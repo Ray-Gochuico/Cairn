@@ -28,6 +28,7 @@
     "react-dom": "^19.1.0",
     "react-hook-form": "^7.75.0",
     "react-router-dom": "^7.15.0",
+    "recharts": "^3.8.1",
     "tailwind-merge": "^3.6.0",
     "yahoo-finance2": "^3.14.0",
     "zod": "^4.4.3",
