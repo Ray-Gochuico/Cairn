@@ -67,8 +67,23 @@ export default function HouseholdTab() {
   }, [household, form]);
 
   const onSubmit = async (values: FormValues) => {
-    await update(values);
+    console.log('[HouseholdTab] onSubmit', values);
+    try {
+      await update(values);
+      console.log('[HouseholdTab] save ok');
+    } catch (e) {
+      console.error('[HouseholdTab] save failed', e);
+    }
   };
+
+  const onInvalid = (errors: Record<string, unknown>) => {
+    console.warn('[HouseholdTab] form validation failed', errors);
+  };
+
+  const fieldErrors = Object.entries(form.formState.errors).map(([field, err]) => ({
+    field,
+    message: (err as { message?: string })?.message ?? 'invalid',
+  }));
 
   return (
     <div className="p-6 max-w-2xl">
@@ -77,7 +92,7 @@ export default function HouseholdTab() {
         Settings shared across the household — filing status, location, expense baseline, and assumptions used by every calculator.
       </p>
 
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-4">
         <Card>
           <CardHeader><CardTitle className="text-base">Identity &amp; tax</CardTitle></CardHeader>
           <CardContent className="space-y-3">
@@ -170,6 +185,19 @@ export default function HouseholdTab() {
             </div>
           </CardContent>
         </Card>
+
+        {fieldErrors.length > 0 && (
+          <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+            <div className="font-medium mb-1">Fix these before saving:</div>
+            <ul className="list-disc pl-5">
+              {fieldErrors.map((e) => (
+                <li key={e.field}>
+                  <span className="font-mono">{e.field}</span>: {e.message}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {error && (
           <div className="text-sm text-destructive">{error}</div>
