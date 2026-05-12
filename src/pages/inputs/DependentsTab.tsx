@@ -59,9 +59,28 @@ function DependentForm({
         </CardContent>
       </Card>
 
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
-        <Button type="submit">Save</Button>
+      <div className="flex justify-end items-center gap-3">
+        <span
+          className="text-sm text-muted-foreground transition-opacity duration-200"
+          style={{ opacity: form.formState.isSubmitting ? 1 : 0 }}
+          aria-live="polite"
+        >
+          Saving…
+        </span>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={onCancel}
+          disabled={form.formState.isSubmitting}
+        >
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          disabled={form.formState.isSubmitting || !form.formState.isDirty}
+        >
+          Save
+        </Button>
       </div>
     </form>
   );
