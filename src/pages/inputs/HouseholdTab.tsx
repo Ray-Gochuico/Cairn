@@ -48,7 +48,7 @@ export default function HouseholdTab() {
   });
 
   useEffect(() => {
-    load();
+    load().catch((e) => console.error('HouseholdTab: load() failed', e));
   }, [load]);
 
   useEffect(() => {

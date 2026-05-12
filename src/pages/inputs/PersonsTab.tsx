@@ -149,7 +149,9 @@ export default function PersonsTab() {
   const { persons, load, create, update, remove } = usePersonsStore();
   const [mode, setMode] = useState<'list' | 'create' | { type: 'edit'; id: number }>('list');
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load().catch((e) => console.error('PersonsTab: load() failed', e));
+  }, [load]);
 
   if (mode === 'create') {
     return (
