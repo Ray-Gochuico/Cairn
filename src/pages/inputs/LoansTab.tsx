@@ -106,7 +106,7 @@ function LoanForm({
           firstPaymentDate: v.firstPaymentDate,
           extraPayment: 0,
         });
-        form.setValue('monthlyPayment', result.monthlyPayment, { shouldDirty: true });
+        form.setValue('monthlyPayment', result.monthlyPayment, { shouldDirty: false });
       } catch {
         // Invalid input — leave field as-is.
       }
