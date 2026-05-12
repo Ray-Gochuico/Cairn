@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useHouseholdStore } from '@/stores/household-store';
@@ -25,46 +25,48 @@ const US_STATES = [
 
 type FormValues = Omit<Household, 'id'>;
 
+const DEFAULT_VALUES: FormValues = {
+  name: null,
+  filingStatus: FilingStatus.SINGLE,
+  state: 'CA',
+  city: null,
+  monthlyExpenseBaseline: 0,
+  withdrawalRate: 0.04,
+  inflationAssumption: 0.024,
+  growthScenarios: [
+    { label: 'Conservative', rate: 0.05 },
+    { label: 'Moderate', rate: 0.06 },
+    { label: 'Optimistic', rate: 0.07 },
+    { label: 'Bull', rate: 0.08 },
+  ],
+};
+
 export default function HouseholdTab() {
   const { household, load, update, isLoading, error } = useHouseholdStore();
 
+  const values = useMemo<FormValues | undefined>(() => {
+    if (!household) return undefined;
+    return {
+      name: household.name ?? null,
+      filingStatus: household.filingStatus,
+      state: household.state,
+      city: household.city,
+      monthlyExpenseBaseline: household.monthlyExpenseBaseline,
+      withdrawalRate: household.withdrawalRate,
+      inflationAssumption: household.inflationAssumption,
+      growthScenarios: household.growthScenarios,
+    };
+  }, [household]);
+
   const form = useForm<FormValues>({
     resolver: zodResolver(HouseholdSchema.omit({ id: true })),
-    defaultValues: {
-      name: null,
-      filingStatus: FilingStatus.SINGLE,
-      state: 'CA',
-      city: null,
-      monthlyExpenseBaseline: 0,
-      withdrawalRate: 0.04,
-      inflationAssumption: 0.024,
-      growthScenarios: [
-        { label: 'Conservative', rate: 0.05 },
-        { label: 'Moderate', rate: 0.06 },
-        { label: 'Optimistic', rate: 0.07 },
-        { label: 'Bull', rate: 0.08 },
-      ],
-    },
+    defaultValues: DEFAULT_VALUES,
+    values,
   });
 
   useEffect(() => {
     load().catch((e) => console.error('HouseholdTab: load() failed', e));
   }, [load]);
-
-  useEffect(() => {
-    if (household) {
-      form.reset({
-        name: household.name ?? null,
-        filingStatus: household.filingStatus,
-        state: household.state,
-        city: household.city,
-        monthlyExpenseBaseline: household.monthlyExpenseBaseline,
-        withdrawalRate: household.withdrawalRate,
-        inflationAssumption: household.inflationAssumption,
-        growthScenarios: household.growthScenarios,
-      });
-    }
-  }, [household, form]);
 
   const onSubmit = async (values: FormValues) => {
     console.log('[HouseholdTab] onSubmit', values);
