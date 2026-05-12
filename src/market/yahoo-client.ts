@@ -1,5 +1,3 @@
-import YahooFinance from 'yahoo-finance2';
-
 export interface QuoteResult {
   ticker: string;
   price: number;
@@ -8,11 +6,32 @@ export interface QuoteResult {
   fetchedAt: string;
 }
 
+// Loaded type-only to keep `yahoo-finance2` itself out of the import graph
+// of any file that imports YahooClient.
+type YahooFinanceInstance = InstanceType<typeof import('yahoo-finance2').default>;
+
+/**
+ * Wraps `yahoo-finance2`. Lazy-loads the underlying package on first method
+ * call rather than at module load time — `yahoo-finance2` pulls in
+ * `@deno/shim-deno`, which calls `os.platform()` at top level. In the Tauri
+ * WebView (and any browser environment), `os` is a stub without `platform`,
+ * so an eager import crashes everything else that ships in the bootstrap
+ * chunk. Deferring the import scopes that risk to actual Yahoo calls, which
+ * already run inside background fire-and-forget paths with try/catch.
+ */
 export class YahooClient {
-  private yf = new YahooFinance();
+  private yfPromise: Promise<YahooFinanceInstance> | null = null;
+
+  private getYf(): Promise<YahooFinanceInstance> {
+    if (!this.yfPromise) {
+      this.yfPromise = import('yahoo-finance2').then((mod) => new mod.default());
+    }
+    return this.yfPromise;
+  }
 
   async quote(ticker: string): Promise<QuoteResult> {
-    const q = await this.yf.quote(ticker);
+    const yf = await this.getYf();
+    const q = await yf.quote(ticker);
     return {
       ticker,
       price: q.regularMarketPrice ?? 0,
@@ -31,10 +50,11 @@ export class YahooClient {
    * comes back empty.
    */
   async historical(ticker: string, date: string): Promise<number> {
+    const yf = await this.getYf();
     const start = new Date(`${date}T00:00:00Z`);
     const end = new Date(start);
     end.setUTCDate(end.getUTCDate() + 1);
-    const result = await this.yf.chart(ticker, {
+    const result = await yf.chart(ticker, {
       period1: start,
       period2: end,
       interval: '1d',
