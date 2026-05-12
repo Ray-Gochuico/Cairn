@@ -8,6 +8,16 @@ import Step4Accounts from './Step4Accounts';
 import Step5Holdings from './Step5Holdings';
 import Step6Loans from './Step6Loans';
 import Step7PropertyVehicles from './Step7PropertyVehicles';
+import Step8Goals from './Step8Goals';
+import { useAccountsStore } from '@/stores/accounts-store';
+import { useHoldingsStore } from '@/stores/holdings-store';
+import { AccountsRepo } from '@/domain/accounts';
+import { HoldingsRepo } from '@/domain/holdings';
+import { AccountSnapshotsRepo } from '@/domain/snapshots';
+import { PriceCache } from '@/market/price-cache';
+import { YahooClient } from '@/market/yahoo-client';
+import { deriveLast12Months } from '@/market/snapshot-derivation';
+import { getDatabase } from '@/db/db';
 
 type StepIndex = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
@@ -26,26 +36,6 @@ const STEPS: StepMeta[] = [
   { index: 7, label: 'Property & Vehicles' },
   { index: 8, label: 'Goals' },
 ];
-
-function PlaceholderStep({
-  index,
-  onComplete,
-}: {
-  index: StepIndex;
-  onComplete: () => void;
-}) {
-  return (
-    <div className="border rounded-md p-8 text-center space-y-3">
-      <p className="text-muted-foreground">Step {index}: (Unit I)</p>
-      <p className="text-sm text-muted-foreground">
-        This step will be wired in a later unit. Use Next to skip ahead.
-      </p>
-      <Button type="button" onClick={onComplete}>
-        Next
-      </Button>
-    </div>
-  );
-}
 
 export default function SetupWizard() {
   const navigate = useNavigate();
@@ -69,8 +59,39 @@ export default function SetupWizard() {
     }
   };
 
+  /**
+   * Finish handler. If the user added both accounts AND holdings during
+   * the wizard, fire `deriveLast12Months` in the background so the
+   * dashboard has historical snapshots by the time the user clicks
+   * Net Worth. This is fire-and-forget — navigation never blocks on
+   * Yahoo, mirroring the same pattern src/db/init.ts uses at boot.
+   */
   const finish = () => {
-    navigate('/');
+    const { accounts } = useAccountsStore.getState();
+    const { holdings } = useHoldingsStore.getState();
+
+    if (accounts.length > 0 && holdings.length > 0) {
+      void (async () => {
+        try {
+          const db = getDatabase();
+          const accountsRepo = new AccountsRepo(db);
+          const holdingsRepo = new HoldingsRepo(db);
+          const snapshotsRepo = new AccountSnapshotsRepo(db);
+          const prices = new PriceCache(db, new YahooClient());
+          await deriveLast12Months({
+            accounts: accountsRepo,
+            holdings: holdingsRepo,
+            snapshots: snapshotsRepo,
+            prices,
+          });
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn('[setup] snapshot derivation failed:', err);
+        }
+      })();
+    }
+
+    navigate('/', { replace: true });
   };
 
   const currentMeta = STEPS[current - 1];
@@ -98,12 +119,10 @@ export default function SetupWizard() {
     case 7:
       stepContent = <Step7PropertyVehicles onComplete={advance} />;
       break;
-    default:
-      stepContent = <PlaceholderStep index={current} onComplete={advance} />;
+    case 8:
+      stepContent = <Step8Goals onComplete={finish} />;
+      break;
   }
-
-  const isLast = current === 8;
-  const stepDone = completed.has(current);
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
@@ -149,22 +168,6 @@ export default function SetupWizard() {
             {current > 1 && (
               <Button type="button" variant="ghost" onClick={goBack}>
                 Back
-              </Button>
-            )}
-          </div>
-          <div className="flex gap-3">
-            {!isLast ? (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={advance}
-                disabled={!stepDone}
-              >
-                Next
-              </Button>
-            ) : (
-              <Button type="button" onClick={finish} disabled={!stepDone}>
-                Finish
               </Button>
             )}
           </div>
