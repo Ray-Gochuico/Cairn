@@ -1,8 +1,7 @@
 import { create } from 'zustand';
 import { ContributionsRepo } from '@/domain/contributions';
 import { getDatabase } from '@/db/db';
-import { ContributionSchema, type Contribution } from '@/types/schema';
-import type { ContributionSource } from '@/types/enums';
+import type { Contribution } from '@/types/schema';
 
 interface ContributionsState {
   contributions: Contribution[];
@@ -14,24 +13,6 @@ interface ContributionsState {
   remove: (id: number) => Promise<void>;
 }
 
-interface ContributionRow {
-  id: number;
-  account_id: number;
-  person_id: number | null;
-  date: string;
-  amount: number;
-  source: ContributionSource;
-}
-
-/**
- * Loads ALL contributions across every account. Per-account scoping is the
- * responsibility of the consumer (ContributionsTab, Investments page).
- * Components that need a SQL-level filter call ContributionsRepo directly.
- *
- * ContributionsRepo intentionally doesn't expose a listAll() (per plan
- * scoping — it lists per account or per person+month-range). The store
- * runs an unscoped query here to populate the cache for in-memory filtering.
- */
 export const useContributionsStore = create<ContributionsState>((set, get) => ({
   contributions: [],
   isLoading: false,
@@ -40,19 +21,8 @@ export const useContributionsStore = create<ContributionsState>((set, get) => ({
   load: async () => {
     set({ isLoading: true, error: null });
     try {
-      const rows = await getDatabase().select<ContributionRow>(
-        'SELECT * FROM contributions ORDER BY date ASC, id ASC'
-      );
-      const contributions = rows.map((r) =>
-        ContributionSchema.parse({
-          id: r.id,
-          accountId: r.account_id,
-          personId: r.person_id,
-          date: r.date,
-          amount: r.amount,
-          source: r.source,
-        })
-      );
+      const repo = new ContributionsRepo(getDatabase());
+      const contributions = await repo.listAll();
       set({ contributions, isLoading: false });
     } catch (e) {
       set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load' });

@@ -40,6 +40,13 @@ function firstDayOfMonth(yyyymm: string): string {
 export class ContributionsRepo {
   constructor(private db: Database) {}
 
+  async listAll(): Promise<Contribution[]> {
+    const rows = await this.db.select<ContributionRow>(
+      'SELECT * FROM contributions ORDER BY date ASC, id ASC'
+    );
+    return rows.map(rowToContribution);
+  }
+
   async listForAccount(accountId: number): Promise<Contribution[]> {
     const rows = await this.db.select<ContributionRow>(
       'SELECT * FROM contributions WHERE account_id = ? ORDER BY date ASC, id ASC',
