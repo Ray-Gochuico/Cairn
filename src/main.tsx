@@ -5,6 +5,7 @@ import './globals.css';
 import { initDatabase } from './db/init';
 import { getDatabase } from './db/db';
 import { PersonsRepo } from './domain/persons';
+import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 
 async function bootstrap() {
   try {
@@ -24,6 +25,27 @@ async function bootstrap() {
       // normal app render and surface errors via the in-app error pane.
       // eslint-disable-next-line no-console
       console.warn('[bootstrap] first-launch detection failed:', e);
+    }
+
+    // Fire an optional native notification on the 1st of the month so users
+    // who haven't opened the app yet see the nudge. In-app banner remains
+    // the primary surface; this is bonus.
+    if (new Date().getDate() === 1) {
+      void (async () => {
+        try {
+          let granted = await isPermissionGranted();
+          if (!granted) granted = (await requestPermission()) === 'granted';
+          if (granted) {
+            sendNotification({
+              title: 'Monthly input pending',
+              body: 'Confirm this month’s account balances when you have a moment.',
+            });
+          }
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.warn('[bootstrap] notification dispatch failed:', e);
+        }
+      })();
     }
 
     ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
