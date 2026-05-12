@@ -6,8 +6,9 @@ import { useLoansStore } from '@/stores/loans-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
-import { AccountType, SnapshotSource } from '@/types/enums';
+import { AccountType } from '@/types/enums';
 import { netWorthForMonth, type NetWorthInput } from '@/lib/networth';
+import { isMonthlyInputPending, lastMonthYyyymm } from '@/lib/input-pending';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import MetricCard from '@/components/cards/MetricCard';
@@ -38,6 +39,18 @@ const LIQUID_INVESTMENT_TYPES = new Set<AccountType>([
   AccountType.ACCOUNT_CASH,
   AccountType.ACCOUNT_SAVINGS,
   AccountType.ACCOUNT_HSA,
+]);
+
+/**
+ * Account types whose values are entered manually as of "today", not
+ * auto-derived for last month's close. Matches the set in
+ * `snapshot-derivation.ts` so the pending-input nudge stays consistent with
+ * what derivation actually produces.
+ */
+const MANUAL_BALANCE_TYPES = new Set<AccountType>([
+  AccountType.ACCOUNT_CASH,
+  AccountType.ACCOUNT_SAVINGS,
+  AccountType.ACCOUNT_CRYPTO,
 ]);
 
 const currencyFormatter = new Intl.NumberFormat('en-US', {
@@ -106,31 +119,6 @@ function computeLiquidInvestments(
     }
   }
   return [...latestByAccount.values()].reduce((sum, s) => sum + s.totalValue, 0);
-}
-
-/**
- * Banner shows when (a) it's the 1st of the month — a hard nudge to confirm
- * the prior month's numbers — OR (b) we have no USER_CONFIRMED/MANUAL
- * snapshot for the current month. AUTO_DERIVED alone counts as "still
- * pending" because the user hasn't ratified the derived value yet.
- *
- * The richer mid-month detection that `src/lib/input-pending.ts` exposes
- * (Task 32) overlays a grace period; Dashboard v1 keeps the rule simple per
- * the prompt and defers the grace-period polish until that helper lands.
- */
-function computeInputPending(
-  today: Date,
-  snapshots: AccountSnapshot[],
-  currentMonth: string,
-): boolean {
-  if (today.getDate() === 1) return true;
-  const hasConfirmedThisMonth = snapshots.some(
-    (s) =>
-      s.snapshotDate.slice(0, 7) === currentMonth &&
-      (s.source === SnapshotSource.USER_CONFIRMED ||
-        s.source === SnapshotSource.MANUAL),
-  );
-  return !hasConfirmedThisMonth;
 }
 
 export default function Dashboard() {
@@ -213,9 +201,41 @@ export default function Dashboard() {
     [accounts, snapshots, currentMonth],
   );
 
+  /**
+   * Pending-input detection lives in `src/lib/input-pending.ts` as a pure
+   * helper. Dashboard's job is to compose the inputs:
+   *   - `accountIds`: every non-excluded account whose value is auto-derived
+   *     (the manual-balance set is skipped — those get a "what's today's
+   *     balance?" card in the mini-window instead of a last-month check).
+   *   - `snapshotsLastMonth`: filtered to last month's snapshots.
+   */
+  const pendingAccountIds = useMemo(
+    () =>
+      accounts
+        .filter(
+          (a) =>
+            a.id !== undefined &&
+            !a.excludedFromNetWorth &&
+            !MANUAL_BALANCE_TYPES.has(a.type),
+        )
+        .map((a) => a.id as number),
+    [accounts],
+  );
+
+  const lastMonth = useMemo(() => lastMonthYyyymm(today), [today]);
+
+  const snapshotsLastMonth = useMemo(
+    () => snapshots.filter((s) => s.snapshotDate.slice(0, 7) === lastMonth),
+    [snapshots, lastMonth],
+  );
+
   const isInputPending = useMemo(
-    () => computeInputPending(today, snapshots, currentMonth),
-    [today, snapshots, currentMonth],
+    () =>
+      isMonthlyInputPending(today, {
+        accountIds: pendingAccountIds,
+        snapshotsLastMonth,
+      }),
+    [today, pendingAccountIds, snapshotsLastMonth],
   );
 
   const netWorthDelta = currentNetWorth - previousNetWorth;
