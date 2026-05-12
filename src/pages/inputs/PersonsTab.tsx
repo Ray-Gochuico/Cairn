@@ -150,7 +150,7 @@ export default function PersonsTab() {
   const [mode, setMode] = useState<'list' | 'create' | { type: 'edit'; id: number }>('list');
 
   useEffect(() => {
-    load().catch((e) => console.error('PersonsTab: load() failed', e));
+    load();
   }, [load]);
 
   if (mode === 'create') {

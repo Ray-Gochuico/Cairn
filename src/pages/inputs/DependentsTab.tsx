@@ -72,7 +72,7 @@ export default function DependentsTab() {
   const [mode, setMode] = useState<'list' | 'create' | { type: 'edit'; id: number }>('list');
 
   useEffect(() => {
-    load().catch((e) => console.error('DependentsTab: load() failed', e));
+    load();
   }, [load]);
 
   if (mode === 'create') {

@@ -65,7 +65,7 @@ export default function HouseholdTab() {
   });
 
   useEffect(() => {
-    load().catch((e) => console.error('HouseholdTab: load() failed', e));
+    load();
   }, [load]);
 
   const [justSaved, setJustSaved] = useState(false);
@@ -75,17 +75,13 @@ export default function HouseholdTab() {
     return () => clearTimeout(t);
   }, [justSaved]);
 
-  const onSubmit = async (values: FormValues) => {
+  const onSubmit = async (next: FormValues) => {
     try {
-      await update(values);
+      await update(next);
       setJustSaved(true);
-    } catch (e) {
-      console.error('[HouseholdTab] save failed', e);
+    } catch {
+      // store.error already populated; no extra console noise needed
     }
-  };
-
-  const onInvalid = (errors: Record<string, unknown>) => {
-    console.warn('[HouseholdTab] form validation failed', errors);
   };
 
   const fieldErrors = Object.entries(form.formState.errors).map(([field, err]) => ({
@@ -102,7 +98,7 @@ export default function HouseholdTab() {
         Settings shared across the household — filing status, location, expense baseline, and assumptions used by every calculator.
       </p>
 
-      <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-4">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
         <Card>
           <CardHeader><CardTitle className="text-base">Identity &amp; tax</CardTitle></CardHeader>
           <CardContent className="space-y-3">
