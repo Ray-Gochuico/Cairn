@@ -4,6 +4,10 @@ import { Button } from '@/components/ui/button';
 import Step1Household from './Step1Household';
 import Step2Persons from './Step2Persons';
 import Step3Dependents from './Step3Dependents';
+import Step4Accounts from './Step4Accounts';
+import Step5Holdings from './Step5Holdings';
+import Step6Loans from './Step6Loans';
+import Step7PropertyVehicles from './Step7PropertyVehicles';
 
 type StepIndex = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
@@ -81,6 +85,18 @@ export default function SetupWizard() {
       break;
     case 3:
       stepContent = <Step3Dependents onComplete={advance} />;
+      break;
+    case 4:
+      stepContent = <Step4Accounts onComplete={advance} />;
+      break;
+    case 5:
+      stepContent = <Step5Holdings onComplete={advance} />;
+      break;
+    case 6:
+      stepContent = <Step6Loans onComplete={advance} />;
+      break;
+    case 7:
+      stepContent = <Step7PropertyVehicles onComplete={advance} />;
       break;
     default:
       stepContent = <PlaceholderStep index={current} onComplete={advance} />;

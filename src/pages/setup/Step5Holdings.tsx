@@ -1,19 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import HoldingForm, { type HoldingFormValues } from '@/components/forms/HoldingForm';
 
-/**
- * HoldingsTab — pick an account, see its holdings.
- *
- * Editing is per-row with an explicit Save button (cleaner to test than
- * onBlur, and gives the user a calm dirty-aware Save UX matching the
- * rest of Phase 1's input tabs). The "Add holding" affordance is an
- * inline row at the bottom of the table.
- */
+interface Props {
+  onComplete: () => void;
+}
 
-export default function HoldingsTab() {
+/**
+ * Setup wizard Step 5 — Holdings. Per-account inline editing, mirrors
+ * HoldingsTab's row UX. If no accounts exist (user skipped Step 4),
+ * shows a gentle prompt and just a Continue button.
+ */
+export default function Step5Holdings({ onComplete }: Props) {
   const { accounts, load: loadAccounts } = useAccountsStore();
   const { holdings, load: loadHoldings, create, update, remove } = useHoldingsStore();
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
@@ -44,14 +45,18 @@ export default function HoldingsTab() {
 
   if (accounts.length === 0) {
     return (
-      <div className="p-6 max-w-3xl">
-        <h2 className="text-2xl font-semibold mb-1">Holdings</h2>
-        <p className="text-sm text-muted-foreground mb-6">
-          Per-account tickers and share counts. Used by the Investments page and the
-          Net Worth chart.
-        </p>
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-2xl font-semibold mb-1">Holdings</h2>
+          <p className="text-sm text-muted-foreground">
+            Holdings are tickers + share counts inside your investment accounts.
+          </p>
+        </div>
         <div className="border rounded-md p-8 text-center text-muted-foreground">
-          Add accounts first.
+          Add accounts in Step 4 to add holdings here. You can also add holdings later from the Inputs page.
+        </div>
+        <div className="pt-2">
+          <Button onClick={onComplete}>Continue</Button>
         </div>
       </div>
     );
@@ -66,14 +71,15 @@ export default function HoldingsTab() {
   };
 
   return (
-    <div className="p-6 max-w-4xl">
-      <h2 className="text-2xl font-semibold mb-1">Holdings</h2>
-      <p className="text-sm text-muted-foreground mb-6">
-        Per-account tickers and share counts. Used by the Investments page and the
-        Net Worth chart.
-      </p>
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-2xl font-semibold mb-1">Holdings</h2>
+        <p className="text-sm text-muted-foreground">
+          For each investment account, add the tickers and share counts you hold. Skip this step if you only have cash accounts.
+        </p>
+      </div>
 
-      <div className="mb-4">
+      <div>
         <label htmlFor="accountPicker" className="text-sm font-medium mr-2">
           Account
         </label>
@@ -135,7 +141,6 @@ export default function HoldingsTab() {
           <div className="pt-2">
             <div className="text-xs text-muted-foreground mb-1">Add holding</div>
             <HoldingForm
-              // The key resets the form when accounts change so the new-row inputs clear.
               key={`new-${selectedAccountId}-${accountHoldings.length}`}
               initial={newRowInitial}
               onSave={async (next) => {
@@ -146,6 +151,15 @@ export default function HoldingsTab() {
           </div>
         </CardContent>
       </Card>
+
+      <div className="flex items-center gap-3 pt-2">
+        <Button onClick={onComplete}>Continue</Button>
+        {holdings.length === 0 && (
+          <Button type="button" variant="ghost" onClick={onComplete}>
+            Skip — no holdings yet
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
