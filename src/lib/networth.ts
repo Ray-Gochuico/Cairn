@@ -12,8 +12,10 @@ export interface NetWorthInput {
   loans: LoanLiability[];
 }
 
+// Callers should supply at most one snapshot per (accountId, snapshotMonth) —
+// the DB enforces this via UNIQUE(account_id, snapshot_date). With duplicates,
+// the earlier-iterated entry wins.
 export function netWorthForMonth(month: string, input: NetWorthInput): number {
-  // Latest snapshot per account at or before this month
   const byAccount = new Map<number, SnapshotPoint>();
   for (const s of input.snapshots) {
     if (s.snapshotMonth > month) continue;

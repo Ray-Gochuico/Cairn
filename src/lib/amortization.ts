@@ -38,9 +38,15 @@ export function amortize(input: AmortizationInput): Amortization {
   const schedule: ScheduleEntry[] = [];
   const startDate = new Date(input.firstPaymentDate + 'T00:00:00Z');
 
+  const startYear = startDate.getUTCFullYear();
+  const startMonth = startDate.getUTCMonth();
+  const startDay = startDate.getUTCDate();
+
   for (let i = 0; balance > 0.005 && i < n + 360 /* safety */; i++) {
-    const date = new Date(startDate);
-    date.setUTCMonth(date.getUTCMonth() + i);
+    // Clamp day to last day of target month so e.g. Jan-31 + 1mo → Feb-28/29,
+    // not Mar-2 (which is what naive setUTCMonth produces).
+    const lastDayOfTargetMonth = new Date(Date.UTC(startYear, startMonth + i + 1, 0)).getUTCDate();
+    const date = new Date(Date.UTC(startYear, startMonth + i, Math.min(startDay, lastDayOfTargetMonth)));
     const interest = balance * r;
     let principal = monthlyPayment - interest;
     let extra = input.extraPayment;

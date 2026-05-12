@@ -32,7 +32,7 @@ describe('netWorthForMonth', () => {
       105000 + 51000 + 600000 + 25000 - 350000 - 15000
     );
   });
-  it('returns 0 for months before any data exists', () => {
+  it('falls back to property/vehicle/loan totals when no snapshots exist', () => {
     expect(netWorthForMonth('2023-01', { ...fixture, snapshots: [] })).toBe(
       600000 + 25000 - 350000 - 15000
     );
