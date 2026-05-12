@@ -1,4 +1,4 @@
-import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
 import PageShell from './components/layout/PageShell';
 import Dashboard from './pages/Dashboard';
 import NetWorth from './pages/NetWorth';
@@ -12,6 +12,10 @@ import Calculators from './pages/Calculators';
 import WhatIf from './pages/WhatIf';
 import Profile from './pages/Profile';
 import InputsLayout from './pages/inputs/InputsLayout';
+import HouseholdTab from './pages/inputs/HouseholdTab';
+import PersonsTab from './pages/inputs/PersonsTab';
+import DependentsTab from './pages/inputs/DependentsTab';
+import ComingSoonTab from './pages/inputs/tabs-coming-soon';
 
 const router = createBrowserRouter([
   {
@@ -29,7 +33,28 @@ const router = createBrowserRouter([
       { path: 'calculators', element: <Calculators /> },
       { path: 'what-if', element: <WhatIf /> },
       { path: 'profile', element: <Profile /> },
-      { path: 'inputs/*', element: <InputsLayout /> },
+      {
+        path: 'inputs',
+        element: <InputsLayout />,
+        children: [
+          { index: true, element: <Navigate to="household" replace /> },
+          { path: 'household', element: <HouseholdTab /> },
+          { path: 'persons', element: <PersonsTab /> },
+          { path: 'dependents', element: <DependentsTab /> },
+          { path: 'accounts', element: <ComingSoonTab name="Accounts" phase={2} /> },
+          { path: 'holdings', element: <ComingSoonTab name="Holdings" phase={2} /> },
+          { path: 'contributions', element: <ComingSoonTab name="Contributions" phase={2} /> },
+          { path: 'loans', element: <ComingSoonTab name="Loans" phase={2} /> },
+          { path: 'equity-grants', element: <ComingSoonTab name="Equity Grants" phase={3} /> },
+          { path: 'properties', element: <ComingSoonTab name="Properties" phase={2} /> },
+          { path: 'vehicles', element: <ComingSoonTab name="Vehicles" phase={2} /> },
+          { path: 'goals', element: <ComingSoonTab name="Goals" phase={3} /> },
+          { path: 'plans-529', element: <ComingSoonTab name="529 Plans" phase={3} /> },
+          { path: 'growth-tax', element: <ComingSoonTab name="Growth & Tax" phase={3} /> },
+          { path: 'categories', element: <ComingSoonTab name="Categories" phase={4} /> },
+          { path: 'tickers', element: <ComingSoonTab name="Tickers" phase={3} /> },
+        ],
+      },
     ],
   },
 ]);

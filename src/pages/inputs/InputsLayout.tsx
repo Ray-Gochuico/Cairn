@@ -1,32 +1,27 @@
-import { NavLink, Routes, Route, Navigate } from 'react-router-dom';
+import { NavLink, Outlet } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import HouseholdTab from './HouseholdTab';
-import PersonsTab from './PersonsTab';
-import DependentsTab from './DependentsTab';
-import ComingSoonTab from './tabs-coming-soon';
 
 interface TabDef {
   path: string;
   label: string;
-  element: React.ReactNode;
 }
 
 const tabs: TabDef[] = [
-  { path: 'household', label: 'Household', element: <HouseholdTab /> },
-  { path: 'persons', label: 'Persons', element: <PersonsTab /> },
-  { path: 'dependents', label: 'Dependents', element: <DependentsTab /> },
-  { path: 'accounts', label: 'Accounts', element: <ComingSoonTab name="Accounts" phase={2} /> },
-  { path: 'holdings', label: 'Holdings', element: <ComingSoonTab name="Holdings" phase={2} /> },
-  { path: 'contributions', label: 'Contributions', element: <ComingSoonTab name="Contributions" phase={2} /> },
-  { path: 'loans', label: 'Loans', element: <ComingSoonTab name="Loans" phase={2} /> },
-  { path: 'equity-grants', label: 'Equity Grants', element: <ComingSoonTab name="Equity Grants" phase={3} /> },
-  { path: 'properties', label: 'Properties', element: <ComingSoonTab name="Properties" phase={2} /> },
-  { path: 'vehicles', label: 'Vehicles', element: <ComingSoonTab name="Vehicles" phase={2} /> },
-  { path: 'goals', label: 'Goals', element: <ComingSoonTab name="Goals" phase={3} /> },
-  { path: 'plans-529', label: '529 Plans', element: <ComingSoonTab name="529 Plans" phase={3} /> },
-  { path: 'growth-tax', label: 'Growth & Tax', element: <ComingSoonTab name="Growth & Tax" phase={3} /> },
-  { path: 'categories', label: 'Categories', element: <ComingSoonTab name="Categories" phase={4} /> },
-  { path: 'tickers', label: 'Tickers', element: <ComingSoonTab name="Tickers" phase={3} /> },
+  { path: 'household', label: 'Household' },
+  { path: 'persons', label: 'Persons' },
+  { path: 'dependents', label: 'Dependents' },
+  { path: 'accounts', label: 'Accounts' },
+  { path: 'holdings', label: 'Holdings' },
+  { path: 'contributions', label: 'Contributions' },
+  { path: 'loans', label: 'Loans' },
+  { path: 'equity-grants', label: 'Equity Grants' },
+  { path: 'properties', label: 'Properties' },
+  { path: 'vehicles', label: 'Vehicles' },
+  { path: 'goals', label: 'Goals' },
+  { path: 'plans-529', label: '529 Plans' },
+  { path: 'growth-tax', label: 'Growth & Tax' },
+  { path: 'categories', label: 'Categories' },
+  { path: 'tickers', label: 'Tickers' },
 ];
 
 export default function InputsLayout() {
@@ -54,12 +49,7 @@ export default function InputsLayout() {
         ))}
       </nav>
       <div className="flex-1 overflow-y-auto">
-        <Routes>
-          <Route index element={<Navigate to="household" replace />} />
-          {tabs.map((t) => (
-            <Route key={t.path} path={t.path} element={t.element} />
-          ))}
-        </Routes>
+        <Outlet />
       </div>
     </div>
   );
