@@ -153,6 +153,14 @@ export default function PersonsTab() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    if (typeof mode === 'object' && mode.type === 'edit') {
+      if (!persons.some((p) => p.id === mode.id)) {
+        setMode('list');
+      }
+    }
+  }, [mode, persons]);
+
   if (mode === 'create') {
     return (
       <div className="p-6 max-w-2xl">
@@ -170,7 +178,7 @@ export default function PersonsTab() {
   if (typeof mode === 'object' && mode.type === 'edit') {
     const target = persons.find((p) => p.id === mode.id);
     if (!target) {
-      setMode('list');
+      // Effect above will reset mode to 'list' on the next tick.
       return null;
     }
     return (

@@ -75,6 +75,14 @@ export default function DependentsTab() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    if (typeof mode === 'object' && mode.type === 'edit') {
+      if (!dependents.some((d) => d.id === mode.id)) {
+        setMode('list');
+      }
+    }
+  }, [mode, dependents]);
+
   if (mode === 'create') {
     return (
       <div className="p-6 max-w-2xl">
@@ -91,7 +99,7 @@ export default function DependentsTab() {
   if (typeof mode === 'object' && mode.type === 'edit') {
     const target = dependents.find((d) => d.id === mode.id);
     if (!target) {
-      setMode('list');
+      // Effect above will reset mode to 'list' on the next tick.
       return null;
     }
     return (
