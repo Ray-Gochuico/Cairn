@@ -3,10 +3,29 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './globals.css';
 import { initDatabase } from './db/init';
+import { getDatabase } from './db/db';
+import { PersonsRepo } from './domain/persons';
 
 async function bootstrap() {
   try {
     await initDatabase();
+
+    // First-launch detection: if no persons exist yet AND the user is
+    // landing on the root route, redirect to the setup wizard before
+    // React mounts so we don't flash the dashboard.
+    try {
+      const persons = await new PersonsRepo(getDatabase()).list();
+      const path = window.location.pathname;
+      if (persons.length === 0 && (path === '/' || path === '')) {
+        window.history.replaceState({}, '', '/setup');
+      }
+    } catch (e) {
+      // Don't block boot if the persons query fails — fall through to
+      // normal app render and surface errors via the in-app error pane.
+      // eslint-disable-next-line no-console
+      console.warn('[bootstrap] first-launch detection failed:', e);
+    }
+
     ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
       <React.StrictMode>
         <App />

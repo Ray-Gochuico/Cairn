@@ -22,8 +22,13 @@ import LoansTab from './pages/inputs/LoansTab';
 import PropertiesTab from './pages/inputs/PropertiesTab';
 import VehiclesTab from './pages/inputs/VehiclesTab';
 import ComingSoonTab from './pages/inputs/tabs-coming-soon';
+import SetupWizard from './pages/setup/SetupWizard';
 
 const router = createBrowserRouter([
+  {
+    path: '/setup',
+    element: <SetupWizard />,
+  },
   {
     path: '/',
     element: <PageShell />,
