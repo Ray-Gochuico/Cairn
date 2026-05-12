@@ -34,7 +34,7 @@ export default function InputsLayout() {
         {tabs.map((t) => (
           <NavLink
             key={t.path}
-            to={t.path}
+            to={`/inputs/${t.path}`}
             className={({ isActive }) =>
               cn(
                 'px-3 py-1.5 rounded-md text-sm transition',
