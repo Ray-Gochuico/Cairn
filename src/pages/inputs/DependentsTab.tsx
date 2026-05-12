@@ -1,90 +1,9 @@
 import { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { useDependentsStore } from '@/stores/dependents-store';
-import { DependentSchema, type Dependent } from '@/types/schema';
 import { DependentType } from '@/types/enums';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-
-type FormValues = Omit<Dependent, 'id'>;
-
-const DEFAULT_DEPENDENT: FormValues = {
-  householdId: 1,
-  name: '',
-  dateOfBirth: '',
-  type: DependentType.CHILD,
-};
-
-function DependentForm({
-  initial,
-  onSubmit,
-  onCancel,
-}: {
-  initial: FormValues;
-  onSubmit: (values: FormValues) => Promise<void>;
-  onCancel: () => void;
-}) {
-  const form = useForm<FormValues>({
-    resolver: zodResolver(DependentSchema.omit({ id: true })),
-    defaultValues: initial,
-  });
-
-  return (
-    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-      <Card>
-        <CardHeader><CardTitle className="text-base">Dependent details</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          <div>
-            <Label htmlFor="name">Name</Label>
-            <Input id="name" {...form.register('name')} />
-          </div>
-          <div>
-            <Label htmlFor="dateOfBirth">Date of birth</Label>
-            <Input id="dateOfBirth" type="date" {...form.register('dateOfBirth')} />
-          </div>
-          <div>
-            <Label htmlFor="type">Type</Label>
-            <select
-              id="type"
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              {...form.register('type')}
-            >
-              <option value={DependentType.CHILD}>Child</option>
-              <option value={DependentType.OTHER}>Other</option>
-            </select>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="flex justify-end items-center gap-3">
-        <span
-          className="text-sm text-muted-foreground transition-opacity duration-200"
-          style={{ opacity: form.formState.isSubmitting ? 1 : 0 }}
-          aria-live="polite"
-        >
-          Saving…
-        </span>
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={onCancel}
-          disabled={form.formState.isSubmitting}
-        >
-          Cancel
-        </Button>
-        <Button
-          type="submit"
-          disabled={form.formState.isSubmitting || !form.formState.isDirty}
-        >
-          Save
-        </Button>
-      </div>
-    </form>
-  );
-}
+import { Card, CardContent } from '@/components/ui/card';
+import DependentForm, { DEFAULT_DEPENDENT } from '@/components/forms/DependentForm';
 
 export default function DependentsTab() {
   const { dependents, load, create, update, remove } = useDependentsStore();
