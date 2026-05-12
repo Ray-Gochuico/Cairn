@@ -118,7 +118,12 @@ export default function HouseholdTab() {
               <Label htmlFor="filingStatus">Filing status</Label>
               <Select
                 value={form.watch('filingStatus')}
-                onValueChange={(v) => form.setValue('filingStatus', v as FilingStatus)}
+                onValueChange={(v) =>
+                  form.setValue('filingStatus', v as FilingStatus, {
+                    shouldDirty: true,
+                    shouldTouch: true,
+                  })
+                }
               >
                 <SelectTrigger id="filingStatus"><SelectValue /></SelectTrigger>
                 <SelectContent>
