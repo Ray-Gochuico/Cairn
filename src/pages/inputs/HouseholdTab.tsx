@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useHouseholdStore } from '@/stores/household-store';
@@ -68,11 +68,17 @@ export default function HouseholdTab() {
     load().catch((e) => console.error('HouseholdTab: load() failed', e));
   }, [load]);
 
+  const [justSaved, setJustSaved] = useState(false);
+  useEffect(() => {
+    if (!justSaved) return;
+    const t = setTimeout(() => setJustSaved(false), 1800);
+    return () => clearTimeout(t);
+  }, [justSaved]);
+
   const onSubmit = async (values: FormValues) => {
-    console.log('[HouseholdTab] onSubmit', values);
     try {
       await update(values);
-      console.log('[HouseholdTab] save ok');
+      setJustSaved(true);
     } catch (e) {
       console.error('[HouseholdTab] save failed', e);
     }
@@ -86,6 +92,8 @@ export default function HouseholdTab() {
     field,
     message: (err as { message?: string })?.message ?? 'invalid',
   }));
+
+  const dirty = form.formState.isDirty;
 
   return (
     <div className="p-6 max-w-2xl">
@@ -205,9 +213,16 @@ export default function HouseholdTab() {
           <div className="text-sm text-destructive">{error}</div>
         )}
 
-        <div className="flex justify-end gap-2">
-          <Button type="submit" disabled={isLoading}>
-            {isLoading ? 'Saving...' : 'Save'}
+        <div className="flex justify-end items-center gap-3">
+          <span
+            className="text-sm text-muted-foreground transition-opacity duration-200"
+            style={{ opacity: isLoading || justSaved ? 1 : 0 }}
+            aria-live="polite"
+          >
+            {isLoading ? 'Saving…' : justSaved ? 'Saved' : ''}
+          </span>
+          <Button type="submit" disabled={isLoading || !dirty}>
+            Save
           </Button>
         </div>
       </form>
