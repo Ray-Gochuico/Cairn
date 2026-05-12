@@ -26,7 +26,6 @@ export const useDependentsStore = create<DependentsState>((set, get) => ({
       set({ dependents, isLoading: false });
     } catch (e) {
       set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load' });
-      throw e;
     }
   },
 

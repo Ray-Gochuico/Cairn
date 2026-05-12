@@ -24,7 +24,6 @@ export const useHouseholdStore = create<HouseholdState>((set) => ({
       set({ household, isLoading: false });
     } catch (e) {
       set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load' });
-      throw e;
     }
   },
 
