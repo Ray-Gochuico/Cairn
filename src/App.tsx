@@ -11,6 +11,7 @@ import Goals from './pages/Goals';
 import Calculators from './pages/Calculators';
 import WhatIf from './pages/WhatIf';
 import Profile from './pages/Profile';
+import MonthlyMiniWindow from './pages/MonthlyMiniWindow';
 import InputsLayout from './pages/inputs/InputsLayout';
 import HouseholdTab from './pages/inputs/HouseholdTab';
 import PersonsTab from './pages/inputs/PersonsTab';
@@ -44,6 +45,7 @@ const router = createBrowserRouter([
       { path: 'calculators', element: <Calculators /> },
       { path: 'what-if', element: <WhatIf /> },
       { path: 'profile', element: <Profile /> },
+      { path: 'monthly', element: <MonthlyMiniWindow /> },
       {
         path: 'inputs',
         element: <InputsLayout />,
