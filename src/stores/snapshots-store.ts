@@ -1,8 +1,13 @@
 import { create } from 'zustand';
 import { AccountSnapshotsRepo } from '@/domain/snapshots';
+import { AccountsRepo } from '@/domain/accounts';
+import { HoldingsRepo } from '@/domain/holdings';
 import { getDatabase } from '@/db/db';
 import { AccountSnapshotSchema, type AccountSnapshot } from '@/types/schema';
 import type { SnapshotSource } from '@/types/enums';
+import { PriceCache } from '@/market/price-cache';
+import { YahooClient } from '@/market/yahoo-client';
+import { deriveLast12Months } from '@/market/snapshot-derivation';
 
 interface SnapshotsState {
   snapshots: AccountSnapshot[];
@@ -11,6 +16,12 @@ interface SnapshotsState {
   load: () => Promise<void>;
   upsert: (snapshot: Omit<AccountSnapshot, 'id'>) => Promise<number>;
   remove: (id: number) => Promise<void>;
+  /**
+   * Re-derive last-12-months snapshots and reload. User-triggered (e.g. via
+   * the Monthly mini-window's Refresh prices button), so it awaits derivation
+   * and rethrows on failure — different from load(), which absorbs errors.
+   */
+  refresh: () => Promise<void>;
 }
 
 interface SnapshotRow {
@@ -65,6 +76,16 @@ export const useSnapshotsStore = create<SnapshotsState>((set, get) => ({
   remove: async (id) => {
     const repo = new AccountSnapshotsRepo(getDatabase());
     await repo.delete(id);
+    await get().load();
+  },
+
+  refresh: async () => {
+    const db = getDatabase();
+    const accounts = new AccountsRepo(db);
+    const holdings = new HoldingsRepo(db);
+    const snapshots = new AccountSnapshotsRepo(db);
+    const prices = new PriceCache(db, new YahooClient());
+    await deriveLast12Months({ accounts, holdings, snapshots, prices });
     await get().load();
   },
 }));
