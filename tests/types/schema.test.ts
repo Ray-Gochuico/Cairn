@@ -4,8 +4,26 @@ import {
   PersonSchema,
   DependentSchema,
   GrowthScenarioSchema,
+  AccountSchema,
+  HoldingSchema,
+  ContributionSchema,
+  AccountSnapshotSchema,
+  LoanSchema,
+  LoanPaymentSchema,
+  PropertySchema,
+  VehicleSchema,
 } from '@/types/schema';
-import { FilingStatus, DependentType } from '@/types/enums';
+import {
+  FilingStatus,
+  DependentType,
+  AccountType,
+  ContributionSource,
+  SnapshotSource,
+  LoanType,
+  PropertyType,
+} from '@/types/enums';
+
+const futureDate = () => new Date(Date.now() + 86400000).toISOString().slice(0, 10);
 
 describe('HouseholdSchema', () => {
   it('accepts a valid household', () => {
@@ -147,5 +165,288 @@ describe('GrowthScenarioSchema', () => {
   it('rejects rates outside 0-1', () => {
     expect(() => GrowthScenarioSchema.parse({ label: 'X', rate: 1.5 })).toThrow();
     expect(() => GrowthScenarioSchema.parse({ label: 'X', rate: -0.1 })).toThrow();
+  });
+});
+
+describe('AccountSchema', () => {
+  const valid = {
+    id: 1,
+    householdId: 1,
+    ownerPersonId: 1,
+    beneficiaryDependentId: null,
+    name: 'Vanguard 401k',
+    institution: 'Vanguard',
+    type: AccountType.ACCOUNT_401K,
+    cryptoWalletAddress: null,
+    autoFetchEnabled: false,
+    excludedFromNetWorth: false,
+    stateOfPlan: 'WA',
+  };
+
+  it('accepts a valid account', () => {
+    expect(() => AccountSchema.parse(valid)).not.toThrow();
+  });
+
+  it('rejects unknown account type', () => {
+    expect(() => AccountSchema.parse({ ...valid, type: 'BOGUS' })).toThrow();
+  });
+
+  it('rejects stateOfPlan that is not exactly 2 chars', () => {
+    expect(() => AccountSchema.parse({ ...valid, stateOfPlan: 'WAS' })).toThrow();
+    expect(() => AccountSchema.parse({ ...valid, stateOfPlan: 'W' })).toThrow();
+  });
+
+  it('rejects empty account name', () => {
+    expect(() => AccountSchema.parse({ ...valid, name: '' })).toThrow();
+  });
+});
+
+describe('HoldingSchema', () => {
+  const valid = {
+    id: 1,
+    accountId: 1,
+    ticker: 'VTI',
+    shareCount: 100,
+    targetAllocationPct: 0.6,
+    costBasis: 12000,
+  };
+
+  it('accepts a valid holding', () => {
+    expect(() => HoldingSchema.parse(valid)).not.toThrow();
+  });
+
+  it('rejects negative share count', () => {
+    expect(() => HoldingSchema.parse({ ...valid, shareCount: -1 })).toThrow();
+  });
+
+  it('rejects targetAllocationPct outside 0-1', () => {
+    expect(() => HoldingSchema.parse({ ...valid, targetAllocationPct: 1.5 })).toThrow();
+    expect(() => HoldingSchema.parse({ ...valid, targetAllocationPct: -0.1 })).toThrow();
+  });
+
+  it('rejects empty ticker', () => {
+    expect(() => HoldingSchema.parse({ ...valid, ticker: '' })).toThrow();
+  });
+});
+
+describe('ContributionSchema', () => {
+  const valid = {
+    id: 1,
+    accountId: 1,
+    personId: 1,
+    date: '2024-03-15',
+    amount: 1500,
+    source: ContributionSource.PAYCHECK,
+  };
+
+  it('accepts a valid contribution', () => {
+    expect(() => ContributionSchema.parse(valid)).not.toThrow();
+  });
+
+  it('rejects unknown contribution source', () => {
+    expect(() => ContributionSchema.parse({ ...valid, source: 'BOGUS' })).toThrow();
+  });
+
+  it('rejects negative amount', () => {
+    expect(() => ContributionSchema.parse({ ...valid, amount: -50 })).toThrow();
+  });
+
+  it('rejects contribution date in the future', () => {
+    expect(() => ContributionSchema.parse({ ...valid, date: futureDate() })).toThrow();
+  });
+});
+
+describe('AccountSnapshotSchema', () => {
+  const valid = {
+    id: 1,
+    accountId: 1,
+    snapshotDate: '2024-03-15',
+    totalValue: 50000,
+    source: SnapshotSource.MANUAL,
+  };
+
+  it('accepts a valid snapshot', () => {
+    expect(() => AccountSnapshotSchema.parse(valid)).not.toThrow();
+  });
+
+  it('rejects unknown snapshot source', () => {
+    expect(() => AccountSnapshotSchema.parse({ ...valid, source: 'BOGUS' })).toThrow();
+  });
+
+  it('accepts negative totalValue (margin accounts)', () => {
+    expect(() => AccountSnapshotSchema.parse({ ...valid, totalValue: -1000 })).not.toThrow();
+  });
+
+  it('accepts future snapshotDate (plain isoDateString)', () => {
+    expect(() =>
+      AccountSnapshotSchema.parse({ ...valid, snapshotDate: futureDate() })
+    ).not.toThrow();
+  });
+
+  it('rejects malformed snapshotDate', () => {
+    expect(() => AccountSnapshotSchema.parse({ ...valid, snapshotDate: '03/15/2024' })).toThrow();
+  });
+});
+
+describe('LoanSchema', () => {
+  const valid = {
+    id: 1,
+    householdId: 1,
+    obligorPersonId: 1,
+    name: 'Primary Mortgage',
+    type: LoanType.MORTGAGE,
+    originalAmount: 400000,
+    currentBalance: 350000,
+    interestRate: 0.065,
+    termMonths: 360,
+    firstPaymentDate: '2022-06-01',
+    monthlyPayment: 2528,
+    extraPaymentDefault: 0,
+    linkedPropertyId: 1,
+    linkedVehicleId: null,
+  };
+
+  it('accepts a valid loan', () => {
+    expect(() => LoanSchema.parse(valid)).not.toThrow();
+  });
+
+  it('rejects unknown loan type', () => {
+    expect(() => LoanSchema.parse({ ...valid, type: 'BOGUS' })).toThrow();
+  });
+
+  it('rejects negative originalAmount', () => {
+    expect(() => LoanSchema.parse({ ...valid, originalAmount: -100 })).toThrow();
+  });
+
+  it('rejects interestRate outside 0-1', () => {
+    expect(() => LoanSchema.parse({ ...valid, interestRate: 1.5 })).toThrow();
+    expect(() => LoanSchema.parse({ ...valid, interestRate: -0.01 })).toThrow();
+  });
+
+  it('accepts a future firstPaymentDate (plain isoDateString)', () => {
+    expect(() =>
+      LoanSchema.parse({ ...valid, firstPaymentDate: futureDate() })
+    ).not.toThrow();
+  });
+});
+
+describe('LoanPaymentSchema', () => {
+  const valid = {
+    id: 1,
+    loanId: 1,
+    paymentDate: '2024-03-15',
+    principal: 500,
+    interest: 1000,
+    extra: 100,
+    source: 'AMORTIZATION' as const,
+  };
+
+  it('accepts a valid loan payment', () => {
+    expect(() => LoanPaymentSchema.parse(valid)).not.toThrow();
+  });
+
+  it('rejects unknown payment source', () => {
+    expect(() => LoanPaymentSchema.parse({ ...valid, source: 'BOGUS' })).toThrow();
+  });
+
+  it('rejects negative principal', () => {
+    expect(() => LoanPaymentSchema.parse({ ...valid, principal: -10 })).toThrow();
+  });
+
+  it('rejects negative interest', () => {
+    expect(() => LoanPaymentSchema.parse({ ...valid, interest: -10 })).toThrow();
+  });
+});
+
+describe('PropertySchema', () => {
+  const valid = {
+    id: 1,
+    householdId: 1,
+    ownerPersonId: 1,
+    name: 'Seattle House',
+    type: PropertyType.PRIMARY_RESIDENCE,
+    address: '123 Main St',
+    purchaseDate: '2021-04-01',
+    purchasePrice: 600000,
+    currentEstimatedValue: 750000,
+    linkedLoanId: 1,
+    excludedFromNetWorth: false,
+  };
+
+  it('accepts a valid property', () => {
+    expect(() => PropertySchema.parse(valid)).not.toThrow();
+  });
+
+  it('accepts a property with nullable optional fields', () => {
+    expect(() =>
+      PropertySchema.parse({
+        ...valid,
+        address: null,
+        purchaseDate: null,
+        purchasePrice: null,
+        currentEstimatedValue: null,
+        linkedLoanId: null,
+      })
+    ).not.toThrow();
+  });
+
+  it('rejects unknown property type', () => {
+    expect(() => PropertySchema.parse({ ...valid, type: 'BOGUS' })).toThrow();
+  });
+
+  it('rejects negative purchasePrice', () => {
+    expect(() => PropertySchema.parse({ ...valid, purchasePrice: -100 })).toThrow();
+  });
+
+  it('rejects purchaseDate in the future', () => {
+    expect(() => PropertySchema.parse({ ...valid, purchaseDate: futureDate() })).toThrow();
+  });
+});
+
+describe('VehicleSchema', () => {
+  const valid = {
+    id: 1,
+    householdId: 1,
+    ownerPersonId: 1,
+    name: 'Family SUV',
+    year: 2020,
+    make: 'Toyota',
+    model: 'Highlander',
+    purchaseDate: '2020-08-12',
+    purchasePrice: 38000,
+    currentEstimatedValue: 28000,
+    linkedLoanId: null,
+    excludedFromNetWorth: false,
+  };
+
+  it('accepts a valid vehicle', () => {
+    expect(() => VehicleSchema.parse(valid)).not.toThrow();
+  });
+
+  it('accepts a vehicle with nullable optional fields', () => {
+    expect(() =>
+      VehicleSchema.parse({
+        ...valid,
+        year: null,
+        make: null,
+        model: null,
+        purchaseDate: null,
+        purchasePrice: null,
+        currentEstimatedValue: null,
+      })
+    ).not.toThrow();
+  });
+
+  it('rejects year outside 1900-2100', () => {
+    expect(() => VehicleSchema.parse({ ...valid, year: 1899 })).toThrow();
+    expect(() => VehicleSchema.parse({ ...valid, year: 2101 })).toThrow();
+  });
+
+  it('rejects negative purchasePrice', () => {
+    expect(() => VehicleSchema.parse({ ...valid, purchasePrice: -100 })).toThrow();
+  });
+
+  it('rejects purchaseDate in the future', () => {
+    expect(() => VehicleSchema.parse({ ...valid, purchaseDate: futureDate() })).toThrow();
   });
 });

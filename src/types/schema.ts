@@ -1,5 +1,13 @@
 import { z } from 'zod';
-import { FilingStatus, DependentType } from './enums';
+import {
+  FilingStatus,
+  DependentType,
+  AccountType,
+  ContributionSource,
+  SnapshotSource,
+  LoanType,
+  PropertyType,
+} from './enums';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -55,3 +63,107 @@ export const DependentSchema = z.object({
   type: z.nativeEnum(DependentType),
 });
 export type Dependent = z.infer<typeof DependentSchema>;
+
+export const AccountSchema = z.object({
+  id: z.number().int().positive().optional(),
+  householdId: z.number().int().positive(),
+  ownerPersonId: z.number().int().positive().nullable(),
+  beneficiaryDependentId: z.number().int().positive().nullable(),
+  name: z.string().min(1).max(100),
+  institution: z.string().max(100).nullable(),
+  type: z.nativeEnum(AccountType),
+  cryptoWalletAddress: z.string().max(200).nullable(),
+  autoFetchEnabled: z.boolean(),
+  excludedFromNetWorth: z.boolean(),
+  stateOfPlan: z.string().length(2).nullable(),
+});
+export type Account = z.infer<typeof AccountSchema>;
+
+export const HoldingSchema = z.object({
+  id: z.number().int().positive().optional(),
+  accountId: z.number().int().positive(),
+  ticker: z.string().min(1).max(20),
+  shareCount: z.number().nonnegative(),
+  targetAllocationPct: z.number().min(0).max(1).nullable(),
+  costBasis: z.number().nonnegative().nullable(),
+});
+export type Holding = z.infer<typeof HoldingSchema>;
+
+export const ContributionSchema = z.object({
+  id: z.number().int().positive().optional(),
+  accountId: z.number().int().positive(),
+  personId: z.number().int().positive().nullable(),
+  date: pastOrTodayDate,
+  amount: z.number().nonnegative(),
+  source: z.nativeEnum(ContributionSource),
+});
+export type Contribution = z.infer<typeof ContributionSchema>;
+
+export const AccountSnapshotSchema = z.object({
+  id: z.number().int().positive().optional(),
+  accountId: z.number().int().positive(),
+  snapshotDate: isoDateString,
+  totalValue: z.number(),
+  source: z.nativeEnum(SnapshotSource),
+});
+export type AccountSnapshot = z.infer<typeof AccountSnapshotSchema>;
+
+export const LoanSchema = z.object({
+  id: z.number().int().positive().optional(),
+  householdId: z.number().int().positive(),
+  obligorPersonId: z.number().int().positive().nullable(),
+  name: z.string().min(1).max(100),
+  type: z.nativeEnum(LoanType),
+  originalAmount: z.number().nonnegative(),
+  currentBalance: z.number().nonnegative(),
+  interestRate: z.number().min(0).max(1),
+  termMonths: z.number().int().positive(),
+  firstPaymentDate: isoDateString,
+  monthlyPayment: z.number().nonnegative(),
+  extraPaymentDefault: z.number().nonnegative(),
+  linkedPropertyId: z.number().int().positive().nullable(),
+  linkedVehicleId: z.number().int().positive().nullable(),
+});
+export type Loan = z.infer<typeof LoanSchema>;
+
+export const LoanPaymentSchema = z.object({
+  id: z.number().int().positive().optional(),
+  loanId: z.number().int().positive(),
+  paymentDate: isoDateString,
+  principal: z.number().nonnegative(),
+  interest: z.number().nonnegative(),
+  extra: z.number().nonnegative(),
+  source: z.enum(['AMORTIZATION', 'MANUAL', 'IMPORTED']),
+});
+export type LoanPayment = z.infer<typeof LoanPaymentSchema>;
+
+export const PropertySchema = z.object({
+  id: z.number().int().positive().optional(),
+  householdId: z.number().int().positive(),
+  ownerPersonId: z.number().int().positive().nullable(),
+  name: z.string().min(1).max(100),
+  type: z.nativeEnum(PropertyType),
+  address: z.string().max(200).nullable(),
+  purchaseDate: pastOrTodayDate.nullable(),
+  purchasePrice: z.number().nonnegative().nullable(),
+  currentEstimatedValue: z.number().nonnegative().nullable(),
+  linkedLoanId: z.number().int().positive().nullable(),
+  excludedFromNetWorth: z.boolean(),
+});
+export type Property = z.infer<typeof PropertySchema>;
+
+export const VehicleSchema = z.object({
+  id: z.number().int().positive().optional(),
+  householdId: z.number().int().positive(),
+  ownerPersonId: z.number().int().positive().nullable(),
+  name: z.string().min(1).max(100),
+  year: z.number().int().min(1900).max(2100).nullable(),
+  make: z.string().max(50).nullable(),
+  model: z.string().max(50).nullable(),
+  purchaseDate: pastOrTodayDate.nullable(),
+  purchasePrice: z.number().nonnegative().nullable(),
+  currentEstimatedValue: z.number().nonnegative().nullable(),
+  linkedLoanId: z.number().int().positive().nullable(),
+  excludedFromNetWorth: z.boolean(),
+});
+export type Vehicle = z.infer<typeof VehicleSchema>;
