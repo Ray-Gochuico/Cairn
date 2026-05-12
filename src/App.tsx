@@ -15,6 +15,7 @@ import InputsLayout from './pages/inputs/InputsLayout';
 import HouseholdTab from './pages/inputs/HouseholdTab';
 import PersonsTab from './pages/inputs/PersonsTab';
 import DependentsTab from './pages/inputs/DependentsTab';
+import AccountsTab from './pages/inputs/AccountsTab';
 import ComingSoonTab from './pages/inputs/tabs-coming-soon';
 
 const router = createBrowserRouter([
@@ -41,7 +42,7 @@ const router = createBrowserRouter([
           { path: 'household', element: <HouseholdTab /> },
           { path: 'persons', element: <PersonsTab /> },
           { path: 'dependents', element: <DependentsTab /> },
-          { path: 'accounts', element: <ComingSoonTab name="Accounts" phase={2} /> },
+          { path: 'accounts', element: <AccountsTab /> },
           { path: 'holdings', element: <ComingSoonTab name="Holdings" phase={2} /> },
           { path: 'contributions', element: <ComingSoonTab name="Contributions" phase={2} /> },
           { path: 'loans', element: <ComingSoonTab name="Loans" phase={2} /> },
