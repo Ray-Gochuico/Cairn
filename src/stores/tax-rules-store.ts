@@ -34,6 +34,7 @@ export const useTaxRulesStore = create<TaxRulesState>((set, get) => ({
     return (
       get().items.find(
         (r) =>
+          r.year === get().year &&
           r.jurisdictionType === jurisdictionType &&
           r.jurisdictionCode === code &&
           r.filingStatus === filingStatus,

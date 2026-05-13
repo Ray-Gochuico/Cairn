@@ -186,4 +186,30 @@ describe('useTaxRulesStore', () => {
     expect(error).not.toBeNull();
     expect(isLoading).toBe(false);
   });
+
+  it('lookup respects the currently-loaded year', async () => {
+    // Insert two rows: same jurisdiction/filingStatus, different years
+    await db.execute(
+      `INSERT INTO tax_rules (year, jurisdiction_type, jurisdiction_code, filing_status, brackets, standard_deduction) VALUES (?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?)`,
+      [
+        2025, 'FEDERAL', 'US', FilingStatus.SINGLE, JSON.stringify([{ min: 0, max: null, rate: 0.10 }]), 13850,
+        2026, 'FEDERAL', 'US', FilingStatus.SINGLE, JSON.stringify([{ min: 0, max: null, rate: 0.12 }]), 14600,
+      ],
+    );
+
+    await useTaxRulesStore.getState().loadYear(2026);
+    const rule2026 = useTaxRulesStore.getState().lookup('FEDERAL', 'US', FilingStatus.SINGLE);
+    expect(rule2026?.year).toBe(2026);
+    expect(rule2026?.standardDeduction).toBe(14600);
+
+    // Manually inject the 2025 row into items WITHOUT changing year — verify lookup still only returns 2026
+    useTaxRulesStore.setState({
+      items: [
+        ...useTaxRulesStore.getState().items,
+        { id: 99, year: 2025, jurisdictionType: 'FEDERAL', jurisdictionCode: 'US', filingStatus: FilingStatus.SINGLE, brackets: [{ min: 0, max: null, rate: 0.10 }], standardDeduction: 13850 },
+      ],
+    });
+    const ruleStillThere = useTaxRulesStore.getState().lookup('FEDERAL', 'US', FilingStatus.SINGLE);
+    expect(ruleStillThere?.year).toBe(2026);
+  });
 });
