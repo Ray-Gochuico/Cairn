@@ -1,6 +1,5 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App';
 import './globals.css';
 import { initDatabase } from './db/init';
 import { getDatabase } from './db/db';
@@ -47,6 +46,13 @@ async function bootstrap() {
         }
       })();
     }
+
+    // Dynamic-import App so createBrowserRouter inside App.tsx only runs
+    // after the first-launch replaceState above. A static import would
+    // execute App.tsx at module load — before bootstrap() ran — and the
+    // router would capture window.location.pathname === '/', then ignore
+    // the subsequent URL change.
+    const { default: App } = await import('./App');
 
     ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
       <React.StrictMode>
