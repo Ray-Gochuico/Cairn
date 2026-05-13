@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluateBrackets, type Bracket, computeFica } from '@/lib/tax';
+import { evaluateBrackets, type Bracket, computeFica, computePretaxDeductions, computeBonusTax } from '@/lib/tax';
 
 const federal2026Single: Bracket[] = [
   { min: 0, max: 11600, rate: 0.10 },
@@ -52,5 +52,70 @@ describe('computeFica', () => {
     // 300000 MFJ: SS capped; Medicare: 300000 × 0.0145 + (300000-250000) × 0.009 = 4350 + 450 = 4800
     // total: 10918.2 + 4800 = 15718.2
     expect(computeFica(300000, 'MFJ')).toBeCloseTo(15718.2, 1);
+  });
+});
+
+describe('computePretaxDeductions', () => {
+  it('caps 401k at $24,500', () => {
+    const result = computePretaxDeductions({
+      salary: 200000,
+      pretax401kPct: 0.20,                        // 200k × 20% = 40k (over cap)
+      healthInsuranceMonthlyPremium: 0,
+      dcfsaMonthly: 0,
+      hsaMonthly: 0,
+      hsaEligible: false,
+      filingStatus: 'SINGLE',
+      personCount: 1,
+      dependentCount: 0,
+    });
+    expect(result.pretax401k).toBe(24500);
+  });
+  it('caps DCFSA at $5k for SINGLE', () => {
+    const result = computePretaxDeductions({
+      salary: 100000, pretax401kPct: 0, healthInsuranceMonthlyPremium: 0,
+      dcfsaMonthly: 1000,                         // 12k > 5k cap
+      hsaMonthly: 0, hsaEligible: false,
+      filingStatus: 'SINGLE', personCount: 1, dependentCount: 0,
+    });
+    expect(result.pretaxDcfsa).toBe(5000);
+  });
+  it('caps HSA at family limit when household has 2 persons', () => {
+    const result = computePretaxDeductions({
+      salary: 100000, pretax401kPct: 0, healthInsuranceMonthlyPremium: 0,
+      dcfsaMonthly: 0,
+      hsaMonthly: 1000,                           // 12k > 8750 family cap
+      hsaEligible: true,
+      filingStatus: 'MFJ', personCount: 2, dependentCount: 0,
+    });
+    expect(result.pretaxHsa).toBe(8750);
+  });
+  it('returns 0 HSA when not eligible regardless of monthly entry', () => {
+    const result = computePretaxDeductions({
+      salary: 100000, pretax401kPct: 0, healthInsuranceMonthlyPremium: 0,
+      dcfsaMonthly: 0, hsaMonthly: 500, hsaEligible: false,
+      filingStatus: 'SINGLE', personCount: 1, dependentCount: 0,
+    });
+    expect(result.pretaxHsa).toBe(0);
+  });
+});
+
+describe('computeBonusTax', () => {
+  const state: Bracket[] = [{ min: 0, max: null, rate: 0.05 }];
+  const stdDeduction = 14600;
+
+  it('produces a positive marginal rate on bonus', () => {
+    const result = computeBonusTax({
+      personGross: 100000,
+      bonus: 20000,
+      pretax: { pretax401k: 0, pretaxHealth: 0, pretaxDcfsa: 0, pretaxHsa: 0 },
+      filingStatus: 'SINGLE',
+      federalBrackets: federal2026Single,
+      stateBrackets: state,
+      cityBrackets: null,
+      standardDeduction: stdDeduction,
+    });
+    expect(result.marginalRateOnBonus).toBeGreaterThan(0);
+    expect(result.marginalRateOnBonus).toBeLessThan(1);
+    expect(result.bonusTakeHome).toBeCloseTo(20000 * (1 - result.marginalRateOnBonus), 2);
   });
 });
