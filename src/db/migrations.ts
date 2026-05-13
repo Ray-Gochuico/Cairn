@@ -41,7 +41,9 @@ export async function runMigrations(db: Database, migrations: Migration[]): Prom
 
 export async function loadAllMigrations(): Promise<Migration[]> {
   const m0001 = (await import('./migrations/0001_initial.sql?raw')).default;
+  const m0002 = (await import('./migrations/0002_seed_tax_rules.sql?raw')).default;
   return [
     { version: '0001_initial', sql: m0001 },
+    { version: '0002_seed_tax_rules', sql: m0002 },
   ];
 }
