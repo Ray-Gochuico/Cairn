@@ -46,18 +46,20 @@ export default function MetricCard({
   const card = (
     <Card
       className={cn(
-        'h-full',
+        'h-full min-w-0',
         href && 'transition-colors hover:bg-accent/40 cursor-pointer',
       )}
     >
       <CardHeader className="pb-2">
-        <div className="text-xs uppercase tracking-wider text-muted-foreground">
+        <div className="text-xs uppercase tracking-wider text-muted-foreground truncate">
           {label}
         </div>
       </CardHeader>
-      <CardContent className="space-y-1">
-        <div className="flex items-baseline gap-2 flex-wrap">
-          <div className="text-3xl font-semibold leading-none">{value}</div>
+      <CardContent className="space-y-1 min-w-0">
+        <div className="flex items-baseline gap-2 flex-wrap min-w-0">
+          <div className="text-2xl sm:text-3xl font-semibold leading-tight tabular-nums break-words min-w-0">
+            {value}
+          </div>
           {delta ? (
             <div className={cn('text-sm font-medium', deltaClass(deltaTone))}>
               {delta}

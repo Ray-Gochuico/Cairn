@@ -266,8 +266,8 @@ export default function Dashboard() {
       </div>
 
       {isInputPending && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-4 flex items-center justify-between gap-4">
-          <div>
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-4 flex flex-wrap items-center justify-between gap-4">
+          <div className="min-w-0">
             <div className="font-medium text-amber-900">Monthly input pending</div>
             <div className="text-sm text-amber-900/80">
               Confirm this month's account balances and loan payments.
