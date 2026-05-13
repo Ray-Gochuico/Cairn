@@ -28,9 +28,9 @@ describe('TaxRulesRepo', () => {
     await db.close();
   });
 
-  it('listForYear returns 4 federal rules + 204 state rules (208 total) when seed migration applied', async () => {
+  it('listForYear returns 4 federal + 204 state + 1020 city rules (1228 total) when seed migration applied', async () => {
     const result = await repo.listForYear(2026);
-    expect(result).toHaveLength(208);  // 4 federal + (51 states × 4 filing statuses)
+    expect(result).toHaveLength(1228);  // 4 federal + (51 states × 4 filing statuses) + (255 cities × 4 filing statuses)
     expect(result.some(r => r.filingStatus === 'SINGLE')).toBe(true);
     expect(result.some(r => r.filingStatus === 'MFJ')).toBe(true);
   });
@@ -241,5 +241,83 @@ describe('0002 state seed', () => {
     const single = await repo.lookup(2026, 'STATE', 'CA', 'SINGLE');
     const mfj = await repo.lookup(2026, 'STATE', 'CA', 'MFJ');
     expect(mfj!.brackets).not.toEqual(single!.brackets);
+  });
+});
+
+describe('0002 city seed', () => {
+  let db: SqliteAdapter;
+  let repo: TaxRulesRepo;
+
+  beforeEach(async () => {
+    db = new SqliteAdapter(':memory:');
+    await runMigrations(db, [
+      { version: '0001_initial', sql: loadInitialMigration() },
+      { version: '0002_seed_tax_rules', sql: loadTaxRulesSeed() },
+    ]);
+    repo = new TaxRulesRepo(db);
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  it('seeds NYC with progressive brackets — SINGLE differs from MFJ', async () => {
+    const single = await repo.lookup(2026, 'CITY', 'NY_NYC', 'SINGLE');
+    const mfj = await repo.lookup(2026, 'CITY', 'NY_NYC', 'MFJ');
+    expect(single).not.toBeNull();
+    expect(mfj).not.toBeNull();
+    expect(single!.brackets[0].rate).toBeCloseTo(0.03078, 5);
+    expect(single!.brackets[0].max).toBe(12000);
+    expect(mfj!.brackets[0].max).toBe(21600);
+    expect(single!.brackets).not.toEqual(mfj!.brackets);
+  });
+
+  it('seeds Philadelphia as a flat 3.75% resident wage tax', async () => {
+    const rule = await repo.lookup(2026, 'CITY', 'PA_PHILADELPHIA', 'SINGLE');
+    expect(rule).not.toBeNull();
+    expect(rule!.brackets).toEqual([{ min: 0, max: null, rate: 0.0375 }]);
+  });
+
+  it('seeds Detroit at 2.4% flat (resident)', async () => {
+    const rule = await repo.lookup(2026, 'CITY', 'MI_DETROIT', 'SINGLE');
+    expect(rule!.brackets[0].rate).toBeCloseTo(0.024, 4);
+  });
+
+  it('seeds Multnomah County PFA with 0/1.5%/3% tiered brackets (SINGLE)', async () => {
+    const rule = await repo.lookup(2026, 'CITY', 'OR_MULTNOMAH_COUNTY', 'SINGLE');
+    expect(rule).not.toBeNull();
+    expect(rule!.brackets).toEqual([
+      { min: 0, max: 125000, rate: 0 },
+      { min: 125000, max: 250000, rate: 0.015 },
+      { min: 250000, max: null, rate: 0.03 },
+    ]);
+  });
+
+  it('Multnomah County PFA MFJ tier boundaries differ from SINGLE', async () => {
+    const single = await repo.lookup(2026, 'CITY', 'OR_MULTNOMAH_COUNTY', 'SINGLE');
+    const mfj = await repo.lookup(2026, 'CITY', 'OR_MULTNOMAH_COUNTY', 'MFJ');
+    expect(single!.brackets[1].min).toBe(125000);
+    expect(mfj!.brackets[1].min).toBe(200000);
+  });
+
+  it('seeds Cleveland and Columbus as flat 2.5%', async () => {
+    const cle = await repo.lookup(2026, 'CITY', 'OH_CLEVELAND', 'SINGLE');
+    const col = await repo.lookup(2026, 'CITY', 'OH_COLUMBUS', 'SINGLE');
+    expect(cle!.brackets[0].rate).toBeCloseTo(0.025, 4);
+    expect(col!.brackets[0].rate).toBeCloseTo(0.025, 4);
+  });
+
+  it('does NOT seed Yonkers (resident surcharge cannot encode as flat bracket)', async () => {
+    expect(await repo.lookup(2026, 'CITY', 'NY_YONKERS', 'SINGLE')).toBeNull();
+  });
+
+  it('does NOT seed Denver (Colorado $/month occupational privilege tax)', async () => {
+    expect(await repo.lookup(2026, 'CITY', 'CO_DENVER', 'SINGLE')).toBeNull();
+  });
+
+  it('seeds 1020 city rows total (255 localities × 4 filing statuses)', async () => {
+    const rules = await repo.listForYear(2026);
+    const cityRules = rules.filter((r) => r.jurisdictionType === 'CITY');
+    expect(cityRules.length).toBe(1020);
   });
 });
