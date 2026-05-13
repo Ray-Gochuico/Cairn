@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { CONTRIBUTION_LIMITS_2026, hsaLimitForHousehold } from '@/lib/contribution-limits';
+import { CONTRIBUTION_LIMITS_2026, hsaLimitForHousehold, dcfsaLimit } from '@/lib/contribution-limits';
 
 describe('CONTRIBUTION_LIMITS_2026', () => {
   it('matches IRS-published 2026 limits', () => {
@@ -21,5 +21,16 @@ describe('hsaLimitForHousehold', () => {
   });
   it('returns self-only limit for single adult, no dependents', () => {
     expect(hsaLimitForHousehold({ personCount: 1, dependentCount: 0 })).toBe(4400);
+  });
+});
+
+describe('dcfsaLimit', () => {
+  it('returns 2500 for MFS filing status', () => {
+    expect(dcfsaLimit('MFS')).toBe(2500);
+  });
+  it('returns 5000 for SINGLE, MFJ, and HOH filing statuses', () => {
+    expect(dcfsaLimit('SINGLE')).toBe(5000);
+    expect(dcfsaLimit('MFJ')).toBe(5000);
+    expect(dcfsaLimit('HOH')).toBe(5000);
   });
 });
