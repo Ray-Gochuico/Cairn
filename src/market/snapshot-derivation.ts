@@ -29,12 +29,24 @@ const SKIPPED_ACCOUNT_TYPES = new Set<AccountType>([
 /**
  * Derive an AUTO_DERIVED snapshot for each non-cash, non-excluded account
  * for the given month. Snapshot date is the last business day of `yyyymm`.
+ *
+ * If that date is in the future (i.e., the month hasn't ended yet),
+ * skip silently. Yahoo's chart endpoint rejects future dates with a 400,
+ * and conceptually there is no end-of-month value to compute yet.
+ * Callers see this as "no snapshot for the current month until it ends",
+ * which matches the auto-EOM semantics in the spec.
  */
 export async function deriveSnapshotsForMonth(
   yyyymm: string,
-  deps: SnapshotDerivationDeps
+  deps: SnapshotDerivationDeps,
+  now: Date = new Date()
 ): Promise<void> {
   const snapshotDate = lastBusinessDayOfMonth(yyyymm);
+  const todayIso = now.toISOString().slice(0, 10);
+  if (snapshotDate >= todayIso) {
+    // Month hasn't closed yet — Yahoo would 400 on the future-dated query.
+    return;
+  }
   const allAccounts = await deps.accounts.list();
 
   for (const account of allAccounts) {
@@ -85,7 +97,7 @@ export async function deriveLast12Months(
 
   for (const month of months) {
     try {
-      await deriveSnapshotsForMonth(month, deps);
+      await deriveSnapshotsForMonth(month, deps, now);
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn(`[snapshot-derivation] failed for ${month}:`, err);
