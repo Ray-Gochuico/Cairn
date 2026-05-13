@@ -118,4 +118,52 @@ describe('computeBonusTax', () => {
     expect(result.marginalRateOnBonus).toBeLessThan(1);
     expect(result.bonusTakeHome).toBeCloseTo(20000 * (1 - result.marginalRateOnBonus), 2);
   });
+
+  it('Test A: zero-bonus path guards against division by zero', () => {
+    const result = computeBonusTax({
+      personGross: 100000,
+      bonus: 0,
+      pretax: { pretax401k: 0, pretaxHealth: 0, pretaxDcfsa: 0, pretaxHsa: 0 },
+      filingStatus: 'SINGLE',
+      federalBrackets: federal2026Single,
+      stateBrackets: state,
+      cityBrackets: null,
+      standardDeduction: stdDeduction,
+    });
+    expect(result.marginalRateOnBonus).toBe(0);
+    expect(result.bonusTakeHome).toBe(0);
+  });
+
+  it('Test B: anchors to known numeric scenario without city tax', () => {
+    const result = computeBonusTax({
+      personGross: 100000,
+      bonus: 10000,
+      pretax: { pretax401k: 0, pretaxHealth: 0, pretaxDcfsa: 0, pretaxHsa: 0 },
+      filingStatus: 'SINGLE',
+      federalBrackets: federal2026Single,
+      stateBrackets: state,
+      cityBrackets: null,
+      standardDeduction: stdDeduction,
+    });
+    // Expected: marginal tax on bonus = 3465, marginal rate = 0.3465, take-home = 6535
+    expect(result.marginalRateOnBonus).toBeCloseTo(0.3465, 3);
+    expect(result.bonusTakeHome).toBeCloseTo(6535, 0);
+  });
+
+  it('Test C: anchors with city tax applied', () => {
+    const city: Bracket[] = [{ min: 0, max: null, rate: 0.03 }];
+    const result = computeBonusTax({
+      personGross: 100000,
+      bonus: 10000,
+      pretax: { pretax401k: 0, pretaxHealth: 0, pretaxDcfsa: 0, pretaxHsa: 0 },
+      filingStatus: 'SINGLE',
+      federalBrackets: federal2026Single,
+      stateBrackets: state,
+      cityBrackets: city,
+      standardDeduction: stdDeduction,
+    });
+    // City tax adds 3% to adjusted income; marginal rate should increase by ~0.03
+    expect(result.cityTax).toBeGreaterThan(0);
+    expect(result.marginalRateOnBonus).toBeGreaterThan(0.3465 + 0.025);
+  });
 });

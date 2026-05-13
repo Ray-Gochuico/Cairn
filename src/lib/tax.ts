@@ -91,6 +91,15 @@ export interface BonusTaxOutput {
   bonusTakeHome: number;
 }
 
+/**
+ * Computes federal + FICA + state + city tax on a person's full gross (salary + bonus)
+ * and derives the marginal rate paid on the bonus portion via a with/without-bonus diff.
+ *
+ * ASSUMPTION: `pretax` and `standardDeduction` are static across the with/without-bonus
+ * paths. Callers should compute pretax deductions ONCE against base salary using
+ * `computePretaxDeductions`, then pass the fixed result here. The bonus does not re-trigger
+ * pretax caps in this calc.
+ */
 export function computeBonusTax(input: BonusTaxInput): BonusTaxOutput {
   const pretaxTotal = input.pretax.pretax401k + input.pretax.pretaxHealth + input.pretax.pretaxDcfsa + input.pretax.pretaxHsa;
   const adjusted = Math.max(0, input.personGross - pretaxTotal - input.standardDeduction);
