@@ -28,9 +28,9 @@ describe('TaxRulesRepo', () => {
     await db.close();
   });
 
-  it('listForYear returns 4 federal rules when seed migration applied', async () => {
+  it('listForYear returns 4 federal rules + 204 state rules (208 total) when seed migration applied', async () => {
     const result = await repo.listForYear(2026);
-    expect(result).toHaveLength(4);
+    expect(result).toHaveLength(208);  // 4 federal + (51 states × 4 filing statuses)
     expect(result.some(r => r.filingStatus === 'SINGLE')).toBe(true);
     expect(result.some(r => r.filingStatus === 'MFJ')).toBe(true);
   });
@@ -128,10 +128,10 @@ describe('TaxRulesRepo', () => {
     ];
     await db.execute(
       `INSERT INTO tax_rules (year, jurisdiction_type, jurisdiction_code, filing_status, brackets, standard_deduction) VALUES (?, ?, ?, ?, ?, ?)`,
-      [2026, 'STATE', 'CA', 'SINGLE', JSON.stringify(complexBrackets), 7500]
+      [2025, 'STATE', 'XX', 'SINGLE', JSON.stringify(complexBrackets), 7500]
     );
 
-    const result = await repo.lookup(2026, 'STATE', 'CA', FilingStatus.SINGLE);
+    const result = await repo.lookup(2025, 'STATE', 'XX', FilingStatus.SINGLE);
     expect(result!.brackets).toHaveLength(4);
     expect(result!.brackets[2].max).toBe(50000);
     expect(result!.brackets[3].rate).toBe(0.22);
@@ -171,5 +171,75 @@ describe('0002_seed_tax_rules.sql seed', () => {
   it('does NOT seed FICA into tax_rules (FICA is constants-only in src/lib/tax.ts)', async () => {
     const rule = await repo.lookup(2026, 'FICA', 'US', 'SINGLE');
     expect(rule).toBeNull();
+  });
+});
+
+describe('0002 state seed', () => {
+  let db: SqliteAdapter;
+  let repo: TaxRulesRepo;
+
+  beforeEach(async () => {
+    db = new SqliteAdapter(':memory:');
+    await runMigrations(db, [
+      { version: '0001_initial', sql: loadInitialMigration() },
+      { version: '0002_seed_tax_rules', sql: loadTaxRulesSeed() },
+    ]);
+    repo = new TaxRulesRepo(db);
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  it('seeds all 50 states + DC for each filing status', async () => {
+    const rules = await repo.listForYear(2026);
+    const stateRules = rules.filter((r) => r.jurisdictionType === 'STATE');
+    expect(stateRules.length).toBe(204);  // 51 jurisdictions × 4 filing statuses
+  });
+
+  it('seeds CA progressive brackets — SINGLE starts at 1%', async () => {
+    const rule = await repo.lookup(2026, 'STATE', 'CA', 'SINGLE');
+    expect(rule).not.toBeNull();
+    expect(rule!.brackets[0].rate).toBe(0.01);
+    // California has many brackets; just confirm the structure
+    expect(rule!.brackets.length).toBeGreaterThan(5);
+  });
+
+  it('seeds TX as zero-rate (no wage income tax)', async () => {
+    const rule = await repo.lookup(2026, 'STATE', 'TX', 'SINGLE');
+    expect(rule!.brackets).toEqual([{ min: 0, max: null, rate: 0 }]);
+    expect(rule!.standardDeduction).toBe(0);
+  });
+
+  it('seeds NC as flat 3.99%', async () => {
+    const rule = await repo.lookup(2026, 'STATE', 'NC', 'SINGLE');
+    expect(rule!.brackets[0].rate).toBeCloseTo(0.0399, 4);
+  });
+
+  it('Idaho has an explicit 0% zero-tax bracket below $4,811 then 5.3% above', async () => {
+    const rule = await repo.lookup(2026, 'STATE', 'ID', 'SINGLE');
+    expect(rule!.brackets.length).toBe(2);
+    expect(rule!.brackets[0]).toEqual({ min: 0, max: 4811, rate: 0 });
+    expect(rule!.brackets[1].rate).toBeCloseTo(0.053, 4);
+  });
+
+  it('NY has progressive brackets with the top tier above $25M', async () => {
+    const rule = await repo.lookup(2026, 'STATE', 'NY', 'SINGLE');
+    expect(rule).not.toBeNull();
+    expect(rule!.brackets[rule!.brackets.length - 1].max).toBeNull();
+    expect(rule!.brackets.some((b) => b.min === 25000000)).toBe(true);
+  });
+
+  it('MFS uses the SINGLE schedule (Phase 3 simplification)', async () => {
+    const single = await repo.lookup(2026, 'STATE', 'CA', 'SINGLE');
+    const mfs = await repo.lookup(2026, 'STATE', 'CA', 'MFS');
+    expect(mfs!.brackets).toEqual(single!.brackets);
+    expect(mfs!.standardDeduction).toBe(single!.standardDeduction);
+  });
+
+  it('MFJ has its own schedule distinct from SINGLE for progressive states', async () => {
+    const single = await repo.lookup(2026, 'STATE', 'CA', 'SINGLE');
+    const mfj = await repo.lookup(2026, 'STATE', 'CA', 'MFJ');
+    expect(mfj!.brackets).not.toEqual(single!.brackets);
   });
 });
