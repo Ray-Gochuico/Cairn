@@ -186,7 +186,7 @@ export const TaxRuleSchema = z.object({
   id: z.number().int().positive().optional(),
   year: z.number().int().min(2000).max(2100),
   jurisdictionType: z.nativeEnum(JurisdictionType),
-  jurisdictionCode: z.string().min(1).max(20),
+  jurisdictionCode: z.string().min(1).max(40),
   filingStatus: z.nativeEnum(FilingStatus),
   brackets: z.array(BracketSchema).min(1).refine(
     (rows) => rows.every((b, i) => i === 0 || b.min >= (rows[i - 1].max ?? Infinity)),
