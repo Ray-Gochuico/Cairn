@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { VehicleSchema, type Vehicle } from '@/types/schema';
 import { Button } from '@/components/ui/button';
+import DatePicker from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -150,10 +151,15 @@ export default function VehicleForm({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label htmlFor="purchaseDate">Purchase date (optional)</Label>
-              <Input
+              <DatePicker
                 id="purchaseDate"
-                type="date"
-                {...form.register('purchaseDate', { setValueAs: (v) => (v === '' ? null : v) })}
+                value={form.watch('purchaseDate') ?? ''}
+                onChange={(v) =>
+                  form.setValue('purchaseDate', v === '' ? null : v, {
+                    shouldDirty: true,
+                    shouldTouch: true,
+                  })
+                }
               />
             </div>
             <div>

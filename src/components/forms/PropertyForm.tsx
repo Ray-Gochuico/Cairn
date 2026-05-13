@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { PropertySchema, type Property } from '@/types/schema';
 import { PropertyType } from '@/types/enums';
 import { Button } from '@/components/ui/button';
+import DatePicker from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -152,10 +153,15 @@ export default function PropertyForm({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label htmlFor="purchaseDate">Purchase date (optional)</Label>
-              <Input
+              <DatePicker
                 id="purchaseDate"
-                type="date"
-                {...form.register('purchaseDate', { setValueAs: (v) => (v === '' ? null : v) })}
+                value={form.watch('purchaseDate') ?? ''}
+                onChange={(v) =>
+                  form.setValue('purchaseDate', v === '' ? null : v, {
+                    shouldDirty: true,
+                    shouldTouch: true,
+                  })
+                }
               />
             </div>
             <div>

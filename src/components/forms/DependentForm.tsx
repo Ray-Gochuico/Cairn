@@ -3,6 +3,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { DependentSchema, type Dependent } from '@/types/schema';
 import { DependentType } from '@/types/enums';
 import { Button } from '@/components/ui/button';
+import DatePicker from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -49,7 +50,13 @@ export default function DependentForm({
           </div>
           <div>
             <Label htmlFor="dateOfBirth">Date of birth</Label>
-            <Input id="dateOfBirth" type="date" {...form.register('dateOfBirth')} />
+            <DatePicker
+              id="dateOfBirth"
+              value={form.watch('dateOfBirth')}
+              onChange={(v) =>
+                form.setValue('dateOfBirth', v, { shouldDirty: true, shouldTouch: true })
+              }
+            />
           </div>
           <div>
             <Label htmlFor="type">Type</Label>

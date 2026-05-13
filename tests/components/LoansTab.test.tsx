@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { UserEvent } from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { runMigrations } from '@/db/migrations';
@@ -17,6 +18,14 @@ import { resolve } from 'node:path';
 
 const loadInitialMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
+
+async function selectDate(user: UserEvent, pickerId: string, isoDate: string) {
+  const [yyyy, mm, dd] = isoDate.split('-');
+  const root = screen.getByTestId(`${pickerId}-picker`);
+  await user.selectOptions(within(root).getByLabelText('Year'), yyyy);
+  await user.selectOptions(within(root).getByLabelText('Month'), mm);
+  await user.selectOptions(within(root).getByLabelText('Day'), dd);
+}
 
 async function seedPerson(db: SqliteAdapter, name: string): Promise<number> {
   const repo = new PersonsRepo(db);
@@ -89,13 +98,12 @@ describe('LoansTab', () => {
     const balance = screen.getByLabelText(/current balance/i);
     const rate = screen.getByLabelText(/interest rate/i);
     const term = screen.getByLabelText(/term \(months\)/i);
-    const firstPayment = screen.getByLabelText(/first payment date/i);
     const monthly = screen.getByLabelText(/monthly payment/i) as HTMLInputElement;
 
     await user.type(original, '400000');
     await user.type(balance, '400000');
     await user.type(rate, '0.06');
-    await user.type(firstPayment, '2024-06-01');
+    await selectDate(user, 'firstPaymentDate', '2024-06-01');
     // term already defaults to 360; clear and re-type to trigger blur
     await user.clear(term);
     await user.type(term, '360');
@@ -118,7 +126,7 @@ describe('LoansTab', () => {
     await user.type(screen.getByLabelText(/original amount/i), '400000');
     await user.type(screen.getByLabelText(/current balance/i), '400000');
     await user.type(screen.getByLabelText(/interest rate/i), '0.06');
-    await user.type(screen.getByLabelText(/first payment date/i), '2024-06-01');
+    await selectDate(user, 'firstPaymentDate', '2024-06-01');
     // Pick Alex as obligor via the radio
     await user.click(screen.getByRole('radio', { name: /alex/i }));
     // term defaults to 360 — tabbing off triggers monthly payment auto-fill
@@ -149,7 +157,7 @@ describe('LoansTab', () => {
     await user.type(screen.getByLabelText(/original amount/i), '100000');
     await user.type(screen.getByLabelText(/current balance/i), '100000');
     await user.type(screen.getByLabelText(/interest rate/i), '0.05');
-    await user.type(screen.getByLabelText(/first payment date/i), '2023-01-01');
+    await selectDate(user, 'firstPaymentDate', '2023-01-01');
     await user.click(screen.getByRole('radio', { name: /alex/i }));
     await user.tab();
     await user.click(screen.getByRole('button', { name: /save/i }));

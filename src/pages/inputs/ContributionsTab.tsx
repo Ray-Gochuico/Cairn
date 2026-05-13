@@ -7,6 +7,7 @@ import { useContributionsStore } from '@/stores/contributions-store';
 import { ContributionSchema, type Contribution } from '@/types/schema';
 import { ContributionSource } from '@/types/enums';
 import { Button } from '@/components/ui/button';
+import DatePicker from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -72,7 +73,13 @@ function ContributionForm({ initial, accounts, persons, onSubmit, onCancel }: Co
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label htmlFor="date">Date</Label>
-              <Input id="date" type="date" {...form.register('date')} />
+              <DatePicker
+                id="date"
+                value={form.watch('date')}
+                onChange={(v) =>
+                  form.setValue('date', v, { shouldDirty: true, shouldTouch: true })
+                }
+              />
             </div>
             <div>
               <Label htmlFor="amount">Amount ($)</Label>

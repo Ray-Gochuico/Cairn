@@ -5,6 +5,7 @@ import { LoanSchema, type Loan } from '@/types/schema';
 import { LoanType } from '@/types/enums';
 import { amortize } from '@/lib/amortization';
 import { Button } from '@/components/ui/button';
+import DatePicker from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -239,11 +240,13 @@ export default function LoanForm({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label htmlFor="firstPaymentDate">First payment date</Label>
-              <Input
+              <DatePicker
                 id="firstPaymentDate"
-                type="date"
-                {...form.register('firstPaymentDate')}
-                onBlur={tryAutoFillMonthlyPayment}
+                value={form.watch('firstPaymentDate')}
+                onChange={(v) => {
+                  form.setValue('firstPaymentDate', v, { shouldDirty: true, shouldTouch: true });
+                  tryAutoFillMonthlyPayment();
+                }}
               />
             </div>
             <div>

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { UserEvent } from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { runMigrations } from '@/db/migrations';
@@ -19,6 +20,14 @@ import { resolve } from 'node:path';
 
 const loadInitialMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
+
+async function selectDate(user: UserEvent, pickerId: string, isoDate: string) {
+  const [yyyy, mm, dd] = isoDate.split('-');
+  const root = screen.getByTestId(`${pickerId}-picker`);
+  await user.selectOptions(within(root).getByLabelText('Year'), yyyy);
+  await user.selectOptions(within(root).getByLabelText('Month'), mm);
+  await user.selectOptions(within(root).getByLabelText('Day'), dd);
+}
 
 /**
  * Renders the SetupWizard inside a MemoryRouter that also has a dummy
@@ -103,7 +112,7 @@ describe('SetupWizard', () => {
     });
     // Step2Persons auto-opens the form when persons.length === 0.
     await user.type(screen.getByLabelText(/^name$/i), 'Alex');
-    await user.type(screen.getByLabelText(/date of birth/i), '1990-04-12');
+    await selectDate(user, 'dateOfBirth', '1990-04-12');
     await user.click(screen.getByRole('button', { name: /^add person$/i }));
 
     // After person added, the inner "Continue" button enables.
