@@ -8,7 +8,7 @@ import PropertyVehicles from './pages/PropertyVehicles';
 import EquityGrants from './pages/EquityGrants';
 import Spending from './pages/Spending';
 import Goals from './pages/Goals';
-import Calculators from './pages/Calculators';
+import CalculatorsLayout from './pages/calculators/CalculatorsLayout';
 import WhatIf from './pages/WhatIf';
 import Profile from './pages/Profile';
 import MonthlyMiniWindow from './pages/MonthlyMiniWindow';
@@ -42,7 +42,7 @@ const router = createBrowserRouter([
       { path: 'equity-grants', element: <EquityGrants /> },
       { path: 'spending', element: <Spending /> },
       { path: 'goals', element: <Goals /> },
-      { path: 'calculators', element: <Calculators /> },
+      { path: 'calculators', element: <CalculatorsLayout /> },
       { path: 'what-if', element: <WhatIf /> },
       { path: 'profile', element: <Profile /> },
       { path: 'monthly', element: <MonthlyMiniWindow /> },
