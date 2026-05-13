@@ -11,6 +11,12 @@ export default defineConfig(async () => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // yahoo-finance2 → @deno/shim-deno calls os.platform() at module load.
+      // Vite externalises `os` to `{}` in browser builds, which crashes the
+      // shim. A minimal stub keeps init from throwing without dragging in a
+      // full polyfill. See src/shims/node-os.ts for the rationale.
+      os: path.resolve(__dirname, "./src/shims/node-os.ts"),
+      "node:os": path.resolve(__dirname, "./src/shims/node-os.ts"),
     },
   },
 
