@@ -86,7 +86,16 @@ interface DerivedValueCardProps {
 
 function DerivedValueCard({ account, snapshot }: DerivedValueCardProps) {
   const upsertSnapshot = useSnapshotsStore((s) => s.upsert);
-  const [mode, setMode] = useState<CardMode>('pending');
+  // Initialize from snapshot.source so a previously-confirmed card stays
+  // visibly confirmed instead of disappearing when the user re-opens the
+  // mini-window. Banner-dismissal still depends on the upsert having flipped
+  // the source on the underlying snapshot, which it has.
+  const initialMode: CardMode =
+    snapshot.source === SnapshotSource.USER_CONFIRMED ||
+    snapshot.source === SnapshotSource.MANUAL
+      ? 'confirmed'
+      : 'pending';
+  const [mode, setMode] = useState<CardMode>(initialMode);
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState<string>(String(snapshot.totalValue));
   const [error, setError] = useState<string | null>(null);
@@ -510,7 +519,9 @@ export default function MonthlyMiniWindow() {
             s.snapshotDate === lastMonthClose,
         );
         if (!snap) return null;
-        if (snap.source !== SnapshotSource.AUTO_DERIVED) return null;
+        // Show the card regardless of source. Pending cards drive the
+        // banner; confirmed cards stay visible with a checkmark so the
+        // user sees their progress through the ritual.
         return { account, snapshot: snap };
       })
       .filter((x): x is { account: Account; snapshot: AccountSnapshot } => x !== null);
