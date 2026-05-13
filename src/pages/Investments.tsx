@@ -322,6 +322,7 @@ export default function Investments() {
             title="Asset allocation"
             subtitle="Approximate, using latest snapshot per account"
             data={allocation}
+            valueFormatter={formatCurrency}
           />
         ) : (
           <Card>

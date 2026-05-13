@@ -21,6 +21,11 @@ export interface DonutChartCardProps {
   innerRadius?: number;
   outerRadius?: number;
   labelFormatter?: (slice: DonutSlice) => string;
+  /**
+   * Formats raw slice values for the tooltip. Use for $ or % displays.
+   * If omitted, Recharts shows the raw number.
+   */
+  valueFormatter?: (value: number) => string;
 }
 
 const DEFAULT_PALETTE = [
@@ -41,7 +46,9 @@ export default function DonutChartCard({
   innerRadius = 60,
   outerRadius = 90,
   labelFormatter,
+  valueFormatter,
 }: DonutChartCardProps) {
+  const total = data.reduce((sum, slice) => sum + slice.value, 0);
   return (
     <Card>
       <CardHeader>
@@ -73,7 +80,19 @@ export default function DonutChartCard({
                 />
               ))}
             </Pie>
-            <Tooltip />
+            <Tooltip
+              formatter={
+                valueFormatter
+                  ? (value, name) => {
+                      if (typeof value !== 'number') {
+                        return [String(value ?? ''), String(name ?? '')];
+                      }
+                      const pct = total > 0 ? ` (${((value / total) * 100).toFixed(1)}%)` : '';
+                      return [`${valueFormatter(value)}${pct}`, String(name ?? '')];
+                    }
+                  : undefined
+              }
+            />
             <Legend />
           </PieChart>
         </ResponsiveContainer>
