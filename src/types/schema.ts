@@ -167,3 +167,31 @@ export const VehicleSchema = z.object({
   excludedFromNetWorth: z.boolean(),
 });
 export type Vehicle = z.infer<typeof VehicleSchema>;
+
+const BracketSchema = z.object({
+  min: z.number().nonnegative(),
+  max: z.number().nullable(),
+  rate: z.number().min(0).max(1),
+});
+
+export const JurisdictionType = {
+  FEDERAL: 'FEDERAL',
+  FICA: 'FICA',
+  STATE: 'STATE',
+  CITY: 'CITY',
+} as const;
+export type JurisdictionType = typeof JurisdictionType[keyof typeof JurisdictionType];
+
+export const TaxRuleSchema = z.object({
+  id: z.number().int().positive().optional(),
+  year: z.number().int().min(2000).max(2100),
+  jurisdictionType: z.nativeEnum(JurisdictionType),
+  jurisdictionCode: z.string().min(1).max(20),
+  filingStatus: z.nativeEnum(FilingStatus),
+  brackets: z.array(BracketSchema).min(1).refine(
+    (rows) => rows.every((b, i) => i === 0 || b.min >= (rows[i - 1].max ?? Infinity)),
+    'brackets must be monotonic',
+  ),
+  standardDeduction: z.number().nonnegative(),
+});
+export type TaxRule = z.infer<typeof TaxRuleSchema>;

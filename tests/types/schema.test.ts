@@ -12,6 +12,7 @@ import {
   LoanPaymentSchema,
   PropertySchema,
   VehicleSchema,
+  TaxRuleSchema,
 } from '@/types/schema';
 import {
   FilingStatus,
@@ -448,5 +449,33 @@ describe('VehicleSchema', () => {
 
   it('rejects purchaseDate in the future', () => {
     expect(() => VehicleSchema.parse({ ...valid, purchaseDate: futureDate() })).toThrow();
+  });
+});
+
+describe('TaxRuleSchema', () => {
+  const valid = {
+    id: 1,
+    year: 2026,
+    jurisdictionType: 'FEDERAL',
+    jurisdictionCode: 'US',
+    filingStatus: FilingStatus.SINGLE,
+    brackets: [{ min: 0, max: 11600, rate: 0.10 }, { min: 11600, max: null, rate: 0.12 }],
+    standardDeduction: 14600,
+  };
+  it('accepts a valid federal SINGLE row', () => {
+    expect(() => TaxRuleSchema.parse(valid)).not.toThrow();
+  });
+  it('rejects bad jurisdictionType', () => {
+    expect(() => TaxRuleSchema.parse({ ...valid, jurisdictionType: 'COUNTY' })).toThrow();
+  });
+  it('rejects rate > 1 in brackets', () => {
+    expect(() => TaxRuleSchema.parse({
+      ...valid, brackets: [{ min: 0, max: 100, rate: 1.5 }],
+    })).toThrow();
+  });
+  it('rejects non-monotonic brackets', () => {
+    expect(() => TaxRuleSchema.parse({
+      ...valid, brackets: [{ min: 100, max: 200, rate: 0.10 }, { min: 50, max: 75, rate: 0.05 }],
+    })).toThrow();
   });
 });
