@@ -192,7 +192,7 @@ export default function LoanForm({
             </fieldset>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label htmlFor="originalAmount">Original amount ($)</Label>
               <Input
@@ -215,7 +215,7 @@ export default function LoanForm({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label htmlFor="interestRate">Interest rate (e.g. 0.06 = 6%)</Label>
               <Input
@@ -237,7 +237,7 @@ export default function LoanForm({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label htmlFor="firstPaymentDate">First payment date</Label>
               <DatePicker

@@ -52,7 +52,7 @@ export default function PersonForm({
       <Card>
         <CardHeader><CardTitle className="text-base">Person details</CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label htmlFor="name">Name</Label>
               <Input id="name" {...form.register('name')} />
@@ -69,7 +69,7 @@ export default function PersonForm({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label htmlFor="targetRetirementAge">Target retirement age</Label>
               <Input
@@ -89,7 +89,7 @@ export default function PersonForm({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label htmlFor="expectedBonus">Expected bonus ($)</Label>
               <Input
@@ -110,7 +110,7 @@ export default function PersonForm({
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
             <div>
               <Label htmlFor="healthInsuranceMonthlyPremium">Health ins. premium /mo</Label>
               <Input

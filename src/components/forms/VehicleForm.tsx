@@ -87,7 +87,7 @@ export default function VehicleForm({
             <Input id="name" {...form.register('name')} />
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
             <div>
               <Label htmlFor="year">Year (optional)</Label>
               <Input
@@ -148,7 +148,7 @@ export default function VehicleForm({
             </fieldset>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label htmlFor="purchaseDate">Purchase date (optional)</Label>
               <DatePicker

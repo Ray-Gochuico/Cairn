@@ -136,7 +136,7 @@ export default function HouseholdForm({
             </Select>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label htmlFor="state">State</Label>
               <Input
@@ -179,7 +179,7 @@ export default function HouseholdForm({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label htmlFor="withdrawalRate">Withdrawal rate (e.g. 0.04 = 4% rule)</Label>
               <Input

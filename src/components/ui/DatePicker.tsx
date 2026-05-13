@@ -124,7 +124,7 @@ export default function DatePicker({
     'flex h-9 rounded-md border border-input bg-transparent px-2 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50';
 
   return (
-    <div className="flex gap-2" data-testid={id ? `${id}-picker` : undefined}>
+    <div className="flex flex-wrap gap-2" data-testid={id ? `${id}-picker` : undefined}>
       <select
         id={id}
         aria-label="Year"

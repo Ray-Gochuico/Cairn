@@ -93,56 +93,60 @@ export default function HoldingsTab() {
 
       <Card>
         <CardContent className="pt-4">
-          <div className="grid grid-cols-12 gap-2 text-xs text-muted-foreground uppercase tracking-wider pb-2 border-b">
-            <div className="col-span-2">Ticker</div>
-            <div className="col-span-2">Shares</div>
-            <div className="col-span-2">Target %</div>
-            <div className="col-span-2">Cost basis</div>
-            <div className="col-span-4 text-right">Actions</div>
-          </div>
+          <div className="overflow-x-auto">
+            <div className="min-w-[640px]">
+              <div className="grid grid-cols-12 gap-2 text-xs text-muted-foreground uppercase tracking-wider pb-2 border-b">
+                <div className="col-span-2">Ticker</div>
+                <div className="col-span-2">Shares</div>
+                <div className="col-span-2">Target %</div>
+                <div className="col-span-2">Cost basis</div>
+                <div className="col-span-4 text-right">Actions</div>
+              </div>
 
-          {accountHoldings.length === 0 ? (
-            <div className="py-6 text-center text-sm text-muted-foreground border-b">
-              No holdings in this account yet.
+              {accountHoldings.length === 0 ? (
+                <div className="py-6 text-center text-sm text-muted-foreground border-b">
+                  No holdings in this account yet.
+                </div>
+              ) : (
+                accountHoldings.map((h) => (
+                  <HoldingForm
+                    key={h.id}
+                    initial={{
+                      accountId: h.accountId,
+                      ticker: h.ticker,
+                      shareCount: h.shareCount,
+                      targetAllocationPct: h.targetAllocationPct,
+                      costBasis: h.costBasis,
+                    }}
+                    onSave={async (next) => {
+                      await update(h.id!, {
+                        ticker: next.ticker,
+                        shareCount: next.shareCount,
+                        targetAllocationPct: next.targetAllocationPct,
+                        costBasis: next.costBasis,
+                      });
+                    }}
+                    onDelete={async () => {
+                      await remove(h.id!);
+                    }}
+                    saveLabel="Save"
+                  />
+                ))
+              )}
+
+              <div className="pt-2">
+                <div className="text-xs text-muted-foreground mb-1">Add holding</div>
+                <HoldingForm
+                  // The key resets the form when accounts change so the new-row inputs clear.
+                  key={`new-${selectedAccountId}-${accountHoldings.length}`}
+                  initial={newRowInitial}
+                  onSave={async (next) => {
+                    await create({ ...next, accountId: selectedAccountId ?? accounts[0].id! });
+                  }}
+                  saveLabel="Add"
+                />
+              </div>
             </div>
-          ) : (
-            accountHoldings.map((h) => (
-              <HoldingForm
-                key={h.id}
-                initial={{
-                  accountId: h.accountId,
-                  ticker: h.ticker,
-                  shareCount: h.shareCount,
-                  targetAllocationPct: h.targetAllocationPct,
-                  costBasis: h.costBasis,
-                }}
-                onSave={async (next) => {
-                  await update(h.id!, {
-                    ticker: next.ticker,
-                    shareCount: next.shareCount,
-                    targetAllocationPct: next.targetAllocationPct,
-                    costBasis: next.costBasis,
-                  });
-                }}
-                onDelete={async () => {
-                  await remove(h.id!);
-                }}
-                saveLabel="Save"
-              />
-            ))
-          )}
-
-          <div className="pt-2">
-            <div className="text-xs text-muted-foreground mb-1">Add holding</div>
-            <HoldingForm
-              // The key resets the form when accounts change so the new-row inputs clear.
-              key={`new-${selectedAccountId}-${accountHoldings.length}`}
-              initial={newRowInitial}
-              onSave={async (next) => {
-                await create({ ...next, accountId: selectedAccountId ?? accounts[0].id! });
-              }}
-              saveLabel="Add"
-            />
           </div>
         </CardContent>
       </Card>
