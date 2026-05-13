@@ -1,5 +1,6 @@
 import type { Database } from '@/db/db';
-import { TaxRuleSchema, type TaxRule, type JurisdictionType, type FilingStatus } from '@/types/schema';
+import { TaxRuleSchema, type TaxRule, type JurisdictionType } from '@/types/schema';
+import type { FilingStatus } from '@/types/enums';
 
 interface TaxRuleRow {
   id: number;

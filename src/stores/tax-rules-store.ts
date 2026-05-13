@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { TaxRulesRepo } from '@/domain/tax-rules';
 import { getDatabase } from '@/db/db';
-import type { TaxRule, JurisdictionType, FilingStatus } from '@/types/schema';
+import type { TaxRule, JurisdictionType } from '@/types/schema';
+import type { FilingStatus } from '@/types/enums';
 
 interface TaxRulesState {
   year: number | null;
