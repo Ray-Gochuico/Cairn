@@ -13,6 +13,13 @@
     "notification:default",
     "notification:allow-is-permission-granted",
     "notification:allow-request-permission",
-    "notification:allow-notify"
+    "notification:allow-notify",
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "https://query1.finance.yahoo.com/*" },
+        { "url": "https://query2.finance.yahoo.com/*" }
+      ]
+    }
   ]
 }

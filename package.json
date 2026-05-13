@@ -18,6 +18,7 @@
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-tabs": "^1.1.13",
     "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-http": "^2.5.9",
     "@tauri-apps/plugin-notification": "^2.3.3",
     "@tauri-apps/plugin-opener": "^2",
     "@tauri-apps/plugin-sql": "^2.4.0",
@@ -31,7 +32,6 @@
     "react-router-dom": "^7.15.0",
     "recharts": "^3.8.1",
     "tailwind-merge": "^3.6.0",
-    "yahoo-finance2": "^3.14.0",
     "zod": "^4.4.3",
     "zustand": "^5.0.13"
   },
