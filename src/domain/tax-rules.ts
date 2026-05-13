@@ -26,13 +26,6 @@ function rowToTaxRule(row: TaxRuleRow): TaxRule {
 export class TaxRulesRepo {
   constructor(private db: Database) {}
 
-  async list(): Promise<TaxRule[]> {
-    const rows = await this.db.select<TaxRuleRow>(
-      'SELECT * FROM tax_rules ORDER BY year, jurisdiction_type, jurisdiction_code, filing_status'
-    );
-    return rows.map(rowToTaxRule);
-  }
-
   async listForYear(year: number): Promise<TaxRule[]> {
     const rows = await this.db.select<TaxRuleRow>(
       'SELECT * FROM tax_rules WHERE year = ? ORDER BY jurisdiction_type, jurisdiction_code, filing_status',
