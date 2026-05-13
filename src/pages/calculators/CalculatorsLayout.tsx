@@ -1,3 +1,5 @@
+import { BonusTaxCard } from './BonusTaxCard';
+
 export default function CalculatorsLayout() {
   return (
     <div className="space-y-4 min-w-0">
@@ -5,7 +7,9 @@ export default function CalculatorsLayout() {
       <p className="text-sm text-muted-foreground">
         All calculators run on your current Inputs data. Use "Override" on any card to try a what-if.
       </p>
-      {/* Cards filled in by subsequent slices */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
+        <BonusTaxCard />
+      </div>
     </div>
   );
 }
