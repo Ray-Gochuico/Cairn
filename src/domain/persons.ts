@@ -9,8 +9,14 @@ interface PersonRow {
   target_retirement_age: number;
   annual_salary_pretax: number;
   expected_bonus: number;
+  expected_bonus_frequency: string;
+  bonus_is_consistent: number;
   expected_commission: number;
   expected_commission_frequency: string;
+  employment_type: string;
+  hourly_rate: number | null;
+  regular_hours_per_week: number | null;
+  ot_threshold_hours_per_week: number | null;
   pretax_401k_pct: number;
   health_insurance_monthly_premium: number;
   dependent_care_fsa_monthly: number;
@@ -27,8 +33,14 @@ function rowToPerson(row: PersonRow): Person {
     targetRetirementAge: row.target_retirement_age,
     annualSalaryPretax: row.annual_salary_pretax,
     expectedBonus: row.expected_bonus,
+    expectedBonusFrequency: row.expected_bonus_frequency ?? 'ANNUAL',
+    bonusIsConsistent: !!row.bonus_is_consistent,
     expectedCommission: row.expected_commission ?? 0,
     expectedCommissionFrequency: row.expected_commission_frequency ?? 'MONTHLY',
+    employmentType: row.employment_type ?? 'SALARY_NO_OT',
+    hourlyRate: row.hourly_rate,
+    regularHoursPerWeek: row.regular_hours_per_week ?? 40,
+    otThresholdHoursPerWeek: row.ot_threshold_hours_per_week,
     pretax401kPct: row.pretax_401k_pct,
     healthInsuranceMonthlyPremium: row.health_insurance_monthly_premium,
     dependentCareFsaMonthly: row.dependent_care_fsa_monthly,
@@ -48,28 +60,36 @@ export class PersonsRepo {
   }
 
   async create(person: Omit<Person, 'id'>): Promise<number> {
-    PersonSchema.omit({ id: true }).parse(person);
+    const parsed = PersonSchema.omit({ id: true }).parse(person);
     const result = await this.db.execute(
       `INSERT INTO persons (
         household_id, name, date_of_birth, target_retirement_age,
-        annual_salary_pretax, expected_bonus, expected_commission, expected_commission_frequency,
+        annual_salary_pretax, expected_bonus, expected_bonus_frequency, bonus_is_consistent,
+        expected_commission, expected_commission_frequency,
+        employment_type, hourly_rate, regular_hours_per_week, ot_threshold_hours_per_week,
         pretax_401k_pct, health_insurance_monthly_premium, dependent_care_fsa_monthly,
         hsa_monthly_contribution, hsa_eligible
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        person.householdId,
-        person.name,
-        person.dateOfBirth,
-        person.targetRetirementAge,
-        person.annualSalaryPretax,
-        person.expectedBonus ?? 0,
-        person.expectedCommission,
-        person.expectedCommissionFrequency,
-        person.pretax401kPct,
-        person.healthInsuranceMonthlyPremium,
-        person.dependentCareFsaMonthly,
-        person.hsaMonthlyContribution,
-        person.hsaEligible ? 1 : 0,
+        parsed.householdId,
+        parsed.name,
+        parsed.dateOfBirth,
+        parsed.targetRetirementAge,
+        parsed.annualSalaryPretax,
+        parsed.expectedBonus ?? 0,
+        parsed.expectedBonusFrequency,
+        Number(parsed.bonusIsConsistent),
+        parsed.expectedCommission,
+        parsed.expectedCommissionFrequency,
+        parsed.employmentType,
+        parsed.hourlyRate,
+        parsed.regularHoursPerWeek,
+        parsed.otThresholdHoursPerWeek,
+        parsed.pretax401kPct,
+        parsed.healthInsuranceMonthlyPremium,
+        parsed.dependentCareFsaMonthly,
+        parsed.hsaMonthlyContribution,
+        parsed.hsaEligible ? 1 : 0,
       ]
     );
     if (!result.lastInsertId) {
@@ -91,8 +111,14 @@ export class PersonsRepo {
         target_retirement_age = ?,
         annual_salary_pretax = ?,
         expected_bonus = ?,
+        expected_bonus_frequency = ?,
+        bonus_is_consistent = ?,
         expected_commission = ?,
         expected_commission_frequency = ?,
+        employment_type = ?,
+        hourly_rate = ?,
+        regular_hours_per_week = ?,
+        ot_threshold_hours_per_week = ?,
         pretax_401k_pct = ?,
         health_insurance_monthly_premium = ?,
         dependent_care_fsa_monthly = ?,
@@ -106,8 +132,14 @@ export class PersonsRepo {
         merged.targetRetirementAge,
         merged.annualSalaryPretax,
         merged.expectedBonus ?? 0,
+        merged.expectedBonusFrequency,
+        Number(merged.bonusIsConsistent),
         merged.expectedCommission,
         merged.expectedCommissionFrequency,
+        merged.employmentType,
+        merged.hourlyRate,
+        merged.regularHoursPerWeek,
+        merged.otThresholdHoursPerWeek,
         merged.pretax401kPct,
         merged.healthInsuranceMonthlyPremium,
         merged.dependentCareFsaMonthly,

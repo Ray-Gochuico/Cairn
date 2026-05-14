@@ -12,6 +12,8 @@ const loadInitialMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
 const loadCommissionMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0003_add_commission_columns.sql'), 'utf-8');
+const loadEmploymentBonusMigration = () =>
+  readFileSync(resolve(__dirname, '../../src/db/migrations/0005_add_employment_and_bonus_columns.sql'), 'utf-8');
 
 const makePerson = async (personsRepo: PersonsRepo, name: string): Promise<number> => {
   return personsRepo.create({
@@ -56,6 +58,7 @@ describe('ContributionsRepo', () => {
     await runMigrations(db, [
       { version: '0001_initial', sql: loadInitialMigration() },
       { version: '0003_add_commission_columns', sql: loadCommissionMigration() },
+      { version: '0005_add_employment_and_bonus_columns', sql: loadEmploymentBonusMigration() },
     ]);
     repo = new ContributionsRepo(db);
     accountsRepo = new AccountsRepo(db);

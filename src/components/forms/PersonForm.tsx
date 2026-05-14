@@ -7,10 +7,22 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-// PersonFormValues omits deprecated expectedBonus (not surfaced in the form UI).
-// The field is preserved in Person/DB for backwards compat; callers should inject
-// expectedBonus: 0 when converting PersonFormValues back to a full Person for persistence.
-export type PersonFormValues = Omit<Person, 'id' | 'expectedBonus'>;
+// PersonFormValues omits fields not yet surfaced in the form UI (expectedBonus is
+// deprecated; the employment-type and bonus-frequency fields are introduced in
+// migration 0005 and will be surfaced by tasks 12.6.2–12.6.7). Callers inject
+// safe defaults when converting PersonFormValues back to a full Person for
+// persistence (see PersonsTab.tsx, Step2Persons.tsx).
+export type PersonFormValues = Omit<
+  Person,
+  | 'id'
+  | 'expectedBonus'
+  | 'expectedBonusFrequency'
+  | 'bonusIsConsistent'
+  | 'employmentType'
+  | 'hourlyRate'
+  | 'regularHoursPerWeek'
+  | 'otThresholdHoursPerWeek'
+>;
 
 export const DEFAULT_PERSON: PersonFormValues = {
   householdId: 1,
@@ -47,7 +59,18 @@ export default function PersonForm({
   submitLabel = 'Save',
 }: PersonFormProps) {
   const form = useForm<PersonFormValues>({
-    resolver: zodResolver(PersonSchema.omit({ id: true, expectedBonus: true })),
+    resolver: zodResolver(
+      PersonSchema.omit({
+        id: true,
+        expectedBonus: true,
+        expectedBonusFrequency: true,
+        bonusIsConsistent: true,
+        employmentType: true,
+        hourlyRate: true,
+        regularHoursPerWeek: true,
+        otThresholdHoursPerWeek: true,
+      }),
+    ),
     defaultValues: initial,
   });
 

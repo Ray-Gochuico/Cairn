@@ -39,6 +39,12 @@ export const HouseholdSchema = z.object({
 });
 export type Household = z.infer<typeof HouseholdSchema>;
 
+export const EmploymentTypeSchema = z.enum(['HOURLY', 'SALARY_NO_OT', 'SALARY_WITH_OT']);
+export type EmploymentType = z.infer<typeof EmploymentTypeSchema>;
+
+export const BonusFrequencySchema = z.enum(['ANNUAL', 'QUARTERLY']);
+export type BonusFrequency = z.infer<typeof BonusFrequencySchema>;
+
 export const PersonSchema = z.object({
   id: z.number().int().positive().optional(),
   householdId: z.number().int().positive(),
@@ -46,9 +52,15 @@ export const PersonSchema = z.object({
   dateOfBirth: pastOrTodayDate,
   targetRetirementAge: z.number().int().min(30).max(90),
   annualSalaryPretax: z.number().nonnegative(),
-  expectedBonus: z.number().nonnegative().optional().default(0),  // deprecated, no longer in PersonForm
+  expectedBonus: z.number().min(0).default(0),
+  expectedBonusFrequency: BonusFrequencySchema.default('ANNUAL'),
+  bonusIsConsistent: z.boolean().default(true),
   expectedCommission: z.number().nonnegative(),  // annual total (user enters yearly; calculator derives per-check from frequency)
   expectedCommissionFrequency: z.enum(['MONTHLY', 'QUARTERLY']),  // how often commission is paid out
+  employmentType: EmploymentTypeSchema.default('SALARY_NO_OT'),
+  hourlyRate: z.number().positive().nullable().default(null),
+  regularHoursPerWeek: z.number().positive().default(40),
+  otThresholdHoursPerWeek: z.number().positive().nullable().default(null),
   pretax401kPct: z.number().min(0).max(1),
   healthInsuranceMonthlyPremium: z.number().nonnegative(),
   dependentCareFsaMonthly: z.number().nonnegative(),

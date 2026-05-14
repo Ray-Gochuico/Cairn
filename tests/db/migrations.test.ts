@@ -91,6 +91,10 @@ function loadAll() {
       version: '0004_seed_yonkers',
       sql: readFileSync(resolve(__dirname, '../../src/db/migrations/0004_seed_yonkers.sql'), 'utf-8'),
     },
+    {
+      version: '0005_add_employment_and_bonus_columns',
+      sql: readFileSync(resolve(__dirname, '../../src/db/migrations/0005_add_employment_and_bonus_columns.sql'), 'utf-8'),
+    },
   ];
 }
 
@@ -113,6 +117,7 @@ describe('runMigrations idempotency', () => {
       '0002_seed_tax_rules',
       '0003_add_commission_columns',
       '0004_seed_yonkers',
+      '0005_add_employment_and_bonus_columns',
     ]);
   });
 
@@ -152,6 +157,7 @@ describe('runMigrations idempotency', () => {
       '0002_seed_tax_rules',
       '0003_add_commission_columns',
       '0004_seed_yonkers',
+      '0005_add_employment_and_bonus_columns',
     ]);
   });
 });

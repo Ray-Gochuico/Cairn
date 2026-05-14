@@ -27,7 +27,19 @@ export default function PersonsTab() {
         <p className="text-sm text-muted-foreground mb-4">Up to 2 persons supported per household.</p>
         <PersonForm
           initial={DEFAULT_PERSON}
-          onSubmit={async (v) => { await create({ ...v, expectedBonus: 0 }); setMode('list'); }}
+          onSubmit={async (v) => {
+            await create({
+              ...v,
+              expectedBonus: 0,
+              expectedBonusFrequency: 'ANNUAL',
+              bonusIsConsistent: true,
+              employmentType: 'SALARY_NO_OT',
+              hourlyRate: null,
+              regularHoursPerWeek: 40,
+              otThresholdHoursPerWeek: null,
+            });
+            setMode('list');
+          }}
           onCancel={() => setMode('list')}
         />
       </div>
@@ -58,7 +70,19 @@ export default function PersonsTab() {
             hsaMonthlyContribution: target.hsaMonthlyContribution,
             hsaEligible: target.hsaEligible,
           }}
-          onSubmit={async (v) => { await update(mode.id, { ...v, expectedBonus: 0 }); setMode('list'); }}
+          onSubmit={async (v) => {
+            await update(mode.id, {
+              ...v,
+              expectedBonus: target.expectedBonus,
+              expectedBonusFrequency: target.expectedBonusFrequency,
+              bonusIsConsistent: target.bonusIsConsistent,
+              employmentType: target.employmentType,
+              hourlyRate: target.hourlyRate,
+              regularHoursPerWeek: target.regularHoursPerWeek,
+              otThresholdHoursPerWeek: target.otThresholdHoursPerWeek,
+            });
+            setMode('list');
+          }}
           onCancel={() => setMode('list')}
         />
       </div>

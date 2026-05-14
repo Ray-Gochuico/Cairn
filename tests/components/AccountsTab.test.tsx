@@ -19,6 +19,8 @@ const loadInitialMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
 const loadCommissionMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0003_add_commission_columns.sql'), 'utf-8');
+const loadEmploymentBonusMigration = () =>
+  readFileSync(resolve(__dirname, '../../src/db/migrations/0005_add_employment_and_bonus_columns.sql'), 'utf-8');
 
 async function seedPerson(db: SqliteAdapter, name: string): Promise<number> {
   const repo = new PersonsRepo(db);
@@ -56,6 +58,7 @@ describe('AccountsTab', () => {
     await runMigrations(db, [
       { version: '0001_initial', sql: loadInitialMigration() },
       { version: '0003_add_commission_columns', sql: loadCommissionMigration() },
+      { version: '0005_add_employment_and_bonus_columns', sql: loadEmploymentBonusMigration() },
     ]);
     setDatabase(db);
     useAccountsStore.setState({ accounts: [], isLoading: false, error: null });
