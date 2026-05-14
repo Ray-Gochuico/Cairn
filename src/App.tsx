@@ -23,6 +23,7 @@ import LoansTab from './pages/inputs/LoansTab';
 import PropertiesTab from './pages/inputs/PropertiesTab';
 import VehiclesTab from './pages/inputs/VehiclesTab';
 import GoalsTab from './pages/inputs/GoalsTab';
+import EquityGrantsTab from './pages/inputs/EquityGrantsTab';
 import ComingSoonTab from './pages/inputs/tabs-coming-soon';
 import SetupWizard from './pages/setup/SetupWizard';
 import BackupRestore from './pages/BackupRestore';
@@ -61,7 +62,7 @@ const router = createBrowserRouter([
           { path: 'holdings', element: <HoldingsTab /> },
           { path: 'contributions', element: <ContributionsTab /> },
           { path: 'loans', element: <LoansTab /> },
-          { path: 'equity-grants', element: <ComingSoonTab name="Equity Grants" phase={3} /> },
+          { path: 'equity-grants', element: <EquityGrantsTab /> },
           { path: 'properties', element: <PropertiesTab /> },
           { path: 'vehicles', element: <VehiclesTab /> },
           { path: 'goals', element: <GoalsTab /> },
