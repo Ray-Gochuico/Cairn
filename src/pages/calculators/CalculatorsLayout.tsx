@@ -1,3 +1,4 @@
+import { PaycheckCard } from './PaycheckCard';
 import { BonusTaxCard } from './BonusTaxCard';
 
 export default function CalculatorsLayout() {
@@ -8,6 +9,7 @@ export default function CalculatorsLayout() {
         All calculators run on your current Inputs data. Use "Override" on any card to try a what-if.
       </p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
+        <PaycheckCard />
         <BonusTaxCard />
       </div>
     </div>
