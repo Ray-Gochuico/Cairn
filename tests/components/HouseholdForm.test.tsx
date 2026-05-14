@@ -58,8 +58,8 @@ describe('HouseholdForm city dropdown', () => {
     // NYC option should be present with prettified label
     expect(citySelect.querySelector('option[value="NY_NYC"]')).toBeInTheDocument();
     const nycOption = citySelect.querySelector('option[value="NY_NYC"]') as HTMLOptionElement;
-    // prettifyCityCode: state prefix dropped, remaining parts title-cased → "Nyc"
-    expect(nycOption.textContent).toBe('Nyc');
+    // prettifyCityCode keeps short all-caps acronyms intact → "NYC"
+    expect(nycOption.textContent).toBe('NYC');
   });
 
   it('selecting NYC sets form value to NY_NYC', async () => {

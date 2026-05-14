@@ -18,12 +18,18 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 const CITY_TAX_YEAR = 2026;
 
-/** Convert a jurisdiction code like NY_NYC → "NYC", MD_PRINCE_GEORGE_S_COUNTY → "Prince George S County". */
+/** Convert a jurisdiction code like NY_NYC → "NYC", MI_DETROIT → "Detroit". Keeps short
+ * all-caps abbreviations (length ≤ 3 letters, all uppercase) as-is to avoid mangling NYC, DC, etc. */
 function prettifyCityCode(code: string): string {
   const parts = code.split('_');
   // First part is the state prefix; drop it.
   const rest = parts.slice(1);
-  return rest.map((p) => p.charAt(0) + p.slice(1).toLowerCase()).join(' ');
+  return rest
+    .map((p) => {
+      if (p.length <= 3 && /^[A-Z]+$/.test(p)) return p;
+      return p.charAt(0) + p.slice(1).toLowerCase();
+    })
+    .join(' ');
 }
 
 export type HouseholdFormValues = Omit<Household, 'id'>;
