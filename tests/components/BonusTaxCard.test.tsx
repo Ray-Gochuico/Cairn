@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
@@ -142,14 +141,11 @@ describe('BonusTaxCard', () => {
   });
 
   it('changing the override bonus amount updates the headline', async () => {
-    const user = userEvent.setup();
     // Prime stores with $100k SINGLE CA + person with expectedBonus = $10k.
     primeStores(10000);
     render(<MemoryRouter><BonusTaxCard /></MemoryRouter>);
     await screen.findByTestId('bonus-takehome');
 
-    // Click Override button to reveal the panel
-    await user.click(screen.getByRole('button', { name: /override/i }));
     const input = screen.getByLabelText(/Bonus amount/i);
     // Use fireEvent.change for reliable controlled-input updates
     fireEvent.change(input, { target: { value: '20000' } });
@@ -161,11 +157,9 @@ describe('BonusTaxCard', () => {
   });
 
   it('shows placeholder when bonus override is set to 0', async () => {
-    const user = userEvent.setup();
     // Prime stores with $10k expected bonus
     primeStores(10000);
     render(<MemoryRouter><BonusTaxCard /></MemoryRouter>);
-    await user.click(screen.getByRole('button', { name: /override/i }));
     const input = screen.getByLabelText(/Bonus amount/i);
     // Use fireEvent.change for reliable controlled-input updates
     fireEvent.change(input, { target: { value: '0' } });

@@ -125,7 +125,6 @@ describe('PaycheckCard', () => {
     const monthlyValue = parseFloat(monthlyText.replace(/[$,]/g, ''));
     expect(monthlyValue).toBeGreaterThan(5500);
     expect(monthlyValue).toBeLessThan(7000);
-    expect(monthlyText).toMatch(/per month/i);
   });
 
   it('switches to bi-weekly when the period selector changes', async () => {
@@ -139,7 +138,6 @@ describe('PaycheckCard', () => {
 
     await user.selectOptions(screen.getByLabelText(/Period:/i), 'BI_WEEKLY');
     const headline = screen.getByTestId('paycheck-takehome');
-    expect(headline.textContent).toMatch(/per bi-weekly/i);
     const value = parseFloat(headline.textContent!.replace(/[$,]/g, ''));
     // Annual ~$73,100 / 26 ≈ $2,812
     expect(value).toBeGreaterThan(2500);

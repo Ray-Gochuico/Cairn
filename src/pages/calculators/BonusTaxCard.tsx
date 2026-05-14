@@ -81,8 +81,8 @@ export function BonusTaxCard() {
     });
   }, [household, persons, dependents, taxItems, taxYear, effectiveBonus]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const overridePanel = (
-    <div className="space-y-2">
+  const bonusInput = (
+    <div className="space-y-1 mb-4">
       <label htmlFor="bonus-override" className="text-sm font-medium">
         Bonus amount
       </label>
@@ -97,16 +97,13 @@ export function BonusTaxCard() {
           setBonusOverride(Number.isFinite(v as number) ? v : null);
         }}
       />
-      <p className="text-xs text-muted-foreground">
-        Defaults to the sum of each person&#39;s &ldquo;Expected bonus&rdquo; on the Persons tab.
-        Editing here doesn&#39;t persist.
-      </p>
     </div>
   );
 
   if (!result) {
     return (
-      <CalculatorCard title="Bonus Tax" headline="—" overridePanel={overridePanel}>
+      <CalculatorCard title="Bonus Tax" headline="—">
+        {bonusInput}
         <p className="text-sm text-muted-foreground">
           Set up your household profile + tax rules to see bonus tax.
         </p>
@@ -116,7 +113,8 @@ export function BonusTaxCard() {
 
   if (effectiveBonus <= 0) {
     return (
-      <CalculatorCard title="Bonus Tax" headline="—" overridePanel={overridePanel}>
+      <CalculatorCard title="Bonus Tax" headline="—">
+        {bonusInput}
         <p className="text-sm text-muted-foreground">
           Enter a bonus amount to see the bonus tax breakdown.
         </p>
@@ -131,11 +129,11 @@ export function BonusTaxCard() {
       title="Bonus Tax"
       headline={
         <span data-testid="bonus-takehome">
-          {formatCurrency(bonusTakeHome)} take-home on bonus
+          {formatCurrency(bonusTakeHome)}
         </span>
       }
-      overridePanel={overridePanel}
     >
+      {bonusInput}
       <div className="text-sm text-muted-foreground mb-3">
         On a {formatCurrency(effectiveBonus)} bonus, marginal-rate-diff math gives:
       </div>
@@ -177,6 +175,10 @@ export function BonusTaxCard() {
           </div>
         </div>
       </div>
+      <p className="text-xs text-muted-foreground mt-2">
+        Defaults to the sum of each person&#39;s &ldquo;Expected bonus&rdquo; on the Persons tab.
+        Editing here doesn&#39;t persist.
+      </p>
     </CalculatorCard>
   );
 }

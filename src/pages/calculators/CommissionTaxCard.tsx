@@ -107,8 +107,8 @@ export function CommissionTaxCard() {
     return { result: taxResult, commission401kPerCheck: commissionCheckContrib };
   }, [household, persons, dependents, taxItems, taxYear, annualCommission, periods]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const overridePanel = (
-    <div className="space-y-3">
+  const commissionInputs = (
+    <div className="space-y-3 mb-4">
       <div className="space-y-1">
         <label htmlFor="commission-per-check" className="text-sm font-medium">
           Commission per check
@@ -139,13 +139,13 @@ export function CommissionTaxCard() {
           <option value="QUARTERLY">Quarterly (4/yr)</option>
         </select>
       </div>
-      <p className="text-xs text-muted-foreground">Changes are temporary and don&#39;t persist.</p>
     </div>
   );
 
   if (!household || persons.length === 0 || !result) {
     return (
-      <CalculatorCard title="Commission Tax" headline="—" overridePanel={overridePanel}>
+      <CalculatorCard title="Commission Tax" headline="—">
+        {commissionInputs}
         <p className="text-sm text-muted-foreground">
           Set up your household profile + tax rules to see commission tax.
         </p>
@@ -155,7 +155,8 @@ export function CommissionTaxCard() {
 
   if (commissionPerCheck === 0) {
     return (
-      <CalculatorCard title="Commission Tax" headline="—" overridePanel={overridePanel}>
+      <CalculatorCard title="Commission Tax" headline="—">
+        {commissionInputs}
         <p className="text-sm text-muted-foreground">
           Enter a commission amount to see the tax breakdown.
         </p>
@@ -174,10 +175,10 @@ export function CommissionTaxCard() {
     <CalculatorCard
       title="Commission Tax"
       headline={
-        <span data-testid="commission-takehome">{formatCurrency(netPerCheck)} per check</span>
+        <span data-testid="commission-takehome">{formatCurrency(netPerCheck)}</span>
       }
-      overridePanel={overridePanel}
     >
+      {commissionInputs}
       {/* Per-check breakdown */}
       <div className="text-sm font-medium mb-2">Per check ({frequency === 'MONTHLY' ? 'monthly' : 'quarterly'})</div>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-sm mb-4">

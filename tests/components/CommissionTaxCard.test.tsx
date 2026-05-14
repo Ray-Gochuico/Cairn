@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
@@ -123,15 +122,12 @@ describe('CommissionTaxCard', () => {
     // Per check (12/yr): commission $5k - 401k $250 - tax ~$1,900 = ~$2,850 net
     primeStores();
 
-    const user = userEvent.setup();
     render(
       <MemoryRouter>
         <CommissionTaxCard />
       </MemoryRouter>,
     );
 
-    // Open override panel + set commission
-    await user.click(screen.getByRole('button', { name: /override/i }));
     const input = screen.getByLabelText(/Commission per check/i);
     fireEvent.change(input, { target: { value: '5000' } });
 
@@ -150,14 +146,12 @@ describe('CommissionTaxCard', () => {
     // Net per check = $15,000 - $750 - ~$5,700 = ~$8,550
     primeStores();
 
-    const user = userEvent.setup();
     render(
       <MemoryRouter>
         <CommissionTaxCard />
       </MemoryRouter>,
     );
 
-    await user.click(screen.getByRole('button', { name: /override/i }));
     const input = screen.getByLabelText(/Commission per check/i);
     fireEvent.change(input, { target: { value: '15000' } });
 

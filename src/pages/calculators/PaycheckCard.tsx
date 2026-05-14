@@ -116,15 +116,12 @@ export function PaycheckCard() {
     takeHome: annual.takeHome / div,
   };
 
-  const periodDescriptor = PAYCHECK_PERIODS.find((p) => p.id === period)!;
-  const headlineLabel = period === 'ANNUAL' ? 'annual' : 'per ' + periodDescriptor.label.toLowerCase();
-
   return (
     <CalculatorCard
       title="Paycheck (take-home)"
       headline={
         <span data-testid="paycheck-takehome">
-          {formatCurrency(perPeriod.takeHome)} {headlineLabel}
+          {formatCurrency(perPeriod.takeHome)}
         </span>
       }
     >
