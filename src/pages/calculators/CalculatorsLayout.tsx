@@ -1,5 +1,6 @@
 import { PaycheckCard } from './PaycheckCard';
 import { BonusTaxCard } from './BonusTaxCard';
+import { CommissionTaxCard } from './CommissionTaxCard';
 
 export default function CalculatorsLayout() {
   return (
@@ -11,6 +12,7 @@ export default function CalculatorsLayout() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
         <PaycheckCard />
         <BonusTaxCard />
+        <CommissionTaxCard />
       </div>
     </div>
   );
