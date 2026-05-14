@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
@@ -106,6 +107,11 @@ function primeBaseline() {
 describe('CalculatorsLayout', () => {
   beforeEach(() => {
     resetStores();
+    sessionStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('renders the baseline cards (Paycheck, Bonus, Commission) when household is set', async () => {
@@ -187,5 +193,170 @@ describe('CalculatorsLayout', () => {
     // Page heading still renders
     await screen.findByRole('heading', { name: /Calculators/i });
     expect(screen.queryByText(/^Overtime$/i)).not.toBeInTheDocument();
+  });
+
+  describe('stale tax-year banner', () => {
+    it('shows stale-year banner when seeded years do not include current calendar year', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2027-03-15'));
+      primeBaseline(); // seeds year=2026
+      usePersonsStore.setState({
+        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
+        isLoading: false,
+        error: null,
+      });
+
+      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+
+      expect(await screen.findByText(/using 2026 tax brackets/i)).toBeInTheDocument();
+      expect(screen.getByText(/update.*newer rates/i)).toBeInTheDocument();
+    });
+
+    it('hides banner when dismissed', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2027-03-15'));
+      primeBaseline();
+      usePersonsStore.setState({
+        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
+        isLoading: false,
+        error: null,
+      });
+
+      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+
+      const dismissBtn = await screen.findByRole('button', { name: /dismiss/i });
+      await userEvent.click(dismissBtn);
+      expect(screen.queryByText(/using 2026 tax brackets/i)).not.toBeInTheDocument();
+    });
+
+    it('does NOT show banner when current calendar year is in seeded set', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-06-01'));
+      primeBaseline(); // seeds year=2026
+      usePersonsStore.setState({
+        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
+        isLoading: false,
+        error: null,
+      });
+
+      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+
+      // Page rendered
+      await screen.findByText(/Bonus take-home/i);
+      // Banner should NOT appear
+      expect(screen.queryByText(/using 2026 tax brackets/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    it('does NOT show banner when seededYears is empty', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2027-03-15'));
+      // Do NOT call primeBaseline; tax_rules.items remains []
+      useHouseholdStore.setState({
+        household: {
+          filingStatus: FilingStatus.SINGLE,
+          state: 'CA',
+          city: null,
+          monthlyExpenseBaseline: 5000,
+          withdrawalRate: 0.04,
+          inflationAssumption: 0.03,
+          growthScenarios: [],
+        },
+        isLoading: false,
+        error: null,
+      });
+      usePersonsStore.setState({
+        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
+        isLoading: false,
+        error: null,
+      });
+
+      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+
+      await screen.findByRole('heading', { name: /Calculators/i });
+      // No banner — when seededYears is empty, year is null and we don't render
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.queryByText(/tax brackets/i)).not.toBeInTheDocument();
+    });
+
+    it('respects sessionStorage dismissed state across re-renders', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2027-03-15'));
+      sessionStorage.setItem('stale-tax-year-banner-dismissed', 'true');
+      primeBaseline();
+      usePersonsStore.setState({
+        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
+        isLoading: false,
+        error: null,
+      });
+
+      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+
+      await screen.findByText(/Bonus take-home/i);
+      expect(screen.queryByText(/using 2026 tax brackets/i)).not.toBeInTheDocument();
+    });
+
+    it('shows the most-recent seeded year, not the next-most-recent', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2027-03-15'));
+      // Seed both 2024 and 2025; resolver should pick 2025 (most recent), not 2024
+      useHouseholdStore.setState({
+        household: {
+          filingStatus: FilingStatus.SINGLE,
+          state: 'CA',
+          city: null,
+          monthlyExpenseBaseline: 5000,
+          withdrawalRate: 0.04,
+          inflationAssumption: 0.03,
+          growthScenarios: [],
+        },
+        isLoading: false,
+        error: null,
+      });
+      useTaxRulesStore.setState({
+        year: 2025,
+        items: [
+          {
+            id: 1,
+            year: 2024,
+            jurisdictionType: 'FEDERAL',
+            jurisdictionCode: 'US',
+            filingStatus: FilingStatus.SINGLE,
+            brackets: federalSingleBrackets,
+            standardDeduction: 14000,
+          },
+          {
+            id: 2,
+            year: 2025,
+            jurisdictionType: 'FEDERAL',
+            jurisdictionCode: 'US',
+            filingStatus: FilingStatus.SINGLE,
+            brackets: federalSingleBrackets,
+            standardDeduction: 14600,
+          },
+          {
+            id: 3,
+            year: 2025,
+            jurisdictionType: 'STATE',
+            jurisdictionCode: 'CA',
+            filingStatus: FilingStatus.SINGLE,
+            brackets: caSingleBrackets,
+            standardDeduction: 0,
+          },
+        ],
+        isLoading: false,
+        error: null,
+      });
+      usePersonsStore.setState({
+        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
+        isLoading: false,
+        error: null,
+      });
+
+      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+
+      expect(await screen.findByText(/using 2025 tax brackets/i)).toBeInTheDocument();
+      expect(screen.queryByText(/using 2024 tax brackets/i)).not.toBeInTheDocument();
+    });
   });
 });
