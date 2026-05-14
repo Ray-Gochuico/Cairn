@@ -3,6 +3,7 @@ import { PaycheckCard } from './PaycheckCard';
 import { BonusTaxCard } from './BonusTaxCard';
 import { CommissionTaxCard } from './CommissionTaxCard';
 import { OvertimeCard } from './OvertimeCard';
+import { FireCard } from './FireCard';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { getCurrentTaxYear } from '@/lib/current-tax-year';
@@ -17,6 +18,7 @@ const CARD_IDS = {
   BONUS: 'bonus-tax',
   COMMISSION: 'commission',
   OVERTIME: 'overtime',
+  FIRE: 'fire',
 } as const;
 
 // Human-friendly labels surfaced in the "manage" popover.
@@ -25,6 +27,7 @@ const CARD_LABELS: Record<string, string> = {
   [CARD_IDS.BONUS]: 'Bonus tax',
   [CARD_IDS.COMMISSION]: 'Commission tax',
   [CARD_IDS.OVERTIME]: 'Overtime',
+  [CARD_IDS.FIRE]: 'Years to FI',
 };
 
 function labelFor(id: string): string {
@@ -124,6 +127,9 @@ export default function CalculatorsLayout() {
         )}
         {showOvertime && !hiddenSet.has(CARD_IDS.OVERTIME) && (
           <OvertimeCard cardId={CARD_IDS.OVERTIME} onHide={refreshHidden} />
+        )}
+        {!hiddenSet.has(CARD_IDS.FIRE) && (
+          <FireCard cardId={CARD_IDS.FIRE} onHide={refreshHidden} />
         )}
       </div>
       {hiddenCount > 0 && (
