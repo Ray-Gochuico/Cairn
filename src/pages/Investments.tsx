@@ -4,13 +4,15 @@ import { useAccountsStore } from '@/stores/accounts-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useContributionsStore } from '@/stores/contributions-store';
+import { useDependentsStore } from '@/stores/dependents-store';
+import { useHouseholdStore } from '@/stores/household-store';
 import { getDatabase } from '@/db/db';
-import { AssetClass } from '@/types/enums';
+import { AccountType, AssetClass } from '@/types/enums';
 import { monthsBetween } from '@/lib/business-days';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import DonutChartCard from '@/components/charts/DonutChartCard';
 import BarChartCard from '@/components/charts/BarChartCard';
-import type { Account, Holding, AccountSnapshot } from '@/types/schema';
+import type { Account, Dependent, Holding, AccountSnapshot, Household } from '@/types/schema';
 
 /**
  * Investments page — Phase 2 visualization surface.
@@ -209,6 +211,51 @@ function contributionsLast12Months(
   return months.map((mm) => ({ month: mm, amount: totals.get(mm) ?? 0 }));
 }
 
+/**
+ * Project a 529 plan's value forward to the beneficiary's 18th birthday.
+ * Uses monthly compounding at `growthRate` annual, plus the beneficiary's
+ * recent monthly contribution rate. Returns `currentValue` if the
+ * beneficiary is already 18 or older (monthsUntil clamps to 0).
+ */
+function projectedAtAge18(
+  currentValue: number,
+  monthlyContrib: number,
+  dobIso: string,
+  growthRate: number,
+): number {
+  const dob = new Date(dobIso);
+  const eighteen = new Date(dob);
+  eighteen.setFullYear(eighteen.getFullYear() + 18);
+  const now = new Date();
+  const monthsUntil = Math.max(
+    0,
+    (eighteen.getFullYear() - now.getFullYear()) * 12 +
+      (eighteen.getMonth() - now.getMonth()),
+  );
+  const r = growthRate / 12;
+  if (r === 0) return currentValue + monthlyContrib * monthsUntil;
+  return (
+    currentValue * Math.pow(1 + r, monthsUntil) +
+    (monthlyContrib * (Math.pow(1 + r, monthsUntil) - 1)) / r
+  );
+}
+
+/**
+ * Pick the growth rate to project against. Prefers the entry labelled
+ * "Moderate", then the second entry, then the first, then 6%. Defensive
+ * defaults matter because the page renders before household.load() resolves.
+ * Mirrors the helper in Goals.tsx so projections feel consistent.
+ */
+function pickModerateRate(household: Household | null): number {
+  const FALLBACK = 0.06;
+  if (!household || household.growthScenarios.length === 0) return FALLBACK;
+  const moderate = household.growthScenarios.find((s) => s.label === 'Moderate');
+  if (moderate) return moderate.rate;
+  const second = household.growthScenarios[1];
+  if (second) return second.rate;
+  return household.growthScenarios[0]?.rate ?? FALLBACK;
+}
+
 export default function Investments() {
   const accounts = useAccountsStore((s) => s.accounts);
   const loadAccounts = useAccountsStore((s) => s.load);
@@ -218,13 +265,26 @@ export default function Investments() {
   const loadSnapshots = useSnapshotsStore((s) => s.load);
   const contributions = useContributionsStore((s) => s.contributions);
   const loadContributions = useContributionsStore((s) => s.load);
+  const dependents = useDependentsStore((s) => s.dependents);
+  const loadDependents = useDependentsStore((s) => s.load);
+  const household = useHouseholdStore((s) => s.household);
+  const loadHousehold = useHouseholdStore((s) => s.load);
 
   useEffect(() => {
     loadAccounts();
     loadHoldings();
     loadSnapshots();
     loadContributions();
-  }, [loadAccounts, loadHoldings, loadSnapshots, loadContributions]);
+    loadDependents();
+    loadHousehold();
+  }, [
+    loadAccounts,
+    loadHoldings,
+    loadSnapshots,
+    loadContributions,
+    loadDependents,
+    loadHousehold,
+  ]);
 
   const [assetClassByTicker, setAssetClassByTicker] = useState<Map<string, AssetClass>>(
     () => new Map(),
@@ -284,10 +344,42 @@ export default function Investments() {
     }));
   }, [accounts, latestPerAccount]);
 
+  // 529 section derivations. We keep these out of the JSX body so the
+  // section can short-circuit when there are no 529 accounts without
+  // wasting work on the typical case (most households have none).
+  const plans529 = useMemo(
+    () => accounts.filter((a) => a.type === AccountType.ACCOUNT_529),
+    [accounts],
+  );
+
+  const dependentById = useMemo<Map<number, Dependent>>(
+    () => new Map(dependents.filter((d) => d.id != null).map((d) => [d.id!, d])),
+    [dependents],
+  );
+
+  // Latest snapshot per account by snapshotDate. We need the full snapshot
+  // (not just totalValue, like latestPerAccount above) so the 529 card can
+  // surface the snapshot date if we ever want to. Today only the value is
+  // displayed but keeping the row makes future tweaks cheap.
+  const latestSnapByAccount = useMemo(() => {
+    const map = new Map<number, AccountSnapshot>();
+    for (const s of snapshots) {
+      const prev = map.get(s.accountId);
+      if (!prev || s.snapshotDate > prev.snapshotDate) map.set(s.accountId, s);
+    }
+    return map;
+  }, [snapshots]);
+
+  const today529 = useMemo(() => new Date(), []);
+  const moderateRate = useMemo(() => pickModerateRate(household), [household]);
+
   const hasAnyHolding = holdings.length > 0;
   const hasAnySnapshot = snapshots.length > 0;
 
-  if (!hasAnyHolding && !hasAnySnapshot) {
+  // A user with a 529-only setup (no holdings, no snapshots elsewhere) still
+  // wants to see their 529 card, so the empty state only fires when there
+  // are also no 529 plans to surface.
+  if (!hasAnyHolding && !hasAnySnapshot && plans529.length === 0) {
     return (
       <div className="p-8 max-w-6xl">
         <h1 className="text-2xl font-semibold mb-1">Investments</h1>
@@ -436,6 +528,87 @@ export default function Investments() {
           )}
         </CardContent>
       </Card>
+
+      {plans529.length > 0 && (
+        <Card data-testid="529-section">
+          <CardHeader>
+            <CardTitle>529 Plans</CardTitle>
+            <CardDescription>
+              College savings — current value, contributions YTD, and
+              projected value at the beneficiary's 18th birthday using the
+              Moderate growth scenario ({(moderateRate * 100).toFixed(1)}%).
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="divide-y">
+              {plans529.map((plan) => {
+                const dep =
+                  plan.beneficiaryDependentId != null
+                    ? dependentById.get(plan.beneficiaryDependentId)
+                    : null;
+                const latestSnap =
+                  plan.id != null ? latestSnapByAccount.get(plan.id) : undefined;
+                const currentValue = latestSnap?.totalValue ?? 0;
+                // YTD = sum of contributions in the current calendar year.
+                const yearPrefix = String(today529.getFullYear());
+                const ytdContribs = contributions
+                  .filter(
+                    (c) =>
+                      c.accountId === plan.id && c.date.startsWith(yearPrefix),
+                  )
+                  .reduce((sum, c) => sum + c.amount, 0);
+                // Approximate the projection's monthly inflow with YTD ÷ months
+                // elapsed this year. Coarse but matches what the user can see
+                // in the contribution log; refines automatically as the year
+                // progresses.
+                const monthsThisYear = today529.getMonth() + 1;
+                const monthlyAvg =
+                  monthsThisYear > 0 ? ytdContribs / monthsThisYear : 0;
+                const projected =
+                  dep != null
+                    ? projectedAtAge18(
+                        currentValue,
+                        monthlyAvg,
+                        dep.dateOfBirth,
+                        moderateRate,
+                      )
+                    : currentValue;
+                return (
+                  <li
+                    key={plan.id}
+                    className="flex items-center justify-between gap-4 py-3"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-medium truncate">{plan.name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {dep ? `for ${dep.name}` : 'no beneficiary set'}
+                        {plan.stateOfPlan ? ` · ${plan.stateOfPlan}` : ''}
+                        {plan.institution ? ` · ${plan.institution}` : ''}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0 text-sm space-y-0.5">
+                      <div className="font-mono tabular-nums">
+                        {formatCurrency(currentValue)}{' '}
+                        <span className="text-muted-foreground">now</span>
+                      </div>
+                      <div className="font-mono tabular-nums">
+                        {formatCurrency(ytdContribs)}{' '}
+                        <span className="text-muted-foreground">YTD</span>
+                      </div>
+                      {dep != null && (
+                        <div className="font-mono tabular-nums">
+                          {formatCurrency(projected)}{' '}
+                          <span className="text-muted-foreground">at 18</span>
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
