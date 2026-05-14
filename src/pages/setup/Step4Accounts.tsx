@@ -14,7 +14,7 @@ interface Props {
 }
 
 /**
- * Setup wizard Step 4 — Accounts. Multi-instance, optional (Continue is
+ * Setup wizard Step 5 — Accounts. Multi-instance, optional (Continue is
  * always enabled — a user can complete onboarding with zero accounts).
  */
 export default function Step4Accounts({ onComplete }: Props) {

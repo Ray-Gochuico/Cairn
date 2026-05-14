@@ -19,10 +19,10 @@ interface Props {
 type SubForm = 'none' | 'property' | 'vehicle';
 
 /**
- * Setup wizard Step 7 — Property & Vehicles combined. Two entity types
- * sharing one step keeps the wizard at 8 steps (matches the spec) while
- * giving the user a single visual context for "things you own that
- * aren't financial accounts." Inline-add forms open one at a time.
+ * Setup wizard Step 8 — Property & Vehicles combined. Two entity types
+ * sharing one step gives the user a single visual context for "things
+ * you own that aren't financial accounts." Inline-add forms open one
+ * at a time.
  */
 export default function Step7PropertyVehicles({ onComplete }: Props) {
   const {

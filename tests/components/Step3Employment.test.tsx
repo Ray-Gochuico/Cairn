@@ -195,6 +195,88 @@ describe('Step3Employment', () => {
     expect(screen.getAllByLabelText(/employment type/i)).toHaveLength(2);
   });
 
+  it('saves only the targeted person when multiple persons exist (per-card personId routing)', async () => {
+    const alexId = await seedPerson(db, 'Alex');
+    const jordanId = await seedPerson(db, 'Jordan');
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <Step3Employment onComplete={() => {}} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Alex/)).toBeInTheDocument();
+      expect(screen.getByText(/Jordan/)).toBeInTheDocument();
+    });
+
+    // Scope edits + Save click to Jordan's card via the testid.
+    const jordanCard = screen.getByTestId(`employment-card-${jordanId}`);
+    await user.selectOptions(
+      within(jordanCard).getByLabelText(/employment type/i),
+      'HOURLY',
+    );
+    const hourlyRate = within(jordanCard).getByLabelText(/hourly rate/i);
+    await user.clear(hourlyRate);
+    await user.type(hourlyRate, '55');
+    await user.click(within(jordanCard).getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => {
+      const { persons } = usePersonsStore.getState();
+      const jordan = persons.find((p) => p.id === jordanId);
+      const alex = persons.find((p) => p.id === alexId);
+      expect(jordan?.employmentType).toBe('HOURLY');
+      expect(jordan?.hourlyRate).toBe(55);
+      // Alex untouched — still the seeded SALARY_NO_OT, no hourly rate.
+      expect(alex?.employmentType).toBe('SALARY_NO_OT');
+      expect(alex?.hourlyRate).toBeNull();
+    });
+  });
+
+  it('shows an inline error and does not save when annual salary is cleared', async () => {
+    await seedPerson(db, 'Alex');
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <Step3Employment onComplete={() => {}} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Alex/)).toBeInTheDocument();
+    });
+
+    // Clear the required annual-salary input and Save.
+    await user.clear(screen.getByLabelText(/annual salary/i));
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+    // Inline error surfaces.
+    expect(await screen.findByRole('alert')).toHaveTextContent(/couldn't save/i);
+    // Persisted record still has the original $100,000 — empty input did
+    // not silently coerce to 0.
+    const { persons } = usePersonsStore.getState();
+    expect(persons[0].annualSalaryPretax).toBe(100000);
+  });
+
+  it('shows an inline error when regular hours / week is cleared on an HOURLY person', async () => {
+    await seedPerson(db, 'Alex', { employmentType: 'HOURLY' });
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <Step3Employment onComplete={() => {}} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Alex/)).toBeInTheDocument();
+    });
+
+    await user.clear(screen.getByLabelText(/regular hours/i));
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/couldn't save/i);
+  });
+
   it('Continue calls onComplete', async () => {
     await seedPerson(db, 'Alex');
     const onComplete = vi.fn();

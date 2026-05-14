@@ -12,7 +12,7 @@ interface Props {
 }
 
 /**
- * Setup wizard Step 6 — Loans. Multi-instance, optional. Properties and
+ * Setup wizard Step 7 — Loans. Multi-instance, optional. Properties and
  * vehicles haven't been created yet at this point in the wizard, so the
  * linked-property / linked-vehicle pickers will be empty here; users can
  * link after-the-fact from the Inputs page once everything exists.

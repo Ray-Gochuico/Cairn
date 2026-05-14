@@ -10,7 +10,7 @@ interface Props {
 }
 
 /**
- * Setup wizard Step 3 — Dependents. Optional, multi-instance. The
+ * Setup wizard Step 4 — Dependents. Optional, multi-instance. The
  * Continue button is always enabled; a Skip button is offered as an
  * obvious zero-dependents path.
  */

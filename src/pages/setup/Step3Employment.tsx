@@ -11,19 +11,22 @@ interface Props {
 }
 
 interface PersonDraft {
+  // Required-numeric fields are stored as strings here so an empty input
+  // stays empty (instead of silently coercing to 0). The save handler
+  // converts back to numbers and validates against the schema.
   employmentType: EmploymentType;
-  annualSalaryPretax: number;
+  annualSalaryPretax: string;
   hourlyRate: number | null;
-  regularHoursPerWeek: number;
+  regularHoursPerWeek: string;
   otThresholdHoursPerWeek: number | null;
 }
 
 function personToDraft(p: Person): PersonDraft {
   return {
     employmentType: p.employmentType,
-    annualSalaryPretax: p.annualSalaryPretax,
+    annualSalaryPretax: String(p.annualSalaryPretax),
     hourlyRate: p.hourlyRate,
-    regularHoursPerWeek: p.regularHoursPerWeek,
+    regularHoursPerWeek: String(p.regularHoursPerWeek),
     otThresholdHoursPerWeek: p.otThresholdHoursPerWeek,
   };
 }
@@ -52,6 +55,7 @@ export default function Step3Employment({ onComplete }: Props) {
   const { persons, load, update } = usePersonsStore();
   const [drafts, setDrafts] = useState<Record<number, PersonDraft>>({});
   const [savingId, setSavingId] = useState<number | null>(null);
+  const [errorById, setErrorById] = useState<Record<number, string | null>>({});
 
   useEffect(() => {
     load();
@@ -82,15 +86,33 @@ export default function Step3Employment({ onComplete }: Props) {
   const handleSave = async (id: number) => {
     const draft = drafts[id];
     if (!draft) return;
+    // Empty-input guard: required-numeric fields are kept as strings in
+    // the draft so we can detect a cleared input here and reject it
+    // instead of silently coercing to 0.
+    if (draft.annualSalaryPretax.trim() === '' || draft.regularHoursPerWeek.trim() === '') {
+      setErrorById((prev) => ({
+        ...prev,
+        [id]: "Couldn't save — please check the values.",
+      }));
+      return;
+    }
+    const annualSalaryPretax = Number(draft.annualSalaryPretax);
+    const regularHoursPerWeek = Number(draft.regularHoursPerWeek);
     setSavingId(id);
+    setErrorById((prev) => ({ ...prev, [id]: null }));
     try {
       await update(id, {
         employmentType: draft.employmentType,
-        annualSalaryPretax: draft.annualSalaryPretax,
+        annualSalaryPretax,
         hourlyRate: draft.hourlyRate,
-        regularHoursPerWeek: draft.regularHoursPerWeek,
+        regularHoursPerWeek,
         otThresholdHoursPerWeek: draft.otThresholdHoursPerWeek,
       });
+    } catch {
+      setErrorById((prev) => ({
+        ...prev,
+        [id]: "Couldn't save — please check the values.",
+      }));
     } finally {
       setSavingId(null);
     }
@@ -135,9 +157,10 @@ export default function Step3Employment({ onComplete }: Props) {
         const showAnnualSalary = draft.employmentType !== 'HOURLY';
         const isSaving = savingId === id;
         const labelId = `employmentType-${id}`;
+        const saveError = errorById[id] ?? null;
 
         return (
-          <Card key={id}>
+          <Card key={id} data-testid={`employment-card-${id}`}>
             <CardHeader>
               <CardTitle className="text-base">{p.name}</CardTitle>
             </CardHeader>
@@ -168,7 +191,7 @@ export default function Step3Employment({ onComplete }: Props) {
                       step="any"
                       value={draft.annualSalaryPretax}
                       onChange={(e) =>
-                        setDraft(id, { annualSalaryPretax: Number(e.target.value) })
+                        setDraft(id, { annualSalaryPretax: e.target.value })
                       }
                     />
                   </div>
@@ -195,7 +218,7 @@ export default function Step3Employment({ onComplete }: Props) {
                         step="any"
                         value={draft.regularHoursPerWeek}
                         onChange={(e) =>
-                          setDraft(id, { regularHoursPerWeek: Number(e.target.value) })
+                          setDraft(id, { regularHoursPerWeek: e.target.value })
                         }
                       />
                     </div>
@@ -216,6 +239,15 @@ export default function Step3Employment({ onComplete }: Props) {
                   </>
                 )}
               </div>
+
+              {saveError && (
+                <div
+                  role="alert"
+                  className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive"
+                >
+                  {saveError}
+                </div>
+              )}
 
               <div className="flex justify-end items-center gap-3">
                 <span

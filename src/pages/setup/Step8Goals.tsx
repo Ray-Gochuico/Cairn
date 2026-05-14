@@ -5,7 +5,7 @@ interface Props {
 }
 
 /**
- * Setup wizard Step 8 — Goals placeholder. Goals tracking is Phase 3
+ * Setup wizard Step 9 — Goals placeholder. Goals tracking is Phase 3
  * surface, so the final wizard step is just a celebratory "All set!"
  * card with a Finish button that hands control back to SetupWizard.tsx
  * to navigate to the dashboard and kick off snapshot derivation.
