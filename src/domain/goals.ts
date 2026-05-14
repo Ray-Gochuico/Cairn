@@ -110,7 +110,7 @@ export class GoalsRepo {
     );
   }
 
-  async remove(id: number): Promise<void> {
+  async delete(id: number): Promise<void> {
     await this.db.execute('DELETE FROM goals WHERE id = ?', [id]);
   }
 }

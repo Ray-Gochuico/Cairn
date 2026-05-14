@@ -104,7 +104,7 @@ describe('GoalsRepo', () => {
 
   it('deletes a goal', async () => {
     const id = await makeGoal(repo);
-    await repo.remove(id);
+    await repo.delete(id);
     expect(await repo.list()).toEqual([]);
     expect(await repo.findById(id)).toBeNull();
   });
