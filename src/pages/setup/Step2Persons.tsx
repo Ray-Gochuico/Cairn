@@ -64,16 +64,7 @@ export default function Step2Persons({ onComplete }: Props) {
         <PersonForm
           initial={DEFAULT_PERSON}
           onSubmit={async (v) => {
-            await create({
-              ...v,
-              expectedBonus: 0,
-              expectedBonusFrequency: 'ANNUAL',
-              bonusIsConsistent: true,
-              employmentType: 'SALARY_NO_OT',
-              hourlyRate: null,
-              regularHoursPerWeek: 40,
-              otThresholdHoursPerWeek: null,
-            });
+            await create(v);
             setShowForm(false);
           }}
           onCancel={persons.length > 0 ? () => setShowForm(false) : undefined}

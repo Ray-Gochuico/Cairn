@@ -28,16 +28,7 @@ export default function PersonsTab() {
         <PersonForm
           initial={DEFAULT_PERSON}
           onSubmit={async (v) => {
-            await create({
-              ...v,
-              expectedBonus: 0,
-              expectedBonusFrequency: 'ANNUAL',
-              bonusIsConsistent: true,
-              employmentType: 'SALARY_NO_OT',
-              hourlyRate: null,
-              regularHoursPerWeek: 40,
-              otThresholdHoursPerWeek: null,
-            });
+            await create(v);
             setMode('list');
           }}
           onCancel={() => setMode('list')}
@@ -62,8 +53,15 @@ export default function PersonsTab() {
             dateOfBirth: target.dateOfBirth,
             targetRetirementAge: target.targetRetirementAge,
             annualSalaryPretax: target.annualSalaryPretax,
+            expectedBonus: target.expectedBonus,
+            expectedBonusFrequency: target.expectedBonusFrequency,
+            bonusIsConsistent: target.bonusIsConsistent,
             expectedCommission: target.expectedCommission,
             expectedCommissionFrequency: target.expectedCommissionFrequency,
+            employmentType: target.employmentType,
+            hourlyRate: target.hourlyRate,
+            regularHoursPerWeek: target.regularHoursPerWeek,
+            otThresholdHoursPerWeek: target.otThresholdHoursPerWeek,
             pretax401kPct: target.pretax401kPct,
             healthInsuranceMonthlyPremium: target.healthInsuranceMonthlyPremium,
             dependentCareFsaMonthly: target.dependentCareFsaMonthly,
@@ -71,16 +69,7 @@ export default function PersonsTab() {
             hsaEligible: target.hsaEligible,
           }}
           onSubmit={async (v) => {
-            await update(mode.id, {
-              ...v,
-              expectedBonus: target.expectedBonus,
-              expectedBonusFrequency: target.expectedBonusFrequency,
-              bonusIsConsistent: target.bonusIsConsistent,
-              employmentType: target.employmentType,
-              hourlyRate: target.hourlyRate,
-              regularHoursPerWeek: target.regularHoursPerWeek,
-              otThresholdHoursPerWeek: target.otThresholdHoursPerWeek,
-            });
+            await update(mode.id, v);
             setMode('list');
           }}
           onCancel={() => setMode('list')}

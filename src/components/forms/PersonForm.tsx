@@ -1,28 +1,22 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { PersonSchema, type Person } from '@/types/schema';
+import { z } from 'zod';
+import {
+  PersonSchema,
+  EmploymentTypeSchema,
+  BonusFrequencySchema,
+  type Person,
+} from '@/types/schema';
 import { Button } from '@/components/ui/button';
 import DatePicker from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-// PersonFormValues omits fields not yet surfaced in the form UI (expectedBonus is
-// deprecated; the employment-type and bonus-frequency fields are introduced in
-// migration 0005 and will be surfaced by tasks 12.6.2–12.6.7). Callers inject
-// safe defaults when converting PersonFormValues back to a full Person for
-// persistence (see PersonsTab.tsx, Step2Persons.tsx).
-export type PersonFormValues = Omit<
-  Person,
-  | 'id'
-  | 'expectedBonus'
-  | 'expectedBonusFrequency'
-  | 'bonusIsConsistent'
-  | 'employmentType'
-  | 'hourlyRate'
-  | 'regularHoursPerWeek'
-  | 'otThresholdHoursPerWeek'
->;
+// PersonFormValues mirrors Person but drops the DB-only id. All other
+// columns are surfaced in the form UI; callers no longer need to inject
+// defaults at the boundary (see PersonsTab.tsx, Step2Persons.tsx).
+export type PersonFormValues = Omit<Person, 'id'>;
 
 export const DEFAULT_PERSON: PersonFormValues = {
   householdId: 1,
@@ -30,8 +24,15 @@ export const DEFAULT_PERSON: PersonFormValues = {
   dateOfBirth: '',
   targetRetirementAge: 65,
   annualSalaryPretax: 0,
+  expectedBonus: 0,
+  expectedBonusFrequency: 'ANNUAL',
+  bonusIsConsistent: true,
   expectedCommission: 0,
   expectedCommissionFrequency: 'MONTHLY',
+  employmentType: 'SALARY_NO_OT',
+  hourlyRate: null,
+  regularHoursPerWeek: 40,
+  otThresholdHoursPerWeek: null,
   pretax401kPct: 0,
   healthInsuranceMonthlyPremium: 0,
   dependentCareFsaMonthly: 0,
@@ -46,6 +47,32 @@ export interface PersonFormProps {
   submitLabel?: string;
 }
 
+// Empty input → null for nullable numeric fields (hourlyRate,
+// otThresholdHoursPerWeek). RHF's `valueAsNumber: true` coerces empty
+// strings to NaN, which fails Zod's `.positive().nullable()` refinement.
+const emptyToNullNumber = (v: unknown): number | null => {
+  if (v === '' || v === null || v === undefined) return null;
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
+// Form-shaped schema. PersonSchema has `.default(...)` on several
+// fields, which makes Zod's *input* type partial (those keys become
+// optional). RHF derives its resolver type from the schema's input
+// type, so the result is a Resolver<Partial<...>> that doesn't line up
+// with our strict `PersonFormValues` (= Omit<Person, 'id'>). We rebuild
+// without the defaults so input and output coincide. DEFAULT_PERSON
+// already provides equivalent runtime defaults for new persons.
+const PersonFormSchema = PersonSchema.omit({ id: true }).extend({
+  expectedBonus: z.number().min(0),
+  expectedBonusFrequency: BonusFrequencySchema,
+  bonusIsConsistent: z.boolean(),
+  employmentType: EmploymentTypeSchema,
+  hourlyRate: z.number().positive().nullable(),
+  regularHoursPerWeek: z.number().positive(),
+  otThresholdHoursPerWeek: z.number().positive().nullable(),
+});
+
 /**
  * Standalone person form. Used by both the PersonsTab create/edit
  * flow and the SetupWizard Step 2 onboarding flow. Caller owns the
@@ -59,20 +86,13 @@ export default function PersonForm({
   submitLabel = 'Save',
 }: PersonFormProps) {
   const form = useForm<PersonFormValues>({
-    resolver: zodResolver(
-      PersonSchema.omit({
-        id: true,
-        expectedBonus: true,
-        expectedBonusFrequency: true,
-        bonusIsConsistent: true,
-        employmentType: true,
-        hourlyRate: true,
-        regularHoursPerWeek: true,
-        otThresholdHoursPerWeek: true,
-      }),
-    ),
+    resolver: zodResolver(PersonFormSchema),
     defaultValues: initial,
   });
+
+  const employmentType = form.watch('employmentType');
+  const showHourlyFields = employmentType !== 'SALARY_NO_OT';
+  const showAnnualSalary = employmentType !== 'HOURLY';
 
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -106,14 +126,62 @@ export default function PersonForm({
               />
             </div>
             <div>
-              <Label htmlFor="annualSalaryPretax">Annual salary (pre-tax)</Label>
-              <Input
-                id="annualSalaryPretax"
-                type="number"
-                step="any"
-                {...form.register('annualSalaryPretax', { valueAsNumber: true })}
-              />
+              <Label htmlFor="employmentType">Employment type</Label>
+              <select
+                id="employmentType"
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                {...form.register('employmentType')}
+              >
+                <option value="HOURLY">Hourly</option>
+                <option value="SALARY_NO_OT">Salaried — no overtime</option>
+                <option value="SALARY_WITH_OT">Salaried with overtime</option>
+              </select>
             </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {showAnnualSalary && (
+              <div>
+                <Label htmlFor="annualSalaryPretax">Annual salary (pre-tax)</Label>
+                <Input
+                  id="annualSalaryPretax"
+                  type="number"
+                  step="any"
+                  {...form.register('annualSalaryPretax', { valueAsNumber: true })}
+                />
+              </div>
+            )}
+            {showHourlyFields && (
+              <>
+                <div>
+                  <Label htmlFor="hourlyRate">Hourly rate</Label>
+                  <Input
+                    id="hourlyRate"
+                    type="number"
+                    step="any"
+                    {...form.register('hourlyRate', { setValueAs: emptyToNullNumber })}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="regularHoursPerWeek">Regular hours / week</Label>
+                  <Input
+                    id="regularHoursPerWeek"
+                    type="number"
+                    step="any"
+                    {...form.register('regularHoursPerWeek', { valueAsNumber: true })}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="otThresholdHoursPerWeek">OT threshold (hrs / week)</Label>
+                  <Input
+                    id="otThresholdHoursPerWeek"
+                    type="number"
+                    step="any"
+                    {...form.register('otThresholdHoursPerWeek', { setValueAs: emptyToNullNumber })}
+                  />
+                </div>
+              </>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -137,6 +205,39 @@ export default function PersonForm({
                 <option value="QUARTERLY">Quarterly</option>
               </select>
             </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="expectedBonus">Expected bonus (annual)</Label>
+              <Input
+                id="expectedBonus"
+                type="number"
+                step="any"
+                {...form.register('expectedBonus', { valueAsNumber: true })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="expectedBonusFrequency">Bonus frequency</Label>
+              <select
+                id="expectedBonusFrequency"
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                {...form.register('expectedBonusFrequency')}
+              >
+                <option value="ANNUAL">Annual</option>
+                <option value="QUARTERLY">Quarterly</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                {...form.register('bonusIsConsistent')}
+              />
+              Bonuses are consistent year over year
+            </label>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
