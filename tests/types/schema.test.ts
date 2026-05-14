@@ -13,6 +13,7 @@ import {
   PropertySchema,
   VehicleSchema,
   TaxRuleSchema,
+  GoalSchema,
 } from '@/types/schema';
 import {
   FilingStatus,
@@ -22,6 +23,7 @@ import {
   SnapshotSource,
   LoanType,
   PropertyType,
+  GoalType,
 } from '@/types/enums';
 
 const futureDate = () => new Date(Date.now() + 86400000).toISOString().slice(0, 10);
@@ -480,5 +482,51 @@ describe('TaxRuleSchema', () => {
     expect(() => TaxRuleSchema.parse({
       ...valid, brackets: [{ min: 100, max: 200, rate: 0.10 }, { min: 50, max: 75, rate: 0.05 }],
     })).toThrow();
+  });
+});
+
+describe('GoalSchema', () => {
+  const valid = {
+    id: 1,
+    householdId: 1,
+    forPersonId: 1,
+    name: 'House Down Payment',
+    type: GoalType.DOWN_PAYMENT,
+    targetAmount: 80000,
+    targetDate: '2030-06-01',
+    linkedAccountIds: [1, 2, 3],
+  };
+
+  it('accepts a valid goal', () => {
+    expect(() => GoalSchema.parse(valid)).not.toThrow();
+  });
+
+  it('rejects an invalid type', () => {
+    expect(() => GoalSchema.parse({ ...valid, type: 'BOGUS' })).toThrow();
+  });
+
+  it('rejects non-array linkedAccountIds', () => {
+    expect(() => GoalSchema.parse({ ...valid, linkedAccountIds: '1,2,3' })).toThrow();
+    expect(() => GoalSchema.parse({ ...valid, linkedAccountIds: 1 })).toThrow();
+    expect(() => GoalSchema.parse({ ...valid, linkedAccountIds: null })).toThrow();
+  });
+
+  it('allows target_date in the past', () => {
+    expect(() =>
+      GoalSchema.parse({ ...valid, targetDate: '2020-01-01' })
+    ).not.toThrow();
+  });
+
+  it('accepts an empty linkedAccountIds array', () => {
+    expect(() =>
+      GoalSchema.parse({ ...valid, linkedAccountIds: [] })
+    ).not.toThrow();
+  });
+
+  it('accepts forPersonId as null or a positive int', () => {
+    expect(() => GoalSchema.parse({ ...valid, forPersonId: null })).not.toThrow();
+    expect(() => GoalSchema.parse({ ...valid, forPersonId: 42 })).not.toThrow();
+    expect(() => GoalSchema.parse({ ...valid, forPersonId: 0 })).toThrow();
+    expect(() => GoalSchema.parse({ ...valid, forPersonId: -1 })).toThrow();
   });
 });

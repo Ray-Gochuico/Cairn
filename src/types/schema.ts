@@ -7,6 +7,7 @@ import {
   SnapshotSource,
   LoanType,
   PropertyType,
+  GoalType,
 } from './enums';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -181,6 +182,18 @@ export const VehicleSchema = z.object({
   excludedFromNetWorth: z.boolean(),
 });
 export type Vehicle = z.infer<typeof VehicleSchema>;
+
+export const GoalSchema = z.object({
+  id: z.number().int().positive().optional(),
+  householdId: z.number().int().positive(),
+  forPersonId: z.number().int().positive().nullable(),
+  name: z.string().min(1).max(100),
+  type: z.nativeEnum(GoalType),
+  targetAmount: z.number().nonnegative(),
+  targetDate: isoDateString,
+  linkedAccountIds: z.array(z.number().int().positive()),
+});
+export type Goal = z.infer<typeof GoalSchema>;
 
 const BracketSchema = z.object({
   min: z.number().nonnegative(),
