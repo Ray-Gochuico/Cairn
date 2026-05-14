@@ -166,4 +166,38 @@ describe('computeBonusTax', () => {
     expect(result.cityTax).toBeGreaterThan(0);
     expect(result.marginalRateOnBonus).toBeGreaterThan(0.3465 + 0.025);
   });
+
+  it('bonusBreakdown sums to marginalTaxOnBonus × bonus', () => {
+    const result = computeBonusTax({
+      personGross: 100000,
+      bonus: 10000,
+      pretax: { pretax401k: 0, pretaxHealth: 0, pretaxDcfsa: 0, pretaxHsa: 0 },
+      filingStatus: 'SINGLE',
+      federalBrackets: federal2026Single,
+      stateBrackets: state,
+      cityBrackets: null,
+      standardDeduction: stdDeduction,
+    });
+    const sumOfBreakdown = result.bonusBreakdown.federal + result.bonusBreakdown.fica + result.bonusBreakdown.state + result.bonusBreakdown.city;
+    expect(sumOfBreakdown).toBeCloseTo(result.bonusBreakdown.total, 4);
+    expect(result.bonusBreakdown.total).toBeCloseTo(result.marginalRateOnBonus * 10000, 4);
+  });
+
+  it('bonusBreakdown.federal matches the marginal federal-tax diff', () => {
+    // For our anchor scenario, federal bracket at $85.4k taxable lands in 22% tier.
+    // Adding $10k bonus → adjusted goes from $75.4k to $85.4k (both in 22% tier for SINGLE).
+    // Federal diff should be 22% × 10000 = $2,200.
+    const result = computeBonusTax({
+      personGross: 100000,
+      bonus: 10000,
+      pretax: { pretax401k: 0, pretaxHealth: 0, pretaxDcfsa: 0, pretaxHsa: 0 },
+      filingStatus: 'SINGLE',
+      federalBrackets: federal2026Single,
+      stateBrackets: state,
+      cityBrackets: null,
+      standardDeduction: stdDeduction,
+    });
+    expect(result.bonusBreakdown.federal).toBeCloseTo(2200, 0);
+    expect(result.bonusBreakdown.state).toBeCloseTo(500, 0);  // 5% × 10000
+  });
 });

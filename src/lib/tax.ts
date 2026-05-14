@@ -89,6 +89,13 @@ export interface BonusTaxOutput {
   effectiveRate: number;
   marginalRateOnBonus: number;
   bonusTakeHome: number;
+  bonusBreakdown: {
+    federal: number;
+    fica: number;
+    state: number;
+    city: number;
+    total: number;
+  };
 }
 
 /**
@@ -110,19 +117,27 @@ export function computeBonusTax(input: BonusTaxInput): BonusTaxOutput {
   const cityTax = input.cityBrackets ? evaluateBrackets(input.cityBrackets, adjusted) : 0;
   const totalTax = federalTax + fica + stateTax + cityTax;
 
-  // Marginal rate on bonus: re-run the calc without the bonus, diff the totals.
+  // Marginal rate on bonus: re-run the calc without the bonus, diff per jurisdiction.
   const grossWithoutBonus = input.personGross - input.bonus;
   const adjustedNoBonus = Math.max(0, grossWithoutBonus - pretaxTotal - input.standardDeduction);
-  const totalTaxNoBonus =
-    evaluateBrackets(input.federalBrackets, adjustedNoBonus)
-    + computeFica(grossWithoutBonus, input.filingStatus)
-    + evaluateBrackets(input.stateBrackets, adjustedNoBonus)
-    + (input.cityBrackets ? evaluateBrackets(input.cityBrackets, adjustedNoBonus) : 0);
 
-  const marginalTaxOnBonus = totalTax - totalTaxNoBonus;
+  const federalNoBonus = evaluateBrackets(input.federalBrackets, adjustedNoBonus);
+  const ficaNoBonus = computeFica(grossWithoutBonus, input.filingStatus);
+  const stateNoBonus = evaluateBrackets(input.stateBrackets, adjustedNoBonus);
+  const cityNoBonus = input.cityBrackets ? evaluateBrackets(input.cityBrackets, adjustedNoBonus) : 0;
+
+  const bonusBreakdown = {
+    federal: federalTax - federalNoBonus,
+    fica: fica - ficaNoBonus,
+    state: stateTax - stateNoBonus,
+    city: cityTax - cityNoBonus,
+    total: totalTax - (federalNoBonus + ficaNoBonus + stateNoBonus + cityNoBonus),
+  };
+
+  const marginalTaxOnBonus = bonusBreakdown.total;
   const marginalRateOnBonus = input.bonus > 0 ? marginalTaxOnBonus / input.bonus : 0;
   const bonusTakeHome = input.bonus - marginalTaxOnBonus;
   const effectiveRate = input.personGross > 0 ? totalTax / input.personGross : 0;
 
-  return { federalTax, fica, stateTax, cityTax, totalTax, effectiveRate, marginalRateOnBonus, bonusTakeHome };
+  return { federalTax, fica, stateTax, cityTax, totalTax, effectiveRate, marginalRateOnBonus, bonusTakeHome, bonusBreakdown };
 }
