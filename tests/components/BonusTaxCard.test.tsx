@@ -187,4 +187,98 @@ describe('BonusTaxCard', () => {
     expect(screen.getByText(/State on bonus/i)).toBeInTheDocument();
     expect(screen.getByText(/Marginal rate/i)).toBeInTheDocument();
   });
+
+  it('shows Quarterly frequency and adjusts annual bonus total', async () => {
+    // Person seeded with expectedBonusFrequency=QUARTERLY. The input represents
+    // a single quarterly bonus payment (e.g. $5000), and the math should treat
+    // the annual figure as 5000 * 4 = 20000 when computing the bonus tax.
+    primeStores();
+    usePersonsStore.setState({
+      persons: [
+        {
+          ...usePersonsStore.getState().persons[0],
+          expectedBonus: 5000,
+          expectedBonusFrequency: 'QUARTERLY',
+          bonusIsConsistent: true,
+        },
+      ],
+      isLoading: false,
+      error: null,
+    });
+
+    render(<MemoryRouter><BonusTaxCard /></MemoryRouter>);
+
+    // Frequency select should reflect QUARTERLY seeded from the person
+    const freqSelect = await screen.findByLabelText(/Bonus frequency/i) as HTMLSelectElement;
+    expect(freqSelect.value).toBe('QUARTERLY');
+
+    // Enter $5000 per quarter
+    const input = screen.getByLabelText(/Bonus amount/i);
+    fireEvent.change(input, { target: { value: '5000' } });
+    await screen.findByTestId('bonus-takehome');
+
+    // The annual figure (5000 * 4 = 20000) should be reflected somewhere in
+    // the body so the user understands the math being applied.
+    expect(screen.getByText(/\$20,000/)).toBeInTheDocument();
+
+    // Per-bonus take-home should be roughly $5000 * (1 - ~0.41 marginal) ≈ $3000
+    const headline = screen.getByTestId('bonus-takehome');
+    const value = parseFloat(headline.textContent!.replace(/[$,]/g, ''));
+    expect(value).toBeGreaterThan(2500);
+    expect(value).toBeLessThan(3500);
+
+    // With consistent=true, an annual rollup line should be visible.
+    expect(screen.getByText(/total take-home/i)).toBeInTheDocument();
+  });
+
+  it('hides annual total line when bonus is not consistent', async () => {
+    // Person seeded with bonusIsConsistent=false: the annual rollup line is
+    // hidden because the user can't reliably project a full year of bonuses.
+    primeStores();
+    usePersonsStore.setState({
+      persons: [
+        {
+          ...usePersonsStore.getState().persons[0],
+          expectedBonus: 10000,
+          expectedBonusFrequency: 'ANNUAL',
+          bonusIsConsistent: false,
+        },
+      ],
+      isLoading: false,
+      error: null,
+    });
+
+    render(<MemoryRouter><BonusTaxCard /></MemoryRouter>);
+
+    const input = screen.getByLabelText(/Bonus amount/i);
+    fireEvent.change(input, { target: { value: '10000' } });
+    await screen.findByTestId('bonus-takehome');
+
+    // The "total take-home for the year" rollup must be absent.
+    expect(screen.queryByText(/total take-home/i)).not.toBeInTheDocument();
+
+    // The consistency checkbox should be unchecked, reflecting the seed.
+    const consistencyCheckbox = screen.getByLabelText(/consistent/i) as HTMLInputElement;
+    expect(consistencyCheckbox.checked).toBe(false);
+  });
+
+  it('toggling consistency override hides the annual rollup line', async () => {
+    // Default seed is consistent=true; toggling the checkbox off should
+    // hide the annual rollup line without persisting back to the store.
+    primeStores();
+    render(<MemoryRouter><BonusTaxCard /></MemoryRouter>);
+
+    const input = screen.getByLabelText(/Bonus amount/i);
+    fireEvent.change(input, { target: { value: '10000' } });
+    await screen.findByTestId('bonus-takehome');
+
+    // Default seed is consistent → annual rollup visible
+    expect(screen.getByText(/total take-home/i)).toBeInTheDocument();
+
+    // Toggle off
+    const consistencyCheckbox = screen.getByLabelText(/consistent/i);
+    fireEvent.click(consistencyCheckbox);
+
+    expect(screen.queryByText(/total take-home/i)).not.toBeInTheDocument();
+  });
 });
