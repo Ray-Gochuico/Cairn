@@ -36,6 +36,13 @@ export async function runMigrations(db: Database, migrations: Migration[]): Prom
     for (const stmt of statements) {
       await db.execute(stmt);
     }
+
+    // Record successful application. OR IGNORE so that migrations which self-record
+    // (e.g., 0001_initial.sql) don't conflict here.
+    await db.execute(
+      'INSERT OR IGNORE INTO schema_migrations (version) VALUES (?)',
+      [m.version],
+    );
   }
 }
 

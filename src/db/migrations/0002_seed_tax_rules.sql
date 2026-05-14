@@ -6,7 +6,7 @@
 -- enum value is retained for future use but no rows are inserted here.
 
 -- FEDERAL — 4 filing statuses
-INSERT INTO tax_rules (year, jurisdiction_type, jurisdiction_code, filing_status, brackets, standard_deduction) VALUES
+INSERT OR IGNORE INTO tax_rules (year, jurisdiction_type, jurisdiction_code, filing_status, brackets, standard_deduction) VALUES
 (2026, 'FEDERAL', 'US', 'SINGLE',
  '[{"min":0,"max":11600,"rate":0.10},{"min":11600,"max":47150,"rate":0.12},{"min":47150,"max":100525,"rate":0.22},{"min":100525,"max":191950,"rate":0.24},{"min":191950,"max":243725,"rate":0.32},{"min":243725,"max":609350,"rate":0.35},{"min":609350,"max":null,"rate":0.37}]',
  14600),
@@ -24,7 +24,7 @@ INSERT INTO tax_rules (year, jurisdiction_type, jurisdiction_code, filing_status
 -- MFS and HOH use the SINGLE bracket schedule (Phase 3 simplification — many states have
 -- specific MFS/HOH brackets we don't model yet; Phase 3.5 patch if a tester surfaces an issue).
 -- WA's wage tax is 0 (the spreadsheet's WA brackets are a capital gains tax, not income tax).
-INSERT INTO tax_rules (year, jurisdiction_type, jurisdiction_code, filing_status, brackets, standard_deduction) VALUES
+INSERT OR IGNORE INTO tax_rules (year, jurisdiction_type, jurisdiction_code, filing_status, brackets, standard_deduction) VALUES
 (2026, 'STATE', 'AL', 'SINGLE', '[{"min": 0.0, "max": 500.0, "rate": 0.02}, {"min": 500.0, "max": 3000.0, "rate": 0.04}, {"min": 3000.0, "max": null, "rate": 0.05}]', 3000),
 (2026, 'STATE', 'AL', 'MFJ',    '[{"min": 0.0, "max": 1000.0, "rate": 0.02}, {"min": 1000.0, "max": 6000.0, "rate": 0.04}, {"min": 6000.0, "max": null, "rate": 0.05}]', 8500),
 (2026, 'STATE', 'AL', 'MFS',    '[{"min": 0.0, "max": 500.0, "rate": 0.02}, {"min": 500.0, "max": 3000.0, "rate": 0.04}, {"min": 3000.0, "max": null, "rate": 0.05}]', 3000),
@@ -254,7 +254,7 @@ INSERT INTO tax_rules (year, jurisdiction_type, jurisdiction_code, filing_status
 --   WV_PARKERSBURG: Flat $/week service fee, not bracket-able
 --   WV_WEIRTON: Flat $/week service fee, not bracket-able
 --   WV_WHEELING: Flat $/week service fee, not bracket-able
-INSERT INTO tax_rules (year, jurisdiction_type, jurisdiction_code, filing_status, brackets, standard_deduction) VALUES
+INSERT OR IGNORE INTO tax_rules (year, jurisdiction_type, jurisdiction_code, filing_status, brackets, standard_deduction) VALUES
 (2026, 'CITY', 'AL_ATTALLA', 'SINGLE', '[{"min": 0, "max": null, "rate": 0.02}]', 0),
 (2026, 'CITY', 'AL_ATTALLA', 'MFJ',    '[{"min": 0, "max": null, "rate": 0.02}]', 0),
 (2026, 'CITY', 'AL_ATTALLA', 'MFS',    '[{"min": 0, "max": null, "rate": 0.02}]', 0),
