@@ -24,6 +24,7 @@ import PropertiesTab from './pages/inputs/PropertiesTab';
 import VehiclesTab from './pages/inputs/VehiclesTab';
 import GoalsTab from './pages/inputs/GoalsTab';
 import EquityGrantsTab from './pages/inputs/EquityGrantsTab';
+import Plan529Tab from './pages/inputs/Plan529Tab';
 import ComingSoonTab from './pages/inputs/tabs-coming-soon';
 import SetupWizard from './pages/setup/SetupWizard';
 import BackupRestore from './pages/BackupRestore';
@@ -66,7 +67,7 @@ const router = createBrowserRouter([
           { path: 'properties', element: <PropertiesTab /> },
           { path: 'vehicles', element: <VehiclesTab /> },
           { path: 'goals', element: <GoalsTab /> },
-          { path: 'plans-529', element: <ComingSoonTab name="529 Plans" phase={3} /> },
+          { path: 'plans-529', element: <Plan529Tab /> },
           { path: 'growth-tax', element: <ComingSoonTab name="Growth & Tax" phase={3} /> },
           { path: 'categories', element: <ComingSoonTab name="Categories" phase={4} /> },
           { path: 'tickers', element: <ComingSoonTab name="Tickers" phase={3} /> },
