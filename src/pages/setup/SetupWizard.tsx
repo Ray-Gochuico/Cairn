@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import Step1Household from './Step1Household';
 import Step2Persons from './Step2Persons';
+import Step3Employment from './Step3Employment';
 import Step3Dependents from './Step3Dependents';
 import Step4Accounts from './Step4Accounts';
 import Step5Holdings from './Step5Holdings';
@@ -19,22 +20,28 @@ import { YahooClient } from '@/market/yahoo-client';
 import { deriveLast12Months } from '@/market/snapshot-derivation';
 import { getDatabase } from '@/db/db';
 
-type StepIndex = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+type StepIndex = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
 interface StepMeta {
   index: StepIndex;
   label: string;
 }
 
+// Plan deviation: Phase 3 plan called for Employment as Step 2 (before
+// Persons), but Step3Employment iterates the persons-store to set
+// per-person employment type — that store is empty until Step 2 runs.
+// Placed Employment as Step 3 (after Persons) so persons exist when
+// this step renders. Total: 8 → 9 steps.
 const STEPS: StepMeta[] = [
   { index: 1, label: 'Household' },
   { index: 2, label: 'Persons' },
-  { index: 3, label: 'Dependents' },
-  { index: 4, label: 'Accounts' },
-  { index: 5, label: 'Holdings' },
-  { index: 6, label: 'Loans' },
-  { index: 7, label: 'Property & Vehicles' },
-  { index: 8, label: 'Goals' },
+  { index: 3, label: 'Employment' },
+  { index: 4, label: 'Dependents' },
+  { index: 5, label: 'Accounts' },
+  { index: 6, label: 'Holdings' },
+  { index: 7, label: 'Loans' },
+  { index: 8, label: 'Property & Vehicles' },
+  { index: 9, label: 'Goals' },
 ];
 
 export default function SetupWizard() {
@@ -48,7 +55,7 @@ export default function SetupWizard() {
       next.add(current);
       return next;
     });
-    if (current < 8) {
+    if (current < 9) {
       setCurrent((current + 1) as StepIndex);
     }
   };
@@ -105,21 +112,24 @@ export default function SetupWizard() {
       stepContent = <Step2Persons onComplete={advance} />;
       break;
     case 3:
-      stepContent = <Step3Dependents onComplete={advance} />;
+      stepContent = <Step3Employment onComplete={advance} />;
       break;
     case 4:
-      stepContent = <Step4Accounts onComplete={advance} />;
+      stepContent = <Step3Dependents onComplete={advance} />;
       break;
     case 5:
-      stepContent = <Step5Holdings onComplete={advance} />;
+      stepContent = <Step4Accounts onComplete={advance} />;
       break;
     case 6:
-      stepContent = <Step6Loans onComplete={advance} />;
+      stepContent = <Step5Holdings onComplete={advance} />;
       break;
     case 7:
-      stepContent = <Step7PropertyVehicles onComplete={advance} />;
+      stepContent = <Step6Loans onComplete={advance} />;
       break;
     case 8:
+      stepContent = <Step7PropertyVehicles onComplete={advance} />;
+      break;
+    case 9:
       stepContent = <Step8Goals onComplete={finish} />;
       break;
   }
@@ -130,7 +140,7 @@ export default function SetupWizard() {
         <div className="max-w-3xl mx-auto px-6 py-4">
           <h1 className="text-xl font-semibold">Welcome — let&apos;s set up your household</h1>
           <p className="text-sm text-muted-foreground">
-            Step {current} of 8: {currentMeta.label}
+            Step {current} of 9: {currentMeta.label}
           </p>
         </div>
       </header>

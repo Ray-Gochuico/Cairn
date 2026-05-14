@@ -10,9 +10,9 @@ interface Props {
 }
 
 /**
- * Setup wizard Step 5 — Holdings. Per-account inline editing, mirrors
- * HoldingsTab's row UX. If no accounts exist (user skipped Step 4),
- * shows a gentle prompt and just a Continue button.
+ * Setup wizard step — Holdings. Per-account inline editing, mirrors
+ * HoldingsTab's row UX. If no accounts exist (user skipped the Accounts
+ * step), shows a gentle prompt and just a Continue button.
  */
 export default function Step5Holdings({ onComplete }: Props) {
   const { accounts, load: loadAccounts } = useAccountsStore();
@@ -53,7 +53,7 @@ export default function Step5Holdings({ onComplete }: Props) {
           </p>
         </div>
         <div className="border rounded-md p-8 text-center text-muted-foreground">
-          Add accounts in Step 4 to add holdings here. You can also add holdings later from the Inputs page.
+          Add accounts in Step 5 to add holdings here. You can also add holdings later from the Inputs page.
         </div>
         <div className="pt-2">
           <Button onClick={onComplete}>Continue</Button>

@@ -79,26 +79,27 @@ describe('SetupWizard', () => {
     await db.close();
   });
 
-  it('renders Step 1 (Household) by default and shows the 8-step progress indicator', async () => {
+  it('renders Step 1 (Household) by default and shows the 9-step progress indicator', async () => {
     renderWizard();
 
     // Header reflects the current step.
     expect(
-      await screen.findByText(/Step 1 of 8: Household/i),
+      await screen.findByText(/Step 1 of 9: Household/i),
     ).toBeInTheDocument();
 
-    // The progress nav lists all 8 step labels.
+    // The progress nav lists all 9 step labels.
     expect(screen.getByText(/^1\. Household$/i)).toBeInTheDocument();
     expect(screen.getByText(/^2\. Persons$/i)).toBeInTheDocument();
-    expect(screen.getByText(/^3\. Dependents$/i)).toBeInTheDocument();
-    expect(screen.getByText(/^4\. Accounts$/i)).toBeInTheDocument();
-    expect(screen.getByText(/^5\. Holdings$/i)).toBeInTheDocument();
-    expect(screen.getByText(/^6\. Loans$/i)).toBeInTheDocument();
-    expect(screen.getByText(/^7\. Property & Vehicles$/i)).toBeInTheDocument();
-    expect(screen.getByText(/^8\. Goals$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^3\. Employment$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^4\. Dependents$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^5\. Accounts$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^6\. Holdings$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^7\. Loans$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^8\. Property & Vehicles$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^9\. Goals$/i)).toBeInTheDocument();
   });
 
-  it('traverses all 8 steps with minimal data and navigates to / on Finish', async () => {
+  it('traverses all 9 steps with minimal data and navigates to / on Finish', async () => {
     const user = userEvent.setup();
     renderWizard();
 
@@ -116,7 +117,7 @@ describe('SetupWizard', () => {
 
     // --- Step 2: Persons ---
     await waitFor(() => {
-      expect(screen.getByText(/Step 2 of 8: Persons/i)).toBeInTheDocument();
+      expect(screen.getByText(/Step 2 of 9: Persons/i)).toBeInTheDocument();
     });
     // Step2Persons auto-opens the form when persons.length === 0.
     await user.type(screen.getByLabelText(/^name$/i), 'Alex');
@@ -130,46 +131,53 @@ describe('SetupWizard', () => {
     });
     await user.click(screen.getByRole('button', { name: /^continue$/i }));
 
-    // --- Step 3: Dependents (skip) ---
+    // --- Step 3: Employment ---
     await waitFor(() => {
-      expect(screen.getByText(/Step 3 of 8: Dependents/i)).toBeInTheDocument();
+      expect(screen.getByText(/Step 3 of 9: Employment/i)).toBeInTheDocument();
+    });
+    // Just continue without making per-person edits.
+    await user.click(screen.getByRole('button', { name: /^continue$/i }));
+
+    // --- Step 4: Dependents (skip) ---
+    await waitFor(() => {
+      expect(screen.getByText(/Step 4 of 9: Dependents/i)).toBeInTheDocument();
     });
     await user.click(screen.getByRole('button', { name: /skip — no dependents/i }));
 
-    // --- Step 4: Accounts (skip) ---
+    // --- Step 5: Accounts (skip) ---
     await waitFor(() => {
-      expect(screen.getByText(/Step 4 of 8: Accounts/i)).toBeInTheDocument();
+      expect(screen.getByText(/Step 5 of 9: Accounts/i)).toBeInTheDocument();
     });
     await user.click(screen.getByRole('button', { name: /skip — no accounts yet/i }));
 
-    // --- Step 5: Holdings (no accounts → just Continue) ---
+    // --- Step 6: Holdings (no accounts → just Continue) ---
     await waitFor(() => {
-      expect(screen.getByText(/Step 5 of 8: Holdings/i)).toBeInTheDocument();
+      expect(screen.getByText(/Step 6 of 9: Holdings/i)).toBeInTheDocument();
     });
     expect(
-      screen.getByText(/Add accounts in Step 4 to add holdings here/i),
+      screen.getByText(/Add accounts in Step 5 to add holdings here/i),
     ).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /^continue$/i }));
 
-    // --- Step 6: Loans (skip) ---
+    // --- Step 7: Loans (skip) ---
     await waitFor(() => {
-      expect(screen.getByText(/Step 6 of 8: Loans/i)).toBeInTheDocument();
+      expect(screen.getByText(/Step 7 of 9: Loans/i)).toBeInTheDocument();
     });
     await user.click(screen.getByRole('button', { name: /skip — no loans/i }));
 
-    // --- Step 7: Property & Vehicles (skip) ---
+    // --- Step 8: Property & Vehicles (skip) ---
     await waitFor(() => {
       expect(
-        screen.getByText(/Step 7 of 8: Property & Vehicles/i),
+        screen.getByText(/Step 8 of 9: Property & Vehicles/i),
       ).toBeInTheDocument();
     });
     await user.click(
       screen.getByRole('button', { name: /skip — no property or vehicles/i }),
     );
 
-    // --- Step 8: Goals → Finish ---
+    // --- Step 9: Goals → Finish ---
     await waitFor(() => {
-      expect(screen.getByText(/Step 8 of 8: Goals/i)).toBeInTheDocument();
+      expect(screen.getByText(/Step 9 of 9: Goals/i)).toBeInTheDocument();
     });
     expect(screen.getByText(/all set!/i)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /^finish$/i }));
