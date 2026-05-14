@@ -222,3 +222,28 @@ export const TaxRuleSchema = z.object({
   standardDeduction: z.number().nonnegative(),
 });
 export type TaxRule = z.infer<typeof TaxRuleSchema>;
+
+const VestingEntrySchema = z.object({
+  date: isoDateString,
+  cumulativePct: z.number().min(0).max(1),
+});
+
+export const EquityGrantSchema = z.object({
+  id: z.number().int().positive().optional(),
+  householdId: z.number().int().positive(),
+  ownerPersonId: z.number().int().positive(),     // required (grants are individual)
+  name: z.string().min(1).max(100),
+  companyName: z.string().min(1).max(100),
+  grantDate: pastOrTodayDate,
+  strikePrice: z.number().nonnegative(),
+  totalShares: z.number().nonnegative(),
+  vestingSchedule: z.array(VestingEntrySchema).min(1).refine(
+    (rows) => rows.every((r, i) => i === 0 || (r.date >= rows[i - 1].date && r.cumulativePct >= rows[i - 1].cumulativePct)),
+    'vesting schedule must have monotonic dates and cumulativePct',
+  ).refine(
+    (rows) => Math.abs(rows[rows.length - 1].cumulativePct - 1.0) < 1e-9,
+    'last vesting entry must reach cumulativePct = 1.0',
+  ),
+  currentFmv: z.number().nonnegative(),
+});
+export type EquityGrant = z.infer<typeof EquityGrantSchema>;

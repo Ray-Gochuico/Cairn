@@ -14,6 +14,7 @@ import {
   VehicleSchema,
   TaxRuleSchema,
   GoalSchema,
+  EquityGrantSchema,
 } from '@/types/schema';
 import {
   FilingStatus,
@@ -528,5 +529,139 @@ describe('GoalSchema', () => {
     expect(() => GoalSchema.parse({ ...valid, forPersonId: 42 })).not.toThrow();
     expect(() => GoalSchema.parse({ ...valid, forPersonId: 0 })).toThrow();
     expect(() => GoalSchema.parse({ ...valid, forPersonId: -1 })).toThrow();
+  });
+});
+
+describe('EquityGrantSchema', () => {
+  const valid = {
+    id: 1,
+    householdId: 1,
+    ownerPersonId: 1,
+    name: 'New Hire RSU Grant',
+    companyName: 'Acme Corp',
+    grantDate: '2023-01-15',
+    strikePrice: 0,
+    totalShares: 1200,
+    vestingSchedule: [
+      { date: '2024-01-15', cumulativePct: 0.25 },
+      { date: '2025-01-15', cumulativePct: 0.50 },
+      { date: '2026-01-15', cumulativePct: 0.75 },
+      { date: '2027-01-15', cumulativePct: 1.0 },
+    ],
+    currentFmv: 145.50,
+  };
+
+  it('accepts a valid equity grant', () => {
+    expect(() => EquityGrantSchema.parse(valid)).not.toThrow();
+  });
+
+  it('accepts a single-entry vesting schedule with cumulativePct=1.0 (immediate full vest)', () => {
+    expect(() =>
+      EquityGrantSchema.parse({
+        ...valid,
+        vestingSchedule: [{ date: '2024-01-15', cumulativePct: 1.0 }],
+      })
+    ).not.toThrow();
+  });
+
+  it('rejects vesting entry with cumulativePct > 1', () => {
+    expect(() =>
+      EquityGrantSchema.parse({
+        ...valid,
+        vestingSchedule: [
+          { date: '2024-01-15', cumulativePct: 0.5 },
+          { date: '2025-01-15', cumulativePct: 1.5 },
+        ],
+      })
+    ).toThrow();
+  });
+
+  it('rejects vesting entry with cumulativePct < 0', () => {
+    expect(() =>
+      EquityGrantSchema.parse({
+        ...valid,
+        vestingSchedule: [{ date: '2024-01-15', cumulativePct: -0.1 }],
+      })
+    ).toThrow();
+  });
+
+  it('rejects non-monotonic cumulativePct', () => {
+    expect(() =>
+      EquityGrantSchema.parse({
+        ...valid,
+        vestingSchedule: [
+          { date: '2024-01-15', cumulativePct: 0.5 },
+          { date: '2025-01-15', cumulativePct: 0.4 },
+          { date: '2026-01-15', cumulativePct: 1.0 },
+        ],
+      })
+    ).toThrow();
+  });
+
+  it('rejects non-monotonic dates', () => {
+    expect(() =>
+      EquityGrantSchema.parse({
+        ...valid,
+        vestingSchedule: [
+          { date: '2025-01-15', cumulativePct: 0.25 },
+          { date: '2024-01-15', cumulativePct: 0.50 },
+          { date: '2026-01-15', cumulativePct: 1.0 },
+        ],
+      })
+    ).toThrow();
+  });
+
+  it('rejects vestingSchedule whose last cumulativePct is not 1.0', () => {
+    expect(() =>
+      EquityGrantSchema.parse({
+        ...valid,
+        vestingSchedule: [
+          { date: '2024-01-15', cumulativePct: 0.5 },
+          { date: '2025-01-15', cumulativePct: 0.99 },
+        ],
+      })
+    ).toThrow();
+  });
+
+  it('rejects empty vestingSchedule', () => {
+    expect(() => EquityGrantSchema.parse({ ...valid, vestingSchedule: [] })).toThrow();
+  });
+
+  it('rejects ownerPersonId === null (grants are individual)', () => {
+    expect(() => EquityGrantSchema.parse({ ...valid, ownerPersonId: null })).toThrow();
+  });
+
+  it('rejects ownerPersonId omitted', () => {
+    const { ownerPersonId: _omit, ...withoutOwner } = valid;
+    expect(() => EquityGrantSchema.parse(withoutOwner)).toThrow();
+  });
+
+  it('requires companyName (rejects empty string)', () => {
+    expect(() => EquityGrantSchema.parse({ ...valid, companyName: '' })).toThrow();
+  });
+
+  it('rejects negative strikePrice', () => {
+    expect(() => EquityGrantSchema.parse({ ...valid, strikePrice: -1 })).toThrow();
+  });
+
+  it('rejects negative totalShares', () => {
+    expect(() => EquityGrantSchema.parse({ ...valid, totalShares: -10 })).toThrow();
+  });
+
+  it('rejects negative currentFmv', () => {
+    expect(() => EquityGrantSchema.parse({ ...valid, currentFmv: -1 })).toThrow();
+  });
+
+  it('rejects grantDate in the future', () => {
+    expect(() => EquityGrantSchema.parse({ ...valid, grantDate: futureDate() })).toThrow();
+  });
+
+  it('rejects malformed vesting entry date', () => {
+    expect(() =>
+      EquityGrantSchema.parse({
+        ...valid,
+        vestingSchedule: [{ date: '01/15/2024', cumulativePct: 1.0 }],
+      })
+    ).toThrow();
   });
 });
