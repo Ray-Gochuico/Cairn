@@ -43,6 +43,7 @@ const sections: NavSection[] = [
     items: [
       { to: '/inputs', label: 'Inputs', icon: '📝' },
       { to: '/profile', label: 'Profile', icon: '⚙️' },
+      { to: '/backup-restore', label: 'Backup & Restore', icon: '💾' },
     ],
   },
 ];

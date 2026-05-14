@@ -24,6 +24,7 @@ import PropertiesTab from './pages/inputs/PropertiesTab';
 import VehiclesTab from './pages/inputs/VehiclesTab';
 import ComingSoonTab from './pages/inputs/tabs-coming-soon';
 import SetupWizard from './pages/setup/SetupWizard';
+import BackupRestore from './pages/BackupRestore';
 
 const router = createBrowserRouter([
   {
@@ -45,6 +46,7 @@ const router = createBrowserRouter([
       { path: 'calculators', element: <CalculatorsLayout /> },
       { path: 'what-if', element: <WhatIf /> },
       { path: 'profile', element: <Profile /> },
+      { path: 'backup-restore', element: <BackupRestore /> },
       { path: 'monthly', element: <MonthlyMiniWindow /> },
       {
         path: 'inputs',
