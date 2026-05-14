@@ -99,7 +99,7 @@ export function BonusTaxCard() {
 
   if (!result) {
     return (
-      <CalculatorCard title="Bonus Tax" headline="—">
+      <CalculatorCard title="Bonus take-home" headline="—">
         {bonusInput}
         <p className="text-sm text-muted-foreground">
           Set up your household profile + tax rules to see bonus tax.
@@ -110,7 +110,7 @@ export function BonusTaxCard() {
 
   if (effectiveBonus <= 0) {
     return (
-      <CalculatorCard title="Bonus Tax" headline="—">
+      <CalculatorCard title="Bonus take-home" headline="—">
         {bonusInput}
         <p className="text-sm text-muted-foreground">
           Enter a bonus amount to see the bonus tax breakdown.
@@ -123,7 +123,7 @@ export function BonusTaxCard() {
 
   return (
     <CalculatorCard
-      title="Bonus Tax"
+      title="Bonus take-home"
       headline={
         <span data-testid="bonus-takehome">
           {formatCurrency(bonusTakeHome)}

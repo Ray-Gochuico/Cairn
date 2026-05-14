@@ -24,12 +24,16 @@ export function CommissionTaxCard() {
   const taxItems = useTaxRulesStore((s) => s.items);
   const taxYear = useTaxRulesStore((s) => s.year);
 
-  const [commissionPerCheck, setCommissionPerCheck] = useState<number>(
-    () => persons[0]?.expectedCommission ?? 0
-  );
   const [frequency, setFrequency] = useState<CommissionFrequency>(
     () => (persons[0]?.expectedCommissionFrequency as CommissionFrequency) ?? 'MONTHLY'
   );
+  const [commissionPerCheck, setCommissionPerCheck] = useState<number>(() => {
+    const initialPerson = persons[0];
+    const initialFrequency = (initialPerson?.expectedCommissionFrequency ?? 'MONTHLY') as CommissionFrequency;
+    const periodsForInitial = initialFrequency === 'MONTHLY' ? 12 : 4;
+    const initialAnnual = initialPerson?.expectedCommission ?? 0;
+    return initialAnnual / periodsForInitial;
+  });
 
   useEffect(() => {
     useTaxRulesStore.getState().loadYear(YEAR);
@@ -148,7 +152,7 @@ export function CommissionTaxCard() {
 
   if (!household || persons.length === 0 || !result) {
     return (
-      <CalculatorCard title="Commission Tax" headline="—">
+      <CalculatorCard title="Commission take-home" headline="—">
         {commissionInputs}
         <p className="text-sm text-muted-foreground">
           Set up your household profile + tax rules to see commission tax.
@@ -159,7 +163,7 @@ export function CommissionTaxCard() {
 
   if (commissionPerCheck === 0) {
     return (
-      <CalculatorCard title="Commission Tax" headline="—">
+      <CalculatorCard title="Commission take-home" headline="—">
         {commissionInputs}
         <p className="text-sm text-muted-foreground">
           Enter a commission amount to see the tax breakdown.
@@ -177,7 +181,7 @@ export function CommissionTaxCard() {
 
   return (
     <CalculatorCard
-      title="Commission Tax"
+      title="Commission take-home"
       headline={
         <span data-testid="commission-takehome">{formatCurrency(netPerCheck)}</span>
       }

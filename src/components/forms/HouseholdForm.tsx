@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { HouseholdSchema, type Household } from '@/types/schema';
 import { FilingStatus } from '@/types/enums';
+import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,6 +15,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+
+const CITY_TAX_YEAR = 2026;
+
+/** Convert a jurisdiction code like NY_NYC → "NYC", MD_PRINCE_GEORGE_S_COUNTY → "Prince George S County". */
+function prettifyCityCode(code: string): string {
+  const parts = code.split('_');
+  // First part is the state prefix; drop it.
+  const rest = parts.slice(1);
+  return rest.map((p) => p.charAt(0) + p.slice(1).toLowerCase()).join(' ');
+}
 
 export type HouseholdFormValues = Omit<Household, 'id'>;
 
@@ -76,6 +87,30 @@ export default function HouseholdForm({
     defaultValues: HOUSEHOLD_DEFAULT_VALUES,
     values,
   });
+
+  // Load tax rules for 2026 on mount so city dropdown is populated.
+  useEffect(() => {
+    useTaxRulesStore.getState().loadYear(CITY_TAX_YEAR);
+  }, []);
+
+  const taxRulesItems = useTaxRulesStore((s) => s.items);
+  const state = form.watch('state');
+
+  // When state changes, clear city if its prefix no longer matches.
+  useEffect(() => {
+    const currentCity = form.watch('city');
+    if (currentCity && !currentCity.startsWith(`${state}_`)) {
+      form.setValue('city', null, { shouldDirty: true });
+    }
+  }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Filter to CITY rules scoped to the current state (SINGLE only to avoid duplicates).
+  const cityRules = taxRulesItems.filter(
+    (r) =>
+      r.jurisdictionType === 'CITY' &&
+      r.filingStatus === 'SINGLE' &&
+      r.jurisdictionCode.startsWith(`${state}_`),
+  );
 
   const [justSaved, setJustSaved] = useState(false);
   useEffect(() => {
@@ -156,11 +191,23 @@ export default function HouseholdForm({
             </div>
             <div>
               <Label htmlFor="city">City (only if it has local income tax)</Label>
-              <Input
+              <select
                 id="city"
-                {...form.register('city', { setValueAs: (v) => (v === '' ? null : v) })}
-                placeholder="e.g. NYC"
-              />
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                value={form.watch('city') ?? ''}
+                onChange={(e) =>
+                  form.setValue('city', e.target.value === '' ? null : e.target.value, {
+                    shouldDirty: true,
+                  })
+                }
+              >
+                <option value="">(No local tax)</option>
+                {cityRules.map((r) => (
+                  <option key={r.jurisdictionCode} value={r.jurisdictionCode}>
+                    {prettifyCityCode(r.jurisdictionCode)}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </CardContent>

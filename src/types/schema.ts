@@ -47,8 +47,8 @@ export const PersonSchema = z.object({
   targetRetirementAge: z.number().int().min(30).max(90),
   annualSalaryPretax: z.number().nonnegative(),
   expectedBonus: z.number().nonnegative().optional().default(0),  // deprecated, no longer in PersonForm
-  expectedCommission: z.number().nonnegative(),
-  expectedCommissionFrequency: z.enum(['MONTHLY', 'QUARTERLY']),
+  expectedCommission: z.number().nonnegative(),  // annual total (user enters yearly; calculator derives per-check from frequency)
+  expectedCommissionFrequency: z.enum(['MONTHLY', 'QUARTERLY']),  // how often commission is paid out
   pretax401kPct: z.number().min(0).max(1),
   healthInsuranceMonthlyPremium: z.number().nonnegative(),
   dependentCareFsaMonthly: z.number().nonnegative(),
