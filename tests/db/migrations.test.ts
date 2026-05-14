@@ -87,6 +87,10 @@ function loadAll() {
       version: '0003_add_commission_columns',
       sql: readFileSync(resolve(__dirname, '../../src/db/migrations/0003_add_commission_columns.sql'), 'utf-8'),
     },
+    {
+      version: '0004_seed_yonkers',
+      sql: readFileSync(resolve(__dirname, '../../src/db/migrations/0004_seed_yonkers.sql'), 'utf-8'),
+    },
   ];
 }
 
@@ -108,6 +112,7 @@ describe('runMigrations idempotency', () => {
       '0001_initial',
       '0002_seed_tax_rules',
       '0003_add_commission_columns',
+      '0004_seed_yonkers',
     ]);
   });
 
@@ -146,6 +151,7 @@ describe('runMigrations idempotency', () => {
       '0001_initial',
       '0002_seed_tax_rules',
       '0003_add_commission_columns',
+      '0004_seed_yonkers',
     ]);
   });
 });

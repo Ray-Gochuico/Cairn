@@ -50,9 +50,11 @@ export async function loadAllMigrations(): Promise<Migration[]> {
   const m0001 = (await import('./migrations/0001_initial.sql?raw')).default;
   const m0002 = (await import('./migrations/0002_seed_tax_rules.sql?raw')).default;
   const m0003 = (await import('./migrations/0003_add_commission_columns.sql?raw')).default;
+  const m0004 = (await import('./migrations/0004_seed_yonkers.sql?raw')).default;
   return [
     { version: '0001_initial', sql: m0001 },
     { version: '0002_seed_tax_rules', sql: m0002 },
     { version: '0003_add_commission_columns', sql: m0003 },
+    { version: '0004_seed_yonkers', sql: m0004 },
   ];
 }

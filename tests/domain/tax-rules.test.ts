@@ -10,6 +10,8 @@ const loadInitialMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
 const loadTaxRulesSeed = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0002_seed_tax_rules.sql'), 'utf-8');
+const loadYonkersSeed = () =>
+  readFileSync(resolve(__dirname, '../../src/db/migrations/0004_seed_yonkers.sql'), 'utf-8');
 
 describe('TaxRulesRepo', () => {
   let db: SqliteAdapter;
@@ -30,7 +32,7 @@ describe('TaxRulesRepo', () => {
 
   it('listForYear returns 4 federal + 204 state + 1020 city rules (1228 total) when seed migration applied', async () => {
     const result = await repo.listForYear(2026);
-    expect(result).toHaveLength(1228);  // 4 federal + (51 states × 4 filing statuses) + (255 cities × 4 filing statuses)
+    expect(result).toHaveLength(1228);  // 4 federal + (51 states × 4 filing statuses) + (255 cities × 4 filing statuses); Yonkers added in 0004
     expect(result.some(r => r.filingStatus === 'SINGLE')).toBe(true);
     expect(result.some(r => r.filingStatus === 'MFJ')).toBe(true);
   });
@@ -307,7 +309,7 @@ describe('0002 city seed', () => {
     expect(col!.brackets[0].rate).toBeCloseTo(0.025, 4);
   });
 
-  it('does NOT seed Yonkers (resident surcharge cannot encode as flat bracket)', async () => {
+  it('does NOT seed Yonkers in 0002 (Yonkers is added in migration 0004)', async () => {
     expect(await repo.lookup(2026, 'CITY', 'NY_YONKERS', 'SINGLE')).toBeNull();
   });
 
@@ -319,5 +321,43 @@ describe('0002 city seed', () => {
     const rules = await repo.listForYear(2026);
     const cityRules = rules.filter((r) => r.jurisdictionType === 'CITY');
     expect(cityRules.length).toBe(1020);
+  });
+});
+
+describe('0004 Yonkers seed', () => {
+  let db: SqliteAdapter;
+  let repo: TaxRulesRepo;
+
+  beforeEach(async () => {
+    db = new SqliteAdapter(':memory:');
+    await runMigrations(db, [
+      { version: '0001_initial', sql: loadInitialMigration() },
+      { version: '0002_seed_tax_rules', sql: loadTaxRulesSeed() },
+      { version: '0004_seed_yonkers', sql: loadYonkersSeed() },
+    ]);
+    repo = new TaxRulesRepo(db);
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  it('seeds NY_YONKERS as a CITY with all 4 filing statuses', async () => {
+    const all = ['SINGLE', 'MFJ', 'MFS', 'HOH'] as const;
+    for (const fs of all) {
+      const rule = await repo.lookup(2026, 'CITY', 'NY_YONKERS', fs);
+      expect(rule, `Yonkers ${fs} should exist`).not.toBeNull();
+    }
+  });
+
+  it('Yonkers SINGLE first-bracket rate is NY-state SINGLE rate × 0.1675', async () => {
+    const yonkers = await repo.lookup(2026, 'CITY', 'NY_YONKERS', 'SINGLE');
+    const ny = await repo.lookup(2026, 'STATE', 'NY', 'SINGLE');
+    expect(yonkers!.brackets[0].rate).toBeCloseTo(ny!.brackets[0].rate * 0.1675, 6);
+  });
+
+  it('Yonkers MFJ uses MFJ-style boundaries (not SINGLE)', async () => {
+    const yonkers = await repo.lookup(2026, 'CITY', 'NY_YONKERS', 'MFJ');
+    expect(yonkers!.brackets[1].min).toBe(17150);  // MFJ second-tier boundary
   });
 });
