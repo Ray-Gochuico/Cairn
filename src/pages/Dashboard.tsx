@@ -1,18 +1,28 @@
 import { useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useLoansStore } from '@/stores/loans-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
-import { AccountType } from '@/types/enums';
+import { useGoalsStore } from '@/stores/goals-store';
+import { useContributionsStore } from '@/stores/contributions-store';
+import { AccountType, GoalType } from '@/types/enums';
 import { netWorthForMonth, type NetWorthInput } from '@/lib/networth';
 import { isMonthlyInputPending, lastMonthYyyymm } from '@/lib/input-pending';
+import { computeGoalProgress, type GoalProgressResult } from '@/lib/goal-progress';
+import { formatPercent } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import MetricCard from '@/components/cards/MetricCard';
-import type { Account, AccountSnapshot } from '@/types/schema';
+import type {
+  Account,
+  AccountSnapshot,
+  Contribution,
+  Goal,
+  Household,
+} from '@/types/schema';
 
 /**
  * Dashboard v1 — Phase 2 entry surface.
@@ -92,6 +102,125 @@ function priorYyyymm(yyyymm: string): string {
 }
 
 /**
+ * Goals strip: emoji per GoalType, mirrors the icon set on the Goals page.
+ * Kept inline to avoid an extra util module for two render sites.
+ */
+const GOAL_TYPE_ICONS: Record<GoalType, string> = {
+  [GoalType.RETIREMENT]: '🏖️',
+  [GoalType.DOWN_PAYMENT]: '🏠',
+  [GoalType.DEBT_PAYOFF]: '💳',
+  [GoalType.EDUCATION]: '🎓',
+  [GoalType.EMERGENCY_FUND]: '🛟',
+  [GoalType.GENERIC]: '🎯',
+};
+
+/**
+ * Pick the moderate growth rate for goal projections. Mirrors Goals.tsx /
+ * FireCard so all surfaces agree on which scenario drives projections.
+ * Falls back to 6% when household has no scenarios.
+ */
+function pickModerateRate(household: Household | null): number {
+  const FALLBACK = 0.06;
+  if (!household || household.growthScenarios.length === 0) return FALLBACK;
+  const moderate = household.growthScenarios.find((s) => s.label === 'Moderate');
+  if (moderate) return moderate.rate;
+  const second = household.growthScenarios[1];
+  if (second) return second.rate;
+  return household.growthScenarios[0]?.rate ?? FALLBACK;
+}
+
+/**
+ * Build a map of accountId → latest snapshot total. ISO date strings sort
+ * lexicographically, so a string compare picks the chronologically latest.
+ */
+function latestSnapshotPerAccount(snapshots: AccountSnapshot[]): Map<number, number> {
+  const winner = new Map<number, { date: string; value: number }>();
+  for (const s of snapshots) {
+    const prev = winner.get(s.accountId);
+    if (!prev || s.snapshotDate > prev.date) {
+      winner.set(s.accountId, { date: s.snapshotDate, value: s.totalValue });
+    }
+  }
+  return new Map([...winner.entries()].map(([k, v]) => [k, v.value]));
+}
+
+/**
+ * 6-month rolling average contribution to a set of accounts. Mirrors
+ * Goals.tsx — months with zero contributions still divide the total down.
+ */
+function monthlyContributionAvg(
+  contributions: Contribution[],
+  linkedIds: number[],
+  today: Date,
+  monthsBack = 6,
+): number {
+  if (linkedIds.length === 0 || monthsBack <= 0) return 0;
+  const cutoff = new Date(today);
+  cutoff.setMonth(cutoff.getMonth() - monthsBack);
+  const cutoffIso = cutoff.toISOString().slice(0, 10);
+  const linkedSet = new Set(linkedIds);
+  const total = contributions
+    .filter((c) => linkedSet.has(c.accountId) && c.date >= cutoffIso)
+    .reduce((sum, c) => sum + c.amount, 0);
+  return total / monthsBack;
+}
+
+interface GoalProjection extends GoalProgressResult {
+  goal: Goal;
+}
+
+/**
+ * Compact, single-row goal preview for the dashboard. One line of identity
+ * (icon + name + percent), one slim progress bar coloured by on-track state.
+ * The richer fields (monthly needed, projected at target) live on the full
+ * Goals page — this is just an at-a-glance affordance.
+ */
+function MiniGoalCard({ projection }: { projection: GoalProjection }) {
+  const { goal } = projection;
+  const pct = Math.min(1, Math.max(0, projection.percentComplete));
+  const valuenow = Math.round(pct * 100);
+  const onTrack = projection.onTrack;
+  return (
+    <Link
+      to="/goals"
+      className="block rounded-lg border bg-card p-3 hover:bg-accent/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <div className="flex items-center justify-between gap-2 mb-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <span aria-hidden>{GOAL_TYPE_ICONS[goal.type] ?? '🎯'}</span>
+          <span className="text-sm font-medium truncate">{goal.name}</span>
+        </div>
+        <span
+          className={
+            onTrack
+              ? 'text-xs px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-100 whitespace-nowrap'
+              : 'text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-100 whitespace-nowrap'
+          }
+        >
+          {onTrack ? 'On track' : 'Off track'}
+        </span>
+      </div>
+      <div
+        className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={valuenow}
+        aria-label={`${goal.name} progress`}
+      >
+        <div
+          className={onTrack ? 'h-full bg-emerald-500' : 'h-full bg-amber-500'}
+          style={{ width: `${pct * 100}%` }}
+        />
+      </div>
+      <div className="text-xs text-muted-foreground mt-1 tabular-nums">
+        {formatPercent(projection.percentComplete)} complete
+      </div>
+    </Link>
+  );
+}
+
+/**
  * Sum the latest snapshot total per account whose type is in
  * LIQUID_INVESTMENT_TYPES, scoped to snapshots at or before the current
  * month. Accounts excluded from net worth are still counted here — the
@@ -142,6 +271,12 @@ export default function Dashboard() {
   const vehicles = useVehiclesStore((s) => s.vehicles);
   const loadVehicles = useVehiclesStore((s) => s.load);
 
+  const goals = useGoalsStore((s) => s.goals);
+  const loadGoals = useGoalsStore((s) => s.load);
+
+  const contributions = useContributionsStore((s) => s.contributions);
+  const loadContributions = useContributionsStore((s) => s.load);
+
   useEffect(() => {
     loadHousehold();
     loadAccounts();
@@ -149,6 +284,8 @@ export default function Dashboard() {
     loadSnapshots();
     loadProperties();
     loadVehicles();
+    loadGoals();
+    loadContributions();
   }, [
     loadHousehold,
     loadAccounts,
@@ -156,6 +293,8 @@ export default function Dashboard() {
     loadSnapshots,
     loadProperties,
     loadVehicles,
+    loadGoals,
+    loadContributions,
   ]);
 
   const today = useMemo(() => new Date(), []);
@@ -200,6 +339,41 @@ export default function Dashboard() {
     () => computeLiquidInvestments(accounts, snapshots, currentMonth),
     [accounts, snapshots, currentMonth],
   );
+
+  /**
+   * Compute on-track / off-track projections per goal using the same machinery
+   * as the Goals page. Renders only the first 3 in the strip; the rest live
+   * behind the "View all" link. We resolve currentSaved + recent contribution
+   * average per goal (mirrors Goals.tsx) so the dashboard agrees with the
+   * detail page.
+   */
+  const annualGrowthRate = useMemo(() => pickModerateRate(household), [household]);
+
+  const goalProjections = useMemo<GoalProjection[]>(() => {
+    if (goals.length === 0) return [];
+    const latestMap = latestSnapshotPerAccount(snapshots);
+    return goals.map((g) => {
+      const currentSaved = g.linkedAccountIds.reduce(
+        (sum, id) => sum + (latestMap.get(id) ?? 0),
+        0,
+      );
+      const recentMonthlyContribution = monthlyContributionAvg(
+        contributions,
+        g.linkedAccountIds,
+        today,
+        6,
+      );
+      const result = computeGoalProgress({
+        targetAmount: g.targetAmount,
+        targetDate: g.targetDate,
+        currentSaved,
+        recentMonthlyContribution,
+        annualGrowthRate,
+        today,
+      });
+      return { goal: g, ...result };
+    });
+  }, [goals, snapshots, contributions, today, annualGrowthRate]);
 
   /**
    * Pending-input detection lives in `src/lib/input-pending.ts` as a pure
@@ -308,11 +482,29 @@ export default function Dashboard() {
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <CardTitle>Goals</CardTitle>
+          {goals.length > 0 && (
+            <Link to="/goals" className="text-sm text-primary hover:underline">
+              View all →
+            </Link>
+          )}
         </CardHeader>
-        <CardContent className="text-center text-muted-foreground py-8">
-          No goals yet. Goals come in Phase 3.
+        <CardContent>
+          {goals.length === 0 ? (
+            <div className="text-center text-muted-foreground py-6 space-y-3">
+              <div>No goals yet.</div>
+              <Button asChild size="sm" variant="outline">
+                <Link to="/inputs/goals">Add your first goal</Link>
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {goalProjections.slice(0, 3).map((p) => (
+                <MiniGoalCard key={p.goal.id} projection={p} />
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

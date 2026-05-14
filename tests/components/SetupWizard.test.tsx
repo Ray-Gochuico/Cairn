@@ -14,7 +14,10 @@ import { useHoldingsStore } from '@/stores/holdings-store';
 import { useLoansStore } from '@/stores/loans-store';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
+import { useGoalsStore } from '@/stores/goals-store';
 import SetupWizard from '@/pages/setup/SetupWizard';
+import Step8Goals from '@/pages/setup/Step8Goals';
+import { GoalType } from '@/types/enums';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -59,6 +62,7 @@ function resetAllStores() {
   useLoansStore.setState({ loans: [], isLoading: false, error: null });
   usePropertiesStore.setState({ properties: [], isLoading: false, error: null });
   useVehiclesStore.setState({ vehicles: [], isLoading: false, error: null });
+  useGoalsStore.setState({ goals: [], isLoading: false, error: null });
 }
 
 describe('SetupWizard', () => {
@@ -175,14 +179,57 @@ describe('SetupWizard', () => {
       screen.getByRole('button', { name: /skip — no property or vehicles/i }),
     );
 
-    // --- Step 9: Goals → Finish ---
+    // --- Step 9: Goals → Skip (no goal entered) ---
     await waitFor(() => {
       expect(screen.getByText(/Step 9 of 9: Goals/i)).toBeInTheDocument();
     });
-    expect(screen.getByText(/all set!/i)).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: /^finish$/i }));
+    expect(screen.getByText(/add your first goal/i)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^skip$/i }));
 
-    // After Finish, the dummy `/` route renders.
+    // After Skip, the dummy `/` route renders.
     expect(await screen.findByTestId('dashboard-marker')).toBeInTheDocument();
+  });
+
+  it('Step 9 (Goals) lets user skip without creating a goal', async () => {
+    // Render Step8Goals directly with a stub onComplete to keep the test
+    // focused — the wizard navigation is exercised by the full traversal
+    // test above. Either Skip or "Save goal & finish" with a blank name
+    // should advance via onComplete without creating a goal.
+    const user = userEvent.setup();
+    let completed = false;
+    render(<Step8Goals onComplete={() => { completed = true; }} />);
+
+    expect(useGoalsStore.getState().goals).toHaveLength(0);
+    await user.click(screen.getByRole('button', { name: /^skip$/i }));
+    expect(completed).toBe(true);
+    expect(useGoalsStore.getState().goals).toHaveLength(0);
+  });
+
+  it('Step 9 (Goals) creates a goal when name is filled in', async () => {
+    // Direct render — Step8Goals owns the form, calls useGoalsStore.create()
+    // which writes to the in-memory DB seeded by beforeEach. After submit,
+    // the store should contain the new goal and onComplete should fire.
+    const user = userEvent.setup();
+    let completed = false;
+    render(<Step8Goals onComplete={() => { completed = true; }} />);
+
+    await user.type(screen.getByLabelText(/goal name/i), 'Emergency Fund');
+    await user.selectOptions(screen.getByLabelText(/^type$/i), GoalType.EMERGENCY_FUND);
+    const amount = screen.getByLabelText(/target amount/i);
+    await user.clear(amount);
+    await user.type(amount, '25000');
+    await selectDate(user, 'goal-date', '2030-06-01');
+
+    await user.click(screen.getByRole('button', { name: /save goal & finish/i }));
+
+    await waitFor(() => {
+      const { goals } = useGoalsStore.getState();
+      expect(goals).toHaveLength(1);
+      expect(goals[0].name).toBe('Emergency Fund');
+      expect(goals[0].type).toBe(GoalType.EMERGENCY_FUND);
+      expect(goals[0].targetAmount).toBe(25000);
+      expect(goals[0].targetDate).toBe('2030-06-01');
+    });
+    expect(completed).toBe(true);
   });
 });
