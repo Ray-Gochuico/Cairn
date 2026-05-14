@@ -4,6 +4,7 @@ import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { CalculatorCard } from './CalculatorCard';
+import { OvertimeRowEditor, type OvertimeRow } from './OvertimeRowEditor';
 import { computePretaxDeductions, computeBonusTax } from '@/lib/tax';
 import { formatCurrency, formatPercent } from '@/lib/format';
 import { Input } from '@/components/ui/input';
@@ -24,16 +25,7 @@ const YEAR = 2026;
 const SELECT_CLASS =
   'flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
 
-interface RowState {
-  hours: number;
-  baseMultiplier: number;
-  // Preset selector value: '1.5', '2', or 'custom' (when custom, baseMultiplier holds the user's number)
-  preset: '1.5' | '2' | 'custom';
-  holidayMultiplier: number | null;
-  stackMultipliers: boolean;
-}
-
-const STARTER_ROW: RowState = {
+const STARTER_ROW: OvertimeRow = {
   hours: 8,
   baseMultiplier: 1.5,
   preset: '1.5',
@@ -70,7 +62,7 @@ export function OvertimeCard() {
   const eligiblePerson = useMemo(() => persons.find(isEligible), [persons]);
 
   // ---- ephemeral UI state ----
-  const [rows, setRows] = useState<RowState[]>([STARTER_ROW]);
+  const [rows, setRows] = useState<OvertimeRow[]>([STARTER_ROW]);
   const [baseOverride, setBaseOverride] = useState<number | null>(null);
   const [period, setPeriod] = useState<PaycheckPeriod>('BI_WEEKLY');
 
@@ -148,7 +140,7 @@ export function OvertimeCard() {
 
   // ---- handlers ----
 
-  const updateRow = (index: number, patch: Partial<RowState>) => {
+  const updateRow = (index: number, patch: Partial<OvertimeRow>) => {
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
   };
   const addRow = () => setRows((prev) => [...prev, { ...STARTER_ROW }]);
@@ -206,134 +198,16 @@ export function OvertimeCard() {
   const rowsEditor = (
     <div className="space-y-3 mb-4">
       <div className="text-sm font-medium">OT line items</div>
-      {rows.map((row, i) => {
-        const hoursId = `ot-row-${i}-hours`;
-        const presetId = `ot-row-${i}-preset`;
-        const customId = `ot-row-${i}-custom`;
-        const holidayId = `ot-row-${i}-holiday`;
-        const stackId = `ot-row-${i}-stack`;
-
-        return (
-          <div
-            key={i}
-            className="rounded-md border bg-muted/30 p-3 space-y-2"
-            data-testid={`ot-row-${i}`}
-          >
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label htmlFor={hoursId} className="text-xs font-medium">
-                  Hours
-                </label>
-                <Input
-                  id={hoursId}
-                  type="number"
-                  min="0"
-                  step="0.25"
-                  value={row.hours === 0 ? '' : row.hours}
-                  onChange={(e) => {
-                    const v = parseFloat(e.target.value);
-                    updateRow(i, { hours: Number.isFinite(v) && v >= 0 ? v : 0 });
-                  }}
-                />
-              </div>
-              <div className="space-y-1">
-                <label htmlFor={presetId} className="text-xs font-medium">
-                  Multiplier
-                </label>
-                <select
-                  id={presetId}
-                  className={SELECT_CLASS}
-                  value={row.preset}
-                  onChange={(e) => {
-                    const next = e.target.value as RowState['preset'];
-                    if (next === '1.5') updateRow(i, { preset: '1.5', baseMultiplier: 1.5 });
-                    else if (next === '2') updateRow(i, { preset: '2', baseMultiplier: 2 });
-                    else updateRow(i, { preset: 'custom' });
-                  }}
-                >
-                  <option value="1.5">1.5x (time-and-a-half)</option>
-                  <option value="2">2x (double-time)</option>
-                  <option value="custom">Custom</option>
-                </select>
-              </div>
-            </div>
-
-            {row.preset === 'custom' && (
-              <div className="space-y-1">
-                <label htmlFor={customId} className="text-xs font-medium">
-                  Custom multiplier
-                </label>
-                <Input
-                  id={customId}
-                  type="number"
-                  min="0"
-                  step="0.05"
-                  value={row.baseMultiplier}
-                  onChange={(e) => {
-                    const v = parseFloat(e.target.value);
-                    updateRow(i, { baseMultiplier: Number.isFinite(v) ? v : 0 });
-                  }}
-                />
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label htmlFor={holidayId} className="text-xs font-medium">
-                  Holiday multiplier (optional)
-                </label>
-                <Input
-                  id={holidayId}
-                  type="number"
-                  min="0"
-                  step="0.05"
-                  value={row.holidayMultiplier ?? ''}
-                  onChange={(e) => {
-                    const raw = e.target.value;
-                    if (raw === '') {
-                      updateRow(i, { holidayMultiplier: null });
-                      return;
-                    }
-                    const v = parseFloat(raw);
-                    updateRow(i, { holidayMultiplier: Number.isFinite(v) ? v : null });
-                  }}
-                />
-              </div>
-              <div className="flex items-end">
-                <label
-                  htmlFor={stackId}
-                  className="text-xs font-medium flex items-center gap-2"
-                >
-                  <input
-                    id={stackId}
-                    type="checkbox"
-                    checked={row.stackMultipliers}
-                    disabled={row.holidayMultiplier === null}
-                    onChange={(e) =>
-                      updateRow(i, { stackMultipliers: e.target.checked })
-                    }
-                  />
-                  Stack with base
-                </label>
-              </div>
-            </div>
-
-            {rows.length > 1 && (
-              <div className="flex justify-end">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => removeRow(i)}
-                  aria-label={`Remove row ${i + 1}`}
-                >
-                  Remove
-                </Button>
-              </div>
-            )}
-          </div>
-        );
-      })}
+      {rows.map((row, i) => (
+        <OvertimeRowEditor
+          key={i}
+          row={row}
+          index={i}
+          canRemove={rows.length > 1}
+          onChange={(patch) => updateRow(i, patch)}
+          onRemove={() => removeRow(i)}
+        />
+      ))}
       <div>
         <Button type="button" variant="outline" size="sm" onClick={addRow}>
           + Add row
@@ -346,7 +220,7 @@ export function OvertimeCard() {
 
   if (baseHourlyRate <= 0) {
     return (
-      <CalculatorCard title="OT take-home" headline="—">
+      <CalculatorCard title="Overtime" headline="—">
         {baseInput}
         {rowsEditor}
         <p className="text-sm text-muted-foreground">
@@ -358,7 +232,7 @@ export function OvertimeCard() {
 
   if (totalGross <= 0 || !taxResult) {
     return (
-      <CalculatorCard title="OT take-home" headline="—">
+      <CalculatorCard title="Overtime" headline="—">
         {baseInput}
         {rowsEditor}
         <p className="text-sm text-muted-foreground">
@@ -374,7 +248,7 @@ export function OvertimeCard() {
 
   return (
     <CalculatorCard
-      title="OT take-home"
+      title="Overtime"
       headline={
         <span data-testid="ot-takehome">{formatCurrency(overtimeTakeHome)}</span>
       }

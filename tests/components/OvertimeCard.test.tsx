@@ -124,8 +124,9 @@ describe('OvertimeCard', () => {
     render(<MemoryRouter><OvertimeCard /></MemoryRouter>);
 
     const headline = await screen.findByTestId('ot-takehome');
-    // Title "OT take-home" should also be present in the card header.
-    expect(screen.getAllByText(/OT take-home/i).length).toBeGreaterThan(0);
+    // Card title is "Overtime"; "Total OT take-home" appears in the body summary.
+    expect(screen.getAllByText(/Overtime/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Total OT take-home/i).length).toBeGreaterThan(0);
     const value = parseFloat(headline.textContent!.replace(/[$,]/g, ''));
     expect(value).toBeGreaterThan(150);
     expect(value).toBeLessThan(300);
@@ -184,5 +185,56 @@ describe('OvertimeCard', () => {
     // Take-home on $300 should be ~$200 — somewhere between $150 and $300.
     expect(value).toBeGreaterThan(150);
     expect(value).toBeLessThan(300);
+  });
+
+  it('applies holiday stack=true → effective multiplier = base × holiday', async () => {
+    // HOURLY @ $25/hr, default 1.5x base, switch to 4 hours, holiday=2, stacked.
+    // Effective = 1.5 × 2 = 3.0  →  gross = 4 × 25 × 3 = $300.
+    primeStores();
+    render(<MemoryRouter><OvertimeCard /></MemoryRouter>);
+
+    // Set hours to 4 on row 0.
+    const hoursInput = screen.getAllByLabelText(/Hours/i)[0];
+    fireEvent.change(hoursInput, { target: { value: '4' } });
+
+    // Set holiday multiplier on row 0 to 2.
+    const holidayInput = screen.getAllByLabelText(/Holiday multiplier/i)[0];
+    fireEvent.change(holidayInput, { target: { value: '2' } });
+
+    // Check the "Stack with base" checkbox on row 0.
+    const stackCheckbox = screen.getAllByLabelText(/Stack with base/i)[0];
+    fireEvent.click(stackCheckbox);
+
+    // Per-row breakdown row 0 should show gross = $300.
+    const breakdownRow = await screen.findByTestId('ot-row-result-0');
+    expect(breakdownRow.textContent).toContain('300');
+
+    // Headline take-home on $300 OT at this income (~35% marginal) → ~$195.
+    const headline = await screen.findByTestId('ot-takehome');
+    const value = parseFloat(headline.textContent!.replace(/[$,]/g, ''));
+    expect(value).toBeGreaterThan(150);
+  });
+
+  it('user enters custom multiplier 1.75x', async () => {
+    // HOURLY @ $25/hr, default row of 4 hours, switch preset to custom, enter 1.75.
+    // Gross = 4 × 25 × 1.75 = $175.
+    primeStores();
+    render(<MemoryRouter><OvertimeCard /></MemoryRouter>);
+
+    // Set hours to 4 on row 0.
+    const hoursInput = screen.getAllByLabelText(/Hours/i)[0];
+    fireEvent.change(hoursInput, { target: { value: '4' } });
+
+    // Switch the preset to "Custom".
+    const presetSelect = screen.getAllByLabelText(/Multiplier/i)[0];
+    fireEvent.change(presetSelect, { target: { value: 'custom' } });
+
+    // The "Custom multiplier" input should now appear.
+    const customInput = await screen.findByLabelText(/Custom multiplier/i);
+    fireEvent.change(customInput, { target: { value: '1.75' } });
+
+    // Per-row breakdown row 0 should show gross = $175.
+    const breakdownRow = await screen.findByTestId('ot-row-result-0');
+    expect(breakdownRow.textContent).toContain('175');
   });
 });
