@@ -35,6 +35,13 @@ export class TaxRulesRepo {
     return rows.map(rowToTaxRule);
   }
 
+  async listDistinctYears(): Promise<number[]> {
+    const rows = await this.db.select<{ year: number }>(
+      'SELECT DISTINCT year FROM tax_rules ORDER BY year ASC'
+    );
+    return rows.map((r) => r.year);
+  }
+
   async lookup(
     year: number,
     jurisdictionType: JurisdictionType,

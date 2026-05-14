@@ -121,6 +121,24 @@ describe('TaxRulesRepo', () => {
     expect(result).toBeNull();
   });
 
+  it('listDistinctYears returns sorted distinct years across the table', async () => {
+    // Repo is seeded with 2026 from migration 0002; insert one 2025 row.
+    await db.execute(
+      `INSERT INTO tax_rules (year, jurisdiction_type, jurisdiction_code, filing_status, brackets, standard_deduction) VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        2025,
+        'STATE',
+        'CA',
+        'SINGLE',
+        JSON.stringify([{ min: 0, max: null, rate: 0.1 }]),
+        14600,
+      ],
+    );
+
+    const years = await repo.listDistinctYears();
+    expect(years).toEqual([2025, 2026]);
+  });
+
   it('lookup correctly parses JSON brackets array', async () => {
     const complexBrackets = [
       { min: 0, max: 10000, rate: 0.05 },

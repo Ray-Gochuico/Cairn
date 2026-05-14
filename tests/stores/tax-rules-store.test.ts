@@ -187,6 +187,62 @@ describe('useTaxRulesStore', () => {
     expect(isLoading).toBe(false);
   });
 
+  it('loadYear preserves prior items when new year returns empty', async () => {
+    // Pre-seed 2026 rules so the store has items to fall back to.
+    await db.execute(
+      `INSERT INTO tax_rules (year, jurisdiction_type, jurisdiction_code, filing_status, brackets, standard_deduction)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        sampleTaxRule.year,
+        sampleTaxRule.jurisdictionType,
+        sampleTaxRule.jurisdictionCode,
+        sampleTaxRule.filingStatus,
+        JSON.stringify(sampleTaxRule.brackets),
+        sampleTaxRule.standardDeduction,
+      ],
+    );
+
+    await useTaxRulesStore.getState().loadYear(2026);
+    expect(useTaxRulesStore.getState().items).toHaveLength(1);
+
+    // Now ask for a year the DB has no rules for. Items should NOT be
+    // clobbered — the prior 2026 rows must remain so the UI's
+    // getCurrentTaxYear() resolver can still fall back.
+    await useTaxRulesStore.getState().loadYear(2027);
+    const { year, items, isLoading, error } = useTaxRulesStore.getState();
+    expect(year).toBe(2027);
+    expect(items).toHaveLength(1);
+    expect(items[0].year).toBe(2026);
+    expect(isLoading).toBe(false);
+    expect(error).toBeNull();
+  });
+
+  it('loadAvailableYears loads the most-recent year when multiple years are seeded', async () => {
+    // Seed both 2025 and 2026.
+    await db.execute(
+      `INSERT INTO tax_rules (year, jurisdiction_type, jurisdiction_code, filing_status, brackets, standard_deduction) VALUES (?, ?, ?, ?, ?, ?), (?, ?, ?, ?, ?, ?)`,
+      [
+        2025, 'FEDERAL', 'US', FilingStatus.SINGLE, JSON.stringify([{ min: 0, max: null, rate: 0.10 }]), 13850,
+        2026, 'FEDERAL', 'US', FilingStatus.SINGLE, JSON.stringify([{ min: 0, max: null, rate: 0.12 }]), 14600,
+      ],
+    );
+
+    await useTaxRulesStore.getState().loadAvailableYears();
+    const { year, items, error } = useTaxRulesStore.getState();
+    expect(year).toBe(2026);
+    expect(items.length).toBeGreaterThan(0);
+    expect(items.every((r) => r.year === 2026)).toBe(true);
+    expect(error).toBeNull();
+  });
+
+  it('loadAvailableYears handles an empty DB gracefully', async () => {
+    await useTaxRulesStore.getState().loadAvailableYears();
+    const { year, items, error } = useTaxRulesStore.getState();
+    expect(year).toBeNull();
+    expect(items).toEqual([]);
+    expect(error).toBeNull();
+  });
+
   it('lookup respects the currently-loaded year', async () => {
     // Insert two rows: same jurisdiction/filingStatus, different years
     await db.execute(

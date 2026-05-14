@@ -61,11 +61,12 @@ export function OvertimeCard() {
   );
   const { year: resolvedYear } = getCurrentTaxYear(seededYears);
 
-  // Bootstrap: on mount, ask the store to load the current calendar year. If
-  // those rules don't exist, the store will populate items=[] and the resolver
-  // above will fall back to whatever year IS seeded once items load.
+  // Bootstrap: on mount, discover what years are seeded and load the most
+  // recent. This avoids the trap where loadYear(currentCalendarYear) returns
+  // empty and clobbers any pre-loaded fallback rules — the resolver above
+  // will then map seededYears → resolvedYear correctly.
   useEffect(() => {
-    useTaxRulesStore.getState().loadYear(new Date().getFullYear());
+    useTaxRulesStore.getState().loadAvailableYears();
   }, []);
 
   const eligiblePerson = useMemo(() => persons.find(isEligible), [persons]);
