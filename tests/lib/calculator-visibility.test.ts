@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   getHiddenCards,
   hideCard,
@@ -6,48 +6,7 @@ import {
   isHidden,
 } from '@/lib/calculator-visibility';
 
-// Node 25 ships an experimental built-in `localStorage` global as an empty
-// stub object that shadows jsdom's Storage. Install a real in-memory Storage
-// before each test so the helper sees a Web-API-compatible object.
-function createMemoryStorage(): Storage {
-  let store: Record<string, string> = {};
-  return {
-    get length() {
-      return Object.keys(store).length;
-    },
-    clear() {
-      store = {};
-    },
-    getItem(key: string) {
-      return Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null;
-    },
-    key(index: number) {
-      return Object.keys(store)[index] ?? null;
-    },
-    removeItem(key: string) {
-      delete store[key];
-    },
-    setItem(key: string, value: string) {
-      store[key] = String(value);
-    },
-  };
-}
-
-beforeEach(() => {
-  const fresh = createMemoryStorage();
-  Object.defineProperty(globalThis, 'localStorage', {
-    value: fresh,
-    writable: true,
-    configurable: true,
-  });
-  if (typeof window !== 'undefined') {
-    Object.defineProperty(window, 'localStorage', {
-      value: fresh,
-      writable: true,
-      configurable: true,
-    });
-  }
-});
+// The Node 25 localStorage polyfill is installed globally by tests/setup.ts.
 
 describe('getHiddenCards', () => {
   it('returns empty array when nothing stored', () => {

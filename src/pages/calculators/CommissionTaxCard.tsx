@@ -16,7 +16,12 @@ function periodsPerYear(frequency: CommissionFrequency): number {
   return frequency === 'MONTHLY' ? 12 : 4;
 }
 
-export function CommissionTaxCard() {
+interface CommissionTaxCardProps {
+  cardId?: string;
+  onHide?: () => void;
+}
+
+export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {}) {
   const { household } = useHouseholdStore();
   const { persons } = usePersonsStore();
   const { dependents } = useDependentsStore();
@@ -162,7 +167,7 @@ export function CommissionTaxCard() {
 
   if (!household || persons.length === 0 || !result) {
     return (
-      <CalculatorCard title="Commission take-home" headline="—">
+      <CalculatorCard title="Commission take-home" headline="—" cardId={cardId} onHide={onHide}>
         {commissionInputs}
         <p className="text-sm text-muted-foreground">
           Set up your household profile + tax rules to see commission tax.
@@ -173,7 +178,7 @@ export function CommissionTaxCard() {
 
   if (commissionPerCheck === 0) {
     return (
-      <CalculatorCard title="Commission take-home" headline="—">
+      <CalculatorCard title="Commission take-home" headline="—" cardId={cardId} onHide={onHide}>
         {commissionInputs}
         <p className="text-sm text-muted-foreground">
           Enter a commission amount to see the tax breakdown.
@@ -192,6 +197,8 @@ export function CommissionTaxCard() {
   return (
     <CalculatorCard
       title="Commission take-home"
+      cardId={cardId}
+      onHide={onHide}
       headline={
         <span data-testid="commission-takehome">{formatCurrency(netPerCheck)}</span>
       }

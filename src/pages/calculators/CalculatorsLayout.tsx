@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { PaycheckCard } from './PaycheckCard';
 import { BonusTaxCard } from './BonusTaxCard';
 import { CommissionTaxCard } from './CommissionTaxCard';
@@ -7,8 +7,29 @@ import { usePersonsStore } from '@/stores/persons-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { getCurrentTaxYear } from '@/lib/current-tax-year';
 import { Button } from '@/components/ui/button';
+import { getHiddenCards, showCard } from '@/lib/calculator-visibility';
 
 const STALE_BANNER_STORAGE_KEY = 'stale-tax-year-banner-dismissed';
+
+// Stable kebab-case ids for each calculator card.
+const CARD_IDS = {
+  PAYCHECK: 'paycheck',
+  BONUS: 'bonus-tax',
+  COMMISSION: 'commission',
+  OVERTIME: 'overtime',
+} as const;
+
+// Human-friendly labels surfaced in the "manage" popover.
+const CARD_LABELS: Record<string, string> = {
+  [CARD_IDS.PAYCHECK]: 'Take-home paycheck',
+  [CARD_IDS.BONUS]: 'Bonus tax',
+  [CARD_IDS.COMMISSION]: 'Commission tax',
+  [CARD_IDS.OVERTIME]: 'Overtime',
+};
+
+function labelFor(id: string): string {
+  return CARD_LABELS[id] ?? id;
+}
 
 export default function CalculatorsLayout() {
   const { persons } = usePersonsStore();
@@ -44,6 +65,27 @@ export default function CalculatorsLayout() {
     setDismissed(true);
   };
 
+  // Track which cards the user has hidden. Lazy-init from localStorage so the
+  // first render reflects persisted prefs without a flash.
+  const [hiddenSet, setHiddenSet] = useState<Set<string>>(
+    () => new Set(getHiddenCards()),
+  );
+
+  const refreshHidden = useCallback(() => {
+    setHiddenSet(new Set(getHiddenCards()));
+  }, []);
+
+  const handleShow = useCallback(
+    (id: string) => {
+      showCard(id);
+      refreshHidden();
+    },
+    [refreshHidden],
+  );
+
+  const hiddenList = useMemo(() => Array.from(hiddenSet), [hiddenSet]);
+  const hiddenCount = hiddenList.length;
+
   return (
     <div className="space-y-4 min-w-0">
       <h1 className="text-2xl font-semibold">Calculators</h1>
@@ -71,11 +113,55 @@ export default function CalculatorsLayout() {
         </div>
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
-        <PaycheckCard />
-        <BonusTaxCard />
-        <CommissionTaxCard />
-        {showOvertime && <OvertimeCard />}
+        {!hiddenSet.has(CARD_IDS.PAYCHECK) && (
+          <PaycheckCard cardId={CARD_IDS.PAYCHECK} onHide={refreshHidden} />
+        )}
+        {!hiddenSet.has(CARD_IDS.BONUS) && (
+          <BonusTaxCard cardId={CARD_IDS.BONUS} onHide={refreshHidden} />
+        )}
+        {!hiddenSet.has(CARD_IDS.COMMISSION) && (
+          <CommissionTaxCard cardId={CARD_IDS.COMMISSION} onHide={refreshHidden} />
+        )}
+        {showOvertime && !hiddenSet.has(CARD_IDS.OVERTIME) && (
+          <OvertimeCard cardId={CARD_IDS.OVERTIME} onHide={refreshHidden} />
+        )}
       </div>
+      {hiddenCount > 0 && (
+        <footer className="pt-2 text-sm text-muted-foreground">
+          <details className="relative inline-block">
+            <summary className="cursor-pointer list-none select-none">
+              {hiddenCount === 1 ? '1 card hidden' : `${hiddenCount} cards hidden`}
+              {' — '}
+              <span className="underline">manage</span>
+            </summary>
+            <div
+              role="dialog"
+              aria-label="Hidden calculator cards"
+              className="absolute left-0 mt-2 w-64 rounded-md border bg-background shadow-md p-2 z-10"
+            >
+              <ul className="space-y-1">
+                {hiddenList.map((id) => (
+                  <li
+                    key={id}
+                    className="flex items-center justify-between gap-2 py-1"
+                  >
+                    <span className="text-sm text-foreground">{labelFor(id)}</span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleShow(id)}
+                      aria-label={`Show ${labelFor(id)} card`}
+                    >
+                      Show
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </details>
+        </footer>
+      )}
     </div>
   );
 }

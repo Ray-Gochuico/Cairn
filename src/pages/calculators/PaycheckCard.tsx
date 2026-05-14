@@ -9,7 +9,12 @@ import { formatCurrency } from '@/lib/format';
 import { PAYCHECK_PERIODS, periodsPerYear, type PaycheckPeriod } from '@/lib/paycheck-periods';
 import { getCurrentTaxYear } from '@/lib/current-tax-year';
 
-export function PaycheckCard() {
+interface PaycheckCardProps {
+  cardId?: string;
+  onHide?: () => void;
+}
+
+export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
   const { household } = useHouseholdStore();
   const { persons } = usePersonsStore();
   const { dependents } = useDependentsStore();
@@ -104,7 +109,7 @@ export function PaycheckCard() {
 
   if (!annual) {
     return (
-      <CalculatorCard title="Paycheck (take-home)" headline="—">
+      <CalculatorCard title="Paycheck (take-home)" headline="—" cardId={cardId} onHide={onHide}>
         <p className="text-sm text-muted-foreground">
           Set up your household profile + tax rules to see take-home.
         </p>
@@ -129,6 +134,8 @@ export function PaycheckCard() {
   return (
     <CalculatorCard
       title="Paycheck (take-home)"
+      cardId={cardId}
+      onHide={onHide}
       headline={
         <span data-testid="paycheck-takehome">
           {formatCurrency(perPeriod.takeHome)}

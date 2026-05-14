@@ -2,18 +2,37 @@ import { useState, type ReactNode } from 'react';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ChevronDownIcon, ChevronUpIcon, SettingsIcon } from 'lucide-react';
+import { hideCard } from '@/lib/calculator-visibility';
 
 interface CalculatorCardProps {
   title: string;
   headline: string | ReactNode;
   defaultExpanded?: boolean;
   overridePanel?: ReactNode;
+  /** Stable identifier used for the Hide/Show feature. When set, a "Hide" button is rendered. */
+  cardId?: string;
+  /** Invoked after the card is hidden so the parent can refresh its visibility state. */
+  onHide?: () => void;
   children: ReactNode;
 }
 
-export function CalculatorCard({ title, headline, defaultExpanded = true, overridePanel, children }: CalculatorCardProps) {
+export function CalculatorCard({
+  title,
+  headline,
+  defaultExpanded = true,
+  overridePanel,
+  cardId,
+  onHide,
+  children,
+}: CalculatorCardProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [showOverride, setShowOverride] = useState(false);
+
+  const handleHide = () => {
+    if (!cardId) return;
+    hideCard(cardId);
+    onHide?.();
+  };
 
   return (
     <Card className="min-w-0">
@@ -41,6 +60,17 @@ export function CalculatorCard({ title, headline, defaultExpanded = true, overri
           >
             {expanded ? <ChevronUpIcon className="h-4 w-4" /> : <ChevronDownIcon className="h-4 w-4" />}
           </Button>
+          {cardId && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleHide}
+              aria-label={`Hide ${title} card`}
+              className="text-muted-foreground"
+            >
+              Hide
+            </Button>
+          )}
         </div>
       </CardHeader>
       {expanded && (

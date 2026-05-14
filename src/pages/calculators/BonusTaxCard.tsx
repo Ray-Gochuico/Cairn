@@ -10,7 +10,12 @@ import { Input } from '@/components/ui/input';
 import { getCurrentTaxYear } from '@/lib/current-tax-year';
 import type { BonusFrequency } from '@/types/schema';
 
-export function BonusTaxCard() {
+interface BonusTaxCardProps {
+  cardId?: string;
+  onHide?: () => void;
+}
+
+export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
   const { household } = useHouseholdStore();
   const { persons } = usePersonsStore();
   const { dependents } = useDependentsStore();
@@ -151,7 +156,7 @@ export function BonusTaxCard() {
 
   if (!result) {
     return (
-      <CalculatorCard title="Bonus take-home" headline="—">
+      <CalculatorCard title="Bonus take-home" headline="—" cardId={cardId} onHide={onHide}>
         {controls}
         <p className="text-sm text-muted-foreground">
           Set up your household profile + tax rules to see bonus tax.
@@ -162,7 +167,7 @@ export function BonusTaxCard() {
 
   if (effectiveBonus <= 0) {
     return (
-      <CalculatorCard title="Bonus take-home" headline="—">
+      <CalculatorCard title="Bonus take-home" headline="—" cardId={cardId} onHide={onHide}>
         {controls}
         <p className="text-sm text-muted-foreground">
           Enter a bonus amount to see the bonus tax breakdown.
@@ -180,6 +185,8 @@ export function BonusTaxCard() {
   return (
     <CalculatorCard
       title="Bonus take-home"
+      cardId={cardId}
+      onHide={onHide}
       headline={
         <span data-testid="bonus-takehome">
           {formatCurrency(perBonusTakeHome)}

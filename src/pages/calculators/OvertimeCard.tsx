@@ -47,7 +47,12 @@ function isEligible(person: Person): boolean {
   return person.employmentType === 'HOURLY' || person.employmentType === 'SALARY_WITH_OT';
 }
 
-export function OvertimeCard() {
+interface OvertimeCardProps {
+  cardId?: string;
+  onHide?: () => void;
+}
+
+export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
   const { household } = useHouseholdStore();
   const { persons } = usePersonsStore();
   const { dependents } = useDependentsStore();
@@ -140,7 +145,7 @@ export function OvertimeCard() {
 
   if (!eligiblePerson) {
     return (
-      <CalculatorCard title="Overtime" headline="—">
+      <CalculatorCard title="Overtime" headline="—" cardId={cardId} onHide={onHide}>
         <p className="text-sm text-muted-foreground">
           No eligible person — set Employment type to Hourly or Salaried with overtime to enable this card.
         </p>
@@ -230,7 +235,7 @@ export function OvertimeCard() {
 
   if (baseHourlyRate <= 0) {
     return (
-      <CalculatorCard title="Overtime" headline="—">
+      <CalculatorCard title="Overtime" headline="—" cardId={cardId} onHide={onHide}>
         {baseInput}
         {rowsEditor}
         <p className="text-sm text-muted-foreground">
@@ -242,7 +247,7 @@ export function OvertimeCard() {
 
   if (totalGross <= 0 || !taxResult) {
     return (
-      <CalculatorCard title="Overtime" headline="—">
+      <CalculatorCard title="Overtime" headline="—" cardId={cardId} onHide={onHide}>
         {baseInput}
         {rowsEditor}
         <p className="text-sm text-muted-foreground">
@@ -259,6 +264,8 @@ export function OvertimeCard() {
   return (
     <CalculatorCard
       title="Overtime"
+      cardId={cardId}
+      onHide={onHide}
       headline={
         <span data-testid="ot-takehome">{formatCurrency(overtimeTakeHome)}</span>
       }

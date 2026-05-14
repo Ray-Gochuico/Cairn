@@ -108,6 +108,10 @@ describe('CalculatorsLayout', () => {
   beforeEach(() => {
     resetStores();
     sessionStorage.clear();
+    // tests/setup.ts installs a fresh in-memory localStorage per test, but
+    // call clear() defensively in case any prior code in this beforeEach hook
+    // wrote to it.
+    localStorage.clear();
   });
 
   afterEach(() => {
@@ -357,6 +361,140 @@ describe('CalculatorsLayout', () => {
 
       expect(await screen.findByText(/using 2025 tax brackets/i)).toBeInTheDocument();
       expect(screen.queryByText(/using 2024 tax brackets/i)).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Hide / show cards', () => {
+    it('hides card when "Hide" link is clicked', async () => {
+      primeBaseline();
+      usePersonsStore.setState({
+        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
+        isLoading: false,
+        error: null,
+      });
+
+      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+
+      // Wait for cards to render
+      await screen.findByText(/Bonus take-home/i);
+
+      // There should be 3 Hide buttons (paycheck, bonus, commission — no overtime).
+      const hideButtonsBefore = screen.getAllByRole('button', { name: /^hide /i });
+      expect(hideButtonsBefore.length).toBeGreaterThanOrEqual(3);
+
+      await userEvent.click(hideButtonsBefore[0]);
+
+      // After hiding one, the count of Hide buttons should drop.
+      const hideButtonsAfter = screen.queryAllByRole('button', { name: /^hide /i });
+      expect(hideButtonsAfter.length).toBe(hideButtonsBefore.length - 1);
+    });
+
+    it('shows "1 card hidden — manage" in footer after hiding a card', async () => {
+      primeBaseline();
+      usePersonsStore.setState({
+        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
+        isLoading: false,
+        error: null,
+      });
+
+      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+
+      await screen.findByText(/Bonus take-home/i);
+      const hideButton = screen.getAllByRole('button', { name: /^hide /i })[0];
+      await userEvent.click(hideButton);
+
+      expect(await screen.findByText(/1 card hidden/i)).toBeInTheDocument();
+      expect(screen.getByText(/manage/i)).toBeInTheDocument();
+    });
+
+    it('pluralizes hidden count: "2 cards hidden"', async () => {
+      primeBaseline();
+      usePersonsStore.setState({
+        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
+        isLoading: false,
+        error: null,
+      });
+
+      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+
+      await screen.findByText(/Bonus take-home/i);
+
+      // Hide first card
+      let hideButtons = screen.getAllByRole('button', { name: /^hide /i });
+      await userEvent.click(hideButtons[0]);
+
+      // Hide another card
+      hideButtons = screen.getAllByRole('button', { name: /^hide /i });
+      await userEvent.click(hideButtons[0]);
+
+      expect(await screen.findByText(/2 cards hidden/i)).toBeInTheDocument();
+    });
+
+    it('popover lists hidden cards with Show button (and pre-populated localStorage works)', async () => {
+      // Pre-populate localStorage with a hidden card, then render.
+      localStorage.setItem('calculator-hidden-cards', JSON.stringify(['bonus-tax']));
+
+      primeBaseline();
+      usePersonsStore.setState({
+        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
+        isLoading: false,
+        error: null,
+      });
+
+      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+
+      // The bonus card should NOT render.
+      await screen.findByText(/Paycheck/i);
+      expect(screen.queryByText(/Bonus take-home/i)).not.toBeInTheDocument();
+
+      // Footer shows the hidden count and the manage trigger.
+      const manageBtn = await screen.findByText(/manage/i);
+      await userEvent.click(manageBtn);
+
+      // Popover lists the hidden card by its human-friendly label.
+      expect(screen.getByText(/bonus tax/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /show bonus tax card/i })).toBeInTheDocument();
+    });
+
+    it('clicking "Show" in popover restores the card', async () => {
+      localStorage.setItem('calculator-hidden-cards', JSON.stringify(['bonus-tax']));
+
+      primeBaseline();
+      usePersonsStore.setState({
+        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
+        isLoading: false,
+        error: null,
+      });
+
+      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+
+      await screen.findByText(/Paycheck/i);
+      expect(screen.queryByText(/Bonus take-home/i)).not.toBeInTheDocument();
+
+      const manageBtn = await screen.findByText(/manage/i);
+      await userEvent.click(manageBtn);
+
+      const showBtn = screen.getByRole('button', { name: /show bonus tax card/i });
+      await userEvent.click(showBtn);
+
+      // Bonus card returns; footer disappears (no more hidden cards).
+      expect(await screen.findByText(/Bonus take-home/i)).toBeInTheDocument();
+      expect(screen.queryByText(/card hidden/i)).not.toBeInTheDocument();
+    });
+
+    it('does NOT render footer when no cards are hidden', async () => {
+      primeBaseline();
+      usePersonsStore.setState({
+        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
+        isLoading: false,
+        error: null,
+      });
+
+      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+
+      await screen.findByText(/Bonus take-home/i);
+      expect(screen.queryByText(/card hidden/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/manage/i)).not.toBeInTheDocument();
     });
   });
 });
