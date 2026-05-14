@@ -7,6 +7,8 @@ import { resolve } from 'node:path';
 
 const loadInitialMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
+const loadCommissionMigration = () =>
+  readFileSync(resolve(__dirname, '../../src/db/migrations/0003_add_commission_columns.sql'), 'utf-8');
 
 describe('PersonsRepo', () => {
   let db: SqliteAdapter;
@@ -14,7 +16,10 @@ describe('PersonsRepo', () => {
 
   beforeEach(async () => {
     db = new SqliteAdapter(':memory:');
-    await runMigrations(db, [{ version: '0001_initial', sql: loadInitialMigration() }]);
+    await runMigrations(db, [
+      { version: '0001_initial', sql: loadInitialMigration() },
+      { version: '0003_add_commission_columns', sql: loadCommissionMigration() },
+    ]);
     repo = new PersonsRepo(db);
   });
 
@@ -34,7 +39,8 @@ describe('PersonsRepo', () => {
       dateOfBirth: '1988-03-15',
       targetRetirementAge: 55,
       annualSalaryPretax: 140000,
-      expectedBonus: 30000,
+      expectedCommission: 2000,
+      expectedCommissionFrequency: 'MONTHLY',
       pretax401kPct: 0.10,
       healthInsuranceMonthlyPremium: 250,
       dependentCareFsaMonthly: 0,
@@ -56,7 +62,8 @@ describe('PersonsRepo', () => {
       dateOfBirth: '1988-03-15',
       targetRetirementAge: 55,
       annualSalaryPretax: 140000,
-      expectedBonus: 30000,
+      expectedCommission: 2000,
+      expectedCommissionFrequency: 'MONTHLY',
       pretax401kPct: 0.10,
       healthInsuranceMonthlyPremium: 250,
       dependentCareFsaMonthly: 0,
@@ -78,7 +85,8 @@ describe('PersonsRepo', () => {
       dateOfBirth: '1988-03-15',
       targetRetirementAge: 55,
       annualSalaryPretax: 140000,
-      expectedBonus: 0,
+      expectedCommission: 0,
+      expectedCommissionFrequency: 'MONTHLY',
       pretax401kPct: 0,
       healthInsuranceMonthlyPremium: 0,
       dependentCareFsaMonthly: 0,
@@ -99,7 +107,8 @@ describe('PersonsRepo', () => {
         dateOfBirth: '2050-01-01',
         targetRetirementAge: 55,
         annualSalaryPretax: 140000,
-        expectedBonus: 0,
+        expectedCommission: 0,
+        expectedCommissionFrequency: 'MONTHLY',
         pretax401kPct: 0,
         healthInsuranceMonthlyPremium: 0,
         dependentCareFsaMonthly: 0,

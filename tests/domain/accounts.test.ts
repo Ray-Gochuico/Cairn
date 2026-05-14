@@ -10,6 +10,8 @@ import { resolve } from 'node:path';
 
 const loadInitialMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
+const loadCommissionMigration = () =>
+  readFileSync(resolve(__dirname, '../../src/db/migrations/0003_add_commission_columns.sql'), 'utf-8');
 
 describe('AccountsRepo', () => {
   let db: SqliteAdapter;
@@ -19,7 +21,10 @@ describe('AccountsRepo', () => {
 
   beforeEach(async () => {
     db = new SqliteAdapter(':memory:');
-    await runMigrations(db, [{ version: '0001_initial', sql: loadInitialMigration() }]);
+    await runMigrations(db, [
+      { version: '0001_initial', sql: loadInitialMigration() },
+      { version: '0003_add_commission_columns', sql: loadCommissionMigration() },
+    ]);
     repo = new AccountsRepo(db);
     personsRepo = new PersonsRepo(db);
     dependentsRepo = new DependentsRepo(db);
@@ -149,7 +154,8 @@ describe('AccountsRepo', () => {
       dateOfBirth: '1985-01-01',
       targetRetirementAge: 60,
       annualSalaryPretax: 100000,
-      expectedBonus: 0,
+      expectedCommission: 0,
+      expectedCommissionFrequency: 'MONTHLY',
       pretax401kPct: 0,
       healthInsuranceMonthlyPremium: 0,
       dependentCareFsaMonthly: 0,
@@ -162,7 +168,8 @@ describe('AccountsRepo', () => {
       dateOfBirth: '1986-02-02',
       targetRetirementAge: 60,
       annualSalaryPretax: 100000,
-      expectedBonus: 0,
+      expectedCommission: 0,
+      expectedCommissionFrequency: 'MONTHLY',
       pretax401kPct: 0,
       healthInsuranceMonthlyPremium: 0,
       dependentCareFsaMonthly: 0,

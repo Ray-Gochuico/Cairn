@@ -18,6 +18,8 @@ import { resolve } from 'node:path';
 
 const loadInitialMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
+const loadCommissionMigration = () =>
+  readFileSync(resolve(__dirname, '../../src/db/migrations/0003_add_commission_columns.sql'), 'utf-8');
 
 async function selectDate(user: UserEvent, pickerId: string, isoDate: string) {
   const [yyyy, mm, dd] = isoDate.split('-');
@@ -35,7 +37,8 @@ async function seedPerson(db: SqliteAdapter, name: string): Promise<number> {
     dateOfBirth: '1990-01-01',
     targetRetirementAge: 65,
     annualSalaryPretax: 100000,
-    expectedBonus: 0,
+    expectedCommission: 0,
+    expectedCommissionFrequency: 'MONTHLY',
     pretax401kPct: 0,
     healthInsuranceMonthlyPremium: 0,
     dependentCareFsaMonthly: 0,
@@ -49,7 +52,10 @@ describe('LoansTab', () => {
 
   beforeEach(async () => {
     db = new SqliteAdapter(':memory:');
-    await runMigrations(db, [{ version: '0001_initial', sql: loadInitialMigration() }]);
+    await runMigrations(db, [
+      { version: '0001_initial', sql: loadInitialMigration() },
+      { version: '0003_add_commission_columns', sql: loadCommissionMigration() },
+    ]);
     setDatabase(db);
     useLoansStore.setState({ loans: [], isLoading: false, error: null });
     usePersonsStore.setState({ persons: [], isLoading: false, error: null });

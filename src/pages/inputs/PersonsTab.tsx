@@ -27,7 +27,7 @@ export default function PersonsTab() {
         <p className="text-sm text-muted-foreground mb-4">Up to 2 persons supported per household.</p>
         <PersonForm
           initial={DEFAULT_PERSON}
-          onSubmit={async (v) => { await create(v); setMode('list'); }}
+          onSubmit={async (v) => { await create({ ...v, expectedBonus: 0 }); setMode('list'); }}
           onCancel={() => setMode('list')}
         />
       </div>
@@ -50,14 +50,15 @@ export default function PersonsTab() {
             dateOfBirth: target.dateOfBirth,
             targetRetirementAge: target.targetRetirementAge,
             annualSalaryPretax: target.annualSalaryPretax,
-            expectedBonus: target.expectedBonus,
+            expectedCommission: target.expectedCommission,
+            expectedCommissionFrequency: target.expectedCommissionFrequency,
             pretax401kPct: target.pretax401kPct,
             healthInsuranceMonthlyPremium: target.healthInsuranceMonthlyPremium,
             dependentCareFsaMonthly: target.dependentCareFsaMonthly,
             hsaMonthlyContribution: target.hsaMonthlyContribution,
             hsaEligible: target.hsaEligible,
           }}
-          onSubmit={async (v) => { await update(mode.id, v); setMode('list'); }}
+          onSubmit={async (v) => { await update(mode.id, { ...v, expectedBonus: 0 }); setMode('list'); }}
           onCancel={() => setMode('list')}
         />
       </div>

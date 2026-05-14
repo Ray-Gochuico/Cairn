@@ -64,7 +64,7 @@ export default function Step2Persons({ onComplete }: Props) {
         <PersonForm
           initial={DEFAULT_PERSON}
           onSubmit={async (v) => {
-            await create(v);
+            await create({ ...v, expectedBonus: 0 });
             setShowForm(false);
           }}
           onCancel={persons.length > 0 ? () => setShowForm(false) : undefined}

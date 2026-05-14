@@ -39,7 +39,7 @@ function resetStores() {
   useTaxRulesStore.setState({ year: null, items: [], isLoading: false, error: null });
 }
 
-function primeStores(expectedBonus = 10000) {
+function primeStores() {
   useHouseholdStore.setState({
     household: {
       filingStatus: FilingStatus.SINGLE,
@@ -63,7 +63,8 @@ function primeStores(expectedBonus = 10000) {
         dateOfBirth: '1990-01-01',
         targetRetirementAge: 65,
         annualSalaryPretax: 100000,
-        expectedBonus,
+        expectedCommission: 0,
+        expectedCommissionFrequency: 'MONTHLY',
         pretax401kPct: 0,
         healthInsuranceMonthlyPremium: 0,
         dependentCareFsaMonthly: 0,
@@ -110,12 +111,13 @@ describe('BonusTaxCard', () => {
   });
 
   it('renders bonus take-home headline using person + household + tax rules', async () => {
-    // Setup: a single person earning $100k with $10k bonus, filing SINGLE, state CA
+    // Setup: a single person earning $100k, filing SINGLE, state CA
+    // bonus is entered via the inline input (no longer pulled from person)
     // tax-rules-store pre-loaded with federal SINGLE + CA SINGLE
     // expected: marginal rate roughly 0.35-0.42 (federal 24% + CA 9.3% + FICA 7.65% = ~41%)
     // bonus take-home roughly $5,800-6,500
 
-    primeStores(10000);
+    primeStores();
 
     render(
       <MemoryRouter>
@@ -123,7 +125,13 @@ describe('BonusTaxCard', () => {
       </MemoryRouter>,
     );
 
-    await screen.findByText(/Bonus Tax/i);
+    // Wait for the card to render (bonus input is present)
+    await screen.findByLabelText(/Bonus amount/i);
+
+    // Type the bonus into the inline input
+    const input = screen.getByLabelText(/Bonus amount/i);
+    fireEvent.change(input, { target: { value: '10000' } });
+
     const headline = await screen.findByTestId('bonus-takehome');
     const value = parseFloat(headline.textContent!.replace(/[$,]/g, ''));
     expect(value).toBeGreaterThan(5500);
@@ -141,12 +149,15 @@ describe('BonusTaxCard', () => {
   });
 
   it('changing the override bonus amount updates the headline', async () => {
-    // Prime stores with $100k SINGLE CA + person with expectedBonus = $10k.
-    primeStores(10000);
+    // Prime stores with $100k SINGLE CA. Bonus starts at 0 (no person default).
+    primeStores();
     render(<MemoryRouter><BonusTaxCard /></MemoryRouter>);
-    await screen.findByTestId('bonus-takehome');
 
     const input = screen.getByLabelText(/Bonus amount/i);
+    // Set initial bonus to $10k, then change to $20k
+    fireEvent.change(input, { target: { value: '10000' } });
+    await screen.findByTestId('bonus-takehome');
+
     // Use fireEvent.change for reliable controlled-input updates
     fireEvent.change(input, { target: { value: '20000' } });
 
@@ -156,20 +167,20 @@ describe('BonusTaxCard', () => {
     expect(value).toBeGreaterThan(11000);  // ~13k take-home on $20k bonus at ~35% marginal
   });
 
-  it('shows placeholder when bonus override is set to 0', async () => {
-    // Prime stores with $10k expected bonus
-    primeStores(10000);
+  it('shows placeholder when bonus is 0', async () => {
+    // Prime stores — bonus defaults to 0 (no person default)
+    primeStores();
     render(<MemoryRouter><BonusTaxCard /></MemoryRouter>);
-    const input = screen.getByLabelText(/Bonus amount/i);
-    // Use fireEvent.change for reliable controlled-input updates
-    fireEvent.change(input, { target: { value: '0' } });
+    // Default is 0, so placeholder should already be visible
     expect(screen.getByText(/Enter a bonus amount/i)).toBeInTheDocument();
   });
 
   it('headline body shows per-jurisdiction bonus tax breakdown', async () => {
-    // Prime stores with standard setup
-    primeStores(10000);
+    // Prime stores with standard setup; type $10k into the bonus input
+    primeStores();
     render(<MemoryRouter><BonusTaxCard /></MemoryRouter>);
+    const input = screen.getByLabelText(/Bonus amount/i);
+    fireEvent.change(input, { target: { value: '10000' } });
     await screen.findByTestId('bonus-takehome');
     expect(screen.getByText(/Federal on bonus/i)).toBeInTheDocument();
     expect(screen.getByText(/FICA on bonus/i)).toBeInTheDocument();

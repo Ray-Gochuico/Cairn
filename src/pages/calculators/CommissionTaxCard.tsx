@@ -24,8 +24,12 @@ export function CommissionTaxCard() {
   const taxItems = useTaxRulesStore((s) => s.items);
   const taxYear = useTaxRulesStore((s) => s.year);
 
-  const [commissionPerCheck, setCommissionPerCheck] = useState<number>(0);
-  const [frequency, setFrequency] = useState<CommissionFrequency>('MONTHLY');
+  const [commissionPerCheck, setCommissionPerCheck] = useState<number>(
+    () => persons[0]?.expectedCommission ?? 0
+  );
+  const [frequency, setFrequency] = useState<CommissionFrequency>(
+    () => (persons[0]?.expectedCommissionFrequency as CommissionFrequency) ?? 'MONTHLY'
+  );
 
   useEffect(() => {
     useTaxRulesStore.getState().loadYear(YEAR);

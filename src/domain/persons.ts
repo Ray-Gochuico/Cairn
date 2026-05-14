@@ -9,6 +9,8 @@ interface PersonRow {
   target_retirement_age: number;
   annual_salary_pretax: number;
   expected_bonus: number;
+  expected_commission: number;
+  expected_commission_frequency: string;
   pretax_401k_pct: number;
   health_insurance_monthly_premium: number;
   dependent_care_fsa_monthly: number;
@@ -25,6 +27,8 @@ function rowToPerson(row: PersonRow): Person {
     targetRetirementAge: row.target_retirement_age,
     annualSalaryPretax: row.annual_salary_pretax,
     expectedBonus: row.expected_bonus,
+    expectedCommission: row.expected_commission ?? 0,
+    expectedCommissionFrequency: row.expected_commission_frequency ?? 'MONTHLY',
     pretax401kPct: row.pretax_401k_pct,
     healthInsuranceMonthlyPremium: row.health_insurance_monthly_premium,
     dependentCareFsaMonthly: row.dependent_care_fsa_monthly,
@@ -48,17 +52,19 @@ export class PersonsRepo {
     const result = await this.db.execute(
       `INSERT INTO persons (
         household_id, name, date_of_birth, target_retirement_age,
-        annual_salary_pretax, expected_bonus, pretax_401k_pct,
-        health_insurance_monthly_premium, dependent_care_fsa_monthly,
+        annual_salary_pretax, expected_bonus, expected_commission, expected_commission_frequency,
+        pretax_401k_pct, health_insurance_monthly_premium, dependent_care_fsa_monthly,
         hsa_monthly_contribution, hsa_eligible
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         person.householdId,
         person.name,
         person.dateOfBirth,
         person.targetRetirementAge,
         person.annualSalaryPretax,
-        person.expectedBonus,
+        person.expectedBonus ?? 0,
+        person.expectedCommission,
+        person.expectedCommissionFrequency,
         person.pretax401kPct,
         person.healthInsuranceMonthlyPremium,
         person.dependentCareFsaMonthly,
@@ -85,6 +91,8 @@ export class PersonsRepo {
         target_retirement_age = ?,
         annual_salary_pretax = ?,
         expected_bonus = ?,
+        expected_commission = ?,
+        expected_commission_frequency = ?,
         pretax_401k_pct = ?,
         health_insurance_monthly_premium = ?,
         dependent_care_fsa_monthly = ?,
@@ -97,7 +105,9 @@ export class PersonsRepo {
         merged.dateOfBirth,
         merged.targetRetirementAge,
         merged.annualSalaryPretax,
-        merged.expectedBonus,
+        merged.expectedBonus ?? 0,
+        merged.expectedCommission,
+        merged.expectedCommissionFrequency,
         merged.pretax401kPct,
         merged.healthInsuranceMonthlyPremium,
         merged.dependentCareFsaMonthly,

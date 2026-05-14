@@ -46,7 +46,9 @@ export const PersonSchema = z.object({
   dateOfBirth: pastOrTodayDate,
   targetRetirementAge: z.number().int().min(30).max(90),
   annualSalaryPretax: z.number().nonnegative(),
-  expectedBonus: z.number().nonnegative(),
+  expectedBonus: z.number().nonnegative().optional().default(0),  // deprecated, no longer in PersonForm
+  expectedCommission: z.number().nonnegative(),
+  expectedCommissionFrequency: z.enum(['MONTHLY', 'QUARTERLY']),
   pretax401kPct: z.number().min(0).max(1),
   healthInsuranceMonthlyPremium: z.number().nonnegative(),
   dependentCareFsaMonthly: z.number().nonnegative(),

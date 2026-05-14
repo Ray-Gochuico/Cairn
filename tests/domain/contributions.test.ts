@@ -10,6 +10,8 @@ import { resolve } from 'node:path';
 
 const loadInitialMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
+const loadCommissionMigration = () =>
+  readFileSync(resolve(__dirname, '../../src/db/migrations/0003_add_commission_columns.sql'), 'utf-8');
 
 const makePerson = async (personsRepo: PersonsRepo, name: string): Promise<number> => {
   return personsRepo.create({
@@ -18,7 +20,8 @@ const makePerson = async (personsRepo: PersonsRepo, name: string): Promise<numbe
     dateOfBirth: '1985-01-01',
     targetRetirementAge: 60,
     annualSalaryPretax: 100000,
-    expectedBonus: 0,
+    expectedCommission: 0,
+    expectedCommissionFrequency: 'MONTHLY',
     pretax401kPct: 0,
     healthInsuranceMonthlyPremium: 0,
     dependentCareFsaMonthly: 0,
@@ -50,7 +53,10 @@ describe('ContributionsRepo', () => {
 
   beforeEach(async () => {
     db = new SqliteAdapter(':memory:');
-    await runMigrations(db, [{ version: '0001_initial', sql: loadInitialMigration() }]);
+    await runMigrations(db, [
+      { version: '0001_initial', sql: loadInitialMigration() },
+      { version: '0003_add_commission_columns', sql: loadCommissionMigration() },
+    ]);
     repo = new ContributionsRepo(db);
     accountsRepo = new AccountsRepo(db);
     personsRepo = new PersonsRepo(db);

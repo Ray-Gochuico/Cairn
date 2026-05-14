@@ -7,7 +7,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-export type PersonFormValues = Omit<Person, 'id'>;
+// PersonFormValues omits deprecated expectedBonus (not surfaced in the form UI).
+// The field is preserved in Person/DB for backwards compat; callers should inject
+// expectedBonus: 0 when converting PersonFormValues back to a full Person for persistence.
+export type PersonFormValues = Omit<Person, 'id' | 'expectedBonus'>;
 
 export const DEFAULT_PERSON: PersonFormValues = {
   householdId: 1,
@@ -15,7 +18,8 @@ export const DEFAULT_PERSON: PersonFormValues = {
   dateOfBirth: '',
   targetRetirementAge: 65,
   annualSalaryPretax: 0,
-  expectedBonus: 0,
+  expectedCommission: 0,
+  expectedCommissionFrequency: 'MONTHLY',
   pretax401kPct: 0,
   healthInsuranceMonthlyPremium: 0,
   dependentCareFsaMonthly: 0,
@@ -43,7 +47,7 @@ export default function PersonForm({
   submitLabel = 'Save',
 }: PersonFormProps) {
   const form = useForm<PersonFormValues>({
-    resolver: zodResolver(PersonSchema.omit({ id: true })),
+    resolver: zodResolver(PersonSchema.omit({ id: true, expectedBonus: true })),
     defaultValues: initial,
   });
 
@@ -91,14 +95,28 @@ export default function PersonForm({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <Label htmlFor="expectedBonus">Expected bonus ($)</Label>
+              <Label htmlFor="expectedCommission">Expected commission per check</Label>
               <Input
-                id="expectedBonus"
+                id="expectedCommission"
                 type="number"
                 step="any"
-                {...form.register('expectedBonus', { valueAsNumber: true })}
+                {...form.register('expectedCommission', { valueAsNumber: true })}
               />
             </div>
+            <div>
+              <Label htmlFor="expectedCommissionFrequency">Frequency</Label>
+              <select
+                id="expectedCommissionFrequency"
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                {...form.register('expectedCommissionFrequency')}
+              >
+                <option value="MONTHLY">Monthly</option>
+                <option value="QUARTERLY">Quarterly</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label htmlFor="pretax401kPct">Pre-tax 401k contribution (e.g. 0.10 = 10%)</Label>
               <Input

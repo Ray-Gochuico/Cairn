@@ -17,11 +17,8 @@ export function BonusTaxCard() {
   const taxItems = useTaxRulesStore((s) => s.items);
   const taxYear = useTaxRulesStore((s) => s.year);
 
-  // Default override = sum of all persons' expected bonus. Update when persons load.
-  const defaultBonus = useMemo(
-    () => persons.reduce((a, p) => a + (p.expectedBonus ?? 0), 0),
-    [persons],
-  );
+  // Bonus is purely ephemeral — no default from Person data. User must enter inline.
+  const defaultBonus = 0;
   const [bonusOverride, setBonusOverride] = useState<number | null>(null);
   const effectiveBonus = bonusOverride ?? defaultBonus;
 
@@ -176,8 +173,7 @@ export function BonusTaxCard() {
         </div>
       </div>
       <p className="text-xs text-muted-foreground mt-2">
-        Defaults to the sum of each person&#39;s &ldquo;Expected bonus&rdquo; on the Persons tab.
-        Editing here doesn&#39;t persist.
+        Enter a one-time bonus amount above. Editing here doesn&#39;t persist.
       </p>
     </CalculatorCard>
   );
