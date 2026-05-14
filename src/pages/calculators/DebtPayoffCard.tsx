@@ -1,0 +1,260 @@
+import { useMemo, useState } from 'react';
+import { useLoansStore } from '@/stores/loans-store';
+import { amortize, type Amortization } from '@/lib/amortization';
+import { CalculatorCard } from './CalculatorCard';
+import { formatCurrency } from '@/lib/format';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import type { Loan } from '@/types/schema';
+
+type Strategy = 'none' | 'snowball' | 'avalanche';
+
+interface DebtPayoffCardProps {
+  cardId?: string;
+  onHide?: () => void;
+}
+
+interface LoanProjection {
+  loan: Loan;
+  amortization: Amortization;
+  /** Computed extra-payment that was applied for this loan (default + strategy share). */
+  extraApplied: number;
+}
+
+/**
+ * Pick the index of the loan that should receive the global "extra" payment
+ * for a given strategy. Snowball: smallest balance first. Avalanche: highest
+ * rate first. Returns -1 when there's nothing to target.
+ *
+ * v1 limitation: a SINGLE loan receives the entire extra each month. We do
+ * NOT model the "snowball cascade" where, after the targeted loan is paid
+ * off, the freed-up payment rolls onto the next loan in priority order.
+ * Adding a true cascade requires a coupled month-by-month simulation across
+ * all loans (the per-loan amortize() runs are independent today). Future
+ * iteration.
+ */
+function pickStrategyTargetIndex(loans: Loan[], strategy: Strategy): number {
+  if (loans.length === 0) return -1;
+  if (strategy === 'none') return -1;
+  let bestIdx = 0;
+  for (let i = 1; i < loans.length; i++) {
+    if (strategy === 'snowball') {
+      if (loans[i].currentBalance < loans[bestIdx].currentBalance) bestIdx = i;
+    } else {
+      // avalanche
+      if (loans[i].interestRate > loans[bestIdx].interestRate) bestIdx = i;
+    }
+  }
+  return bestIdx;
+}
+
+function projectionsFor(
+  loans: Loan[],
+  strategy: Strategy,
+  extraTotal: number,
+): LoanProjection[] {
+  const targetIdx = pickStrategyTargetIndex(loans, strategy);
+  return loans.map((loan, i) => {
+    const strategyExtra =
+      strategy !== 'none' && i === targetIdx ? Math.max(0, extraTotal) : 0;
+    const extraApplied = loan.extraPaymentDefault + strategyExtra;
+    const amortization = amortize({
+      principal: loan.currentBalance,
+      annualRatePct: loan.interestRate,
+      termMonths: loan.termMonths,
+      firstPaymentDate: loan.firstPaymentDate,
+      extraPayment: extraApplied,
+    });
+    return { loan, amortization, extraApplied };
+  });
+}
+
+export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
+  const { loans } = useLoansStore();
+  const [strategy, setStrategy] = useState<Strategy>('none');
+  const [extraTotal, setExtraTotal] = useState<number>(0);
+
+  const projections = useMemo(
+    () => projectionsFor(loans, strategy, extraTotal),
+    [loans, strategy, extraTotal],
+  );
+
+  // Baseline: every loan with extraPayment=0. Used to estimate "savings" from
+  // the user's combined defaults + strategy choice. Recomputed only when the
+  // loan set changes.
+  const baselineInterest = useMemo(() => {
+    let sum = 0;
+    for (const loan of loans) {
+      const a = amortize({
+        principal: loan.currentBalance,
+        annualRatePct: loan.interestRate,
+        termMonths: loan.termMonths,
+        firstPaymentDate: loan.firstPaymentDate,
+        extraPayment: 0,
+      });
+      sum += a.totalInterest;
+    }
+    return sum;
+  }, [loans]);
+
+  if (loans.length === 0) {
+    return (
+      <CalculatorCard
+        cardId={cardId}
+        onHide={onHide}
+        title="Debt Payoff"
+        headline="—"
+      >
+        <p className="text-sm text-muted-foreground">
+          Add loans on the Inputs page to see payoff projections.
+        </p>
+      </CalculatorCard>
+    );
+  }
+
+  const totalBalance = loans.reduce((a, l) => a + l.currentBalance, 0);
+  const totalInterest = projections.reduce(
+    (a, p) => a + p.amortization.totalInterest,
+    0,
+  );
+  const interestSavings = Math.max(0, baselineInterest - totalInterest);
+
+  // Estimated full-debt payoff: latest payment date across all schedules.
+  // ISO YYYY-MM-DD strings sort lexicographically as dates do.
+  const lastPaymentDates = projections
+    .map((p) => p.amortization.schedule[p.amortization.schedule.length - 1]?.paymentDate)
+    .filter((d): d is string => Boolean(d));
+  const aggregatePayoffDate =
+    lastPaymentDates.length > 0
+      ? lastPaymentDates.reduce((latest, d) => (d > latest ? d : latest))
+      : null;
+
+  return (
+    <CalculatorCard
+      cardId={cardId}
+      onHide={onHide}
+      title="Debt Payoff"
+      headline={
+        <span data-testid="debt-payoff-headline">
+          {formatCurrency(totalBalance)}
+        </span>
+      }
+    >
+      {/* Aggregate metric strip */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+        <div className="rounded-md border bg-muted/40 p-3">
+          <div className="text-xs text-muted-foreground">Total interest</div>
+          <div
+            className="text-base font-semibold tabular-nums"
+            data-testid="debt-total-interest"
+          >
+            {formatCurrency(totalInterest)}
+          </div>
+        </div>
+        <div className="rounded-md border bg-muted/40 p-3">
+          <div className="text-xs text-muted-foreground">
+            Estimated payoff
+          </div>
+          <div
+            className="text-base font-semibold tabular-nums"
+            data-testid="debt-aggregate-payoff"
+          >
+            {aggregatePayoffDate ?? '—'}
+          </div>
+        </div>
+        <div className="rounded-md border bg-muted/40 p-3">
+          <div className="text-xs text-muted-foreground">
+            Savings vs no-extra
+          </div>
+          <div
+            className="text-base font-semibold tabular-nums"
+            data-testid="debt-savings"
+          >
+            {formatCurrency(interestSavings)}
+          </div>
+        </div>
+      </div>
+
+      {/* Strategy + extra-payment controls */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+        <div className="space-y-1">
+          <Label htmlFor="debt-strategy">Strategy</Label>
+          <select
+            id="debt-strategy"
+            className="flex h-9 w-full items-center rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            value={strategy}
+            onChange={(e) => setStrategy(e.target.value as Strategy)}
+          >
+            <option value="none">None</option>
+            <option value="snowball">Snowball (smallest balance)</option>
+            <option value="avalanche">Avalanche (highest rate)</option>
+          </select>
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="debt-extra">Extra monthly payment</Label>
+          <Input
+            id="debt-extra"
+            type="number"
+            min={0}
+            step={50}
+            value={extraTotal}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              setExtraTotal(Number.isFinite(v) && v >= 0 ? v : 0);
+            }}
+            disabled={strategy === 'none'}
+          />
+          <p className="text-xs text-muted-foreground">
+            {strategy === 'none'
+              ? 'Pick a strategy to apply additional monthly payments.'
+              : strategy === 'snowball'
+                ? 'Applied to the smallest-balance loan each month.'
+                : 'Applied to the highest-rate loan each month.'}
+          </p>
+        </div>
+      </div>
+
+      {/* Per-loan rows */}
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-muted-foreground">
+            <th className="py-2">Loan</th>
+            <th className="py-2">Balance</th>
+            <th className="py-2">Rate</th>
+            <th className="py-2">Payoff date</th>
+            <th className="py-2">Interest</th>
+          </tr>
+        </thead>
+        <tbody>
+          {projections.map((p) => {
+            const last = p.amortization.schedule[p.amortization.schedule.length - 1];
+            return (
+              <tr
+                key={p.loan.id ?? p.loan.name}
+                className="border-t"
+                data-testid={`debt-loan-row-${p.loan.id ?? p.loan.name}`}
+              >
+                <td className="py-2">{p.loan.name}</td>
+                <td className="py-2 tabular-nums">
+                  {formatCurrency(p.loan.currentBalance)}
+                </td>
+                <td className="py-2 tabular-nums">
+                  {(p.loan.interestRate * 100).toFixed(2)}%
+                </td>
+                <td
+                  className="py-2 tabular-nums"
+                  data-testid={`debt-loan-payoff-${p.loan.id ?? p.loan.name}`}
+                >
+                  {last?.paymentDate ?? '—'}
+                </td>
+                <td className="py-2 tabular-nums">
+                  {formatCurrency(p.amortization.totalInterest)}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </CalculatorCard>
+  );
+}

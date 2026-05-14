@@ -5,6 +5,7 @@ import { CommissionTaxCard } from './CommissionTaxCard';
 import { OvertimeCard } from './OvertimeCard';
 import { FireCard } from './FireCard';
 import { CoastFiCard } from './CoastFiCard';
+import { DebtPayoffCard } from './DebtPayoffCard';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { getCurrentTaxYear } from '@/lib/current-tax-year';
@@ -21,6 +22,7 @@ const CARD_IDS = {
   OVERTIME: 'overtime',
   FIRE: 'fire',
   COAST_FI: 'coast-fi',
+  DEBT_PAYOFF: 'debt-payoff',
 } as const;
 
 // Human-friendly labels surfaced in the "manage" popover.
@@ -31,6 +33,7 @@ const CARD_LABELS: Record<string, string> = {
   [CARD_IDS.OVERTIME]: 'Overtime',
   [CARD_IDS.FIRE]: 'Years to FI',
   [CARD_IDS.COAST_FI]: 'CoastFI',
+  [CARD_IDS.DEBT_PAYOFF]: 'Debt Payoff',
 };
 
 function labelFor(id: string): string {
@@ -136,6 +139,9 @@ export default function CalculatorsLayout() {
         )}
         {!hiddenSet.has(CARD_IDS.COAST_FI) && (
           <CoastFiCard cardId={CARD_IDS.COAST_FI} onHide={refreshHidden} />
+        )}
+        {!hiddenSet.has(CARD_IDS.DEBT_PAYOFF) && (
+          <DebtPayoffCard cardId={CARD_IDS.DEBT_PAYOFF} onHide={refreshHidden} />
         )}
       </div>
       {hiddenCount > 0 && (
