@@ -18,6 +18,8 @@ import { useLoansStore } from '@/stores/loans-store';
 import { useLoanPaymentsStore } from '@/stores/loan-payments-store';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
+import { useEquityGrantsStore } from '@/stores/equity-grants-store';
+import { useGoalsStore } from '@/stores/goals-store';
 
 /**
  * Backup & Restore — the user's escape hatch.
@@ -54,10 +56,8 @@ function snapshotStores(): BackupData {
     loan_payments: useLoanPaymentsStore.getState().payments,
     properties: usePropertiesStore.getState().properties,
     vehicles: useVehiclesStore.getState().vehicles,
-    // equity_grants and goals don't have stores yet (Phase 3 entities still
-    // landing); pass empty arrays to satisfy the envelope schema.
-    equity_grants: [],
-    goals: [],
+    equity_grants: useEquityGrantsStore.getState().equityGrants,
+    goals: useGoalsStore.getState().goals,
   };
 }
 
