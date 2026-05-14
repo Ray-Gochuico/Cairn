@@ -215,6 +215,65 @@ describe('OvertimeCard', () => {
     expect(value).toBeGreaterThan(150);
   });
 
+  it('still renders with stale (non-current) tax-rule year via getCurrentTaxYear fallback', async () => {
+    // Seed household + HOURLY person, but tax rules ONLY for 2025 (older than
+    // current calendar year). The card's getCurrentTaxYear() resolver should
+    // pick 2025 as the most-recent seeded year and the lookup must find rules.
+    useHouseholdStore.setState({
+      household: {
+        filingStatus: FilingStatus.SINGLE,
+        state: 'CA',
+        city: null,
+        monthlyExpenseBaseline: 5000,
+        withdrawalRate: 0.04,
+        inflationAssumption: 0.03,
+        growthScenarios: [],
+      },
+      isLoading: false,
+      error: null,
+    });
+    usePersonsStore.setState({
+      persons: [{ ...baseHourlyPerson }],
+      isLoading: false,
+      error: null,
+    });
+    useDependentsStore.setState({ dependents: [], isLoading: false, error: null });
+    useTaxRulesStore.setState({
+      year: 2025,
+      items: [
+        {
+          id: 1,
+          year: 2025,
+          jurisdictionType: 'FEDERAL',
+          jurisdictionCode: 'US',
+          filingStatus: FilingStatus.SINGLE,
+          brackets: federalSingleBrackets,
+          standardDeduction: 15000,
+        },
+        {
+          id: 2,
+          year: 2025,
+          jurisdictionType: 'STATE',
+          jurisdictionCode: 'CA',
+          filingStatus: FilingStatus.SINGLE,
+          brackets: caSingleBrackets,
+          standardDeduction: 0,
+        },
+      ],
+      isLoading: false,
+      error: null,
+    });
+
+    render(<MemoryRouter><OvertimeCard /></MemoryRouter>);
+
+    // Default starter row: 8 hrs @ 1.5x = $300 OT gross. Card should render
+    // the take-home headline using the stale 2025 rules — no crash, no empty state.
+    const headline = await screen.findByTestId('ot-takehome');
+    const value = parseFloat(headline.textContent!.replace(/[$,]/g, ''));
+    expect(value).toBeGreaterThan(150);
+    expect(value).toBeLessThan(300);
+  });
+
   it('user enters custom multiplier 1.75x', async () => {
     // HOURLY @ $25/hr, default row of 4 hours, switch preset to custom, enter 1.75.
     // Gross = 4 × 25 × 1.75 = $175.

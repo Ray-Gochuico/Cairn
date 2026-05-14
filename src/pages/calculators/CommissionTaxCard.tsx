@@ -8,8 +8,7 @@ import { computePretaxDeductions, computeBonusTax } from '@/lib/tax';
 import { formatCurrency } from '@/lib/format';
 import { Input } from '@/components/ui/input';
 import { CONTRIBUTION_LIMITS_2026 } from '@/lib/contribution-limits';
-
-const YEAR = 2026;
+import { getCurrentTaxYear } from '@/lib/current-tax-year';
 
 type CommissionFrequency = 'MONTHLY' | 'QUARTERLY';
 
@@ -22,7 +21,14 @@ export function CommissionTaxCard() {
   const { persons } = usePersonsStore();
   const { dependents } = useDependentsStore();
   const taxItems = useTaxRulesStore((s) => s.items);
-  const taxYear = useTaxRulesStore((s) => s.year);
+
+  // Smart-resolve the tax year from the seeded set: if the current calendar year
+  // has rules use it, otherwise fall back to the most-recent seeded year.
+  const seededYears = useMemo(
+    () => [...new Set(taxItems.map((r) => r.year))],
+    [taxItems],
+  );
+  const { year: resolvedYear } = getCurrentTaxYear(seededYears);
 
   const [frequency, setFrequency] = useState<CommissionFrequency>(
     () => (persons[0]?.expectedCommissionFrequency as CommissionFrequency) ?? 'MONTHLY'
@@ -35,14 +41,17 @@ export function CommissionTaxCard() {
     return initialAnnual / periodsForInitial;
   });
 
+  // Bootstrap: on mount, ask the store to load the current calendar year. If
+  // those rules don't exist, the store will populate items=[] and the resolver
+  // above will fall back to whatever year IS seeded once items load.
   useEffect(() => {
-    useTaxRulesStore.getState().loadYear(YEAR);
+    useTaxRulesStore.getState().loadYear(new Date().getFullYear());
   }, []);
 
   const lookup = (jt: 'FEDERAL' | 'STATE' | 'CITY', code: string, fs: string) =>
     taxItems.find(
       (r) =>
-        r.year === taxYear &&
+        r.year === resolvedYear &&
         r.jurisdictionType === jt &&
         r.jurisdictionCode === code &&
         r.filingStatus === fs,
@@ -113,7 +122,7 @@ export function CommissionTaxCard() {
     const commissionCheckContrib = annualCommission401k / periods;
 
     return { result: taxResult, commission401kPerCheck: commissionCheckContrib };
-  }, [household, persons, dependents, taxItems, taxYear, annualCommission, periods]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [household, persons, dependents, taxItems, resolvedYear, annualCommission, periods]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const commissionInputs = (
     <div className="space-y-3 mb-4">

@@ -7,25 +7,34 @@ import { CalculatorCard } from './CalculatorCard';
 import { computePretaxDeductions, computeBonusTax } from '@/lib/tax';
 import { formatCurrency } from '@/lib/format';
 import { PAYCHECK_PERIODS, periodsPerYear, type PaycheckPeriod } from '@/lib/paycheck-periods';
-
-const YEAR = 2026;
+import { getCurrentTaxYear } from '@/lib/current-tax-year';
 
 export function PaycheckCard() {
   const { household } = useHouseholdStore();
   const { persons } = usePersonsStore();
   const { dependents } = useDependentsStore();
   const taxItems = useTaxRulesStore((s) => s.items);
-  const taxYear = useTaxRulesStore((s) => s.year);
   const [period, setPeriod] = useState<PaycheckPeriod>('MONTHLY');
 
+  // Smart-resolve the tax year from the seeded set: if the current calendar year
+  // has rules use it, otherwise fall back to the most-recent seeded year.
+  const seededYears = useMemo(
+    () => [...new Set(taxItems.map((r) => r.year))],
+    [taxItems],
+  );
+  const { year: resolvedYear } = getCurrentTaxYear(seededYears);
+
+  // Bootstrap: on mount, ask the store to load the current calendar year. If
+  // those rules don't exist, the store will populate items=[] and the resolver
+  // above will fall back to whatever year IS seeded once items load.
   useEffect(() => {
-    useTaxRulesStore.getState().loadYear(YEAR);
+    useTaxRulesStore.getState().loadYear(new Date().getFullYear());
   }, []);
 
   const lookup = (jt: 'FEDERAL' | 'STATE' | 'CITY', code: string, fs: string) =>
     taxItems.find(
       (r) =>
-        r.year === taxYear &&
+        r.year === resolvedYear &&
         r.jurisdictionType === jt &&
         r.jurisdictionCode === code &&
         r.filingStatus === fs,
@@ -90,7 +99,7 @@ export function PaycheckCard() {
       cityTax: tax.cityTax,
       takeHome,
     };
-  }, [household, persons, dependents, taxItems, taxYear]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [household, persons, dependents, taxItems, resolvedYear]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!annual) {
     return (

@@ -7,17 +7,22 @@ import { CalculatorCard } from './CalculatorCard';
 import { computePretaxDeductions, computeBonusTax } from '@/lib/tax';
 import { formatCurrency, formatPercent } from '@/lib/format';
 import { Input } from '@/components/ui/input';
+import { getCurrentTaxYear } from '@/lib/current-tax-year';
 import type { BonusFrequency } from '@/types/schema';
-
-// TODO(12.7.1): swap for getCurrentTaxYear() once that helper lands.
-const YEAR = 2026;
 
 export function BonusTaxCard() {
   const { household } = useHouseholdStore();
   const { persons } = usePersonsStore();
   const { dependents } = useDependentsStore();
   const taxItems = useTaxRulesStore((s) => s.items);
-  const taxYear = useTaxRulesStore((s) => s.year);
+
+  // Smart-resolve the tax year from the seeded set: if the current calendar year
+  // has rules use it, otherwise fall back to the most-recent seeded year.
+  const seededYears = useMemo(
+    () => [...new Set(taxItems.map((r) => r.year))],
+    [taxItems],
+  );
+  const { year: resolvedYear } = getCurrentTaxYear(seededYears);
 
   // Seed frequency + consistency from the FIRST person who has a non-zero
   // expectedBonus, falling back to the first person if none qualify. Households
@@ -41,16 +46,17 @@ export function BonusTaxCard() {
   // annual figure that drives marginal-rate math.
   const annualBonus = effectiveBonus * bonusesPerYear;
 
-  // Call loadYear once on mount using getState() to avoid object-reference
-  // churn in the dependency array (fixes the infinite-loop risk from the plan).
+  // Bootstrap: on mount, ask the store to load the current calendar year. If
+  // those rules don't exist, the store will populate items=[] and the resolver
+  // above will fall back to whatever year IS seeded once items load.
   useEffect(() => {
-    useTaxRulesStore.getState().loadYear(YEAR);
+    useTaxRulesStore.getState().loadYear(new Date().getFullYear());
   }, []);
 
   const lookup = (jt: 'FEDERAL' | 'STATE' | 'CITY', code: string, fs: string) =>
     taxItems.find(
       (r) =>
-        r.year === taxYear &&
+        r.year === resolvedYear &&
         r.jurisdictionType === jt &&
         r.jurisdictionCode === code &&
         r.filingStatus === fs,
@@ -95,7 +101,7 @@ export function BonusTaxCard() {
       cityBrackets: city?.brackets ?? null,
       standardDeduction: federal.standardDeduction,
     });
-  }, [household, persons, dependents, taxItems, taxYear, annualBonus]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [household, persons, dependents, taxItems, resolvedYear, annualBonus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const controls = (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">

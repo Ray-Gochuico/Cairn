@@ -167,6 +167,81 @@ describe('CommissionTaxCard', () => {
     expect(value).toBeLessThan(10500);
   });
 
+  it('still renders with stale (non-current) tax-rule year via getCurrentTaxYear fallback', async () => {
+    // Seed household + person, but tax rules ONLY for 2025 (older than current
+    // calendar year). The card's getCurrentTaxYear() resolver should pick 2025
+    // as the most-recent seeded year and the lookup must still find the rules.
+    useHouseholdStore.setState({
+      household: {
+        filingStatus: FilingStatus.SINGLE,
+        state: 'CA',
+        city: null,
+        monthlyExpenseBaseline: 5000,
+        withdrawalRate: 0.04,
+        inflationAssumption: 0.03,
+        growthScenarios: [],
+      },
+      isLoading: false,
+      error: null,
+    });
+    usePersonsStore.setState({
+      persons: [
+        {
+          id: 1,
+          householdId: 1,
+          name: 'Alice',
+          dateOfBirth: '1990-01-01',
+          targetRetirementAge: 65,
+          annualSalaryPretax: 100000,
+          expectedCommission: 0,
+          expectedCommissionFrequency: 'MONTHLY',
+          pretax401kPct: 0.05,
+          healthInsuranceMonthlyPremium: 0,
+          dependentCareFsaMonthly: 0,
+          hsaMonthlyContribution: 0,
+          hsaEligible: false,
+        },
+      ],
+      isLoading: false,
+      error: null,
+    });
+    useTaxRulesStore.setState({
+      year: 2025,
+      items: [
+        {
+          id: 1,
+          year: 2025,
+          jurisdictionType: 'FEDERAL',
+          jurisdictionCode: 'US',
+          filingStatus: FilingStatus.SINGLE,
+          brackets: federalSingleBrackets,
+          standardDeduction: 15000,
+        },
+        {
+          id: 2,
+          year: 2025,
+          jurisdictionType: 'STATE',
+          jurisdictionCode: 'CA',
+          filingStatus: FilingStatus.SINGLE,
+          brackets: caSingleBrackets,
+          standardDeduction: 0,
+        },
+      ],
+      isLoading: false,
+      error: null,
+    });
+
+    render(<MemoryRouter><CommissionTaxCard /></MemoryRouter>);
+    const input = screen.getByLabelText(/Commission per check/i);
+    fireEvent.change(input, { target: { value: '5000' } });
+
+    // Card renders with the stale 2025 rules — no crash, no empty state.
+    const headline = await screen.findByTestId('commission-takehome');
+    const value = parseFloat(headline.textContent!.replace(/[$,]/g, ''));
+    expect(value).toBeGreaterThan(2400);
+    expect(value).toBeLessThan(3500);
+  });
+
   it('shows placeholder when commission is 0', async () => {
     primeStores();
 

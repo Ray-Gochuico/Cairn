@@ -18,9 +18,8 @@ import {
   PAYCHECK_PERIODS,
   type PaycheckPeriod,
 } from '@/lib/paycheck-periods';
+import { getCurrentTaxYear } from '@/lib/current-tax-year';
 import type { Person } from '@/types/schema';
-
-const YEAR = 2026;
 
 const SELECT_CLASS =
   'flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
@@ -53,10 +52,20 @@ export function OvertimeCard() {
   const { persons } = usePersonsStore();
   const { dependents } = useDependentsStore();
   const taxItems = useTaxRulesStore((s) => s.items);
-  const taxYear = useTaxRulesStore((s) => s.year);
 
+  // Smart-resolve the tax year from the seeded set: if the current calendar year
+  // has rules use it, otherwise fall back to the most-recent seeded year.
+  const seededYears = useMemo(
+    () => [...new Set(taxItems.map((r) => r.year))],
+    [taxItems],
+  );
+  const { year: resolvedYear } = getCurrentTaxYear(seededYears);
+
+  // Bootstrap: on mount, ask the store to load the current calendar year. If
+  // those rules don't exist, the store will populate items=[] and the resolver
+  // above will fall back to whatever year IS seeded once items load.
   useEffect(() => {
-    useTaxRulesStore.getState().loadYear(YEAR);
+    useTaxRulesStore.getState().loadYear(new Date().getFullYear());
   }, []);
 
   const eligiblePerson = useMemo(() => persons.find(isEligible), [persons]);
@@ -72,7 +81,7 @@ export function OvertimeCard() {
   const lookup = (jt: 'FEDERAL' | 'STATE' | 'CITY', code: string, fs: string) =>
     taxItems.find(
       (r) =>
-        r.year === taxYear &&
+        r.year === resolvedYear &&
         r.jurisdictionType === jt &&
         r.jurisdictionCode === code &&
         r.filingStatus === fs,
@@ -124,7 +133,7 @@ export function OvertimeCard() {
       cityBrackets: city?.brackets ?? null,
       standardDeduction: federal.standardDeduction,
     });
-  }, [household, eligiblePerson, persons, dependents, taxItems, taxYear, totalGross]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [household, eligiblePerson, persons, dependents, taxItems, resolvedYear, totalGross]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- early returns ----
 
