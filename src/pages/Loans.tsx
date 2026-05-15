@@ -1,7 +1,7 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useLoansStore } from '@/stores/loans-store';
-import { amortize, type Amortization } from '@/lib/amortization';
+import { amortize, type Amortization, type ScheduleEntry } from '@/lib/amortization';
 import { filterByObligorPersonId } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { LoanType } from '@/types/enums';
@@ -122,12 +122,82 @@ function buildDebtSeries(
   return result.slice(0, MAX_CHART_MONTHS);
 }
 
-interface LoanCardProps {
-  projection: LoanProjection;
+// ---------------------------------------------------------------------------
+// AmortizationTable
+// ---------------------------------------------------------------------------
+
+function AmortizationTable({ schedule }: { schedule: ScheduleEntry[] }) {
+  const [showAll, setShowAll] = useState(false);
+  const truncated = schedule.length > 60 && !showAll;
+  const head = truncated ? schedule.slice(0, 12) : schedule;
+  const tail = truncated ? schedule.slice(-12) : [];
+
+  return (
+    <div className="min-w-[480px]">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-muted-foreground border-b">
+            <th className="py-2 font-medium">Date</th>
+            <th className="py-2 font-medium text-right">Principal</th>
+            <th className="py-2 font-medium text-right">Interest</th>
+            <th className="py-2 font-medium text-right">Remaining</th>
+          </tr>
+        </thead>
+        <tbody>
+          {head.map((row, i) => (
+            <tr key={`h-${i}`} className="border-b last:border-b-0">
+              <td className="py-1.5">{row.paymentDate}</td>
+              <td className="py-1.5 text-right tabular-nums">{formatCurrency(row.principal)}</td>
+              <td className="py-1.5 text-right tabular-nums">{formatCurrency(row.interest)}</td>
+              <td className="py-1.5 text-right tabular-nums">{formatCurrency(row.balance)}</td>
+            </tr>
+          ))}
+          {truncated && (
+            <tr className="border-b">
+              <td colSpan={4} className="py-2 text-center text-muted-foreground italic">
+                … {schedule.length - 24} payments omitted …
+              </td>
+            </tr>
+          )}
+          {tail.map((row, i) => (
+            <tr key={`t-${i}`} className="border-b last:border-b-0">
+              <td className="py-1.5">{row.paymentDate}</td>
+              <td className="py-1.5 text-right tabular-nums">{formatCurrency(row.principal)}</td>
+              <td className="py-1.5 text-right tabular-nums">{formatCurrency(row.interest)}</td>
+              <td className="py-1.5 text-right tabular-nums">{formatCurrency(row.balance)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {schedule.length > 60 && (
+        <div className="pt-2">
+          <button
+            type="button"
+            onClick={() => setShowAll((v) => !v)}
+            className="text-sm text-primary hover:underline"
+          >
+            {showAll ? 'Show first/last 12' : `Show all ${schedule.length} payments`}
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
-function LoanCard({ projection }: LoanCardProps) {
+// ---------------------------------------------------------------------------
+// LoanCard
+// ---------------------------------------------------------------------------
+
+interface LoanCardProps {
+  projection: LoanProjection;
+  expanded: boolean;
+  onToggleExpand: () => void;
+  schedule: ScheduleEntry[];
+}
+
+function LoanCard({ projection, expanded, onToggleExpand, schedule }: LoanCardProps) {
   const { loan, withDefault, withoutExtra } = projection;
+  const loanId = loan.id!;
   const paid = Math.max(0, loan.originalAmount - loan.currentBalance);
   const paidPct = loan.originalAmount > 0
     ? Math.min(100, Math.max(0, (paid / loan.originalAmount) * 100))
@@ -222,6 +292,24 @@ function LoanCard({ projection }: LoanCardProps) {
             </div>
           </div>
         ) : null}
+
+        <div>
+          <button
+            type="button"
+            onClick={onToggleExpand}
+            aria-expanded={expanded}
+            aria-controls={`loan-schedule-${loanId}`}
+            className="text-sm text-primary hover:underline"
+          >
+            {expanded ? 'Hide schedule' : 'View schedule'}
+          </button>
+        </div>
+
+        {expanded && (
+          <div id={`loan-schedule-${loanId}`} className="mt-3 overflow-x-auto">
+            <AmortizationTable schedule={schedule} />
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -231,6 +319,17 @@ export default function Loans() {
   const { filter, persons } = useViewFilter();
   const loans = useLoansStore((s) => s.loans);
   const load = useLoansStore((s) => s.load);
+
+  const [expandedLoanIds, setExpandedLoanIds] = useState<Set<number>>(new Set());
+
+  function toggleExpanded(loanId: number) {
+    setExpandedLoanIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(loanId)) next.delete(loanId);
+      else next.add(loanId);
+      return next;
+    });
+  }
 
   useEffect(() => {
     load();
@@ -248,6 +347,26 @@ export default function Loans() {
     () => visibleLoans.map(projectLoan),
     [visibleLoans],
   );
+
+  // Compute amortization schedules only for loans the user has expanded, to
+  // avoid recomputing entire schedules on every unrelated re-render.
+  const schedulesByLoanId = useMemo(() => {
+    const map = new Map<number, ScheduleEntry[]>();
+    for (const loan of visibleLoans) {
+      if (!expandedLoanIds.has(loan.id!)) continue;
+      map.set(
+        loan.id!,
+        amortize({
+          principal: loan.currentBalance,
+          annualRatePct: loan.interestRate,
+          termMonths: loan.termMonths,
+          firstPaymentDate: loan.firstPaymentDate,
+          extraPayment: loan.extraPaymentDefault,
+        }).schedule,
+      );
+    }
+    return map;
+  }, [visibleLoans, expandedLoanIds]);
 
   const totalDebt = useMemo(
     () => visibleLoans.reduce((sum, l) => sum + l.currentBalance, 0),
@@ -339,7 +458,13 @@ export default function Loans() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {projections.map((p) => (
-          <LoanCard key={p.loan.id} projection={p} />
+          <LoanCard
+            key={p.loan.id}
+            projection={p}
+            expanded={expandedLoanIds.has(p.loan.id!)}
+            onToggleExpand={() => toggleExpanded(p.loan.id!)}
+            schedule={schedulesByLoanId.get(p.loan.id!) ?? []}
+          />
         ))}
       </div>
 
