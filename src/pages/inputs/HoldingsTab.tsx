@@ -8,6 +8,7 @@ import { enrichTickerIfMissing } from '@/market/ticker-enrichment';
 import { YahooClient } from '@/market/yahoo-client';
 import { TickersRepo } from '@/domain/tickers';
 import { getDatabase } from '@/db/db';
+import { validateAccountTargetPct } from '@/lib/holdings-validation';
 
 /**
  * HoldingsTab — pick an account, see its holdings.
@@ -47,6 +48,33 @@ export default function HoldingsTab() {
     () => holdings.filter((h) => h.accountId === selectedAccountId),
     [holdings, selectedAccountId]
   );
+
+  const selectedAccount = useMemo(
+    () => accounts.find((a) => a.id === selectedAccountId) ?? null,
+    [accounts, selectedAccountId]
+  );
+
+  /**
+   * Validate that the about-to-be-persisted holding (combined with all
+   * other holdings on the same account) does not exceed 100% target
+   * allocation, unless the account opts into margin. Pass `editingId =
+   * null` for new-row submits, or the existing holding id for edits so
+   * the existing row is excluded from the "others" pool.
+   */
+  const buildValidator = (editingId: number | null) =>
+    (next: HoldingFormValues): string | null => {
+      const account = accounts.find((a) => a.id === next.accountId);
+      if (!account) return null;
+      const others = holdings.filter(
+        (h) => h.accountId === next.accountId && (editingId === null || h.id !== editingId)
+      );
+      const proposed = [
+        ...others.map((h) => ({ targetAllocationPct: h.targetAllocationPct })),
+        { targetAllocationPct: next.targetAllocationPct },
+      ];
+      const result = validateAccountTargetPct(proposed, { allowMargin: account.allowMargin });
+      return result.ok ? null : result.message;
+    };
 
   if (accounts.length === 0) {
     return (
@@ -104,7 +132,14 @@ export default function HoldingsTab() {
               <div className="grid grid-cols-12 gap-2 text-xs text-muted-foreground uppercase tracking-wider pb-2 border-b">
                 <div className="col-span-2">Ticker</div>
                 <div className="col-span-2">Shares</div>
-                <div className="col-span-2">Target %</div>
+                <div className="col-span-2">
+                  Target %
+                  {selectedAccount?.allowMargin && (
+                    <span className="ml-1 normal-case tracking-normal text-[10px] text-muted-foreground/80">
+                      (margin allowed — sum can exceed 100%)
+                    </span>
+                  )}
+                </div>
                 <div className="col-span-2">Cost basis</div>
                 <div className="col-span-4 text-right">Actions</div>
               </div>
@@ -135,6 +170,8 @@ export default function HoldingsTab() {
                     onDelete={async () => {
                       await remove(h.id!);
                     }}
+                    onValidateSubmit={buildValidator(h.id!)}
+                    allowMarginHint={selectedAccount?.allowMargin ?? false}
                     saveLabel="Save"
                   />
                 ))
@@ -160,6 +197,8 @@ export default function HoldingsTab() {
                       }
                     })();
                   }}
+                  onValidateSubmit={buildValidator(null)}
+                  allowMarginHint={selectedAccount?.allowMargin ?? false}
                   saveLabel="Add"
                 />
               </div>

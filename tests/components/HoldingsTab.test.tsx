@@ -19,7 +19,11 @@ const loadInitialMigration = () =>
 const loadAccountMarginMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0007_add_account_margin.sql'), 'utf-8');
 
-async function seedAccount(db: SqliteAdapter, name: string): Promise<number> {
+async function seedAccount(
+  db: SqliteAdapter,
+  name: string,
+  opts: { allowMargin?: boolean } = {}
+): Promise<number> {
   const repo = new AccountsRepo(db);
   return repo.create({
     householdId: 1,
@@ -31,6 +35,7 @@ async function seedAccount(db: SqliteAdapter, name: string): Promise<number> {
     cryptoWalletAddress: null,
     autoFetchEnabled: false,
     excludedFromNetWorth: false,
+    allowMargin: opts.allowMargin ?? false,
     stateOfPlan: null,
   });
 }
@@ -39,14 +44,15 @@ async function seedHolding(
   db: SqliteAdapter,
   accountId: number,
   ticker: string,
-  shareCount: number
+  shareCount: number,
+  targetAllocationPct: number | null = null,
 ): Promise<number> {
   const repo = new HoldingsRepo(db);
   return repo.create({
     accountId,
     ticker,
     shareCount,
-    targetAllocationPct: null,
+    targetAllocationPct,
     costBasis: null,
   });
 }
@@ -160,6 +166,66 @@ describe('HoldingsTab', () => {
     await waitFor(() => {
       const { holdings } = useHoldingsStore.getState();
       expect(holdings[0].ticker).toBe('VOO');
+    });
+  });
+
+  it('blocks save when target % sum exceeds 100% on a non-margin account, allows it after enabling margin', async () => {
+    const a = await seedAccount(db, 'Account A', { allowMargin: false });
+    await seedHolding(db, a, 'VTI', 100, 0.5);
+    await seedHolding(db, a, 'VXUS', 50, 0.3);
+
+    const user = userEvent.setup();
+    render(<MemoryRouter><HoldingsTab /></MemoryRouter>);
+
+    // Wait for the existing two rows + the add row.
+    await waitFor(() => {
+      const tickers = screen.getAllByLabelText(/^ticker$/i) as HTMLInputElement[];
+      expect(tickers).toHaveLength(3);
+    });
+
+    // Fill the Add row with a new holding that would push the sum to 110%.
+    const tickerInputs = screen.getAllByLabelText(/^ticker$/i) as HTMLInputElement[];
+    const sharesInputs = screen.getAllByLabelText(/^shares$/i) as HTMLInputElement[];
+    const targetInputs = screen.getAllByLabelText(/^target allocation/i) as HTMLInputElement[];
+    // The add row is the last one.
+    const addTicker = tickerInputs[tickerInputs.length - 1];
+    const addShares = sharesInputs[sharesInputs.length - 1];
+    const addTarget = targetInputs[targetInputs.length - 1];
+
+    await user.type(addTicker, 'BND');
+    await user.clear(addShares);
+    await user.type(addShares, '20');
+    await user.clear(addTarget);
+    await user.type(addTarget, '30');
+
+    await user.click(screen.getByRole('button', { name: /^add$/i }));
+
+    // Save should be BLOCKED: holdings store should still have only 2 entries
+    // and an inline error message should appear.
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(/110(\.0)?%/);
+    });
+    expect(useHoldingsStore.getState().holdings).toHaveLength(2);
+
+    // Now flip the account to allowMargin via the accounts store; the
+    // validator should permit the save.
+    await useAccountsStore.getState().update(a, { allowMargin: true });
+
+    await waitFor(() => {
+      const acct = useAccountsStore.getState().accounts.find((x) => x.id === a);
+      expect(acct?.allowMargin).toBe(true);
+    });
+
+    // Re-submit the Add row (form values still present).
+    await user.click(screen.getByRole('button', { name: /^add$/i }));
+
+    await waitFor(() => {
+      const { holdings } = useHoldingsStore.getState();
+      expect(holdings).toHaveLength(3);
+      const bnd = holdings.find((h) => h.ticker === 'BND');
+      expect(bnd).toBeDefined();
+      // DB still stores 0..1 fraction; UI converts × 100 / ÷ 100.
+      expect(bnd?.targetAllocationPct).toBeCloseTo(0.3, 6);
     });
   });
 
