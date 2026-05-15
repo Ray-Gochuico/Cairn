@@ -1,12 +1,22 @@
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { AccountSchema, type Account } from '@/types/schema';
 import { AccountType } from '@/types/enums';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+
+// AccountSchema has allowMargin: z.boolean().default(false), which makes Zod's
+// *input* type treat that key as optional. RHF derives its resolver type from
+// the schema input type, so the resolver becomes Resolver<Partial<...>> and
+// doesn't unify with strict AccountFormValues. Strip the .default() so input
+// and output types coincide — DEFAULT_ACCOUNT provides the runtime default.
+const AccountFormSchema = AccountSchema.omit({ id: true }).extend({
+  allowMargin: z.boolean(),
+});
 
 export type AccountFormValues = Omit<Account, 'id'>;
 
@@ -20,6 +30,7 @@ export const DEFAULT_ACCOUNT: AccountFormValues = {
   cryptoWalletAddress: null,
   autoFetchEnabled: false,
   excludedFromNetWorth: false,
+  allowMargin: false,
   stateOfPlan: null,
 };
 
@@ -60,7 +71,7 @@ export default function AccountForm({
   submitLabel = 'Save',
 }: AccountFormProps) {
   const form = useForm<AccountFormValues>({
-    resolver: zodResolver(AccountSchema.omit({ id: true })),
+    resolver: zodResolver(AccountFormSchema),
     defaultValues: initial,
   });
 

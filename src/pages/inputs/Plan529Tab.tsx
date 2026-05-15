@@ -120,6 +120,7 @@ export default function Plan529Tab() {
             cryptoWalletAddress: target.cryptoWalletAddress,
             autoFetchEnabled: target.autoFetchEnabled,
             excludedFromNetWorth: target.excludedFromNetWorth,
+            allowMargin: target.allowMargin,
             stateOfPlan: target.stateOfPlan,
           }}
           persons={personOptions}

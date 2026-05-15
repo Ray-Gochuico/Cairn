@@ -71,6 +71,7 @@ export default function AccountsTab() {
             cryptoWalletAddress: target.cryptoWalletAddress,
             autoFetchEnabled: target.autoFetchEnabled,
             excludedFromNetWorth: target.excludedFromNetWorth,
+            allowMargin: target.allowMargin,
             stateOfPlan: target.stateOfPlan,
           }}
           persons={personOptions}

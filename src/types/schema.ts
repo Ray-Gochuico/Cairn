@@ -90,6 +90,7 @@ export const AccountSchema = z.object({
   cryptoWalletAddress: z.string().max(200).nullable(),
   autoFetchEnabled: z.boolean(),
   excludedFromNetWorth: z.boolean(),
+  allowMargin: z.boolean().default(false),
   stateOfPlan: z.string().length(2).nullable(),
 });
 export type Account = z.infer<typeof AccountSchema>;

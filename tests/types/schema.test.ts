@@ -210,6 +210,21 @@ describe('AccountSchema', () => {
   it('rejects empty account name', () => {
     expect(() => AccountSchema.parse({ ...valid, name: '' })).toThrow();
   });
+
+  it('parses Account with allowMargin: true', () => {
+    const parsed = AccountSchema.parse({ ...valid, allowMargin: true });
+    expect(parsed.allowMargin).toBe(true);
+  });
+
+  it('defaults allowMargin to false when omitted', () => {
+    const { allowMargin: _omit, ...withoutAllowMargin } = { ...valid, allowMargin: false };
+    const parsed = AccountSchema.parse(withoutAllowMargin);
+    expect(parsed.allowMargin).toBe(false);
+  });
+
+  it('rejects non-boolean allowMargin', () => {
+    expect(() => AccountSchema.parse({ ...valid, allowMargin: 'yes' })).toThrow();
+  });
 });
 
 describe('HoldingSchema', () => {
