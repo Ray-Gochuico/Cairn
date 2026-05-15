@@ -8,6 +8,9 @@ import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
 import { useGoalsStore } from '@/stores/goals-store';
 import { useContributionsStore } from '@/stores/contributions-store';
+import { useHoldingsStore } from '@/stores/holdings-store';
+import { useTickersStore } from '@/stores/tickers-store';
+import { useFundHoldingsStore } from '@/stores/fund-holdings-store';
 import { AccountType, GoalType } from '@/types/enums';
 import { netWorthForMonth, type NetWorthInput } from '@/lib/networth';
 import { isMonthlyInputPending, lastMonthYyyymm } from '@/lib/input-pending';
@@ -16,6 +19,7 @@ import { formatPercent } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import MetricCard from '@/components/cards/MetricCard';
+import { ConcentrationCard } from '@/components/cards/ConcentrationCard';
 import type {
   Account,
   AccountSnapshot,
@@ -277,6 +281,13 @@ export default function Dashboard() {
   const contributions = useContributionsStore((s) => s.contributions);
   const loadContributions = useContributionsStore((s) => s.load);
 
+  // Holdings + tickers + fund-holdings feed the ConcentrationCard via
+  // useConcentration(). Loaded here so the card renders against populated
+  // data on first paint instead of an empty "0 warnings" flash.
+  const loadHoldings = useHoldingsStore((s) => s.load);
+  const loadTickers = useTickersStore((s) => s.load);
+  const loadFundHoldings = useFundHoldingsStore((s) => s.load);
+
   useEffect(() => {
     loadHousehold();
     loadAccounts();
@@ -286,6 +297,9 @@ export default function Dashboard() {
     loadVehicles();
     loadGoals();
     loadContributions();
+    loadHoldings();
+    loadTickers();
+    loadFundHoldings();
   }, [
     loadHousehold,
     loadAccounts,
@@ -295,6 +309,9 @@ export default function Dashboard() {
     loadVehicles,
     loadGoals,
     loadContributions,
+    loadHoldings,
+    loadTickers,
+    loadFundHoldings,
   ]);
 
   const today = useMemo(() => new Date(), []);
@@ -479,6 +496,10 @@ export default function Dashboard() {
           value="—"
           subtitle="Available with Phase 4 spending data"
         />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <ConcentrationCard />
       </div>
 
       <Card>

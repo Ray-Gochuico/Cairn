@@ -4,9 +4,12 @@ import { runMigrations, loadAllMigrations } from './migrations';
 import { AccountsRepo } from '@/domain/accounts';
 import { HoldingsRepo } from '@/domain/holdings';
 import { AccountSnapshotsRepo } from '@/domain/snapshots';
+import { FundHoldingsRepo } from '@/domain/fund-holdings';
+import { TickersRepo } from '@/domain/tickers';
 import { PriceCache } from '@/market/price-cache';
 import { YahooClient } from '@/market/yahoo-client';
 import { deriveLast12Months } from '@/market/snapshot-derivation';
+import { syncStaleFunds } from '@/market/fund-holdings-sync';
 
 export async function initDatabase(): Promise<void> {
   const adapter = await TauriAdapter.load('sqlite:finance.db');
@@ -27,6 +30,24 @@ export async function initDatabase(): Promise<void> {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('[init] background snapshot derivation failed:', err);
+    }
+  })();
+
+  // Refresh stale fund-of-funds holdings so the Concentration look-through
+  // sees up-to-date weights. Independent of snapshot derivation — kept in
+  // its own IIFE so a Yahoo failure in either branch doesn't block the
+  // other, and a partial-fail still leaves the UI responsive.
+  void (async () => {
+    try {
+      await syncStaleFunds({
+        yahoo: new YahooClient(),
+        fundHoldings: new FundHoldingsRepo(adapter),
+        tickers: new TickersRepo(adapter),
+        holdings: new HoldingsRepo(adapter),
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[init] background fund-holdings sync failed:', err);
     }
   })();
 }

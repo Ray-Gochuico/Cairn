@@ -6,13 +6,19 @@ import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useContributionsStore } from '@/stores/contributions-store';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useHouseholdStore } from '@/stores/household-store';
+import { useTickersStore } from '@/stores/tickers-store';
+import { useFundHoldingsStore } from '@/stores/fund-holdings-store';
 import { getDatabase } from '@/db/db';
 import { AccountType, AssetClass } from '@/types/enums';
 import { monthsBetween } from '@/lib/business-days';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import DonutChartCard from '@/components/charts/DonutChartCard';
 import BarChartCard from '@/components/charts/BarChartCard';
-import type { Account, Dependent, Holding, AccountSnapshot, Household } from '@/types/schema';
+import { useConcentration } from '@/lib/use-concentration';
+import { valueHoldings, type HoldingValuation } from '@/lib/holdings-value';
+import type { Dependent, AccountSnapshot, Household } from '@/types/schema';
+import type { ConcentrationWarning } from '@/lib/concentration';
+import { AlertTriangleIcon } from 'lucide-react';
 
 /**
  * Investments page — Phase 2 visualization surface.
@@ -34,6 +40,28 @@ const currencyFormatter = new Intl.NumberFormat('en-US', {
 
 function formatCurrency(value: number): string {
   return currencyFormatter.format(value);
+}
+
+/**
+ * Educational copy for each warning type, surfaced as a tooltip on the
+ * Concentration Health section. Phase 3 keeps tooltips simple — a `title`
+ * attribute renders a native browser tooltip; no popover library required.
+ */
+const CONCENTRATION_TOOLTIP: Record<ConcentrationWarning['type'], string> = {
+  PER_TICKER_HIGH: "A single ticker's outsized share concentrates idiosyncratic risk.",
+  PER_TICKER_SOFT: "Watch this ticker — it's getting concentrated.",
+  PER_ASSET_CLASS_HIGH: 'Heavy weight in one asset class amplifies its drawdowns.',
+  PER_ASSET_CLASS_SOFT: 'Asset-class exposure is approaching concentrated territory.',
+  LEVERAGE_HIGH: 'Effective leverage means small moves cause big P&L swings.',
+};
+
+function severityColor(severity: ConcentrationWarning['severity']): string {
+  switch (severity) {
+    case 'HIGH': return 'text-red-500';
+    case 'MEDIUM': return 'text-amber-500';
+    case 'LOW':
+    default: return 'text-blue-500';
+  }
 }
 
 const ASSET_CLASS_LABEL: Record<AssetClass, string> = {
@@ -76,60 +104,6 @@ async function loadTickerAssetClasses(tickers: string[]): Promise<Map<string, As
       result.set(row.ticker, cls);
     }
   }
-  return result;
-}
-
-interface HoldingValuation {
-  holding: Holding;
-  /** Approximated dollar value: account snapshot × holding's share-of-account by shareCount. */
-  value: number;
-  assetClass: AssetClass;
-  accountName: string;
-}
-
-/**
- * For each holding, compute an approximated dollar value: distribute the
- * latest snapshot.totalValue per account proportionally across that
- * account's holdings, weighted by share count. Accounts with no snapshot
- * contribute zero. Accounts with snapshots but no holdings are ignored
- * here (their value still shows up in the per-account summary list).
- */
-function valueHoldings(
-  accounts: Account[],
-  holdings: Holding[],
-  latestPerAccount: Map<number, number>,
-  assetClassByTicker: Map<string, AssetClass>,
-): HoldingValuation[] {
-  const accountNames = new Map<number, string>();
-  for (const a of accounts) {
-    if (a.id != null) accountNames.set(a.id, a.name);
-  }
-
-  const result: HoldingValuation[] = [];
-  // Group holdings by account.
-  const byAccount = new Map<number, Holding[]>();
-  for (const h of holdings) {
-    const list = byAccount.get(h.accountId) ?? [];
-    list.push(h);
-    byAccount.set(h.accountId, list);
-  }
-
-  for (const [accountId, accountHoldings] of byAccount.entries()) {
-    const snapshotValue = latestPerAccount.get(accountId) ?? 0;
-    const totalShares = accountHoldings.reduce((a, b) => a + b.shareCount, 0);
-    for (const h of accountHoldings) {
-      const value = totalShares === 0
-        ? 0
-        : (h.shareCount / totalShares) * snapshotValue;
-      result.push({
-        holding: h,
-        value,
-        assetClass: assetClassByTicker.get(h.ticker) ?? AssetClass.OTHER,
-        accountName: accountNames.get(accountId) ?? `Account #${accountId}`,
-      });
-    }
-  }
-
   return result;
 }
 
@@ -269,6 +243,10 @@ export default function Investments() {
   const loadDependents = useDependentsStore((s) => s.load);
   const household = useHouseholdStore((s) => s.household);
   const loadHousehold = useHouseholdStore((s) => s.load);
+  // Tickers + fund holdings power the Concentration Health section below.
+  // Loaded here so useConcentration() sees populated stores on first paint.
+  const loadTickers = useTickersStore((s) => s.load);
+  const loadFundHoldings = useFundHoldingsStore((s) => s.load);
 
   useEffect(() => {
     loadAccounts();
@@ -277,6 +255,8 @@ export default function Investments() {
     loadContributions();
     loadDependents();
     loadHousehold();
+    loadTickers();
+    loadFundHoldings();
   }, [
     loadAccounts,
     loadHoldings,
@@ -284,7 +264,11 @@ export default function Investments() {
     loadContributions,
     loadDependents,
     loadHousehold,
+    loadTickers,
+    loadFundHoldings,
   ]);
+
+  const concentration = useConcentration();
 
   const [assetClassByTicker, setAssetClassByTicker] = useState<Map<string, AssetClass>>(
     () => new Map(),
@@ -480,6 +464,67 @@ export default function Investments() {
           </CardContent>
         </Card>
       </div>
+
+      <Card data-testid="concentration-section">
+        <CardHeader>
+          <CardTitle>Concentration Health</CardTitle>
+          <CardDescription>
+            Effective exposure after fund look-through and leverage. Warnings
+            fire when a single ticker exceeds 25%, an asset class exceeds 60%,
+            or total leverage exceeds 1.5x.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {concentration.warnings.length === 0 ? (
+            <div className="text-sm text-muted-foreground">
+              No concentration issues detected.
+            </div>
+          ) : (
+            <ul className="space-y-3">
+              {concentration.warnings.map((w, i) => (
+                <li
+                  key={`${w.type}-${w.ticker ?? w.assetClass ?? i}`}
+                  className="flex items-start gap-3"
+                >
+                  <AlertTriangleIcon
+                    className={`h-5 w-5 shrink-0 mt-0.5 ${severityColor(w.severity)}`}
+                    aria-label={`${w.severity} severity`}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm">{w.message}</div>
+                    <details className="mt-1">
+                      <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
+                        Why this matters
+                      </summary>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {CONCENTRATION_TOOLTIP[w.type]}
+                      </p>
+                    </details>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {concentration.perTicker.filter((t) => t.pctOfPortfolio > 0).length > 0 && (
+            <div className="mt-6 border-t pt-4">
+              <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
+                Top 3 effective exposures
+              </div>
+              <ul className="space-y-1 text-sm">
+                {concentration.perTicker.slice(0, 3).map((t) => (
+                  <li key={t.ticker} className="flex justify-between gap-2 tabular-nums">
+                    <span className="font-mono">{t.ticker}</span>
+                    <span className="text-muted-foreground">
+                      {(t.pctOfPortfolio * 100).toFixed(1)}%
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <BarChartCard
         title="Contributions (last 12 months)"
