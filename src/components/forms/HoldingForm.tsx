@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -73,9 +74,23 @@ export default function HoldingForm({
   onValidateSubmit,
   allowMarginHint,
 }: HoldingFormProps) {
+  // Memoize on the primitive fields of `initial` so the `values` reference
+  // only changes when the underlying data actually changes — parent renders
+  // pass a fresh object literal each time, but RHF's `values` prop is
+  // reference-compared. Per the conventions doc (Form sync with store):
+  // `values` is the idiomatic way to keep RHF in lockstep with a store-
+  // backed source and makes `isDirty` track "current vs. persisted",
+  // which is what the Save button gates on.
+  const memoValues = useMemo<HoldingRowFormValues>(
+    () => toForm(initial),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [initial.accountId, initial.ticker, initial.shareCount, initial.targetAllocationPct, initial.costBasis],
+  );
+
   const form = useForm<HoldingRowFormValues>({
     resolver: zodResolver(HoldingRowFormSchema),
-    defaultValues: toForm(initial),
+    defaultValues: memoValues,
+    values: memoValues,
   });
 
   return (

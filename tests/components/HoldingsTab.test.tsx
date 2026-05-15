@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -227,6 +228,47 @@ describe('HoldingsTab', () => {
       // DB still stores 0..1 fraction; UI converts × 100 / ÷ 100.
       expect(bnd?.targetAllocationPct).toBeCloseTo(0.3, 6);
     });
+  });
+
+  it('enables Save when target % is changed on an existing row with non-null default', async () => {
+    const a = await seedAccount(db, 'Account A', { allowMargin: false });
+    await seedHolding(db, a, 'VTI', 100, 0.3);
+
+    const user = userEvent.setup();
+    // Wrap in StrictMode to match the production main.tsx render and surface
+    // React-19 double-render races inside HoldingForm's RHF initialization.
+    render(
+      <StrictMode>
+        <MemoryRouter><HoldingsTab /></MemoryRouter>
+      </StrictMode>
+    );
+
+    // Wait for the existing row + add row.
+    await waitFor(() => {
+      const tickers = screen.getAllByLabelText(/^ticker$/i) as HTMLInputElement[];
+      expect(tickers).toHaveLength(2);
+    });
+
+    // Target% inputs: first is the existing row's, second is the add row's.
+    const targetInputs = screen.getAllByLabelText(/^target allocation/i) as HTMLInputElement[];
+    expect(targetInputs).toHaveLength(2);
+    const existingTarget = targetInputs[0];
+    // Defaults render as whole-number percent (0.3 fraction → 30).
+    expect(existingTarget.value).toBe('30');
+
+    // Save button for the existing row should start disabled.
+    const saveButtons = screen.getAllByRole('button', { name: /^save$/i });
+    expect(saveButtons[0]).toBeDisabled();
+
+    // Edit the target%: clear and type 45 — Save should now be enabled.
+    await user.clear(existingTarget);
+    await user.type(existingTarget, '45');
+
+    // Confirm the value is what we expect after the edit.
+    expect(existingTarget.value).toBe('45');
+
+    const saveButtonsAfter = screen.getAllByRole('button', { name: /^save$/i });
+    expect(saveButtonsAfter[0]).not.toBeDisabled();
   });
 
   it('deletes a holding', async () => {
