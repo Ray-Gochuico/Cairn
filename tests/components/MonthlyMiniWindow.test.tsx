@@ -23,6 +23,8 @@ const loadInitialMigration = () =>
     resolve(__dirname, '../../src/db/migrations/0001_initial.sql'),
     'utf-8',
   );
+const loadAccountMarginMigration = () =>
+  readFileSync(resolve(__dirname, '../../src/db/migrations/0007_add_account_margin.sql'), 'utf-8');
 
 function resetStores() {
   useAccountsStore.setState({ accounts: [], isLoading: false, error: null });
@@ -39,6 +41,7 @@ describe('MonthlyMiniWindow', () => {
     db = new SqliteAdapter(':memory:');
     await runMigrations(db, [
       { version: '0001_initial', sql: loadInitialMigration() },
+      { version: '0007_add_account_margin', sql: loadAccountMarginMigration() },
     ]);
     setDatabase(db);
     resetStores();

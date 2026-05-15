@@ -14,6 +14,8 @@ const loadCommissionMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0003_add_commission_columns.sql'), 'utf-8');
 const loadEmploymentBonusMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0005_add_employment_and_bonus_columns.sql'), 'utf-8');
+const loadAccountMarginMigration = () =>
+  readFileSync(resolve(__dirname, '../../src/db/migrations/0007_add_account_margin.sql'), 'utf-8');
 
 describe('AccountsRepo', () => {
   let db: SqliteAdapter;
@@ -27,6 +29,7 @@ describe('AccountsRepo', () => {
       { version: '0001_initial', sql: loadInitialMigration() },
       { version: '0003_add_commission_columns', sql: loadCommissionMigration() },
       { version: '0005_add_employment_and_bonus_columns', sql: loadEmploymentBonusMigration() },
+      { version: '0007_add_account_margin', sql: loadAccountMarginMigration() },
     ]);
     repo = new AccountsRepo(db);
     personsRepo = new PersonsRepo(db);
@@ -251,5 +254,61 @@ describe('AccountsRepo', () => {
 
   it('listFor529Beneficiary returns empty array when no matches', async () => {
     expect(await repo.listFor529Beneficiary(99)).toEqual([]);
+  });
+
+  describe('AccountsRepo allowMargin round-trip', () => {
+    it('persists allowMargin: true and reads it back as true', async () => {
+      const id = await repo.create({
+        householdId: 1,
+        ownerPersonId: null,
+        beneficiaryDependentId: null,
+        name: 'Margin Account',
+        institution: null,
+        type: AccountType.ACCOUNT_BROKERAGE,
+        cryptoWalletAddress: null,
+        autoFetchEnabled: false,
+        excludedFromNetWorth: false,
+        allowMargin: true,
+        stateOfPlan: null,
+      });
+      const account = await repo.findById(id);
+      expect(account?.allowMargin).toBe(true);
+    });
+
+    it('defaults allowMargin to false when not specified at create time', async () => {
+      const id = await repo.create({
+        householdId: 1,
+        ownerPersonId: null,
+        beneficiaryDependentId: null,
+        name: 'Cash Account',
+        institution: null,
+        type: AccountType.ACCOUNT_CASH,
+        cryptoWalletAddress: null,
+        autoFetchEnabled: false,
+        excludedFromNetWorth: false,
+        stateOfPlan: null,
+      });
+      const account = await repo.findById(id);
+      expect(account?.allowMargin).toBe(false);
+    });
+
+    it('updates allowMargin from false to true via update()', async () => {
+      const id = await repo.create({
+        householdId: 1,
+        ownerPersonId: null,
+        beneficiaryDependentId: null,
+        name: 'Upgradeable Account',
+        institution: null,
+        type: AccountType.ACCOUNT_BROKERAGE,
+        cryptoWalletAddress: null,
+        autoFetchEnabled: false,
+        excludedFromNetWorth: false,
+        allowMargin: false,
+        stateOfPlan: null,
+      });
+      await repo.update(id, { allowMargin: true });
+      const account = await repo.findById(id);
+      expect(account?.allowMargin).toBe(true);
+    });
   });
 });

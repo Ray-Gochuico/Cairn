@@ -13,6 +13,7 @@ interface AccountRow {
   crypto_wallet_address: string | null;
   auto_fetch_enabled: number;
   excluded_from_net_worth: number;
+  allow_margin: number;
   state_of_plan: string | null;
 }
 
@@ -28,6 +29,7 @@ function rowToAccount(row: AccountRow): Account {
     cryptoWalletAddress: row.crypto_wallet_address,
     autoFetchEnabled: row.auto_fetch_enabled === 1,
     excludedFromNetWorth: row.excluded_from_net_worth === 1,
+    allowMargin: row.allow_margin === 1,
     stateOfPlan: row.state_of_plan,
   });
 }
@@ -57,8 +59,8 @@ export class AccountsRepo {
       `INSERT INTO accounts (
         household_id, owner_person_id, beneficiary_dependent_id,
         name, institution, type, crypto_wallet_address,
-        auto_fetch_enabled, excluded_from_net_worth, state_of_plan
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        auto_fetch_enabled, excluded_from_net_worth, allow_margin, state_of_plan
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         account.householdId,
         account.ownerPersonId ?? null,
@@ -69,6 +71,7 @@ export class AccountsRepo {
         account.cryptoWalletAddress ?? null,
         account.autoFetchEnabled ? 1 : 0,
         account.excludedFromNetWorth ? 1 : 0,
+        account.allowMargin ? 1 : 0,
         account.stateOfPlan ?? null,
       ]
     );
@@ -97,6 +100,7 @@ export class AccountsRepo {
         crypto_wallet_address = ?,
         auto_fetch_enabled = ?,
         excluded_from_net_worth = ?,
+        allow_margin = ?,
         state_of_plan = ?,
         updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
@@ -109,6 +113,7 @@ export class AccountsRepo {
         merged.cryptoWalletAddress ?? null,
         merged.autoFetchEnabled ? 1 : 0,
         merged.excludedFromNetWorth ? 1 : 0,
+        merged.allowMargin ? 1 : 0,
         merged.stateOfPlan ?? null,
         id,
       ]

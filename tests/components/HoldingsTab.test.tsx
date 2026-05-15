@@ -16,6 +16,8 @@ import { resolve } from 'node:path';
 
 const loadInitialMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
+const loadAccountMarginMigration = () =>
+  readFileSync(resolve(__dirname, '../../src/db/migrations/0007_add_account_margin.sql'), 'utf-8');
 
 async function seedAccount(db: SqliteAdapter, name: string): Promise<number> {
   const repo = new AccountsRepo(db);
@@ -54,7 +56,10 @@ describe('HoldingsTab', () => {
 
   beforeEach(async () => {
     db = new SqliteAdapter(':memory:');
-    await runMigrations(db, [{ version: '0001_initial', sql: loadInitialMigration() }]);
+    await runMigrations(db, [
+      { version: '0001_initial', sql: loadInitialMigration() },
+      { version: '0007_add_account_margin', sql: loadAccountMarginMigration() },
+    ]);
     setDatabase(db);
     useAccountsStore.setState({ accounts: [], isLoading: false, error: null });
     useHoldingsStore.setState({ holdings: [], isLoading: false, error: null });

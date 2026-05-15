@@ -9,6 +9,8 @@ import { resolve } from 'node:path';
 
 const loadInitialMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
+const loadAccountMarginMigration = () =>
+  readFileSync(resolve(__dirname, '../../src/db/migrations/0007_add_account_margin.sql'), 'utf-8');
 
 const makeAccount = async (accountsRepo: AccountsRepo, name = 'Brokerage'): Promise<number> => {
   return accountsRepo.create({
@@ -32,7 +34,10 @@ describe('AccountSnapshotsRepo', () => {
 
   beforeEach(async () => {
     db = new SqliteAdapter(':memory:');
-    await runMigrations(db, [{ version: '0001_initial', sql: loadInitialMigration() }]);
+    await runMigrations(db, [
+      { version: '0001_initial', sql: loadInitialMigration() },
+      { version: '0007_add_account_margin', sql: loadAccountMarginMigration() },
+    ]);
     repo = new AccountSnapshotsRepo(db);
     accountsRepo = new AccountsRepo(db);
   });
