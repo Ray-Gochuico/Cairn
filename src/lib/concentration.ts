@@ -105,3 +105,21 @@ export function computeConcentration(input: ConcentrationInput): ConcentrationRe
 
   return { perTicker, perAssetClass, totalLeverage, warnings };
 }
+
+/**
+ * Collapse the tail of a sorted-descending perTicker list into a single
+ * "Misc" bucket so a donut chart can render at most N + 1 wedges.
+ * Assumes input is already sorted by pctOfPortfolio desc (which is the
+ * shape `computeConcentration().perTicker` returns).
+ */
+export function topNWithMisc(
+  perTicker: Array<{ ticker: string; effectiveExposure: number; pctOfPortfolio: number }>,
+  n: number,
+): Array<{ ticker: string; effectiveExposure: number; pctOfPortfolio: number }> {
+  if (perTicker.length <= n) return perTicker;
+  const head = perTicker.slice(0, n);
+  const tail = perTicker.slice(n);
+  const miscExposure = tail.reduce((a, b) => a + b.effectiveExposure, 0);
+  const miscPct = tail.reduce((a, b) => a + b.pctOfPortfolio, 0);
+  return [...head, { ticker: 'Misc', effectiveExposure: miscExposure, pctOfPortfolio: miscPct }];
+}

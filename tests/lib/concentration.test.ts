@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeConcentration } from '@/lib/concentration';
+import { computeConcentration, topNWithMisc } from '@/lib/concentration';
 
 describe('computeConcentration', () => {
   it('single stock contributes 100% to its own exposure', () => {
@@ -132,5 +132,42 @@ describe('computeConcentration', () => {
     expect(acSoft).toBeDefined();
     expect(acSoft!.exposurePct).toBeGreaterThan(0.50);
     expect(acSoft!.exposurePct).toBeLessThanOrEqual(0.60);
+  });
+});
+
+describe('topNWithMisc', () => {
+  it('returns original list when length ≤ n', () => {
+    const result = topNWithMisc(
+      [
+        { ticker: 'AAPL', effectiveExposure: 1000, pctOfPortfolio: 0.5 },
+        { ticker: 'MSFT', effectiveExposure: 1000, pctOfPortfolio: 0.5 },
+      ],
+      10,
+    );
+    expect(result).toHaveLength(2);
+    expect(result.find((r) => r.ticker === 'Misc')).toBeUndefined();
+  });
+
+  it('aggregates the tail into a Misc bucket when length > n', () => {
+    const items = Array.from({ length: 15 }, (_, i) => ({
+      ticker: `T${i}`, effectiveExposure: 100, pctOfPortfolio: 0.066,
+    }));
+    const result = topNWithMisc(items, 10);
+    expect(result).toHaveLength(11);
+    expect(result[10].ticker).toBe('Misc');
+    expect(result[10].effectiveExposure).toBeCloseTo(500, 4);
+    expect(result[10].pctOfPortfolio).toBeCloseTo(0.066 * 5, 4);
+  });
+
+  it('preserves the top-N order from the input list', () => {
+    const items = [
+      { ticker: 'A', effectiveExposure: 50, pctOfPortfolio: 0.5 },
+      { ticker: 'B', effectiveExposure: 30, pctOfPortfolio: 0.3 },
+      { ticker: 'C', effectiveExposure: 15, pctOfPortfolio: 0.15 },
+      { ticker: 'D', effectiveExposure: 5, pctOfPortfolio: 0.05 },
+    ];
+    const result = topNWithMisc(items, 2);
+    expect(result.map((r) => r.ticker)).toEqual(['A', 'B', 'Misc']);
+    expect(result[2].effectiveExposure).toBeCloseTo(20, 4);
   });
 });
