@@ -9,6 +9,9 @@ import { resolve } from 'node:path';
 const loadInitialMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
 
+const loadSeedTickersMigration = () =>
+  readFileSync(resolve(__dirname, '../../src/db/migrations/0006_seed_tickers.sql'), 'utf-8');
+
 const sampleTicker = (): Ticker => ({
   ticker: 'VTI',
   name: 'Vanguard Total Stock Market ETF',
@@ -126,5 +129,89 @@ describe('TickersRepo', () => {
     await repo.upsert({ ...sampleTicker(), name: null });
     const found = await repo.lookup('VTI');
     expect(found?.name).toBeNull();
+  });
+});
+
+describe('TickersRepo with seed migration', () => {
+  let db: SqliteAdapter;
+  let repo: TickersRepo;
+
+  beforeEach(async () => {
+    db = new SqliteAdapter(':memory:');
+    await runMigrations(db, [
+      { version: '0001_initial', sql: loadInitialMigration() },
+      { version: '0006_seed_tickers', sql: loadSeedTickersMigration() },
+    ]);
+    repo = new TickersRepo(db);
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  it('seeds VTI as US_TOTAL_MARKET', async () => {
+    const t = await repo.lookup('VTI');
+    expect(t).not.toBeNull();
+    expect(t!.assetClass).toBe('US_TOTAL_MARKET');
+    expect(t!.leverageFactor).toBe(1.0);
+  });
+
+  it('seeds TQQQ as US_LARGE_CAP with leverage 3x', async () => {
+    const t = await repo.lookup('TQQQ');
+    expect(t!.leverageFactor).toBe(3.0);
+    expect(t!.direction).toBe('LONG');
+  });
+
+  it('seeds BTC-USD as CRYPTO', async () => {
+    const t = await repo.lookup('BTC-USD');
+    expect(t!.assetClass).toBe('CRYPTO');
+  });
+
+  it('seeds SPY as US_LARGE_CAP with userAdded false', async () => {
+    const t = await repo.lookup('SPY');
+    expect(t).not.toBeNull();
+    expect(t!.assetClass).toBe('US_LARGE_CAP');
+    expect(t!.userAdded).toBe(false);
+  });
+
+  it('seeds BND as US_BONDS with userAdded false', async () => {
+    const t = await repo.lookup('BND');
+    expect(t).not.toBeNull();
+    expect(t!.assetClass).toBe('US_BONDS');
+    expect(t!.userAdded).toBe(false);
+  });
+
+  it('seeds AAPL as SINGLE_STOCK with userAdded false', async () => {
+    const t = await repo.lookup('AAPL');
+    expect(t).not.toBeNull();
+    expect(t!.assetClass).toBe('SINGLE_STOCK');
+    expect(t!.leverageFactor).toBe(1.0);
+    expect(t!.userAdded).toBe(false);
+  });
+
+  it('seeds SQQQ as SHORT direction', async () => {
+    const t = await repo.lookup('SQQQ');
+    expect(t).not.toBeNull();
+    expect(t!.direction).toBe('SHORT');
+  });
+
+  it('seeds GLD as COMMODITIES', async () => {
+    const t = await repo.lookup('GLD');
+    expect(t).not.toBeNull();
+    expect(t!.assetClass).toBe('COMMODITIES');
+  });
+
+  it('list() returns at least 150 rows from seed', async () => {
+    const all = await repo.list();
+    expect(all.length).toBeGreaterThanOrEqual(150);
+  });
+
+  it('seed is idempotent (running migration twice does not throw)', async () => {
+    const sql = loadSeedTickersMigration();
+    await expect(
+      runMigrations(db, [{ version: '0006_seed_tickers_dup', sql }])
+    ).resolves.not.toThrow();
+    const all = await repo.list();
+    expect(all.length).toBeGreaterThanOrEqual(150);
   });
 });

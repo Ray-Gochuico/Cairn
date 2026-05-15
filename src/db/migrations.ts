@@ -52,11 +52,13 @@ export async function loadAllMigrations(): Promise<Migration[]> {
   const m0003 = (await import('./migrations/0003_add_commission_columns.sql?raw')).default;
   const m0004 = (await import('./migrations/0004_seed_yonkers.sql?raw')).default;
   const m0005 = (await import('./migrations/0005_add_employment_and_bonus_columns.sql?raw')).default;
+  const m0006 = (await import('./migrations/0006_seed_tickers.sql?raw')).default;
   return [
     { version: '0001_initial', sql: m0001 },
     { version: '0002_seed_tax_rules', sql: m0002 },
     { version: '0003_add_commission_columns', sql: m0003 },
     { version: '0004_seed_yonkers', sql: m0004 },
     { version: '0005_add_employment_and_bonus_columns', sql: m0005 },
+    { version: '0006_seed_tickers', sql: m0006 },
   ];
 }
