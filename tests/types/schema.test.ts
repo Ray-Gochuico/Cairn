@@ -15,6 +15,9 @@ import {
   TaxRuleSchema,
   GoalSchema,
   EquityGrantSchema,
+  TickerSchema,
+  AssetClass,
+  Direction,
 } from '@/types/schema';
 import {
   FilingStatus,
@@ -663,5 +666,58 @@ describe('EquityGrantSchema', () => {
         vestingSchedule: [{ date: '01/15/2024', cumulativePct: 1.0 }],
       })
     ).toThrow();
+  });
+});
+
+describe('TickerSchema', () => {
+  const valid = {
+    ticker: 'VTI',
+    name: 'Vanguard Total Stock Market ETF',
+    assetClass: AssetClass.US_TOTAL_MARKET,
+    leverageFactor: 1,
+    direction: Direction.LONG,
+    userAdded: false,
+  };
+
+  it('accepts a valid ticker', () => {
+    expect(() => TickerSchema.parse(valid)).not.toThrow();
+  });
+
+  it('rejects invalid assetClass', () => {
+    expect(() => TickerSchema.parse({ ...valid, assetClass: 'NOT_A_CLASS' })).toThrow();
+  });
+
+  it('rejects negative leverageFactor', () => {
+    expect(() => TickerSchema.parse({ ...valid, leverageFactor: -0.1 })).toThrow();
+  });
+
+  it('defaults direction to LONG when omitted', () => {
+    const { direction: _omit, ...withoutDirection } = valid;
+    const result = TickerSchema.parse(withoutDirection);
+    expect(result.direction).toBe('LONG');
+  });
+
+  it('defaults leverageFactor to 1.0 when omitted', () => {
+    const { leverageFactor: _omit, ...withoutLeverage } = valid;
+    const result = TickerSchema.parse(withoutLeverage);
+    expect(result.leverageFactor).toBe(1.0);
+  });
+
+  it('defaults userAdded to false when omitted', () => {
+    const { userAdded: _omit, ...withoutUserAdded } = valid;
+    const result = TickerSchema.parse(withoutUserAdded);
+    expect(result.userAdded).toBe(false);
+  });
+
+  it('rejects empty ticker string', () => {
+    expect(() => TickerSchema.parse({ ...valid, ticker: '' })).toThrow();
+  });
+
+  it('rejects ticker longer than 20 characters', () => {
+    expect(() => TickerSchema.parse({ ...valid, ticker: 'A'.repeat(21) })).toThrow();
+  });
+
+  it('accepts null name', () => {
+    expect(() => TickerSchema.parse({ ...valid, name: null })).not.toThrow();
   });
 });

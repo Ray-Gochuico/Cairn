@@ -247,3 +247,35 @@ export const EquityGrantSchema = z.object({
   currentFmv: z.number().nonnegative(),
 });
 export type EquityGrant = z.infer<typeof EquityGrantSchema>;
+
+export const AssetClass = {
+  US_TOTAL_MARKET: 'US_TOTAL_MARKET',
+  US_LARGE_CAP: 'US_LARGE_CAP',
+  US_MID_CAP: 'US_MID_CAP',
+  US_SMALL_CAP: 'US_SMALL_CAP',
+  INTL_DEVELOPED: 'INTL_DEVELOPED',
+  EMERGING_MARKETS: 'EMERGING_MARKETS',
+  US_BONDS: 'US_BONDS',
+  INTL_BONDS: 'INTL_BONDS',
+  TIPS: 'TIPS',
+  REAL_ESTATE: 'REAL_ESTATE',
+  COMMODITIES: 'COMMODITIES',
+  CRYPTO: 'CRYPTO',
+  SINGLE_STOCK: 'SINGLE_STOCK',
+  CASH: 'CASH',
+  OTHER: 'OTHER',
+} as const;
+export type AssetClass = typeof AssetClass[keyof typeof AssetClass];
+
+export const Direction = { LONG: 'LONG', SHORT: 'SHORT' } as const;
+export type Direction = typeof Direction[keyof typeof Direction];
+
+export const TickerSchema = z.object({
+  ticker: z.string().min(1).max(20),
+  name: z.string().max(200).nullable(),
+  assetClass: z.nativeEnum(AssetClass),
+  leverageFactor: z.number().nonnegative().default(1.0),
+  direction: z.nativeEnum(Direction).default('LONG'),
+  userAdded: z.boolean().default(false),
+});
+export type Ticker = z.infer<typeof TickerSchema>;
