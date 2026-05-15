@@ -279,3 +279,11 @@ export const TickerSchema = z.object({
   userAdded: z.boolean().default(false),
 });
 export type Ticker = z.infer<typeof TickerSchema>;
+
+export const FundHoldingSchema = z.object({
+  fundTicker: z.string().min(1).max(20),
+  holdingTicker: z.string().min(1).max(20),
+  weight: z.number().min(0).max(1),
+  asOfDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+export type FundHolding = z.infer<typeof FundHoldingSchema>;

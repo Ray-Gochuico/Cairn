@@ -16,6 +16,7 @@ import {
   GoalSchema,
   EquityGrantSchema,
   TickerSchema,
+  FundHoldingSchema,
   AssetClass,
   Direction,
 } from '@/types/schema';
@@ -719,5 +720,30 @@ describe('TickerSchema', () => {
 
   it('accepts null name', () => {
     expect(() => TickerSchema.parse({ ...valid, name: null })).not.toThrow();
+  });
+});
+
+describe('FundHoldingSchema', () => {
+  const valid = {
+    fundTicker: 'VTI',
+    holdingTicker: 'AAPL',
+    weight: 0.05,
+    asOfDate: '2025-01-15',
+  };
+
+  it('accepts a valid fund holding row', () => {
+    expect(() => FundHoldingSchema.parse(valid)).not.toThrow();
+  });
+
+  it('rejects weight greater than 1', () => {
+    expect(() => FundHoldingSchema.parse({ ...valid, weight: 1.01 })).toThrow();
+  });
+
+  it('rejects weight less than 0', () => {
+    expect(() => FundHoldingSchema.parse({ ...valid, weight: -0.01 })).toThrow();
+  });
+
+  it('rejects bad date format (not YYYY-MM-DD)', () => {
+    expect(() => FundHoldingSchema.parse({ ...valid, asOfDate: '01/15/2025' })).toThrow();
   });
 });
