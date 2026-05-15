@@ -1,8 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
+import { useTickersStore } from '@/stores/tickers-store';
 import { Card, CardContent } from '@/components/ui/card';
 import HoldingForm, { type HoldingFormValues } from '@/components/forms/HoldingForm';
+import { enrichTickerIfMissing } from '@/market/ticker-enrichment';
+import { YahooClient } from '@/market/yahoo-client';
+import { TickersRepo } from '@/domain/tickers';
+import { getDatabase } from '@/db/db';
 
 /**
  * HoldingsTab — pick an account, see its holdings.
@@ -16,6 +21,7 @@ import HoldingForm, { type HoldingFormValues } from '@/components/forms/HoldingF
 export default function HoldingsTab() {
   const { accounts, load: loadAccounts } = useAccountsStore();
   const { holdings, load: loadHoldings, create, update, remove } = useHoldingsStore();
+  const loadTickers = useTickersStore((s) => s.load);
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -142,6 +148,17 @@ export default function HoldingsTab() {
                   initial={newRowInitial}
                   onSave={async (next) => {
                     await create({ ...next, accountId: selectedAccountId ?? accounts[0].id! });
+                    void (async () => {
+                      try {
+                        await enrichTickerIfMissing(next.ticker, {
+                          yahoo: new YahooClient(),
+                          tickers: new TickersRepo(getDatabase()),
+                        });
+                        await loadTickers();
+                      } catch {
+                        // best-effort
+                      }
+                    })();
                   }}
                   saveLabel="Add"
                 />
