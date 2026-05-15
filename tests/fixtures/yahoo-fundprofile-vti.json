@@ -1,0 +1,9 @@
+{
+  "quoteSummary": {
+    "result": [{
+      "fundProfile": { "categoryName": "Large Blend" },
+      "price": { "quoteType": "ETF" }
+    }],
+    "error": null
+  }
+}

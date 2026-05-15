@@ -102,13 +102,58 @@ export class YahooClient {
   }
 
   /**
-   * Placeholder — fund top-10 holdings come from Yahoo's `quoteSummary`
-   * endpoint with `modules=topHoldings`. Phase 3 will wire it; Phase 2
-   * only needs price data, so we keep the method to preserve the
-   * existing `YahooClient` interface but return an empty list.
+   * Calls Yahoo's `/v10/finance/quoteSummary/<TICKER>?modules=<m1>,<m2>,...`
+   * endpoint and returns the raw parsed JSON.
+   *
+   * The return type is `unknown` because each module block has a different
+   * shape (topHoldings, fundProfile, price, etc.). Callers that need
+   * structured access should use the typed wrappers below (`fundTopHoldings`,
+   * `fundProfile`) rather than casting this directly.
    */
-  async topHoldings(_ticker: string): Promise<Array<{ holdingTicker: string; weight: number }>> {
-    return [];
+  async quoteSummary(ticker: string, modules: string[]): Promise<unknown> {
+    const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(ticker)}?modules=${modules.join(',')}`;
+    const res = await fetch(url, { method: 'GET' });
+    if (!res.ok) throw new Error(`Yahoo quoteSummary ${ticker} failed: ${res.status}`);
+    return res.json();
+  }
+
+  /**
+   * Returns the top holdings for a fund/ETF ticker, sourced from Yahoo's
+   * `quoteSummary` endpoint with `modules=topHoldings`.
+   *
+   * Supersedes the Phase 2 `topHoldings(_ticker)` placeholder (which returned
+   * an empty list). Callers in `PriceCache` and snapshot derivation do not use
+   * holdings data, so the old method was safe to remove outright.
+   */
+  async fundTopHoldings(ticker: string): Promise<{ holdings: { symbol: string; weight: number }[]; asOf: string }> {
+    const data = await this.quoteSummary(ticker, ['topHoldings']);
+    // Using `as any` here because the quoteSummary response is a heterogeneous
+    // JSON blob whose shape depends on the requested modules. A full typed
+    // interface would be large and fragile against Yahoo API drift; the
+    // narrowed typed wrappers (this method and fundProfile) enforce shape at
+    // the return boundary instead.
+    const result = (data as any).quoteSummary?.result?.[0]?.topHoldings;
+    if (!result?.holdings) return { holdings: [], asOf: new Date().toISOString().slice(0, 10) };
+    return {
+      holdings: result.holdings.map((h: any) => ({
+        symbol: h.symbol,
+        weight: h.holdingPercent?.raw ?? 0,
+      })).filter((h: any) => h.symbol),
+      asOf: new Date().toISOString().slice(0, 10),
+    };
+  }
+
+  /**
+   * Returns the Morningstar category and instrument type for `ticker`,
+   * sourced from Yahoo's `quoteSummary` endpoint with `modules=fundProfile,price`.
+   */
+  async fundProfile(ticker: string): Promise<{ category: string | null; quoteType: string | null }> {
+    const data = await this.quoteSummary(ticker, ['fundProfile', 'price']);
+    // Same `as any` rationale as fundTopHoldings — quoteSummary returns an
+    // open-ended JSON blob; the typed boundary is this method's return type.
+    const profile = (data as any).quoteSummary?.result?.[0]?.fundProfile;
+    const price = (data as any).quoteSummary?.result?.[0]?.price;
+    return { category: profile?.categoryName ?? null, quoteType: price?.quoteType ?? null };
   }
 
   private async fetchChart(url: string, ticker: string): Promise<ChartResponse> {

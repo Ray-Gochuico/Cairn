@@ -25,7 +25,6 @@ describe('PriceCache', () => {
     mockYahoo = {
       quote: quoteFn,
       historical: historicalFn,
-      topHoldings: vi.fn(),
     } as unknown as YahooClient;
   });
 

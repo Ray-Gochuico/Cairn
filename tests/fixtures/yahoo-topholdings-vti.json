@@ -1,0 +1,13 @@
+{
+  "quoteSummary": {
+    "result": [{
+      "topHoldings": {
+        "holdings": [
+          { "symbol": "AAPL", "holdingPercent": { "raw": 0.0762 } },
+          { "symbol": "MSFT", "holdingPercent": { "raw": 0.0651 } }
+        ]
+      }
+    }],
+    "error": null
+  }
+}
