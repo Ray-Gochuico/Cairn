@@ -100,7 +100,14 @@ export default function AccountsTab() {
             <Card key={a.id}>
               <CardContent className="flex items-center justify-between py-3">
                 <div>
-                  <div className="font-medium">{a.name}</div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{a.name}</span>
+                    {a.allowMargin && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                        Margin
+                      </span>
+                    )}
+                  </div>
                   <div className="text-xs text-muted-foreground">
                     {ACCOUNT_TYPE_LABELS[a.type]}
                     {a.institution ? ` · ${a.institution}` : ''}

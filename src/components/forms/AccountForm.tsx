@@ -224,6 +224,16 @@ export default function AccountForm({
               <input type="checkbox" {...form.register('excludedFromNetWorth')} />
               Exclude from net worth
             </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={form.watch('allowMargin')}
+                onChange={(e) =>
+                  form.setValue('allowMargin', e.target.checked, { shouldDirty: true, shouldTouch: true })
+                }
+              />
+              Allow target allocations &gt;100% (margin account)
+            </label>
           </div>
         </CardContent>
       </Card>
