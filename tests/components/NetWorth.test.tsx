@@ -8,6 +8,8 @@ import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
 import { useLoansStore } from '@/stores/loans-store';
+import { useAccountsStore } from '@/stores/accounts-store';
+import { usePersonsStore } from '@/stores/persons-store';
 import { AccountsRepo } from '@/domain/accounts';
 import { AccountSnapshotsRepo } from '@/domain/snapshots';
 import { PropertiesRepo } from '@/domain/properties';
@@ -19,9 +21,33 @@ import {
   PropertyType,
   SnapshotSource,
 } from '@/types/enums';
+import type { Person } from '@/types/schema';
 import NetWorth from '@/pages/NetWorth';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+
+const basePerson: Person = {
+  id: 1,
+  householdId: 1,
+  name: 'Alice',
+  dateOfBirth: '1990-01-01',
+  targetRetirementAge: 65,
+  annualSalaryPretax: 100000,
+  expectedBonus: 0,
+  expectedBonusFrequency: 'ANNUAL',
+  bonusIsConsistent: true,
+  expectedCommission: 0,
+  expectedCommissionFrequency: 'MONTHLY',
+  employmentType: 'SALARY_NO_OT',
+  hourlyRate: null,
+  regularHoursPerWeek: 40,
+  otThresholdHoursPerWeek: null,
+  pretax401kPct: 0,
+  healthInsuranceMonthlyPremium: 0,
+  dependentCareFsaMonthly: 0,
+  hsaMonthlyContribution: 0,
+  hsaEligible: false,
+};
 
 const loadInitialMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
@@ -31,13 +57,19 @@ function resetStores() {
   usePropertiesStore.setState({ properties: [], isLoading: false, error: null });
   useVehiclesStore.setState({ vehicles: [], isLoading: false, error: null });
   useLoansStore.setState({ loans: [], isLoading: false, error: null });
+  useAccountsStore.setState({ accounts: [], isLoading: false, error: null });
+  usePersonsStore.setState({ persons: [], isLoading: false, error: null });
 }
 
-async function seedAccount(db: SqliteAdapter, name: string): Promise<number> {
+async function seedAccount(
+  db: SqliteAdapter,
+  name: string,
+  ownerPersonId: number | null = null,
+): Promise<number> {
   const repo = new AccountsRepo(db);
   return repo.create({
     householdId: 1,
-    ownerPersonId: null,
+    ownerPersonId,
     beneficiaryDependentId: null,
     name,
     institution: null,
@@ -101,11 +133,12 @@ async function seedLoan(
   db: SqliteAdapter,
   type: LoanType,
   currentBalance: number,
+  obligorPersonId: number | null = null,
 ): Promise<void> {
   const repo = new LoansRepo(db);
   await repo.create({
     householdId: 1,
-    obligorPersonId: null,
+    obligorPersonId,
     name: `${type} loan`,
     type,
     originalAmount: currentBalance + 50000,
@@ -194,5 +227,56 @@ describe('NetWorth page', () => {
 
     // Liabilities card present.
     expect(screen.getByText(/Liabilities by type/i)).toBeInTheDocument();
+  });
+
+  it('view filter ?view=p1 scopes the current net worth to p1-owned items only', async () => {
+    // The 0001 migration already seeds household(id=1); we just need persons
+    // so the accounts.owner_person_id FK resolves. Inserted via raw SQL
+    // because the 0001 migration has a narrower persons schema than
+    // PersonsRepo.create expects (the commission/employment columns land in
+    // later migrations not loaded by this test).
+    await db.execute(
+      `INSERT INTO persons (id, household_id, name, date_of_birth, target_retirement_age) VALUES (1, 1, 'Alice', '1990-01-01', 65)`,
+    );
+    await db.execute(
+      `INSERT INTO persons (id, household_id, name, date_of_birth, target_retirement_age) VALUES (2, 1, 'Bob', '1990-01-01', 65)`,
+    );
+
+    // Mirror the DB state in the persons-store so useViewFilter sees a
+    // two-person household. (The page doesn't call loadPersons itself, so we
+    // can't rely on the store to be in sync with the DB without doing this.)
+    usePersonsStore.setState({
+      persons: [
+        { ...basePerson, id: 1, name: 'Alice' },
+        { ...basePerson, id: 2, name: 'Bob' },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    });
+
+    // p1 owns a brokerage with $50k. p2 owns a brokerage with $200k.
+    const p1Account = await seedAccount(db, "Alice's Brokerage", 1);
+    const p2Account = await seedAccount(db, "Bob's Brokerage", 2);
+    await seedSnapshot(db, p1Account, '2024-06-28', 50_000);
+    await seedSnapshot(db, p2Account, '2024-06-28', 200_000);
+
+    render(
+      <MemoryRouter initialEntries={['/net-worth?view=p1']}>
+        <NetWorth />
+      </MemoryRouter>,
+    );
+
+    // Net worth should show only p1's $50k, NOT the household total of $250k.
+    await waitFor(() => {
+      expect(screen.getByText(/Current Net Worth/i)).toBeInTheDocument();
+    });
+    // $50,000 appears at least twice — in the "Current Net Worth" tile and in
+    // the breakdown "Investments" row — so use findAllByText to allow both.
+    const hits = await screen.findAllByText('$50,000');
+    expect(hits.length).toBeGreaterThanOrEqual(1);
+    // The full household totals should NOT appear since the filter is on p1.
+    expect(screen.queryByText('$250,000')).not.toBeInTheDocument();
+    expect(screen.queryByText('$200,000')).not.toBeInTheDocument();
   });
 });

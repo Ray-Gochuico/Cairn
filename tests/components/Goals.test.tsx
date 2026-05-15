@@ -6,6 +6,7 @@ import { useAccountsStore } from '@/stores/accounts-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useContributionsStore } from '@/stores/contributions-store';
 import { useHouseholdStore } from '@/stores/household-store';
+import { usePersonsStore } from '@/stores/persons-store';
 import {
   AccountType,
   ContributionSource,
@@ -13,8 +14,31 @@ import {
   GoalType,
   SnapshotSource,
 } from '@/types/enums';
-import type { Account, Contribution, Goal, GrowthScenario } from '@/types/schema';
+import type { Account, Contribution, Goal, GrowthScenario, Person } from '@/types/schema';
 import Goals from '@/pages/Goals';
+
+const basePerson: Person = {
+  id: 1,
+  householdId: 1,
+  name: 'Alice',
+  dateOfBirth: '1990-01-01',
+  targetRetirementAge: 65,
+  annualSalaryPretax: 100000,
+  expectedBonus: 0,
+  expectedBonusFrequency: 'ANNUAL',
+  bonusIsConsistent: true,
+  expectedCommission: 0,
+  expectedCommissionFrequency: 'MONTHLY',
+  employmentType: 'SALARY_NO_OT',
+  hourlyRate: null,
+  regularHoursPerWeek: 40,
+  otThresholdHoursPerWeek: null,
+  pretax401kPct: 0,
+  healthInsuranceMonthlyPremium: 0,
+  dependentCareFsaMonthly: 0,
+  hsaMonthlyContribution: 0,
+  hsaEligible: false,
+};
 
 const fourScenarios: GrowthScenario[] = [
   { label: 'Conservative', rate: 0.05 },
@@ -29,6 +53,7 @@ function resetStores() {
   useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null });
   useContributionsStore.setState({ contributions: [], isLoading: false, error: null });
   useHouseholdStore.setState({ household: null, isLoading: false, error: null });
+  usePersonsStore.setState({ persons: [], isLoading: false, error: null });
 }
 
 interface PrimeOpts {
@@ -381,5 +406,39 @@ describe('Goals page', () => {
     const card2 = screen.getByText('Sensitive Goal').closest('[class*="rounded-xl"]');
     expect(card2).not.toBeNull();
     expect(within(card2 as HTMLElement).getByText(/on track/i)).toBeInTheDocument();
+  });
+
+  it('view filter ?view=p1 hides p2 goals and keeps p1 goals visible', () => {
+    // Seed two persons so useViewFilter recognises a two-person household.
+    usePersonsStore.setState({
+      persons: [
+        { ...basePerson, id: 1, name: 'Alice' },
+        { ...basePerson, id: 2, name: 'Bob' },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    });
+
+    primeStores({
+      goals: [
+        { name: "Alice's goal", forPersonId: 1 },
+        { name: "Bob's goal", forPersonId: 2 },
+        { name: 'Joint goal', forPersonId: null },
+      ],
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/goals?view=p1']}>
+        <Goals />
+      </MemoryRouter>,
+    );
+
+    // p1's goal is visible
+    expect(screen.getByText("Alice's goal")).toBeInTheDocument();
+    // p2's goal is filtered out
+    expect(screen.queryByText("Bob's goal")).not.toBeInTheDocument();
+    // The joint goal is filtered out too (only ?view=joint or household shows it)
+    expect(screen.queryByText('Joint goal')).not.toBeInTheDocument();
   });
 });

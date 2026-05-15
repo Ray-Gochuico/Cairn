@@ -7,6 +7,7 @@ import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useContributionsStore } from '@/stores/contributions-store';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useHouseholdStore } from '@/stores/household-store';
+import { usePersonsStore } from '@/stores/persons-store';
 import {
   AccountType,
   ContributionSource,
@@ -14,8 +15,31 @@ import {
   FilingStatus,
   SnapshotSource,
 } from '@/types/enums';
-import type { Account, Contribution, Dependent, GrowthScenario } from '@/types/schema';
+import type { Account, Contribution, Dependent, GrowthScenario, Person } from '@/types/schema';
 import Investments from '@/pages/Investments';
+
+const basePerson: Person = {
+  id: 1,
+  householdId: 1,
+  name: 'Alice',
+  dateOfBirth: '1990-01-01',
+  targetRetirementAge: 65,
+  annualSalaryPretax: 100000,
+  expectedBonus: 0,
+  expectedBonusFrequency: 'ANNUAL',
+  bonusIsConsistent: true,
+  expectedCommission: 0,
+  expectedCommissionFrequency: 'MONTHLY',
+  employmentType: 'SALARY_NO_OT',
+  hourlyRate: null,
+  regularHoursPerWeek: 40,
+  otThresholdHoursPerWeek: null,
+  pretax401kPct: 0,
+  healthInsuranceMonthlyPremium: 0,
+  dependentCareFsaMonthly: 0,
+  hsaMonthlyContribution: 0,
+  hsaEligible: false,
+};
 
 // The page reads asset_class for each ticker via getDatabase().select(...).
 // We don't have a SQLite singleton here and we don't care about the tickers
@@ -42,6 +66,7 @@ function resetStores() {
   useContributionsStore.setState({ contributions: [], isLoading: false, error: null });
   useDependentsStore.setState({ dependents: [], isLoading: false, error: null });
   useHouseholdStore.setState({ household: null, isLoading: false, error: null });
+  usePersonsStore.setState({ persons: [], isLoading: false, error: null });
 }
 
 interface PrimeOpts {
@@ -309,5 +334,50 @@ describe('Investments page — 529 section', () => {
     expect(within(section).getAllByText(/^at 18$/)).toHaveLength(1);
     // Subtitle should mention the Moderate scenario rate (default 6.0%).
     expect(within(section).getByText(/6\.0%/)).toBeInTheDocument();
+  });
+
+  it('view filter ?view=p1 hides accounts owned by p2', () => {
+    // Seed two persons so useViewFilter recognises a two-person household.
+    usePersonsStore.setState({
+      persons: [
+        { ...basePerson, id: 1, name: 'Alice' },
+        { ...basePerson, id: 2, name: 'Bob' },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    });
+
+    primeStores({
+      accounts: [
+        {
+          id: 1,
+          name: "Alice's Brokerage",
+          type: AccountType.ACCOUNT_BROKERAGE,
+          ownerPersonId: 1,
+        },
+        {
+          id: 2,
+          name: "Bob's Brokerage",
+          type: AccountType.ACCOUNT_BROKERAGE,
+          ownerPersonId: 2,
+        },
+      ],
+      snapshotValues: [
+        { accountId: 1, snapshotDate: '2026-04-01', totalValue: 50_000 },
+        { accountId: 2, snapshotDate: '2026-04-01', totalValue: 75_000 },
+      ],
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/investments?view=p1']}>
+        <Investments />
+      </MemoryRouter>,
+    );
+
+    // p1's brokerage is visible (in the Accounts list)
+    expect(screen.getByText("Alice's Brokerage")).toBeInTheDocument();
+    // p2's brokerage is filtered out
+    expect(screen.queryByText("Bob's Brokerage")).not.toBeInTheDocument();
   });
 });

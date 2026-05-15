@@ -44,6 +44,14 @@ function labelFor(id: string): string {
 }
 
 export default function CalculatorsLayout() {
+  // Note: the household/p1/p2 view filter from useViewFilter is intentionally
+  // NOT wired in here. Each calculator card has its own per-card behaviour —
+  // Paycheck / FIRE / CoastFI / Equity Value naturally split per-person via
+  // their underlying calcs; Bonus Tax always shows MFJ-combined for household
+  // and per-person for p1/p2; and each card already auto-shows or hides based
+  // on whether the relevant inputs exist. Adding a person filter at the
+  // layout level would shadow those behaviours, so it stays out-of-scope for
+  // Phase 3.
   const { persons } = usePersonsStore();
   const showOvertime = persons.some(
     (p) => p.employmentType === 'HOURLY' || p.employmentType === 'SALARY_WITH_OT',

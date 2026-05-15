@@ -11,6 +11,8 @@ import { useFundHoldingsStore } from '@/stores/fund-holdings-store';
 import { getDatabase } from '@/db/db';
 import { AccountType, AssetClass } from '@/types/enums';
 import { monthsBetween } from '@/lib/business-days';
+import { filterByOwnerPersonId } from '@/lib/filter-by-view';
+import { useViewFilter } from '@/lib/use-view-filter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import DonutChartCard from '@/components/charts/DonutChartCard';
 import BarChartCard from '@/components/charts/BarChartCard';
@@ -231,6 +233,8 @@ function pickModerateRate(household: Household | null): number {
 }
 
 export default function Investments() {
+  const { filter, persons } = useViewFilter();
+
   const accounts = useAccountsStore((s) => s.accounts);
   const loadAccounts = useAccountsStore((s) => s.load);
   const holdings = useHoldingsStore((s) => s.holdings);
@@ -268,6 +272,35 @@ export default function Investments() {
     loadFundHoldings,
   ]);
 
+  // Filter accounts by the household / p1 / p2 / joint dropdown. Holdings,
+  // snapshots, and contributions all scope to "visible accounts" — they
+  // have no person field of their own, only an accountId, so ownership
+  // flows down from the account.
+  const visibleAccounts = useMemo(
+    () => filterByOwnerPersonId(accounts, filter, persons),
+    [accounts, filter, persons],
+  );
+  const visibleAccountIds = useMemo(
+    () => new Set(visibleAccounts.map((a) => a.id).filter((id): id is number => id != null)),
+    [visibleAccounts],
+  );
+  const visibleHoldings = useMemo(
+    () => (filter === 'household' ? holdings : holdings.filter((h) => visibleAccountIds.has(h.accountId))),
+    [holdings, filter, visibleAccountIds],
+  );
+  const visibleSnapshots = useMemo(
+    () => (filter === 'household' ? snapshots : snapshots.filter((s) => visibleAccountIds.has(s.accountId))),
+    [snapshots, filter, visibleAccountIds],
+  );
+  const visibleContributions = useMemo(
+    () => (filter === 'household' ? contributions : contributions.filter((c) => visibleAccountIds.has(c.accountId))),
+    [contributions, filter, visibleAccountIds],
+  );
+
+  // Concentration health is intentionally household-wide regardless of the
+  // person filter — concentration semantics ("is one ticker too big a share
+  // of *the portfolio*?") don't change when you focus on one owner. Keeping
+  // the card hook unconditional keeps the section stable across filter flips.
   const concentration = useConcentration();
 
   const [assetClassByTicker, setAssetClassByTicker] = useState<Map<string, AssetClass>>(
@@ -278,7 +311,7 @@ export default function Investments() {
   // table starts empty in Phase 2; this lookup gracefully resolves to an
   // empty map and every holding falls back to AssetClass.OTHER.
   useEffect(() => {
-    const tickers = Array.from(new Set(holdings.map((h) => h.ticker))).sort();
+    const tickers = Array.from(new Set(visibleHoldings.map((h) => h.ticker))).sort();
     if (tickers.length === 0) {
       setAssetClassByTicker(new Map());
       return;
@@ -292,16 +325,16 @@ export default function Investments() {
     return () => {
       cancelled = true;
     };
-  }, [holdings]);
+  }, [visibleHoldings]);
 
   const latestPerAccount = useMemo(
-    () => latestSnapshotPerAccount(snapshots),
-    [snapshots],
+    () => latestSnapshotPerAccount(visibleSnapshots),
+    [visibleSnapshots],
   );
 
   const valuations = useMemo(
-    () => valueHoldings(accounts, holdings, latestPerAccount, assetClassByTicker),
-    [accounts, holdings, latestPerAccount, assetClassByTicker],
+    () => valueHoldings(visibleAccounts, visibleHoldings, latestPerAccount, assetClassByTicker),
+    [visibleAccounts, visibleHoldings, latestPerAccount, assetClassByTicker],
   );
 
   const allocation = useMemo(
@@ -317,23 +350,25 @@ export default function Investments() {
 
   const currentMonth = new Date().toISOString().slice(0, 7);
   const contribSeries = useMemo(
-    () => contributionsLast12Months(contributions, currentMonth),
-    [contributions, currentMonth],
+    () => contributionsLast12Months(visibleContributions, currentMonth),
+    [visibleContributions, currentMonth],
   );
 
   const accountSummary = useMemo(() => {
-    return accounts.map((a) => ({
+    return visibleAccounts.map((a) => ({
       account: a,
       latestValue: a.id != null ? (latestPerAccount.get(a.id) ?? 0) : 0,
     }));
-  }, [accounts, latestPerAccount]);
+  }, [visibleAccounts, latestPerAccount]);
 
   // 529 section derivations. We keep these out of the JSX body so the
   // section can short-circuit when there are no 529 accounts without
-  // wasting work on the typical case (most households have none).
+  // wasting work on the typical case (most households have none). 529s
+  // belonging to filtered-out persons disappear automatically because
+  // visibleAccounts already honours the view filter.
   const plans529 = useMemo(
-    () => accounts.filter((a) => a.type === AccountType.ACCOUNT_529),
-    [accounts],
+    () => visibleAccounts.filter((a) => a.type === AccountType.ACCOUNT_529),
+    [visibleAccounts],
   );
 
   const dependentById = useMemo<Map<number, Dependent>>(
@@ -347,18 +382,18 @@ export default function Investments() {
   // displayed but keeping the row makes future tweaks cheap.
   const latestSnapByAccount = useMemo(() => {
     const map = new Map<number, AccountSnapshot>();
-    for (const s of snapshots) {
+    for (const s of visibleSnapshots) {
       const prev = map.get(s.accountId);
       if (!prev || s.snapshotDate > prev.snapshotDate) map.set(s.accountId, s);
     }
     return map;
-  }, [snapshots]);
+  }, [visibleSnapshots]);
 
   const today529 = useMemo(() => new Date(), []);
   const moderateRate = useMemo(() => pickModerateRate(household), [household]);
 
-  const hasAnyHolding = holdings.length > 0;
-  const hasAnySnapshot = snapshots.length > 0;
+  const hasAnyHolding = visibleHoldings.length > 0;
+  const hasAnySnapshot = visibleSnapshots.length > 0;
 
   // A user with a 529-only setup (no holdings, no snapshots elsewhere) still
   // wants to see their 529 card, so the empty state only fires when there
@@ -596,7 +631,7 @@ export default function Investments() {
                 const currentValue = latestSnap?.totalValue ?? 0;
                 // YTD = sum of contributions in the current calendar year.
                 const yearPrefix = String(today529.getFullYear());
-                const ytdContribs = contributions
+                const ytdContribs = visibleContributions
                   .filter(
                     (c) =>
                       c.accountId === plan.id && c.date.startsWith(yearPrefix),

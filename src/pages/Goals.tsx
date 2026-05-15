@@ -9,6 +9,8 @@ import {
   computeGoalProgress,
   type GoalProgressResult,
 } from '@/lib/goal-progress';
+import { filterByForPersonId } from '@/lib/filter-by-view';
+import { useViewFilter } from '@/lib/use-view-filter';
 import { GOAL_TYPE_LABELS } from '@/components/forms/GoalForm';
 import { GoalType } from '@/types/enums';
 import type {
@@ -212,6 +214,7 @@ function GoalProgressCard({ projection }: GoalProgressCardProps) {
 }
 
 export default function Goals() {
+  const { filter, persons } = useViewFilter();
   const goals = useGoalsStore((s) => s.goals);
   const loadGoals = useGoalsStore((s) => s.load);
   const loadAccounts = useAccountsStore((s) => s.load);
@@ -221,6 +224,15 @@ export default function Goals() {
   const loadContributions = useContributionsStore((s) => s.load);
   const household = useHouseholdStore((s) => s.household);
   const loadHousehold = useHouseholdStore((s) => s.load);
+
+  // Filter goals by the household / p1 / p2 / joint dropdown. Snapshots and
+  // contributions intentionally aren't pre-filtered here — the goal already
+  // declares its linked accounts via `linkedAccountIds`, so the
+  // `computeGoalProgress` derivations naturally scope to those accounts.
+  const visibleGoals = useMemo(
+    () => filterByForPersonId(goals, filter, persons),
+    [goals, filter, persons],
+  );
 
   // Goals page also reads accounts so the side-effect loads keep accounts
   // warm for downstream linking, but the projection itself doesn't need
@@ -242,7 +254,7 @@ export default function Goals() {
 
   const projections = useMemo<GoalProjection[]>(() => {
     const latestMap = latestSnapshotPerAccount(snapshots);
-    return goals.map((g) => {
+    return visibleGoals.map((g) => {
       const currentSaved = g.linkedAccountIds.reduce(
         (sum, id) => sum + (latestMap.get(id) ?? 0),
         0,
@@ -263,9 +275,9 @@ export default function Goals() {
       });
       return { goal: g, recentMonthlyContribution, ...result };
     });
-  }, [goals, snapshots, contributions, today, annualRate]);
+  }, [visibleGoals, snapshots, contributions, today, annualRate]);
 
-  if (goals.length === 0) {
+  if (visibleGoals.length === 0) {
     return (
       <div className="p-8 max-w-6xl">
         <h1 className="text-2xl font-semibold mb-1">Goals</h1>

@@ -15,6 +15,12 @@ import { AccountType, GoalType } from '@/types/enums';
 import { netWorthForMonth, type NetWorthInput } from '@/lib/networth';
 import { isMonthlyInputPending, lastMonthYyyymm } from '@/lib/input-pending';
 import { computeGoalProgress, type GoalProgressResult } from '@/lib/goal-progress';
+import {
+  filterByForPersonId,
+  filterByObligorPersonId,
+  filterByOwnerPersonId,
+} from '@/lib/filter-by-view';
+import { useViewFilter } from '@/lib/use-view-filter';
 import { formatPercent } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -256,6 +262,7 @@ function computeLiquidInvestments(
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { filter, persons } = useViewFilter();
 
   const household = useHouseholdStore((s) => s.household);
   const loadHousehold = useHouseholdStore((s) => s.load);
@@ -318,24 +325,58 @@ export default function Dashboard() {
   const currentMonth = useMemo(() => currentYyyymm(), []);
   const previousMonth = useMemo(() => priorYyyymm(currentMonth), [currentMonth]);
 
+  // Apply the view filter to every entity rendered in the headline metrics
+  // and the goals strip. ConcentrationCard intentionally stays household-wide
+  // (see the comment above its render below).
+  const visibleAccounts = useMemo(
+    () => filterByOwnerPersonId(accounts, filter, persons),
+    [accounts, filter, persons],
+  );
+  const visibleAccountIds = useMemo(
+    () => new Set(visibleAccounts.map((a) => a.id).filter((id): id is number => id != null)),
+    [visibleAccounts],
+  );
+  const visibleSnapshots = useMemo(
+    () => (filter === 'household'
+      ? snapshots
+      : snapshots.filter((s) => visibleAccountIds.has(s.accountId))),
+    [snapshots, filter, visibleAccountIds],
+  );
+  const visibleProperties = useMemo(
+    () => filterByOwnerPersonId(properties, filter, persons),
+    [properties, filter, persons],
+  );
+  const visibleVehicles = useMemo(
+    () => filterByOwnerPersonId(vehicles, filter, persons),
+    [vehicles, filter, persons],
+  );
+  const visibleLoans = useMemo(
+    () => filterByObligorPersonId(loans, filter, persons),
+    [loans, filter, persons],
+  );
+  const visibleGoals = useMemo(
+    () => filterByForPersonId(goals, filter, persons),
+    [goals, filter, persons],
+  );
+
   const netWorthInput = useMemo<NetWorthInput>(() => ({
-    snapshots: snapshots.map((s) => ({
+    snapshots: visibleSnapshots.map((s) => ({
       accountId: s.accountId,
       snapshotMonth: s.snapshotDate.slice(0, 7),
       totalValue: s.totalValue,
     })),
-    properties: properties.map((p) => ({
+    properties: visibleProperties.map((p) => ({
       id: p.id!,
       currentEstimatedValue: p.currentEstimatedValue,
       excludedFromNetWorth: p.excludedFromNetWorth,
     })),
-    vehicles: vehicles.map((v) => ({
+    vehicles: visibleVehicles.map((v) => ({
       id: v.id!,
       currentEstimatedValue: v.currentEstimatedValue,
       excludedFromNetWorth: v.excludedFromNetWorth,
     })),
-    loans: loans.map((l) => ({ id: l.id!, currentBalance: l.currentBalance })),
-  }), [snapshots, properties, vehicles, loans]);
+    loans: visibleLoans.map((l) => ({ id: l.id!, currentBalance: l.currentBalance })),
+  }), [visibleSnapshots, visibleProperties, visibleVehicles, visibleLoans]);
 
   const currentNetWorth = useMemo(
     () => netWorthForMonth(currentMonth, netWorthInput),
@@ -348,13 +389,13 @@ export default function Dashboard() {
   );
 
   const totalDebt = useMemo(
-    () => loans.reduce((sum, l) => sum + l.currentBalance, 0),
-    [loans],
+    () => visibleLoans.reduce((sum, l) => sum + l.currentBalance, 0),
+    [visibleLoans],
   );
 
   const liquidInvestments = useMemo(
-    () => computeLiquidInvestments(accounts, snapshots, currentMonth),
-    [accounts, snapshots, currentMonth],
+    () => computeLiquidInvestments(visibleAccounts, visibleSnapshots, currentMonth),
+    [visibleAccounts, visibleSnapshots, currentMonth],
   );
 
   /**
@@ -367,9 +408,13 @@ export default function Dashboard() {
   const annualGrowthRate = useMemo(() => pickModerateRate(household), [household]);
 
   const goalProjections = useMemo<GoalProjection[]>(() => {
-    if (goals.length === 0) return [];
+    if (visibleGoals.length === 0) return [];
+    // currentSaved/contributions still derive from the full snapshots and
+    // contributions stores — a goal's `linkedAccountIds` already constrains
+    // which accounts feed the projection, so there's no need to re-filter
+    // here.
     const latestMap = latestSnapshotPerAccount(snapshots);
-    return goals.map((g) => {
+    return visibleGoals.map((g) => {
       const currentSaved = g.linkedAccountIds.reduce(
         (sum, id) => sum + (latestMap.get(id) ?? 0),
         0,
@@ -390,7 +435,7 @@ export default function Dashboard() {
       });
       return { goal: g, ...result };
     });
-  }, [goals, snapshots, contributions, today, annualGrowthRate]);
+  }, [visibleGoals, snapshots, contributions, today, annualGrowthRate]);
 
   /**
    * Pending-input detection lives in `src/lib/input-pending.ts` as a pure
@@ -402,7 +447,7 @@ export default function Dashboard() {
    */
   const pendingAccountIds = useMemo(
     () =>
-      accounts
+      visibleAccounts
         .filter(
           (a) =>
             a.id !== undefined &&
@@ -410,14 +455,14 @@ export default function Dashboard() {
             !MANUAL_BALANCE_TYPES.has(a.type),
         )
         .map((a) => a.id as number),
-    [accounts],
+    [visibleAccounts],
   );
 
   const lastMonth = useMemo(() => lastMonthYyyymm(today), [today]);
 
   const snapshotsLastMonth = useMemo(
-    () => snapshots.filter((s) => s.snapshotDate.slice(0, 7) === lastMonth),
-    [snapshots, lastMonth],
+    () => visibleSnapshots.filter((s) => s.snapshotDate.slice(0, 7) === lastMonth),
+    [visibleSnapshots, lastMonth],
   );
 
   const isInputPending = useMemo(
@@ -481,8 +526,8 @@ export default function Dashboard() {
           label="Total Debt"
           value={formatUSD(totalDebt)}
           href="/loans"
-          subtitle={loans.length > 0
-            ? `Across ${loans.length} loan${loans.length === 1 ? '' : 's'}`
+          subtitle={visibleLoans.length > 0
+            ? `Across ${visibleLoans.length} loan${visibleLoans.length === 1 ? '' : 's'}`
             : undefined}
         />
         <MetricCard
@@ -498,6 +543,15 @@ export default function Dashboard() {
         />
       </div>
 
+      {/*
+       * ConcentrationCard intentionally stays household-wide regardless of
+       * the person filter — its semantics ("is one ticker too big a share
+       * of *the portfolio*?") don't change when you focus on a single owner.
+       * Threading the filter into useConcentration() would also require
+       * scoping holdings/snapshots inside the hook, which is out-of-scope
+       * for this task. Revisit if a per-person concentration view is asked
+       * for explicitly.
+       */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <ConcentrationCard />
       </div>
@@ -505,14 +559,14 @@ export default function Dashboard() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <CardTitle>Goals</CardTitle>
-          {goals.length > 0 && (
+          {visibleGoals.length > 0 && (
             <Link to="/goals" className="text-sm text-primary hover:underline">
               View all →
             </Link>
           )}
         </CardHeader>
         <CardContent>
-          {goals.length === 0 ? (
+          {visibleGoals.length === 0 ? (
             <div className="text-center text-muted-foreground py-6 space-y-3">
               <div>No goals yet.</div>
               <Button asChild size="sm" variant="outline">

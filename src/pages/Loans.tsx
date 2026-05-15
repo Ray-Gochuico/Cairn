@@ -2,6 +2,8 @@ import { useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useLoansStore } from '@/stores/loans-store';
 import { amortize, type Amortization } from '@/lib/amortization';
+import { filterByObligorPersonId } from '@/lib/filter-by-view';
+import { useViewFilter } from '@/lib/use-view-filter';
 import { LoanType } from '@/types/enums';
 import type { Loan } from '@/types/schema';
 import {
@@ -226,6 +228,7 @@ function LoanCard({ projection }: LoanCardProps) {
 }
 
 export default function Loans() {
+  const { filter, persons } = useViewFilter();
   const loans = useLoansStore((s) => s.loans);
   const load = useLoansStore((s) => s.load);
 
@@ -233,19 +236,27 @@ export default function Loans() {
     load();
   }, [load]);
 
+  // Filter loans by the household / p1 / p2 / joint dropdown. Every
+  // downstream derivation (projections, totals, debt series) reads from
+  // visibleLoans so the dropdown reaches the entire page.
+  const visibleLoans = useMemo(
+    () => filterByObligorPersonId(loans, filter, persons),
+    [loans, filter, persons],
+  );
+
   const projections = useMemo(
-    () => loans.map(projectLoan),
-    [loans],
+    () => visibleLoans.map(projectLoan),
+    [visibleLoans],
   );
 
   const totalDebt = useMemo(
-    () => loans.reduce((sum, l) => sum + l.currentBalance, 0),
-    [loans],
+    () => visibleLoans.reduce((sum, l) => sum + l.currentBalance, 0),
+    [visibleLoans],
   );
 
   const totalMonthlyPayment = useMemo(
-    () => loans.reduce((sum, l) => sum + l.monthlyPayment, 0),
-    [loans],
+    () => visibleLoans.reduce((sum, l) => sum + l.monthlyPayment, 0),
+    [visibleLoans],
   );
 
   const lifetimeInterest = useMemo(
@@ -255,7 +266,7 @@ export default function Loans() {
 
   const debtSeries = useMemo(() => buildDebtSeries(projections), [projections]);
 
-  if (loans.length === 0) {
+  if (visibleLoans.length === 0) {
     return (
       <div className="p-8 max-w-6xl">
         <h1 className="text-2xl font-semibold mb-1">Loans</h1>
@@ -294,7 +305,7 @@ export default function Loans() {
           <CardContent>
             <div className="text-3xl font-semibold">{formatCurrency(totalDebt)}</div>
             <div className="mt-1 text-sm text-muted-foreground">
-              Across {loans.length} loan{loans.length === 1 ? '' : 's'}
+              Across {visibleLoans.length} loan{visibleLoans.length === 1 ? '' : 's'}
             </div>
           </CardContent>
         </Card>

@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
 import { useLoansStore } from '@/stores/loans-store';
+import { filterByOwnerPersonId } from '@/lib/filter-by-view';
+import { useViewFilter } from '@/lib/use-view-filter';
 import { LoanType } from '@/types/enums';
 import { PROPERTY_TYPE_LABELS } from '@/components/forms/PropertyForm';
 import type { Property, Vehicle } from '@/types/schema';
@@ -333,6 +335,8 @@ type EditTarget =
   | { kind: 'vehicle'; id: number };
 
 export default function PropertyVehicles() {
+  const { filter, persons } = useViewFilter();
+
   const properties = usePropertiesStore((s) => s.properties);
   const loadProperties = usePropertiesStore((s) => s.load);
   const updateProperty = usePropertiesStore((s) => s.update);
@@ -351,6 +355,18 @@ export default function PropertyVehicles() {
     loadVehicles();
     loadLoans();
   }, [loadProperties, loadVehicles, loadLoans]);
+
+  // Filter properties + vehicles by the household / p1 / p2 / joint dropdown.
+  // Loans aren't filtered here — they're a lookup source (linked-loan
+  // balance per property/vehicle), not a thing rendered in its own section.
+  const visibleProperties = useMemo(
+    () => filterByOwnerPersonId(properties, filter, persons),
+    [properties, filter, persons],
+  );
+  const visibleVehicles = useMemo(
+    () => filterByOwnerPersonId(vehicles, filter, persons),
+    [vehicles, filter, persons],
+  );
 
   /**
    * Build a quick lookup of mortgage balances keyed by the linked loan id.
@@ -380,17 +396,19 @@ export default function PropertyVehicles() {
   }, [loans]);
 
   // Reset stale editing target when its entity disappears (e.g. deleted in
-  // another tab). Mirrors the pattern used by PropertiesTab.
+  // another tab, or hidden by the view filter). We watch the visible* slices
+  // so flipping the filter to a person who doesn't own the currently-editing
+  // entity cleanly drops the inline editor instead of stranding it.
   useEffect(() => {
     if (editing == null) return;
-    if (editing.kind === 'property' && !properties.some((p) => p.id === editing.id)) {
+    if (editing.kind === 'property' && !visibleProperties.some((p) => p.id === editing.id)) {
       setEditing(null);
-    } else if (editing.kind === 'vehicle' && !vehicles.some((v) => v.id === editing.id)) {
+    } else if (editing.kind === 'vehicle' && !visibleVehicles.some((v) => v.id === editing.id)) {
       setEditing(null);
     }
-  }, [editing, properties, vehicles]);
+  }, [editing, visibleProperties, visibleVehicles]);
 
-  const hasAny = properties.length > 0 || vehicles.length > 0;
+  const hasAny = visibleProperties.length > 0 || visibleVehicles.length > 0;
 
   if (!hasAny) {
     return (
@@ -434,14 +452,14 @@ export default function PropertyVehicles() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">Properties</h2>
-          {properties.length === 0 ? (
+          {visibleProperties.length === 0 ? (
             <Card>
               <CardContent className="py-8 text-center text-sm text-muted-foreground">
                 No properties yet.
               </CardContent>
             </Card>
           ) : (
-            properties.map((p) => {
+            visibleProperties.map((p) => {
               const mortgageBalance = p.linkedLoanId != null
                 ? mortgageById.get(p.linkedLoanId) ?? null
                 : null;
@@ -463,14 +481,14 @@ export default function PropertyVehicles() {
 
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">Vehicles</h2>
-          {vehicles.length === 0 ? (
+          {visibleVehicles.length === 0 ? (
             <Card>
               <CardContent className="py-8 text-center text-sm text-muted-foreground">
                 No vehicles yet.
               </CardContent>
             </Card>
           ) : (
-            vehicles.map((v) => {
+            visibleVehicles.map((v) => {
               const loanBalance = v.linkedLoanId != null
                 ? autoLoanById.get(v.linkedLoanId) ?? null
                 : null;

@@ -3,12 +3,18 @@ import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
 import { useLoansStore } from '@/stores/loans-store';
+import { useAccountsStore } from '@/stores/accounts-store';
 import {
   netWorthForMonth,
   netWorthSeries,
   type NetWorthInput,
 } from '@/lib/networth';
 import { monthsBetween } from '@/lib/business-days';
+import {
+  filterByObligorPersonId,
+  filterByOwnerPersonId,
+} from '@/lib/filter-by-view';
+import { useViewFilter } from '@/lib/use-view-filter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import LineChartCard from '@/components/charts/LineChartCard';
 import BarChartCard from '@/components/charts/BarChartCard';
@@ -122,13 +128,19 @@ function liabilitiesByType(loans: Loan[]): { type: string; total: number }[] {
     .sort((a, b) => b.total - a.total);
 }
 
-function useNetWorthData(): NetWorthInput {
-  const snapshots = useSnapshotsStore((s) => s.snapshots);
-  const properties = usePropertiesStore((s) => s.properties);
-  const vehicles = useVehiclesStore((s) => s.vehicles);
-  const loans = useLoansStore((s) => s.loans);
-
-  return useMemo<NetWorthInput>(() => ({
+/**
+ * Build the pure-helper input shape from already-filtered store rows. Each
+ * arg is the page's view-filtered slice (see Net Worth body below), so the
+ * dropdown reaches every aggregation downstream without each derivation
+ * having to re-apply the filter.
+ */
+function buildNetWorthInput(
+  snapshots: ReturnType<typeof useSnapshotsStore.getState>['snapshots'],
+  properties: ReturnType<typeof usePropertiesStore.getState>['properties'],
+  vehicles: ReturnType<typeof useVehiclesStore.getState>['vehicles'],
+  loans: ReturnType<typeof useLoansStore.getState>['loans'],
+): NetWorthInput {
+  return {
     snapshots: snapshots.map((s) => ({
       accountId: s.accountId,
       snapshotMonth: s.snapshotDate.slice(0, 7),
@@ -145,7 +157,7 @@ function useNetWorthData(): NetWorthInput {
       excludedFromNetWorth: v.excludedFromNetWorth,
     })),
     loans: loans.map((l) => ({ id: l.id!, currentBalance: l.currentBalance })),
-  }), [snapshots, properties, vehicles, loans]);
+  };
 }
 
 function MetricCard({
@@ -181,20 +193,63 @@ function MetricCard({
 }
 
 export default function NetWorth() {
+  const { filter, persons } = useViewFilter();
+
+  const snapshots = useSnapshotsStore((s) => s.snapshots);
   const loadSnapshots = useSnapshotsStore((s) => s.load);
+  const properties = usePropertiesStore((s) => s.properties);
   const loadProperties = usePropertiesStore((s) => s.load);
+  const vehicles = useVehiclesStore((s) => s.vehicles);
   const loadVehicles = useVehiclesStore((s) => s.load);
-  const loadLoans = useLoansStore((s) => s.load);
   const loans = useLoansStore((s) => s.loans);
+  const loadLoans = useLoansStore((s) => s.load);
+  // Accounts are loaded so the view filter can scope snapshots to accounts
+  // owned by the selected person (snapshots themselves carry no owner field;
+  // they inherit ownership from their parent account).
+  const accounts = useAccountsStore((s) => s.accounts);
+  const loadAccounts = useAccountsStore((s) => s.load);
 
   useEffect(() => {
     loadSnapshots();
     loadProperties();
     loadVehicles();
     loadLoans();
-  }, [loadSnapshots, loadProperties, loadVehicles, loadLoans]);
+    loadAccounts();
+  }, [loadSnapshots, loadProperties, loadVehicles, loadLoans, loadAccounts]);
 
-  const input = useNetWorthData();
+  // Apply the view filter as the data-prep step — every derivation below
+  // reads from these filtered slices and stays oblivious to the dropdown.
+  const visibleAccounts = useMemo(
+    () => filterByOwnerPersonId(accounts, filter, persons),
+    [accounts, filter, persons],
+  );
+  const visibleAccountIds = useMemo(
+    () => new Set(visibleAccounts.map((a) => a.id).filter((id): id is number => id != null)),
+    [visibleAccounts],
+  );
+  const visibleSnapshots = useMemo(
+    () => (filter === 'household'
+      ? snapshots
+      : snapshots.filter((s) => visibleAccountIds.has(s.accountId))),
+    [snapshots, filter, visibleAccountIds],
+  );
+  const visibleProperties = useMemo(
+    () => filterByOwnerPersonId(properties, filter, persons),
+    [properties, filter, persons],
+  );
+  const visibleVehicles = useMemo(
+    () => filterByOwnerPersonId(vehicles, filter, persons),
+    [vehicles, filter, persons],
+  );
+  const visibleLoans = useMemo(
+    () => filterByObligorPersonId(loans, filter, persons),
+    [loans, filter, persons],
+  );
+
+  const input = useMemo<NetWorthInput>(
+    () => buildNetWorthInput(visibleSnapshots, visibleProperties, visibleVehicles, visibleLoans),
+    [visibleSnapshots, visibleProperties, visibleVehicles, visibleLoans],
+  );
 
   const hasAnyData =
     input.snapshots.length > 0 ||
@@ -232,7 +287,7 @@ export default function NetWorth() {
   ].filter((b) => b.value > 0);
 
   const breakdownTotal = breakdown.reduce((a, b) => a + b.value, 0);
-  const liabilities = liabilitiesByType(loans);
+  const liabilities = liabilitiesByType(visibleLoans);
   const liabilitiesTotal = liabilities.reduce((a, b) => a + b.total, 0);
 
   if (!hasAnyData) {

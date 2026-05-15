@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useEquityGrantsStore } from '@/stores/equity-grants-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { computeEquityValue, type EquityValueResult } from '@/lib/equity-value';
+import { useViewFilter, type ViewFilter } from '@/lib/use-view-filter';
 import type { EquityGrant } from '@/types/schema';
 import {
   Card,
@@ -34,6 +35,25 @@ interface GrantProjection {
   grant: EquityGrant;
   ownerName: string;
   result: EquityValueResult;
+}
+
+/**
+ * EquityGrant.ownerPersonId is non-nullable per the Phase 3 schema (grants
+ * are always individual — there's no "joint grant" concept), so we can't
+ * reuse the generic `filterByOwnerPersonId` helper without adjusting types.
+ * Special-cased inline here: in 'joint' view, return nothing (no grant
+ * qualifies); in p1/p2 view, return grants whose ownerPersonId matches.
+ */
+function filterGrantsByView(
+  grants: EquityGrant[],
+  filter: ViewFilter,
+  persons: { id?: number }[],
+): EquityGrant[] {
+  if (filter === 'household') return grants;
+  if (filter === 'joint') return [];
+  const personId = filter === 'p1' ? persons[0]?.id : persons[1]?.id;
+  if (personId == null) return [];
+  return grants.filter((g) => g.ownerPersonId === personId);
 }
 
 interface EquityGrantCardProps {
@@ -138,9 +158,9 @@ function EquityGrantCard({ projection }: EquityGrantCardProps) {
 }
 
 export default function EquityGrants() {
+  const { filter, persons } = useViewFilter();
   const equityGrants = useEquityGrantsStore((s) => s.equityGrants);
   const loadGrants = useEquityGrantsStore((s) => s.load);
-  const persons = usePersonsStore((s) => s.persons);
   const loadPersons = usePersonsStore((s) => s.load);
 
   useEffect(() => {
@@ -148,24 +168,33 @@ export default function EquityGrants() {
     loadPersons();
   }, [loadGrants, loadPersons]);
 
+  // Apply the view filter — grants are individual (ownerPersonId is
+  // non-nullable), so 'joint' produces an empty list.
+  const visibleGrants = useMemo(
+    () => filterGrantsByView(equityGrants, filter, persons),
+    [equityGrants, filter, persons],
+  );
+
   // Stable "today" per render cycle — passed into computeEquityValue so the
   // helper isn't recomputed twice from new Date() drift inside a single
   // render. Recomputed on each commit which is fine for date-precision UI.
   const today = useMemo(() => new Date(), []);
 
-  // Owner name lookup (id is non-nullable on persisted Person rows).
+  // Owner name lookup (id is non-nullable on persisted Person rows). Uses the
+  // full persons list (from useViewFilter) so we can still resolve names for
+  // grants whose owner isn't the currently-selected filter target.
   const personById = useMemo(
     () => new Map(persons.map((p) => [p.id!, p.name])),
     [persons],
   );
 
   const projections = useMemo<GrantProjection[]>(() => {
-    return equityGrants.map((grant) => ({
+    return visibleGrants.map((grant) => ({
       grant,
       ownerName: personById.get(grant.ownerPersonId) ?? 'Unknown',
       result: computeEquityValue(grant, today),
     }));
-  }, [equityGrants, personById, today]);
+  }, [visibleGrants, personById, today]);
 
   const totals = useMemo(() => {
     return projections.reduce(
