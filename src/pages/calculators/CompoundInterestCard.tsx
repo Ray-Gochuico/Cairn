@@ -61,13 +61,15 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
   }, [series]);
 
   const hasVariance = variancePercent !== '' && Number(variancePercent) > 0;
+  // Red = pessimistic (rate - variance), blue = expected (mid),
+  // green = optimistic (rate + variance). Single-line view uses blue.
   const chartSeries = hasVariance
     ? [
-        { dataKey: 'low', label: 'Low', color: '#94a3b8' },
-        { dataKey: 'mid', label: 'Mid', color: '#0f172a' },
-        { dataKey: 'high', label: 'High', color: '#94a3b8' },
+        { dataKey: 'low', label: 'Low', color: '#dc2626' },
+        { dataKey: 'mid', label: 'Mid', color: '#2563eb' },
+        { dataKey: 'high', label: 'High', color: '#16a34a' },
       ]
-    : [{ dataKey: 'mid', label: 'Balance', color: '#0f172a' }];
+    : [{ dataKey: 'mid', label: 'Balance', color: '#2563eb' }];
 
   return (
     <CalculatorCard
