@@ -7,6 +7,7 @@ import { FireCard } from './FireCard';
 import { CoastFiCard } from './CoastFiCard';
 import { DebtPayoffCard } from './DebtPayoffCard';
 import { EquityValueCard } from './EquityValueCard';
+import { CompoundInterestCard } from './CompoundInterestCard';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { getCurrentTaxYear } from '@/lib/current-tax-year';
@@ -23,6 +24,7 @@ const CARD_IDS = {
   OVERTIME: 'overtime',
   FIRE: 'fire',
   COAST_FI: 'coast-fi',
+  COMPOUND: 'compound-interest',
   DEBT_PAYOFF: 'debt-payoff',
   EQUITY: 'equity',
 } as const;
@@ -35,6 +37,7 @@ const CARD_LABELS: Record<string, string> = {
   [CARD_IDS.OVERTIME]: 'Overtime',
   [CARD_IDS.FIRE]: 'Years to FI',
   [CARD_IDS.COAST_FI]: 'CoastFI',
+  [CARD_IDS.COMPOUND]: 'Compound Interest',
   [CARD_IDS.DEBT_PAYOFF]: 'Debt Payoff',
   [CARD_IDS.EQUITY]: 'Equity Value',
 };
@@ -150,6 +153,9 @@ export default function CalculatorsLayout() {
         )}
         {!hiddenSet.has(CARD_IDS.COAST_FI) && (
           <CoastFiCard cardId={CARD_IDS.COAST_FI} onHide={refreshHidden} />
+        )}
+        {!hiddenSet.has(CARD_IDS.COMPOUND) && (
+          <CompoundInterestCard cardId={CARD_IDS.COMPOUND} onHide={refreshHidden} />
         )}
         {!hiddenSet.has(CARD_IDS.DEBT_PAYOFF) && (
           <DebtPayoffCard cardId={CARD_IDS.DEBT_PAYOFF} onHide={refreshHidden} />
