@@ -15,6 +15,7 @@ import { filterByOwnerPersonId } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import DonutChartCard from '@/components/charts/DonutChartCard';
+import PerTickerDonut from '@/components/charts/PerTickerDonut';
 import BarChartCard from '@/components/charts/BarChartCard';
 import { useConcentration } from '@/lib/use-concentration';
 import { valueHoldings, type HoldingValuation } from '@/lib/holdings-value';
@@ -427,6 +428,7 @@ export default function Investments() {
         </p>
       </div>
 
+      {/* Donuts row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {allocation.length > 0 ? (
           <DonutChartCard
@@ -448,57 +450,59 @@ export default function Investments() {
             </CardContent>
           </Card>
         )}
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Target vs Actual</CardTitle>
-            <CardDescription>
-              Holdings with targets, sorted by absolute drift
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {driftWithTarget.length === 0 ? (
-              <div className="text-sm text-muted-foreground">
-                No target allocations set. Add target % per holding in Holdings.
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground border-b">
-                      <th className="py-2 pr-2">Ticker</th>
-                      <th className="py-2 px-2 text-right">Target</th>
-                      <th className="py-2 px-2 text-right">Actual</th>
-                      <th className="py-2 pl-2 text-right">Drift</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {driftWithTarget.map((row) => (
-                      <tr key={`${row.accountName}-${row.ticker}`} className="border-b last:border-b-0">
-                        <td className="py-2 pr-2 font-mono">{row.ticker}</td>
-                        <td className="py-2 px-2 text-right">
-                          {row.targetPct != null
-                            ? `${(row.targetPct * 100).toFixed(1)}%`
-                            : '—'}
-                        </td>
-                        <td className="py-2 px-2 text-right">
-                          {(row.actualPct * 100).toFixed(1)}%
-                        </td>
-                        <td className={`py-2 pl-2 text-right ${
-                          row.drift >= 0 ? 'text-emerald-600' : 'text-red-600'
-                        }`}>
-                          {row.drift >= 0 ? '+' : ''}
-                          {(row.drift * 100).toFixed(1)}%
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <PerTickerDonut />
       </div>
+
+      {/* Target / drift, full width below */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Target vs Actual</CardTitle>
+          <CardDescription>
+            Holdings with targets, sorted by absolute drift
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {driftWithTarget.length === 0 ? (
+            <div className="text-sm text-muted-foreground">
+              No target allocations set. Add target % per holding in Holdings.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground border-b">
+                    <th className="py-2 pr-2">Ticker</th>
+                    <th className="py-2 px-2 text-right">Target</th>
+                    <th className="py-2 px-2 text-right">Actual</th>
+                    <th className="py-2 pl-2 text-right">Drift</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {driftWithTarget.map((row) => (
+                    <tr key={`${row.accountName}-${row.ticker}`} className="border-b last:border-b-0">
+                      <td className="py-2 pr-2 font-mono">{row.ticker}</td>
+                      <td className="py-2 px-2 text-right">
+                        {row.targetPct != null
+                          ? `${(row.targetPct * 100).toFixed(1)}%`
+                          : '—'}
+                      </td>
+                      <td className="py-2 px-2 text-right">
+                        {(row.actualPct * 100).toFixed(1)}%
+                      </td>
+                      <td className={`py-2 pl-2 text-right ${
+                        row.drift >= 0 ? 'text-emerald-600' : 'text-red-600'
+                      }`}>
+                        {row.drift >= 0 ? '+' : ''}
+                        {(row.drift * 100).toFixed(1)}%
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card data-testid="concentration-section">
         <CardHeader>
