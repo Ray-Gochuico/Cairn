@@ -121,31 +121,33 @@ export function computeConcentration(input: ConcentrationInput): ConcentrationRe
 }
 
 /**
- * Collapse the tail of a sorted-descending perTicker list into a single
- * "Misc" bucket so a donut chart can render at most N + 1 wedges.
- * Assumes input is already sorted by pctOfPortfolio desc (which is the
- * shape `computeConcentration().perTicker` returns).
+ * Collapse a sorted-descending perTicker list into top-N named tickers
+ * + a single "Misc" bucket. Misc never occupies one of the N slots — it
+ * always appears as the (N+1)th wedge when there's anything to aggregate.
+ *
+ * Aggregation rules:
+ *   - The tail of named tickers (anything ranked beyond top-N) goes into Misc.
+ *   - Any pre-existing 'Misc' entry from `computeConcentration` (fund tails)
+ *     also gets folded into the single final Misc wedge.
+ *   - If named.length ≤ N AND no pre-existing Misc, no Misc wedge is added.
+ *
+ * Assumes input is already sorted descending by pctOfPortfolio (which is
+ * the shape `computeConcentration().perTicker` returns).
  */
 export function topNWithMisc(
   perTicker: Array<{ ticker: string; effectiveExposure: number; pctOfPortfolio: number }>,
   n: number,
 ): Array<{ ticker: string; effectiveExposure: number; pctOfPortfolio: number }> {
-  if (perTicker.length <= n) return perTicker;
-  const head = perTicker.slice(0, n);
-  const tail = perTicker.slice(n);
-  const tailMiscExposure = tail.reduce((a, b) => a + b.effectiveExposure, 0);
-  const tailMiscPct = tail.reduce((a, b) => a + b.pctOfPortfolio, 0);
+  const named = perTicker.filter((s) => s.ticker !== 'Misc');
+  const existingMisc = perTicker.filter((s) => s.ticker === 'Misc');
 
-  // If the head already contains 'Misc' (e.g., added by computeConcentration
-  // for fund untracked portions), merge the tail into that existing entry.
-  // Otherwise, append a new 'Misc' entry.
-  const existingIdx = head.findIndex((s) => s.ticker === 'Misc');
-  if (existingIdx >= 0) {
-    const merged = { ...head[existingIdx] };
-    merged.effectiveExposure += tailMiscExposure;
-    merged.pctOfPortfolio += tailMiscPct;
-    head[existingIdx] = merged;
-    return head;
-  }
-  return [...head, { ticker: 'Misc', effectiveExposure: tailMiscExposure, pctOfPortfolio: tailMiscPct }];
+  const head = named.slice(0, n);
+  const tail = named.slice(n);
+
+  const allForMisc = [...tail, ...existingMisc];
+  if (allForMisc.length === 0) return head;
+
+  const miscExposure = allForMisc.reduce((a, b) => a + b.effectiveExposure, 0);
+  const miscPct = allForMisc.reduce((a, b) => a + b.pctOfPortfolio, 0);
+  return [...head, { ticker: 'Misc', effectiveExposure: miscExposure, pctOfPortfolio: miscPct }];
 }

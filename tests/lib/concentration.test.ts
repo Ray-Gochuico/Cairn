@@ -232,19 +232,52 @@ describe('topNWithMisc', () => {
     expect(result[2].effectiveExposure).toBeCloseTo(20, 4);
   });
 
-  it('merges tail into an existing Misc entry rather than creating a duplicate', () => {
+  it('always reserves the Misc slot for non-Misc top-N, merging existing Misc with tail', () => {
     const result = topNWithMisc(
       [
         { ticker: 'A', effectiveExposure: 50, pctOfPortfolio: 0.5 },
-        { ticker: 'Misc', effectiveExposure: 30, pctOfPortfolio: 0.3 },  // already in top-2
+        { ticker: 'Misc', effectiveExposure: 30, pctOfPortfolio: 0.3 },
         { ticker: 'B', effectiveExposure: 15, pctOfPortfolio: 0.15 },
         { ticker: 'C', effectiveExposure: 5, pctOfPortfolio: 0.05 },
       ],
       2,
     );
-    // top-2 is [A, Misc]. Tail (B+C = 20, 0.20) merges into Misc.
+    // Top-2 NAMED = [A, B]. Misc bucket = existing 30 + tail (C) 5 = 35.
+    expect(result).toHaveLength(3);
+    expect(result.map((r) => r.ticker)).toEqual(['A', 'B', 'Misc']);
+    expect(result.find((r) => r.ticker === 'Misc')!.effectiveExposure).toBeCloseTo(35, 4);
+    expect(result.find((r) => r.ticker === 'Misc')!.pctOfPortfolio).toBeCloseTo(0.35, 4);
+  });
+
+  it('shows N=10 named tickers + Misc when a giant Misc bucket would have ranked first', () => {
+    // Realistic shape: 12 small individual companies + 1 huge Misc (from fund tails).
+    // With the old buggy behavior, Misc would land in top-10 and bump one company.
+    const items = [
+      { ticker: 'Misc', effectiveExposure: 50000, pctOfPortfolio: 0.50 },
+      ...Array.from({ length: 12 }, (_, i) => ({
+        ticker: `T${i}`,
+        effectiveExposure: 3000,
+        pctOfPortfolio: 0.03,
+      })),
+    ];
+    const result = topNWithMisc(items, 10);
+    expect(result).toHaveLength(11);
+    // First 10 wedges are all named (T0..T9), Misc is last.
+    expect(result.slice(0, 10).every((r) => r.ticker.startsWith('T'))).toBe(true);
+    expect(result[10].ticker).toBe('Misc');
+    // Misc bucket = existing 50000 + tail (T10, T11) = 50000 + 6000 = 56000.
+    expect(result[10].effectiveExposure).toBeCloseTo(56000, 1);
+  });
+
+  it('omits Misc when named.length ≤ N and no pre-existing Misc', () => {
+    const result = topNWithMisc(
+      [
+        { ticker: 'A', effectiveExposure: 60, pctOfPortfolio: 0.6 },
+        { ticker: 'B', effectiveExposure: 40, pctOfPortfolio: 0.4 },
+      ],
+      10,
+    );
     expect(result).toHaveLength(2);
-    expect(result.find((r) => r.ticker === 'Misc')!.effectiveExposure).toBeCloseTo(50, 4);
-    expect(result.find((r) => r.ticker === 'Misc')!.pctOfPortfolio).toBeCloseTo(0.5, 4);
+    expect(result.find((r) => r.ticker === 'Misc')).toBeUndefined();
   });
 });
