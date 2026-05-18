@@ -15,6 +15,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { CHART_PALETTE } from './palette';
 
 export interface BarChartPoint {
   [key: string]: number | string;
@@ -36,8 +37,6 @@ export interface BarChartCardProps {
   yFormatter?: (value: number) => string;
   layout?: 'horizontal' | 'vertical';
 }
-
-const DEFAULT_PALETTE = ['#0f172a', '#475569', '#94a3b8', '#cbd5e1'];
 
 export default function BarChartCard({
   title,
@@ -105,7 +104,7 @@ export default function BarChartCard({
                 key={s.dataKey}
                 dataKey={s.dataKey}
                 name={s.label}
-                fill={s.color ?? DEFAULT_PALETTE[idx % DEFAULT_PALETTE.length]}
+                fill={s.color ?? CHART_PALETTE[idx % CHART_PALETTE.length]}
                 radius={[2, 2, 0, 0]}
               />
             ))}

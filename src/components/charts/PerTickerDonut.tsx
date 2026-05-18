@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import DonutChartCard from './DonutChartCard';
+import { CHART_NEUTRAL } from './palette';
 import { topNWithMisc } from '@/lib/concentration';
 import { useConcentration } from '@/lib/use-concentration';
 import { useTickersStore } from '@/stores/tickers-store';
@@ -52,6 +53,7 @@ export function PerTickerDonut() {
     name: s.ticker,
     // Donut can't render negative wedges; SHORT exposures get clamped here.
     value: Math.max(0, s.effectiveExposure),
+    ...(s.ticker === 'Misc' ? { color: CHART_NEUTRAL } : {}),
   }));
 
   // Identify wedges whose ticker is itself classified as a fund — these are

@@ -15,6 +15,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { CHART_PALETTE } from './palette';
 
 export interface LineChartPoint {
   [key: string]: number | string;
@@ -35,8 +36,6 @@ export interface LineChartCardProps {
   series: LineChartSeries[];
   yFormatter?: (value: number) => string;
 }
-
-const DEFAULT_PALETTE = ['#0f172a', '#475569', '#94a3b8', '#cbd5e1'];
 
 export default function LineChartCard({
   title,
@@ -79,7 +78,7 @@ export default function LineChartCard({
                 type="monotone"
                 dataKey={s.dataKey}
                 name={s.label}
-                stroke={s.color ?? DEFAULT_PALETTE[idx % DEFAULT_PALETTE.length]}
+                stroke={s.color ?? CHART_PALETTE[idx % CHART_PALETTE.length]}
                 strokeWidth={2}
                 dot={false}
                 activeDot={{ r: 4 }}

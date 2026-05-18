@@ -6,6 +6,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { CHART_PALETTE } from './palette';
 
 export interface DonutSlice {
   name: string;
@@ -33,16 +34,6 @@ export interface DonutChartCardProps {
    */
   tooltipNameFormatter?: (name: string) => string;
 }
-
-const DEFAULT_PALETTE = [
-  '#0f172a',
-  '#1e293b',
-  '#475569',
-  '#64748b',
-  '#94a3b8',
-  '#cbd5e1',
-  '#e2e8f0',
-];
 
 export default function DonutChartCard({
   title,
@@ -83,7 +74,7 @@ export default function DonutChartCard({
               {data.map((slice, idx) => (
                 <Cell
                   key={`${slice.name}-${idx}`}
-                  fill={slice.color ?? DEFAULT_PALETTE[idx % DEFAULT_PALETTE.length]}
+                  fill={slice.color ?? CHART_PALETTE[idx % CHART_PALETTE.length]}
                 />
               ))}
             </Pie>
