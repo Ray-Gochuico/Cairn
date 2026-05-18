@@ -39,12 +39,24 @@ export async function initDatabase(): Promise<void> {
   // other, and a partial-fail still leaves the UI responsive.
   void (async () => {
     try {
-      await syncStaleFunds({
+      const result = await syncStaleFunds({
         yahoo: new YahooClient(),
         fundHoldings: new FundHoldingsRepo(adapter),
         tickers: new TickersRepo(adapter),
         holdings: new HoldingsRepo(adapter),
       });
+      // Surface the sync outcome so DevTools shows exactly which tickers
+      // got refreshed, which were skipped (already-fresh OR Yahoo returned
+      // no holdings), and which errored. Helps diagnose the "fund ticker
+      // shows up on Per-Company donut instead of underlying companies"
+      // bug when Yahoo returns empty for VTI/FXAIX etc.
+      // eslint-disable-next-line no-console
+      console.info(
+        '[init] fund-holdings sync done: refreshed=%o skipped=%o errors=%o',
+        result.refreshed,
+        result.skipped,
+        result.errors,
+      );
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('[init] background fund-holdings sync failed:', err);

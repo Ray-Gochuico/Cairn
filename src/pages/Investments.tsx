@@ -14,6 +14,7 @@ import { monthsBetween } from '@/lib/business-days';
 import { filterByOwnerPersonId } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import DonutChartCard from '@/components/charts/DonutChartCard';
 import PerTickerDonut from '@/components/charts/PerTickerDonut';
 import BarChartCard from '@/components/charts/BarChartCard';
@@ -22,6 +23,11 @@ import { valueHoldings, type HoldingValuation } from '@/lib/holdings-value';
 import type { Dependent, AccountSnapshot, Household } from '@/types/schema';
 import type { ConcentrationWarning } from '@/lib/concentration';
 import { AlertTriangleIcon } from 'lucide-react';
+import { YahooClient } from '@/market/yahoo-client';
+import { TickersRepo } from '@/domain/tickers';
+import { FundHoldingsRepo } from '@/domain/fund-holdings';
+import { HoldingsRepo } from '@/domain/holdings';
+import { syncStaleFunds, type SyncResult } from '@/market/fund-holdings-sync';
 
 /**
  * Investments page — Phase 2 visualization surface.
@@ -308,6 +314,47 @@ export default function Investments() {
     () => new Map(),
   );
 
+  // "Refresh fund data" button state. Lets the user force a fund-holdings
+  // sync without waiting for the next app restart — important when the
+  // Per-Company donut is showing fund tickers (VTI, FXAIX) instead of the
+  // look-through into underlying companies. The fast-forward `today` trick
+  // below bypasses syncStaleFunds's 90-day staleness gate so the button
+  // always refetches.
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshResult, setRefreshResult] = useState<SyncResult | null>(null);
+
+  const handleRefreshFundData = async () => {
+    setRefreshing(true);
+    setRefreshResult(null);
+    try {
+      const db = getDatabase();
+      // Pass a date 100 years in the future as `today` so every cached row
+      // reads as older than STALE_DAYS — forces a refresh of every fund the
+      // user holds. The constant in fund-holdings-sync stays untouched.
+      const farFuture = new Date();
+      farFuture.setFullYear(farFuture.getFullYear() + 100);
+      const result = await syncStaleFunds(
+        {
+          yahoo: new YahooClient(),
+          fundHoldings: new FundHoldingsRepo(db),
+          tickers: new TickersRepo(db),
+          holdings: new HoldingsRepo(db),
+        },
+        farFuture,
+      );
+      setRefreshResult(result);
+      await loadFundHoldings();
+    } catch (err) {
+      setRefreshResult({
+        refreshed: [],
+        skipped: [],
+        errors: [err instanceof Error ? err.message : String(err)],
+      });
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   // Look up asset classes whenever the set of tickers changes. The tickers
   // table starts empty in Phase 2; this lookup gracefully resolves to an
   // empty map and every holding falls back to AssetClass.OTHER.
@@ -426,6 +473,35 @@ export default function Investments() {
         <p className="text-sm text-muted-foreground">
           Allocation across asset classes, drift from your targets, and contribution trends.
         </p>
+        <div className="flex flex-wrap items-center gap-3 mt-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefreshFundData}
+            disabled={refreshing}
+          >
+            {refreshing ? 'Refreshing fund data…' : 'Refresh fund data'}
+          </Button>
+          {refreshResult && (
+            <div className="text-xs text-muted-foreground">
+              {refreshResult.refreshed.length > 0 && (
+                <span className="mr-3">
+                  Refreshed: {refreshResult.refreshed.join(', ')}
+                </span>
+              )}
+              {refreshResult.skipped.length > 0 && (
+                <span className="mr-3">
+                  Skipped: {refreshResult.skipped.join(', ')}
+                </span>
+              )}
+              {refreshResult.errors.length > 0 && (
+                <span className="text-destructive">
+                  Errors: {refreshResult.errors.join('; ')}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Donuts row */}
