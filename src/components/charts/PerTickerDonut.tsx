@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import DonutChartCard from './DonutChartCard';
 import { CHART_NEUTRAL } from './palette';
-import { topNWithMisc } from '@/lib/concentration';
+import { withMiscLast } from '@/lib/concentration';
 import { useConcentration } from '@/lib/use-concentration';
 import { useTickersStore } from '@/stores/tickers-store';
 import { formatCurrency } from '@/lib/format';
@@ -49,7 +49,7 @@ export function PerTickerDonut() {
     [tickerNameMap],
   );
 
-  const slices = topNWithMisc(report.perTicker, 10).map((s) => ({
+  const slices = withMiscLast(report.perTicker).map((s) => ({
     name: s.ticker,
     // Donut can't render negative wedges; SHORT exposures get clamped here.
     value: Math.max(0, s.effectiveExposure),
@@ -80,8 +80,8 @@ export function PerTickerDonut() {
   }
 
   const subtitle = opaqueFunds.length > 0
-    ? `Top 10 + Misc · ${opaqueFunds.join(', ')} couldn't be looked through (click "Refresh fund data")`
-    : 'Top 10 + Misc, after fund look-through';
+    ? `After fund look-through · ${opaqueFunds.join(', ')} couldn't be looked through (click "Refresh fund data")`
+    : 'After fund look-through';
 
   return (
     <DonutChartCard

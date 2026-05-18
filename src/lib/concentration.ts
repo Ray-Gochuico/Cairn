@@ -121,33 +121,20 @@ export function computeConcentration(input: ConcentrationInput): ConcentrationRe
 }
 
 /**
- * Collapse a sorted-descending perTicker list into top-N named tickers
- * + a single "Misc" bucket. Misc never occupies one of the N slots — it
- * always appears as the (N+1)th wedge when there's anything to aggregate.
+ * Reorder a perTicker list so the 'Misc' wedge appears last in the
+ * donut visualization, regardless of its pctOfPortfolio rank. The
+ * input is already sorted descending by pct (from `computeConcentration`),
+ * which would otherwise put a large Misc bucket at the front; visually
+ * Misc reads better as the catch-all wedge at the end.
  *
- * Aggregation rules:
- *   - The tail of named tickers (anything ranked beyond top-N) goes into Misc.
- *   - Any pre-existing 'Misc' entry from `computeConcentration` (fund tails)
- *     also gets folded into the single final Misc wedge.
- *   - If named.length ≤ N AND no pre-existing Misc, no Misc wedge is added.
- *
- * Assumes input is already sorted descending by pctOfPortfolio (which is
- * the shape `computeConcentration().perTicker` returns).
+ * No truncation, no aggregation: every named ticker comes through
+ * unchanged. Returns the input unchanged if no Misc entry is present.
  */
-export function topNWithMisc(
+export function withMiscLast(
   perTicker: Array<{ ticker: string; effectiveExposure: number; pctOfPortfolio: number }>,
-  n: number,
 ): Array<{ ticker: string; effectiveExposure: number; pctOfPortfolio: number }> {
+  const misc = perTicker.find((s) => s.ticker === 'Misc');
+  if (!misc) return perTicker;
   const named = perTicker.filter((s) => s.ticker !== 'Misc');
-  const existingMisc = perTicker.filter((s) => s.ticker === 'Misc');
-
-  const head = named.slice(0, n);
-  const tail = named.slice(n);
-
-  const allForMisc = [...tail, ...existingMisc];
-  if (allForMisc.length === 0) return head;
-
-  const miscExposure = allForMisc.reduce((a, b) => a + b.effectiveExposure, 0);
-  const miscPct = allForMisc.reduce((a, b) => a + b.pctOfPortfolio, 0);
-  return [...head, { ticker: 'Misc', effectiveExposure: miscExposure, pctOfPortfolio: miscPct }];
+  return [...named, misc];
 }
