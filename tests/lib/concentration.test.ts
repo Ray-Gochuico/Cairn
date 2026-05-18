@@ -133,6 +133,67 @@ describe('computeConcentration', () => {
     expect(acSoft!.exposurePct).toBeGreaterThan(0.50);
     expect(acSoft!.exposurePct).toBeLessThanOrEqual(0.60);
   });
+
+  it('attributes the fund tail to a shared Misc bucket when top-N covers < 100%', () => {
+    const result = computeConcentration({
+      holdings: [{ ticker: 'VTI', value: 10000 }],
+      tickers: new Map([
+        ['VTI', { assetClass: 'US_TOTAL_MARKET', leverageFactor: 1, direction: 'LONG' }],
+        ['AAPL', { assetClass: 'SINGLE_STOCK', leverageFactor: 1, direction: 'LONG' }],
+        ['MSFT', { assetClass: 'SINGLE_STOCK', leverageFactor: 1, direction: 'LONG' }],
+      ]),
+      // Yahoo-style: top-2 sum to 0.15, the other 0.85 is untracked tail
+      fundHoldings: new Map([['VTI', [
+        { symbol: 'AAPL', weight: 0.08 },
+        { symbol: 'MSFT', weight: 0.07 },
+      ]]]),
+      totalPortfolioValue: 10000,
+    });
+    const misc = result.perTicker.find((t) => t.ticker === 'Misc');
+    expect(misc).toBeDefined();
+    expect(misc!.effectiveExposure).toBeCloseTo(10000 * 0.85, 4);
+    expect(misc!.pctOfPortfolio).toBeCloseTo(0.85, 4);
+
+    // Sum of all per-ticker effective exposures should equal portfolio value
+    const sum = result.perTicker.reduce((a, t) => a + Math.abs(t.effectiveExposure), 0);
+    expect(sum).toBeCloseTo(10000, 1);
+  });
+
+  it('sums Misc across multiple funds into one shared bucket', () => {
+    const result = computeConcentration({
+      holdings: [
+        { ticker: 'VTI', value: 10000 },
+        { ticker: 'FXAIX', value: 5000 },
+      ],
+      tickers: new Map([
+        ['VTI', { assetClass: 'US_TOTAL_MARKET', leverageFactor: 1, direction: 'LONG' }],
+        ['FXAIX', { assetClass: 'US_LARGE_CAP', leverageFactor: 1, direction: 'LONG' }],
+      ]),
+      fundHoldings: new Map([
+        ['VTI', [{ symbol: 'AAPL', weight: 0.1 }]],   // 90% misc
+        ['FXAIX', [{ symbol: 'AAPL', weight: 0.05 }]], // 95% misc
+      ]),
+      totalPortfolioValue: 15000,
+    });
+    const misc = result.perTicker.find((t) => t.ticker === 'Misc');
+    // VTI: 10000 * 0.9 = 9000, FXAIX: 5000 * 0.95 = 4750, total 13750
+    expect(misc!.effectiveExposure).toBeCloseTo(13750, 1);
+  });
+
+  it('does not create Misc when fund top-N sums to 1.0', () => {
+    const result = computeConcentration({
+      holdings: [{ ticker: 'VTI', value: 10000 }],
+      tickers: new Map([
+        ['VTI', { assetClass: 'US_TOTAL_MARKET', leverageFactor: 1, direction: 'LONG' }],
+      ]),
+      fundHoldings: new Map([['VTI', [
+        { symbol: 'AAPL', weight: 0.4 },
+        { symbol: 'MSFT', weight: 0.6 },
+      ]]]),
+      totalPortfolioValue: 10000,
+    });
+    expect(result.perTicker.find((t) => t.ticker === 'Misc')).toBeUndefined();
+  });
 });
 
 describe('topNWithMisc', () => {
@@ -169,5 +230,21 @@ describe('topNWithMisc', () => {
     const result = topNWithMisc(items, 2);
     expect(result.map((r) => r.ticker)).toEqual(['A', 'B', 'Misc']);
     expect(result[2].effectiveExposure).toBeCloseTo(20, 4);
+  });
+
+  it('merges tail into an existing Misc entry rather than creating a duplicate', () => {
+    const result = topNWithMisc(
+      [
+        { ticker: 'A', effectiveExposure: 50, pctOfPortfolio: 0.5 },
+        { ticker: 'Misc', effectiveExposure: 30, pctOfPortfolio: 0.3 },  // already in top-2
+        { ticker: 'B', effectiveExposure: 15, pctOfPortfolio: 0.15 },
+        { ticker: 'C', effectiveExposure: 5, pctOfPortfolio: 0.05 },
+      ],
+      2,
+    );
+    // top-2 is [A, Misc]. Tail (B+C = 20, 0.20) merges into Misc.
+    expect(result).toHaveLength(2);
+    expect(result.find((r) => r.ticker === 'Misc')!.effectiveExposure).toBeCloseTo(50, 4);
+    expect(result.find((r) => r.ticker === 'Misc')!.pctOfPortfolio).toBeCloseTo(0.5, 4);
   });
 });

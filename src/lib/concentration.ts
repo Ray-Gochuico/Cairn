@@ -43,12 +43,26 @@ export function computeConcentration(input: ConcentrationInput): ConcentrationRe
     const fundRows = isFund ? input.fundHoldings.get(h.ticker) : undefined;
 
     if (fundRows && fundRows.length > 0) {
+      let totalCovered = 0;
       for (const f of fundRows) {
         const contribution = h.value * f.weight * leverage * sign;
         tickerExposure.set(f.symbol, (tickerExposure.get(f.symbol) ?? 0) + contribution);
         const underlyingMeta = input.tickers.get(f.symbol);
         const underlyingClass = underlyingMeta?.assetClass ?? 'OTHER';
         assetClassExposure.set(underlyingClass, (assetClassExposure.get(underlyingClass) ?? 0) + Math.abs(contribution));
+        totalCovered += f.weight;
+      }
+      // The fund's top-N weights typically sum to less than 1.0 (Yahoo returns
+      // only top-10). Attribute the remaining (1 - totalCovered) to a shared
+      // 'Misc' ticker so the per-company donut sums to 100% of the portfolio.
+      // Asset-class exposure for the uncovered slice stays under the fund's
+      // own class (a US_TOTAL_MARKET fund's untracked portion is still
+      // US_TOTAL_MARKET).
+      const uncovered = Math.max(0, 1 - totalCovered);
+      if (uncovered > 0) {
+        const miscContribution = h.value * uncovered * leverage * sign;
+        tickerExposure.set('Misc', (tickerExposure.get('Misc') ?? 0) + miscContribution);
+        assetClassExposure.set(assetClass, (assetClassExposure.get(assetClass) ?? 0) + Math.abs(miscContribution));
       }
       absLeverageSum += Math.abs(h.value * leverage);
     } else {
@@ -119,7 +133,19 @@ export function topNWithMisc(
   if (perTicker.length <= n) return perTicker;
   const head = perTicker.slice(0, n);
   const tail = perTicker.slice(n);
-  const miscExposure = tail.reduce((a, b) => a + b.effectiveExposure, 0);
-  const miscPct = tail.reduce((a, b) => a + b.pctOfPortfolio, 0);
-  return [...head, { ticker: 'Misc', effectiveExposure: miscExposure, pctOfPortfolio: miscPct }];
+  const tailMiscExposure = tail.reduce((a, b) => a + b.effectiveExposure, 0);
+  const tailMiscPct = tail.reduce((a, b) => a + b.pctOfPortfolio, 0);
+
+  // If the head already contains 'Misc' (e.g., added by computeConcentration
+  // for fund untracked portions), merge the tail into that existing entry.
+  // Otherwise, append a new 'Misc' entry.
+  const existingIdx = head.findIndex((s) => s.ticker === 'Misc');
+  if (existingIdx >= 0) {
+    const merged = { ...head[existingIdx] };
+    merged.effectiveExposure += tailMiscExposure;
+    merged.pctOfPortfolio += tailMiscPct;
+    head[existingIdx] = merged;
+    return head;
+  }
+  return [...head, { ticker: 'Misc', effectiveExposure: tailMiscExposure, pctOfPortfolio: tailMiscPct }];
 }

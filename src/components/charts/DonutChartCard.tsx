@@ -26,6 +26,12 @@ export interface DonutChartCardProps {
    * If omitted, Recharts shows the raw number.
    */
   valueFormatter?: (value: number) => string;
+  /**
+   * Optional. Formats the slice name shown in the tooltip. The legend
+   * keeps showing the raw slice name unchanged. Use this to show longer
+   * labels (e.g., "AAPL — Apple Inc.") on hover without bloating the legend.
+   */
+  tooltipNameFormatter?: (name: string) => string;
 }
 
 const DEFAULT_PALETTE = [
@@ -47,6 +53,7 @@ export default function DonutChartCard({
   outerRadius = 90,
   labelFormatter,
   valueFormatter,
+  tooltipNameFormatter,
 }: DonutChartCardProps) {
   const total = data.reduce((sum, slice) => sum + slice.value, 0);
   return (
@@ -81,17 +88,17 @@ export default function DonutChartCard({
               ))}
             </Pie>
             <Tooltip
-              formatter={
-                valueFormatter
-                  ? (value, name) => {
-                      if (typeof value !== 'number') {
-                        return [String(value ?? ''), String(name ?? '')];
-                      }
-                      const pct = total > 0 ? ` (${((value / total) * 100).toFixed(1)}%)` : '';
-                      return [`${valueFormatter(value)}${pct}`, String(name ?? '')];
-                    }
-                  : undefined
-              }
+              formatter={(value, name) => {
+                const displayName = tooltipNameFormatter && typeof name === 'string'
+                  ? tooltipNameFormatter(name)
+                  : String(name ?? '');
+                if (typeof value !== 'number') {
+                  return [String(value ?? ''), displayName];
+                }
+                const pct = total > 0 ? ` (${((value / total) * 100).toFixed(1)}%)` : '';
+                const formatted = valueFormatter ? `${valueFormatter(value)}${pct}` : `${value}${pct}`;
+                return [formatted, displayName];
+              }}
             />
             <Legend />
           </PieChart>

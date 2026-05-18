@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import DonutChartCard from './DonutChartCard';
 import { topNWithMisc } from '@/lib/concentration';
 import { useConcentration } from '@/lib/use-concentration';
@@ -34,6 +34,18 @@ export function PerTickerDonut() {
   const tickerClassMap = useMemo(
     () => new Map(tickers.map((t) => [t.ticker, t.assetClass])),
     [tickers],
+  );
+  const tickerNameMap = useMemo(
+    () => new Map(tickers.map((t) => [t.ticker, t.name])),
+    [tickers],
+  );
+
+  const tooltipNameFormatter = useCallback(
+    (name: string) => {
+      const companyName = tickerNameMap.get(name);
+      return companyName ? `${name} — ${companyName}` : name;
+    },
+    [tickerNameMap],
   );
 
   const slices = topNWithMisc(report.perTicker, 10).map((s) => ({
@@ -75,6 +87,7 @@ export function PerTickerDonut() {
       subtitle={subtitle}
       data={slices}
       valueFormatter={formatCurrency}
+      tooltipNameFormatter={tooltipNameFormatter}
     />
   );
 }
