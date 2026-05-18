@@ -1,4 +1,5 @@
 import { fetch } from '@tauri-apps/plugin-http';
+import { invoke } from '@tauri-apps/api/core';
 
 export interface QuoteResult {
   ticker: string;
@@ -34,32 +35,7 @@ interface ChartResponse {
 const YAHOO_BASE = 'https://query2.finance.yahoo.com/v8/finance/chart';
 
 /**
- * Reads Set-Cookie headers from a fetch Response in a way that works
- * across both the modern fetch spec (`Headers.getSetCookie()` returns
- * an array of individual values) and older runtimes that join all
- * Set-Cookie values into a single comma-delimited string via `.get()`.
- *
- * Yahoo's specific session cookies (A1, A3, B, A1S, GUC) are simple
- * `name=value` pairs with Expires/Path/Domain attributes that we strip
- * with `.split(';')[0]`, so even the imperfect comma-split fallback is
- * adequate — none of these cookie values contain unescaped commas.
- */
-function readSetCookieHeaders(headers: Headers): string[] {
-  const anyHeaders = headers as unknown as { getSetCookie?: () => string[] };
-  if (typeof anyHeaders.getSetCookie === 'function') {
-    return anyHeaders.getSetCookie();
-  }
-  const joined = headers.get('set-cookie');
-  if (!joined) return [];
-  // Split on `, <cookie-name>=` lookahead. Date attributes inside cookies
-  // contain commas (e.g. "Expires=Wed, 21 Oct 2026 ..."), but those are
-  // followed by a space + day-name, not a `name=` pattern, so the
-  // lookahead skips them correctly.
-  return joined.split(/,\s*(?=[A-Za-z0-9_-]+=)/);
-}
-
-/**
- * Wraps Yahoo Finance's public chart endpoint.
+ * Wraps Yahoo Finance's public chart + quoteSummary endpoints.
  *
  * Why a hand-rolled client instead of the `yahoo-finance2` npm package:
  * yahoo-finance2 transitively imports `@deno/shim-deno`, which calls
@@ -69,27 +45,18 @@ function readSetCookieHeaders(headers: Headers): string[] {
  * doesn't send `Access-Control-Allow-Origin`, so a direct browser
  * request gets rejected.
  *
- * `@tauri-apps/plugin-http`'s `fetch` routes the request through the
- * Rust shell, which has no CORS policy. Yahoo's chart endpoint returns
- * the JSON we need (current price + daily closes) with no auth and
- * generous rate limits.
+ * Transport split:
+ *   - `quote()` / `historical()` use `@tauri-apps/plugin-http`'s `fetch`,
+ *     which routes through the Rust shell (no CORS). Yahoo's chart
+ *     endpoint requires no auth and has generous rate limits.
+ *   - `quoteSummary()` invokes the Rust command `yahoo_quote_summary`
+ *     (see `src-tauri/src/yahoo.rs`). Yahoo requires a CSRF "crumb" tied
+ *     to session cookies set by `fc.yahoo.com`, and the JS-side
+ *     `plugin-http` fetch doesn't reliably surface `Set-Cookie` headers
+ *     in the WebView. Rust uses `reqwest`'s cookie jar to keep a single
+ *     persistent session and caches the crumb for 24h.
  */
 export class YahooClient {
-  /**
-   * Cached session credentials for the `quoteSummary` endpoint, which
-   * since 2023 requires a CSRF "crumb" tied to a set of session cookies.
-   * The chart endpoint used by `quote()` / `historical()` does NOT need
-   * these — keep `quote()` and `historical()` unauthenticated for speed.
-   *
-   * The pair is refreshed lazily on first `quoteSummary` call and reused
-   * for 24h, or invalidated on a mid-session 401/403 so we re-auth once
-   * and retry.
-   */
-  private _cookieHeader: string | null = null;
-  private _crumb: string | null = null;
-  private _authFetchedAt: number = 0;
-  private static readonly AUTH_TTL_MS = 24 * 60 * 60 * 1000;
-
   /**
    * Returns the current regular-market price for `ticker`.
    */
@@ -143,7 +110,13 @@ export class YahooClient {
 
   /**
    * Calls Yahoo's `/v10/finance/quoteSummary/<TICKER>?modules=<m1>,<m2>,...`
-   * endpoint and returns the raw parsed JSON.
+   * endpoint via the Rust `yahoo_quote_summary` Tauri command and returns
+   * the raw parsed JSON.
+   *
+   * All cookie/crumb auth lives in Rust (see `src-tauri/src/yahoo.rs`):
+   * the JS side just hands ticker + modules to the command and parses the
+   * returned body string. The Rust client maintains a persistent cookie
+   * jar and a 24h crumb cache, so this stays cheap across many calls.
    *
    * The return type is `unknown` because each module block has a different
    * shape (topHoldings, fundProfile, price, etc.). Callers that need
@@ -151,95 +124,8 @@ export class YahooClient {
    * `fundProfile`) rather than casting this directly.
    */
   async quoteSummary(ticker: string, modules: string[]): Promise<unknown> {
-    const { cookie, crumb } = await this.ensureAuth();
-    const buildUrl = (c: string) =>
-      `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(ticker)}?modules=${modules.join(',')}&crumb=${encodeURIComponent(c)}`;
-
-    const res = await fetch(buildUrl(crumb), {
-      method: 'GET',
-      headers: { Cookie: cookie },
-    });
-    if (res.status === 401 || res.status === 403) {
-      // Session expired mid-life. Invalidate the cache, re-auth once,
-      // and retry. A second failure surfaces as a normal error.
-      this._cookieHeader = null;
-      this._crumb = null;
-      this._authFetchedAt = 0;
-      const { cookie: cookie2, crumb: crumb2 } = await this.ensureAuth();
-      const retryRes = await fetch(buildUrl(crumb2), {
-        method: 'GET',
-        headers: { Cookie: cookie2 },
-      });
-      if (!retryRes.ok) {
-        throw new Error(`Yahoo quoteSummary ${ticker} failed: ${retryRes.status}`);
-      }
-      return retryRes.json();
-    }
-    if (!res.ok) throw new Error(`Yahoo quoteSummary ${ticker} failed: ${res.status}`);
-    return res.json();
-  }
-
-  /**
-   * Lazily fetches (and caches) the cookie + crumb pair required to call
-   * Yahoo's `quoteSummary` endpoint. The flow:
-   *
-   *   1. GET https://fc.yahoo.com — returns 404 in body, but the response
-   *      headers carry the session cookies (A1, A3, B, GUC, etc.) that
-   *      the crumb endpoint requires.
-   *   2. GET https://query1.finance.yahoo.com/v1/test/getcrumb with the
-   *      cookies attached. Body is the raw crumb string (~11 chars).
-   *   3. Subsequent quoteSummary calls append `&crumb=<crumb>` and send
-   *      the cookies as a `Cookie:` header.
-   *
-   * Both values are stable for ~24h per session, so we cache them on the
-   * instance and refresh on TTL expiry or on a mid-session 401/403.
-   *
-   * NB: `fc.yahoo.com` must be whitelisted in
-   * `src-tauri/capabilities/default.json` under the `http:default` allow
-   * list, alongside `query1`/`query2`; without it the Tauri shell blocks
-   * the request with an ACL error before it hits the network.
-   */
-  private async ensureAuth(): Promise<{ cookie: string; crumb: string }> {
-    const fresh =
-      this._cookieHeader &&
-      this._crumb &&
-      Date.now() - this._authFetchedAt < YahooClient.AUTH_TTL_MS;
-    if (fresh) {
-      return { cookie: this._cookieHeader!, crumb: this._crumb! };
-    }
-
-    // Step 1: Issue session cookies. fc.yahoo.com returns a 404 body but
-    // sets cookies on the response — we explicitly don't check `.ok`.
-    const cookieRes = await fetch('https://fc.yahoo.com', { method: 'GET' });
-    const rawCookies = readSetCookieHeaders(cookieRes.headers);
-    if (rawCookies.length === 0) {
-      throw new Error('Yahoo cookie endpoint returned no Set-Cookie headers');
-    }
-    // Reduce each `name=value; Path=/; Expires=...; Domain=...; Secure`
-    // to just `name=value`, then join into a single Cookie header value.
-    const cookieHeader = rawCookies
-      .map((c) => c.split(';')[0].trim())
-      .filter((c) => c.length > 0)
-      .join('; ');
-    if (cookieHeader.length === 0) {
-      throw new Error('Yahoo cookie endpoint returned empty cookie values');
-    }
-
-    // Step 2: Fetch the crumb tied to those cookies.
-    const crumbRes = await fetch('https://query1.finance.yahoo.com/v1/test/getcrumb', {
-      method: 'GET',
-      headers: { Cookie: cookieHeader },
-    });
-    if (!crumbRes.ok) {
-      throw new Error(`Yahoo getcrumb failed: ${crumbRes.status}`);
-    }
-    const crumb = (await crumbRes.text()).trim();
-    if (!crumb) throw new Error('Yahoo getcrumb returned empty body');
-
-    this._cookieHeader = cookieHeader;
-    this._crumb = crumb;
-    this._authFetchedAt = Date.now();
-    return { cookie: cookieHeader, crumb };
+    const body = await invoke<string>('yahoo_quote_summary', { ticker, modules });
+    return JSON.parse(body);
   }
 
   /**

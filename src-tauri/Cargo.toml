@@ -25,4 +25,12 @@ tauri-plugin-notification = "2"
 tauri-plugin-http = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Yahoo quoteSummary auth (cookie pre-flight + crumb) is owned by the Rust
+# shell — see `src/yahoo.rs`. The JS-side @tauri-apps/plugin-http fetch doesn't
+# reliably surface Set-Cookie headers in the Tauri WebView, and re-authenticating
+# per ticker hits Yahoo's rate limit. `reqwest` with `cookie_store(true)` keeps
+# a single persistent session for the app's lifetime.
+reqwest = { version = "0.12", default-features = false, features = ["json", "cookies", "rustls-tls"] }
+tokio = { version = "1", features = ["sync"] }
+urlencoding = "2"
 

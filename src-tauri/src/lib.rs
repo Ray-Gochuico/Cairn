@@ -1,4 +1,8 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+mod yahoo;
+
+use yahoo::{yahoo_quote_summary, YahooState};
+
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
@@ -11,7 +15,10 @@ pub fn run() {
         .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_http::init())
-        .invoke_handler(tauri::generate_handler![greet])
+        // YahooState is a singleton (single reqwest cookie jar + shared crumb
+        // cache) used by `yahoo_quote_summary`. See `src/yahoo.rs`.
+        .manage(YahooState::new())
+        .invoke_handler(tauri::generate_handler![greet, yahoo_quote_summary])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
