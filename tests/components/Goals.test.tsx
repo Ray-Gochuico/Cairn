@@ -6,6 +6,7 @@ import { useAccountsStore } from '@/stores/accounts-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useContributionsStore } from '@/stores/contributions-store';
 import { useHouseholdStore } from '@/stores/household-store';
+import { useHoldingsStore } from '@/stores/holdings-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import {
   AccountType,
@@ -14,7 +15,14 @@ import {
   GoalType,
   SnapshotSource,
 } from '@/types/enums';
-import type { Account, Contribution, Goal, GrowthScenario, Person } from '@/types/schema';
+import type {
+  Account,
+  Contribution,
+  Goal,
+  GrowthScenario,
+  Holding,
+  Person,
+} from '@/types/schema';
 import Goals from '@/pages/Goals';
 
 const basePerson: Person = {
@@ -53,6 +61,7 @@ function resetStores() {
   useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null });
   useContributionsStore.setState({ contributions: [], isLoading: false, error: null });
   useHouseholdStore.setState({ household: null, isLoading: false, error: null });
+  useHoldingsStore.setState({ holdings: [], isLoading: false, error: null });
   usePersonsStore.setState({ persons: [], isLoading: false, error: null });
 }
 
@@ -63,6 +72,8 @@ interface PrimeOpts {
   snapshotValues?: Array<{ accountId: number; snapshotDate: string; totalValue: number }>;
   /** Per-month $amount/account; defaults to one $1k contribution per month for last 6 months on accountId 1. */
   contributions?: Array<Partial<Contribution>>;
+  /** Optional holdings — accounts with at least one holding render "auto from prices"; others get an Update button. */
+  holdings?: Array<Partial<Holding>>;
 }
 
 function primeStores(opts: PrimeOpts = {}) {
@@ -142,6 +153,20 @@ function primeStores(opts: PrimeOpts = {}) {
     },
     isLoading: false,
     error: null,
+  });
+
+  useHoldingsStore.setState({
+    holdings: (opts.holdings ?? []).map((h, i) => ({
+      id: h.id ?? i + 1,
+      accountId: h.accountId ?? 1,
+      ticker: h.ticker ?? 'VTI',
+      shareCount: h.shareCount ?? 0,
+      targetAllocationPct: h.targetAllocationPct ?? null,
+      costBasis: h.costBasis ?? null,
+    })),
+    isLoading: false,
+    error: null,
+    load: async () => {},
   });
 }
 
@@ -406,6 +431,61 @@ describe('Goals page', () => {
     const card2 = screen.getByText('Sensitive Goal').closest('[class*="rounded-xl"]');
     expect(card2).not.toBeNull();
     expect(within(card2 as HTMLElement).getByText(/on track/i)).toBeInTheDocument();
+  });
+
+  it('renders an "Update" button for linked accounts without holdings and "auto from prices" for accounts with holdings', () => {
+    // Two linked accounts: cash savings (no holdings) and brokerage (has a VTI
+    // position). The cash row should expose an Update button; the brokerage
+    // row should fall back to the muted "auto from prices" copy.
+    primeStores({
+      goals: [
+        {
+          name: 'Emergency fund',
+          type: GoalType.EMERGENCY_FUND,
+          targetAmount: 20_000,
+          targetDate: '2031-01-01',
+          linkedAccountIds: [1, 2],
+        },
+      ],
+      accounts: [
+        { id: 1, name: 'Cash Savings', type: AccountType.ACCOUNT_BROKERAGE },
+        { id: 2, name: 'Brokerage VTI', type: AccountType.ACCOUNT_BROKERAGE },
+      ],
+      snapshotValues: [
+        { accountId: 1, snapshotDate: '2026-04-15', totalValue: 5_000 },
+        { accountId: 2, snapshotDate: '2026-05-01', totalValue: 15_000 },
+      ],
+      holdings: [
+        {
+          id: 1,
+          accountId: 2,
+          ticker: 'VTI',
+          shareCount: 100,
+          targetAllocationPct: null,
+          costBasis: null,
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter>
+        <Goals />
+      </MemoryRouter>,
+    );
+
+    // Goal title appears in the card header. (The string "Emergency fund"
+    // also appears as the type-label subtitle, hence getAllByText + length.)
+    expect(screen.getAllByText('Emergency fund').length).toBeGreaterThanOrEqual(1);
+    // Both account names show up in the linked-accounts footer.
+    expect(screen.getByText('Cash Savings')).toBeInTheDocument();
+    expect(screen.getByText('Brokerage VTI')).toBeInTheDocument();
+    // Cash row → Update button is the only path.
+    expect(screen.getByRole('button', { name: /^update$/i })).toBeInTheDocument();
+    // Brokerage row → muted "auto from prices" copy, no Update button.
+    expect(screen.getByText(/auto from prices/i)).toBeInTheDocument();
+    // Last-updated date is surfaced for each account.
+    expect(screen.getByText(/updated 2026-04-15/i)).toBeInTheDocument();
+    expect(screen.getByText(/updated 2026-05-01/i)).toBeInTheDocument();
   });
 
   it('view filter ?view=p1 hides p2 goals and keeps p1 goals visible', () => {

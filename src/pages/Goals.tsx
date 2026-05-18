@@ -1,10 +1,11 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useGoalsStore } from '@/stores/goals-store';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useContributionsStore } from '@/stores/contributions-store';
 import { useHouseholdStore } from '@/stores/household-store';
+import { useHoldingsStore } from '@/stores/holdings-store';
 import {
   computeGoalProgress,
   type GoalProgressResult,
@@ -27,6 +28,7 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { formatCurrency, formatPercent } from '@/lib/format';
+import { UpdateAccountBalanceDialog } from '@/components/dialogs/UpdateAccountBalanceDialog';
 
 /**
  * Goals page — Phase 3 visualization surface.
@@ -115,11 +117,23 @@ interface GoalProjection extends GoalProgressResult {
   recentMonthlyContribution: number;
 }
 
-interface GoalProgressCardProps {
-  projection: GoalProjection;
+interface LinkedAccountInfo {
+  name: string;
+  lastUpdated: string | null;
+  hasHoldings: boolean;
 }
 
-function GoalProgressCard({ projection }: GoalProgressCardProps) {
+interface GoalProgressCardProps {
+  projection: GoalProjection;
+  accountInfoById: Map<number, LinkedAccountInfo>;
+  onUpdateBalance: (accountId: number, accountName: string) => void;
+}
+
+function GoalProgressCard({
+  projection,
+  accountInfoById,
+  onUpdateBalance,
+}: GoalProgressCardProps) {
   const { goal } = projection;
   // Clamp the visual width to [0, 1]; aria-valuenow follows the same clamp so
   // an over-funded goal reads as "100" instead of e.g. "150" (still labelled
@@ -208,6 +222,50 @@ function GoalProgressCard({ projection }: GoalProgressCardProps) {
             </dd>
           </div>
         </dl>
+
+        {goal.linkedAccountIds.length > 0 && (
+          <div className="border-t pt-3">
+            <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
+              Linked accounts
+            </div>
+            <ul className="space-y-1.5">
+              {goal.linkedAccountIds.map((accountId) => {
+                const info = accountInfoById.get(accountId);
+                // Account may have been deleted while still referenced in
+                // linkedAccountIds — skip the row rather than crash.
+                if (!info) return null;
+                return (
+                  <li
+                    key={accountId}
+                    className="flex items-center justify-between text-xs gap-2"
+                  >
+                    <span className="min-w-0 truncate">
+                      <span className="font-medium">{info.name}</span>
+                      <span className="text-muted-foreground ml-2">
+                        {info.lastUpdated
+                          ? `updated ${info.lastUpdated}`
+                          : 'never updated'}
+                      </span>
+                    </span>
+                    {info.hasHoldings ? (
+                      <span className="text-muted-foreground italic shrink-0">
+                        auto from prices
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onUpdateBalance(accountId, info.name)}
+                        className="text-primary hover:underline shrink-0"
+                      >
+                        Update
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -217,6 +275,7 @@ export default function Goals() {
   const { filter, persons } = useViewFilter();
   const goals = useGoalsStore((s) => s.goals);
   const loadGoals = useGoalsStore((s) => s.load);
+  const accounts = useAccountsStore((s) => s.accounts);
   const loadAccounts = useAccountsStore((s) => s.load);
   const snapshots = useSnapshotsStore((s) => s.snapshots);
   const loadSnapshots = useSnapshotsStore((s) => s.load);
@@ -224,6 +283,16 @@ export default function Goals() {
   const loadContributions = useContributionsStore((s) => s.load);
   const household = useHouseholdStore((s) => s.household);
   const loadHousehold = useHouseholdStore((s) => s.load);
+  const holdings = useHoldingsStore((s) => s.holdings);
+  const loadHoldings = useHoldingsStore((s) => s.load);
+
+  // Tracks which account the UpdateAccountBalanceDialog is currently editing;
+  // null means the dialog is closed. We keep both the id and the name in
+  // state so the dialog can render its title without re-querying accounts.
+  const [dialogTarget, setDialogTarget] = useState<{
+    accountId: number;
+    accountName: string;
+  } | null>(null);
 
   // Filter goals by the household / p1 / p2 / joint dropdown. Snapshots and
   // contributions intentionally aren't pre-filtered here — the goal already
@@ -243,7 +312,15 @@ export default function Goals() {
     loadSnapshots();
     loadContributions();
     loadHousehold();
-  }, [loadGoals, loadAccounts, loadSnapshots, loadContributions, loadHousehold]);
+    loadHoldings();
+  }, [
+    loadGoals,
+    loadAccounts,
+    loadSnapshots,
+    loadContributions,
+    loadHousehold,
+    loadHoldings,
+  ]);
 
   // Stable "today" per render cycle — passed into computeGoalProgress so the
   // helper isn't recomputed twice from new Date() drift inside a single
@@ -251,6 +328,27 @@ export default function Goals() {
   const today = useMemo(() => new Date(), []);
 
   const annualRate = useMemo(() => pickModerateRate(household), [household]);
+
+  // Map<accountId, info> consumed by each card's "Linked accounts" footer.
+  // We compute it once at the page level rather than per-card so the O(N*M)
+  // snapshot scan happens only when one of the source arrays actually
+  // changes (rather than every card render).
+  const accountInfoById = useMemo(() => {
+    const map = new Map<number, LinkedAccountInfo>();
+    for (const a of accounts) {
+      if (a.id == null) continue;
+      // Walk all snapshots once per account; ISO dates compare lexically.
+      let lastUpdated: string | null = null;
+      for (const s of snapshots) {
+        if (s.accountId === a.id && (lastUpdated === null || s.snapshotDate > lastUpdated)) {
+          lastUpdated = s.snapshotDate;
+        }
+      }
+      const hasHoldings = holdings.some((h) => h.accountId === a.id);
+      map.set(a.id, { name: a.name, lastUpdated, hasHoldings });
+    }
+    return map;
+  }, [accounts, snapshots, holdings]);
 
   const projections = useMemo<GoalProjection[]>(() => {
     const latestMap = latestSnapshotPerAccount(snapshots);
@@ -313,9 +411,27 @@ export default function Goals() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {projections.map((p) => (
-          <GoalProgressCard key={p.goal.id} projection={p} />
+          <GoalProgressCard
+            key={p.goal.id}
+            projection={p}
+            accountInfoById={accountInfoById}
+            onUpdateBalance={(accountId, accountName) =>
+              setDialogTarget({ accountId, accountName })
+            }
+          />
         ))}
       </div>
+
+      {dialogTarget && (
+        <UpdateAccountBalanceDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setDialogTarget(null);
+          }}
+          accountId={dialogTarget.accountId}
+          accountName={dialogTarget.accountName}
+        />
+      )}
     </div>
   );
 }
