@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Investments over time — mockup</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f8fafc;
+      color: #0f172a;
+    }
+    .page { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+    h1 { margin: 0 0 4px; font-size: 22px; font-weight: 600; }
+    .subtitle { color: #64748b; font-size: 14px; margin-bottom: 24px; }
+    .card {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .card-header {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 20px;
+    }
+    .card-title { font-size: 18px; font-weight: 600; }
+    .card-subtitle { font-size: 13px; color: #64748b; margin-top: 4px; }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+    .granularity {
+      display: inline-flex;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .granularity button {
+      border: 0;
+      background: #fff;
+      padding: 6px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      color: #475569;
+      border-right: 1px solid #cbd5e1;
+    }
+    .granularity button:last-child { border-right: 0; }
+    .granularity button.active {
+      background: #2563eb;
+      color: #fff;
+    }
+    .granularity button:hover:not(.active) {
+      background: #f1f5f9;
+    }
+    .accounts-picker {
+      position: relative;
+    }
+    .accounts-picker > button {
+      border: 1px solid #cbd5e1;
+      background: #fff;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      color: #475569;
+    }
+    .accounts-picker > button:hover { background: #f1f5f9; }
+    .accounts-dropdown {
+      position: absolute;
+      right: 0;
+      top: 100%;
+      margin-top: 6px;
+      background: #fff;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 8px;
+      min-width: 240px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      z-index: 10;
+      display: none;
+    }
+    .accounts-dropdown.open { display: block; }
+    .accounts-dropdown label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      font-size: 13px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .accounts-dropdown label:hover { background: #f1f5f9; }
+    .accounts-dropdown .swatch {
+      width: 10px; height: 10px; border-radius: 2px;
+      display: inline-block;
+    }
+    .chart-container { position: relative; height: 360px; }
+    .footer-note { font-size: 12px; color: #94a3b8; margin-top: 12px; }
+    .mockup-banner {
+      background: #fef3c7;
+      border-left: 3px solid #f59e0b;
+      padding: 12px 16px;
+      border-radius: 4px;
+      margin-bottom: 24px;
+      font-size: 13px;
+      color: #78350f;
+    }
+    .variant-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    .variant-row button {
+      border: 1px solid #cbd5e1;
+      background: #fff;
+      padding: 8px 14px;
+      font-size: 13px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .variant-row button.active {
+      background: #0f172a;
+      color: #fff;
+      border-color: #0f172a;
+    }
+    .variant-row button:hover:not(.active) { background: #f1f5f9; }
+    .variant-description {
+      background: #f1f5f9;
+      padding: 12px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      color: #475569;
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+    .variant-description code {
+      background: #fff;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="mockup-banner">
+      <strong>Mockup only.</strong> Open this file in a browser to preview the
+      Investments timeseries chart before it's added to the app. Uses
+      Chart.js via CDN; no app code changed.
+    </div>
+
+    <h1>Investments over time</h1>
+    <div class="subtitle">Stacked bars by account + line overlay tracing total portfolio value.</div>
+
+    <div class="variant-row">
+      <button class="variant-btn active" data-variant="A">A · Stacked bars + line overlay (proposed)</button>
+      <button class="variant-btn" data-variant="B">B · Stacked area + line overlay</button>
+      <button class="variant-btn" data-variant="C">C · Grouped bars per account + line for total</button>
+    </div>
+    <div class="variant-description" id="variantDescription"></div>
+
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Investments over time</div>
+          <div class="card-subtitle" id="cardSubtitle">Monthly snapshots · all 3 accounts</div>
+        </div>
+        <div class="controls">
+          <div class="granularity" id="granularitySelector">
+            <button data-granularity="DAY">Days</button>
+            <button data-granularity="WEEK">Weeks</button>
+            <button data-granularity="MONTH" class="active">Months</button>
+            <button data-granularity="QUARTER">Quarters</button>
+            <button data-granularity="YEAR">Years</button>
+          </div>
+          <div class="accounts-picker">
+            <button id="accountsPickerBtn">Accounts ▾</button>
+            <div class="accounts-dropdown" id="accountsDropdown">
+              <!-- populated by JS -->
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="chart-container">
+        <canvas id="chartCanvas"></canvas>
+      </div>
+      <div class="footer-note">
+        Sample data: 24 months of monthly snapshots for 3 accounts. Daily/weekly views
+        synthesize finer-grained data from the same series for visualization purposes.
+      </div>
+    </div>
+
+    <div class="card" style="background:#f8fafc;">
+      <div class="card-title" style="font-size:15px;">What the chart shows</div>
+      <ul style="font-size:13px; color:#475569; line-height:1.7; margin:12px 0 0; padding-left:20px;">
+        <li><strong>Stacked bars</strong>: each account's value at that bucket end-date, stacked. Bar height = total portfolio value at that point.</li>
+        <li><strong>Line overlay</strong>: traces the top of the stacked bars (total over time). Same data as bar-tops; emphasizes trajectory.</li>
+        <li><strong>Granularity buttons</strong>: re-bucket the same underlying snapshots. Each bucket takes the LATEST snapshot per account in that bucket.</li>
+        <li><strong>Account multi-select</strong>: defaults to all selected. Unchecking drops that account's bar + reduces the total line accordingly.</li>
+        <li><strong>Tooltip on hover</strong>: shows per-account values + total for that bucket.</li>
+        <li><strong>Hard cap: 90 bars</strong> shown at once. If "Days" exceeds 90 days of data, shows the most recent 90.</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    // ============================================================
+    // Helpers
+    // ============================================================
+    // Adaptive dollar formatter for axis ticks. Scales suffix based on magnitude:
+    //   $0..$999       -> "$500"
+    //   $1k..$999k     -> "$80k" or "$1.2k"  (1 decimal if not whole)
+    //   $1M+           -> "$1.2M" or "$5M"  (1 decimal if not whole)
+    function formatAxisDollar(v) {
+      const abs = Math.abs(v);
+      if (abs >= 1_000_000) {
+        const m = v / 1_000_000;
+        return '$' + (Number.isInteger(m) ? m.toFixed(0) : m.toFixed(1)) + 'M';
+      }
+      if (abs >= 1_000) {
+        const k = v / 1_000;
+        return '$' + (Number.isInteger(k) ? k.toFixed(0) : k.toFixed(1)) + 'k';
+      }
+      return '$' + v.toFixed(0);
+    }
+
+    // ============================================================
+    // Sample data — 3 accounts, 24 months of monthly snapshots
+    // ============================================================
+    // Tailwind 500 weights — less saturated than the prior 600 set.
+    const ACCOUNTS = [
+      { id: 1, name: 'Fidelity 401k',     color: '#3b82f6' },  // blue-500
+      { id: 2, name: 'Vanguard Brokerage', color: '#f97316' },  // orange-500
+      { id: 3, name: 'Schwab IRA',         color: '#22c55e' },  // green-500
+    ];
+
+    // Generate 24 monthly snapshots, with realistic-ish growth + noise
+    function generateMonthlySnapshots() {
+      const out = [];
+      const today = new Date();
+      today.setDate(1);
+      for (let i = 23; i >= 0; i--) {
+        const date = new Date(today);
+        date.setMonth(date.getMonth() - i);
+        const monthsElapsed = 23 - i;
+        // Each account grows at slightly different rates with noise
+        out.push({
+          date: date.toISOString().slice(0, 10),
+          values: {
+            1: 50000 + monthsElapsed * 1250 + Math.sin(monthsElapsed * 0.7) * 1800,
+            2: 20000 + monthsElapsed * 625 + Math.sin(monthsElapsed * 0.5 + 1) * 1200,
+            3: 30000 + monthsElapsed * 625 + Math.cos(monthsElapsed * 0.6) * 1500,
+          },
+        });
+      }
+      return out;
+    }
+    const monthlySnapshots = generateMonthlySnapshots();
+
+    // Synthesize daily data (last 30 days) by interpolating + adding noise
+    function generateDailySnapshots() {
+      const out = [];
+      const today = new Date();
+      const last = monthlySnapshots[monthlySnapshots.length - 1].values;
+      const prev = monthlySnapshots[monthlySnapshots.length - 2].values;
+      for (let i = 29; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        const fraction = (30 - i) / 30;
+        out.push({
+          date: date.toISOString().slice(0, 10),
+          values: {
+            1: prev[1] + (last[1] - prev[1]) * fraction + Math.sin(i * 0.9) * 500,
+            2: prev[2] + (last[2] - prev[2]) * fraction + Math.cos(i * 0.7) * 300,
+            3: prev[3] + (last[3] - prev[3]) * fraction + Math.sin(i * 1.1) * 400,
+          },
+        });
+      }
+      return out;
+    }
+
+    // Aggregate daily snapshots into weekly buckets (end-of-week values)
+    function bucketByWeek(snapshots) {
+      // Take last snapshot in each ISO week
+      const byWeek = new Map();
+      for (const snap of snapshots) {
+        const d = new Date(snap.date);
+        // Sunday-anchored week end (Saturday)
+        const day = d.getDay();
+        const weekEnd = new Date(d);
+        weekEnd.setDate(d.getDate() + (6 - day));
+        const key = weekEnd.toISOString().slice(0, 10);
+        byWeek.set(key, { ...snap, date: key });
+      }
+      return [...byWeek.values()].sort((a, b) => a.date.localeCompare(b.date));
+    }
+
+    function bucketByQuarter(snapshots) {
+      const byQuarter = new Map();
+      for (const snap of snapshots) {
+        const d = new Date(snap.date);
+        const q = Math.floor(d.getMonth() / 3) + 1;
+        const key = `${d.getFullYear()}-Q${q}`;
+        byQuarter.set(key, snap);
+      }
+      return [...byQuarter.entries()].map(([key, snap]) => ({ ...snap, date: key }));
+    }
+
+    function bucketByYear(snapshots) {
+      const byYear = new Map();
+      for (const snap of snapshots) {
+        const year = snap.date.slice(0, 4);
+        byYear.set(year, { ...snap, date: year });
+      }
+      return [...byYear.values()];
+    }
+
+    // ============================================================
+    // State + render
+    // ============================================================
+    let activeGranularity = 'MONTH';
+    let activeVariant = 'A';
+    let activeAccounts = new Set(ACCOUNTS.map((a) => a.id));
+    let chart = null;
+
+    const VARIANT_DESCRIPTIONS = {
+      A: 'Stacked bars where each segment = one account\'s value, plus a line on top tracing total portfolio value. <strong>Proposed default.</strong>',
+      B: 'Stacked area chart instead of bars — smoother, better at conveying trajectory but less precise at picking out individual buckets. Line overlay still traces total.',
+      C: 'Grouped bars (side-by-side per account) + a single line for total. More room per account but harder to read "total portfolio at time X" at a glance.',
+    };
+
+    function getSnapshots() {
+      if (activeGranularity === 'DAY') return generateDailySnapshots();
+      if (activeGranularity === 'WEEK') return bucketByWeek(generateDailySnapshots());
+      if (activeGranularity === 'MONTH') return monthlySnapshots;
+      if (activeGranularity === 'QUARTER') return bucketByQuarter(monthlySnapshots);
+      if (activeGranularity === 'YEAR') return bucketByYear(monthlySnapshots);
+      return monthlySnapshots;
+    }
+
+    function buildChartData() {
+      const snaps = getSnapshots().slice(-90); // 90-bar cap
+      const labels = snaps.map((s) => s.date);
+
+      const datasets = [];
+
+      // Per-account datasets — bars OR areas depending on variant
+      for (const acc of ACCOUNTS) {
+        if (!activeAccounts.has(acc.id)) continue;
+        const data = snaps.map((s) => Math.round(s.values[acc.id] || 0));
+        if (activeVariant === 'A') {
+          datasets.push({
+            label: acc.name,
+            data,
+            type: 'bar',
+            backgroundColor: acc.color,
+            borderColor: acc.color,
+            stack: 'investments',
+            order: 2,
+          });
+        } else if (activeVariant === 'B') {
+          datasets.push({
+            label: acc.name,
+            data,
+            type: 'line',
+            fill: true,
+            backgroundColor: acc.color + 'aa',
+            borderColor: acc.color,
+            stack: 'investments',
+            tension: 0.3,
+            pointRadius: 0,
+            order: 2,
+          });
+        } else if (activeVariant === 'C') {
+          datasets.push({
+            label: acc.name,
+            data,
+            type: 'bar',
+            backgroundColor: acc.color,
+            borderColor: acc.color,
+            order: 2,
+            // no stack — grouped
+          });
+        }
+      }
+
+      // Line overlay — total per bucket (sum of selected accounts)
+      const totals = snaps.map((s) =>
+        Math.round([...activeAccounts].reduce((sum, accId) => sum + (s.values[accId] || 0), 0))
+      );
+      datasets.push({
+        label: 'Total',
+        data: totals,
+        type: 'line',
+        borderColor: '#0f172a',
+        backgroundColor: '#0f172a',
+        borderWidth: 2.5,
+        pointRadius: 3,
+        pointBackgroundColor: '#0f172a',
+        tension: 0.2,
+        fill: false,
+        order: 1,
+      });
+
+      return { labels, datasets };
+    }
+
+    function render() {
+      const ctx = document.getElementById('chartCanvas').getContext('2d');
+      const data = buildChartData();
+      if (chart) chart.destroy();
+      chart = new Chart(ctx, {
+        type: 'bar',
+        data,
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 12 } } },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => {
+                  const v = ctx.parsed.y;
+                  return ` ${ctx.dataset.label}: $${v.toLocaleString()}`;
+                },
+              },
+            },
+          },
+          scales: {
+            x: {
+              stacked: activeVariant !== 'C',
+              grid: { display: false },
+              ticks: { autoSkip: true, maxRotation: 0, font: { size: 11 } },
+            },
+            y: {
+              stacked: activeVariant === 'A',
+              grid: { color: '#e2e8f0' },
+              ticks: {
+                font: { size: 11 },
+                callback: (v) => formatAxisDollar(v),
+              },
+            },
+          },
+        },
+      });
+
+      // Subtitle
+      const granLabel = {
+        DAY: 'Daily', WEEK: 'Weekly', MONTH: 'Monthly',
+        QUARTER: 'Quarterly', YEAR: 'Yearly',
+      }[activeGranularity];
+      const accCount = activeAccounts.size;
+      document.getElementById('cardSubtitle').textContent =
+        `${granLabel} snapshots · ${accCount} of ${ACCOUNTS.length} accounts selected`;
+      document.getElementById('variantDescription').innerHTML = VARIANT_DESCRIPTIONS[activeVariant];
+    }
+
+    // ============================================================
+    // Wire up controls
+    // ============================================================
+    function setupControls() {
+      // Granularity buttons
+      document.querySelectorAll('#granularitySelector button').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('#granularitySelector button').forEach((b) => b.classList.remove('active'));
+          btn.classList.add('active');
+          activeGranularity = btn.dataset.granularity;
+          render();
+        });
+      });
+
+      // Variant buttons
+      document.querySelectorAll('.variant-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.variant-btn').forEach((b) => b.classList.remove('active'));
+          btn.classList.add('active');
+          activeVariant = btn.dataset.variant;
+          render();
+        });
+      });
+
+      // Account picker
+      const dropdown = document.getElementById('accountsDropdown');
+      for (const acc of ACCOUNTS) {
+        const id = `acct-${acc.id}`;
+        const label = document.createElement('label');
+        label.innerHTML = `
+          <input type="checkbox" id="${id}" checked />
+          <span class="swatch" style="background:${acc.color}"></span>
+          ${acc.name}
+        `;
+        label.querySelector('input').addEventListener('change', (e) => {
+          if (e.target.checked) activeAccounts.add(acc.id);
+          else activeAccounts.delete(acc.id);
+          render();
+        });
+        dropdown.appendChild(label);
+      }
+      document.getElementById('accountsPickerBtn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        dropdown.classList.toggle('open');
+      });
+      document.addEventListener('click', (e) => {
+        if (!dropdown.contains(e.target) && e.target.id !== 'accountsPickerBtn') {
+          dropdown.classList.remove('open');
+        }
+      });
+    }
+
+    setupControls();
+    render();
+  </script>
+</body>
+</html>
