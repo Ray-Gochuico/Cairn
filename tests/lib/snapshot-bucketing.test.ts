@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { bucketSnapshots, type Granularity } from '@/lib/snapshot-bucketing';
+import { bucketSnapshots, cutoffForWindow, type Granularity } from '@/lib/snapshot-bucketing';
 
 const SNAPS = [
   { accountId: 1, snapshotDate: '2024-01-15', totalValue: 100 },
@@ -88,5 +88,25 @@ describe('bucketSnapshots', () => {
       90,
     );
     expect(result.bucketEnds).toEqual(['2023-12-31', '2024-12-31']);
+  });
+});
+
+describe('cutoffForWindow', () => {
+  const today = new Date(Date.UTC(2024, 4, 15)); // 2024-05-15 UTC
+
+  it('computes 3M cutoff as today minus 3 months', () => {
+    expect(cutoffForWindow('3M', today)).toBe('2024-02-15');
+  });
+
+  it('computes 1Y cutoff as today minus 12 months', () => {
+    expect(cutoffForWindow('1Y', today)).toBe('2023-05-15');
+  });
+
+  it('computes 5Y cutoff as today minus 60 months', () => {
+    expect(cutoffForWindow('5Y', today)).toBe('2019-05-15');
+  });
+
+  it('returns null for ALL (no cutoff)', () => {
+    expect(cutoffForWindow('ALL', today)).toBeNull();
   });
 });

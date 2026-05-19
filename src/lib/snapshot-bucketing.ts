@@ -1,5 +1,20 @@
 export type Granularity = 'DAY' | 'WEEK' | 'MONTH' | 'QUARTER' | 'YEAR';
 
+export type TimeWindow = '3M' | '1Y' | '5Y' | 'ALL';
+
+/**
+ * Returns the ISO (YYYY-MM-DD) cutoff date for a time window relative to `today`,
+ * or `null` for `'ALL'` (no filtering). Uses UTC math so the result is
+ * timezone-stable regardless of the caller's locale.
+ */
+export function cutoffForWindow(w: TimeWindow, today: Date = new Date()): string | null {
+  if (w === 'ALL') return null;
+  const monthsBack = w === '3M' ? 3 : w === '1Y' ? 12 : 60;
+  const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+  d.setUTCMonth(d.getUTCMonth() - monthsBack);
+  return d.toISOString().slice(0, 10);
+}
+
 export interface BucketedSeries {
   /** ISO end-of-period dates, sorted ascending. */
   bucketEnds: string[];

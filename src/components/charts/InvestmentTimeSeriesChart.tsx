@@ -19,7 +19,9 @@ import {
 import { Button } from '@/components/ui/button';
 import {
   bucketSnapshots,
+  cutoffForWindow,
   type Granularity,
+  type TimeWindow,
 } from '@/lib/snapshot-bucketing';
 import { colorForAccount } from '@/lib/account-colors';
 import { formatCompactCurrency, formatCurrency } from '@/lib/format';
@@ -28,6 +30,8 @@ import {
   setGranularity,
   getSelectedAccounts,
   setSelectedAccounts,
+  getTimeWindow,
+  setTimeWindow,
 } from '@/lib/investment-chart-prefs';
 import type { Account, Holding, AccountSnapshot } from '@/types/schema';
 
@@ -37,6 +41,13 @@ const GRANULARITY_OPTIONS: Array<{ value: Granularity; label: string }> = [
   { value: 'MONTH', label: 'Months' },
   { value: 'QUARTER', label: 'Quarters' },
   { value: 'YEAR', label: 'Years' },
+];
+
+const TIME_WINDOW_OPTIONS: Array<{ value: TimeWindow; label: string }> = [
+  { value: '3M', label: '3M' },
+  { value: '1Y', label: '1Y' },
+  { value: '5Y', label: '5Y' },
+  { value: 'ALL', label: 'All' },
 ];
 
 const MAX_BUCKETS = 90;
@@ -110,6 +121,7 @@ export default function InvestmentTimeSeriesChart({
   );
 
   const [granularity, setGranularityState] = useState<Granularity>('MONTH');
+  const [timeWindow, setTimeWindowState] = useState<TimeWindow>('ALL');
   const [selectedAccountIds, setSelectedAccountIdsState] = useState<Set<number>>(new Set());
   const [pickerOpen, setPickerOpen] = useState(false);
 
@@ -117,6 +129,9 @@ export default function InvestmentTimeSeriesChart({
   useEffect(() => {
     const savedG = getGranularity();
     if (savedG) setGranularityState(savedG);
+
+    const savedW = getTimeWindow();
+    if (savedW) setTimeWindowState(savedW);
 
     const eligibleIds = eligibleAccounts.map((a) => a.id!).filter((n): n is number => typeof n === 'number');
     const saved = getSelectedAccounts();
@@ -137,6 +152,11 @@ export default function InvestmentTimeSeriesChart({
     setGranularity(g);
   };
 
+  const handleTimeWindowChange = (w: TimeWindow) => {
+    setTimeWindowState(w);
+    setTimeWindow(w);
+  };
+
   const toggleAccount = (id: number) => {
     setSelectedAccountIdsState((prev) => {
       const next = new Set(prev);
@@ -147,10 +167,17 @@ export default function InvestmentTimeSeriesChart({
     });
   };
 
+  // Compute window cutoff (memoized so we don't churn on every render).
+  const cutoff = useMemo(() => cutoffForWindow(timeWindow), [timeWindow]);
+
   // Build chart data: per-bucket row keyed by account name with a `total`.
   const filteredSnapshots = useMemo(
-    () => snapshots.filter((s) => selectedAccountIds.has(s.accountId)),
-    [snapshots, selectedAccountIds],
+    () =>
+      snapshots.filter(
+        (s) =>
+          selectedAccountIds.has(s.accountId) && (cutoff === null || s.snapshotDate >= cutoff),
+      ),
+    [snapshots, selectedAccountIds, cutoff],
   );
 
   const selectedAccounts = useMemo(
@@ -196,6 +223,23 @@ export default function InvestmentTimeSeriesChart({
                     variant={active ? 'default' : 'outline'}
                     aria-pressed={active}
                     onClick={() => handleGranularityChange(opt.value)}
+                  >
+                    {opt.label}
+                  </Button>
+                );
+              })}
+            </div>
+            <div className="flex gap-1" role="group" aria-label="Time window">
+              {TIME_WINDOW_OPTIONS.map((opt) => {
+                const active = opt.value === timeWindow;
+                return (
+                  <Button
+                    key={opt.value}
+                    type="button"
+                    size="sm"
+                    variant={active ? 'default' : 'outline'}
+                    aria-pressed={active}
+                    onClick={() => handleTimeWindowChange(opt.value)}
                   >
                     {opt.label}
                   </Button>

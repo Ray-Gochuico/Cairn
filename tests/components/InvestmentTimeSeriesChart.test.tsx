@@ -3,7 +3,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import InvestmentTimeSeriesChart from '@/components/charts/InvestmentTimeSeriesChart';
 import { AccountType, SnapshotSource } from '@/types/enums';
-import { getGranularity, getSelectedAccounts } from '@/lib/investment-chart-prefs';
+import { getGranularity, getSelectedAccounts, getTimeWindow } from '@/lib/investment-chart-prefs';
 import type { Account, Holding, AccountSnapshot } from '@/types/schema';
 
 const accounts: Account[] = [
@@ -121,5 +121,23 @@ describe('InvestmentTimeSeriesChart', () => {
     await user.click(within(picker).getByLabelText(/brokerage/i));
     // Persisted selection should now be just [2] (Roth IRA).
     expect(getSelectedAccounts()).toEqual([2]);
+  });
+
+  it('clicking a time window button persists to localStorage and re-renders', async () => {
+    const user = userEvent.setup();
+    render(
+      <div style={{ width: 800, height: 400 }}>
+        <InvestmentTimeSeriesChart accounts={accounts} holdings={holdings} snapshots={snapshots} />
+      </div>
+    );
+    // Default window is ALL.
+    const allBtn = screen.getByRole('button', { name: /^all$/i });
+    expect(allBtn).toHaveAttribute('aria-pressed', 'true');
+    // Click 1Y.
+    const oneYearBtn = screen.getByRole('button', { name: /^1y$/i });
+    await user.click(oneYearBtn);
+    expect(getTimeWindow()).toBe('1Y');
+    expect(oneYearBtn).toHaveAttribute('aria-pressed', 'true');
+    expect(allBtn).toHaveAttribute('aria-pressed', 'false');
   });
 });

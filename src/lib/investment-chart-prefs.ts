@@ -1,8 +1,9 @@
 // src/lib/investment-chart-prefs.ts
 const STORAGE_KEY_ACCOUNTS = 'investment-chart-selected-accounts';
 const STORAGE_KEY_GRANULARITY = 'investment-chart-granularity';
+const STORAGE_KEY_TIME_WINDOW = 'investment-chart-time-window';
 
-import type { Granularity } from './snapshot-bucketing';
+import type { Granularity, TimeWindow } from './snapshot-bucketing';
 
 /**
  * Returns the persisted set of account ids the user wants to see in the
@@ -42,6 +43,24 @@ export function getGranularity(): Granularity | null {
 export function setGranularity(g: Granularity): void {
   try {
     localStorage.setItem(STORAGE_KEY_GRANULARITY, g);
+  } catch {
+    // ignore
+  }
+}
+
+export function getTimeWindow(): TimeWindow | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_TIME_WINDOW);
+    if (raw === '3M' || raw === '1Y' || raw === '5Y' || raw === 'ALL') return raw;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function setTimeWindow(w: TimeWindow): void {
+  try {
+    localStorage.setItem(STORAGE_KEY_TIME_WINDOW, w);
   } catch {
     // ignore
   }
