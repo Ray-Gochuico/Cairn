@@ -15,9 +15,10 @@ import { filterByOwnerPersonId } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import DonutChartCard from '@/components/charts/DonutChartCard';
-import PerTickerDonut from '@/components/charts/PerTickerDonut';
 import BarChartCard from '@/components/charts/BarChartCard';
+import DonutChartCard from '@/components/charts/DonutChartCard';
+import InvestmentTimeSeriesChart from '@/components/charts/InvestmentTimeSeriesChart';
+import PerTickerDonut from '@/components/charts/PerTickerDonut';
 import { useConcentration } from '@/lib/use-concentration';
 import { valueHoldings, type HoldingValuation } from '@/lib/holdings-value';
 import type { Dependent, AccountSnapshot, Household } from '@/types/schema';
@@ -503,6 +504,12 @@ export default function Investments() {
           )}
         </div>
       </div>
+
+      <InvestmentTimeSeriesChart
+        accounts={visibleAccounts}
+        holdings={visibleHoldings}
+        snapshots={visibleSnapshots}
+      />
 
       {/* Donuts row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
