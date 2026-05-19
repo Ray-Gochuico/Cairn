@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PaycheckCard } from './PaycheckCard';
 import { BonusTaxCard } from './BonusTaxCard';
 import { CommissionTaxCard } from './CommissionTaxCard';
@@ -109,6 +109,12 @@ export default function CalculatorsLayout() {
   const hiddenList = useMemo(() => Array.from(hiddenSet), [hiddenSet]);
   const hiddenCount = hiddenList.length;
 
+  const [popoverOpen, setPopoverOpen] = useState(false);
+
+  useEffect(() => {
+    if (hiddenCount === 0) setPopoverOpen(false);
+  }, [hiddenCount]);
+
   return (
     <div className="space-y-4 min-w-0">
       <h1 className="text-2xl font-semibold">Calculators</h1>
@@ -165,39 +171,71 @@ export default function CalculatorsLayout() {
         )}
       </div>
       {hiddenCount > 0 && (
-        <footer className="pt-2 text-sm text-muted-foreground">
-          <details className="relative inline-block">
-            <summary className="cursor-pointer list-none select-none">
-              {hiddenCount === 1 ? '1 card hidden' : `${hiddenCount} cards hidden`}
-              {' — '}
-              <span className="underline">manage</span>
-            </summary>
-            <div
-              role="dialog"
-              aria-label="Hidden calculator cards"
-              className="absolute left-0 mt-2 w-64 rounded-md border bg-background shadow-md p-2 z-10"
-            >
-              <ul className="space-y-1">
-                {hiddenList.map((id) => (
-                  <li
-                    key={id}
-                    className="flex items-center justify-between gap-2 py-1"
+        <footer className="pt-2 text-sm text-muted-foreground relative">
+          <button
+            type="button"
+            onClick={() => setPopoverOpen((v) => !v)}
+            aria-expanded={popoverOpen}
+            aria-haspopup="dialog"
+            className="cursor-pointer underline decoration-dotted underline-offset-4 hover:text-foreground transition-colors"
+          >
+            {hiddenCount === 1 ? '1 card hidden' : `${hiddenCount} cards hidden`}
+            {' — '}
+            <span className="font-medium">manage</span>
+          </button>
+          {popoverOpen && (
+            <>
+              {/* Backdrop — closes the popover when clicked outside. */}
+              <div
+                className="fixed inset-0 z-10"
+                aria-hidden="true"
+                onClick={() => setPopoverOpen(false)}
+              />
+              <div
+                role="dialog"
+                aria-label="Hidden calculator cards"
+                className="absolute left-0 bottom-full mb-2 w-72 rounded-md border bg-background shadow-lg p-2 z-20"
+              >
+                <div className="flex items-center justify-between px-2 pt-1 pb-2 border-b mb-1">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    Hidden cards
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      for (const id of hiddenList) handleShow(id);
+                      setPopoverOpen(false);
+                    }}
+                    className="h-6 text-xs"
                   >
-                    <span className="text-sm text-foreground">{labelFor(id)}</span>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleShow(id)}
-                      aria-label={`Show ${labelFor(id)} card`}
+                    Show all
+                  </Button>
+                </div>
+                <ul className="space-y-0.5 max-h-72 overflow-y-auto">
+                  {hiddenList.map((id) => (
+                    <li
+                      key={id}
+                      className="flex items-center justify-between gap-2 px-2 py-1 rounded hover:bg-muted/40"
                     >
-                      Show
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </details>
+                      <span className="text-sm text-foreground">{labelFor(id)}</span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleShow(id)}
+                        aria-label={`Show ${labelFor(id)} card`}
+                        className="h-7"
+                      >
+                        Show
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </>
+          )}
         </footer>
       )}
     </div>
