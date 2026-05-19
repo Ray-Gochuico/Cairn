@@ -9,6 +9,7 @@ import { TickersRepo } from '@/domain/tickers';
 import { PriceCache } from '@/market/price-cache';
 import { YahooClient } from '@/market/yahoo-client';
 import { deriveLast12Months } from '@/market/snapshot-derivation';
+import { deriveTodaysSnapshot } from '@/market/daily-snapshot';
 import { syncStaleFunds } from '@/market/fund-holdings-sync';
 
 export async function initDatabase(): Promise<void> {
@@ -60,6 +61,28 @@ export async function initDatabase(): Promise<void> {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('[init] background fund-holdings sync failed:', err);
+    }
+  })();
+
+  // Derive today's per-account snapshot so the dashboard shows current
+  // totals immediately after boot. Independent of the 12-month backfill
+  // and fund sync — kept in its own IIFE so a failure in either doesn't
+  // block this, and vice versa.
+  void (async () => {
+    try {
+      const accounts = new AccountsRepo(adapter);
+      const holdings = new HoldingsRepo(adapter);
+      const snapshots = new AccountSnapshotsRepo(adapter);
+      const prices = new PriceCache(adapter, new YahooClient());
+      const result = await deriveTodaysSnapshot({ accounts, holdings, snapshots, prices });
+      // eslint-disable-next-line no-console
+      console.info(
+        '[init] daily snapshot done: upserted=%o skipped=%o errors=%o',
+        result.upserted, result.skipped, result.errors,
+      );
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[init] daily snapshot derivation failed:', err);
     }
   })();
 }
