@@ -78,27 +78,27 @@ describe('InvestmentTimeSeriesChart', () => {
     );
     // Title visible.
     expect(screen.getByText(/investments over time/i)).toBeInTheDocument();
-    // Months button is the active one (aria-pressed=true).
-    const monthsBtn = screen.getByRole('button', { name: /^months$/i });
-    expect(monthsBtn).toHaveAttribute('aria-pressed', 'true');
-    // Quarters button exists and is inactive.
-    const quartersBtn = screen.getByRole('button', { name: /^quarters$/i });
-    expect(quartersBtn).toHaveAttribute('aria-pressed', 'false');
+    // Granularity select defaults to MONTH.
+    const granularitySelect = screen.getByLabelText(/granularity/i);
+    expect(granularitySelect).toHaveValue('MONTH');
+    // Window select defaults to ALL.
+    const windowSelect = screen.getByLabelText(/window/i);
+    expect(windowSelect).toHaveValue('ALL');
   });
 
-  it('changes granularity when a button is clicked + persists to localStorage', async () => {
+  it('changes granularity when a select option is chosen + persists to localStorage', async () => {
     const user = userEvent.setup();
     render(
       <div style={{ width: 800, height: 400 }}>
         <InvestmentTimeSeriesChart accounts={accounts} holdings={holdings} snapshots={snapshots} />
       </div>
     );
-    const quartersBtn = screen.getByRole('button', { name: /^quarters$/i });
-    await user.click(quartersBtn);
-    // After click, persisted value should be QUARTER.
+    const granularitySelect = screen.getByLabelText(/granularity/i);
+    await user.selectOptions(granularitySelect, 'QUARTER');
+    // After selection, persisted value should be QUARTER.
     expect(getGranularity()).toBe('QUARTER');
-    // And the Quarters button should now be active.
-    expect(quartersBtn).toHaveAttribute('aria-pressed', 'true');
+    // And the select should reflect the new value.
+    expect(granularitySelect).toHaveValue('QUARTER');
   });
 
   it('opens the account picker and toggling an account persists the selection', async () => {
@@ -123,7 +123,7 @@ describe('InvestmentTimeSeriesChart', () => {
     expect(getSelectedAccounts()).toEqual([2]);
   });
 
-  it('clicking a time window button persists to localStorage and re-renders', async () => {
+  it('changes time window when a select option is chosen + persists to localStorage', async () => {
     const user = userEvent.setup();
     render(
       <div style={{ width: 800, height: 400 }}>
@@ -131,13 +131,11 @@ describe('InvestmentTimeSeriesChart', () => {
       </div>
     );
     // Default window is ALL.
-    const allBtn = screen.getByRole('button', { name: /^all$/i });
-    expect(allBtn).toHaveAttribute('aria-pressed', 'true');
-    // Click 1Y.
-    const oneYearBtn = screen.getByRole('button', { name: /^1y$/i });
-    await user.click(oneYearBtn);
+    const windowSelect = screen.getByLabelText(/window/i);
+    expect(windowSelect).toHaveValue('ALL');
+    // Select 1Y.
+    await user.selectOptions(windowSelect, '1Y');
     expect(getTimeWindow()).toBe('1Y');
-    expect(oneYearBtn).toHaveAttribute('aria-pressed', 'true');
-    expect(allBtn).toHaveAttribute('aria-pressed', 'false');
+    expect(windowSelect).toHaveValue('1Y');
   });
 });

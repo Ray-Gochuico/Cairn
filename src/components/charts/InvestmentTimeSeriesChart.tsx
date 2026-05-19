@@ -17,6 +17,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 import {
   bucketSnapshots,
   cutoffForWindow,
@@ -44,10 +45,10 @@ const GRANULARITY_OPTIONS: Array<{ value: Granularity; label: string }> = [
 ];
 
 const TIME_WINDOW_OPTIONS: Array<{ value: TimeWindow; label: string }> = [
-  { value: '3M', label: '3M' },
-  { value: '1Y', label: '1Y' },
-  { value: '5Y', label: '5Y' },
-  { value: 'ALL', label: 'All' },
+  { value: '3M', label: '3 months' },
+  { value: '1Y', label: '1 year' },
+  { value: '5Y', label: '5 years' },
+  { value: 'ALL', label: 'All time' },
 ];
 
 const MAX_BUCKETS = 90;
@@ -211,40 +212,36 @@ export default function InvestmentTimeSeriesChart({
       <CardHeader className="gap-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <CardTitle>Investments Over Time</CardTitle>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex gap-1" role="group" aria-label="Time bucket granularity">
-              {GRANULARITY_OPTIONS.map((opt) => {
-                const active = opt.value === granularity;
-                return (
-                  <Button
-                    key={opt.value}
-                    type="button"
-                    size="sm"
-                    variant={active ? 'default' : 'outline'}
-                    aria-pressed={active}
-                    onClick={() => handleGranularityChange(opt.value)}
-                  >
-                    {opt.label}
-                  </Button>
-                );
-              })}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="inv-chart-granularity" className="text-xs text-muted-foreground whitespace-nowrap">
+                Granularity
+              </Label>
+              <select
+                id="inv-chart-granularity"
+                value={granularity}
+                onChange={(e) => handleGranularityChange(e.target.value as Granularity)}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                {GRANULARITY_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
             </div>
-            <div className="flex gap-1" role="group" aria-label="Time window">
-              {TIME_WINDOW_OPTIONS.map((opt) => {
-                const active = opt.value === timeWindow;
-                return (
-                  <Button
-                    key={opt.value}
-                    type="button"
-                    size="sm"
-                    variant={active ? 'default' : 'outline'}
-                    aria-pressed={active}
-                    onClick={() => handleTimeWindowChange(opt.value)}
-                  >
-                    {opt.label}
-                  </Button>
-                );
-              })}
+            <div className="flex items-center gap-2">
+              <Label htmlFor="inv-chart-window" className="text-xs text-muted-foreground whitespace-nowrap">
+                Window
+              </Label>
+              <select
+                id="inv-chart-window"
+                value={timeWindow}
+                onChange={(e) => handleTimeWindowChange(e.target.value as TimeWindow)}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                {TIME_WINDOW_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
             </div>
             {hasEligible && (
               <div className="relative">
