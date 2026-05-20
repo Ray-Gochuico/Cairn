@@ -1,6 +1,9 @@
 # Brainstorming session artifacts (visual companion)
 .superpowers/
 
+# Git worktrees (isolated phase workspaces)
+.worktrees/
+
 # macOS
 .DS_Store
 .AppleDouble
