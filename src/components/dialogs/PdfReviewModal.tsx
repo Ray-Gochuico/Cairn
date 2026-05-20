@@ -4,6 +4,8 @@ import { transactionDedupKey, filterDuplicates } from '@/lib/dedup';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useMerchantOverridesStore } from '@/stores/merchant-overrides-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
+import { usePropertiesStore } from '@/stores/properties-store';
+import { useVehiclesStore } from '@/stores/vehicles-store';
 import { MerchantSeedRepo } from '@/domain/merchant-seed';
 import { getDatabase } from '@/db/db';
 import type { ParseResult } from '@/pdf/parse-statement';
@@ -44,19 +46,42 @@ export function PdfReviewModal({
   const loadOverrides = useMerchantOverridesStore((s) => s.load);
   const upsertForMerchant = useMerchantOverridesStore((s) => s.upsertForMerchant);
   const createMany = useTransactionsStore((s) => s.createMany);
+  const properties = usePropertiesStore((s) => s.properties);
+  const loadProperties = usePropertiesStore((s) => s.load);
+  const vehicles = useVehiclesStore((s) => s.vehicles);
+  const loadVehicles = useVehiclesStore((s) => s.load);
 
   const [rows, setRows] = useState<EditableRow[]>([]);
   const [seeds, setSeeds] = useState<MerchantSeed[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load categories, overrides, and seeds on mount
+  // Load categories, overrides, seeds, properties, and vehicles on mount
   useEffect(() => {
     loadCategories();
     loadOverrides();
+    loadProperties();
+    loadVehicles();
     const repo = new MerchantSeedRepo(getDatabase());
     repo.list().then(setSeeds).catch(() => setSeeds([]));
-  }, [loadCategories, loadOverrides]);
+  }, [loadCategories, loadOverrides, loadProperties, loadVehicles]);
+
+  // Determine which categories are Home (parentId=1) or Vehicles (parentId=2) children
+  // The seeded data uses id=1 for Home and id=2 for Vehicles as parent categories
+  const homeParent = categories.find((c) => c.name === 'Home' && c.parentCategoryId === null);
+  const vehicleParent = categories.find((c) => c.name === 'Vehicles' && c.parentCategoryId === null);
+
+  /** Returns the propertyId/vehicleId to auto-select for a given categoryId */
+  function defaultPropertyVehicle(categoryId: number | null): { propertyId: number | null; vehicleId: number | null } {
+    if (categoryId == null) return { propertyId: null, vehicleId: null };
+    const cat = categories.find((c) => c.id === categoryId);
+    const isHome = homeParent != null && cat?.parentCategoryId === homeParent.id;
+    const isVehicle = vehicleParent != null && cat?.parentCategoryId === vehicleParent.id;
+    return {
+      propertyId: isHome && properties.length === 1 ? (properties[0].id ?? null) : (isHome ? null : null),
+      vehicleId: isVehicle && vehicles.length === 1 ? (vehicles[0].id ?? null) : (isVehicle ? null : null),
+    };
+  }
 
   // Build editable rows once we have categories + overrides + seeds
   useEffect(() => {
@@ -71,6 +96,7 @@ export function PdfReviewModal({
     const built: EditableRow[] = result.transactions.map((t) => {
       const predictedCategoryId = categorize(t.merchant, overrides, seeds);
       const isDuplicate = dupKeys.has(transactionDedupKey(t));
+      const { propertyId, vehicleId } = defaultPropertyVehicle(predictedCategoryId);
       return {
         date: t.date,
         merchant: t.merchant,
@@ -79,8 +105,8 @@ export function PdfReviewModal({
         categoryId: predictedCategoryId,
         predictedCategoryId,
         reimbursable: false,
-        propertyId: null,
-        vehicleId: null,
+        propertyId,
+        vehicleId,
         included: !isDuplicate,
         isDuplicate,
       };
@@ -92,9 +118,9 @@ export function PdfReviewModal({
       return a.date.localeCompare(b.date);
     });
     setRows(built);
-  // Intentionally re-run when categories/overrides/seeds arrive
+  // Intentionally re-run when categories/overrides/seeds/properties/vehicles arrive
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categories, overrides, seeds]);
+  }, [categories, overrides, seeds, properties, vehicles]);
 
   function updateRow(index: number, patch: Partial<EditableRow>) {
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
@@ -140,11 +166,6 @@ export function PdfReviewModal({
       setSaving(false);
     }
   };
-
-  // Determine which categories are Home (parentId=1) or Vehicles (parentId=2) children
-  // The seeded data uses id=1 for Home and id=2 for Vehicles as parent categories
-  const homeParent = categories.find((c) => c.name === 'Home' && c.parentCategoryId === null);
-  const vehicleParent = categories.find((c) => c.name === 'Vehicles' && c.parentCategoryId === null);
 
   return (
     <div
@@ -258,7 +279,8 @@ export function PdfReviewModal({
                             className="border rounded px-1 py-0.5 text-xs"
                             onChange={(e) => {
                               const val = e.target.value === '' ? null : Number(e.target.value);
-                              updateRow(i, { categoryId: val, propertyId: null, vehicleId: null });
+                              const { propertyId, vehicleId } = defaultPropertyVehicle(val);
+                              updateRow(i, { categoryId: val, propertyId, vehicleId });
                             }}
                           >
                             <option value="">— uncategorized —</option>
@@ -296,6 +318,11 @@ export function PdfReviewModal({
                             }
                           >
                             <option value="">— property —</option>
+                            {properties.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name}
+                              </option>
+                            ))}
                           </select>
                         )}
                         {/* Vehicle sub-select */}
@@ -309,6 +336,11 @@ export function PdfReviewModal({
                             }
                           >
                             <option value="">— vehicle —</option>
+                            {vehicles.map((v) => (
+                              <option key={v.id} value={v.id}>
+                                {v.name}
+                              </option>
+                            ))}
                           </select>
                         )}
                       </td>

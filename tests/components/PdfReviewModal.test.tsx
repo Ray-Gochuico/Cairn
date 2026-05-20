@@ -8,6 +8,8 @@ import { setDatabase } from '@/db/db';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useMerchantOverridesStore } from '@/stores/merchant-overrides-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
+import { usePropertiesStore } from '@/stores/properties-store';
+import { useVehiclesStore } from '@/stores/vehicles-store';
 import { PdfReviewModal } from '@/components/dialogs/PdfReviewModal';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -58,13 +60,15 @@ describe('PdfReviewModal', () => {
     useCategoriesStore.setState({ categories: [], isLoading: false, error: null });
     useMerchantOverridesStore.setState({ overrides: [], isLoading: false, error: null });
     useTransactionsStore.setState({ transactions: [], isLoading: false, error: null });
+    usePropertiesStore.setState({ properties: [], isLoading: false, error: null });
+    useVehiclesStore.setState({ vehicles: [], isLoading: false, error: null });
   });
 
   afterEach(async () => {
     await db.close();
   });
 
-  it('(a) renders one row per parsed transaction', async () => {
+  it('(a) renders one row per parsed transaction with auto-categorized category preselected', async () => {
     const result = makeResult([
       { date: '2026-03-05', merchantRaw: 'WHOLE FOODS MARKET', merchant: 'WHOLE FOODS MARKET', amount: 54.23 },
       { date: '2026-03-06', merchantRaw: 'NETFLIX.COM', merchant: 'NETFLIX', amount: 15.49 },
@@ -79,6 +83,15 @@ describe('PdfReviewModal', () => {
       expect(screen.getByDisplayValue('WHOLE FOODS MARKET')).toBeInTheDocument();
       expect(screen.getByDisplayValue('NETFLIX')).toBeInTheDocument();
     });
+
+    // Category selects should be preselected to the categorize() prediction:
+    // WHOLE FOODS MARKET → merchant_seed pattern 'WHOLE FOODS' → category id 33 (Groceries)
+    // NETFLIX → merchant_seed pattern 'NETFLIX' → category id 39 (Subscriptions)
+    const categorySelects = screen.getAllByRole('combobox', { name: /category for/i });
+    expect(categorySelects).toHaveLength(2);
+    // Row order is date-sorted: 2026-03-05 (WHOLE FOODS) first, 2026-03-06 (NETFLIX) second
+    expect(categorySelects[0]).toHaveValue('33');
+    expect(categorySelects[1]).toHaveValue('39');
   });
 
   it('(b) a row whose dedup key matches an existing transaction renders unchecked with duplicate badge', async () => {
