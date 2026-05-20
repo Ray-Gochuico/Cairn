@@ -3,7 +3,12 @@ import * as pdfjsLib from 'pdfjs-dist';
 // found a different filename, change it here to match.
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import type { PdfTextItem } from './types';
+import { installReadableStreamAsyncIterator } from './readable-stream-async-iterator';
 
+// WebKit (the macOS WKWebView Tauri uses) lacks ReadableStream async
+// iteration, which pdfjs's getTextContent() relies on. Install the shim
+// before any extraction runs.
+installReadableStreamAsyncIterator();
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
 /**
