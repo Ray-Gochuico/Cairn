@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
-import { runMigrations } from '@/db/migrations';
+import { runMigrations, loadAllMigrations } from '@/db/migrations';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -160,4 +160,14 @@ describe('runMigrations idempotency', () => {
       '0005_add_employment_and_bonus_columns',
     ]);
   });
+});
+
+it('0008 adds property_id and vehicle_id columns to transactions', async () => {
+  const db = new SqliteAdapter(':memory:');
+  await runMigrations(db, await loadAllMigrations());
+  const cols = await db.select<{ name: string }>("PRAGMA table_info(transactions)");
+  const names = cols.map((c) => c.name);
+  expect(names).toContain('property_id');
+  expect(names).toContain('vehicle_id');
+  await db.close();
 });
