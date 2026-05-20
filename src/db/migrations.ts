@@ -55,6 +55,7 @@ export async function loadAllMigrations(): Promise<Migration[]> {
   const m0006 = (await import('./migrations/0006_seed_tickers.sql?raw')).default;
   const m0007 = (await import('./migrations/0007_add_account_margin.sql?raw')).default;
   const m0008 = (await import('./migrations/0008_add_transaction_property_links.sql?raw')).default;
+  const m0009 = (await import('./migrations/0009_seed_categories.sql?raw')).default;
   return [
     { version: '0001_initial', sql: m0001 },
     { version: '0002_seed_tax_rules', sql: m0002 },
@@ -64,5 +65,6 @@ export async function loadAllMigrations(): Promise<Migration[]> {
     { version: '0006_seed_tickers', sql: m0006 },
     { version: '0007_add_account_margin', sql: m0007 },
     { version: '0008_add_transaction_property_links', sql: m0008 },
+    { version: '0009_seed_categories', sql: m0009 },
   ];
 }

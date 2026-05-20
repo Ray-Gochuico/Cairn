@@ -171,3 +171,16 @@ it('0008 adds property_id and vehicle_id columns to transactions', async () => {
   expect(names).toContain('vehicle_id');
   await db.close();
 });
+
+it('0009 seeds 42 categories with a resolvable parent tree', async () => {
+  const db = new SqliteAdapter(':memory:');
+  await runMigrations(db, await loadAllMigrations());
+  const rows = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM categories');
+  expect(rows[0].n).toBe(42);
+  const orphans = await db.select<{ n: number }>(
+    'SELECT COUNT(*) AS n FROM categories c WHERE c.parent_category_id IS NOT NULL ' +
+      'AND NOT EXISTS (SELECT 1 FROM categories p WHERE p.id = c.parent_category_id)',
+  );
+  expect(orphans[0].n).toBe(0);
+  await db.close();
+});
