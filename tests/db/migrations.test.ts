@@ -184,3 +184,16 @@ it('0009 seeds 42 categories with a resolvable parent tree', async () => {
   expect(orphans[0].n).toBe(0);
   await db.close();
 });
+
+it('0010 seeds >=200 merchant mappings, all pointing at real categories', async () => {
+  const db = new SqliteAdapter(':memory:');
+  await runMigrations(db, await loadAllMigrations());
+  const rows = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM merchant_seed_mapping');
+  expect(rows[0].n).toBeGreaterThanOrEqual(200);
+  const bad = await db.select<{ n: number }>(
+    'SELECT COUNT(*) AS n FROM merchant_seed_mapping m ' +
+      'WHERE NOT EXISTS (SELECT 1 FROM categories c WHERE c.id = m.category_id)',
+  );
+  expect(bad[0].n).toBe(0);
+  await db.close();
+});
