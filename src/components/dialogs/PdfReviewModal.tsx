@@ -9,7 +9,7 @@ import { useVehiclesStore } from '@/stores/vehicles-store';
 import { MerchantSeedRepo } from '@/domain/merchant-seed';
 import { getDatabase } from '@/db/db';
 import type { ParseResult } from '@/pdf/parse-statement';
-import type { Transaction, MerchantSeed } from '@/types/schema';
+import type { Transaction } from '@/types/schema';
 
 interface PdfReviewModalProps {
   result: ParseResult;
@@ -40,34 +40,104 @@ export function PdfReviewModal({
   onClose,
   onSaved,
 }: PdfReviewModalProps) {
+  // Store hooks — used for rendering option lists (reactive so selects stay current)
   const categories = useCategoriesStore((s) => s.categories);
-  const loadCategories = useCategoriesStore((s) => s.load);
-  const overrides = useMerchantOverridesStore((s) => s.overrides);
-  const loadOverrides = useMerchantOverridesStore((s) => s.load);
   const upsertForMerchant = useMerchantOverridesStore((s) => s.upsertForMerchant);
   const createMany = useTransactionsStore((s) => s.createMany);
   const properties = usePropertiesStore((s) => s.properties);
-  const loadProperties = usePropertiesStore((s) => s.load);
   const vehicles = useVehiclesStore((s) => s.vehicles);
-  const loadVehicles = useVehiclesStore((s) => s.load);
 
   const [rows, setRows] = useState<EditableRow[]>([]);
-  const [seeds, setSeeds] = useState<MerchantSeed[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Load categories, overrides, seeds, properties, and vehicles on mount
+  // One-shot row initialisation on mount. We await every store load so we read
+  // fresh data via getState() rather than the stale closure values captured by
+  // the hooks. After this point, store reloads triggered by save must NOT
+  // rebuild rows, or in-modal edits would be lost.
   useEffect(() => {
-    loadCategories();
-    loadOverrides();
-    loadProperties();
-    loadVehicles();
-    const repo = new MerchantSeedRepo(getDatabase());
-    repo.list().then(setSeeds).catch(() => setSeeds([]));
-  }, [loadCategories, loadOverrides, loadProperties, loadVehicles]);
+    let cancelled = false;
 
-  // Determine which categories are Home (parentId=1) or Vehicles (parentId=2) children
-  // The seeded data uses id=1 for Home and id=2 for Vehicles as parent categories
+    async function init() {
+      await Promise.all([
+        useCategoriesStore.getState().load(),
+        useMerchantOverridesStore.getState().load(),
+        usePropertiesStore.getState().load(),
+        useVehiclesStore.getState().load(),
+      ]);
+
+      const seedRepo = new MerchantSeedRepo(getDatabase());
+      const seeds = await seedRepo.list().catch(() => []);
+
+      if (cancelled) return;
+
+      // Read fresh state now that all loads have settled
+      const freshCategories = useCategoriesStore.getState().categories;
+      const freshOverrides = useMerchantOverridesStore.getState().overrides;
+      const freshProperties = usePropertiesStore.getState().properties;
+      const freshVehicles = useVehiclesStore.getState().vehicles;
+
+      const homeParentId = freshCategories.find(
+        (c) => c.name === 'Home' && c.parentCategoryId === null,
+      )?.id ?? null;
+      const vehicleParentId = freshCategories.find(
+        (c) => c.name === 'Vehicles' && c.parentCategoryId === null,
+      )?.id ?? null;
+
+      function defaultPropertyVehicleFromFresh(
+        categoryId: number | null,
+      ): { propertyId: number | null; vehicleId: number | null } {
+        if (categoryId == null) return { propertyId: null, vehicleId: null };
+        const cat = freshCategories.find((c) => c.id === categoryId);
+        const isHome = homeParentId != null && cat?.parentCategoryId === homeParentId;
+        const isVehicle = vehicleParentId != null && cat?.parentCategoryId === vehicleParentId;
+        return {
+          propertyId: isHome && freshProperties.length === 1 ? (freshProperties[0].id ?? null) : null,
+          vehicleId: isVehicle && freshVehicles.length === 1 ? (freshVehicles[0].id ?? null) : null,
+        };
+      }
+
+      const { duplicates: dupTransactions } = filterDuplicates(
+        result.transactions,
+        existing,
+      );
+      const dupKeys = new Set(dupTransactions.map(transactionDedupKey));
+
+      const built: EditableRow[] = result.transactions.map((t) => {
+        const predictedCategoryId = categorize(t.merchant, freshOverrides, seeds);
+        const isDuplicate = dupKeys.has(transactionDedupKey(t));
+        const { propertyId, vehicleId } = defaultPropertyVehicleFromFresh(predictedCategoryId);
+        return {
+          date: t.date,
+          merchant: t.merchant,
+          merchantRaw: t.merchantRaw,
+          amount: t.amount,
+          categoryId: predictedCategoryId,
+          predictedCategoryId,
+          reimbursable: false,
+          propertyId,
+          vehicleId,
+          included: !isDuplicate,
+          isDuplicate,
+        };
+      });
+      // Keep fresh ones first for easier review
+      built.sort((a, b) => {
+        if (a.isDuplicate && !b.isDuplicate) return 1;
+        if (!a.isDuplicate && b.isDuplicate) return -1;
+        return a.date.localeCompare(b.date);
+      });
+      setRows(built);
+    }
+
+    void init();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Determine which categories are Home or Vehicles children — used for the
+  // property/vehicle sub-selects in the render body (reactive so option lists
+  // update if the categories store is refreshed while the modal is open).
   const homeParent = categories.find((c) => c.name === 'Home' && c.parentCategoryId === null);
   const vehicleParent = categories.find((c) => c.name === 'Vehicles' && c.parentCategoryId === null);
 
@@ -78,49 +148,10 @@ export function PdfReviewModal({
     const isHome = homeParent != null && cat?.parentCategoryId === homeParent.id;
     const isVehicle = vehicleParent != null && cat?.parentCategoryId === vehicleParent.id;
     return {
-      propertyId: isHome && properties.length === 1 ? (properties[0].id ?? null) : (isHome ? null : null),
-      vehicleId: isVehicle && vehicles.length === 1 ? (vehicles[0].id ?? null) : (isVehicle ? null : null),
+      propertyId: isHome && properties.length === 1 ? (properties[0].id ?? null) : null,
+      vehicleId: isVehicle && vehicles.length === 1 ? (vehicles[0].id ?? null) : null,
     };
   }
-
-  // Build editable rows once we have categories + overrides + seeds
-  useEffect(() => {
-    if (categories.length === 0) return;
-
-    const { duplicates: dupTransactions } = filterDuplicates(
-      result.transactions,
-      existing,
-    );
-    const dupKeys = new Set(dupTransactions.map(transactionDedupKey));
-
-    const built: EditableRow[] = result.transactions.map((t) => {
-      const predictedCategoryId = categorize(t.merchant, overrides, seeds);
-      const isDuplicate = dupKeys.has(transactionDedupKey(t));
-      const { propertyId, vehicleId } = defaultPropertyVehicle(predictedCategoryId);
-      return {
-        date: t.date,
-        merchant: t.merchant,
-        merchantRaw: t.merchantRaw,
-        amount: t.amount,
-        categoryId: predictedCategoryId,
-        predictedCategoryId,
-        reimbursable: false,
-        propertyId,
-        vehicleId,
-        included: !isDuplicate,
-        isDuplicate,
-      };
-    });
-    // Keep fresh ones first for easier review
-    built.sort((a, b) => {
-      if (a.isDuplicate && !b.isDuplicate) return 1;
-      if (!a.isDuplicate && b.isDuplicate) return -1;
-      return a.date.localeCompare(b.date);
-    });
-    setRows(built);
-  // Intentionally re-run when categories/overrides/seeds/properties/vehicles arrive
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categories, overrides, seeds, properties, vehicles]);
 
   function updateRow(index: number, patch: Partial<EditableRow>) {
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
@@ -297,10 +328,16 @@ export function PdfReviewModal({
                             className="text-xs text-muted-foreground hover:text-foreground"
                             aria-label={`Exclude transfer for ${row.merchant}`}
                             onClick={() => {
-                              // Transfer is seeded as id=41
+                              // Transfer is seeded as id=41; it is not a Home/Vehicles
+                              // category so property/vehicle links must be cleared.
                               const transferCat = categories.find((c) => c.name === 'Transfer');
                               if (transferCat?.id) {
-                                updateRow(i, { categoryId: transferCat.id, included: true });
+                                updateRow(i, {
+                                  categoryId: transferCat.id,
+                                  included: true,
+                                  propertyId: null,
+                                  vehicleId: null,
+                                });
                               }
                             }}
                           >

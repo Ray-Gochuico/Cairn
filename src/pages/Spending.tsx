@@ -71,9 +71,10 @@ export default function Spending() {
     setQueue((prev) => prev.slice(1));
   };
 
-  const handleModalSaved = (insertedCount: number) => {
-    // Reload transactions so the list reflects the new rows
-    loadTransactions();
+  const handleModalSaved = async (insertedCount: number) => {
+    // Await reload so the next modal in the queue receives an up-to-date
+    // `existing` list and can correctly pre-flag duplicates from this batch.
+    await loadTransactions();
     setQueue((prev) => prev.slice(1));
     // eslint-disable-next-line no-console
     console.info('[spending] imported', insertedCount, 'transactions');
