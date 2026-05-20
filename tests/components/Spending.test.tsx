@@ -1,0 +1,104 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+// pdfjs-dist uses DOMMatrix which is not available in jsdom. Mock the extract
+// module so the Spending page can be imported without pulling in pdfjs.
+vi.mock('@/pdf/extract', () => ({
+  extractTextItems: vi.fn().mockResolvedValue([]),
+}));
+import { render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { SqliteAdapter } from '@/db/sqlite-adapter';
+import { runMigrations } from '@/db/migrations';
+import { setDatabase } from '@/db/db';
+import { useCategoriesStore } from '@/stores/categories-store';
+import { useTransactionsStore } from '@/stores/transactions-store';
+import Spending from '@/pages/Spending';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import type { Transaction } from '@/types/schema';
+
+const mig = (file: string) => ({
+  version: file,
+  sql: readFileSync(resolve(__dirname, `../../src/db/migrations/${file}.sql`), 'utf-8'),
+});
+
+function renderPage() {
+  return render(
+    <MemoryRouter>
+      <Spending />
+    </MemoryRouter>,
+  );
+}
+
+describe('Spending page', () => {
+  let db: SqliteAdapter;
+
+  beforeEach(async () => {
+    db = new SqliteAdapter(':memory:');
+    await runMigrations(db, [
+      mig('0001_initial'),
+      mig('0008_add_transaction_property_links'),
+      mig('0009_seed_categories'),
+      mig('0010_seed_merchant_mappings'),
+    ]);
+    setDatabase(db);
+    useCategoriesStore.setState({ categories: [], isLoading: false, error: null });
+    useTransactionsStore.setState({ transactions: [], isLoading: false, error: null });
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  it('(a) renders the import button and an empty-state message when there are no transactions', async () => {
+    renderPage();
+
+    // Import button should be visible
+    expect(screen.getByRole('button', { name: /import statement/i })).toBeInTheDocument();
+
+    // File input for drag-and-drop should be present
+    expect(screen.getByLabelText(/statement pdf/i)).toBeInTheDocument();
+
+    // Empty state message
+    await waitFor(() => {
+      expect(
+        screen.getByText(/no transactions yet/i),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('(b) with seeded transactions in the store, the list renders them with category names', async () => {
+    // Pre-seed: insert categories and transactions directly via the store
+    await useCategoriesStore.getState().load();
+
+    // Insert two transactions directly in the DB
+    const txn1: Omit<Transaction, 'id'> = {
+      householdId: 1, date: '2026-03-05', merchant: 'AMAZON', merchantRaw: 'AMAZON.COM',
+      amount: 54.23, categoryId: 37 /* Shopping */, sourceAccountId: null, propertyId: null,
+      vehicleId: null, sourcePdfFilename: 'mar.pdf', reimbursable: false,
+      reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
+    };
+    const txn2: Omit<Transaction, 'id'> = {
+      householdId: 1, date: '2026-03-06', merchant: 'STARBUCKS', merchantRaw: 'STARBUCKS #1',
+      amount: 7.50, categoryId: 32 /* Food & Drink */, sourceAccountId: null, propertyId: null,
+      vehicleId: null, sourcePdfFilename: 'mar.pdf', reimbursable: false,
+      reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
+    };
+
+    await useTransactionsStore.getState().createMany([txn1, txn2]);
+
+    renderPage();
+
+    // Both merchant names should appear in the list
+    await waitFor(() => {
+      expect(screen.getByText('AMAZON')).toBeInTheDocument();
+      expect(screen.getByText('STARBUCKS')).toBeInTheDocument();
+    });
+
+    // Category names should appear
+    await waitFor(() => {
+      expect(screen.getByText('Shopping')).toBeInTheDocument();
+      expect(screen.getByText('Food & Drink')).toBeInTheDocument();
+    });
+  });
+});

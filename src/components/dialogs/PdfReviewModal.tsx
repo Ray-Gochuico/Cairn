@@ -62,7 +62,7 @@ export function PdfReviewModal({
   useEffect(() => {
     if (categories.length === 0) return;
 
-    const { fresh: freshTransactions, duplicates: dupTransactions } = filterDuplicates(
+    const { duplicates: dupTransactions } = filterDuplicates(
       result.transactions,
       existing,
     );
