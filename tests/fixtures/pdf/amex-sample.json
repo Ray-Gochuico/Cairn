@@ -1,0 +1,11 @@
+[
+  { "page": 1, "str": "03/04/26", "x": 48, "y": 210, "width": 46, "height": 8 },
+  { "page": 1, "str": "UBER TRIP HELP.UBER.COM", "x": 110, "y": 210, "width": 200, "height": 8 },
+  { "page": 1, "str": "$18.40", "x": 520, "y": 210, "width": 40, "height": 8 },
+  { "page": 1, "str": "03/09/26", "x": 48, "y": 232, "width": 46, "height": 8 },
+  { "page": 1, "str": "NETFLIX.COM", "x": 110, "y": 232, "width": 90, "height": 8 },
+  { "page": 1, "str": "$15.49", "x": 520, "y": 232, "width": 40, "height": 8 },
+  { "page": 1, "str": "03/12/26", "x": 48, "y": 254, "width": 46, "height": 8 },
+  { "page": 1, "str": "AUTOPAY PAYMENT RECEIVED", "x": 110, "y": 254, "width": 200, "height": 8 },
+  { "page": 1, "str": "-$340.00", "x": 520, "y": 254, "width": 48, "height": 8 }
+]
