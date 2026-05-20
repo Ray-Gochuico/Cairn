@@ -769,6 +769,31 @@ describe('TickerSchema', () => {
   });
 });
 
+import { TransactionSchema } from '@/types/schema';
+
+describe('TransactionSchema', () => {
+  it('accepts a purchase and a negative-amount credit', () => {
+    const base = {
+      householdId: 1, date: '2026-03-05', merchant: 'AMAZON', merchantRaw: 'AMAZON.COM',
+      amount: 54.23, categoryId: 37, sourceAccountId: null, propertyId: null,
+      vehicleId: null, sourcePdfFilename: 'mar.pdf', reimbursable: false,
+      reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
+    };
+    expect(TransactionSchema.parse(base).amount).toBe(54.23);
+    expect(TransactionSchema.parse({ ...base, amount: -200 }).amount).toBe(-200);
+  });
+  it('rejects a bad date and an empty merchant', () => {
+    const base = {
+      householdId: 1, date: '03/05/2026', merchant: 'X', merchantRaw: null,
+      amount: 1, categoryId: null, sourceAccountId: null, propertyId: null,
+      vehicleId: null, sourcePdfFilename: null, reimbursable: false,
+      reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
+    };
+    expect(() => TransactionSchema.parse(base)).toThrow();
+    expect(() => TransactionSchema.parse({ ...base, date: '2026-03-05', merchant: '' })).toThrow();
+  });
+});
+
 describe('FundHoldingSchema', () => {
   const valid = {
     fundTicker: 'VTI',

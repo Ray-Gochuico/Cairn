@@ -317,3 +317,24 @@ export const MerchantSeedSchema = z.object({
   categoryId: z.number().int().positive(),
 });
 export type MerchantSeed = z.infer<typeof MerchantSeedSchema>;
+
+export const TransactionSchema = z.object({
+  id: z.number().int().positive().optional(),
+  householdId: z.number().int().positive(),
+  date: isoDateString,
+  merchant: z.string().min(1),
+  merchantRaw: z.string().nullable(),
+  amount: z.number(), // positive = purchase, negative = payment/credit
+  categoryId: z.number().int().positive().nullable(),
+  sourceAccountId: z.number().int().positive().nullable(),
+  propertyId: z.number().int().positive().nullable(),
+  vehicleId: z.number().int().positive().nullable(),
+  sourcePdfFilename: z.string().nullable(),
+  importedAt: z.string().optional(),
+  reimbursable: z.boolean(),
+  reimbursedAt: isoDateString.nullable(),
+  reimbursedAmount: z.number().nullable(),
+  isRecurring: z.boolean(),
+  notes: z.string().nullable(),
+});
+export type Transaction = z.infer<typeof TransactionSchema>;
