@@ -7,7 +7,6 @@ import {
   GoalType,
   ContributionSource,
   SnapshotSource,
-  TransactionCategoryType,
   AssetClass,
   DependentType,
   JurisdictionType,

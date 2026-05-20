@@ -185,6 +185,7 @@ export default function CategoriesTab() {
     [categories],
   );
 
+  // Assumes a two-level tree (parents + their direct children); the seed tree and the parent-picker enforce this — deeper nesting would not render.
   // Group categories: parents with children, then standalone
   const grouped = useMemo(() => {
     const parents = categories.filter((c) => c.parentCategoryId === null);

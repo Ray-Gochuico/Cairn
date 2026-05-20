@@ -63,15 +63,6 @@ export const SnapshotSource = {
 } as const;
 export type SnapshotSource = typeof SnapshotSource[keyof typeof SnapshotSource];
 
-export const TransactionCategoryType = {
-  NEED: 'NEED',
-  WANT: 'WANT',
-  SAVINGS: 'SAVINGS',
-  INCOME: 'INCOME',
-  TRANSFER: 'TRANSFER',
-} as const;
-export type TransactionCategoryType = typeof TransactionCategoryType[keyof typeof TransactionCategoryType];
-
 export const AssetClass = {
   US_TOTAL_MARKET: 'US_TOTAL_MARKET',
   US_LARGE_CAP: 'US_LARGE_CAP',

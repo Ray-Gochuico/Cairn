@@ -1,3 +1,7 @@
+-- 0010_seed_merchant_mappings.sql
+-- Starter merchant->category seed. Patterns are matched as case-insensitive
+-- substrings of the cleaned merchant name; longest match wins (see categorize.ts).
+-- Extend to >=200 rows per the coverage targets in the Phase 4 plan, Task 15.
 INSERT OR IGNORE INTO merchant_seed_mapping (merchant_pattern, category_id) VALUES
   ('WHOLE FOODS', 33),
   ('TRADER JOE', 33),

@@ -1,3 +1,6 @@
+-- 0009_seed_categories.sql
+-- Default category tree. Explicit ids; parents (1-4) precede their children.
+-- INSERT OR IGNORE keeps re-runs on an existing install safe.
 INSERT OR IGNORE INTO categories
   (id, name, parent_category_id, color, icon, type, is_capital, system_managed) VALUES
   (1,  'Home',                 NULL, '#2563eb', '🏠', 'NEED', 0, 0),
