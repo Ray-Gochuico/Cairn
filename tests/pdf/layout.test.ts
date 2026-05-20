@@ -5,7 +5,8 @@ import {
   rowText,
   cleanMerchant,
   parseAmount,
-  inferStatementYear,
+  inferStatementPeriod,
+  resolveTransactionYear,
 } from '@/pdf/layout';
 import type { PdfTextItem } from '@/pdf/types';
 
@@ -79,16 +80,36 @@ describe('cleanMerchant', () => {
   });
 });
 
-describe('inferStatementYear', () => {
-  it('reads a 2-digit year from a MM/DD/YY date on page 1', () => {
-    expect(inferStatementYear([item({ str: 'Closing Date 03/14/26' })])).toBe(2026);
+describe('inferStatementPeriod', () => {
+  it('anchors on the latest year-bearing date on page 1', () => {
+    // a year-crossing cycle: closing date is the later one
+    expect(
+      inferStatementPeriod([item({ str: 'Opening/Closing Date 12/28/25 - 01/27/26' })]),
+    ).toEqual({ closingMonth: 1, closingYear: 2026 });
   });
-  it('reads a 4-digit year', () => {
-    expect(inferStatementYear([item({ str: 'Statement 2025' })])).toBe(2025);
+  it('uses a 4-digit year and the latest date when several are present', () => {
+    expect(
+      inferStatementPeriod([
+        item({ str: 'Statement closing date 03/14/2026' }),
+        item({ str: 'Payment due date 04/10/2026' }),
+      ]),
+    ).toEqual({ closingMonth: 4, closingYear: 2026 });
   });
-  it('falls back to the current year when no year is present', () => {
-    expect(inferStatementYear([item({ str: 'no dates here' })])).toBe(
-      new Date().getFullYear(),
-    );
+  it('falls back to the current month/year when no year-bearing date exists', () => {
+    const now = new Date();
+    expect(inferStatementPeriod([item({ str: 'no dated text' })])).toEqual({
+      closingMonth: now.getMonth() + 1,
+      closingYear: now.getFullYear(),
+    });
+  });
+});
+
+describe('resolveTransactionYear', () => {
+  const period = { closingMonth: 1, closingYear: 2026 };
+  it('uses the closing year for a month at or before the closing month', () => {
+    expect(resolveTransactionYear(1, period)).toBe(2026);
+  });
+  it('uses the prior year for a month after the closing month', () => {
+    expect(resolveTransactionYear(12, period)).toBe(2025);
   });
 });

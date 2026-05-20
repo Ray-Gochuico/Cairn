@@ -66,18 +66,50 @@ export function cleanMerchant(raw: string): string {
   return s.trim() || raw.trim();
 }
 
+export interface StatementPeriod {
+  /** 1-12 */
+  closingMonth: number;
+  closingYear: number;
+}
+
 /**
- * Best-effort statement year for parsers whose date tokens omit the year
- * (e.g. Chase MM/DD). Reads page-1 text; falls back to the current year.
+ * Infer the statement's closing month/year from the year-bearing dates on
+ * page 1 (period / closing / payment-due dates — transaction rows in formats
+ * like Chase's bare MM/DD have no year and are ignored). The latest such date
+ * anchors the period; `resolveTransactionYear` dates each transaction
+ * relative to it. Falls back to today's month/year when page 1 has no
+ * year-bearing date.
  */
-export function inferStatementYear(items: PdfTextItem[]): number {
+export function inferStatementPeriod(items: PdfTextItem[]): StatementPeriod {
   const text = firstPageText(items);
-  const full = text.match(/\b\d{1,2}\/\d{1,2}\/(\d{4}|\d{2})\b/);
-  if (full) {
-    const y = Number.parseInt(full[1], 10);
-    return full[1].length === 2 ? 2000 + y : y;
+  const dated = [...text.matchAll(/\b(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})\b/g)].map(
+    (m) => {
+      const month = Number(m[1]);
+      const year = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]);
+      return { month, year };
+    },
+  );
+  if (dated.length > 0) {
+    const closing = dated.reduce((a, b) =>
+      b.year * 12 + b.month > a.year * 12 + a.month ? b : a,
+    );
+    return { closingMonth: closing.month, closingYear: closing.year };
   }
-  const y4 = text.match(/\b(20\d{2})\b/);
-  if (y4) return Number.parseInt(y4[1], 10);
-  return new Date().getFullYear();
+  const now = new Date();
+  return { closingMonth: now.getMonth() + 1, closingYear: now.getFullYear() };
+}
+
+/**
+ * Resolve a transaction's full year from its month and the statement period.
+ * A transaction whose month is after the closing month belongs to the prior
+ * calendar year — statements span at most ~one month, so a 12/30 charge on a
+ * statement closing 01/27 is from the previous year.
+ */
+export function resolveTransactionYear(
+  txnMonth: number,
+  period: StatementPeriod,
+): number {
+  return txnMonth <= period.closingMonth
+    ? period.closingYear
+    : period.closingYear - 1;
 }

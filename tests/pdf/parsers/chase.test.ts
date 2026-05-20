@@ -12,4 +12,18 @@ describe('parseChase', () => {
       { date: '2026-03-11', merchantRaw: "TRADER JOE'S #088", merchant: "TRADER JOE'S #088", amount: 73.1 },
     ]);
   });
+
+  it('dates transactions across a year boundary using the statement period', () => {
+    const items: PdfTextItem[] = [
+      { page: 1, str: 'Opening/Closing Date 12/28/25 - 01/27/26', x: 50, y: 60, width: 240, height: 8 },
+      { page: 1, str: '12/30', x: 50, y: 200, width: 32, height: 8 },
+      { page: 1, str: 'OLD YEAR STORE', x: 95, y: 200, width: 150, height: 8 },
+      { page: 1, str: '$40.00', x: 505, y: 200, width: 40, height: 8 },
+      { page: 1, str: '01/15', x: 50, y: 224, width: 32, height: 8 },
+      { page: 1, str: 'NEW YEAR STORE', x: 95, y: 224, width: 150, height: 8 },
+      { page: 1, str: '$60.00', x: 505, y: 224, width: 40, height: 8 },
+    ];
+    const result = parseChase(items);
+    expect(result.map((t) => t.date)).toEqual(['2025-12-30', '2026-01-15']);
+  });
 });
