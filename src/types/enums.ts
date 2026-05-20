@@ -110,3 +110,15 @@ export const JurisdictionType = {
   CITY: 'CITY',
 } as const;
 export type JurisdictionType = typeof JurisdictionType[keyof typeof JurisdictionType];
+
+export const Issuer = {
+  CHASE: 'CHASE',
+  AMEX: 'AMEX',
+  CITI: 'CITI',
+  DISCOVER: 'DISCOVER',
+  CAPITAL_ONE: 'CAPITAL_ONE',
+  BOA: 'BOA',
+  WELLS_FARGO: 'WELLS_FARGO',
+  UNKNOWN: 'UNKNOWN',
+} as const;
+export type Issuer = (typeof Issuer)[keyof typeof Issuer];

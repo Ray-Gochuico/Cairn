@@ -19,3 +19,17 @@ export interface PdfTextItem {
   width: number;
   height: number;
 }
+
+/**
+ * One transaction extracted from a statement, before categorization.
+ *
+ * `amount` sign convention: **positive = a purchase** (money spent),
+ * **negative = a payment/refund/credit**. The review modal and
+ * `transactions.amount` keep the same convention.
+ */
+export interface ParsedTransaction {
+  date: string; // YYYY-MM-DD
+  merchantRaw: string; // verbatim from the statement
+  merchant: string; // cleaned (see cleanMerchant)
+  amount: number;
+}
