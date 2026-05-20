@@ -172,11 +172,11 @@ it('0008 adds property_id and vehicle_id columns to transactions', async () => {
   await db.close();
 });
 
-it('0009 seeds 42 categories with a resolvable parent tree', async () => {
+it('0009 seeds the base category tree with a resolvable parent tree (44 total after 0011)', async () => {
   const db = new SqliteAdapter(':memory:');
   await runMigrations(db, await loadAllMigrations());
   const rows = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM categories');
-  expect(rows[0].n).toBe(42);
+  expect(rows[0].n).toBe(44);
   const orphans = await db.select<{ n: number }>(
     'SELECT COUNT(*) AS n FROM categories c WHERE c.parent_category_id IS NOT NULL ' +
       'AND NOT EXISTS (SELECT 1 FROM categories p WHERE p.id = c.parent_category_id)',
@@ -195,5 +195,41 @@ it('0010 seeds >=200 merchant mappings, all pointing at real categories', async 
       'WHERE NOT EXISTS (SELECT 1 FROM categories c WHERE c.id = m.category_id)',
   );
   expect(bad[0].n).toBe(0);
+  await db.close();
+});
+
+it('0011 adds Debt Payment and Business Expense categories and seeds payment patterns', async () => {
+  const db = new SqliteAdapter(':memory:');
+  await runMigrations(db, await loadAllMigrations());
+
+  // (i) categories 43 and 44 exist with correct types
+  const debtCat = await db.select<{ id: number; name: string; type: string }>(
+    "SELECT id, name, type FROM categories WHERE id = 43"
+  );
+  expect(debtCat).toHaveLength(1);
+  expect(debtCat[0].name).toBe('Debt Payment');
+  expect(debtCat[0].type).toBe('TRANSFER');
+
+  const bizCat = await db.select<{ id: number; name: string; type: string }>(
+    "SELECT id, name, type FROM categories WHERE id = 44"
+  );
+  expect(bizCat).toHaveLength(1);
+  expect(bizCat[0].name).toBe('Business Expense');
+  expect(bizCat[0].type).toBe('WANT');
+
+  // (ii) CC-payment pattern AUTOPAY resolves to Transfer (category 41)
+  const autopay = await db.select<{ category_id: number }>(
+    "SELECT category_id FROM merchant_seed_mapping WHERE merchant_pattern = 'AUTOPAY'"
+  );
+  expect(autopay).toHaveLength(1);
+  expect(autopay[0].category_id).toBe(41);
+
+  // (iii) loan-servicer pattern NELNET resolves to Debt Payment (category 43)
+  const nelnet = await db.select<{ category_id: number }>(
+    "SELECT category_id FROM merchant_seed_mapping WHERE merchant_pattern = 'NELNET'"
+  );
+  expect(nelnet).toHaveLength(1);
+  expect(nelnet[0].category_id).toBe(43);
+
   await db.close();
 });
