@@ -122,3 +122,12 @@ export const Issuer = {
   UNKNOWN: 'UNKNOWN',
 } as const;
 export type Issuer = (typeof Issuer)[keyof typeof Issuer];
+
+export const CategoryType = {
+  NEED: 'NEED',
+  WANT: 'WANT',
+  SAVINGS: 'SAVINGS',
+  INCOME: 'INCOME',
+  TRANSFER: 'TRANSFER',
+} as const;
+export type CategoryType = (typeof CategoryType)[keyof typeof CategoryType];

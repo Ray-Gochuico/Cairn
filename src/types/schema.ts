@@ -8,6 +8,7 @@ import {
   LoanType,
   PropertyType,
   GoalType,
+  CategoryType,
 } from './enums';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -288,3 +289,31 @@ export const FundHoldingSchema = z.object({
   asOfDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 export type FundHolding = z.infer<typeof FundHoldingSchema>;
+
+export const CategorySchema = z.object({
+  id: z.number().int().positive().optional(),
+  name: z.string().min(1),
+  parentCategoryId: z.number().int().positive().nullable(),
+  color: z.string().nullable(),
+  icon: z.string().nullable(),
+  type: z.nativeEnum(CategoryType),
+  isCapital: z.boolean(),
+  systemManaged: z.boolean(),
+});
+export type Category = z.infer<typeof CategorySchema>;
+
+export const MerchantOverrideSchema = z.object({
+  id: z.number().int().positive().optional(),
+  householdId: z.number().int().positive(),
+  merchantPattern: z.string().min(1),
+  categoryId: z.number().int().positive(),
+  createdFromCorrectionAt: z.string().optional(),
+});
+export type MerchantOverride = z.infer<typeof MerchantOverrideSchema>;
+
+export const MerchantSeedSchema = z.object({
+  id: z.number().int().positive().optional(),
+  merchantPattern: z.string().min(1),
+  categoryId: z.number().int().positive(),
+});
+export type MerchantSeed = z.infer<typeof MerchantSeedSchema>;

@@ -1,4 +1,35 @@
 import { describe, it, expect } from 'vitest';
+import { CategorySchema, MerchantOverrideSchema, MerchantSeedSchema } from '@/types/schema';
+
+describe('CategorySchema', () => {
+  it('accepts a valid category and a null parent', () => {
+    const c = CategorySchema.parse({
+      id: 1, name: 'Home', parentCategoryId: null, color: '#2563eb',
+      icon: '🏠', type: 'NEED', isCapital: false, systemManaged: false,
+    });
+    expect(c.name).toBe('Home');
+  });
+  it('rejects an empty name and an unknown type', () => {
+    expect(() => CategorySchema.parse({
+      name: '', parentCategoryId: null, color: null, icon: null,
+      type: 'NEED', isCapital: false, systemManaged: false,
+    })).toThrow();
+    expect(() => CategorySchema.parse({
+      name: 'X', parentCategoryId: null, color: null, icon: null,
+      type: 'BOGUS', isCapital: false, systemManaged: false,
+    })).toThrow();
+  });
+});
+
+describe('MerchantOverrideSchema / MerchantSeedSchema', () => {
+  it('round-trip a valid override and seed', () => {
+    expect(MerchantOverrideSchema.parse({
+      householdId: 1, merchantPattern: 'PEET', categoryId: 32,
+    }).merchantPattern).toBe('PEET');
+    expect(MerchantSeedSchema.parse({ merchantPattern: 'PEET', categoryId: 32 }).categoryId).toBe(32);
+  });
+});
+
 import {
   HouseholdSchema,
   PersonSchema,
