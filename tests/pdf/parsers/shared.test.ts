@@ -49,4 +49,20 @@ describe('extractRowsByShape', () => {
     ];
     expect(extractRowsByShape(items, config)[0].amount).toBe(-200);
   });
+
+  it('extracts transactions spanning multiple pages and folds a page-2 continuation', () => {
+    const items: PdfTextItem[] = [
+      { page: 1, str: '03/05', x: 50, y: 700, width: 32, height: 8 },
+      { page: 1, str: 'PAGE ONE STORE', x: 95, y: 700, width: 150, height: 8 },
+      { page: 1, str: '$10.00', x: 505, y: 700, width: 40, height: 8 },
+      { page: 2, str: '03/07', x: 50, y: 100, width: 32, height: 8 },
+      { page: 2, str: 'PAGE TWO STORE', x: 95, y: 100, width: 150, height: 8 },
+      { page: 2, str: '$20.00', x: 505, y: 100, width: 40, height: 8 },
+      { page: 2, str: 'WRAPPED DETAIL', x: 95, y: 124, width: 150, height: 8 },
+    ];
+    const result = extractRowsByShape(items, config);
+    expect(result).toHaveLength(2);
+    expect(result[0].merchantRaw).toBe('PAGE ONE STORE');
+    expect(result[1].merchantRaw).toBe('PAGE TWO STORE WRAPPED DETAIL');
+  });
 });

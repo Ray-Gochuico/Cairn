@@ -40,7 +40,13 @@ export function extractRowsByShape(
     const dateMatch = config.dateRe.exec(row[0].str.trim());
 
     if (!dateMatch) {
-      // Continuation row: append to the previous transaction's merchant.
+      // Continuation row heuristic: a no-leading-date row is folded into the
+      // previous transaction's merchant only when it also has no amount-shaped
+      // token. A no-date row that *does* contain one is treated as a summary
+      // line (e.g. "Previous Balance $0.00") and skipped. Known imperfection:
+      // a wrapped description that happens to contain a number-with-cents
+      // token would also be skipped; the always-shown review modal backstops
+      // that edge case.
       if (out.length > 0 && amount === null) {
         const cont = row.map((i) => i.str).join(' ').replace(/\s+/g, ' ').trim();
         if (cont) {

@@ -39,9 +39,10 @@ export function rowText(row: PdfTextItem[]): string {
 const AMOUNT_RE = /^\(?-?\$?-?[\d,]+\.\d{2}-?\)?$/;
 
 /**
- * Parse a currency token to a signed number. A leading/trailing minus or
- * surrounding parentheses mean negative (a credit/payment). Requires a
- * `.dd` cents suffix, so plain store numbers like "STORE123" return null.
+ * Loosely parse a number-with-cents token to a signed number. A leading/
+ * trailing minus or surrounding parentheses mean negative (a credit/payment).
+ * The `.dd` cents suffix is required so that plain store numbers like
+ * "STORE123" are rejected and return null.
  */
 export function parseAmount(raw: string): number | null {
   const s = raw.trim();
@@ -50,13 +51,17 @@ export function parseAmount(raw: string): number | null {
   const digits = s.replace(/[^\d.]/g, '');
   const n = Number.parseFloat(digits);
   if (Number.isNaN(n)) return null;
-  return negative ? -n : n;
+  const result = negative ? -n : n;
+  return result === 0 ? 0 : result;
 }
 
 /**
  * Strip trailing noise (phone numbers, long store ids, a trailing 2-letter
  * state code) from a raw merchant string and collapse whitespace. Never
  * returns empty — falls back to the trimmed raw input.
+ *
+ * The trailing state-code / store-number strips are best-effort and lossy;
+ * callers keep `merchantRaw` as the lossless original.
  */
 export function cleanMerchant(raw: string): string {
   let s = raw.replace(/\s+/g, ' ').trim();
