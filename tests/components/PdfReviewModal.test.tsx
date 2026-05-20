@@ -10,10 +10,12 @@ import { useMerchantOverridesStore } from '@/stores/merchant-overrides-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
+import { PropertiesRepo } from '@/domain/properties';
 import { PdfReviewModal } from '@/components/dialogs/PdfReviewModal';
+import { getDatabase } from '@/db/db';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { Issuer } from '@/types/enums';
+import { Issuer, PropertyType } from '@/types/enums';
 import type { ParseResult } from '@/pdf/parse-statement';
 import type { Transaction } from '@/types/schema';
 
@@ -157,5 +159,45 @@ describe('PdfReviewModal', () => {
     const { transactions } = useTransactionsStore.getState();
     expect(transactions).toHaveLength(1);
     expect(transactions[0].merchant).toBe('STARBUCKS');
+  });
+
+  it('(d) property select renders and auto-selects for a Home-child category when exactly one property exists', async () => {
+    // Seed exactly one property into the DB
+    const repo = new PropertiesRepo(getDatabase());
+    const propertyId = await repo.create({
+      householdId: 1,
+      ownerPersonId: null,
+      name: 'Main House',
+      type: PropertyType.PRIMARY_RESIDENCE,
+      address: null,
+      purchaseDate: null,
+      purchasePrice: null,
+      currentEstimatedValue: null,
+      linkedLoanId: null,
+      excludedFromNetWorth: false,
+    });
+
+    // Render with a transaction; we will manually set its category to
+    // "Capital Improvements" (id=12, parentCategoryId=1 i.e. Home) after mount.
+    const result = makeResult([
+      { date: '2026-04-01', merchantRaw: 'CONTRACTORS INC', merchant: 'CONTRACTORS INC', amount: 3500.00 },
+    ]);
+    renderModal(result, []);
+
+    // Wait for the merchant row to appear
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('CONTRACTORS INC')).toBeInTheDocument();
+    });
+
+    // Change category to Capital Improvements (id=12) — a Home child
+    const categorySelect = screen.getByRole('combobox', { name: /category for contractors inc/i });
+    await userEvent.selectOptions(categorySelect, '12');
+
+    // The property sub-select should now appear and be auto-selected to the seeded property
+    await waitFor(() => {
+      const propertySelect = screen.getByRole('combobox', { name: /property for contractors inc/i });
+      expect(propertySelect).toBeInTheDocument();
+      expect(propertySelect).toHaveValue(String(propertyId));
+    });
   });
 });
