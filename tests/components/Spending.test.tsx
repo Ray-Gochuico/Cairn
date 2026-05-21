@@ -89,16 +89,65 @@ describe('Spending page', () => {
 
     renderPage();
 
-    // Both merchant names should appear in the list
+    // Both merchant names should appear (may appear in both top-merchants and transactions list)
     await waitFor(() => {
-      expect(screen.getByText('AMAZON')).toBeInTheDocument();
-      expect(screen.getByText('STARBUCKS')).toBeInTheDocument();
+      expect(screen.getAllByText('AMAZON').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('STARBUCKS').length).toBeGreaterThan(0);
     });
 
     // Category names should appear
     await waitFor(() => {
       expect(screen.getByText('Shopping')).toBeInTheDocument();
       expect(screen.getByText('Food & Drink')).toBeInTheDocument();
+    });
+  });
+
+  it('(c) shows top merchants, subscription count, and awaiting-reimbursement row', async () => {
+    await useCategoriesStore.getState().load();
+
+    // A recurring trio (NETFLIX, ~monthly, same amount)
+    const netflixBase: Omit<Transaction, 'id'> = {
+      householdId: 1, merchant: 'NETFLIX', merchantRaw: 'NETFLIX.COM',
+      amount: 15.49, categoryId: 37, sourceAccountId: null, propertyId: null,
+      vehicleId: null, sourcePdfFilename: 'mar.pdf', reimbursable: false,
+      reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
+      date: '2026-01-09',
+    };
+    // One pending reimbursable transaction
+    const reimbursableTxn: Omit<Transaction, 'id'> = {
+      householdId: 1, date: '2026-03-10', merchant: 'ACME EXPENSE', merchantRaw: 'ACME EXPENSE',
+      amount: 200, categoryId: 37, sourceAccountId: null, propertyId: null,
+      vehicleId: null, sourcePdfFilename: 'mar.pdf', reimbursable: true,
+      reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
+    };
+
+    await useTransactionsStore.getState().createMany([
+      { ...netflixBase, date: '2026-01-09' },
+      { ...netflixBase, date: '2026-02-09' },
+      { ...netflixBase, date: '2026-03-09' },
+      reimbursableTxn,
+    ]);
+
+    renderPage();
+
+    // Top merchants section shows NETFLIX (may appear in multiple elements — top merchants + transactions list)
+    await waitFor(() => {
+      expect(screen.getAllByText('NETFLIX').length).toBeGreaterThan(0);
+    });
+
+    // Subscriptions section shows 1 service
+    await waitFor(() => {
+      expect(
+        screen.getByText(/1 service/i),
+      ).toBeInTheDocument();
+    });
+
+    // Awaiting reimbursement section shows the reimbursable transaction
+    await waitFor(() => {
+      expect(screen.getAllByText('ACME EXPENSE').length).toBeGreaterThan(0);
+      expect(
+        screen.getByRole('button', { name: /mark reimbursed/i }),
+      ).toBeInTheDocument();
     });
   });
 });

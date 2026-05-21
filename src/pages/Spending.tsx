@@ -1,10 +1,16 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { extractTextItems } from '@/pdf/extract';
 import { parseStatement } from '@/pdf/parse-statement';
 import { PdfReviewModal } from '@/components/dialogs/PdfReviewModal';
+import { MarkReimbursedDialog } from '@/components/dialogs/MarkReimbursedDialog';
+import BarChartCard from '@/components/charts/BarChartCard';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { useCategoriesStore } from '@/stores/categories-store';
+import { useHouseholdStore } from '@/stores/household-store';
+import { summarizeSpending } from '@/lib/spending-analysis';
+import { detectRecurring } from '@/lib/recurring';
 import type { ParseResult } from '@/pdf/parse-statement';
+import type { Transaction } from '@/types/schema';
 
 interface PendingImport {
   result: ParseResult;
@@ -16,17 +22,87 @@ export default function Spending() {
   const [queue, setQueue] = useState<PendingImport[]>([]);
   const [importError, setImportError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [reimbursedTarget, setReimbursedTarget] = useState<Transaction | null>(null);
 
   const transactions = useTransactionsStore((s) => s.transactions);
   const loadTransactions = useTransactionsStore((s) => s.load);
+  const syncRecurring = useTransactionsStore((s) => s.syncRecurring);
   const categories = useCategoriesStore((s) => s.categories);
   const loadCategories = useCategoriesStore((s) => s.load);
+  const household = useHouseholdStore((s) => s.household);
+  const loadHousehold = useHouseholdStore((s) => s.load);
 
   useEffect(() => {
-    loadTransactions();
-    loadCategories();
-  }, [loadTransactions, loadCategories]);
+    void Promise.all([
+      loadTransactions(),
+      loadCategories(),
+      loadHousehold(),
+    ]).then(() => syncRecurring());
+  }, [loadTransactions, loadCategories, loadHousehold, syncRecurring]);
 
+  // --- Analysis ---
+  const summary = useMemo(
+    () => summarizeSpending(transactions, categories),
+    [transactions, categories],
+  );
+  const recurring = useMemo(() => detectRecurring(transactions), [transactions]);
+
+  // Category lookup for display
+  const categoryById = useMemo(
+    () => new Map(categories.map((c) => [c.id, c])),
+    [categories],
+  );
+
+  // Monthly category bars data — pivot monthlyByCategory into chart rows
+  const monthlyBarData = useMemo(() => {
+    const byMonth = new Map<string, Record<string, number>>();
+    for (const row of summary.monthlyByCategory) {
+      const catName = row.categoryId != null
+        ? (categoryById.get(row.categoryId)?.name ?? `Cat ${row.categoryId}`)
+        : 'Uncategorized';
+      const existing = byMonth.get(row.month) ?? {};
+      existing[catName] = (existing[catName] ?? 0) + row.total;
+      byMonth.set(row.month, existing);
+    }
+    return [...byMonth.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, cats]) => ({ month, ...cats }));
+  }, [summary.monthlyByCategory, categoryById]);
+
+  // Derive the unique category keys that appear in chart data
+  const categorySeries = useMemo(() => {
+    const keys = new Set<string>();
+    for (const row of monthlyBarData) {
+      for (const k of Object.keys(row)) {
+        if (k !== 'month') keys.add(k);
+      }
+    }
+    return [...keys].map((name) => ({
+      dataKey: name,
+      label: name,
+    }));
+  }, [monthlyBarData]);
+
+  // Awaiting reimbursement
+  const awaitingReimbursement = useMemo(
+    () => transactions.filter((t) => t.reimbursable && t.reimbursedAt == null),
+    [transactions],
+  );
+
+  // Budget data
+  const budget = household?.monthlyExpenseBaseline ?? 0;
+  const currentTotal = summary.currentMonthTotal;
+  const budgetPct = budget > 0 ? Math.min(currentTotal / budget, 1) : 0;
+  const overBudget = budget > 0 && currentTotal > budget;
+
+  // MoM trend
+  const momDelta = currentTotal - summary.previousMonthTotal;
+  const momSign = momDelta >= 0 ? '+' : '';
+
+  // Recurring total
+  const recurringTotal = recurring.reduce((s, g) => s + g.averageAmount, 0);
+
+  // --- Import handlers ---
   const processFiles = useCallback(async (files: File[]) => {
     setImportError(null);
     const results: PendingImport[] = [];
@@ -55,9 +131,7 @@ export default function Spending() {
     e.preventDefault();
     setDragOver(true);
   };
-
   const handleDragLeave = () => setDragOver(false);
-
   const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setDragOver(false);
@@ -67,13 +141,8 @@ export default function Spending() {
     if (files.length > 0) await processFiles(files);
   };
 
-  const handleModalClose = () => {
-    setQueue((prev) => prev.slice(1));
-  };
-
+  const handleModalClose = () => setQueue((prev) => prev.slice(1));
   const handleModalSaved = async (insertedCount: number) => {
-    // Await reload so the next modal in the queue receives an up-to-date
-    // `existing` list and can correctly pre-flag duplicates from this batch.
     await loadTransactions();
     setQueue((prev) => prev.slice(1));
     // eslint-disable-next-line no-console
@@ -82,11 +151,8 @@ export default function Spending() {
 
   const current = queue[0];
 
-  // Build category lookup for display
-  const categoryById = new Map(categories.map((c) => [c.id, c]));
-
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-8 space-y-8">
       <h1 className="text-2xl font-semibold">Spending</h1>
 
       {/* Import area */}
@@ -126,9 +192,144 @@ export default function Spending() {
         </p>
       )}
 
-      {/* Transactions list */}
-      <div className="space-y-2">
-        <h2 className="text-lg font-medium">Transactions</h2>
+      {/* Only render analysis sections when there are transactions */}
+      {transactions.length > 0 && (
+        <>
+          {/* Monthly category bars */}
+          {monthlyBarData.length > 0 && categorySeries.length > 0 && (
+            <section aria-label="Monthly spending by category">
+              <BarChartCard
+                title="Monthly Spending by Category"
+                data={monthlyBarData}
+                xKey="month"
+                series={categorySeries}
+                yFormatter={(v) => `$${v.toLocaleString()}`}
+              />
+            </section>
+          )}
+
+          {/* Current month vs budget + MoM */}
+          <section className="grid grid-cols-2 gap-4">
+            <div className="border rounded-lg p-4 space-y-2">
+              <h2 className="text-sm font-medium text-muted-foreground">
+                {summary.currentMonth} spending
+              </h2>
+              <p className="text-2xl font-semibold">
+                ${currentTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+              {budget > 0 && (
+                <>
+                  <div className="w-full bg-muted rounded-full h-2">
+                    <div
+                      className={`h-2 rounded-full ${overBudget ? 'bg-destructive' : 'bg-primary'}`}
+                      style={{ width: `${budgetPct * 100}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {overBudget
+                      ? `$${(currentTotal - budget).toFixed(2)} over budget`
+                      : `$${(budget - currentTotal).toFixed(2)} under budget`}{' '}
+                    (budget: ${budget.toLocaleString()})
+                  </p>
+                </>
+              )}
+            </div>
+
+            <div className="border rounded-lg p-4 space-y-2">
+              <h2 className="text-sm font-medium text-muted-foreground">
+                Month-over-month
+              </h2>
+              <p className={`text-2xl font-semibold ${momDelta > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                {momSign}${Math.abs(momDelta).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {' '}
+                {momDelta >= 0 ? '▲' : '▼'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                vs {summary.previousMonthTotal > 0
+                  ? `$${summary.previousMonthTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} last month`
+                  : 'no prior-month data'}
+              </p>
+            </div>
+          </section>
+
+          {/* Top merchants */}
+          {summary.topMerchants.length > 0 && (
+            <section>
+              <h2 className="text-lg font-medium mb-3">Top merchants</h2>
+              <ul className="space-y-1">
+                {summary.topMerchants.map((m) => (
+                  <li key={m.merchant} className="flex items-center justify-between text-sm">
+                    <span>{m.merchant}</span>
+                    <span className="text-muted-foreground">
+                      ${m.total.toFixed(2)} · {m.count}×
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {/* Recurring subscriptions */}
+          <section>
+            <h2 className="text-lg font-medium mb-1">Subscriptions</h2>
+            {recurring.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No recurring subscriptions detected.</p>
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground mb-3">
+                  ${recurringTotal.toFixed(2)}/mo across {recurring.length} service{recurring.length !== 1 ? 's' : ''}
+                </p>
+                <ul className="space-y-1">
+                  {recurring.map((g) => (
+                    <li key={g.merchant} className="flex items-center justify-between text-sm">
+                      <span>{g.merchant}</span>
+                      <span className="text-muted-foreground">
+                        ${g.averageAmount.toFixed(2)}/mo · {g.occurrences}×
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </section>
+
+          {/* Awaiting reimbursement */}
+          <section>
+            <h2 className="text-lg font-medium mb-3">Awaiting reimbursement</h2>
+            {awaitingReimbursement.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No pending reimbursements.</p>
+            ) : (
+              <ul className="space-y-2">
+                {awaitingReimbursement.map((t) => (
+                  <li
+                    key={t.id}
+                    className="flex items-center justify-between text-sm border rounded-lg px-4 py-2"
+                  >
+                    <div>
+                      <span className="font-medium">{t.merchant}</span>
+                      <span className="ml-2 text-muted-foreground">{t.date}</span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <span>${t.amount.toFixed(2)}</span>
+                      <button
+                        type="button"
+                        onClick={() => setReimbursedTarget(t)}
+                        className="text-xs px-2 py-1 border rounded hover:bg-muted"
+                      >
+                        Mark reimbursed
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </>
+      )}
+
+      {/* Recent transactions list */}
+      <section>
+        <h2 className="text-lg font-medium mb-3">Recent transactions</h2>
         {transactions.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No transactions yet. Import a statement to get started.
@@ -157,9 +358,7 @@ export default function Spending() {
                     </td>
                     <td className="py-2 text-right">
                       {t.amount < 0 ? (
-                        <span className="text-green-600">
-                          {t.amount.toFixed(2)}
-                        </span>
+                        <span className="text-green-600">{t.amount.toFixed(2)}</span>
                       ) : (
                         <span>{t.amount.toFixed(2)}</span>
                       )}
@@ -169,9 +368,9 @@ export default function Spending() {
             </tbody>
           </table>
         )}
-      </div>
+      </section>
 
-      {/* Review modal — shows for the first item in the queue */}
+      {/* Modals */}
       {current && (
         <PdfReviewModal
           result={current.result}
@@ -179,6 +378,16 @@ export default function Spending() {
           existing={transactions}
           onClose={handleModalClose}
           onSaved={handleModalSaved}
+        />
+      )}
+      {reimbursedTarget && (
+        <MarkReimbursedDialog
+          transaction={reimbursedTarget}
+          onClose={() => setReimbursedTarget(null)}
+          onConfirmed={() => {
+            setReimbursedTarget(null);
+            void loadTransactions();
+          }}
         />
       )}
     </div>
