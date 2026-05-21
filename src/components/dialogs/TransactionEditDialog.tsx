@@ -7,11 +7,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import DatePicker from '@/components/ui/DatePicker';
 import { useTransactionsStore } from '@/stores/transactions-store';
-import type { Transaction, Category } from '@/types/schema';
+import type { Transaction, Category, Property, Vehicle } from '@/types/schema';
 
 interface TransactionEditDialogProps {
   transaction: Transaction;
   categories: Category[];
+  properties: Property[];
+  vehicles: Vehicle[];
   onClose: () => void;
   onSaved: () => void;
 }
@@ -20,12 +22,14 @@ const selectClass =
   'flex h-9 w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
 
 export function TransactionEditDialog({
-  transaction, categories, onClose, onSaved,
+  transaction, categories, properties, vehicles, onClose, onSaved,
 }: TransactionEditDialogProps) {
   const [date, setDate] = useState(transaction.date);
   const [merchant, setMerchant] = useState(transaction.merchant);
   const [amount, setAmount] = useState(String(transaction.amount));
   const [categoryId, setCategoryId] = useState<number | null>(transaction.categoryId);
+  const [propertyId, setPropertyId] = useState<number | null>(transaction.propertyId);
+  const [vehicleId, setVehicleId] = useState<number | null>(transaction.vehicleId);
   const [reimbursable, setReimbursable] = useState(transaction.reimbursable);
   const [notes, setNotes] = useState(transaction.notes ?? '');
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -34,6 +38,12 @@ export function TransactionEditDialog({
 
   const update = useTransactionsStore((s) => s.update);
   const remove = useTransactionsStore((s) => s.remove);
+
+  const homeParent = categories.find((c) => c.name === 'Home' && c.parentCategoryId === null);
+  const vehicleParent = categories.find((c) => c.name === 'Vehicles' && c.parentCategoryId === null);
+  const chosen = categories.find((c) => c.id === categoryId);
+  const isHome = homeParent != null && chosen?.parentCategoryId === homeParent.id;
+  const isVehicle = vehicleParent != null && chosen?.parentCategoryId === vehicleParent.id;
 
   const handleSave = async () => {
     const n = Number(amount);
@@ -52,6 +62,8 @@ export function TransactionEditDialog({
         merchant: merchant.trim(),
         amount: n,
         categoryId,
+        propertyId: isHome ? propertyId : null,
+        vehicleId: isVehicle ? vehicleId : null,
         reimbursable,
         notes: notes.trim() === '' ? null : notes.trim(),
       });
@@ -110,6 +122,38 @@ export function TransactionEditDialog({
               ))}
             </select>
           </div>
+          {isHome && (
+            <div>
+              <Label htmlFor="edit-property">Property</Label>
+              <select id="edit-property" aria-label="Property" className={selectClass}
+                value={propertyId ?? ''}
+                onChange={(e) =>
+                  setPropertyId(e.target.value === '' ? null : Number(e.target.value))
+                }
+              >
+                <option value="">— none —</option>
+                {properties.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {isVehicle && (
+            <div>
+              <Label htmlFor="edit-vehicle">Vehicle</Label>
+              <select id="edit-vehicle" aria-label="Vehicle" className={selectClass}
+                value={vehicleId ?? ''}
+                onChange={(e) =>
+                  setVehicleId(e.target.value === '' ? null : Number(e.target.value))
+                }
+              >
+                <option value="">— none —</option>
+                {vehicles.map((v) => (
+                  <option key={v.id} value={v.id}>{v.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <input id="edit-reimbursable" type="checkbox" aria-label="Reimbursable"
               checked={reimbursable}

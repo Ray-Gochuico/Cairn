@@ -9,7 +9,7 @@ import { useTransactionsStore } from '@/stores/transactions-store';
 import { TransactionsRepo } from '@/domain/transactions';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { Transaction, Category } from '@/types/schema';
+import type { Transaction, Category, Property, Vehicle } from '@/types/schema';
 
 const mig = (file: string) => ({
   version: file,
@@ -49,7 +49,7 @@ describe('TransactionEditDialog', () => {
   it('prefills the merchant, amount, and category from the transaction', () => {
     render(
       <TransactionEditDialog transaction={transaction} categories={categories}
-        onClose={vi.fn()} onSaved={vi.fn()} />,
+        properties={[]} vehicles={[]} onClose={vi.fn()} onSaved={vi.fn()} />,
     );
     expect(screen.getByLabelText('Merchant')).toHaveValue('STARBUCKS');
     expect(screen.getByLabelText('Amount')).toHaveValue(7.5);
@@ -61,7 +61,7 @@ describe('TransactionEditDialog', () => {
     const user = userEvent.setup();
     render(
       <TransactionEditDialog transaction={transaction} categories={categories}
-        onClose={vi.fn()} onSaved={onSaved} />,
+        properties={[]} vehicles={[]} onClose={vi.fn()} onSaved={onSaved} />,
     );
     const merchant = screen.getByLabelText('Merchant');
     await user.clear(merchant);
@@ -82,7 +82,7 @@ describe('TransactionEditDialog', () => {
     const user = userEvent.setup();
     render(
       <TransactionEditDialog transaction={transaction} categories={categories}
-        onClose={vi.fn()} onSaved={onSaved} />,
+        properties={[]} vehicles={[]} onClose={vi.fn()} onSaved={onSaved} />,
     );
     await user.click(screen.getByRole('button', { name: /^delete$/i }));
     // confirmation appears; the row is still there until confirmed
@@ -91,5 +91,35 @@ describe('TransactionEditDialog', () => {
     const rows = await new TransactionsRepo(db).list();
     expect(rows).toHaveLength(0);
     expect(onSaved).toHaveBeenCalled();
+  });
+
+  it('shows a property picker when the category is a Home child, and saves the pick', async () => {
+    const user = userEvent.setup();
+    // Home parent + a Home child category
+    const homeCats: Category[] = [
+      { id: 1, name: 'Home', parentCategoryId: null, color: null, icon: null,
+        type: 'NEED', isCapital: false, systemManaged: false },
+      { id: 7, name: 'Maintenance', parentCategoryId: 1, color: null, icon: null,
+        type: 'NEED', isCapital: false, systemManaged: false },
+    ];
+    // Seed a real property into the DB so the FK constraint on transactions.property_id is satisfied.
+    await db.execute(
+      `INSERT INTO properties (id, household_id, name, type, excluded_from_net_worth)
+       VALUES (5, 1, 'Main House', 'PRIMARY_RESIDENCE', 0)`,
+    );
+    const properties = [{ id: 5, name: 'Main House' }] as Property[];
+    render(
+      <TransactionEditDialog transaction={transaction} categories={homeCats}
+        properties={properties} vehicles={[]} onClose={vi.fn()} onSaved={vi.fn()} />,
+    );
+    // pick the Home child category → property picker appears
+    await user.selectOptions(screen.getByLabelText('Category'), '7');
+    const propertyPicker = screen.getByLabelText('Property');
+    await user.selectOptions(propertyPicker, '5');
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+    const rows = await new TransactionsRepo(db).list();
+    expect(rows[0].propertyId).toBe(5);
+    expect(rows[0].categoryId).toBe(7);
   });
 });
