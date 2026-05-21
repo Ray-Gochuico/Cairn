@@ -174,6 +174,7 @@ export function PdfReviewModal({
           sourceAccountId: null,
           propertyId: r.propertyId,
           vehicleId: r.vehicleId,
+          personId: null,
           sourcePdfFilename: filename,
           reimbursable: r.reimbursable,
           reimbursedAt: null,

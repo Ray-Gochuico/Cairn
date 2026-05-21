@@ -149,6 +149,7 @@ describe('Vehicles page', () => {
           sourceAccountId: null,
           propertyId: null,
           vehicleId: 5,
+          personId: null,
           sourcePdfFilename: null,
           reimbursable: false,
           reimbursedAt: null,

@@ -11,7 +11,7 @@ const txn = (
 ): Transaction => ({
   id, householdId: 1, date, merchant, merchantRaw: merchant, amount,
   categoryId, sourceAccountId: null, propertyId: null, vehicleId: null,
-  sourcePdfFilename: null, reimbursable: false, reimbursedAt: null,
+  personId: null, sourcePdfFilename: null, reimbursable: false, reimbursedAt: null,
   reimbursedAmount: null, isRecurring: false, notes: null,
 });
 

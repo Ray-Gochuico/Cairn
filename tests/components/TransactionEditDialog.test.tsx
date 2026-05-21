@@ -26,7 +26,7 @@ const categories: Category[] = [
 const baseTransaction: Omit<Transaction, 'id'> = {
   householdId: 1, date: '2026-03-05', merchant: 'STARBUCKS', merchantRaw: 'STARBUCKS #1',
   amount: 7.5, categoryId: 32, sourceAccountId: null, propertyId: null, vehicleId: null,
-  sourcePdfFilename: 'mar.pdf', reimbursable: false, reimbursedAt: null,
+  personId: null, sourcePdfFilename: 'mar.pdf', reimbursable: false, reimbursedAt: null,
   reimbursedAmount: null, isRecurring: false, notes: null,
 };
 
@@ -36,7 +36,7 @@ describe('TransactionEditDialog', () => {
 
   beforeEach(async () => {
     db = new SqliteAdapter(':memory:');
-    await runMigrations(db, [mig('0001_initial'), mig('0008_add_transaction_property_links'), mig('0009_seed_categories')]);
+    await runMigrations(db, [mig('0001_initial'), mig('0008_add_transaction_property_links'), mig('0012_add_transaction_person'), mig('0009_seed_categories')]);
     setDatabase(db);
     useTransactionsStore.setState({ transactions: [], isLoading: false, error: null });
     const repo = new TransactionsRepo(db);

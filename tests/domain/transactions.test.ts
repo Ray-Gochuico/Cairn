@@ -14,7 +14,7 @@ const mig = (file: string) => ({
 const row = (over: Partial<Transaction> = {}): Omit<Transaction, 'id'> => ({
   householdId: 1, date: '2026-03-05', merchant: 'AMAZON', merchantRaw: 'AMAZON.COM',
   amount: 54.23, categoryId: null, sourceAccountId: null, propertyId: null,
-  vehicleId: null, sourcePdfFilename: 'mar.pdf', reimbursable: false,
+  vehicleId: null, personId: null, sourcePdfFilename: 'mar.pdf', reimbursable: false,
   reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
   ...over,
 });
@@ -24,7 +24,7 @@ describe('TransactionsRepo', () => {
   let repo: TransactionsRepo;
   beforeEach(async () => {
     db = new SqliteAdapter(':memory:');
-    await runMigrations(db, [mig('0001_initial'), mig('0008_add_transaction_property_links')]);
+    await runMigrations(db, [mig('0001_initial'), mig('0008_add_transaction_property_links'), mig('0012_add_transaction_person')]);
     repo = new TransactionsRepo(db);
   });
   afterEach(async () => { await db.close(); });
@@ -46,5 +46,17 @@ describe('TransactionsRepo', () => {
     const id = await repo.create(row());
     await repo.setRecurring([id], true);
     expect((await repo.findById(id))?.isRecurring).toBe(true);
+  });
+
+  it('round-trips person_id', async () => {
+    // Seed a person (household id=1 already seeded by migration 0001) to satisfy the FK constraint
+    await db.execute(
+      `INSERT INTO persons (id, household_id, name, date_of_birth, target_retirement_age)
+       VALUES (2, 1, 'Test Person', '1990-01-01', 65)`,
+    );
+    const id = await repo.create(row({ personId: 2 }));
+    expect((await repo.findById(id))?.personId).toBe(2);
+    await repo.update(id, { personId: null });
+    expect((await repo.findById(id))?.personId).toBe(null);
   });
 });

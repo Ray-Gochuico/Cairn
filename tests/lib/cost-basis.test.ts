@@ -9,7 +9,7 @@ const cat = (id: number, isCapital: boolean, type: Category['type'] = 'NEED'): C
 const txn = (over: Partial<Transaction>): Transaction => ({
   id: 1, householdId: 1, date: '2026-03-05', merchant: 'X', merchantRaw: 'X',
   amount: 100, categoryId: 12, sourceAccountId: null, propertyId: 7, vehicleId: null,
-  sourcePdfFilename: null, reimbursable: false, reimbursedAt: null,
+  personId: null, sourcePdfFilename: null, reimbursable: false, reimbursedAt: null,
   reimbursedAmount: null, isRecurring: false, notes: null, ...over,
 });
 const cats = [cat(12, true), cat(11, false)]; // 12 = Capital Improvements, 11 = Home Maintenance

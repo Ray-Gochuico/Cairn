@@ -15,7 +15,7 @@ const mig = (file: string) => ({
 const row = (over: Partial<Omit<Transaction, 'id'>> = {}): Omit<Transaction, 'id'> => ({
   householdId: 1, date: '2026-03-05', merchant: 'AMAZON', merchantRaw: 'AMAZON.COM',
   amount: 54.23, categoryId: null, sourceAccountId: null, propertyId: null,
-  vehicleId: null, sourcePdfFilename: 'mar.pdf', reimbursable: false,
+  vehicleId: null, personId: null, sourcePdfFilename: 'mar.pdf', reimbursable: false,
   reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
   ...over,
 });
@@ -28,6 +28,7 @@ describe('useTransactionsStore', () => {
     await runMigrations(db, [
       mig('0001_initial'),
       mig('0008_add_transaction_property_links'),
+      mig('0012_add_transaction_person'),
     ]);
     setDatabase(db);
     useTransactionsStore.setState({ transactions: [], isLoading: false, error: null });

@@ -40,6 +40,7 @@ describe('Spending page', () => {
     await runMigrations(db, [
       mig('0001_initial'),
       mig('0008_add_transaction_property_links'),
+      mig('0012_add_transaction_person'),
       mig('0009_seed_categories'),
       mig('0010_seed_merchant_mappings'),
     ]);
@@ -78,13 +79,13 @@ describe('Spending page', () => {
     const txn1: Omit<Transaction, 'id'> = {
       householdId: 1, date: '2026-03-05', merchant: 'AMAZON', merchantRaw: 'AMAZON.COM',
       amount: 54.23, categoryId: 37 /* Shopping */, sourceAccountId: null, propertyId: null,
-      vehicleId: null, sourcePdfFilename: 'mar.pdf', reimbursable: false,
+      vehicleId: null, personId: null, sourcePdfFilename: 'mar.pdf', reimbursable: false,
       reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
     };
     const txn2: Omit<Transaction, 'id'> = {
       householdId: 1, date: '2026-03-06', merchant: 'STARBUCKS', merchantRaw: 'STARBUCKS #1',
       amount: 7.50, categoryId: 32 /* Food & Drink */, sourceAccountId: null, propertyId: null,
-      vehicleId: null, sourcePdfFilename: 'mar.pdf', reimbursable: false,
+      vehicleId: null, personId: null, sourcePdfFilename: 'mar.pdf', reimbursable: false,
       reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
     };
 
@@ -112,7 +113,7 @@ describe('Spending page', () => {
     const netflixBase: Omit<Transaction, 'id'> = {
       householdId: 1, merchant: 'NETFLIX', merchantRaw: 'NETFLIX.COM',
       amount: 15.49, categoryId: 37, sourceAccountId: null, propertyId: null,
-      vehicleId: null, sourcePdfFilename: 'mar.pdf', reimbursable: false,
+      vehicleId: null, personId: null, sourcePdfFilename: 'mar.pdf', reimbursable: false,
       reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
       date: '2026-01-09',
     };
@@ -120,7 +121,7 @@ describe('Spending page', () => {
     const reimbursableTxn: Omit<Transaction, 'id'> = {
       householdId: 1, date: '2026-03-10', merchant: 'ACME EXPENSE', merchantRaw: 'ACME EXPENSE',
       amount: 200, categoryId: 37, sourceAccountId: null, propertyId: null,
-      vehicleId: null, sourcePdfFilename: 'mar.pdf', reimbursable: true,
+      vehicleId: null, personId: null, sourcePdfFilename: 'mar.pdf', reimbursable: true,
       reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
     };
 
@@ -162,7 +163,7 @@ describe('Spending page', () => {
     const txn: Omit<Transaction, 'id'> = {
       householdId: 1, date: '2026-03-05', merchant: 'AMAZON', merchantRaw: 'AMAZON.COM',
       amount: 54.23, categoryId: 37, sourceAccountId: null, propertyId: null,
-      vehicleId: null, sourcePdfFilename: 'mar.pdf', reimbursable: false,
+      vehicleId: null, personId: null, sourcePdfFilename: 'mar.pdf', reimbursable: false,
       reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
     };
     await useTransactionsStore.getState().createMany([txn]);
@@ -214,7 +215,7 @@ describe('Spending page', () => {
     const txn: Omit<Transaction, 'id'> = {
       householdId: 1, date: recentDate, merchant: 'GROCERY', merchantRaw: 'GROCERY',
       amount: 200, categoryId: null, sourceAccountId: null, propertyId: null,
-      vehicleId: null, sourcePdfFilename: 'test.pdf', reimbursable: false,
+      vehicleId: null, personId: null, sourcePdfFilename: 'test.pdf', reimbursable: false,
       reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
     };
 

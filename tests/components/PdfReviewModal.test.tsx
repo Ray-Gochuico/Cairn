@@ -55,6 +55,7 @@ describe('PdfReviewModal', () => {
     await runMigrations(db, [
       mig('0001_initial'),
       mig('0008_add_transaction_property_links'),
+      mig('0012_add_transaction_person'),
       mig('0009_seed_categories'),
       mig('0010_seed_merchant_mappings'),
     ]);
@@ -104,8 +105,8 @@ describe('PdfReviewModal', () => {
     const existing: Transaction[] = [{
       id: 1, householdId: 1, date: '2026-03-05', merchant: 'AMAZON', merchantRaw: 'AMAZON.COM',
       amount: 54.23, categoryId: null, sourceAccountId: null, propertyId: null, vehicleId: null,
-      sourcePdfFilename: null, reimbursable: false, reimbursedAt: null, reimbursedAmount: null,
-      isRecurring: false, notes: null,
+      personId: null, sourcePdfFilename: null, reimbursable: false, reimbursedAt: null,
+      reimbursedAmount: null, isRecurring: false, notes: null,
     }];
 
     renderModal(result, existing);

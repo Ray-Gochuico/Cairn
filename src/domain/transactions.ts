@@ -12,6 +12,7 @@ interface TransactionRow {
   source_account_id: number | null;
   property_id: number | null;
   vehicle_id: number | null;
+  person_id: number | null;
   source_pdf_filename: string | null;
   imported_at: string;
   reimbursable: number;
@@ -33,6 +34,7 @@ function rowToTransaction(row: TransactionRow): Transaction {
     sourceAccountId: row.source_account_id,
     propertyId: row.property_id,
     vehicleId: row.vehicle_id,
+    personId: row.person_id,
     sourcePdfFilename: row.source_pdf_filename,
     importedAt: row.imported_at,
     reimbursable: row.reimbursable === 1,
@@ -67,9 +69,9 @@ export class TransactionsRepo {
     const result = await this.db.execute(
       `INSERT INTO transactions
         (household_id, date, merchant, merchant_raw, amount, category_id,
-         source_account_id, property_id, vehicle_id, source_pdf_filename,
+         source_account_id, property_id, vehicle_id, person_id, source_pdf_filename,
          reimbursable, reimbursed_at, reimbursed_amount, is_recurring, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         t.householdId,
         t.date,
@@ -80,6 +82,7 @@ export class TransactionsRepo {
         t.sourceAccountId ?? null,
         t.propertyId ?? null,
         t.vehicleId ?? null,
+        t.personId ?? null,
         t.sourcePdfFilename ?? null,
         t.reimbursable ? 1 : 0,
         t.reimbursedAt ?? null,
@@ -109,7 +112,7 @@ export class TransactionsRepo {
     await this.db.execute(
       `UPDATE transactions SET
         date = ?, merchant = ?, merchant_raw = ?, amount = ?, category_id = ?,
-        source_account_id = ?, property_id = ?, vehicle_id = ?,
+        source_account_id = ?, property_id = ?, vehicle_id = ?, person_id = ?,
         source_pdf_filename = ?, reimbursable = ?, reimbursed_at = ?,
         reimbursed_amount = ?, is_recurring = ?, notes = ?
        WHERE id = ?`,
@@ -122,6 +125,7 @@ export class TransactionsRepo {
         merged.sourceAccountId ?? null,
         merged.propertyId ?? null,
         merged.vehicleId ?? null,
+        merged.personId ?? null,
         merged.sourcePdfFilename ?? null,
         merged.reimbursable ? 1 : 0,
         merged.reimbursedAt ?? null,

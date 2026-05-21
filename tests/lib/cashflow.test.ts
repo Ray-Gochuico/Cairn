@@ -4,8 +4,8 @@ import type { Transaction, Category } from '@/types/schema';
 
 const txn = (id: number, date: string, amount: number, categoryId: number | null, over: Partial<Transaction> = {}): Transaction => ({
   id, householdId: 1, date, merchant: 'X', merchantRaw: 'X', amount, categoryId,
-  sourceAccountId: null, propertyId: null, vehicleId: null, sourcePdfFilename: null,
-  reimbursable: false, reimbursedAt: null, reimbursedAmount: null,
+  sourceAccountId: null, propertyId: null, vehicleId: null, personId: null,
+  sourcePdfFilename: null, reimbursable: false, reimbursedAt: null, reimbursedAmount: null,
   isRecurring: false, notes: null, ...over,
 });
 

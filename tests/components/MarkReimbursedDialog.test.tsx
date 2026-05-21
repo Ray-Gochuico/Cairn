@@ -27,6 +27,7 @@ const baseTransaction: Transaction = {
   sourceAccountId: null,
   propertyId: null,
   vehicleId: null,
+  personId: null,
   sourcePdfFilename: 'mar.pdf',
   reimbursable: true,
   reimbursedAt: null,
@@ -44,6 +45,7 @@ describe('MarkReimbursedDialog', () => {
     await runMigrations(db, [
       mig('0001_initial'),
       mig('0008_add_transaction_property_links'),
+      mig('0012_add_transaction_person'),
     ]);
     setDatabase(db);
     useTransactionsStore.setState({ transactions: [], isLoading: false, error: null });

@@ -776,7 +776,7 @@ describe('TransactionSchema', () => {
     const base = {
       householdId: 1, date: '2026-03-05', merchant: 'AMAZON', merchantRaw: 'AMAZON.COM',
       amount: 54.23, categoryId: 37, sourceAccountId: null, propertyId: null,
-      vehicleId: null, sourcePdfFilename: 'mar.pdf', reimbursable: false,
+      vehicleId: null, personId: null, sourcePdfFilename: 'mar.pdf', reimbursable: false,
       reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
     };
     expect(TransactionSchema.parse(base).amount).toBe(54.23);
@@ -786,11 +786,21 @@ describe('TransactionSchema', () => {
     const base = {
       householdId: 1, date: '03/05/2026', merchant: 'X', merchantRaw: null,
       amount: 1, categoryId: null, sourceAccountId: null, propertyId: null,
-      vehicleId: null, sourcePdfFilename: null, reimbursable: false,
+      vehicleId: null, personId: null, sourcePdfFilename: null, reimbursable: false,
       reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
     };
     expect(() => TransactionSchema.parse(base)).toThrow();
     expect(() => TransactionSchema.parse({ ...base, date: '2026-03-05', merchant: '' })).toThrow();
+  });
+  it('accepts a personId and a null personId', () => {
+    const base = {
+      householdId: 1, date: '2026-03-05', merchant: 'AMAZON', merchantRaw: 'AMAZON.COM',
+      amount: 54.23, categoryId: 37, sourceAccountId: null, propertyId: null,
+      vehicleId: null, personId: null, sourcePdfFilename: 'mar.pdf', reimbursable: false,
+      reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
+    };
+    expect(TransactionSchema.parse(base).personId).toBe(null);
+    expect(TransactionSchema.parse({ ...base, personId: 2 }).personId).toBe(2);
   });
 });
 

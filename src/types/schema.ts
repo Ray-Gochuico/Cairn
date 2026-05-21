@@ -329,6 +329,7 @@ export const TransactionSchema = z.object({
   sourceAccountId: z.number().int().positive().nullable(),
   propertyId: z.number().int().positive().nullable(),
   vehicleId: z.number().int().positive().nullable(),
+  personId: z.number().int().positive().nullable(),
   sourcePdfFilename: z.string().nullable(),
   importedAt: z.string().optional(),
   reimbursable: z.boolean(),
