@@ -6,6 +6,7 @@ import { useMerchantOverridesStore } from '@/stores/merchant-overrides-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
+import { usePersonsStore } from '@/stores/persons-store';
 import { MerchantSeedRepo } from '@/domain/merchant-seed';
 import { getDatabase } from '@/db/db';
 import type { ParseResult } from '@/pdf/parse-statement';
@@ -29,6 +30,7 @@ interface EditableRow {
   reimbursable: boolean;
   propertyId: number | null;
   vehicleId: number | null;
+  personId: number | null;
   included: boolean;
   isDuplicate: boolean;
 }
@@ -47,6 +49,7 @@ export function PdfReviewModal({
   const syncRecurring = useTransactionsStore((s) => s.syncRecurring);
   const properties = usePropertiesStore((s) => s.properties);
   const vehicles = useVehiclesStore((s) => s.vehicles);
+  const persons = usePersonsStore((s) => s.persons);
 
   const [rows, setRows] = useState<EditableRow[]>([]);
   const [saving, setSaving] = useState(false);
@@ -65,6 +68,7 @@ export function PdfReviewModal({
         useMerchantOverridesStore.getState().load(),
         usePropertiesStore.getState().load(),
         useVehiclesStore.getState().load(),
+        usePersonsStore.getState().load(),
       ]);
 
       const seedRepo = new MerchantSeedRepo(getDatabase());
@@ -118,6 +122,7 @@ export function PdfReviewModal({
           reimbursable: false,
           propertyId,
           vehicleId,
+          personId: null,
           included: !isDuplicate,
           isDuplicate,
         };
@@ -174,7 +179,7 @@ export function PdfReviewModal({
           sourceAccountId: null,
           propertyId: r.propertyId,
           vehicleId: r.vehicleId,
-          personId: null,
+          personId: r.personId,
           sourcePdfFilename: filename,
           reimbursable: r.reimbursable,
           reimbursedAt: null,
@@ -246,6 +251,9 @@ export function PdfReviewModal({
                   <th className="py-2 pr-3">Amount</th>
                   <th className="py-2 pr-3">Category</th>
                   <th className="py-2 pr-3">Reimbursable</th>
+                  {persons.length === 2 && (
+                    <th className="py-2 pr-3">Person</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -392,6 +400,25 @@ export function PdfReviewModal({
                           onChange={(e) => updateRow(i, { reimbursable: e.target.checked })}
                         />
                       </td>
+                      {persons.length === 2 && (
+                        <td className="py-2 pr-3">
+                          <select
+                            value={row.personId ?? ''}
+                            aria-label={`Person for ${row.merchant}`}
+                            className="border rounded px-1 py-0.5 text-xs"
+                            onChange={(e) =>
+                              updateRow(i, { personId: e.target.value === '' ? null : Number(e.target.value) })
+                            }
+                          >
+                            <option value="">Joint</option>
+                            {persons.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}

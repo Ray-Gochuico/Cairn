@@ -10,8 +10,11 @@ import { useMerchantOverridesStore } from '@/stores/merchant-overrides-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
+import { PersonsRepo } from '@/domain/persons';
+import { TransactionsRepo } from '@/domain/transactions';
 import { PropertiesRepo } from '@/domain/properties';
 import { PdfReviewModal } from '@/components/dialogs/PdfReviewModal';
+import { usePersonsStore } from '@/stores/persons-store';
 import { getDatabase } from '@/db/db';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -54,6 +57,8 @@ describe('PdfReviewModal', () => {
     db = new SqliteAdapter(':memory:');
     await runMigrations(db, [
       mig('0001_initial'),
+      mig('0003_add_commission_columns'),
+      mig('0005_add_employment_and_bonus_columns'),
       mig('0008_add_transaction_property_links'),
       mig('0012_add_transaction_person'),
       mig('0009_seed_categories'),
@@ -65,6 +70,7 @@ describe('PdfReviewModal', () => {
     useTransactionsStore.setState({ transactions: [], isLoading: false, error: null });
     usePropertiesStore.setState({ properties: [], isLoading: false, error: null });
     useVehiclesStore.setState({ vehicles: [], isLoading: false, error: null });
+    usePersonsStore.setState({ persons: [], isLoading: false, error: null });
   });
 
   afterEach(async () => {
@@ -160,6 +166,47 @@ describe('PdfReviewModal', () => {
     const { transactions } = useTransactionsStore.getState();
     expect(transactions).toHaveLength(1);
     expect(transactions[0].merchant).toBe('STARBUCKS');
+  });
+
+  it('(e) attributes an imported transaction to the selected person', async () => {
+    // Persons must be in the DB — the modal's init effect calls
+    // usePersonsStore.getState().load(), which overwrites any setState seed.
+    const person = (name: string) => ({
+      householdId: 1, name, dateOfBirth: '1990-01-01', targetRetirementAge: 65,
+      annualSalaryPretax: 0, expectedBonus: 0, expectedBonusFrequency: 'ANNUAL' as const,
+      bonusIsConsistent: true, expectedCommission: 0,
+      expectedCommissionFrequency: 'MONTHLY' as const,
+      employmentType: 'SALARY_NO_OT' as const, hourlyRate: null,
+      regularHoursPerWeek: 40, otThresholdHoursPerWeek: null, pretax401kPct: 0,
+      healthInsuranceMonthlyPremium: 0, dependentCareFsaMonthly: 0,
+      hsaMonthlyContribution: 0, hsaEligible: false,
+    });
+    const personsRepo = new PersonsRepo(db);
+    await personsRepo.create(person('Alex'));
+    await personsRepo.create(person('Sam'));
+
+    const result: ParseResult = {
+      issuer: Issuer.CHASE,
+      transactions: [
+        { date: '2026-03-05', merchantRaw: 'STARBUCKS #1', merchant: 'STARBUCKS', amount: 7.5 },
+      ],
+    };
+
+    render(
+      <PdfReviewModal result={result} filename="mar.pdf" existing={[]}
+        onClose={vi.fn()} onSaved={vi.fn()} />,
+    );
+
+    const user = userEvent.setup();
+    const personSelect = await screen.findByLabelText(/person for STARBUCKS/i);
+    await user.selectOptions(personSelect, '2');
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(async () => {
+      const rows = await new TransactionsRepo(db).list();
+      expect(rows).toHaveLength(1);
+      expect(rows[0].personId).toBe(2);
+    });
   });
 
   it('(d) property select renders and auto-selects for a Home-child category when exactly one property exists', async () => {
