@@ -4,9 +4,10 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { runMigrations } from '@/db/migrations';
-import { setDatabase } from '@/db/db';
+import { setDatabase, getDatabase } from '@/db/db';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useMerchantOverridesStore } from '@/stores/merchant-overrides-store';
+import { CategoriesRepo } from '@/domain/categories';
 import CategoriesTab from '@/pages/inputs/CategoriesTab';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -91,5 +92,57 @@ describe('CategoriesTab', () => {
     expect(screen.getByText('Transfer')).toBeInTheDocument();
     // System managed category with lock icon should exist
     expect(document.querySelector('[title="System managed"]')).toBeInTheDocument();
+  });
+
+  it('editing a category (e.g. renaming it) does not wipe its monthlyBudget', async () => {
+    const user = userEvent.setup();
+
+    // Give Groceries (id=33, non-system, top-level) a non-null monthly budget directly in DB.
+    const repo = new CategoriesRepo(getDatabase());
+    await repo.update(33, { monthlyBudget: 500 });
+
+    // Confirm the budget was written
+    const before = await repo.findById(33);
+    expect(before?.monthlyBudget).toBe(500);
+
+    renderTab();
+
+    // Wait for categories to load
+    await waitFor(() => expect(screen.getByText('Groceries')).toBeInTheDocument());
+
+    // Find the Edit button next to "Groceries" — it is the Edit button inside the
+    // card that contains the "Groceries" text node.
+    const groceriesText = screen.getByText('Groceries');
+    const groceriesCard = groceriesText.closest('.rounded-lg, .rounded-md, [class*="card"]') ??
+      groceriesText.parentElement!.parentElement!.parentElement!;
+
+    // getAllByRole finds all Edit buttons; pick the one inside the Groceries card.
+    // Fall back to finding any button labelled "Edit" closest to the text.
+    let editBtn: HTMLElement;
+    try {
+      // Find all Edit buttons and pick the one nearest to "Groceries"
+      const allEditBtns = screen.getAllByRole('button', { name: 'Edit' });
+      editBtn = allEditBtns.find((btn) => groceriesCard.contains(btn)) ?? allEditBtns[0];
+    } catch {
+      editBtn = screen.getAllByRole('button', { name: /edit/i })[0];
+    }
+
+    await user.click(editBtn);
+
+    // Edit form should appear; change the name to make the form dirty
+    await waitFor(() => expect(screen.getByLabelText('Name')).toBeInTheDocument());
+    const nameInput = screen.getByLabelText('Name');
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Groceries Renamed');
+
+    // Click Save
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    // Wait for list view to return
+    await waitFor(() => expect(screen.getByText('Groceries Renamed')).toBeInTheDocument());
+
+    // Assert monthlyBudget is still 500, not null
+    const after = await repo.findById(33);
+    expect(after?.monthlyBudget).toBe(500);
   });
 });

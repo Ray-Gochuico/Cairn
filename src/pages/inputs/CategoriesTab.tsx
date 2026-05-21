@@ -235,7 +235,7 @@ export default function CategoriesTab() {
             icon: target.icon,
             type: target.type,
             isCapital: target.isCapital,
-            monthlyBudget: null,
+            monthlyBudget: target.monthlyBudget,
           }}
           parents={parentOptions.filter((p) => p.id !== target.id)}
           onSubmit={async (v) => {
