@@ -17,7 +17,8 @@ import { usePersonsStore } from '@/stores/persons-store';
 import Spending from '@/pages/Spending';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { Transaction } from '@/types/schema';
+import { PersonsRepo } from '@/domain/persons';
+import type { Transaction, Person } from '@/types/schema';
 
 const mig = (file: string) => ({
   version: file,
@@ -39,6 +40,8 @@ describe('Spending page', () => {
     db = new SqliteAdapter(':memory:');
     await runMigrations(db, [
       mig('0001_initial'),
+      mig('0003_add_commission_columns'),
+      mig('0005_add_employment_and_bonus_columns'),
       mig('0008_add_transaction_property_links'),
       mig('0012_add_transaction_person'),
       mig('0009_seed_categories'),
@@ -175,6 +178,47 @@ describe('Spending page', () => {
 
     expect(await screen.findByText('Edit transaction')).toBeInTheDocument();
     expect(screen.getByLabelText('Merchant')).toHaveValue('AMAZON');
+  });
+
+  it('(f) honors the ?view=p1 filter — shows only that person\'s transactions', async () => {
+    await useCategoriesStore.getState().load();
+
+    // Persons must be inserted in the DB — the page's mount effect calls
+    // loadPersons(), which would overwrite a usePersonsStore.setState seed.
+    const mkPerson = (name: string): Omit<Person, 'id'> => ({
+      householdId: 1, name, dateOfBirth: '1990-01-01', targetRetirementAge: 65,
+      annualSalaryPretax: 0, expectedBonus: 0, expectedBonusFrequency: 'ANNUAL',
+      bonusIsConsistent: true, expectedCommission: 0,
+      expectedCommissionFrequency: 'MONTHLY', employmentType: 'SALARY_NO_OT',
+      hourlyRate: null, regularHoursPerWeek: 40, otThresholdHoursPerWeek: null,
+      pretax401kPct: 0, healthInsuranceMonthlyPremium: 0, dependentCareFsaMonthly: 0,
+      hsaMonthlyContribution: 0, hsaEligible: false,
+    });
+    const personsRepo = new PersonsRepo(db);
+    await personsRepo.create(mkPerson('Alex')); // id 1
+    await personsRepo.create(mkPerson('Sam'));  // id 2
+
+    const mk = (over: Partial<Omit<Transaction, 'id'>>): Omit<Transaction, 'id'> => ({
+      householdId: 1, date: '2026-03-05', merchant: 'X', merchantRaw: 'X', amount: 10,
+      categoryId: 37, sourceAccountId: null, propertyId: null, vehicleId: null,
+      personId: null, sourcePdfFilename: 'm.pdf', reimbursable: false, reimbursedAt: null,
+      reimbursedAmount: null, isRecurring: false, notes: null, ...over,
+    });
+    await useTransactionsStore.getState().createMany([
+      mk({ merchant: 'ALEXMART', personId: 1 }),
+      mk({ merchant: 'SAMSHOP', personId: 2 }),
+    ]);
+
+    render(
+      <MemoryRouter initialEntries={['/spending?view=p1']}>
+        <Spending />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText('ALEXMART').length).toBeGreaterThan(0);
+      expect(screen.queryByText('SAMSHOP')).not.toBeInTheDocument();
+    });
   });
 
   it('(d) shows cashflow section with inflow, outflow, and net given seeded persons + transactions', async () => {

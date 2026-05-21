@@ -14,6 +14,8 @@ import { useVehiclesStore } from '@/stores/vehicles-store';
 import { summarizeSpending } from '@/lib/spending-analysis';
 import { detectRecurring } from '@/lib/recurring';
 import { cashflowWindow } from '@/lib/cashflow';
+import { useViewFilter } from '@/lib/use-view-filter';
+import { filterByPersonId } from '@/lib/filter-by-view';
 import type { ParseResult } from '@/pdf/parse-statement';
 import type { Transaction } from '@/types/schema';
 
@@ -44,6 +46,8 @@ export default function Spending() {
   const vehicles = useVehiclesStore((s) => s.vehicles);
   const loadVehicles = useVehiclesStore((s) => s.load);
 
+  const { filter } = useViewFilter();
+
   useEffect(() => {
     void Promise.all([
       loadTransactions(),
@@ -55,12 +59,22 @@ export default function Spending() {
     ]).then(() => syncRecurring(useCategoriesStore.getState().categories));
   }, [loadTransactions, loadCategories, loadHousehold, loadPersons, loadProperties, loadVehicles, syncRecurring]);
 
+  // Filtered slice — honours the ?view=p1|p2|joint|household query param
+  const visibleTransactions = useMemo(
+    () => filterByPersonId(transactions, filter, persons),
+    [transactions, filter, persons],
+  );
+  const personById = useMemo(
+    () => new Map(persons.filter((p) => p.id != null).map((p) => [p.id as number, p.name])),
+    [persons],
+  );
+
   // --- Analysis ---
   const summary = useMemo(
-    () => summarizeSpending(transactions, categories),
-    [transactions, categories],
+    () => summarizeSpending(visibleTransactions, categories),
+    [visibleTransactions, categories],
   );
-  const recurring = useMemo(() => detectRecurring(transactions, categories), [transactions, categories]);
+  const recurring = useMemo(() => detectRecurring(visibleTransactions, categories), [visibleTransactions, categories]);
 
   // Category lookup for display
   const categoryById = useMemo(
@@ -100,21 +114,27 @@ export default function Spending() {
 
   // Awaiting reimbursement
   const awaitingReimbursement = useMemo(
-    () => transactions.filter((t) => t.reimbursable && t.reimbursedAt == null),
-    [transactions],
+    () => visibleTransactions.filter((t) => t.reimbursable && t.reimbursedAt == null),
+    [visibleTransactions],
   );
 
   // Rolling 30-day cashflow
   // Inflow = sum of each person's estimated monthly net income.
   // A simple approximation: annualSalaryPretax / 12 (gross); the plan notes
   // exact proration/tax is the implementer's call (design spec § Open questions).
+  const visiblePersons = useMemo(
+    () => (filter === 'p1' ? persons.slice(0, 1)
+      : filter === 'p2' ? persons.slice(1, 2)
+      : persons),
+    [filter, persons],
+  );
   const estimatedMonthlyInflow = useMemo(
-    () => persons.reduce((s, p) => s + p.annualSalaryPretax / 12, 0),
-    [persons],
+    () => visiblePersons.reduce((s, p) => s + p.annualSalaryPretax / 12, 0),
+    [visiblePersons],
   );
   const cashflow = useMemo(
-    () => cashflowWindow(transactions, estimatedMonthlyInflow, 30, categories),
-    [transactions, estimatedMonthlyInflow, categories],
+    () => cashflowWindow(visibleTransactions, estimatedMonthlyInflow, 30, categories),
+    [visibleTransactions, estimatedMonthlyInflow, categories],
   );
 
   // Budget data
@@ -416,6 +436,8 @@ export default function Spending() {
           <p className="text-sm text-muted-foreground">
             No transactions yet. Import a statement to get started.
           </p>
+        ) : visibleTransactions.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No transactions to show.</p>
         ) : (
           <table className="w-full text-sm border-collapse">
             <thead>
@@ -423,12 +445,13 @@ export default function Spending() {
                 <th className="py-2 pr-4">Date</th>
                 <th className="py-2 pr-4">Merchant</th>
                 <th className="py-2 pr-4">Category</th>
+                {persons.length === 2 && <th className="py-2 pr-4">Person</th>}
                 <th className="py-2 text-right">Amount</th>
                 <th className="py-2 pr-2 w-10"><span className="sr-only">Edit</span></th>
               </tr>
             </thead>
             <tbody>
-              {[...transactions]
+              {[...visibleTransactions]
                 .sort((a, b) => b.date.localeCompare(a.date))
                 .map((t) => (
                   <tr key={t.id} className="border-b">
@@ -439,6 +462,13 @@ export default function Spending() {
                         ? (categoryById.get(t.categoryId)?.name ?? '—')
                         : '—'}
                     </td>
+                    {persons.length === 2 && (
+                      <td className="py-2 pr-4 text-muted-foreground">
+                        {t.personId != null
+                          ? (personById.get(t.personId) ?? '—')
+                          : 'Joint'}
+                      </td>
+                    )}
                     <td className="py-2 text-right">
                       {t.amount < 0 ? (
                         <span className="text-green-600">-${Math.abs(t.amount).toFixed(2)}</span>
