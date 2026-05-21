@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useLoansStore } from '@/stores/loans-store';
+import { useTransactionsStore } from '@/stores/transactions-store';
+import { useCategoriesStore } from '@/stores/categories-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
@@ -13,6 +15,7 @@ import { useTickersStore } from '@/stores/tickers-store';
 import { useFundHoldingsStore } from '@/stores/fund-holdings-store';
 import { AccountType, GoalType } from '@/types/enums';
 import { netWorthForMonth, type NetWorthInput } from '@/lib/networth';
+import { summarizeSpending } from '@/lib/spending-analysis';
 import { isMonthlyInputPending, lastMonthYyyymm } from '@/lib/input-pending';
 import { computeGoalProgress, type GoalProgressResult } from '@/lib/goal-progress';
 import {
@@ -295,6 +298,12 @@ export default function Dashboard() {
   const loadTickers = useTickersStore((s) => s.load);
   const loadFundHoldings = useFundHoldingsStore((s) => s.load);
 
+  const transactions = useTransactionsStore((s) => s.transactions);
+  const loadTransactions = useTransactionsStore((s) => s.load);
+
+  const categories = useCategoriesStore((s) => s.categories);
+  const loadCategories = useCategoriesStore((s) => s.load);
+
   useEffect(() => {
     loadHousehold();
     loadAccounts();
@@ -307,6 +316,8 @@ export default function Dashboard() {
     loadHoldings();
     loadTickers();
     loadFundHoldings();
+    loadTransactions();
+    loadCategories();
   }, [
     loadHousehold,
     loadAccounts,
@@ -319,6 +330,8 @@ export default function Dashboard() {
     loadHoldings,
     loadTickers,
     loadFundHoldings,
+    loadTransactions,
+    loadCategories,
   ]);
 
   const today = useMemo(() => new Date(), []);
@@ -474,6 +487,21 @@ export default function Dashboard() {
     [today, pendingAccountIds, snapshotsLastMonth],
   );
 
+  // Spending cards: awaiting reimbursement + spending vs budget
+  const awaitingReimbursementTotal = useMemo(
+    () => transactions
+      .filter((t) => t.reimbursable && t.reimbursedAt == null)
+      .reduce((s, t) => s + t.amount, 0),
+    [transactions],
+  );
+
+  const spendingSummary = useMemo(
+    () => summarizeSpending(transactions, categories),
+    [transactions, categories],
+  );
+  const currentMonthSpend = spendingSummary.currentMonthTotal;
+  const monthlyBudget = household?.monthlyExpenseBaseline ?? 0;
+
   const netWorthDelta = currentNetWorth - previousNetWorth;
   const hasNetWorthBaseline = previousNetWorth !== 0;
   const netWorthDeltaLabel = hasNetWorthBaseline
@@ -537,9 +565,28 @@ export default function Dashboard() {
           subtitle="Brokerage, cash, savings, HSA"
         />
         <MetricCard
-          label="Monthly Cash Flow"
-          value="—"
-          subtitle="Available with Phase 4 spending data"
+          label="Awaiting Reimbursement"
+          value={formatUSD(awaitingReimbursementTotal)}
+          href="/spending"
+          subtitle={awaitingReimbursementTotal > 0 ? 'Click to review' : 'None pending'}
+        />
+        <MetricCard
+          label="Spending vs Budget"
+          value={formatUSD(currentMonthSpend)}
+          href="/spending"
+          delta={monthlyBudget > 0
+            ? currentMonthSpend > monthlyBudget
+              ? `${formatUSD(currentMonthSpend - monthlyBudget)} over`
+              : `${formatUSD(monthlyBudget - currentMonthSpend)} under`
+            : undefined}
+          deltaTone={monthlyBudget > 0
+            ? currentMonthSpend > monthlyBudget
+              ? 'negative'
+              : 'positive'
+            : 'neutral'}
+          subtitle={monthlyBudget > 0
+            ? `Budget: ${formatUSD(monthlyBudget)}`
+            : 'Set a budget in Inputs'}
         />
       </div>
 

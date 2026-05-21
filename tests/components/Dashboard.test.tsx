@@ -9,6 +9,8 @@ import { useHouseholdStore } from '@/stores/household-store';
 import { useLoansStore } from '@/stores/loans-store';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
+import { useTransactionsStore } from '@/stores/transactions-store';
+import { useCategoriesStore } from '@/stores/categories-store';
 import {
   AccountType,
   ContributionSource,
@@ -46,6 +48,8 @@ function resetStores() {
   useLoansStore.setState({ loans: [], isLoading: false, error: null, load: async () => {} });
   usePropertiesStore.setState({ properties: [], isLoading: false, error: null, load: async () => {} });
   useVehiclesStore.setState({ vehicles: [], isLoading: false, error: null, load: async () => {} });
+  useTransactionsStore.setState({ transactions: [], isLoading: false, error: null, load: async () => {} });
+  useCategoriesStore.setState({ categories: [], isLoading: false, error: null, load: async () => {} });
 }
 
 interface PrimeOpts {
@@ -227,5 +231,103 @@ describe('Dashboard goals strip', () => {
 
     const link = screen.getByRole('link', { name: /view all/i });
     expect(link).toHaveAttribute('href', '/goals');
+  });
+});
+
+describe('Dashboard spending cards', () => {
+  beforeEach(() => {
+    resetStores();
+  });
+
+  it('shows Awaiting Reimbursement card with the pending total', () => {
+    useTransactionsStore.setState({
+      transactions: [
+        {
+          id: 1,
+          householdId: 1,
+          date: '2026-05-10',
+          merchant: 'ACME CORP',
+          merchantRaw: 'ACME CORP',
+          amount: 250,
+          categoryId: null,
+          sourceAccountId: null,
+          propertyId: null,
+          vehicleId: null,
+          sourcePdfFilename: null,
+          reimbursable: true,
+          reimbursedAt: null,
+          reimbursedAmount: null,
+          isRecurring: false,
+          notes: null,
+        },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    });
+
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText(/awaiting reimbursement/i)).toBeInTheDocument();
+    expect(screen.getByText('$250')).toBeInTheDocument();
+  });
+
+  it('shows Spending vs Budget card with current-month spend and over/under indication', () => {
+    // Set budget to $3,000/month
+    useHouseholdStore.setState({
+      household: {
+        filingStatus: FilingStatus.SINGLE,
+        state: 'CA',
+        city: null,
+        monthlyExpenseBaseline: 3000,
+        withdrawalRate: 0.04,
+        inflationAssumption: 0.03,
+        growthScenarios: moderateScenarios,
+      },
+      isLoading: false,
+      error: null,
+    });
+
+    // A transaction in the current month (2026-05 = today's month per test context)
+    const currentMonthDate = new Date().toISOString().slice(0, 7) + '-15';
+    useTransactionsStore.setState({
+      transactions: [
+        {
+          id: 2,
+          householdId: 1,
+          date: currentMonthDate,
+          merchant: 'GROCERY STORE',
+          merchantRaw: 'GROCERY STORE',
+          amount: 500,
+          categoryId: null,
+          sourceAccountId: null,
+          propertyId: null,
+          vehicleId: null,
+          sourcePdfFilename: null,
+          reimbursable: false,
+          reimbursedAt: null,
+          reimbursedAmount: null,
+          isRecurring: false,
+          notes: null,
+        },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    });
+
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText(/spending vs budget/i)).toBeInTheDocument();
+    // $500 spend, $3,000 budget → $2,500 under
+    expect(screen.getByText(/\$2,500 under/i)).toBeInTheDocument();
   });
 });
