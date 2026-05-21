@@ -18,6 +18,7 @@ const sections: NavSection[] = [
     items: [
       { to: '/', label: 'Dashboard', icon: '📊' },
       { to: '/net-worth', label: 'Net Worth', icon: '💎' },
+      { to: '/budget', label: 'Budget', icon: '📋' },
     ],
   },
   {

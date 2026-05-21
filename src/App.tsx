@@ -8,6 +8,7 @@ import Property from './pages/Property';
 import Vehicles from './pages/Vehicles';
 import EquityGrants from './pages/EquityGrants';
 import Spending from './pages/Spending';
+import Budget from './pages/Budget';
 import Goals from './pages/Goals';
 import CalculatorsLayout from './pages/calculators/CalculatorsLayout';
 import WhatIf from './pages/WhatIf';
@@ -49,6 +50,7 @@ const router = createBrowserRouter([
       { path: 'vehicles', element: <Vehicles /> },
       { path: 'equity-grants', element: <EquityGrants /> },
       { path: 'spending', element: <Spending /> },
+      { path: 'budget', element: <Budget /> },
       { path: 'goals', element: <Goals /> },
       { path: 'calculators', element: <CalculatorsLayout /> },
       { path: 'what-if', element: <WhatIf /> },
