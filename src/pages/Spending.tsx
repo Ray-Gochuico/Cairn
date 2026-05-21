@@ -49,7 +49,7 @@ export default function Spending() {
 
   // Category lookup for display
   const categoryById = useMemo(
-    () => new Map(categories.map((c) => [c.id, c])),
+    () => new Map(categories.filter((c) => c.id != null).map((c) => [c.id as number, c])),
     [categories],
   );
 
@@ -95,9 +95,8 @@ export default function Spending() {
   const budgetPct = budget > 0 ? Math.min(currentTotal / budget, 1) : 0;
   const overBudget = budget > 0 && currentTotal > budget;
 
-  // MoM trend
+  // MoM comparison (month-to-date vs last month's full total)
   const momDelta = currentTotal - summary.previousMonthTotal;
-  const momSign = momDelta >= 0 ? '+' : '';
 
   // Recurring total
   const recurringTotal = recurring.reduce((s, g) => s + g.averageAmount, 0);
@@ -142,11 +141,9 @@ export default function Spending() {
   };
 
   const handleModalClose = () => setQueue((prev) => prev.slice(1));
-  const handleModalSaved = async (insertedCount: number) => {
+  const handleModalSaved = async (_insertedCount: number) => {
     await loadTransactions();
     setQueue((prev) => prev.slice(1));
-    // eslint-disable-next-line no-console
-    console.info('[spending] imported', insertedCount, 'transactions');
   };
 
   const current = queue[0];
@@ -237,18 +234,29 @@ export default function Spending() {
 
             <div className="border rounded-lg p-4 space-y-2">
               <h2 className="text-sm font-medium text-muted-foreground">
-                Month-over-month
+                Month-to-date vs last month
               </h2>
-              <p className={`text-2xl font-semibold ${momDelta > 0 ? 'text-destructive' : 'text-green-600'}`}>
-                {momSign}${Math.abs(momDelta).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                {' '}
-                {momDelta >= 0 ? '▲' : '▼'}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                vs {summary.previousMonthTotal > 0
-                  ? `$${summary.previousMonthTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} last month`
-                  : 'no prior-month data'}
-              </p>
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">This month so far</p>
+                <p className="text-2xl font-semibold">
+                  ${currentTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">Last month (full)</p>
+                <p className="text-lg font-medium text-muted-foreground">
+                  {summary.previousMonthTotal > 0
+                    ? `$${summary.previousMonthTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                    : 'No prior-month data'}
+                </p>
+              </div>
+              {summary.previousMonthTotal > 0 && (
+                <p className={`text-xs ${momDelta === 0 ? 'text-muted-foreground' : momDelta > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                  {momDelta === 0
+                    ? 'Same as last month so far'
+                    : `${momDelta > 0 ? '+' : ''}$${Math.abs(momDelta).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} vs last month's full total (month in progress)`}
+                </p>
+              )}
             </div>
           </section>
 
