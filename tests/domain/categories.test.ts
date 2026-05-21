@@ -5,7 +5,7 @@ import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { runMigrations } from '@/db/migrations';
 import { CategoriesRepo } from '@/domain/categories';
 
-// Categories tests need the seed — run 0001 + 0008 + 0009.
+// Categories tests need the seed — run 0001 + 0008 + 0009 + 0013.
 const mig = (file: string) => ({
   version: file,
   sql: readFileSync(resolve(__dirname, `../../src/db/migrations/${file}.sql`), 'utf-8'),
@@ -20,6 +20,7 @@ describe('CategoriesRepo', () => {
       mig('0001_initial'),
       mig('0008_add_transaction_property_links'),
       mig('0009_seed_categories'),
+      mig('0013_add_category_budget'),
     ]);
     repo = new CategoriesRepo(db);
   });
@@ -32,7 +33,7 @@ describe('CategoriesRepo', () => {
   it('creates and updates a user category', async () => {
     const id = await repo.create({
       name: 'Pet Care', parentCategoryId: null, color: null, icon: null,
-      type: 'WANT', isCapital: false, systemManaged: false,
+      type: 'WANT', isCapital: false, systemManaged: false, monthlyBudget: null,
     });
     await repo.update(id, { name: 'Pets' });
     expect((await repo.findById(id))?.name).toBe('Pets');
@@ -41,10 +42,20 @@ describe('CategoriesRepo', () => {
   it('deletes a user category', async () => {
     const id = await repo.create({
       name: 'Temp', parentCategoryId: null, color: null, icon: null,
-      type: 'WANT', isCapital: false, systemManaged: false,
+      type: 'WANT', isCapital: false, systemManaged: false, monthlyBudget: null,
     });
     await repo.delete(id);
     expect(await repo.findById(id)).toBeNull();
+  });
+
+  it('round-trips monthly_budget', async () => {
+    const id = await repo.create({
+      name: 'Pet Care', parentCategoryId: null, color: null, icon: null,
+      type: 'WANT', isCapital: false, systemManaged: false, monthlyBudget: 120,
+    });
+    expect((await repo.findById(id))?.monthlyBudget).toBe(120);
+    await repo.update(id, { monthlyBudget: null });
+    expect((await repo.findById(id))?.monthlyBudget).toBe(null);
   });
 
   it('refuses to delete a system-managed category', async () => {

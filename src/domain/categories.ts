@@ -10,6 +10,7 @@ interface CategoryRow {
   type: string;
   is_capital: number;
   system_managed: number;
+  monthly_budget: number | null;
 }
 
 function rowToCategory(row: CategoryRow): Category {
@@ -22,6 +23,7 @@ function rowToCategory(row: CategoryRow): Category {
     type: row.type,
     isCapital: row.is_capital === 1,
     systemManaged: row.system_managed === 1,
+    monthlyBudget: row.monthly_budget,
   });
 }
 
@@ -48,8 +50,8 @@ export class CategoriesRepo {
     CategorySchema.omit({ id: true }).parse(cat);
     const result = await this.db.execute(
       `INSERT INTO categories
-        (name, parent_category_id, color, icon, type, is_capital, system_managed)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        (name, parent_category_id, color, icon, type, is_capital, system_managed, monthly_budget)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         cat.name,
         cat.parentCategoryId ?? null,
@@ -58,6 +60,7 @@ export class CategoriesRepo {
         cat.type,
         cat.isCapital ? 1 : 0,
         cat.systemManaged ? 1 : 0,
+        cat.monthlyBudget ?? null,
       ],
     );
     if (!result.lastInsertId) {
@@ -82,7 +85,8 @@ export class CategoriesRepo {
         color = ?,
         icon = ?,
         type = ?,
-        is_capital = ?
+        is_capital = ?,
+        monthly_budget = ?
        WHERE id = ?`,
       [
         merged.name,
@@ -91,6 +95,7 @@ export class CategoriesRepo {
         merged.icon ?? null,
         merged.type,
         merged.isCapital ? 1 : 0,
+        merged.monthlyBudget ?? null,
         id,
       ],
     );

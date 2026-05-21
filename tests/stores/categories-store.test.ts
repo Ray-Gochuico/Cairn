@@ -20,6 +20,7 @@ describe('useCategoriesStore', () => {
       mig('0001_initial'),
       mig('0008_add_transaction_property_links'),
       mig('0009_seed_categories'),
+      mig('0013_add_category_budget'),
     ]);
     setDatabase(db);
     useCategoriesStore.setState({ categories: [], isLoading: false, error: null });
@@ -47,6 +48,7 @@ describe('useCategoriesStore', () => {
       type: 'WANT',
       isCapital: false,
       systemManaged: false,
+      monthlyBudget: null,
     });
     expect(id).toBeGreaterThan(0);
     const { categories } = useCategoriesStore.getState();

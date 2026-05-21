@@ -22,6 +22,7 @@ const DEFAULT_VALUES: CategoryFormValues = {
   icon: null,
   type: 'WANT',
   isCapital: false,
+  monthlyBudget: null,
 };
 
 const CATEGORY_TYPE_OPTIONS = [
@@ -234,6 +235,7 @@ export default function CategoriesTab() {
             icon: target.icon,
             type: target.type,
             isCapital: target.isCapital,
+            monthlyBudget: null,
           }}
           parents={parentOptions.filter((p) => p.id !== target.id)}
           onSubmit={async (v) => {

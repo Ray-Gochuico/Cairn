@@ -5,18 +5,32 @@ describe('CategorySchema', () => {
   it('accepts a valid category and a null parent', () => {
     const c = CategorySchema.parse({
       id: 1, name: 'Home', parentCategoryId: null, color: '#2563eb',
-      icon: '🏠', type: 'NEED', isCapital: false, systemManaged: false,
+      icon: '🏠', type: 'NEED', isCapital: false, systemManaged: false, monthlyBudget: null,
     });
     expect(c.name).toBe('Home');
   });
   it('rejects an empty name and an unknown type', () => {
     expect(() => CategorySchema.parse({
       name: '', parentCategoryId: null, color: null, icon: null,
-      type: 'NEED', isCapital: false, systemManaged: false,
+      type: 'NEED', isCapital: false, systemManaged: false, monthlyBudget: null,
     })).toThrow();
     expect(() => CategorySchema.parse({
       name: 'X', parentCategoryId: null, color: null, icon: null,
-      type: 'BOGUS', isCapital: false, systemManaged: false,
+      type: 'BOGUS', isCapital: false, systemManaged: false, monthlyBudget: null,
+    })).toThrow();
+  });
+  it('accepts a monthlyBudget and a null monthlyBudget', () => {
+    const base = {
+      name: 'Groceries', parentCategoryId: null, color: null, icon: null,
+      type: 'NEED' as const, isCapital: false, systemManaged: false,
+    };
+    expect(CategorySchema.parse({ ...base, monthlyBudget: null }).monthlyBudget).toBe(null);
+    expect(CategorySchema.parse({ ...base, monthlyBudget: 600 }).monthlyBudget).toBe(600);
+  });
+  it('rejects a negative monthlyBudget', () => {
+    expect(() => CategorySchema.parse({
+      name: 'Groceries', parentCategoryId: null, color: null, icon: null,
+      type: 'NEED', isCapital: false, systemManaged: false, monthlyBudget: -1,
     })).toThrow();
   });
 });

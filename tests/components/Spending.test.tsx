@@ -46,6 +46,7 @@ describe('Spending page', () => {
       mig('0012_add_transaction_person'),
       mig('0009_seed_categories'),
       mig('0010_seed_merchant_mappings'),
+      mig('0013_add_category_budget'),
     ]);
     setDatabase(db);
     useCategoriesStore.setState({ categories: [], isLoading: false, error: null });

@@ -299,6 +299,7 @@ export const CategorySchema = z.object({
   type: z.nativeEnum(CategoryType),
   isCapital: z.boolean(),
   systemManaged: z.boolean(),
+  monthlyBudget: z.number().nonnegative().nullable(),
 });
 export type Category = z.infer<typeof CategorySchema>;
 
