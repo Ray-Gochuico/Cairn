@@ -1,0 +1,8 @@
+[
+  { "page": 1, "str": "03/04/26", "x": 46, "y": 212, "width": 46, "height": 8 },
+  { "page": 1, "str": "HOME DEPOT #6402", "x": 110, "y": 212, "width": 140, "height": 8 },
+  { "page": 1, "str": "$214.55", "x": 512, "y": 212, "width": 44, "height": 8 },
+  { "page": 1, "str": "03/09/26", "x": 46, "y": 235, "width": 46, "height": 8 },
+  { "page": 1, "str": "CHIPOTLE 1180", "x": 110, "y": 235, "width": 110, "height": 8 },
+  { "page": 1, "str": "$13.85", "x": 512, "y": 235, "width": 40, "height": 8 }
+]
