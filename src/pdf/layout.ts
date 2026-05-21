@@ -31,11 +31,6 @@ export function groupIntoRows(items: PdfTextItem[], yTolerance = 3): PdfTextItem
   return rows;
 }
 
-/** Join a row's strings, collapsing whitespace. */
-export function rowText(row: PdfTextItem[]): string {
-  return row.map((i) => i.str).join(' ').replace(/\s+/g, ' ').trim();
-}
-
 const AMOUNT_RE = /^\(?-?\$?-?[\d,]+\.\d{2}-?\)?$/;
 
 /**

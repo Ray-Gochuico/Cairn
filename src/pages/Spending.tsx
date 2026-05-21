@@ -42,7 +42,7 @@ export default function Spending() {
       loadCategories(),
       loadHousehold(),
       loadPersons(),
-    ]).then(() => syncRecurring());
+    ]).then(() => syncRecurring(useCategoriesStore.getState().categories));
   }, [loadTransactions, loadCategories, loadHousehold, loadPersons, syncRecurring]);
 
   // --- Analysis ---
@@ -50,7 +50,7 @@ export default function Spending() {
     () => summarizeSpending(transactions, categories),
     [transactions, categories],
   );
-  const recurring = useMemo(() => detectRecurring(transactions), [transactions]);
+  const recurring = useMemo(() => detectRecurring(transactions, categories), [transactions, categories]);
 
   // Category lookup for display
   const categoryById = useMemo(

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { TransactionsRepo } from '@/domain/transactions';
 import { getDatabase } from '@/db/db';
 import { detectRecurring } from '@/lib/recurring';
-import type { Transaction } from '@/types/schema';
+import type { Transaction, Category } from '@/types/schema';
 
 interface TransactionsState {
   transactions: Transaction[];
@@ -14,7 +14,7 @@ interface TransactionsState {
   update: (id: number, patch: Partial<Omit<Transaction, 'id' | 'householdId'>>) => Promise<void>;
   remove: (id: number) => Promise<void>;
   setRecurring: (ids: number[], value: boolean) => Promise<void>;
-  syncRecurring: () => Promise<void>;
+  syncRecurring: (categories: Category[]) => Promise<void>;
 }
 
 export const useTransactionsStore = create<TransactionsState>((set, get) => ({
@@ -65,11 +65,11 @@ export const useTransactionsStore = create<TransactionsState>((set, get) => ({
     await get().load();
   },
 
-  syncRecurring: async () => {
+  syncRecurring: async (categories: Category[]) => {
     const repo = new TransactionsRepo(getDatabase());
     const txns = get().transactions;
     const recurringIds = new Set(
-      detectRecurring(txns).flatMap((g) => g.transactionIds),
+      detectRecurring(txns, categories).flatMap((g) => g.transactionIds),
     );
     const toTrue = txns
       .filter((t) => t.id != null && recurringIds.has(t.id) && !t.isRecurring)

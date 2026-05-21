@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   firstPageText,
   groupIntoRows,
-  rowText,
   cleanMerchant,
   parseAmount,
   inferStatementPeriod,
@@ -38,12 +37,6 @@ describe('groupIntoRows', () => {
       item({ str: 'p2', x: 10, y: 100, page: 2 }),
     ]);
     expect(rows).toHaveLength(2);
-  });
-});
-
-describe('rowText', () => {
-  it('joins a row and collapses whitespace', () => {
-    expect(rowText([item({ str: 'A ' }), item({ str: ' B' })])).toBe('A B');
   });
 });
 

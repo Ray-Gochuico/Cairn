@@ -1,4 +1,4 @@
-import type { Transaction } from '@/types/schema';
+import type { Transaction, Category } from '@/types/schema';
 
 export interface RecurringGroup {
   merchant: string;
@@ -26,11 +26,22 @@ function isMonthlyGap(gapDays: number): boolean {
 /**
  * Detect recurring (subscription-like) transactions: the same merchant,
  * similar amount, at a roughly monthly cadence over >=2 occurrences.
+ *
+ * Skips credits (amount <= 0) and any transaction whose category resolves to
+ * an INCOME- or TRANSFER-typed category — debt payments and transfers are not
+ * subscriptions. Uncategorized transactions (categoryId null) remain eligible.
  */
-export function detectRecurring(transactions: Transaction[]): RecurringGroup[] {
+export function detectRecurring(transactions: Transaction[], categories: Category[]): RecurringGroup[] {
+  const catById = new Map<number, Category>(
+    categories.flatMap((c) => (c.id != null ? [[c.id, c]] : [])),
+  );
   const byMerchant = new Map<string, Transaction[]>();
   for (const t of transactions) {
     if (t.amount <= 0) continue; // subscriptions are charges, not credits
+    if (t.categoryId != null) {
+      const cat = catById.get(t.categoryId);
+      if (cat?.type === 'INCOME' || cat?.type === 'TRANSFER') continue;
+    }
     const key = t.merchant.toUpperCase();
     const list = byMerchant.get(key) ?? [];
     list.push(t);

@@ -62,7 +62,7 @@ describe('useTransactionsStore', () => {
     const before = useTransactionsStore.getState().transactions;
     expect(before.every((t) => !t.isRecurring)).toBe(true);
 
-    await useTransactionsStore.getState().syncRecurring();
+    await useTransactionsStore.getState().syncRecurring([]);
 
     const after = useTransactionsStore.getState().transactions;
     expect(after.every((t) => t.isRecurring)).toBe(true);

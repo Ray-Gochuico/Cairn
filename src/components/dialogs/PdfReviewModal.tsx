@@ -191,7 +191,7 @@ export function PdfReviewModal({
         }
       }
 
-      await syncRecurring();
+      await syncRecurring(useCategoriesStore.getState().categories);
       onSaved(included.length);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
