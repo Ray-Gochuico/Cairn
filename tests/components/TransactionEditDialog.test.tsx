@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TransactionEditDialog } from '@/components/dialogs/TransactionEditDialog';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
