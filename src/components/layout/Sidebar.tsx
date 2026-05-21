@@ -25,7 +25,8 @@ const sections: NavSection[] = [
     items: [
       { to: '/investments', label: 'Investments', icon: '📈' },
       { to: '/loans', label: 'Loans', icon: '💳' },
-      { to: '/property-vehicles', label: 'Property & Vehicles', icon: '🏠' },
+      { to: '/property', label: 'Property', icon: '🏠' },
+      { to: '/vehicles', label: 'Vehicles', icon: '🚗' },
       { to: '/equity-grants', label: 'Equity Grants', icon: '🎁' },
       { to: '/spending', label: 'Spending', icon: '💸' },
     ],

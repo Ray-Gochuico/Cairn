@@ -4,7 +4,8 @@ import Dashboard from './pages/Dashboard';
 import NetWorth from './pages/NetWorth';
 import Investments from './pages/Investments';
 import Loans from './pages/Loans';
-import PropertyVehicles from './pages/PropertyVehicles';
+import Property from './pages/Property';
+import Vehicles from './pages/Vehicles';
 import EquityGrants from './pages/EquityGrants';
 import Spending from './pages/Spending';
 import Goals from './pages/Goals';
@@ -44,7 +45,8 @@ const router = createBrowserRouter([
       { path: 'net-worth', element: <NetWorth /> },
       { path: 'investments', element: <Investments /> },
       { path: 'loans', element: <Loans /> },
-      { path: 'property-vehicles', element: <PropertyVehicles /> },
+      { path: 'property', element: <Property /> },
+      { path: 'vehicles', element: <Vehicles /> },
       { path: 'equity-grants', element: <EquityGrants /> },
       { path: 'spending', element: <Spending /> },
       { path: 'goals', element: <Goals /> },
