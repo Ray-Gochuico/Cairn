@@ -2,10 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useLoansStore } from '@/stores/loans-store';
+import { useTransactionsStore } from '@/stores/transactions-store';
+import { useCategoriesStore } from '@/stores/categories-store';
 import { filterByOwnerPersonId } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { LoanType } from '@/types/enums';
 import { PROPERTY_TYPE_LABELS } from '@/components/forms/PropertyForm';
+import { propertyCostBasis, rollingExpense } from '@/lib/cost-basis';
 import type { Property } from '@/types/schema';
 import {
   Card,
@@ -136,6 +139,8 @@ function EquityRow({ label, value, tone }: EquityRowProps) {
 interface PropertyCardProps {
   property: Property;
   mortgageBalance: number | null;
+  costBasis: number;
+  rolling12moExpense: number;
   isEditing: boolean;
   onEdit: () => void;
   onCancelEdit: () => void;
@@ -145,6 +150,8 @@ interface PropertyCardProps {
 function PropertyCard({
   property,
   mortgageBalance,
+  costBasis,
+  rolling12moExpense,
   isEditing,
   onEdit,
   onCancelEdit,
@@ -205,11 +212,17 @@ function PropertyCard({
               Cost basis
             </dt>
             <dd className="font-mono">
-              {formatCurrencyOrDash(property.purchasePrice)}
+              {formatCurrency(costBasis)}
               <span className="ml-1 text-xs text-muted-foreground">
                 (purchase price + capital improvements)
               </span>
             </dd>
+          </div>
+          <div className="col-span-2">
+            <dt className="text-xs uppercase tracking-wider text-muted-foreground">
+              12-mo expense
+            </dt>
+            <dd className="font-mono">{formatCurrency(rolling12moExpense)}</dd>
           </div>
         </dl>
 
@@ -239,12 +252,20 @@ export default function Property() {
   const loans = useLoansStore((s) => s.loans);
   const loadLoans = useLoansStore((s) => s.load);
 
+  const transactions = useTransactionsStore((s) => s.transactions);
+  const loadTransactions = useTransactionsStore((s) => s.load);
+
+  const categories = useCategoriesStore((s) => s.categories);
+  const loadCategories = useCategoriesStore((s) => s.load);
+
   const [editing, setEditing] = useState<EditTarget>(null);
 
   useEffect(() => {
     loadProperties();
     loadLoans();
-  }, [loadProperties, loadLoans]);
+    loadTransactions();
+    loadCategories();
+  }, [loadProperties, loadLoans, loadTransactions, loadCategories]);
 
   const visibleProperties = useMemo(
     () => filterByOwnerPersonId(properties, filter, persons),
@@ -308,11 +329,15 @@ export default function Property() {
             ? mortgageById.get(p.linkedLoanId) ?? null
             : null;
           const isEditing = editing?.id === p.id;
+          const costBasis = propertyCostBasis(p.purchasePrice, p.id!, transactions, categories);
+          const rolling12moExpense = rollingExpense(transactions, { propertyId: p.id! }, 12);
           return (
             <PropertyCard
               key={p.id}
               property={p}
               mortgageBalance={mortgageBalance}
+              costBasis={costBasis}
+              rolling12moExpense={rolling12moExpense}
               isEditing={isEditing}
               onEdit={() => setEditing({ id: p.id! })}
               onCancelEdit={() => setEditing(null)}

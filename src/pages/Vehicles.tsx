@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useVehiclesStore } from '@/stores/vehicles-store';
 import { useLoansStore } from '@/stores/loans-store';
+import { useTransactionsStore } from '@/stores/transactions-store';
 import { filterByOwnerPersonId } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { LoanType } from '@/types/enums';
+import { rollingExpense } from '@/lib/cost-basis';
 import type { Vehicle } from '@/types/schema';
 import {
   Card,
@@ -145,6 +147,7 @@ function EquityRow({ label, value, tone }: EquityRowProps) {
 interface VehicleCardProps {
   vehicle: Vehicle;
   loanBalance: number | null;
+  rolling12moExpense: number;
   isEditing: boolean;
   onEdit: () => void;
   onCancelEdit: () => void;
@@ -154,6 +157,7 @@ interface VehicleCardProps {
 function VehicleCard({
   vehicle,
   loanBalance,
+  rolling12moExpense,
   isEditing,
   onEdit,
   onCancelEdit,
@@ -205,6 +209,12 @@ function VehicleCard({
               {formatCurrencyOrDash(vehicle.purchasePrice)}
             </dd>
           </div>
+          <div className="col-span-2">
+            <dt className="text-xs uppercase tracking-wider text-muted-foreground">
+              12-mo expense
+            </dt>
+            <dd className="font-mono">{formatCurrency(rolling12moExpense)}</dd>
+          </div>
         </dl>
 
         <EquityRow label="Equity" value={equity} />
@@ -233,12 +243,16 @@ export default function Vehicles() {
   const loans = useLoansStore((s) => s.loans);
   const loadLoans = useLoansStore((s) => s.load);
 
+  const transactions = useTransactionsStore((s) => s.transactions);
+  const loadTransactions = useTransactionsStore((s) => s.load);
+
   const [editing, setEditing] = useState<EditTarget>(null);
 
   useEffect(() => {
     loadVehicles();
     loadLoans();
-  }, [loadVehicles, loadLoans]);
+    loadTransactions();
+  }, [loadVehicles, loadLoans, loadTransactions]);
 
   const visibleVehicles = useMemo(
     () => filterByOwnerPersonId(vehicles, filter, persons),
@@ -302,11 +316,13 @@ export default function Vehicles() {
             ? autoLoanById.get(v.linkedLoanId) ?? null
             : null;
           const isEditing = editing?.id === v.id;
+          const rolling12moExpense = rollingExpense(transactions, { vehicleId: v.id! }, 12);
           return (
             <VehicleCard
               key={v.id}
               vehicle={v}
               loanBalance={loanBalance}
+              rolling12moExpense={rolling12moExpense}
               isEditing={isEditing}
               onEdit={() => setEditing({ id: v.id! })}
               onCancelEdit={() => setEditing(null)}

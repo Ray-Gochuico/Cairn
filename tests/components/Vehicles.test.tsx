@@ -5,6 +5,7 @@ import { useVehiclesStore } from '@/stores/vehicles-store';
 import { useLoansStore } from '@/stores/loans-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
+import { useTransactionsStore } from '@/stores/transactions-store';
 import { FilingStatus } from '@/types/enums';
 import Vehicles from '@/pages/Vehicles';
 
@@ -25,6 +26,7 @@ function resetStores() {
     error: null,
   });
   usePersonsStore.setState({ persons: [], isLoading: false, error: null, load: async () => {} });
+  useTransactionsStore.setState({ transactions: [], isLoading: false, error: null, load: async () => {} });
 }
 
 function renderPage() {
@@ -106,5 +108,63 @@ describe('Vehicles page', () => {
     expect(screen.getAllByText(/equity/i).length).toBeGreaterThan(0);
     // $20,000 equity (no loan linked)
     expect(screen.getAllByText('$20,000').length).toBeGreaterThan(0);
+  });
+
+  it('shows rolling-12-month expense from vehicle-linked transactions', () => {
+    useVehiclesStore.setState({
+      vehicles: [
+        {
+          id: 5,
+          householdId: 1,
+          ownerPersonId: null,
+          name: 'SUV',
+          make: 'Ford',
+          model: 'Explorer',
+          year: 2023,
+          purchasePrice: 42000,
+          purchaseDate: '2023-01-01',
+          currentEstimatedValue: 38000,
+          linkedLoanId: null,
+          excludedFromNetWorth: false,
+          notes: null,
+        },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    });
+
+    useTransactionsStore.setState({
+      transactions: [
+        {
+          id: 1,
+          householdId: 1,
+          date: '2026-01-10',
+          merchant: 'Auto Service',
+          merchantRaw: 'Auto Service',
+          amount: 350,
+          categoryId: null,
+          sourceAccountId: null,
+          propertyId: null,
+          vehicleId: 5,
+          sourcePdfFilename: null,
+          reimbursable: false,
+          reimbursedAt: null,
+          reimbursedAmount: null,
+          isRecurring: false,
+          notes: null,
+        },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    });
+
+    renderPage();
+
+    // The 12-mo expense row should appear
+    expect(screen.getByText(/12-mo expense/i)).toBeInTheDocument();
+    // $350 linked to vehicle 5 is within 12 months
+    expect(screen.getAllByText('$350').length).toBeGreaterThan(0);
   });
 });
