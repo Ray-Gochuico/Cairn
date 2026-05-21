@@ -1,0 +1,9 @@
+[
+  { "page": 1, "str": "Billing Period 02/16/26-03/15/26", "x": 50, "y": 60, "width": 200, "height": 8 },
+  { "page": 1, "str": "03/03", "x": 48, "y": 220, "width": 32, "height": 8 },
+  { "page": 1, "str": "COSTCO WHSE #0511", "x": 96, "y": 220, "width": 150, "height": 8 },
+  { "page": 1, "str": "$182.40", "x": 506, "y": 220, "width": 44, "height": 8 },
+  { "page": 1, "str": "03/10", "x": 48, "y": 244, "width": 32, "height": 8 },
+  { "page": 1, "str": "SPOTIFY USA", "x": 96, "y": 244, "width": 90, "height": 8 },
+  { "page": 1, "str": "$11.99", "x": 506, "y": 244, "width": 40, "height": 8 }
+]
