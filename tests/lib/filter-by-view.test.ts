@@ -3,6 +3,7 @@ import {
   filterByOwnerPersonId,
   filterByObligorPersonId,
   filterByForPersonId,
+  filterByPersonId,
 } from '@/lib/filter-by-view';
 
 // Two-person household stubs — only the `id` field is read by the helpers.
@@ -125,5 +126,28 @@ describe('filterByForPersonId', () => {
 
   it("filter='p1' returns empty array when persons[0]?.id is undefined", () => {
     expect(filterByForPersonId(forRows, 'p1', personsMissingP1)).toEqual([]);
+  });
+});
+
+describe('filterByPersonId', () => {
+  const persons = [{ id: 1 }, { id: 2 }];
+  const items = [
+    { personId: 1, label: 'a' },
+    { personId: 2, label: 'b' },
+    { personId: null, label: 'joint' },
+  ];
+
+  it('household returns everything', () => {
+    expect(filterByPersonId(items, 'household', persons)).toHaveLength(3);
+  });
+  it('joint returns only null-person rows', () => {
+    expect(filterByPersonId(items, 'joint', persons).map((i) => i.label)).toEqual(['joint']);
+  });
+  it('p1 / p2 return that person\'s rows', () => {
+    expect(filterByPersonId(items, 'p1', persons).map((i) => i.label)).toEqual(['a']);
+    expect(filterByPersonId(items, 'p2', persons).map((i) => i.label)).toEqual(['b']);
+  });
+  it('returns empty when the selected person has no id', () => {
+    expect(filterByPersonId(items, 'p2', [{ id: 1 }])).toEqual([]);
   });
 });

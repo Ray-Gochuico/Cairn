@@ -54,3 +54,15 @@ export function filterByForPersonId<T extends { forPersonId: number | null }>(
   if (personId == null) return [];
   return items.filter((i) => i.forPersonId === personId);
 }
+
+export function filterByPersonId<T extends { personId: number | null }>(
+  items: T[],
+  filter: ViewFilter,
+  persons: { id?: number }[],
+): T[] {
+  if (filter === 'household') return items;
+  if (filter === 'joint') return items.filter((i) => i.personId === null);
+  const personId = filter === 'p1' ? persons[0]?.id : persons[1]?.id;
+  if (personId == null) return [];
+  return items.filter((i) => i.personId === personId);
+}
