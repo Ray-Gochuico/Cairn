@@ -3,14 +3,21 @@ import type { PdfTextItem, ParsedTransaction } from './types';
 import { detectIssuer } from './detect-issuer';
 import { parseChase } from './parsers/chase';
 import { parseAmex } from './parsers/amex';
+import { parseCiti } from './parsers/citi';
+import { parseDiscover } from './parsers/discover';
+import { parseCapitalOne } from './parsers/capital-one';
+import { parseBoa } from './parsers/boa';
+import { parseWellsFargo } from './parsers/wells-fargo';
 import { parseGeneric } from './parsers/generic';
 
-/** Issuer → parser. Issuers without a dedicated parser yet (Citi, Discover,
- *  Capital One, BoA, Wells Fargo until Slice 7) are simply absent and route
- *  to the generic fallback. */
 const PARSERS: Partial<Record<Issuer, (i: PdfTextItem[]) => ParsedTransaction[]>> = {
   [Issuer.CHASE]: parseChase,
   [Issuer.AMEX]: parseAmex,
+  [Issuer.CITI]: parseCiti,
+  [Issuer.DISCOVER]: parseDiscover,
+  [Issuer.CAPITAL_ONE]: parseCapitalOne,
+  [Issuer.BOA]: parseBoa,
+  [Issuer.WELLS_FARGO]: parseWellsFargo,
 };
 
 export interface ParseResult {

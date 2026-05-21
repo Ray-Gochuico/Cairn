@@ -3,6 +3,7 @@ import { parseStatement } from '@/pdf/parse-statement';
 import { Issuer } from '@/types/enums';
 import type { PdfTextItem } from '@/pdf/types';
 import chaseFixture from '../fixtures/pdf/chase-sample.json';
+import citiFixture from '../fixtures/pdf/citi-sample.json';
 
 describe('parseStatement', () => {
   it('detects the issuer and routes to its parser', () => {
@@ -36,5 +37,15 @@ describe('parseStatement', () => {
       { page: 1, str: '$22.00', x: 500, y: 100, width: 40, height: 8 },
     ];
     expect(parseStatement(items).transactions).toHaveLength(1);
+  });
+
+  it('routes a Citi statement to parseCiti and returns 2 transactions', () => {
+    const items: PdfTextItem[] = [
+      { page: 1, str: 'Citi', x: 0, y: 0, width: 10, height: 8 },
+      ...(citiFixture as PdfTextItem[]),
+    ];
+    const result = parseStatement(items);
+    expect(result.issuer).toBe(Issuer.CITI);
+    expect(result.transactions).toHaveLength(2);
   });
 });
