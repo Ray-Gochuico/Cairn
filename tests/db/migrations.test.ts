@@ -233,3 +233,11 @@ it('0011 adds Debt Payment and Business Expense categories and seeds payment pat
 
   await db.close();
 });
+
+it('0012 adds a person_id column to transactions', async () => {
+  const db = new SqliteAdapter(':memory:');
+  await runMigrations(db, await loadAllMigrations());
+  const cols = await db.select<{ name: string }>('PRAGMA table_info(transactions)');
+  expect(cols.map((c) => c.name)).toContain('person_id');
+  await db.close();
+});
