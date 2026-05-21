@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isRealSpending, summarizeSpending } from '@/lib/spending-analysis';
+import { isRealSpending, summarizeSpending, effectiveSpendingAmount } from '@/lib/spending-analysis';
 import type { Transaction, Category } from '@/types/schema';
 
 const cat = (id: number, type: Category['type']): Category => ({
@@ -32,6 +32,38 @@ describe('isRealSpending', () => {
   });
 });
 
+describe('effectiveSpendingAmount', () => {
+  it('returns full amount for a plain (non-reimbursable) transaction', () => {
+    expect(effectiveSpendingAmount(txn({ amount: 100 }))).toBe(100);
+  });
+  it('returns full amount for a pending reimbursable (reimbursedAt null)', () => {
+    // pending reimbursables don't even reach effectiveSpendingAmount in practice
+    // (isRealSpending filters them), but the function itself should be neutral
+    expect(effectiveSpendingAmount(txn({ reimbursable: true, reimbursedAt: null, amount: 200 }))).toBe(200);
+  });
+  it('returns net out-of-pocket for a partially reimbursed transaction', () => {
+    expect(
+      effectiveSpendingAmount(
+        txn({ amount: 200, reimbursable: true, reimbursedAt: '2026-03-20', reimbursedAmount: 150 }),
+      ),
+    ).toBe(50);
+  });
+  it('returns 0 for a fully reimbursed transaction', () => {
+    expect(
+      effectiveSpendingAmount(
+        txn({ amount: 200, reimbursable: true, reimbursedAt: '2026-03-20', reimbursedAmount: 200 }),
+      ),
+    ).toBe(0);
+  });
+  it('clamps to 0 when reimbursedAmount exceeds the charge', () => {
+    expect(
+      effectiveSpendingAmount(
+        txn({ amount: 100, reimbursable: true, reimbursedAt: '2026-03-20', reimbursedAmount: 120 }),
+      ),
+    ).toBe(0);
+  });
+});
+
 describe('summarizeSpending', () => {
   it('aggregates monthly totals, top merchants, and current vs previous month', () => {
     const txns = [
@@ -48,5 +80,39 @@ describe('summarizeSpending', () => {
       { month: '2026-02', total: 100 },
       { month: '2026-03', total: 100 },
     ]);
+  });
+
+  it('counts a partially reimbursed transaction at net amount (not gross)', () => {
+    // $200 charge, $150 reimbursed => net $50 should count toward spending
+    const txns = [
+      txn({
+        id: 1,
+        date: '2026-03-10',
+        merchant: 'ACME',
+        amount: 200,
+        reimbursable: true,
+        reimbursedAt: '2026-03-20',
+        reimbursedAmount: 150,
+      }),
+    ];
+    const s = summarizeSpending(txns, cats, new Date('2026-03-31T00:00:00Z'));
+    expect(s.currentMonthTotal).toBe(50);
+    expect(s.topMerchants[0]).toEqual({ merchant: 'ACME', total: 50, count: 1 });
+  });
+
+  it('counts a fully reimbursed transaction as zero spending', () => {
+    const txns = [
+      txn({
+        id: 1,
+        date: '2026-03-10',
+        merchant: 'ACME',
+        amount: 200,
+        reimbursable: true,
+        reimbursedAt: '2026-03-20',
+        reimbursedAmount: 200,
+      }),
+    ];
+    const s = summarizeSpending(txns, cats, new Date('2026-03-31T00:00:00Z'));
+    expect(s.currentMonthTotal).toBe(0);
   });
 });

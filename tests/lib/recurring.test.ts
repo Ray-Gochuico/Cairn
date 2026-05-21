@@ -39,4 +39,26 @@ describe('detectRecurring', () => {
       ]),
     ).toEqual([]);
   });
+
+  it('detects recurring when one month is skipped (gap of ~60 days)', () => {
+    // Jan 9 → Feb 9 → Apr 9 (Feb→Apr skips March; gap ~59 days ≈ 2 months)
+    const groups = detectRecurring([
+      txn(1, 'SPOTIFY', '2026-01-09', 9.99),
+      txn(2, 'SPOTIFY', '2026-02-09', 9.99),
+      txn(3, 'SPOTIFY', '2026-04-09', 9.99),
+    ]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].merchant).toBe('SPOTIFY');
+    expect(groups[0].transactionIds).toEqual([1, 2, 3]);
+  });
+
+  it('skips credits (amount <= 0) and does not produce a recurring group from them', () => {
+    expect(
+      detectRecurring([
+        txn(1, 'CASHBACK', '2026-01-01', -5),
+        txn(2, 'CASHBACK', '2026-02-01', -5),
+        txn(3, 'CASHBACK', '2026-03-01', -5),
+      ]),
+    ).toEqual([]);
+  });
 });

@@ -25,6 +25,10 @@ const NON_SPENDING_TYPES = new Set<Category['type']>(['INCOME', 'TRANSFER']);
  * "Real spending" — a positive-amount charge that is not a pending
  * reimbursable and not in an Income/Transfer category. Uncategorized
  * (categoryId null) positive charges count.
+ *
+ * Note: reimbursed transactions (reimbursable with reimbursedAt set) ARE
+ * included here, but are counted at their net out-of-pocket amount via
+ * `effectiveSpendingAmount` rather than their gross charge amount.
  */
 export function isRealSpending(
   txn: Transaction,
@@ -37,6 +41,19 @@ export function isRealSpending(
     if (cat && NON_SPENDING_TYPES.has(cat.type)) return false;
   }
   return true;
+}
+
+/**
+ * The amount of a transaction that counts as real spending. For a reimbursed
+ * transaction (reimbursable with a reimbursedAt set), only the net
+ * out-of-pocket — the charge minus what came back — counts; a fully-reimbursed
+ * transaction contributes zero. All other transactions count their full amount.
+ */
+export function effectiveSpendingAmount(txn: Transaction): number {
+  if (txn.reimbursable && txn.reimbursedAt != null) {
+    return Math.max(0, txn.amount - (txn.reimbursedAmount ?? 0));
+  }
+  return txn.amount;
 }
 
 /** Aggregate transactions into the Spending-page summary. */
@@ -54,13 +71,14 @@ export function summarizeSpending(
   const merchant = new Map<string, { total: number; count: number }>();
 
   for (const t of spend) {
+    const amt = effectiveSpendingAmount(t);
     const m = t.date.slice(0, 7);
     const ck = `${m}|${t.categoryId ?? 0}`;
-    monthCat.set(ck, (monthCat.get(ck) ?? 0) + t.amount);
-    monthTot.set(m, (monthTot.get(m) ?? 0) + t.amount);
+    monthCat.set(ck, (monthCat.get(ck) ?? 0) + amt);
+    monthTot.set(m, (monthTot.get(m) ?? 0) + amt);
     const mk = t.merchant.toUpperCase();
     const cur = merchant.get(mk) ?? { total: 0, count: 0 };
-    merchant.set(mk, { total: cur.total + t.amount, count: cur.count + 1 });
+    merchant.set(mk, { total: cur.total + amt, count: cur.count + 1 });
   }
 
   const monthlyByCategory: MonthlyCategoryTotal[] = [...monthCat.entries()].map(
