@@ -1,0 +1,8 @@
+[
+  { "page": 1, "str": "03/06/26", "x": 48, "y": 210, "width": 46, "height": 8 },
+  { "page": 1, "str": "TARGET T-2841", "x": 110, "y": 210, "width": 120, "height": 8 },
+  { "page": 1, "str": "$64.18", "x": 520, "y": 210, "width": 40, "height": 8 },
+  { "page": 1, "str": "03/11/26", "x": 48, "y": 232, "width": 46, "height": 8 },
+  { "page": 1, "str": "DISCOVER PAYMENT", "x": 110, "y": 232, "width": 140, "height": 8 },
+  { "page": 1, "str": "-$150.00", "x": 520, "y": 232, "width": 48, "height": 8 }
+]
