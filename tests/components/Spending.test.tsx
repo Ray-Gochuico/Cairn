@@ -133,8 +133,11 @@ describe('Spending page', () => {
 
     renderPage();
 
-    // Top merchants section shows NETFLIX (may appear in multiple elements — top merchants + transactions list)
+    // Top merchants section renders (as a BarChartCard — merchant names appear in Recharts SVG
+    // which jsdom may not expose as queryable text, so we assert the section heading instead).
+    // NETFLIX appears reliably as DOM text in the recent-transactions list.
     await waitFor(() => {
+      expect(screen.getByRole('region', { name: /top merchants/i })).toBeInTheDocument();
       expect(screen.getAllByText('NETFLIX').length).toBeGreaterThan(0);
     });
 

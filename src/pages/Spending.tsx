@@ -339,18 +339,15 @@ export default function Spending() {
 
           {/* Top merchants */}
           {summary.topMerchants.length > 0 && (
-            <section>
-              <h2 className="text-lg font-medium mb-3">Top merchants</h2>
-              <ul className="space-y-1">
-                {summary.topMerchants.map((m) => (
-                  <li key={m.merchant} className="flex items-center justify-between text-sm">
-                    <span>{m.merchant}</span>
-                    <span className="text-muted-foreground">
-                      ${m.total.toFixed(2)} · {m.count}×
-                    </span>
-                  </li>
-                ))}
-              </ul>
+            <section aria-label="Top merchants">
+              <BarChartCard
+                title="Top merchants"
+                data={summary.topMerchants.map((m) => ({ merchant: m.merchant, total: m.total }))}
+                xKey="merchant"
+                series={[{ dataKey: 'total', label: 'Spent' }]}
+                yFormatter={(v) => `$${v.toLocaleString()}`}
+                layout="vertical"
+              />
             </section>
           )}
 
