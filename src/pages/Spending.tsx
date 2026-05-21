@@ -7,8 +7,10 @@ import BarChartCard from '@/components/charts/BarChartCard';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useHouseholdStore } from '@/stores/household-store';
+import { usePersonsStore } from '@/stores/persons-store';
 import { summarizeSpending } from '@/lib/spending-analysis';
 import { detectRecurring } from '@/lib/recurring';
+import { cashflowWindow } from '@/lib/cashflow';
 import type { ParseResult } from '@/pdf/parse-statement';
 import type { Transaction } from '@/types/schema';
 
@@ -31,14 +33,17 @@ export default function Spending() {
   const loadCategories = useCategoriesStore((s) => s.load);
   const household = useHouseholdStore((s) => s.household);
   const loadHousehold = useHouseholdStore((s) => s.load);
+  const persons = usePersonsStore((s) => s.persons);
+  const loadPersons = usePersonsStore((s) => s.load);
 
   useEffect(() => {
     void Promise.all([
       loadTransactions(),
       loadCategories(),
       loadHousehold(),
+      loadPersons(),
     ]).then(() => syncRecurring());
-  }, [loadTransactions, loadCategories, loadHousehold, syncRecurring]);
+  }, [loadTransactions, loadCategories, loadHousehold, loadPersons, syncRecurring]);
 
   // --- Analysis ---
   const summary = useMemo(
@@ -87,6 +92,19 @@ export default function Spending() {
   const awaitingReimbursement = useMemo(
     () => transactions.filter((t) => t.reimbursable && t.reimbursedAt == null),
     [transactions],
+  );
+
+  // Rolling 30-day cashflow
+  // Inflow = sum of each person's estimated monthly net income.
+  // A simple approximation: annualSalaryPretax / 12 (gross); the plan notes
+  // exact proration/tax is the implementer's call (design spec § Open questions).
+  const estimatedMonthlyInflow = useMemo(
+    () => persons.reduce((s, p) => s + p.annualSalaryPretax / 12, 0),
+    [persons],
+  );
+  const cashflow = useMemo(
+    () => cashflowWindow(transactions, estimatedMonthlyInflow, 30),
+    [transactions, estimatedMonthlyInflow],
   );
 
   // Budget data
@@ -258,6 +276,55 @@ export default function Spending() {
                 </p>
               )}
             </div>
+          </section>
+
+          {/* Money in vs out (last 30 days) */}
+          <section>
+            <h2 className="text-lg font-medium mb-3">Money in vs out (last 30 days)</h2>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="border rounded-lg p-4 space-y-1">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Money in</p>
+                <p className="text-2xl font-semibold text-emerald-600">
+                  ${cashflow.inflow.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+                <p className="text-xs text-muted-foreground">Estimated from salary</p>
+              </div>
+              <div className="border rounded-lg p-4 space-y-1">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Money out</p>
+                <p className="text-2xl font-semibold">
+                  ${cashflow.outflow.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+                <p className="text-xs text-muted-foreground">Transactions in window</p>
+              </div>
+              <div className="border rounded-lg p-4 space-y-1">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Net</p>
+                <p className={`text-2xl font-semibold ${cashflow.net >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                  {cashflow.net >= 0 ? '+' : ''}${cashflow.net.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {cashflow.net >= 0 ? 'Surplus' : 'Deficit'}
+                </p>
+              </div>
+            </div>
+            {cashflow.outflowByCategory.length > 0 && (
+              <ul className="mt-3 space-y-1">
+                {cashflow.outflowByCategory
+                  .sort((a, b) => b.total - a.total)
+                  .map((row) => (
+                    <li
+                      key={row.categoryId ?? 'null'}
+                      className="flex items-center justify-between text-sm"
+                    >
+                      <span className="text-muted-foreground">
+                        {row.categoryId != null
+                          ? (categoryById.get(row.categoryId)?.name ?? `Cat ${row.categoryId}`)
+                          : 'Uncategorized'}
+                      </span>
+                      <span>${row.total.toFixed(2)}</span>
+                    </li>
+                  ))}
+              </ul>
+            )}
           </section>
 
           {/* Top merchants */}

@@ -12,6 +12,7 @@ import { runMigrations } from '@/db/migrations';
 import { setDatabase } from '@/db/db';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
+import { usePersonsStore } from '@/stores/persons-store';
 import Spending from '@/pages/Spending';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -44,6 +45,7 @@ describe('Spending page', () => {
     setDatabase(db);
     useCategoriesStore.setState({ categories: [], isLoading: false, error: null });
     useTransactionsStore.setState({ transactions: [], isLoading: false, error: null });
+    usePersonsStore.setState({ persons: [], isLoading: false, error: null });
   });
 
   afterEach(async () => {
@@ -148,6 +150,65 @@ describe('Spending page', () => {
       expect(
         screen.getByRole('button', { name: /mark reimbursed/i }),
       ).toBeInTheDocument();
+    });
+  });
+
+  it('(d) shows cashflow section with inflow, outflow, and net given seeded persons + transactions', async () => {
+    await useCategoriesStore.getState().load();
+
+    // Seed a person with $120,000/yr salary → $10,000/mo inflow estimate
+    usePersonsStore.setState({
+      persons: [
+        {
+          id: 1,
+          householdId: 1,
+          name: 'Alice',
+          dateOfBirth: '1990-01-01',
+          targetRetirementAge: 65,
+          annualSalaryPretax: 120000,
+          expectedBonus: 0,
+          expectedBonusFrequency: 'ANNUAL',
+          bonusIsConsistent: true,
+          expectedCommission: 0,
+          expectedCommissionFrequency: 'MONTHLY',
+          employmentType: 'SALARY_NO_OT',
+          hourlyRate: null,
+          regularHoursPerWeek: 40,
+          otThresholdHoursPerWeek: null,
+          pretax401kPct: 0,
+          healthInsuranceMonthlyPremium: 0,
+          dependentCareFsaMonthly: 0,
+          hsaMonthlyContribution: 0,
+          hsaEligible: false,
+        },
+      ],
+      isLoading: false,
+      error: null,
+    });
+
+    // A recent transaction within the 30-day window
+    const recentDate = new Date(Date.now() - 5 * 86_400_000).toISOString().slice(0, 10);
+    const txn: Omit<Transaction, 'id'> = {
+      householdId: 1, date: recentDate, merchant: 'GROCERY', merchantRaw: 'GROCERY',
+      amount: 200, categoryId: null, sourceAccountId: null, propertyId: null,
+      vehicleId: null, sourcePdfFilename: 'test.pdf', reimbursable: false,
+      reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
+    };
+
+    await useTransactionsStore.getState().createMany([txn]);
+
+    renderPage();
+
+    await waitFor(() => {
+      // Cashflow section heading
+      expect(screen.getByText(/money in vs out/i)).toBeInTheDocument();
+    });
+
+    // Inflow label and outflow label
+    await waitFor(() => {
+      expect(screen.getAllByText(/money in/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/money out/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/^net$/i).length).toBeGreaterThan(0);
     });
   });
 });
