@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { TransactionsRepo } from '@/domain/transactions';
 import { getDatabase } from '@/db/db';
+import { detectRecurring } from '@/lib/recurring';
 import type { Transaction } from '@/types/schema';
 
 interface TransactionsState {
@@ -13,6 +14,7 @@ interface TransactionsState {
   update: (id: number, patch: Partial<Omit<Transaction, 'id' | 'householdId'>>) => Promise<void>;
   remove: (id: number) => Promise<void>;
   setRecurring: (ids: number[], value: boolean) => Promise<void>;
+  syncRecurring: () => Promise<void>;
 }
 
 export const useTransactionsStore = create<TransactionsState>((set, get) => ({
@@ -61,5 +63,22 @@ export const useTransactionsStore = create<TransactionsState>((set, get) => ({
     const repo = new TransactionsRepo(getDatabase());
     await repo.setRecurring(ids, value);
     await get().load();
+  },
+
+  syncRecurring: async () => {
+    const repo = new TransactionsRepo(getDatabase());
+    const txns = get().transactions;
+    const recurringIds = new Set(
+      detectRecurring(txns).flatMap((g) => g.transactionIds),
+    );
+    const toTrue = txns
+      .filter((t) => t.id != null && recurringIds.has(t.id) && !t.isRecurring)
+      .map((t) => t.id as number);
+    const toFalse = txns
+      .filter((t) => t.id != null && !recurringIds.has(t.id) && t.isRecurring)
+      .map((t) => t.id as number);
+    if (toTrue.length) await repo.setRecurring(toTrue, true);
+    if (toFalse.length) await repo.setRecurring(toFalse, false);
+    if (toTrue.length || toFalse.length) await get().load();
   },
 }));

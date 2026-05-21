@@ -48,4 +48,23 @@ describe('useTransactionsStore', () => {
     expect(isLoading).toBe(false);
     expect(error).toBeNull();
   });
+
+  it('syncRecurring marks three monthly same-amount transactions as recurring', async () => {
+    // Seed three NETFLIX charges ~30 days apart with identical amounts
+    await useTransactionsStore.getState().createMany([
+      row({ merchant: 'NETFLIX', amount: 15.49, date: '2026-01-09' }),
+      row({ merchant: 'NETFLIX', amount: 15.49, date: '2026-02-09' }),
+      row({ merchant: 'NETFLIX', amount: 15.49, date: '2026-03-09' }),
+    ]);
+    await useTransactionsStore.getState().load();
+
+    // Before sync, none should be recurring
+    const before = useTransactionsStore.getState().transactions;
+    expect(before.every((t) => !t.isRecurring)).toBe(true);
+
+    await useTransactionsStore.getState().syncRecurring();
+
+    const after = useTransactionsStore.getState().transactions;
+    expect(after.every((t) => t.isRecurring)).toBe(true);
+  });
 });

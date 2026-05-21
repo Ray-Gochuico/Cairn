@@ -44,6 +44,7 @@ export function PdfReviewModal({
   const categories = useCategoriesStore((s) => s.categories);
   const upsertForMerchant = useMerchantOverridesStore((s) => s.upsertForMerchant);
   const createMany = useTransactionsStore((s) => s.createMany);
+  const syncRecurring = useTransactionsStore((s) => s.syncRecurring);
   const properties = usePropertiesStore((s) => s.properties);
   const vehicles = useVehiclesStore((s) => s.vehicles);
 
@@ -190,6 +191,7 @@ export function PdfReviewModal({
         }
       }
 
+      await syncRecurring();
       onSaved(included.length);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
