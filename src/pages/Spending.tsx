@@ -103,8 +103,8 @@ export default function Spending() {
     [persons],
   );
   const cashflow = useMemo(
-    () => cashflowWindow(transactions, estimatedMonthlyInflow, 30),
-    [transactions, estimatedMonthlyInflow],
+    () => cashflowWindow(transactions, estimatedMonthlyInflow, 30, categories),
+    [transactions, estimatedMonthlyInflow, categories],
   );
 
   // Budget data

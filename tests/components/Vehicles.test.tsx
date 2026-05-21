@@ -6,6 +6,7 @@ import { useLoansStore } from '@/stores/loans-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
+import { useCategoriesStore } from '@/stores/categories-store';
 import { FilingStatus } from '@/types/enums';
 import Vehicles from '@/pages/Vehicles';
 
@@ -27,6 +28,7 @@ function resetStores() {
   });
   usePersonsStore.setState({ persons: [], isLoading: false, error: null, load: async () => {} });
   useTransactionsStore.setState({ transactions: [], isLoading: false, error: null, load: async () => {} });
+  useCategoriesStore.setState({ categories: [], isLoading: false, error: null, load: async () => {} });
 }
 
 function renderPage() {

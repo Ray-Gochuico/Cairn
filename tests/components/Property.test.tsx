@@ -185,4 +185,79 @@ describe('Property page', () => {
     // Cost basis = $400,000 purchase price + $5,000 capital improvement = $405,000
     expect(screen.getAllByText('$405,000').length).toBeGreaterThan(0);
   });
+
+  it('renders the rolling-12-month expense from property-linked transactions', () => {
+    usePropertiesStore.setState({
+      properties: [
+        {
+          id: 7,
+          householdId: 1,
+          ownerPersonId: null,
+          name: 'My Home',
+          type: PropertyType.PRIMARY_RESIDENCE,
+          address: null,
+          purchasePrice: 300000,
+          purchaseDate: '2020-01-01',
+          currentEstimatedValue: 350000,
+          linkedLoanId: null,
+          excludedFromNetWorth: false,
+          notes: null,
+        },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    });
+
+    useCategoriesStore.setState({
+      categories: [
+        {
+          id: 11,
+          name: 'Home Maintenance',
+          parentCategoryId: 1,
+          color: null,
+          icon: null,
+          type: 'NEED',
+          isCapital: false,
+          systemManaged: false,
+        },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    });
+
+    useTransactionsStore.setState({
+      transactions: [
+        {
+          id: 1,
+          householdId: 1,
+          date: '2026-01-15',
+          merchant: 'Plumber',
+          merchantRaw: 'Plumber',
+          amount: 750,
+          categoryId: 11,
+          sourceAccountId: null,
+          propertyId: 7,
+          vehicleId: null,
+          sourcePdfFilename: null,
+          reimbursable: false,
+          reimbursedAt: null,
+          reimbursedAmount: null,
+          isRecurring: false,
+          notes: null,
+        },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    });
+
+    renderPage();
+
+    // 12-mo expense label must appear
+    expect(screen.getByText(/12-mo expense/i)).toBeInTheDocument();
+    // $750 maintenance transaction linked to property 7 within 12 months
+    expect(screen.getAllByText('$750').length).toBeGreaterThan(0);
+  });
 });

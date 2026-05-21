@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useVehiclesStore } from '@/stores/vehicles-store';
 import { useLoansStore } from '@/stores/loans-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
+import { useCategoriesStore } from '@/stores/categories-store';
 import { filterByOwnerPersonId } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { LoanType } from '@/types/enums';
@@ -16,8 +17,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { ValueEditor, EquityRow } from '@/components/AssetCardParts';
 
 /**
  * Vehicles page — Phase 4 split of the former "Property & Vehicles" combined
@@ -48,100 +48,6 @@ function describeVehicle(v: Vehicle): string {
     v.model,
   ].filter((s): s is string => Boolean(s));
   return parts.join(' ');
-}
-
-interface ValueEditorProps {
-  initialValue: number | null;
-  onSave: (value: number | null) => Promise<void>;
-  onCancel: () => void;
-}
-
-function ValueEditor({ initialValue, onSave, onCancel }: ValueEditorProps) {
-  const [text, setText] = useState<string>(
-    initialValue != null ? String(initialValue) : '',
-  );
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleSave() {
-    setError(null);
-    const trimmed = text.trim();
-    let parsed: number | null;
-    if (trimmed === '') {
-      parsed = null;
-    } else {
-      const n = Number(trimmed);
-      if (!Number.isFinite(n) || n < 0) {
-        setError('Enter a non-negative number, or leave blank to clear.');
-        return;
-      }
-      parsed = n;
-    }
-    setSaving(true);
-    try {
-      await onSave(parsed);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to save');
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="mt-3 rounded-md border bg-muted/30 p-3 space-y-2">
-      <Label htmlFor="value-editor-input" className="text-xs">
-        Current estimated value
-      </Label>
-      <Input
-        id="value-editor-input"
-        type="number"
-        min={0}
-        step="any"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        disabled={saving}
-      />
-      {error ? (
-        <div className="text-xs text-red-600">{error}</div>
-      ) : null}
-      <div className="flex gap-2 justify-end">
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={onCancel}
-          disabled={saving}
-        >
-          Cancel
-        </Button>
-        <Button size="sm" onClick={handleSave} disabled={saving}>
-          {saving ? 'Saving…' : 'Save'}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-interface EquityRowProps {
-  label: string;
-  value: number;
-  tone?: 'negative';
-}
-
-function EquityRow({ label, value, tone }: EquityRowProps) {
-  const isNegative = tone === 'negative' || value < 0;
-  return (
-    <div className="flex items-center justify-between border-t pt-3">
-      <span className="text-xs uppercase tracking-wider text-muted-foreground">
-        {label}
-      </span>
-      <span
-        className={`text-lg font-semibold ${
-          isNegative ? 'text-red-600' : 'text-emerald-600'
-        }`}
-      >
-        {formatCurrency(value)}
-      </span>
-    </div>
-  );
 }
 
 interface VehicleCardProps {
@@ -246,13 +152,17 @@ export default function Vehicles() {
   const transactions = useTransactionsStore((s) => s.transactions);
   const loadTransactions = useTransactionsStore((s) => s.load);
 
+  const categories = useCategoriesStore((s) => s.categories);
+  const loadCategories = useCategoriesStore((s) => s.load);
+
   const [editing, setEditing] = useState<EditTarget>(null);
 
   useEffect(() => {
     loadVehicles();
     loadLoans();
     loadTransactions();
-  }, [loadVehicles, loadLoans, loadTransactions]);
+    loadCategories();
+  }, [loadVehicles, loadLoans, loadTransactions, loadCategories]);
 
   const visibleVehicles = useMemo(
     () => filterByOwnerPersonId(vehicles, filter, persons),
@@ -316,7 +226,7 @@ export default function Vehicles() {
             ? autoLoanById.get(v.linkedLoanId) ?? null
             : null;
           const isEditing = editing?.id === v.id;
-          const rolling12moExpense = rollingExpense(transactions, { vehicleId: v.id! }, 12);
+          const rolling12moExpense = rollingExpense(transactions, { vehicleId: v.id! }, 12, categories);
           return (
             <VehicleCard
               key={v.id}
