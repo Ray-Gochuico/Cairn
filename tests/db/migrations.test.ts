@@ -241,3 +241,11 @@ it('0012 adds a person_id column to transactions', async () => {
   expect(cols.map((c) => c.name)).toContain('person_id');
   await db.close();
 });
+
+it('0013 adds a monthly_budget column to categories', async () => {
+  const db = new SqliteAdapter(':memory:');
+  await runMigrations(db, await loadAllMigrations());
+  const cols = await db.select<{ name: string }>('PRAGMA table_info(categories)');
+  expect(cols.map((c) => c.name)).toContain('monthly_budget');
+  await db.close();
+});
