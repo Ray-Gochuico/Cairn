@@ -444,9 +444,9 @@ export default function Spending() {
                     </td>
                     <td className="py-2 text-right">
                       {t.amount < 0 ? (
-                        <span className="text-green-600">{t.amount.toFixed(2)}</span>
+                        <span className="text-green-600">-${Math.abs(t.amount).toFixed(2)}</span>
                       ) : (
-                        <span>{t.amount.toFixed(2)}</span>
+                        <span>${t.amount.toFixed(2)}</span>
                       )}
                     </td>
                     <td className="py-2 pr-2 text-right">
