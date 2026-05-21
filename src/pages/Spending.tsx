@@ -3,11 +3,14 @@ import { extractTextItems } from '@/pdf/extract';
 import { parseStatement } from '@/pdf/parse-statement';
 import { PdfReviewModal } from '@/components/dialogs/PdfReviewModal';
 import { MarkReimbursedDialog } from '@/components/dialogs/MarkReimbursedDialog';
+import { TransactionEditDialog } from '@/components/dialogs/TransactionEditDialog';
 import BarChartCard from '@/components/charts/BarChartCard';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
+import { usePropertiesStore } from '@/stores/properties-store';
+import { useVehiclesStore } from '@/stores/vehicles-store';
 import { summarizeSpending } from '@/lib/spending-analysis';
 import { detectRecurring } from '@/lib/recurring';
 import { cashflowWindow } from '@/lib/cashflow';
@@ -25,6 +28,7 @@ export default function Spending() {
   const [importError, setImportError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [reimbursedTarget, setReimbursedTarget] = useState<Transaction | null>(null);
+  const [editTarget, setEditTarget] = useState<Transaction | null>(null);
 
   const transactions = useTransactionsStore((s) => s.transactions);
   const loadTransactions = useTransactionsStore((s) => s.load);
@@ -35,6 +39,10 @@ export default function Spending() {
   const loadHousehold = useHouseholdStore((s) => s.load);
   const persons = usePersonsStore((s) => s.persons);
   const loadPersons = usePersonsStore((s) => s.load);
+  const properties = usePropertiesStore((s) => s.properties);
+  const loadProperties = usePropertiesStore((s) => s.load);
+  const vehicles = useVehiclesStore((s) => s.vehicles);
+  const loadVehicles = useVehiclesStore((s) => s.load);
 
   useEffect(() => {
     void Promise.all([
@@ -42,8 +50,10 @@ export default function Spending() {
       loadCategories(),
       loadHousehold(),
       loadPersons(),
+      loadProperties(),
+      loadVehicles(),
     ]).then(() => syncRecurring(useCategoriesStore.getState().categories));
-  }, [loadTransactions, loadCategories, loadHousehold, loadPersons, syncRecurring]);
+  }, [loadTransactions, loadCategories, loadHousehold, loadPersons, loadProperties, loadVehicles, syncRecurring]);
 
   // --- Analysis ---
   const summary = useMemo(
@@ -417,6 +427,7 @@ export default function Spending() {
                 <th className="py-2 pr-4">Merchant</th>
                 <th className="py-2 pr-4">Category</th>
                 <th className="py-2 text-right">Amount</th>
+                <th className="py-2 pr-2 w-10"><span className="sr-only">Edit</span></th>
               </tr>
             </thead>
             <tbody>
@@ -437,6 +448,16 @@ export default function Spending() {
                       ) : (
                         <span>{t.amount.toFixed(2)}</span>
                       )}
+                    </td>
+                    <td className="py-2 pr-2 text-right">
+                      <button
+                        type="button"
+                        aria-label={`Edit ${t.merchant}`}
+                        className="text-xs px-2 py-1 border rounded hover:bg-muted"
+                        onClick={() => setEditTarget(t)}
+                      >
+                        ✏️
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -461,6 +482,19 @@ export default function Spending() {
           onClose={() => setReimbursedTarget(null)}
           onConfirmed={() => {
             setReimbursedTarget(null);
+            void loadTransactions();
+          }}
+        />
+      )}
+      {editTarget && (
+        <TransactionEditDialog
+          transaction={editTarget}
+          categories={categories}
+          properties={properties}
+          vehicles={vehicles}
+          onClose={() => setEditTarget(null)}
+          onSaved={() => {
+            setEditTarget(null);
             void loadTransactions();
           }}
         />

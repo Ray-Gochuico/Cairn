@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
 
 // pdfjs-dist uses DOMMatrix which is not available in jsdom. Mock the extract
 // module so the Spending page can be imported without pulling in pdfjs.
@@ -151,6 +152,25 @@ describe('Spending page', () => {
         screen.getByRole('button', { name: /mark reimbursed/i }),
       ).toBeInTheDocument();
     });
+  });
+
+  it('(e) clicking a transaction row Edit button opens the edit dialog', async () => {
+    await useCategoriesStore.getState().load();
+    const txn: Omit<Transaction, 'id'> = {
+      householdId: 1, date: '2026-03-05', merchant: 'AMAZON', merchantRaw: 'AMAZON.COM',
+      amount: 54.23, categoryId: 37, sourceAccountId: null, propertyId: null,
+      vehicleId: null, sourcePdfFilename: 'mar.pdf', reimbursable: false,
+      reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
+    };
+    await useTransactionsStore.getState().createMany([txn]);
+    renderPage();
+
+    const user = userEvent.setup();
+    const editButton = await screen.findByRole('button', { name: /edit amazon/i });
+    await user.click(editButton);
+
+    expect(await screen.findByText('Edit transaction')).toBeInTheDocument();
+    expect(screen.getByLabelText('Merchant')).toHaveValue('AMAZON');
   });
 
   it('(d) shows cashflow section with inflow, outflow, and net given seeded persons + transactions', async () => {
