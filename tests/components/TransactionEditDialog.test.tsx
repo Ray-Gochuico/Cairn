@@ -39,6 +39,11 @@ describe('TransactionEditDialog', () => {
     await runMigrations(db, [mig('0001_initial'), mig('0008_add_transaction_property_links'), mig('0012_add_transaction_person'), mig('0009_seed_categories')]);
     setDatabase(db);
     useTransactionsStore.setState({ transactions: [], isLoading: false, error: null });
+    // Seed two persons so person FK constraints are satisfied in the person picker tests.
+    await db.execute(
+      `INSERT INTO persons (id, household_id, name, date_of_birth, target_retirement_age)
+       VALUES (1, 1, 'Alex', '1990-01-01', 65), (2, 1, 'Sam', '1992-01-01', 65)`,
+    );
     const repo = new TransactionsRepo(db);
     const id = await repo.create(baseTransaction);
     transaction = { ...baseTransaction, id };
@@ -49,7 +54,7 @@ describe('TransactionEditDialog', () => {
   it('prefills the merchant, amount, and category from the transaction', () => {
     render(
       <TransactionEditDialog transaction={transaction} categories={categories}
-        properties={[]} vehicles={[]} onClose={vi.fn()} onSaved={vi.fn()} />,
+        properties={[]} vehicles={[]} persons={[]} onClose={vi.fn()} onSaved={vi.fn()} />,
     );
     expect(screen.getByLabelText('Merchant')).toHaveValue('STARBUCKS');
     expect(screen.getByLabelText('Amount')).toHaveValue(7.5);
@@ -61,7 +66,7 @@ describe('TransactionEditDialog', () => {
     const user = userEvent.setup();
     render(
       <TransactionEditDialog transaction={transaction} categories={categories}
-        properties={[]} vehicles={[]} onClose={vi.fn()} onSaved={onSaved} />,
+        properties={[]} vehicles={[]} persons={[]} onClose={vi.fn()} onSaved={onSaved} />,
     );
     const merchant = screen.getByLabelText('Merchant');
     await user.clear(merchant);
@@ -82,7 +87,7 @@ describe('TransactionEditDialog', () => {
     const user = userEvent.setup();
     render(
       <TransactionEditDialog transaction={transaction} categories={categories}
-        properties={[]} vehicles={[]} onClose={vi.fn()} onSaved={onSaved} />,
+        properties={[]} vehicles={[]} persons={[]} onClose={vi.fn()} onSaved={onSaved} />,
     );
     await user.click(screen.getByRole('button', { name: /^delete$/i }));
     // confirmation appears; the row is still there until confirmed
@@ -110,7 +115,7 @@ describe('TransactionEditDialog', () => {
     const properties = [{ id: 5, name: 'Main House' }] as Property[];
     render(
       <TransactionEditDialog transaction={transaction} categories={homeCats}
-        properties={properties} vehicles={[]} onClose={vi.fn()} onSaved={vi.fn()} />,
+        properties={properties} vehicles={[]} persons={[]} onClose={vi.fn()} onSaved={vi.fn()} />,
     );
     // pick the Home child category → property picker appears
     await user.selectOptions(screen.getByLabelText('Category'), '7');
@@ -121,5 +126,28 @@ describe('TransactionEditDialog', () => {
     const rows = await new TransactionsRepo(db).list();
     expect(rows[0].propertyId).toBe(5);
     expect(rows[0].categoryId).toBe(7);
+  });
+
+  it('shows a person picker for a two-person household and saves the pick', async () => {
+    const user = userEvent.setup();
+    const persons = [{ id: 1, name: 'Alex' }, { id: 2, name: 'Sam' }];
+    render(
+      <TransactionEditDialog transaction={transaction} categories={categories}
+        properties={[]} vehicles={[]} persons={persons}
+        onClose={vi.fn()} onSaved={vi.fn()} />,
+    );
+    await user.selectOptions(screen.getByLabelText('Person'), '2');
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+    const rows = await new TransactionsRepo(db).list();
+    expect(rows[0].personId).toBe(2);
+  });
+
+  it('hides the person picker for a one-person household', () => {
+    render(
+      <TransactionEditDialog transaction={transaction} categories={categories}
+        properties={[]} vehicles={[]} persons={[{ id: 1, name: 'Alex' }]}
+        onClose={vi.fn()} onSaved={vi.fn()} />,
+    );
+    expect(screen.queryByLabelText('Person')).not.toBeInTheDocument();
   });
 });

@@ -14,6 +14,7 @@ interface TransactionEditDialogProps {
   categories: Category[];
   properties: Property[];
   vehicles: Vehicle[];
+  persons: { id?: number; name: string }[];
   onClose: () => void;
   onSaved: () => void;
 }
@@ -22,7 +23,7 @@ const selectClass =
   'flex h-9 w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
 
 export function TransactionEditDialog({
-  transaction, categories, properties, vehicles, onClose, onSaved,
+  transaction, categories, properties, vehicles, persons, onClose, onSaved,
 }: TransactionEditDialogProps) {
   const [date, setDate] = useState(transaction.date);
   const [merchant, setMerchant] = useState(transaction.merchant);
@@ -30,6 +31,7 @@ export function TransactionEditDialog({
   const [categoryId, setCategoryId] = useState<number | null>(transaction.categoryId);
   const [propertyId, setPropertyId] = useState<number | null>(transaction.propertyId);
   const [vehicleId, setVehicleId] = useState<number | null>(transaction.vehicleId);
+  const [personId, setPersonId] = useState<number | null>(transaction.personId);
   const [reimbursable, setReimbursable] = useState(transaction.reimbursable);
   const [notes, setNotes] = useState(transaction.notes ?? '');
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -64,6 +66,7 @@ export function TransactionEditDialog({
         categoryId,
         propertyId: isHome ? propertyId : null,
         vehicleId: isVehicle ? vehicleId : null,
+        personId,
         reimbursable,
         notes: notes.trim() === '' ? null : notes.trim(),
       });
@@ -150,6 +153,22 @@ export function TransactionEditDialog({
                 <option value="">— none —</option>
                 {vehicles.map((v) => (
                   <option key={v.id} value={v.id}>{v.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {persons.length === 2 && (
+            <div>
+              <Label htmlFor="edit-person">Person</Label>
+              <select id="edit-person" aria-label="Person" className={selectClass}
+                value={personId ?? ''}
+                onChange={(e) =>
+                  setPersonId(e.target.value === '' ? null : Number(e.target.value))
+                }
+              >
+                <option value="">Joint</option>
+                {persons.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>
             </div>

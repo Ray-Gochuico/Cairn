@@ -489,6 +489,7 @@ export default function Spending() {
           categories={categories}
           properties={properties}
           vehicles={vehicles}
+          persons={persons}
           onClose={() => setEditTarget(null)}
           onSaved={() => {
             setEditTarget(null);
