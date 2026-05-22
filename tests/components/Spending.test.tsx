@@ -14,6 +14,7 @@ import { setDatabase } from '@/db/db';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { usePersonsStore } from '@/stores/persons-store';
+import { useAccountsStore } from '@/stores/accounts-store';
 import Spending from '@/pages/Spending';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -42,6 +43,7 @@ describe('Spending page', () => {
       mig('0001_initial'),
       mig('0003_add_commission_columns'),
       mig('0005_add_employment_and_bonus_columns'),
+      mig('0007_add_account_margin'),
       mig('0008_add_transaction_property_links'),
       mig('0012_add_transaction_person'),
       mig('0009_seed_categories'),
@@ -52,6 +54,7 @@ describe('Spending page', () => {
     useCategoriesStore.setState({ categories: [], isLoading: false, error: null });
     useTransactionsStore.setState({ transactions: [], isLoading: false, error: null });
     usePersonsStore.setState({ persons: [], isLoading: false, error: null });
+    useAccountsStore.setState({ accounts: [], isLoading: false, error: null });
   });
 
   afterEach(async () => {
@@ -220,6 +223,61 @@ describe('Spending page', () => {
       expect(screen.getAllByText('ALEXMART').length).toBeGreaterThan(0);
       expect(screen.queryByText('SAMSHOP')).not.toBeInTheDocument();
     });
+  });
+
+  it('(g) Export CSV downloads the transactions table with FK names resolved', async () => {
+    await useCategoriesStore.getState().load();
+
+    // FK targets: one account (id 1) and one person (id 1) in the DB.
+    const personsRepo = new PersonsRepo(db);
+    await personsRepo.create({
+      householdId: 1, name: 'Alex', dateOfBirth: '1990-01-01', targetRetirementAge: 65,
+      annualSalaryPretax: 0, expectedBonus: 0, expectedBonusFrequency: 'ANNUAL',
+      bonusIsConsistent: true, expectedCommission: 0,
+      expectedCommissionFrequency: 'MONTHLY', employmentType: 'SALARY_NO_OT',
+      hourlyRate: null, regularHoursPerWeek: 40, otThresholdHoursPerWeek: null,
+      pretax401kPct: 0, healthInsuranceMonthlyPremium: 0, dependentCareFsaMonthly: 0,
+      hsaMonthlyContribution: 0, hsaEligible: false,
+    });
+    await db.execute(
+      `INSERT INTO accounts
+        (id, household_id, owner_person_id, beneficiary_dependent_id, name,
+         institution, type, crypto_wallet_address, auto_fetch_enabled,
+         excluded_from_net_worth, allow_margin, state_of_plan)
+       VALUES (1, 1, NULL, NULL, 'Chase Checking', NULL, 'ACCOUNT_CASH', NULL, 0, 0, 0, NULL)`,
+    );
+
+    const txn: Omit<Transaction, 'id'> = {
+      householdId: 1, date: '2026-03-05', merchant: 'AMAZON', merchantRaw: 'AMAZON.COM',
+      amount: 54.23, categoryId: 37 /* Shopping */, sourceAccountId: 1, propertyId: null,
+      vehicleId: null, personId: 1, sourcePdfFilename: 'mar.pdf', reimbursable: true,
+      reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: 'gift',
+    };
+    await useTransactionsStore.getState().createMany([txn]);
+
+    let capturedCsv = '';
+    const createSpy = vi.spyOn(URL, 'createObjectURL').mockImplementation((b) => {
+      void (b as Blob).text().then((t) => { capturedCsv = t; });
+      return 'blob:mock';
+    });
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+
+    renderPage();
+
+    const user = userEvent.setup();
+    const exportButton = await screen.findByRole('button', { name: /export csv/i });
+    await user.click(exportButton);
+    await Promise.resolve();
+
+    expect(capturedCsv.split('\n')[0]).toBe(
+      'date,merchant,amount,category,account,person,reimbursable,notes',
+    );
+    expect(capturedCsv.split('\n')[1]).toBe(
+      '2026-03-05,AMAZON,54.23,Shopping,Chase Checking,Alex,true,gift',
+    );
+
+    createSpy.mockRestore();
+    revokeSpy.mockRestore();
   });
 
   it('(d) shows cashflow section with inflow, outflow, and net given seeded persons + transactions', async () => {

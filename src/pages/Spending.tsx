@@ -11,6 +11,9 @@ import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
+import { ExportCsvButton } from '@/components/ExportCsvButton';
+import { useAccountsStore } from '@/stores/accounts-store';
+import type { CsvColumn } from '@/lib/csv';
 import { summarizeSpending } from '@/lib/spending-analysis';
 import { detectRecurring } from '@/lib/recurring';
 import { cashflowWindow } from '@/lib/cashflow';
@@ -45,6 +48,8 @@ export default function Spending() {
   const loadProperties = usePropertiesStore((s) => s.load);
   const vehicles = useVehiclesStore((s) => s.vehicles);
   const loadVehicles = useVehiclesStore((s) => s.load);
+  const accounts = useAccountsStore((s) => s.accounts);
+  const loadAccounts = useAccountsStore((s) => s.load);
 
   const { filter } = useViewFilter();
 
@@ -56,8 +61,9 @@ export default function Spending() {
       loadPersons(),
       loadProperties(),
       loadVehicles(),
+      loadAccounts(),
     ]).then(() => syncRecurring(useCategoriesStore.getState().categories));
-  }, [loadTransactions, loadCategories, loadHousehold, loadPersons, loadProperties, loadVehicles, syncRecurring]);
+  }, [loadTransactions, loadCategories, loadHousehold, loadPersons, loadProperties, loadVehicles, loadAccounts, syncRecurring]);
 
   // Filtered slice — honours the ?view=p1|p2|joint|household query param
   const visibleTransactions = useMemo(
@@ -67,6 +73,10 @@ export default function Spending() {
   const personById = useMemo(
     () => new Map(persons.filter((p) => p.id != null).map((p) => [p.id as number, p.name])),
     [persons],
+  );
+  const accountById = useMemo(
+    () => new Map(accounts.filter((a) => a.id != null).map((a) => [a.id as number, a.name])),
+    [accounts],
   );
 
   // --- Analysis ---
@@ -80,6 +90,33 @@ export default function Spending() {
   const categoryById = useMemo(
     () => new Map(categories.filter((c) => c.id != null).map((c) => [c.id as number, c])),
     [categories],
+  );
+
+  // CSV export columns. FK ids resolve to names via the lookup Maps; a null
+  // id, or one with no matching row, becomes ''. The exported rows are the
+  // full `transactions` array — the ?view filter is intentionally ignored.
+  const csvColumns = useMemo<CsvColumn<Transaction>[]>(
+    () => [
+      { header: 'date', value: (t) => t.date },
+      { header: 'merchant', value: (t) => t.merchant },
+      { header: 'amount', value: (t) => t.amount },
+      {
+        header: 'category',
+        value: (t) => (t.categoryId != null ? (categoryById.get(t.categoryId)?.name ?? '') : ''),
+      },
+      {
+        header: 'account',
+        value: (t) =>
+          t.sourceAccountId != null ? (accountById.get(t.sourceAccountId) ?? '') : '',
+      },
+      {
+        header: 'person',
+        value: (t) => (t.personId != null ? (personById.get(t.personId) ?? '') : ''),
+      },
+      { header: 'reimbursable', value: (t) => t.reimbursable },
+      { header: 'notes', value: (t) => t.notes },
+    ],
+    [categoryById, accountById, personById],
   );
 
   // Monthly category bars data — pivot monthlyByCategory into chart rows
@@ -198,7 +235,10 @@ export default function Spending() {
 
   return (
     <div className="p-8 space-y-8">
-      <h1 className="text-2xl font-semibold">Spending</h1>
+      <div className="flex items-start justify-between gap-4">
+        <h1 className="text-2xl font-semibold">Spending</h1>
+        <ExportCsvButton baseName="transactions" columns={csvColumns} rows={transactions} />
+      </div>
 
       {/* Import area */}
       <div
