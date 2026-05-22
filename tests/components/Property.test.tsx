@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useLoansStore } from '@/stores/loans-store';
@@ -261,5 +262,60 @@ describe('Property page', () => {
     expect(screen.getByText(/12-mo expense/i)).toBeInTheDocument();
     // $750 maintenance transaction linked to property 7 within 12 months
     expect(screen.getAllByText('$750').length).toBeGreaterThan(0);
+  });
+
+  it('exports the full properties table to CSV with the owner name resolved', async () => {
+    usePersonsStore.setState({
+      persons: [
+        { id: 1, name: 'Alex' },
+        { id: 2, name: 'Sam' },
+      ] as never,
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    });
+    usePropertiesStore.setState({
+      properties: [
+        {
+          id: 1,
+          householdId: 1,
+          ownerPersonId: 1,
+          name: 'Main Home',
+          type: PropertyType.PRIMARY_RESIDENCE,
+          address: '123 Main St',
+          purchaseDate: '2020-01-01',
+          purchasePrice: 400000,
+          currentEstimatedValue: 500000,
+          linkedLoanId: null,
+          excludedFromNetWorth: false,
+        },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    });
+
+    let capturedCsv = '';
+    const createSpy = vi.spyOn(URL, 'createObjectURL').mockImplementation((b) => {
+      void (b as Blob).text().then((t) => {
+        capturedCsv = t;
+      });
+      return 'blob:mock';
+    });
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+
+    renderPage();
+    await userEvent.click(screen.getByRole('button', { name: /export csv/i }));
+    await Promise.resolve();
+
+    expect(capturedCsv.split('\n')[0]).toBe(
+      'name,type,address,purchase date,purchase price,current value,owner',
+    );
+    expect(capturedCsv.split('\n')[1]).toBe(
+      'Main Home,Primary residence,123 Main St,2020-01-01,400000,500000,Alex',
+    );
+
+    createSpy.mockRestore();
+    revokeSpy.mockRestore();
   });
 });

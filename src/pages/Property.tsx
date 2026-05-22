@@ -19,6 +19,8 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ValueEditor, EquityRow } from '@/components/AssetCardParts';
+import { ExportCsvButton } from '@/components/ExportCsvButton';
+import type { CsvColumn } from '@/lib/csv';
 
 /**
  * Property page — Phase 4 split of the former "Property & Vehicles" combined
@@ -187,6 +189,33 @@ export default function Property() {
     return map;
   }, [loans]);
 
+  const personNameById = useMemo(
+    () =>
+      new Map(
+        persons.filter((p) => p.id != null).map((p) => [p.id as number, p.name]),
+      ),
+    [persons],
+  );
+
+  const csvColumns = useMemo<CsvColumn<Property>[]>(
+    () => [
+      { header: 'name', value: (p) => p.name },
+      { header: 'type', value: (p) => PROPERTY_TYPE_LABELS[p.type] },
+      { header: 'address', value: (p) => p.address },
+      { header: 'purchase date', value: (p) => p.purchaseDate },
+      { header: 'purchase price', value: (p) => p.purchasePrice },
+      { header: 'current value', value: (p) => p.currentEstimatedValue },
+      {
+        header: 'owner',
+        value: (p) =>
+          p.ownerPersonId != null
+            ? (personNameById.get(p.ownerPersonId) ?? '')
+            : '',
+      },
+    ],
+    [personNameById],
+  );
+
   useEffect(() => {
     if (editing == null) return;
     if (!visibleProperties.some((p) => p.id === editing.id)) {
@@ -221,11 +250,14 @@ export default function Property() {
 
   return (
     <div className="p-8 max-w-6xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold mb-1">Property</h1>
-        <p className="text-sm text-muted-foreground">
-          Equity = current value − linked-loan balance.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold mb-1">Property</h1>
+          <p className="text-sm text-muted-foreground">
+            Equity = current value − linked-loan balance.
+          </p>
+        </div>
+        <ExportCsvButton baseName="properties" columns={csvColumns} rows={properties} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
