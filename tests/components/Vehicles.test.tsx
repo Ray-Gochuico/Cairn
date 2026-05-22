@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useVehiclesStore } from '@/stores/vehicles-store';
 import { useLoansStore } from '@/stores/loans-store';
@@ -169,5 +170,61 @@ describe('Vehicles page', () => {
     expect(screen.getByText(/12-mo expense/i)).toBeInTheDocument();
     // $350 linked to vehicle 5 is within 12 months
     expect(screen.getAllByText('$350').length).toBeGreaterThan(0);
+  });
+
+  it('exports the full vehicles table to CSV with the owner name resolved', async () => {
+    usePersonsStore.setState({
+      persons: [
+        { id: 1, name: 'Alex' },
+        { id: 2, name: 'Sam' },
+      ] as never,
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    });
+    useVehiclesStore.setState({
+      vehicles: [
+        {
+          id: 1,
+          householdId: 1,
+          ownerPersonId: 2,
+          name: 'Family SUV',
+          make: 'Toyota',
+          model: 'RAV4',
+          year: 2022,
+          purchaseDate: '2022-03-01',
+          purchasePrice: 35000,
+          currentEstimatedValue: 28000,
+          linkedLoanId: null,
+          excludedFromNetWorth: false,
+        },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    });
+
+    let capturedCsv = '';
+    const createSpy = vi.spyOn(URL, 'createObjectURL').mockImplementation((b) => {
+      void (b as Blob).text().then((t) => {
+        capturedCsv = t;
+      });
+      return 'blob:mock';
+    });
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+
+    renderPage();
+    await userEvent.click(screen.getByRole('button', { name: /export csv/i }));
+    await Promise.resolve();
+
+    expect(capturedCsv.split('\n')[0]).toBe(
+      'name,year,make,model,purchase date,purchase price,current value,owner',
+    );
+    expect(capturedCsv.split('\n')[1]).toBe(
+      'Family SUV,2022,Toyota,RAV4,2022-03-01,35000,28000,Sam',
+    );
+
+    createSpy.mockRestore();
+    revokeSpy.mockRestore();
   });
 });
