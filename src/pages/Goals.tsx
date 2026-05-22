@@ -29,6 +29,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { formatCurrency, formatPercent } from '@/lib/format';
 import { UpdateAccountBalanceDialog } from '@/components/dialogs/UpdateAccountBalanceDialog';
+import { ExportCsvButton } from '@/components/ExportCsvButton';
+import type { CsvColumn } from '@/lib/csv';
 
 /**
  * Goals page — Phase 3 visualization surface.
@@ -350,6 +352,36 @@ export default function Goals() {
     return map;
   }, [accounts, snapshots, holdings]);
 
+  // Person-name lookup for the CSV `for` column. Built from the full persons
+  // list (from useViewFilter) so every goal's forPersonId resolves regardless
+  // of the current view filter. Persisted Person rows always have an id.
+  const personById = useMemo(
+    () =>
+      new Map(
+        persons.filter((p) => p.id != null).map((p) => [p.id as number, p.name]),
+      ),
+    [persons],
+  );
+
+  // CSV column map for the Export CSV button. `type` uses the existing
+  // GOAL_TYPE_LABELS map; `for` resolves forPersonId to a person name (a null
+  // id or an id with no matching person renders as an empty cell).
+  // linkedAccountIds (an array) is not a CSV column. targetDate is already
+  // stored as YYYY-MM-DD — passed through.
+  const csvColumns = useMemo<CsvColumn<Goal>[]>(
+    () => [
+      { header: 'name', value: (g) => g.name },
+      { header: 'type', value: (g) => GOAL_TYPE_LABELS[g.type] },
+      { header: 'target amount', value: (g) => g.targetAmount },
+      { header: 'target date', value: (g) => g.targetDate },
+      {
+        header: 'for',
+        value: (g) => (g.forPersonId == null ? '' : personById.get(g.forPersonId) ?? ''),
+      },
+    ],
+    [personById],
+  );
+
   const projections = useMemo<GoalProjection[]>(() => {
     const latestMap = latestSnapshotPerAccount(snapshots);
     return visibleGoals.map((g) => {
@@ -396,7 +428,7 @@ export default function Goals() {
 
   return (
     <div className="p-8 max-w-6xl space-y-6">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold mb-1">Goals</h1>
           <p className="text-sm text-muted-foreground">
@@ -404,9 +436,12 @@ export default function Goals() {
             growth scenario ({(annualRate * 100).toFixed(1)}%).
           </p>
         </div>
-        <Button asChild variant="outline" size="sm">
-          <Link to="/inputs/goals">Manage goals</Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <ExportCsvButton baseName="goals" columns={csvColumns} rows={goals} size="sm" />
+          <Button asChild variant="outline" size="sm">
+            <Link to="/inputs/goals">Manage goals</Link>
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

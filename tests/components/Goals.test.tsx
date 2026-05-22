@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import userEvent from '@testing-library/user-event';
 import { useGoalsStore } from '@/stores/goals-store';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
@@ -520,5 +521,57 @@ describe('Goals page', () => {
     expect(screen.queryByText("Bob's goal")).not.toBeInTheDocument();
     // The joint goal is filtered out too (only ?view=joint or household shows it)
     expect(screen.queryByText('Joint goal')).not.toBeInTheDocument();
+  });
+
+  it('Export CSV button downloads the goals table with the type label and person resolved', async () => {
+    // Seed two persons so useViewFilter exposes them for FK resolution.
+    usePersonsStore.setState({
+      persons: [
+        { ...basePerson, id: 1, name: 'Alice' },
+        { ...basePerson, id: 2, name: 'Bob' },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    });
+
+    primeStores({
+      goals: [
+        {
+          name: 'Future Home',
+          type: GoalType.DOWN_PAYMENT,
+          targetAmount: 50_000,
+          targetDate: '2030-01-01',
+          forPersonId: 2,
+        },
+      ],
+    });
+
+    let capturedCsv = '';
+    const createSpy = vi.spyOn(URL, 'createObjectURL').mockImplementation((b) => {
+      void (b as Blob).text().then((t) => {
+        capturedCsv = t;
+      });
+      return 'blob:mock';
+    });
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+
+    render(
+      <MemoryRouter>
+        <Goals />
+      </MemoryRouter>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /export csv/i }));
+    await Promise.resolve();
+
+    expect(capturedCsv.split('\n')[0]).toBe(
+      'name,type,target amount,target date,for',
+    );
+    expect(capturedCsv.split('\n')[1]).toBe(
+      'Future Home,Down payment,50000,2030-01-01,Bob',
+    );
+
+    createSpy.mockRestore();
+    revokeSpy.mockRestore();
   });
 });
