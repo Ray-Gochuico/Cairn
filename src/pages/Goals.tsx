@@ -407,7 +407,7 @@ export default function Goals() {
     });
   }, [visibleGoals, snapshots, contributions, today, annualRate]);
 
-  if (visibleGoals.length === 0) {
+  if (goals.length === 0) {
     return (
       <div className="p-8 max-w-6xl">
         <h1 className="text-2xl font-semibold mb-1">Goals</h1>

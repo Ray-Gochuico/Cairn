@@ -216,7 +216,7 @@ export default function Vehicles() {
     }
   }, [editing, visibleVehicles]);
 
-  if (visibleVehicles.length === 0) {
+  if (vehicles.length === 0) {
     return (
       <div className="p-8 max-w-6xl">
         <h1 className="text-2xl font-semibold mb-1">Vehicles</h1>
