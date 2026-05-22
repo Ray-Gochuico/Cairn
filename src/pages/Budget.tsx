@@ -54,10 +54,19 @@ export default function Budget() {
     .filter((r) => r.budget != null)
     .map((r) => ({ name: r.categoryName, budget: r.budget as number, actual: r.actual }));
 
-  const handleBudgetCommit = async (categoryId: number, raw: string) => {
+  const handleBudgetCommit = async (
+    categoryId: number,
+    raw: string,
+    inputEl: HTMLInputElement,
+    savedBudget: number | null,
+  ) => {
     const trimmed = raw.trim();
     const value = trimmed === '' ? null : Number(trimmed);
-    if (value != null && (!Number.isFinite(value) || value < 0)) return;
+    if (value != null && (!Number.isFinite(value) || value < 0)) {
+      // Rejected — revert the displayed value to the last-saved budget.
+      inputEl.value = savedBudget != null ? String(savedBudget) : '';
+      return;
+    }
     await updateCategory(categoryId, { monthlyBudget: value });
   };
 
@@ -142,7 +151,7 @@ export default function Budget() {
                             className="h-8 w-28"
                             aria-label={`Budget for ${r.categoryName}`}
                             defaultValue={r.budget ?? ''}
-                            onBlur={(e) => handleBudgetCommit(r.categoryId, e.target.value)}
+                            onBlur={(e) => handleBudgetCommit(r.categoryId, e.target.value, e.target, r.budget)}
                           />
                         </td>
                         <td className="py-2 pr-4 text-right tabular-nums">

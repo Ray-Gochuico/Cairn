@@ -78,4 +78,24 @@ describe('Budget page', () => {
       expect(screen.getByText(/budget vs actual/i)).toBeInTheDocument();
     });
   });
+
+  it('reverts a rejected negative budget input without persisting it', async () => {
+    render(<MemoryRouter><Budget /></MemoryRouter>);
+    const user = userEvent.setup();
+    const input = await screen.findByLabelText(/budget for groceries/i);
+
+    // Type a negative value then blur to trigger the commit handler.
+    await user.clear(input);
+    await user.type(input, '-50');
+    await user.tab();
+
+    // (a) The displayed value must be reverted — not left as '-50'.
+    // The prior saved budget is null, so the input should revert to empty string.
+    expect((input as HTMLInputElement).value).not.toBe('-50');
+
+    // (b) The category's monthlyBudget must NOT have been updated to a negative value.
+    const cats = await new CategoriesRepo(db).list();
+    const groceries = cats.find((c) => c.name === 'Groceries');
+    expect(groceries?.monthlyBudget).toBeNull();
+  });
 });
