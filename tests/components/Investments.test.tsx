@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
@@ -15,7 +16,7 @@ import {
   FilingStatus,
   SnapshotSource,
 } from '@/types/enums';
-import type { Account, Contribution, Dependent, GrowthScenario, Person } from '@/types/schema';
+import type { Account, Contribution, Dependent, GrowthScenario, Holding, Person } from '@/types/schema';
 import Investments from '@/pages/Investments';
 
 const basePerson: Person = {
@@ -76,6 +77,7 @@ interface PrimeOpts {
   snapshotValues?: Array<{ accountId: number; snapshotDate: string; totalValue: number }>;
   contributions?: Array<Partial<Contribution>>;
   dependents?: Array<Partial<Dependent>>;
+  holdings?: Array<Partial<Holding>>;
 }
 
 function primeStores(opts: PrimeOpts = {}) {
@@ -101,7 +103,14 @@ function primeStores(opts: PrimeOpts = {}) {
   });
 
   useHoldingsStore.setState({
-    holdings: [],
+    holdings: (opts.holdings ?? []).map((h, i) => ({
+      id: h.id ?? i + 1,
+      accountId: h.accountId ?? 1,
+      ticker: h.ticker ?? `TICK${i + 1}`,
+      shareCount: h.shareCount ?? 0,
+      targetAllocationPct: h.targetAllocationPct ?? null,
+      costBasis: h.costBasis ?? null,
+    })),
     isLoading: false,
     error: null,
     load: async () => {},
@@ -334,6 +343,42 @@ describe('Investments page — 529 section', () => {
     expect(within(section).getAllByText(/^at 18$/)).toHaveLength(1);
     // Subtitle should mention the Moderate scenario rate (default 6.0%).
     expect(within(section).getByText(/6\.0%/)).toBeInTheDocument();
+  });
+
+  it('Export CSV downloads the holdings table with the account name resolved', async () => {
+    primeStores({
+      accounts: [
+        { id: 1, name: 'Schwab Brokerage', type: AccountType.ACCOUNT_BROKERAGE },
+      ],
+      holdings: [
+        { id: 1, accountId: 1, ticker: 'VTI', shareCount: 10, costBasis: 2000, targetAllocationPct: 0.6 },
+      ],
+    });
+
+    let capturedCsv = '';
+    const createSpy = vi.spyOn(URL, 'createObjectURL').mockImplementation((b) => {
+      void (b as Blob).text().then((t) => { capturedCsv = t; });
+      return 'blob:mock';
+    });
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+
+    render(
+      <MemoryRouter>
+        <Investments />
+      </MemoryRouter>,
+    );
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /export csv/i }));
+    await Promise.resolve();
+
+    expect(capturedCsv.split('\n')[0]).toBe(
+      'account,ticker,share count,cost basis,target allocation',
+    );
+    expect(capturedCsv.split('\n')[1]).toBe('Schwab Brokerage,VTI,10,2000,0.6');
+
+    createSpy.mockRestore();
+    revokeSpy.mockRestore();
   });
 
   it('view filter ?view=p1 hides accounts owned by p2', () => {

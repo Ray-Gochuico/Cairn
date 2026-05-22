@@ -21,7 +21,9 @@ import InvestmentTimeSeriesChart from '@/components/charts/InvestmentTimeSeriesC
 import PerTickerDonut from '@/components/charts/PerTickerDonut';
 import { useConcentration } from '@/lib/use-concentration';
 import { valueHoldings, type HoldingValuation } from '@/lib/holdings-value';
-import type { Dependent, AccountSnapshot, Household } from '@/types/schema';
+import type { Dependent, AccountSnapshot, Household, Holding } from '@/types/schema';
+import { ExportCsvButton } from '@/components/ExportCsvButton';
+import type { CsvColumn } from '@/lib/csv';
 import type { ConcentrationWarning } from '@/lib/concentration';
 import { AlertTriangleIcon } from 'lucide-react';
 import { YahooClient } from '@/market/yahoo-client';
@@ -296,6 +298,30 @@ export default function Investments() {
     () => (filter === 'household' ? holdings : holdings.filter((h) => visibleAccountIds.has(h.accountId))),
     [holdings, filter, visibleAccountIds],
   );
+
+  // CSV export. accountId resolves to the account name via accountById; a
+  // null id, or one with no matching account, becomes ''. targetAllocationPct
+  // is the stored 0..1 fraction and is exported raw (no ×100) — hence the
+  // header 'target allocation' rather than 'target allocation %'. The rows
+  // are the full `holdings` array; the ?view filter is intentionally ignored.
+  const accountById = useMemo(
+    () => new Map(accounts.filter((a) => a.id != null).map((a) => [a.id as number, a.name])),
+    [accounts],
+  );
+  const csvColumns = useMemo<CsvColumn<Holding>[]>(
+    () => [
+      {
+        header: 'account',
+        value: (h) => accountById.get(h.accountId) ?? '',
+      },
+      { header: 'ticker', value: (h) => h.ticker },
+      { header: 'share count', value: (h) => h.shareCount },
+      { header: 'cost basis', value: (h) => h.costBasis },
+      { header: 'target allocation', value: (h) => h.targetAllocationPct },
+    ],
+    [accountById],
+  );
+
   const visibleSnapshots = useMemo(
     () => (filter === 'household' ? snapshots : snapshots.filter((s) => visibleAccountIds.has(s.accountId))),
     [snapshots, filter, visibleAccountIds],
@@ -469,40 +495,43 @@ export default function Investments() {
 
   return (
     <div className="p-8 max-w-6xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold mb-1">Investments</h1>
-        <p className="text-sm text-muted-foreground">
-          Allocation across asset classes, drift from your targets, and contribution trends.
-        </p>
-        <div className="flex flex-wrap items-center gap-3 mt-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRefreshFundData}
-            disabled={refreshing}
-          >
-            {refreshing ? 'Refreshing fund data…' : 'Refresh fund data'}
-          </Button>
-          {refreshResult && (
-            <div className="text-xs text-muted-foreground">
-              {refreshResult.refreshed.length > 0 && (
-                <span className="mr-3">
-                  Refreshed: {refreshResult.refreshed.join(', ')}
-                </span>
-              )}
-              {refreshResult.skipped.length > 0 && (
-                <span className="mr-3">
-                  Skipped: {refreshResult.skipped.join(', ')}
-                </span>
-              )}
-              {refreshResult.errors.length > 0 && (
-                <span className="text-destructive">
-                  Errors: {refreshResult.errors.join('; ')}
-                </span>
-              )}
-            </div>
-          )}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold mb-1">Investments</h1>
+          <p className="text-sm text-muted-foreground">
+            Allocation across asset classes, drift from your targets, and contribution trends.
+          </p>
+          <div className="flex flex-wrap items-center gap-3 mt-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefreshFundData}
+              disabled={refreshing}
+            >
+              {refreshing ? 'Refreshing fund data…' : 'Refresh fund data'}
+            </Button>
+            {refreshResult && (
+              <div className="text-xs text-muted-foreground">
+                {refreshResult.refreshed.length > 0 && (
+                  <span className="mr-3">
+                    Refreshed: {refreshResult.refreshed.join(', ')}
+                  </span>
+                )}
+                {refreshResult.skipped.length > 0 && (
+                  <span className="mr-3">
+                    Skipped: {refreshResult.skipped.join(', ')}
+                  </span>
+                )}
+                {refreshResult.errors.length > 0 && (
+                  <span className="text-destructive">
+                    Errors: {refreshResult.errors.join('; ')}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
         </div>
+        <ExportCsvButton baseName="holdings" columns={csvColumns} rows={holdings} />
       </div>
 
       <InvestmentTimeSeriesChart
