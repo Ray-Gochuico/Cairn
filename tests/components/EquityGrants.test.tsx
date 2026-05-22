@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import userEvent from '@testing-library/user-event';
 import { useEquityGrantsStore } from '@/stores/equity-grants-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import type { EquityGrant, Person } from '@/types/schema';
@@ -269,5 +270,50 @@ describe('EquityGrants page', () => {
 
     const link = screen.getByRole('link', { name: /manage grants/i });
     expect(link).toHaveAttribute('href', '/inputs/equity-grants');
+  });
+
+  it('Export CSV button downloads the equity grants table with the owner name resolved', async () => {
+    primeStores({
+      persons: [
+        { id: 1, name: 'Alice' },
+        { id: 2, name: 'Bob' },
+      ],
+      grants: [
+        {
+          name: 'ISO 2024',
+          companyName: 'Acme',
+          ownerPersonId: 2,
+          grantDate: '2024-01-15',
+          strikePrice: 5,
+          totalShares: 1000,
+          currentFmv: 50,
+        },
+      ],
+    });
+
+    let capturedCsv = '';
+    const createSpy = vi.spyOn(URL, 'createObjectURL').mockImplementation((b) => {
+      void (b as Blob).text().then((t) => {
+        capturedCsv = t;
+      });
+      return 'blob:mock';
+    });
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+
+    render(
+      <MemoryRouter>
+        <EquityGrants />
+      </MemoryRouter>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /export csv/i }));
+    await Promise.resolve();
+
+    expect(capturedCsv.split('\n')[0]).toBe(
+      'name,company,owner,grant date,strike price,total shares,current FMV',
+    );
+    expect(capturedCsv.split('\n')[1]).toBe('ISO 2024,Acme,Bob,2024-01-15,5,1000,50');
+
+    createSpy.mockRestore();
+    revokeSpy.mockRestore();
   });
 });

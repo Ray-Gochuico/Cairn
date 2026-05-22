@@ -12,6 +12,8 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { ExportCsvButton } from '@/components/ExportCsvButton';
+import type { CsvColumn } from '@/lib/csv';
 import { formatCurrency } from '@/lib/format';
 
 /**
@@ -188,6 +190,23 @@ export default function EquityGrants() {
     [persons],
   );
 
+  // CSV column map for the Export CSV button. `owner` resolves ownerPersonId
+  // to the owning person's name via personById; an id with no matching
+  // person renders as an empty cell. vestingSchedule (a JSON array) is not a
+  // CSV column. grantDate is already stored as YYYY-MM-DD — passed through.
+  const csvColumns = useMemo<CsvColumn<EquityGrant>[]>(
+    () => [
+      { header: 'name', value: (g) => g.name },
+      { header: 'company', value: (g) => g.companyName },
+      { header: 'owner', value: (g) => personById.get(g.ownerPersonId) ?? '' },
+      { header: 'grant date', value: (g) => g.grantDate },
+      { header: 'strike price', value: (g) => g.strikePrice },
+      { header: 'total shares', value: (g) => g.totalShares },
+      { header: 'current FMV', value: (g) => g.currentFmv },
+    ],
+    [personById],
+  );
+
   const projections = useMemo<GrantProjection[]>(() => {
     return visibleGrants.map((grant) => ({
       grant,
@@ -229,16 +248,24 @@ export default function EquityGrants() {
 
   return (
     <div className="p-8 max-w-6xl space-y-6">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold mb-1">Equity Grants</h1>
           <p className="text-sm text-muted-foreground">
             Vesting progress and value across all grants in your household.
           </p>
         </div>
-        <Button asChild variant="outline" size="sm">
-          <Link to="/inputs/equity-grants">Manage grants</Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <ExportCsvButton
+            baseName="equity-grants"
+            columns={csvColumns}
+            rows={equityGrants}
+            size="sm"
+          />
+          <Button asChild variant="outline" size="sm">
+            <Link to="/inputs/equity-grants">Manage grants</Link>
+          </Button>
+        </div>
       </div>
 
       <div

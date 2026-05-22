@@ -10,6 +10,8 @@ interface ExportCsvButtonProps<T> {
   rows: T[];
   /** Button label. Defaults to "Export CSV". */
   label?: string;
+  /** Button size — forwarded to the shadcn Button. Defaults to the Button's default. */
+  size?: 'default' | 'sm' | 'lg' | 'icon';
 }
 
 /**
@@ -22,6 +24,7 @@ export function ExportCsvButton<T>({
   columns,
   rows,
   label = 'Export CSV',
+  size,
 }: ExportCsvButtonProps<T>) {
   const handleClick = () => {
     const today = new Date().toISOString().slice(0, 10);
@@ -29,7 +32,7 @@ export function ExportCsvButton<T>({
   };
 
   return (
-    <Button variant="outline" onClick={handleClick} disabled={rows.length === 0}>
+    <Button variant="outline" size={size} onClick={handleClick} disabled={rows.length === 0}>
       {label}
     </Button>
   );
