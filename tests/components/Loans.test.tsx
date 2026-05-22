@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -126,6 +126,57 @@ describe('Loans page', () => {
     await waitFor(() => {
       expect(screen.queryByText('Date')).not.toBeInTheDocument();
     });
+  });
+
+  it('exports the full loans table to CSV with the obligor name resolved', async () => {
+    usePersonsStore.setState({
+      persons: [
+        { id: 1, name: 'Alex' },
+        { id: 2, name: 'Sam' },
+      ] as never,
+      isLoading: false,
+      error: null,
+    });
+    useLoansStore.setState({
+      loans: [
+        makeLoan({
+          id: 1,
+          obligorPersonId: 2,
+          name: 'Primary Mortgage',
+          type: LoanType.MORTGAGE,
+          originalAmount: 400000,
+          currentBalance: 380000,
+          interestRate: 0.06,
+          termMonths: 360,
+          monthlyPayment: 2398,
+        }),
+      ],
+      isLoading: false,
+      error: null,
+    });
+
+    let capturedCsv = '';
+    const createSpy = vi.spyOn(URL, 'createObjectURL').mockImplementation((b) => {
+      void (b as Blob).text().then((t) => {
+        capturedCsv = t;
+      });
+      return 'blob:mock';
+    });
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+
+    renderLoans();
+    await userEvent.click(screen.getByRole('button', { name: /export csv/i }));
+    await Promise.resolve();
+
+    expect(capturedCsv.split('\n')[0]).toBe(
+      'name,type,original amount,current balance,interest rate,term months,monthly payment,obligor',
+    );
+    expect(capturedCsv.split('\n')[1]).toBe(
+      'Primary Mortgage,Mortgage,400000,380000,0.06,360,2398,Sam',
+    );
+
+    createSpy.mockRestore();
+    revokeSpy.mockRestore();
   });
 
   it('handles a short loan (< 60 months) without truncation', async () => {

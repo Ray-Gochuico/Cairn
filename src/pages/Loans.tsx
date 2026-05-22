@@ -14,6 +14,8 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import LineChartCard from '@/components/charts/LineChartCard';
+import { ExportCsvButton } from '@/components/ExportCsvButton';
+import type { CsvColumn } from '@/lib/csv';
 
 /**
  * Loans page — Phase 2 visualization surface.
@@ -385,6 +387,34 @@ export default function Loans() {
 
   const debtSeries = useMemo(() => buildDebtSeries(projections), [projections]);
 
+  const personNameById = useMemo(
+    () =>
+      new Map(
+        persons.filter((p) => p.id != null).map((p) => [p.id as number, p.name]),
+      ),
+    [persons],
+  );
+
+  const csvColumns = useMemo<CsvColumn<Loan>[]>(
+    () => [
+      { header: 'name', value: (l) => l.name },
+      { header: 'type', value: (l) => LOAN_TYPE_LABEL[l.type] },
+      { header: 'original amount', value: (l) => l.originalAmount },
+      { header: 'current balance', value: (l) => l.currentBalance },
+      { header: 'interest rate', value: (l) => l.interestRate },
+      { header: 'term months', value: (l) => l.termMonths },
+      { header: 'monthly payment', value: (l) => l.monthlyPayment },
+      {
+        header: 'obligor',
+        value: (l) =>
+          l.obligorPersonId != null
+            ? (personNameById.get(l.obligorPersonId) ?? '')
+            : '',
+      },
+    ],
+    [personNameById],
+  );
+
   if (visibleLoans.length === 0) {
     return (
       <div className="p-8 max-w-6xl">
@@ -407,11 +437,14 @@ export default function Loans() {
 
   return (
     <div className="p-8 max-w-6xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold mb-1">Loans</h1>
-        <p className="text-sm text-muted-foreground">
-          Per-loan amortization projected from each loan's current balance.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold mb-1">Loans</h1>
+          <p className="text-sm text-muted-foreground">
+            Per-loan amortization projected from each loan's current balance.
+          </p>
+        </div>
+        <ExportCsvButton baseName="loans" columns={csvColumns} rows={loans} />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
