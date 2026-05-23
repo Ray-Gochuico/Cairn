@@ -54,11 +54,16 @@ export default function Spending() {
   const loadVehicles = useVehiclesStore((s) => s.load);
   const accounts = useAccountsStore((s) => s.accounts);
   const loadAccounts = useAccountsStore((s) => s.load);
-  const settings = useSettingsStore((s) => s.settings);
-  const loadSettings = useSettingsStore((s) => s.load);
 
   const { filter } = useViewFilter();
 
+  // Note: useSettingsStore is consumed via getState() inside handleModalSaved
+  // rather than as a subscription. Subscribing here would cause Spending to
+  // re-render every time ANY Settings section writes (sidebar overlay, color
+  // picks, etc.), which combined with the two BarChartCards on this page
+  // tripped React's max-update-depth guard via a recharts internal dispatch
+  // loop. Sidebar (always mounted) calls settings.load() on app start, so
+  // settings is populated by the time the user reaches Spending.
   useEffect(() => {
     void Promise.all([
       loadTransactions(),
@@ -68,9 +73,8 @@ export default function Spending() {
       loadProperties(),
       loadVehicles(),
       loadAccounts(),
-      loadSettings(),
     ]).then(() => syncRecurring(useCategoriesStore.getState().categories));
-  }, [loadTransactions, loadCategories, loadHousehold, loadPersons, loadProperties, loadVehicles, loadAccounts, loadSettings, syncRecurring]);
+  }, [loadTransactions, loadCategories, loadHousehold, loadPersons, loadProperties, loadVehicles, loadAccounts, syncRecurring]);
 
   // Filtered slice — honours the ?view=p1|p2|joint|household query param
   const visibleTransactions = useMemo(
@@ -237,6 +241,15 @@ export default function Spending() {
   const handleModalSaved = async (_insertedCount: number, fileBytes: Uint8Array) => {
     const saved = queue[0];
     await loadTransactions();
+    // Read settings on-demand via getState() so Spending doesn't subscribe to
+    // settings changes (see the comment above the mount useEffect). Defensive
+    // load() in case Sidebar's mount load hasn't completed by the time of the
+    // very first import on a fresh app start.
+    let settings = useSettingsStore.getState().settings;
+    if (settings === null) {
+      await useSettingsStore.getState().load();
+      settings = useSettingsStore.getState().settings;
+    }
     const folder = settings?.statementsFolderPath ?? null;
     // Best-effort: archive the PDF if a folder is configured. archiveStatementPdf
     // never throws — a failure returns a warning string. Archiving must never
