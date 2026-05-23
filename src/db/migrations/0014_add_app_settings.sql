@@ -13,4 +13,4 @@ CREATE TABLE app_settings (
   last_refresh_at TEXT,
   statements_folder_path TEXT
 );
-INSERT INTO app_settings (id) VALUES (1);
+INSERT OR IGNORE INTO app_settings (id) VALUES (1);
