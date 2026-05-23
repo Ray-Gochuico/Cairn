@@ -26,14 +26,17 @@
     "fs:default",
     {
       "identifier": "fs:allow-write-file",
+      "__comment__": "Static $HOME-scoped write access. Why this exists alongside dialog: tauri-plugin-dialog 2.7.1 auto-grants fs scope after dialog.open() (its commands.rs calls scope.allow_file/allow_directory unconditionally), but that grant is session-only and disappears on app restart. This static scope persists across restarts so files chosen in a prior session remain writable. Caveat: paths outside $HOME (external drives at /Volumes/*, network mounts, etc.) are NOT covered — those still rely on the dialog's session-only grant. Pattern note: '$HOME/**/*' requires at least one path segment under $HOME and does not match $HOME itself, unlike Tauri's canonical '$HOME/**'. Left as-is because we only ever touch files inside subdirectories of $HOME.",
       "allow": [{ "path": "$HOME/**/*" }]
     },
     {
       "identifier": "fs:allow-read-file",
+      "__comment__": "Static $HOME-scoped read access. Same rationale as fs:allow-write-file above: dialog-granted fs scope from tauri-plugin-dialog 2.7.1 is session-only; this static scope provides cross-restart persistence. Does not cover paths outside $HOME.",
       "allow": [{ "path": "$HOME/**/*" }]
     },
     {
       "identifier": "fs:allow-mkdir",
+      "__comment__": "Static $HOME-scoped mkdir access. Same rationale as fs:allow-write-file above: dialog-granted fs scope from tauri-plugin-dialog 2.7.1 is session-only; this static scope provides cross-restart persistence. Does not cover paths outside $HOME.",
       "allow": [{ "path": "$HOME/**/*" }]
     }
   ]
