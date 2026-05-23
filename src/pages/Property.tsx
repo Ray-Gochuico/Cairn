@@ -8,7 +8,13 @@ import { filterByOwnerPersonId } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { LoanType } from '@/types/enums';
 import { PROPERTY_TYPE_LABELS } from '@/components/forms/PropertyForm';
-import { propertyCostBasis, rollingExpense, linkedSpendingTransactions } from '@/lib/cost-basis';
+import {
+  propertyCostBasis,
+  rollingExpense,
+  linkedSpendingTransactions,
+  allLinkedSpending,
+  averageMonthlySpending,
+} from '@/lib/cost-basis';
 import type { Property, Transaction } from '@/types/schema';
 import {
   Card,
@@ -43,29 +49,25 @@ function formatCurrencyOrDash(value: number | null | undefined): string {
   return formatCurrency(value);
 }
 
-interface PropertyCardProps {
+interface PropertyAssetCardProps {
   property: Property;
   mortgageBalance: number | null;
   costBasis: number;
-  rolling12moExpense: number;
-  linkedTransactions: Transaction[];
   isEditing: boolean;
   onEdit: () => void;
   onCancelEdit: () => void;
   onSaveValue: (value: number | null) => Promise<void>;
 }
 
-function PropertyCard({
+function PropertyAssetCard({
   property,
   mortgageBalance,
   costBasis,
-  rolling12moExpense,
-  linkedTransactions,
   isEditing,
   onEdit,
   onCancelEdit,
   onSaveValue,
-}: PropertyCardProps) {
+}: PropertyAssetCardProps) {
   const value = property.currentEstimatedValue ?? 0;
   const equity = value - (mortgageBalance ?? 0);
 
@@ -127,11 +129,57 @@ function PropertyCard({
               </span>
             </dd>
           </div>
-          <div className="col-span-2">
+        </dl>
+
+        <EquityRow label="Equity" value={equity} />
+
+        {isEditing ? (
+          <ValueEditor
+            initialValue={property.currentEstimatedValue}
+            onSave={onSaveValue}
+            onCancel={onCancelEdit}
+          />
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+interface PropertyExpensesCardProps {
+  propertyName: string;
+  rolling12moExpense: number;
+  annualAverage: number;
+  linkedTransactions: Transaction[];
+}
+
+function PropertyExpensesCard({
+  propertyName,
+  rolling12moExpense,
+  annualAverage,
+  linkedTransactions,
+}: PropertyExpensesCardProps) {
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Expenses</CardTitle>
+        <CardDescription className="text-xs truncate">{propertyName}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <dl className="grid grid-cols-2 gap-3 text-sm">
+          <div>
             <dt className="text-xs uppercase tracking-wider text-muted-foreground">
-              12-mo expense
+              12-mo rolling
             </dt>
-            <dd className="font-mono">{formatCurrency(rolling12moExpense)}</dd>
+            <dd className="font-mono text-lg">{formatCurrency(rolling12moExpense)}</dd>
+          </div>
+          <div>
+            <dt className="text-xs uppercase tracking-wider text-muted-foreground">
+              Annual average
+            </dt>
+            <dd className="font-mono text-lg">{formatCurrency(annualAverage)}</dd>
+            <dd className="text-xs text-muted-foreground">
+              over full history
+            </dd>
           </div>
         </dl>
 
@@ -162,16 +210,46 @@ function PropertyCard({
             </ul>
           )}
         </details>
+      </CardContent>
+    </Card>
+  );
+}
 
-        <EquityRow label="Equity" value={equity} />
+interface PropertyUtilitiesCardProps {
+  propertyName: string;
+  utilitiesCategoryFound: boolean;
+  avgMonthlyUtilities: number;
+  utilitiesTxCount: number;
+}
 
-        {isEditing ? (
-          <ValueEditor
-            initialValue={property.currentEstimatedValue}
-            onSave={onSaveValue}
-            onCancel={onCancelEdit}
-          />
-        ) : null}
+function PropertyUtilitiesCard({
+  propertyName,
+  utilitiesCategoryFound,
+  avgMonthlyUtilities,
+  utilitiesTxCount,
+}: PropertyUtilitiesCardProps) {
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Utilities</CardTitle>
+        <CardDescription className="text-xs truncate">{propertyName}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div>
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">
+            Average monthly
+          </div>
+          <div className="font-mono text-2xl">
+            {utilitiesCategoryFound ? formatCurrency(avgMonthlyUtilities) : '—'}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {!utilitiesCategoryFound
+              ? 'No "Utilities" category configured.'
+              : utilitiesTxCount === 0
+                ? 'No utilities-categorized transactions linked to this property.'
+                : `Across ${utilitiesTxCount} linked transaction${utilitiesTxCount === 1 ? '' : 's'}`}
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
@@ -208,6 +286,23 @@ export default function Property() {
     () => filterByOwnerPersonId(properties, filter, persons),
     [properties, filter, persons],
   );
+
+  // Look up the seeded "Home > Utilities" category id for the Utilities card.
+  // Robust to renumbering: matches by name within the Home parent rather than
+  // hardcoding the seed id. Returns null if the user's category tree doesn't
+  // have it (e.g., they renamed/removed it), in which case the Utilities card
+  // shows an em-dash with a configuration hint.
+  const utilitiesCategoryId = useMemo(() => {
+    const homeParent = categories.find(
+      (c) => c.name === 'Home' && c.parentCategoryId === null,
+    );
+    if (!homeParent) return null;
+    return (
+      categories.find(
+        (c) => c.name === 'Utilities' && c.parentCategoryId === homeParent.id,
+      )?.id ?? null
+    );
+  }, [categories]);
 
   const mortgageById = useMemo(() => {
     const map = new Map<number, number>();
@@ -290,7 +385,7 @@ export default function Property() {
         <ExportCsvButton baseName="properties" columns={csvColumns} rows={properties} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="space-y-6">
         {visibleProperties.map((p) => {
           const mortgageBalance = p.linkedLoanId != null
             ? mortgageById.get(p.linkedLoanId) ?? null
@@ -299,19 +394,36 @@ export default function Property() {
           const costBasis = propertyCostBasis(p.purchasePrice, p.id!, transactions, categories);
           const linkedTransactions = linkedSpendingTransactions(transactions, { propertyId: p.id! }, 12, categories);
           const rolling12moExpense = rollingExpense(transactions, { propertyId: p.id! }, 12, categories);
+          const allLinked = allLinkedSpending(transactions, { propertyId: p.id! }, categories);
+          const annualAverage = averageMonthlySpending(allLinked) * 12;
+          const utilitiesTx = utilitiesCategoryId != null
+            ? allLinked.filter((t) => t.categoryId === utilitiesCategoryId)
+            : [];
+          const avgMonthlyUtilities = averageMonthlySpending(utilitiesTx);
           return (
-            <PropertyCard
-              key={p.id}
-              property={p}
-              mortgageBalance={mortgageBalance}
-              costBasis={costBasis}
-              rolling12moExpense={rolling12moExpense}
-              linkedTransactions={linkedTransactions}
-              isEditing={isEditing}
-              onEdit={() => setEditing({ id: p.id! })}
-              onCancelEdit={() => setEditing(null)}
-              onSaveValue={(v) => handleSaveProperty(p.id!, v)}
-            />
+            <div key={p.id} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <PropertyAssetCard
+                property={p}
+                mortgageBalance={mortgageBalance}
+                costBasis={costBasis}
+                isEditing={isEditing}
+                onEdit={() => setEditing({ id: p.id! })}
+                onCancelEdit={() => setEditing(null)}
+                onSaveValue={(v) => handleSaveProperty(p.id!, v)}
+              />
+              <PropertyExpensesCard
+                propertyName={p.name}
+                rolling12moExpense={rolling12moExpense}
+                annualAverage={annualAverage}
+                linkedTransactions={linkedTransactions}
+              />
+              <PropertyUtilitiesCard
+                propertyName={p.name}
+                utilitiesCategoryFound={utilitiesCategoryId != null}
+                avgMonthlyUtilities={avgMonthlyUtilities}
+                utilitiesTxCount={utilitiesTx.length}
+              />
+            </div>
           );
         })}
       </div>

@@ -76,7 +76,9 @@ describe('Property page', () => {
 
     renderPage();
 
-    expect(screen.getByText('Main Home')).toBeInTheDocument();
+    // The property name now appears in three cards: the Asset card title and
+    // the Expenses/Utilities card descriptions.
+    expect(screen.getAllByText('Main Home').length).toBeGreaterThan(0);
     expect(screen.getAllByText('$500,000').length).toBeGreaterThan(0);
   });
 
@@ -258,8 +260,10 @@ describe('Property page', () => {
 
     renderPage();
 
-    // 12-mo expense label must appear
-    expect(screen.getByText(/12-mo expense/i)).toBeInTheDocument();
+    // The Expenses card surfaces both the rolling-12mo and annual-average
+    // stats. The label was renamed from "12-mo expense" to "12-mo rolling"
+    // when the Property card was split into Asset / Expenses / Utilities.
+    expect(screen.getByText(/12-mo rolling/i)).toBeInTheDocument();
     // $750 maintenance transaction linked to property 7 within 12 months
     expect(screen.getAllByText('$750').length).toBeGreaterThan(0);
   });

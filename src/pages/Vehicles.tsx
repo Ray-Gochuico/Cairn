@@ -7,7 +7,12 @@ import { useCategoriesStore } from '@/stores/categories-store';
 import { filterByOwnerPersonId } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { LoanType } from '@/types/enums';
-import { rollingExpense, linkedSpendingTransactions } from '@/lib/cost-basis';
+import {
+  rollingExpense,
+  linkedSpendingTransactions,
+  allLinkedSpending,
+  averageMonthlySpending,
+} from '@/lib/cost-basis';
 import type { Vehicle, Transaction } from '@/types/schema';
 import {
   Card,
@@ -52,27 +57,23 @@ function describeVehicle(v: Vehicle): string {
   return parts.join(' ');
 }
 
-interface VehicleCardProps {
+interface VehicleAssetCardProps {
   vehicle: Vehicle;
   loanBalance: number | null;
-  rolling12moExpense: number;
-  linkedTransactions: Transaction[];
   isEditing: boolean;
   onEdit: () => void;
   onCancelEdit: () => void;
   onSaveValue: (value: number | null) => Promise<void>;
 }
 
-function VehicleCard({
+function VehicleAssetCard({
   vehicle,
   loanBalance,
-  rolling12moExpense,
-  linkedTransactions,
   isEditing,
   onEdit,
   onCancelEdit,
   onSaveValue,
-}: VehicleCardProps) {
+}: VehicleAssetCardProps) {
   const value = vehicle.currentEstimatedValue ?? 0;
   const equity = value - (loanBalance ?? 0);
   const description = describeVehicle(vehicle);
@@ -119,11 +120,57 @@ function VehicleCard({
               {formatCurrencyOrDash(vehicle.purchasePrice)}
             </dd>
           </div>
-          <div className="col-span-2">
+        </dl>
+
+        <EquityRow label="Equity" value={equity} />
+
+        {isEditing ? (
+          <ValueEditor
+            initialValue={vehicle.currentEstimatedValue}
+            onSave={onSaveValue}
+            onCancel={onCancelEdit}
+          />
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+interface VehicleExpensesCardProps {
+  vehicleName: string;
+  rolling12moExpense: number;
+  annualAverage: number;
+  linkedTransactions: Transaction[];
+}
+
+function VehicleExpensesCard({
+  vehicleName,
+  rolling12moExpense,
+  annualAverage,
+  linkedTransactions,
+}: VehicleExpensesCardProps) {
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Expenses</CardTitle>
+        <CardDescription className="text-xs truncate">{vehicleName}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <dl className="grid grid-cols-2 gap-3 text-sm">
+          <div>
             <dt className="text-xs uppercase tracking-wider text-muted-foreground">
-              12-mo expense
+              12-mo rolling
             </dt>
-            <dd className="font-mono">{formatCurrency(rolling12moExpense)}</dd>
+            <dd className="font-mono text-lg">{formatCurrency(rolling12moExpense)}</dd>
+          </div>
+          <div>
+            <dt className="text-xs uppercase tracking-wider text-muted-foreground">
+              Annual average
+            </dt>
+            <dd className="font-mono text-lg">{formatCurrency(annualAverage)}</dd>
+            <dd className="text-xs text-muted-foreground">
+              over full history
+            </dd>
           </div>
         </dl>
 
@@ -154,16 +201,46 @@ function VehicleCard({
             </ul>
           )}
         </details>
+      </CardContent>
+    </Card>
+  );
+}
 
-        <EquityRow label="Equity" value={equity} />
+interface VehicleGasCardProps {
+  vehicleName: string;
+  gasCategoryFound: boolean;
+  avgMonthlyGas: number;
+  gasTxCount: number;
+}
 
-        {isEditing ? (
-          <ValueEditor
-            initialValue={vehicle.currentEstimatedValue}
-            onSave={onSaveValue}
-            onCancel={onCancelEdit}
-          />
-        ) : null}
+function VehicleGasCard({
+  vehicleName,
+  gasCategoryFound,
+  avgMonthlyGas,
+  gasTxCount,
+}: VehicleGasCardProps) {
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base">Gas</CardTitle>
+        <CardDescription className="text-xs truncate">{vehicleName}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div>
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">
+            Average monthly
+          </div>
+          <div className="font-mono text-2xl">
+            {gasCategoryFound ? formatCurrency(avgMonthlyGas) : '—'}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {!gasCategoryFound
+              ? 'No "Gas/Fuel" category configured.'
+              : gasTxCount === 0
+                ? 'No gas-categorized transactions linked to this vehicle.'
+                : `Across ${gasTxCount} linked transaction${gasTxCount === 1 ? '' : 's'}`}
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
@@ -200,6 +277,21 @@ export default function Vehicles() {
     () => filterByOwnerPersonId(vehicles, filter, persons),
     [vehicles, filter, persons],
   );
+
+  // Look up the seeded "Vehicles > Gas/Fuel" category id for the Gas card.
+  // Robust to renumbering: matches by name within the Vehicles parent rather
+  // than hardcoding the seed id. Returns null if the tree doesn't have it.
+  const gasCategoryId = useMemo(() => {
+    const vehiclesParent = categories.find(
+      (c) => c.name === 'Vehicles' && c.parentCategoryId === null,
+    );
+    if (!vehiclesParent) return null;
+    return (
+      categories.find(
+        (c) => c.name === 'Gas/Fuel' && c.parentCategoryId === vehiclesParent.id,
+      )?.id ?? null
+    );
+  }, [categories]);
 
   const autoLoanById = useMemo(() => {
     const map = new Map<number, number>();
@@ -283,7 +375,7 @@ export default function Vehicles() {
         <ExportCsvButton baseName="vehicles" columns={csvColumns} rows={vehicles} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="space-y-6">
         {visibleVehicles.map((v) => {
           const loanBalance = v.linkedLoanId != null
             ? autoLoanById.get(v.linkedLoanId) ?? null
@@ -291,18 +383,35 @@ export default function Vehicles() {
           const isEditing = editing?.id === v.id;
           const linkedTransactions = linkedSpendingTransactions(transactions, { vehicleId: v.id! }, 12, categories);
           const rolling12moExpense = rollingExpense(transactions, { vehicleId: v.id! }, 12, categories);
+          const allLinked = allLinkedSpending(transactions, { vehicleId: v.id! }, categories);
+          const annualAverage = averageMonthlySpending(allLinked) * 12;
+          const gasTx = gasCategoryId != null
+            ? allLinked.filter((t) => t.categoryId === gasCategoryId)
+            : [];
+          const avgMonthlyGas = averageMonthlySpending(gasTx);
           return (
-            <VehicleCard
-              key={v.id}
-              vehicle={v}
-              loanBalance={loanBalance}
-              rolling12moExpense={rolling12moExpense}
-              linkedTransactions={linkedTransactions}
-              isEditing={isEditing}
-              onEdit={() => setEditing({ id: v.id! })}
-              onCancelEdit={() => setEditing(null)}
-              onSaveValue={(val) => handleSaveVehicle(v.id!, val)}
-            />
+            <div key={v.id} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <VehicleAssetCard
+                vehicle={v}
+                loanBalance={loanBalance}
+                isEditing={isEditing}
+                onEdit={() => setEditing({ id: v.id! })}
+                onCancelEdit={() => setEditing(null)}
+                onSaveValue={(val) => handleSaveVehicle(v.id!, val)}
+              />
+              <VehicleExpensesCard
+                vehicleName={v.name}
+                rolling12moExpense={rolling12moExpense}
+                annualAverage={annualAverage}
+                linkedTransactions={linkedTransactions}
+              />
+              <VehicleGasCard
+                vehicleName={v.name}
+                gasCategoryFound={gasCategoryId != null}
+                avgMonthlyGas={avgMonthlyGas}
+                gasTxCount={gasTx.length}
+              />
+            </div>
           );
         })}
       </div>

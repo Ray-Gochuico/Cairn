@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { propertyCostBasis, rollingExpense, linkedSpendingTransactions } from '@/lib/cost-basis';
+import {
+  propertyCostBasis,
+  rollingExpense,
+  linkedSpendingTransactions,
+  allLinkedSpending,
+  averageMonthlySpending,
+} from '@/lib/cost-basis';
 import type { Transaction, Category } from '@/types/schema';
 
 const cat = (id: number, isCapital: boolean, type: Category['type'] = 'NEED'): Category => ({
@@ -109,5 +115,74 @@ describe('linkedSpendingTransactions', () => {
     ];
     const out = linkedSpendingTransactions(txns, { propertyId: 7 }, 12, cats, new Date('2026-03-15T00:00:00Z'));
     expect(out.map((t) => t.id)).toEqual([2]);
+  });
+});
+
+describe('allLinkedSpending', () => {
+  it('returns ALL linked real-spending tx with no time cutoff', () => {
+    const txns = [
+      txn({ id: 1, amount: 100, propertyId: 7, date: '2020-01-15' }), // very old, still kept
+      txn({ id: 2, amount: 200, propertyId: 7, date: '2026-03-10' }),
+      txn({ id: 3, amount: 999, propertyId: 9, date: '2026-03-10' }), // other property
+    ];
+    const out = allLinkedSpending(txns, { propertyId: 7 }, cats);
+    expect(out.map((t) => t.id).sort()).toEqual([1, 2]);
+  });
+
+  it('filters by vehicleId when link is a vehicle', () => {
+    const txns = [
+      txn({ id: 1, amount: 100, propertyId: null, vehicleId: 3, date: '2024-06-01' }),
+      txn({ id: 2, amount: 100, propertyId: null, vehicleId: 4, date: '2024-06-01' }),
+    ];
+    expect(allLinkedSpending(txns, { vehicleId: 3 }, cats).map((t) => t.id)).toEqual([1]);
+  });
+
+  it('still excludes pending reimbursables and income/transfer categories', () => {
+    const incomeCat = cat(99, false, 'INCOME');
+    const mixed = [...cats, incomeCat];
+    const txns = [
+      txn({ id: 1, amount: 500, propertyId: 7, categoryId: 99 }),                                  // INCOME
+      txn({ id: 2, amount: 300, propertyId: 7, reimbursable: true, reimbursedAt: null }),          // pending
+      txn({ id: 3, amount: 200, propertyId: 7 }),                                                  // real
+    ];
+    expect(allLinkedSpending(txns, { propertyId: 7 }, mixed).map((t) => t.id)).toEqual([3]);
+  });
+});
+
+describe('averageMonthlySpending', () => {
+  const asOf = new Date('2026-03-15T00:00:00Z'); // March 2026
+
+  it('returns 0 for an empty set', () => {
+    expect(averageMonthlySpending([], asOf)).toBe(0);
+  });
+
+  it('divides total by months from earliest tx through asOf inclusive', () => {
+    // Earliest: Jan 2026 → March 2026 = 3 months. Total $600 → $200/mo.
+    const txns = [
+      txn({ id: 1, amount: 100, date: '2026-01-10' }),
+      txn({ id: 2, amount: 200, date: '2026-02-05' }),
+      txn({ id: 3, amount: 300, date: '2026-03-01' }),
+    ];
+    expect(averageMonthlySpending(txns, asOf)).toBe(200);
+  });
+
+  it('returns the full total for a single-month dataset', () => {
+    // Jan 2026 only → 1-month span → $250 / 1 = $250.
+    const txns = [
+      txn({ id: 1, amount: 100, date: '2026-01-05' }),
+      txn({ id: 2, amount: 150, date: '2026-01-20' }),
+    ];
+    expect(averageMonthlySpending(txns, new Date('2026-01-31T00:00:00Z'))).toBe(250);
+  });
+
+  it('nets reimbursed amount out via effectiveSpendingAmount', () => {
+    // $500 charge, $400 reimbursed → $100 effective. 1-month span.
+    const txns = [
+      txn({
+        id: 1, amount: 500, date: '2026-03-01',
+        reimbursable: true, reimbursedAt: '2026-03-10', reimbursedAmount: 400,
+      }),
+    ];
+    expect(averageMonthlySpending(txns, new Date('2026-03-31T00:00:00Z'))).toBe(100);
   });
 });

@@ -77,7 +77,9 @@ describe('Vehicles page', () => {
 
     renderPage();
 
-    expect(screen.getByText('Family SUV')).toBeInTheDocument();
+    // The vehicle name now appears in three cards: the Asset card title and
+    // the Expenses/Gas card descriptions.
+    expect(screen.getAllByText('Family SUV').length).toBeGreaterThan(0);
     expect(screen.getAllByText('$28,000').length).toBeGreaterThan(0);
     expect(screen.getByText('2022 Toyota RAV4')).toBeInTheDocument();
   });
@@ -166,8 +168,10 @@ describe('Vehicles page', () => {
 
     renderPage();
 
-    // The 12-mo expense row should appear
-    expect(screen.getByText(/12-mo expense/i)).toBeInTheDocument();
+    // The Expenses card surfaces both the rolling-12mo and annual-average
+    // stats. The label was renamed from "12-mo expense" to "12-mo rolling"
+    // when the Vehicle card was split into Asset / Expenses / Gas.
+    expect(screen.getByText(/12-mo rolling/i)).toBeInTheDocument();
     // $350 linked to vehicle 5 is within 12 months
     expect(screen.getAllByText('$350').length).toBeGreaterThan(0);
   });
