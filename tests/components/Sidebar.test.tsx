@@ -56,4 +56,11 @@ describe('Sidebar', () => {
     expect(link).toHaveAttribute('href', '/settings');
     expect(screen.queryByRole('link', { name: /^profile$/i })).toBeNull();
   });
+
+  it('no longer renders a Backup & Restore link', () => {
+    render(<MemoryRouter><Sidebar /></MemoryRouter>);
+    expect(
+      screen.queryByRole('link', { name: /backup.*restore/i }),
+    ).toBeNull();
+  });
 });

@@ -31,7 +31,6 @@ import TickersTab from './pages/inputs/TickersTab';
 import ComingSoonTab from './pages/inputs/tabs-coming-soon';
 import CategoriesTab from './pages/inputs/CategoriesTab';
 import SetupWizard from './pages/setup/SetupWizard';
-import BackupRestore from './pages/BackupRestore';
 
 const router = createBrowserRouter([
   {
@@ -55,7 +54,6 @@ const router = createBrowserRouter([
       { path: 'calculators', element: <CalculatorsLayout /> },
       { path: 'what-if', element: <WhatIf /> },
       { path: 'settings', element: <Settings /> },
-      { path: 'backup-restore', element: <BackupRestore /> },
       { path: 'monthly', element: <MonthlyMiniWindow /> },
       {
         path: 'inputs',

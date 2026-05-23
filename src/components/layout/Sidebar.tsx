@@ -48,7 +48,6 @@ export const DEFAULT_SECTIONS: NavSection[] = [
     items: [
       { to: '/inputs', label: 'Inputs', icon: '📝' },
       { to: '/settings', label: 'Settings', icon: '⚙️' },
-      { to: '/backup-restore', label: 'Backup & Restore', icon: '💾' },
     ],
   },
 ];
