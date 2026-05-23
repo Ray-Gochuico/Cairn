@@ -249,3 +249,24 @@ it('0013 adds a monthly_budget column to categories', async () => {
   expect(cols.map((c) => c.name)).toContain('monthly_budget');
   await db.close();
 });
+
+it('0014 creates the app_settings singleton with one seeded row', async () => {
+  const db = new SqliteAdapter(':memory:');
+  await runMigrations(db, await loadAllMigrations());
+  const cols = await db.select<{ name: string }>('PRAGMA table_info(app_settings)');
+  const names = cols.map((c) => c.name);
+  expect(names).toEqual(
+    expect.arrayContaining([
+      'id', 'sidebar_layout', 'notifications_enabled', 'notification_day',
+      'refresh_cadence', 'last_refresh_at', 'statements_folder_path',
+    ]),
+  );
+  const rows = await db.select<{ id: number; notifications_enabled: number; refresh_cadence: string }>(
+    'SELECT id, notifications_enabled, refresh_cadence FROM app_settings',
+  );
+  expect(rows).toHaveLength(1);
+  expect(rows[0].id).toBe(1);
+  expect(rows[0].notifications_enabled).toBe(1);
+  expect(rows[0].refresh_cadence).toBe('EVERY_LAUNCH');
+  await db.close();
+});
