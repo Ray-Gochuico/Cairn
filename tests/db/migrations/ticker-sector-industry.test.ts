@@ -1,11 +1,20 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { loadAllMigrations, runMigrations } from '@/db/migrations';
 
 describe('ticker-sector-industry migration', () => {
-  it('adds sector and industry as nullable TEXT', async () => {
-    const db = new SqliteAdapter();
+  let db: SqliteAdapter;
+
+  beforeEach(async () => {
+    db = new SqliteAdapter();
     await runMigrations(db, await loadAllMigrations());
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  it('adds sector and industry as nullable TEXT', async () => {
     const info = await db.select<any>("PRAGMA table_info('tickers')");
     const sector = info.find((c: any) => c.name === 'sector');
     const industry = info.find((c: any) => c.name === 'industry');
@@ -18,9 +27,8 @@ describe('ticker-sector-industry migration', () => {
   });
 
   it('seeded tickers (from 0006_seed_tickers) have null sector', async () => {
-    const db = new SqliteAdapter();
-    await runMigrations(db, await loadAllMigrations());
     const r = await db.select<any>(`SELECT ticker, sector FROM tickers LIMIT 1`);
-    if (r.length) expect(r[0].sector).toBeNull();
+    expect(r.length).toBeGreaterThan(0);   // verifies 0006 ran
+    expect(r[0].sector).toBeNull();        // verifies 0016 left it null
   });
 });
