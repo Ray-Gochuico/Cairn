@@ -38,6 +38,23 @@ export interface BarChartCardProps {
   layout?: 'horizontal' | 'vertical';
 }
 
+// Long PDF-extracted merchant strings, category names, etc. overflow the
+// y-axis label area in vertical layouts. Truncate to this many chars and
+// suffix an ellipsis so each tick fits inside YAXIS_VERTICAL_WIDTH.
+const VERTICAL_TICK_MAX_CHARS = 22;
+const YAXIS_VERTICAL_WIDTH = 160;
+// Each bar needs ~32px of vertical space to render with its label legible;
+// short datasets reuse the default `height`, longer ones grow to fit.
+const ROW_HEIGHT_PX = 32;
+const VERTICAL_HEIGHT_PADDING_PX = 80;
+
+function truncateTick(value: unknown): string {
+  const s = String(value ?? '');
+  return s.length > VERTICAL_TICK_MAX_CHARS
+    ? `${s.slice(0, VERTICAL_TICK_MAX_CHARS - 1)}…`
+    : s;
+}
+
 export default function BarChartCard({
   title,
   subtitle,
@@ -49,6 +66,9 @@ export default function BarChartCard({
   layout = 'horizontal',
 }: BarChartCardProps) {
   const isVertical = layout === 'vertical';
+  const effectiveHeight = isVertical
+    ? Math.max(height, data.length * ROW_HEIGHT_PX + VERTICAL_HEIGHT_PADDING_PX)
+    : height;
   return (
     <Card>
       <CardHeader>
@@ -56,7 +76,7 @@ export default function BarChartCard({
         {subtitle ? <CardDescription>{subtitle}</CardDescription> : null}
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={height}>
+        <ResponsiveContainer width="100%" height={effectiveHeight}>
           <BarChart
             data={data}
             layout={layout}
@@ -76,7 +96,9 @@ export default function BarChartCard({
                   dataKey={xKey}
                   stroke="#64748b"
                   fontSize={12}
-                  width={96}
+                  width={YAXIS_VERTICAL_WIDTH}
+                  interval={0}
+                  tickFormatter={truncateTick}
                 />
               </>
             ) : (
