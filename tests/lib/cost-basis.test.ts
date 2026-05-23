@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { propertyCostBasis, rollingExpense } from '@/lib/cost-basis';
+import { propertyCostBasis, rollingExpense, linkedSpendingTransactions } from '@/lib/cost-basis';
 import type { Transaction, Category } from '@/types/schema';
 
 const cat = (id: number, isCapital: boolean, type: Category['type'] = 'NEED'): Category => ({
@@ -72,5 +72,42 @@ describe('rollingExpense', () => {
     // Only the $200 NEED should count
     expect(rollingExpense(txns, { propertyId: 7 }, 12, mixedCats, new Date('2026-03-15T00:00:00Z')))
       .toBe(200);
+  });
+});
+
+describe('linkedSpendingTransactions', () => {
+  it('returns the linked, in-window, real-spending tx sorted newest-first', () => {
+    const txns = [
+      txn({ id: 1, amount: 200, propertyId: 7, date: '2026-02-01' }),
+      txn({ id: 2, amount: 150, propertyId: 7, date: '2026-03-10' }),
+      txn({ id: 3, amount: 100, propertyId: 7, date: '2025-01-01' }), // too old
+      txn({ id: 4, amount: 80,  propertyId: 9, date: '2026-03-01' }), // other property
+    ];
+    const out = linkedSpendingTransactions(txns, { propertyId: 7 }, 12, cats, new Date('2026-03-15T00:00:00Z'));
+    expect(out.map((t) => t.id)).toEqual([2, 1]);
+  });
+
+  it('returns an empty array when nothing is linked', () => {
+    const txns = [txn({ id: 1, amount: 200, propertyId: null, date: '2026-03-01' })];
+    expect(linkedSpendingTransactions(txns, { propertyId: 7 }, 12, cats, new Date('2026-03-15T00:00:00Z')))
+      .toEqual([]);
+  });
+
+  it('filters by vehicleId when the link is a vehicle', () => {
+    const txns = [
+      txn({ id: 1, amount: 50, propertyId: null, vehicleId: 3, date: '2026-03-01' }),
+      txn({ id: 2, amount: 90, propertyId: null, vehicleId: 4, date: '2026-03-01' }),
+    ];
+    const out = linkedSpendingTransactions(txns, { vehicleId: 3 }, 12, cats, new Date('2026-03-15T00:00:00Z'));
+    expect(out.map((t) => t.id)).toEqual([1]);
+  });
+
+  it('excludes pending reimbursables (mirrors rollingExpense)', () => {
+    const txns = [
+      txn({ id: 1, amount: 300, propertyId: 7, date: '2026-03-01', reimbursable: true, reimbursedAt: null }),
+      txn({ id: 2, amount: 200, propertyId: 7, date: '2026-03-01' }),
+    ];
+    const out = linkedSpendingTransactions(txns, { propertyId: 7 }, 12, cats, new Date('2026-03-15T00:00:00Z'));
+    expect(out.map((t) => t.id)).toEqual([2]);
   });
 });

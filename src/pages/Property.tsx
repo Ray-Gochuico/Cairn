@@ -8,8 +8,8 @@ import { filterByOwnerPersonId } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { LoanType } from '@/types/enums';
 import { PROPERTY_TYPE_LABELS } from '@/components/forms/PropertyForm';
-import { propertyCostBasis, rollingExpense } from '@/lib/cost-basis';
-import type { Property } from '@/types/schema';
+import { propertyCostBasis, rollingExpense, linkedSpendingTransactions } from '@/lib/cost-basis';
+import type { Property, Transaction } from '@/types/schema';
 import {
   Card,
   CardContent,
@@ -48,6 +48,7 @@ interface PropertyCardProps {
   mortgageBalance: number | null;
   costBasis: number;
   rolling12moExpense: number;
+  linkedTransactions: Transaction[];
   isEditing: boolean;
   onEdit: () => void;
   onCancelEdit: () => void;
@@ -59,6 +60,7 @@ function PropertyCard({
   mortgageBalance,
   costBasis,
   rolling12moExpense,
+  linkedTransactions,
   isEditing,
   onEdit,
   onCancelEdit,
@@ -132,6 +134,34 @@ function PropertyCard({
             <dd className="font-mono">{formatCurrency(rolling12moExpense)}</dd>
           </div>
         </dl>
+
+        <details className="text-sm">
+          <summary className="cursor-pointer text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground">
+            Linked transactions ({linkedTransactions.length})
+          </summary>
+          {linkedTransactions.length === 0 ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              No transactions linked to this property in the last 12 months.
+              Edit a transaction on the Spending page and select this property
+              to link it here.
+            </p>
+          ) : (
+            <ul className="mt-2 space-y-1 max-h-56 overflow-y-auto pr-1">
+              {linkedTransactions.map((t) => (
+                <li
+                  key={t.id}
+                  className="flex items-center justify-between gap-3 text-xs"
+                >
+                  <span className="text-muted-foreground tabular-nums">{t.date}</span>
+                  <span className="flex-1 truncate">{t.merchant}</span>
+                  <span className="font-mono tabular-nums">
+                    {formatCurrency(t.amount)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </details>
 
         <EquityRow label="Equity" value={equity} />
 
@@ -267,6 +297,7 @@ export default function Property() {
             : null;
           const isEditing = editing?.id === p.id;
           const costBasis = propertyCostBasis(p.purchasePrice, p.id!, transactions, categories);
+          const linkedTransactions = linkedSpendingTransactions(transactions, { propertyId: p.id! }, 12, categories);
           const rolling12moExpense = rollingExpense(transactions, { propertyId: p.id! }, 12, categories);
           return (
             <PropertyCard
@@ -275,6 +306,7 @@ export default function Property() {
               mortgageBalance={mortgageBalance}
               costBasis={costBasis}
               rolling12moExpense={rolling12moExpense}
+              linkedTransactions={linkedTransactions}
               isEditing={isEditing}
               onEdit={() => setEditing({ id: p.id! })}
               onCancelEdit={() => setEditing(null)}

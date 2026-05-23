@@ -7,8 +7,8 @@ import { useCategoriesStore } from '@/stores/categories-store';
 import { filterByOwnerPersonId } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { LoanType } from '@/types/enums';
-import { rollingExpense } from '@/lib/cost-basis';
-import type { Vehicle } from '@/types/schema';
+import { rollingExpense, linkedSpendingTransactions } from '@/lib/cost-basis';
+import type { Vehicle, Transaction } from '@/types/schema';
 import {
   Card,
   CardContent,
@@ -56,6 +56,7 @@ interface VehicleCardProps {
   vehicle: Vehicle;
   loanBalance: number | null;
   rolling12moExpense: number;
+  linkedTransactions: Transaction[];
   isEditing: boolean;
   onEdit: () => void;
   onCancelEdit: () => void;
@@ -66,6 +67,7 @@ function VehicleCard({
   vehicle,
   loanBalance,
   rolling12moExpense,
+  linkedTransactions,
   isEditing,
   onEdit,
   onCancelEdit,
@@ -124,6 +126,34 @@ function VehicleCard({
             <dd className="font-mono">{formatCurrency(rolling12moExpense)}</dd>
           </div>
         </dl>
+
+        <details className="text-sm">
+          <summary className="cursor-pointer text-xs uppercase tracking-wider text-muted-foreground hover:text-foreground">
+            Linked transactions ({linkedTransactions.length})
+          </summary>
+          {linkedTransactions.length === 0 ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              No transactions linked to this vehicle in the last 12 months.
+              Edit a transaction on the Spending page and select this vehicle
+              to link it here.
+            </p>
+          ) : (
+            <ul className="mt-2 space-y-1 max-h-56 overflow-y-auto pr-1">
+              {linkedTransactions.map((t) => (
+                <li
+                  key={t.id}
+                  className="flex items-center justify-between gap-3 text-xs"
+                >
+                  <span className="text-muted-foreground tabular-nums">{t.date}</span>
+                  <span className="flex-1 truncate">{t.merchant}</span>
+                  <span className="font-mono tabular-nums">
+                    {formatCurrency(t.amount)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </details>
 
         <EquityRow label="Equity" value={equity} />
 
@@ -259,6 +289,7 @@ export default function Vehicles() {
             ? autoLoanById.get(v.linkedLoanId) ?? null
             : null;
           const isEditing = editing?.id === v.id;
+          const linkedTransactions = linkedSpendingTransactions(transactions, { vehicleId: v.id! }, 12, categories);
           const rolling12moExpense = rollingExpense(transactions, { vehicleId: v.id! }, 12, categories);
           return (
             <VehicleCard
@@ -266,6 +297,7 @@ export default function Vehicles() {
               vehicle={v}
               loanBalance={loanBalance}
               rolling12moExpense={rolling12moExpense}
+              linkedTransactions={linkedTransactions}
               isEditing={isEditing}
               onEdit={() => setEditing({ id: v.id! })}
               onCancelEdit={() => setEditing(null)}

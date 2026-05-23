@@ -26,19 +26,19 @@ export function propertyCostBasis(
 }
 
 /**
- * Real-spending total for transactions linked to a property/vehicle within the
- * trailing `months` window. Uses `isRealSpending` (excludes pending
- * reimbursables and INCOME/TRANSFER-category rows) and sums
- * `effectiveSpendingAmount` (nets out reimbursements) to stay consistent with
- * the Dashboard's "Spending vs Budget" card.
+ * Real-spending transactions linked to a property/vehicle within the trailing
+ * `months` window, sorted newest-first. Uses `isRealSpending` (excludes pending
+ * reimbursables and INCOME/TRANSFER-category rows). The Property and Vehicles
+ * pages render this list directly so users can see which charges contribute to
+ * the rolling expense total below each card's "12-mo expense" row.
  */
-export function rollingExpense(
+export function linkedSpendingTransactions(
   transactions: Transaction[],
   link: { propertyId: number } | { vehicleId: number },
   months: number,
   categories: Category[],
   asOf: Date = new Date(),
-): number {
+): Transaction[] {
   const categoriesById = new Map<number, Category>();
   for (const c of categories) if (c.id != null) categoriesById.set(c.id, c);
 
@@ -54,5 +54,22 @@ export function rollingExpense(
       if ('vehicleId' in link && t.vehicleId !== link.vehicleId) return false;
       return t.date >= cutoff && isRealSpending(t, categoriesById);
     })
+    .sort((a, b) => b.date.localeCompare(a.date));
+}
+
+/**
+ * Real-spending total for transactions linked to a property/vehicle within the
+ * trailing `months` window. Sums `effectiveSpendingAmount` (nets out
+ * reimbursements) over `linkedSpendingTransactions` to stay consistent with
+ * the Dashboard's "Spending vs Budget" card.
+ */
+export function rollingExpense(
+  transactions: Transaction[],
+  link: { propertyId: number } | { vehicleId: number },
+  months: number,
+  categories: Category[],
+  asOf: Date = new Date(),
+): number {
+  return linkedSpendingTransactions(transactions, link, months, categories, asOf)
     .reduce((s, t) => s + effectiveSpendingAmount(t), 0);
 }
