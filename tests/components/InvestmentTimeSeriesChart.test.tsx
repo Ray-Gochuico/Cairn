@@ -141,4 +141,22 @@ describe('InvestmentTimeSeriesChart', () => {
     expect(getTimeWindow()).toBe('1Y');
     expect(windowSelect).toHaveValue('1Y');
   });
+
+  it('uses an account accentColor override for its picker swatch', async () => {
+    const user = userEvent.setup();
+    const overridden: Account[] = accounts.map((a) =>
+      a.id === 1 ? { ...a, accentColor: '#123456' } : a,
+    );
+    render(
+      <div style={{ width: 800, height: 400 }}>
+        <InvestmentTimeSeriesChart accounts={overridden} holdings={holdings} snapshots={snapshots} />
+      </div>,
+    );
+    await user.click(screen.getByRole('button', { name: /accounts/i }));
+    const picker = screen.getByRole('dialog', { name: /select accounts/i });
+    // The Brokerage row (account 1) renders its swatch with the override color.
+    const brokerageRow = within(picker).getByLabelText(/brokerage/i).closest('li')!;
+    const swatch = brokerageRow.querySelector('span[aria-hidden="true"]') as HTMLElement;
+    expect(swatch.style.background).toBe('rgb(18, 52, 86)'); // #123456
+  });
 });

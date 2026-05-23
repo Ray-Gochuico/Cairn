@@ -284,7 +284,7 @@ export default function InvestmentTimeSeriesChart({
                               <span
                                 aria-hidden="true"
                                 className="inline-block h-3 w-3 rounded-sm shrink-0"
-                                style={{ background: colorForAccount(id) }}
+                                style={{ background: colorForAccount(id, acc.accentColor) }}
                               />
                               <label htmlFor={inputId} className="text-sm cursor-pointer flex-1 truncate">
                                 {acc.name}
@@ -331,7 +331,7 @@ export default function InvestmentTimeSeriesChart({
                   key={acc.id}
                   dataKey={acc.name}
                   stackId="investments"
-                  fill={colorForAccount(acc.id!)}
+                  fill={colorForAccount(acc.id!, acc.accentColor)}
                   name={acc.name}
                 />
               ))}

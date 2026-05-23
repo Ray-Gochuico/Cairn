@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import DonutChartCard from './DonutChartCard';
 import { CHART_NEUTRAL } from './palette';
+import { colorForTicker } from '@/lib/chart-colors';
 import { withMiscLast } from '@/lib/concentration';
 import { useConcentration } from '@/lib/use-concentration';
 import { useTickersStore } from '@/stores/tickers-store';
@@ -40,6 +41,10 @@ export function PerTickerDonut() {
     () => new Map(tickers.map((t) => [t.ticker, t.name])),
     [tickers],
   );
+  const tickerColorMap = useMemo(
+    () => new Map(tickers.map((t) => [t.ticker, t.accentColor])),
+    [tickers],
+  );
 
   const tooltipNameFormatter = useCallback(
     (name: string) => {
@@ -53,7 +58,10 @@ export function PerTickerDonut() {
     name: s.ticker,
     // Donut can't render negative wedges; SHORT exposures get clamped here.
     value: Math.max(0, s.effectiveExposure),
-    ...(s.ticker === 'Misc' ? { color: CHART_NEUTRAL } : {}),
+    color:
+      s.ticker === 'Misc'
+        ? CHART_NEUTRAL
+        : colorForTicker(s.ticker, tickerColorMap.get(s.ticker)),
   }));
 
   // Identify wedges whose ticker is itself classified as a fund — these are
