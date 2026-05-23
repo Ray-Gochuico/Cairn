@@ -8,6 +8,7 @@ interface TickerRow {
   leverage_factor: number;
   direction: string;
   user_added: number;
+  accent_color: string | null;
 }
 
 function rowToTicker(row: TickerRow): Ticker {
@@ -18,6 +19,7 @@ function rowToTicker(row: TickerRow): Ticker {
     leverageFactor: row.leverage_factor,
     direction: row.direction,
     userAdded: row.user_added === 1,
+    accentColor: row.accent_color ?? null,
   });
 }
 
@@ -42,8 +44,8 @@ export class TickersRepo {
   async upsert(ticker: Ticker): Promise<void> {
     const parsed = TickerSchema.parse(ticker);
     await this.db.execute(
-      `INSERT OR REPLACE INTO tickers (ticker, name, asset_class, leverage_factor, direction, user_added)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO tickers (ticker, name, asset_class, leverage_factor, direction, user_added, accent_color)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         parsed.ticker,
         parsed.name,
@@ -51,6 +53,7 @@ export class TickersRepo {
         parsed.leverageFactor,
         parsed.direction,
         parsed.userAdded ? 1 : 0,
+        parsed.accentColor ?? null,
       ]
     );
   }

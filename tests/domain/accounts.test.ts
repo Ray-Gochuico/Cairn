@@ -16,6 +16,8 @@ const loadEmploymentBonusMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0005_add_employment_and_bonus_columns.sql'), 'utf-8');
 const loadAccountMarginMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0007_add_account_margin.sql'), 'utf-8');
+const loadAccentColorsMigration = () =>
+  readFileSync(resolve(__dirname, '../../src/db/migrations/0015_add_accent_colors.sql'), 'utf-8');
 
 describe('AccountsRepo', () => {
   let db: SqliteAdapter;
@@ -30,6 +32,7 @@ describe('AccountsRepo', () => {
       { version: '0003_add_commission_columns', sql: loadCommissionMigration() },
       { version: '0005_add_employment_and_bonus_columns', sql: loadEmploymentBonusMigration() },
       { version: '0007_add_account_margin', sql: loadAccountMarginMigration() },
+      { version: '0015_add_accent_colors', sql: loadAccentColorsMigration() },
     ]);
     repo = new AccountsRepo(db);
     personsRepo = new PersonsRepo(db);
@@ -56,6 +59,7 @@ describe('AccountsRepo', () => {
       autoFetchEnabled: true,
       excludedFromNetWorth: false,
       stateOfPlan: null,
+      accentColor: null,
     });
     expect(id).toBeGreaterThan(0);
 
@@ -84,6 +88,7 @@ describe('AccountsRepo', () => {
       autoFetchEnabled: false,
       excludedFromNetWorth: false,
       stateOfPlan: null,
+      accentColor: null,
     });
     const found = await repo.findById(id);
     expect(found).not.toBeNull();
@@ -107,6 +112,7 @@ describe('AccountsRepo', () => {
       autoFetchEnabled: true,
       excludedFromNetWorth: false,
       stateOfPlan: null,
+      accentColor: null,
     });
 
     await repo.update(id, { name: 'Taxable Brokerage', excludedFromNetWorth: true });
@@ -130,6 +136,7 @@ describe('AccountsRepo', () => {
       autoFetchEnabled: false,
       excludedFromNetWorth: false,
       stateOfPlan: null,
+      accentColor: null,
     });
     await repo.delete(id);
     expect(await repo.list()).toEqual([]);
@@ -149,6 +156,7 @@ describe('AccountsRepo', () => {
         autoFetchEnabled: false,
         excludedFromNetWorth: false,
         stateOfPlan: null,
+      accentColor: null,
       })
     ).rejects.toThrow();
   });
@@ -187,16 +195,19 @@ describe('AccountsRepo', () => {
       householdId: 1, ownerPersonId: aliceId, beneficiaryDependentId: null,
       name: "Alice's 401k", institution: 'Fidelity', type: AccountType.ACCOUNT_401K,
       cryptoWalletAddress: null, autoFetchEnabled: false, excludedFromNetWorth: false, stateOfPlan: null,
+      accentColor: null,
     });
     await repo.create({
       householdId: 1, ownerPersonId: bobId, beneficiaryDependentId: null,
       name: "Bob's Roth", institution: 'Fidelity', type: AccountType.ACCOUNT_ROTH_IRA,
       cryptoWalletAddress: null, autoFetchEnabled: false, excludedFromNetWorth: false, stateOfPlan: null,
+      accentColor: null,
     });
     await repo.create({
       householdId: 1, ownerPersonId: null, beneficiaryDependentId: null,
       name: 'Joint Cash', institution: null, type: AccountType.ACCOUNT_CASH,
       cryptoWalletAddress: null, autoFetchEnabled: false, excludedFromNetWorth: false, stateOfPlan: null,
+      accentColor: null,
     });
 
     const alices = await repo.listForPerson(aliceId);
@@ -231,18 +242,21 @@ describe('AccountsRepo', () => {
       householdId: 1, ownerPersonId: null, beneficiaryDependentId: kidId,
       name: "Kid's 529", institution: 'Edward Jones', type: AccountType.ACCOUNT_529,
       cryptoWalletAddress: null, autoFetchEnabled: false, excludedFromNetWorth: false, stateOfPlan: 'NY',
+      accentColor: null,
     });
     // 529 for Other Kid
     await repo.create({
       householdId: 1, ownerPersonId: null, beneficiaryDependentId: otherKidId,
       name: "Other Kid's 529", institution: 'Edward Jones', type: AccountType.ACCOUNT_529,
       cryptoWalletAddress: null, autoFetchEnabled: false, excludedFromNetWorth: false, stateOfPlan: 'NY',
+      accentColor: null,
     });
     // Brokerage that has Kid as beneficiary (should NOT show up — type filter)
     await repo.create({
       householdId: 1, ownerPersonId: null, beneficiaryDependentId: kidId,
       name: 'Trust Brokerage', institution: 'Fidelity', type: AccountType.ACCOUNT_BROKERAGE,
       cryptoWalletAddress: null, autoFetchEnabled: false, excludedFromNetWorth: false, stateOfPlan: null,
+      accentColor: null,
     });
 
     const kid529s = await repo.listFor529Beneficiary(kidId);
@@ -270,6 +284,7 @@ describe('AccountsRepo', () => {
         excludedFromNetWorth: false,
         allowMargin: true,
         stateOfPlan: null,
+      accentColor: null,
       });
       const account = await repo.findById(id);
       expect(account?.allowMargin).toBe(true);
@@ -287,6 +302,7 @@ describe('AccountsRepo', () => {
         autoFetchEnabled: false,
         excludedFromNetWorth: false,
         stateOfPlan: null,
+      accentColor: null,
       });
       const account = await repo.findById(id);
       expect(account?.allowMargin).toBe(false);
@@ -305,6 +321,7 @@ describe('AccountsRepo', () => {
         excludedFromNetWorth: false,
         allowMargin: false,
         stateOfPlan: null,
+      accentColor: null,
       });
       await repo.update(id, { allowMargin: true });
       const account = await repo.findById(id);

@@ -73,6 +73,7 @@ export default function AccountsTab() {
             excludedFromNetWorth: target.excludedFromNetWorth,
             allowMargin: target.allowMargin,
             stateOfPlan: target.stateOfPlan,
+            accentColor: target.accentColor,
           }}
           persons={personOptions}
           dependents={dependentOptions}

@@ -26,6 +26,8 @@ const loadEmploymentBonusMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0005_add_employment_and_bonus_columns.sql'), 'utf-8');
 const loadAccountMarginMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0007_add_account_margin.sql'), 'utf-8');
+const loadAccentColorsMigration = () =>
+  readFileSync(resolve(__dirname, '../../src/db/migrations/0015_add_accent_colors.sql'), 'utf-8');
 
 const moderateScenarios: GrowthScenario[] = [
   { label: 'Conservative', rate: 0.05 },
@@ -84,6 +86,7 @@ async function seedAccount(
     autoFetchEnabled: false,
     excludedFromNetWorth: false,
     stateOfPlan: overrides.stateOfPlan ?? null,
+    accentColor: null,
   });
 }
 
@@ -117,6 +120,7 @@ describe('Plan529Tab', () => {
       { version: '0003_add_commission_columns', sql: loadCommissionMigration() },
       { version: '0005_add_employment_and_bonus_columns', sql: loadEmploymentBonusMigration() },
       { version: '0007_add_account_margin', sql: loadAccountMarginMigration() },
+      { version: '0015_add_accent_colors', sql: loadAccentColorsMigration() },
     ]);
     setDatabase(db);
     useAccountsStore.setState({ accounts: [], isLoading: false, error: null });

@@ -11,6 +11,8 @@ const loadInitialMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
 const loadAccountMarginMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0007_add_account_margin.sql'), 'utf-8');
+const loadAccentColorsMigration = () =>
+  readFileSync(resolve(__dirname, '../../src/db/migrations/0015_add_accent_colors.sql'), 'utf-8');
 
 const makeAccount = async (accountsRepo: AccountsRepo, name = 'Brokerage'): Promise<number> => {
   return accountsRepo.create({
@@ -24,6 +26,7 @@ const makeAccount = async (accountsRepo: AccountsRepo, name = 'Brokerage'): Prom
     autoFetchEnabled: false,
     excludedFromNetWorth: false,
     stateOfPlan: null,
+      accentColor: null,
   });
 };
 
@@ -37,6 +40,7 @@ describe('AccountSnapshotsRepo', () => {
     await runMigrations(db, [
       { version: '0001_initial', sql: loadInitialMigration() },
       { version: '0007_add_account_margin', sql: loadAccountMarginMigration() },
+      { version: '0015_add_accent_colors', sql: loadAccentColorsMigration() },
     ]);
     repo = new AccountSnapshotsRepo(db);
     accountsRepo = new AccountsRepo(db);

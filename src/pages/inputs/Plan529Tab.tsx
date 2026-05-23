@@ -122,6 +122,7 @@ export default function Plan529Tab() {
             excludedFromNetWorth: target.excludedFromNetWorth,
             allowMargin: target.allowMargin,
             stateOfPlan: target.stateOfPlan,
+            accentColor: target.accentColor,
           }}
           persons={personOptions}
           dependents={dependentOptions}

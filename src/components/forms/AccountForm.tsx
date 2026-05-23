@@ -32,6 +32,7 @@ export const DEFAULT_ACCOUNT: AccountFormValues = {
   excludedFromNetWorth: false,
   allowMargin: false,
   stateOfPlan: null,
+  accentColor: null,
 };
 
 export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {

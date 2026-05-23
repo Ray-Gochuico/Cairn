@@ -20,6 +20,7 @@ const accounts: Account[] = [
     excludedFromNetWorth: false,
     allowMargin: false,
     stateOfPlan: null,
+      accentColor: null,
   },
   {
     id: 2,
@@ -34,6 +35,7 @@ const accounts: Account[] = [
     excludedFromNetWorth: false,
     allowMargin: false,
     stateOfPlan: null,
+      accentColor: null,
   },
   {
     id: 3,
@@ -48,6 +50,7 @@ const accounts: Account[] = [
     excludedFromNetWorth: false,
     allowMargin: false,
     stateOfPlan: null,
+      accentColor: null,
   },
 ];
 

@@ -49,6 +49,7 @@ describe('Spending page', () => {
       mig('0009_seed_categories'),
       mig('0010_seed_merchant_mappings'),
       mig('0013_add_category_budget'),
+      mig('0015_add_accent_colors'),
     ]);
     setDatabase(db);
     useCategoriesStore.setState({ categories: [], isLoading: false, error: null });

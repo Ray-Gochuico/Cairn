@@ -238,6 +238,7 @@ describe('AccountSchema', () => {
     autoFetchEnabled: false,
     excludedFromNetWorth: false,
     stateOfPlan: 'WA',
+    accentColor: null,
   };
 
   it('accepts a valid account', () => {
@@ -270,6 +271,16 @@ describe('AccountSchema', () => {
 
   it('rejects non-boolean allowMargin', () => {
     expect(() => AccountSchema.parse({ ...valid, allowMargin: 'yes' })).toThrow();
+  });
+
+  it('accepts a valid hex accentColor and a null accentColor', () => {
+    expect(AccountSchema.parse({ ...valid, accentColor: '#4c78a8' }).accentColor).toBe('#4c78a8');
+    expect(AccountSchema.parse({ ...valid, accentColor: null }).accentColor).toBeNull();
+  });
+
+  it('rejects a malformed accentColor', () => {
+    expect(() => AccountSchema.parse({ ...valid, accentColor: 'blue' })).toThrow();
+    expect(() => AccountSchema.parse({ ...valid, accentColor: '#fff' })).toThrow();
   });
 });
 
@@ -739,6 +750,7 @@ describe('TickerSchema', () => {
     leverageFactor: 1,
     direction: Direction.LONG,
     userAdded: false,
+    accentColor: null,
   };
 
   it('accepts a valid ticker', () => {
@@ -781,6 +793,15 @@ describe('TickerSchema', () => {
 
   it('accepts null name', () => {
     expect(() => TickerSchema.parse({ ...valid, name: null })).not.toThrow();
+  });
+
+  it('accepts a valid hex accentColor and a null accentColor', () => {
+    expect(TickerSchema.parse({ ...valid, accentColor: '#f58518' }).accentColor).toBe('#f58518');
+    expect(TickerSchema.parse({ ...valid, accentColor: null }).accentColor).toBeNull();
+  });
+
+  it('rejects a malformed accentColor', () => {
+    expect(() => TickerSchema.parse({ ...valid, accentColor: 'orange' })).toThrow();
   });
 });
 

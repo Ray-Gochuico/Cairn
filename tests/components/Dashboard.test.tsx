@@ -92,6 +92,7 @@ function primeStores(opts: PrimeOpts = {}) {
         autoFetchEnabled: a.autoFetchEnabled ?? false,
         excludedFromNetWorth: a.excludedFromNetWorth ?? false,
         stateOfPlan: a.stateOfPlan ?? null,
+        accentColor: a.accentColor ?? null,
       })),
       isLoading: false,
       error: null,

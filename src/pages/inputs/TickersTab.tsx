@@ -48,6 +48,7 @@ const DEFAULT_TICKER_FORM: TickerFormValues = {
   assetClass: AssetClass.OTHER,
   leverageFactor: 1.0,
   direction: Direction.LONG,
+  accentColor: null,
 };
 
 // ─── inner form component ─────────────────────────────────────────────────────
@@ -287,6 +288,7 @@ export default function TickersTab() {
       assetClass: target.assetClass,
       leverageFactor: target.leverageFactor,
       direction: target.direction,
+      accentColor: target.accentColor,
     };
 
     return (

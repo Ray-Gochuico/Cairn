@@ -77,6 +77,7 @@ describe('ConcentrationCard', () => {
         autoFetchEnabled: false,
         excludedFromNetWorth: false,
         stateOfPlan: null,
+        accentColor: null,
       }],
       isLoading: false,
       error: null,
@@ -102,8 +103,8 @@ describe('ConcentrationCard', () => {
     });
     useTickersStore.setState({
       tickers: [
-        { ticker: 'AAPL', name: null, assetClass: AssetClass.SINGLE_STOCK, leverageFactor: 1, direction: TickerDirection.LONG, userAdded: false },
-        { ticker: 'BND', name: null, assetClass: AssetClass.US_BONDS, leverageFactor: 1, direction: TickerDirection.LONG, userAdded: false },
+        { ticker: 'AAPL', name: null, assetClass: AssetClass.SINGLE_STOCK, leverageFactor: 1, direction: TickerDirection.LONG, userAdded: false, accentColor: null },
+        { ticker: 'BND', name: null, assetClass: AssetClass.US_BONDS, leverageFactor: 1, direction: TickerDirection.LONG, userAdded: false, accentColor: null },
       ],
       isLoading: false,
       error: null,
@@ -137,6 +138,7 @@ describe('ConcentrationCard', () => {
         type: AccountType.ACCOUNT_BROKERAGE,
         cryptoWalletAddress: null, autoFetchEnabled: false,
         excludedFromNetWorth: false, stateOfPlan: null,
+        accentColor: null,
       }],
       isLoading: false, error: null, load: async () => {},
     });
@@ -155,7 +157,7 @@ describe('ConcentrationCard', () => {
     });
     useTickersStore.setState({
       tickers: [
-        { ticker: 'AAPL', name: null, assetClass: AssetClass.SINGLE_STOCK, leverageFactor: 1, direction: TickerDirection.LONG, userAdded: false },
+        { ticker: 'AAPL', name: null, assetClass: AssetClass.SINGLE_STOCK, leverageFactor: 1, direction: TickerDirection.LONG, userAdded: false, accentColor: null },
       ],
       isLoading: false, error: null, load: async () => {},
       upsert: async () => {}, remove: async () => {}, lookup: () => undefined,

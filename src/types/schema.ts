@@ -94,6 +94,10 @@ export const AccountSchema = z.object({
   excludedFromNetWorth: z.boolean(),
   allowMargin: z.boolean().default(false),
   stateOfPlan: z.string().length(2).nullable(),
+  accentColor: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, 'Must be a 6-digit hex color')
+    .nullable(),
 });
 export type Account = z.infer<typeof AccountSchema>;
 
@@ -280,6 +284,10 @@ export const TickerSchema = z.object({
   leverageFactor: z.number().nonnegative().default(1.0),
   direction: z.nativeEnum(Direction).default('LONG'),
   userAdded: z.boolean().default(false),
+  accentColor: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, 'Must be a 6-digit hex color')
+    .nullable(),
 });
 export type Ticker = z.infer<typeof TickerSchema>;
 

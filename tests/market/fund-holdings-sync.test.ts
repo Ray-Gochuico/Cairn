@@ -19,6 +19,7 @@ function makeTicker(ticker: string, assetClass: string): Ticker {
     leverageFactor: 1.0,
     direction: 'LONG',
     userAdded: false,
+    accentColor: null,
   };
 }
 

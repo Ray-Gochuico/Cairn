@@ -16,6 +16,7 @@ function mkAccount(id: number, name: string, overrides: Partial<Account> = {}): 
     autoFetchEnabled: false,
     excludedFromNetWorth: false,
     stateOfPlan: null,
+      accentColor: null,
     ...overrides,
   };
 }

@@ -11,6 +11,8 @@ const loadInitialMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
 const loadAccountMarginMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0007_add_account_margin.sql'), 'utf-8');
+const loadAccentColorsMigration = () =>
+  readFileSync(resolve(__dirname, '../../src/db/migrations/0015_add_accent_colors.sql'), 'utf-8');
 
 const sampleAccount = {
   householdId: 1,
@@ -23,6 +25,7 @@ const sampleAccount = {
   autoFetchEnabled: true,
   excludedFromNetWorth: false,
   stateOfPlan: null,
+  accentColor: null,
 };
 
 describe('useAccountsStore', () => {
@@ -33,6 +36,7 @@ describe('useAccountsStore', () => {
     await runMigrations(db, [
       { version: '0001_initial', sql: loadInitialMigration() },
       { version: '0007_add_account_margin', sql: loadAccountMarginMigration() },
+      { version: '0015_add_accent_colors', sql: loadAccentColorsMigration() },
     ]);
     setDatabase(db);
     useAccountsStore.setState({ accounts: [], isLoading: false, error: null });

@@ -18,6 +18,8 @@ const loadInitialMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
 const loadAccountMarginMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0007_add_account_margin.sql'), 'utf-8');
+const loadAccentColorsMigration = () =>
+  readFileSync(resolve(__dirname, '../../src/db/migrations/0015_add_accent_colors.sql'), 'utf-8');
 
 describe('snapshot derivation', () => {
   let db: SqliteAdapter;
@@ -32,6 +34,7 @@ describe('snapshot derivation', () => {
     await runMigrations(db, [
       { version: '0001_initial', sql: loadInitialMigration() },
       { version: '0007_add_account_margin', sql: loadAccountMarginMigration() },
+      { version: '0015_add_accent_colors', sql: loadAccentColorsMigration() },
     ]);
     accounts = new AccountsRepo(db);
     holdings = new HoldingsRepo(db);
@@ -67,6 +70,7 @@ describe('snapshot derivation', () => {
       autoFetchEnabled: false,
       excludedFromNetWorth,
       stateOfPlan: null,
+      accentColor: null,
     });
   }
 

@@ -42,6 +42,7 @@ export async function enrichTickerIfMissing(
       leverageFactor,
       direction,
       userAdded: false,
+      accentColor: null,
     });
   } catch {
     // Best-effort: if Yahoo errors, leave the ticker absent. Concentration math falls back to OTHER.

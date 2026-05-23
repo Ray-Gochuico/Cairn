@@ -15,6 +15,7 @@ interface AccountRow {
   excluded_from_net_worth: number;
   allow_margin: number;
   state_of_plan: string | null;
+  accent_color: string | null;
 }
 
 function rowToAccount(row: AccountRow): Account {
@@ -31,6 +32,7 @@ function rowToAccount(row: AccountRow): Account {
     excludedFromNetWorth: row.excluded_from_net_worth === 1,
     allowMargin: row.allow_margin === 1,
     stateOfPlan: row.state_of_plan,
+    accentColor: row.accent_color ?? null,
   });
 }
 
@@ -59,8 +61,9 @@ export class AccountsRepo {
       `INSERT INTO accounts (
         household_id, owner_person_id, beneficiary_dependent_id,
         name, institution, type, crypto_wallet_address,
-        auto_fetch_enabled, excluded_from_net_worth, allow_margin, state_of_plan
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        auto_fetch_enabled, excluded_from_net_worth, allow_margin, state_of_plan,
+        accent_color
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         account.householdId,
         account.ownerPersonId ?? null,
@@ -73,6 +76,7 @@ export class AccountsRepo {
         account.excludedFromNetWorth ? 1 : 0,
         account.allowMargin ? 1 : 0,
         account.stateOfPlan ?? null,
+        account.accentColor ?? null,
       ]
     );
     if (!result.lastInsertId) {
@@ -102,6 +106,7 @@ export class AccountsRepo {
         excluded_from_net_worth = ?,
         allow_margin = ?,
         state_of_plan = ?,
+        accent_color = ?,
         updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
       [
@@ -115,6 +120,7 @@ export class AccountsRepo {
         merged.excludedFromNetWorth ? 1 : 0,
         merged.allowMargin ? 1 : 0,
         merged.stateOfPlan ?? null,
+        merged.accentColor ?? null,
         id,
       ]
     );

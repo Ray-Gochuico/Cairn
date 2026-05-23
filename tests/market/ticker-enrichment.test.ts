@@ -30,6 +30,7 @@ const existingTicker: Ticker = {
   leverageFactor: 1,
   direction: 'LONG',
   userAdded: false,
+  accentColor: null,
 };
 
 describe('enrichTickerIfMissing', () => {
