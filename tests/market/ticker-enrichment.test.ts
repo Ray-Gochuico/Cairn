@@ -31,6 +31,8 @@ const existingTicker: Ticker = {
   direction: 'LONG',
   userAdded: false,
   accentColor: null,
+  sector: null,
+  industry: null,
 };
 
 describe('enrichTickerIfMissing', () => {

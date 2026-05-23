@@ -751,6 +751,8 @@ describe('TickerSchema', () => {
     direction: Direction.LONG,
     userAdded: false,
     accentColor: null,
+    sector: null,
+    industry: null,
   };
 
   it('accepts a valid ticker', () => {
@@ -802,6 +804,24 @@ describe('TickerSchema', () => {
 
   it('rejects a malformed accentColor', () => {
     expect(() => TickerSchema.parse({ ...valid, accentColor: 'orange' })).toThrow();
+  });
+
+  it('accepts string and null sector', () => {
+    expect(TickerSchema.parse({ ...valid, sector: 'Technology' }).sector).toBe('Technology');
+    expect(TickerSchema.parse({ ...valid, sector: null }).sector).toBeNull();
+  });
+
+  it('accepts string and null industry', () => {
+    expect(TickerSchema.parse({ ...valid, industry: 'Software' }).industry).toBe('Software');
+    expect(TickerSchema.parse({ ...valid, industry: null }).industry).toBeNull();
+  });
+
+  it('rejects sector longer than 100 characters', () => {
+    expect(() => TickerSchema.parse({ ...valid, sector: 'A'.repeat(101) })).toThrow();
+  });
+
+  it('rejects industry longer than 100 characters', () => {
+    expect(() => TickerSchema.parse({ ...valid, industry: 'A'.repeat(101) })).toThrow();
   });
 });
 
