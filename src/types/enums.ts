@@ -122,3 +122,11 @@ export const CategoryType = {
   TRANSFER: 'TRANSFER',
 } as const;
 export type CategoryType = (typeof CategoryType)[keyof typeof CategoryType];
+
+export const RefreshCadence = {
+  EVERY_LAUNCH: 'EVERY_LAUNCH',
+  DAILY: 'DAILY',
+  WEEKLY: 'WEEKLY',
+  MANUAL: 'MANUAL',
+} as const;
+export type RefreshCadence = typeof RefreshCadence[keyof typeof RefreshCadence];

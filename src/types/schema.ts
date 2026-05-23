@@ -9,6 +9,7 @@ import {
   PropertyType,
   GoalType,
   CategoryType,
+  RefreshCadence,
 } from './enums';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -340,3 +341,20 @@ export const TransactionSchema = z.object({
   notes: z.string().nullable(),
 });
 export type Transaction = z.infer<typeof TransactionSchema>;
+
+export const SidebarLayoutEntrySchema = z.object({
+  to: z.string(),
+  hidden: z.boolean(),
+});
+export type SidebarLayoutEntry = z.infer<typeof SidebarLayoutEntrySchema>;
+
+export const AppSettingsSchema = z.object({
+  id: z.literal(1),
+  sidebarLayout: z.array(SidebarLayoutEntrySchema).nullable(),
+  notificationsEnabled: z.boolean(),
+  notificationDay: z.number().int().min(1).max(28),
+  refreshCadence: z.nativeEnum(RefreshCadence),
+  lastRefreshAt: z.string().nullable(),
+  statementsFolderPath: z.string().nullable(),
+});
+export type AppSettings = z.infer<typeof AppSettingsSchema>;

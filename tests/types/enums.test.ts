@@ -10,6 +10,7 @@ import {
   AssetClass,
   DependentType,
   JurisdictionType,
+  RefreshCadence,
 } from '@/types/enums';
 
 describe('enums', () => {
@@ -41,5 +42,12 @@ describe('enums', () => {
   it('DependentType has CHILD and OTHER', () => {
     expect(DependentType.CHILD).toBe('CHILD');
     expect(DependentType.OTHER).toBe('OTHER');
+  });
+
+  it('RefreshCadence has all four cadence values', () => {
+    expect(RefreshCadence.EVERY_LAUNCH).toBe('EVERY_LAUNCH');
+    expect(RefreshCadence.DAILY).toBe('DAILY');
+    expect(RefreshCadence.WEEKLY).toBe('WEEKLY');
+    expect(RefreshCadence.MANUAL).toBe('MANUAL');
   });
 });

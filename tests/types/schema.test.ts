@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { CategorySchema, MerchantOverrideSchema, MerchantSeedSchema } from '@/types/schema';
+import { CategorySchema, MerchantOverrideSchema, MerchantSeedSchema, AppSettingsSchema } from '@/types/schema';
+import { RefreshCadence } from '@/types/enums';
 
 describe('CategorySchema', () => {
   it('accepts a valid category and a null parent', () => {
@@ -840,5 +841,50 @@ describe('FundHoldingSchema', () => {
 
   it('rejects bad date format (not YYYY-MM-DD)', () => {
     expect(() => FundHoldingSchema.parse({ ...valid, asOfDate: '01/15/2025' })).toThrow();
+  });
+});
+
+describe('AppSettingsSchema', () => {
+  const base = {
+    id: 1 as const,
+    sidebarLayout: null,
+    notificationsEnabled: true,
+    notificationDay: 1,
+    refreshCadence: RefreshCadence.EVERY_LAUNCH,
+    lastRefreshAt: null,
+    statementsFolderPath: null,
+  };
+
+  it('accepts a valid settings object with null optionals', () => {
+    const s = AppSettingsSchema.parse(base);
+    expect(s.id).toBe(1);
+    expect(s.notificationsEnabled).toBe(true);
+    expect(s.refreshCadence).toBe('EVERY_LAUNCH');
+  });
+
+  it('accepts a populated sidebarLayout array', () => {
+    const s = AppSettingsSchema.parse({
+      ...base,
+      sidebarLayout: [
+        { to: '/', hidden: false },
+        { to: '/vehicles', hidden: true },
+      ],
+    });
+    expect(s.sidebarLayout).toHaveLength(2);
+    expect(s.sidebarLayout![1]).toEqual({ to: '/vehicles', hidden: true });
+  });
+
+  it('rejects a notificationDay outside 1..28', () => {
+    expect(() => AppSettingsSchema.parse({ ...base, notificationDay: 0 })).toThrow();
+    expect(() => AppSettingsSchema.parse({ ...base, notificationDay: 29 })).toThrow();
+  });
+
+  it('rejects an unknown refreshCadence', () => {
+    expect(() => AppSettingsSchema.parse({ ...base, refreshCadence: 'HOURLY' })).toThrow();
+  });
+
+  it('accepts a populated statementsFolderPath', () => {
+    const s = AppSettingsSchema.parse({ ...base, statementsFolderPath: '/Users/me/Statements' });
+    expect(s.statementsFolderPath).toBe('/Users/me/Statements');
   });
 });
