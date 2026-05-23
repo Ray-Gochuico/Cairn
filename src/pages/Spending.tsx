@@ -196,6 +196,7 @@ export default function Spending() {
   // --- Import handlers ---
   const processFiles = useCallback(async (files: File[]) => {
     setImportError(null);
+    setArchiveWarning(null);
     const results: PendingImport[] = [];
     for (const file of files) {
       try {
@@ -234,8 +235,8 @@ export default function Spending() {
 
   const handleModalClose = () => setQueue((prev) => prev.slice(1));
   const handleModalSaved = async (_insertedCount: number, fileBytes: Uint8Array) => {
-    await loadTransactions();
     const saved = queue[0];
+    await loadTransactions();
     const folder = settings?.statementsFolderPath ?? null;
     // Best-effort: archive the PDF if a folder is configured. archiveStatementPdf
     // never throws — a failure returns a warning string. Archiving must never
