@@ -12,7 +12,7 @@ import Budget from './pages/Budget';
 import Goals from './pages/Goals';
 import CalculatorsLayout from './pages/calculators/CalculatorsLayout';
 import WhatIf from './pages/WhatIf';
-import Profile from './pages/Profile';
+import Settings from './pages/Settings';
 import MonthlyMiniWindow from './pages/MonthlyMiniWindow';
 import InputsLayout from './pages/inputs/InputsLayout';
 import HouseholdTab from './pages/inputs/HouseholdTab';
@@ -54,7 +54,7 @@ const router = createBrowserRouter([
       { path: 'goals', element: <Goals /> },
       { path: 'calculators', element: <CalculatorsLayout /> },
       { path: 'what-if', element: <WhatIf /> },
-      { path: 'profile', element: <Profile /> },
+      { path: 'settings', element: <Settings /> },
       { path: 'backup-restore', element: <BackupRestore /> },
       { path: 'monthly', element: <MonthlyMiniWindow /> },
       {

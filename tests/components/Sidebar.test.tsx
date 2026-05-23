@@ -9,4 +9,11 @@ describe('Sidebar', () => {
     const link = screen.getByRole('link', { name: /budget/i });
     expect(link).toHaveAttribute('href', '/budget');
   });
+
+  it('has a Settings link pointing at /settings and no Profile link', () => {
+    render(<MemoryRouter><Sidebar /></MemoryRouter>);
+    const link = screen.getByRole('link', { name: /settings/i });
+    expect(link).toHaveAttribute('href', '/settings');
+    expect(screen.queryByRole('link', { name: /^profile$/i })).toBeNull();
+  });
 });

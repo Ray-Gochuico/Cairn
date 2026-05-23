@@ -44,7 +44,7 @@ const sections: NavSection[] = [
     label: 'System',
     items: [
       { to: '/inputs', label: 'Inputs', icon: '📝' },
-      { to: '/profile', label: 'Profile', icon: '⚙️' },
+      { to: '/settings', label: 'Settings', icon: '⚙️' },
       { to: '/backup-restore', label: 'Backup & Restore', icon: '💾' },
     ],
   },
