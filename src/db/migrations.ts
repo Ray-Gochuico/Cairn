@@ -61,6 +61,7 @@ export async function loadAllMigrations(): Promise<Migration[]> {
   const m0012 = (await import('./migrations/0012_add_transaction_person.sql?raw')).default;
   const m0013 = (await import('./migrations/0013_add_category_budget.sql?raw')).default;
   const m0014 = (await import('./migrations/0014_add_app_settings.sql?raw')).default;
+  const m0015 = (await import('./migrations/0015_add_accent_colors.sql?raw')).default;
   return [
     { version: '0001_initial', sql: m0001 },
     { version: '0002_seed_tax_rules', sql: m0002 },
@@ -76,5 +77,6 @@ export async function loadAllMigrations(): Promise<Migration[]> {
     { version: '0012_add_transaction_person', sql: m0012 },
     { version: '0013_add_category_budget', sql: m0013 },
     { version: '0014_add_app_settings', sql: m0014 },
+    { version: '0015_add_accent_colors', sql: m0015 },
   ];
 }

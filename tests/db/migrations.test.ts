@@ -270,3 +270,40 @@ it('0014 creates the app_settings singleton with one seeded row', async () => {
   expect(rows[0].refresh_cadence).toBe('EVERY_LAUNCH');
   await db.close();
 });
+
+it('0015 adds accent_color columns to accounts and tickers, accepting NULL and hex', async () => {
+  const db = new SqliteAdapter(':memory:');
+  await runMigrations(db, await loadAllMigrations());
+
+  const accountCols = await db.select<{ name: string }>('PRAGMA table_info(accounts)');
+  expect(accountCols.map((c) => c.name)).toContain('accent_color');
+  const tickerCols = await db.select<{ name: string }>('PRAGMA table_info(tickers)');
+  expect(tickerCols.map((c) => c.name)).toContain('accent_color');
+
+  // A fresh account row has accent_color NULL by default.
+  await db.execute(
+    `INSERT INTO accounts (
+      household_id, owner_person_id, beneficiary_dependent_id, name, institution,
+      type, crypto_wallet_address, auto_fetch_enabled, excluded_from_net_worth, state_of_plan
+    ) VALUES (1, NULL, NULL, 'Acct', NULL, 'ACCOUNT_BROKERAGE', NULL, 0, 0, NULL)`,
+  );
+  const a = await db.select<{ accent_color: string | null }>(
+    'SELECT accent_color FROM accounts',
+  );
+  expect(a[0].accent_color).toBeNull();
+
+  // Both columns accept a hex string.
+  await db.execute('UPDATE accounts SET accent_color = ? WHERE id = 1', ['#4c78a8']);
+  await db.execute(
+    `INSERT INTO tickers (ticker, name, asset_class, leverage_factor, direction, user_added, accent_color)
+     VALUES ('ZZZ', 'Test', 'OTHER', 1, 'LONG', 0, '#f58518')`,
+  );
+  const a2 = await db.select<{ accent_color: string }>('SELECT accent_color FROM accounts');
+  expect(a2[0].accent_color).toBe('#4c78a8');
+  const t = await db.select<{ accent_color: string }>(
+    "SELECT accent_color FROM tickers WHERE ticker = 'ZZZ'",
+  );
+  expect(t[0].accent_color).toBe('#f58518');
+
+  await db.close();
+});
