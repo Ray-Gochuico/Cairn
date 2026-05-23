@@ -20,6 +20,21 @@
         { "url": "https://query1.finance.yahoo.com/*" },
         { "url": "https://query2.finance.yahoo.com/*" }
       ]
+    },
+    "dialog:default",
+    "dialog:allow-open",
+    "fs:default",
+    {
+      "identifier": "fs:allow-write-file",
+      "allow": [{ "path": "$HOME/**/*" }]
+    },
+    {
+      "identifier": "fs:allow-read-file",
+      "allow": [{ "path": "$HOME/**/*" }]
+    },
+    {
+      "identifier": "fs:allow-mkdir",
+      "allow": [{ "path": "$HOME/**/*" }]
     }
   ]
 }
