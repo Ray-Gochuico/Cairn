@@ -1,5 +1,8 @@
+import { useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { useSettingsStore } from '@/stores/settings-store';
+import { applySidebarLayout } from '@/lib/sidebar-layout';
 
 interface NavItem {
   to: string;
@@ -12,7 +15,7 @@ interface NavSection {
   items: NavItem[];
 }
 
-const sections: NavSection[] = [
+export const DEFAULT_SECTIONS: NavSection[] = [
   {
     label: 'Overview',
     items: [
@@ -51,6 +54,18 @@ const sections: NavSection[] = [
 ];
 
 export default function Sidebar() {
+  const layout = useSettingsStore((s) => s.settings?.sidebarLayout ?? null);
+  const load = useSettingsStore((s) => s.load);
+
+  // Sidebar is always mounted (PageShell), so loading the settings store
+  // here makes the layout overlay take effect on every page. load()
+  // swallows its own errors — a missing DB during tests is harmless.
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const sections = applySidebarLayout(DEFAULT_SECTIONS, layout);
+
   return (
     <aside className="w-56 border-r bg-card p-2 flex flex-col gap-1 overflow-y-auto">
       {sections.map((s) => (

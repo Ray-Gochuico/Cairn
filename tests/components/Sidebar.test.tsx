@@ -1,9 +1,49 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Sidebar from '@/components/layout/Sidebar';
+import { SqliteAdapter } from '@/db/sqlite-adapter';
+import { runMigrations, loadAllMigrations } from '@/db/migrations';
+import { setDatabase } from '@/db/db';
+import { SettingsRepo } from '@/domain/app-settings';
+import { useSettingsStore } from '@/stores/settings-store';
 
 describe('Sidebar', () => {
+  let db: SqliteAdapter;
+
+  beforeEach(async () => {
+    db = new SqliteAdapter(':memory:');
+    await runMigrations(db, await loadAllMigrations());
+    setDatabase(db);
+    useSettingsStore.setState({ settings: null, isLoading: false, error: null });
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  it('hides a tab whose stored layout entry is hidden', async () => {
+    await new SettingsRepo(db).update({
+      sidebarLayout: [{ to: '/net-worth', hidden: true }],
+    });
+    render(<MemoryRouter><Sidebar /></MemoryRouter>);
+    // The overlay loads asynchronously; once applied, Net Worth is gone
+    // while a tab absent from the overlay (Dashboard) is still shown.
+    await waitFor(() => {
+      expect(screen.queryByRole('link', { name: /net worth/i })).toBeNull();
+    });
+    expect(screen.getByRole('link', { name: /dashboard/i })).toBeInTheDocument();
+  });
+
+  it('renders all default tabs when no layout is stored', async () => {
+    render(<MemoryRouter><Sidebar /></MemoryRouter>);
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: /dashboard/i })).toBeInTheDocument();
+    });
+    expect(screen.getByRole('link', { name: /net worth/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /spending/i })).toBeInTheDocument();
+  });
+
   it('has a Budget link pointing at /budget', () => {
     render(<MemoryRouter><Sidebar /></MemoryRouter>);
     const link = screen.getByRole('link', { name: /budget/i });
