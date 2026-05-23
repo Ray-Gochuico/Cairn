@@ -328,4 +328,23 @@ describe('AccountsRepo', () => {
       expect(account?.allowMargin).toBe(true);
     });
   });
+
+  it('round-trips accentColor', async () => {
+    const id = await repo.create({
+      householdId: 1,
+      ownerPersonId: null,
+      beneficiaryDependentId: null,
+      name: 'Colored Account',
+      institution: null,
+      type: AccountType.ACCOUNT_BROKERAGE,
+      cryptoWalletAddress: null,
+      autoFetchEnabled: false,
+      excludedFromNetWorth: false,
+      stateOfPlan: null,
+      accentColor: '#4c78a8',
+    });
+    expect((await repo.findById(id))?.accentColor).toBe('#4c78a8');
+    await repo.update(id, { accentColor: null });
+    expect((await repo.findById(id))?.accentColor).toBeNull();
+  });
 });

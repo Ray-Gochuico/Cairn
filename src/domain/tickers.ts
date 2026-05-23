@@ -62,6 +62,13 @@ export class TickersRepo {
     await this.db.execute('DELETE FROM tickers WHERE ticker = ?', [ticker]);
   }
 
+  async setAccentColor(ticker: string, color: string | null): Promise<void> {
+    await this.db.execute(
+      'UPDATE tickers SET accent_color = ? WHERE ticker = ?',
+      [color, ticker],
+    );
+  }
+
   async listUserAdded(): Promise<Ticker[]> {
     const rows = await this.db.select<TickerRow>(
       'SELECT * FROM tickers WHERE user_added = 1 ORDER BY ticker ASC'

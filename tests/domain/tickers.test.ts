@@ -136,6 +136,22 @@ describe('TickersRepo', () => {
     const found = await repo.lookup('VTI');
     expect(found?.name).toBeNull();
   });
+
+  it('round-trips accentColor through upsert', async () => {
+    await repo.upsert({ ...sampleTicker(), accentColor: '#f58518' });
+    expect((await repo.lookup('VTI'))?.accentColor).toBe('#f58518');
+  });
+
+  it('setAccentColor changes only the color column', async () => {
+    await repo.upsert(sampleTicker());
+    await repo.setAccentColor('VTI', '#54a24b');
+    const t = await repo.lookup('VTI');
+    expect(t?.accentColor).toBe('#54a24b');
+    expect(t?.name).toBe('Vanguard Total Stock Market ETF'); // unchanged
+    expect(t?.assetClass).toBe('US_TOTAL_MARKET'); // unchanged
+    await repo.setAccentColor('VTI', null);
+    expect((await repo.lookup('VTI'))?.accentColor).toBeNull();
+  });
 });
 
 describe('TickersRepo with seed migration', () => {
