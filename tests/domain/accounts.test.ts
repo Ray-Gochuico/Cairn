@@ -156,7 +156,7 @@ describe('AccountsRepo', () => {
         autoFetchEnabled: false,
         excludedFromNetWorth: false,
         stateOfPlan: null,
-      accentColor: null,
+        accentColor: null,
       })
     ).rejects.toThrow();
   });
@@ -284,7 +284,7 @@ describe('AccountsRepo', () => {
         excludedFromNetWorth: false,
         allowMargin: true,
         stateOfPlan: null,
-      accentColor: null,
+        accentColor: null,
       });
       const account = await repo.findById(id);
       expect(account?.allowMargin).toBe(true);
@@ -302,7 +302,7 @@ describe('AccountsRepo', () => {
         autoFetchEnabled: false,
         excludedFromNetWorth: false,
         stateOfPlan: null,
-      accentColor: null,
+        accentColor: null,
       });
       const account = await repo.findById(id);
       expect(account?.allowMargin).toBe(false);
@@ -321,7 +321,7 @@ describe('AccountsRepo', () => {
         excludedFromNetWorth: false,
         allowMargin: false,
         stateOfPlan: null,
-      accentColor: null,
+        accentColor: null,
       });
       await repo.update(id, { allowMargin: true });
       const account = await repo.findById(id);
