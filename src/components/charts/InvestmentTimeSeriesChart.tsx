@@ -24,7 +24,7 @@ import {
   type Granularity,
   type TimeWindow,
 } from '@/lib/snapshot-bucketing';
-import { colorForAccount } from '@/lib/account-colors';
+import { colorForAccount } from '@/lib/chart-colors';
 import { formatCompactCurrency, formatCurrency } from '@/lib/format';
 import {
   getGranularity,
