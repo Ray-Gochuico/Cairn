@@ -13,6 +13,8 @@ import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import { useAccountsStore } from '@/stores/accounts-store';
+import { useSettingsStore } from '@/stores/settings-store';
+import { archiveStatementPdf } from '@/lib/statements-archive';
 import type { CsvColumn } from '@/lib/csv';
 import { summarizeSpending } from '@/lib/spending-analysis';
 import { detectRecurring } from '@/lib/recurring';
@@ -32,6 +34,7 @@ export default function Spending() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [queue, setQueue] = useState<PendingImport[]>([]);
   const [importError, setImportError] = useState<string | null>(null);
+  const [archiveWarning, setArchiveWarning] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [reimbursedTarget, setReimbursedTarget] = useState<Transaction | null>(null);
   const [editTarget, setEditTarget] = useState<Transaction | null>(null);
@@ -51,6 +54,8 @@ export default function Spending() {
   const loadVehicles = useVehiclesStore((s) => s.load);
   const accounts = useAccountsStore((s) => s.accounts);
   const loadAccounts = useAccountsStore((s) => s.load);
+  const settings = useSettingsStore((s) => s.settings);
+  const loadSettings = useSettingsStore((s) => s.load);
 
   const { filter } = useViewFilter();
 
@@ -63,8 +68,9 @@ export default function Spending() {
       loadProperties(),
       loadVehicles(),
       loadAccounts(),
+      loadSettings(),
     ]).then(() => syncRecurring(useCategoriesStore.getState().categories));
-  }, [loadTransactions, loadCategories, loadHousehold, loadPersons, loadProperties, loadVehicles, loadAccounts, syncRecurring]);
+  }, [loadTransactions, loadCategories, loadHousehold, loadPersons, loadProperties, loadVehicles, loadAccounts, loadSettings, syncRecurring]);
 
   // Filtered slice — honours the ?view=p1|p2|joint|household query param
   const visibleTransactions = useMemo(
@@ -227,8 +233,19 @@ export default function Spending() {
   };
 
   const handleModalClose = () => setQueue((prev) => prev.slice(1));
-  const handleModalSaved = async (_insertedCount: number, _fileBytes: Uint8Array) => {
+  const handleModalSaved = async (_insertedCount: number, fileBytes: Uint8Array) => {
     await loadTransactions();
+    const saved = queue[0];
+    const folder = settings?.statementsFolderPath ?? null;
+    // Best-effort: archive the PDF if a folder is configured. archiveStatementPdf
+    // never throws — a failure returns a warning string. Archiving must never
+    // fail the import: the transactions are already saved above.
+    if (folder && saved) {
+      const warning = await archiveStatementPdf(folder, saved.filename, fileBytes);
+      setArchiveWarning(warning);
+    } else {
+      setArchiveWarning(null);
+    }
     setQueue((prev) => prev.slice(1));
   };
 
@@ -275,6 +292,11 @@ export default function Spending() {
       {importError && (
         <p className="text-sm text-destructive" role="alert">
           {importError}
+        </p>
+      )}
+      {archiveWarning && (
+        <p className="text-sm text-amber-600" role="status">
+          {archiveWarning}
         </p>
       )}
 

@@ -6,6 +6,23 @@ import userEvent from '@testing-library/user-event';
 vi.mock('@/pdf/extract', () => ({
   extractTextItems: vi.fn().mockResolvedValue([]),
 }));
+
+// parseStatement uses the extract output — mock it to return a minimal result.
+vi.mock('@/pdf/parse-statement', () => ({
+  parseStatement: vi.fn().mockReturnValue({
+    issuer: 'GENERIC',
+    transactions: [
+      { date: '2026-03-01', merchantRaw: 'MOCK MERCHANT', merchant: 'MOCK MERCHANT', amount: 10.00 },
+    ],
+  }),
+}));
+
+// archiveStatementPdf touches the Tauri fs plugin, which is unavailable in
+// jsdom. Mock the whole module; the no-folder path never calls it anyway.
+vi.mock('@/lib/statements-archive', () => ({
+  archiveStatementPdf: vi.fn().mockResolvedValue(null),
+  resolveArchivePath: vi.fn(),
+}));
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
@@ -15,6 +32,7 @@ import { useCategoriesStore } from '@/stores/categories-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useAccountsStore } from '@/stores/accounts-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import Spending from '@/pages/Spending';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -49,6 +67,7 @@ describe('Spending page', () => {
       mig('0009_seed_categories'),
       mig('0010_seed_merchant_mappings'),
       mig('0013_add_category_budget'),
+      mig('0014_add_app_settings'),
       mig('0015_add_accent_colors'),
     ]);
     setDatabase(db);
@@ -56,6 +75,7 @@ describe('Spending page', () => {
     useTransactionsStore.setState({ transactions: [], isLoading: false, error: null });
     usePersonsStore.setState({ persons: [], isLoading: false, error: null });
     useAccountsStore.setState({ accounts: [], isLoading: false, error: null });
+    useSettingsStore.setState({ settings: null, isLoading: false, error: null });
   });
 
   afterEach(async () => {
@@ -279,6 +299,31 @@ describe('Spending page', () => {
 
     createSpy.mockRestore();
     revokeSpy.mockRestore();
+  });
+
+  it('(h) a confirmed import with no archive folder still saves, with no warning', async () => {
+    await useCategoriesStore.getState().load();
+    renderPage();
+
+    const user = userEvent.setup();
+    const fileInput = screen.getByLabelText('Statement PDF');
+    // A minimal File — extractTextItems/parseStatement are mocked in this
+    // suite's setup, so the bytes content is irrelevant.
+    const file = new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], 'mar.pdf', {
+      type: 'application/pdf',
+    });
+    await user.upload(fileInput, file);
+
+    // The review modal opens; confirm the import.
+    await screen.findByText('Review transactions');
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Review transactions')).not.toBeInTheDocument();
+    });
+    // No archive folder configured ⇒ no archiving warning is shown.
+    expect(screen.queryByText(/could not archive/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/archive folder not found/i)).not.toBeInTheDocument();
   });
 
   it('(d) shows cashflow section with inflow, outflow, and net given seeded persons + transactions', async () => {
