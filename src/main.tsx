@@ -4,6 +4,8 @@ import './globals.css';
 import { initDatabase } from './db/init';
 import { getDatabase } from './db/db';
 import { PersonsRepo } from './domain/persons';
+import { SettingsRepo } from './domain/app-settings';
+import { shouldNotify } from './lib/notification-due';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 
 async function bootstrap() {
@@ -26,26 +28,29 @@ async function bootstrap() {
       console.warn('[bootstrap] first-launch detection failed:', e);
     }
 
-    // Fire an optional native notification on the 1st of the month so users
-    // who haven't opened the app yet see the nudge. In-app banner remains
-    // the primary surface; this is bonus.
-    if (new Date().getDate() === 1) {
-      void (async () => {
-        try {
-          let granted = await isPermissionGranted();
-          if (!granted) granted = (await requestPermission()) === 'granted';
-          if (granted) {
-            sendNotification({
-              title: 'Monthly input pending',
-              body: 'Confirm this month’s account balances when you have a moment.',
-            });
-          }
-        } catch (e) {
-          // eslint-disable-next-line no-console
-          console.warn('[bootstrap] notification dispatch failed:', e);
+    // Fire an optional native notification on the user's chosen day of the
+    // month so users who haven't opened the app yet see the nudge. The
+    // settings store is not mounted this early in bootstrap, so read the
+    // singleton through the repo directly — the same pattern as the
+    // first-launch PersonsRepo.list() call above. In-app banner remains the
+    // primary surface; this is bonus, and the user can disable it.
+    void (async () => {
+      try {
+        const settings = await new SettingsRepo(getDatabase()).get();
+        if (!shouldNotify(settings, new Date())) return;
+        let granted = await isPermissionGranted();
+        if (!granted) granted = (await requestPermission()) === 'granted';
+        if (granted) {
+          sendNotification({
+            title: 'Monthly input pending',
+            body: 'Confirm this month’s account balances when you have a moment.',
+          });
         }
-      })();
-    }
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn('[bootstrap] notification dispatch failed:', e);
+      }
+    })();
 
     // Dynamic-import App so createBrowserRouter inside App.tsx only runs
     // after the first-launch replaceState above. A static import would
