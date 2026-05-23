@@ -10,6 +10,7 @@ interface TickersState {
   load: () => Promise<void>;
   upsert: (ticker: Ticker) => Promise<void>;
   remove: (ticker: string) => Promise<void>;
+  setAccentColor: (ticker: string, color: string | null) => Promise<void>;
   lookup: (ticker: string) => Ticker | undefined;
 }
 
@@ -38,6 +39,12 @@ export const useTickersStore = create<TickersState>((set, get) => ({
   remove: async (ticker) => {
     const repo = new TickersRepo(getDatabase());
     await repo.delete(ticker);
+    await get().load();
+  },
+
+  setAccentColor: async (ticker, color) => {
+    const repo = new TickersRepo(getDatabase());
+    await repo.setAccentColor(ticker, color);
     await get().load();
   },
 
