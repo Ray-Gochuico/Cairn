@@ -25,6 +25,7 @@ import type { Transaction } from '@/types/schema';
 interface PendingImport {
   result: ParseResult;
   filename: string;
+  fileBytes: Uint8Array;
 }
 
 export default function Spending() {
@@ -195,7 +196,7 @@ export default function Spending() {
         const bytes = new Uint8Array(await file.arrayBuffer());
         const items = await extractTextItems(bytes);
         const result = parseStatement(items);
-        results.push({ result, filename: file.name });
+        results.push({ result, filename: file.name, fileBytes: bytes });
       } catch (err) {
         setImportError(err instanceof Error ? err.message : String(err));
       }
@@ -226,7 +227,7 @@ export default function Spending() {
   };
 
   const handleModalClose = () => setQueue((prev) => prev.slice(1));
-  const handleModalSaved = async (_insertedCount: number) => {
+  const handleModalSaved = async (_insertedCount: number, _fileBytes: Uint8Array) => {
     await loadTransactions();
     setQueue((prev) => prev.slice(1));
   };
@@ -538,6 +539,7 @@ export default function Spending() {
         <PdfReviewModal
           result={current.result}
           filename={current.filename}
+          fileBytes={current.fileBytes}
           existing={transactions}
           onClose={handleModalClose}
           onSaved={handleModalSaved}

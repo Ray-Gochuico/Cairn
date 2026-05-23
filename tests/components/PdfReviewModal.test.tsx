@@ -42,6 +42,7 @@ function renderModal(
       <PdfReviewModal
         result={result}
         filename="test.pdf"
+        fileBytes={new Uint8Array()}
         existing={existing}
         onClose={onClose}
         onSaved={onSaved}
@@ -158,9 +159,9 @@ describe('PdfReviewModal', () => {
     // Save
     await user.click(screen.getByRole('button', { name: /^save$/i }));
 
-    // onSaved should be called with 1 (only first row was included)
+    // onSaved should be called with 1 (only first row was included) and the file bytes
     await waitFor(() => {
-      expect(onSaved).toHaveBeenCalledWith(1);
+      expect(onSaved).toHaveBeenCalledWith(1, expect.any(Uint8Array));
     });
 
     // The transaction should be in the DB
@@ -194,7 +195,7 @@ describe('PdfReviewModal', () => {
     };
 
     render(
-      <PdfReviewModal result={result} filename="mar.pdf" existing={[]}
+      <PdfReviewModal result={result} filename="mar.pdf" fileBytes={new Uint8Array()} existing={[]}
         onClose={vi.fn()} onSaved={vi.fn()} />,
     );
 
@@ -207,6 +208,35 @@ describe('PdfReviewModal', () => {
       const rows = await new TransactionsRepo(db).list();
       expect(rows).toHaveLength(1);
       expect(rows[0].personId).toBe(2);
+    });
+  });
+
+  it('passes the imported PDF bytes back through onSaved', async () => {
+    const result: ParseResult = {
+      issuer: 'CHASE',
+      transactions: [
+        { date: '2026-03-05', merchantRaw: 'STARBUCKS #1', merchant: 'STARBUCKS', amount: 7.5 },
+      ],
+    };
+    const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46]); // "%PDF"
+    let received: Uint8Array | undefined;
+
+    render(
+      <PdfReviewModal
+        result={result}
+        filename="mar.pdf"
+        fileBytes={bytes}
+        existing={[]}
+        onClose={vi.fn()}
+        onSaved={(_count, b) => { received = b; }}
+      />,
+    );
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => {
+      expect(received).toBe(bytes);
     });
   });
 

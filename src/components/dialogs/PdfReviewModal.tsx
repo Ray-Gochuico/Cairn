@@ -15,9 +15,10 @@ import type { Transaction } from '@/types/schema';
 interface PdfReviewModalProps {
   result: ParseResult;
   filename: string;
+  fileBytes: Uint8Array;
   existing: Transaction[];
   onClose: () => void;
-  onSaved: (insertedCount: number) => void;
+  onSaved: (insertedCount: number, fileBytes: Uint8Array) => void;
 }
 
 interface EditableRow {
@@ -38,6 +39,7 @@ interface EditableRow {
 export function PdfReviewModal({
   result,
   filename,
+  fileBytes,
   existing,
   onClose,
   onSaved,
@@ -198,7 +200,7 @@ export function PdfReviewModal({
       }
 
       await syncRecurring(useCategoriesStore.getState().categories);
-      onSaved(included.length);
+      onSaved(included.length, fileBytes);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
