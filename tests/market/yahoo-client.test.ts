@@ -155,4 +155,64 @@ describe('YahooClient', () => {
       });
     });
   });
+
+  describe('assetProfile', () => {
+    it('returns sector and industry from Yahoo quoteSummary assetProfile module', async () => {
+      const response = {
+        quoteSummary: {
+          result: [{ assetProfile: { sector: 'Technology', industry: 'Software—Infrastructure' } }],
+          error: null,
+        },
+      };
+      mockInvoke.mockResolvedValueOnce(JSON.stringify(response));
+
+      const result = await client.assetProfile('AAPL');
+
+      expect(result).toEqual({ sector: 'Technology', industry: 'Software—Infrastructure' });
+    });
+
+    it('returns nulls when fields are missing', async () => {
+      const emptyResponse = { quoteSummary: { result: [{ assetProfile: {} }], error: null } };
+      mockInvoke.mockResolvedValueOnce(JSON.stringify(emptyResponse));
+
+      const result = await client.assetProfile('XYZ');
+
+      expect(result).toEqual({ sector: null, industry: null });
+    });
+
+    it('returns nulls when assetProfile module is missing entirely', async () => {
+      const noModuleResponse = { quoteSummary: { result: [{}], error: null } };
+      mockInvoke.mockResolvedValueOnce(JSON.stringify(noModuleResponse));
+
+      const result = await client.assetProfile('XYZ');
+
+      expect(result).toEqual({ sector: null, industry: null });
+    });
+
+    it('returns nulls when result array is null', async () => {
+      const noResultResponse = { quoteSummary: { result: null, error: null } };
+      mockInvoke.mockResolvedValueOnce(JSON.stringify(noResultResponse));
+
+      const result = await client.assetProfile('XYZ');
+
+      expect(result).toEqual({ sector: null, industry: null });
+    });
+
+    it('invokes the Rust command with modules=[assetProfile]', async () => {
+      const response = {
+        quoteSummary: {
+          result: [{ assetProfile: { sector: 'Technology', industry: 'Software—Infrastructure' } }],
+          error: null,
+        },
+      };
+      mockInvoke.mockResolvedValueOnce(JSON.stringify(response));
+
+      await client.assetProfile('AAPL');
+
+      expect(mockInvoke).toHaveBeenCalledWith('yahoo_quote_summary', {
+        ticker: 'AAPL',
+        modules: ['assetProfile'],
+      });
+    });
+  });
 });
