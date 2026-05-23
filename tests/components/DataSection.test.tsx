@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import BackupRestore from '@/pages/BackupRestore';
+import { DataSection } from '@/components/settings/DataSection';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
@@ -16,6 +16,8 @@ import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
 import { useEquityGrantsStore } from '@/stores/equity-grants-store';
 import { useGoalsStore } from '@/stores/goals-store';
+import { useTransactionsStore } from '@/stores/transactions-store';
+import { useCategoriesStore } from '@/stores/categories-store';
 
 function resetAllStores() {
   useHouseholdStore.setState({ household: null, isLoading: false, error: null });
@@ -31,9 +33,11 @@ function resetAllStores() {
   useVehiclesStore.setState({ vehicles: [], isLoading: false, error: null });
   useEquityGrantsStore.setState({ equityGrants: [], isLoading: false, error: null });
   useGoalsStore.setState({ goals: [], isLoading: false, error: null });
+  useTransactionsStore.setState({ transactions: [], isLoading: false, error: null });
+  useCategoriesStore.setState({ categories: [], isLoading: false, error: null });
 }
 
-describe('BackupRestore', () => {
+describe('DataSection', () => {
   beforeEach(() => {
     resetAllStores();
   });
@@ -41,7 +45,7 @@ describe('BackupRestore', () => {
   it('renders Export and Restore buttons', () => {
     render(
       <MemoryRouter>
-        <BackupRestore />
+        <DataSection />
       </MemoryRouter>,
     );
     expect(
@@ -55,7 +59,7 @@ describe('BackupRestore', () => {
   it('renders a hidden file input for restore', () => {
     const { container } = render(
       <MemoryRouter>
-        <BackupRestore />
+        <DataSection />
       </MemoryRouter>,
     );
     const input = container.querySelector('input[type="file"]');
@@ -64,8 +68,6 @@ describe('BackupRestore', () => {
   });
 
   it('clicking Export does not crash and shows a success message', async () => {
-    // jsdom supports URL.createObjectURL / Blob; the anchor click is a no-op
-    // in jsdom, so we just need to verify the path doesn't throw.
     const createObjectURLSpy = vi
       .spyOn(URL, 'createObjectURL')
       .mockReturnValue('blob:mock-url');
@@ -75,7 +77,7 @@ describe('BackupRestore', () => {
 
     render(
       <MemoryRouter>
-        <BackupRestore />
+        <DataSection />
       </MemoryRouter>,
     );
 
@@ -130,7 +132,6 @@ describe('BackupRestore', () => {
     const createObjectURLSpy = vi
       .spyOn(URL, 'createObjectURL')
       .mockImplementation((blob) => {
-        // Read the blob synchronously via its text() Promise — capture for assertion.
         (blob as Blob).text().then((t) => { capturedJson = t; });
         return 'blob:mock-url';
       });
@@ -140,12 +141,11 @@ describe('BackupRestore', () => {
 
     render(
       <MemoryRouter>
-        <BackupRestore />
+        <DataSection />
       </MemoryRouter>,
     );
 
     await userEvent.click(screen.getByRole('button', { name: /export to json/i }));
-    // Let the blob.text() Promise settle.
     await Promise.resolve();
     await Promise.resolve();
 
@@ -162,7 +162,7 @@ describe('BackupRestore', () => {
   it('shows confirmation modal after a valid backup file is loaded', async () => {
     render(
       <MemoryRouter>
-        <BackupRestore />
+        <DataSection />
       </MemoryRouter>,
     );
 
@@ -201,7 +201,7 @@ describe('BackupRestore', () => {
   it('Cancel button closes the confirmation modal', async () => {
     render(
       <MemoryRouter>
-        <BackupRestore />
+        <DataSection />
       </MemoryRouter>,
     );
 
@@ -240,7 +240,7 @@ describe('BackupRestore', () => {
   it('shows an error message when an invalid file is selected', async () => {
     render(
       <MemoryRouter>
-        <BackupRestore />
+        <DataSection />
       </MemoryRouter>,
     );
 
@@ -262,7 +262,7 @@ describe('BackupRestore', () => {
 
     render(
       <MemoryRouter>
-        <BackupRestore />
+        <DataSection />
       </MemoryRouter>,
     );
 
@@ -296,9 +296,7 @@ describe('BackupRestore', () => {
     await userEvent.click(screen.getByRole('button', { name: /^restore$/i }));
 
     expect(warnSpy).toHaveBeenCalled();
-    // Modal should close after applying.
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    // A success message should appear.
     expect(await screen.findByText(/restore.*completed|restored/i)).toBeInTheDocument();
 
     warnSpy.mockRestore();
