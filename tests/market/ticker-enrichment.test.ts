@@ -5,10 +5,14 @@ import type { Ticker } from '@/types/schema';
 import { enrichTickerIfMissing } from '@/market/ticker-enrichment';
 
 function makeYahooMock(
-  overrides: Partial<{ fundProfile: ReturnType<typeof vi.fn> }> = {},
+  overrides: Partial<{
+    fundProfile: ReturnType<typeof vi.fn>;
+    assetProfile: ReturnType<typeof vi.fn>;
+  }> = {},
 ): YahooClient {
   return {
     fundProfile: vi.fn().mockResolvedValue({ category: null, quoteType: null }),
+    assetProfile: vi.fn().mockResolvedValue({ sector: null, industry: null }),
     ...overrides,
   } as unknown as YahooClient;
 }
@@ -36,28 +40,38 @@ const existingTicker: Ticker = {
 };
 
 describe('enrichTickerIfMissing', () => {
-  it('returns immediately when ticker already exists', async () => {
+  it('returns immediately when ticker already exists and sector is set', async () => {
     const yahoo = makeYahooMock();
     const tickers = makeTickersMock({
-      lookup: vi.fn().mockResolvedValue(existingTicker),
+      lookup: vi.fn().mockResolvedValue({
+        ...existingTicker,
+        sector: 'Technology',
+        industry: 'Software—Infrastructure',
+      }),
     });
 
     await enrichTickerIfMissing('VTI', { yahoo, tickers });
 
     expect(tickers.lookup).toHaveBeenCalledWith('VTI');
     expect(yahoo.fundProfile).not.toHaveBeenCalled();
+    expect(yahoo.assetProfile).not.toHaveBeenCalled();
     expect(tickers.upsert).not.toHaveBeenCalled();
   });
 
-  it('fetches Yahoo fundProfile and upserts when ticker is missing', async () => {
+  it('fetches Yahoo fundProfile + assetProfile and upserts when ticker is missing', async () => {
     const yahoo = makeYahooMock({
       fundProfile: vi.fn().mockResolvedValue({ category: 'Large Blend', quoteType: 'ETF' }),
+      assetProfile: vi.fn().mockResolvedValue({
+        sector: 'Technology',
+        industry: 'Software—Infrastructure',
+      }),
     });
     const tickers = makeTickersMock();
 
     await enrichTickerIfMissing('VTI', { yahoo, tickers });
 
     expect(yahoo.fundProfile).toHaveBeenCalledWith('VTI');
+    expect(yahoo.assetProfile).toHaveBeenCalledWith('VTI');
     expect(tickers.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         ticker: 'VTI',
@@ -65,6 +79,67 @@ describe('enrichTickerIfMissing', () => {
         leverageFactor: 1,
         direction: 'LONG',
         userAdded: false,
+        sector: 'Technology',
+        industry: 'Software—Infrastructure',
+      }),
+    );
+  });
+
+  it('re-enriches existing ticker when sector is null, preserving name/assetClass/leverage', async () => {
+    const yahoo = makeYahooMock({
+      assetProfile: vi.fn().mockResolvedValue({
+        sector: 'Technology',
+        industry: 'Software—Infrastructure',
+      }),
+    });
+    const tickers = makeTickersMock({
+      lookup: vi.fn().mockResolvedValue(existingTicker),
+    });
+
+    await enrichTickerIfMissing('VTI', { yahoo, tickers });
+
+    // assetProfile fills in sector; fundProfile NOT called since other fields are already set
+    expect(yahoo.assetProfile).toHaveBeenCalledWith('VTI');
+    expect(yahoo.fundProfile).not.toHaveBeenCalled();
+    expect(tickers.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ticker: 'VTI',
+        name: existingTicker.name,
+        assetClass: existingTicker.assetClass,
+        leverageFactor: existingTicker.leverageFactor,
+        direction: existingTicker.direction,
+        userAdded: existingTicker.userAdded,
+        accentColor: existingTicker.accentColor,
+        sector: 'Technology',
+        industry: 'Software—Infrastructure',
+      }),
+    );
+  });
+
+  it('retries assetProfile on every call when Yahoo returns null sector (best-effort)', async () => {
+    // Yahoo couldn't classify this ticker — sector stays null in the upsert.
+    // Per spec: the next refresh must still attempt enrichment, because the
+    // "should we enrich?" gate is purely existing.sector being null.
+    const yahoo = makeYahooMock({
+      assetProfile: vi.fn().mockResolvedValue({ sector: null, industry: null }),
+    });
+    const existingWithNullSector = { ...existingTicker, sector: null, industry: null };
+    const tickers = makeTickersMock({
+      lookup: vi.fn().mockResolvedValue(existingWithNullSector),
+    });
+
+    await enrichTickerIfMissing(existingTicker.ticker, { yahoo, tickers });
+    await enrichTickerIfMissing(existingTicker.ticker, { yahoo, tickers });
+
+    // Both calls attempted enrichment — sector-null means "retry next refresh"
+    expect(yahoo.assetProfile).toHaveBeenCalledTimes(2);
+    expect(tickers.upsert).toHaveBeenCalledTimes(2);
+    // Upsert still happens; sector stays null
+    expect(tickers.upsert).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        ticker: existingTicker.ticker,
+        sector: null,
+        industry: null,
       }),
     );
   });

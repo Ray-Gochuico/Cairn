@@ -30,23 +30,46 @@ export async function enrichTickerIfMissing(
   deps: { yahoo: YahooClient; tickers: TickersRepo },
 ): Promise<void> {
   const existing = await deps.tickers.lookup(ticker);
-  if (existing) return;
+  // Skip only when the ticker exists AND already has a sector. A null
+  // sector means either (a) the ticker pre-dates migration 0016, or
+  // (b) Yahoo couldn't classify it on a previous attempt — either way,
+  // retry on the next refresh until something non-null comes back.
+  if (existing && existing.sector) return;
+
   try {
-    const profile = await deps.yahoo.fundProfile(ticker);
-    const assetClass = mapYahooCategoryToAssetClass(profile.category, profile.quoteType);
-    const { leverageFactor, direction } = detectLeverage(ticker, profile.category);
-    await deps.tickers.upsert({
-      ticker,
-      name: profile.category,
-      assetClass,
-      leverageFactor,
-      direction,
-      userAdded: false,
-      accentColor: null,
-      sector: null,
-      industry: null,
-    });
+    // For existing tickers, name/assetClass/leverage are already populated, so we
+    // only need assetProfile for the sector backfill. New tickers need both calls.
+    const [assetProfile, fundProfile] = await Promise.all([
+      deps.yahoo.assetProfile(ticker),
+      existing ? Promise.resolve(null) : deps.yahoo.fundProfile(ticker),
+    ]);
+
+    if (existing) {
+      // Re-enrich: preserve name/assetClass/leverage/direction/accentColor,
+      // overwrite only sector + industry with the fresh Yahoo values.
+      await deps.tickers.upsert({
+        ...existing,
+        sector: assetProfile.sector,
+        industry: assetProfile.industry,
+      });
+    } else {
+      // First encounter — derive assetClass + leverage from fundProfile.
+      const assetClass = mapYahooCategoryToAssetClass(fundProfile!.category, fundProfile!.quoteType);
+      const { leverageFactor, direction } = detectLeverage(ticker, fundProfile!.category);
+      await deps.tickers.upsert({
+        ticker,
+        name: fundProfile!.category,
+        assetClass,
+        leverageFactor,
+        direction,
+        userAdded: false,
+        accentColor: null,
+        sector: assetProfile.sector,
+        industry: assetProfile.industry,
+      });
+    }
   } catch {
-    // Best-effort: if Yahoo errors, leave the ticker absent. Concentration math falls back to OTHER.
+    // Best-effort: if Yahoo errors, leave fields null. The next refresh will
+    // retry (since sector stays null). Concentration math falls back to OTHER.
   }
 }
