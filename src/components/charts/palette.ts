@@ -14,10 +14,10 @@
  * pass them via the slice/series `color` field; this palette is only
  * used as a default when no explicit color is supplied.
  *
- * Future Phase 3.7 user color picker will offer these 20 colors first,
- * then the 10 Tailwind 600 hexes (#2563eb, #ea580c, #16a34a, #dc2626,
- * #9333ea, #0891b2, #db2777, #ca8a04, #0d9488, #7c3aed) as a secondary
- * set — total 30 selectable colors per account/holding.
+ * The Phase 5 user color picker offers these 20 colors first, then the
+ * 10 legacy Tailwind-600 hexes (LEGACY_TAILWIND_PALETTE below) as a
+ * secondary set — SWATCH_OPTIONS is the combined 30-swatch list the
+ * ColorSwatchPicker renders.
  */
 export const CHART_PALETTE = [
   // Positions 0–9 — Vega category10 (unchanged)
@@ -50,3 +50,19 @@ export const CHART_PALETTE = [
  * Same value as before — slate-400.
  */
 export const CHART_NEUTRAL = '#94a3b8';
+
+/**
+ * The 10 legacy Tailwind-600 hexes — the chart palette used before the
+ * Vega switch. Kept as the secondary half of the color picker's swatch
+ * set so users can still pick the older colors.
+ */
+export const LEGACY_TAILWIND_PALETTE = [
+  '#2563eb', '#ea580c', '#16a34a', '#dc2626', '#9333ea',
+  '#0891b2', '#db2777', '#ca8a04', '#0d9488', '#7c3aed',
+];
+
+/**
+ * The full 30-swatch set the ColorSwatchPicker offers: the 20 Vega
+ * CHART_PALETTE colors first, then the 10 legacy Tailwind-600 hexes.
+ */
+export const SWATCH_OPTIONS = [...CHART_PALETTE, ...LEGACY_TAILWIND_PALETTE];
