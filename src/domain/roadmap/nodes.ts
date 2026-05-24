@@ -1,4 +1,9 @@
 import type { NodeId, NodeResult, RoadmapContext, RoadmapNode } from '@/types/roadmap';
+import {
+  evaluateSmallEmergencyFund,
+  evaluateEmergencyFund3Months,
+  evaluateEmergencyFund6To12Months,
+} from './rules/emergencyFund';
 
 /**
  * Declarative registry of every Roadmap chart node, derived from
@@ -98,7 +103,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Build a small emergency fund',
     body: '$1,000 or one month of expenses, whichever is greater. Park it in a high-yield savings account (HYSA).',
     prerequisites: ['s0_min_debt_payments'],
-    evaluate: stub('s1_emergency_small'),
+    evaluate: evaluateSmallEmergencyFund,
   },
   {
     id: 's1_evaluate_non_essentials',
@@ -170,7 +175,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Grow EF to 3 months (stable income)',
     body: 'Use an FDIC-insured HYSA, low-risk brokerage assets, or a mix.',
     prerequisites: ['s1_job_stability_q'],
-    evaluate: stub('s1_emergency_3mo'),
+    evaluate: evaluateEmergencyFund3Months,
   },
   {
     id: 's1_emergency_6_12mo',
@@ -179,7 +184,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Grow EF to 6–12 months (unstable income)',
     body: 'Use an FDIC-insured HYSA or a rotating CD ladder sized to monthly expenses.',
     prerequisites: ['s1_job_stability_q'],
-    evaluate: stub('s1_emergency_6_12mo'),
+    evaluate: evaluateEmergencyFund6To12Months,
   },
 
   // ──────────────────────────────────────────────────────────────────

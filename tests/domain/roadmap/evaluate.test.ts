@@ -58,9 +58,19 @@ describe('evaluate', () => {
     }
   });
 
-  it('returns the stub result for an unmodified registry', () => {
+  it('returns stub results for nodes whose real rule has not yet shipped', () => {
+    // Tasks 7-9 replace a handful of stubs with real rules; those
+    // produce non-info statuses against a realistic context. This test
+    // confirms the remaining stubs still flow through with their "not
+    // yet implemented" sentinel evidence.
+    const realRuleNodeIds = new Set([
+      's1_emergency_small',
+      's1_emergency_3mo',
+      's1_emergency_6_12mo',
+    ]);
     const results = evaluate(makeContext());
     for (const [id, r] of results) {
+      if (realRuleNodeIds.has(id)) continue;
       expect(r.status, id).toBe('info');
       expect(r.evidence, id).toMatch(/not yet implemented/);
     }

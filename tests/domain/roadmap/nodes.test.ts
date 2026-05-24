@@ -76,13 +76,21 @@ describe('NODES registry', () => {
     }
   });
 
-  it("stubs return an 'info' status with a 'not yet implemented' evidence string", () => {
-    const synthetic = {} as any; // stubs ignore ctx
+  it("remaining stubs return an 'info' status with a 'not yet implemented' evidence string", () => {
+    // Tasks 7-9 replace a handful of stubs with real rules; those need
+    // real RoadmapContexts and are exercised in their own rule tests.
+    // Stub assertion here only covers the still-stubbed nodes.
+    const realRuleNodeIds = new Set([
+      's1_emergency_small',
+      's1_emergency_3mo',
+      's1_emergency_6_12mo',
+    ]);
+    const synthetic = {} as any;
     for (const n of NODES) {
+      if (realRuleNodeIds.has(n.id)) continue;
       const r = n.evaluate(synthetic);
-      // Tasks 7-9 will replace some stubs; for now every node is a stub.
-      expect(r.status).toBe('info');
-      expect(r.evidence).toMatch(/not yet implemented/);
+      expect(r.status, n.id).toBe('info');
+      expect(r.evidence, n.id).toMatch(/not yet implemented/);
     }
   });
 });
