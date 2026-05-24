@@ -32,7 +32,17 @@ function prettifyCityCode(code: string): string {
     .join(' ');
 }
 
-export type HouseholdFormValues = Omit<Household, 'id'>;
+// Disclosure cache columns are not managed by this form (they're set by
+// the disclosure modals). Strip them from the form's value shape so RHF
+// + zodResolver see a stable, narrower schema.
+export type HouseholdFormValues = Omit<
+  Household,
+  | 'id'
+  | 'disclaimerAcceptedAt'
+  | 'disclaimerVersionAccepted'
+  | 'roadmapDisclaimerAcceptedAt'
+  | 'roadmapDisclaimerVersionAccepted'
+>;
 
 const US_STATES = [
   'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA',
@@ -89,7 +99,15 @@ export default function HouseholdForm({
   showSavedConfirmation = false,
 }: HouseholdFormProps) {
   const form = useForm<HouseholdFormValues>({
-    resolver: zodResolver(HouseholdSchema.omit({ id: true })),
+    resolver: zodResolver(
+      HouseholdSchema.omit({
+        id: true,
+        disclaimerAcceptedAt: true,
+        disclaimerVersionAccepted: true,
+        roadmapDisclaimerAcceptedAt: true,
+        roadmapDisclaimerVersionAccepted: true,
+      }),
+    ),
     defaultValues: HOUSEHOLD_DEFAULT_VALUES,
     values,
   });
