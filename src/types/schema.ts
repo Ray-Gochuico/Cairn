@@ -47,6 +47,17 @@ export const HouseholdSchema = z.object({
   disclaimerVersionAccepted: z.string().nullable().default(null),
   roadmapDisclaimerAcceptedAt: z.string().nullable().default(null),
   roadmapDisclaimerVersionAccepted: z.string().nullable().default(null),
+  // Roadmap rule-engine chart answers + threshold overrides. All
+  // nullable with no UI default; null means the user hasn't answered
+  // the matching decision node yet (rule engine surfaces as 'unanswered').
+  interestThresholdLowPct: z.number().nullable().default(null),
+  interestThresholdHighPct: z.number().nullable().default(null),
+  hasWrittenIps: z.boolean().nullable().default(null),
+  hasHsaQualifiedHdhp: z.boolean().nullable().default(null),
+  makesCharitableGifts: z.boolean().nullable().default(null),
+  upcomingLargePurchase: z.boolean().nullable().default(null),
+  upcomingPurchaseAmount: z.number().nullable().default(null),
+  upcomingPurchaseMonths: z.number().nullable().default(null),
 });
 export type Household = z.infer<typeof HouseholdSchema>;
 
@@ -77,6 +88,11 @@ export const PersonSchema = z.object({
   dependentCareFsaMonthly: z.number().nonnegative(),
   hsaMonthlyContribution: z.number().nonnegative(),
   hsaEligible: z.boolean(),
+  // Roadmap rule-engine chart answers.
+  jobStability: z.enum(['stable', 'unstable']).nullable().default(null),
+  expectsHigherFutureIncome: z.boolean().nullable().default(null),
+  onParentHealthInsurance: z.boolean().nullable().default(null),
+  isRelativelyHealthy: z.boolean().nullable().default(null),
 });
 export type Person = z.infer<typeof PersonSchema>;
 
@@ -106,6 +122,12 @@ export const AccountSchema = z.object({
     .string()
     .regex(/^#[0-9a-fA-F]{6}$/, 'Must be a 6-digit hex color')
     .nullable(),
+  // Roadmap rule-engine chart answers (per-account, e.g. 401(k) match).
+  hasEmployerMatch: z.boolean().nullable().default(null),
+  employerMatchPct: z.number().nullable().default(null),
+  employerMatchLimitPct: z.number().nullable().default(null),
+  allowsMegaBackdoorRollover: z.boolean().nullable().default(null),
+  hasHighFees: z.boolean().nullable().default(null),
 });
 export type Account = z.infer<typeof AccountSchema>;
 

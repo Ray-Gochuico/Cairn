@@ -15,6 +15,19 @@ interface HouseholdRow {
   disclaimer_version_accepted: string | null;
   roadmap_disclaimer_accepted_at: string | null;
   roadmap_disclaimer_version_accepted: string | null;
+  interest_threshold_low_pct: number | null;
+  interest_threshold_high_pct: number | null;
+  has_written_ips: number | null;
+  has_hsa_qualified_hdhp: number | null;
+  makes_charitable_gifts: number | null;
+  upcoming_large_purchase: number | null;
+  upcoming_purchase_amount: number | null;
+  upcoming_purchase_months: number | null;
+}
+
+function nullableBool(v: number | null | undefined): boolean | null {
+  if (v === null || v === undefined) return null;
+  return v === 1;
 }
 
 function rowToHousehold(row: HouseholdRow): Household {
@@ -33,6 +46,14 @@ function rowToHousehold(row: HouseholdRow): Household {
     disclaimerVersionAccepted: row.disclaimer_version_accepted,
     roadmapDisclaimerAcceptedAt: row.roadmap_disclaimer_accepted_at,
     roadmapDisclaimerVersionAccepted: row.roadmap_disclaimer_version_accepted,
+    interestThresholdLowPct: row.interest_threshold_low_pct,
+    interestThresholdHighPct: row.interest_threshold_high_pct,
+    hasWrittenIps: nullableBool(row.has_written_ips),
+    hasHsaQualifiedHdhp: nullableBool(row.has_hsa_qualified_hdhp),
+    makesCharitableGifts: nullableBool(row.makes_charitable_gifts),
+    upcomingLargePurchase: nullableBool(row.upcoming_large_purchase),
+    upcomingPurchaseAmount: row.upcoming_purchase_amount,
+    upcomingPurchaseMonths: row.upcoming_purchase_months,
   });
 }
 

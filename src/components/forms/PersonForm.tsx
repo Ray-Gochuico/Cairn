@@ -13,10 +13,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-// PersonFormValues mirrors Person but drops the DB-only id. All other
-// columns are surfaced in the form UI; callers no longer need to inject
-// defaults at the boundary (see PersonsTab.tsx, Step2Persons.tsx).
-export type PersonFormValues = Omit<Person, 'id'>;
+// PersonFormValues mirrors Person but drops the DB-only id and the
+// roadmap rule-engine chart-answer columns (those are written by
+// roadmap decision nodes, not by the person edit form).
+export type PersonFormValues = Omit<
+  Person,
+  | 'id'
+  | 'jobStability'
+  | 'expectsHigherFutureIncome'
+  | 'onParentHealthInsurance'
+  | 'isRelativelyHealthy'
+>;
 
 export const DEFAULT_PERSON: PersonFormValues = {
   householdId: 1,
@@ -63,7 +70,13 @@ const emptyToNullNumber = (v: unknown): number | null => {
 // with our strict `PersonFormValues` (= Omit<Person, 'id'>). We rebuild
 // without the defaults so input and output coincide. DEFAULT_PERSON
 // already provides equivalent runtime defaults for new persons.
-const PersonFormSchema = PersonSchema.omit({ id: true }).extend({
+const PersonFormSchema = PersonSchema.omit({
+  id: true,
+  jobStability: true,
+  expectsHigherFutureIncome: true,
+  onParentHealthInsurance: true,
+  isRelativelyHealthy: true,
+}).extend({
   expectedBonus: z.number().min(0),
   expectedBonusFrequency: BonusFrequencySchema,
   bonusIsConsistent: z.boolean(),

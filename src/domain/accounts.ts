@@ -16,6 +16,16 @@ interface AccountRow {
   allow_margin: number;
   state_of_plan: string | null;
   accent_color: string | null;
+  has_employer_match: number | null;
+  employer_match_pct: number | null;
+  employer_match_limit_pct: number | null;
+  allows_mega_backdoor_rollover: number | null;
+  has_high_fees: number | null;
+}
+
+function nullableBool(v: number | null | undefined): boolean | null {
+  if (v === null || v === undefined) return null;
+  return v === 1;
 }
 
 function rowToAccount(row: AccountRow): Account {
@@ -33,6 +43,11 @@ function rowToAccount(row: AccountRow): Account {
     allowMargin: row.allow_margin === 1,
     stateOfPlan: row.state_of_plan,
     accentColor: row.accent_color ?? null,
+    hasEmployerMatch: nullableBool(row.has_employer_match),
+    employerMatchPct: row.employer_match_pct,
+    employerMatchLimitPct: row.employer_match_limit_pct,
+    allowsMegaBackdoorRollover: nullableBool(row.allows_mega_backdoor_rollover),
+    hasHighFees: nullableBool(row.has_high_fees),
   });
 }
 

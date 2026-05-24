@@ -32,9 +32,10 @@ function prettifyCityCode(code: string): string {
     .join(' ');
 }
 
-// Disclosure cache columns are not managed by this form (they're set by
-// the disclosure modals). Strip them from the form's value shape so RHF
-// + zodResolver see a stable, narrower schema.
+// Disclosure cache columns + roadmap rule-engine chart-answer columns
+// are not managed by this form (set by disclosure modals / roadmap
+// decision nodes). Strip them so RHF + zodResolver see a stable,
+// narrower schema.
 export type HouseholdFormValues = Omit<
   Household,
   | 'id'
@@ -42,6 +43,14 @@ export type HouseholdFormValues = Omit<
   | 'disclaimerVersionAccepted'
   | 'roadmapDisclaimerAcceptedAt'
   | 'roadmapDisclaimerVersionAccepted'
+  | 'interestThresholdLowPct'
+  | 'interestThresholdHighPct'
+  | 'hasWrittenIps'
+  | 'hasHsaQualifiedHdhp'
+  | 'makesCharitableGifts'
+  | 'upcomingLargePurchase'
+  | 'upcomingPurchaseAmount'
+  | 'upcomingPurchaseMonths'
 >;
 
 const US_STATES = [
@@ -106,6 +115,14 @@ export default function HouseholdForm({
         disclaimerVersionAccepted: true,
         roadmapDisclaimerAcceptedAt: true,
         roadmapDisclaimerVersionAccepted: true,
+        interestThresholdLowPct: true,
+        interestThresholdHighPct: true,
+        hasWrittenIps: true,
+        hasHsaQualifiedHdhp: true,
+        makesCharitableGifts: true,
+        upcomingLargePurchase: true,
+        upcomingPurchaseAmount: true,
+        upcomingPurchaseMonths: true,
       }),
     ),
     defaultValues: HOUSEHOLD_DEFAULT_VALUES,

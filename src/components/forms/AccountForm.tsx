@@ -14,11 +14,28 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 // the schema input type, so the resolver becomes Resolver<Partial<...>> and
 // doesn't unify with strict AccountFormValues. Strip the .default() so input
 // and output types coincide — DEFAULT_ACCOUNT provides the runtime default.
-const AccountFormSchema = AccountSchema.omit({ id: true }).extend({
+const AccountFormSchema = AccountSchema.omit({
+  id: true,
+  hasEmployerMatch: true,
+  employerMatchPct: true,
+  employerMatchLimitPct: true,
+  allowsMegaBackdoorRollover: true,
+  hasHighFees: true,
+}).extend({
   allowMargin: z.boolean(),
 });
 
-export type AccountFormValues = Omit<Account, 'id'>;
+// Strip roadmap rule-engine chart-answer columns; those are written by
+// roadmap decision nodes, not the account edit form.
+export type AccountFormValues = Omit<
+  Account,
+  | 'id'
+  | 'hasEmployerMatch'
+  | 'employerMatchPct'
+  | 'employerMatchLimitPct'
+  | 'allowsMegaBackdoorRollover'
+  | 'hasHighFees'
+>;
 
 export const DEFAULT_ACCOUNT: AccountFormValues = {
   householdId: 1,
