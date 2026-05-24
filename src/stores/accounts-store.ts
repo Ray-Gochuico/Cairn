@@ -3,12 +3,25 @@ import { AccountsRepo } from '@/domain/accounts';
 import { getDatabase } from '@/db/db';
 import type { Account } from '@/types/schema';
 
+// Roadmap chart-answer columns are owned by roadmap decision nodes, not
+// the account CRUD form. Accept the narrower shape here and default
+// them to null on the way to the repo.
+type AccountCreateInput = Omit<
+  Account,
+  | 'id'
+  | 'hasEmployerMatch'
+  | 'employerMatchPct'
+  | 'employerMatchLimitPct'
+  | 'allowsMegaBackdoorRollover'
+  | 'hasHighFees'
+>;
+
 interface AccountsState {
   accounts: Account[];
   isLoading: boolean;
   error: string | null;
   load: () => Promise<void>;
-  create: (account: Omit<Account, 'id'>) => Promise<number>;
+  create: (account: AccountCreateInput) => Promise<number>;
   update: (id: number, patch: Partial<Omit<Account, 'id' | 'householdId'>>) => Promise<void>;
   remove: (id: number) => Promise<void>;
 }
@@ -31,7 +44,14 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
 
   create: async (account) => {
     const repo = new AccountsRepo(getDatabase());
-    const id = await repo.create(account);
+    const id = await repo.create({
+      ...account,
+      hasEmployerMatch: null,
+      employerMatchPct: null,
+      employerMatchLimitPct: null,
+      allowsMegaBackdoorRollover: null,
+      hasHighFees: null,
+    });
     await get().load();
     return id;
   },

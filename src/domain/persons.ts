@@ -22,6 +22,15 @@ interface PersonRow {
   dependent_care_fsa_monthly: number;
   hsa_monthly_contribution: number;
   hsa_eligible: number;
+  job_stability: string | null;
+  expects_higher_future_income: number | null;
+  on_parent_health_insurance: number | null;
+  is_relatively_healthy: number | null;
+}
+
+function nullableBool(v: number | null | undefined): boolean | null {
+  if (v === null || v === undefined) return null;
+  return v === 1;
 }
 
 function rowToPerson(row: PersonRow): Person {
@@ -46,6 +55,10 @@ function rowToPerson(row: PersonRow): Person {
     dependentCareFsaMonthly: row.dependent_care_fsa_monthly,
     hsaMonthlyContribution: row.hsa_monthly_contribution,
     hsaEligible: row.hsa_eligible === 1,
+    jobStability: row.job_stability as 'stable' | 'unstable' | null,
+    expectsHigherFutureIncome: nullableBool(row.expects_higher_future_income),
+    onParentHealthInsurance: nullableBool(row.on_parent_health_insurance),
+    isRelativelyHealthy: nullableBool(row.is_relatively_healthy),
   });
 }
 
