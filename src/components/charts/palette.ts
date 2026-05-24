@@ -1,3 +1,5 @@
+import { shadeHexColor } from '@/lib/color';
+
 /**
  * Default chart palette. Positions 0–9 are Vega category10 (Tableau-
  * derived) — picked for chart-specific aesthetic and distinguishability.
@@ -66,3 +68,48 @@ export const LEGACY_TAILWIND_PALETTE = [
  * CHART_PALETTE colors first, then the 10 legacy Tailwind-600 hexes.
  */
 export const SWATCH_OPTIONS = [...CHART_PALETTE, ...LEGACY_TAILWIND_PALETTE];
+
+/**
+ * Sector → base color map for the SectorDonut.
+ *
+ * Covers the 11 GICS sectors Yahoo's assetProfile returns plus the
+ * pseudo-sectors that sector-classification.ts derives from asset class
+ * (Fixed Income, Commodities, Crypto, Unclassified). Real Estate is in
+ * GICS and used directly.
+ *
+ * Hues are spaced around the color wheel so adjacent wedges in a typical
+ * portfolio (tech-heavy + finance-heavy) read as distinct sectors at a
+ * glance. Unclassified deliberately uses the neutral gray so it visually
+ * recedes the same way the per-ticker donut's "Misc" wedge does.
+ */
+export const SECTOR_COLORS: Record<string, string> = {
+  'Technology':              '#3b82f6',
+  'Financials':              '#10b981',
+  'Health Care':             '#f59e0b',
+  'Consumer Discretionary':  '#ef4444',
+  'Communication Services':  '#8b5cf6',
+  'Industrials':             '#ec4899',
+  'Consumer Staples':        '#14b8a6',
+  'Energy':                  '#f97316',
+  'Utilities':               '#6366f1',
+  'Materials':               '#84cc16',
+  'Real Estate':             '#a855f7',
+  'Fixed Income':            '#0ea5e9',
+  'Commodities':             '#facc15',
+  'Crypto':                  '#f43f5e',
+  'Unclassified':            CHART_NEUTRAL,
+};
+
+export function colorForSector(sector: string): string {
+  return SECTOR_COLORS[sector] ?? CHART_NEUTRAL;
+}
+
+/**
+ * Shaded color for the i-th industry wedge inside a drilled-in sector
+ * view. Industry order is whatever the caller passes in (typically
+ * insertion order from aggregateByIndustry), so the shading is stable
+ * across renders as long as the same input order is preserved.
+ */
+export function shadedColorForIndustry(parentSector: string, index: number): string {
+  return shadeHexColor(colorForSector(parentSector), index);
+}

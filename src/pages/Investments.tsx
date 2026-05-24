@@ -19,6 +19,7 @@ import BarChartCard from '@/components/charts/BarChartCard';
 import DonutChartCard from '@/components/charts/DonutChartCard';
 import InvestmentTimeSeriesChart from '@/components/charts/InvestmentTimeSeriesChart';
 import PerTickerDonut from '@/components/charts/PerTickerDonut';
+import SectorDonut from '@/components/charts/SectorDonut';
 import { useConcentration } from '@/lib/use-concentration';
 import { valueHoldings, type HoldingValuation } from '@/lib/holdings-value';
 import type { Dependent, AccountSnapshot, Household, Holding } from '@/types/schema';
@@ -540,8 +541,8 @@ export default function Investments() {
         snapshots={visibleSnapshots}
       />
 
-      {/* Donuts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Donuts row — asset class, per-ticker, sector. Stacks on narrow widths. */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {allocation.length > 0 ? (
           <DonutChartCard
             title="Asset allocation"
@@ -563,6 +564,7 @@ export default function Investments() {
           </Card>
         )}
         <PerTickerDonut />
+        <SectorDonut />
       </div>
 
       {/* Target / drift, full width below */}

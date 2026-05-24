@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import {
   Card,
@@ -16,7 +17,11 @@ export interface DonutSlice {
 
 export interface DonutChartCardProps {
   title: string;
-  subtitle?: string;
+  /**
+   * Subtitle text or any ReactNode (e.g. a "Back" button for drill-down
+   * donuts). Renders inside CardDescription.
+   */
+  subtitle?: ReactNode;
   height?: number;
   data: DonutSlice[];
   innerRadius?: number;
@@ -33,6 +38,13 @@ export interface DonutChartCardProps {
    * labels (e.g., "AAPL — Apple Inc.") on hover without bloating the legend.
    */
   tooltipNameFormatter?: (name: string) => string;
+  /**
+   * Optional. Invoked with the clicked slice's `name` when a wedge is
+   * clicked. Setting this also flips the donut to a pointer cursor so
+   * the affordance is visible. Used by SectorDonut to drill into a
+   * sector's industry breakdown.
+   */
+  onClickSlice?: (sliceName: string) => void;
 }
 
 export default function DonutChartCard({
@@ -45,6 +57,7 @@ export default function DonutChartCard({
   labelFormatter,
   valueFormatter,
   tooltipNameFormatter,
+  onClickSlice,
 }: DonutChartCardProps) {
   const total = data.reduce((sum, slice) => sum + slice.value, 0);
   return (
@@ -70,6 +83,15 @@ export default function DonutChartCard({
                   ? (entry) => labelFormatter(entry as DonutSlice)
                   : undefined
               }
+              onClick={
+                onClickSlice
+                  ? (entry: unknown) => {
+                      const name = (entry as { name?: unknown } | undefined)?.name;
+                      if (typeof name === 'string') onClickSlice(name);
+                    }
+                  : undefined
+              }
+              style={onClickSlice ? { cursor: 'pointer' } : undefined}
             >
               {data.map((slice, idx) => (
                 <Cell
