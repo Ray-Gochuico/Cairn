@@ -63,6 +63,7 @@ export async function loadAllMigrations(): Promise<Migration[]> {
   const m0014 = (await import('./migrations/0014_add_app_settings.sql?raw')).default;
   const m0015 = (await import('./migrations/0015_add_accent_colors.sql?raw')).default;
   const m0016 = (await import('./migrations/0016_add_ticker_sector_industry.sql?raw')).default;
+  const m0017 = (await import('./migrations/0017_disclosure_foundations.sql?raw')).default;
   return [
     { version: '0001_initial', sql: m0001 },
     { version: '0002_seed_tax_rules', sql: m0002 },
@@ -80,5 +81,6 @@ export async function loadAllMigrations(): Promise<Migration[]> {
     { version: '0014_add_app_settings', sql: m0014 },
     { version: '0015_add_accent_colors', sql: m0015 },
     { version: '0016_add_ticker_sector_industry', sql: m0016 },
+    { version: '0017_disclosure_foundations', sql: m0017 },
   ];
 }
