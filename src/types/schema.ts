@@ -288,6 +288,8 @@ export const TickerSchema = z.object({
     .string()
     .regex(/^#[0-9a-fA-F]{6}$/, 'Must be a 6-digit hex color')
     .nullable(),
+  sector: z.string().max(100).nullable(),
+  industry: z.string().max(100).nullable(),
 });
 export type Ticker = z.infer<typeof TickerSchema>;
 

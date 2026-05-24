@@ -167,6 +167,26 @@ export class YahooClient {
     return { category: profile?.categoryName ?? null, quoteType: price?.quoteType ?? null };
   }
 
+  /**
+   * Returns the GICS-style sector and industry for `ticker`, sourced from
+   * Yahoo's `quoteSummary` endpoint with `modules=assetProfile`.
+   *
+   * For individual equities Yahoo populates `assetProfile.sector` (e.g.
+   * "Technology") and `assetProfile.industry` (e.g. "Software—Infrastructure").
+   * Funds/ETFs typically lack this block — they expose category data via
+   * `fundProfile` instead — so we return nulls rather than throwing when
+   * either field is absent. Callers (see `enrichTickerIfMissing` in Task 5)
+   * persist whatever is returned, and the sector-classification helpers
+   * decide how to bucket nulls for the industry donut.
+   */
+  async assetProfile(ticker: string): Promise<{ sector: string | null; industry: string | null }> {
+    const data = await this.quoteSummary(ticker, ['assetProfile']);
+    // Same `as any` rationale as fundTopHoldings / fundProfile — quoteSummary
+    // returns an open-ended JSON blob; the typed boundary is this return type.
+    const profile = (data as any).quoteSummary?.result?.[0]?.assetProfile;
+    return { sector: profile?.sector ?? null, industry: profile?.industry ?? null };
+  }
+
   private async fetchChart(url: string, ticker: string): Promise<ChartResponse> {
     const res = await fetch(url, { method: 'GET' });
     if (!res.ok) {

@@ -9,10 +9,12 @@ import { YahooClient } from '@/market/yahoo-client';
 import { deriveLast12Months } from '@/market/snapshot-derivation';
 import { deriveTodaysSnapshot } from '@/market/daily-snapshot';
 import { syncStaleFunds } from '@/market/fund-holdings-sync';
+import { enrichTickerIfMissing } from '@/market/ticker-enrichment';
 
 /**
- * Run the three background market-data derivations — the 12-month snapshot
- * backfill, the stale fund-holdings sync, and today's per-account snapshot.
+ * Run the four background market-data derivations — the 12-month snapshot
+ * backfill, the stale fund-holdings sync, the per-ticker sector/industry
+ * enrichment, and today's per-account snapshot.
  *
  * Extracted from `init.ts` so both launch (`init.ts`, gated by
  * `isRefreshDue`) and the Settings "Refresh now" button call one
@@ -66,6 +68,34 @@ export function runMarketDataRefresh(db: Database): void {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('[market] background fund-holdings sync failed:', err);
+    }
+  })();
+
+  // Lazy backfill of sector/industry for each distinct held ticker.
+  // `enrichTickerIfMissing` early-exits when the ticker already has a
+  // non-null sector, so this is cheap for already-enriched tickers and
+  // only hits Yahoo for the ones that pre-date migration 0016 (or whose
+  // previous attempt returned null). Without this loop, tickers added
+  // before the industry-donut feature stay "Unclassified" forever —
+  // the spec § 5 explicitly promises the refresh path fixes this.
+  // Independent of snapshot derivation and fund sync — kept in its own
+  // IIFE so a Yahoo failure here doesn't block the others.
+  void (async () => {
+    try {
+      const holdings = new HoldingsRepo(db);
+      const tickers = new TickersRepo(db);
+      const yahoo = new YahooClient();
+      const allHoldings = await holdings.listAll();
+      const distinctTickers = [...new Set(allHoldings.map((h) => h.ticker))];
+      // Parallel — enrichTickerIfMissing itself swallows per-ticker errors
+      // and short-circuits when sector is already populated, so this stays
+      // O(network calls) only for the unenriched subset.
+      await Promise.all(
+        distinctTickers.map((ticker) => enrichTickerIfMissing(ticker, { yahoo, tickers })),
+      );
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[market] background ticker enrichment failed:', err);
     }
   })();
 

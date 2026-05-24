@@ -15,6 +15,9 @@ const loadSeedTickersMigration = () =>
 const loadAccentColorsMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0015_add_accent_colors.sql'), 'utf-8');
 
+const loadSectorIndustryMigration = () =>
+  readFileSync(resolve(__dirname, '../../src/db/migrations/0016_add_ticker_sector_industry.sql'), 'utf-8');
+
 const sampleTicker = (): Ticker => ({
   ticker: 'VTI',
   name: 'Vanguard Total Stock Market ETF',
@@ -23,6 +26,8 @@ const sampleTicker = (): Ticker => ({
   direction: 'LONG',
   userAdded: false,
   accentColor: null,
+  sector: null,
+  industry: null,
 });
 
 describe('TickersRepo', () => {
@@ -34,6 +39,7 @@ describe('TickersRepo', () => {
     await runMigrations(db, [
       { version: '0001_initial', sql: loadInitialMigration() },
       { version: '0015_add_accent_colors', sql: loadAccentColorsMigration() },
+      { version: '0016_add_ticker_sector_industry', sql: loadSectorIndustryMigration() },
     ]);
     repo = new TickersRepo(db);
   });
@@ -101,6 +107,8 @@ describe('TickersRepo', () => {
       direction: 'LONG',
       userAdded: true,
       accentColor: null,
+      sector: null,
+      industry: null,
     };
 
     await repo.upsert(seedTicker);
@@ -127,6 +135,9 @@ describe('TickersRepo', () => {
         leverageFactor: 1.0,
         direction: 'LONG',
         userAdded: false,
+        accentColor: null,
+        sector: null,
+        industry: null,
       })
     ).rejects.toThrow();
   });
@@ -152,6 +163,30 @@ describe('TickersRepo', () => {
     await repo.setAccentColor('VTI', null);
     expect((await repo.lookup('VTI'))?.accentColor).toBeNull();
   });
+
+  it('round-trips sector and industry through upsert', async () => {
+    await repo.upsert({
+      ...sampleTicker(),
+      sector: 'Technology',
+      industry: 'Software—Infrastructure',
+    });
+    const found = await repo.lookup('VTI');
+    expect(found?.sector).toBe('Technology');
+    expect(found?.industry).toBe('Software—Infrastructure');
+  });
+
+  it('round-trips null sector and industry through upsert', async () => {
+    await repo.upsert({
+      ...sampleTicker(),
+      sector: 'Technology',
+      industry: 'Software',
+    });
+    // Now clear them.
+    await repo.upsert({ ...sampleTicker(), sector: null, industry: null });
+    const found = await repo.lookup('VTI');
+    expect(found?.sector).toBeNull();
+    expect(found?.industry).toBeNull();
+  });
 });
 
 describe('TickersRepo with seed migration', () => {
@@ -164,6 +199,7 @@ describe('TickersRepo with seed migration', () => {
       { version: '0001_initial', sql: loadInitialMigration() },
       { version: '0006_seed_tickers', sql: loadSeedTickersMigration() },
       { version: '0015_add_accent_colors', sql: loadAccentColorsMigration() },
+      { version: '0016_add_ticker_sector_industry', sql: loadSectorIndustryMigration() },
     ]);
     repo = new TickersRepo(db);
   });

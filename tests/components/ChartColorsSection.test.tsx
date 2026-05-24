@@ -36,7 +36,7 @@ describe('ChartColorsSection', () => {
     await tickersRepo.upsert({
       ticker: 'VTI', name: 'Vanguard Total Stock Market ETF',
       assetClass: 'US_TOTAL_MARKET', leverageFactor: 1, direction: 'LONG',
-      userAdded: false, accentColor: null,
+      userAdded: false, accentColor: null, sector: null, industry: null,
     });
     const holdingsRepo = new HoldingsRepo(db);
     await holdingsRepo.create({
