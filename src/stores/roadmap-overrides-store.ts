@@ -1,14 +1,15 @@
 import { create } from 'zustand';
+import { RoadmapOverridesRepo } from '@/domain/roadmap-overrides-repo';
+import { getDatabase } from '@/db/db';
+import { useHouseholdStore } from '@/stores/household-store';
 import type { NodeId, RoadmapNodeOverride, OverrideStatus } from '@/types/roadmap';
 
 /**
  * Per-node user overrides of the rule engine's computed status. Each
  * row in roadmap_node_overrides becomes one entry in
  * overridesByNodeId, keyed by NodeId for O(1) lookup during
- * evaluate().
- *
- * Sub-Plan B Task 6 wires this to the DB repo. For now the store
- * exposes the shape so context.ts and evaluate.ts can consume it.
+ * evaluate(). Mutations call back to refresh the in-memory map so
+ * subscribers re-render on every change.
  */
 interface RoadmapOverridesState {
   overridesByNodeId: Map<NodeId, RoadmapNodeOverride>;
@@ -19,11 +20,42 @@ interface RoadmapOverridesState {
   clearOverride: (nodeId: NodeId) => Promise<void>;
 }
 
-export const useRoadmapOverridesStore = create<RoadmapOverridesState>(() => ({
+function currentHouseholdId(): number {
+  return useHouseholdStore.getState().household?.id ?? 1;
+}
+
+export const useRoadmapOverridesStore = create<RoadmapOverridesState>((set, get) => ({
   overridesByNodeId: new Map(),
   isLoading: false,
   error: null,
-  load: async () => { /* Task 6 wires the repo */ },
-  setOverride: async () => { /* Task 6 wires the repo */ },
-  clearOverride: async () => { /* Task 6 wires the repo */ },
+
+  load: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const repo = new RoadmapOverridesRepo(getDatabase());
+      const rows = await repo.list();
+      const map = new Map<NodeId, RoadmapNodeOverride>();
+      for (const row of rows) map.set(row.nodeId, row);
+      set({ overridesByNodeId: map, isLoading: false });
+    } catch (e) {
+      set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load overrides' });
+    }
+  },
+
+  setOverride: async (nodeId, status, note) => {
+    const repo = new RoadmapOverridesRepo(getDatabase());
+    await repo.upsert({
+      householdId: currentHouseholdId(),
+      nodeId,
+      overrideStatus: status,
+      note: note ?? null,
+    });
+    await get().load();
+  },
+
+  clearOverride: async (nodeId) => {
+    const repo = new RoadmapOverridesRepo(getDatabase());
+    await repo.delete(currentHouseholdId(), nodeId);
+    await get().load();
+  },
 }));
