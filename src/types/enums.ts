@@ -53,6 +53,7 @@ export const ContributionSource = {
   EMPLOYER_MATCH: 'EMPLOYER_MATCH',
   MANUAL: 'MANUAL',
   ROLLOVER: 'ROLLOVER',
+  ANNUAL_TOTAL: 'ANNUAL_TOTAL',
 } as const;
 export type ContributionSource = typeof ContributionSource[keyof typeof ContributionSource];
 
@@ -60,8 +61,14 @@ export const SnapshotSource = {
   AUTO_DERIVED: 'AUTO_DERIVED',
   MANUAL: 'MANUAL',
   USER_CONFIRMED: 'USER_CONFIRMED',
+  CSV_IMPORT: 'CSV_IMPORT',
 } as const;
 export type SnapshotSource = typeof SnapshotSource[keyof typeof SnapshotSource];
+
+export const TransactionSource = {
+  CSV_IMPORT: 'CSV_IMPORT',
+} as const;
+export type TransactionSource = typeof TransactionSource[keyof typeof TransactionSource];
 
 export const AssetClass = {
   US_TOTAL_MARKET: 'US_TOTAL_MARKET',
