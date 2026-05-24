@@ -84,6 +84,9 @@ describe('NODES registry', () => {
       's1_emergency_small',
       's1_emergency_3mo',
       's1_emergency_6_12mo',
+      's1_high_interest_debt',
+      's2_moderate_debt_action',
+      's6_low_interest_debt',
     ]);
     const synthetic = {} as any;
     for (const n of NODES) {

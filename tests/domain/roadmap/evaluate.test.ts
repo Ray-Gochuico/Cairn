@@ -67,6 +67,9 @@ describe('evaluate', () => {
       's1_emergency_small',
       's1_emergency_3mo',
       's1_emergency_6_12mo',
+      's1_high_interest_debt',
+      's2_moderate_debt_action',
+      's6_low_interest_debt',
     ]);
     const results = evaluate(makeContext());
     for (const [id, r] of results) {

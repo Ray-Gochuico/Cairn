@@ -4,6 +4,11 @@ import {
   evaluateEmergencyFund3Months,
   evaluateEmergencyFund6To12Months,
 } from './rules/emergencyFund';
+import {
+  evaluateHighInterestDebt,
+  evaluateModerateInterestDebt,
+  evaluateLowInterestDebt,
+} from './rules/debtClassification';
 
 /**
  * Declarative registry of every Roadmap chart node, derived from
@@ -157,7 +162,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Pay all high-interest debt',
     body: 'Defined in this app as any loan with an annual rate ≥ 8% (default; adjustable in Settings → Advanced).',
     prerequisites: ['s1_employer_match'],
-    evaluate: stub('s1_high_interest_debt'),
+    evaluate: evaluateHighInterestDebt,
   },
   {
     id: 's1_job_stability_q',
@@ -206,7 +211,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Refinance + avalanche moderate-interest debt',
     body: 'Refinance the rate down where possible, then pay the highest-rate balance first (avalanche).',
     prerequisites: ['s2_moderate_debt_q'],
-    evaluate: stub('s2_moderate_debt_action'),
+    evaluate: evaluateModerateInterestDebt,
   },
 
   // ──────────────────────────────────────────────────────────────────
@@ -474,7 +479,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Evaluate paying off low-interest debt',
     body: 'Defined as any loan with an annual rate < 5%. Compare your expected after-tax return on investments to the rate.',
     prerequisites: ['s6_tax_loss_harvest'],
-    evaluate: stub('s6_low_interest_debt'),
+    evaluate: evaluateLowInterestDebt,
   },
   {
     id: 's6_charitable_daf',
