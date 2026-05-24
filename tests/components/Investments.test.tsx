@@ -382,6 +382,40 @@ describe('Investments page — 529 section', () => {
     revokeSpy.mockRestore();
   });
 
+  it('renders the three-up donut grid with asset, per-ticker, and sector cards', () => {
+    primeStores({
+      accounts: [
+        { id: 1, name: 'Brokerage', type: AccountType.ACCOUNT_BROKERAGE },
+      ],
+      snapshotValues: [
+        { accountId: 1, snapshotDate: '2026-04-01', totalValue: 1_000 },
+      ],
+    });
+
+    render(
+      <MemoryRouter>
+        <Investments />
+      </MemoryRouter>,
+    );
+
+    // All three donut titles render in their cards. PerTickerDonut and
+    // SectorDonut fall through to their empty-state cards (no holdings)
+    // but still render their titles, which is enough to verify the
+    // 3-up grid is wired.
+    expect(screen.getByText('Asset allocation')).toBeInTheDocument();
+    expect(screen.getByText('Per-company exposure')).toBeInTheDocument();
+    expect(screen.getByText('Sector exposure')).toBeInTheDocument();
+
+    // Grid container uses lg:grid-cols-3 so the three donuts sit side-
+    // by-side on wide viewports and stack on narrow ones.
+    const sectorCardTitle = screen.getByText('Sector exposure');
+    // Climb out of: CardTitle → CardHeader → Card → grid container.
+    const grid = sectorCardTitle.closest('.grid');
+    expect(grid).not.toBeNull();
+    expect(grid!.className).toContain('lg:grid-cols-3');
+    expect(grid!.className).toContain('grid-cols-1');
+  });
+
   it('view filter ?view=p1 hides accounts owned by p2', () => {
     // Seed two persons so useViewFilter recognises a two-person household.
     usePersonsStore.setState({
