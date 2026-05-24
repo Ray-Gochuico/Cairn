@@ -14,7 +14,7 @@ function makeLoan(opts: { name?: string; rate: number; balance?: number }): Loan
     householdId: 1,
     obligorPersonId: null,
     name: opts.name ?? 'Loan',
-    type: LoanType.LOAN_PERSONAL,
+    type: LoanType.PERSONAL,
     originalAmount: 10_000,
     currentBalance: opts.balance ?? 5_000,
     interestRate: opts.rate,  // stored as decimal (0.08 = 8%)

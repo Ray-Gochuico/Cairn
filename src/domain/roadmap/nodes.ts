@@ -9,6 +9,12 @@ import {
   evaluateModerateInterestDebt,
   evaluateLowInterestDebt,
 } from './rules/debtClassification';
+import {
+  evaluateIraBand,
+  evaluateBackdoorRoth,
+  evaluateRothIra,
+  evaluateTraditionalIra,
+} from './rules/iraBranch';
 
 /**
  * Declarative registry of every Roadmap chart node, derived from
@@ -309,7 +315,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Branch by MAGI',
     body: 'Single MAGI > $153k or MFJ > $242k → backdoor Roth. Single $81k–$153k or MFJ $129k–$242k → Roth IRA. Below → step 4 (traditional vs. Roth choice).',
     prerequisites: ['s4_contribute_ira'],
-    evaluate: stub('s4_ira_band'),
+    evaluate: evaluateIraBand,
   },
   {
     id: 's4_backdoor_roth',
@@ -318,7 +324,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Max traditional IRA, then convert to Roth (backdoor)',
     body: 'High earners only. Be aware of the IRS pro-rata rule if you hold any pre-tax IRA balance.',
     prerequisites: ['s4_ira_band'],
-    evaluate: stub('s4_backdoor_roth'),
+    evaluate: evaluateBackdoorRoth,
   },
   {
     id: 's4_roth_ira',
@@ -327,7 +333,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Max out Roth IRA',
     body: 'Mid-band earners. If you accidentally over-contribute, perform a recharacterization.',
     prerequisites: ['s4_ira_band'],
-    evaluate: stub('s4_roth_ira'),
+    evaluate: evaluateRothIra,
   },
   {
     id: 's4_expect_higher_income_q',
@@ -345,7 +351,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Max out traditional IRA',
     body: 'For low-MAGI filers not expecting higher future income.',
     prerequisites: ['s4_expect_higher_income_q'],
-    evaluate: stub('s4_traditional_ira'),
+    evaluate: evaluateTraditionalIra,
   },
   {
     id: 's4_solo_401k',

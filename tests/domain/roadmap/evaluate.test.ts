@@ -70,6 +70,10 @@ describe('evaluate', () => {
       's1_high_interest_debt',
       's2_moderate_debt_action',
       's6_low_interest_debt',
+      's4_ira_band',
+      's4_backdoor_roth',
+      's4_roth_ira',
+      's4_traditional_ira',
     ]);
     const results = evaluate(makeContext());
     for (const [id, r] of results) {
