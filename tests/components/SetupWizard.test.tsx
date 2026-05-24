@@ -29,6 +29,23 @@ const loadEmploymentBonusMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0005_add_employment_and_bonus_columns.sql'), 'utf-8');
 const loadAccountMarginMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0007_add_account_margin.sql'), 'utf-8');
+const loadDisclosureFoundationsMigration = () =>
+  readFileSync(resolve(__dirname, '../../src/db/migrations/0017_disclosure_foundations.sql'), 'utf-8');
+
+/**
+ * Click through Step 0 (the app-wide disclaimer modal) so subsequent
+ * assertions can target the actual stepper. Use after `renderWizard()`.
+ */
+async function dismissStep0Disclaimer(user: UserEvent) {
+  await waitFor(() => {
+    expect(screen.getByRole('heading', { name: 'Disclaimer' })).toBeInTheDocument();
+  });
+  await user.click(screen.getByRole('checkbox'));
+  await user.click(screen.getByRole('button', { name: /continue to setup/i }));
+  await waitFor(() => {
+    expect(screen.queryByRole('heading', { name: 'Disclaimer' })).not.toBeInTheDocument();
+  });
+}
 
 async function selectDate(user: UserEvent, pickerId: string, isoDate: string) {
   const [yyyy, mm, dd] = isoDate.split('-');
@@ -77,6 +94,9 @@ describe('SetupWizard', () => {
       { version: '0003_add_commission_columns', sql: loadCommissionMigration() },
       { version: '0005_add_employment_and_bonus_columns', sql: loadEmploymentBonusMigration() },
       { version: '0007_add_account_margin', sql: loadAccountMarginMigration() },
+      // 0017 adds the disclosure cache columns + audit table — needed
+      // for SetupWizard's Step 0 to write the user's acceptance.
+      { version: '0017_disclosure_foundations', sql: loadDisclosureFoundationsMigration() },
     ]);
     setDatabase(db);
     resetAllStores();
@@ -86,8 +106,19 @@ describe('SetupWizard', () => {
     await db.close();
   });
 
-  it('renders Step 1 (Household) by default and shows the 9-step progress indicator', async () => {
+  it('shows the Step 0 disclaimer modal first on a fresh setup', async () => {
     renderWizard();
+    expect(
+      await screen.findByRole('heading', { name: 'Disclaimer' }),
+    ).toBeInTheDocument();
+    // The 9-step stepper is hidden until the user accepts.
+    expect(screen.queryByText(/Step 1 of 9/i)).not.toBeInTheDocument();
+  });
+
+  it('renders Step 1 (Household) after dismissing the Step 0 disclaimer', async () => {
+    const user = userEvent.setup();
+    renderWizard();
+    await dismissStep0Disclaimer(user);
 
     // Header reflects the current step.
     expect(
@@ -109,6 +140,9 @@ describe('SetupWizard', () => {
   it('traverses all 9 steps with minimal data and navigates to / on Finish', async () => {
     const user = userEvent.setup();
     renderWizard();
+
+    // --- Step 0: Disclaimer ---
+    await dismissStep0Disclaimer(user);
 
     // --- Step 1: Household ---
     // Household is seeded by migration; load is fired by Step1Household's

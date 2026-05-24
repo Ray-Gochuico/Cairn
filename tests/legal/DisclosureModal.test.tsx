@@ -89,4 +89,14 @@ describe('DisclosureModal', () => {
     render(<DisclosureModal document={appWideDoc} onAccept={vi.fn()} />);
     expect(screen.getByText('I have read and understand.')).toBeInTheDocument();
   });
+
+  it('shows an inline error and re-enables Continue if onAccept rejects', async () => {
+    const onAccept = vi.fn().mockRejectedValue(new Error('db unavailable'));
+    render(<DisclosureModal document={appWideDoc} onAccept={onAccept} />);
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }));
+    await screen.findByText(/db unavailable/i);
+    // Continue button should be enabled again so the user can retry.
+    expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled();
+  });
 });

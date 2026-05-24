@@ -35,11 +35,18 @@ export function DisclosureModal({
 
   const title = document.id === 'app_wide' ? 'Disclaimer' : 'About the Roadmap';
 
+  const [error, setError] = useState<string | null>(null);
   const handleAccept = async () => {
     if (!checked || submitting) return;
     setSubmitting(true);
+    setError(null);
     try {
       await onAccept(document.version);
+    } catch (e) {
+      // Surface the error inline so the user can retry instead of bubbling
+      // it up to an unhandled rejection. The caller's onAccept is expected
+      // to write to the DB; transient failures are rare but possible.
+      setError(e instanceof Error ? e.message : 'Failed to record acceptance. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -89,6 +96,12 @@ export function DisclosureModal({
             <span>{document.acceptanceCheckboxLabel}</span>
           </label>
         </div>
+
+        {error && (
+          <div className="px-6 py-2 text-sm text-red-700 bg-red-50 border-t border-red-200">
+            {error}
+          </div>
+        )}
 
         <div className="px-6 py-3 border-t flex justify-end gap-2">
           {onCancel && (
