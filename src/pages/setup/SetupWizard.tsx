@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import Step0Disclaimer from './Step0Disclaimer';
 import Step1Household from './Step1Household';
 import Step2Persons from './Step2Persons';
 import Step3Employment from './Step3Employment';
@@ -12,6 +13,7 @@ import Step7PropertyVehicles from './Step7PropertyVehicles';
 import Step8Goals from './Step8Goals';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
+import { useHouseholdStore } from '@/stores/household-store';
 import { AccountsRepo } from '@/domain/accounts';
 import { HoldingsRepo } from '@/domain/holdings';
 import { AccountSnapshotsRepo } from '@/domain/snapshots';
@@ -19,6 +21,7 @@ import { PriceCache } from '@/market/price-cache';
 import { YahooClient } from '@/market/yahoo-client';
 import { deriveLast12Months } from '@/market/snapshot-derivation';
 import { getDatabase } from '@/db/db';
+import { DISCLOSURES } from '@/legal/disclosures';
 
 type StepIndex = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
@@ -48,6 +51,23 @@ export default function SetupWizard() {
   const navigate = useNavigate();
   const [current, setCurrent] = useState<StepIndex>(1);
   const [completed, setCompleted] = useState<Set<StepIndex>>(new Set());
+
+  // Step 0 is a pre-wizard gate, not part of the visible stepper. It
+  // renders as a full-screen modal that covers the entire wizard until
+  // the user accepts the app-wide disclaimer. Returning users (with
+  // disclaimer_version_accepted matching the current version) skip
+  // straight to Step 1; first-runs see the modal first.
+  const household = useHouseholdStore((s) => s.household);
+  const loadHousehold = useHouseholdStore((s) => s.load);
+  const [step0LocalAccept, setStep0LocalAccept] = useState(false);
+
+  useEffect(() => {
+    if (!household) void loadHousehold();
+  }, [household, loadHousehold]);
+
+  const disclaimerSatisfied =
+    step0LocalAccept ||
+    (household?.disclaimerVersionAccepted === DISCLOSURES.app_wide.version);
 
   const advance = () => {
     setCompleted((prev) => {
@@ -132,6 +152,12 @@ export default function SetupWizard() {
     case 9:
       stepContent = <Step8Goals onComplete={finish} />;
       break;
+  }
+
+  // Gate the rest of the wizard behind Step 0 (the app-wide disclaimer).
+  // Skipped for returning users whose accepted version is current.
+  if (!disclaimerSatisfied) {
+    return <Step0Disclaimer onComplete={() => setStep0LocalAccept(true)} />;
   }
 
   return (

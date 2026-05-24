@@ -39,6 +39,14 @@ export const HouseholdSchema = z.object({
   withdrawalRate: z.number().min(0).max(1),
   inflationAssumption: z.number().min(0).max(1),
   growthScenarios: z.array(GrowthScenarioSchema),
+  // Disclosure acceptance cache (latest accepted version per document).
+  // Null = never accepted; the AppDisclaimerGate / Setup Wizard Step 0
+  // intercept these users on next launch. The full audit trail lives in
+  // the disclosure_acceptances table.
+  disclaimerAcceptedAt: z.string().nullable().default(null),
+  disclaimerVersionAccepted: z.string().nullable().default(null),
+  roadmapDisclaimerAcceptedAt: z.string().nullable().default(null),
+  roadmapDisclaimerVersionAccepted: z.string().nullable().default(null),
 });
 export type Household = z.infer<typeof HouseholdSchema>;
 

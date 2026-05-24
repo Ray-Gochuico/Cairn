@@ -11,6 +11,10 @@ interface HouseholdRow {
   withdrawal_rate: number;
   inflation_assumption: number;
   growth_scenarios: string;
+  disclaimer_accepted_at: string | null;
+  disclaimer_version_accepted: string | null;
+  roadmap_disclaimer_accepted_at: string | null;
+  roadmap_disclaimer_version_accepted: string | null;
 }
 
 function rowToHousehold(row: HouseholdRow): Household {
@@ -25,8 +29,14 @@ function rowToHousehold(row: HouseholdRow): Household {
     withdrawalRate: row.withdrawal_rate,
     inflationAssumption: row.inflation_assumption,
     growthScenarios,
+    disclaimerAcceptedAt: row.disclaimer_accepted_at,
+    disclaimerVersionAccepted: row.disclaimer_version_accepted,
+    roadmapDisclaimerAcceptedAt: row.roadmap_disclaimer_accepted_at,
+    roadmapDisclaimerVersionAccepted: row.roadmap_disclaimer_version_accepted,
   });
 }
+
+export type DisclosureDocumentId = 'app_wide' | 'roadmap';
 
 export class HouseholdRepo {
   constructor(private db: Database) {}
@@ -69,6 +79,26 @@ export class HouseholdRepo {
         merged.inflationAssumption,
         JSON.stringify(merged.growthScenarios),
       ]
+    );
+  }
+
+  /**
+   * Cache the latest accepted disclosure version on the household row.
+   * The audit trail in disclosure_acceptances is the source of truth —
+   * this is just the fast-path read so AppDisclaimerGate doesn't have to
+   * hit the audit table on every render.
+   */
+  async updateDisclosure(
+    documentId: DisclosureDocumentId,
+    version: string,
+    acceptedAt: string,
+  ): Promise<void> {
+    const cols = documentId === 'app_wide'
+      ? { atCol: 'disclaimer_accepted_at', verCol: 'disclaimer_version_accepted' }
+      : { atCol: 'roadmap_disclaimer_accepted_at', verCol: 'roadmap_disclaimer_version_accepted' };
+    await this.db.execute(
+      `UPDATE household SET ${cols.atCol} = ?, ${cols.verCol} = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1`,
+      [acceptedAt, version],
     );
   }
 }

@@ -58,10 +58,13 @@ async function bootstrap() {
     // router would capture window.location.pathname === '/', then ignore
     // the subsequent URL change.
     const { default: App } = await import('./App');
+    const { AppDisclaimerGate } = await import('./legal/AppDisclaimerGate');
 
     ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
       <React.StrictMode>
-        <App />
+        <AppDisclaimerGate>
+          <App />
+        </AppDisclaimerGate>
       </React.StrictMode>,
     );
   } catch (e) {
