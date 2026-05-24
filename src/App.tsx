@@ -10,6 +10,7 @@ import EquityGrants from './pages/EquityGrants';
 import Spending from './pages/Spending';
 import Budget from './pages/Budget';
 import Goals from './pages/Goals';
+import Roadmap from './pages/Roadmap';
 import CalculatorsLayout from './pages/calculators/CalculatorsLayout';
 import WhatIf from './pages/WhatIf';
 import Settings from './pages/Settings';
@@ -51,6 +52,7 @@ const router = createBrowserRouter([
       { path: 'spending', element: <Spending /> },
       { path: 'budget', element: <Budget /> },
       { path: 'goals', element: <Goals /> },
+      { path: 'roadmap', element: <Roadmap /> },
       { path: 'calculators', element: <CalculatorsLayout /> },
       { path: 'what-if', element: <WhatIf /> },
       { path: 'settings', element: <Settings /> },
