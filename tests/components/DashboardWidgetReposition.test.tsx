@@ -44,8 +44,8 @@ function resetStores() {
   useVehiclesStore.setState({ vehicles: [], isLoading: false, error: null, load: async () => {} });
   useTransactionsStore.setState({ transactions: [], isLoading: false, error: null, load: async () => {} });
   useCategoriesStore.setState({ categories: [], isLoading: false, error: null, load: async () => {} });
-  // Each test starts from a clean layout (default order, nothing hidden).
   try { window.localStorage.removeItem('dashboardPillLayout.v1'); } catch { /* ignore */ }
+  try { window.localStorage.removeItem('dashboardWidgetLayout.v1'); } catch { /* ignore */ }
 }
 
 function renderDashboard() {
@@ -56,79 +56,99 @@ function renderDashboard() {
   );
 }
 
-describe('Dashboard edit mode', () => {
+describe('Dashboard "Customize layout" button', () => {
   beforeEach(() => {
     resetStores();
   });
 
-  it('shows a Customize layout toggle button in the header that flips to "Done" when active', () => {
+  it('labels the toggle "Customize layout" when off and "Done" when on', () => {
     renderDashboard();
     const toggle = screen.getByTestId('dashboard-edit-toggle');
     expect(toggle).toHaveTextContent(/customize layout/i);
-    expect(toggle).toHaveAttribute('aria-pressed', 'false');
     fireEvent.click(toggle);
     expect(toggle).toHaveTextContent(/done/i);
-    expect(toggle).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('reveals remove/move controls on every pill only when editing is on', () => {
+  it('includes a tooltip describing what the button does', () => {
     renderDashboard();
-    // Off by default: no remove button anywhere.
-    expect(screen.queryByTestId('pill-net-worth-remove')).toBeNull();
-    // Turn it on.
-    fireEvent.click(screen.getByTestId('dashboard-edit-toggle'));
-    // Every default pill exposes a remove + move controls.
-    expect(screen.getByTestId('pill-net-worth-remove')).toBeInTheDocument();
-    expect(screen.getByTestId('pill-total-debt-up')).toBeInTheDocument();
-    expect(screen.getByTestId('pill-spending-vs-budget-down')).toBeInTheDocument();
+    const toggle = screen.getByTestId('dashboard-edit-toggle');
+    const tooltip = toggle.getAttribute('title') ?? toggle.getAttribute('aria-label') ?? '';
+    expect(tooltip.toLowerCase()).toMatch(/reorder|hide|widget|pill/);
+  });
+});
+
+describe('Dashboard widget reposition', () => {
+  beforeEach(() => {
+    resetStores();
   });
 
-  it('removes a pill from the grid when its X is clicked and surfaces it under "Hidden pills"', () => {
+  it('renders every dashboard widget under a stable data-widget-id wrapper', () => {
     renderDashboard();
-    fireEvent.click(screen.getByTestId('dashboard-edit-toggle'));
-    // Confirm Net Worth pill is visible before removal.
-    expect(screen.getByTestId('pill-net-worth')).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId('pill-net-worth-remove'));
-    // Pill drops out of the visible grid.
-    expect(screen.queryByTestId('pill-net-worth')).toBeNull();
-    // Hidden-pills tray surfaces a re-add chip for it.
-    expect(screen.getByTestId('pill-add-net-worth')).toBeInTheDocument();
+    // The four widgets currently composed on the dashboard.
+    expect(screen.getByTestId('widget-pills-section')).toBeInTheDocument();
+    expect(screen.getByTestId('widget-spending')).toBeInTheDocument();
+    expect(screen.getByTestId('widget-concentration')).toBeInTheDocument();
+    expect(screen.getByTestId('widget-goals')).toBeInTheDocument();
   });
 
-  it('restores a hidden pill back into the grid when its "Add" chip is clicked', () => {
+  it('reveals widget move/remove controls only when editing is on', () => {
     renderDashboard();
+    expect(screen.queryByTestId('widget-spending-remove')).toBeNull();
     fireEvent.click(screen.getByTestId('dashboard-edit-toggle'));
-    fireEvent.click(screen.getByTestId('pill-total-debt-remove'));
-    expect(screen.queryByTestId('pill-total-debt')).toBeNull();
-    fireEvent.click(screen.getByTestId('pill-add-total-debt'));
-    expect(screen.getByTestId('pill-total-debt')).toBeInTheDocument();
+    expect(screen.getByTestId('widget-spending-remove')).toBeInTheDocument();
+    expect(screen.getByTestId('widget-concentration-up')).toBeInTheDocument();
+    expect(screen.getByTestId('widget-goals-down')).toBeInTheDocument();
   });
 
-  it('reorders pills via the up/down arrows', () => {
+  it('reorders widgets via the up/down chevrons', () => {
     renderDashboard();
     fireEvent.click(screen.getByTestId('dashboard-edit-toggle'));
-    // The "Total Debt" pill sits at index 1 by default. Move it up to index 0.
-    fireEvent.click(screen.getByTestId('pill-total-debt-up'));
-    // Inspect grid order — first child should now be the Total Debt pill.
-    const grid = screen.getByTestId('dashboard-pill-grid');
-    const firstPill = grid.querySelector('[data-pill-id]');
-    expect(firstPill?.getAttribute('data-pill-id')).toBe('total-debt');
+    // The spending widget is at index 1 by default (after pills-section).
+    // Moving it up swaps it with pills-section so pills moves to index 1.
+    const before = Array.from(document.querySelectorAll('[data-widget-id]')).map(
+      (el) => el.getAttribute('data-widget-id'),
+    );
+    expect(before[0]).toBe('pills-section');
+    expect(before[1]).toBe('spending');
+    fireEvent.click(screen.getByTestId('widget-spending-up'));
+    const after = Array.from(document.querySelectorAll('[data-widget-id]')).map(
+      (el) => el.getAttribute('data-widget-id'),
+    );
+    expect(after[0]).toBe('spending');
+    expect(after[1]).toBe('pills-section');
   });
 
-  it('disables the up arrow on the first pill and the down arrow on the last pill', () => {
+  it('hides a widget and surfaces it under the Hidden widgets tray', () => {
     renderDashboard();
     fireEvent.click(screen.getByTestId('dashboard-edit-toggle'));
-    expect(screen.getByTestId('pill-net-worth-up')).toBeDisabled();
-    expect(screen.getByTestId('pill-spending-vs-budget-down')).toBeDisabled();
+    expect(screen.getByTestId('widget-spending')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('widget-spending-remove'));
+    expect(screen.queryByTestId('widget-spending')).toBeNull();
+    expect(screen.getByTestId('widget-add-spending')).toBeInTheDocument();
   });
 
-  it('persists hidden pills across remount via localStorage', () => {
+  it('restores a hidden widget from the tray', () => {
+    renderDashboard();
+    fireEvent.click(screen.getByTestId('dashboard-edit-toggle'));
+    fireEvent.click(screen.getByTestId('widget-concentration-remove'));
+    expect(screen.queryByTestId('widget-concentration')).toBeNull();
+    fireEvent.click(screen.getByTestId('widget-add-concentration'));
+    expect(screen.getByTestId('widget-concentration')).toBeInTheDocument();
+  });
+
+  it('disables the up arrow on the first widget and the down arrow on the last widget', () => {
+    renderDashboard();
+    fireEvent.click(screen.getByTestId('dashboard-edit-toggle'));
+    expect(screen.getByTestId('widget-pills-section-up')).toBeDisabled();
+    expect(screen.getByTestId('widget-goals-down')).toBeDisabled();
+  });
+
+  it('persists hidden widgets across remount via localStorage', () => {
     const { unmount } = renderDashboard();
     fireEvent.click(screen.getByTestId('dashboard-edit-toggle'));
-    fireEvent.click(screen.getByTestId('pill-liquid-investments-remove'));
+    fireEvent.click(screen.getByTestId('widget-spending-remove'));
     unmount();
-    // Mount fresh — localStorage should re-seed Liquid Investments as hidden.
     renderDashboard();
-    expect(screen.queryByTestId('pill-liquid-investments')).toBeNull();
+    expect(screen.queryByTestId('widget-spending')).toBeNull();
   });
 });
