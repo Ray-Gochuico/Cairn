@@ -168,54 +168,58 @@ export default function ProjectionChart({
             <XAxis dataKey="monthISO" tick={{ fontSize: 11 }} minTickGap={32} />
             <YAxis tick={{ fontSize: 11 }} tickFormatter={formatCompactCurrency} width={72} />
             <Tooltip
-              formatter={(v: number, name: string) => [formatCompactCurrency(v), name]}
-              labelFormatter={(label: string) => label}
+              formatter={(value, name) => [formatCompactCurrency(Number(value)), String(name)]}
+              labelFormatter={(label) => String(label ?? '')}
               cursor={{ strokeDasharray: '3 3' }}
             />
 
-            {mode === 'composition' && visible.length === 1 && visible[0] != null && (
-              <>
-                <Area
-                  type="monotone"
-                  dataKey={`investments_${visible[0].id}`}
-                  name="Investments"
-                  stackId="composition"
-                  stroke="none"
-                  fill="#4f86f7"
-                  fillOpacity={0.25}
-                  isAnimationActive={false}
-                />
-                <Area
-                  type="monotone"
-                  dataKey={`homeEquity_${visible[0].id}`}
-                  name="Home equity"
-                  stackId="composition"
-                  stroke="none"
-                  fill="#5fbb7c"
-                  fillOpacity={0.25}
-                  isAnimationActive={false}
-                />
-                <Area
-                  type="monotone"
-                  dataKey={`cash_${visible[0].id}`}
-                  name="Cash"
-                  stackId="composition"
-                  stroke="none"
-                  fill="#e6b54b"
-                  fillOpacity={0.25}
-                  isAnimationActive={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey={`net_${visible[0].id}`}
-                  name={`${visible[0].name} net worth`}
-                  stroke={visible[0].color}
-                  strokeWidth={2.5}
-                  dot={false}
-                  isAnimationActive={false}
-                />
-              </>
-            )}
+            {mode === 'composition' && visible.length === 1 && visible[0]?.id != null && (() => {
+              const sc = visible[0]!;
+              const scId = sc.id!;
+              return (
+                <>
+                  <Area
+                    type="monotone"
+                    dataKey={`investments_${scId}`}
+                    name="Investments"
+                    stackId="composition"
+                    stroke="none"
+                    fill="#4f86f7"
+                    fillOpacity={0.25}
+                    isAnimationActive={false}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey={`homeEquity_${scId}`}
+                    name="Home equity"
+                    stackId="composition"
+                    stroke="none"
+                    fill="#5fbb7c"
+                    fillOpacity={0.25}
+                    isAnimationActive={false}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey={`cash_${scId}`}
+                    name="Cash"
+                    stackId="composition"
+                    stroke="none"
+                    fill="#e6b54b"
+                    fillOpacity={0.25}
+                    isAnimationActive={false}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey={`net_${scId}`}
+                    name={`${sc.name} net worth`}
+                    stroke={sc.color}
+                    strokeWidth={2.5}
+                    dot={false}
+                    isAnimationActive={false}
+                  />
+                </>
+              );
+            })()}
 
             {mode === 'lines' &&
               visible.map((sc) => (
@@ -246,8 +250,8 @@ export default function ProjectionChart({
             <XAxis dataKey="monthISO" tick={{ fontSize: 11 }} minTickGap={32} />
             <YAxis tick={{ fontSize: 11 }} tickFormatter={formatCompactCurrency} width={72} />
             <Tooltip
-              formatter={(v: number, name: string) => [formatCompactCurrency(v), name]}
-              labelFormatter={(label: string) => label}
+              formatter={(value, name) => [formatCompactCurrency(Number(value)), String(name)]}
+              labelFormatter={(label) => String(label ?? '')}
               cursor={{ strokeDasharray: '3 3' }}
             />
             {visible.map((sc) => (
