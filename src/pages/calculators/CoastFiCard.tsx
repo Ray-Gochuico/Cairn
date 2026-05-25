@@ -9,7 +9,7 @@ import { formatCurrency } from '@/lib/format';
 
 interface CoastFiCardProps {
   cardId?: string;
-  onHide?: () => void;
+  onHide?: (cardId: string) => void;
 }
 
 interface ScenarioRow {

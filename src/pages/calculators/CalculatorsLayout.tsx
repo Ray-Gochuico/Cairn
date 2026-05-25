@@ -13,7 +13,7 @@ import { usePersonsStore } from '@/stores/persons-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { getCurrentTaxYear } from '@/lib/current-tax-year';
 import { Button } from '@/components/ui/button';
-import { getHiddenCards, showCard } from '@/lib/calculator-visibility';
+import { getHiddenCards, persistHiddenCards } from '@/lib/calculator-visibility';
 
 const STALE_BANNER_STORAGE_KEY = 'stale-tax-year-banner-dismissed';
 
@@ -91,26 +91,42 @@ export default function CalculatorsLayout() {
     setDismissed(true);
   };
 
-  // Track which cards the user has hidden. Lazy-init from localStorage so the
-  // first render reflects persisted prefs without a flash.
-  const [hiddenSet, setHiddenSet] = useState<Set<string>>(
-    () => new Set(getHiddenCards()),
-  );
+  // Track which cards the user has hidden. The React state is the source of
+  // truth within the session; localStorage is a side-effect persister kept in
+  // sync through `persistHiddenCards`. Storing an array (not a Set) keeps the
+  // value structurally comparable so functional updaters can bail out of
+  // redundant writes, and lets the popover render in a stable order matching
+  // the user's hide sequence.
+  const [hiddenIds, setHiddenIds] = useState<string[]>(() => getHiddenCards());
 
-  const refreshHidden = useCallback(() => {
-    setHiddenSet(new Set(getHiddenCards()));
+  const handleHide = useCallback((id: string) => {
+    setHiddenIds((prev) => {
+      if (prev.includes(id)) return prev;
+      const next = [...prev, id];
+      persistHiddenCards(next);
+      return next;
+    });
   }, []);
 
-  const handleShow = useCallback(
-    (id: string) => {
-      showCard(id);
-      refreshHidden();
-    },
-    [refreshHidden],
-  );
+  const handleShow = useCallback((id: string) => {
+    setHiddenIds((prev) => {
+      if (!prev.includes(id)) return prev;
+      const next = prev.filter((x) => x !== id);
+      persistHiddenCards(next);
+      return next;
+    });
+  }, []);
 
-  const hiddenList = useMemo(() => Array.from(hiddenSet), [hiddenSet]);
-  const hiddenCount = hiddenList.length;
+  const handleShowAll = useCallback(() => {
+    setHiddenIds((prev) => {
+      if (prev.length === 0) return prev;
+      persistHiddenCards([]);
+      return [];
+    });
+  }, []);
+
+  const hiddenSet = useMemo(() => new Set(hiddenIds), [hiddenIds]);
+  const hiddenCount = hiddenIds.length;
 
   const [popoverOpen, setPopoverOpen] = useState(false);
 
@@ -146,37 +162,37 @@ export default function CalculatorsLayout() {
       )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
         {!hiddenSet.has(CARD_IDS.PAYCHECK) && (
-          <PaycheckCard cardId={CARD_IDS.PAYCHECK} onHide={refreshHidden} />
+          <PaycheckCard cardId={CARD_IDS.PAYCHECK} onHide={handleHide} />
         )}
         {!hiddenSet.has(CARD_IDS.BONUS) && (
-          <BonusTaxCard cardId={CARD_IDS.BONUS} onHide={refreshHidden} />
+          <BonusTaxCard cardId={CARD_IDS.BONUS} onHide={handleHide} />
         )}
         {!hiddenSet.has(CARD_IDS.RETIREMENT_401K) && (
           <Retirement401kWithdrawalCard
             cardId={CARD_IDS.RETIREMENT_401K}
-            onHide={refreshHidden}
+            onHide={handleHide}
           />
         )}
         {!hiddenSet.has(CARD_IDS.COMMISSION) && (
-          <CommissionTaxCard cardId={CARD_IDS.COMMISSION} onHide={refreshHidden} />
+          <CommissionTaxCard cardId={CARD_IDS.COMMISSION} onHide={handleHide} />
         )}
         {showOvertime && !hiddenSet.has(CARD_IDS.OVERTIME) && (
-          <OvertimeCard cardId={CARD_IDS.OVERTIME} onHide={refreshHidden} />
+          <OvertimeCard cardId={CARD_IDS.OVERTIME} onHide={handleHide} />
         )}
         {!hiddenSet.has(CARD_IDS.FIRE) && (
-          <FireCard cardId={CARD_IDS.FIRE} onHide={refreshHidden} />
+          <FireCard cardId={CARD_IDS.FIRE} onHide={handleHide} />
         )}
         {!hiddenSet.has(CARD_IDS.COAST_FI) && (
-          <CoastFiCard cardId={CARD_IDS.COAST_FI} onHide={refreshHidden} />
+          <CoastFiCard cardId={CARD_IDS.COAST_FI} onHide={handleHide} />
         )}
         {!hiddenSet.has(CARD_IDS.COMPOUND) && (
-          <CompoundInterestCard cardId={CARD_IDS.COMPOUND} onHide={refreshHidden} />
+          <CompoundInterestCard cardId={CARD_IDS.COMPOUND} onHide={handleHide} />
         )}
         {!hiddenSet.has(CARD_IDS.DEBT_PAYOFF) && (
-          <DebtPayoffCard cardId={CARD_IDS.DEBT_PAYOFF} onHide={refreshHidden} />
+          <DebtPayoffCard cardId={CARD_IDS.DEBT_PAYOFF} onHide={handleHide} />
         )}
         {!hiddenSet.has(CARD_IDS.EQUITY) && (
-          <EquityValueCard cardId={CARD_IDS.EQUITY} onHide={refreshHidden} />
+          <EquityValueCard cardId={CARD_IDS.EQUITY} onHide={handleHide} />
         )}
       </div>
       {hiddenCount > 0 && (
@@ -214,7 +230,7 @@ export default function CalculatorsLayout() {
                     size="sm"
                     variant="ghost"
                     onClick={() => {
-                      for (const id of hiddenList) handleShow(id);
+                      handleShowAll();
                       setPopoverOpen(false);
                     }}
                     className="h-6 text-xs"
@@ -223,7 +239,7 @@ export default function CalculatorsLayout() {
                   </Button>
                 </div>
                 <ul className="space-y-0.5 max-h-72 overflow-y-auto">
-                  {hiddenList.map((id) => (
+                  {hiddenIds.map((id) => (
                     <li
                       key={id}
                       className="flex items-center justify-between gap-2 px-2 py-1 rounded hover:bg-muted/40"

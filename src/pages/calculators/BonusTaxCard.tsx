@@ -12,7 +12,7 @@ import type { BonusFrequency } from '@/types/schema';
 
 interface BonusTaxCardProps {
   cardId?: string;
-  onHide?: () => void;
+  onHide?: (cardId: string) => void;
 }
 
 export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
