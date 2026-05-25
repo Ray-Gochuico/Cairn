@@ -26,10 +26,10 @@ export function ConcentrationCard() {
   return (
     <Card className="min-w-0 h-full" data-testid="concentration-card">
       <CardHeader className="pb-2">
-        <div className="text-xs uppercase tracking-wider text-muted-foreground truncate">
+        <div className="text-[11px] sm:text-xs uppercase tracking-wider text-muted-foreground truncate">
           Concentration
         </div>
-        <div className="text-2xl sm:text-3xl font-semibold leading-tight tabular-nums">
+        <div className="text-xl sm:text-2xl md:text-3xl font-semibold leading-tight tabular-nums whitespace-nowrap overflow-hidden text-ellipsis">
           {count} {count === 1 ? 'warning' : 'warnings'}
         </div>
       </CardHeader>

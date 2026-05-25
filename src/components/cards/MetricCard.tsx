@@ -49,25 +49,42 @@ export default function MetricCard({
         'h-full min-w-0',
         href && 'transition-colors hover:bg-accent/40 cursor-pointer',
       )}
+      data-testid="metric-card"
     >
       <CardHeader className="pb-2">
-        <div className="text-xs uppercase tracking-wider text-muted-foreground truncate">
+        <div
+          className="text-[11px] sm:text-xs uppercase tracking-wider text-muted-foreground truncate"
+          title={label}
+          data-testid="metric-card-label"
+        >
           {label}
         </div>
       </CardHeader>
       <CardContent className="space-y-1 min-w-0">
         <div className="flex items-baseline gap-2 flex-wrap min-w-0">
-          <div className="text-2xl sm:text-3xl font-semibold leading-tight tabular-nums break-words min-w-0">
+          <div
+            className="text-xl sm:text-2xl md:text-3xl font-semibold leading-tight tabular-nums whitespace-nowrap overflow-hidden text-ellipsis min-w-0 max-w-full"
+            title={value}
+            data-testid="metric-card-value"
+          >
             {value}
           </div>
           {delta ? (
-            <div className={cn('text-sm font-medium', deltaClass(deltaTone))}>
+            <div
+              className={cn(
+                'text-xs sm:text-sm font-medium whitespace-nowrap overflow-hidden text-ellipsis max-w-full',
+                deltaClass(deltaTone),
+              )}
+              title={delta}
+            >
               {delta}
             </div>
           ) : null}
         </div>
         {subtitle ? (
-          <div className="text-xs text-muted-foreground">{subtitle}</div>
+          <div className="text-xs text-muted-foreground truncate" title={subtitle}>
+            {subtitle}
+          </div>
         ) : null}
       </CardContent>
     </Card>
