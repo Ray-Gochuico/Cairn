@@ -27,6 +27,15 @@ import {
   evaluateEmployerMatch,
   evaluateJobStability,
 } from './rules/section1';
+import {
+  evaluatePickInsurance,
+  evaluateHdhpQ,
+  evaluateContributeHsa,
+  evaluateSaveReceipts,
+  evaluateHsaFeesQ,
+  evaluateRolloverHsa,
+  evaluateKeepEmployerHsa,
+} from './rules/hsa';
 
 /**
  * Declarative registry of every Roadmap chart node, derived from
@@ -242,7 +251,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Pick the right medical insurance for your needs',
     body: 'PPO / POS / HMO / EPO each have different premiums, deductibles, and copays. If under 26 and parent plan eligible, compare that too.',
     prerequisites: ['s2_moderate_debt_action'],
-    evaluate: stub('s3_pick_medical_insurance'),
+    evaluate: evaluatePickInsurance,
   },
   {
     id: 's3_hdhp_q',
@@ -251,7 +260,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Do you have an HSA-qualified HDHP?',
     body: 'No → skip to Section 4. Yes → continue with HSA contributions.',
     prerequisites: ['s3_pick_medical_insurance'],
-    evaluate: stub('s3_hdhp_q'),
+    evaluate: evaluateHdhpQ,
   },
   {
     id: 's3_contribute_hsa',
@@ -260,7 +269,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Contribute to an HSA',
     body: 'Contributing through your employer makes it FICA-deductible too. HDHP+HSA is generally recommended if you are relatively healthy.',
     prerequisites: ['s3_hdhp_q'],
-    evaluate: stub('s3_contribute_hsa'),
+    evaluate: evaluateContributeHsa,
   },
   {
     id: 's3_save_receipts',
@@ -269,7 +278,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Keep proof of purchase for qualified medical expenses',
     body: 'Build a receipts system — HSAs let you reimburse yourself years later from those receipts.',
     prerequisites: ['s3_contribute_hsa'],
-    evaluate: stub('s3_save_receipts'),
+    evaluate: evaluateSaveReceipts,
   },
   {
     id: 's3_hsa_fees_q',
@@ -278,7 +287,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Does your employer HSA have high fees?',
     body: 'Yes → roll the balance to a lower-fee HSA brokerage if available. No → keep contributing there.',
     prerequisites: ['s3_save_receipts'],
-    evaluate: stub('s3_hsa_fees_q'),
+    evaluate: evaluateHsaFeesQ,
   },
   {
     id: 's3_rollover_hsa',
@@ -287,7 +296,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Roll HSA balance to a lower-fee HSA brokerage',
     body: 'Most HSA custodians allow trustee-to-trustee transfers without tax consequences.',
     prerequisites: ['s3_hsa_fees_q'],
-    evaluate: stub('s3_rollover_hsa'),
+    evaluate: evaluateRolloverHsa,
   },
   {
     id: 's3_keep_employer_hsa',
@@ -296,7 +305,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Keep contributing to employer HSA + enroll in investing',
     body: 'Once you hit the minimum cash threshold, switch additional contributions into the investing portion.',
     prerequisites: ['s3_hsa_fees_q'],
-    evaluate: stub('s3_keep_employer_hsa'),
+    evaluate: evaluateKeepEmployerHsa,
   },
 
   // ──────────────────────────────────────────────────────────────────

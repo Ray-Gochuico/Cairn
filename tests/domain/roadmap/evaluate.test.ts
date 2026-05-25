@@ -83,6 +83,13 @@ describe('evaluate', () => {
       's1_high_interest_debt',
       's1_job_stability_q',
       's2_moderate_debt_action',
+      's3_pick_medical_insurance',
+      's3_hdhp_q',
+      's3_contribute_hsa',
+      's3_save_receipts',
+      's3_hsa_fees_q',
+      's3_rollover_hsa',
+      's3_keep_employer_hsa',
       's6_low_interest_debt',
       's4_ira_band',
       's4_backdoor_roth',
@@ -108,20 +115,20 @@ describe('evaluate', () => {
   it('applies an override status and stashes the auto-result on autoResult', () => {
     // Use a node whose evaluator is still a stub so the auto-result
     // assertion below ("not yet implemented") stays stable as more
-    // rules ship. `s3_pick_medical_insurance` is an info-kind node
-    // with no backing rule yet.
+    // rules ship. `s4_solo_401k` is an info-kind reference node with
+    // no backing rule yet.
     const overrides = new Map<string, RoadmapNodeOverride>([
-      ['s3_pick_medical_insurance', {
+      ['s4_solo_401k', {
         id: 1,
         householdId: 1,
-        nodeId: 's3_pick_medical_insurance',
+        nodeId: 's4_solo_401k',
         overrideStatus: 'done',
-        note: 'I picked one in open enrollment',
+        note: 'Rolled it last quarter',
         setAt: '2026-05-23T00:00:00Z',
       }],
     ]);
     const results = evaluate(makeContext({ overrides }));
-    const r = results.get('s3_pick_medical_insurance')!;
+    const r = results.get('s4_solo_401k')!;
     expect(r.status).toBe('done');
     expect(r.autoResult).toBeDefined();
     expect(r.autoResult!.status).toBe('info');
@@ -131,15 +138,18 @@ describe('evaluate', () => {
   it('does not propagate overrides to dependent nodes', () => {
     // Override an upstream node — its dependent should still reflect
     // its own evaluator's output, not be coerced by the parent override.
+    // s4_solo_401k is currently a leaf; use s5_espp_q (still a stub)
+    // to also assert a child node keeps its own status. Both are
+    // intentionally stubs at this point.
     const overrides = new Map<string, RoadmapNodeOverride>([
-      ['s3_pick_medical_insurance', {
-        id: 1, householdId: 1, nodeId: 's3_pick_medical_insurance',
+      ['s4_solo_401k', {
+        id: 1, householdId: 1, nodeId: 's4_solo_401k',
         overrideStatus: 'done', note: null, setAt: '2026-05-23T00:00:00Z',
       }],
     ]);
     const results = evaluate(makeContext({ overrides }));
-    expect(results.get('s3_pick_medical_insurance')?.status).toBe('done');
-    expect(results.get('s3_hdhp_q')?.status).toBe('info');
+    expect(results.get('s4_solo_401k')?.status).toBe('done');
+    expect(results.get('s5_espp_q')?.status).toBe('info');
   });
 
   it('ignores overrides for unknown node ids', () => {
