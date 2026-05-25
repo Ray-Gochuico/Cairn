@@ -2,6 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { computeBaselineExpenses } from '@/lib/expense-baseline';
 import type { Transaction } from '@/types/schema';
 
+// Adjusted for the expense-sign fix: purchase amounts are positive per the
+// Transaction schema convention (amount > 0 = purchase/expense, amount < 0 =
+// refund/credit).
+
 const tx = (id: number, date: string, amount: number): Transaction =>
   ({
     id,
@@ -22,10 +26,10 @@ describe('computeBaselineExpenses', () => {
   it('divides by months observed, not by 12, for 4 months of data', () => {
     // $2,000 spent in each of Feb, Mar, Apr, May 2026 → total $8,000 / 4 months = $2,000.
     const txs = [
-      tx(1, '2026-02-10', -2000),
-      tx(2, '2026-03-10', -2000),
-      tx(3, '2026-04-10', -2000),
-      tx(4, '2026-05-01', -2000),
+      tx(1, '2026-02-10', 2000),
+      tx(2, '2026-03-10', 2000),
+      tx(3, '2026-04-10', 2000),
+      tx(4, '2026-05-01', 2000),
     ];
     expect(computeBaselineExpenses(txs, '2026-05-01')).toBeCloseTo(2000, 0);
   });
@@ -39,7 +43,7 @@ describe('computeBaselineExpenses', () => {
         m <= 12
           ? `2025-${String(m).padStart(2, '0')}`
           : `2026-${String(m - 12).padStart(2, '0')}`;
-      txs.push(tx(id++, `${yyyymm}-15`, -1200));
+      txs.push(tx(id++, `${yyyymm}-15`, 1200));
     }
     expect(computeBaselineExpenses(txs, '2026-05-20')).toBeCloseTo(1200, 0);
   });
@@ -47,8 +51,8 @@ describe('computeBaselineExpenses', () => {
   it('aggregates multiple transactions within a single month into that month', () => {
     // Two transactions in one month should not inflate monthsObserved.
     const txs = [
-      tx(1, '2026-04-05', -1500),
-      tx(2, '2026-04-25', -2500),
+      tx(1, '2026-04-05', 1500),
+      tx(2, '2026-04-25', 2500),
     ];
     // 1 month observed, total $4,000 → /1 = $4,000.
     expect(computeBaselineExpenses(txs, '2026-05-01')).toBeCloseTo(4000, 0);
@@ -56,17 +60,27 @@ describe('computeBaselineExpenses', () => {
 
   it('ignores transactions outside the 12-month rolling window', () => {
     const txs = [
-      tx(1, '2026-04-15', -1000),
-      tx(2, '2023-01-01', -50_000), // ancient — out of window
+      tx(1, '2026-04-15', 1000),
+      tx(2, '2023-01-01', 50_000), // ancient — out of window
     ];
     expect(computeBaselineExpenses(txs, '2026-05-01')).toBeCloseTo(1000, 0);
   });
 
   it('ignores transactions dated after asOfISO (future)', () => {
     const txs = [
-      tx(1, '2026-04-15', -1000),
-      tx(2, '2027-01-01', -50_000), // future — anchored window excludes this
+      tx(1, '2026-04-15', 1000),
+      tx(2, '2027-01-01', 50_000), // future — anchored window excludes this
     ];
     expect(computeBaselineExpenses(txs, '2026-05-01')).toBeCloseTo(1000, 0);
+  });
+
+  it('excludes refunds/credits (amount < 0) so they do not deflate the baseline', () => {
+    // April: $2,000 purchase + $500 refund. Baseline should be $2,000 (only the purchase),
+    // NOT $1,500 (net) and NOT something derived from the refund.
+    const txs = [
+      tx(1, '2026-04-05', 2000), // purchase
+      tx(2, '2026-04-20', -500), // refund — must be ignored
+    ];
+    expect(computeBaselineExpenses(txs, '2026-05-01')).toBeCloseTo(2000, 0);
   });
 });
