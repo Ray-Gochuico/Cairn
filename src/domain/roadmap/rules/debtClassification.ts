@@ -61,6 +61,21 @@ export function evaluateModerateInterestDebt(ctx: RoadmapContext): NodeResult {
   };
 }
 
+export function evaluateModerateDebtQ(ctx: RoadmapContext): NodeResult {
+  const offenders = activeLoansInBand(ctx.loans, ctx.thresholds, 'moderate');
+  if (offenders.length === 0) {
+    return {
+      status: 'done',
+      evidence: `No loans in the ${ctx.thresholds.low}–${ctx.thresholds.high}% band — skip the action.`,
+    };
+  }
+  const noun = offenders.length === 1 ? 'loan' : 'loans';
+  return {
+    status: 'done',
+    evidence: `${offenders.length} ${noun} in the moderate band — see the action below.`,
+  };
+}
+
 export function evaluateLowInterestDebt(ctx: RoadmapContext): NodeResult {
   const lows = activeLoansInBand(ctx.loans, ctx.thresholds, 'low');
   if (lows.length === 0) {

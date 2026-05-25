@@ -59,48 +59,14 @@ describe('evaluate', () => {
     }
   });
 
-  it('returns stub results for nodes whose real rule has not yet shipped', () => {
-    // Tasks 7-10 replace stubs with real rules; those produce non-info
-    // statuses against a realistic context. This test confirms the
-    // remaining stubs still flow through with their "not yet
-    // implemented" sentinel evidence.
-    const realRuleNodeIds = new Set([
-      's0_create_budget',
-      's0_pay_rent',
-      's0_buy_food',
-      's0_pay_essentials',
-      's0_income_expenses',
-      's0_pay_health_care',
-      's0_min_debt_payments',
-      's1_emergency_small',
-      's1_evaluate_non_essentials',
-      's1_track_expenses',
-      's1_consider_ips',
-      's1_employer_match_q',
-      's1_employer_match',
-      's1_emergency_3mo',
-      's1_emergency_6_12mo',
-      's1_high_interest_debt',
-      's1_job_stability_q',
-      's2_moderate_debt_action',
-      's3_pick_medical_insurance',
-      's3_hdhp_q',
-      's3_contribute_hsa',
-      's3_save_receipts',
-      's3_hsa_fees_q',
-      's3_rollover_hsa',
-      's3_keep_employer_hsa',
-      's6_low_interest_debt',
-      's4_ira_band',
-      's4_backdoor_roth',
-      's4_roth_ira',
-      's4_traditional_ira',
-    ]);
+  it('no result carries the stub sentinel "not yet implemented" evidence', () => {
+    // Sub-Plan C wired every node to a real evaluator. This guard
+    // asserts the registry no longer falls through to a stub on a
+    // realistic context. Status content is exercised by per-rule
+    // tests; we only check the sentinel here.
     const results = evaluate(makeContext());
     for (const [id, r] of results) {
-      if (realRuleNodeIds.has(id)) continue;
-      expect(r.status, id).toBe('info');
-      expect(r.evidence, id).toMatch(/not yet implemented/);
+      expect(r.evidence ?? '', id).not.toMatch(/not yet implemented/);
     }
   });
 
@@ -113,10 +79,11 @@ describe('evaluate', () => {
   });
 
   it('applies an override status and stashes the auto-result on autoResult', () => {
-    // Use a node whose evaluator is still a stub so the auto-result
-    // assertion below ("not yet implemented") stays stable as more
-    // rules ship. `s4_solo_401k` is an info-kind reference node with
-    // no backing rule yet.
+    // Override s4_solo_401k, an info-only chart reference, and verify
+    // the engine surfaces both the override and the real auto-result
+    // ("info" + the chart's note). We assert the existence of the
+    // side channel + the status flip, not the exact evidence string,
+    // so the test stays loose against future copy edits.
     const overrides = new Map<string, RoadmapNodeOverride>([
       ['s4_solo_401k', {
         id: 1,
@@ -132,15 +99,11 @@ describe('evaluate', () => {
     expect(r.status).toBe('done');
     expect(r.autoResult).toBeDefined();
     expect(r.autoResult!.status).toBe('info');
-    expect(r.autoResult!.evidence).toMatch(/not yet implemented/);
   });
 
   it('does not propagate overrides to dependent nodes', () => {
     // Override an upstream node — its dependent should still reflect
     // its own evaluator's output, not be coerced by the parent override.
-    // s4_solo_401k is currently a leaf; use s5_espp_q (still a stub)
-    // to also assert a child node keeps its own status. Both are
-    // intentionally stubs at this point.
     const overrides = new Map<string, RoadmapNodeOverride>([
       ['s4_solo_401k', {
         id: 1, householdId: 1, nodeId: 's4_solo_401k',

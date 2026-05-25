@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   evaluateHighInterestDebt,
   evaluateModerateInterestDebt,
+  evaluateModerateDebtQ,
   evaluateLowInterestDebt,
 } from '@/domain/roadmap/rules/debtClassification';
 import type { RoadmapContext } from '@/types/roadmap';
@@ -176,5 +177,19 @@ describe('evaluateLowInterestDebt', () => {
       makeLoan({ name: 'L2', rate: 0.03 }),
     ]));
     expect(multiple.evidence).toMatch(/2 low-interest loans/);
+  });
+});
+
+describe('evaluateModerateDebtQ', () => {
+  it('done with skip-the-action evidence when no moderate-band loans exist', () => {
+    const r = evaluateModerateDebtQ(makeContext([makeLoan({ rate: 0.02 })]));
+    expect(r.status).toBe('done');
+    expect(r.evidence).toMatch(/skip the action/);
+  });
+
+  it('done with action-pending evidence when at least one moderate-band loan exists', () => {
+    const r = evaluateModerateDebtQ(makeContext([makeLoan({ rate: 0.06 })]));
+    expect(r.status).toBe('done');
+    expect(r.evidence).toMatch(/see the action below/);
   });
 });

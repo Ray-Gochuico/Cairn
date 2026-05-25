@@ -76,48 +76,37 @@ describe('NODES registry', () => {
     }
   });
 
-  it("remaining stubs return an 'info' status with a 'not yet implemented' evidence string", () => {
-    // Tasks 7-10 replace stubs with real rules; those need real
-    // RoadmapContexts and are exercised in their own rule tests. The
-    // stub assertion here only covers the still-stubbed nodes.
-    const realRuleNodeIds = new Set([
-      's0_create_budget',
-      's0_pay_rent',
-      's0_buy_food',
-      's0_pay_essentials',
-      's0_income_expenses',
-      's0_pay_health_care',
-      's0_min_debt_payments',
-      's1_emergency_small',
-      's1_evaluate_non_essentials',
-      's1_track_expenses',
-      's1_consider_ips',
-      's1_employer_match_q',
-      's1_employer_match',
-      's1_emergency_3mo',
-      's1_emergency_6_12mo',
-      's1_high_interest_debt',
-      's1_job_stability_q',
-      's2_moderate_debt_action',
-      's3_pick_medical_insurance',
-      's3_hdhp_q',
-      's3_contribute_hsa',
-      's3_save_receipts',
-      's3_hsa_fees_q',
-      's3_rollover_hsa',
-      's3_keep_employer_hsa',
-      's6_low_interest_debt',
-      's4_ira_band',
-      's4_backdoor_roth',
-      's4_roth_ira',
-      's4_traditional_ira',
-    ]);
-    const synthetic = {} as any;
+  it('no node returns the stub sentinel "not yet implemented" evidence', () => {
+    // Sub-Plan C wired every node to a real evaluator. The stub
+    // factory is intentionally kept around so the registry can grow
+    // gracefully in the future, but the production NODES table should
+    // never reference it. Rule evaluators are individually exercised
+    // in their own test files with realistic RoadmapContexts.
+    const sample = {
+      household: {
+        monthlyExpenseBaseline: 0,
+        hasWrittenIps: null,
+        hasHsaQualifiedHdhp: null,
+        makesCharitableGifts: null,
+        upcomingLargePurchase: null,
+        upcomingPurchaseAmount: null,
+        upcomingPurchaseMonths: null,
+        filingStatus: 'SINGLE',
+      },
+      persons: [],
+      accounts: [],
+      loans: [],
+      contributions: [],
+      snapshots: [],
+      transactions: [],
+      overrides: new Map(),
+      thresholds: { low: 5, high: 8 },
+      taxYear: 2026,
+      today: new Date('2026-05-23T00:00:00Z'),
+    } as any;
     for (const n of NODES) {
-      if (realRuleNodeIds.has(n.id)) continue;
-      const r = n.evaluate(synthetic);
-      expect(r.status, n.id).toBe('info');
-      expect(r.evidence, n.id).toMatch(/not yet implemented/);
+      const r = n.evaluate(sample);
+      expect(r.evidence ?? '', n.id).not.toMatch(/not yet implemented/);
     }
   });
 });

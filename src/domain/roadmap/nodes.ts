@@ -1,4 +1,4 @@
-import type { NodeId, NodeResult, RoadmapContext, RoadmapNode } from '@/types/roadmap';
+import type { NodeId, RoadmapNode } from '@/types/roadmap';
 import {
   evaluateSmallEmergencyFund,
   evaluateEmergencyFund3Months,
@@ -7,6 +7,7 @@ import {
 import {
   evaluateHighInterestDebt,
   evaluateModerateInterestDebt,
+  evaluateModerateDebtQ,
   evaluateLowInterestDebt,
 } from './rules/debtClassification';
 import {
@@ -36,26 +37,40 @@ import {
   evaluateRolloverHsa,
   evaluateKeepEmployerHsa,
 } from './rules/hsa';
+import {
+  evaluateEarnedIncomeQ,
+  evaluateContributeIra,
+  evaluateExpectHigherIncomeQ,
+  evaluateSolo401k,
+  evaluateAfterTax401kQ,
+  evaluateMegaBackdoor,
+} from './rules/section4Misc';
+import {
+  evaluateEsppQ,
+  evaluateEsppAction,
+  evaluateLargePurchasesQ,
+  evaluateSaveShortTerm,
+  evaluateEmploymentTypeQ,
+  evaluateMax401k,
+  evaluatePrioritizeIraVs401k,
+  evaluate529,
+  evaluateTaxableBrokerage,
+  evaluateTaxLossHarvest,
+  evaluateCharitableDaf,
+  evaluateRebalance,
+} from './rules/sections5to6';
 
 /**
  * Declarative registry of every Roadmap chart node, derived from
- * FinFlowChartv43.md sections 0–6. Sub-Plan B ships the skeleton: all
- * ~49 IDs registered with stub evaluators that return an 'info' status
- * + "not yet implemented" evidence. Three rules (emergencyFund,
- * debtClassification, iraBranch) replace specific stubs in Tasks 7-9.
- * Sub-Plan C fills in the rest incrementally as each rule is needed.
+ * FinFlowChartv43.md sections 0–6. Sub-Plan B shipped the skeleton +
+ * three rule files (emergencyFund, debtClassification, iraBranch);
+ * Sub-Plan C wires the remaining ~30 evaluators across budgetEssentials,
+ * section1, hsa, section4Misc, and sections5to6.
  *
  * Node IDs use the pattern `s<section>_<short_name>`. They are stable
  * identifiers — never renamed once shipped, because they're the foreign
  * key in roadmap_node_overrides.
  */
-
-// Stub evaluator factory — every node starts here, three get replaced.
-const stub = (id: NodeId) =>
-  (_ctx: RoadmapContext): NodeResult => ({
-    status: 'info',
-    evidence: `Evaluator for "${id}" not yet implemented`,
-  });
 
 export const NODES: ReadonlyArray<RoadmapNode> = [
   // ──────────────────────────────────────────────────────────────────
@@ -229,7 +244,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Do you have any moderate-interest debt?',
     body: 'Defined as any loan with an annual rate between 5% and 8% (default; adjustable).',
     prerequisites: ['s1_emergency_3mo', 's1_emergency_6_12mo'],
-    evaluate: stub('s2_moderate_debt_q'),
+    evaluate: evaluateModerateDebtQ,
   },
   {
     id: 's2_moderate_debt_action',
@@ -318,7 +333,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Do you have earned income?',
     body: 'Required for any IRA contribution. Before April 15, you can also still fund last year.',
     prerequisites: ['s3_rollover_hsa', 's3_keep_employer_hsa'],
-    evaluate: stub('s4_earned_income_q'),
+    evaluate: evaluateEarnedIncomeQ,
   },
   {
     id: 's4_contribute_ira',
@@ -327,7 +342,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Contribute to an IRA',
     body: 'Then calculate your Modified Adjusted Gross Income (MAGI) to pick the right branch.',
     prerequisites: ['s4_earned_income_q'],
-    evaluate: stub('s4_contribute_ira'),
+    evaluate: evaluateContributeIra,
   },
   {
     id: 's4_ira_band',
@@ -363,7 +378,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Do you expect future income to exceed the IRS threshold?',
     body: 'Yes → consider Roth (avoid pro-rata pain later). No → max traditional for current deduction.',
     prerequisites: ['s4_ira_band'],
-    evaluate: stub('s4_expect_higher_income_q'),
+    evaluate: evaluateExpectHigherIncomeQ,
   },
   {
     id: 's4_traditional_ira',
@@ -381,7 +396,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Consider rolling tIRA → solo-401(k) to sidestep pro-rata',
     body: 'If you still go with a traditional IRA, opening a solo-401(k) and rolling the tIRA in avoids future backdoor pro-rata pain.',
     prerequisites: ['s4_traditional_ira'],
-    evaluate: stub('s4_solo_401k'),
+    evaluate: evaluateSolo401k,
   },
 
   // ──────────────────────────────────────────────────────────────────
@@ -394,7 +409,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Does your employer offer an ESPP?',
     body: 'Yes → evaluate participating. A common good case: 15% discount + immediate vesting — buy and sell immediately.',
     prerequisites: ['s4_backdoor_roth', 's4_roth_ira', 's4_traditional_ira'],
-    evaluate: stub('s5_espp_q'),
+    evaluate: evaluateEsppQ,
   },
   {
     id: 's5_espp_action',
@@ -403,7 +418,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Participate in ESPP',
     body: 'Default play: buy at the discounted price, sell immediately to lock the spread, redirect proceeds back into your plan.',
     prerequisites: ['s5_espp_q'],
-    evaluate: stub('s5_espp_action'),
+    evaluate: evaluateEsppAction,
   },
   {
     id: 's5_large_purchases_q',
@@ -412,7 +427,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Any large required purchases in the next 3–5 years?',
     body: 'College, certifications, a car needed for work, a future house, etc.',
     prerequisites: ['s5_espp_q'],
-    evaluate: stub('s5_large_purchases_q'),
+    evaluate: evaluateLargePurchasesQ,
   },
   {
     id: 's5_save_short_term',
@@ -421,7 +436,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Save the upcoming-purchase amount in HYSA / 529 / ESA',
     body: 'For educational expenses, prefer a 529 or Coverdell ESA. SECURE 2.0 also permits a 529 → Roth IRA rollover (lifetime $35k cap).',
     prerequisites: ['s5_large_purchases_q'],
-    evaluate: stub('s5_save_short_term'),
+    evaluate: evaluateSaveShortTerm,
   },
   {
     id: 's5_employment_type_q',
@@ -430,7 +445,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'W-2 employee or self-employed?',
     body: 'W-2 → finish maxing employer 401(k). Self-employed → evaluate maxing a solo-401(k).',
     prerequisites: ['s5_large_purchases_q'],
-    evaluate: stub('s5_employment_type_q'),
+    evaluate: evaluateEmploymentTypeQ,
   },
   {
     id: 's5_max_401k',
@@ -439,7 +454,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Finish maxing your employer plan (401(k) or solo-401(k))',
     body: 'W-2 → finish maxing the employer 401(k). Self-employed → max a solo-401(k). Many on the FIRE path prefer pre-tax, then convert/withdraw in lower-bracket years.',
     prerequisites: ['s5_employment_type_q'],
-    evaluate: stub('s5_max_401k'),
+    evaluate: evaluateMax401k,
   },
   {
     id: 's5_prioritize_ira_vs_401k',
@@ -448,7 +463,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'IRA vs. 401(k) priority (when you cannot max both)',
     body: 'Always capture the employer match first. IRAs offer more flexibility; 401(k)s lower MAGI; 457(b)s have no 10% early-withdrawal penalty.',
     prerequisites: ['s5_max_401k'],
-    evaluate: stub('s5_prioritize_ira_vs_401k'),
+    evaluate: evaluatePrioritizeIraVs401k,
   },
 
   // ──────────────────────────────────────────────────────────────────
@@ -461,7 +476,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Does your 401(k) allow after-tax + in-plan Roth rollover?',
     body: 'Yes → execute the "mega backdoor Roth" up to the $66k combined limit.',
     prerequisites: ['s5_prioritize_ira_vs_401k'],
-    evaluate: stub('s6_after_tax_401k_q'),
+    evaluate: evaluateAfterTax401kQ,
   },
   {
     id: 's6_mega_backdoor',
@@ -470,7 +485,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Max after-tax 401(k) and roll into Roth (mega backdoor)',
     body: 'Distinct from the regular backdoor Roth. Availability depends on plan documents.',
     prerequisites: ['s6_after_tax_401k_q'],
-    evaluate: stub('s6_mega_backdoor'),
+    evaluate: evaluateMegaBackdoor,
   },
   {
     id: 's6_529_action',
@@ -479,7 +494,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Evaluate 529 / ESA for future generations',
     body: "Check your state's 529 for state-tax deductions.",
     prerequisites: ['s6_after_tax_401k_q'],
-    evaluate: stub('s6_529_action'),
+    evaluate: evaluate529,
   },
   {
     id: 's6_taxable_brokerage',
@@ -488,7 +503,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Contribute to a taxable brokerage (or pay extra mortgage principal)',
     body: 'A taxable account has zero contribution cap and flexible access; extra mortgage principal compounds via avoided interest.',
     prerequisites: ['s6_529_action'],
-    evaluate: stub('s6_taxable_brokerage'),
+    evaluate: evaluateTaxableBrokerage,
   },
   {
     id: 's6_tax_loss_harvest',
@@ -497,7 +512,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Evaluate tax-loss harvesting',
     body: 'Watch the wash-sale rule (30 days across all your accounts, including IRAs).',
     prerequisites: ['s6_taxable_brokerage'],
-    evaluate: stub('s6_tax_loss_harvest'),
+    evaluate: evaluateTaxLossHarvest,
   },
   {
     id: 's6_low_interest_debt',
@@ -515,7 +530,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Consider a donor-advised fund (DAF) for charitable giving',
     body: 'Front-loads multiple years of deductions into a single tax year via appreciated-stock contributions.',
     prerequisites: ['s6_low_interest_debt'],
-    evaluate: stub('s6_charitable_daf'),
+    evaluate: evaluateCharitableDaf,
   },
   {
     id: 's6_rebalance',
@@ -524,7 +539,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Rebalance your portfolio to your IPS regularly',
     body: 'Minimize fees and avoid generating taxable events when possible (e.g. rebalance via new contributions, not sells).',
     prerequisites: ['s6_charitable_daf'],
-    evaluate: stub('s6_rebalance'),
+    evaluate: evaluateRebalance,
   },
 ];
 
