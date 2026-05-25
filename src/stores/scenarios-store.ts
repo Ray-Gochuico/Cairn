@@ -1,0 +1,98 @@
+import { create } from 'zustand';
+import { ScenariosRepo } from '@/domain/scenarios';
+import { getDatabase } from '@/db/db';
+import {
+  emptyLeverPayload,
+  projectScenario,
+  type LeverPayload,
+  type MonthlyState,
+  type RealState,
+} from '@/lib/scenarios';
+import type { Scenario } from '@/types/scenario';
+
+export type DollarMode = 'nominal' | 'real';
+
+interface ProjectionCacheEntry {
+  states: MonthlyState[];
+  key: string;
+}
+
+interface ScenariosState {
+  scenarios: Scenario[];
+  isLoading: boolean;
+  error: string | null;
+
+  horizonMonths: number;
+  dollarMode: DollarMode;
+  inflation: number;
+  defaultReturnRate: number;
+
+  projectionCache: Map<number, ProjectionCacheEntry>;
+
+  load: () => Promise<void>;
+  create: (input: Omit<Scenario, 'id' | 'createdAt' | 'updatedAt'>) => Promise<number>;
+  update: (id: number, patch: Partial<Omit<Scenario, 'id' | 'createdAt' | 'updatedAt'>>) => Promise<void>;
+  remove: (id: number) => Promise<void>;
+  setActive: (id: number) => Promise<void>;
+  updateLever: (id: number, partial: Partial<LeverPayload>) => Promise<void>;
+  duplicate: (sourceId: number, newName?: string) => Promise<number>;
+  rename: (id: number, newName: string) => Promise<void>;
+  toggleVisibility: (id: number) => Promise<void>;
+  setHorizonMonths: (months: number) => void;
+  setDollarMode: (mode: DollarMode) => void;
+
+  projectedScenarios: (real: RealState) => Map<number, MonthlyState[]>;
+}
+
+const BASELINE_DEFAULTS: Omit<Scenario, 'id' | 'createdAt' | 'updatedAt'> = {
+  name: 'Baseline',
+  isBaseline: true,
+  color: '#4f86f7',
+  lineStyle: 'solid',
+  visible: true,
+  isActive: true,
+  sortOrder: 0,
+  leverPayload: emptyLeverPayload(),
+};
+
+export const useScenariosStore = create<ScenariosState>((set, get) => ({
+  scenarios: [],
+  isLoading: false,
+  error: null,
+  horizonMonths: 360,
+  dollarMode: 'nominal',
+  inflation: 0.025,
+  defaultReturnRate: 0.07,
+  projectionCache: new Map(),
+
+  load: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const repo = new ScenariosRepo(getDatabase());
+      let scenarios = await repo.list();
+      if (scenarios.length === 0) {
+        await repo.create(BASELINE_DEFAULTS);
+        scenarios = await repo.list();
+      }
+      set({ scenarios, isLoading: false });
+    } catch (e) {
+      set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load scenarios' });
+    }
+  },
+
+  create: async () => { throw new Error('not implemented yet — see Task 7'); },
+  update: async () => { throw new Error('not implemented yet — see Task 7'); },
+  remove: async () => { throw new Error('not implemented yet — see Task 7'); },
+  setActive: async () => { throw new Error('not implemented yet — see Task 7'); },
+  updateLever: async () => { throw new Error('not implemented yet — see Task 7'); },
+  duplicate: async () => { throw new Error('not implemented yet — see Task 7'); },
+  rename: async () => { throw new Error('not implemented yet — see Task 7'); },
+  toggleVisibility: async () => { throw new Error('not implemented yet — see Task 8'); },
+  setHorizonMonths: () => { throw new Error('not implemented yet — see Task 8'); },
+  setDollarMode: () => { throw new Error('not implemented yet — see Task 8'); },
+
+  projectedScenarios: () => { throw new Error('not implemented yet — see Task 9'); },
+}));
+
+// Silence unused-import warnings until Task 9 wires the selector
+void projectScenario;
