@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { UserEvent } from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -130,16 +130,13 @@ describe('EquityGrantsTab', () => {
     await waitFor(() => screen.getByRole('button', { name: /add a grant/i }));
     await user.click(screen.getByRole('button', { name: /add a grant/i }));
 
-    await user.type(screen.getByLabelText(/^name$/i), '2024 RSU grant');
-    await user.type(screen.getByLabelText(/^company$/i), 'Acme Corp');
+    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: '2024 RSU grant' } });
+    fireEvent.change(screen.getByLabelText(/^company$/i), { target: { value: 'Acme Corp' } });
     await user.click(screen.getByRole('radio', { name: /^alex$/i }));
     await selectDate(user, 'grant-date', '2024-01-15');
-    await user.clear(screen.getByLabelText(/strike price/i));
-    await user.type(screen.getByLabelText(/strike price/i), '0');
-    await user.clear(screen.getByLabelText(/total shares/i));
-    await user.type(screen.getByLabelText(/total shares/i), '4800');
-    await user.clear(screen.getByLabelText(/current fmv/i));
-    await user.type(screen.getByLabelText(/current fmv/i), '120');
+    fireEvent.change(screen.getByLabelText(/strike price/i), { target: { value: '0' } });
+    fireEvent.change(screen.getByLabelText(/total shares/i), { target: { value: '4800' } });
+    fireEvent.change(screen.getByLabelText(/current fmv/i), { target: { value: '120' } });
 
     // Apply the 4-year monthly with 1-year cliff template
     await user.selectOptions(
@@ -180,8 +177,7 @@ describe('EquityGrantsTab', () => {
     expect((nameInput as HTMLInputElement).value).toBe('Existing Grant');
     expect((screen.getByLabelText(/^company$/i) as HTMLInputElement).value).toBe('Globex');
 
-    await user.clear(nameInput);
-    await user.type(nameInput, 'Updated Grant');
+    fireEvent.change(nameInput, { target: { value: 'Updated Grant' } });
     await user.click(screen.getByRole('button', { name: /^save$/i }));
 
     await waitFor(() => {
@@ -196,19 +192,17 @@ describe('EquityGrantsTab', () => {
     await waitFor(() => screen.getByRole('button', { name: /add a grant/i }));
     await user.click(screen.getByRole('button', { name: /add a grant/i }));
 
-    await user.type(screen.getByLabelText(/^name$/i), 'Custom Grant');
-    await user.type(screen.getByLabelText(/^company$/i), 'Initech');
+    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: 'Custom Grant' } });
+    fireEvent.change(screen.getByLabelText(/^company$/i), { target: { value: 'Initech' } });
     await user.click(screen.getByRole('radio', { name: /^alex$/i }));
     await selectDate(user, 'grant-date', '2024-01-15');
-    await user.clear(screen.getByLabelText(/total shares/i));
-    await user.type(screen.getByLabelText(/total shares/i), '1000');
+    fireEvent.change(screen.getByLabelText(/total shares/i), { target: { value: '1000' } });
 
     // Default schedule starts as a single row with cumulativePct = 1.0
     // Find row 1's percent input and edit it (still 1.0 since we need a complete schedule)
     const pctInput = screen.getByLabelText(/cumulative % for row 1/i) as HTMLInputElement;
     expect(pctInput.value).toBe('1');
-    await user.clear(pctInput);
-    await user.type(pctInput, '1');
+    fireEvent.change(pctInput, { target: { value: '1' } });
     expect(pctInput.value).toBe('1');
 
     // Now also set a date for that single row so the schedule is valid
@@ -253,12 +247,11 @@ describe('EquityGrantsTab', () => {
     await waitFor(() => screen.getByRole('button', { name: /add a grant/i }));
     await user.click(screen.getByRole('button', { name: /add a grant/i }));
 
-    await user.type(screen.getByLabelText(/^name$/i), 'No Owner Grant');
-    await user.type(screen.getByLabelText(/^company$/i), 'NoOwnerCo');
+    fireEvent.change(screen.getByLabelText(/^name$/i), { target: { value: 'No Owner Grant' } });
+    fireEvent.change(screen.getByLabelText(/^company$/i), { target: { value: 'NoOwnerCo' } });
     // Intentionally do NOT select an owner radio
     await selectDate(user, 'grant-date', '2024-01-15');
-    await user.clear(screen.getByLabelText(/total shares/i));
-    await user.type(screen.getByLabelText(/total shares/i), '100');
+    fireEvent.change(screen.getByLabelText(/total shares/i), { target: { value: '100' } });
 
     // Apply a template so the schedule itself is valid
     await user.selectOptions(
