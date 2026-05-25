@@ -163,38 +163,50 @@ export interface BonusTaxOutput {
  * pretax caps in this calc.
  */
 export function computeBonusTax(input: BonusTaxInput): BonusTaxOutput {
-  const pretaxTotal = input.pretax.pretax401k + input.pretax.pretaxHealth + input.pretax.pretaxDcfsa + input.pretax.pretaxHsa;
-  const adjusted = Math.max(0, input.personGross - pretaxTotal - input.standardDeduction);
-
-  const federalTax = evaluateBrackets(input.federalBrackets, adjusted);
-  const fica = computeFica(input.personGross, input.filingStatus);
-  const stateTax = evaluateBrackets(input.stateBrackets, adjusted);
-  const cityTax = input.cityBrackets ? evaluateBrackets(input.cityBrackets, adjusted) : 0;
-  const totalTax = federalTax + fica + stateTax + cityTax;
-
-  // Marginal rate on bonus: re-run the calc without the bonus, diff per jurisdiction.
   const grossWithoutBonus = input.personGross - input.bonus;
-  const adjustedNoBonus = Math.max(0, grossWithoutBonus - pretaxTotal - input.standardDeduction);
 
-  const federalNoBonus = evaluateBrackets(input.federalBrackets, adjustedNoBonus);
-  const ficaNoBonus = computeFica(grossWithoutBonus, input.filingStatus);
-  const stateNoBonus = evaluateBrackets(input.stateBrackets, adjustedNoBonus);
-  const cityNoBonus = input.cityBrackets ? evaluateBrackets(input.cityBrackets, adjustedNoBonus) : 0;
+  const withBonus = computeTotalTax({
+    gross: input.personGross,
+    filingStatus: input.filingStatus,
+    federalBrackets: input.federalBrackets,
+    stateBrackets: input.stateBrackets,
+    cityBrackets: input.cityBrackets,
+    standardDeduction: input.standardDeduction,
+    pretax: input.pretax,
+  });
+
+  const withoutBonus = computeTotalTax({
+    gross: grossWithoutBonus,
+    filingStatus: input.filingStatus,
+    federalBrackets: input.federalBrackets,
+    stateBrackets: input.stateBrackets,
+    cityBrackets: input.cityBrackets,
+    standardDeduction: input.standardDeduction,
+    pretax: input.pretax,
+  });
 
   const bonusBreakdown = {
-    federal: federalTax - federalNoBonus,
-    fica: fica - ficaNoBonus,
-    state: stateTax - stateNoBonus,
-    city: cityTax - cityNoBonus,
-    total: totalTax - (federalNoBonus + ficaNoBonus + stateNoBonus + cityNoBonus),
+    federal: withBonus.federal - withoutBonus.federal,
+    fica: withBonus.fica - withoutBonus.fica,
+    state: withBonus.state - withoutBonus.state,
+    city: withBonus.city - withoutBonus.city,
+    total: withBonus.total - withoutBonus.total,
   };
 
-  const marginalTaxOnBonus = bonusBreakdown.total;
-  const marginalRateOnBonus = input.bonus > 0 ? marginalTaxOnBonus / input.bonus : 0;
-  const bonusTakeHome = input.bonus - marginalTaxOnBonus;
-  const effectiveRate = input.personGross > 0 ? totalTax / input.personGross : 0;
+  const marginalRateOnBonus = input.bonus > 0 ? bonusBreakdown.total / input.bonus : 0;
+  const bonusTakeHome = input.bonus - bonusBreakdown.total;
 
-  return { federalTax, fica, stateTax, cityTax, totalTax, effectiveRate, marginalRateOnBonus, bonusTakeHome, bonusBreakdown };
+  return {
+    federalTax: withBonus.federal,
+    fica: withBonus.fica,
+    stateTax: withBonus.state,
+    cityTax: withBonus.city,
+    totalTax: withBonus.total,
+    effectiveRate: withBonus.effectiveRate,
+    marginalRateOnBonus,
+    bonusTakeHome,
+    bonusBreakdown,
+  };
 }
 
 export interface WithdrawalTaxBreakdown {
