@@ -13,7 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import LineChartCard from '@/components/charts/LineChartCard';
+import BarChartCard, { type BarChartSeries } from '@/components/charts/BarChartCard';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import type { CsvColumn } from '@/lib/csv';
 
@@ -95,33 +95,56 @@ function formatPaymentMonth(isoDate: string): string {
 }
 
 /**
- * Build an aggregate "total debt over time" series. We take each loan's
- * projected schedule (using its stored extra-payment default), align by the
- * YYYY-MM bucket of each payment, and sum balances. Months past a given
- * loan's payoff implicitly contribute 0 to that loan's term.
- *
- * Returns at most MAX_CHART_MONTHS rows.
+ * One row of the stacked debt series. The row carries one numeric column per
+ * loan type present in the household ('MORTGAGE', 'AUTO', …); each column is
+ * the summed remaining balance for loans of that type in the given month.
+ * Months past a given loan's payoff implicitly contribute 0 to that type.
  */
-function buildDebtSeries(
-  projections: LoanProjection[],
-): { month: string; total: number }[] {
-  if (projections.length === 0) return [];
-  const byMonth = new Map<string, number>();
-  let maxMonths = 0;
+export interface DebtSeriesRow {
+  month: string;
+  [loanTypeKey: string]: string | number;
+}
+
+/**
+ * Build the stacked "total debt over time" series. Buckets every projection
+ * entry by YYYY-MM month *and* loan type so the chart can stack one segment
+ * per type. Only types with at least one loan in the visible set get a
+ * column — otherwise Recharts would render empty bars (and the legend would
+ * list types the household doesn't have).
+ *
+ * Returns the rows (capped at MAX_CHART_MONTHS) and the ordered list of
+ * loan types present, so the chart knows how many series to draw.
+ */
+function buildDebtSeries(projections: LoanProjection[]): {
+  rows: DebtSeriesRow[];
+  typesPresent: LoanType[];
+} {
+  if (projections.length === 0) return { rows: [], typesPresent: [] };
+  // Preserve LOAN_TYPE_LABEL order so the legend reads consistently.
+  const orderedTypes: LoanType[] = Object.keys(LOAN_TYPE_LABEL) as LoanType[];
+  const typesPresent = orderedTypes.filter((t) =>
+    projections.some((p) => p.loan.type === t),
+  );
+
+  const rowsByMonth = new Map<string, DebtSeriesRow>();
   for (const p of projections) {
-    if (p.withDefault.schedule.length > maxMonths) {
-      maxMonths = p.withDefault.schedule.length;
-    }
+    const t = p.loan.type;
     for (const entry of p.withDefault.schedule) {
       const month = entry.paymentDate.slice(0, 7);
-      byMonth.set(month, (byMonth.get(month) ?? 0) + entry.balance);
+      let row = rowsByMonth.get(month);
+      if (!row) {
+        row = { month };
+        for (const tp of typesPresent) row[tp] = 0;
+        rowsByMonth.set(month, row);
+      }
+      row[t] = (row[t] as number) + entry.balance;
     }
   }
-  // Sorted ascending by YYYY-MM string (lexicographic === chronological).
-  const result = [...byMonth.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([month, total]) => ({ month, total }));
-  return result.slice(0, MAX_CHART_MONTHS);
+
+  const rows = [...rowsByMonth.values()]
+    .sort((a, b) => (a.month as string).localeCompare(b.month as string))
+    .slice(0, MAX_CHART_MONTHS);
+  return { rows, typesPresent };
 }
 
 // ---------------------------------------------------------------------------
@@ -385,7 +408,20 @@ export default function Loans() {
     [projections],
   );
 
-  const debtSeries = useMemo(() => buildDebtSeries(projections), [projections]);
+  const { rows: debtRows, typesPresent: debtTypes } = useMemo(
+    () => buildDebtSeries(projections),
+    [projections],
+  );
+
+  const debtChartSeries = useMemo<BarChartSeries[]>(
+    () =>
+      debtTypes.map((t) => ({
+        dataKey: t,
+        label: LOAN_TYPE_LABEL[t],
+        stackId: 'debt',
+      })),
+    [debtTypes],
+  );
 
   const personNameById = useMemo(
     () =>
@@ -501,13 +537,17 @@ export default function Loans() {
         ))}
       </div>
 
-      {debtSeries.length > 0 ? (
-        <LineChartCard
+      {debtRows.length > 0 ? (
+        <BarChartCard
           title="Total debt over time"
-          subtitle="Sum of remaining balances per amortization schedule"
-          data={debtSeries}
+          subtitle={
+            debtTypes.length > 1
+              ? 'Remaining balances stacked by loan type'
+              : 'Sum of remaining balances per amortization schedule'
+          }
+          data={debtRows}
           xKey="month"
-          series={[{ dataKey: 'total', label: 'Total debt' }]}
+          series={debtChartSeries}
           yFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
         />
       ) : null}

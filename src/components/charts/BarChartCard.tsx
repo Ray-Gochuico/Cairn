@@ -25,6 +25,11 @@ export interface BarChartSeries {
   dataKey: string;
   label: string;
   color?: string;
+  /**
+   * Optional Recharts stackId. Series sharing the same stackId stack on top
+   * of each other. Omit to draw side-by-side bars (default).
+   */
+  stackId?: string;
 }
 
 export interface BarChartCardProps {
@@ -126,6 +131,7 @@ export default function BarChartCard({
                 key={s.dataKey}
                 dataKey={s.dataKey}
                 name={s.label}
+                stackId={s.stackId}
                 fill={s.color ?? CHART_PALETTE[idx % CHART_PALETTE.length]}
                 radius={[2, 2, 0, 0]}
               />
