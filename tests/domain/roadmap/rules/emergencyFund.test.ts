@@ -277,14 +277,16 @@ describe('evaluateEmergencyFund6To12Months', () => {
 });
 
 describe('emergency-fund rule — real expense baseline from transactions', () => {
+  // Adjusted for the expense-sign fix: purchase amounts are positive per the
+  // Transaction schema convention.
   it('prefers 12-month rolling avg from transactions over household baseline', () => {
     // 3 months of $4,000 outflows → baseline = $4,000.
     // Household baseline says $5,000 (would have made 3-mo target $15k).
     // With $4,000 real baseline, 3-mo target = $12k → cash $12,500 should mark done.
     const transactions = [
-      tx(1, '2026-03-10', -4000),
-      tx(2, '2026-04-10', -4000),
-      tx(3, '2026-05-10', -4000),
+      tx(1, '2026-03-10', 4000),
+      tx(2, '2026-04-10', 4000),
+      tx(3, '2026-05-10', 4000),
     ];
     const r = evaluateEmergencyFund3Months(
       makeContext({ baseline: 5000, cash: 12_500, stability: 'stable', transactions }),
@@ -306,10 +308,10 @@ describe('emergency-fund rule — real expense baseline from transactions', () =
     // Real baseline = $12,000 / 4 = $3,000.
     // 6-mo unstable target = 6 × $3,000 = $18,000. Cash $18,000 → done.
     const transactions = [
-      tx(1, '2026-02-15', -3000),
-      tx(2, '2026-03-15', -3000),
-      tx(3, '2026-04-15', -3000),
-      tx(4, '2026-05-15', -3000),
+      tx(1, '2026-02-15', 3000),
+      tx(2, '2026-03-15', 3000),
+      tx(3, '2026-04-15', 3000),
+      tx(4, '2026-05-15', 3000),
     ];
     const r = evaluateEmergencyFund6To12Months(
       makeContext({ baseline: 0, cash: 18_000, stability: 'unstable', transactions }),
@@ -323,8 +325,8 @@ describe('emergency-fund rule — real expense baseline from transactions', () =
     // 2 months of $600 → $1,200 / 2 = $600 baseline.
     // Small target = max($1,000, $600) = $1,000. Cash $900 → active.
     const transactions = [
-      tx(1, '2026-04-10', -600),
-      tx(2, '2026-05-10', -600),
+      tx(1, '2026-04-10', 600),
+      tx(2, '2026-05-10', 600),
     ];
     const r = evaluateSmallEmergencyFund(
       makeContext({ baseline: 5000, cash: 900, transactions }),

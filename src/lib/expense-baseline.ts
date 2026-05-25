@@ -10,12 +10,10 @@ import type { Transaction } from '@/types/schema';
  *
  * Returns 0 when no qualifying transactions exist in the window.
  *
- * Outflow-detection note: this preserves the existing convention used by
- * `state-snapshot.ts` (filters `amount < 0` and sums absolute values).
- * The Transaction schema actually documents `positive = purchase,
- * negative = payment/credit`, so this is inverted relative to the rest
- * of the codebase. Kept as-is here to keep this commit a pure
- * extraction; sign correction is tracked separately.
+ * Sign convention: per the Transaction schema (`src/types/schema.ts`),
+ * `amount > 0` is a purchase (expense) and `amount < 0` is a refund or
+ * credit. Other consumers (spending-analysis, recurring) follow the
+ * same convention. We filter `amount > 0` here to sum actual outflows.
  */
 export function computeBaselineExpenses(
   transactions: Transaction[],
@@ -25,12 +23,12 @@ export function computeBaselineExpenses(
   const horizonMs = 12 * 30 * 86_400_000;
   const recent = transactions.filter(
     (t) =>
-      t.amount < 0 &&
+      t.amount > 0 &&
       Date.parse(t.date) >= startMs - horizonMs &&
       Date.parse(t.date) <= startMs,
   );
   if (recent.length === 0) return 0;
-  const totalOutflow = recent.reduce((acc, t) => acc + Math.abs(t.amount), 0);
+  const totalOutflow = recent.reduce((acc, t) => acc + t.amount, 0);
   const monthsObserved = new Set(recent.map((t) => t.date.slice(0, 7))).size;
   return totalOutflow / Math.max(monthsObserved, 1);
 }
