@@ -2,12 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { summarizeBudget, type BudgetRow } from '@/lib/budget-analysis';
-import BarChartCard from '@/components/charts/BarChartCard';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import BudgetOverlayRow from '@/components/budget/BudgetOverlayRow';
+import { Card, CardContent } from '@/components/ui/card';
 
 const currency = (n: number) =>
-  `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  `$${Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 
 export default function Budget() {
   const categories = useCategoriesStore((s) => s.categories);
@@ -50,9 +49,7 @@ export default function Budget() {
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
   }, [summary.rows, categories]);
 
-  const chartData = summary.rows
-    .filter((r) => r.budget != null)
-    .map((r) => ({ name: r.categoryName, budget: r.budget as number, actual: r.actual }));
+  const anyBudgetSet = summary.rows.some((r) => r.budget != null);
 
   const handleBudgetCommit = async (
     categoryId: number,
@@ -71,7 +68,7 @@ export default function Budget() {
   };
 
   return (
-    <div className="p-8 max-w-6xl space-y-6">
+    <div className="p-8 max-w-4xl space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold mb-1">Budget</h1>
@@ -89,91 +86,48 @@ export default function Budget() {
         </select>
       </div>
 
-      {chartData.length > 0 ? (
-        <BarChartCard
-          title="Budget vs actual"
-          subtitle={month}
-          data={chartData}
-          xKey="name"
-          series={[
-            { dataKey: 'budget', label: 'Budget' },
-            { dataKey: 'actual', label: 'Actual' },
-          ]}
-          yFormatter={currency}
-          layout="vertical"
-          height={Math.max(240, chartData.length * 40)}
-        />
+      {anyBudgetSet ? (
+        <div className="flex items-baseline justify-between border-b pb-2">
+          <h2 className="text-lg font-semibold">Spending</h2>
+          <span className="text-sm text-muted-foreground tabular-nums">
+            {currency(summary.totalActual)} of {currency(summary.totalBudget)}
+          </span>
+        </div>
       ) : (
         <Card>
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            Set a monthly budget on a category below to see the budget-vs-actual chart.
+            Set a monthly budget on a category below to see the budget-vs-actual overlay.
           </CardContent>
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Category budgets</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {groups.map(([parentName, rows]) => {
-            const groupBudget = rows.reduce((s, r) => s + (r.budget ?? 0), 0);
-            const groupActual = rows.reduce((s, r) => s + r.actual, 0);
-            return (
-              <div key={parentName}>
-                <div className="flex items-center justify-between border-b pb-1 mb-2">
-                  <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    {parentName}
-                  </h2>
-                  <span className="text-xs text-muted-foreground tabular-nums">
-                    {currency(groupActual)} / {currency(groupBudget)}
-                  </span>
-                </div>
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-xs text-muted-foreground">
-                      <th className="py-1 pr-4">Category</th>
-                      <th className="py-1 pr-4">Monthly budget</th>
-                      <th className="py-1 pr-4 text-right">Actual</th>
-                      <th className="py-1 pr-4 text-right">Remaining</th>
-                      <th className="py-1 text-right">Used</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((r) => (
-                      <tr key={r.categoryId} className="border-b last:border-b-0">
-                        <td className="py-2 pr-4">{r.categoryName}</td>
-                        <td className="py-2 pr-4">
-                          <Input
-                            type="number"
-                            step="1"
-                            min="0"
-                            className="h-8 w-28"
-                            aria-label={`Budget for ${r.categoryName}`}
-                            defaultValue={r.budget ?? ''}
-                            onBlur={(e) => handleBudgetCommit(r.categoryId, e.target.value, e.target, r.budget)}
-                          />
-                        </td>
-                        <td className="py-2 pr-4 text-right tabular-nums">
-                          {currency(r.actual)}
-                        </td>
-                        <td className={`py-2 pr-4 text-right tabular-nums ${
-                          r.overBudget ? 'text-destructive' : ''}`}>
-                          {r.remaining != null ? currency(r.remaining) : '—'}
-                        </td>
-                        <td className={`py-2 text-right tabular-nums ${
-                          r.overBudget ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
-                          {r.pct != null ? `${Math.round(r.pct * 100)}%` : '—'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+      <div className="space-y-8">
+        {groups.map(([parentName, rows]) => {
+          const groupBudget = rows.reduce((s, r) => s + (r.budget ?? 0), 0);
+          const groupActual = rows.reduce((s, r) => s + r.actual, 0);
+          return (
+            <div key={parentName}>
+              <div className="flex items-center justify-between border-b pb-1 mb-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  {parentName}
+                </h3>
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {currency(groupActual)} of {currency(groupBudget)}
+                </span>
               </div>
-            );
-          })}
-        </CardContent>
-      </Card>
+              <div className="divide-y">
+                {rows.map((r) => (
+                  <BudgetOverlayRow
+                    key={r.categoryId}
+                    row={r}
+                    onBudgetCommit={handleBudgetCommit}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
