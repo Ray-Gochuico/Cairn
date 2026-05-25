@@ -160,7 +160,38 @@ export const useScenariosStore = create<ScenariosState>((set, get) => ({
     await get().load();
   },
 
-  projectedScenarios: () => { throw new Error('not implemented yet — see Task 9'); },
+  projectedScenarios: (real) => {
+    const state = get();
+    const next = new Map(state.projectionCache);
+    const out = new Map<number, MonthlyState[]>();
+
+    const defaultsKey = `${state.inflation}|${state.defaultReturnRate}`;
+    const horizonKey = `${real.startISO}|${state.horizonMonths}`;
+
+    for (const sc of state.scenarios) {
+      if (!sc.visible) continue;
+      if (sc.id == null) continue;
+      const id = sc.id;
+      const leverKey = JSON.stringify(sc.leverPayload);
+      const key = `${leverKey}|${horizonKey}|${defaultsKey}`;
+
+      const cached = next.get(id);
+      if (cached && cached.key === key) {
+        out.set(id, cached.states);
+        continue;
+      }
+
+      const states = projectScenario(real, sc.leverPayload, {
+        startISO: real.startISO,
+        months: state.horizonMonths,
+      });
+      next.set(id, { states, key });
+      out.set(id, states);
+    }
+
+    set({ projectionCache: next });
+    return out;
+  },
 }));
 
 function invalidateProjectionFor(
@@ -173,5 +204,3 @@ function invalidateProjectionFor(
   set({ projectionCache: next });
 }
 
-// Silence unused-import warnings until Task 9 wires the selector
-void projectScenario;

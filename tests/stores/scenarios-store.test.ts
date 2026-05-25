@@ -207,3 +207,87 @@ describe('useScenariosStore — UI-state mutators', () => {
     expect(reloaded?.visible).toBe(false);
   });
 });
+
+import type { RealState } from '@/lib/scenarios';
+
+const sampleRealState = (): RealState => ({
+  accounts: [],
+  holdings: [{ id: 1, accountId: 1, ticker: 'VTI', shareCount: 1000, costBasis: 200, targetAllocationPct: null } as any],
+  loans: [{ id: 1, householdId: 1, name: 'Auto', type: 'AUTO', currentBalance: 18400, interestRate: 0.059, monthlyPayment: 425, termMonths: 60 } as any],
+  loanPayments: [],
+  household: {
+    id: 1,
+    persons: [{ id: 1, annualSalaryPretax: 135000 }],
+    filingStatus: 'SINGLE', state: 'CA', city: null,
+  } as any,
+  baselineMonthlyExpenses: 4500,
+  defaults: { inflation: 0.025, returnRate: 0.07 },
+  startISO: '2026-05',
+});
+
+describe('useScenariosStore.projectedScenarios — memoization', () => {
+  let db: SqliteAdapter;
+
+  beforeEach(async () => {
+    db = new SqliteAdapter();
+    await runMigrations(db, await loadAllMigrations());
+    setDatabase(db);
+    resetStore();
+    await useScenariosStore.getState().load();
+  });
+
+  afterEach(async () => { await db.close(); });
+
+  it('returns a projection per visible scenario keyed by scenario id', () => {
+    const result = useScenariosStore.getState().projectedScenarios(sampleRealState());
+    const baselineId = useScenariosStore.getState().scenarios.find((s) => s.isBaseline)!.id!;
+    expect(result.has(baselineId)).toBe(true);
+    expect(result.get(baselineId)!.length).toBe(360);
+  });
+
+  it('caches projections — a second call with the same inputs returns identical references', () => {
+    const real = sampleRealState();
+    const a = useScenariosStore.getState().projectedScenarios(real);
+    const b = useScenariosStore.getState().projectedScenarios(real);
+    for (const [id, states] of a) {
+      expect(b.get(id)).toBe(states);
+    }
+  });
+
+  it('skips invisible scenarios entirely', async () => {
+    const id = await useScenariosStore.getState().create(variantInput({ visible: false }));
+    const result = useScenariosStore.getState().projectedScenarios(sampleRealState());
+    expect(result.has(id)).toBe(false);
+  });
+
+  it('updateLever invalidates the cache for the affected scenario', async () => {
+    const baselineId = useScenariosStore.getState().scenarios.find((s) => s.isBaseline)!.id!;
+    const real = sampleRealState();
+    const before = useScenariosStore.getState().projectedScenarios(real).get(baselineId)!;
+    await useScenariosStore.getState().updateLever(baselineId, { extraLoanPayments: [{ loanId: 1, extraMonthly: 300 }] });
+    const after = useScenariosStore.getState().projectedScenarios(real).get(baselineId)!;
+    expect(after).not.toBe(before);
+    const beforeDebtFree = before.findIndex((s) => Object.values(s.debtByLoan).reduce((a, b) => a + b, 0) === 0);
+    const afterDebtFree  = after.findIndex((s) => Object.values(s.debtByLoan).reduce((a, b) => a + b, 0) === 0);
+    expect(afterDebtFree).toBeLessThan(beforeDebtFree);
+  });
+
+  it('setHorizonMonths invalidates the entire cache', () => {
+    const real = sampleRealState();
+    const baselineId = useScenariosStore.getState().scenarios.find((s) => s.isBaseline)!.id!;
+    const before = useScenariosStore.getState().projectedScenarios(real).get(baselineId)!;
+    useScenariosStore.getState().setHorizonMonths(120);
+    const after = useScenariosStore.getState().projectedScenarios(real).get(baselineId)!;
+    expect(after).not.toBe(before);
+    expect(after.length).toBe(120);
+  });
+
+  it('dollar-mode toggle does NOT re-project — toReal is applied at the chart layer', () => {
+    const real = sampleRealState();
+    const baselineId = useScenariosStore.getState().scenarios.find((s) => s.isBaseline)!.id!;
+    const nominal = useScenariosStore.getState().projectedScenarios(real).get(baselineId)!;
+    useScenariosStore.getState().setDollarMode('real');
+    const stillNominal = useScenariosStore.getState().projectedScenarios(real).get(baselineId)!;
+    expect(stillNominal).toBe(nominal);
+  });
+});
