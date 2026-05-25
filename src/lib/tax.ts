@@ -141,3 +141,71 @@ export function computeBonusTax(input: BonusTaxInput): BonusTaxOutput {
 
   return { federalTax, fica, stateTax, cityTax, totalTax, effectiveRate, marginalRateOnBonus, bonusTakeHome, bonusBreakdown };
 }
+
+export interface WithdrawalTaxBreakdown {
+  incrementalFederal: number;
+  incrementalState: number;
+  incrementalCity: number;
+  earlyWithdrawalPenalty: number;
+  totalTaxOnWithdrawal: number;
+  netToUser: number;
+  effectiveRate: number;
+}
+
+export interface WithdrawalTaxInput {
+  withdrawalAmount: number;
+  annualW2Income: number;
+  annualCapitalGains: number;
+  ageAtWithdrawal: number;
+  filingStatus: 'SINGLE' | 'MFJ' | 'MFS' | 'HOH';
+  federalBrackets: Bracket[];
+  stateBrackets: Bracket[];
+  cityBrackets: Bracket[] | null;
+  federalStandardDeduction: number;
+  taxYear: number;
+}
+
+/**
+ * Incremental tax a Traditional 401k withdrawal triggers on top of existing
+ * ordinary income, via the with/without-X diff pattern (mirrors computeBonusTax).
+ * FICA is not levied on 401k distributions; the 10% penalty fires strictly when
+ * ageAtWithdrawal < 59.5. Roth distributions and IRS exceptions (separation at
+ * 55+, hardship, SEPP/72(t)) are not modeled.
+ */
+export function calculate401kWithdrawalTax(input: WithdrawalTaxInput): WithdrawalTaxBreakdown {
+  if (input.withdrawalAmount < 0) throw new Error('withdrawalAmount must be non-negative');
+  if (input.annualW2Income < 0) throw new Error('annualW2Income must be non-negative');
+  if (input.annualCapitalGains < 0) throw new Error('annualCapitalGains must be non-negative');
+  if (input.ageAtWithdrawal < 0 || input.ageAtWithdrawal > 130) throw new Error('ageAtWithdrawal out of range');
+
+  const ordinaryWithoutWithdrawal = input.annualW2Income + input.annualCapitalGains;
+  const adjustedWithout = Math.max(0, ordinaryWithoutWithdrawal - input.federalStandardDeduction);
+  const adjustedWith = Math.max(0, ordinaryWithoutWithdrawal + input.withdrawalAmount - input.federalStandardDeduction);
+
+  const federalWithout = evaluateBrackets(input.federalBrackets, adjustedWithout);
+  const federalWith = evaluateBrackets(input.federalBrackets, adjustedWith);
+  const incrementalFederal = federalWith - federalWithout;
+
+  const stateWithout = input.stateBrackets.length > 0 ? evaluateBrackets(input.stateBrackets, adjustedWithout) : 0;
+  const stateWith = input.stateBrackets.length > 0 ? evaluateBrackets(input.stateBrackets, adjustedWith) : 0;
+  const incrementalState = stateWith - stateWithout;
+
+  const cityWithout = input.cityBrackets ? evaluateBrackets(input.cityBrackets, adjustedWithout) : 0;
+  const cityWith = input.cityBrackets ? evaluateBrackets(input.cityBrackets, adjustedWith) : 0;
+  const incrementalCity = cityWith - cityWithout;
+
+  const earlyWithdrawalPenalty = input.ageAtWithdrawal < 59.5 ? input.withdrawalAmount * 0.10 : 0;
+  const totalTaxOnWithdrawal = incrementalFederal + incrementalState + incrementalCity + earlyWithdrawalPenalty;
+  const netToUser = input.withdrawalAmount - totalTaxOnWithdrawal;
+  const effectiveRate = input.withdrawalAmount > 0 ? totalTaxOnWithdrawal / input.withdrawalAmount : 0;
+
+  return {
+    incrementalFederal,
+    incrementalState,
+    incrementalCity,
+    earlyWithdrawalPenalty,
+    totalTaxOnWithdrawal,
+    netToUser,
+    effectiveRate,
+  };
+}

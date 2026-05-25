@@ -8,6 +8,7 @@ import { CoastFiCard } from './CoastFiCard';
 import { DebtPayoffCard } from './DebtPayoffCard';
 import { EquityValueCard } from './EquityValueCard';
 import { CompoundInterestCard } from './CompoundInterestCard';
+import { Retirement401kWithdrawalCard } from './Retirement401kWithdrawalCard';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { getCurrentTaxYear } from '@/lib/current-tax-year';
@@ -27,6 +28,7 @@ const CARD_IDS = {
   COMPOUND: 'compound-interest',
   DEBT_PAYOFF: 'debt-payoff',
   EQUITY: 'equity',
+  RETIREMENT_401K: 'retirement-401k-withdrawal',
 } as const;
 
 // Human-friendly labels surfaced in the "manage" popover.
@@ -40,6 +42,7 @@ const CARD_LABELS: Record<string, string> = {
   [CARD_IDS.COMPOUND]: 'Compound Interest',
   [CARD_IDS.DEBT_PAYOFF]: 'Debt Payoff',
   [CARD_IDS.EQUITY]: 'Equity Value',
+  [CARD_IDS.RETIREMENT_401K]: '401k withdrawal tax',
 };
 
 function labelFor(id: string): string {
@@ -147,6 +150,12 @@ export default function CalculatorsLayout() {
         )}
         {!hiddenSet.has(CARD_IDS.BONUS) && (
           <BonusTaxCard cardId={CARD_IDS.BONUS} onHide={refreshHidden} />
+        )}
+        {!hiddenSet.has(CARD_IDS.RETIREMENT_401K) && (
+          <Retirement401kWithdrawalCard
+            cardId={CARD_IDS.RETIREMENT_401K}
+            onHide={refreshHidden}
+          />
         )}
         {!hiddenSet.has(CARD_IDS.COMMISSION) && (
           <CommissionTaxCard cardId={CARD_IDS.COMMISSION} onHide={refreshHidden} />
