@@ -156,6 +156,86 @@ describe('YahooClient', () => {
     });
   });
 
+  describe('fundSectorWeightings', () => {
+    it('returns mapped sectors with human-readable names and weights', async () => {
+      mockInvoke.mockResolvedValueOnce(JSON.stringify(topHoldingsFixture));
+
+      const result = await client.fundSectorWeightings('VTI');
+
+      // Yahoo returns 11 GICS sectors as `[{snake_case: {raw: 0.xxx}}, ...]`.
+      // We map snake_case → "Title Case" so the donut labels look like the
+      // assetProfile-driven sectors for individual equities (e.g. "Technology"
+      // not "technology"). Verifies a few representative rows.
+      const tech = result.sectors.find((s) => s.sector === 'Technology');
+      const fin = result.sectors.find((s) => s.sector === 'Financial Services');
+      const real = result.sectors.find((s) => s.sector === 'Real Estate');
+      const comm = result.sectors.find((s) => s.sector === 'Communication Services');
+      expect(tech?.weight).toBeCloseTo(0.2865, 4);
+      expect(fin?.weight).toBeCloseTo(0.1402, 4);
+      expect(real?.weight).toBeCloseTo(0.0291, 4);
+      expect(comm?.weight).toBeCloseTo(0.0813, 4);
+      expect(result.sectors).toHaveLength(11);
+      expect(result.asOf).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+
+    it('returns empty sectors when Yahoo omits sectorWeightings', async () => {
+      const noSectorsResponse = {
+        quoteSummary: { result: [{ topHoldings: { holdings: [] } }], error: null },
+      };
+      mockInvoke.mockResolvedValueOnce(JSON.stringify(noSectorsResponse));
+
+      const result = await client.fundSectorWeightings('VTI');
+
+      expect(result.sectors).toEqual([]);
+      expect(result.asOf).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+
+    it('returns empty sectors when result array is null', async () => {
+      const noResultResponse = { quoteSummary: { result: null, error: null } };
+      mockInvoke.mockResolvedValueOnce(JSON.stringify(noResultResponse));
+
+      const result = await client.fundSectorWeightings('VTI');
+
+      expect(result.sectors).toEqual([]);
+    });
+
+    it('drops entries with zero weight (Yahoo emits these for non-equity funds)', async () => {
+      const zeroWeightResponse = {
+        quoteSummary: {
+          result: [{
+            topHoldings: {
+              sectorWeightings: [
+                { technology: { raw: 0.3 } },
+                { healthcare: { raw: 0 } },
+                { financial_services: { raw: 0.2 } },
+              ],
+            },
+          }],
+          error: null,
+        },
+      };
+      mockInvoke.mockResolvedValueOnce(JSON.stringify(zeroWeightResponse));
+
+      const result = await client.fundSectorWeightings('VTI');
+
+      expect(result.sectors).toHaveLength(2);
+      expect(result.sectors.map((s) => s.sector).sort()).toEqual([
+        'Financial Services', 'Technology',
+      ]);
+    });
+
+    it('invokes the Rust command with modules=[topHoldings]', async () => {
+      mockInvoke.mockResolvedValueOnce(JSON.stringify(topHoldingsFixture));
+
+      await client.fundSectorWeightings('VTI');
+
+      expect(mockInvoke).toHaveBeenCalledWith('yahoo_quote_summary', {
+        ticker: 'VTI',
+        modules: ['topHoldings'],
+      });
+    });
+  });
+
   describe('assetProfile', () => {
     it('returns sector and industry from Yahoo quoteSummary assetProfile module', async () => {
       const response = {

@@ -3,6 +3,7 @@ import { AccountsRepo } from '@/domain/accounts';
 import { HoldingsRepo } from '@/domain/holdings';
 import { AccountSnapshotsRepo } from '@/domain/snapshots';
 import { FundHoldingsRepo } from '@/domain/fund-holdings';
+import { FundSectorsRepo } from '@/domain/fund-sectors';
 import { TickersRepo } from '@/domain/tickers';
 import { PriceCache } from '@/market/price-cache';
 import { YahooClient } from '@/market/yahoo-client';
@@ -50,6 +51,7 @@ export function runMarketDataRefresh(db: Database): void {
       const result = await syncStaleFunds({
         yahoo: new YahooClient(),
         fundHoldings: new FundHoldingsRepo(db),
+        fundSectors: new FundSectorsRepo(db),
         tickers: new TickersRepo(db),
         holdings: new HoldingsRepo(db),
       });

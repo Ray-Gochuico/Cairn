@@ -4,10 +4,12 @@ import DonutChartCard from './DonutChartCard';
 import { colorForSector, shadedColorForIndustry } from './palette';
 import { useConcentration } from '@/lib/use-concentration';
 import { useTickersStore } from '@/stores/tickers-store';
+import { useFundSectorsStore } from '@/stores/fund-sectors-store';
 import {
   aggregateByIndustry,
   aggregateBySector,
   buildSectorMap,
+  type FundSectorWeights,
 } from '@/lib/sector-classification';
 import { formatCurrency } from '@/lib/format';
 
@@ -28,13 +30,32 @@ import { formatCurrency } from '@/lib/format';
 export function SectorDonut() {
   const report = useConcentration();
   const tickers = useTickersStore((s) => s.tickers);
+  const fundSectors = useFundSectorsStore((s) => s.fundSectors);
+  const loadFundSectors = useFundSectorsStore((s) => s.load);
   const [selectedSector, setSelectedSector] = useState<string | null>(null);
+
+  // Load fund sectors on mount so the donut has data on first paint. The
+  // Investments page also loads the holdings/tickers/fund-holdings stores
+  // in its own mount block; this is the same pattern for sectors.
+  useEffect(() => {
+    loadFundSectors();
+  }, [loadFundSectors]);
 
   const sectorMap = useMemo(() => buildSectorMap(tickers), [tickers]);
 
+  const fundSectorWeights = useMemo(() => {
+    const map = new Map<string, { sector: string; weight: number }[]>();
+    for (const fs of fundSectors) {
+      const rows = map.get(fs.fundTicker) ?? [];
+      rows.push({ sector: fs.sector, weight: fs.weight });
+      map.set(fs.fundTicker, rows);
+    }
+    return map as ReadonlyMap<string, FundSectorWeights>;
+  }, [fundSectors]);
+
   const slices = useMemo(() => {
     if (selectedSector === null) {
-      return aggregateBySector(report.perTicker, sectorMap).map((s) => ({
+      return aggregateBySector(report.perTicker, sectorMap, fundSectorWeights).map((s) => ({
         ...s,
         color: colorForSector(s.name),
       }));
@@ -43,7 +64,7 @@ export function SectorDonut() {
       ...s,
       color: shadedColorForIndustry(selectedSector, i),
     }));
-  }, [report.perTicker, sectorMap, selectedSector]);
+  }, [report.perTicker, sectorMap, fundSectorWeights, selectedSector]);
 
   useEffect(() => {
     if (selectedSector === null) return;
