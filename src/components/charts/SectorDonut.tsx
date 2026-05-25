@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
-import DonutChartCard from './DonutChartCard';
+import DonutChartCard, { type DonutSlice } from './DonutChartCard';
 import { colorForSector, shadedColorForIndustry } from './palette';
 import { useConcentration } from '@/lib/use-concentration';
 import { useTickersStore } from '@/stores/tickers-store';
@@ -13,15 +13,23 @@ import {
 } from '@/lib/sector-classification';
 import { formatCurrency } from '@/lib/format';
 
+// Module-level empty-data sentinel for the empty-state donut. Hoisted so the
+// `data` prop keeps a stable reference across renders — recharts' Pie keys
+// its <JavascriptAnimate> off `useAnimationId(props)`, which uses reference
+// equality on the entire props object, and a fresh `[]` each render churns
+// the animation lifecycle.
+const EMPTY_DONUT_DATA: DonutSlice[] = [];
+
 /**
  * Sector exposure donut that drills into industries on click.
  *
- * Default view: one wedge per resolved sector (Yahoo GICS classification
- * with pseudo-sector fallbacks from sector-classification.ts), colored
- * from SECTOR_COLORS. Clicking a wedge switches to that sector's
- * industry breakdown, colored as shaded variants of the parent sector
- * color so the connection reads at a glance. A "← Back to sectors"
- * link in the card subtitle returns to the default view.
+ * Default view: one wedge per resolved sector (Yahoo's Morningstar-style
+ * labels — "Financial Services", "Healthcare", "Consumer Cyclical" — with
+ * pseudo-sector fallbacks from sector-classification.ts), colored from
+ * SECTOR_COLORS. Clicking a wedge switches to that sector's industry
+ * breakdown, colored as shaded variants of the parent sector color so the
+ * connection reads at a glance. A "← Back to sectors" link in the card
+ * subtitle returns to the default view.
  *
  * If the drilled-in sector becomes empty (e.g. the user sold every
  * holding in it), the view self-heals back to the sector overview
@@ -92,7 +100,7 @@ export function SectorDonut() {
       <DonutChartCard
         title="Sector exposure"
         subtitle="After fund look-through"
-        data={[]}
+        data={EMPTY_DONUT_DATA}
       />
     );
   }

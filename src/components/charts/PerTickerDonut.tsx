@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import DonutChartCard from './DonutChartCard';
+import DonutChartCard, { type DonutSlice } from './DonutChartCard';
 import { CHART_NEUTRAL } from './palette';
 import { colorForTicker } from '@/lib/chart-colors';
 import { withMiscLast } from '@/lib/concentration';
@@ -7,6 +7,12 @@ import { useConcentration } from '@/lib/use-concentration';
 import { useTickersStore } from '@/stores/tickers-store';
 import { formatCurrency } from '@/lib/format';
 import type { AssetClass } from '@/types/schema';
+
+// Module-level empty-data sentinel so the empty-state donut passes the
+// same `data` reference every render — recharts' Pie regenerates its
+// animation id on each new props object, and an inline `[]` would
+// re-animate on every parent re-render.
+const EMPTY_DONUT_DATA: DonutSlice[] = [];
 
 /**
  * Per-company effective exposure donut with top-10 + Misc rollup.
@@ -54,26 +60,40 @@ export function PerTickerDonut() {
     [tickerNameMap],
   );
 
-  const slices = withMiscLast(report.perTicker).map((s) => ({
-    name: s.ticker,
-    // Donut can't render negative wedges; SHORT exposures get clamped here.
-    value: Math.max(0, s.effectiveExposure),
-    color:
-      s.ticker === 'Misc'
-        ? CHART_NEUTRAL
-        : colorForTicker(s.ticker, tickerColorMap.get(s.ticker)),
-  }));
+  // Memoise the slices and opaque-funds derivations on report.perTicker /
+  // tickerColorMap so the `data` array passed to <DonutChartCard> keeps a
+  // stable reference across re-renders. Without this, every Investments-page
+  // render produces a fresh array, which churns recharts' Pie animation
+  // (it keys its <JavascriptAnimate> off a reference-equality animationId)
+  // and contributed to the page-level Maximum-update-depth crash.
+  const slices = useMemo(
+    () =>
+      withMiscLast(report.perTicker).map((s) => ({
+        name: s.ticker,
+        // Donut can't render negative wedges; SHORT exposures get clamped here.
+        value: Math.max(0, s.effectiveExposure),
+        color:
+          s.ticker === 'Misc'
+            ? CHART_NEUTRAL
+            : colorForTicker(s.ticker, tickerColorMap.get(s.ticker)),
+      })),
+    [report.perTicker, tickerColorMap],
+  );
 
   // Identify wedges whose ticker is itself classified as a fund — these are
   // funds whose look-through failed (concentration's math falls back to
   // "opaque holding" and credits the fund's ticker directly). Surfacing
   // them tells the user why they're seeing VTI/FXAIX instead of AAPL/MSFT.
-  const opaqueFunds = report.perTicker
-    .filter((t) => {
-      const cls = tickerClassMap.get(t.ticker);
-      return cls !== undefined && FUND_ASSET_CLASSES.has(cls);
-    })
-    .map((t) => t.ticker);
+  const opaqueFunds = useMemo(
+    () =>
+      report.perTicker
+        .filter((t) => {
+          const cls = tickerClassMap.get(t.ticker);
+          return cls !== undefined && FUND_ASSET_CLASSES.has(cls);
+        })
+        .map((t) => t.ticker),
+    [report.perTicker, tickerClassMap],
+  );
 
   const hasData = slices.some((s) => s.value > 0);
 
@@ -82,7 +102,7 @@ export function PerTickerDonut() {
       <DonutChartCard
         title="Per-company exposure"
         subtitle="After fund look-through"
-        data={[]}
+        data={EMPTY_DONUT_DATA}
       />
     );
   }

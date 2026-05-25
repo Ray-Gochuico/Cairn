@@ -1,5 +1,6 @@
+import { StrictMode } from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useAccountsStore } from '@/stores/accounts-store';
@@ -9,6 +10,9 @@ import { useContributionsStore } from '@/stores/contributions-store';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
+import { useTickersStore } from '@/stores/tickers-store';
+import { useFundHoldingsStore } from '@/stores/fund-holdings-store';
+import { useFundSectorsStore } from '@/stores/fund-sectors-store';
 import {
   AccountType,
   ContributionSource,
@@ -68,6 +72,12 @@ function resetStores() {
   useDependentsStore.setState({ dependents: [], isLoading: false, error: null });
   useHouseholdStore.setState({ household: null, isLoading: false, error: null });
   usePersonsStore.setState({ persons: [], isLoading: false, error: null });
+  // The fund stores' default load() hits getDatabase().select(...). The mock
+  // at the top of the file returns [], but the load() still fires set() which
+  // notifies subscribers. Stub out load() so mount-time refreshes are no-ops.
+  useTickersStore.setState({ tickers: [], isLoading: false, error: null, load: async () => {} });
+  useFundHoldingsStore.setState({ fundHoldings: [], isLoading: false, error: null, load: async () => {} });
+  useFundSectorsStore.setState({ fundSectors: [], isLoading: false, error: null, load: async () => {} });
 }
 
 interface PrimeOpts {
@@ -414,6 +424,109 @@ describe('Investments page — 529 section', () => {
     expect(grid).not.toBeNull();
     expect(grid!.className).toContain('lg:grid-cols-3');
     expect(grid!.className).toContain('grid-cols-1');
+  });
+
+  // Regression for P0.5: the live Investments page crashed with
+  // "Maximum update depth exceeded" thrown from recharts' JavascriptAnimate
+  // after the P0 What-If fix unblocked tab nav. The root cause was render-
+  // time churn on the SectorDonut data prop. Mount the page with realistic
+  // holdings + ticker + fund-sector data (the only combination that
+  // exercises the look-through math), wait for effects to settle, then
+  // assert no React render-loop warnings reached console.error AND
+  // assert that the donut store's load() is only called a bounded number
+  // of times (would be unbounded if the page is looping).
+  it('does not emit setState-in-render or Maximum-update-depth warnings with full fund data', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    // Count how many times the fund-sectors store's load() runs. The live
+    // bug manifested as the page calling load() dozens of times within a
+    // few seconds; a render loop would do the same here. The load() also
+    // simulates the production behaviour of triggering set(), which would
+    // re-notify subscribers and amplify any churn into a render storm.
+    let loadFundSectorsCallCount = 0;
+    const countingLoad = async () => {
+      loadFundSectorsCallCount += 1;
+      // Emulate the real store's set({ fundSectors: ... }) — keep the array
+      // reference fresh so subscribers see a "new" value just like prod.
+      useFundSectorsStore.setState({
+        fundSectors: [...useFundSectorsStore.getState().fundSectors],
+      });
+    };
+    try {
+      primeStores({
+        accounts: [
+          { id: 1, name: 'Brokerage', type: AccountType.ACCOUNT_BROKERAGE },
+        ],
+        holdings: [
+          { id: 1, accountId: 1, ticker: 'VTI', shareCount: 100 },
+          { id: 2, accountId: 1, ticker: 'FXAIX', shareCount: 50 },
+        ],
+        snapshotValues: [
+          { accountId: 1, snapshotDate: '2026-04-01', totalValue: 50_000 },
+        ],
+      });
+      useTickersStore.setState({
+        tickers: [
+          { ticker: 'VTI', name: 'Vanguard Total', assetClass: 'US_TOTAL_MARKET', leverageFactor: 1, direction: 'LONG', userAdded: false, accentColor: null, sector: null, industry: null },
+          { ticker: 'FXAIX', name: 'Fidelity 500', assetClass: 'US_LARGE_CAP', leverageFactor: 1, direction: 'LONG', userAdded: false, accentColor: null, sector: null, industry: null },
+        ],
+        isLoading: false,
+        error: null,
+        load: async () => {},
+      });
+      useFundSectorsStore.setState({
+        fundSectors: [
+          { fundTicker: 'VTI', sector: 'Technology', weight: 0.28, asOfDate: '2026-01-01' },
+          { fundTicker: 'VTI', sector: 'Financial Services', weight: 0.14, asOfDate: '2026-01-01' },
+          { fundTicker: 'VTI', sector: 'Healthcare', weight: 0.13, asOfDate: '2026-01-01' },
+          { fundTicker: 'VTI', sector: 'Consumer Cyclical', weight: 0.11, asOfDate: '2026-01-01' },
+          { fundTicker: 'FXAIX', sector: 'Technology', weight: 0.32, asOfDate: '2026-01-01' },
+          { fundTicker: 'FXAIX', sector: 'Healthcare', weight: 0.13, asOfDate: '2026-01-01' },
+        ],
+        isLoading: false,
+        error: null,
+        load: countingLoad,
+      });
+
+      // StrictMode mirrors main.tsx and double-invokes effects in dev — the
+      // exact environment that originally surfaced the live-app crash.
+      // Mount, unmount, re-mount to mirror tab navigation (the live app
+      // user saw the crash on revisit, not first load).
+      const first = render(
+        <StrictMode>
+          <MemoryRouter><Investments /></MemoryRouter>
+        </StrictMode>,
+      );
+      await waitFor(() => expect(screen.getByText('Sector exposure')).toBeInTheDocument());
+      first.unmount();
+      render(
+        <StrictMode>
+          <MemoryRouter><Investments /></MemoryRouter>
+        </StrictMode>,
+      );
+      await waitFor(() => expect(screen.getByText('Sector exposure')).toBeInTheDocument());
+      // Allow recharts' animation lifecycle a chance to fire the loop.
+      await new Promise((r) => setTimeout(r, 200));
+      // Then poke the store one more time to simulate a late update arriving
+      // (e.g. fund-holdings sync completing). A healthy page absorbs this
+      // without an additional render cascade; a looping page would compound.
+      const beforePoke = loadFundSectorsCallCount;
+      useTickersStore.setState({
+        tickers: [...useTickersStore.getState().tickers],
+      });
+      await new Promise((r) => setTimeout(r, 100));
+
+      const messages = errorSpy.mock.calls.map((c) => String(c[0] ?? ''));
+      expect(messages.find((m) => m.includes('Maximum update depth'))).toBeUndefined();
+      expect(messages.find((m) => m.includes('Cannot update a component'))).toBeUndefined();
+      // load() should be called at most a few times (mount + SectorDonut
+      // mount, doubled by StrictMode, repeated for the re-mount). A render
+      // loop would push this into the dozens.
+      expect(loadFundSectorsCallCount).toBeLessThan(20);
+      // A single late store update should not cascade into many load() calls.
+      expect(loadFundSectorsCallCount - beforePoke).toBeLessThan(3);
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 
   it('view filter ?view=p1 hides accounts owned by p2', () => {
