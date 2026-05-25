@@ -33,6 +33,7 @@ const realState: RealState = {
   baselineMonthlyExpenses: 4500,
   defaults: { inflation: 0.025, returnRate: 0.07 },
   startISO: '2026-05',
+  taxBrackets: { federal: [], state: [], city: null, standardDeduction: 0 },
 };
 
 describe('projectScenario (end-to-end)', () => {

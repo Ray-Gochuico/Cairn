@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { captureRealState, type RealStateInputs } from '@/lib/scenarios/state-snapshot';
-import type { Account, Holding, Loan, Transaction, Household } from '@/types/schema';
+import type { Account, Holding, Loan, Transaction, Household, TaxRule } from '@/types/schema';
 
 const household = {
   id: 1,
@@ -49,6 +49,7 @@ const inputs: RealStateInputs = {
   household,
   appSettings: { defaultInflation: 0.025, defaultReturnRate: 0.07 },
   startISO: '2026-05-01',
+  taxRules: [],
 };
 
 describe('captureRealState', () => {
@@ -68,5 +69,50 @@ describe('captureRealState', () => {
     ]});
     // Avg of (3000 + 3500 + 2800) / 3 = 3100 — only 3 months of data, so divide by months observed
     expect(s.baselineMonthlyExpenses).toBeCloseTo(3100, 0);
+  });
+});
+
+describe('captureRealState — tax brackets', () => {
+  const federalRule: TaxRule = {
+    year: 2026,
+    jurisdictionType: 'FEDERAL',
+    jurisdictionCode: 'US',
+    filingStatus: 'SINGLE',
+    brackets: [
+      { min: 0, max: 11600, rate: 0.10 },
+      { min: 11600, max: 47150, rate: 0.12 },
+    ],
+    standardDeduction: 14600,
+  };
+  const caRule: TaxRule = {
+    year: 2026,
+    jurisdictionType: 'STATE',
+    jurisdictionCode: 'CA',
+    filingStatus: 'SINGLE',
+    brackets: [{ min: 0, max: 10412, rate: 0.01 }],
+    standardDeduction: 5363,
+  };
+
+  it('parses bracket arrays and exposes federal + state + city + standardDeduction', () => {
+    const s = captureRealState({
+      ...inputs,
+      taxRules: [federalRule, caRule],
+    });
+    expect(s.taxBrackets.federal.length).toBeGreaterThan(0);
+    expect(s.taxBrackets.federal[0].rate).toBeCloseTo(0.10, 4);
+    expect(s.taxBrackets.state.length).toBeGreaterThan(0);
+    expect(s.taxBrackets.city).toBeNull();
+    expect(s.taxBrackets.standardDeduction).toBe(14600);
+  });
+
+  it('falls back to empty brackets when no rule matches the household (TX no-state-tax case)', () => {
+    const s = captureRealState({
+      ...inputs,
+      household: { ...inputs.household, state: 'TX' } as Household,
+      taxRules: [federalRule],
+    });
+    expect(s.taxBrackets.federal.length).toBeGreaterThan(0);
+    expect(s.taxBrackets.state).toEqual([]);
+    expect(s.taxBrackets.city).toBeNull();
   });
 });
