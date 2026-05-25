@@ -216,6 +216,89 @@ describe('computeConcentration', () => {
     });
     expect(result.perTicker.find((t) => t.ticker === 'Misc')).toBeUndefined();
   });
+
+  describe('tickerExposures (pre-look-through)', () => {
+    // Used by the sector donut: report.perTicker is fund-look-through and
+    // replaces VTI with its top-N underlyings + Misc, which makes
+    // aggregateBySector unable to look up VTI's sectorWeightings. The
+    // tickerExposures field keeps the fund ticker intact so the sector
+    // distribution can fire.
+
+    it('keeps the fund ticker intact (no top-10 explosion)', () => {
+      const result = computeConcentration({
+        holdings: [{ ticker: 'VTI', value: 10000 }],
+        tickers: new Map([
+          ['VTI', { assetClass: 'US_TOTAL_MARKET', leverageFactor: 1, direction: 'LONG' }],
+        ]),
+        fundHoldings: new Map([['VTI', [
+          { symbol: 'AAPL', weight: 0.08 },
+          { symbol: 'MSFT', weight: 0.07 },
+        ]]]),
+        totalPortfolioValue: 10000,
+      });
+      // perTicker (post-look-through) explodes into AAPL/MSFT/Misc
+      expect(result.perTicker.find((t) => t.ticker === 'VTI')).toBeUndefined();
+      expect(result.perTicker.find((t) => t.ticker === 'AAPL')).toBeDefined();
+      // tickerExposures (pre-look-through) keeps the fund ticker
+      expect(result.tickerExposures.find((t) => t.ticker === 'VTI')).toBeDefined();
+      expect(result.tickerExposures.find((t) => t.ticker === 'AAPL')).toBeUndefined();
+      expect(result.tickerExposures.find((t) => t.ticker === 'Misc')).toBeUndefined();
+    });
+
+    it('applies leverage and direction in the same way as perTicker', () => {
+      const result = computeConcentration({
+        holdings: [{ ticker: 'TQQQ', value: 10000 }],
+        tickers: new Map([
+          ['TQQQ', { assetClass: 'US_LARGE_CAP', leverageFactor: 3, direction: 'SHORT' }],
+        ]),
+        fundHoldings: new Map(),
+        totalPortfolioValue: 10000,
+      });
+      const tqqq = result.tickerExposures.find((t) => t.ticker === 'TQQQ')!;
+      // value * leverage * sign(SHORT=-1) = 10000 * 3 * -1 = -30000
+      expect(tqqq.effectiveExposure).toBeCloseTo(-30000, 4);
+    });
+
+    it('sums multiple holdings of the same ticker (across accounts)', () => {
+      const result = computeConcentration({
+        holdings: [
+          { ticker: 'VTI', value: 6000 },
+          { ticker: 'VTI', value: 4000 },
+        ],
+        tickers: new Map([
+          ['VTI', { assetClass: 'US_TOTAL_MARKET', leverageFactor: 1, direction: 'LONG' }],
+        ]),
+        fundHoldings: new Map(),
+        totalPortfolioValue: 10000,
+      });
+      const vti = result.tickerExposures.find((t) => t.ticker === 'VTI')!;
+      expect(vti.effectiveExposure).toBeCloseTo(10000, 4);
+    });
+
+    it('mixes funds and single stocks correctly', () => {
+      const result = computeConcentration({
+        holdings: [
+          { ticker: 'VTI', value: 10000 },
+          { ticker: 'NVDA', value: 5000 },
+        ],
+        tickers: new Map([
+          ['VTI', { assetClass: 'US_TOTAL_MARKET', leverageFactor: 1, direction: 'LONG' }],
+          ['NVDA', { assetClass: 'SINGLE_STOCK', leverageFactor: 1, direction: 'LONG' }],
+        ]),
+        fundHoldings: new Map([['VTI', [{ symbol: 'NVDA', weight: 0.05 }]]]),
+        totalPortfolioValue: 15000,
+      });
+      // tickerExposures has the raw holdings; both tickers appear without merge.
+      const vti = result.tickerExposures.find((t) => t.ticker === 'VTI')!;
+      const nvda = result.tickerExposures.find((t) => t.ticker === 'NVDA')!;
+      expect(vti.effectiveExposure).toBeCloseTo(10000, 4);
+      expect(nvda.effectiveExposure).toBeCloseTo(5000, 4);
+      // perTicker (post-look-through) double-counts NVDA via the fund weight
+      // plus the direct holding, but that's a different field.
+      const nvdaPost = result.perTicker.find((t) => t.ticker === 'NVDA')!;
+      expect(nvdaPost.effectiveExposure).toBeCloseTo(5000 + 10000 * 0.05, 4);
+    });
+  });
 });
 
 describe('withMiscLast', () => {

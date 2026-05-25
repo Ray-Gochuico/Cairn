@@ -73,9 +73,18 @@ function makeTicker(overrides: Partial<Ticker> & Pick<Ticker, 'ticker'>): Ticker
   };
 }
 
-function setReport(perTicker: Array<{ ticker: string; effectiveExposure: number }>) {
+function setReport(
+  perTicker: Array<{ ticker: string; effectiveExposure: number }>,
+  tickerExposures?: Array<{ ticker: string; effectiveExposure: number }>,
+) {
+  // Default tickerExposures = perTicker so older tests (which only pass
+  // perTicker) keep behaving correctly. New tests pass both to model the
+  // production gap where perTicker is post-look-through (AAPL/MSFT/Misc)
+  // but tickerExposures keeps the fund ticker (VTI/FXAIX) intact.
+  const exposures = tickerExposures ?? perTicker;
   reportRef.current = {
     perTicker: perTicker.map((p) => ({ ...p, pctOfPortfolio: 0 })),
+    tickerExposures: exposures.map((p) => ({ ...p })),
     perAssetClass: [],
     totalLeverage: 0,
     warnings: [],
@@ -93,6 +102,7 @@ function setFundSectors(fundSectors: FundSector[]) {
 beforeEach(() => {
   reportRef.current = {
     perTicker: [],
+    tickerExposures: [],
     perAssetClass: [],
     totalLeverage: 0,
     warnings: [],
@@ -262,6 +272,88 @@ describe('SectorDonut — fund sector look-through', () => {
     render(<SectorDonut />);
 
     expect(screen.getByTestId('slice-Unclassified')).toBeTruthy();
+  });
+
+  it('REGRESSION: production-shaped report (perTicker post-look-through) still distributes via fund_sectors', () => {
+    // Mirrors the live-app bug: useConcentration() replaces VTI/FXAIX with
+    // their top-10 underlyings + Misc in perTicker. Earlier versions of the
+    // donut consumed perTicker directly and so couldn't see the fund tickers
+    // anymore — fund_sectors never got applied and the donut collapsed into
+    // a single "Unclassified"+"Misc" bucket. The fix is to consume the
+    // pre-look-through tickerExposures field which keeps the fund ticker
+    // intact.
+    setTickers([
+      makeTicker({ ticker: 'VTI', assetClass: 'US_TOTAL_MARKET' }),
+      makeTicker({ ticker: 'FXAIX', assetClass: 'US_LARGE_CAP' }),
+      // Underlyings the top-N look-through expanded VTI/FXAIX into.
+      makeTicker({ ticker: 'NVDA', sector: 'Technology', industry: 'Semiconductors' }),
+      makeTicker({ ticker: 'AAPL', sector: 'Technology', industry: 'Consumer Electronics' }),
+      makeTicker({ ticker: 'MSFT', sector: 'Technology', industry: 'Software—Infrastructure' }),
+      makeTicker({ ticker: 'AMZN', sector: 'Consumer Cyclical', industry: 'Internet Retail' }),
+    ]);
+    setReport(
+      // perTicker — post-look-through, what the live app actually has
+      [
+        { ticker: 'Misc', effectiveExposure: 32_223 },
+        { ticker: 'NVDA', effectiveExposure: 3_427 },
+        { ticker: 'AAPL', effectiveExposure: 2_982 },
+        { ticker: 'MSFT', effectiveExposure: 2_242 },
+        { ticker: 'AMZN', effectiveExposure: 1_810 },
+      ],
+      // tickerExposures — pre-look-through, what we ACTUALLY want the donut to use
+      [
+        { ticker: 'VTI', effectiveExposure: 30_000 },
+        { ticker: 'FXAIX', effectiveExposure: 20_000 },
+      ],
+    );
+    setFundSectors([
+      { fundTicker: 'VTI', sector: 'Technology', weight: 0.28, asOfDate: '2026-01-01' },
+      { fundTicker: 'VTI', sector: 'Financial Services', weight: 0.14, asOfDate: '2026-01-01' },
+      { fundTicker: 'VTI', sector: 'Consumer Cyclical', weight: 0.11, asOfDate: '2026-01-01' },
+      { fundTicker: 'VTI', sector: 'Healthcare', weight: 0.13, asOfDate: '2026-01-01' },
+      { fundTicker: 'VTI', sector: 'Industrials', weight: 0.10, asOfDate: '2026-01-01' },
+      { fundTicker: 'VTI', sector: 'Communication Services', weight: 0.08, asOfDate: '2026-01-01' },
+      { fundTicker: 'VTI', sector: 'Consumer Defensive', weight: 0.06, asOfDate: '2026-01-01' },
+      { fundTicker: 'VTI', sector: 'Energy', weight: 0.04, asOfDate: '2026-01-01' },
+      { fundTicker: 'VTI', sector: 'Utilities', weight: 0.03, asOfDate: '2026-01-01' },
+      { fundTicker: 'VTI', sector: 'Real Estate', weight: 0.02, asOfDate: '2026-01-01' },
+      { fundTicker: 'VTI', sector: 'Basic Materials', weight: 0.01, asOfDate: '2026-01-01' },
+      { fundTicker: 'FXAIX', sector: 'Technology', weight: 0.32, asOfDate: '2026-01-01' },
+      { fundTicker: 'FXAIX', sector: 'Financial Services', weight: 0.14, asOfDate: '2026-01-01' },
+      { fundTicker: 'FXAIX', sector: 'Consumer Cyclical', weight: 0.10, asOfDate: '2026-01-01' },
+      { fundTicker: 'FXAIX', sector: 'Healthcare', weight: 0.13, asOfDate: '2026-01-01' },
+      { fundTicker: 'FXAIX', sector: 'Industrials', weight: 0.10, asOfDate: '2026-01-01' },
+      { fundTicker: 'FXAIX', sector: 'Communication Services', weight: 0.08, asOfDate: '2026-01-01' },
+      { fundTicker: 'FXAIX', sector: 'Consumer Defensive', weight: 0.06, asOfDate: '2026-01-01' },
+      { fundTicker: 'FXAIX', sector: 'Energy', weight: 0.03, asOfDate: '2026-01-01' },
+      { fundTicker: 'FXAIX', sector: 'Utilities', weight: 0.02, asOfDate: '2026-01-01' },
+      { fundTicker: 'FXAIX', sector: 'Real Estate', weight: 0.01, asOfDate: '2026-01-01' },
+      { fundTicker: 'FXAIX', sector: 'Basic Materials', weight: 0.01, asOfDate: '2026-01-01' },
+    ]);
+
+    render(<SectorDonut />);
+
+    // The eleven GICS sectors must each get a slice.
+    expect(screen.getByTestId('slice-Technology')).toBeTruthy();
+    expect(screen.getByTestId('slice-Financial Services')).toBeTruthy();
+    expect(screen.getByTestId('slice-Consumer Cyclical')).toBeTruthy();
+    expect(screen.getByTestId('slice-Healthcare')).toBeTruthy();
+    expect(screen.getByTestId('slice-Industrials')).toBeTruthy();
+    expect(screen.getByTestId('slice-Communication Services')).toBeTruthy();
+    expect(screen.getByTestId('slice-Consumer Defensive')).toBeTruthy();
+    expect(screen.getByTestId('slice-Energy')).toBeTruthy();
+    expect(screen.getByTestId('slice-Utilities')).toBeTruthy();
+    expect(screen.getByTestId('slice-Real Estate')).toBeTruthy();
+    expect(screen.getByTestId('slice-Basic Materials')).toBeTruthy();
+    // Misc must NOT bleed through — perTicker's Misc bucket should not appear
+    // since the donut consumes tickerExposures, not perTicker.
+    expect(screen.queryByTestId('slice-Misc')).toBeNull();
+    // Same for AAPL/NVDA etc. — those are post-look-through artifacts that
+    // belong to the per-company donut, not the sector donut.
+    expect(screen.queryByTestId('slice-NVDA')).toBeNull();
+    expect(screen.queryByTestId('slice-AAPL')).toBeNull();
+    // Unclassified must not dominate — funds had full coverage.
+    expect(screen.queryByTestId('slice-Unclassified')).toBeNull();
   });
 });
 

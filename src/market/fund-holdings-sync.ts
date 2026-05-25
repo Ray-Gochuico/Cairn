@@ -54,22 +54,10 @@ export async function syncStaleFunds(
   const skipped: string[] = [];
   const errors: string[] = [];
   const todayIso = today.toISOString().slice(0, 10);
-  // eslint-disable-next-line no-console
-  console.log('[syncStaleFunds] start', {
-    todayIso,
-    uniqueTickers,
-    hasFundSectorsRepo: deps.fundSectors != null,
-  });
 
   for (const ticker of uniqueTickers) {
     const t = await deps.tickers.lookup(ticker);
     if (!t || !FUND_ASSET_CLASSES.has(t.assetClass)) {
-      // eslint-disable-next-line no-console
-      console.log('[syncStaleFunds] skip non-fund', {
-        ticker,
-        tickerKnown: t != null,
-        assetClass: t?.assetClass ?? null,
-      });
       skipped.push(ticker);
       continue;
     }
@@ -81,10 +69,6 @@ export async function syncStaleFunds(
     const sectorsAsOf = deps.fundSectors ? await deps.fundSectors.getAsOf(ticker) : null;
     const holdingsFresh = isFresh(holdingsAsOf, todayIso);
     const sectorsFresh = deps.fundSectors ? isFresh(sectorsAsOf, todayIso) : true;
-    // eslint-disable-next-line no-console
-    console.log('[syncStaleFunds] gate', {
-      ticker, holdingsAsOf, sectorsAsOf, holdingsFresh, sectorsFresh,
-    });
     if (holdingsFresh && sectorsFresh) {
       skipped.push(ticker);
       continue;
@@ -102,11 +86,13 @@ export async function syncStaleFunds(
         } catch (sectorErr) {
           // Sector failure must not block holdings — bond ETFs etc. legitimately
           // have no sectorWeightings, and one missing field shouldn't poison
-          // the holdings refresh.
+          // the holdings refresh. Surface the failure to the console so a
+          // future regression (CSRF crumb, allow-list, JSON shape drift) is
+          // visible instead of disappearing into a swallowed catch.
           // eslint-disable-next-line no-console
-          console.error('[syncStaleFunds] fundSectorWeightings rejected (continuing)', {
+          console.error('[syncStaleFunds] fundSectorWeightings rejected', {
             ticker,
-            error: sectorErr instanceof Error ? { message: sectorErr.message, stack: sectorErr.stack } : sectorErr,
+            error: sectorErr instanceof Error ? sectorErr.message : String(sectorErr),
           });
           sectorResult = null;
         }
@@ -121,25 +107,11 @@ export async function syncStaleFunds(
         await deps.fundSectors.upsertSectors(ticker, sectorResult.sectors, sectorResult.asOf);
         didWrite = true;
       }
-      // eslint-disable-next-line no-console
-      console.log('[syncStaleFunds] ticker done', {
-        ticker,
-        didWrite,
-        holdingsLen: result?.holdings.length ?? null,
-        sectorsLen: sectorResult?.sectors.length ?? null,
-      });
       (didWrite ? refreshed : skipped).push(ticker);
     } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error('[syncStaleFunds] ticker threw', {
-        ticker,
-        error: e instanceof Error ? { message: e.message, stack: e.stack } : e,
-      });
       errors.push(`${ticker}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
-  // eslint-disable-next-line no-console
-  console.log('[syncStaleFunds] done', { refreshed, skipped, errors });
   return { refreshed, skipped, errors };
 }

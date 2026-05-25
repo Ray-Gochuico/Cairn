@@ -55,31 +55,18 @@ export class FundSectorsRepo {
     sectors: { sector: string; weight: number }[],
     asOfDate: string
   ): Promise<void> {
-    // eslint-disable-next-line no-console
-    console.log('[FundSectorsRepo.upsertSectors] start', { fundTicker, sectorCount: sectors.length, asOfDate });
-    try {
-      await this.db.execute('DELETE FROM fund_sectors WHERE fund_ticker = ?', [fundTicker]);
-      for (const s of sectors) {
-        FundSectorSchema.parse({
-          fundTicker,
-          sector: s.sector,
-          weight: s.weight,
-          asOfDate,
-        });
-        await this.db.execute(
-          'INSERT INTO fund_sectors (fund_ticker, sector, weight, as_of_date) VALUES (?, ?, ?, ?)',
-          [fundTicker, s.sector, s.weight, asOfDate]
-        );
-      }
-      // eslint-disable-next-line no-console
-      console.log('[FundSectorsRepo.upsertSectors] ok', { fundTicker, sectorCount: sectors.length });
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error('[FundSectorsRepo.upsertSectors] FAILED', {
+    await this.db.execute('DELETE FROM fund_sectors WHERE fund_ticker = ?', [fundTicker]);
+    for (const s of sectors) {
+      FundSectorSchema.parse({
         fundTicker,
-        error: err instanceof Error ? { message: err.message, stack: err.stack } : err,
+        sector: s.sector,
+        weight: s.weight,
+        asOfDate,
       });
-      throw err;
+      await this.db.execute(
+        'INSERT INTO fund_sectors (fund_ticker, sector, weight, as_of_date) VALUES (?, ?, ?, ?)',
+        [fundTicker, s.sector, s.weight, asOfDate]
+      );
     }
   }
 }

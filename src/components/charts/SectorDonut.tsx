@@ -55,29 +55,24 @@ export function SectorDonut() {
 
   const slices = useMemo(() => {
     if (selectedSector === null) {
-      const agg = aggregateBySector(report.perTicker, sectorMap, fundSectorWeights);
-      // eslint-disable-next-line no-console
-      console.log('[SectorDonut] render — sector view', {
-        fundSectorsRowCount: fundSectors.length,
-        fundSectorWeightsKeys: [...fundSectorWeights.keys()],
-        perTickerCount: report.perTicker.length,
-        perTickerTopFew: report.perTicker.slice(0, 5).map((t) => ({
-          ticker: t.ticker,
-          exposure: t.effectiveExposure,
-        })),
-        sectorMapSize: sectorMap.size,
-        aggregateSlices: agg.map((s) => ({ name: s.name, value: s.value })),
-      });
+      // Sector view consumes the PRE-look-through `tickerExposures` so fund
+      // tickers (VTI, FXAIX, ...) stay intact and can be distributed across
+      // their fund_sectors weights. `report.perTicker` is post-look-through
+      // (AAPL/MSFT/Misc) and would collapse the donut into 'Unclassified' +
+      // 'Misc' — that was the regression two earlier fixes missed.
+      const agg = aggregateBySector(report.tickerExposures, sectorMap, fundSectorWeights);
       return agg.map((s) => ({
         ...s,
         color: colorForSector(s.name),
       }));
     }
+    // Industry drill-down stays on perTicker: it operates on individual
+    // companies (AAPL/MSFT/JPM) where the post-look-through view is correct.
     return aggregateByIndustry(report.perTicker, sectorMap, selectedSector).map((s, i) => ({
       ...s,
       color: shadedColorForIndustry(selectedSector, i),
     }));
-  }, [report.perTicker, sectorMap, fundSectorWeights, selectedSector, fundSectors.length]);
+  }, [report.perTicker, report.tickerExposures, sectorMap, fundSectorWeights, selectedSector]);
 
   useEffect(() => {
     if (selectedSector === null) return;
