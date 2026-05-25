@@ -529,6 +529,41 @@ describe('Investments page — 529 section', () => {
     }
   });
 
+  // Sentinel: the Contributions area was consolidated from two adjacent bar
+  // charts (single-series totals + stacked-by-bucket) into ONE stacked chart
+  // whose stack height communicates the monthly total. This test catches a
+  // regression where the deleted single-series chart returns, OR the
+  // consolidated chart's subtitle drifts back to wording that doesn't make
+  // it clear the total IS the stack height (so users don't think they're
+  // missing a separate totals chart).
+  it('renders exactly one consolidated contributions chart (stack height = total)', () => {
+    primeStores({
+      accounts: [
+        { id: 1, name: 'Brokerage', type: AccountType.ACCOUNT_BROKERAGE },
+      ],
+      snapshotValues: [
+        { accountId: 1, snapshotDate: '2026-04-01', totalValue: 50_000 },
+      ],
+      contributions: [
+        { accountId: 1, date: '2026-04-01', amount: 1000 },
+      ],
+    });
+
+    render(
+      <MemoryRouter>
+        <Investments />
+      </MemoryRouter>,
+    );
+
+    // The deleted single-series chart's title and subtitle must not return.
+    expect(screen.queryByText('Contributions (last 12 months)')).not.toBeInTheDocument();
+    expect(screen.queryByText('Sum of contributions per month')).not.toBeInTheDocument();
+    // The consolidated chart's subtitle must communicate that the total IS
+    // the stack height — guards against a future drift back to wording that
+    // makes users think they're missing a separate totals chart.
+    expect(screen.getByText(/stack height = total/i)).toBeInTheDocument();
+  });
+
   it('view filter ?view=p1 hides accounts owned by p2', () => {
     // Seed two persons so useViewFilter recognises a two-person household.
     usePersonsStore.setState({

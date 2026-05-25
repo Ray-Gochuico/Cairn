@@ -34,10 +34,11 @@ export interface ContributionsByBucketChartProps {
 
 /**
  * Stacked monthly contributions broken out by destination bucket
- * (Brokerage, 401k, 401k Match, Roth IRA, Trad IRA, HSA, 529). Sits on the
- * Investments page below the existing single-series "Contributions (last
- * 12 months)" chart so the user can see how flows are split across
- * tax-treatment buckets without losing the simple total view above.
+ * (Brokerage, 401k, 401k Match, Roth IRA, Trad IRA, HSA, 529). This is the
+ * only contributions chart on the Investments page — the monthly total reads
+ * directly as the stack height, and per-bucket flows are visible both in the
+ * stack segments and in the tooltip on hover. The subtitle explicitly calls
+ * out "Stack height = total" so users don't look for a separate totals chart.
  */
 export default function ContributionsByBucketChart({
   accounts,
@@ -61,8 +62,8 @@ export default function ContributionsByBucketChart({
   );
   return (
     <BarChartCard
-      title="Contributions by destination"
-      subtitle="Stacked monthly totals by account type"
+      title="Monthly contributions by bucket"
+      subtitle="Stack height = total; stacked by account type (last 12 months)"
       data={data}
       xKey="month"
       series={series}

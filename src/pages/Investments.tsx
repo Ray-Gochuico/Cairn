@@ -11,12 +11,10 @@ import { useFundHoldingsStore } from '@/stores/fund-holdings-store';
 import { useFundSectorsStore } from '@/stores/fund-sectors-store';
 import { getDatabase } from '@/db/db';
 import { AccountType, AssetClass } from '@/types/enums';
-import { monthsBetween } from '@/lib/business-days';
 import { filterByOwnerPersonId } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import BarChartCard from '@/components/charts/BarChartCard';
 import ContributionsByBucketChart from '@/components/charts/ContributionsByBucketChart';
 import DonutChartCard from '@/components/charts/DonutChartCard';
 import InvestmentTimeSeriesChart from '@/components/charts/InvestmentTimeSeriesChart';
@@ -180,25 +178,6 @@ function computeDrift(valuations: HoldingValuation[]): DriftRow[] {
       };
     })
     .sort((a, b) => Math.abs(b.drift) - Math.abs(a.drift));
-}
-
-function contributionsLast12Months(
-  contributions: { date: string; amount: number }[],
-  currentMonth: string,
-): { month: string; amount: number }[] {
-  // Build the 12-month window ending at currentMonth.
-  const [y, m] = currentMonth.split('-').map(Number);
-  const fromDate = new Date(Date.UTC(y - 1, m - 1, 1));
-  const fromYyyymm = fromDate.toISOString().slice(0, 7);
-  const months = monthsBetween(fromYyyymm, currentMonth);
-  const totals = new Map<string, number>(months.map((mm) => [mm, 0]));
-  for (const c of contributions) {
-    const mm = c.date.slice(0, 7);
-    if (totals.has(mm)) {
-      totals.set(mm, (totals.get(mm) ?? 0) + c.amount);
-    }
-  }
-  return months.map((mm) => ({ month: mm, amount: totals.get(mm) ?? 0 }));
 }
 
 /**
@@ -548,14 +527,10 @@ export default function Investments() {
   );
 
   const currentMonth = new Date().toISOString().slice(0, 7);
-  const contribSeries = useMemo(
-    () => contributionsLast12Months(visibleContributions, currentMonth),
-    [visibleContributions, currentMonth],
-  );
 
-  // 12-month window for the stacked-by-bucket chart. Built off currentMonth
-  // so it matches the single-series chart above and the two read as a pair
-  // (total flow on top, where the flow goes on bottom).
+  // 12-month window for the stacked-by-bucket contributions chart, the sole
+  // contributions chart on the page. The stack height reads as the monthly
+  // total, so a separate single-series totals chart isn't needed.
   const contribRange = useMemo(() => {
     const [y, m] = currentMonth.split('-').map(Number);
     const from = new Date(Date.UTC(y - 1, m - 1, 1));
@@ -845,15 +820,6 @@ export default function Investments() {
           )}
         </CardContent>
       </Card>
-
-      <BarChartCard
-        title="Contributions (last 12 months)"
-        subtitle="Sum of contributions per month"
-        data={contribSeries}
-        xKey="month"
-        series={[{ dataKey: 'amount', label: 'Amount' }]}
-        yFormatter={(v) => `$${(v / 1000).toFixed(1)}k`}
-      />
 
       <ContributionsByBucketChart
         accounts={visibleAccounts}

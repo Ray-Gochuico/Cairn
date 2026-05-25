@@ -74,8 +74,10 @@ describe('ContributionsByBucketChart', () => {
         toYyyymm="2026-03"
       />,
     );
-    expect(screen.getByText('Contributions by destination')).toBeTruthy();
-    expect(screen.getByText('Stacked monthly totals by account type')).toBeTruthy();
+    expect(screen.getByText('Monthly contributions by bucket')).toBeTruthy();
+    expect(
+      screen.getByText('Stack height = total; stacked by account type (last 12 months)'),
+    ).toBeTruthy();
   });
 
   it('renders one stacked bar per bucket, all sharing the same stackId', () => {
