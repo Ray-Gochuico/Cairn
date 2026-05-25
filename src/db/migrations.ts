@@ -65,6 +65,7 @@ export async function loadAllMigrations(): Promise<Migration[]> {
   const m0016 = (await import('./migrations/0016_add_ticker_sector_industry.sql?raw')).default;
   const m0017 = (await import('./migrations/0017_disclosure_foundations.sql?raw')).default;
   const m0018 = (await import('./migrations/0018_roadmap_rule_engine.sql?raw')).default;
+  const m0019 = (await import('./migrations/0019_scenarios.sql?raw')).default;
   return [
     { version: '0001_initial', sql: m0001 },
     { version: '0002_seed_tax_rules', sql: m0002 },
@@ -84,5 +85,6 @@ export async function loadAllMigrations(): Promise<Migration[]> {
     { version: '0016_add_ticker_sector_industry', sql: m0016 },
     { version: '0017_disclosure_foundations', sql: m0017 },
     { version: '0018_roadmap_rule_engine', sql: m0018 },
+    { version: '0019_scenarios', sql: m0019 },
   ];
 }
