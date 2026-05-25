@@ -166,3 +166,44 @@ describe('useScenariosStore — mutators', () => {
     expect(useScenariosStore.getState().scenarios.find((s) => s.id === id)?.name).toBe('New name');
   });
 });
+
+describe('useScenariosStore — UI-state mutators', () => {
+  let db: SqliteAdapter;
+
+  beforeEach(async () => {
+    db = new SqliteAdapter();
+    await runMigrations(db, await loadAllMigrations());
+    setDatabase(db);
+    resetStore();
+    await useScenariosStore.getState().load();
+  });
+
+  afterEach(async () => { await db.close(); });
+
+  it('setHorizonMonths clamps to [60, 480]', () => {
+    useScenariosStore.getState().setHorizonMonths(50);
+    expect(useScenariosStore.getState().horizonMonths).toBe(60);
+    useScenariosStore.getState().setHorizonMonths(500);
+    expect(useScenariosStore.getState().horizonMonths).toBe(480);
+    useScenariosStore.getState().setHorizonMonths(240);
+    expect(useScenariosStore.getState().horizonMonths).toBe(240);
+  });
+
+  it('setDollarMode flips between nominal and real', () => {
+    expect(useScenariosStore.getState().dollarMode).toBe('nominal');
+    useScenariosStore.getState().setDollarMode('real');
+    expect(useScenariosStore.getState().dollarMode).toBe('real');
+  });
+
+  it('toggleVisibility persists the visible flag through the DB', async () => {
+    const baselineId = useScenariosStore.getState().scenarios.find((s) => s.isBaseline)!.id!;
+    expect(useScenariosStore.getState().scenarios.find((s) => s.id === baselineId)?.visible).toBe(true);
+    await useScenariosStore.getState().toggleVisibility(baselineId);
+    expect(useScenariosStore.getState().scenarios.find((s) => s.id === baselineId)?.visible).toBe(false);
+
+    const { ScenariosRepo } = await import('@/domain/scenarios');
+    const repo = new ScenariosRepo(db);
+    const reloaded = await repo.findById(baselineId);
+    expect(reloaded?.visible).toBe(false);
+  });
+});

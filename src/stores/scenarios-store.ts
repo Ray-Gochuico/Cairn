@@ -143,9 +143,22 @@ export const useScenariosStore = create<ScenariosState>((set, get) => ({
     await get().load();
   },
 
-  toggleVisibility: async () => { throw new Error('not implemented yet — see Task 8'); },
-  setHorizonMonths: () => { throw new Error('not implemented yet — see Task 8'); },
-  setDollarMode: () => { throw new Error('not implemented yet — see Task 8'); },
+  setHorizonMonths: (months) => {
+    const clamped = Math.max(60, Math.min(480, Math.round(months)));
+    set({ horizonMonths: clamped, projectionCache: new Map() });
+  },
+
+  setDollarMode: (mode) => {
+    set({ dollarMode: mode });
+  },
+
+  toggleVisibility: async (id) => {
+    const repo = new ScenariosRepo(getDatabase());
+    const existing = get().scenarios.find((s) => s.id === id);
+    if (!existing) throw new Error(`Scenario ${id} not found in store`);
+    await repo.update(id, { visible: !existing.visible });
+    await get().load();
+  },
 
   projectedScenarios: () => { throw new Error('not implemented yet — see Task 9'); },
 }));
