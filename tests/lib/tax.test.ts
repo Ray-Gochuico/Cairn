@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluateBrackets, type Bracket, computeFica, computePretaxDeductions, computeBonusTax } from '@/lib/tax';
+import { evaluateBrackets, type Bracket, computeFica, computePretaxDeductions, computeBonusTax, computeTotalTax, type TotalTaxInput } from '@/lib/tax';
 
 const federal2026Single: Bracket[] = [
   { min: 0, max: 11600, rate: 0.10 },
@@ -199,5 +199,83 @@ describe('computeBonusTax', () => {
     });
     expect(result.bonusBreakdown.federal).toBeCloseTo(2200, 0);
     expect(result.bonusBreakdown.state).toBeCloseTo(500, 0);  // 5% × 10000
+  });
+});
+
+describe('computeTotalTax', () => {
+  // California 2026 single, simplified for fixture parity.
+  const caSingle: Bracket[] = [
+    { min: 0, max: 10412, rate: 0.01 },
+    { min: 10412, max: 24684, rate: 0.02 },
+    { min: 24684, max: 38959, rate: 0.04 },
+    { min: 38959, max: 54081, rate: 0.06 },
+    { min: 54081, max: 68350, rate: 0.08 },
+    { min: 68350, max: 349137, rate: 0.093 },
+    { min: 349137, max: null, rate: 0.103 },
+  ];
+
+  // No state tax — Texas.
+  const txSingle: Bracket[] = [];
+
+  // NYC resident, simplified.
+  const nycResident: Bracket[] = [
+    { min: 0, max: 12000, rate: 0.03078 },
+    { min: 12000, max: 25000, rate: 0.03762 },
+    { min: 25000, max: 50000, rate: 0.03819 },
+    { min: 50000, max: null, rate: 0.03876 },
+  ];
+
+  const baseInput: Omit<TotalTaxInput, 'stateBrackets' | 'cityBrackets'> = {
+    gross: 100000,
+    filingStatus: 'SINGLE',
+    federalBrackets: federal2026Single,
+    standardDeduction: 14600,
+    pretax: { pretax401k: 0, pretaxHealth: 0, pretaxDcfsa: 0, pretaxHsa: 0 },
+  };
+
+  it('SINGLE @ $100k CA: federal + FICA + state, no city', () => {
+    const out = computeTotalTax({ ...baseInput, stateBrackets: caSingle, cityBrackets: null });
+    expect(out.federal).toBeCloseTo(13841, 0);     // ~13.84% effective fed on $85,400 taxable
+    expect(out.fica).toBeCloseTo(7650, 0);         // 7.65% on $100k gross
+    expect(out.state).toBeGreaterThan(0);
+    expect(out.city).toBe(0);
+    expect(out.total).toBeCloseTo(out.federal + out.fica + out.state + out.city, 2);
+  });
+
+  it('SINGLE @ $100k TX: federal + FICA only (no state, no city)', () => {
+    const out = computeTotalTax({ ...baseInput, stateBrackets: txSingle, cityBrackets: null });
+    expect(out.state).toBe(0);
+    expect(out.city).toBe(0);
+    expect(out.total).toBeCloseTo(out.federal + out.fica, 2);
+  });
+
+  it('SINGLE @ $100k NYC (NY state + NYC city): all four components positive', () => {
+    const out = computeTotalTax({
+      ...baseInput,
+      stateBrackets: caSingle,  // reusing as a "state with brackets" fixture
+      cityBrackets: nycResident,
+    });
+    expect(out.federal).toBeGreaterThan(0);
+    expect(out.fica).toBeGreaterThan(0);
+    expect(out.state).toBeGreaterThan(0);
+    expect(out.city).toBeGreaterThan(0);
+  });
+
+  it('Pretax deductions reduce taxable income before bracket math', () => {
+    const noPretax = computeTotalTax({ ...baseInput, stateBrackets: txSingle, cityBrackets: null });
+    const withPretax = computeTotalTax({
+      ...baseInput,
+      pretax: { pretax401k: 15000, pretaxHealth: 3000, pretaxDcfsa: 0, pretaxHsa: 0 },
+      stateBrackets: txSingle,
+      cityBrackets: null,
+    });
+    // Federal should drop; FICA is computed on gross so it stays.
+    expect(withPretax.federal).toBeLessThan(noPretax.federal);
+  });
+
+  it('Zero / negative gross still produces a sensible result (no NaN, no throw)', () => {
+    const out = computeTotalTax({ ...baseInput, gross: 0, stateBrackets: txSingle, cityBrackets: null });
+    expect(out.federal).toBe(0);
+    expect(out.total).toBeCloseTo(out.fica, 2); // FICA still computed on 0 gross = 0
   });
 });

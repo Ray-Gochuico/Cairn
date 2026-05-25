@@ -69,6 +69,61 @@ export function computePretaxDeductions(input: PretaxDeductionsInput): PretaxDed
   return { pretax401k, pretaxHealth, pretaxDcfsa, pretaxHsa, total: pretax401k + pretaxHealth + pretaxDcfsa + pretaxHsa };
 }
 
+export interface TotalTaxInput {
+  gross: number;                       // person or household gross income for the period
+  filingStatus: 'SINGLE' | 'MFJ' | 'MFS' | 'HOH';
+  federalBrackets: Bracket[];
+  stateBrackets: Bracket[];            // [] for no-state-tax jurisdictions (TX, FL, etc.)
+  cityBrackets: Bracket[] | null;      // null for no city tax
+  standardDeduction: number;
+  pretax: {
+    pretax401k: number;
+    pretaxHealth: number;
+    pretaxDcfsa: number;
+    pretaxHsa: number;
+  };
+}
+
+export interface TotalTaxOutput {
+  federal: number;
+  fica: number;
+  state: number;
+  city: number;
+  total: number;
+  /** total / gross — 0 when gross is 0 */
+  effectiveRate: number;
+}
+
+/**
+ * Federal + FICA + state + city tax on a single gross income. Pure: every bracket
+ * and config value is an input. Shared by the simulator engine and `computeBonusTax`
+ * (which runs this twice for marginal-rate diffing).
+ */
+export function computeTotalTax(input: TotalTaxInput): TotalTaxOutput {
+  const pretaxTotal =
+    input.pretax.pretax401k +
+    input.pretax.pretaxHealth +
+    input.pretax.pretaxDcfsa +
+    input.pretax.pretaxHsa;
+
+  const taxable = Math.max(0, input.gross - pretaxTotal - input.standardDeduction);
+
+  const federal = input.gross > 0 ? evaluateBrackets(input.federalBrackets, taxable) : 0;
+  const fica = computeFica(input.gross, input.filingStatus);
+  const state = input.stateBrackets.length > 0 ? evaluateBrackets(input.stateBrackets, taxable) : 0;
+  const city = input.cityBrackets ? evaluateBrackets(input.cityBrackets, taxable) : 0;
+  const total = federal + fica + state + city;
+
+  return {
+    federal,
+    fica,
+    state,
+    city,
+    total,
+    effectiveRate: input.gross > 0 ? total / input.gross : 0,
+  };
+}
+
 export interface BonusTaxInput {
   personGross: number;             // salary + bonus
   bonus: number;
