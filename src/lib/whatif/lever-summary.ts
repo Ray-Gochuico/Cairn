@@ -4,7 +4,7 @@ export interface SummarizeContext {
   loanNames: Record<number, string>;
 }
 
-const DEFAULT_RAISE = 0.03;
+const DEFAULT_RAISE = 0;
 const DEFAULT_RETURN = 0.07;
 
 function formatMoney(n: number): string {
