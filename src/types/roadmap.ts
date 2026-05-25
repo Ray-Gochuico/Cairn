@@ -6,6 +6,7 @@ import type {
   Loan,
   Contribution,
   AccountSnapshot,
+  Transaction,
 } from './schema';
 
 /**
@@ -76,6 +77,13 @@ export interface RoadmapContext {
   loans: Loan[];
   contributions: Contribution[];
   snapshots: AccountSnapshot[];
+  /**
+   * Transactions from the spending pipeline (Phase 4). Rules that need
+   * to detect "is the user actively tracking expenses?" read this; an
+   * empty array means tracking is not happening, not that the user has
+   * zero spending. Most rules will ignore this field entirely.
+   */
+  transactions: Transaction[];
   overrides: Map<NodeId, RoadmapNodeOverride>;
   thresholds: { low: number; high: number };
   taxYear: 2026;

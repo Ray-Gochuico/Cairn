@@ -19,6 +19,14 @@ import {
   evaluateCreateBudget,
   evaluateSection0Info,
 } from './rules/budgetEssentials';
+import {
+  evaluateIps,
+  evaluateNonEssentials,
+  evaluateTrackExpenses,
+  evaluateEmployerMatchQ,
+  evaluateEmployerMatch,
+  evaluateJobStability,
+} from './rules/section1';
 
 /**
  * Declarative registry of every Roadmap chart node, derived from
@@ -127,7 +135,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Evaluate your non-essentials',
     body: 'Reduce expenses where you can; otherwise pay non-essential bills in full (cable, internet, phone, etc.).',
     prerequisites: ['s1_emergency_small'],
-    evaluate: stub('s1_evaluate_non_essentials'),
+    evaluate: evaluateNonEssentials,
   },
   {
     id: 's1_track_expenses',
@@ -136,7 +144,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Track all your expenses',
     body: 'This shows where money is going and where to cut.',
     prerequisites: ['s1_evaluate_non_essentials'],
-    evaluate: stub('s1_track_expenses'),
+    evaluate: evaluateTrackExpenses,
   },
   {
     id: 's1_consider_ips',
@@ -145,7 +153,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Consider writing an Investment Policy Statement (IPS)',
     body: 'An IPS records your investing rules in advance so you do not improvise during market stress.',
     prerequisites: ['s1_track_expenses'],
-    evaluate: stub('s1_consider_ips'),
+    evaluate: evaluateIps,
   },
   {
     id: 's1_employer_match_q',
@@ -154,7 +162,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Does your employer offer a retirement account with a match?',
     body: 'Yes → contribute exactly the amount needed to capture the full match. No → skip ahead.',
     prerequisites: ['s1_consider_ips'],
-    evaluate: stub('s1_employer_match_q'),
+    evaluate: evaluateEmployerMatchQ,
   },
   {
     id: 's1_employer_match',
@@ -163,7 +171,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Capture the full employer match',
     body: 'Contribute exactly the amount needed to capture the full match — and nothing more at this stage.',
     prerequisites: ['s1_employer_match_q'],
-    evaluate: stub('s1_employer_match'),
+    evaluate: evaluateEmployerMatch,
   },
   {
     id: 's1_high_interest_debt',
@@ -181,7 +189,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Stable or unstable job prospects?',
     body: 'Stable → grow EF to 3 months. Unstable → grow to 6–12 months.',
     prerequisites: ['s1_high_interest_debt'],
-    evaluate: stub('s1_job_stability_q'),
+    evaluate: evaluateJobStability,
   },
   {
     id: 's1_emergency_3mo',

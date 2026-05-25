@@ -41,6 +41,7 @@ function makeContext(patch: Partial<RoadmapContext> = {}): RoadmapContext {
     loans: [],
     contributions: [],
     snapshots: [],
+    transactions: [],
     overrides: new Map(),
     thresholds: { low: 5, high: 8 },
     taxYear: 2026,
@@ -72,9 +73,15 @@ describe('evaluate', () => {
       's0_pay_health_care',
       's0_min_debt_payments',
       's1_emergency_small',
+      's1_evaluate_non_essentials',
+      's1_track_expenses',
+      's1_consider_ips',
+      's1_employer_match_q',
+      's1_employer_match',
       's1_emergency_3mo',
       's1_emergency_6_12mo',
       's1_high_interest_debt',
+      's1_job_stability_q',
       's2_moderate_debt_action',
       's6_low_interest_debt',
       's4_ira_band',
@@ -101,20 +108,20 @@ describe('evaluate', () => {
   it('applies an override status and stashes the auto-result on autoResult', () => {
     // Use a node whose evaluator is still a stub so the auto-result
     // assertion below ("not yet implemented") stays stable as more
-    // rules ship. `s1_consider_ips` is an info-kind node with no
-    // backing rule yet.
+    // rules ship. `s3_pick_medical_insurance` is an info-kind node
+    // with no backing rule yet.
     const overrides = new Map<string, RoadmapNodeOverride>([
-      ['s1_consider_ips', {
+      ['s3_pick_medical_insurance', {
         id: 1,
         householdId: 1,
-        nodeId: 's1_consider_ips',
+        nodeId: 's3_pick_medical_insurance',
         overrideStatus: 'done',
-        note: 'I have one in Notion',
+        note: 'I picked one in open enrollment',
         setAt: '2026-05-23T00:00:00Z',
       }],
     ]);
     const results = evaluate(makeContext({ overrides }));
-    const r = results.get('s1_consider_ips')!;
+    const r = results.get('s3_pick_medical_insurance')!;
     expect(r.status).toBe('done');
     expect(r.autoResult).toBeDefined();
     expect(r.autoResult!.status).toBe('info');
@@ -125,14 +132,14 @@ describe('evaluate', () => {
     // Override an upstream node — its dependent should still reflect
     // its own evaluator's output, not be coerced by the parent override.
     const overrides = new Map<string, RoadmapNodeOverride>([
-      ['s1_consider_ips', {
-        id: 1, householdId: 1, nodeId: 's1_consider_ips',
+      ['s3_pick_medical_insurance', {
+        id: 1, householdId: 1, nodeId: 's3_pick_medical_insurance',
         overrideStatus: 'done', note: null, setAt: '2026-05-23T00:00:00Z',
       }],
     ]);
     const results = evaluate(makeContext({ overrides }));
-    expect(results.get('s1_consider_ips')?.status).toBe('done');
-    expect(results.get('s1_employer_match_q')?.status).toBe('info');
+    expect(results.get('s3_pick_medical_insurance')?.status).toBe('done');
+    expect(results.get('s3_hdhp_q')?.status).toBe('info');
   });
 
   it('ignores overrides for unknown node ids', () => {

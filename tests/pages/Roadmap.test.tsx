@@ -8,6 +8,7 @@ import { useAccountsStore } from '@/stores/accounts-store';
 import { useLoansStore } from '@/stores/loans-store';
 import { useContributionsStore } from '@/stores/contributions-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
+import { useTransactionsStore } from '@/stores/transactions-store';
 import { useRoadmapOverridesStore } from '@/stores/roadmap-overrides-store';
 import { FilingStatus } from '@/types/enums';
 import type { Household } from '@/types/schema';
@@ -55,6 +56,7 @@ function resetStores(household: Household | null) {
   useLoansStore.setState({ loans: [], isLoading: false, error: null, load: async () => {} } as any);
   useContributionsStore.setState({ contributions: [], isLoading: false, error: null, load: async () => {} } as any);
   useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null, load: async () => {} } as any);
+  useTransactionsStore.setState({ transactions: [], isLoading: false, error: null, load: async () => {} } as any);
   useRoadmapOverridesStore.setState({
     overridesByNodeId: new Map(),
     isLoading: false,

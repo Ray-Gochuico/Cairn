@@ -62,6 +62,7 @@ function makeContext(
     loans,
     contributions: [],
     snapshots: [],
+    transactions: [],
     overrides: new Map(),
     thresholds,
     taxYear: 2026,
