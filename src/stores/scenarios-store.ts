@@ -42,6 +42,9 @@ interface ScenariosState {
   setHorizonMonths: (months: number) => void;
   setDollarMode: (mode: DollarMode) => void;
 
+  activeScenario: () => Scenario | undefined;
+  visibleScenarioIds: () => number[];
+
   projectedScenarios: (real: RealState) => Map<number, MonthlyState[]>;
 }
 
@@ -65,6 +68,16 @@ export const useScenariosStore = create<ScenariosState>((set, get) => ({
   inflation: 0.025,
   defaultReturnRate: 0.07,
   projectionCache: new Map(),
+
+  activeScenario: () => {
+    const ss = get().scenarios;
+    return ss.find((s) => s.isActive) ?? ss.find((s) => s.isBaseline);
+  },
+
+  visibleScenarioIds: () =>
+    get()
+      .scenarios.filter((s) => s.visible && s.id != null)
+      .map((s) => s.id as number),
 
   load: async () => {
     set({ isLoading: true, error: null });
