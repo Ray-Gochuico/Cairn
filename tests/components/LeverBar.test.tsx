@@ -26,7 +26,7 @@ const baseline = (over: Partial<Scenario> = {}): Scenario => ({
 describe('LeverBar', () => {
   beforeEach(() => { resetStore(); });
 
-  it('renders five pill buttons in spec order', () => {
+  it('renders six pill buttons in spec order', () => {
     useScenariosStore.setState({ scenarios: [baseline()] });
     render(<MemoryRouter><LeverBar /></MemoryRouter>);
     expect(screen.getByRole('button', { name: /loans/i })).toBeInTheDocument();
@@ -34,6 +34,29 @@ describe('LeverBar', () => {
     expect(screen.getByRole('button', { name: /expenses/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /returns/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /income/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /contributions/i })).toBeInTheDocument();
+  });
+
+  it('shows a contributions count badge based on configured segments', () => {
+    useScenariosStore.setState({
+      scenarios: [baseline({ leverPayload: {
+        ...emptyLeverPayload(),
+        contributions: [
+          { startMonth: 0, endMonth: 59, monthlyAmount: 1000 },
+          { startMonth: 60, endMonth: null, monthlyAmount: 2000 },
+        ],
+      } })],
+    });
+    render(<MemoryRouter><LeverBar /></MemoryRouter>);
+    expect(screen.getByText(/Contributions · 2/i)).toBeInTheDocument();
+  });
+
+  it('clicking the Contributions pill opens its popover', async () => {
+    useScenariosStore.setState({ scenarios: [baseline()] });
+    const user = userEvent.setup();
+    render(<MemoryRouter><LeverBar /></MemoryRouter>);
+    await user.click(screen.getByRole('button', { name: /contributions/i }));
+    expect(screen.getByRole('dialog', { name: /investment contributions/i })).toBeInTheDocument();
   });
 
   it('shows a count badge per lever based on the active scenario', () => {

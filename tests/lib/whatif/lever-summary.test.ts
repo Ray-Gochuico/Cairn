@@ -62,6 +62,22 @@ describe('summarizeLevers', () => {
     expect(summarizeLevers(payload, { loanNames: {} })).toContain('Returns: 2 years overridden');
   });
 
+  it('summarizes a contribution segment with year-range window', () => {
+    const payload: LeverPayload = {
+      ...emptyLeverPayload(),
+      contributions: [{ startMonth: 0, endMonth: 59, monthlyAmount: 1000 }],
+    };
+    expect(summarizeLevers(payload, { loanNames: {} })).toContain('Contribute +$1,000/mo (Y1-5)');
+  });
+
+  it('summarizes an open-ended contribution segment with ∞ end', () => {
+    const payload: LeverPayload = {
+      ...emptyLeverPayload(),
+      contributions: [{ startMonth: 240, endMonth: null, monthlyAmount: 3000 }],
+    };
+    expect(summarizeLevers(payload, { loanNames: {} })).toContain('Contribute +$3,000/mo (Y21-∞)');
+  });
+
   it('summarizes a non-default annual raise rate per person', () => {
     const payload: LeverPayload = {
       ...emptyLeverPayload(),

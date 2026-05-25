@@ -1,5 +1,12 @@
 import type { MonthlyState } from './engine';
-import type { ExpensePeriod, ExtraLoanPayment, IncomeEvent, LumpSumEvent, PersonIncomePlan } from './lever-types';
+import type {
+  ContributionSegment,
+  ExpensePeriod,
+  ExtraLoanPayment,
+  IncomeEvent,
+  LumpSumEvent,
+  PersonIncomePlan,
+} from './lever-types';
 
 /** Converts an annual return to a monthly return that compounds back to the annual. */
 export function monthlyReturnFromAnnual(annual: number): number {
@@ -79,6 +86,26 @@ function isWithinWindow(monthISO: string, start?: string, end?: string): boolean
   if (start && m < start.slice(0, 7)) return false;
   if (end && m > end.slice(0, 7)) return false;
   return true;
+}
+
+/**
+ * Returns the active contribution amount for a given `monthIndex` (0-based, months
+ * elapsed since projection start), or `null` if no segment covers this month.
+ *
+ * Segments are half-open intervals on the LEFT (startMonth inclusive) and CLOSED
+ * on the RIGHT (endMonth inclusive). `endMonth: null` is open-ended through the
+ * horizon. If multiple segments overlap a month, the first one in array order wins.
+ */
+export function activeContributionAmount(
+  segments: ContributionSegment[],
+  monthIndex: number,
+): number | null {
+  for (const seg of segments) {
+    if (monthIndex < seg.startMonth) continue;
+    if (seg.endMonth !== null && monthIndex > seg.endMonth) continue;
+    return seg.monthlyAmount;
+  }
+  return null;
 }
 
 export function computeMonthlyIncomeForPerson(

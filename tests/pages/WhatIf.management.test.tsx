@@ -51,6 +51,7 @@ vi.mock('@/stores/scenarios-store', () => {
       expensePeriods: [],
       returns: { defaultRate: 0.07, overrides: {} },
       income: { perPerson: [{ annualRaiseRate: 0.03, events: [] }] },
+      contributions: [],
     },
     createdAt: '',
     updatedAt: '',
