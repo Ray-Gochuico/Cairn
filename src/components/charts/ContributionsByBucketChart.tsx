@@ -1,5 +1,32 @@
 import { useMemo } from 'react';
 import BarChartCard from './BarChartCard';
+
+/**
+ * Format a dollar amount for the y-axis, adapting to value magnitude:
+ *   < $1,000  → "$500"   (sub-K values: show raw dollars, no decimals)
+ *   ≥ $1,000  → "$1.5k"  (K-denominated with one decimal)
+ * This avoids the "$0.0k" / "$0.5k" illegibility that occurs when monthly
+ * contributions are small (e.g. $100-$900).
+ */
+function formatContributionY(v: number): string {
+  if (v < 1000) return `$${Math.round(v)}`;
+  return `$${(v / 1000).toFixed(1)}k`;
+}
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/**
+ * Abbreviate a YYYY-MM x-axis tick to a short 3-letter month name.
+ * Keeps labels short enough so all 12 ticks fit without overlapping when
+ * xAxisInterval={0}.
+ */
+function formatContributionXTick(value: unknown): string {
+  const s = String(value ?? '');
+  // Expected format: "YYYY-MM"
+  const monthIdx = parseInt(s.slice(5, 7), 10) - 1;
+  return MONTH_NAMES[monthIdx] ?? s;
+}
 import {
   aggregateContributionsByBucket,
   CONTRIBUTION_BUCKETS,
@@ -67,7 +94,9 @@ export default function ContributionsByBucketChart({
       data={data}
       xKey="month"
       series={series}
-      yFormatter={(v) => `$${(v / 1000).toFixed(1)}k`}
+      yFormatter={formatContributionY}
+      xAxisInterval={0}
+      xTickFormatter={formatContributionXTick}
     />
   );
 }

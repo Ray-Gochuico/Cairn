@@ -5,8 +5,8 @@ import type { Account, Contribution } from '@/types/schema';
 import ContributionsByBucketChart from '@/components/charts/ContributionsByBucketChart';
 
 // Mock recharts so the bar chart renders to inspectable DOM in jsdom. Each
-// <Bar> becomes a div with its dataKey and stackId; this lets us assert
-// stacking is wired through without needing real SVG.
+// <Bar> becomes a div with its dataKey and stackId; XAxis and YAxis expose
+// their props for axis-specific assertions.
 vi.mock('recharts', () => ({
   ResponsiveContainer: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="rc-responsive">{children}</div>
@@ -25,8 +25,39 @@ vi.mock('recharts', () => ({
     />
   ),
   CartesianGrid: () => null,
-  XAxis: () => null,
-  YAxis: () => null,
+  XAxis: ({
+    interval,
+    tickFormatter,
+  }: {
+    interval?: number | string;
+    tickFormatter?: (value: unknown) => string;
+  }) => (
+    <div
+      data-testid="rc-xaxis"
+      data-interval={interval !== undefined ? String(interval) : 'default'}
+      data-has-formatter={tickFormatter ? 'yes' : 'no'}
+      // Sample formatted tick so we can assert abbreviation
+      data-sample-tick={tickFormatter ? tickFormatter('2026-01') : 'raw'}
+    />
+  ),
+  YAxis: ({
+    tickFormatter,
+  }: {
+    tickFormatter?: (value: number) => string;
+  }) => (
+    <div
+      data-testid="rc-yaxis"
+      data-has-formatter={tickFormatter ? 'yes' : 'no'}
+      // Emit formatted values for key thresholds.
+      // NOTE: HTML dataset converts hyphens to camelCase:
+      //   data-fmt-zero  → dataset.fmtZero
+      //   data-fmtv500   → dataset.fmtv500  (no hyphen in numeric part)
+      data-fmt-zero={tickFormatter ? tickFormatter(0) : 'raw'}
+      data-fmtv500={tickFormatter ? tickFormatter(500) : 'raw'}
+      data-fmtv1000={tickFormatter ? tickFormatter(1000) : 'raw'}
+      data-fmtv2500={tickFormatter ? tickFormatter(2500) : 'raw'}
+    />
+  ),
   Tooltip: () => null,
   Legend: () => null,
 }));
@@ -125,6 +156,100 @@ describe('ContributionsByBucketChart', () => {
       Brokerage: 500,
       '401k': 1000,
       '401k Match': 250,
+    });
+  });
+
+  describe('y-axis formatter — adapts to value magnitude (defect sentinel)', () => {
+    it('formats sub-$1k values as dollars (e.g. $500) not as "$0.5k"', () => {
+      render(
+        <ContributionsByBucketChart
+          accounts={[]}
+          contributions={[]}
+          fromYyyymm="2026-01"
+          toYyyymm="2026-01"
+        />,
+      );
+      const yAxis = screen.getByTestId('rc-yaxis');
+      // $500 should show as a dollar amount, NOT "$0.5k" which is hard to read
+      // and shows as "$0.0k" for amounts < $100 (the reported bug)
+      const fmt500 = yAxis.dataset.fmtv500 ?? '';
+      expect(fmt500).not.toBe('$0.5k'); // old broken formatter
+      expect(fmt500).toMatch(/^\$500$/); // expected: "$500"
+    });
+
+    it('formats $0 as "$0" not "$0.0k"', () => {
+      render(
+        <ContributionsByBucketChart
+          accounts={[]}
+          contributions={[]}
+          fromYyyymm="2026-01"
+          toYyyymm="2026-01"
+        />,
+      );
+      const yAxis = screen.getByTestId('rc-yaxis');
+      const fmtZero = yAxis.dataset.fmtZero ?? '';
+      expect(fmtZero).not.toBe('$0.0k');
+      expect(fmtZero).toBe('$0');
+    });
+
+    it('formats $1000 as "$1.0k"', () => {
+      render(
+        <ContributionsByBucketChart
+          accounts={[]}
+          contributions={[]}
+          fromYyyymm="2026-01"
+          toYyyymm="2026-01"
+        />,
+      );
+      const yAxis = screen.getByTestId('rc-yaxis');
+      expect(yAxis.dataset.fmtv1000).toBe('$1.0k');
+    });
+
+    it('formats $2500 as "$2.5k"', () => {
+      render(
+        <ContributionsByBucketChart
+          accounts={[]}
+          contributions={[]}
+          fromYyyymm="2026-01"
+          toYyyymm="2026-01"
+        />,
+      );
+      const yAxis = screen.getByTestId('rc-yaxis');
+      expect(yAxis.dataset.fmtv2500).toBe('$2.5k');
+    });
+  });
+
+  describe('x-axis interval — consistent tick spacing (defect sentinel)', () => {
+    it('sets xAxisInterval=0 so all month ticks are shown, not recharts default', () => {
+      render(
+        <ContributionsByBucketChart
+          accounts={[]}
+          contributions={[]}
+          fromYyyymm="2026-01"
+          toYyyymm="2026-12"
+        />,
+      );
+      const xAxis = screen.getByTestId('rc-xaxis');
+      // Must NOT be recharts default; must be 0 (show all ticks)
+      expect(xAxis.dataset.interval).not.toBe('default');
+      expect(xAxis.dataset.interval).toBe('0');
+    });
+
+    it('uses a tick formatter that abbreviates YYYY-MM to short month name', () => {
+      render(
+        <ContributionsByBucketChart
+          accounts={[]}
+          contributions={[]}
+          fromYyyymm="2026-01"
+          toYyyymm="2026-01"
+        />,
+      );
+      const xAxis = screen.getByTestId('rc-xaxis');
+      // The mock renders xTickFormatter('2026-01') as data-sample-tick
+      // Should produce a short label like "Jan" or "Jan '26"
+      const sampleTick = xAxis.dataset.sampleTick ?? '';
+      expect(sampleTick).not.toBe('2026-01'); // must abbreviate
+      expect(sampleTick).toMatch(/Jan/);       // must contain the month name
     });
   });
 });

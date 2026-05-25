@@ -41,6 +41,17 @@ export interface BarChartCardProps {
   series: BarChartSeries[];
   yFormatter?: (value: number) => string;
   layout?: 'horizontal' | 'vertical';
+  /**
+   * Override recharts' default 'preserveStartEnd' x-axis tick interval.
+   * Pass 0 to show all ticks (useful for monthly data where every month
+   * label should appear). Omit to use recharts' default behaviour.
+   */
+  xAxisInterval?: number | 'preserveStartEnd' | 'preserveStart' | 'preserveEnd';
+  /**
+   * Override the x-axis tick formatter (e.g. to shorten 'YYYY-MM' → 'Jan').
+   * Omit to display the raw x-axis value.
+   */
+  xTickFormatter?: (value: unknown) => string;
 }
 
 // Long PDF-extracted merchant strings, category names, etc. overflow the
@@ -69,6 +80,8 @@ export default function BarChartCard({
   series,
   yFormatter,
   layout = 'horizontal',
+  xAxisInterval,
+  xTickFormatter,
 }: BarChartCardProps) {
   const isVertical = layout === 'vertical';
   const effectiveHeight = isVertical
@@ -108,7 +121,13 @@ export default function BarChartCard({
               </>
             ) : (
               <>
-                <XAxis dataKey={xKey} stroke="#64748b" fontSize={12} />
+                <XAxis
+                  dataKey={xKey}
+                  stroke="#64748b"
+                  fontSize={12}
+                  {...(xAxisInterval !== undefined ? { interval: xAxisInterval } : {})}
+                  {...(xTickFormatter !== undefined ? { tickFormatter: xTickFormatter } : {})}
+                />
                 <YAxis
                   stroke="#64748b"
                   fontSize={12}
