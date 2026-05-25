@@ -1,6 +1,7 @@
 import type { Account, Holding, Loan, LoanPayment, Transaction, Household, TaxRule, JurisdictionType } from '@/types/schema';
 import type { Bracket } from '@/lib/tax';
 import type { FilingStatus } from '@/types/enums';
+import { computeBaselineExpenses } from '@/lib/expense-baseline';
 
 export interface AppSettingsSlice {
   defaultInflation: number;
@@ -91,16 +92,4 @@ export function captureRealState(inputs: RealStateInputs): RealState {
     startISO: inputs.startISO,
     taxBrackets,
   };
-}
-
-function computeBaselineExpenses(transactions: Transaction[], startISO: string): number {
-  const startMs = Date.parse(startISO);
-  const horizonMs = 12 * 30 * 86_400_000;
-  const recent = transactions.filter(
-    (t) => t.amount < 0 && Date.parse(t.date) >= startMs - horizonMs && Date.parse(t.date) <= startMs,
-  );
-  if (recent.length === 0) return 0;
-  const totalOutflow = recent.reduce((acc, t) => acc + Math.abs(t.amount), 0);
-  const monthsObserved = new Set(recent.map((t) => t.date.slice(0, 7))).size;
-  return totalOutflow / Math.max(monthsObserved, 1);
 }

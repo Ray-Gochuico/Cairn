@@ -1,6 +1,7 @@
 import type { NodeResult, RoadmapContext } from '@/types/roadmap';
 import { AccountType } from '@/types/enums';
 import type { Account, AccountSnapshot } from '@/types/schema';
+import { computeBaselineExpenses } from '@/lib/expense-baseline';
 
 /**
  * Emergency-fund evaluators for the three EF nodes in Section 1.
@@ -10,10 +11,17 @@ import type { Account, AccountSnapshot } from '@/types/schema';
  * emergency fund once you accumulate qualified-expense receipts —
  * matches how the source chart treats it.
  *
+ * Baseline expense source: the rule prefers the 12-month rolling
+ * average computed from real transactions. When no transactions are
+ * present yet (new user, no imports), we fall back to the household's
+ * manually entered `monthlyExpenseBaseline` so the rule still produces
+ * a meaningful target. The active source is surfaced in the evidence
+ * string so users can see whether the figure is computed or self-set.
+ *
  * Targets:
- *   small  → max($1,000, 1 × monthlyExpenseBaseline)
- *   3 mo   → 3  × monthlyExpenseBaseline
- *   6–12mo → 6  × monthlyExpenseBaseline (use 6 as the lower bound)
+ *   small  → max($1,000, 1 × baseline)
+ *   3 mo   → 3  × baseline
+ *   6–12mo → 6  × baseline (use 6 as the lower bound)
  *
  * The 3-month and 6-month rules require the user to have answered the
  * job-stability decision node first (so we know which path is on the
@@ -45,15 +53,36 @@ function formatUSD(n: number): string {
   return `$${Math.round(n).toLocaleString('en-US')}`;
 }
 
-function efContext(ctx: RoadmapContext): { baseline: number; cash: number } {
+type BaselineSource = 'transactions' | 'household' | 'none';
+
+function efContext(
+  ctx: RoadmapContext,
+): { baseline: number; cash: number; baselineSource: BaselineSource } {
+  const todayISO = ctx.today.toISOString().slice(0, 10);
+  const computed = computeBaselineExpenses(ctx.transactions, todayISO);
+  if (computed > 0) {
+    return {
+      baseline: computed,
+      cash: totalCashReserve(ctx.accounts, ctx.snapshots),
+      baselineSource: 'transactions',
+    };
+  }
+  const fallback = ctx.household.monthlyExpenseBaseline;
   return {
-    baseline: ctx.household.monthlyExpenseBaseline,
+    baseline: fallback,
     cash: totalCashReserve(ctx.accounts, ctx.snapshots),
+    baselineSource: fallback > 0 ? 'household' : 'none',
   };
 }
 
+function baselineSuffix(source: BaselineSource): string {
+  if (source === 'transactions') return ' from 12-mo avg';
+  if (source === 'household') return ' from Household';
+  return '';
+}
+
 export function evaluateSmallEmergencyFund(ctx: RoadmapContext): NodeResult {
-  const { baseline, cash } = efContext(ctx);
+  const { baseline, cash, baselineSource } = efContext(ctx);
   if (baseline <= 0) {
     return {
       status: 'unanswered',
@@ -62,15 +91,16 @@ export function evaluateSmallEmergencyFund(ctx: RoadmapContext): NodeResult {
     };
   }
   const target = Math.max(1000, baseline);
+  const suffix = baselineSuffix(baselineSource);
   if (cash >= target) {
     return {
       status: 'done',
-      evidence: `${formatUSD(cash)} cash ≥ ${formatUSD(target)} target`,
+      evidence: `${formatUSD(cash)} cash ≥ ${formatUSD(target)} target${suffix}`,
     };
   }
   return {
     status: 'active',
-    evidence: `${formatUSD(cash)} / ${formatUSD(target)} (${Math.round((cash / target) * 100)}%)`,
+    evidence: `${formatUSD(cash)} / ${formatUSD(target)} (${Math.round((cash / target) * 100)}%${suffix})`,
     cta: { label: 'Open Accounts →', href: '/accounts' },
   };
 }
@@ -86,7 +116,7 @@ function jobStabilityAnswer(ctx: RoadmapContext): 'stable' | 'unstable' | null {
 }
 
 export function evaluateEmergencyFund3Months(ctx: RoadmapContext): NodeResult {
-  const { baseline, cash } = efContext(ctx);
+  const { baseline, cash, baselineSource } = efContext(ctx);
   if (baseline <= 0) {
     return { status: 'not-started', evidence: 'Set your monthly expense baseline first' };
   }
@@ -102,18 +132,19 @@ export function evaluateEmergencyFund3Months(ctx: RoadmapContext): NodeResult {
     return { status: 'skipped', evidence: 'Unstable income path uses the 6–12-month EF target instead' };
   }
   const target = 3 * baseline;
+  const suffix = baselineSuffix(baselineSource);
   if (cash >= target) {
-    return { status: 'done', evidence: `${formatUSD(cash)} cash ≥ ${formatUSD(target)} (3-mo) target` };
+    return { status: 'done', evidence: `${formatUSD(cash)} cash ≥ ${formatUSD(target)} (3-mo target${suffix})` };
   }
   return {
     status: 'active',
-    evidence: `${formatUSD(cash)} / ${formatUSD(target)} (3-mo target, ${Math.round((cash / target) * 100)}%)`,
+    evidence: `${formatUSD(cash)} / ${formatUSD(target)} (3-mo target, ${Math.round((cash / target) * 100)}%${suffix})`,
     cta: { label: 'Open Accounts →', href: '/accounts' },
   };
 }
 
 export function evaluateEmergencyFund6To12Months(ctx: RoadmapContext): NodeResult {
-  const { baseline, cash } = efContext(ctx);
+  const { baseline, cash, baselineSource } = efContext(ctx);
   if (baseline <= 0) {
     return { status: 'not-started', evidence: 'Set your monthly expense baseline first' };
   }
@@ -130,16 +161,17 @@ export function evaluateEmergencyFund6To12Months(ctx: RoadmapContext): NodeResul
   // For unstable income, 6 months is the floor; 12 months is the ceiling.
   // We report done at 6 months and active in between with progress %.
   const target = 6 * baseline;
+  const suffix = baselineSuffix(baselineSource);
   if (cash >= target) {
     const ceiling = 12 * baseline;
     const evidence = cash >= ceiling
-      ? `${formatUSD(cash)} cash ≥ ${formatUSD(ceiling)} (12-mo ceiling)`
-      : `${formatUSD(cash)} cash ≥ ${formatUSD(target)} (6-mo floor)`;
+      ? `${formatUSD(cash)} cash ≥ ${formatUSD(ceiling)} (12-mo ceiling${suffix})`
+      : `${formatUSD(cash)} cash ≥ ${formatUSD(target)} (6-mo floor${suffix})`;
     return { status: 'done', evidence };
   }
   return {
     status: 'active',
-    evidence: `${formatUSD(cash)} / ${formatUSD(target)} (6-mo floor, ${Math.round((cash / target) * 100)}%)`,
+    evidence: `${formatUSD(cash)} / ${formatUSD(target)} (6-mo floor, ${Math.round((cash / target) * 100)}%${suffix})`,
     cta: { label: 'Open Accounts →', href: '/accounts' },
   };
 }
