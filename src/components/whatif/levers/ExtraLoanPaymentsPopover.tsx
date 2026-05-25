@@ -1,11 +1,146 @@
+import { useEffect, useMemo, useState } from 'react';
 import LeverPopoverShell from './LeverPopoverShell';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useScenariosStore } from '@/stores/scenarios-store';
+import { useLoansStore } from '@/stores/loans-store';
+import { previewExtraLoanPayment, type LoanPreviewInput } from '@/lib/whatif/extra-loan-preview';
+import type { ExtraLoanPayment } from '@/lib/scenarios';
 
 interface Props { open: boolean; onOpenChange: (n: boolean) => void }
 
+interface DraftRow {
+  loanId: number;
+  extraMonthly: number;
+  start?: string;
+  end?: string;
+}
+
+function mergeWithPersisted(loans: Array<{ id?: number }>, persisted: ExtraLoanPayment[]): DraftRow[] {
+  const byLoan = new Map(persisted.map((p) => [p.loanId, p]));
+  return loans
+    .filter((l): l is { id: number } => l.id != null)
+    .map((l) => {
+      const existing = byLoan.get(l.id);
+      return existing
+        ? { loanId: l.id, extraMonthly: existing.extraMonthly, start: existing.start, end: existing.end }
+        : { loanId: l.id, extraMonthly: 0 };
+    });
+}
+
+function fmtMonth(monthISO: string): string {
+  const [y, m] = monthISO.split('-').map(Number);
+  const NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return y && m ? `${NAMES[m-1]} ${y}` : monthISO;
+}
+
 export default function ExtraLoanPaymentsPopover({ open, onOpenChange }: Props) {
+  const scenarios = useScenariosStore((s) => s.scenarios);
+  const loans     = useLoansStore((s) => s.loans);
+  const active    = scenarios.find((s) => s.isActive);
+
+  const [draft, setDraft] = useState<DraftRow[]>(() =>
+    mergeWithPersisted(loans, active?.leverPayload.extraLoanPayments ?? []),
+  );
+
+  useEffect(() => {
+    if (open) setDraft(mergeWithPersisted(loans, active?.leverPayload.extraLoanPayments ?? []));
+  }, [open, loans, active?.leverPayload]);
+
+  const previews = useMemo(() => {
+    return draft.map((row) => {
+      const loan = loans.find((l) => l.id === row.loanId);
+      if (!loan || loan.id == null) return null;
+      const preview: LoanPreviewInput = {
+        id: loan.id,
+        currentBalance: loan.currentBalance,
+        interestRate: loan.interestRate,
+        monthlyPayment: loan.monthlyPayment,
+        termMonths: loan.termMonths,
+        firstPaymentDate: loan.firstPaymentDate,
+      };
+      return previewExtraLoanPayment(preview, row.extraMonthly, { start: row.start, end: row.end });
+    });
+  }, [draft, loans]);
+
+  const setRow = (i: number, patch: Partial<DraftRow>) => {
+    setDraft((d) => d.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+  };
+
+  const handleApply = async () => {
+    if (!active?.id) return;
+    const slice: ExtraLoanPayment[] = draft
+      .filter((r) => r.extraMonthly > 0)
+      .map((r) => {
+        const out: ExtraLoanPayment = { loanId: r.loanId, extraMonthly: r.extraMonthly };
+        if (r.start) out.start = r.start;
+        if (r.end)   out.end   = r.end;
+        return out;
+      });
+    await useScenariosStore.getState().updateLever(active.id, { extraLoanPayments: slice });
+    onOpenChange(false);
+  };
+
+  const handleReset = () =>
+    setDraft(mergeWithPersisted(loans, active?.leverPayload.extraLoanPayments ?? []));
+
   return (
-    <LeverPopoverShell open={open} title="Extra loan payments" onOpenChange={onOpenChange} onApply={() => onOpenChange(false)} onReset={() => {}}>
-      <p className="text-sm text-muted-foreground">Stub — implemented in Sub-Plan S-D Task 4.</p>
+    <LeverPopoverShell
+      open={open}
+      title="Extra loan payments"
+      onOpenChange={onOpenChange}
+      onApply={handleApply}
+      onReset={handleReset}
+    >
+      <div className="space-y-2">
+        {loans.length === 0 && (
+          <p className="text-sm text-muted-foreground">No loans configured.</p>
+        )}
+        {draft.map((row, i) => {
+          const loan = loans.find((l) => l.id === row.loanId);
+          if (!loan) return null;
+          const preview = previews[i];
+          return (
+            <div key={row.loanId} className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-end border-b py-2">
+              <div className="font-medium">{loan.name}</div>
+              <div>
+                <Label htmlFor={`extra-${loan.id}`} className="text-xs">Extra / mo</Label>
+                <Input
+                  id={`extra-${loan.id}`}
+                  type="number"
+                  min={0}
+                  step={25}
+                  value={row.extraMonthly}
+                  onChange={(e) => setRow(i, { extraMonthly: Math.max(0, Number(e.target.value) || 0) })}
+                />
+              </div>
+              <div>
+                <Label htmlFor={`start-${loan.id}`} className="text-xs">Start (YYYY-MM-DD)</Label>
+                <Input
+                  id={`start-${loan.id}`}
+                  value={row.start ?? ''}
+                  placeholder="always"
+                  onChange={(e) => setRow(i, { start: e.target.value || undefined })}
+                />
+              </div>
+              <div>
+                <Label htmlFor={`end-${loan.id}`} className="text-xs">End (YYYY-MM-DD)</Label>
+                <Input
+                  id={`end-${loan.id}`}
+                  value={row.end ?? ''}
+                  placeholder="always"
+                  onChange={(e) => setRow(i, { end: e.target.value || undefined })}
+                />
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {preview && row.extraMonthly > 0
+                  ? `Payoff: ${fmtMonth(preview.payoffMonthISO)} → was ${fmtMonth(preview.baselinePayoffMonthISO)} (–${preview.monthsSaved} months)`
+                  : ''}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </LeverPopoverShell>
   );
 }
