@@ -152,15 +152,18 @@ export default function IncomePopover({ open, onOpenChange }: Props) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <Label htmlFor="raise-rate" className="text-xs">Annual raise rate</Label>
+            <Label htmlFor="raise-rate" className="text-xs">Annual raise rate (%)</Label>
             <Input
               id="raise-rate"
               type="number"
-              step={0.005}
-              min={-0.05}
-              max={0.15}
-              value={plan.annualRaiseRate}
-              onChange={(e) => updatePlan({ annualRaiseRate: Number(e.target.value) || 0 })}
+              step={0.25}
+              min={-5}
+              max={15}
+              value={(plan.annualRaiseRate * 100).toFixed(2)}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                updatePlan({ annualRaiseRate: Number.isFinite(n) ? n / 100 : 0 });
+              }}
               aria-label="Annual raise rate"
             />
           </div>

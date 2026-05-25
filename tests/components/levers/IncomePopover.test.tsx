@@ -52,11 +52,27 @@ describe('IncomePopover', () => {
     expect(screen.getByRole('tab', { name: /partner/i })).toBeInTheDocument();
   });
 
-  it('raise-rate input edits the active person\'s plan', () => {
+  it('raise-rate input edits the active person\'s plan (percentage)', () => {
     render(<MemoryRouter><IncomePopover open onOpenChange={() => {}} /></MemoryRouter>);
     const slider = screen.getByLabelText(/annual raise rate/i) as HTMLInputElement;
-    fireEvent.change(slider, { target: { value: '0.05' } });
-    expect(slider.value).toBe('0.05');
+    // Default 0.03 (3%) should render as "3.00", not "0.03".
+    expect(slider.value).toBe('3.00');
+    fireEvent.change(slider, { target: { value: '5' } });
+    // After commit the controlled input reformats to two-decimal pct.
+    expect(slider.value).toBe('5.00');
+  });
+
+  it('raise-rate input is stored as a decimal (5% → 0.05 on Apply)', async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter><IncomePopover open onOpenChange={() => {}} /></MemoryRouter>);
+    fireEvent.change(screen.getByLabelText(/annual raise rate/i), { target: { value: '5' } });
+    await user.click(screen.getByRole('button', { name: /apply/i }));
+    const updateLever = (useScenariosStore.getState() as any).updateLever as ReturnType<typeof vi.fn>;
+    expect(updateLever).toHaveBeenCalledWith(1, expect.objectContaining({
+      income: expect.objectContaining({
+        perPerson: [expect.objectContaining({ annualRaiseRate: 0.05 })],
+      }),
+    }));
   });
 
   it('can add a promotion event and Apply writes the income lever slice', async () => {
@@ -98,10 +114,10 @@ describe('IncomePopover', () => {
     const user = userEvent.setup();
     render(<MemoryRouter><IncomePopover open onOpenChange={() => {}} /></MemoryRouter>);
     const slider = screen.getByLabelText(/annual raise rate/i) as HTMLInputElement;
-    fireEvent.change(slider, { target: { value: '0.05' } });
+    fireEvent.change(slider, { target: { value: '5' } });
     await user.click(screen.getByRole('button', { name: /mirror to partner/i }));
     await user.click(screen.getByRole('tab', { name: /partner/i }));
-    expect((screen.getByLabelText(/annual raise rate/i) as HTMLInputElement).value).toBe('0.05');
+    expect((screen.getByLabelText(/annual raise rate/i) as HTMLInputElement).value).toBe('5.00');
   });
 
   it('renders the live trajectory preview at the bottom', () => {
