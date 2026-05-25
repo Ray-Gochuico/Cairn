@@ -38,6 +38,7 @@ interface ScenariosState {
   duplicate: (sourceId: number, newName?: string) => Promise<number>;
   rename: (id: number, newName: string) => Promise<void>;
   toggleVisibility: (id: number) => Promise<void>;
+  saveCurrentAsScenario: (newName: string) => Promise<number>;
   setHorizonMonths: (months: number) => void;
   setDollarMode: (mode: DollarMode) => void;
 
@@ -158,6 +159,27 @@ export const useScenariosStore = create<ScenariosState>((set, get) => ({
     if (!existing) throw new Error(`Scenario ${id} not found in store`);
     await repo.update(id, { visible: !existing.visible });
     await get().load();
+  },
+
+  saveCurrentAsScenario: async (newName) => {
+    const repo = new ScenariosRepo(getDatabase());
+    const scenarios = get().scenarios;
+    const active = scenarios.find((s) => s.isActive) ?? scenarios.find((s) => s.isBaseline);
+    if (!active) throw new Error('No active scenario to snapshot');
+    const maxSort = scenarios.reduce((acc, s) => Math.max(acc, s.sortOrder), 0);
+    const input: Omit<Scenario, 'id' | 'createdAt' | 'updatedAt'> = {
+      name: newName,
+      isBaseline: false,
+      isActive: false,
+      color: active.color,
+      lineStyle: active.lineStyle,
+      visible: true,
+      sortOrder: maxSort + 1,
+      leverPayload: active.leverPayload,
+    };
+    const newId = await repo.create(input);
+    await get().load();
+    return newId;
   },
 
   projectedScenarios: (real) => {
