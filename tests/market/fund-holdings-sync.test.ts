@@ -65,8 +65,9 @@ function makeFundHoldings(): Pick<FundHoldingsRepo, 'getAsOf' | 'upsertHoldings'
   };
 }
 
-function makeFundSectors(): Pick<FundSectorsRepo, 'upsertSectors'> {
+function makeFundSectors(): Pick<FundSectorsRepo, 'getAsOf' | 'upsertSectors'> {
   return {
+    getAsOf: vi.fn().mockResolvedValue(null),
     upsertSectors: vi.fn().mockResolvedValue(undefined),
   };
 }
@@ -415,6 +416,102 @@ describe('syncStaleFunds', () => {
       expect(fundSectors.upsertSectors).not.toHaveBeenCalled();
       expect(result.refreshed).toContain('VTI');
       expect(result.errors).toHaveLength(0);
+    });
+  });
+
+  describe('Test 13: fresh holdings + missing sectors triggers a sectors-only backfill', () => {
+    it('fetches sectorWeightings (but not topHoldings) when fund_holdings is fresh and fund_sectors is empty', async () => {
+      // The regression: existing users with fresh fund_holdings (from before
+      // migration 0021) never got fund_sectors populated, so the donut stayed
+      // grey. We backfill sectors without redundantly re-pulling holdings.
+      const freshDate = daysBefore(TODAY, 30);
+      const yahoo = makeYahoo();
+      const fundHoldings = makeFundHoldings();
+      (fundHoldings.getAsOf as ReturnType<typeof vi.fn>).mockResolvedValue(freshDate);
+      const fundSectors = makeFundSectors();
+      // sectors.getAsOf returns null by default — no sector rows yet.
+      const tickers = makeTickers({ VTI: makeTicker('VTI', 'US_TOTAL_MARKET') });
+      const holdings = makeHoldings([makeHolding(1, 'VTI')]);
+
+      const result = await syncStaleFunds(
+        {
+          yahoo: yahoo as unknown as YahooClient,
+          fundHoldings: fundHoldings as unknown as FundHoldingsRepo,
+          fundSectors: fundSectors as unknown as FundSectorsRepo,
+          tickers: tickers as unknown as TickersRepo,
+          holdings: holdings as unknown as HoldingsRepo,
+        },
+        TODAY,
+      );
+
+      expect(yahoo.fundTopHoldings).not.toHaveBeenCalled();
+      expect(yahoo.fundSectorWeightings).toHaveBeenCalledWith('VTI');
+      expect(fundHoldings.upsertHoldings).not.toHaveBeenCalled();
+      expect(fundSectors.upsertSectors).toHaveBeenCalledWith(
+        'VTI',
+        [{ sector: 'Technology', weight: 0.28 }],
+        '2026-01-01',
+      );
+      expect(result.refreshed).toContain('VTI');
+    });
+  });
+
+  describe('Test 14: both holdings and sectors fresh → skipped (no Yahoo calls)', () => {
+    it('does not call Yahoo when fund_holdings and fund_sectors are both fresh', async () => {
+      const freshDate = daysBefore(TODAY, 30);
+      const yahoo = makeYahoo();
+      const fundHoldings = makeFundHoldings();
+      (fundHoldings.getAsOf as ReturnType<typeof vi.fn>).mockResolvedValue(freshDate);
+      const fundSectors = makeFundSectors();
+      (fundSectors.getAsOf as ReturnType<typeof vi.fn>).mockResolvedValue(freshDate);
+      const tickers = makeTickers({ VTI: makeTicker('VTI', 'US_TOTAL_MARKET') });
+      const holdings = makeHoldings([makeHolding(1, 'VTI')]);
+
+      const result = await syncStaleFunds(
+        {
+          yahoo: yahoo as unknown as YahooClient,
+          fundHoldings: fundHoldings as unknown as FundHoldingsRepo,
+          fundSectors: fundSectors as unknown as FundSectorsRepo,
+          tickers: tickers as unknown as TickersRepo,
+          holdings: holdings as unknown as HoldingsRepo,
+        },
+        TODAY,
+      );
+
+      expect(yahoo.fundTopHoldings).not.toHaveBeenCalled();
+      expect(yahoo.fundSectorWeightings).not.toHaveBeenCalled();
+      expect(result.skipped).toContain('VTI');
+      expect(result.refreshed).not.toContain('VTI');
+    });
+  });
+
+  describe('Test 15: stale sectors trigger a refetch even when holdings are fresh', () => {
+    it('refetches sectorWeightings when fund_sectors row is older than 90 days', async () => {
+      const freshDate = daysBefore(TODAY, 30);
+      const staleSectorsDate = daysBefore(TODAY, 120);
+      const yahoo = makeYahoo();
+      const fundHoldings = makeFundHoldings();
+      (fundHoldings.getAsOf as ReturnType<typeof vi.fn>).mockResolvedValue(freshDate);
+      const fundSectors = makeFundSectors();
+      (fundSectors.getAsOf as ReturnType<typeof vi.fn>).mockResolvedValue(staleSectorsDate);
+      const tickers = makeTickers({ VTI: makeTicker('VTI', 'US_TOTAL_MARKET') });
+      const holdings = makeHoldings([makeHolding(1, 'VTI')]);
+
+      const result = await syncStaleFunds(
+        {
+          yahoo: yahoo as unknown as YahooClient,
+          fundHoldings: fundHoldings as unknown as FundHoldingsRepo,
+          fundSectors: fundSectors as unknown as FundSectorsRepo,
+          tickers: tickers as unknown as TickersRepo,
+          holdings: holdings as unknown as HoldingsRepo,
+        },
+        TODAY,
+      );
+
+      expect(yahoo.fundTopHoldings).not.toHaveBeenCalled();
+      expect(yahoo.fundSectorWeightings).toHaveBeenCalled();
+      expect(fundSectors.upsertSectors).toHaveBeenCalled();
+      expect(result.refreshed).toContain('VTI');
     });
   });
 });

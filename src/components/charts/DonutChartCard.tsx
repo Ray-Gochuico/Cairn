@@ -60,6 +60,11 @@ export default function DonutChartCard({
   onClickSlice,
 }: DonutChartCardProps) {
   const total = data.reduce((sum, slice) => sum + slice.value, 0);
+  // Wrap recharts inside a flex column so the SVG and the legend it appends
+  // stay centered horizontally inside the card body. Without this the legend
+  // wraps to two/three lines for many-wedge charts (Per-Company exposure has
+  // ~10 tickers) and lands left-aligned because Recharts' <Legend/> defaults
+  // to align="center" but the parent block isn't centered to it.
   return (
     <Card>
       <CardHeader>
@@ -67,55 +72,63 @@ export default function DonutChartCard({
         {subtitle ? <CardDescription>{subtitle}</CardDescription> : null}
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={height}>
-          <PieChart>
-            <Pie
-              data={data}
-              dataKey="value"
-              nameKey="name"
-              cx="50%"
-              cy="50%"
-              innerRadius={innerRadius}
-              outerRadius={outerRadius}
-              paddingAngle={1}
-              label={
-                labelFormatter
-                  ? (entry) => labelFormatter(entry as DonutSlice)
-                  : undefined
-              }
-              onClick={
-                onClickSlice
-                  ? (entry: unknown) => {
-                      const name = (entry as { name?: unknown } | undefined)?.name;
-                      if (typeof name === 'string') onClickSlice(name);
-                    }
-                  : undefined
-              }
-              style={onClickSlice ? { cursor: 'pointer' } : undefined}
-            >
-              {data.map((slice, idx) => (
-                <Cell
-                  key={`${slice.name}-${idx}`}
-                  fill={slice.color ?? CHART_PALETTE[idx % CHART_PALETTE.length]}
-                />
-              ))}
-            </Pie>
-            <Tooltip
-              formatter={(value, name) => {
-                const displayName = tooltipNameFormatter && typeof name === 'string'
-                  ? tooltipNameFormatter(name)
-                  : String(name ?? '');
-                if (typeof value !== 'number') {
-                  return [String(value ?? ''), displayName];
+        <div className="flex flex-col items-center">
+          <ResponsiveContainer width="100%" height={height}>
+            <PieChart>
+              <Pie
+                data={data}
+                dataKey="value"
+                nameKey="name"
+                cx="50%"
+                cy="50%"
+                innerRadius={innerRadius}
+                outerRadius={outerRadius}
+                paddingAngle={1}
+                label={
+                  labelFormatter
+                    ? (entry) => labelFormatter(entry as DonutSlice)
+                    : undefined
                 }
-                const pct = total > 0 ? ` (${((value / total) * 100).toFixed(1)}%)` : '';
-                const formatted = valueFormatter ? `${valueFormatter(value)}${pct}` : `${value}${pct}`;
-                return [formatted, displayName];
-              }}
-            />
-            <Legend />
-          </PieChart>
-        </ResponsiveContainer>
+                onClick={
+                  onClickSlice
+                    ? (entry: unknown) => {
+                        const name = (entry as { name?: unknown } | undefined)?.name;
+                        if (typeof name === 'string') onClickSlice(name);
+                      }
+                    : undefined
+                }
+                style={onClickSlice ? { cursor: 'pointer' } : undefined}
+              >
+                {data.map((slice, idx) => (
+                  <Cell
+                    key={`${slice.name}-${idx}`}
+                    fill={slice.color ?? CHART_PALETTE[idx % CHART_PALETTE.length]}
+                  />
+                ))}
+              </Pie>
+              <Tooltip
+                formatter={(value, name) => {
+                  const displayName = tooltipNameFormatter && typeof name === 'string'
+                    ? tooltipNameFormatter(name)
+                    : String(name ?? '');
+                  if (typeof value !== 'number') {
+                    return [String(value ?? ''), displayName];
+                  }
+                  const pct = total > 0 ? ` (${((value / total) * 100).toFixed(1)}%)` : '';
+                  const formatted = valueFormatter ? `${valueFormatter(value)}${pct}` : `${value}${pct}`;
+                  return [formatted, displayName];
+                }}
+              />
+              <Legend
+                wrapperStyle={{ paddingTop: 8 }}
+                iconSize={8}
+                formatter={(value) => (
+                  <span className="text-xs text-muted-foreground">{value}</span>
+                )}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
       </CardContent>
     </Card>
   );
