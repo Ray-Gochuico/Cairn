@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { StrictMode } from 'react';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import InvestmentTimeSeriesChart from '@/components/charts/InvestmentTimeSeriesChart';
 import { AccountType, SnapshotSource } from '@/types/enums';
@@ -140,6 +141,48 @@ describe('InvestmentTimeSeriesChart', () => {
     await user.selectOptions(windowSelect, '1Y');
     expect(getTimeWindow()).toBe('1Y');
     expect(windowSelect).toHaveValue('1Y');
+  });
+
+  // Regression sentinel for the InvestmentTimeSeriesChart render-loop crash.
+  // The live Investments page threw "Maximum update depth exceeded" out of
+  // recharts' RenderedTicksReporter → XAxisImpl → CartesianChart on this
+  // chart. Root class of bug: unmemoized object/element props (`margin`,
+  // `dot`, `<CustomTooltip />`) handed into recharts each render, which
+  // recharts' internal store sees as fresh references and dispatches
+  // updates on. Mount under StrictMode with realistic data, mount-unmount-
+  // remount to mirror tab navigation, and assert no setState-in-render or
+  // Maximum-update-depth warnings reached console.error. jsdom does not run
+  // recharts' real animation lifecycle so this cannot reproduce the exact
+  // production loop — it catches the easier setState-in-render class going
+  // forward and documents the fix's intent.
+  it('does not emit setState-in-render or Maximum-update-depth warnings', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const first = render(
+        <StrictMode>
+          <div style={{ width: 800, height: 400 }}>
+            <InvestmentTimeSeriesChart accounts={accounts} holdings={holdings} snapshots={snapshots} />
+          </div>
+        </StrictMode>,
+      );
+      await waitFor(() => expect(screen.getByText(/investments over time/i)).toBeInTheDocument());
+      first.unmount();
+      render(
+        <StrictMode>
+          <div style={{ width: 800, height: 400 }}>
+            <InvestmentTimeSeriesChart accounts={accounts} holdings={holdings} snapshots={snapshots} />
+          </div>
+        </StrictMode>,
+      );
+      await waitFor(() => expect(screen.getByText(/investments over time/i)).toBeInTheDocument());
+      await new Promise((r) => setTimeout(r, 200));
+
+      const messages = errorSpy.mock.calls.map((c) => String(c[0] ?? ''));
+      expect(messages.find((m) => m.includes('Maximum update depth'))).toBeUndefined();
+      expect(messages.find((m) => m.includes('Cannot update a component'))).toBeUndefined();
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 
   it('uses an account accentColor override for its picker swatch', async () => {
