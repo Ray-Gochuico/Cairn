@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { projectScenario } from '@/lib/scenarios/engine';
 import { emptyLeverPayload } from '@/lib/scenarios/lever-types';
 import type { RealState } from '@/lib/scenarios/state-snapshot';
-import type { Holding, Loan, Household } from '@/types/schema';
+import type { Holding, Loan, Household, Person } from '@/types/schema';
 import type { Bracket } from '@/lib/tax';
 
 const holdings = [
@@ -22,8 +22,11 @@ const household = {
   withdrawalRate: 0.04,
   inflationAssumption: 0.025,
   growthScenarios: [],
-  persons: [{ id: 1, householdId: 1, name: 'P1', annualSalaryPretax: 135000 }],
-} as unknown as Household & { persons: Array<{ id: number; annualSalaryPretax: number }> };
+} as unknown as Household;
+
+const persons: Person[] = [
+  { id: 1, householdId: 1, name: 'P1', annualSalaryPretax: 135000 } as unknown as Person,
+];
 
 const federal2026Single: Bracket[] = [
   { min: 0, max: 11600, rate: 0.10 },
@@ -51,6 +54,7 @@ const realState: RealState = {
   loans,
   loanPayments: [],
   household,
+  persons,
   baselineMonthlyExpenses: 4500,
   defaults: { inflation: 0.025, returnRate: 0.07 },
   startISO: '2026-05',

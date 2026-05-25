@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import IncomePopover from '@/components/whatif/levers/IncomePopover';
 import { useScenariosStore } from '@/stores/scenarios-store';
 import { useHouseholdStore } from '@/stores/household-store';
+import { usePersonsStore } from '@/stores/persons-store';
 import { emptyLeverPayload } from '@/lib/scenarios';
 import { FilingStatus } from '@/types/enums';
 import type { Scenario } from '@/types/scenario';
@@ -13,10 +14,13 @@ function resetStores(twoPersons = false) {
   useHouseholdStore.setState({
     household: {
       filingStatus: twoPersons ? FilingStatus.MFJ : FilingStatus.SINGLE, state: 'CA', city: null,
-      persons: twoPersons
-        ? [{ id: 1, annualSalaryPretax: 135000 }, { id: 2, annualSalaryPretax: 92000 }]
-        : [{ id: 1, annualSalaryPretax: 135000 }],
     } as any,
+    isLoading: false, error: null,
+  });
+  usePersonsStore.setState({
+    persons: twoPersons
+      ? [{ id: 1, annualSalaryPretax: 135000 } as any, { id: 2, annualSalaryPretax: 92000 } as any]
+      : [{ id: 1, annualSalaryPretax: 135000 } as any],
     isLoading: false, error: null,
   });
   useScenariosStore.setState({

@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useScenariosStore } from '@/stores/scenarios-store';
-import { useHouseholdStore } from '@/stores/household-store';
+import { usePersonsStore } from '@/stores/persons-store';
 import { incomeTrajectory } from '@/lib/whatif/income-trajectory';
 import { formatCurrency } from '@/lib/format';
 import type { PersonIncomePlan, IncomeEvent } from '@/lib/scenarios';
@@ -31,11 +31,10 @@ function defaultPersonPlan(): PersonIncomePlan {
 
 export default function IncomePopover({ open, onOpenChange }: Props) {
   const scenarios = useScenariosStore((s) => s.scenarios);
-  const household = useHouseholdStore((s) => s.household);
+  const persons = usePersonsStore((s) => s.persons);
   const horizonMonths = useScenariosStore((s) => s.horizonMonths);
   const active = scenarios.find((s) => s.isActive);
 
-  const persons = (household as unknown as { persons?: Array<{ annualSalaryPretax?: number; salary?: number }> })?.persons ?? [];
   const personCount = Math.max(1, Math.min(2, persons.length || 1));
   const labels = personCount === 2 ? ['You', 'Partner'] : ['You'];
 
@@ -58,7 +57,7 @@ export default function IncomePopover({ open, onOpenChange }: Props) {
   }, [open, active?.leverPayload, personCount]);
 
   const plan = draft[tab] ?? defaultPersonPlan();
-  const personSalary = persons[tab]?.annualSalaryPretax ?? persons[tab]?.salary ?? 0;
+  const personSalary = persons[tab]?.annualSalaryPretax ?? 0;
 
   const updatePlan = (patch: Partial<PersonIncomePlan>) => {
     setDraft((d) => d.map((p, i) => (i === tab ? { ...p, ...patch } : p)));

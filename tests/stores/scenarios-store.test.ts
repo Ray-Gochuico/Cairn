@@ -217,9 +217,9 @@ const sampleRealState = (): RealState => ({
   loanPayments: [],
   household: {
     id: 1,
-    persons: [{ id: 1, annualSalaryPretax: 135000 }],
     filingStatus: 'SINGLE', state: 'CA', city: null,
   } as any,
+  persons: [{ id: 1, annualSalaryPretax: 135000 } as any],
   baselineMonthlyExpenses: 4500,
   defaults: { inflation: 0.025, returnRate: 0.07 },
   startISO: '2026-05',
