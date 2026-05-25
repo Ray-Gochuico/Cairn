@@ -2,10 +2,11 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { loadAllMigrations, runMigrations } from '@/db/migrations';
 import { setDatabase } from '@/db/db';
-import { useScenariosStore } from '@/stores/scenarios-store';
+import { useScenariosStore, _resetProjectionCacheForTest } from '@/stores/scenarios-store';
 import { emptyLeverPayload } from '@/lib/scenarios';
 
 const resetStore = () => {
+  _resetProjectionCacheForTest();
   useScenariosStore.setState({
     scenarios: [],
     isLoading: false,
@@ -14,7 +15,6 @@ const resetStore = () => {
     dollarMode: 'nominal',
     inflation: 0.025,
     defaultReturnRate: 0.07,
-    projectionCache: new Map(),
   });
 };
 

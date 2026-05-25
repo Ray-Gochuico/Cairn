@@ -37,7 +37,6 @@ function resetStores() {
     scenarios: [], isLoading: false, error: null,
     horizonMonths: 360, dollarMode: 'nominal',
     inflation: 0.025, defaultReturnRate: 0.07,
-    projectionCache: new Map(),
   });
   useTaxRulesStore.setState({ year: null, items: [], isLoading: false, error: null });
 }

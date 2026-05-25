@@ -6,7 +6,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { setDatabase } from '@/db/db';
 import { loadAllMigrations, runMigrations } from '@/db/migrations';
-import { useScenariosStore } from '@/stores/scenarios-store';
+import { useScenariosStore, _resetProjectionCacheForTest } from '@/stores/scenarios-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useLoansStore } from '@/stores/loans-store';
@@ -69,11 +69,11 @@ describe('WhatIf page', () => {
     } as any);
     useAccountsStore.setState({ accounts: [], isLoading: false, error: null, load: async () => {} } as any);
     useTransactionsStore.setState({ transactions: [], isLoading: false, error: null, load: async () => {} } as any);
+    _resetProjectionCacheForTest();
     useScenariosStore.setState({
       scenarios: [], isLoading: false, error: null,
       horizonMonths: 360, dollarMode: 'nominal',
       inflation: 0.025, defaultReturnRate: 0.07,
-      projectionCache: new Map(),
     });
   });
 
@@ -125,11 +125,20 @@ describe('WhatIf page', () => {
     const slider = screen.getByLabelText(/horizon/i) as HTMLInputElement;
     fireEvent.change(slider, { target: { value: '120' } });
     expect(useScenariosStore.getState().horizonMonths).toBe(120);
-    // The projection re-runs and the chart picks up the new length on next render.
+    // Re-projecting against the new horizon yields series of the matching length.
     await waitFor(() => {
       const baselineId = useScenariosStore.getState().scenarios[0].id!;
-      const cached = useScenariosStore.getState().projectionCache.get(baselineId);
-      expect(cached?.states.length).toBe(120);
+      const real = {
+        accounts: [], holdings: [], loans: [], loanPayments: [],
+        household: { id: 1, filingStatus: 'SINGLE', state: 'CA', city: null } as any,
+        persons: [{ id: 1, annualSalaryPretax: 135000 } as any],
+        baselineMonthlyExpenses: 4500,
+        defaults: { inflation: 0.025, returnRate: 0.07 },
+        startISO: '2026-05',
+        taxBrackets: { federal: [], state: [], city: null, standardDeduction: 0 },
+      };
+      const result = useScenariosStore.getState().projectedScenarios(real as any);
+      expect(result.get(baselineId)?.length).toBe(120);
     });
   });
 
@@ -155,5 +164,31 @@ describe('WhatIf page', () => {
     expect(screen.getByRole('button', { name: /expenses/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /returns/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /income/i })).toBeInTheDocument();
+  });
+
+  // Regression: `projectedScenarios` used to call `set({ projectionCache })`
+  // mid-render which scheduled re-renders on subscribed components (e.g.
+  // LeverBar) while WhatIf was still rendering, producing React's
+  // "Cannot update a component while rendering a different component"
+  // warning and eventually a Maximum-update-depth crash on navigation
+  // back to /what-if. The cache now lives outside the store, so a fresh
+  // mount must not emit either warning.
+  it('does not emit setState-in-render or Maximum-update-depth warnings on mount or re-mount', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const first = render(<MemoryRouter><WhatIf /></MemoryRouter>);
+      await waitFor(() => expect(useScenariosStore.getState().scenarios.length).toBe(1));
+      await waitFor(() => expect(screen.getByTestId('whatif-projection-chart')).toBeInTheDocument());
+      first.unmount();
+
+      render(<MemoryRouter><WhatIf /></MemoryRouter>);
+      await waitFor(() => expect(screen.getByTestId('whatif-projection-chart')).toBeInTheDocument());
+
+      const messages = errorSpy.mock.calls.map((call) => String(call[0] ?? ''));
+      expect(messages.find((m) => m.includes('Cannot update a component')),).toBeUndefined();
+      expect(messages.find((m) => m.includes('Maximum update depth')),).toBeUndefined();
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 });

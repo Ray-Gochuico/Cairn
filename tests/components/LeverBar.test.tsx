@@ -13,7 +13,6 @@ function resetStore() {
     isLoading: false, error: null,
     horizonMonths: 360, dollarMode: 'nominal',
     inflation: 0.025, defaultReturnRate: 0.07,
-    projectionCache: new Map(),
   });
 }
 
