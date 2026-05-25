@@ -72,4 +72,22 @@ describe('detectMilestones', () => {
   it('returns undefined netWorth30y when given an empty state list', () => {
     expect(detectMilestones([], fireParams).netWorth30y).toBeUndefined();
   });
+
+  it('detects the retirement month (first month where incomeAfterTax transitions to 0)', () => {
+    const states: MonthlyState[] = [
+      { monthISO: '2026-05', investments: 0, homeEquity: 0, cash: 0, debtByLoan: {}, netWorth: 0, incomeAfterTax: 8000, expenses: 4000, savings: 4000, events: [] },
+      { monthISO: '2026-06', investments: 0, homeEquity: 0, cash: 0, debtByLoan: {}, netWorth: 0, incomeAfterTax: 8000, expenses: 4000, savings: 4000, events: [] },
+      { monthISO: '2031-06', investments: 0, homeEquity: 0, cash: 0, debtByLoan: {}, netWorth: 0, incomeAfterTax: 0,    expenses: 4000, savings: -4000, events: [] },
+      { monthISO: '2031-07', investments: 0, homeEquity: 0, cash: 0, debtByLoan: {}, netWorth: 0, incomeAfterTax: 0,    expenses: 4000, savings: -4000, events: [] },
+    ];
+    expect(detectMilestones(states, fireParams).retirementISO).toBe('2031-06');
+  });
+
+  it('returns undefined retirementISO when income never transitions to zero', () => {
+    const states: MonthlyState[] = [
+      { monthISO: '2026-05', investments: 0, homeEquity: 0, cash: 0, debtByLoan: {}, netWorth: 0, incomeAfterTax: 8000, expenses: 4000, savings: 4000, events: [] },
+      { monthISO: '2026-06', investments: 0, homeEquity: 0, cash: 0, debtByLoan: {}, netWorth: 0, incomeAfterTax: 8000, expenses: 4000, savings: 4000, events: [] },
+    ];
+    expect(detectMilestones(states, fireParams).retirementISO).toBeUndefined();
+  });
 });

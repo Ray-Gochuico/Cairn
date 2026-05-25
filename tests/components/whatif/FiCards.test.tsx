@@ -178,6 +178,41 @@ describe('FiCards', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it('renders the retirement-age control with the person default when no override is set', () => {
+    const projections = new Map<number, MonthlyState[]>([[1, seedState(100_000, 50_000)]]);
+    render(
+      <FiCards
+        scenarios={[makeScenario()]}
+        projections={projections}
+        household={makeHousehold()}
+        persons={[makePerson({ targetRetirementAge: 60 })]}
+      />,
+    );
+    const control = screen.getByTestId('whatif-retirement-age-control');
+    expect(control).toBeInTheDocument();
+    const input = screen.getByLabelText('Retirement age') as HTMLInputElement;
+    expect(input.value).toBe('60');
+    // Override-tag only shown when override is set.
+    expect(control).not.toHaveTextContent('override');
+  });
+
+  it('retirement-age control reflects the override when present', () => {
+    const projections = new Map<number, MonthlyState[]>([[1, seedState(100_000, 50_000)]]);
+    const lp = emptyLeverPayload();
+    lp.retirementAgeOverride = 55;
+    render(
+      <FiCards
+        scenarios={[makeScenario({ leverPayload: lp })]}
+        projections={projections}
+        household={makeHousehold()}
+        persons={[makePerson({ targetRetirementAge: 65 })]}
+      />,
+    );
+    const input = screen.getByLabelText('Retirement age') as HTMLInputElement;
+    expect(input.value).toBe('55');
+    expect(screen.getByTestId('whatif-retirement-age-control')).toHaveTextContent('override');
+  });
+
   it('prefers active scenario over baseline when both are present', () => {
     // Active scenario has different liquid NW than baseline. Card should
     // display the active one's liquid NW in the progress row.

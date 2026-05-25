@@ -125,6 +125,17 @@ export default function ProjectionChart({
           />,
         );
       }
+      if (m.retirementISO) {
+        out.push(
+          <ReferenceLine
+            key={`retire_${sc.id}`}
+            x={m.retirementISO}
+            stroke={sc.color}
+            strokeDasharray="1 3"
+            label={{ value: 'Retire', position: 'top', fill: sc.color, fontSize: 11 }}
+          />,
+        );
+      }
       return out;
     });
 
@@ -151,6 +162,16 @@ export default function ProjectionChart({
             x={m.fireISO}
             stroke={sc.color}
             strokeDasharray="2 6"
+          />,
+        );
+      }
+      if (m.retirementISO) {
+        out.push(
+          <ReferenceLine
+            key={`retire_lower_${sc.id}`}
+            x={m.retirementISO}
+            stroke={sc.color}
+            strokeDasharray="1 3"
           />,
         );
       }

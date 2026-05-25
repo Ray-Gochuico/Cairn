@@ -71,6 +71,13 @@ export const LeverPayloadSchema = z.object({
   returns: ReturnScheduleSchema,
   income: IncomeLeverSchema,
   contributions: ContributionsLeverSchema.default([]),
+  /**
+   * Household-level override for the retirement age at which each person's
+   * salary income drops to zero. When null (default), each person retires at
+   * their own Person.targetRetirementAge. The cash-floor rule then routes
+   * post-retirement expenses out of investments.
+   */
+  retirementAgeOverride: z.number().int().min(30).max(90).nullable().default(null),
 });
 export type LeverPayload = z.infer<typeof LeverPayloadSchema>;
 
@@ -82,5 +89,6 @@ export function emptyLeverPayload(): LeverPayload {
     returns: { defaultRate: 0.07, overrides: {} },
     income: { perPerson: [{ annualRaiseRate: 0, events: [] }] },
     contributions: [],
+    retirementAgeOverride: null,
   };
 }
