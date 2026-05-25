@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { runMigrations } from '@/db/migrations';
@@ -287,5 +287,65 @@ describe('NetWorth page', () => {
     // The full household totals should NOT appear since the filter is on p1.
     expect(screen.queryByText('$250,000')).not.toBeInTheDocument();
     expect(screen.queryByText('$200,000')).not.toBeInTheDocument();
+  });
+
+  it('imports a snapshot CSV end-to-end and persists the new row', async () => {
+    const accountId = await seedAccount(db, 'Fidelity 401k');
+    await seedSnapshot(db, accountId, '2024-06-28', 50_000);
+    useAccountsStore.setState({
+      accounts: [
+        {
+          id: accountId,
+          householdId: 1,
+          ownerPersonId: null,
+          beneficiaryDependentId: null,
+          name: 'Fidelity 401k',
+          institution: null,
+          type: AccountType.ACCOUNT_BROKERAGE,
+          cryptoWalletAddress: null,
+          autoFetchEnabled: false,
+          excludedFromNetWorth: false,
+          stateOfPlan: null,
+          accentColor: null,
+        },
+      ],
+      isLoading: false,
+      error: null,
+    });
+
+    render(
+      <MemoryRouter>
+        <NetWorth />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /import csv/i })).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: /import csv/i }));
+
+    const file = new File(
+      ['account,snapshot_date,total_value\nFidelity 401k,2023-06-30,60000\n'],
+      'snap.csv',
+      { type: 'text/csv' },
+    );
+    const input = screen.getByTestId('import-csv-file-input') as HTMLInputElement;
+    Object.defineProperty(input, 'files', { value: [file] });
+    fireEvent.change(input);
+
+    await screen.findByRole('dialog');
+    expect(screen.getByText(/import account snapshots from csv/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /^commit/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    const repo = new AccountSnapshotsRepo(db);
+    const all = await repo.listForAccount(accountId);
+    const imported = all.find((s) => s.snapshotDate === '2023-06-30');
+    expect(imported).toBeDefined();
+    expect(imported?.totalValue).toBe(60_000);
   });
 });
