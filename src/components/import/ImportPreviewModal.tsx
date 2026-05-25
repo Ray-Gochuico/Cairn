@@ -19,7 +19,6 @@ import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { AccountSnapshotsRepo } from '@/domain/snapshots';
 import { getDatabase } from '@/db/db';
 import type { ImportEntity, ValidationContext } from '@/lib/import/types';
-import type { SnapshotResolved } from '@/lib/import/validators/snapshot-validator';
 
 interface Props {
   entity: ImportEntity;
