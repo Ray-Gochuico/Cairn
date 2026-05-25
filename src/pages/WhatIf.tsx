@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import ChartToolbar from '@/components/whatif/ChartToolbar';
+import FiCards from '@/components/whatif/FiCards';
 import LeverBar from '@/components/whatif/LeverBar';
 import MilestoneStrip from '@/components/whatif/MilestoneStrip';
 import ProjectionChart from '@/components/whatif/ProjectionChart';
@@ -12,6 +13,7 @@ import { useLoansStore } from '@/stores/loans-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
+import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { detectMilestones, type Milestones, type MonthlyState } from '@/lib/scenarios';
@@ -32,6 +34,9 @@ export default function WhatIf() {
   const loadTransactions   = useTransactionsStore((s) => s.load);
   const loadPersons        = usePersonsStore((s) => s.load);
   const loadTaxYears       = useTaxRulesStore((s) => s.loadAvailableYears);
+
+  const household          = useHouseholdStore((s) => s.household);
+  const persons            = usePersonsStore((s) => s.persons);
 
   const [manageOpen, setManageOpen] = useState(false);
 
@@ -86,6 +91,15 @@ export default function WhatIf() {
       </div>
 
       <LeverBar />
+
+      {household && persons.length > 0 && (
+        <FiCards
+          scenarios={scenarios}
+          projections={projections}
+          household={household}
+          persons={persons}
+        />
+      )}
 
       <Card className="min-w-0">
         <CardHeader>
