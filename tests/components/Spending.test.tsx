@@ -190,6 +190,21 @@ describe('Spending page', () => {
     });
   });
 
+  it('(open-all) shows an "Open all transactions" link to the sub-route when transactions exist', async () => {
+    await useCategoriesStore.getState().load();
+    const txn: Omit<Transaction, 'id'> = {
+      householdId: 1, date: '2026-03-05', merchant: 'AMAZON', merchantRaw: 'AMAZON.COM',
+      amount: 54.23, categoryId: 37, sourceAccountId: null, propertyId: null,
+      vehicleId: null, personId: null, sourcePdfFilename: 'mar.pdf', reimbursable: false,
+      reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
+    };
+    await useTransactionsStore.getState().createMany([txn]);
+    renderPage();
+
+    const link = await screen.findByRole('link', { name: /open all transactions/i });
+    expect(link).toHaveAttribute('href', '/spending/transactions');
+  });
+
   it('(e) clicking a transaction row Edit button opens the edit dialog', async () => {
     await useCategoriesStore.getState().load();
     const txn: Omit<Transaction, 'id'> = {

@@ -8,6 +8,7 @@ import Property from './pages/Property';
 import Vehicles from './pages/Vehicles';
 import EquityGrants from './pages/EquityGrants';
 import Spending from './pages/Spending';
+import SpendingTransactions from './pages/SpendingTransactions';
 import Budget from './pages/Budget';
 import Goals from './pages/Goals';
 import Roadmap from './pages/Roadmap';
@@ -50,6 +51,7 @@ const router = createBrowserRouter([
       { path: 'vehicles', element: <Vehicles /> },
       { path: 'equity-grants', element: <EquityGrants /> },
       { path: 'spending', element: <Spending /> },
+      { path: 'spending/transactions', element: <SpendingTransactions /> },
       { path: 'budget', element: <Budget /> },
       { path: 'goals', element: <Goals /> },
       { path: 'roadmap', element: <Roadmap /> },
