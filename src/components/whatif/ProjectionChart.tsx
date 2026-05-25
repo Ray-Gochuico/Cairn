@@ -7,8 +7,10 @@ import {
   XAxis,
   YAxis,
   ResponsiveContainer,
+  ReferenceLine,
   Tooltip,
 } from 'recharts';
+import React from 'react';
 import type { Scenario } from '@/types/scenario';
 import type { MonthlyState, Milestones } from '@/lib/scenarios';
 import { toReal } from '@/lib/scenarios';
@@ -95,7 +97,65 @@ export default function ProjectionChart({
   const upperRows = useMemo(() => buildUpperPaneRows(scenarios, display), [scenarios, display]);
   const lowerRows = useMemo(() => buildLowerPaneRows(scenarios, display), [scenarios, display]);
 
-  void milestones; // milestones reference lines added in Task 7
+  const milestoneRefLines = scenarios
+    .filter((sc) => sc.visible && sc.id != null)
+    .flatMap((sc) => {
+      const m = milestones.get(sc.id!);
+      if (!m) return [];
+      const out: React.ReactNode[] = [];
+      if (m.debtFreeISO) {
+        out.push(
+          <ReferenceLine
+            key={`df_${sc.id}`}
+            x={m.debtFreeISO}
+            stroke={sc.color}
+            strokeDasharray="4 4"
+            label={{ value: 'Debt-free', position: 'top', fill: sc.color, fontSize: 11 }}
+          />,
+        );
+      }
+      if (m.fireISO) {
+        out.push(
+          <ReferenceLine
+            key={`fire_${sc.id}`}
+            x={m.fireISO}
+            stroke={sc.color}
+            strokeDasharray="2 6"
+            label={{ value: 'FIRE', position: 'top', fill: sc.color, fontSize: 11 }}
+          />,
+        );
+      }
+      return out;
+    });
+
+  const milestoneRefLinesLower = scenarios
+    .filter((sc) => sc.visible && sc.id != null)
+    .flatMap((sc) => {
+      const m = milestones.get(sc.id!);
+      if (!m) return [];
+      const out: React.ReactNode[] = [];
+      if (m.debtFreeISO) {
+        out.push(
+          <ReferenceLine
+            key={`df_lower_${sc.id}`}
+            x={m.debtFreeISO}
+            stroke={sc.color}
+            strokeDasharray="4 4"
+          />,
+        );
+      }
+      if (m.fireISO) {
+        out.push(
+          <ReferenceLine
+            key={`fire_lower_${sc.id}`}
+            x={m.fireISO}
+            stroke={sc.color}
+            strokeDasharray="2 6"
+          />,
+        );
+      }
+      return out;
+    });
 
   return (
     <div data-testid="whatif-projection-chart" className="w-full">
@@ -171,6 +231,8 @@ export default function ProjectionChart({
                   isAnimationActive={false}
                 />
               ))}
+
+            {milestoneRefLines}
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -201,6 +263,8 @@ export default function ProjectionChart({
                 isAnimationActive={false}
               />
             ))}
+
+            {milestoneRefLinesLower}
           </ComposedChart>
         </ResponsiveContainer>
       </div>

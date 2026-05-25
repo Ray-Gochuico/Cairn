@@ -183,3 +183,61 @@ describe('ProjectionChart — composition mode (exactly 1 scenario visible)', ()
     expect(container.querySelectorAll('.recharts-area-area').length).toBe(0);
   });
 });
+
+describe('ProjectionChart — milestone reference lines', () => {
+  it('renders a Debt-free reference line at the milestone month', () => {
+    const projections = new Map([[1, fixtureStates()]]);
+    const milestones = new Map<number, Milestones>([[1, { debtFreeISO: '2026-06' }]]);
+    const { container } = render(
+      <MemoryRouter>
+        <ProjectionChart
+          scenarios={[baseline]}
+          projections={projections}
+          milestones={milestones}
+          dollarMode="nominal"
+          inflation={0.025}
+          startISO="2026-01"
+        />
+      </MemoryRouter>,
+    );
+    const refLines = container.querySelectorAll('.recharts-reference-line-line');
+    expect(refLines.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('renders FIRE reference line when fireISO is set', () => {
+    const projections = new Map([[1, fixtureStates()]]);
+    const milestones = new Map<number, Milestones>([[1, { debtFreeISO: '2026-06', fireISO: '2026-10' }]]);
+    const { container } = render(
+      <MemoryRouter>
+        <ProjectionChart
+          scenarios={[baseline]}
+          projections={projections}
+          milestones={milestones}
+          dollarMode="nominal"
+          inflation={0.025}
+          startISO="2026-01"
+        />
+      </MemoryRouter>,
+    );
+    const refLines = container.querySelectorAll('.recharts-reference-line-line');
+    expect(refLines.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('omits reference lines for scenarios that never reach the milestone', () => {
+    const projections = new Map([[1, fixtureStates()]]);
+    const milestones = new Map<number, Milestones>([[1, {}]]);
+    const { container } = render(
+      <MemoryRouter>
+        <ProjectionChart
+          scenarios={[baseline]}
+          projections={projections}
+          milestones={milestones}
+          dollarMode="nominal"
+          inflation={0.025}
+          startISO="2026-01"
+        />
+      </MemoryRouter>,
+    );
+    expect(container.querySelectorAll('.recharts-reference-line-line').length).toBe(0);
+  });
+});
