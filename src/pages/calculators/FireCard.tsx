@@ -9,7 +9,7 @@ import { formatCurrency } from '@/lib/format';
 
 interface FireCardProps {
   cardId?: string;
-  onHide?: () => void;
+  onHide?: (cardId: string) => void;
 }
 
 export function FireCard({ cardId, onHide }: FireCardProps = {}) {

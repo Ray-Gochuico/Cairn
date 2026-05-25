@@ -8,7 +8,7 @@ import { formatCurrency } from '@/lib/format';
 
 interface EquityValueCardProps {
   cardId?: string;
-  onHide?: () => void;
+  onHide?: (cardId: string) => void;
 }
 
 interface PersonTotal {

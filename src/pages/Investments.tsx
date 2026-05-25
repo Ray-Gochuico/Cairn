@@ -8,6 +8,7 @@ import { useDependentsStore } from '@/stores/dependents-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useTickersStore } from '@/stores/tickers-store';
 import { useFundHoldingsStore } from '@/stores/fund-holdings-store';
+import { useFundSectorsStore } from '@/stores/fund-sectors-store';
 import { getDatabase } from '@/db/db';
 import { AccountType, AssetClass } from '@/types/enums';
 import { monthsBetween } from '@/lib/business-days';
@@ -30,6 +31,7 @@ import { AlertTriangleIcon } from 'lucide-react';
 import { YahooClient } from '@/market/yahoo-client';
 import { TickersRepo } from '@/domain/tickers';
 import { FundHoldingsRepo } from '@/domain/fund-holdings';
+import { FundSectorsRepo } from '@/domain/fund-sectors';
 import { HoldingsRepo } from '@/domain/holdings';
 import { syncStaleFunds, type SyncResult } from '@/market/fund-holdings-sync';
 
@@ -262,6 +264,7 @@ export default function Investments() {
   // Loaded here so useConcentration() sees populated stores on first paint.
   const loadTickers = useTickersStore((s) => s.load);
   const loadFundHoldings = useFundHoldingsStore((s) => s.load);
+  const loadFundSectors = useFundSectorsStore((s) => s.load);
 
   useEffect(() => {
     loadAccounts();
@@ -272,6 +275,7 @@ export default function Investments() {
     loadHousehold();
     loadTickers();
     loadFundHoldings();
+    loadFundSectors();
   }, [
     loadAccounts,
     loadHoldings,
@@ -281,6 +285,7 @@ export default function Investments() {
     loadHousehold,
     loadTickers,
     loadFundHoldings,
+    loadFundSectors,
   ]);
 
   // Filter accounts by the household / p1 / p2 / joint dropdown. Holdings,
@@ -365,6 +370,7 @@ export default function Investments() {
         {
           yahoo: new YahooClient(),
           fundHoldings: new FundHoldingsRepo(db),
+          fundSectors: new FundSectorsRepo(db),
           tickers: new TickersRepo(db),
           holdings: new HoldingsRepo(db),
         },
@@ -372,6 +378,7 @@ export default function Investments() {
       );
       setRefreshResult(result);
       await loadFundHoldings();
+      await loadFundSectors();
     } catch (err) {
       setRefreshResult({
         refreshed: [],

@@ -6,7 +6,7 @@ import {
   totalCashReserve,
 } from '@/domain/roadmap/rules/emergencyFund';
 import type { RoadmapContext } from '@/types/roadmap';
-import type { Account, AccountSnapshot, Household, Person } from '@/types/schema';
+import type { Account, AccountSnapshot, Household, Person, Transaction } from '@/types/schema';
 import { AccountType, FilingStatus, SnapshotSource } from '@/types/enums';
 
 function makeHousehold(patch: Partial<Household> = {}): Household {
@@ -105,6 +105,7 @@ function makeContext(opts: {
   hsa?: number;
   savings?: number;
   stability?: 'stable' | 'unstable' | null;
+  transactions?: Transaction[];
 } = {}): RoadmapContext {
   const accounts: Account[] = [];
   const snapshots: AccountSnapshot[] = [];
@@ -127,12 +128,25 @@ function makeContext(opts: {
     loans: [],
     contributions: [],
     snapshots,
-    transactions: [],
+    transactions: opts.transactions ?? [],
     overrides: new Map(),
     thresholds: { low: 5, high: 8 },
     taxYear: 2026,
     today: new Date('2026-05-23T12:00:00Z'),
   };
+}
+
+function tx(id: number, date: string, amount: number): Transaction {
+  return ({
+    id,
+    householdId: 1,
+    date,
+    amount,
+    merchant: 'M',
+    merchantRaw: null,
+    categoryId: 1,
+    sourceAccountId: 1,
+  } as unknown) as Transaction;
 }
 
 describe('totalCashReserve', () => {
@@ -259,5 +273,66 @@ describe('evaluateEmergencyFund6To12Months', () => {
       makeContext({ baseline: 5000, cash: 10_000, hsa: 20_000, stability: 'unstable' }),
     );
     expect(r.status).toBe('done');
+  });
+});
+
+describe('emergency-fund rule — real expense baseline from transactions', () => {
+  // Adjusted for the expense-sign fix: purchase amounts are positive per the
+  // Transaction schema convention.
+  it('prefers 12-month rolling avg from transactions over household baseline', () => {
+    // 3 months of $4,000 outflows → baseline = $4,000.
+    // Household baseline says $5,000 (would have made 3-mo target $15k).
+    // With $4,000 real baseline, 3-mo target = $12k → cash $12,500 should mark done.
+    const transactions = [
+      tx(1, '2026-03-10', 4000),
+      tx(2, '2026-04-10', 4000),
+      tx(3, '2026-05-10', 4000),
+    ];
+    const r = evaluateEmergencyFund3Months(
+      makeContext({ baseline: 5000, cash: 12_500, stability: 'stable', transactions }),
+    );
+    expect(r.status).toBe('done');
+    expect(r.evidence).toMatch(/from 12-mo avg/);
+  });
+
+  it('falls back to household baseline when no transactions exist', () => {
+    const r = evaluateEmergencyFund3Months(
+      makeContext({ baseline: 5000, cash: 15_000, stability: 'stable', transactions: [] }),
+    );
+    expect(r.status).toBe('done');
+    expect(r.evidence).toMatch(/from Household/);
+  });
+
+  it('uses monthsObserved as divisor — 4 months of data yields total/4 not total/12', () => {
+    // $3,000 spent in each of Feb, Mar, Apr, May → 4 months observed, $12k total.
+    // Real baseline = $12,000 / 4 = $3,000.
+    // 6-mo unstable target = 6 × $3,000 = $18,000. Cash $18,000 → done.
+    const transactions = [
+      tx(1, '2026-02-15', 3000),
+      tx(2, '2026-03-15', 3000),
+      tx(3, '2026-04-15', 3000),
+      tx(4, '2026-05-15', 3000),
+    ];
+    const r = evaluateEmergencyFund6To12Months(
+      makeContext({ baseline: 0, cash: 18_000, stability: 'unstable', transactions }),
+    );
+    expect(r.status).toBe('done');
+    expect(r.evidence).toMatch(/6-mo floor/);
+    expect(r.evidence).toMatch(/from 12-mo avg/);
+  });
+
+  it('small EF target picks the transactions-derived baseline floor', () => {
+    // 2 months of $600 → $1,200 / 2 = $600 baseline.
+    // Small target = max($1,000, $600) = $1,000. Cash $900 → active.
+    const transactions = [
+      tx(1, '2026-04-10', 600),
+      tx(2, '2026-05-10', 600),
+    ];
+    const r = evaluateSmallEmergencyFund(
+      makeContext({ baseline: 5000, cash: 900, transactions }),
+    );
+    expect(r.status).toBe('active');
+    expect(r.evidence).toMatch(/\$1,000/);
+    expect(r.evidence).toMatch(/from 12-mo avg/);
   });
 });

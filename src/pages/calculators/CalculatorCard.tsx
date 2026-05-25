@@ -2,7 +2,6 @@ import { useState, type ReactNode } from 'react';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ChevronDownIcon, ChevronUpIcon, SettingsIcon } from 'lucide-react';
-import { hideCard } from '@/lib/calculator-visibility';
 
 interface CalculatorCardProps {
   title: string;
@@ -11,8 +10,12 @@ interface CalculatorCardProps {
   overridePanel?: ReactNode;
   /** Stable identifier used for the Hide/Show feature. When set, a "Hide" button is rendered. */
   cardId?: string;
-  /** Invoked after the card is hidden so the parent can refresh its visibility state. */
-  onHide?: () => void;
+  /**
+   * Invoked when the user clicks "Hide". The parent owns the visibility state
+   * and persists it — the card does not write to localStorage itself, so the
+   * state update + persistence happen atomically from one source.
+   */
+  onHide?: (cardId: string) => void;
   children: ReactNode;
 }
 
@@ -30,8 +33,7 @@ export function CalculatorCard({
 
   const handleHide = () => {
     if (!cardId) return;
-    hideCard(cardId);
-    onHide?.();
+    onHide?.(cardId);
   };
 
   return (

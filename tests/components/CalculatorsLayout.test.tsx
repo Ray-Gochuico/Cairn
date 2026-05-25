@@ -496,5 +496,88 @@ describe('CalculatorsLayout', () => {
       expect(screen.queryByText(/card hidden/i)).not.toBeInTheDocument();
       expect(screen.queryByText(/manage/i)).not.toBeInTheDocument();
     });
+
+    it('hide → show → hide cycle on the same card updates the visible cards each step', async () => {
+      // Regression: hide/show transitions had a state/render bug where the
+      // card grid would not visually update until a route change forced a
+      // re-mount. The layout must reflect each individual click without an
+      // unmount/mount in between.
+      primeBaseline();
+      usePersonsStore.setState({
+        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
+        isLoading: false,
+        error: null,
+      });
+
+      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+      await screen.findByText(/Bonus take-home/i);
+
+      // 1) hide Bonus card
+      const bonusHideBtn = screen.getByRole('button', { name: /^hide bonus take-home/i });
+      await userEvent.click(bonusHideBtn);
+      expect(screen.queryByText(/Bonus take-home/i)).not.toBeInTheDocument();
+      expect(await screen.findByText(/1 card hidden/i)).toBeInTheDocument();
+
+      // 2) show it back via the manage popover
+      await userEvent.click(screen.getByText(/manage/i));
+      await userEvent.click(
+        screen.getByRole('button', { name: /show bonus tax card/i }),
+      );
+      expect(await screen.findByText(/Bonus take-home/i)).toBeInTheDocument();
+      expect(screen.queryByText(/card hidden/i)).not.toBeInTheDocument();
+
+      // 3) hide it again — the layout must update again without re-mounting
+      const bonusHideBtnAgain = screen.getByRole('button', { name: /^hide bonus take-home/i });
+      await userEvent.click(bonusHideBtnAgain);
+      expect(screen.queryByText(/Bonus take-home/i)).not.toBeInTheDocument();
+      expect(await screen.findByText(/1 card hidden/i)).toBeInTheDocument();
+    });
+
+    it('hiding two cards in quick succession reflects both in the layout immediately', async () => {
+      primeBaseline();
+      usePersonsStore.setState({
+        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
+        isLoading: false,
+        error: null,
+      });
+
+      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+      await screen.findByText(/Bonus take-home/i);
+
+      // Hide Bonus
+      await userEvent.click(screen.getByRole('button', { name: /^hide bonus take-home/i }));
+      // Hide Commission
+      await userEvent.click(screen.getByRole('button', { name: /^hide commission take-home/i }));
+
+      expect(screen.queryByText(/Bonus take-home/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Commission take-home/i)).not.toBeInTheDocument();
+      expect(await screen.findByText(/2 cards hidden/i)).toBeInTheDocument();
+    });
+
+    it('"Show all" restores every hidden card and closes the popover', async () => {
+      localStorage.setItem(
+        'calculator-hidden-cards',
+        JSON.stringify(['bonus-tax', 'commission']),
+      );
+
+      primeBaseline();
+      usePersonsStore.setState({
+        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
+        isLoading: false,
+        error: null,
+      });
+
+      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+      await screen.findByText(/Paycheck/i);
+      expect(screen.queryByText(/Bonus take-home/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Commission take-home/i)).not.toBeInTheDocument();
+
+      await userEvent.click(screen.getByText(/manage/i));
+      await userEvent.click(screen.getByRole('button', { name: /^show all$/i }));
+
+      expect(await screen.findByText(/Bonus take-home/i)).toBeInTheDocument();
+      expect(screen.getByText(/Commission take-home/i)).toBeInTheDocument();
+      expect(screen.queryByText(/card hidden/i)).not.toBeInTheDocument();
+    });
   });
 });

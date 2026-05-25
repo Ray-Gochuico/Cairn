@@ -11,7 +11,7 @@ import { getCurrentTaxYear } from '@/lib/current-tax-year';
 
 interface PaycheckCardProps {
   cardId?: string;
-  onHide?: () => void;
+  onHide?: (cardId: string) => void;
 }
 
 export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {

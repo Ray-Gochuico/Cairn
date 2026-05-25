@@ -11,7 +11,7 @@ import { formatCurrency } from '@/lib/format';
 
 interface CompoundInterestCardProps {
   cardId?: string;
-  onHide?: () => void;
+  onHide?: (cardId: string) => void;
 }
 
 const FREQUENCY_OPTIONS: Array<{ value: CompoundFrequency; label: string }> = [

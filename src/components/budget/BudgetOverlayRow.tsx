@@ -1,0 +1,90 @@
+import type { BudgetRow } from '@/lib/budget-analysis';
+import { Input } from '@/components/ui/input';
+
+const currency = (n: number) =>
+  `$${Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+
+export interface BudgetOverlayRowProps {
+  row: BudgetRow;
+  onBudgetCommit?: (
+    categoryId: number,
+    raw: string,
+    inputEl: HTMLInputElement,
+    savedBudget: number | null,
+  ) => void;
+}
+
+export default function BudgetOverlayRow({ row, onBudgetCommit }: BudgetOverlayRowProps) {
+  const { categoryId, categoryName, budget, actual, remaining, overBudget } = row;
+
+  // Fill ratio: 0..1 (capped). Unbudgeted rows render an empty track.
+  const fillRatio =
+    budget != null && budget > 0
+      ? Math.min(actual / budget, 1)
+      : 0;
+  const fillPct = `${Math.round(fillRatio * 100)}%`;
+
+  // Fill color tracks state — green for under, red/pink for over, transparent
+  // when no spending so the muted track shows through.
+  const fillColor = overBudget
+    ? 'bg-rose-500'
+    : actual > 0
+      ? 'bg-emerald-500'
+      : 'bg-transparent';
+
+  // Right-side label — "$X over" (red) when over, "$X left" (green when there
+  // is real spending, muted when actual = 0) otherwise. Hidden for unbudgeted.
+  const showLabel = budget != null && remaining != null;
+  const labelText = overBudget
+    ? `${currency(remaining as number)} over`
+    : `${currency(remaining as number)} left`;
+  const labelColor = overBudget
+    ? 'text-rose-600'
+    : actual > 0
+      ? 'text-emerald-600'
+      : 'text-muted-foreground';
+
+  return (
+    <div className="grid grid-cols-[10rem_7rem_1fr_auto] items-center gap-3 py-2">
+      <div className="text-sm font-medium">{categoryName}</div>
+
+      <Input
+        type="number"
+        step="1"
+        min="0"
+        className="h-8 w-24 tabular-nums"
+        aria-label={`Budget for ${categoryName}`}
+        defaultValue={budget ?? ''}
+        onBlur={(e) =>
+          onBudgetCommit?.(categoryId, e.target.value, e.target, budget)
+        }
+      />
+
+      <div>
+        <div
+          className="relative h-3 w-full overflow-hidden rounded-full bg-muted"
+          data-testid="budget-overlay-track"
+        >
+          <div
+            data-testid="budget-overlay-fill"
+            className={`absolute left-0 top-0 h-full rounded-full transition-all ${fillColor}`}
+            style={{ width: fillPct }}
+          />
+        </div>
+        {budget != null && (
+          <div className="mt-1 text-xs text-muted-foreground tabular-nums">
+            {currency(actual)} of {currency(budget)}
+          </div>
+        )}
+      </div>
+
+      {showLabel ? (
+        <div className={`text-sm font-medium tabular-nums ${labelColor}`}>
+          {labelText}
+        </div>
+      ) : (
+        <div />
+      )}
+    </div>
+  );
+}

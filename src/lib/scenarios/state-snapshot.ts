@@ -96,4 +96,3 @@ export function captureRealState(inputs: RealStateInputs): RealState {
     taxBrackets,
   };
 }
-

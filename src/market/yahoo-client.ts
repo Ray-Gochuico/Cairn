@@ -35,6 +35,22 @@ interface ChartResponse {
 const YAHOO_BASE = 'https://query2.finance.yahoo.com/v8/finance/chart';
 
 /**
+ * Convert Yahoo's snake_case sector keys (`financial_services`,
+ * `consumer_cyclical`, `realestate`) into the Title Case labels used
+ * elsewhere in the app (`Financial Services`, `Consumer Cyclical`,
+ * `Real Estate`). The `realestate` key is the only one without an
+ * underscore separator, so it gets a one-off override; everything else
+ * splits on `_` and capitalises each word.
+ */
+function snakeToTitleSector(key: string): string {
+  if (key === 'realestate') return 'Real Estate';
+  return key
+    .split('_')
+    .map((part) => (part.length > 0 ? part[0].toUpperCase() + part.slice(1) : ''))
+    .join(' ');
+}
+
+/**
  * Wraps Yahoo Finance's public chart + quoteSummary endpoints.
  *
  * Why a hand-rolled client instead of the `yahoo-finance2` npm package:
@@ -152,6 +168,41 @@ export class YahooClient {
       })).filter((h: any) => h.symbol),
       asOf: new Date().toISOString().slice(0, 10),
     };
+  }
+
+  /**
+   * Returns the sector-weight breakdown for a fund/ETF ticker, sourced from
+   * the same `quoteSummary` endpoint with `modules=topHoldings`. Yahoo
+   * returns 11 GICS sectors in `topHoldings.sectorWeightings`, each as a
+   * single-key object like `{financial_services: {raw: 0.14}}`. We
+   * normalise the key to Title Case so labels match the assetProfile-driven
+   * sectors for individual equities (e.g. "Financial Services").
+   *
+   * For non-equity funds (pure bond ETFs, commodity ETFs) Yahoo emits the
+   * array with all-zero weights, or omits it entirely. We drop zero-weight
+   * rows so the downstream sector donut doesn't fan out into eleven empty
+   * wedges, and return `sectors: []` so callers can fall back to the
+   * asset-class pseudo-sector ("Fixed Income", "Commodities", etc.).
+   */
+  async fundSectorWeightings(ticker: string): Promise<{ sectors: { sector: string; weight: number }[]; asOf: string }> {
+    const data = await this.quoteSummary(ticker, ['topHoldings']);
+    // Same `as any` rationale as fundTopHoldings / fundProfile — quoteSummary
+    // returns an open-ended JSON blob; the typed boundary is this return type.
+    const result = (data as any).quoteSummary?.result?.[0]?.topHoldings;
+    const rawSectors = result?.sectorWeightings;
+    const asOf = new Date().toISOString().slice(0, 10);
+    if (!Array.isArray(rawSectors)) return { sectors: [], asOf };
+    const sectors: { sector: string; weight: number }[] = [];
+    for (const entry of rawSectors) {
+      if (!entry || typeof entry !== 'object') continue;
+      const keys = Object.keys(entry);
+      if (keys.length === 0) continue;
+      const key = keys[0];
+      const weight = (entry as any)[key]?.raw;
+      if (typeof weight !== 'number' || weight <= 0) continue;
+      sectors.push({ sector: snakeToTitleSector(key), weight });
+    }
+    return { sectors, asOf };
   }
 
   /**

@@ -40,12 +40,15 @@ const loans = [
 const baseTx = (id: number, date: string, amount: number): Transaction =>
   ({ id, householdId: 1, date, amount, merchant: 'X', merchantRaw: null, categoryId: 5, sourceAccountId: 2 } as unknown as Transaction);
 
+// Adjusted for the expense-sign fix: Transaction amounts use the schema
+// convention (amount > 0 = purchase/expense). Fixture amounts here used to
+// be negative before the sign correction landed in expense-baseline.ts.
 const inputs: RealStateInputs = {
   accounts,
   holdings,
   loans,
   loanPayments: [],
-  transactions: [baseTx(1, '2026-04-15', -1500)],
+  transactions: [baseTx(1, '2026-04-15', 1500)],
   household,
   persons: [],
   appSettings: { defaultInflation: 0.025, defaultReturnRate: 0.07 },
@@ -64,9 +67,9 @@ describe('captureRealState', () => {
 
   it('computes baselineMonthlyExpenses as 12-month rolling avg from transactions', () => {
     const s = captureRealState({ ...inputs, transactions: [
-      baseTx(1, '2026-04-15', -3000),
-      baseTx(2, '2026-03-15', -3500),
-      baseTx(3, '2026-02-15', -2800),
+      baseTx(1, '2026-04-15', 3000),
+      baseTx(2, '2026-03-15', 3500),
+      baseTx(3, '2026-02-15', 2800),
     ]});
     // Avg of (3000 + 3500 + 2800) / 3 = 3100 — only 3 months of data, so divide by months observed
     expect(s.baselineMonthlyExpenses).toBeCloseTo(3100, 0);

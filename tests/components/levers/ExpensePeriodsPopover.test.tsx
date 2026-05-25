@@ -79,7 +79,7 @@ describe('ExpensePeriodsPopover', () => {
     // Build 7 distinct months of outflows so we can prove the popover trims to 6.
     const months = ['2026-04', '2026-03', '2026-02', '2026-01', '2025-12', '2025-11', '2025-10'];
     for (const m of months) {
-      txs.push(tx(id++, `${m}-15`, -(1000 + id * 50)));
+      txs.push(tx(id++, `${m}-15`, 1000 + id * 50));
     }
     resetStores({ transactions: txs });
     render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
@@ -92,7 +92,7 @@ describe('ExpensePeriodsPopover', () => {
 
   it('clicking a month chip sets the baseline input value', async () => {
     const user = userEvent.setup();
-    const txs = [tx(1, '2026-04-15', -3000), tx(2, '2026-04-20', -1500)];
+    const txs = [tx(1, '2026-04-15', 3000), tx(2, '2026-04-20', 1500)];
     resetStores({ transactions: txs });
     render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
     const aprChip = screen.getByRole('button', { name: /set baseline to apr total/i });
@@ -103,7 +103,7 @@ describe('ExpensePeriodsPopover', () => {
 
   it('Apply persists the baseline via household.update when it has changed', async () => {
     const user = userEvent.setup();
-    const txs = [tx(1, '2026-04-15', -4500)];
+    const txs = [tx(1, '2026-04-15', 4500)];
     resetStores({ transactions: txs });
     render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
     const chip = screen.getByRole('button', { name: /set baseline to apr total/i });
