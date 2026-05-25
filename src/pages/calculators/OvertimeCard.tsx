@@ -49,7 +49,7 @@ function isEligible(person: Person): boolean {
 
 interface OvertimeCardProps {
   cardId?: string;
-  onHide?: () => void;
+  onHide?: (cardId: string) => void;
 }
 
 export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {

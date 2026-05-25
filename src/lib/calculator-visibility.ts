@@ -12,16 +12,25 @@ export function getHiddenCards(): string[] {
   }
 }
 
+export function persistHiddenCards(ids: readonly string[]): void {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(ids));
+  } catch {
+    // Storage may be unavailable (private mode / quota / SSR); the React
+    // state still updates so the UI behaves correctly within the session.
+  }
+}
+
 export function hideCard(id: string): void {
   const current = getHiddenCards();
   if (!current.includes(id)) {
-    localStorage.setItem(KEY, JSON.stringify([...current, id]));
+    persistHiddenCards([...current, id]);
   }
 }
 
 export function showCard(id: string): void {
   const current = getHiddenCards();
-  localStorage.setItem(KEY, JSON.stringify(current.filter((x) => x !== id)));
+  persistHiddenCards(current.filter((x) => x !== id));
 }
 
 export function isHidden(id: string, autoVisibilityResult: boolean): boolean {

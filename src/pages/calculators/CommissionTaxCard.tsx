@@ -18,7 +18,7 @@ function periodsPerYear(frequency: CommissionFrequency): number {
 
 interface CommissionTaxCardProps {
   cardId?: string;
-  onHide?: () => void;
+  onHide?: (cardId: string) => void;
 }
 
 export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {}) {

@@ -201,4 +201,74 @@ describe('Retirement401kWithdrawalCard', () => {
       screen.getByText(/set up your household profile/i),
     ).toBeInTheDocument();
   });
+
+  it('surfaces "Total taxes paid" and "Net to you" as the two summary lines', async () => {
+    primeStores();
+    render(
+      <MemoryRouter>
+        <Retirement401kWithdrawalCard />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText(/age at withdrawal/i), {
+      target: { value: '67' },
+    });
+    fireEvent.change(screen.getByLabelText(/withdrawal amount/i), {
+      target: { value: '50000' },
+    });
+
+    expect(await screen.findByText(/^total taxes paid$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^net to you$/i)).toBeInTheDocument();
+    // Legacy ambiguous labels are gone.
+    expect(screen.queryByText(/total tax on withdrawal/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^net to user$/i)).not.toBeInTheDocument();
+  });
+
+  it('renders "Total taxes paid" and "Net to you" rows with equal-weight styling', async () => {
+    primeStores();
+    render(
+      <MemoryRouter>
+        <Retirement401kWithdrawalCard />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText(/age at withdrawal/i), {
+      target: { value: '67' },
+    });
+    fireEvent.change(screen.getByLabelText(/withdrawal amount/i), {
+      target: { value: '50000' },
+    });
+
+    const taxLabel = await screen.findByText(/^total taxes paid$/i);
+    const netLabel = screen.getByText(/^net to you$/i);
+    const taxRow = taxLabel.closest('[data-summary-row]') as HTMLElement;
+    const netRow = netLabel.closest('[data-summary-row]') as HTMLElement;
+    expect(taxRow).not.toBeNull();
+    expect(netRow).not.toBeNull();
+    // Equal visual weight: same className signature on both summary rows so
+    // neither one reads as "the answer" and the other as a footnote.
+    expect(taxRow.className).toBe(netRow.className);
+  });
+
+  it('uses Net-to-you as the card headline (not take-home of the full salary)', async () => {
+    primeStores();
+    render(
+      <MemoryRouter>
+        <Retirement401kWithdrawalCard />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText(/age at withdrawal/i), {
+      target: { value: '67' },
+    });
+    fireEvent.change(screen.getByLabelText(/withdrawal amount/i), {
+      target: { value: '50000' },
+    });
+
+    const headline = await screen.findByTestId('401k-withdrawal-net');
+    const netRow = screen.getByText(/^net to you$/i).closest('[data-summary-row]') as HTMLElement;
+    // Headline value matches the Net-to-you line value so the meaning is
+    // unambiguous: the big number is "what you keep", not "what tax you owe".
+    expect(within(netRow).getByText(headline.textContent ?? '_MISMATCH_')).toBeInTheDocument();
+  });
 });

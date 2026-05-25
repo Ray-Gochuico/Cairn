@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 
 interface Retirement401kWithdrawalCardProps {
   cardId?: string;
-  onHide?: () => void;
+  onHide?: (cardId: string) => void;
 }
 
 function yearsBetween(dobISO: string, todayISO: string): number {
@@ -255,17 +255,29 @@ export function Retirement401kWithdrawalCard({
               {formatCurrency(breakdown.earlyWithdrawalPenalty)}
             </span>
           </div>
-          <div className="flex justify-between font-medium border-t pt-1">
-            <span>Total tax on withdrawal</span>
-            <span className="tabular-nums">
-              {formatCurrency(breakdown.totalTaxOnWithdrawal)}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span>Net to user</span>
-            <span className="tabular-nums font-medium">
-              {formatCurrency(breakdown.netToUser)}
-            </span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 border-t pt-2 mt-1">
+            <div
+              data-summary-row="taxes-paid"
+              className="rounded-md border bg-muted/30 px-3 py-2"
+            >
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                Total taxes paid
+              </div>
+              <div className="text-lg font-semibold tabular-nums">
+                {formatCurrency(breakdown.totalTaxOnWithdrawal)}
+              </div>
+            </div>
+            <div
+              data-summary-row="net-to-you"
+              className="rounded-md border bg-muted/30 px-3 py-2"
+            >
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                Net to you
+              </div>
+              <div className="text-lg font-semibold tabular-nums">
+                {formatCurrency(breakdown.netToUser)}
+              </div>
+            </div>
           </div>
           <div className="flex justify-between text-xs text-muted-foreground">
             <span>Effective rate on this withdrawal</span>

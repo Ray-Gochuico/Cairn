@@ -11,7 +11,7 @@ type Strategy = 'none' | 'snowball' | 'avalanche';
 
 interface DebtPayoffCardProps {
   cardId?: string;
-  onHide?: () => void;
+  onHide?: (cardId: string) => void;
 }
 
 interface LoanProjection {
