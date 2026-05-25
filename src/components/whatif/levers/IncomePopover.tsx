@@ -240,7 +240,7 @@ export default function IncomePopover({ open, onOpenChange }: Props) {
         </div>
 
         <div className="pt-3 border-t" data-testid="income-trajectory-preview">
-          <div className="text-xs font-medium mb-1 text-muted-foreground">Salary trajectory ({trajectory[0]?.year} – {trajectory.at(-1)?.year})</div>
+          <div className="text-xs font-medium mb-1 text-muted-foreground">Salary trajectory ({trajectory[0]?.year} – {trajectory[trajectory.length - 1]?.year})</div>
           <ul className="grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-1 text-xs">
             {trajectory.map((p) => (
               <li key={p.year} className="tabular-nums">

@@ -40,8 +40,8 @@ export function previewExtraLoanPayment(
       extraPayment: extraMonthly,
     });
     return {
-      baselinePayoffMonthISO: monthOf(baseline.schedule.at(-1)!.paymentDate),
-      payoffMonthISO:        monthOf(accelerated.schedule.at(-1)!.paymentDate),
+      baselinePayoffMonthISO: monthOf(baseline.schedule[baseline.schedule.length - 1].paymentDate),
+      payoffMonthISO:        monthOf(accelerated.schedule[accelerated.schedule.length - 1].paymentDate),
       monthsSaved: baseline.schedule.length - accelerated.schedule.length,
       interestSaved: baseline.totalInterest - accelerated.totalInterest,
     };
@@ -70,8 +70,8 @@ export function previewExtraLoanPayment(
   }
 
   return {
-    baselinePayoffMonthISO: monthOf(baseline.schedule.at(-1)!.paymentDate),
-    payoffMonthISO: sched.at(-1) ?? monthOf(baseline.schedule.at(-1)!.paymentDate),
+    baselinePayoffMonthISO: monthOf(baseline.schedule[baseline.schedule.length - 1].paymentDate),
+    payoffMonthISO: sched.length > 0 ? sched[sched.length - 1] : monthOf(baseline.schedule[baseline.schedule.length - 1].paymentDate),
     monthsSaved: Math.max(0, baseline.schedule.length - sched.length),
     interestSaved: baseline.totalInterest - interestPaid,
   };
