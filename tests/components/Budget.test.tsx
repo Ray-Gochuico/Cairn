@@ -60,7 +60,7 @@ describe('Budget page', () => {
     });
   });
 
-  it('shows the budget-vs-actual chart once a budget is set', async () => {
+  it('shows the spending summary header with $actual of $budget once a budget is set', async () => {
     // Pre-set a budget on Groceries (id 33) and add an actual transaction
     const repo = new CategoriesRepo(db);
     await repo.update(33, { monthlyBudget: 600 });
@@ -75,8 +75,13 @@ describe('Budget page', () => {
 
     render(<MemoryRouter><Budget /></MemoryRouter>);
     await waitFor(() => {
-      expect(screen.getByText(/budget vs actual/i)).toBeInTheDocument();
+      expect(screen.getByText(/^spending$/i)).toBeInTheDocument();
     });
+    // Total = $120 of $600 — appears in the Spending header, parent-group
+    // subtotal, and the Groceries row caption since it's the only budgeted row.
+    expect(screen.getAllByText('$120 of $600').length).toBeGreaterThan(0);
+    // The per-row "$X left" badge for under-budget Groceries ($480 remaining)
+    expect(screen.getByText('$480 left')).toBeInTheDocument();
   });
 
   it('reverts a rejected negative budget input without persisting it', async () => {
