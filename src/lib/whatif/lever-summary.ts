@@ -62,6 +62,13 @@ export function summarizeLevers(payload: LeverPayload, ctx: SummarizeContext): s
   const totalEvents = payload.income.perPerson.reduce((acc, p) => acc + p.events.length, 0);
   if (totalEvents > 0) parts.push(`Income events: ${totalEvents}`);
 
+  for (const seg of payload.contributions) {
+    const startYear = Math.floor(seg.startMonth / 12) + 1;
+    const endYear = seg.endMonth === null ? '∞' : Math.floor(seg.endMonth / 12) + 1;
+    const window = `Y${startYear}-${endYear}`;
+    parts.push(`Contribute ${formatMoney(seg.monthlyAmount)}/mo (${window})`);
+  }
+
   if (parts.length === 0) return 'No overrides';
   return parts.join('; ');
 }

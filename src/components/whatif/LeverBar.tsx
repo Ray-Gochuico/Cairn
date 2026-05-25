@@ -6,8 +6,9 @@ import LumpSumsPopover from '@/components/whatif/levers/LumpSumsPopover';
 import ExpensePeriodsPopover from '@/components/whatif/levers/ExpensePeriodsPopover';
 import ReturnSchedulePopover from '@/components/whatif/levers/ReturnSchedulePopover';
 import IncomePopover from '@/components/whatif/levers/IncomePopover';
+import ContributionsPopover from '@/components/whatif/levers/ContributionsPopover';
 
-type LeverKey = 'loans' | 'lumpSums' | 'expenses' | 'returns' | 'income';
+type LeverKey = 'loans' | 'lumpSums' | 'expenses' | 'returns' | 'income' | 'contributions';
 
 export default function LeverBar() {
   const scenarios = useScenariosStore((s) => s.scenarios);
@@ -29,6 +30,7 @@ export default function LeverBar() {
     expenses: lp.expensePeriods.length,
     returns: Object.keys(lp.returns.overrides).length,
     income: lp.income.perPerson.reduce((acc, p) => acc + p.events.length, 0),
+    contributions: lp.contributions.length,
   };
 
   const Pill = ({ k, label }: { k: LeverKey; label: string }) => (
@@ -45,11 +47,12 @@ export default function LeverBar() {
   return (
     <>
       <div className="flex flex-wrap items-center gap-2">
-        <Pill k="loans"    label="Loans" />
-        <Pill k="lumpSums" label="Lump sums" />
-        <Pill k="expenses" label="Expenses" />
-        <Pill k="returns"  label="Returns" />
-        <Pill k="income"   label="Income" />
+        <Pill k="loans"         label="Loans" />
+        <Pill k="lumpSums"      label="Lump sums" />
+        <Pill k="expenses"      label="Expenses" />
+        <Pill k="returns"       label="Returns" />
+        <Pill k="income"        label="Income" />
+        <Pill k="contributions" label="Contributions" />
       </div>
 
       <ExtraLoanPaymentsPopover
@@ -71,6 +74,10 @@ export default function LeverBar() {
       <IncomePopover
         open={openLever === 'income'}
         onOpenChange={(o) => setOpenLever(o ? 'income' : null)}
+      />
+      <ContributionsPopover
+        open={openLever === 'contributions'}
+        onOpenChange={(o) => setOpenLever(o ? 'contributions' : null)}
       />
     </>
   );
