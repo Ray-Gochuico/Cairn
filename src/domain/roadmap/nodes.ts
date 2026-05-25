@@ -1,4 +1,4 @@
-import type { NodeId, NodeResult, RoadmapContext, RoadmapNode } from '@/types/roadmap';
+import type { NodeId, RoadmapNode } from '@/types/roadmap';
 import {
   evaluateSmallEmergencyFund,
   evaluateEmergencyFund3Months,
@@ -7,6 +7,7 @@ import {
 import {
   evaluateHighInterestDebt,
   evaluateModerateInterestDebt,
+  evaluateModerateDebtQ,
   evaluateLowInterestDebt,
 } from './rules/debtClassification';
 import {
@@ -15,26 +16,61 @@ import {
   evaluateRothIra,
   evaluateTraditionalIra,
 } from './rules/iraBranch';
+import {
+  evaluateCreateBudget,
+  evaluateSection0Info,
+} from './rules/budgetEssentials';
+import {
+  evaluateIps,
+  evaluateNonEssentials,
+  evaluateTrackExpenses,
+  evaluateEmployerMatchQ,
+  evaluateEmployerMatch,
+  evaluateJobStability,
+} from './rules/section1';
+import {
+  evaluatePickInsurance,
+  evaluateHdhpQ,
+  evaluateContributeHsa,
+  evaluateSaveReceipts,
+  evaluateHsaFeesQ,
+  evaluateRolloverHsa,
+  evaluateKeepEmployerHsa,
+} from './rules/hsa';
+import {
+  evaluateEarnedIncomeQ,
+  evaluateContributeIra,
+  evaluateExpectHigherIncomeQ,
+  evaluateSolo401k,
+  evaluateAfterTax401kQ,
+  evaluateMegaBackdoor,
+} from './rules/section4Misc';
+import {
+  evaluateEsppQ,
+  evaluateEsppAction,
+  evaluateLargePurchasesQ,
+  evaluateSaveShortTerm,
+  evaluateEmploymentTypeQ,
+  evaluateMax401k,
+  evaluatePrioritizeIraVs401k,
+  evaluate529,
+  evaluateTaxableBrokerage,
+  evaluateTaxLossHarvest,
+  evaluateCharitableDaf,
+  evaluateRebalance,
+} from './rules/sections5to6';
 
 /**
  * Declarative registry of every Roadmap chart node, derived from
- * FinFlowChartv43.md sections 0–6. Sub-Plan B ships the skeleton: all
- * ~49 IDs registered with stub evaluators that return an 'info' status
- * + "not yet implemented" evidence. Three rules (emergencyFund,
- * debtClassification, iraBranch) replace specific stubs in Tasks 7-9.
- * Sub-Plan C fills in the rest incrementally as each rule is needed.
+ * FinFlowChartv43.md sections 0–6. Sub-Plan B shipped the skeleton +
+ * three rule files (emergencyFund, debtClassification, iraBranch);
+ * Sub-Plan C wires the remaining ~30 evaluators across budgetEssentials,
+ * section1, hsa, section4Misc, and sections5to6.
  *
  * Node IDs use the pattern `s<section>_<short_name>`. They are stable
  * identifiers — never renamed once shipped, because they're the foreign
  * key in roadmap_node_overrides.
  */
-
-// Stub evaluator factory — every node starts here, three get replaced.
-const stub = (id: NodeId) =>
-  (_ctx: RoadmapContext): NodeResult => ({
-    status: 'info',
-    evidence: `Evaluator for "${id}" not yet implemented`,
-  });
 
 export const NODES: ReadonlyArray<RoadmapNode> = [
   // ──────────────────────────────────────────────────────────────────
@@ -47,7 +83,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Create a budget',
     body: 'Knowing where your money goes is the foundation. Budgeting shows your income less your expenses.',
     prerequisites: [],
-    evaluate: stub('s0_create_budget'),
+    evaluate: evaluateCreateBudget,
   },
   {
     id: 's0_pay_rent',
@@ -56,7 +92,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Pay rent / mortgage',
     body: 'Include renters or homeowners insurance if required.',
     prerequisites: ['s0_create_budget'],
-    evaluate: stub('s0_pay_rent'),
+    evaluate: evaluateSection0Info('s0_pay_rent'),
   },
   {
     id: 's0_buy_food',
@@ -65,7 +101,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Buy food / groceries',
     body: 'Depending on your situation you may want to prioritize utilities before this step.',
     prerequisites: ['s0_pay_rent'],
-    evaluate: stub('s0_buy_food'),
+    evaluate: evaluateSection0Info('s0_buy_food'),
   },
   {
     id: 's0_pay_essentials',
@@ -74,7 +110,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Pay essential items',
     body: 'Utilities, power, water, heat, toiletries, etc.',
     prerequisites: ['s0_buy_food'],
-    evaluate: stub('s0_pay_essentials'),
+    evaluate: evaluateSection0Info('s0_pay_essentials'),
   },
   {
     id: 's0_income_expenses',
@@ -83,7 +119,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Pay income-earning expenses',
     body: 'Transportation, possibly internet/phone — anything required to keep earning income.',
     prerequisites: ['s0_pay_essentials'],
-    evaluate: stub('s0_income_expenses'),
+    evaluate: evaluateSection0Info('s0_income_expenses'),
   },
   {
     id: 's0_pay_health_care',
@@ -92,7 +128,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Pay health care',
     body: 'Health insurance and health care expenses.',
     prerequisites: ['s0_income_expenses'],
-    evaluate: stub('s0_pay_health_care'),
+    evaluate: evaluateSection0Info('s0_pay_health_care'),
   },
   {
     id: 's0_min_debt_payments',
@@ -101,7 +137,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Make minimum payments on all debts and loans',
     body: 'Student loans, credit cards, etc. Avoid delinquency before optimizing anything else.',
     prerequisites: ['s0_pay_health_care'],
-    evaluate: stub('s0_min_debt_payments'),
+    evaluate: evaluateSection0Info('s0_min_debt_payments'),
   },
 
   // ──────────────────────────────────────────────────────────────────
@@ -123,7 +159,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Evaluate your non-essentials',
     body: 'Reduce expenses where you can; otherwise pay non-essential bills in full (cable, internet, phone, etc.).',
     prerequisites: ['s1_emergency_small'],
-    evaluate: stub('s1_evaluate_non_essentials'),
+    evaluate: evaluateNonEssentials,
   },
   {
     id: 's1_track_expenses',
@@ -132,7 +168,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Track all your expenses',
     body: 'This shows where money is going and where to cut.',
     prerequisites: ['s1_evaluate_non_essentials'],
-    evaluate: stub('s1_track_expenses'),
+    evaluate: evaluateTrackExpenses,
   },
   {
     id: 's1_consider_ips',
@@ -141,7 +177,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Consider writing an Investment Policy Statement (IPS)',
     body: 'An IPS records your investing rules in advance so you do not improvise during market stress.',
     prerequisites: ['s1_track_expenses'],
-    evaluate: stub('s1_consider_ips'),
+    evaluate: evaluateIps,
   },
   {
     id: 's1_employer_match_q',
@@ -150,7 +186,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Does your employer offer a retirement account with a match?',
     body: 'Yes → contribute exactly the amount needed to capture the full match. No → skip ahead.',
     prerequisites: ['s1_consider_ips'],
-    evaluate: stub('s1_employer_match_q'),
+    evaluate: evaluateEmployerMatchQ,
   },
   {
     id: 's1_employer_match',
@@ -159,7 +195,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Capture the full employer match',
     body: 'Contribute exactly the amount needed to capture the full match — and nothing more at this stage.',
     prerequisites: ['s1_employer_match_q'],
-    evaluate: stub('s1_employer_match'),
+    evaluate: evaluateEmployerMatch,
   },
   {
     id: 's1_high_interest_debt',
@@ -177,7 +213,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Stable or unstable job prospects?',
     body: 'Stable → grow EF to 3 months. Unstable → grow to 6–12 months.',
     prerequisites: ['s1_high_interest_debt'],
-    evaluate: stub('s1_job_stability_q'),
+    evaluate: evaluateJobStability,
   },
   {
     id: 's1_emergency_3mo',
@@ -208,7 +244,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Do you have any moderate-interest debt?',
     body: 'Defined as any loan with an annual rate between 5% and 8% (default; adjustable).',
     prerequisites: ['s1_emergency_3mo', 's1_emergency_6_12mo'],
-    evaluate: stub('s2_moderate_debt_q'),
+    evaluate: evaluateModerateDebtQ,
   },
   {
     id: 's2_moderate_debt_action',
@@ -230,7 +266,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Pick the right medical insurance for your needs',
     body: 'PPO / POS / HMO / EPO each have different premiums, deductibles, and copays. If under 26 and parent plan eligible, compare that too.',
     prerequisites: ['s2_moderate_debt_action'],
-    evaluate: stub('s3_pick_medical_insurance'),
+    evaluate: evaluatePickInsurance,
   },
   {
     id: 's3_hdhp_q',
@@ -239,7 +275,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Do you have an HSA-qualified HDHP?',
     body: 'No → skip to Section 4. Yes → continue with HSA contributions.',
     prerequisites: ['s3_pick_medical_insurance'],
-    evaluate: stub('s3_hdhp_q'),
+    evaluate: evaluateHdhpQ,
   },
   {
     id: 's3_contribute_hsa',
@@ -248,7 +284,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Contribute to an HSA',
     body: 'Contributing through your employer makes it FICA-deductible too. HDHP+HSA is generally recommended if you are relatively healthy.',
     prerequisites: ['s3_hdhp_q'],
-    evaluate: stub('s3_contribute_hsa'),
+    evaluate: evaluateContributeHsa,
   },
   {
     id: 's3_save_receipts',
@@ -257,7 +293,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Keep proof of purchase for qualified medical expenses',
     body: 'Build a receipts system — HSAs let you reimburse yourself years later from those receipts.',
     prerequisites: ['s3_contribute_hsa'],
-    evaluate: stub('s3_save_receipts'),
+    evaluate: evaluateSaveReceipts,
   },
   {
     id: 's3_hsa_fees_q',
@@ -266,7 +302,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Does your employer HSA have high fees?',
     body: 'Yes → roll the balance to a lower-fee HSA brokerage if available. No → keep contributing there.',
     prerequisites: ['s3_save_receipts'],
-    evaluate: stub('s3_hsa_fees_q'),
+    evaluate: evaluateHsaFeesQ,
   },
   {
     id: 's3_rollover_hsa',
@@ -275,7 +311,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Roll HSA balance to a lower-fee HSA brokerage',
     body: 'Most HSA custodians allow trustee-to-trustee transfers without tax consequences.',
     prerequisites: ['s3_hsa_fees_q'],
-    evaluate: stub('s3_rollover_hsa'),
+    evaluate: evaluateRolloverHsa,
   },
   {
     id: 's3_keep_employer_hsa',
@@ -284,7 +320,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Keep contributing to employer HSA + enroll in investing',
     body: 'Once you hit the minimum cash threshold, switch additional contributions into the investing portion.',
     prerequisites: ['s3_hsa_fees_q'],
-    evaluate: stub('s3_keep_employer_hsa'),
+    evaluate: evaluateKeepEmployerHsa,
   },
 
   // ──────────────────────────────────────────────────────────────────
@@ -297,7 +333,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Do you have earned income?',
     body: 'Required for any IRA contribution. Before April 15, you can also still fund last year.',
     prerequisites: ['s3_rollover_hsa', 's3_keep_employer_hsa'],
-    evaluate: stub('s4_earned_income_q'),
+    evaluate: evaluateEarnedIncomeQ,
   },
   {
     id: 's4_contribute_ira',
@@ -306,7 +342,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Contribute to an IRA',
     body: 'Then calculate your Modified Adjusted Gross Income (MAGI) to pick the right branch.',
     prerequisites: ['s4_earned_income_q'],
-    evaluate: stub('s4_contribute_ira'),
+    evaluate: evaluateContributeIra,
   },
   {
     id: 's4_ira_band',
@@ -342,7 +378,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Do you expect future income to exceed the IRS threshold?',
     body: 'Yes → consider Roth (avoid pro-rata pain later). No → max traditional for current deduction.',
     prerequisites: ['s4_ira_band'],
-    evaluate: stub('s4_expect_higher_income_q'),
+    evaluate: evaluateExpectHigherIncomeQ,
   },
   {
     id: 's4_traditional_ira',
@@ -360,7 +396,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Consider rolling tIRA → solo-401(k) to sidestep pro-rata',
     body: 'If you still go with a traditional IRA, opening a solo-401(k) and rolling the tIRA in avoids future backdoor pro-rata pain.',
     prerequisites: ['s4_traditional_ira'],
-    evaluate: stub('s4_solo_401k'),
+    evaluate: evaluateSolo401k,
   },
 
   // ──────────────────────────────────────────────────────────────────
@@ -373,7 +409,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Does your employer offer an ESPP?',
     body: 'Yes → evaluate participating. A common good case: 15% discount + immediate vesting — buy and sell immediately.',
     prerequisites: ['s4_backdoor_roth', 's4_roth_ira', 's4_traditional_ira'],
-    evaluate: stub('s5_espp_q'),
+    evaluate: evaluateEsppQ,
   },
   {
     id: 's5_espp_action',
@@ -382,7 +418,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Participate in ESPP',
     body: 'Default play: buy at the discounted price, sell immediately to lock the spread, redirect proceeds back into your plan.',
     prerequisites: ['s5_espp_q'],
-    evaluate: stub('s5_espp_action'),
+    evaluate: evaluateEsppAction,
   },
   {
     id: 's5_large_purchases_q',
@@ -391,7 +427,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Any large required purchases in the next 3–5 years?',
     body: 'College, certifications, a car needed for work, a future house, etc.',
     prerequisites: ['s5_espp_q'],
-    evaluate: stub('s5_large_purchases_q'),
+    evaluate: evaluateLargePurchasesQ,
   },
   {
     id: 's5_save_short_term',
@@ -400,7 +436,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Save the upcoming-purchase amount in HYSA / 529 / ESA',
     body: 'For educational expenses, prefer a 529 or Coverdell ESA. SECURE 2.0 also permits a 529 → Roth IRA rollover (lifetime $35k cap).',
     prerequisites: ['s5_large_purchases_q'],
-    evaluate: stub('s5_save_short_term'),
+    evaluate: evaluateSaveShortTerm,
   },
   {
     id: 's5_employment_type_q',
@@ -409,7 +445,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'W-2 employee or self-employed?',
     body: 'W-2 → finish maxing employer 401(k). Self-employed → evaluate maxing a solo-401(k).',
     prerequisites: ['s5_large_purchases_q'],
-    evaluate: stub('s5_employment_type_q'),
+    evaluate: evaluateEmploymentTypeQ,
   },
   {
     id: 's5_max_401k',
@@ -418,7 +454,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Finish maxing your employer plan (401(k) or solo-401(k))',
     body: 'W-2 → finish maxing the employer 401(k). Self-employed → max a solo-401(k). Many on the FIRE path prefer pre-tax, then convert/withdraw in lower-bracket years.',
     prerequisites: ['s5_employment_type_q'],
-    evaluate: stub('s5_max_401k'),
+    evaluate: evaluateMax401k,
   },
   {
     id: 's5_prioritize_ira_vs_401k',
@@ -427,7 +463,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'IRA vs. 401(k) priority (when you cannot max both)',
     body: 'Always capture the employer match first. IRAs offer more flexibility; 401(k)s lower MAGI; 457(b)s have no 10% early-withdrawal penalty.',
     prerequisites: ['s5_max_401k'],
-    evaluate: stub('s5_prioritize_ira_vs_401k'),
+    evaluate: evaluatePrioritizeIraVs401k,
   },
 
   // ──────────────────────────────────────────────────────────────────
@@ -440,7 +476,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Does your 401(k) allow after-tax + in-plan Roth rollover?',
     body: 'Yes → execute the "mega backdoor Roth" up to the $66k combined limit.',
     prerequisites: ['s5_prioritize_ira_vs_401k'],
-    evaluate: stub('s6_after_tax_401k_q'),
+    evaluate: evaluateAfterTax401kQ,
   },
   {
     id: 's6_mega_backdoor',
@@ -449,7 +485,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Max after-tax 401(k) and roll into Roth (mega backdoor)',
     body: 'Distinct from the regular backdoor Roth. Availability depends on plan documents.',
     prerequisites: ['s6_after_tax_401k_q'],
-    evaluate: stub('s6_mega_backdoor'),
+    evaluate: evaluateMegaBackdoor,
   },
   {
     id: 's6_529_action',
@@ -458,7 +494,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Evaluate 529 / ESA for future generations',
     body: "Check your state's 529 for state-tax deductions.",
     prerequisites: ['s6_after_tax_401k_q'],
-    evaluate: stub('s6_529_action'),
+    evaluate: evaluate529,
   },
   {
     id: 's6_taxable_brokerage',
@@ -467,7 +503,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Contribute to a taxable brokerage (or pay extra mortgage principal)',
     body: 'A taxable account has zero contribution cap and flexible access; extra mortgage principal compounds via avoided interest.',
     prerequisites: ['s6_529_action'],
-    evaluate: stub('s6_taxable_brokerage'),
+    evaluate: evaluateTaxableBrokerage,
   },
   {
     id: 's6_tax_loss_harvest',
@@ -476,7 +512,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Evaluate tax-loss harvesting',
     body: 'Watch the wash-sale rule (30 days across all your accounts, including IRAs).',
     prerequisites: ['s6_taxable_brokerage'],
-    evaluate: stub('s6_tax_loss_harvest'),
+    evaluate: evaluateTaxLossHarvest,
   },
   {
     id: 's6_low_interest_debt',
@@ -494,7 +530,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Consider a donor-advised fund (DAF) for charitable giving',
     body: 'Front-loads multiple years of deductions into a single tax year via appreciated-stock contributions.',
     prerequisites: ['s6_low_interest_debt'],
-    evaluate: stub('s6_charitable_daf'),
+    evaluate: evaluateCharitableDaf,
   },
   {
     id: 's6_rebalance',
@@ -503,7 +539,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Rebalance your portfolio to your IPS regularly',
     body: 'Minimize fees and avoid generating taxable events when possible (e.g. rebalance via new contributions, not sells).',
     prerequisites: ['s6_charitable_daf'],
-    evaluate: stub('s6_rebalance'),
+    evaluate: evaluateRebalance,
   },
 ];
 

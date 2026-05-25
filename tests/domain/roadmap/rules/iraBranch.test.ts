@@ -122,6 +122,7 @@ function makeContext(opts: {
     loans: [],
     contributions: opts.contributions ?? [],
     snapshots: [],
+    transactions: [],
     overrides: new Map(),
     thresholds: { low: 5, high: 8 },
     taxYear: 2026,

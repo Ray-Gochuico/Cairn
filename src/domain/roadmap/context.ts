@@ -5,6 +5,7 @@ import { useAccountsStore } from '@/stores/accounts-store';
 import { useLoansStore } from '@/stores/loans-store';
 import { useContributionsStore } from '@/stores/contributions-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
+import { useTransactionsStore } from '@/stores/transactions-store';
 import { useRoadmapOverridesStore } from '@/stores/roadmap-overrides-store';
 import type { RoadmapContext } from '@/types/roadmap';
 import { getInterestThresholds } from './thresholds';
@@ -27,6 +28,7 @@ export function useRoadmap(): RoadmapContext | null {
   const loans = useLoansStore((s) => s.loans);
   const contributions = useContributionsStore((s) => s.contributions);
   const snapshots = useSnapshotsStore((s) => s.snapshots);
+  const transactions = useTransactionsStore((s) => s.transactions);
   const overrides = useRoadmapOverridesStore((s) => s.overridesByNodeId);
 
   return useMemo(() => {
@@ -38,10 +40,11 @@ export function useRoadmap(): RoadmapContext | null {
       loans,
       contributions,
       snapshots,
+      transactions,
       overrides,
       thresholds: getInterestThresholds(household),
       taxYear: 2026 as const,
       today: new Date(),
     };
-  }, [household, persons, accounts, loans, contributions, snapshots, overrides]);
+  }, [household, persons, accounts, loans, contributions, snapshots, transactions, overrides]);
 }

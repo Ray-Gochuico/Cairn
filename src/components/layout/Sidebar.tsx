@@ -39,6 +39,7 @@ export const DEFAULT_SECTIONS: NavSection[] = [
     label: 'Planning',
     items: [
       { to: '/goals', label: 'Goals', icon: '🎯' },
+      { to: '/roadmap', label: 'Roadmap', icon: '🧭' },
       { to: '/calculators', label: 'Calculators', icon: '🧮' },
       { to: '/what-if', label: 'What-If', icon: '🔀' },
     ],

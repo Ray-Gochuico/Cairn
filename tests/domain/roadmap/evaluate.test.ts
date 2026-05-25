@@ -41,6 +41,7 @@ function makeContext(patch: Partial<RoadmapContext> = {}): RoadmapContext {
     loans: [],
     contributions: [],
     snapshots: [],
+    transactions: [],
     overrides: new Map(),
     thresholds: { low: 5, high: 8 },
     taxYear: 2026,
@@ -58,28 +59,14 @@ describe('evaluate', () => {
     }
   });
 
-  it('returns stub results for nodes whose real rule has not yet shipped', () => {
-    // Tasks 7-9 replace a handful of stubs with real rules; those
-    // produce non-info statuses against a realistic context. This test
-    // confirms the remaining stubs still flow through with their "not
-    // yet implemented" sentinel evidence.
-    const realRuleNodeIds = new Set([
-      's1_emergency_small',
-      's1_emergency_3mo',
-      's1_emergency_6_12mo',
-      's1_high_interest_debt',
-      's2_moderate_debt_action',
-      's6_low_interest_debt',
-      's4_ira_band',
-      's4_backdoor_roth',
-      's4_roth_ira',
-      's4_traditional_ira',
-    ]);
+  it('no result carries the stub sentinel "not yet implemented" evidence', () => {
+    // Sub-Plan C wired every node to a real evaluator. This guard
+    // asserts the registry no longer falls through to a stub on a
+    // realistic context. Status content is exercised by per-rule
+    // tests; we only check the sentinel here.
     const results = evaluate(makeContext());
     for (const [id, r] of results) {
-      if (realRuleNodeIds.has(id)) continue;
-      expect(r.status, id).toBe('info');
-      expect(r.evidence, id).toMatch(/not yet implemented/);
+      expect(r.evidence ?? '', id).not.toMatch(/not yet implemented/);
     }
   });
 
@@ -92,37 +79,40 @@ describe('evaluate', () => {
   });
 
   it('applies an override status and stashes the auto-result on autoResult', () => {
+    // Override s4_solo_401k, an info-only chart reference, and verify
+    // the engine surfaces both the override and the real auto-result
+    // ("info" + the chart's note). We assert the existence of the
+    // side channel + the status flip, not the exact evidence string,
+    // so the test stays loose against future copy edits.
     const overrides = new Map<string, RoadmapNodeOverride>([
-      ['s0_create_budget', {
+      ['s4_solo_401k', {
         id: 1,
         householdId: 1,
-        nodeId: 's0_create_budget',
+        nodeId: 's4_solo_401k',
         overrideStatus: 'done',
-        note: 'I track in a different app',
+        note: 'Rolled it last quarter',
         setAt: '2026-05-23T00:00:00Z',
       }],
     ]);
     const results = evaluate(makeContext({ overrides }));
-    const r = results.get('s0_create_budget')!;
+    const r = results.get('s4_solo_401k')!;
     expect(r.status).toBe('done');
     expect(r.autoResult).toBeDefined();
     expect(r.autoResult!.status).toBe('info');
-    expect(r.autoResult!.evidence).toMatch(/not yet implemented/);
   });
 
   it('does not propagate overrides to dependent nodes', () => {
-    // Override s0_create_budget to 'done' — s0_pay_rent (its child)
-    // should still see whatever its own evaluator says (here: the stub
-    // 'info', not 'active' just because the parent is "done").
+    // Override an upstream node — its dependent should still reflect
+    // its own evaluator's output, not be coerced by the parent override.
     const overrides = new Map<string, RoadmapNodeOverride>([
-      ['s0_create_budget', {
-        id: 1, householdId: 1, nodeId: 's0_create_budget',
+      ['s4_solo_401k', {
+        id: 1, householdId: 1, nodeId: 's4_solo_401k',
         overrideStatus: 'done', note: null, setAt: '2026-05-23T00:00:00Z',
       }],
     ]);
     const results = evaluate(makeContext({ overrides }));
-    expect(results.get('s0_create_budget')?.status).toBe('done');
-    expect(results.get('s0_pay_rent')?.status).toBe('info');
+    expect(results.get('s4_solo_401k')?.status).toBe('done');
+    expect(results.get('s5_espp_q')?.status).toBe('info');
   });
 
   it('ignores overrides for unknown node ids', () => {
