@@ -1,5 +1,6 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { PencilIcon, CheckIcon, PlusIcon } from 'lucide-react';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useLoansStore } from '@/stores/loans-store';
@@ -30,6 +31,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import MetricCard from '@/components/cards/MetricCard';
 import { ConcentrationCard } from '@/components/cards/ConcentrationCard';
 import { NextMoveCard } from '@/components/dashboard/NextMoveCard';
+import { EditablePill } from '@/components/dashboard/EditablePill';
+import { usePillLayout } from '@/components/dashboard/use-pill-layout';
+import { SpendingWidget } from '@/components/dashboard/SpendingWidget';
 import type {
   Account,
   AccountSnapshot,
@@ -521,30 +525,21 @@ export default function Dashboard() {
     year: 'numeric',
   });
 
-  return (
-    <div className="p-6 max-w-6xl space-y-6">
-      <div>
-        <h1 className="text-3xl font-semibold">
-          {household?.name ? `Hi, ${household.name}` : 'Dashboard'}
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">{todayLabel}</p>
-      </div>
+  // Build the per-pill descriptors that the layout hook orders + filters.
+  // Putting each pill's props on a single object keeps the render loop a
+  // straightforward map without losing strong typing on the MetricCardProps.
+  type PillId =
+    | 'net-worth'
+    | 'total-debt'
+    | 'liquid-investments'
+    | 'awaiting-reimbursement'
+    | 'spending-vs-budget';
 
-      <NextMoveCard />
-
-      {isInputPending && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-4 flex flex-wrap items-center justify-between gap-4">
-          <div className="min-w-0">
-            <div className="font-medium text-amber-900">Monthly input pending</div>
-            <div className="text-sm text-amber-900/80">
-              Confirm this month's account balances and loan payments.
-            </div>
-          </div>
-          <Button onClick={() => navigate('/monthly')}>Open</Button>
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+  const pillDefs: Array<{ id: PillId; label: string; render: () => ReactElement }> = [
+    {
+      id: 'net-worth',
+      label: 'Net Worth',
+      render: () => (
         <MetricCard
           label="Net Worth"
           value={formatUSD(currentNetWorth)}
@@ -553,6 +548,12 @@ export default function Dashboard() {
           deltaTone={netWorthDeltaTone}
           subtitle={hasNetWorthBaseline ? 'vs last month' : undefined}
         />
+      ),
+    },
+    {
+      id: 'total-debt',
+      label: 'Total Debt',
+      render: () => (
         <MetricCard
           label="Total Debt"
           value={formatUSD(totalDebt)}
@@ -561,18 +562,36 @@ export default function Dashboard() {
             ? `Across ${visibleLoans.length} loan${visibleLoans.length === 1 ? '' : 's'}`
             : undefined}
         />
+      ),
+    },
+    {
+      id: 'liquid-investments',
+      label: 'Liquid Investments',
+      render: () => (
         <MetricCard
           label="Liquid Investments"
           value={formatUSD(liquidInvestments)}
           href="/investments"
           subtitle="Brokerage, cash, savings, HSA"
         />
+      ),
+    },
+    {
+      id: 'awaiting-reimbursement',
+      label: 'Awaiting Reimbursement',
+      render: () => (
         <MetricCard
           label="Awaiting Reimbursement"
           value={formatUSD(awaitingReimbursementTotal)}
           href="/spending"
           subtitle={awaitingReimbursementTotal > 0 ? 'Click to review' : 'None pending'}
         />
+      ),
+    },
+    {
+      id: 'spending-vs-budget',
+      label: 'Spending vs Budget',
+      render: () => (
         <MetricCard
           label="Spending vs Budget"
           value={formatUSD(currentMonthSpend)}
@@ -591,7 +610,126 @@ export default function Dashboard() {
             ? `Budget: ${formatUSD(monthlyBudget)}`
             : 'Set a budget in Inputs'}
         />
+      ),
+    },
+  ];
+  const pillIds = useMemo<readonly PillId[]>(
+    () => ['net-worth', 'total-debt', 'liquid-investments', 'awaiting-reimbursement', 'spending-vs-budget'],
+    [],
+  );
+  const pillLayout = usePillLayout(pillIds);
+  const pillById = new Map(pillDefs.map((p) => [p.id, p]));
+  const [editing, setEditing] = useState(false);
+
+  const orderedPills = pillLayout.layout
+    .map((e) => ({ entry: e, def: pillById.get(e.id as PillId) }))
+    .filter((row): row is { entry: typeof pillLayout.layout[number]; def: (typeof pillDefs)[number] } => row.def !== undefined);
+  const visiblePills = orderedPills.filter((p) => !p.entry.hidden);
+  const hiddenPills = orderedPills.filter((p) => p.entry.hidden);
+
+  return (
+    <div className="p-6 max-w-6xl space-y-6">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-3xl font-semibold">
+            {household?.name ? `Hi, ${household.name}` : 'Dashboard'}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">{todayLabel}</p>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant={editing ? 'default' : 'outline'}
+          onClick={() => setEditing((v) => !v)}
+          aria-pressed={editing}
+          data-testid="dashboard-edit-toggle"
+        >
+          {editing ? (
+            <>
+              <CheckIcon className="h-4 w-4 mr-1.5" />
+              Done
+            </>
+          ) : (
+            <>
+              <PencilIcon className="h-4 w-4 mr-1.5" />
+              Edit
+            </>
+          )}
+        </Button>
       </div>
+
+      <NextMoveCard />
+
+      {isInputPending && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-4 flex flex-wrap items-center justify-between gap-4">
+          <div className="min-w-0">
+            <div className="font-medium text-amber-900">Monthly input pending</div>
+            <div className="text-sm text-amber-900/80">
+              Confirm this month's account balances and loan payments.
+            </div>
+          </div>
+          <Button onClick={() => navigate('/monthly')}>Open</Button>
+        </div>
+      )}
+
+      <div
+        className="grid grid-cols-2 md:grid-cols-4 gap-4"
+        data-testid="dashboard-pill-grid"
+      >
+        {visiblePills.length === 0 ? (
+          <div className="col-span-full rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
+            All metric pills are hidden. Tap{' '}
+            <span className="font-medium">Edit</span> to add them back.
+          </div>
+        ) : (
+          visiblePills.map((p, index) => (
+            <EditablePill
+              key={p.def.id}
+              id={p.def.id}
+              label={p.def.label}
+              editing={editing}
+              canMoveUp={index > 0}
+              canMoveDown={index < visiblePills.length - 1}
+              onMoveUp={() => pillLayout.move(p.def.id, -1)}
+              onMoveDown={() => pillLayout.move(p.def.id, 1)}
+              onRemove={() => pillLayout.hide(p.def.id)}
+            >
+              {p.def.render()}
+            </EditablePill>
+          ))
+        )}
+      </div>
+
+      {editing && hiddenPills.length > 0 ? (
+        <div
+          className="rounded-md border bg-muted/40 p-3"
+          data-testid="dashboard-hidden-pills"
+        >
+          <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
+            Hidden pills
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {hiddenPills.map((p) => (
+              <button
+                key={p.def.id}
+                type="button"
+                onClick={() => pillLayout.show(p.def.id)}
+                className="inline-flex items-center gap-1.5 rounded-full border bg-background px-3 py-1 text-sm hover:bg-accent"
+                data-testid={`pill-add-${p.def.id}`}
+              >
+                <PlusIcon className="h-3.5 w-3.5" />
+                {p.def.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      <SpendingWidget
+        transactions={transactions}
+        categories={categories}
+        accounts={visibleAccounts}
+      />
 
       {/*
        * ConcentrationCard intentionally stays household-wide regardless of

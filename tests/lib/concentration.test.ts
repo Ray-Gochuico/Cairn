@@ -180,6 +180,28 @@ describe('computeConcentration', () => {
     expect(misc!.effectiveExposure).toBeCloseTo(13750, 1);
   });
 
+  it('does NOT emit per-ticker warnings for the Misc bucket even when it exceeds 25%', () => {
+    // A VTI-heavy portfolio where Yahoo only returned 1 top holding (5%) leaves
+    // 95% of the portfolio attributed to "Misc". Without the guard, Misc would
+    // fire a PER_TICKER_HIGH warning — but Misc is a synthetic catch-all, not
+    // a real concentration risk. Misc still appears in normal perTicker
+    // breakdowns; only the warnings list filters it.
+    const result = computeConcentration({
+      holdings: [{ ticker: 'VTI', value: 100_000 }],
+      tickers: new Map([
+        ['VTI', { assetClass: 'US_TOTAL_MARKET', leverageFactor: 1, direction: 'LONG' }],
+        ['AAPL', { assetClass: 'SINGLE_STOCK', leverageFactor: 1, direction: 'LONG' }],
+      ]),
+      fundHoldings: new Map([['VTI', [{ symbol: 'AAPL', weight: 0.05 }]]]),
+      totalPortfolioValue: 100_000,
+    });
+    const misc = result.perTicker.find((t) => t.ticker === 'Misc');
+    expect(misc).toBeDefined();
+    expect(misc!.pctOfPortfolio).toBeGreaterThan(0.25);
+    // Misc must not show up as any per-ticker warning
+    expect(result.warnings.some((w) => w.ticker === 'Misc')).toBe(false);
+  });
+
   it('does not create Misc when fund top-N sums to 1.0', () => {
     const result = computeConcentration({
       holdings: [{ ticker: 'VTI', value: 10000 }],
