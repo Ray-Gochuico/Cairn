@@ -84,3 +84,60 @@ export function summarizeBudget(
     totalActual: rows.reduce((s, r) => s + r.actual, 0),
   };
 }
+
+/**
+ * Sentinel id for the synthetic "Misc" catch-all row. Negative so it
+ * cannot collide with any real category primary key.
+ *
+ * Note: "Misc" — not "Other" — because the seeded category set already
+ * contains a real "Other" leaf (id 42).
+ */
+export const MISC_CATEGORY_ID = -1;
+export const MISC_CATEGORY_NAME = 'Misc';
+
+export interface TrackedPartition {
+  tracked: BudgetRow[];
+  misc: BudgetRow;
+}
+
+/**
+ * Split rows into the user's selected (tracked) set and a single Misc row
+ * that aggregates every other row's spending and budget. Tracked rows are
+ * returned in the order they appear in `rows` (already grouped by parent).
+ */
+export function partitionTrackedRows(
+  rows: BudgetRow[],
+  trackedIds: readonly number[],
+): TrackedPartition {
+  const trackedSet = new Set(trackedIds);
+  const tracked: BudgetRow[] = [];
+  let miscBudget = 0;
+  let miscActual = 0;
+  let anyUntrackedBudgeted = false;
+
+  for (const r of rows) {
+    if (trackedSet.has(r.categoryId)) {
+      tracked.push(r);
+    } else {
+      if (r.budget != null) {
+        miscBudget += r.budget;
+        anyUntrackedBudgeted = true;
+      }
+      miscActual += r.actual;
+    }
+  }
+
+  const miscBudgetFinal = anyUntrackedBudgeted ? miscBudget : 0;
+  const misc: BudgetRow = {
+    categoryId: MISC_CATEGORY_ID,
+    categoryName: MISC_CATEGORY_NAME,
+    parentCategoryId: null,
+    budget: miscBudgetFinal,
+    actual: miscActual,
+    remaining: miscBudgetFinal - miscActual,
+    pct: miscBudgetFinal > 0 ? miscActual / miscBudgetFinal : null,
+    overBudget: miscActual > miscBudgetFinal,
+  };
+
+  return { tracked, misc };
+}

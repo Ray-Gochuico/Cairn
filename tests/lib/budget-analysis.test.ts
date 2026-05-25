@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { summarizeBudget, budgetableCategories } from '@/lib/budget-analysis';
+import {
+  summarizeBudget,
+  budgetableCategories,
+  partitionTrackedRows,
+  MISC_CATEGORY_ID,
+} from '@/lib/budget-analysis';
+import type { BudgetRow } from '@/lib/budget-analysis';
 import type { Transaction, Category } from '@/types/schema';
 
 const cat = (over: Partial<Category> & { id: number }): Category => ({
@@ -57,5 +63,78 @@ describe('summarizeBudget', () => {
     ];
     const s = summarizeBudget(categories, txns, '2026-03');
     expect(s.rows.find((r) => r.categoryId === 33)!.actual).toBe(50);
+  });
+});
+
+describe('partitionTrackedRows', () => {
+  const mkRow = (over: Partial<BudgetRow> & { categoryId: number }): BudgetRow => ({
+    categoryName: `cat${over.categoryId}`,
+    parentCategoryId: null,
+    budget: 100,
+    actual: 50,
+    remaining: 50,
+    pct: 0.5,
+    overBudget: false,
+    ...over,
+  });
+
+  it('returns every row in tracked when every categoryId is selected, with a zero-actual misc row', () => {
+    const rows = [
+      mkRow({ categoryId: 7, budget: 200, actual: 80, remaining: 120, pct: 0.4 }),
+      mkRow({ categoryId: 33, budget: 600, actual: 700, remaining: -100, pct: 700 / 600, overBudget: true }),
+    ];
+    const { tracked, misc } = partitionTrackedRows(rows, [7, 33]);
+    expect(tracked.map((r) => r.categoryId)).toEqual([7, 33]);
+    expect(misc.categoryId).toBe(MISC_CATEGORY_ID);
+    expect(misc.actual).toBe(0);
+    expect(misc.budget).toBe(0);
+  });
+
+  it('aggregates non-tracked rows into the misc row (budget + actual sums)', () => {
+    const rows = [
+      mkRow({ categoryId: 7, budget: 200, actual: 80, remaining: 120, pct: 0.4 }),
+      mkRow({ categoryId: 33, budget: 600, actual: 700, remaining: -100, pct: 700 / 600, overBudget: true }),
+      mkRow({ categoryId: 41, budget: 50, actual: 30, remaining: 20, pct: 0.6 }),
+    ];
+    // Track only 7; 33 and 41 collapse into misc.
+    const { tracked, misc } = partitionTrackedRows(rows, [7]);
+    expect(tracked.map((r) => r.categoryId)).toEqual([7]);
+    expect(misc.actual).toBe(700 + 30); // 730
+    expect(misc.budget).toBe(600 + 50);  // 650
+    expect(misc.remaining).toBe(650 - 730); // -80
+    expect(misc.overBudget).toBe(true);
+  });
+
+  it('puts every row into misc when the tracked list is empty', () => {
+    const rows = [
+      mkRow({ categoryId: 7, budget: 200, actual: 80, remaining: 120, pct: 0.4 }),
+      mkRow({ categoryId: 33, budget: 600, actual: 700, remaining: -100, pct: 700 / 600, overBudget: true }),
+    ];
+    const { tracked, misc } = partitionTrackedRows(rows, []);
+    expect(tracked).toEqual([]);
+    expect(misc.actual).toBe(780);
+    expect(misc.budget).toBe(800);
+    expect(misc.remaining).toBe(20);
+    expect(misc.overBudget).toBe(false);
+  });
+
+  it('skips unbudgeted (budget=null) rows when summing the misc budget but still adds actuals', () => {
+    const rows = [
+      mkRow({ categoryId: 7, budget: 200, actual: 80, remaining: 120, pct: 0.4 }),
+      mkRow({ categoryId: 33, budget: null, actual: 90, remaining: null, pct: null }),
+    ];
+    const { misc } = partitionTrackedRows(rows, []);
+    expect(misc.budget).toBe(200);
+    expect(misc.actual).toBe(170);
+    expect(misc.remaining).toBe(30);
+  });
+
+  it('omits tracked entries that do not appear in rows (e.g. category since deleted)', () => {
+    const rows = [
+      mkRow({ categoryId: 7, budget: 200, actual: 80, remaining: 120, pct: 0.4 }),
+    ];
+    const { tracked, misc } = partitionTrackedRows(rows, [7, 9999]);
+    expect(tracked.map((r) => r.categoryId)).toEqual([7]);
+    expect(misc.actual).toBe(0);
   });
 });
