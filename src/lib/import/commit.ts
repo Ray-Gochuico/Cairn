@@ -3,6 +3,7 @@ import type { Database } from '@/db/db';
 import type { AccountSnapshotsRepo } from '@/domain/snapshots';
 import type { CommitResult, PreviewRow } from '@/lib/import/types';
 import type { SnapshotResolved } from '@/lib/import/validators/snapshot-validator';
+import type { SnapshotSource } from '@/types/enums';
 
 /**
  * Write a batch of validated snapshot rows in a single SQL transaction.
@@ -30,10 +31,10 @@ export async function commitSnapshotImport(
         throw new Error(`Row ${row.rowId}: missing resolved fields (validator should have caught this)`);
       }
       if (row.status === 'update') {
-        await deps.snapshots.upsert({ accountId, snapshotDate, totalValue, source });
+        await deps.snapshots.upsert({ accountId, snapshotDate, totalValue, source: source as SnapshotSource });
         updated += 1;
       } else if (row.status === 'new') {
-        await deps.snapshots.upsert({ accountId, snapshotDate, totalValue, source });
+        await deps.snapshots.upsert({ accountId, snapshotDate, totalValue, source: source as SnapshotSource });
         inserted += 1;
       } else {
         continue;
