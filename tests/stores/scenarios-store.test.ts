@@ -272,6 +272,24 @@ describe('useScenariosStore.projectedScenarios — memoization', () => {
     expect(afterDebtFree).toBeLessThan(beforeDebtFree);
   });
 
+  it('saveCurrentAsScenario snapshots the active scenarios lever payload as a new row', async () => {
+    const store = useScenariosStore.getState();
+    const baseline = store.scenarios.find((s) => s.isBaseline)!;
+    await store.updateLever(baseline.id!, {
+      extraLoanPayments: [{ loanId: 9, extraMonthly: 250 }],
+    });
+    const newId = await useScenariosStore.getState().saveCurrentAsScenario('Snapshot A');
+    expect(newId).toBeGreaterThan(0);
+    const { scenarios } = useScenariosStore.getState();
+    const snap = scenarios.find((s) => s.id === newId)!;
+    expect(snap.name).toBe('Snapshot A');
+    expect(snap.isBaseline).toBe(false);
+    expect(snap.isActive).toBe(false);
+    expect(snap.visible).toBe(true);
+    expect(snap.leverPayload.extraLoanPayments).toEqual([{ loanId: 9, extraMonthly: 250 }]);
+    expect(snap.sortOrder).toBeGreaterThan(baseline.sortOrder);
+  });
+
   it('setHorizonMonths invalidates the entire cache', () => {
     const real = sampleRealState();
     const baselineId = useScenariosStore.getState().scenarios.find((s) => s.isBaseline)!.id!;

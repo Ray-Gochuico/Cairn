@@ -1,9 +1,11 @@
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import ChartToolbar from '@/components/whatif/ChartToolbar';
 import LeverBar from '@/components/whatif/LeverBar';
 import MilestoneStrip from '@/components/whatif/MilestoneStrip';
 import ProjectionChart from '@/components/whatif/ProjectionChart';
+import ScenariosPanel from '@/components/whatif/ScenariosPanel';
+import ManageScenariosModal from '@/components/whatif/ManageScenariosModal';
 import { useRealState } from '@/components/whatif/useRealState';
 import { useScenariosStore } from '@/stores/scenarios-store';
 import { detectMilestones, type Milestones, type MonthlyState } from '@/lib/scenarios';
@@ -16,6 +18,13 @@ export default function WhatIf() {
   const projectedScenarios = useScenariosStore((s) => s.projectedScenarios);
   const dollarMode         = useScenariosStore((s) => s.dollarMode);
   const inflation          = useScenariosStore((s) => s.inflation);
+
+  const [manageOpen, setManageOpen] = useState(false);
+
+  // S-D's lever bar will expose a programmatic open-popover hook; wire
+  // here once S-D lands. For now this is a no-op stub so the panel and
+  // modal can pass an onEditLevers callback without breaking.
+  const openLeversFor = useCallback((_scenarioId: number) => {}, []);
 
   useEffect(() => { load(); }, [load]);
 
@@ -61,18 +70,33 @@ export default function WhatIf() {
           <CardTitle className="text-base">Net worth & total debt projection</CardTitle>
         </CardHeader>
         <CardContent>
-          <ProjectionChart
-            scenarios={scenarios}
-            projections={projections}
-            milestones={milestones}
-            dollarMode={dollarMode}
-            inflation={inflation}
-            startISO={real.startISO}
-          />
+          <div className="relative">
+            <ProjectionChart
+              scenarios={scenarios}
+              projections={projections}
+              milestones={milestones}
+              dollarMode={dollarMode}
+              inflation={inflation}
+              startISO={real.startISO}
+            />
+            <ScenariosPanel
+              milestones={milestones}
+              onOpenManage={() => setManageOpen(true)}
+              onEditLevers={openLeversFor}
+            />
+          </div>
         </CardContent>
       </Card>
 
       <MilestoneStrip scenarios={scenarios} milestones={milestones} />
+
+      {manageOpen && (
+        <ManageScenariosModal
+          milestones={milestones}
+          onClose={() => setManageOpen(false)}
+          onEditLevers={openLeversFor}
+        />
+      )}
     </div>
   );
 }

@@ -2,8 +2,38 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { AdvancedSection } from '@/components/settings/AdvancedSection';
 import { useHouseholdStore } from '@/stores/household-store';
-import { FilingStatus } from '@/types/enums';
-import type { Household } from '@/types/schema';
+import { useSettingsStore } from '@/stores/settings-store';
+import { FilingStatus, RefreshCadence } from '@/types/enums';
+import type { Household, AppSettings } from '@/types/schema';
+
+function makeSettings(patch: Partial<AppSettings> = {}): AppSettings {
+  return {
+    id: 1,
+    sidebarLayout: null,
+    notificationsEnabled: true,
+    notificationDay: 1,
+    refreshCadence: RefreshCadence.EVERY_LAUNCH,
+    lastRefreshAt: null,
+    statementsFolderPath: null,
+    defaultInflation: null,
+    defaultReturnRate: null,
+    ...patch,
+  };
+}
+
+function resetSettingsStore(
+  settings: AppSettings | null,
+  update: any = vi.fn().mockResolvedValue(undefined),
+) {
+  useSettingsStore.setState({
+    settings,
+    isLoading: false,
+    error: null,
+    load: async () => {},
+    update,
+  } as any);
+  return update;
+}
 
 function makeHousehold(patch: Partial<Household> = {}): Household {
   return {
@@ -47,6 +77,7 @@ function resetStore(household: Household | null, update: any = vi.fn().mockResol
 describe('AdvancedSection', () => {
   beforeEach(() => {
     resetStore(makeHousehold());
+    resetSettingsStore(makeSettings());
   });
 
   it('starts collapsed and expands when the header is clicked', () => {
@@ -125,11 +156,74 @@ describe('AdvancedSection', () => {
       screen.getByRole('heading', { name: /reset disclaimer acceptances\?/i }),
     ).toBeInTheDocument();
   });
+
+  it('renders the What-If projection default inputs prefilled from settings (as whole percent)', () => {
+    resetSettingsStore(makeSettings({ defaultInflation: 0.025, defaultReturnRate: 0.07 }));
+    render(<AdvancedSection />);
+    fireEvent.click(screen.getByText('Advanced'));
+    const inflationInput = screen.getByLabelText(/default inflation rate/i) as HTMLInputElement;
+    const returnInput = screen.getByLabelText(/default investment return rate/i) as HTMLInputElement;
+    expect(inflationInput.value).toBe('2.5');
+    expect(returnInput.value).toBe('7');
+  });
+
+  it('persists default inflation + return rate as fractions through useSettingsStore.update', async () => {
+    const householdUpdate = vi.fn().mockResolvedValue(undefined);
+    const settingsUpdate = vi.fn().mockResolvedValue(undefined);
+    resetStore(makeHousehold(), householdUpdate);
+    resetSettingsStore(makeSettings(), settingsUpdate);
+    render(<AdvancedSection />);
+    fireEvent.click(screen.getByText('Advanced'));
+    fireEvent.change(screen.getByLabelText(/default inflation rate/i), {
+      target: { value: '3' },
+    });
+    fireEvent.change(screen.getByLabelText(/default investment return rate/i), {
+      target: { value: '8' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(settingsUpdate).toHaveBeenCalledWith({
+      defaultInflation: 0.03,
+      defaultReturnRate: 0.08,
+    });
+  });
+
+  it('writes nulls when What-If default inputs are cleared', async () => {
+    const settingsUpdate = vi.fn().mockResolvedValue(undefined);
+    resetSettingsStore(
+      makeSettings({ defaultInflation: 0.025, defaultReturnRate: 0.07 }),
+      settingsUpdate,
+    );
+    render(<AdvancedSection />);
+    fireEvent.click(screen.getByText('Advanced'));
+    fireEvent.change(screen.getByLabelText(/default inflation rate/i), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText(/default investment return rate/i), {
+      target: { value: '' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(settingsUpdate).toHaveBeenCalledWith({
+      defaultInflation: null,
+      defaultReturnRate: null,
+    });
+  });
+
+  it('disables Save when What-If default inflation is out of range (e.g. 25%)', () => {
+    render(<AdvancedSection />);
+    fireEvent.click(screen.getByText('Advanced'));
+    fireEvent.change(screen.getByLabelText(/default inflation rate/i), {
+      target: { value: '25' },
+    });
+    expect(screen.getByRole('button', { name: /^save$/i })).toBeDisabled();
+  });
 });
 
 describe('ResetDisclaimersDialog', () => {
   beforeEach(() => {
     resetStore(makeHousehold());
+    resetSettingsStore(makeSettings());
   });
 
   it('confirms and clears all four cache columns', async () => {

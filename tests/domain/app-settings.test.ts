@@ -65,4 +65,25 @@ describe('SettingsRepo', () => {
   it('rejects an invalid patch', async () => {
     await expect(repo.update({ notificationDay: 99 } as never)).rejects.toThrow();
   });
+
+  it('round-trips defaultInflation and defaultReturnRate through update + get', async () => {
+    await repo.update({ defaultInflation: 0.03, defaultReturnRate: 0.08 });
+    const s = await repo.get();
+    expect(s.defaultInflation).toBeCloseTo(0.03, 5);
+    expect(s.defaultReturnRate).toBeCloseTo(0.08, 5);
+  });
+
+  it('writes nulls when What-If default fields are cleared', async () => {
+    await repo.update({ defaultInflation: 0.04, defaultReturnRate: 0.06 });
+    await repo.update({ defaultInflation: null, defaultReturnRate: null });
+    const s = await repo.get();
+    expect(s.defaultInflation).toBeNull();
+    expect(s.defaultReturnRate).toBeNull();
+  });
+
+  it('seeds defaultInflation and defaultReturnRate as null on fresh DB', async () => {
+    const s = await repo.get();
+    expect(s.defaultInflation).toBeNull();
+    expect(s.defaultReturnRate).toBeNull();
+  });
 });

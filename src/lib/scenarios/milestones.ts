@@ -8,7 +8,15 @@ export interface FireParams {
 export interface Milestones {
   debtFreeISO?: string;
   fireISO?: string;
+  /**
+   * Net worth at the 30-year point in the projection, used by the
+   * ManageScenariosModal scoreboard. Falls back to the final state's
+   * net worth when the horizon is shorter than 30 years.
+   */
+  netWorth30y?: number;
 }
+
+const MONTHS_30Y = 360;
 
 export function detectMilestones(states: MonthlyState[], params: FireParams): Milestones {
   let debtFreeISO: string | undefined;
@@ -28,5 +36,9 @@ export function detectMilestones(states: MonthlyState[], params: FireParams): Mi
     if (debtFreeISO && fireISO) break;
   }
 
-  return { debtFreeISO, fireISO };
+  const horizonState =
+    states.length >= MONTHS_30Y ? states[MONTHS_30Y - 1] : states[states.length - 1];
+  const netWorth30y = horizonState ? horizonState.netWorth : undefined;
+
+  return { debtFreeISO, fireISO, netWorth30y };
 }
