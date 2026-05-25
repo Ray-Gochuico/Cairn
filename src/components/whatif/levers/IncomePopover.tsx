@@ -26,7 +26,7 @@ function emptyEvent(): IncomeEvent {
 }
 
 function defaultPersonPlan(): PersonIncomePlan {
-  return { annualRaiseRate: 0.03, events: [] };
+  return { annualRaiseRate: 0, events: [] };
 }
 
 export default function IncomePopover({ open, onOpenChange }: Props) {

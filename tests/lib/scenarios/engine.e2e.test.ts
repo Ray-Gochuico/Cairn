@@ -97,8 +97,10 @@ describe('projectScenario (end-to-end)', () => {
 describe('projectScenario — tax behavior', () => {
   it('after-tax income rises year-over-year as raises lift gross income', () => {
     const realCA: RealState = { ...realState, household: { ...realState.household, state: 'CA' } as Household };
-    const states = projectScenario(realCA, emptyLeverPayload(), { startISO: '2026-05', months: 36 });
-    // Sample after-tax income across years: should monotonically rise as salary grows by 3%/year default raise.
+    const payload = emptyLeverPayload();
+    payload.income.perPerson[0].annualRaiseRate = 0.03;
+    const states = projectScenario(realCA, payload, { startISO: '2026-05', months: 36 });
+    // Sample after-tax income across years: should monotonically rise with a 3% explicit raise plan.
     const month0  = states[0].incomeAfterTax;
     const month12 = states[12].incomeAfterTax;
     const month24 = states[24].incomeAfterTax;

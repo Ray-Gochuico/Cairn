@@ -55,8 +55,8 @@ describe('IncomePopover', () => {
   it('raise-rate input edits the active person\'s plan (percentage)', () => {
     render(<MemoryRouter><IncomePopover open onOpenChange={() => {}} /></MemoryRouter>);
     const slider = screen.getByLabelText(/annual raise rate/i) as HTMLInputElement;
-    // Default 0.03 (3%) should render as "3.00", not "0.03".
-    expect(slider.value).toBe('3.00');
+    // Default annualRaiseRate is 0 (salary holds steady) — input renders as "0.00".
+    expect(slider.value).toBe('0.00');
     fireEvent.change(slider, { target: { value: '5' } });
     // After commit the controlled input reformats to two-decimal pct.
     expect(slider.value).toBe('5.00');

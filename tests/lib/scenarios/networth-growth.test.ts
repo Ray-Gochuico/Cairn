@@ -63,4 +63,16 @@ describe('projectScenario — net worth growth for a saving household', () => {
     const states = projectScenario(realState, emptyLeverPayload(), { startISO: '2026-05', months: 13 });
     expect(states[6].incomeAfterTax).toBeGreaterThan(0);
   });
+
+  it('default emptyLeverPayload holds salary steady (annualRaiseRate=0)', () => {
+    // With no raises, monthly gross income should be ~identical year over year.
+    // Bracket-real tax may shift slightly due to multi-bracket interactions, but
+    // gross income (and thus pre-tax monthly income drag) should be the same.
+    const states = projectScenario(realState, emptyLeverPayload(), { startISO: '2026-05', months: 36 });
+    const monthA = states[6].incomeAfterTax;
+    const monthB = states[18].incomeAfterTax;
+    const monthC = states[30].incomeAfterTax;
+    expect(monthB).toBeCloseTo(monthA, 0);
+    expect(monthC).toBeCloseTo(monthA, 0);
+  });
 });
