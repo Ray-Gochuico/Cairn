@@ -302,9 +302,9 @@ describe('ProjectionChart — milestone reference lines', () => {
     expect(refLines.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('renders FIRE reference line when fireISO is set', () => {
+  it('renders Financial Independence reference line when financialIndependenceISO is set', () => {
     const projections = new Map([[1, fixtureStates()]]);
-    const milestones = new Map<number, Milestones>([[1, { debtFreeISO: '2026-06', fireISO: '2026-10' }]]);
+    const milestones = new Map<number, Milestones>([[1, { debtFreeISO: '2026-06', financialIndependenceISO: '2026-10' }]]);
     const { container } = render(
       <MemoryRouter>
         <ProjectionChart

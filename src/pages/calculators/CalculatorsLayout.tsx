@@ -3,7 +3,7 @@ import { PaycheckCard } from './PaycheckCard';
 import { BonusTaxCard } from './BonusTaxCard';
 import { CommissionTaxCard } from './CommissionTaxCard';
 import { OvertimeCard } from './OvertimeCard';
-import { FireCard } from './FireCard';
+import { FinancialIndependenceCard } from './FinancialIndependenceCard';
 import { CoastFiCard } from './CoastFiCard';
 import { DebtPayoffCard } from './DebtPayoffCard';
 import { EquityValueCard } from './EquityValueCard';
@@ -23,7 +23,7 @@ const CARD_IDS = {
   BONUS: 'bonus-tax',
   COMMISSION: 'commission',
   OVERTIME: 'overtime',
-  FIRE: 'fire',
+  FINANCIAL_INDEPENDENCE: 'financial-independence',
   COAST_FI: 'coast-fi',
   COMPOUND: 'compound-interest',
   DEBT_PAYOFF: 'debt-payoff',
@@ -37,7 +37,7 @@ const CARD_LABELS: Record<string, string> = {
   [CARD_IDS.BONUS]: 'Bonus tax',
   [CARD_IDS.COMMISSION]: 'Commission tax',
   [CARD_IDS.OVERTIME]: 'Overtime',
-  [CARD_IDS.FIRE]: 'Years to FI',
+  [CARD_IDS.FINANCIAL_INDEPENDENCE]: 'Years to FI',
   [CARD_IDS.COAST_FI]: 'CoastFI',
   [CARD_IDS.COMPOUND]: 'Compound Interest',
   [CARD_IDS.DEBT_PAYOFF]: 'Debt Payoff',
@@ -52,7 +52,7 @@ function labelFor(id: string): string {
 export default function CalculatorsLayout() {
   // Note: the household/p1/p2 view filter from useViewFilter is intentionally
   // NOT wired in here. Each calculator card has its own per-card behaviour —
-  // Paycheck / FIRE / CoastFI / Equity Value naturally split per-person via
+  // Paycheck / Financial Independence / CoastFI / Equity Value naturally split per-person via
   // their underlying calcs; Bonus Tax always shows MFJ-combined for household
   // and per-person for p1/p2; and each card already auto-shows or hides based
   // on whether the relevant inputs exist. Adding a person filter at the
@@ -179,8 +179,11 @@ export default function CalculatorsLayout() {
         {showOvertime && !hiddenSet.has(CARD_IDS.OVERTIME) && (
           <OvertimeCard cardId={CARD_IDS.OVERTIME} onHide={handleHide} />
         )}
-        {!hiddenSet.has(CARD_IDS.FIRE) && (
-          <FireCard cardId={CARD_IDS.FIRE} onHide={handleHide} />
+        {!hiddenSet.has(CARD_IDS.FINANCIAL_INDEPENDENCE) && (
+          <FinancialIndependenceCard
+            cardId={CARD_IDS.FINANCIAL_INDEPENDENCE}
+            onHide={handleHide}
+          />
         )}
         {!hiddenSet.has(CARD_IDS.COAST_FI) && (
           <CoastFiCard cardId={CARD_IDS.COAST_FI} onHide={handleHide} />

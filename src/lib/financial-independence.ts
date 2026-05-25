@@ -26,23 +26,23 @@ export function yearsToFi(input: YearsToFiInput): number {
   return Number.isFinite(t) && t > 0 ? t : t === 0 ? 0 : Infinity;
 }
 
-export interface FireScenario {
+export interface FinancialIndependenceScenario {
   label: string;
   rate: number;
 }
 
-export interface FireSeriesResult {
+export interface FinancialIndependenceSeriesResult {
   label: string;
   rate: number;
   years: number;
 }
 
-export function fireSeries(input: {
+export function financialIndependenceSeries(input: {
   pv: number;
   annualContribution: number;
   targetFv: number;
-  scenarios: FireScenario[];
-}): FireSeriesResult[] {
+  scenarios: FinancialIndependenceScenario[];
+}): FinancialIndependenceSeriesResult[] {
   return input.scenarios.map((s) => ({
     label: s.label,
     rate: s.rate,

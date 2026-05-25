@@ -59,8 +59,8 @@ vi.mock('@/stores/loans-store', () => ({
 
 function makeMilestones(): Map<number, Milestones> {
   const m = new Map<number, Milestones>();
-  m.set(1, { debtFreeISO: '2029-06', fireISO: '2042-04', netWorth30y: 2_345_000 });
-  m.set(2, { debtFreeISO: '2028-02', fireISO: '2041-09', netWorth30y: 2_550_000 });
+  m.set(1, { debtFreeISO: '2029-06', financialIndependenceISO: '2042-04', netWorth30y: 2_345_000 });
+  m.set(2, { debtFreeISO: '2028-02', financialIndependenceISO: '2041-09', netWorth30y: 2_550_000 });
   return m;
 }
 
@@ -95,7 +95,7 @@ describe('ManageScenariosModal', () => {
     expect(screen.getByText('No overrides')).toBeInTheDocument();
   });
 
-  it('shows debt-free, FIRE, and 30y NW columns per row', () => {
+  it('shows debt-free, FI, and 30y NW columns per row', () => {
     setup();
     expect(screen.getByText('2029-06')).toBeInTheDocument();
     expect(screen.getByText('2042-04')).toBeInTheDocument();

@@ -6,7 +6,7 @@ import { usePersonsStore } from '@/stores/persons-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useContributionsStore } from '@/stores/contributions-store';
 import { FilingStatus, ContributionSource, SnapshotSource } from '@/types/enums';
-import { FireCard } from '@/pages/calculators/FireCard';
+import { FinancialIndependenceCard } from '@/pages/calculators/FinancialIndependenceCard';
 import type { GrowthScenario } from '@/types/schema';
 
 const fourScenarios: GrowthScenario[] = [
@@ -114,7 +114,7 @@ function primeStores(opts?: {
   });
 }
 
-describe('FireCard', () => {
+describe('FinancialIndependenceCard', () => {
   beforeEach(() => {
     resetStores();
   });
@@ -123,7 +123,7 @@ describe('FireCard', () => {
     // No household, no persons, no snapshots, no contributions
     render(
       <MemoryRouter>
-        <FireCard />
+        <FinancialIndependenceCard />
       </MemoryRouter>,
     );
     expect(
@@ -137,12 +137,12 @@ describe('FireCard', () => {
     primeStores();
     render(
       <MemoryRouter>
-        <FireCard />
+        <FinancialIndependenceCard />
       </MemoryRouter>,
     );
 
     // Headline shows a numeric "X years" string
-    const headline = screen.getByTestId('fire-headline');
+    const headline = screen.getByTestId('fi-headline');
     expect(headline.textContent).toMatch(/\d+(\.\d+)?\s*years/i);
   });
 
@@ -152,11 +152,11 @@ describe('FireCard', () => {
     primeStores();
     render(
       <MemoryRouter>
-        <FireCard />
+        <FinancialIndependenceCard />
       </MemoryRouter>,
     );
 
-    const headline = screen.getByTestId('fire-headline');
+    const headline = screen.getByTestId('fi-headline');
     const value = parseFloat(headline.textContent!.replace(/[^\d.]/g, ''));
     expect(Number.isFinite(value)).toBe(true);
     expect(value).toBeGreaterThan(5);
@@ -176,11 +176,11 @@ describe('FireCard', () => {
 
     render(
       <MemoryRouter>
-        <FireCard />
+        <FinancialIndependenceCard />
       </MemoryRouter>,
     );
 
-    const headline = screen.getByTestId('fire-headline');
+    const headline = screen.getByTestId('fi-headline');
     expect(headline.textContent).toContain('∞');
   });
 
@@ -188,7 +188,7 @@ describe('FireCard', () => {
     primeStores({ scenarios: fourScenarios });
     render(
       <MemoryRouter>
-        <FireCard />
+        <FinancialIndependenceCard />
       </MemoryRouter>,
     );
 
@@ -210,7 +210,7 @@ describe('FireCard', () => {
     primeStores();
     render(
       <MemoryRouter>
-        <FireCard />
+        <FinancialIndependenceCard />
       </MemoryRouter>,
     );
     expect(screen.getByText(/Target portfolio/i)).toBeInTheDocument();
@@ -231,13 +231,13 @@ describe('FireCard', () => {
     });
     render(
       <MemoryRouter>
-        <FireCard />
+        <FinancialIndependenceCard />
       </MemoryRouter>,
     );
 
     // If older snapshots leaked in, pv would be ~1.3M -> under 1 year to FI.
     // With correct latest-only logic, pv=300k -> ~20 years at moderate 6%.
-    const headline = screen.getByTestId('fire-headline');
+    const headline = screen.getByTestId('fi-headline');
     const value = parseFloat(headline.textContent!.replace(/[^\d.]/g, ''));
     expect(Number.isFinite(value)).toBe(true);
     expect(value).toBeGreaterThan(10);
@@ -248,7 +248,7 @@ describe('FireCard', () => {
     primeStores();
     render(
       <MemoryRouter>
-        <FireCard cardId="fire" onHide={() => {}} />
+        <FinancialIndependenceCard cardId="financial-independence" onHide={() => {}} />
       </MemoryRouter>,
     );
     // CalculatorCard renders a "Hide <title> card" button when cardId is set.

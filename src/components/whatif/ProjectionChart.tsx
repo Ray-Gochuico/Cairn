@@ -114,14 +114,14 @@ export default function ProjectionChart({
           />,
         );
       }
-      if (m.fireISO) {
+      if (m.financialIndependenceISO) {
         out.push(
           <ReferenceLine
-            key={`fire_${sc.id}`}
-            x={m.fireISO}
+            key={`fi_${sc.id}`}
+            x={m.financialIndependenceISO}
             stroke={sc.color}
             strokeDasharray="2 6"
-            label={{ value: 'FIRE', position: 'top', fill: sc.color, fontSize: 11 }}
+            label={{ value: 'FI', position: 'top', fill: sc.color, fontSize: 11 }}
           />,
         );
       }
@@ -155,11 +155,11 @@ export default function ProjectionChart({
           />,
         );
       }
-      if (m.fireISO) {
+      if (m.financialIndependenceISO) {
         out.push(
           <ReferenceLine
-            key={`fire_lower_${sc.id}`}
-            x={m.fireISO}
+            key={`fi_lower_${sc.id}`}
+            x={m.financialIndependenceISO}
             stroke={sc.color}
             strokeDasharray="2 6"
           />,

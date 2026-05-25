@@ -13,7 +13,7 @@ function makeHousehold(overrides: Partial<Household> = {}): Household {
     filingStatus: 'SINGLE',
     state: 'CA',
     city: null,
-    monthlyExpenseBaseline: 4000, // → fireTarget = 48000 / 0.04 = 1,200,000
+    monthlyExpenseBaseline: 4000, // → fiTarget = 48000 / 0.04 = 1,200,000
     withdrawalRate: 0.04,
     inflationAssumption: 0.025,
     growthScenarios: [
@@ -87,7 +87,7 @@ function seedState(investments: number, cash: number): MonthlyState[] {
 }
 
 describe('FiCards', () => {
-  it('renders FIRE number = annual_expenses / withdrawal_rate', () => {
+  it('renders Financial Independence number = annual_expenses / withdrawal_rate', () => {
     const projections = new Map<number, MonthlyState[]>([[1, seedState(100_000, 50_000)]]);
     render(
       <FiCards
@@ -98,9 +98,9 @@ describe('FiCards', () => {
       />,
     );
     // 4000 * 12 / 0.04 = 1,200,000
-    const fire = screen.getByTestId('whatif-fire-number');
-    expect(fire).toHaveTextContent('$1,200,000');
-    expect(fire).toHaveTextContent('4.0% rule');
+    const fi = screen.getByTestId('whatif-fi-number');
+    expect(fi).toHaveTextContent('$1,200,000');
+    expect(fi).toHaveTextContent('4.0% rule');
   });
 
   it('renders Coast FI target derived from the moderate growth rate', () => {
@@ -135,9 +135,9 @@ describe('FiCards', () => {
         persons={[makePerson()]}
       />,
     );
-    const fireProgress = screen.getByTestId('whatif-fire-number-progress');
-    expect(fireProgress).toHaveTextContent('$300,000');
-    expect(fireProgress).toHaveTextContent('25%'); // 300k / 1.2M
+    const fiProgress = screen.getByTestId('whatif-fi-number-progress');
+    expect(fiProgress).toHaveTextContent('$300,000');
+    expect(fiProgress).toHaveTextContent('25%'); // 300k / 1.2M
   });
 
   it('returns null when household has no growth scenarios', () => {
@@ -235,7 +235,7 @@ describe('FiCards', () => {
         persons={[makePerson()]}
       />,
     );
-    const fireProgress = screen.getByTestId('whatif-fire-number-progress');
-    expect(fireProgress).toHaveTextContent('$600,000');
+    const fiProgress = screen.getByTestId('whatif-fi-number-progress');
+    expect(fiProgress).toHaveTextContent('$600,000');
   });
 });

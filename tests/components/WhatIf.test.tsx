@@ -116,7 +116,7 @@ describe('WhatIf page', () => {
     // MilestoneStrip — assert at least one label exists.
     await waitFor(() => expect(screen.getAllByText('Baseline').length).toBeGreaterThan(0));
     expect(screen.getAllByText(/Debt-free/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/FIRE/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/\bFI\b/).length).toBeGreaterThan(0);
   });
 
   it('horizon slider updates the store and re-projects', async () => {

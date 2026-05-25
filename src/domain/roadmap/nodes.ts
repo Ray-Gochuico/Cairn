@@ -452,7 +452,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     section: 5,
     kind: 'action',
     title: 'Finish maxing your employer plan (401(k) or solo-401(k))',
-    body: 'W-2 → finish maxing the employer 401(k). Self-employed → max a solo-401(k). Many on the FIRE path prefer pre-tax, then convert/withdraw in lower-bracket years.',
+    body: 'W-2 → finish maxing the employer 401(k). Self-employed → max a solo-401(k). Many on the Financial Independence path prefer pre-tax, then convert/withdraw in lower-bracket years.',
     prerequisites: ['s5_employment_type_q'],
     evaluate: evaluateMax401k,
   },

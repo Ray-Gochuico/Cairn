@@ -18,7 +18,7 @@ export interface FiCardsProps {
 
 interface ComputedRow {
   liquidNw: number;
-  fireTarget: number;
+  fiTarget: number;
   coastFiTarget: number;
   yearsUntilRetirement: number;
   rate: number;
@@ -57,7 +57,7 @@ function computeCards(props: FiCardsProps): ComputedRow | null {
   const seed = states[0];
 
   const liquidNw = seed.investments + seed.cash;
-  const fireTarget = (household.monthlyExpenseBaseline * 12) / household.withdrawalRate;
+  const fiTarget = (household.monthlyExpenseBaseline * 12) / household.withdrawalRate;
 
   const yearsByPerson = persons.map(
     (p) => p.targetRetirementAge - currentAge(p.dateOfBirth),
@@ -65,14 +65,14 @@ function computeCards(props: FiCardsProps): ComputedRow | null {
   const yearsUntilRetirement = Math.max(0, Math.min(...yearsByPerson));
 
   const coastFiTarget = coastFi({
-    requiredAtRetirement: fireTarget,
+    requiredAtRetirement: fiTarget,
     annualRate: rate.rate,
     yearsUntilRetirement,
   });
 
   return {
     liquidNw,
-    fireTarget,
+    fiTarget,
     coastFiTarget,
     yearsUntilRetirement,
     rate: rate.rate,
@@ -169,7 +169,7 @@ export default function FiCards(props: FiCardsProps) {
   const computed = computeCards(props);
   if (!computed) return null;
 
-  const { liquidNw, fireTarget, coastFiTarget, yearsUntilRetirement, rate, rateLabel } = computed;
+  const { liquidNw, fiTarget, coastFiTarget, yearsUntilRetirement, rate, rateLabel } = computed;
   const ratePct = (rate * 100).toFixed(1);
   const withdrawalPct = (props.household.withdrawalRate * 100).toFixed(1);
 
@@ -177,9 +177,9 @@ export default function FiCards(props: FiCardsProps) {
     <div className="space-y-2" data-testid="whatif-fi-cards-wrap">
       <div className="flex flex-col sm:flex-row gap-3" data-testid="whatif-fi-cards">
         <FiCard
-          testId="whatif-fire-number"
-          title="FIRE number"
-          target={fireTarget}
+          testId="whatif-fi-number"
+          title="Financial Independence number"
+          target={fiTarget}
           liquidNw={liquidNw}
           explainer={`Portfolio at retirement (${withdrawalPct}% rule)`}
         />

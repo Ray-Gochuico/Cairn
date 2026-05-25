@@ -136,7 +136,7 @@ const GOAL_TYPE_ICONS: Record<GoalType, string> = {
 
 /**
  * Pick the moderate growth rate for goal projections. Mirrors Goals.tsx /
- * FireCard so all surfaces agree on which scenario drives projections.
+ * FinancialIndependenceCard so all surfaces agree on which scenario drives projections.
  * Falls back to 6% when household has no scenarios.
  */
 function pickModerateRate(household: Household | null): number {

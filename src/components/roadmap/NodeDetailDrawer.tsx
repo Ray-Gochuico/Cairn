@@ -16,7 +16,7 @@ interface Props {
 /**
  * Right-side sheet that pops out when the user hits the `(i)` button on a
  * node row. Three blocks per the design spec:
- *   1. Verbatim chart text (`node.body`) — what the source FIRE flow
+ *   1. Verbatim chart text (`node.body`) — what the source Financial Independence flow
  *      chart says, unmodified, so users can verify the app's reading.
  *   2. How this was calculated — the engine's `evidence` plus, when the
  *      user has overridden the node, a side-by-side "Auto: X · You

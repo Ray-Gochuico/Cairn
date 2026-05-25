@@ -54,7 +54,7 @@ export function NextMoveCard() {
         </div>
         <div className="text-sm font-medium mt-1">Set up your roadmap</div>
         <div className="text-xs text-slate-600">
-          See where you stand on the FIRE flow chart.
+          See where you stand on the Financial Independence flow chart.
         </div>
         <Link
           to="/roadmap"

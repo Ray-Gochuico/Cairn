@@ -152,25 +152,25 @@ vi.mock('@/stores/persons-store', () => ({
 }));
 
 describe('WhatIf page — FI cards integration', () => {
-  it('renders the FIRE number + Coast FI cards above the chart', () => {
+  it('renders the Financial Independence number + Coast FI cards above the chart', () => {
     render(
       <MemoryRouter>
         <WhatIf />
       </MemoryRouter>,
     );
     expect(screen.getByTestId('whatif-fi-cards')).toBeInTheDocument();
-    expect(screen.getByTestId('whatif-fire-number')).toBeInTheDocument();
+    expect(screen.getByTestId('whatif-fi-number')).toBeInTheDocument();
     expect(screen.getByTestId('whatif-coastfi-number')).toBeInTheDocument();
   });
 
-  it('FIRE number reflects 4% rule × monthly expenses × 12', () => {
+  it('Financial Independence number reflects 4% rule × monthly expenses × 12', () => {
     render(
       <MemoryRouter>
         <WhatIf />
       </MemoryRouter>,
     );
     // 4000 * 12 / 0.04 = 1,200,000
-    expect(screen.getByTestId('whatif-fire-number')).toHaveTextContent('$1,200,000');
+    expect(screen.getByTestId('whatif-fi-number')).toHaveTextContent('$1,200,000');
   });
 
   it('progress row uses liquid NW (investments + cash) from the active scenario seed state', () => {
@@ -180,7 +180,7 @@ describe('WhatIf page — FI cards integration', () => {
       </MemoryRouter>,
     );
     // Liquid NW = 200,000 + 50,000 = 250,000 (homeEquity is NOT included)
-    const progress = screen.getByTestId('whatif-fire-number-progress');
+    const progress = screen.getByTestId('whatif-fi-number-progress');
     expect(progress).toHaveTextContent('$250,000');
   });
 });
