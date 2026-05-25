@@ -1,6 +1,6 @@
-import type { Account, Holding, Loan, LoanPayment, Transaction, Household, Person, TaxRule, JurisdictionType } from '@/types/schema';
+import type { Account, AccountSnapshot, Holding, Loan, LoanPayment, Transaction, Household, Person, TaxRule, JurisdictionType } from '@/types/schema';
 import type { Bracket } from '@/lib/tax';
-import type { FilingStatus } from '@/types/enums';
+import { AccountType, type FilingStatus } from '@/types/enums';
 import { computeBaselineExpenses } from '@/lib/expense-baseline';
 
 export interface AppSettingsSlice {
@@ -10,6 +10,7 @@ export interface AppSettingsSlice {
 
 export interface RealStateInputs {
   accounts: Account[];
+  accountSnapshots?: AccountSnapshot[];
   holdings: Holding[];
   loans: Loan[];
   loanPayments: LoanPayment[];
@@ -36,9 +37,90 @@ export interface RealState {
   household: Household;
   persons: Person[];
   baselineMonthlyExpenses: number;
+  /** Total cash bucket (CASH + SAVINGS) at projection start, from latest per-account snapshot. */
+  initialCash: number;
+  /** Total invested bucket (everything not CASH/SAVINGS, excluding excluded-from-NW) at projection start. */
+  initialInvestments: number;
   defaults: { inflation: number; returnRate: number };
   startISO: string;
   taxBrackets: RealStateTaxBrackets;
+}
+
+const CASH_ACCOUNT_TYPES = new Set<string>([
+  AccountType.ACCOUNT_CASH,
+  AccountType.ACCOUNT_SAVINGS,
+]);
+
+function isCashAccount(account: Account): boolean {
+  return CASH_ACCOUNT_TYPES.has(account.type);
+}
+
+/**
+ * Returns the latest snapshot for each account on or before `startISO`. The
+ * startISO is 'YYYY-MM' or 'YYYY-MM-DD'; we trim to month-precision and accept
+ * any snapshot whose snapshotDate (YYYY-MM-DD) starts with a month <= startMonth.
+ */
+function latestSnapshotPerAccount(
+  snapshots: AccountSnapshot[],
+  startISO: string,
+): Map<number, AccountSnapshot> {
+  const startMonth = startISO.slice(0, 7);
+  const byAccount = new Map<number, AccountSnapshot>();
+  for (const snap of snapshots) {
+    const snapMonth = snap.snapshotDate.slice(0, 7);
+    if (snapMonth > startMonth) continue;
+    const existing = byAccount.get(snap.accountId);
+    if (!existing || existing.snapshotDate < snap.snapshotDate) {
+      byAccount.set(snap.accountId, snap);
+    }
+  }
+  return byAccount;
+}
+
+/**
+ * Compute initial cash and invested-asset balances from the latest snapshot per
+ * account. Falls back to summing holdings (shareCount * costBasis) only when a
+ * non-cash account has no snapshot — this preserves the legacy behavior for the
+ * narrow case where a user entered per-line holdings but never recorded a
+ * snapshot. Excluded-from-NW accounts are skipped entirely.
+ */
+function computeInitialBalances(
+  accounts: Account[],
+  snapshots: AccountSnapshot[],
+  holdings: Holding[],
+  startISO: string,
+): { initialCash: number; initialInvestments: number } {
+  const byAccount = latestSnapshotPerAccount(snapshots, startISO);
+  let cash = 0;
+  let invested = 0;
+  const accountsWithSnapshot = new Set<number>();
+  for (const account of accounts) {
+    if (account.id === undefined) continue;
+    if (account.excludedFromNetWorth) continue;
+    const snap = byAccount.get(account.id);
+    if (snap) {
+      accountsWithSnapshot.add(account.id);
+      if (isCashAccount(account)) cash += snap.totalValue;
+      else invested += snap.totalValue;
+    }
+  }
+
+  // Fallback: for non-cash accounts without a snapshot, fall back to the legacy
+  // holdings-based valuation (shareCount * costBasis) so older fixtures keep
+  // working. Cash accounts without snapshots stay at zero — we have no other
+  // signal for their balance.
+  for (const account of accounts) {
+    if (account.id === undefined) continue;
+    if (account.excludedFromNetWorth) continue;
+    if (accountsWithSnapshot.has(account.id)) continue;
+    if (isCashAccount(account)) continue;
+    const accountHoldings = holdings.filter((h) => h.accountId === account.id);
+    for (const h of accountHoldings) {
+      invested += h.shareCount * (h.costBasis ?? 0);
+    }
+  }
+
+  return { initialCash: cash, initialInvestments: invested };
 }
 
 function pickBrackets(
@@ -80,6 +162,13 @@ export function captureRealState(inputs: RealStateInputs): RealState {
     standardDeduction: pickStandardDeduction(inputs.taxRules, filingStatus),
   };
 
+  const { initialCash, initialInvestments } = computeInitialBalances(
+    inputs.accounts,
+    inputs.accountSnapshots ?? [],
+    inputs.holdings,
+    inputs.startISO,
+  );
+
   return {
     accounts: inputs.accounts,
     holdings: inputs.holdings,
@@ -88,6 +177,8 @@ export function captureRealState(inputs: RealStateInputs): RealState {
     household: inputs.household,
     persons: inputs.persons,
     baselineMonthlyExpenses,
+    initialCash,
+    initialInvestments,
     defaults: {
       inflation: inputs.appSettings.defaultInflation,
       returnRate: inputs.appSettings.defaultReturnRate,

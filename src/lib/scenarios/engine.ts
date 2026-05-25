@@ -52,16 +52,11 @@ export function projectScenario(
   const out: MonthlyState[] = [];
   const startYear = Number(horizon.startISO.slice(0, 4));
 
-  const initialInvestments = real.holdings.reduce(
-    (acc, h) => acc + h.shareCount * (h.costBasis ?? 0),
-    0,
-  );
-
   let state: MonthlyState = {
     monthISO: horizon.startISO,
-    investments: initialInvestments,
+    investments: real.initialInvestments,
     homeEquity: 0,
-    cash: 0,
+    cash: real.initialCash,
     debtByLoan: Object.fromEntries(real.loans.map((l) => [l.id!, l.currentBalance])),
     netWorth: 0,
     incomeAfterTax: 0,

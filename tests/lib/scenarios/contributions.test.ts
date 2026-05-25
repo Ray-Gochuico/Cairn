@@ -40,6 +40,8 @@ const realState: RealState = {
   household,
   persons,
   baselineMonthlyExpenses: 4500,
+  initialCash: 0,
+  initialInvestments: 200000, // 1000 shares VTI @ $200 costBasis
   defaults: { inflation: 0, returnRate: 0 }, // 0% return → no growth drift, easier math
   startISO: '2026-05',
   taxBrackets: {

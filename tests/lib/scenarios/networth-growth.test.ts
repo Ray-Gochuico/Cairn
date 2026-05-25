@@ -41,6 +41,8 @@ const caSingle: Bracket[] = [
 const realState: RealState = {
   accounts: [], holdings, loans, loanPayments: [], household, persons,
   baselineMonthlyExpenses: 3000,
+  initialCash: 0,
+  initialInvestments: 20000, // 100 shares VTI @ $200 costBasis
   defaults: { inflation: 0.025, returnRate: 0.07 },
   startISO: '2026-05',
   taxBrackets: { federal: federal2026Single, state: caSingle, city: null, standardDeduction: 14600 },
