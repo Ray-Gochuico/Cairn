@@ -11,6 +11,7 @@ import DatePicker from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { AddAnnualTotalButton } from '@/components/contributions/AddAnnualTotalButton';
 
 type FormValues = Omit<Contribution, 'id'>;
 
@@ -275,8 +276,9 @@ export default function ContributionsTab() {
         </div>
       )}
 
-      <div className="mt-4">
+      <div className="mt-4 flex items-center gap-2">
         <Button onClick={() => setMode('create')}>Add Contribution</Button>
+        <AddAnnualTotalButton />
       </div>
     </div>
   );
