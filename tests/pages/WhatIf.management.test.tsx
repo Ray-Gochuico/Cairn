@@ -77,7 +77,12 @@ vi.mock('@/stores/scenarios-store', () => {
   };
 });
 
-vi.mock('@/stores/loans-store', () => ({ useLoansStore: () => ({ loans: [] }) }));
+vi.mock('@/stores/loans-store', () => ({
+  useLoansStore: (selector?: any) => {
+    const state = { loans: [], isLoading: false, error: null, load: vi.fn() };
+    return typeof selector === 'function' ? selector(state) : state;
+  },
+}));
 
 describe('WhatIf page management surfaces', () => {
   it('renders ScenariosPanel in the chart area with Save current + Manage buttons', () => {
