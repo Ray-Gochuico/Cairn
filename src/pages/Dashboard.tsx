@@ -29,6 +29,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import MetricCard from '@/components/cards/MetricCard';
 import { ConcentrationCard } from '@/components/cards/ConcentrationCard';
+import { NextMoveCard } from '@/components/dashboard/NextMoveCard';
 import type {
   Account,
   AccountSnapshot,
@@ -528,6 +529,8 @@ export default function Dashboard() {
         </h1>
         <p className="text-sm text-muted-foreground mt-1">{todayLabel}</p>
       </div>
+
+      <NextMoveCard />
 
       {isInputPending && (
         <div className="rounded-md border border-amber-200 bg-amber-50 p-4 flex flex-wrap items-center justify-between gap-4">
