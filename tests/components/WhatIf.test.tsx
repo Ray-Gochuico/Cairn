@@ -8,6 +8,7 @@ import { setDatabase } from '@/db/db';
 import { loadAllMigrations, runMigrations } from '@/db/migrations';
 import { useScenariosStore } from '@/stores/scenarios-store';
 import { useHouseholdStore } from '@/stores/household-store';
+import { usePersonsStore } from '@/stores/persons-store';
 import { useLoansStore } from '@/stores/loans-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
 import { useAccountsStore } from '@/stores/accounts-store';
@@ -50,8 +51,12 @@ describe('WhatIf page', () => {
         filingStatus: FilingStatus.SINGLE, state: 'CA', city: null,
         monthlyExpenseBaseline: 4500,
         withdrawalRate: 0.04, inflationAssumption: 0.025,
-        growthScenarios: [], persons: [{ id: 1, annualSalaryPretax: 135000 }],
+        growthScenarios: [],
       } as any,
+      isLoading: false, error: null,
+    });
+    usePersonsStore.setState({
+      persons: [{ id: 1, annualSalaryPretax: 135000 } as any],
       isLoading: false, error: null,
     });
     useLoansStore.setState({
@@ -77,6 +82,27 @@ describe('WhatIf page', () => {
     await waitFor(() => expect(screen.getByRole('heading', { name: /what-if/i })).toBeInTheDocument());
   });
 
+  it('triggers load() on loans/holdings/accounts/transactions/persons on mount', async () => {
+    const loadLoans = vi.fn().mockResolvedValue(undefined);
+    const loadHoldings = vi.fn().mockResolvedValue(undefined);
+    const loadAccounts = vi.fn().mockResolvedValue(undefined);
+    const loadTransactions = vi.fn().mockResolvedValue(undefined);
+    const loadPersons = vi.fn().mockResolvedValue(undefined);
+    useLoansStore.setState({ load: loadLoans } as any);
+    useHoldingsStore.setState({ load: loadHoldings } as any);
+    useAccountsStore.setState({ load: loadAccounts } as any);
+    useTransactionsStore.setState({ load: loadTransactions } as any);
+    usePersonsStore.setState({ load: loadPersons } as any);
+    render(<MemoryRouter><WhatIf /></MemoryRouter>);
+    await waitFor(() => {
+      expect(loadLoans).toHaveBeenCalled();
+      expect(loadHoldings).toHaveBeenCalled();
+      expect(loadAccounts).toHaveBeenCalled();
+      expect(loadTransactions).toHaveBeenCalled();
+      expect(loadPersons).toHaveBeenCalled();
+    });
+  });
+
   it('auto-creates baseline scenario and renders the chart on first paint', async () => {
     render(<MemoryRouter><WhatIf /></MemoryRouter>);
     await waitFor(() => expect(useScenariosStore.getState().scenarios).toHaveLength(1));
@@ -99,6 +125,12 @@ describe('WhatIf page', () => {
     const slider = screen.getByLabelText(/horizon/i) as HTMLInputElement;
     fireEvent.change(slider, { target: { value: '120' } });
     expect(useScenariosStore.getState().horizonMonths).toBe(120);
+    // The projection re-runs and the chart picks up the new length on next render.
+    await waitFor(() => {
+      const baselineId = useScenariosStore.getState().scenarios[0].id!;
+      const cached = useScenariosStore.getState().projectionCache.get(baselineId);
+      expect(cached?.states.length).toBe(120);
+    });
   });
 
   it('dollar-mode toggle flips store state', async () => {

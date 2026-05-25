@@ -96,11 +96,10 @@ function stepMonth(
   }
 
   // 2. Compute monthly income across persons
-  const persons = (real.household as unknown as { persons?: Array<{ annualSalaryPretax?: number; salary?: number }> }).persons ?? [];
   let monthlyGrossIncome = 0;
-  persons.forEach((p, idx) => {
+  real.persons.forEach((p, idx) => {
     const plan = payload.income.perPerson[idx] ?? payload.income.perPerson[0];
-    const baseSalary = p.annualSalaryPretax ?? p.salary ?? 0;
+    const baseSalary = p.annualSalaryPretax ?? 0;
     monthlyGrossIncome += computeMonthlyIncomeForPerson(baseSalary, plan, monthISO, startYear);
   });
 

@@ -50,6 +50,7 @@ const inputs: RealStateInputs = {
   loanPayments: [],
   transactions: [baseTx(1, '2026-04-15', 1500)],
   household,
+  persons: [],
   appSettings: { defaultInflation: 0.025, defaultReturnRate: 0.07 },
   startISO: '2026-05-01',
   taxRules: [],

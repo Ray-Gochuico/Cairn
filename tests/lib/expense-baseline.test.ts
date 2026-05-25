@@ -1,10 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { computeBaselineExpenses } from '@/lib/expense-baseline';
+import { computeBaselineExpenses, recentMonthlyExpenseTotals } from '@/lib/expense-baseline';
 import type { Transaction } from '@/types/schema';
 
-// Adjusted for the expense-sign fix: purchase amounts are positive per the
-// Transaction schema convention (amount > 0 = purchase/expense, amount < 0 =
-// refund/credit).
+// Sign convention: per the Transaction schema, amount > 0 is a purchase/expense
+// and amount < 0 is a refund/credit. These tests mirror that convention.
 
 const tx = (id: number, date: string, amount: number): Transaction =>
   ({
@@ -82,5 +81,34 @@ describe('computeBaselineExpenses', () => {
       tx(2, '2026-04-20', -500), // refund — must be ignored
     ];
     expect(computeBaselineExpenses(txs, '2026-05-01')).toBeCloseTo(2000, 0);
+  });
+});
+
+describe('recentMonthlyExpenseTotals', () => {
+  it('returns the most recent month totals, descending, limited to N', () => {
+    const txs = [
+      tx(1, '2026-04-15', 1500), tx(2, '2026-04-20', 200),
+      tx(3, '2026-03-01', 2200),
+      tx(4, '2026-02-10', 1800),
+      tx(5, '2026-01-10', 1700),
+      tx(6, '2025-12-31', 1900),
+      tx(7, '2025-11-15', 1600),
+    ];
+    const out = recentMonthlyExpenseTotals(txs, '2026-05-01', 5);
+    expect(out).toHaveLength(5);
+    expect(out[0]).toEqual({ monthISO: '2026-04', total: 1700 });
+    expect(out[1].monthISO).toBe('2026-03');
+    expect(out[4].monthISO).toBe('2025-12');
+  });
+
+  it('excludes refunds/credits and future months', () => {
+    const txs = [
+      tx(1, '2026-04-15', -5000), // refund — must be ignored
+      tx(2, '2026-04-15', 1000),
+      tx(3, '2026-06-15', 500),   // future relative to asOfISO
+    ];
+    const out = recentMonthlyExpenseTotals(txs, '2026-05-01', 6);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toEqual({ monthISO: '2026-04', total: 1000 });
   });
 });

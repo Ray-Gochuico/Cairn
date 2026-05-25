@@ -32,3 +32,33 @@ export function computeBaselineExpenses(
   const monthsObserved = new Set(recent.map((t) => t.date.slice(0, 7))).size;
   return totalOutflow / Math.max(monthsObserved, 1);
 }
+
+export interface MonthlyExpenseTotal {
+  monthISO: string;       // 'YYYY-MM'
+  total: number;          // sum of expense outflows in that month
+}
+
+/**
+ * Returns the top N most-recent month totals (descending by monthISO),
+ * using the same sign convention as `computeBaselineExpenses`.
+ * Future months (relative to `asOfISO`) are excluded.
+ */
+export function recentMonthlyExpenseTotals(
+  transactions: Transaction[],
+  asOfISO: string,
+  count: number,
+): MonthlyExpenseTotal[] {
+  const startMs = Date.parse(asOfISO);
+  const byMonth = new Map<string, number>();
+  for (const t of transactions) {
+    if (t.amount <= 0) continue;
+    const tMs = Date.parse(t.date);
+    if (tMs > startMs) continue;
+    const month = t.date.slice(0, 7);
+    byMonth.set(month, (byMonth.get(month) ?? 0) + t.amount);
+  }
+  const sorted = Array.from(byMonth.entries())
+    .map(([monthISO, total]) => ({ monthISO, total }))
+    .sort((a, b) => (a.monthISO < b.monthISO ? 1 : -1));
+  return sorted.slice(0, count);
+}

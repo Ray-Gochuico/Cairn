@@ -68,6 +68,6 @@ export function emptyLeverPayload(): LeverPayload {
     lumpSums: [],
     expensePeriods: [],
     returns: { defaultRate: 0.07, overrides: {} },
-    income: { perPerson: [{ annualRaiseRate: 0.03, events: [] }] },
+    income: { perPerson: [{ annualRaiseRate: 0, events: [] }] },
   };
 }

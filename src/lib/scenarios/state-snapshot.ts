@@ -1,4 +1,4 @@
-import type { Account, Holding, Loan, LoanPayment, Transaction, Household, TaxRule, JurisdictionType } from '@/types/schema';
+import type { Account, Holding, Loan, LoanPayment, Transaction, Household, Person, TaxRule, JurisdictionType } from '@/types/schema';
 import type { Bracket } from '@/lib/tax';
 import type { FilingStatus } from '@/types/enums';
 import { computeBaselineExpenses } from '@/lib/expense-baseline';
@@ -15,6 +15,7 @@ export interface RealStateInputs {
   loanPayments: LoanPayment[];
   transactions: Transaction[];
   household: Household;
+  persons: Person[];
   appSettings: AppSettingsSlice;
   startISO: string;
   taxRules: TaxRule[];
@@ -33,6 +34,7 @@ export interface RealState {
   loans: Loan[];
   loanPayments: LoanPayment[];
   household: Household;
+  persons: Person[];
   baselineMonthlyExpenses: number;
   defaults: { inflation: number; returnRate: number };
   startISO: string;
@@ -84,6 +86,7 @@ export function captureRealState(inputs: RealStateInputs): RealState {
     loans: inputs.loans,
     loanPayments: inputs.loanPayments,
     household: inputs.household,
+    persons: inputs.persons,
     baselineMonthlyExpenses,
     defaults: {
       inflation: inputs.appSettings.defaultInflation,

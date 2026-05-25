@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { projectScenario } from '@/lib/scenarios/engine';
 import { emptyLeverPayload } from '@/lib/scenarios/lever-types';
 import type { RealState } from '@/lib/scenarios/state-snapshot';
-import type { Holding, Loan, Household } from '@/types/schema';
+import type { Holding, Loan, Household, Person } from '@/types/schema';
 import type { Bracket } from '@/lib/tax';
 
 const holdings = [
@@ -22,8 +22,11 @@ const household = {
   withdrawalRate: 0.04,
   inflationAssumption: 0.025,
   growthScenarios: [],
-  persons: [{ id: 1, householdId: 1, name: 'P1', annualSalaryPretax: 135000 }],
-} as unknown as Household & { persons: Array<{ id: number; annualSalaryPretax: number }> };
+} as unknown as Household;
+
+const persons: Person[] = [
+  { id: 1, householdId: 1, name: 'P1', annualSalaryPretax: 135000 } as unknown as Person,
+];
 
 const federal2026Single: Bracket[] = [
   { min: 0, max: 11600, rate: 0.10 },
@@ -51,6 +54,7 @@ const realState: RealState = {
   loans,
   loanPayments: [],
   household,
+  persons,
   baselineMonthlyExpenses: 4500,
   defaults: { inflation: 0.025, returnRate: 0.07 },
   startISO: '2026-05',
@@ -93,8 +97,10 @@ describe('projectScenario (end-to-end)', () => {
 describe('projectScenario — tax behavior', () => {
   it('after-tax income rises year-over-year as raises lift gross income', () => {
     const realCA: RealState = { ...realState, household: { ...realState.household, state: 'CA' } as Household };
-    const states = projectScenario(realCA, emptyLeverPayload(), { startISO: '2026-05', months: 36 });
-    // Sample after-tax income across years: should monotonically rise as salary grows by 3%/year default raise.
+    const payload = emptyLeverPayload();
+    payload.income.perPerson[0].annualRaiseRate = 0.03;
+    const states = projectScenario(realCA, payload, { startISO: '2026-05', months: 36 });
+    // Sample after-tax income across years: should monotonically rise with a 3% explicit raise plan.
     const month0  = states[0].incomeAfterTax;
     const month12 = states[12].incomeAfterTax;
     const month24 = states[24].incomeAfterTax;

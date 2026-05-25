@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useScenariosStore } from '@/stores/scenarios-store';
-import { useHouseholdStore } from '@/stores/household-store';
+import { usePersonsStore } from '@/stores/persons-store';
 import { incomeTrajectory } from '@/lib/whatif/income-trajectory';
 import { formatCurrency } from '@/lib/format';
 import type { PersonIncomePlan, IncomeEvent } from '@/lib/scenarios';
@@ -26,16 +26,15 @@ function emptyEvent(): IncomeEvent {
 }
 
 function defaultPersonPlan(): PersonIncomePlan {
-  return { annualRaiseRate: 0.03, events: [] };
+  return { annualRaiseRate: 0, events: [] };
 }
 
 export default function IncomePopover({ open, onOpenChange }: Props) {
   const scenarios = useScenariosStore((s) => s.scenarios);
-  const household = useHouseholdStore((s) => s.household);
+  const persons = usePersonsStore((s) => s.persons);
   const horizonMonths = useScenariosStore((s) => s.horizonMonths);
   const active = scenarios.find((s) => s.isActive);
 
-  const persons = (household as unknown as { persons?: Array<{ annualSalaryPretax?: number; salary?: number }> })?.persons ?? [];
   const personCount = Math.max(1, Math.min(2, persons.length || 1));
   const labels = personCount === 2 ? ['You', 'Partner'] : ['You'];
 
@@ -58,7 +57,7 @@ export default function IncomePopover({ open, onOpenChange }: Props) {
   }, [open, active?.leverPayload, personCount]);
 
   const plan = draft[tab] ?? defaultPersonPlan();
-  const personSalary = persons[tab]?.annualSalaryPretax ?? persons[tab]?.salary ?? 0;
+  const personSalary = persons[tab]?.annualSalaryPretax ?? 0;
 
   const updatePlan = (patch: Partial<PersonIncomePlan>) => {
     setDraft((d) => d.map((p, i) => (i === tab ? { ...p, ...patch } : p)));
@@ -153,15 +152,18 @@ export default function IncomePopover({ open, onOpenChange }: Props) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <Label htmlFor="raise-rate" className="text-xs">Annual raise rate</Label>
+            <Label htmlFor="raise-rate" className="text-xs">Annual raise rate (%)</Label>
             <Input
               id="raise-rate"
               type="number"
-              step={0.005}
-              min={-0.05}
-              max={0.15}
-              value={plan.annualRaiseRate}
-              onChange={(e) => updatePlan({ annualRaiseRate: Number(e.target.value) || 0 })}
+              step={0.25}
+              min={-5}
+              max={15}
+              value={(plan.annualRaiseRate * 100).toFixed(2)}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                updatePlan({ annualRaiseRate: Number.isFinite(n) ? n / 100 : 0 });
+              }}
               aria-label="Annual raise rate"
             />
           </div>
