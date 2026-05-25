@@ -35,6 +35,21 @@ export class FundSectorsRepo {
     return rows.map(rowToFundSector);
   }
 
+  /**
+   * Latest as-of date for a fund's sector rows, or null when no rows exist.
+   * Used by syncStaleFunds to decide whether to refetch sectorWeightings
+   * independently of fund_holdings staleness — a fresh fund_holdings row
+   * doesn't imply a fresh fund_sectors row (true for any user who refreshed
+   * before migration 0021 introduced the table).
+   */
+  async getAsOf(fundTicker: string): Promise<string | null> {
+    const rows = await this.db.select<{ as_of_date: string }>(
+      'SELECT as_of_date FROM fund_sectors WHERE fund_ticker = ? ORDER BY as_of_date DESC LIMIT 1',
+      [fundTicker]
+    );
+    return rows.length === 0 ? null : rows[0].as_of_date;
+  }
+
   async upsertSectors(
     fundTicker: string,
     sectors: { sector: string; weight: number }[],

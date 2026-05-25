@@ -81,4 +81,13 @@ describe('FundSectorsRepo', () => {
       repo.upsertSectors('VTI', [{ sector: 'Technology', weight: 1.5 }], '2025-01-15'),
     ).rejects.toThrow();
   });
+
+  it('getAsOf returns null when no sector rows exist for the fund', async () => {
+    expect(await repo.getAsOf('VTI')).toBeNull();
+  });
+
+  it('getAsOf returns the most recent as_of_date', async () => {
+    await repo.upsertSectors('VTI', [{ sector: 'Technology', weight: 0.28 }], '2025-04-01');
+    expect(await repo.getAsOf('VTI')).toBe('2025-04-01');
+  });
 });

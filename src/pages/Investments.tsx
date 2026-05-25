@@ -17,6 +17,7 @@ import { useViewFilter } from '@/lib/use-view-filter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import BarChartCard from '@/components/charts/BarChartCard';
+import ContributionsByBucketChart from '@/components/charts/ContributionsByBucketChart';
 import DonutChartCard from '@/components/charts/DonutChartCard';
 import InvestmentTimeSeriesChart from '@/components/charts/InvestmentTimeSeriesChart';
 import PerTickerDonut from '@/components/charts/PerTickerDonut';
@@ -356,6 +357,44 @@ export default function Investments() {
   const [refreshing, setRefreshing] = useState(false);
   const [refreshResult, setRefreshResult] = useState<SyncResult | null>(null);
 
+  // One-shot sector backfill on first mount when the user holds funds but
+  // the fund_sectors table is empty. Covers existing users whose
+  // last_refresh_at is recent (so the launch refresh in init.ts is gated off)
+  // but whose fund_sectors never got populated because migration 0021 landed
+  // *after* their last sync. Runs in the background — Yahoo unreachable is
+  // logged and swallowed, identical posture to runMarketDataRefresh.
+  const fundSectors = useFundSectorsStore((s) => s.fundSectors);
+  const fundHoldings = useFundHoldingsStore((s) => s.fundHoldings);
+  const [didAutoBackfill, setDidAutoBackfill] = useState(false);
+
+  useEffect(() => {
+    if (didAutoBackfill) return;
+    // Wait until both stores have loaded at least once. We can't tell "loaded
+    // and empty" from "still loading" without a load flag, so we use
+    // fundHoldings as a proxy: if the user holds funds the launch refresh
+    // populated fundHoldings, and an empty fund_sectors next to a non-empty
+    // fund_holdings is exactly the regression we're patching here.
+    if (fundHoldings.length === 0) return;
+    if (fundSectors.length > 0) return;
+    setDidAutoBackfill(true);
+    void (async () => {
+      try {
+        const db = getDatabase();
+        await syncStaleFunds({
+          yahoo: new YahooClient(),
+          fundHoldings: new FundHoldingsRepo(db),
+          fundSectors: new FundSectorsRepo(db),
+          tickers: new TickersRepo(db),
+          holdings: new HoldingsRepo(db),
+        });
+        await loadFundSectors();
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[investments] auto sector backfill failed:', err);
+      }
+    })();
+  }, [fundHoldings, fundSectors, didAutoBackfill, loadFundSectors]);
+
   const handleRefreshFundData = async () => {
     setRefreshing(true);
     setRefreshResult(null);
@@ -436,6 +475,15 @@ export default function Investments() {
     () => contributionsLast12Months(visibleContributions, currentMonth),
     [visibleContributions, currentMonth],
   );
+
+  // 12-month window for the stacked-by-bucket chart. Built off currentMonth
+  // so it matches the single-series chart above and the two read as a pair
+  // (total flow on top, where the flow goes on bottom).
+  const contribRange = useMemo(() => {
+    const [y, m] = currentMonth.split('-').map(Number);
+    const from = new Date(Date.UTC(y - 1, m - 1, 1));
+    return { from: from.toISOString().slice(0, 7), to: currentMonth };
+  }, [currentMonth]);
 
   const accountSummary = useMemo(() => {
     return visibleAccounts.map((a) => ({
@@ -693,6 +741,13 @@ export default function Investments() {
         xKey="month"
         series={[{ dataKey: 'amount', label: 'Amount' }]}
         yFormatter={(v) => `$${(v / 1000).toFixed(1)}k`}
+      />
+
+      <ContributionsByBucketChart
+        accounts={visibleAccounts}
+        contributions={visibleContributions}
+        fromYyyymm={contribRange.from}
+        toYyyymm={contribRange.to}
       />
 
       <Card>

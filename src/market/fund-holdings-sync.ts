@@ -19,6 +19,12 @@ export interface SyncResult {
   errors: string[];
 }
 
+function isFresh(asOf: string | null, todayIso: string): boolean {
+  if (!asOf) return false;
+  const ageDays = (Date.parse(todayIso) - Date.parse(asOf)) / 86_400_000;
+  return ageDays < STALE_DAYS;
+}
+
 /**
  * For each unique fund ticker the user holds, refresh Yahoo's top holdings AND
  * sector weightings if either is stale (>90 days) or absent. Both come from
@@ -55,22 +61,26 @@ export async function syncStaleFunds(
       skipped.push(ticker);
       continue;
     }
-    const asOf = await deps.fundHoldings.getAsOf(ticker);
-    if (asOf) {
-      const ageDays = (Date.parse(todayIso) - Date.parse(asOf)) / 86_400_000;
-      if (ageDays < STALE_DAYS) {
-        skipped.push(ticker);
-        continue;
-      }
+    // Stale-gate holdings and sectors independently. fund_sectors arrived in
+    // migration 0021 — existing users with already-fresh fund_holdings would
+    // otherwise never trigger a sector fetch, so the sector donut renders as
+    // all "Unclassified" until the holdings hit the 90-day staleness window.
+    const holdingsAsOf = await deps.fundHoldings.getAsOf(ticker);
+    const sectorsAsOf = deps.fundSectors ? await deps.fundSectors.getAsOf(ticker) : null;
+    const holdingsFresh = isFresh(holdingsAsOf, todayIso);
+    const sectorsFresh = deps.fundSectors ? isFresh(sectorsAsOf, todayIso) : true;
+    if (holdingsFresh && sectorsFresh) {
+      skipped.push(ticker);
+      continue;
     }
     try {
-      const result = await deps.yahoo.fundTopHoldings(ticker);
-      // Run sector fetch in parallel-by-await: only if a sectors repo was
-      // provided. Sectors and holdings come from the same quoteSummary
-      // response but Yahoo charges us the same regardless of how many fields
-      // we read, so this is a "free" follow-up request.
+      // Skip the holdings call entirely when holdings are fresh but sectors
+      // need refetching — saves a Yahoo round-trip for the common backfill case.
+      const result = holdingsFresh
+        ? null
+        : await deps.yahoo.fundTopHoldings(ticker);
       let sectorResult: { sectors: { sector: string; weight: number }[]; asOf: string } | null = null;
-      if (deps.fundSectors) {
+      if (deps.fundSectors && !sectorsFresh) {
         try {
           sectorResult = await deps.yahoo.fundSectorWeightings(ticker);
         } catch {
@@ -81,21 +91,16 @@ export async function syncStaleFunds(
         }
       }
 
-      if (result.holdings.length > 0) {
+      let didWrite = false;
+      if (result && result.holdings.length > 0) {
         await deps.fundHoldings.upsertHoldings(ticker, result.holdings, result.asOf);
-        if (deps.fundSectors && sectorResult && sectorResult.sectors.length > 0) {
-          await deps.fundSectors.upsertSectors(ticker, sectorResult.sectors, sectorResult.asOf);
-        }
-        refreshed.push(ticker);
-      } else if (deps.fundSectors && sectorResult && sectorResult.sectors.length > 0) {
-        // Some funds (smaller or international) return sector weightings even
-        // when topHoldings.holdings is empty. Persist what we have so the
-        // sector donut still has data, and count the ticker as refreshed.
-        await deps.fundSectors.upsertSectors(ticker, sectorResult.sectors, sectorResult.asOf);
-        refreshed.push(ticker);
-      } else {
-        skipped.push(ticker);
+        didWrite = true;
       }
+      if (deps.fundSectors && sectorResult && sectorResult.sectors.length > 0) {
+        await deps.fundSectors.upsertSectors(ticker, sectorResult.sectors, sectorResult.asOf);
+        didWrite = true;
+      }
+      (didWrite ? refreshed : skipped).push(ticker);
     } catch (e) {
       errors.push(`${ticker}: ${e instanceof Error ? e.message : String(e)}`);
     }
