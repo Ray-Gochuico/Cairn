@@ -3,11 +3,12 @@ import {
   applyAnnualReturn,
   applyExtraLoanPayment,
   applyLumpSum,
+  computeMonthlyIncomeForPerson,
   monthlyExpenseDeltaFromPeriods,
   monthlyReturnFromAnnual,
   type LoanMonthlyContext,
 } from '@/lib/scenarios/apply-real';
-import type { ExpensePeriod, LumpSumEvent } from '@/lib/scenarios/lever-types';
+import type { ExpensePeriod, LumpSumEvent, PersonIncomePlan } from '@/lib/scenarios/lever-types';
 import type { MonthlyState } from '@/lib/scenarios/engine';
 
 const seed = (overrides: Partial<MonthlyState> = {}): MonthlyState => ({
@@ -114,5 +115,42 @@ describe('applyExtraLoanPayment', () => {
     const result = applyExtraLoanPayment(tiny, { loanId: 1, extraMonthly: 1000 }, '2027-03');
     expect(result.newBalance).toBe(0);
     expect(result.extraApplied).toBeLessThanOrEqual(100);
+  });
+});
+
+describe('computeMonthlyIncomeForPerson', () => {
+  const baseSalary = 135000;
+  const startYear = 2026;
+
+  it('grows by raise rate each January', () => {
+    const plan: PersonIncomePlan = { annualRaiseRate: 0.03, events: [] };
+    expect(computeMonthlyIncomeForPerson(baseSalary, plan, '2026-06', startYear)).toBeCloseTo(135000 / 12, 0);
+    expect(computeMonthlyIncomeForPerson(baseSalary, plan, '2027-01', startYear)).toBeCloseTo(135000 * 1.03 / 12, 0);
+    expect(computeMonthlyIncomeForPerson(baseSalary, plan, '2028-06', startYear)).toBeCloseTo(135000 * 1.03 * 1.03 / 12, 0);
+  });
+
+  it('promotion event sets new salary; subsequent raises compound from new base', () => {
+    const plan: PersonIncomePlan = {
+      annualRaiseRate: 0.03,
+      events: [{ when: '2028-04-01', type: 'promotion', newSalary: 168000 }],
+    };
+    // March 2028: still under prior trajectory (135K × 1.03² = 143,221.5) / 12
+    expect(computeMonthlyIncomeForPerson(baseSalary, plan, '2028-03', startYear)).toBeCloseTo(135000 * 1.03 * 1.03 / 12, 1);
+    // April 2028: jumped to 168K
+    expect(computeMonthlyIncomeForPerson(baseSalary, plan, '2028-04', startYear)).toBeCloseTo(168000 / 12, 0);
+    // Jan 2029: 168K × 1.03
+    expect(computeMonthlyIncomeForPerson(baseSalary, plan, '2029-01', startYear)).toBeCloseTo(168000 * 1.03 / 12, 0);
+  });
+
+  it('sabbatical drops income to 0 for the configured duration', () => {
+    const plan: PersonIncomePlan = {
+      annualRaiseRate: 0.03,
+      events: [{ when: '2034-07-01', type: 'sabbatical', durationMonths: 6 }],
+    };
+    expect(computeMonthlyIncomeForPerson(baseSalary, plan, '2034-06', startYear)).toBeGreaterThan(0);
+    expect(computeMonthlyIncomeForPerson(baseSalary, plan, '2034-07', startYear)).toBe(0);
+    expect(computeMonthlyIncomeForPerson(baseSalary, plan, '2034-12', startYear)).toBe(0);
+    // Resumes Jan 2035 at pre-sabbatical salary
+    expect(computeMonthlyIncomeForPerson(baseSalary, plan, '2035-01', startYear)).toBeGreaterThan(0);
   });
 });
