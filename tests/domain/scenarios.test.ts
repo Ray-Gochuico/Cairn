@@ -111,3 +111,52 @@ describe('ScenariosRepo basic CRUD', () => {
     expect(list.map((s) => s.id)).not.toContain(id);
   });
 });
+
+describe('ScenariosRepo.setActive', () => {
+  let db: SqliteAdapter;
+  let repo: ScenariosRepo;
+
+  beforeEach(async () => {
+    db = new SqliteAdapter();
+    await runMigrations(db, await loadAllMigrations());
+    repo = new ScenariosRepo(db);
+  });
+
+  afterEach(async () => { await db.close(); });
+
+  it('moves the active flag atomically — exactly one active row before and after', async () => {
+    const baselineId = await repo.create(baseline());
+    const variantId  = await repo.create(variant({ isActive: false }));
+
+    let list = await repo.list();
+    expect(list.filter((s) => s.isActive).map((s) => s.id)).toEqual([baselineId]);
+
+    await repo.setActive(variantId);
+    list = await repo.list();
+    expect(list.filter((s) => s.isActive).map((s) => s.id)).toEqual([variantId]);
+  });
+
+  it('setActive(id) on the currently-active scenario is a no-op (still exactly one active)', async () => {
+    const baselineId = await repo.create(baseline());
+    await repo.setActive(baselineId);
+    const list = await repo.list();
+    expect(list.filter((s) => s.isActive).map((s) => s.id)).toEqual([baselineId]);
+  });
+
+  it('setActive throws on unknown id', async () => {
+    await expect(repo.setActive(999)).rejects.toThrow(/not found/);
+  });
+
+  it('the partial unique index would catch a non-transactional flip — we exercise the transaction by setting active twice in quick succession', async () => {
+    const baselineId = await repo.create(baseline());
+    const aId = await repo.create(variant({ name: 'A', isActive: false }));
+    const bId = await repo.create(variant({ name: 'B', isActive: false }));
+
+    await repo.setActive(aId);
+    await repo.setActive(bId);
+    await repo.setActive(baselineId);
+
+    const list = await repo.list();
+    expect(list.filter((s) => s.isActive).map((s) => s.id)).toEqual([baselineId]);
+  });
+});

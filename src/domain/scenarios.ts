@@ -116,4 +116,22 @@ export class ScenariosRepo {
   async delete(id: number): Promise<void> {
     await this.db.execute('DELETE FROM scenarios WHERE id = ?', [id]);
   }
+
+  async setActive(id: number): Promise<void> {
+    const target = await this.findById(id);
+    if (!target) throw new Error(`Scenario ${id} not found`);
+
+    await this.db.execute('BEGIN');
+    try {
+      await this.db.execute('UPDATE scenarios SET is_active = 0 WHERE is_active = 1');
+      await this.db.execute(
+        "UPDATE scenarios SET is_active = 1, updated_at = datetime('now') WHERE id = ?",
+        [id],
+      );
+      await this.db.execute('COMMIT');
+    } catch (e) {
+      try { await this.db.execute('ROLLBACK'); } catch { /* swallow */ }
+      throw e;
+    }
+  }
 }
