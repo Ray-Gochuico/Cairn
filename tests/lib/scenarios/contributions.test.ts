@@ -134,9 +134,10 @@ describe('projectScenario — contributions lever', () => {
     expect(states[11].cash).toBeGreaterThan(0);
   });
 
-  it('allows shortfall — investments still receive contribution, cash drops', () => {
+  it('shortfall floors cash at zero and draws remaining deficit from investments', () => {
     // Force a shortfall by configuring an absurdly large baseline expense
-    // so savings is negative for the segment months.
+    // so savings is negative for the segment months. Test adjusted for the
+    // cash-floor change: cash bottoms at 0 and the deficit eats investments.
     const shortfallReal: RealState = {
       ...realState,
       baselineMonthlyExpenses: 99999,
@@ -147,10 +148,13 @@ describe('projectScenario — contributions lever', () => {
     payload.contributions = [{ startMonth: 0, endMonth: 11, monthlyAmount: 1000 }];
 
     const states = projectScenario(shortfallReal, payload, { startISO: '2026-05', months: 13 });
-    expect(states[11].investments - states[0].investments).toBeCloseTo(11 * 1000, 5);
-    // Cash must be deeply negative: savings was very negative AND we still
-    // pulled $1000 out for contributions each month.
-    expect(states[11].cash).toBeLessThan(0);
+    // Cash floors at zero; never goes negative.
+    expect(states[11].cash).toBe(0);
+    // Investments are drawn down to absorb the deficit. The +1000/mo
+    // contribution still routes in first, but the shortfall (savings - 1000,
+    // which is very negative) hits investments after cash hits zero, so
+    // investments end below their starting balance.
+    expect(states[11].investments).toBeLessThan(states[0].investments);
   });
 
   it('reverts to default savings-routing after the segment ends', () => {
