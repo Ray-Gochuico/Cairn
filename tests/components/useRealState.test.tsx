@@ -9,7 +9,9 @@ import { useHoldingsStore } from '@/stores/holdings-store';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { useScenariosStore } from '@/stores/scenarios-store';
+import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { FilingStatus } from '@/types/enums';
+import type { TaxRule } from '@/types/schema';
 
 function resetStores() {
   useHouseholdStore.setState({
@@ -37,6 +39,7 @@ function resetStores() {
     inflation: 0.025, defaultReturnRate: 0.07,
     projectionCache: new Map(),
   });
+  useTaxRulesStore.setState({ year: null, items: [], isLoading: false, error: null });
 }
 
 const wrapper = ({ children }: { children: React.ReactNode }) => <MemoryRouter>{children}</MemoryRouter>;
@@ -65,5 +68,34 @@ describe('useRealState', () => {
   it('preferring household.monthlyExpenseBaseline over transactions-derived expenses when set', () => {
     const { result } = renderHook(() => useRealState(), { wrapper });
     expect(result.current!.baselineMonthlyExpenses).toBe(4500);
+  });
+
+  it('threads tax-rules-store items onto RealState.taxBrackets for the household jurisdiction', () => {
+    const federalRule: TaxRule = {
+      year: 2026,
+      jurisdictionType: 'FEDERAL',
+      jurisdictionCode: 'US',
+      filingStatus: FilingStatus.SINGLE,
+      brackets: [
+        { min: 0, max: 11600, rate: 0.10 },
+        { min: 11600, max: 47150, rate: 0.12 },
+      ],
+      standardDeduction: 14600,
+    };
+    const caRule: TaxRule = {
+      year: 2026,
+      jurisdictionType: 'STATE',
+      jurisdictionCode: 'CA',
+      filingStatus: FilingStatus.SINGLE,
+      brackets: [{ min: 0, max: 10412, rate: 0.01 }],
+      standardDeduction: 5363,
+    };
+    useTaxRulesStore.setState({ year: 2026, items: [federalRule, caRule], isLoading: false, error: null });
+
+    const { result } = renderHook(() => useRealState(), { wrapper });
+    const real = result.current!;
+    expect(real.taxBrackets.federal.length).toBeGreaterThan(0);
+    expect(real.taxBrackets.state.length).toBeGreaterThan(0);
+    expect(real.taxBrackets.standardDeduction).toBe(14600);
   });
 });

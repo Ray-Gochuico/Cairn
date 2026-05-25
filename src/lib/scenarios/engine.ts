@@ -8,6 +8,7 @@ import {
   monthlyExpenseDeltaFromPeriods,
   type LoanMonthlyContext,
 } from './apply-real';
+import { computeTotalTax } from '@/lib/tax';
 
 export interface MonthlyState {
   monthISO: string;
@@ -27,15 +28,20 @@ export interface Horizon {
   months: number;     // 60..480
 }
 
-// Coarse blended effective-tax-rate estimates by filing status for v1 of the engine.
-// Refined tax integration is deferred to a follow-up; the data layer in S-B can
-// inject a more accurate computeTotalTax via lever payload if needed.
-const EFFECTIVE_TAX_RATE_BY_STATUS: Record<string, number> = {
-  SINGLE: 0.28,
-  MFJ: 0.25,
-  MFS: 0.30,
-  HOH: 0.26,
-};
+// V1 ASSUMPTION: brackets are loaded once from tax_rules at projection start
+// (RealState.taxBrackets) and apply unchanged across the entire 5-40y horizon.
+// Year-over-year bracket inflation indexing is not modeled in v1.
+function annualHouseholdTax(real: RealState, annualHouseholdGross: number): number {
+  return computeTotalTax({
+    gross: annualHouseholdGross,
+    filingStatus: real.household.filingStatus,
+    federalBrackets: real.taxBrackets.federal,
+    stateBrackets: real.taxBrackets.state,
+    cityBrackets: real.taxBrackets.city,
+    standardDeduction: real.taxBrackets.standardDeduction,
+    pretax: { pretax401k: 0, pretaxHealth: 0, pretaxDcfsa: 0, pretaxHsa: 0 },
+  }).total;
+}
 
 export function projectScenario(
   real: RealState,
@@ -98,10 +104,12 @@ function stepMonth(
     monthlyGrossIncome += computeMonthlyIncomeForPerson(baseSalary, plan, monthISO, startYear);
   });
 
-  // 3. Apply a coarse effective tax rate based on filing status (v1 stub).
-  const effectiveRate = EFFECTIVE_TAX_RATE_BY_STATUS[real.household.filingStatus] ?? 0.28;
-  const monthlyAfterTax = monthlyGrossIncome * (1 - effectiveRate);
-  s.incomeAfterTax = monthlyAfterTax;
+  // 3. Bracket-real federal + FICA + state + city tax via computeTotalTax.
+  // Annualize monthly gross, compute annual tax once, amortize back to monthly drag.
+  // (Pretax deductions stay at zero in v1 — a follow-up can thread household pretax in.)
+  const annualGross = monthlyGrossIncome * 12;
+  const annualTax = annualHouseholdTax(real, annualGross);
+  s.incomeAfterTax = (annualGross - annualTax) / 12;
 
   // 4. Expenses: baseline trended + period deltas
   const yearsElapsed = monthIndex / 12;
