@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import {
   Bar,
   CartesianGrid,
@@ -52,6 +52,14 @@ const TIME_WINDOW_OPTIONS: Array<{ value: TimeWindow; label: string }> = [
 ];
 
 const MAX_BUCKETS = 90;
+
+// Hoisted so recharts' internal store sees a stable reference every render.
+// A fresh `{ top, right, bottom, left }` object literal in JSX is enough to
+// re-trigger CartesianChart's axis-layout dispatch each tick, which is what
+// the RenderedTicksReporter loop in the live crash was driving.
+const CHART_MARGIN = { top: 8, right: 16, bottom: 8, left: 8 } as const;
+const LINE_DOT = { r: 3 } as const;
+const EMPTY_CHART_DATA: Array<Record<string, number | string>> = [];
 
 interface InvestmentTimeSeriesChartProps {
   accounts: Account[];
@@ -187,7 +195,9 @@ export default function InvestmentTimeSeriesChart({
   );
 
   const chartData = useMemo(() => {
-    if (selectedAccounts.length === 0 || filteredSnapshots.length === 0) return [];
+    if (selectedAccounts.length === 0 || filteredSnapshots.length === 0) {
+      return EMPTY_CHART_DATA;
+    }
     const bucketed = bucketSnapshots(filteredSnapshots, granularity, MAX_BUCKETS);
     return bucketed.bucketEnds.map((bEnd, i) => {
       const row: Record<string, number | string> = { bucketEnd: bEnd };
@@ -202,6 +212,11 @@ export default function InvestmentTimeSeriesChart({
       return row;
     });
   }, [filteredSnapshots, selectedAccounts, granularity]);
+
+  // Stable reference for recharts' Tooltip `content` prop. A fresh
+  // <CustomTooltip /> element every render re-subscribes recharts' tooltip
+  // dispatcher.
+  const tooltipContent = useMemo<ReactElement>(() => <CustomTooltip />, []);
 
   // Render guards: no eligible accounts vs. user unchecked all.
   const hasEligible = eligibleAccounts.length > 0;
@@ -312,10 +327,7 @@ export default function InvestmentTimeSeriesChart({
           </p>
         ) : (
           <ResponsiveContainer width="100%" height={320}>
-            <ComposedChart
-              data={chartData}
-              margin={{ top: 8, right: 16, bottom: 8, left: 8 }}
-            >
+            <ComposedChart data={chartData} margin={CHART_MARGIN}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis dataKey="bucketEnd" stroke="#64748b" fontSize={11} />
               <YAxis
@@ -324,7 +336,7 @@ export default function InvestmentTimeSeriesChart({
                 fontSize={11}
                 width={64}
               />
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip content={tooltipContent} />
               <Legend />
               {selectedAccounts.map((acc) => (
                 <Bar
@@ -339,7 +351,7 @@ export default function InvestmentTimeSeriesChart({
                 dataKey="total"
                 stroke="#0f172a"
                 strokeWidth={2.5}
-                dot={{ r: 3 }}
+                dot={LINE_DOT}
                 name="Total"
               />
             </ComposedChart>
