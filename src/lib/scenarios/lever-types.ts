@@ -53,12 +53,24 @@ export const IncomeLeverSchema = z.object({
 });
 export type IncomeLever = z.infer<typeof IncomeLeverSchema>;
 
+export const ContributionSegmentSchema = z.object({
+  startMonth: z.number().int().nonnegative(),
+  endMonth: z.number().int().nonnegative().nullable(),
+  monthlyAmount: z.number().nonnegative(),
+  label: z.string().optional(),
+});
+export type ContributionSegment = z.infer<typeof ContributionSegmentSchema>;
+
+export const ContributionsLeverSchema = z.array(ContributionSegmentSchema);
+export type ContributionsLever = z.infer<typeof ContributionsLeverSchema>;
+
 export const LeverPayloadSchema = z.object({
   extraLoanPayments: z.array(ExtraLoanPaymentSchema),
   lumpSums: z.array(LumpSumEventSchema),
   expensePeriods: z.array(ExpensePeriodSchema),
   returns: ReturnScheduleSchema,
   income: IncomeLeverSchema,
+  contributions: ContributionsLeverSchema.default([]),
 });
 export type LeverPayload = z.infer<typeof LeverPayloadSchema>;
 
@@ -69,5 +81,6 @@ export function emptyLeverPayload(): LeverPayload {
     expensePeriods: [],
     returns: { defaultRate: 0.07, overrides: {} },
     income: { perPerson: [{ annualRaiseRate: 0, events: [] }] },
+    contributions: [],
   };
 }
