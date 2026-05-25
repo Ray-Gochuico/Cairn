@@ -89,6 +89,12 @@ export default function DonutChartCard({
                 innerRadius={innerRadius}
                 outerRadius={outerRadius}
                 paddingAngle={1}
+                // Recharts 3.x Pie passes its entire (always-fresh) props object
+                // into useAnimationId, so animationId churns every render and the
+                // key={animationId} on <JavascriptAnimate> remounts it on every
+                // render — its cleanup calls onAnimationEnd → setIsAnimating, which
+                // re-renders Pie and loops. Mirrors ProjectionChart's stance.
+                isAnimationActive={false}
                 label={
                   labelFormatter
                     ? (entry) => labelFormatter(entry as DonutSlice)
