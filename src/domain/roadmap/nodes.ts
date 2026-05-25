@@ -15,6 +15,10 @@ import {
   evaluateRothIra,
   evaluateTraditionalIra,
 } from './rules/iraBranch';
+import {
+  evaluateCreateBudget,
+  evaluateSection0Info,
+} from './rules/budgetEssentials';
 
 /**
  * Declarative registry of every Roadmap chart node, derived from
@@ -47,7 +51,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Create a budget',
     body: 'Knowing where your money goes is the foundation. Budgeting shows your income less your expenses.',
     prerequisites: [],
-    evaluate: stub('s0_create_budget'),
+    evaluate: evaluateCreateBudget,
   },
   {
     id: 's0_pay_rent',
@@ -56,7 +60,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Pay rent / mortgage',
     body: 'Include renters or homeowners insurance if required.',
     prerequisites: ['s0_create_budget'],
-    evaluate: stub('s0_pay_rent'),
+    evaluate: evaluateSection0Info('s0_pay_rent'),
   },
   {
     id: 's0_buy_food',
@@ -65,7 +69,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Buy food / groceries',
     body: 'Depending on your situation you may want to prioritize utilities before this step.',
     prerequisites: ['s0_pay_rent'],
-    evaluate: stub('s0_buy_food'),
+    evaluate: evaluateSection0Info('s0_buy_food'),
   },
   {
     id: 's0_pay_essentials',
@@ -74,7 +78,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Pay essential items',
     body: 'Utilities, power, water, heat, toiletries, etc.',
     prerequisites: ['s0_buy_food'],
-    evaluate: stub('s0_pay_essentials'),
+    evaluate: evaluateSection0Info('s0_pay_essentials'),
   },
   {
     id: 's0_income_expenses',
@@ -83,7 +87,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Pay income-earning expenses',
     body: 'Transportation, possibly internet/phone — anything required to keep earning income.',
     prerequisites: ['s0_pay_essentials'],
-    evaluate: stub('s0_income_expenses'),
+    evaluate: evaluateSection0Info('s0_income_expenses'),
   },
   {
     id: 's0_pay_health_care',
@@ -92,7 +96,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Pay health care',
     body: 'Health insurance and health care expenses.',
     prerequisites: ['s0_income_expenses'],
-    evaluate: stub('s0_pay_health_care'),
+    evaluate: evaluateSection0Info('s0_pay_health_care'),
   },
   {
     id: 's0_min_debt_payments',
@@ -101,7 +105,7 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     title: 'Make minimum payments on all debts and loans',
     body: 'Student loans, credit cards, etc. Avoid delinquency before optimizing anything else.',
     prerequisites: ['s0_pay_health_care'],
-    evaluate: stub('s0_min_debt_payments'),
+    evaluate: evaluateSection0Info('s0_min_debt_payments'),
   },
 
   // ──────────────────────────────────────────────────────────────────

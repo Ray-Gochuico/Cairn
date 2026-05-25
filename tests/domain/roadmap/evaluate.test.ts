@@ -59,11 +59,18 @@ describe('evaluate', () => {
   });
 
   it('returns stub results for nodes whose real rule has not yet shipped', () => {
-    // Tasks 7-9 replace a handful of stubs with real rules; those
-    // produce non-info statuses against a realistic context. This test
-    // confirms the remaining stubs still flow through with their "not
-    // yet implemented" sentinel evidence.
+    // Tasks 7-10 replace stubs with real rules; those produce non-info
+    // statuses against a realistic context. This test confirms the
+    // remaining stubs still flow through with their "not yet
+    // implemented" sentinel evidence.
     const realRuleNodeIds = new Set([
+      's0_create_budget',
+      's0_pay_rent',
+      's0_buy_food',
+      's0_pay_essentials',
+      's0_income_expenses',
+      's0_pay_health_care',
+      's0_min_debt_payments',
       's1_emergency_small',
       's1_emergency_3mo',
       's1_emergency_6_12mo',
@@ -92,18 +99,22 @@ describe('evaluate', () => {
   });
 
   it('applies an override status and stashes the auto-result on autoResult', () => {
+    // Use a node whose evaluator is still a stub so the auto-result
+    // assertion below ("not yet implemented") stays stable as more
+    // rules ship. `s1_consider_ips` is an info-kind node with no
+    // backing rule yet.
     const overrides = new Map<string, RoadmapNodeOverride>([
-      ['s0_create_budget', {
+      ['s1_consider_ips', {
         id: 1,
         householdId: 1,
-        nodeId: 's0_create_budget',
+        nodeId: 's1_consider_ips',
         overrideStatus: 'done',
-        note: 'I track in a different app',
+        note: 'I have one in Notion',
         setAt: '2026-05-23T00:00:00Z',
       }],
     ]);
     const results = evaluate(makeContext({ overrides }));
-    const r = results.get('s0_create_budget')!;
+    const r = results.get('s1_consider_ips')!;
     expect(r.status).toBe('done');
     expect(r.autoResult).toBeDefined();
     expect(r.autoResult!.status).toBe('info');
@@ -111,18 +122,17 @@ describe('evaluate', () => {
   });
 
   it('does not propagate overrides to dependent nodes', () => {
-    // Override s0_create_budget to 'done' — s0_pay_rent (its child)
-    // should still see whatever its own evaluator says (here: the stub
-    // 'info', not 'active' just because the parent is "done").
+    // Override an upstream node — its dependent should still reflect
+    // its own evaluator's output, not be coerced by the parent override.
     const overrides = new Map<string, RoadmapNodeOverride>([
-      ['s0_create_budget', {
-        id: 1, householdId: 1, nodeId: 's0_create_budget',
+      ['s1_consider_ips', {
+        id: 1, householdId: 1, nodeId: 's1_consider_ips',
         overrideStatus: 'done', note: null, setAt: '2026-05-23T00:00:00Z',
       }],
     ]);
     const results = evaluate(makeContext({ overrides }));
-    expect(results.get('s0_create_budget')?.status).toBe('done');
-    expect(results.get('s0_pay_rent')?.status).toBe('info');
+    expect(results.get('s1_consider_ips')?.status).toBe('done');
+    expect(results.get('s1_employer_match_q')?.status).toBe('info');
   });
 
   it('ignores overrides for unknown node ids', () => {

@@ -77,10 +77,17 @@ describe('NODES registry', () => {
   });
 
   it("remaining stubs return an 'info' status with a 'not yet implemented' evidence string", () => {
-    // Tasks 7-9 replace a handful of stubs with real rules; those need
-    // real RoadmapContexts and are exercised in their own rule tests.
-    // Stub assertion here only covers the still-stubbed nodes.
+    // Tasks 7-10 replace stubs with real rules; those need real
+    // RoadmapContexts and are exercised in their own rule tests. The
+    // stub assertion here only covers the still-stubbed nodes.
     const realRuleNodeIds = new Set([
+      's0_create_budget',
+      's0_pay_rent',
+      's0_buy_food',
+      's0_pay_essentials',
+      's0_income_expenses',
+      's0_pay_health_care',
+      's0_min_debt_payments',
       's1_emergency_small',
       's1_emergency_3mo',
       's1_emergency_6_12mo',
