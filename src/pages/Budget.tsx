@@ -1,7 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
-import { summarizeBudget, type BudgetRow } from '@/lib/budget-analysis';
+import {
+  summarizeBudget,
+  partitionTrackedRows,
+  MISC_CATEGORY_ID,
+  MISC_CATEGORY_NAME,
+  type BudgetRow,
+} from '@/lib/budget-analysis';
+import {
+  getTrackedBudgetCategories,
+  hasTrackedBudgetCategoriesSelection,
+  persistTrackedBudgetCategories,
+  trackBudgetCategory,
+  untrackBudgetCategory,
+} from '@/lib/tracked-budget-categories';
 import BudgetOverlayRow from '@/components/budget/BudgetOverlayRow';
 import { Card, CardContent } from '@/components/ui/card';
 
@@ -32,13 +45,43 @@ export default function Budget() {
     [categories, transactions, month],
   );
 
-  // Group budget rows under their parent category for display.
+  // Tracked-category selection persisted in localStorage. Initial value is
+  // whatever's stored (null → []); seeded below from rows that have a budget.
+  const [trackedIds, setTrackedIds] = useState<number[]>(
+    () => getTrackedBudgetCategories() ?? [],
+  );
+
+  // Seed default tracked set once on first load when nothing has been
+  // persisted. If any category already carries a budget, seed only those
+  // (preserving the prior Mint-style overlay set). On a brand-new install
+  // where no budgets exist yet, seed every budgetable category so the user
+  // can enter their first budget directly without having to "add" anything.
+  useEffect(() => {
+    if (hasTrackedBudgetCategoriesSelection()) return;
+    if (summary.rows.length === 0) return;
+    const budgeted = summary.rows.filter((r) => r.budget != null).map((r) => r.categoryId);
+    const seeded = budgeted.length > 0 ? budgeted : summary.rows.map((r) => r.categoryId);
+    persistTrackedBudgetCategories(seeded);
+    setTrackedIds(seeded);
+  }, [summary.rows]);
+
+  const { tracked, misc } = useMemo(
+    () => partitionTrackedRows(summary.rows, trackedIds),
+    [summary.rows, trackedIds],
+  );
+
+  const untrackedRows = useMemo(
+    () => summary.rows.filter((r) => !trackedIds.includes(r.categoryId)),
+    [summary.rows, trackedIds],
+  );
+
+  // Group tracked rows under their parent category for display.
   const groups = useMemo(() => {
     const nameById = new Map(
       categories.filter((c) => c.id != null).map((c) => [c.id as number, c.name]),
     );
     const map = new Map<string, BudgetRow[]>();
-    for (const r of summary.rows) {
+    for (const r of tracked) {
       const key = r.parentCategoryId != null
         ? (nameById.get(r.parentCategoryId) ?? 'General')
         : 'General';
@@ -47,7 +90,7 @@ export default function Budget() {
       map.set(key, arr);
     }
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [summary.rows, categories]);
+  }, [tracked, categories]);
 
   const anyBudgetSet = summary.rows.some((r) => r.budget != null);
 
@@ -65,6 +108,24 @@ export default function Budget() {
       return;
     }
     await updateCategory(categoryId, { monthlyBudget: value });
+  };
+
+  const handleUntrack = (categoryId: number) => {
+    untrackBudgetCategory(categoryId);
+    setTrackedIds((ids) => ids.filter((id) => id !== categoryId));
+  };
+
+  const handleTrack = (categoryId: number) => {
+    trackBudgetCategory(categoryId);
+    setTrackedIds((ids) => (ids.includes(categoryId) ? ids : [...ids, categoryId]));
+  };
+
+  const handleAddCategory = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const id = Number(e.target.value);
+    if (Number.isFinite(id) && id > 0) {
+      handleTrack(id);
+    }
+    e.target.value = '';
   };
 
   return (
@@ -101,6 +162,30 @@ export default function Budget() {
         </Card>
       )}
 
+      {untrackedRows.length > 0 && (
+        <div className="flex items-center gap-2 text-sm">
+          <label htmlFor="add-tracked-category" className="text-muted-foreground">
+            Add category:
+          </label>
+          <select
+            id="add-tracked-category"
+            aria-label="Add category"
+            className="flex h-8 rounded-md border border-input bg-transparent px-2 py-1 text-sm"
+            defaultValue=""
+            onChange={handleAddCategory}
+          >
+            <option value="" disabled>
+              Pick a category to track…
+            </option>
+            {untrackedRows.map((r) => (
+              <option key={r.categoryId} value={r.categoryId}>
+                {r.categoryName}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <div className="space-y-8">
         {groups.map(([parentName, rows]) => {
           const groupBudget = rows.reduce((s, r) => s + (r.budget ?? 0), 0);
@@ -117,16 +202,40 @@ export default function Budget() {
               </div>
               <div className="divide-y">
                 {rows.map((r) => (
-                  <BudgetOverlayRow
-                    key={r.categoryId}
-                    row={r}
-                    onBudgetCommit={handleBudgetCommit}
-                  />
+                  <div key={r.categoryId} className="flex items-center gap-2">
+                    <div className="flex-1 min-w-0">
+                      <BudgetOverlayRow row={r} onBudgetCommit={handleBudgetCommit} />
+                    </div>
+                    <button
+                      type="button"
+                      aria-label={`Untrack ${r.categoryName}`}
+                      onClick={() => handleUntrack(r.categoryId)}
+                      className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>
           );
         })}
+
+        {summary.rows.length > 0 && (
+          <div>
+            <div className="flex items-center justify-between border-b pb-1 mb-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {MISC_CATEGORY_NAME}
+              </h3>
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {currency(misc.actual)} of {currency(misc.budget ?? 0)}
+              </span>
+            </div>
+            <div className="divide-y">
+              <BudgetOverlayRow row={{ ...misc, categoryId: MISC_CATEGORY_ID }} />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
