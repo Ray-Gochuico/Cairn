@@ -35,29 +35,35 @@ describe('palette', () => {
 });
 
 describe('SECTOR_COLORS', () => {
-  it('covers the 11 GICS sectors plus 4 pseudo-sectors', () => {
+  it('covers the 11 Morningstar/Yahoo sectors plus pseudo-sectors and Misc', () => {
+    // Keys mirror Yahoo's exact labels — see palette.ts for why this matters.
     expect(Object.keys(SECTOR_COLORS)).toEqual([
       'Technology',
-      'Financials',
-      'Health Care',
-      'Consumer Discretionary',
+      'Financial Services',
+      'Healthcare',
+      'Consumer Cyclical',
       'Communication Services',
       'Industrials',
-      'Consumer Staples',
+      'Consumer Defensive',
       'Energy',
       'Utilities',
-      'Materials',
+      'Basic Materials',
       'Real Estate',
       'Fixed Income',
       'Commodities',
       'Crypto',
       'Unclassified',
+      'Misc',
     ]);
   });
 
-  it('assigns a distinct hex to every sector', () => {
-    const hexes = Object.values(SECTOR_COLORS);
-    expect(new Set(hexes).size).toBe(hexes.length);
+  it('every named sector (not Unclassified/Misc) has a distinct hex', () => {
+    // Unclassified and Misc deliberately share the neutral gray; the 14
+    // named sectors should all be visually distinct.
+    const named = Object.entries(SECTOR_COLORS)
+      .filter(([k]) => k !== 'Unclassified' && k !== 'Misc')
+      .map(([, hex]) => hex);
+    expect(new Set(named).size).toBe(named.length);
   });
 
   it('every sector color is a 6-digit hex', () => {
@@ -66,8 +72,9 @@ describe('SECTOR_COLORS', () => {
     }
   });
 
-  it('Unclassified deliberately reuses the neutral gray', () => {
+  it('Unclassified and Misc reuse the neutral gray', () => {
     expect(SECTOR_COLORS.Unclassified).toBe(CHART_NEUTRAL);
+    expect(SECTOR_COLORS.Misc).toBe(CHART_NEUTRAL);
   });
 });
 

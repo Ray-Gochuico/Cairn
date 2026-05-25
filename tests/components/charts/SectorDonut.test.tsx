@@ -368,6 +368,47 @@ describe('SectorDonut — colors', () => {
     expect(wedge.dataset.color).toBe('#3b82f6');
   });
 
+  it('REGRESSION: assigns colors to every sector Yahoo returns (Morningstar labels)', () => {
+    // Yahoo's topHoldings.sectorWeightings and assetProfile.sector both
+    // use Morningstar labels ("Financial Services", "Healthcare",
+    // "Consumer Cyclical", "Basic Materials", "Consumer Defensive") —
+    // NOT the GICS labels the palette used to be keyed on. Without aliases
+    // these sectors would all fall through to the neutral gray, leaving
+    // the donut visually undifferentiated.
+    setTickers([
+      makeTicker({ ticker: 'VTI', assetClass: 'US_TOTAL_MARKET' }),
+    ]);
+    setReport([{ ticker: 'VTI', effectiveExposure: 10_000 }]);
+    setFundSectors([
+      { fundTicker: 'VTI', sector: 'Technology', weight: 0.10, asOfDate: '2026-01-01' },
+      { fundTicker: 'VTI', sector: 'Financial Services', weight: 0.10, asOfDate: '2026-01-01' },
+      { fundTicker: 'VTI', sector: 'Healthcare', weight: 0.10, asOfDate: '2026-01-01' },
+      { fundTicker: 'VTI', sector: 'Consumer Cyclical', weight: 0.10, asOfDate: '2026-01-01' },
+      { fundTicker: 'VTI', sector: 'Communication Services', weight: 0.10, asOfDate: '2026-01-01' },
+      { fundTicker: 'VTI', sector: 'Industrials', weight: 0.10, asOfDate: '2026-01-01' },
+      { fundTicker: 'VTI', sector: 'Consumer Defensive', weight: 0.10, asOfDate: '2026-01-01' },
+      { fundTicker: 'VTI', sector: 'Energy', weight: 0.10, asOfDate: '2026-01-01' },
+      { fundTicker: 'VTI', sector: 'Utilities', weight: 0.05, asOfDate: '2026-01-01' },
+      { fundTicker: 'VTI', sector: 'Basic Materials', weight: 0.05, asOfDate: '2026-01-01' },
+      { fundTicker: 'VTI', sector: 'Real Estate', weight: 0.10, asOfDate: '2026-01-01' },
+    ]);
+    render(<SectorDonut />);
+
+    // Every wedge must have a 6-digit hex AND must not be the neutral gray
+    // (the fallback for unknown sectors). Both signals together catch a
+    // future regression where one Yahoo label loses its palette entry.
+    const NEUTRAL = '#94a3b8'; // mirrors CHART_NEUTRAL
+    for (const sector of [
+      'Technology', 'Financial Services', 'Healthcare', 'Consumer Cyclical',
+      'Communication Services', 'Industrials', 'Consumer Defensive', 'Energy',
+      'Utilities', 'Basic Materials', 'Real Estate',
+    ]) {
+      const wedge = screen.getByTestId(`slice-${sector}`);
+      expect(wedge.dataset.color).toMatch(/^#[0-9a-f]{6}$/i);
+      expect(wedge.dataset.color, `sector "${sector}" fell through to neutral`).not.toBe(NEUTRAL);
+    }
+  });
+
   it('uses shaded variants of the sector color for industry wedges', () => {
     setTickers([
       makeTicker({ ticker: 'AAPL', sector: 'Technology', industry: 'Consumer Electronics' }),

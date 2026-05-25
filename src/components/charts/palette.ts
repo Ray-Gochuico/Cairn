@@ -72,32 +72,42 @@ export const SWATCH_OPTIONS = [...CHART_PALETTE, ...LEGACY_TAILWIND_PALETTE];
 /**
  * Sector → base color map for the SectorDonut.
  *
- * Covers the 11 GICS sectors Yahoo's assetProfile returns plus the
- * pseudo-sectors that sector-classification.ts derives from asset class
- * (Fixed Income, Commodities, Crypto, Unclassified). Real Estate is in
- * GICS and used directly.
+ * Covers the 11 sectors Yahoo's assetProfile and topHoldings.sectorWeightings
+ * endpoints return plus the pseudo-sectors that sector-classification.ts
+ * derives from asset class (Fixed Income, Commodities, Crypto, Unclassified,
+ * Misc). Yahoo uses Morningstar-style labels ("Financial Services",
+ * "Healthcare", "Consumer Cyclical") rather than the older GICS-style names
+ * ("Financials", "Health Care", "Consumer Discretionary"), so the keys here
+ * mirror Yahoo's exact output — otherwise wedges fall through to the
+ * neutral fallback and the donut looks like a grey blob.
  *
  * Hues are spaced around the color wheel so adjacent wedges in a typical
  * portfolio (tech-heavy + finance-heavy) read as distinct sectors at a
- * glance. Unclassified deliberately uses the neutral gray so it visually
- * recedes the same way the per-ticker donut's "Misc" wedge does.
+ * glance. Unclassified and Misc deliberately use neutral gray so they
+ * visually recede the same way the per-ticker donut's "Misc" wedge does.
  */
 export const SECTOR_COLORS: Record<string, string> = {
+  // 11 Morningstar/Yahoo sector labels — what the live API returns.
   'Technology':              '#3b82f6',
-  'Financials':              '#10b981',
-  'Health Care':             '#f59e0b',
-  'Consumer Discretionary':  '#ef4444',
+  'Financial Services':      '#10b981',
+  'Healthcare':              '#f59e0b',
+  'Consumer Cyclical':       '#ef4444',
   'Communication Services':  '#8b5cf6',
   'Industrials':             '#ec4899',
-  'Consumer Staples':        '#14b8a6',
+  'Consumer Defensive':      '#14b8a6',
   'Energy':                  '#f97316',
   'Utilities':               '#6366f1',
-  'Materials':               '#84cc16',
+  'Basic Materials':         '#84cc16',
   'Real Estate':             '#a855f7',
+  // Pseudo-sectors derived from asset class in sector-classification.ts.
   'Fixed Income':            '#0ea5e9',
   'Commodities':             '#facc15',
   'Crypto':                  '#f43f5e',
+  // Catch-all wedges should visually recede rather than compete with named
+  // sectors. Both 'Unclassified' (the pseudo-sector fallback) and 'Misc'
+  // (concentration's untracked-fund-tail bucket) use the same neutral.
   'Unclassified':            CHART_NEUTRAL,
+  'Misc':                    CHART_NEUTRAL,
 };
 
 export function colorForSector(sector: string): string {
