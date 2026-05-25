@@ -142,20 +142,31 @@ function stepMonth(
   }
 
   // 6. Savings = income - expenses - loan payments.
-  // If a contributions segment is active, route the fixed amount to investments
-  // and let any surplus (or shortfall) flow to cash. Shortfall is allowed in v1:
-  // investments still receive the full segment amount, cash can drop or go
-  // negative. With no segment active (or no segments configured), preserve the
-  // original "all savings → investments" routing.
+  // Route monthly cash flow so that cash is floored at zero and any remaining
+  // shortfall draws from investments instead of letting cash go negative.
+  // - With an active contributions segment: pull the fixed amount into
+  //   investments, then route the remaining surplus (savings - contribution)
+  //   to cash if positive, or apply the cash-floor shortfall rule if negative.
+  // - With no segment active: positive savings → investments, negative savings
+  //   → cash-floor shortfall rule.
+  // The shortfall rule: deduct from cash first, floor cash at zero, then deduct
+  // any remaining deficit from investments. Returns are applied after this
+  // routing (step 7), so investments still receive their monthly growth on
+  // whatever balance remains.
   s.savings = s.incomeAfterTax - s.expenses - regularLoanPayments - extraLoanPayments;
   const contribution = activeContributionAmount(payload.contributions, monthIndex);
   if (contribution !== null) {
     s.investments += contribution;
-    s.cash += s.savings - contribution;
+    const remainder = s.savings - contribution;
+    if (remainder >= 0) {
+      s.cash += remainder;
+    } else {
+      applyCashFloorShortfall(s, -remainder);
+    }
   } else if (s.savings > 0) {
     s.investments += s.savings;
-  } else {
-    s.cash += s.savings;
+  } else if (s.savings < 0) {
+    applyCashFloorShortfall(s, -s.savings);
   }
 
   // 7. Apply this month's return to investments
@@ -165,6 +176,20 @@ function stepMonth(
 
   s.netWorth = computeNetWorth(s);
   return s;
+}
+
+// Deduct `deficit` (a positive number) from cash first; if cash can't cover it,
+// floor cash at zero and pull the rest from investments. Investments may go
+// negative if the deficit exceeds both buckets — we don't clamp, since that
+// would silently hide an insolvent projection from the user.
+function applyCashFloorShortfall(s: MonthlyState, deficit: number): void {
+  if (s.cash >= deficit) {
+    s.cash -= deficit;
+    return;
+  }
+  const fromInvestments = deficit - s.cash;
+  s.cash = 0;
+  s.investments -= fromInvestments;
 }
 
 function computeNetWorth(s: MonthlyState): number {
