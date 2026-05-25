@@ -19,16 +19,16 @@ const variant: Scenario = {
 describe('MilestoneStrip', () => {
   it('renders one chip per visible scenario with its name and color', () => {
     const milestones = new Map([
-      [1, { debtFreeISO: '2029-06', fireISO: '2040-01' }],
-      [2, { debtFreeISO: '2028-03', fireISO: '2037-10' }],
+      [1, { debtFreeISO: '2029-06', financialIndependenceISO: '2040-01' }],
+      [2, { debtFreeISO: '2028-03', financialIndependenceISO: '2037-10' }],
     ]);
     render(<MemoryRouter><MilestoneStrip scenarios={[baseline, variant]} milestones={milestones} /></MemoryRouter>);
     expect(screen.getByText('Baseline')).toBeInTheDocument();
     expect(screen.getByText('Aggressive')).toBeInTheDocument();
     expect(screen.getByText(/Debt-free Jun 2029/i)).toBeInTheDocument();
-    expect(screen.getByText(/FIRE Jan 2040/i)).toBeInTheDocument();
+    expect(screen.getByText(/FI Jan 2040/i)).toBeInTheDocument();
     expect(screen.getByText(/Debt-free Mar 2028/i)).toBeInTheDocument();
-    expect(screen.getByText(/FIRE Oct 2037/i)).toBeInTheDocument();
+    expect(screen.getByText(/FI Oct 2037/i)).toBeInTheDocument();
   });
 
   it('skips invisible scenarios', () => {
@@ -38,14 +38,14 @@ describe('MilestoneStrip', () => {
   });
 
   it('renders "—" when a milestone is never reached within the horizon', () => {
-    const milestones = new Map([[1, { debtFreeISO: undefined, fireISO: undefined }]]);
+    const milestones = new Map([[1, { debtFreeISO: undefined, financialIndependenceISO: undefined }]]);
     render(<MemoryRouter><MilestoneStrip scenarios={[baseline]} milestones={milestones} /></MemoryRouter>);
     expect(screen.getByText(/Debt-free —/)).toBeInTheDocument();
-    expect(screen.getByText(/FIRE —/)).toBeInTheDocument();
+    expect(screen.getByText(/FI —/)).toBeInTheDocument();
   });
 
   it('applies the scenario color to the chip swatch', () => {
-    const m = new Map([[1, { debtFreeISO: '2029-06', fireISO: '2040-01' }]]);
+    const m = new Map([[1, { debtFreeISO: '2029-06', financialIndependenceISO: '2040-01' }]]);
     const { container } = render(<MemoryRouter><MilestoneStrip scenarios={[baseline]} milestones={m} /></MemoryRouter>);
     const swatch = container.querySelector('[data-testid="milestone-swatch-1"]');
     expect(swatch).not.toBeNull();

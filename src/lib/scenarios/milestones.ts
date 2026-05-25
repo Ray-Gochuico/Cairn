@@ -1,13 +1,13 @@
 import type { MonthlyState } from './engine';
 
-export interface FireParams {
+export interface FinancialIndependenceParams {
   /** Safe withdrawal rate, e.g. 0.04 for the 4% rule. */
   withdrawalRate: number;
 }
 
 export interface Milestones {
   debtFreeISO?: string;
-  fireISO?: string;
+  financialIndependenceISO?: string;
   /**
    * First month in the projection where every earner's salary has dropped to
    * zero. Marks the accumulation-to-drawdown transition driven by
@@ -24,9 +24,12 @@ export interface Milestones {
 
 const MONTHS_30Y = 360;
 
-export function detectMilestones(states: MonthlyState[], params: FireParams): Milestones {
+export function detectMilestones(
+  states: MonthlyState[],
+  params: FinancialIndependenceParams,
+): Milestones {
   let debtFreeISO: string | undefined;
-  let fireISO: string | undefined;
+  let financialIndependenceISO: string | undefined;
   let retirementISO: string | undefined;
 
   for (let i = 0; i < states.length; i++) {
@@ -35,10 +38,10 @@ export function detectMilestones(states: MonthlyState[], params: FireParams): Mi
     if (!debtFreeISO && totalDebt === 0) {
       debtFreeISO = s.monthISO;
     }
-    if (!fireISO) {
+    if (!financialIndependenceISO) {
       const monthlyWithdrawalCapacity = (s.netWorth * params.withdrawalRate) / 12;
       if (monthlyWithdrawalCapacity >= s.expenses && s.expenses > 0) {
-        fireISO = s.monthISO;
+        financialIndependenceISO = s.monthISO;
       }
     }
     if (!retirementISO && i > 0 && s.incomeAfterTax === 0 && states[i - 1].incomeAfterTax > 0) {
@@ -50,5 +53,5 @@ export function detectMilestones(states: MonthlyState[], params: FireParams): Mi
     states.length >= MONTHS_30Y ? states[MONTHS_30Y - 1] : states[states.length - 1];
   const netWorth30y = horizonState ? horizonState.netWorth : undefined;
 
-  return { debtFreeISO, fireISO, retirementISO, netWorth30y };
+  return { debtFreeISO, financialIndependenceISO, retirementISO, netWorth30y };
 }

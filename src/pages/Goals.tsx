@@ -46,7 +46,7 @@ import type { CsvColumn } from '@/lib/csv';
  *     experiences in the Monthly mini-window).
  *   - growth rate: pulled from household.growthScenarios — prefer the entry
  *     labelled "Moderate", then the second entry, then the first, then 6%.
- *     Mirrors FireCard's resolution so the two pages agree on one default.
+ *     Mirrors FinancialIndependenceCard's resolution so the two pages agree on one default.
  */
 
 const TYPE_ICONS: Record<GoalType, string> = {
@@ -100,7 +100,7 @@ function monthlyContributionAvg(
 
 /**
  * Pick the growth rate to project against. Prefers an entry labelled
- * "Moderate" (matches FireCard); falls back to the 2nd entry, then the 1st,
+ * "Moderate" (matches FinancialIndependenceCard); falls back to the 2nd entry, then the 1st,
  * then 6% if the household has no scenarios at all. Defensive defaults
  * matter here because the page renders before household.load() resolves.
  */

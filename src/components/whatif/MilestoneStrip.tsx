@@ -39,7 +39,7 @@ export default function MilestoneStrip({ scenarios, milestones }: MilestoneStrip
             <span className="text-muted-foreground">·</span>
             <span>Debt-free {fmtMonth(m?.debtFreeISO)}</span>
             <span className="text-muted-foreground">·</span>
-            <span>FIRE {fmtMonth(m?.fireISO)}</span>
+            <span>FI {fmtMonth(m?.financialIndependenceISO)}</span>
           </div>
         );
       })}

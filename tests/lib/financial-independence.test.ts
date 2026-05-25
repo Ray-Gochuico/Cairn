@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { yearsToFi, fireSeries } from '@/lib/fire';
+import { yearsToFi, financialIndependenceSeries } from '@/lib/financial-independence';
 
 describe('yearsToFi', () => {
   it('returns 0 when already at target', () => {
@@ -36,9 +36,9 @@ describe('yearsToFi', () => {
   });
 });
 
-describe('fireSeries', () => {
+describe('financialIndependenceSeries', () => {
   it('returns one entry per growth scenario', () => {
-    const result = fireSeries({
+    const result = financialIndependenceSeries({
       pv: 100_000,
       annualContribution: 24_000,
       targetFv: 1_000_000,
@@ -56,7 +56,7 @@ describe('fireSeries', () => {
 
   // Bonus test
   it('returns [] for an empty scenarios array', () => {
-    const result = fireSeries({
+    const result = financialIndependenceSeries({
       pv: 100_000,
       annualContribution: 24_000,
       targetFv: 1_000_000,

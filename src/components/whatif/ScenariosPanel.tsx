@@ -89,8 +89,8 @@ export function ScenariosPanel({
                   </span>
                 )}
                 <div className="text-[10px] text-muted-foreground truncate">
-                  Debt-free {formatMilestone(ms?.debtFreeISO)} · FIRE{' '}
-                  {formatMilestone(ms?.fireISO)}
+                  Debt-free {formatMilestone(ms?.debtFreeISO)} · FI{' '}
+                  {formatMilestone(ms?.financialIndependenceISO)}
                 </div>
               </button>
               <Button

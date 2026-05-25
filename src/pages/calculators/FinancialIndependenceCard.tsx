@@ -4,15 +4,18 @@ import { usePersonsStore } from '@/stores/persons-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useContributionsStore } from '@/stores/contributions-store';
 import { CalculatorCard } from './CalculatorCard';
-import { fireSeries } from '@/lib/fire';
+import { financialIndependenceSeries } from '@/lib/financial-independence';
 import { formatCurrency } from '@/lib/format';
 
-interface FireCardProps {
+interface FinancialIndependenceCardProps {
   cardId?: string;
   onHide?: (cardId: string) => void;
 }
 
-export function FireCard({ cardId, onHide }: FireCardProps = {}) {
+export function FinancialIndependenceCard({
+  cardId,
+  onHide,
+}: FinancialIndependenceCardProps = {}) {
   const { household } = useHouseholdStore();
   const { persons } = usePersonsStore();
   const { snapshots } = useSnapshotsStore();
@@ -47,7 +50,7 @@ export function FireCard({ cardId, onHide }: FireCardProps = {}) {
 
     const targetFv = (household.monthlyExpenseBaseline * 12) / household.withdrawalRate;
 
-    return fireSeries({
+    return financialIndependenceSeries({
       pv,
       annualContribution,
       targetFv,
@@ -81,7 +84,7 @@ export function FireCard({ cardId, onHide }: FireCardProps = {}) {
       cardId={cardId}
       onHide={onHide}
       title="Years to FI"
-      headline={<span data-testid="fire-headline">{yearsLabel}</span>}
+      headline={<span data-testid="fi-headline">{yearsLabel}</span>}
     >
       <p className="text-sm text-muted-foreground mb-3">
         Target portfolio:{' '}

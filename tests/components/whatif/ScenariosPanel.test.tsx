@@ -56,8 +56,8 @@ vi.mock('@/stores/scenarios-store', () => ({
 
 function makeMilestones(): Map<number, Milestones> {
   const m = new Map<number, Milestones>();
-  m.set(1, { debtFreeISO: '2029-06', fireISO: '2042-04' });
-  m.set(2, { debtFreeISO: '2028-02', fireISO: '2041-09' });
+  m.set(1, { debtFreeISO: '2029-06', financialIndependenceISO: '2042-04' });
+  m.set(2, { debtFreeISO: '2028-02', financialIndependenceISO: '2041-09' });
   return m;
 }
 
@@ -95,7 +95,7 @@ describe('ScenariosPanel', () => {
   it('renders a key milestone summary per row', () => {
     setup();
     expect(screen.getAllByText(/debt-free/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/fire/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/\bfi\b/i).length).toBeGreaterThan(0);
   });
 
   it('clicking a visibility checkbox calls toggleVisibility(id)', async () => {

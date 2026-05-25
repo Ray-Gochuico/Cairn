@@ -65,7 +65,7 @@ export function ManageScenariosModal({
                 <th className="py-1 pr-2">Name</th>
                 <th className="py-1 pr-2">Levers Applied</th>
                 <th className="py-1 pr-2">Debt-free</th>
-                <th className="py-1 pr-2">FIRE</th>
+                <th className="py-1 pr-2">FI</th>
                 <th className="py-1 pr-2">30y NW</th>
                 <th className="py-1 pr-2 w-44">Actions</th>
               </tr>
@@ -91,7 +91,7 @@ export function ManageScenariosModal({
                       {summarizeLevers(s.leverPayload, { loanNames })}
                     </td>
                     <td className="py-2 pr-2 align-top">{fmtMilestone(ms?.debtFreeISO)}</td>
-                    <td className="py-2 pr-2 align-top">{fmtMilestone(ms?.fireISO)}</td>
+                    <td className="py-2 pr-2 align-top">{fmtMilestone(ms?.financialIndependenceISO)}</td>
                     <td className="py-2 pr-2 align-top tabular-nums">
                       {fmtCurrency(ms?.netWorth30y)}
                     </td>

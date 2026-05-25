@@ -28,7 +28,7 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
     if (!household.growthScenarios || household.growthScenarios.length === 0) return null;
     if (household.withdrawalRate <= 0) return null;
 
-    // Latest snapshot per account: same approach as FireCard. ISO date strings
+    // Latest snapshot per account: same approach as FinancialIndependenceCard. ISO date strings
     // sort lexicographically the same as chronologically, so a string compare
     // is sufficient.
     const latestPerAccount = new Map<number, { date: string; value: number }>();
@@ -50,7 +50,7 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
     );
     const yearsUntilRetirement = Math.min(...yearsByPerson);
 
-    // Same target as FireCard: annual_expenses / withdrawal_rate.
+    // Same target as FinancialIndependenceCard: annual_expenses / withdrawal_rate.
     const targetFv = (household.monthlyExpenseBaseline * 12) / household.withdrawalRate;
 
     const rows: ScenarioRow[] = household.growthScenarios.map((s) => ({
@@ -77,7 +77,7 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
   const { pv, targetFv, yearsUntilRetirement, rows } = computed;
 
   // Headline percent uses the Moderate scenario when present; otherwise the
-  // middle of the list (mirrors FireCard's "stable reference" choice).
+  // middle of the list (mirrors FinancialIndependenceCard's "stable reference" choice).
   const moderate =
     rows.find((r) => r.label === 'Moderate') ??
     rows[Math.min(1, rows.length - 1)] ??
