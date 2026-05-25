@@ -1,3 +1,4 @@
+import React from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -6,7 +7,43 @@ import { useLoansStore } from '@/stores/loans-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { LoanType } from '@/types/enums';
 import type { Loan } from '@/types/schema';
-import Loans from '@/pages/Loans';
+
+// Mock recharts so the stacked debt BarChart renders inspectable DOM in
+// jsdom. Each <Bar> becomes a div carrying its dataKey + stackId so the
+// tests below can assert the segment count by loan type.
+vi.mock('recharts', () => {
+  return {
+    ResponsiveContainer: ({ children }: { children: React.ReactNode }) => (
+      <div data-testid="rc-responsive">{children}</div>
+    ),
+    BarChart: ({ children }: { children: React.ReactNode }) => (
+      <div data-testid="rc-barchart">{children}</div>
+    ),
+    Bar: (props: { dataKey: string; stackId?: string; name?: string }) =>
+      React.createElement('div', {
+        'data-testid': `rc-bar-${props.dataKey}`,
+        'data-key': props.dataKey,
+        'data-stack-id': props.stackId ?? '',
+        'data-name': props.name ?? '',
+      }),
+    LineChart: ({ children }: { children: React.ReactNode }) => (
+      <div data-testid="rc-linechart">{children}</div>
+    ),
+    Line: (props: { dataKey: string }) =>
+      React.createElement('div', {
+        'data-testid': `rc-line-${props.dataKey}`,
+        'data-key': props.dataKey,
+      }),
+    CartesianGrid: () => null,
+    XAxis: () => null,
+    YAxis: () => null,
+    Tooltip: () => null,
+    Legend: () => null,
+  };
+});
+
+// Import the page AFTER mocking recharts.
+const { default: Loans } = await import('@/pages/Loans');
 
 function makeLoan(overrides: Partial<Loan> = {}): Loan {
   return {
@@ -177,6 +214,121 @@ describe('Loans page', () => {
 
     createSpy.mockRestore();
     revokeSpy.mockRestore();
+  });
+
+  it('renders a single-segment stack when only one loan type exists', () => {
+    useLoansStore.setState({
+      loans: [
+        makeLoan({
+          id: 1,
+          name: 'Only Mortgage',
+          type: LoanType.MORTGAGE,
+          currentBalance: 100000,
+          interestRate: 0.05,
+          termMonths: 24,
+          firstPaymentDate: '2026-01-01',
+        }),
+      ],
+      isLoading: false,
+      error: null,
+    });
+
+    const { container } = renderLoans();
+
+    // Title proves we're rendering the stacked debt chart card.
+    expect(screen.getByText(/total debt over time/i)).toBeInTheDocument();
+
+    // One stacked segment when there's a single loan type. Every Bar
+    // belonging to the debt stack must share one stackId.
+    const bars = container.querySelectorAll('[data-testid^="rc-bar-"]');
+    expect(bars.length).toBe(1);
+    expect(bars[0].getAttribute('data-stack-id')).toBeTruthy();
+    // The segment is named after the loan type label so the legend reads
+    // 'Mortgage' rather than the raw enum value.
+    expect(bars[0].getAttribute('data-name')).toBe('Mortgage');
+  });
+
+  it('renders a multi-segment stack broken out by loan type', () => {
+    useLoansStore.setState({
+      loans: [
+        makeLoan({
+          id: 1,
+          name: 'Primary Mortgage',
+          type: LoanType.MORTGAGE,
+          currentBalance: 300000,
+          interestRate: 0.05,
+          termMonths: 24,
+          firstPaymentDate: '2026-01-01',
+          monthlyPayment: 13000,
+        }),
+        makeLoan({
+          id: 2,
+          name: 'Car Loan',
+          type: LoanType.AUTO,
+          currentBalance: 20000,
+          interestRate: 0.06,
+          termMonths: 12,
+          firstPaymentDate: '2026-01-01',
+          monthlyPayment: 1700,
+        }),
+      ],
+      isLoading: false,
+      error: null,
+    });
+
+    const { container } = renderLoans();
+
+    // Two distinct loan types -> two segments in the stack.
+    const bars = container.querySelectorAll('[data-testid^="rc-bar-"]');
+    expect(bars.length).toBe(2);
+
+    // All segments share a single stackId (so they actually stack).
+    const stackIds = new Set(
+      Array.from(bars).map((b) => b.getAttribute('data-stack-id')),
+    );
+    expect(stackIds.size).toBe(1);
+    expect([...stackIds][0]).toBeTruthy();
+
+    // The two segments must correspond to the two loan types present.
+    const names = new Set(
+      Array.from(bars).map((b) => b.getAttribute('data-name')),
+    );
+    expect(names.has('Mortgage')).toBe(true);
+    expect(names.has('Auto')).toBe(true);
+  });
+
+  it('does not include loan-type segments for types with zero balance', () => {
+    // Two mortgages and zero loans of any other type → still 1 segment.
+    useLoansStore.setState({
+      loans: [
+        makeLoan({
+          id: 1,
+          name: 'Mortgage A',
+          type: LoanType.MORTGAGE,
+          currentBalance: 150000,
+          interestRate: 0.05,
+          termMonths: 24,
+          firstPaymentDate: '2026-01-01',
+        }),
+        makeLoan({
+          id: 2,
+          name: 'Mortgage B',
+          type: LoanType.MORTGAGE,
+          currentBalance: 100000,
+          interestRate: 0.05,
+          termMonths: 24,
+          firstPaymentDate: '2026-01-01',
+        }),
+      ],
+      isLoading: false,
+      error: null,
+    });
+
+    const { container } = renderLoans();
+
+    const bars = container.querySelectorAll('[data-testid^="rc-bar-"]');
+    expect(bars.length).toBe(1);
+    expect(bars[0].getAttribute('data-name')).toBe('Mortgage');
   });
 
   it('handles a short loan (< 60 months) without truncation', async () => {
