@@ -18,6 +18,18 @@ export interface ConcentrationWarning {
 
 export interface ConcentrationReport {
   perTicker: { ticker: string; effectiveExposure: number; pctOfPortfolio: number }[];
+  /**
+   * Pre-look-through per-ticker exposure: each holding contributes to its own
+   * ticker (fund tickers are NOT replaced by their underlying top-N + Misc).
+   * Same leverage/direction math as perTicker, but funds stay intact so the
+   * sector donut can distribute each fund across its fund_sectors weights.
+   *
+   * Use this for any per-ticker view that needs to keep fund identity (sector
+   * breakdown, asset-class allocation, raw holdings views). Use perTicker for
+   * any view that wants effective exposure to individual companies after fund
+   * look-through (per-company donut, concentration warnings).
+   */
+  tickerExposures: { ticker: string; effectiveExposure: number }[];
   perAssetClass: { assetClass: AssetClass; effectiveExposure: number; pctOfPortfolio: number }[];
   totalLeverage: number;
   warnings: ConcentrationWarning[];
@@ -31,6 +43,7 @@ const FUND_ASSET_CLASSES = new Set<AssetClass>([
 
 export function computeConcentration(input: ConcentrationInput): ConcentrationReport {
   const tickerExposure = new Map<string, number>();
+  const rawTickerExposure = new Map<string, number>();
   const assetClassExposure = new Map<AssetClass, number>();
   let absLeverageSum = 0;
 
@@ -41,6 +54,14 @@ export function computeConcentration(input: ConcentrationInput): ConcentrationRe
     const sign = meta?.direction === 'SHORT' ? -1 : 1;
     const isFund = FUND_ASSET_CLASSES.has(assetClass);
     const fundRows = isFund ? input.fundHoldings.get(h.ticker) : undefined;
+    // Always accumulate the raw (pre-look-through) per-ticker exposure so the
+    // sector donut sees the fund ticker itself rather than its top-N
+    // underlyings. Same leverage/direction math as the post-look-through
+    // pass below.
+    rawTickerExposure.set(
+      h.ticker,
+      (rawTickerExposure.get(h.ticker) ?? 0) + h.value * leverage * sign,
+    );
 
     if (fundRows && fundRows.length > 0) {
       let totalCovered = 0;
@@ -79,6 +100,10 @@ export function computeConcentration(input: ConcentrationInput): ConcentrationRe
     effectiveExposure,
     pctOfPortfolio: Math.abs(effectiveExposure) / portfolio,
   })).sort((a, b) => b.pctOfPortfolio - a.pctOfPortfolio);
+  const tickerExposures = [...rawTickerExposure].map(([ticker, effectiveExposure]) => ({
+    ticker,
+    effectiveExposure,
+  }));
   const perAssetClass = [...assetClassExposure].map(([assetClass, effectiveExposure]) => ({
     assetClass,
     effectiveExposure,
@@ -122,7 +147,7 @@ export function computeConcentration(input: ConcentrationInput): ConcentrationRe
     message: `Total effective leverage is ${totalLeverage.toFixed(2)}x (>1.5x).`,
   });
 
-  return { perTicker, perAssetClass, totalLeverage, warnings };
+  return { perTicker, tickerExposures, perAssetClass, totalLeverage, warnings };
 }
 
 /**
