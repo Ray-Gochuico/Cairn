@@ -1,6 +1,7 @@
 import type { LeverPayload } from './lever-types';
 import type { RealState } from './state-snapshot';
 import {
+  activeContributionAmount,
   applyAnnualReturn,
   applyLumpSum,
   applyExtraLoanPayment,
@@ -140,10 +141,22 @@ function stepMonth(
     }
   }
 
-  // 6. Savings = income - expenses - loan payments; route to investments
+  // 6. Savings = income - expenses - loan payments.
+  // If a contributions segment is active, route the fixed amount to investments
+  // and let any surplus (or shortfall) flow to cash. Shortfall is allowed in v1:
+  // investments still receive the full segment amount, cash can drop or go
+  // negative. With no segment active (or no segments configured), preserve the
+  // original "all savings → investments" routing.
   s.savings = s.incomeAfterTax - s.expenses - regularLoanPayments - extraLoanPayments;
-  if (s.savings > 0) s.investments += s.savings;
-  else s.cash += s.savings;
+  const contribution = activeContributionAmount(payload.contributions, monthIndex);
+  if (contribution !== null) {
+    s.investments += contribution;
+    s.cash += s.savings - contribution;
+  } else if (s.savings > 0) {
+    s.investments += s.savings;
+  } else {
+    s.cash += s.savings;
+  }
 
   // 7. Apply this month's return to investments
   const year = Number(monthISO.slice(0, 4));

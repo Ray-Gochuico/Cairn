@@ -94,6 +94,44 @@ describe('projectScenario (end-to-end)', () => {
   });
 });
 
+describe('projectScenario — contributions lever combined with other levers', () => {
+  it('handles contributions + extra loan payments + return overrides together without crashing or breaking earlier invariants', () => {
+    const payload = emptyLeverPayload();
+    payload.contributions = [
+      { startMonth: 0, endMonth: 59, monthlyAmount: 1000, label: 'Y1-Y5 $1k/mo' },
+      { startMonth: 60, endMonth: null, monthlyAmount: 2000, label: 'Y6+ $2k/mo' },
+    ];
+    payload.extraLoanPayments = [{ loanId: 1, extraMonthly: 200 }];
+    payload.returns = { defaultRate: 0.07, overrides: { '2027': -0.15, '2028': 0.2 } };
+
+    const states = projectScenario(realState, payload, { startISO: '2026-05', months: 84 });
+
+    // Auto loan still gets paid off (extra payments win — milestone still fires).
+    const debtFreeMonth = states.find((s) => Object.values(s.debtByLoan).reduce((a, b) => a + b, 0) === 0);
+    expect(debtFreeMonth).toBeDefined();
+
+    // Spot-check: month 60 lies in the Y6+ segment ($2000/mo) and prior months
+    // in the Y1-Y5 segment ($1000/mo). Net worth must be a finite number through
+    // the horizon — the combination of negative-year returns, extra debt service,
+    // and contribution routing must not produce NaN or Infinity.
+    expect(Number.isFinite(states[60].netWorth)).toBe(true);
+    expect(Number.isFinite(states[83].investments)).toBe(true);
+  });
+
+  it('shortfall is permitted: investments still receive contribution even when savings is negative', () => {
+    const hostileReal: RealState = {
+      ...realState,
+      baselineMonthlyExpenses: 99999,
+      household: { ...realState.household, monthlyExpenseBaseline: 99999 } as Household,
+    };
+    const payload = emptyLeverPayload();
+    payload.contributions = [{ startMonth: 0, endMonth: 11, monthlyAmount: 1500 }];
+    const states = projectScenario(hostileReal, payload, { startISO: '2026-05', months: 13 });
+    expect(states[11].investments - states[0].investments).toBeGreaterThan(0);
+    expect(states[11].cash).toBeLessThan(0);
+  });
+});
+
 describe('projectScenario — tax behavior', () => {
   it('after-tax income rises year-over-year as raises lift gross income', () => {
     const realCA: RealState = { ...realState, household: { ...realState.household, state: 'CA' } as Household };
