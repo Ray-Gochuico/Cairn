@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { extractTextItems } from '@/pdf/extract';
 import { parseStatement } from '@/pdf/parse-statement';
 import { PdfReviewModal } from '@/components/dialogs/PdfReviewModal';
@@ -512,7 +513,17 @@ export default function Spending() {
 
       {/* Recent transactions list */}
       <section>
-        <h2 className="text-lg font-medium mb-3">Recent transactions</h2>
+        <div className="flex items-baseline justify-between mb-3">
+          <h2 className="text-lg font-medium">Recent transactions</h2>
+          {transactions.length > 0 && (
+            <Link
+              to="/spending/transactions"
+              className="text-sm underline text-muted-foreground hover:text-foreground"
+            >
+              Open all transactions
+            </Link>
+          )}
+        </div>
         {transactions.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No transactions yet. Import a statement to get started.
@@ -534,6 +545,7 @@ export default function Spending() {
             <tbody>
               {[...visibleTransactions]
                 .sort((a, b) => b.date.localeCompare(a.date))
+                .slice(0, 10)
                 .map((t) => (
                   <tr key={t.id} className="border-b">
                     <td className="py-2 pr-4">{t.date}</td>

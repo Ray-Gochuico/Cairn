@@ -3,6 +3,7 @@ import {
   getTrackedBudgetCategories,
   persistTrackedBudgetCategories,
   trackBudgetCategory,
+  trackBudgetCategories,
   untrackBudgetCategory,
   hasTrackedBudgetCategoriesSelection,
   TRACKED_BUDGET_CATEGORIES_KEY,
@@ -43,6 +44,27 @@ describe('tracked-budget-categories localStorage helpers', () => {
     persistTrackedBudgetCategories([7, 33, 41]);
     untrackBudgetCategory(33);
     expect(getTrackedBudgetCategories()).toEqual([7, 41]);
+  });
+
+  it('trackBudgetCategories appends a batch atomically and de-duplicates', () => {
+    persistTrackedBudgetCategories([7]);
+    trackBudgetCategories([33, 41, 7]); // 7 is already tracked → dedupe
+    expect(getTrackedBudgetCategories()).toEqual([7, 33, 41]);
+  });
+
+  it('trackBudgetCategories on a never-set selection seeds from []', () => {
+    // hasTrackedBudgetCategoriesSelection() === false before the call.
+    expect(hasTrackedBudgetCategoriesSelection()).toBe(false);
+    trackBudgetCategories([5, 9]);
+    expect(getTrackedBudgetCategories()).toEqual([5, 9]);
+    expect(hasTrackedBudgetCategoriesSelection()).toBe(true);
+  });
+
+  it('trackBudgetCategories with an empty batch is a no-op (does not write)', () => {
+    // Pre: nothing persisted.
+    trackBudgetCategories([]);
+    // Still treated as "never set" — no write was made.
+    expect(hasTrackedBudgetCategoriesSelection()).toBe(false);
   });
 
   it('falls back to null when stored value is malformed', () => {

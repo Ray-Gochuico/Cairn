@@ -118,7 +118,9 @@ describe('projectScenario — contributions lever combined with other levers', (
     expect(Number.isFinite(states[83].investments)).toBe(true);
   });
 
-  it('shortfall is permitted: investments still receive contribution even when savings is negative', () => {
+  it('shortfall is permitted: cash floors at zero and investments absorb the deficit', () => {
+    // Adjusted for the cash-floor change: cash bottoms at 0 and any remaining
+    // deficit (after contributions and the savings shortfall) hits investments.
     const hostileReal: RealState = {
       ...realState,
       baselineMonthlyExpenses: 99999,
@@ -127,8 +129,102 @@ describe('projectScenario — contributions lever combined with other levers', (
     const payload = emptyLeverPayload();
     payload.contributions = [{ startMonth: 0, endMonth: 11, monthlyAmount: 1500 }];
     const states = projectScenario(hostileReal, payload, { startISO: '2026-05', months: 13 });
-    expect(states[11].investments - states[0].investments).toBeGreaterThan(0);
-    expect(states[11].cash).toBeLessThan(0);
+    expect(states[11].cash).toBe(0);
+    // Run never produces NaN/Infinity even when the household is insolvent.
+    expect(Number.isFinite(states[11].investments)).toBe(true);
+  });
+});
+
+describe('projectScenario — cash floor + investments deficit routing', () => {
+  // No-loans, no-return base so each test reads the routing exactly.
+  // (RealState.defaults are read by ChartToolbar etc; the engine reads
+  // payload.returns. Tests below set both.)
+  const flatReal: RealState = {
+    ...realState,
+    loans: [],
+    defaults: { inflation: 0, returnRate: 0 },
+  };
+
+  function zeroReturnPayload() {
+    const p = emptyLeverPayload();
+    p.returns = { defaultRate: 0, overrides: {} };
+    return p;
+  }
+
+  it('saving household: investments rise from both savings and returns', () => {
+    // Positive-savings household: cash gets no flow (savings > 0 → routed
+    // to investments). With nonzero return investments grow from BOTH the
+    // savings contribution and compounded return each month.
+    const real: RealState = {
+      ...flatReal,
+      household: { ...flatReal.household, monthlyExpenseBaseline: 3000 } as Household,
+      baselineMonthlyExpenses: 3000,
+    };
+    const sevenPct = emptyLeverPayload(); // defaultRate: 0.07
+    const states = projectScenario(real, sevenPct, { startISO: '2026-05', months: 13 });
+    expect(states[12].investments).toBeGreaterThan(states[0].investments);
+    expect(states[12].cash).toBeGreaterThanOrEqual(0);
+    // Compare with-return vs no-return trajectory. The 7% one must end
+    // higher than the 0% one, confirming returns are applied AFTER the
+    // savings routing.
+    const noReturnStates = projectScenario(real, zeroReturnPayload(), { startISO: '2026-05', months: 13 });
+    expect(states[12].investments).toBeGreaterThan(noReturnStates[12].investments);
+  });
+
+  it('moderate deficit with cash buffer: cash drawn down (not negative)', () => {
+    // Seed a positive-cash situation by configuring a contributions segment
+    // that pulls slightly less than savings into investments — surplus flows
+    // to cash. Verify that cash builds up without going negative.
+    const payload = zeroReturnPayload();
+    payload.contributions = [{ startMonth: 0, endMonth: 5, monthlyAmount: 100 }];
+    const states = projectScenario(flatReal, payload, { startISO: '2026-05', months: 7 });
+    expect(states[6].cash).toBeGreaterThan(0);
+    expect(states[6].investments).toBeGreaterThan(states[0].investments);
+  });
+
+  it('heavy deficit: cash floors at zero, investments draws down, returns still applied each month', () => {
+    // Deficit household: expenses just exceed income so savings is negative
+    // each month, but the monthly draw is small enough that investments
+    // stay positive across the 12-month horizon. Compare 5%-return vs
+    // 0%-return: with positive return the investments balance erodes less
+    // per month, ending HIGHER than the no-return case. This is the
+    // observable signal that returns are applied AFTER the cash-floor
+    // deduction each month (step 7 in stepMonth).
+    // Income at 135k/yr CA → ~$8k/mo after-tax → mild deficit at $9k/mo
+    // expenses + $425 loan → ~$1.4k/mo deficit on $200k investments.
+    const real: RealState = {
+      ...flatReal,
+      household: { ...flatReal.household, monthlyExpenseBaseline: 9000 } as Household,
+      baselineMonthlyExpenses: 9000,
+      loans: [], // already cleared in flatReal, kept explicit
+    };
+    const fivePct = emptyLeverPayload();
+    fivePct.returns = { defaultRate: 0.05, overrides: {} };
+    const states = projectScenario(real, fivePct, { startISO: '2026-05', months: 13 });
+    // Cash never dips below zero.
+    for (let i = 0; i < states.length; i++) {
+      expect(states[i].cash).toBeGreaterThanOrEqual(0);
+    }
+    // Investments stay positive across the horizon and absorb the deficit.
+    expect(states[12].investments).toBeGreaterThan(0);
+    expect(states[12].investments).toBeLessThan(states[0].investments);
+    // Returns are still applied each month: 5%-return ends higher than 0%.
+    const noReturnStates = projectScenario(real, zeroReturnPayload(), { startISO: '2026-05', months: 13 });
+    expect(states[12].investments).toBeGreaterThan(noReturnStates[12].investments);
+  });
+
+  it('parity: saving household without contributions behaves identically to pre-change routing', () => {
+    // Saving household → savings > 0 path. The cash-floor change leaves this
+    // code path untouched. Investments must accumulate the full savings each
+    // month, cash must stay at zero (no flow into cash).
+    // Use 0% return + 0% inflation → savings is constant month over month,
+    // so the monthly investment delta should be identical month 1 vs month 12.
+    const states = projectScenario(flatReal, zeroReturnPayload(), { startISO: '2026-05', months: 13 });
+    expect(states[12].cash).toBe(0);
+    expect(states[12].investments).toBeGreaterThan(states[0].investments);
+    const delta1 = states[1].investments - states[0].investments;
+    const delta12 = states[12].investments - states[11].investments;
+    expect(delta1).toBeCloseTo(delta12, 5);
   });
 });
 

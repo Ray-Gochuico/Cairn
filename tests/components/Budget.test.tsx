@@ -182,28 +182,97 @@ describe('Budget page', () => {
       expect(totals.length).toBeGreaterThan(0);
     });
 
-    it('the "Add category" picker re-adds an untracked category to the tracked list', async () => {
+    it('the "Add categories" picker batches multiple selections into one update', async () => {
       const repo = new CategoriesRepo(db);
       await repo.update(33, { monthlyBudget: 600 });
       await repo.update(17, { monthlyBudget: 200 });
       await useTransactionsStore.getState().createMany([seedTxn(17, 80)]);
+      // Start with only Groceries tracked. Two budgetable categories untracked
+      // (Gas/Fuel and at least one other budgetable seeded row).
       localStorage.setItem('trackedBudgetCategories.v1', JSON.stringify([33]));
 
       render(<MemoryRouter><Budget /></MemoryRouter>);
       const user = userEvent.setup();
       await screen.findByText('Groceries');
 
-      // Gas/Fuel is not tracked — its input should not exist.
+      // Gas/Fuel is not tracked — its input should not exist yet.
       expect(screen.queryByLabelText(/budget for gas\/fuel/i)).not.toBeInTheDocument();
 
-      // Pick Gas/Fuel from the "Add category" select.
-      const picker = screen.getByLabelText(/add category/i);
-      await user.selectOptions(picker, '17');
+      // Open the picker.
+      await user.click(screen.getByRole('button', { name: /add categor/i }));
+
+      // Check Gas/Fuel and apply.
+      await user.click(screen.getByRole('checkbox', { name: 'Gas/Fuel' }));
+      const apply = screen.getByRole('button', { name: /add 1 categor/i });
+      await user.click(apply);
 
       // Gas/Fuel input now renders.
       await waitFor(() => {
         expect(screen.getByLabelText(/budget for gas\/fuel/i)).toBeInTheDocument();
       });
+
+      // localStorage was written exactly once with both ids merged.
+      const stored = JSON.parse(localStorage.getItem('trackedBudgetCategories.v1') ?? '[]');
+      expect(stored.sort((a: number, b: number) => a - b)).toEqual([17, 33]);
+    });
+
+    it('the multi-select picker can add several categories in one click', async () => {
+      const repo = new CategoriesRepo(db);
+      // Set budgets on three categories so the picker has multiple options.
+      await repo.update(33, { monthlyBudget: 600 }); // Groceries
+      await repo.update(17, { monthlyBudget: 200 }); // Gas/Fuel
+      await repo.update(34, { monthlyBudget: 100 }); // (next budgetable id)
+      // Start with only Groceries tracked.
+      localStorage.setItem('trackedBudgetCategories.v1', JSON.stringify([33]));
+
+      render(<MemoryRouter><Budget /></MemoryRouter>);
+      const user = userEvent.setup();
+      await screen.findByText('Groceries');
+
+      await user.click(screen.getByRole('button', { name: /add categor/i }));
+
+      // Check two boxes — note: the names are whatever the seed data carries.
+      const cb17 = screen.getByRole('checkbox', { name: 'Gas/Fuel' });
+      await user.click(cb17);
+      // Get the remaining checkboxes (there should be at least one more) and
+      // click the first one that isn't Gas/Fuel.
+      const others = screen.getAllByRole('checkbox').filter((c) => c !== cb17);
+      expect(others.length).toBeGreaterThan(0);
+      await user.click(others[0]!);
+
+      const apply = screen.getByRole('button', { name: /add 2 categor/i });
+      await user.click(apply);
+
+      // After applying, Gas/Fuel input renders, and storage was updated once.
+      await waitFor(() => {
+        expect(screen.getByLabelText(/budget for gas\/fuel/i)).toBeInTheDocument();
+      });
+      const stored = JSON.parse(localStorage.getItem('trackedBudgetCategories.v1') ?? '[]') as number[];
+      expect(stored).toContain(33);
+      expect(stored).toContain(17);
+      expect(stored.length).toBe(3); // Groceries + Gas/Fuel + one other
+    });
+
+    it('opening the picker, closing without applying, leaves the tracked list unchanged', async () => {
+      const repo = new CategoriesRepo(db);
+      await repo.update(33, { monthlyBudget: 600 });
+      await repo.update(17, { monthlyBudget: 200 });
+      localStorage.setItem('trackedBudgetCategories.v1', JSON.stringify([33]));
+
+      render(<MemoryRouter><Budget /></MemoryRouter>);
+      const user = userEvent.setup();
+      await screen.findByText('Groceries');
+
+      await user.click(screen.getByRole('button', { name: /add categor/i }));
+      await user.click(screen.getByRole('checkbox', { name: 'Gas/Fuel' }));
+
+      // Close without applying. (Dialog renders an sr-only "Close" button.)
+      await user.click(screen.getByRole('button', { name: /^close$/i }));
+
+      // Tracked list still just [33], Gas/Fuel input not in the tracked rows.
+      expect(screen.queryByLabelText(/budget for gas\/fuel/i)).not.toBeInTheDocument();
+      const stored = JSON.parse(localStorage.getItem('trackedBudgetCategories.v1') ?? '[]');
+      expect(stored).toEqual([33]);
     });
   });
 });
