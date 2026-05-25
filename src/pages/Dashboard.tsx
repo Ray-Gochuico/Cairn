@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactElement } from 'react';
+import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { PencilIcon, CheckIcon, PlusIcon } from 'lucide-react';
 import { useHouseholdStore } from '@/stores/household-store';
@@ -32,7 +32,9 @@ import MetricCard from '@/components/cards/MetricCard';
 import { ConcentrationCard } from '@/components/cards/ConcentrationCard';
 import { NextMoveCard } from '@/components/dashboard/NextMoveCard';
 import { EditablePill } from '@/components/dashboard/EditablePill';
+import { EditableWidget } from '@/components/dashboard/EditableWidget';
 import { usePillLayout } from '@/components/dashboard/use-pill-layout';
+import { useWidgetLayout } from '@/components/dashboard/use-widget-layout';
 import { SpendingWidget } from '@/components/dashboard/SpendingWidget';
 import type {
   Account,
@@ -627,51 +629,19 @@ export default function Dashboard() {
   const visiblePills = orderedPills.filter((p) => !p.entry.hidden);
   const hiddenPills = orderedPills.filter((p) => p.entry.hidden);
 
-  return (
-    <div className="p-6 max-w-6xl space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-3xl font-semibold">
-            {household?.name ? `Hi, ${household.name}` : 'Dashboard'}
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">{todayLabel}</p>
-        </div>
-        <Button
-          type="button"
-          size="sm"
-          variant={editing ? 'default' : 'outline'}
-          onClick={() => setEditing((v) => !v)}
-          aria-pressed={editing}
-          data-testid="dashboard-edit-toggle"
-        >
-          {editing ? (
-            <>
-              <CheckIcon className="h-4 w-4 mr-1.5" />
-              Done
-            </>
-          ) : (
-            <>
-              <PencilIcon className="h-4 w-4 mr-1.5" />
-              Edit
-            </>
-          )}
-        </Button>
-      </div>
+  // Widget layout (whole-row blocks the user can re-order or hide).
+  // NextMoveCard and the monthly-input nudge intentionally stay anchored at
+  // the top — they're action prompts, not informational widgets, so making
+  // them rearrangeable would risk burying calls to action.
+  type WidgetId = 'pills-section' | 'spending' | 'concentration' | 'goals';
+  const widgetIds = useMemo<readonly WidgetId[]>(
+    () => ['pills-section', 'spending', 'concentration', 'goals'],
+    [],
+  );
+  const widgetLayout = useWidgetLayout(widgetIds);
 
-      <NextMoveCard />
-
-      {isInputPending && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-4 flex flex-wrap items-center justify-between gap-4">
-          <div className="min-w-0">
-            <div className="font-medium text-amber-900">Monthly input pending</div>
-            <div className="text-sm text-amber-900/80">
-              Confirm this month's account balances and loan payments.
-            </div>
-          </div>
-          <Button onClick={() => navigate('/monthly')}>Open</Button>
-        </div>
-      )}
-
+  const pillsSectionContent: ReactNode = (
+    <div className="space-y-4">
       <div
         className="grid grid-cols-2 md:grid-cols-4 gap-4"
         data-testid="dashboard-pill-grid"
@@ -679,7 +649,7 @@ export default function Dashboard() {
         {visiblePills.length === 0 ? (
           <div className="col-span-full rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
             All metric pills are hidden. Tap{' '}
-            <span className="font-medium">Edit</span> to add them back.
+            <span className="font-medium">Customize layout</span> to add them back.
           </div>
         ) : (
           visiblePills.map((p, index) => (
@@ -699,7 +669,6 @@ export default function Dashboard() {
           ))
         )}
       </div>
-
       {editing && hiddenPills.length > 0 ? (
         <div
           className="rounded-md border bg-muted/40 p-3"
@@ -724,52 +693,165 @@ export default function Dashboard() {
           </div>
         </div>
       ) : null}
+    </div>
+  );
 
-      <SpendingWidget
-        transactions={transactions}
-        categories={categories}
-        accounts={visibleAccounts}
-      />
+  const widgetDefs: Array<{ id: WidgetId; label: string; render: () => ReactNode }> = [
+    {
+      id: 'pills-section',
+      label: 'Metric pills',
+      render: () => pillsSectionContent,
+    },
+    {
+      id: 'spending',
+      label: 'Spending',
+      render: () => (
+        <SpendingWidget
+          transactions={transactions}
+          categories={categories}
+          accounts={visibleAccounts}
+        />
+      ),
+    },
+    {
+      id: 'concentration',
+      label: 'Concentration warnings',
+      render: () => (
+        // ConcentrationCard intentionally stays household-wide regardless of
+        // the person filter — its semantics ("is one ticker too big a share
+        // of *the portfolio*?") don't change when you focus on a single
+        // owner.
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <ConcentrationCard />
+        </div>
+      ),
+    },
+    {
+      id: 'goals',
+      label: 'Goals',
+      render: () => (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle>Goals</CardTitle>
+            {visibleGoals.length > 0 && (
+              <Link to="/goals" className="text-sm text-primary hover:underline">
+                View all →
+              </Link>
+            )}
+          </CardHeader>
+          <CardContent>
+            {visibleGoals.length === 0 ? (
+              <div className="text-center text-muted-foreground py-6 space-y-3">
+                <div>No goals yet.</div>
+                <Button asChild size="sm" variant="outline">
+                  <Link to="/inputs/goals">Add your first goal</Link>
+                </Button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {goalProjections.slice(0, 3).map((p) => (
+                  <MiniGoalCard key={p.goal.id} projection={p} />
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ),
+    },
+  ];
+  const widgetById = new Map(widgetDefs.map((w) => [w.id, w]));
+  const orderedWidgets = widgetLayout.layout
+    .map((e) => ({ entry: e, def: widgetById.get(e.id as WidgetId) }))
+    .filter((row): row is { entry: typeof widgetLayout.layout[number]; def: (typeof widgetDefs)[number] } => row.def !== undefined);
+  const visibleWidgets = orderedWidgets.filter((w) => !w.entry.hidden);
+  const hiddenWidgets = orderedWidgets.filter((w) => w.entry.hidden);
 
-      {/*
-       * ConcentrationCard intentionally stays household-wide regardless of
-       * the person filter — its semantics ("is one ticker too big a share
-       * of *the portfolio*?") don't change when you focus on a single owner.
-       * Threading the filter into useConcentration() would also require
-       * scoping holdings/snapshots inside the hook, which is out-of-scope
-       * for this task. Revisit if a per-person concentration view is asked
-       * for explicitly.
-       */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <ConcentrationCard />
+  return (
+    <div className="p-6 max-w-6xl space-y-6">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-3xl font-semibold">
+            {household?.name ? `Hi, ${household.name}` : 'Dashboard'}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">{todayLabel}</p>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant={editing ? 'default' : 'outline'}
+          onClick={() => setEditing((v) => !v)}
+          aria-pressed={editing}
+          title="Reorder, hide, and re-add pills and widgets."
+          data-testid="dashboard-edit-toggle"
+        >
+          {editing ? (
+            <>
+              <CheckIcon className="h-5 w-5 mr-1.5" />
+              Done
+            </>
+          ) : (
+            <>
+              <PencilIcon className="h-5 w-5 mr-1.5" />
+              Customize layout
+            </>
+          )}
+        </Button>
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
-          <CardTitle>Goals</CardTitle>
-          {visibleGoals.length > 0 && (
-            <Link to="/goals" className="text-sm text-primary hover:underline">
-              View all →
-            </Link>
-          )}
-        </CardHeader>
-        <CardContent>
-          {visibleGoals.length === 0 ? (
-            <div className="text-center text-muted-foreground py-6 space-y-3">
-              <div>No goals yet.</div>
-              <Button asChild size="sm" variant="outline">
-                <Link to="/inputs/goals">Add your first goal</Link>
-              </Button>
+      <NextMoveCard />
+
+      {isInputPending && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-4 flex flex-wrap items-center justify-between gap-4">
+          <div className="min-w-0">
+            <div className="font-medium text-amber-900">Monthly input pending</div>
+            <div className="text-sm text-amber-900/80">
+              Confirm this month's account balances and loan payments.
             </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {goalProjections.slice(0, 3).map((p) => (
-                <MiniGoalCard key={p.goal.id} projection={p} />
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+          <Button onClick={() => navigate('/monthly')}>Open</Button>
+        </div>
+      )}
+
+      {visibleWidgets.map((w, index) => (
+        <EditableWidget
+          key={w.def.id}
+          id={w.def.id}
+          label={w.def.label}
+          editing={editing}
+          canMoveUp={index > 0}
+          canMoveDown={index < visibleWidgets.length - 1}
+          onMoveUp={() => widgetLayout.move(w.def.id, -1)}
+          onMoveDown={() => widgetLayout.move(w.def.id, 1)}
+          onRemove={() => widgetLayout.hide(w.def.id)}
+        >
+          {w.def.render()}
+        </EditableWidget>
+      ))}
+
+      {editing && hiddenWidgets.length > 0 ? (
+        <div
+          className="rounded-md border bg-muted/40 p-3"
+          data-testid="dashboard-hidden-widgets"
+        >
+          <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
+            Hidden widgets
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {hiddenWidgets.map((w) => (
+              <button
+                key={w.def.id}
+                type="button"
+                onClick={() => widgetLayout.show(w.def.id)}
+                className="inline-flex items-center gap-1.5 rounded-full border bg-background px-3 py-1 text-sm hover:bg-accent"
+                data-testid={`widget-add-${w.def.id}`}
+              >
+                <PlusIcon className="h-3.5 w-3.5" />
+                {w.def.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
