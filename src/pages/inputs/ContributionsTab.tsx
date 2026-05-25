@@ -20,6 +20,7 @@ const SOURCE_LABELS: Record<ContributionSource, string> = {
   [ContributionSource.EMPLOYER_MATCH]: 'Employer match',
   [ContributionSource.MANUAL]: 'Manual',
   [ContributionSource.ROLLOVER]: 'Rollover',
+  [ContributionSource.ANNUAL_TOTAL]: 'Annual total',
 };
 
 interface ContributionFormProps {
