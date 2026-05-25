@@ -396,5 +396,7 @@ export const AppSettingsSchema = z.object({
   refreshCadence: z.nativeEnum(RefreshCadence),
   lastRefreshAt: z.string().nullable(),
   statementsFolderPath: z.string().nullable(),
+  defaultInflation: z.number().min(0).max(0.2).nullable().default(null),
+  defaultReturnRate: z.number().min(-0.5).max(0.5).nullable().default(null),
 });
 export type AppSettings = z.infer<typeof AppSettingsSchema>;

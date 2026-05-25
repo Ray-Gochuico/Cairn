@@ -9,6 +9,8 @@ interface AppSettingsRow {
   refresh_cadence: string;
   last_refresh_at: string | null;
   statements_folder_path: string | null;
+  default_inflation: number | null;
+  default_return_rate: number | null;
 }
 
 function rowToAppSettings(row: AppSettingsRow): AppSettings {
@@ -23,6 +25,8 @@ function rowToAppSettings(row: AppSettingsRow): AppSettings {
     refreshCadence: row.refresh_cadence,
     lastRefreshAt: row.last_refresh_at,
     statementsFolderPath: row.statements_folder_path,
+    defaultInflation: row.default_inflation,
+    defaultReturnRate: row.default_return_rate,
   });
 }
 
@@ -51,7 +55,9 @@ export class SettingsRepo {
         notification_day = ?,
         refresh_cadence = ?,
         last_refresh_at = ?,
-        statements_folder_path = ?
+        statements_folder_path = ?,
+        default_inflation = ?,
+        default_return_rate = ?
        WHERE id = 1`,
       [
         merged.sidebarLayout === null ? null : JSON.stringify(merged.sidebarLayout),
@@ -60,6 +66,8 @@ export class SettingsRepo {
         merged.refreshCadence,
         merged.lastRefreshAt,
         merged.statementsFolderPath,
+        merged.defaultInflation,
+        merged.defaultReturnRate,
       ],
     );
   }

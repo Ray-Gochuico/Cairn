@@ -271,6 +271,22 @@ it('0014 creates the app_settings singleton with one seeded row', async () => {
   await db.close();
 });
 
+it('0020 adds default_inflation + default_return_rate to app_settings (nullable)', async () => {
+  const db = new SqliteAdapter(':memory:');
+  await runMigrations(db, await loadAllMigrations());
+  const cols = await db.select<{ name: string }>("PRAGMA table_info(app_settings)");
+  const names = cols.map((c) => c.name);
+  expect(names).toContain('default_inflation');
+  expect(names).toContain('default_return_rate');
+  const seed = await db.select<{ default_inflation: number | null; default_return_rate: number | null }>(
+    'SELECT default_inflation, default_return_rate FROM app_settings WHERE id = 1',
+  );
+  expect(seed).toHaveLength(1);
+  expect(seed[0].default_inflation).toBeNull();
+  expect(seed[0].default_return_rate).toBeNull();
+  await db.close();
+});
+
 it('0015 adds accent_color columns to accounts and tickers, accepting NULL and hex', async () => {
   const db = new SqliteAdapter(':memory:');
   await runMigrations(db, await loadAllMigrations());
