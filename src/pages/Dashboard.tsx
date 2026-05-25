@@ -33,6 +33,7 @@ import { ConcentrationCard } from '@/components/cards/ConcentrationCard';
 import { NextMoveCard } from '@/components/dashboard/NextMoveCard';
 import { EditablePill } from '@/components/dashboard/EditablePill';
 import { usePillLayout } from '@/components/dashboard/use-pill-layout';
+import { SpendingWidget } from '@/components/dashboard/SpendingWidget';
 import type {
   Account,
   AccountSnapshot,
@@ -723,6 +724,12 @@ export default function Dashboard() {
           </div>
         </div>
       ) : null}
+
+      <SpendingWidget
+        transactions={transactions}
+        categories={categories}
+        accounts={visibleAccounts}
+      />
 
       {/*
        * ConcentrationCard intentionally stays household-wide regardless of
