@@ -55,7 +55,20 @@ export function SectorDonut() {
 
   const slices = useMemo(() => {
     if (selectedSector === null) {
-      return aggregateBySector(report.perTicker, sectorMap, fundSectorWeights).map((s) => ({
+      const agg = aggregateBySector(report.perTicker, sectorMap, fundSectorWeights);
+      // eslint-disable-next-line no-console
+      console.log('[SectorDonut] render — sector view', {
+        fundSectorsRowCount: fundSectors.length,
+        fundSectorWeightsKeys: [...fundSectorWeights.keys()],
+        perTickerCount: report.perTicker.length,
+        perTickerTopFew: report.perTicker.slice(0, 5).map((t) => ({
+          ticker: t.ticker,
+          exposure: t.effectiveExposure,
+        })),
+        sectorMapSize: sectorMap.size,
+        aggregateSlices: agg.map((s) => ({ name: s.name, value: s.value })),
+      });
+      return agg.map((s) => ({
         ...s,
         color: colorForSector(s.name),
       }));
@@ -64,7 +77,7 @@ export function SectorDonut() {
       ...s,
       color: shadedColorForIndustry(selectedSector, i),
     }));
-  }, [report.perTicker, sectorMap, fundSectorWeights, selectedSector]);
+  }, [report.perTicker, sectorMap, fundSectorWeights, selectedSector, fundSectors.length]);
 
   useEffect(() => {
     if (selectedSector === null) return;

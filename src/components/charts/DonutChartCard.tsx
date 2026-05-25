@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import {
   Card,
   CardContent,
@@ -60,11 +60,16 @@ export default function DonutChartCard({
   onClickSlice,
 }: DonutChartCardProps) {
   const total = data.reduce((sum, slice) => sum + slice.value, 0);
-  // Wrap recharts inside a flex column so the SVG and the legend it appends
-  // stay centered horizontally inside the card body. Without this the legend
-  // wraps to two/three lines for many-wedge charts (Per-Company exposure has
-  // ~10 tickers) and lands left-aligned because Recharts' <Legend/> defaults
-  // to align="center" but the parent block isn't centered to it.
+  // Render the legend as plain DOM below the chart rather than via recharts'
+  // <Legend/>. Recharts stuffs its legend inside the same fixed-height
+  // ResponsiveContainer as the donut and gives it whatever vertical space
+  // is left — when a many-wedge donut (Per-Company has ~11 items) forces
+  // the legend to wrap to 2-3 rows, those rows overlap the donut SVG
+  // because the container height is fixed and the donut's pie geometry
+  // doesn't shrink to make room. Pulling the legend out into a sibling
+  // <ul> lets it flow naturally underneath without eating into the chart.
+  const colorAt = (slice: DonutSlice, idx: number) =>
+    slice.color ?? CHART_PALETTE[idx % CHART_PALETTE.length];
   return (
     <Card>
       <CardHeader>
@@ -102,7 +107,7 @@ export default function DonutChartCard({
                 {data.map((slice, idx) => (
                   <Cell
                     key={`${slice.name}-${idx}`}
-                    fill={slice.color ?? CHART_PALETTE[idx % CHART_PALETTE.length]}
+                    fill={colorAt(slice, idx)}
                   />
                 ))}
               </Pie>
@@ -119,15 +124,28 @@ export default function DonutChartCard({
                   return [formatted, displayName];
                 }}
               />
-              <Legend
-                wrapperStyle={{ paddingTop: 8 }}
-                iconSize={8}
-                formatter={(value) => (
-                  <span className="text-xs text-muted-foreground">{value}</span>
-                )}
-              />
             </PieChart>
           </ResponsiveContainer>
+          {data.length > 0 && (
+            <ul
+              className="mt-3 flex flex-wrap justify-center gap-x-3 gap-y-1 text-xs text-muted-foreground"
+              aria-label="Chart legend"
+            >
+              {data.map((slice, idx) => (
+                <li
+                  key={`${slice.name}-${idx}`}
+                  className="inline-flex items-center gap-1.5 whitespace-nowrap"
+                >
+                  <span
+                    aria-hidden
+                    className="inline-block h-2 w-2 rounded-sm"
+                    style={{ backgroundColor: colorAt(slice, idx) }}
+                  />
+                  {slice.name}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </CardContent>
     </Card>
