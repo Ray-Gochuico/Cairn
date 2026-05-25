@@ -184,6 +184,104 @@ describe('ProjectionChart — composition mode (exactly 1 scenario visible)', ()
   });
 });
 
+describe('ProjectionChart — lower pane (debt lines)', () => {
+  // Regression: the lower debt pane was reported as "not rendering" after the
+  // initial-state seeding fix landed. These tests pin that the debt Line always
+  // appears for each visible scenario with a valid id, regardless of loan count.
+
+  it('renders a debt line in the lower pane for each visible scenario', () => {
+    const projections = new Map([[1, fixtureStates()]]);
+    const milestones = new Map<number, Milestones>([[1, {}]]);
+    render(
+      <MemoryRouter>
+        <ProjectionChart
+          scenarios={[baseline]}
+          projections={projections}
+          milestones={milestones}
+          dollarMode="nominal"
+          inflation={0.025}
+          startISO="2026-01"
+        />
+      </MemoryRouter>,
+    );
+    // The lower pane renders a Line with dataKey="debt_1" for scenario id=1.
+    expect(screen.getByTestId('rc-line-debt_1')).toBeInTheDocument();
+  });
+
+  it('renders two debt lines in the lower pane when two scenarios are visible', () => {
+    const projections = new Map([[1, fixtureStates()], [2, fixtureStates(5000)]]);
+    const milestones = new Map<number, Milestones>([[1, {}], [2, {}]]);
+    render(
+      <MemoryRouter>
+        <ProjectionChart
+          scenarios={[baseline, variant]}
+          projections={projections}
+          milestones={milestones}
+          dollarMode="nominal"
+          inflation={0.025}
+          startISO="2026-01"
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('rc-line-debt_1')).toBeInTheDocument();
+    expect(screen.getByTestId('rc-line-debt_2')).toBeInTheDocument();
+  });
+
+  it('renders debt line even when all debts are zero (no loans)', () => {
+    // When debtByLoan is empty the debt sum is zero for every month — the
+    // Line still renders (recharts just draws a flat zero curve).
+    const noDebtStates: MonthlyState[] = Array.from({ length: 12 }, (_, i) => ({
+      monthISO: `2026-${String(i + 1).padStart(2, '0')}`,
+      investments: 100000 + i * 1000,
+      homeEquity: 250000,
+      cash: 10000,
+      debtByLoan: {},  // no loans
+      netWorth: 360000 + i * 1000,
+      incomeAfterTax: 9000,
+      expenses: 4500,
+      savings: 4500,
+      events: [],
+    }));
+    const projections = new Map([[1, noDebtStates]]);
+    const milestones = new Map<number, Milestones>([[1, {}]]);
+    render(
+      <MemoryRouter>
+        <ProjectionChart
+          scenarios={[baseline]}
+          projections={projections}
+          milestones={milestones}
+          dollarMode="nominal"
+          inflation={0.025}
+          startISO="2026-01"
+        />
+      </MemoryRouter>,
+    );
+    // Even with no loans the lower pane renders a debt line (flat at zero).
+    expect(screen.getByTestId('rc-line-debt_1')).toBeInTheDocument();
+  });
+
+  it('omits debt line for a hidden scenario', () => {
+    const projections = new Map([[1, fixtureStates()], [2, fixtureStates(5000)]]);
+    const milestones = new Map<number, Milestones>([[1, {}], [2, {}]]);
+    render(
+      <MemoryRouter>
+        <ProjectionChart
+          scenarios={[baseline, { ...variant, visible: false }]}
+          projections={projections}
+          milestones={milestones}
+          dollarMode="nominal"
+          inflation={0.025}
+          startISO="2026-01"
+        />
+      </MemoryRouter>,
+    );
+    // Only the baseline (id=1) is visible; the hidden variant (id=2) should
+    // not produce a debt line.
+    expect(screen.getByTestId('rc-line-debt_1')).toBeInTheDocument();
+    expect(screen.queryByTestId('rc-line-debt_2')).toBeNull();
+  });
+});
+
 describe('ProjectionChart — milestone reference lines', () => {
   it('renders a Debt-free reference line at the milestone month', () => {
     const projections = new Map([[1, fixtureStates()]]);
