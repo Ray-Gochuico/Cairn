@@ -8,6 +8,12 @@ import ScenariosPanel from '@/components/whatif/ScenariosPanel';
 import ManageScenariosModal from '@/components/whatif/ManageScenariosModal';
 import { useRealState } from '@/components/whatif/useRealState';
 import { useScenariosStore } from '@/stores/scenarios-store';
+import { useLoansStore } from '@/stores/loans-store';
+import { useHoldingsStore } from '@/stores/holdings-store';
+import { useAccountsStore } from '@/stores/accounts-store';
+import { useTransactionsStore } from '@/stores/transactions-store';
+import { usePersonsStore } from '@/stores/persons-store';
+import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { detectMilestones, type Milestones, type MonthlyState } from '@/lib/scenarios';
 
 const FIRE_PARAMS = { withdrawalRate: 0.04 };
@@ -20,6 +26,13 @@ export default function WhatIf() {
   const inflation          = useScenariosStore((s) => s.inflation);
   const horizonMonths      = useScenariosStore((s) => s.horizonMonths);
 
+  const loadLoans          = useLoansStore((s) => s.load);
+  const loadHoldings       = useHoldingsStore((s) => s.load);
+  const loadAccounts       = useAccountsStore((s) => s.load);
+  const loadTransactions   = useTransactionsStore((s) => s.load);
+  const loadPersons        = usePersonsStore((s) => s.load);
+  const loadTaxYears       = useTaxRulesStore((s) => s.loadAvailableYears);
+
   const [manageOpen, setManageOpen] = useState(false);
 
   // S-D's lever bar will expose a programmatic open-popover hook; wire
@@ -27,7 +40,15 @@ export default function WhatIf() {
   // modal can pass an onEditLevers callback without breaking.
   const openLeversFor = useCallback((_scenarioId: number) => {}, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+    loadLoans();
+    loadHoldings();
+    loadAccounts();
+    loadTransactions();
+    loadPersons();
+    loadTaxYears();
+  }, [load, loadLoans, loadHoldings, loadAccounts, loadTransactions, loadPersons, loadTaxYears]);
 
   const real = useRealState();
 

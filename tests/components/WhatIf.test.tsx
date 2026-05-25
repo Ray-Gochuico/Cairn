@@ -82,6 +82,27 @@ describe('WhatIf page', () => {
     await waitFor(() => expect(screen.getByRole('heading', { name: /what-if/i })).toBeInTheDocument());
   });
 
+  it('triggers load() on loans/holdings/accounts/transactions/persons on mount', async () => {
+    const loadLoans = vi.fn().mockResolvedValue(undefined);
+    const loadHoldings = vi.fn().mockResolvedValue(undefined);
+    const loadAccounts = vi.fn().mockResolvedValue(undefined);
+    const loadTransactions = vi.fn().mockResolvedValue(undefined);
+    const loadPersons = vi.fn().mockResolvedValue(undefined);
+    useLoansStore.setState({ load: loadLoans } as any);
+    useHoldingsStore.setState({ load: loadHoldings } as any);
+    useAccountsStore.setState({ load: loadAccounts } as any);
+    useTransactionsStore.setState({ load: loadTransactions } as any);
+    usePersonsStore.setState({ load: loadPersons } as any);
+    render(<MemoryRouter><WhatIf /></MemoryRouter>);
+    await waitFor(() => {
+      expect(loadLoans).toHaveBeenCalled();
+      expect(loadHoldings).toHaveBeenCalled();
+      expect(loadAccounts).toHaveBeenCalled();
+      expect(loadTransactions).toHaveBeenCalled();
+      expect(loadPersons).toHaveBeenCalled();
+    });
+  });
+
   it('auto-creates baseline scenario and renders the chart on first paint', async () => {
     render(<MemoryRouter><WhatIf /></MemoryRouter>);
     await waitFor(() => expect(useScenariosStore.getState().scenarios).toHaveLength(1));
