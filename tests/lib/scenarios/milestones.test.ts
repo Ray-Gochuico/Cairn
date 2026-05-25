@@ -37,6 +37,39 @@ describe('detectMilestones', () => {
       { month: '2026-05', netWorth: 100000, debt: 18000, expenses: 4000 },
       { month: '2056-05', netWorth: 110000, debt: 12000, expenses: 4000 },
     ]);
-    expect(detectMilestones(states, fireParams)).toEqual({ debtFreeISO: undefined, fireISO: undefined });
+    const m = detectMilestones(states, fireParams);
+    expect(m.debtFreeISO).toBeUndefined();
+    expect(m.fireISO).toBeUndefined();
+  });
+
+  it('reports netWorth30y as the net worth at month index 359 when the horizon is at least 360 months', () => {
+    const states: MonthlyState[] = [];
+    for (let i = 0; i < 400; i++) {
+      states.push({
+        monthISO: '2026-01',
+        investments: 0,
+        homeEquity: 0,
+        cash: 0,
+        debtByLoan: {},
+        netWorth: 1000 + i,
+        incomeAfterTax: 0,
+        expenses: 0,
+        savings: 0,
+        events: [],
+      });
+    }
+    expect(detectMilestones(states, fireParams).netWorth30y).toBe(1000 + 359);
+  });
+
+  it('falls back to the final state net worth when fewer than 30 years of states are available', () => {
+    const states = buildStates([
+      { month: '2026-05', netWorth: 100000, debt: 0, expenses: 4000 },
+      { month: '2026-06', netWorth: 200000, debt: 0, expenses: 4000 },
+    ]);
+    expect(detectMilestones(states, fireParams).netWorth30y).toBe(200000);
+  });
+
+  it('returns undefined netWorth30y when given an empty state list', () => {
+    expect(detectMilestones([], fireParams).netWorth30y).toBeUndefined();
   });
 });
