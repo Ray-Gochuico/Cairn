@@ -12,10 +12,11 @@ import {
   getTrackedBudgetCategories,
   hasTrackedBudgetCategoriesSelection,
   persistTrackedBudgetCategories,
-  trackBudgetCategory,
+  trackBudgetCategories,
   untrackBudgetCategory,
 } from '@/lib/tracked-budget-categories';
 import BudgetOverlayRow from '@/components/budget/BudgetOverlayRow';
+import BudgetCategoryPicker from '@/components/budget/BudgetCategoryPicker';
 import { Card, CardContent } from '@/components/ui/card';
 
 const currency = (n: number) =>
@@ -115,17 +116,16 @@ export default function Budget() {
     setTrackedIds((ids) => ids.filter((id) => id !== categoryId));
   };
 
-  const handleTrack = (categoryId: number) => {
-    trackBudgetCategory(categoryId);
-    setTrackedIds((ids) => (ids.includes(categoryId) ? ids : [...ids, categoryId]));
-  };
-
-  const handleAddCategory = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const id = Number(e.target.value);
-    if (Number.isFinite(id) && id > 0) {
-      handleTrack(id);
-    }
-    e.target.value = '';
+  const handleAddCategories = (ids: number[]) => {
+    if (ids.length === 0) return;
+    trackBudgetCategories(ids);
+    setTrackedIds((current) => {
+      const merged = [...current];
+      for (const id of ids) {
+        if (!merged.includes(id)) merged.push(id);
+      }
+      return merged;
+    });
   };
 
   return (
@@ -163,26 +163,14 @@ export default function Budget() {
       )}
 
       {untrackedRows.length > 0 && (
-        <div className="flex items-center gap-2 text-sm">
-          <label htmlFor="add-tracked-category" className="text-muted-foreground">
-            Add category:
-          </label>
-          <select
-            id="add-tracked-category"
-            aria-label="Add category"
-            className="flex h-8 rounded-md border border-input bg-transparent px-2 py-1 text-sm"
-            defaultValue=""
-            onChange={handleAddCategory}
-          >
-            <option value="" disabled>
-              Pick a category to track…
-            </option>
-            {untrackedRows.map((r) => (
-              <option key={r.categoryId} value={r.categoryId}>
-                {r.categoryName}
-              </option>
-            ))}
-          </select>
+        <div className="flex items-center text-sm">
+          <BudgetCategoryPicker
+            untracked={untrackedRows.map((r) => ({
+              id: r.categoryId,
+              name: r.categoryName,
+            }))}
+            onConfirm={handleAddCategories}
+          />
         </div>
       )}
 

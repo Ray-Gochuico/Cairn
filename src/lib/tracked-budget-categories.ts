@@ -45,6 +45,19 @@ export function trackBudgetCategory(id: number): void {
   persistTrackedBudgetCategories([...current, id]);
 }
 
+// Append a batch of ids in one write. Empty batches are a no-op so that
+// opening + closing the picker without selecting anything does not collapse
+// the "never set" sentinel to an empty array.
+export function trackBudgetCategories(ids: readonly number[]): void {
+  if (ids.length === 0) return;
+  const current = getTrackedBudgetCategories() ?? [];
+  const merged = [...current];
+  for (const id of ids) {
+    if (!merged.includes(id)) merged.push(id);
+  }
+  persistTrackedBudgetCategories(merged);
+}
+
 export function untrackBudgetCategory(id: number): void {
   const current = getTrackedBudgetCategories() ?? [];
   persistTrackedBudgetCategories(current.filter((x) => x !== id));
