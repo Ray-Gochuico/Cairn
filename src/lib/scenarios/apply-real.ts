@@ -94,8 +94,8 @@ export function computeMonthlyIncomeForPerson(
 
   let currentSalary = baseSalary;
   let preSabbaticalSalary = baseSalary;
-  let sabbaticalEndISO: string | null = null;
-  let sabbaticalResumeAt: number | null = null;
+  let sabbaticalEndISO: string | null = null as string | null;
+  let sabbaticalResumeAt: number | null = null as number | null;
 
   // Apply raises for each Jan between startYear and monthISO's year, plus any events that have fired.
   let cursorYear = startYear;
