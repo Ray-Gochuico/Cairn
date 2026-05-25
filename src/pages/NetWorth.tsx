@@ -18,6 +18,7 @@ import { useViewFilter } from '@/lib/use-view-filter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import LineChartCard from '@/components/charts/LineChartCard';
 import BarChartCard from '@/components/charts/BarChartCard';
+import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 import type { Loan } from '@/types/schema';
 import { LoanType } from '@/types/enums';
 
@@ -293,10 +294,15 @@ export default function NetWorth() {
   if (!hasAnyData) {
     return (
       <div className="p-8 max-w-6xl">
-        <h1 className="text-2xl font-semibold mb-1">Net Worth</h1>
-        <p className="text-sm text-muted-foreground mb-6">
-          Track your wealth over time across accounts, property, vehicles, and debt.
-        </p>
+        <div className="flex items-start justify-between gap-4 mb-6">
+          <div>
+            <h1 className="text-2xl font-semibold mb-1">Net Worth</h1>
+            <p className="text-sm text-muted-foreground">
+              Track your wealth over time across accounts, property, vehicles, and debt.
+            </p>
+          </div>
+          <ImportCsvButton entity="snapshot" />
+        </div>
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
             No data yet — set up your accounts in{' '}
@@ -312,11 +318,14 @@ export default function NetWorth() {
 
   return (
     <div className="p-8 max-w-6xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold mb-1">Net Worth</h1>
-        <p className="text-sm text-muted-foreground">
-          As of {currentMonth}. Investments include the latest confirmed snapshot per account.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold mb-1">Net Worth</h1>
+          <p className="text-sm text-muted-foreground">
+            As of {currentMonth}. Investments include the latest confirmed snapshot per account.
+          </p>
+        </div>
+        <ImportCsvButton entity="snapshot" />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
