@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import {
+  Area,
   ComposedChart,
   Line,
   CartesianGrid,
@@ -52,6 +53,9 @@ function buildUpperPaneRows(scenarios: Scenario[], display: Map<number, MonthlyS
       const arr = display.get(sc.id!);
       if (!arr || !arr[i]) continue;
       row[`net_${sc.id}`] = arr[i].netWorth;
+      row[`investments_${sc.id}`] = arr[i].investments;
+      row[`homeEquity_${sc.id}`]  = arr[i].homeEquity;
+      row[`cash_${sc.id}`]        = arr[i].cash;
     }
     return row;
   });
@@ -108,6 +112,50 @@ export default function ProjectionChart({
               labelFormatter={(label: string) => label}
               cursor={{ strokeDasharray: '3 3' }}
             />
+
+            {mode === 'composition' && visible.length === 1 && visible[0] != null && (
+              <>
+                <Area
+                  type="monotone"
+                  dataKey={`investments_${visible[0].id}`}
+                  name="Investments"
+                  stackId="composition"
+                  stroke="none"
+                  fill="#4f86f7"
+                  fillOpacity={0.25}
+                  isAnimationActive={false}
+                />
+                <Area
+                  type="monotone"
+                  dataKey={`homeEquity_${visible[0].id}`}
+                  name="Home equity"
+                  stackId="composition"
+                  stroke="none"
+                  fill="#5fbb7c"
+                  fillOpacity={0.25}
+                  isAnimationActive={false}
+                />
+                <Area
+                  type="monotone"
+                  dataKey={`cash_${visible[0].id}`}
+                  name="Cash"
+                  stackId="composition"
+                  stroke="none"
+                  fill="#e6b54b"
+                  fillOpacity={0.25}
+                  isAnimationActive={false}
+                />
+                <Line
+                  type="monotone"
+                  dataKey={`net_${visible[0].id}`}
+                  name={`${visible[0].name} net worth`}
+                  stroke={visible[0].color}
+                  strokeWidth={2.5}
+                  dot={false}
+                  isAnimationActive={false}
+                />
+              </>
+            )}
 
             {mode === 'lines' &&
               visible.map((sc) => (
