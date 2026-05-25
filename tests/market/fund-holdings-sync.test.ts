@@ -34,9 +34,9 @@ function makeHolding(id: number, ticker: string): Holding {
   };
 }
 
-function daysAgoIso(n: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
+function daysBefore(today: Date, n: number): string {
+  const d = new Date(today);
+  d.setUTCDate(d.getUTCDate() - n);
   return d.toISOString().slice(0, 10);
 }
 
@@ -117,7 +117,7 @@ describe('syncStaleFunds', () => {
 
   describe('Test 2: Refreshes when stale (asOf > 90 days old)', () => {
     it('calls fundTopHoldings and upsertHoldings when data is 100 days old', async () => {
-      const staleDate = daysAgoIso(100);
+      const staleDate = daysBefore(TODAY, 100);
       const yahoo = makeYahoo();
       const fundHoldings = makeFundHoldings();
       (fundHoldings.getAsOf as ReturnType<typeof vi.fn>).mockResolvedValue(staleDate);
@@ -142,7 +142,7 @@ describe('syncStaleFunds', () => {
 
   describe('Test 3: Skips when fresh (asOf < 90 days)', () => {
     it('does NOT call fundTopHoldings when data is only 30 days old', async () => {
-      const freshDate = daysAgoIso(30);
+      const freshDate = daysBefore(TODAY, 30);
       const yahoo = makeYahoo();
       const fundHoldings = makeFundHoldings();
       (fundHoldings.getAsOf as ReturnType<typeof vi.fn>).mockResolvedValue(freshDate);
