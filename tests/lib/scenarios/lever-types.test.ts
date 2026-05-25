@@ -19,6 +19,7 @@ describe('LeverPayloadSchema', () => {
       returns: { defaultRate: 0.07, overrides: { 2027: -0.15, 2028: 0.2 } as unknown as Record<string, number> },
       income: { perPerson: [{ annualRaiseRate: 0.03, events: [] }] },
       contributions: [{ startMonth: 0, endMonth: 59, monthlyAmount: 1000, label: 'Year 1-5' }],
+      retirementAgeOverride: null,
     };
     expect(LeverPayloadSchema.parse(payload)).toEqual(payload);
   });
@@ -33,6 +34,7 @@ describe('LeverPayloadSchema', () => {
     };
     const parsed = LeverPayloadSchema.parse(partial);
     expect(parsed.contributions).toEqual([]);
+    expect(parsed.retirementAgeOverride).toBeNull();
   });
 
   it('rejects a contribution segment with negative monthlyAmount', () => {

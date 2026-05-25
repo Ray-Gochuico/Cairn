@@ -12,6 +12,7 @@ import { useScenariosStore } from '@/stores/scenarios-store';
 import { useLoansStore } from '@/stores/loans-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
 import { useAccountsStore } from '@/stores/accounts-store';
+import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
@@ -31,6 +32,7 @@ export default function WhatIf() {
   const loadLoans          = useLoansStore((s) => s.load);
   const loadHoldings       = useHoldingsStore((s) => s.load);
   const loadAccounts       = useAccountsStore((s) => s.load);
+  const loadSnapshots      = useSnapshotsStore((s) => s.load);
   const loadTransactions   = useTransactionsStore((s) => s.load);
   const loadPersons        = usePersonsStore((s) => s.load);
   const loadTaxYears       = useTaxRulesStore((s) => s.loadAvailableYears);
@@ -50,10 +52,11 @@ export default function WhatIf() {
     loadLoans();
     loadHoldings();
     loadAccounts();
+    loadSnapshots();
     loadTransactions();
     loadPersons();
     loadTaxYears();
-  }, [load, loadLoans, loadHoldings, loadAccounts, loadTransactions, loadPersons, loadTaxYears]);
+  }, [load, loadLoans, loadHoldings, loadAccounts, loadSnapshots, loadTransactions, loadPersons, loadTaxYears]);
 
   const real = useRealState();
 

@@ -10,6 +10,7 @@ import {
   type LoanMonthlyContext,
 } from './apply-real';
 import { computeTotalTax } from '@/lib/tax';
+import { ageAtMonth } from '@/lib/dates';
 
 export interface MonthlyState {
   monthISO: string;
@@ -52,16 +53,11 @@ export function projectScenario(
   const out: MonthlyState[] = [];
   const startYear = Number(horizon.startISO.slice(0, 4));
 
-  const initialInvestments = real.holdings.reduce(
-    (acc, h) => acc + h.shareCount * (h.costBasis ?? 0),
-    0,
-  );
-
   let state: MonthlyState = {
     monthISO: horizon.startISO,
-    investments: initialInvestments,
+    investments: real.initialInvestments,
     homeEquity: 0,
-    cash: 0,
+    cash: real.initialCash,
     debtByLoan: Object.fromEntries(real.loans.map((l) => [l.id!, l.currentBalance])),
     netWorth: 0,
     incomeAfterTax: 0,
@@ -96,11 +92,21 @@ function stepMonth(
     }
   }
 
-  // 2. Compute monthly income across persons
+  // 2. Compute monthly income across persons. After a person reaches their
+  // retirement age (Person.targetRetirementAge, or LeverPayload.retirementAgeOverride
+  // when set), their salary contribution drops to zero. Expenses are still
+  // deducted normally; the cash-floor rule (step 6) will route the resulting
+  // deficit out of investments — modeling a SWR-style drawdown without needing
+  // a separate withdrawal-engine code path.
   let monthlyGrossIncome = 0;
   real.persons.forEach((p, idx) => {
     const plan = payload.income.perPerson[idx] ?? payload.income.perPerson[0];
     const baseSalary = p.annualSalaryPretax ?? 0;
+    const retireAt = payload.retirementAgeOverride ?? (p as { targetRetirementAge?: number }).targetRetirementAge ?? null;
+    if (retireAt !== null) {
+      const personAge = ageAtMonth((p as { dateOfBirth?: string }).dateOfBirth, monthISO);
+      if (personAge >= retireAt) return; // retired this month → no salary
+    }
     monthlyGrossIncome += computeMonthlyIncomeForPerson(baseSalary, plan, monthISO, startYear);
   });
 

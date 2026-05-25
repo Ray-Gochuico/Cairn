@@ -221,6 +221,8 @@ const sampleRealState = (): RealState => ({
   } as any,
   persons: [{ id: 1, annualSalaryPretax: 135000 } as any],
   baselineMonthlyExpenses: 4500,
+  initialCash: 0,
+  initialInvestments: 200000,
   defaults: { inflation: 0.025, returnRate: 0.07 },
   startISO: '2026-05',
   taxBrackets: { federal: [], state: [], city: null, standardDeduction: 0 },

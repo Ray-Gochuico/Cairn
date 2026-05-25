@@ -9,6 +9,12 @@ export interface Milestones {
   debtFreeISO?: string;
   fireISO?: string;
   /**
+   * First month in the projection where every earner's salary has dropped to
+   * zero. Marks the accumulation-to-drawdown transition driven by
+   * Person.targetRetirementAge or LeverPayload.retirementAgeOverride.
+   */
+  retirementISO?: string;
+  /**
    * Net worth at the 30-year point in the projection, used by the
    * ManageScenariosModal scoreboard. Falls back to the final state's
    * net worth when the horizon is shorter than 30 years.
@@ -21,8 +27,10 @@ const MONTHS_30Y = 360;
 export function detectMilestones(states: MonthlyState[], params: FireParams): Milestones {
   let debtFreeISO: string | undefined;
   let fireISO: string | undefined;
+  let retirementISO: string | undefined;
 
-  for (const s of states) {
+  for (let i = 0; i < states.length; i++) {
+    const s = states[i];
     const totalDebt = Object.values(s.debtByLoan).reduce((acc, v) => acc + v, 0);
     if (!debtFreeISO && totalDebt === 0) {
       debtFreeISO = s.monthISO;
@@ -33,12 +41,14 @@ export function detectMilestones(states: MonthlyState[], params: FireParams): Mi
         fireISO = s.monthISO;
       }
     }
-    if (debtFreeISO && fireISO) break;
+    if (!retirementISO && i > 0 && s.incomeAfterTax === 0 && states[i - 1].incomeAfterTax > 0) {
+      retirementISO = s.monthISO;
+    }
   }
 
   const horizonState =
     states.length >= MONTHS_30Y ? states[MONTHS_30Y - 1] : states[states.length - 1];
   const netWorth30y = horizonState ? horizonState.netWorth : undefined;
 
-  return { debtFreeISO, fireISO, netWorth30y };
+  return { debtFreeISO, fireISO, retirementISO, netWorth30y };
 }

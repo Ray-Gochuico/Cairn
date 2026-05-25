@@ -1,8 +1,11 @@
 import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { coastFi } from '@/lib/coast-fi';
 import { currentAge } from '@/lib/dates';
 import { formatCurrency } from '@/lib/format';
 import type { MonthlyState } from '@/lib/scenarios';
+import { useScenariosStore } from '@/stores/scenarios-store';
 import type { Household, Person } from '@/types/schema';
 import type { Scenario } from '@/types/scenario';
 
@@ -104,6 +107,64 @@ function FiCard({ testId, title, target, liquidNw, explainer }: FiCardProps) {
   );
 }
 
+function defaultRetirementAge(persons: Person[]): number | null {
+  const ages = persons
+    .map((p) => p.targetRetirementAge)
+    .filter((n): n is number => typeof n === 'number');
+  if (ages.length === 0) return null;
+  return Math.min(...ages);
+}
+
+function RetirementAgeControl({
+  scenarios,
+  persons,
+}: {
+  scenarios: Scenario[];
+  persons: Person[];
+}) {
+  const active = scenarios.find((s) => s.isActive);
+  if (!active?.id) return null;
+
+  const override = active.leverPayload.retirementAgeOverride;
+  const fallback = defaultRetirementAge(persons);
+  const display = override ?? fallback ?? '';
+
+  const handleChange = async (raw: string) => {
+    if (raw === '') {
+      await useScenariosStore.getState().updateLever(active.id!, { retirementAgeOverride: null });
+      return;
+    }
+    const n = Math.round(Number(raw));
+    if (!Number.isFinite(n)) return;
+    const clamped = Math.max(30, Math.min(90, n));
+    await useScenariosStore.getState().updateLever(active.id!, { retirementAgeOverride: clamped });
+  };
+
+  return (
+    <div className="flex items-center gap-2 text-sm" data-testid="whatif-retirement-age-control">
+      <Label htmlFor="whatif-retirement-age" className="text-xs text-muted-foreground">
+        Retire at age
+      </Label>
+      <Input
+        id="whatif-retirement-age"
+        type="number"
+        min={30}
+        max={90}
+        step={1}
+        value={display}
+        onChange={(e) => handleChange(e.target.value)}
+        aria-label="Retirement age"
+        className="h-8 w-20 tabular-nums"
+      />
+      {override !== null && (
+        <span className="text-xs text-muted-foreground">
+          (override; person default {fallback ?? '—'})
+        </span>
+      )}
+    </div>
+  );
+}
+
 export default function FiCards(props: FiCardsProps) {
   const computed = computeCards(props);
   if (!computed) return null;
@@ -113,24 +174,24 @@ export default function FiCards(props: FiCardsProps) {
   const withdrawalPct = (props.household.withdrawalRate * 100).toFixed(1);
 
   return (
-    <div
-      className="flex flex-col sm:flex-row gap-3"
-      data-testid="whatif-fi-cards"
-    >
-      <FiCard
-        testId="whatif-fire-number"
-        title="FIRE number"
-        target={fireTarget}
-        liquidNw={liquidNw}
-        explainer={`Portfolio at retirement (${withdrawalPct}% rule)`}
-      />
-      <FiCard
-        testId="whatif-coastfi-number"
-        title="Coast FI target today"
-        target={coastFiTarget}
-        liquidNw={liquidNw}
-        explainer={`${rateLabel} ${ratePct}% growth, ${yearsUntilRetirement}y to retirement`}
-      />
+    <div className="space-y-2" data-testid="whatif-fi-cards-wrap">
+      <div className="flex flex-col sm:flex-row gap-3" data-testid="whatif-fi-cards">
+        <FiCard
+          testId="whatif-fire-number"
+          title="FIRE number"
+          target={fireTarget}
+          liquidNw={liquidNw}
+          explainer={`Portfolio at retirement (${withdrawalPct}% rule)`}
+        />
+        <FiCard
+          testId="whatif-coastfi-number"
+          title="Coast FI target today"
+          target={coastFiTarget}
+          liquidNw={liquidNw}
+          explainer={`${rateLabel} ${ratePct}% growth, ${yearsUntilRetirement}y to retirement`}
+        />
+      </div>
+      <RetirementAgeControl scenarios={props.scenarios} persons={props.persons} />
     </div>
   );
 }
