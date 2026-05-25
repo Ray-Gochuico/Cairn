@@ -345,6 +345,11 @@ export default function InvestmentTimeSeriesChart({
                   stackId="investments"
                   fill={colorForAccount(acc.id!, acc.accentColor)}
                   name={acc.name}
+                  // Recharts Bar passes its whole (always-fresh) props object
+                  // into useAnimationId, so JavascriptAnimate's key churns and
+                  // its cleanup loops via setIsAnimating. Same fix as Pie /
+                  // ProjectionChart.
+                  isAnimationActive={false}
                 />
               ))}
               <Line
@@ -353,6 +358,11 @@ export default function InvestmentTimeSeriesChart({
                 strokeWidth={2.5}
                 dot={LINE_DOT}
                 name="Total"
+                // Belt-and-suspenders alongside the prior CHART_MARGIN /
+                // LINE_DOT / EMPTY_CHART_DATA memo fix — disables the
+                // JavascriptAnimate lifecycle entirely on this chart so any
+                // remaining recharts internal churn can't trigger the loop.
+                isAnimationActive={false}
               />
             </ComposedChart>
           </ResponsiveContainer>
