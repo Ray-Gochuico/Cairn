@@ -429,6 +429,83 @@ export default function Investments() {
     }
   };
 
+  // "Force refresh sectors" — a focused debug affordance distinct from
+  // "Refresh fund data". This button clears the fund_sectors table for the
+  // user's held fund tickers, then calls Yahoo's sectorWeightings endpoint
+  // sequentially per ticker so we can surface per-ticker status (ok /
+  // empty / error) inline. Two prior fixes shipped that passed tests but
+  // the donut stayed grey; this button makes whatever's still going wrong
+  // visible to the user without needing to open dev tools.
+  const [forceSectorsRunning, setForceSectorsRunning] = useState(false);
+  interface SectorRefreshRow {
+    ticker: string;
+    status: 'ok' | 'empty' | 'error';
+    sectorCount?: number;
+    error?: string;
+  }
+  const [sectorRefreshRows, setSectorRefreshRows] = useState<SectorRefreshRow[] | null>(null);
+
+  const handleForceRefreshSectors = async () => {
+    setForceSectorsRunning(true);
+    setSectorRefreshRows([]);
+    const db = getDatabase();
+    const yahoo = new YahooClient();
+    const sectorsRepo = new FundSectorsRepo(db);
+    const tickersRepo = new TickersRepo(db);
+    const holdingsRepo = new HoldingsRepo(db);
+    const fundClasses = new Set([
+      'US_TOTAL_MARKET', 'US_LARGE_CAP', 'US_MID_CAP', 'US_SMALL_CAP',
+      'INTL_DEVELOPED', 'EMERGING_MARKETS', 'US_BONDS', 'INTL_BONDS', 'TIPS',
+      'REAL_ESTATE', 'COMMODITIES',
+    ]);
+    try {
+      const all = await holdingsRepo.listAll();
+      const tickers = [...new Set(all.map((h) => h.ticker))];
+      const fundTickers: string[] = [];
+      for (const t of tickers) {
+        const row = await tickersRepo.lookup(t);
+        if (row && fundClasses.has(row.assetClass)) fundTickers.push(t);
+      }
+      // eslint-disable-next-line no-console
+      console.log('[ForceRefreshSectors] candidates', { allTickers: tickers, fundTickers });
+
+      const rows: SectorRefreshRow[] = [];
+      for (const ticker of fundTickers) {
+        try {
+          // Clear before fetching so a fetch failure leaves the table empty
+          // (and the donut visibly grey) rather than masking the bug with
+          // stale rows from a prior run.
+          await db.execute('DELETE FROM fund_sectors WHERE fund_ticker = ?', [ticker]);
+          const { sectors, asOf } = await yahoo.fundSectorWeightings(ticker);
+          if (sectors.length === 0) {
+            rows.push({ ticker, status: 'empty', sectorCount: 0 });
+          } else {
+            await sectorsRepo.upsertSectors(ticker, sectors, asOf);
+            rows.push({ ticker, status: 'ok', sectorCount: sectors.length });
+          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          rows.push({ ticker, status: 'error', error: message });
+        }
+        setSectorRefreshRows([...rows]);
+      }
+      await loadFundSectors();
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[ForceRefreshSectors] outer failure', err);
+      setSectorRefreshRows((prev) => [
+        ...(prev ?? []),
+        {
+          ticker: '(setup)',
+          status: 'error',
+          error: err instanceof Error ? err.message : String(err),
+        },
+      ]);
+    } finally {
+      setForceSectorsRunning(false);
+    }
+  };
+
   // Look up asset classes whenever the set of tickers changes. The tickers
   // table starts empty in Phase 2; this lookup gracefully resolves to an
   // empty map and every holding falls back to AssetClass.OTHER.
@@ -566,6 +643,15 @@ export default function Investments() {
             >
               {refreshing ? 'Refreshing fund data…' : 'Refresh fund data'}
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleForceRefreshSectors}
+              disabled={forceSectorsRunning}
+              title="Clear and re-fetch fund sectors per ticker. Shows per-ticker status."
+            >
+              {forceSectorsRunning ? 'Refreshing sectors…' : 'Force refresh sectors'}
+            </Button>
             {refreshResult && (
               <div className="text-xs text-muted-foreground">
                 {refreshResult.refreshed.length > 0 && (
@@ -586,6 +672,32 @@ export default function Investments() {
               </div>
             )}
           </div>
+          {sectorRefreshRows && sectorRefreshRows.length > 0 && (
+            <div
+              className="mt-3 rounded-md border bg-muted/30 p-3 text-xs space-y-1"
+              data-testid="force-sectors-status"
+            >
+              <div className="font-medium text-foreground">Force-refresh sectors status</div>
+              {sectorRefreshRows.map((row) => (
+                <div key={row.ticker} className="flex items-center gap-2 font-mono">
+                  <span className="w-16">{row.ticker}</span>
+                  {row.status === 'ok' && (
+                    <span className="text-emerald-600">
+                      ok · {row.sectorCount} sectors loaded
+                    </span>
+                  )}
+                  {row.status === 'empty' && (
+                    <span className="text-amber-600">
+                      empty · Yahoo returned no sectorWeightings (bond/commodity fund?)
+                    </span>
+                  )}
+                  {row.status === 'error' && (
+                    <span className="text-destructive">error · {row.error}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         <ExportCsvButton baseName="holdings" columns={csvColumns} rows={holdings} />
       </div>

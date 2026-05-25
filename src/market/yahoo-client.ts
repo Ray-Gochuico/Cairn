@@ -140,8 +140,22 @@ export class YahooClient {
    * `fundProfile`) rather than casting this directly.
    */
   async quoteSummary(ticker: string, modules: string[]): Promise<unknown> {
-    const body = await invoke<string>('yahoo_quote_summary', { ticker, modules });
-    return JSON.parse(body);
+    // eslint-disable-next-line no-console
+    console.log('[YahooClient.quoteSummary] start', { ticker, modules });
+    try {
+      const body = await invoke<string>('yahoo_quote_summary', { ticker, modules });
+      // eslint-disable-next-line no-console
+      console.log('[YahooClient.quoteSummary] ok', { ticker, modules, bodyLength: body.length });
+      return JSON.parse(body);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[YahooClient.quoteSummary] FAILED', {
+        ticker,
+        modules,
+        error: err instanceof Error ? { message: err.message, stack: err.stack } : err,
+      });
+      throw err;
+    }
   }
 
   /**
@@ -185,13 +199,27 @@ export class YahooClient {
    * asset-class pseudo-sector ("Fixed Income", "Commodities", etc.).
    */
   async fundSectorWeightings(ticker: string): Promise<{ sectors: { sector: string; weight: number }[]; asOf: string }> {
+    // eslint-disable-next-line no-console
+    console.log('[YahooClient.fundSectorWeightings] start', { ticker });
     const data = await this.quoteSummary(ticker, ['topHoldings']);
     // Same `as any` rationale as fundTopHoldings / fundProfile — quoteSummary
     // returns an open-ended JSON blob; the typed boundary is this return type.
     const result = (data as any).quoteSummary?.result?.[0]?.topHoldings;
     const rawSectors = result?.sectorWeightings;
     const asOf = new Date().toISOString().slice(0, 10);
-    if (!Array.isArray(rawSectors)) return { sectors: [], asOf };
+    // eslint-disable-next-line no-console
+    console.log('[YahooClient.fundSectorWeightings] parsed quoteSummary', {
+      ticker,
+      hasResult: result != null,
+      rawSectorsType: Array.isArray(rawSectors) ? 'array' : typeof rawSectors,
+      rawSectorsLength: Array.isArray(rawSectors) ? rawSectors.length : null,
+      rawSectorsSample: Array.isArray(rawSectors) ? rawSectors.slice(0, 3) : rawSectors,
+    });
+    if (!Array.isArray(rawSectors)) {
+      // eslint-disable-next-line no-console
+      console.warn('[YahooClient.fundSectorWeightings] rawSectors is not an array — returning empty', { ticker });
+      return { sectors: [], asOf };
+    }
     const sectors: { sector: string; weight: number }[] = [];
     for (const entry of rawSectors) {
       if (!entry || typeof entry !== 'object') continue;
@@ -202,6 +230,8 @@ export class YahooClient {
       if (typeof weight !== 'number' || weight <= 0) continue;
       sectors.push({ sector: snakeToTitleSector(key), weight });
     }
+    // eslint-disable-next-line no-console
+    console.log('[YahooClient.fundSectorWeightings] done', { ticker, sectorCount: sectors.length, sectors });
     return { sectors, asOf };
   }
 
