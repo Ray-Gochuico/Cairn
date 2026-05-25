@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   summarizeBudget,
   budgetableCategories,
+  groupByParent,
   partitionTrackedRows,
   MISC_CATEGORY_ID,
 } from '@/lib/budget-analysis';
@@ -33,6 +34,59 @@ describe('budgetableCategories', () => {
   it('keeps leaf NEED/WANT non-system categories, drops parents/income/system rows', () => {
     const ids = budgetableCategories(categories).map((c) => c.id).sort((a, b) => a! - b!);
     expect(ids).toEqual([7, 33]); // not 1 (parent), not 40 (INCOME), not 50 (system)
+  });
+});
+
+describe('groupByParent', () => {
+  // 1 = Home (parent), 2 = Vehicles (parent), 7 = Maintenance (Home child),
+  // 17 = Gas/Fuel (Vehicles child), 33 = Groceries (no parent — General).
+  const parents: Category[] = [
+    cat({ id: 1, name: 'Home', type: 'NEED' }),
+    cat({ id: 2, name: 'Vehicles', type: 'NEED' }),
+  ];
+  const home1 = cat({ id: 7, name: 'Maintenance', parentCategoryId: 1, type: 'NEED' });
+  const home2 = cat({ id: 10, name: 'Utilities', parentCategoryId: 1, type: 'NEED' });
+  const vehicle1 = cat({ id: 17, name: 'Gas/Fuel', parentCategoryId: 2, type: 'NEED' });
+  const standalone = cat({ id: 33, name: 'Groceries', type: 'NEED' });
+
+  it('groups leaves by their parent category and surfaces the parent name', () => {
+    const groups = groupByParent([...parents, home1, home2, vehicle1, standalone], [home1, home2, vehicle1, standalone]);
+    const home = groups.find((g) => g.parentId === 1);
+    expect(home?.parentName).toBe('Home');
+    expect(home?.options.map((o) => o.name).sort()).toEqual(['Maintenance', 'Utilities']);
+    const vehicles = groups.find((g) => g.parentId === 2);
+    expect(vehicles?.parentName).toBe('Vehicles');
+    expect(vehicles?.options.map((o) => o.name)).toEqual(['Gas/Fuel']);
+  });
+
+  it('places leaves with no parent into a "General" group with parentId=null', () => {
+    const groups = groupByParent([...parents, home1, standalone], [home1, standalone]);
+    const general = groups.find((g) => g.parentId === null);
+    expect(general).toBeDefined();
+    expect(general?.parentName).toBe('General');
+    expect(general?.options.map((o) => o.name)).toEqual(['Groceries']);
+  });
+
+  it('returns groups sorted alphabetically by parent name', () => {
+    const groups = groupByParent([...parents, home1, vehicle1, standalone], [home1, vehicle1, standalone]);
+    expect(groups.map((g) => g.parentName)).toEqual(['General', 'Home', 'Vehicles']);
+  });
+
+  it('returns an empty array when no leaves are provided', () => {
+    expect(groupByParent(parents, [])).toEqual([]);
+  });
+
+  it('falls back to "General" when a leaf references an unknown parent id', () => {
+    const orphan = cat({ id: 99, name: 'Orphan', parentCategoryId: 9999, type: 'NEED' });
+    const groups = groupByParent([...parents, orphan], [orphan]);
+    const general = groups.find((g) => g.parentName === 'General');
+    expect(general?.options.map((o) => o.name)).toEqual(['Orphan']);
+  });
+
+  it('sorts options within a group alphabetically by name', () => {
+    const groups = groupByParent([...parents, home2, home1], [home2, home1]);
+    const home = groups.find((g) => g.parentId === 1);
+    expect(home?.options.map((o) => o.name)).toEqual(['Maintenance', 'Utilities']);
   });
 });
 

@@ -4,6 +4,7 @@ import { useTransactionsStore } from '@/stores/transactions-store';
 import {
   summarizeBudget,
   partitionTrackedRows,
+  groupByParent,
   MISC_CATEGORY_ID,
   MISC_CATEGORY_NAME,
   type BudgetRow,
@@ -75,6 +76,20 @@ export default function Budget() {
     () => summary.rows.filter((r) => !trackedIds.includes(r.categoryId)),
     [summary.rows, trackedIds],
   );
+
+  // Picker shows untracked leaves grouped by their parent category. We resolve
+  // each untracked row back to its Category record so groupByParent can read
+  // the parent_category_id; rows with no matching category are dropped (the
+  // category was deleted out from under the budget — never expected in practice).
+  const pickerGroups = useMemo(() => {
+    const catById = new Map(
+      categories.filter((c) => c.id != null).map((c) => [c.id as number, c]),
+    );
+    const untrackedCats = untrackedRows
+      .map((r) => catById.get(r.categoryId))
+      .filter((c): c is NonNullable<typeof c> => c != null);
+    return groupByParent(categories, untrackedCats);
+  }, [untrackedRows, categories]);
 
   // Group tracked rows under their parent category for display.
   const groups = useMemo(() => {
@@ -165,10 +180,7 @@ export default function Budget() {
       {untrackedRows.length > 0 && (
         <div className="flex items-center text-sm">
           <BudgetCategoryPicker
-            untracked={untrackedRows.map((r) => ({
-              id: r.categoryId,
-              name: r.categoryName,
-            }))}
+            groups={pickerGroups}
             onConfirm={handleAddCategories}
           />
         </div>

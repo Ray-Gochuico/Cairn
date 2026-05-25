@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
@@ -251,6 +251,34 @@ describe('Budget page', () => {
       expect(stored).toContain(33);
       expect(stored).toContain(17);
       expect(stored.length).toBe(3); // Groceries + Gas/Fuel + one other
+    });
+
+    it('renders the picker grouped by parent category — leaf checkboxes live under their parent header', async () => {
+      const repo = new CategoriesRepo(db);
+      // Set budgets on three leaves with distinct parents:
+      //   33 Groceries  → no parent (General)
+      //   17 Gas/Fuel   → 2 Vehicles
+      //   10 Utilities  → 1 Home
+      await repo.update(33, { monthlyBudget: 600 });
+      await repo.update(17, { monthlyBudget: 200 });
+      await repo.update(10, { monthlyBudget: 150 });
+      // Start with only Groceries tracked, so Gas/Fuel and Utilities are
+      // pickable and force two non-General groups to appear.
+      localStorage.setItem('trackedBudgetCategories.v1', JSON.stringify([33]));
+
+      render(<MemoryRouter><Budget /></MemoryRouter>);
+      const user = userEvent.setup();
+      await screen.findByText('Groceries');
+      await user.click(screen.getByRole('button', { name: /add categor/i }));
+
+      // Sentinel: Gas/Fuel must render inside the Vehicles parent group,
+      // and Utilities must render inside the Home parent group.
+      const vehiclesGroup = screen.getByRole('group', { name: 'Vehicles' });
+      expect(within(vehiclesGroup).getByRole('checkbox', { name: 'Gas/Fuel' })).toBeInTheDocument();
+      const homeGroup = screen.getByRole('group', { name: 'Home' });
+      expect(within(homeGroup).getByRole('checkbox', { name: 'Utilities' })).toBeInTheDocument();
+      // Cross-group separation: Gas/Fuel must NOT appear in the Home group.
+      expect(within(homeGroup).queryByRole('checkbox', { name: 'Gas/Fuel' })).not.toBeInTheDocument();
     });
 
     it('opening the picker, closing without applying, leaves the tracked list unchanged', async () => {

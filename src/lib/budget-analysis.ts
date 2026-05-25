@@ -40,6 +40,59 @@ export function budgetableCategories(categories: Category[]): Category[] {
   );
 }
 
+export interface GroupedPickerOption {
+  id: number;
+  name: string;
+}
+
+export interface ParentGroup {
+  /** null when the leaf has no parent (or its parent id is unknown). */
+  parentId: number | null;
+  /** Display name; 'General' for the null-parent fallback. */
+  parentName: string;
+  options: GroupedPickerOption[];
+}
+
+/**
+ * Group leaf categories by their parent for grouped multi-select rendering.
+ * Leaves whose parentCategoryId is null (or points at an unknown id) collapse
+ * into a single 'General' group keyed by parentId=null. Groups are sorted
+ * alphabetically by parent name; options within each group are sorted by name.
+ *
+ * Pass any leaf list — typically `budgetableCategories(...)` or a subset
+ * filtered to those the picker should show.
+ */
+export function groupByParent(
+  allCategories: Category[],
+  leafCategories: Category[],
+): ParentGroup[] {
+  const nameById = new Map<number, string>();
+  for (const c of allCategories) {
+    if (c.id != null) nameById.set(c.id, c.name);
+  }
+
+  const byKey = new Map<string, ParentGroup>();
+  for (const leaf of leafCategories) {
+    if (leaf.id == null) continue;
+    const pid = leaf.parentCategoryId;
+    const hasKnownParent = pid != null && nameById.has(pid);
+    const resolvedParentId = hasKnownParent ? pid : null;
+    const parentName = hasKnownParent ? nameById.get(pid)! : 'General';
+    const key = resolvedParentId == null ? '__general__' : String(resolvedParentId);
+    let group = byKey.get(key);
+    if (group == null) {
+      group = { parentId: resolvedParentId, parentName, options: [] };
+      byKey.set(key, group);
+    }
+    group.options.push({ id: leaf.id, name: leaf.name });
+  }
+
+  const groups = [...byKey.values()];
+  for (const g of groups) g.options.sort((a, b) => a.name.localeCompare(b.name));
+  groups.sort((a, b) => a.parentName.localeCompare(b.parentName));
+  return groups;
+}
+
 /** Budget-vs-actual for one month across every budgetable category. */
 export function summarizeBudget(
   categories: Category[],
