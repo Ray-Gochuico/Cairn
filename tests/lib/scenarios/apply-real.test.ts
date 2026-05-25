@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { applyAnnualReturn, applyLumpSum, monthlyExpenseDeltaFromPeriods, monthlyReturnFromAnnual } from '@/lib/scenarios/apply-real';
+import {
+  applyAnnualReturn,
+  applyExtraLoanPayment,
+  applyLumpSum,
+  monthlyExpenseDeltaFromPeriods,
+  monthlyReturnFromAnnual,
+  type LoanMonthlyContext,
+} from '@/lib/scenarios/apply-real';
 import type { ExpensePeriod, LumpSumEvent } from '@/lib/scenarios/lever-types';
 import type { MonthlyState } from '@/lib/scenarios/engine';
 
@@ -72,5 +79,40 @@ describe('monthlyExpenseDeltaFromPeriods', () => {
   it('sums overlapping periods', () => {
     const overlap: ExpensePeriod = { start: '2026-09-01', monthlyDelta: 500, durationMonths: 3 };
     expect(monthlyExpenseDeltaFromPeriods([period, overlap], '2026-10')).toBe(2000);
+  });
+});
+
+describe('applyExtraLoanPayment', () => {
+  const ctx: LoanMonthlyContext = {
+    loanId: 1,
+    balance: 18400,
+    annualRate: 0.059,
+    regularMonthlyPayment: 425,
+  };
+
+  it('returns balance after regular payment when no extra is configured', () => {
+    const next = applyExtraLoanPayment(ctx, undefined, '2027-03');
+    expect(next.newBalance).toBeLessThan(18400);
+    expect(next.principalPaid).toBeGreaterThan(0);
+    expect(next.extraApplied).toBe(0);
+  });
+  it('applies extra payment to principal, reducing balance faster', () => {
+    const noExtra = applyExtraLoanPayment(ctx, undefined, '2027-03');
+    const withExtra = applyExtraLoanPayment(ctx, { loanId: 1, extraMonthly: 300 }, '2027-03');
+    expect(withExtra.newBalance).toBeLessThan(noExtra.newBalance - 250);
+    expect(withExtra.extraApplied).toBe(300);
+  });
+  it('respects start/end window — no extra applied outside window', () => {
+    const win = { loanId: 1, extraMonthly: 300, start: '2028-01-01', end: '2032-12-01' };
+    expect(applyExtraLoanPayment(ctx, win, '2027-12').extraApplied).toBe(0);
+    expect(applyExtraLoanPayment(ctx, win, '2028-01').extraApplied).toBe(300);
+    expect(applyExtraLoanPayment(ctx, win, '2032-12').extraApplied).toBe(300);
+    expect(applyExtraLoanPayment(ctx, win, '2033-01').extraApplied).toBe(0);
+  });
+  it('caps extra at the remaining balance (no negative balance)', () => {
+    const tiny: LoanMonthlyContext = { loanId: 1, balance: 100, annualRate: 0.05, regularMonthlyPayment: 425 };
+    const result = applyExtraLoanPayment(tiny, { loanId: 1, extraMonthly: 1000 }, '2027-03');
+    expect(result.newBalance).toBe(0);
+    expect(result.extraApplied).toBeLessThanOrEqual(100);
   });
 });
