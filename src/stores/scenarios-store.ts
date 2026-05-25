@@ -80,19 +80,85 @@ export const useScenariosStore = create<ScenariosState>((set, get) => ({
     }
   },
 
-  create: async () => { throw new Error('not implemented yet — see Task 7'); },
-  update: async () => { throw new Error('not implemented yet — see Task 7'); },
-  remove: async () => { throw new Error('not implemented yet — see Task 7'); },
-  setActive: async () => { throw new Error('not implemented yet — see Task 7'); },
-  updateLever: async () => { throw new Error('not implemented yet — see Task 7'); },
-  duplicate: async () => { throw new Error('not implemented yet — see Task 7'); },
-  rename: async () => { throw new Error('not implemented yet — see Task 7'); },
+  create: async (input) => {
+    const repo = new ScenariosRepo(getDatabase());
+    const id = await repo.create(input);
+    invalidateProjectionFor(get, set, id);
+    await get().load();
+    return id;
+  },
+
+  update: async (id, patch) => {
+    const repo = new ScenariosRepo(getDatabase());
+    await repo.update(id, patch);
+    invalidateProjectionFor(get, set, id);
+    await get().load();
+  },
+
+  remove: async (id) => {
+    const repo = new ScenariosRepo(getDatabase());
+    await repo.delete(id);
+    invalidateProjectionFor(get, set, id);
+    await get().load();
+  },
+
+  setActive: async (id) => {
+    const repo = new ScenariosRepo(getDatabase());
+    await repo.setActive(id);
+    await get().load();
+  },
+
+  updateLever: async (id, partial) => {
+    const repo = new ScenariosRepo(getDatabase());
+    const existing = get().scenarios.find((s) => s.id === id);
+    if (!existing) throw new Error(`Scenario ${id} not found in store`);
+    const mergedPayload: LeverPayload = { ...existing.leverPayload, ...partial };
+    await repo.update(id, { leverPayload: mergedPayload });
+    invalidateProjectionFor(get, set, id);
+    await get().load();
+  },
+
+  duplicate: async (sourceId, newName) => {
+    const repo = new ScenariosRepo(getDatabase());
+    const source = get().scenarios.find((s) => s.id === sourceId);
+    if (!source) throw new Error(`Scenario ${sourceId} not found in store`);
+    const copyInput: Omit<Scenario, 'id' | 'createdAt' | 'updatedAt'> = {
+      name: newName ?? `${source.name} (copy)`,
+      isBaseline: false,
+      isActive: false,
+      color: source.color,
+      lineStyle: source.lineStyle,
+      visible: source.visible,
+      sortOrder: source.sortOrder + 1,
+      leverPayload: source.leverPayload,
+    };
+    const newId = await repo.create(copyInput);
+    await get().load();
+    return newId;
+  },
+
+  rename: async (id, newName) => {
+    const repo = new ScenariosRepo(getDatabase());
+    await repo.update(id, { name: newName });
+    await get().load();
+  },
+
   toggleVisibility: async () => { throw new Error('not implemented yet — see Task 8'); },
   setHorizonMonths: () => { throw new Error('not implemented yet — see Task 8'); },
   setDollarMode: () => { throw new Error('not implemented yet — see Task 8'); },
 
   projectedScenarios: () => { throw new Error('not implemented yet — see Task 9'); },
 }));
+
+function invalidateProjectionFor(
+  get: () => ScenariosState,
+  set: (partial: Partial<ScenariosState>) => void,
+  id: number,
+) {
+  const next = new Map(get().projectionCache);
+  next.delete(id);
+  set({ projectionCache: next });
+}
 
 // Silence unused-import warnings until Task 9 wires the selector
 void projectScenario;
