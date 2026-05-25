@@ -17,6 +17,17 @@ interface ProjectionCacheEntry {
   key: string;
 }
 
+// Module-level projection cache. Lives outside the Zustand store so that
+// reading it during render (from `projectedScenarios`) never triggers a
+// store update, which would otherwise schedule re-renders on subscribed
+// components mid-render and produce a "Cannot update X while rendering Y"
+// React error.
+const projectionCache = new Map<number, ProjectionCacheEntry>();
+
+export function _resetProjectionCacheForTest(): void {
+  projectionCache.clear();
+}
+
 interface ScenariosState {
   scenarios: Scenario[];
   isLoading: boolean;
@@ -26,8 +37,6 @@ interface ScenariosState {
   dollarMode: DollarMode;
   inflation: number;
   defaultReturnRate: number;
-
-  projectionCache: Map<number, ProjectionCacheEntry>;
 
   load: () => Promise<void>;
   create: (input: Omit<Scenario, 'id' | 'createdAt' | 'updatedAt'>) => Promise<number>;
@@ -67,7 +76,6 @@ export const useScenariosStore = create<ScenariosState>((set, get) => ({
   dollarMode: 'nominal',
   inflation: 0.025,
   defaultReturnRate: 0.07,
-  projectionCache: new Map(),
 
   activeScenario: () => {
     const ss = get().scenarios;
@@ -97,7 +105,7 @@ export const useScenariosStore = create<ScenariosState>((set, get) => ({
   create: async (input) => {
     const repo = new ScenariosRepo(getDatabase());
     const id = await repo.create(input);
-    invalidateProjectionFor(get, set, id);
+    invalidateProjectionFor(id);
     await get().load();
     return id;
   },
@@ -105,14 +113,14 @@ export const useScenariosStore = create<ScenariosState>((set, get) => ({
   update: async (id, patch) => {
     const repo = new ScenariosRepo(getDatabase());
     await repo.update(id, patch);
-    invalidateProjectionFor(get, set, id);
+    invalidateProjectionFor(id);
     await get().load();
   },
 
   remove: async (id) => {
     const repo = new ScenariosRepo(getDatabase());
     await repo.delete(id);
-    invalidateProjectionFor(get, set, id);
+    invalidateProjectionFor(id);
     await get().load();
   },
 
@@ -128,7 +136,7 @@ export const useScenariosStore = create<ScenariosState>((set, get) => ({
     if (!existing) throw new Error(`Scenario ${id} not found in store`);
     const mergedPayload: LeverPayload = { ...existing.leverPayload, ...partial };
     await repo.update(id, { leverPayload: mergedPayload });
-    invalidateProjectionFor(get, set, id);
+    invalidateProjectionFor(id);
     await get().load();
   },
 
@@ -159,7 +167,8 @@ export const useScenariosStore = create<ScenariosState>((set, get) => ({
 
   setHorizonMonths: (months) => {
     const clamped = Math.max(60, Math.min(480, Math.round(months)));
-    set({ horizonMonths: clamped, projectionCache: new Map() });
+    projectionCache.clear();
+    set({ horizonMonths: clamped });
   },
 
   setDollarMode: (mode) => {
@@ -197,7 +206,6 @@ export const useScenariosStore = create<ScenariosState>((set, get) => ({
 
   projectedScenarios: (real) => {
     const state = get();
-    const next = new Map(state.projectionCache);
     const out = new Map<number, MonthlyState[]>();
 
     const defaultsKey = `${state.inflation}|${state.defaultReturnRate}`;
@@ -210,7 +218,7 @@ export const useScenariosStore = create<ScenariosState>((set, get) => ({
       const leverKey = JSON.stringify(sc.leverPayload);
       const key = `${leverKey}|${horizonKey}|${defaultsKey}`;
 
-      const cached = next.get(id);
+      const cached = projectionCache.get(id);
       if (cached && cached.key === key) {
         out.set(id, cached.states);
         continue;
@@ -220,22 +228,15 @@ export const useScenariosStore = create<ScenariosState>((set, get) => ({
         startISO: real.startISO,
         months: state.horizonMonths,
       });
-      next.set(id, { states, key });
+      projectionCache.set(id, { states, key });
       out.set(id, states);
     }
 
-    set({ projectionCache: next });
     return out;
   },
 }));
 
-function invalidateProjectionFor(
-  get: () => ScenariosState,
-  set: (partial: Partial<ScenariosState>) => void,
-  id: number,
-) {
-  const next = new Map(get().projectionCache);
-  next.delete(id);
-  set({ projectionCache: next });
+function invalidateProjectionFor(id: number) {
+  projectionCache.delete(id);
 }
 
