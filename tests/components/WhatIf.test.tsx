@@ -55,7 +55,7 @@ describe('WhatIf page', () => {
       isLoading: false, error: null,
     });
     useLoansStore.setState({
-      loans: [{ id: 1, householdId: 1, name: 'Auto', type: 'AUTO', currentBalance: 18400, interestRate: 0.059, monthlyPayment: 425, termMonths: 60 } as any],
+      loans: [{ id: 1, householdId: 1, name: 'Auto', type: 'AUTO', currentBalance: 18400, interestRate: 0.059, monthlyPayment: 425, termMonths: 60, firstPaymentDate: '2026-05-01' } as any],
       isLoading: false, error: null, load: async () => {},
     } as any);
     useHoldingsStore.setState({
@@ -111,5 +111,15 @@ describe('WhatIf page', () => {
     useHouseholdStore.setState({ household: null, isLoading: false, error: null });
     render(<MemoryRouter><WhatIf /></MemoryRouter>);
     expect(await screen.findByText(/set up your household/i)).toBeInTheDocument();
+  });
+
+  it('renders the lever bar with all five pills after baseline auto-creation', async () => {
+    render(<MemoryRouter><WhatIf /></MemoryRouter>);
+    await waitFor(() => expect(useScenariosStore.getState().scenarios.length).toBe(1));
+    expect(screen.getByRole('button', { name: /loans/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /lump sums/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /expenses/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /returns/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /income/i })).toBeInTheDocument();
   });
 });

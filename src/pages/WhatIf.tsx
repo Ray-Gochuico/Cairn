@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import ChartToolbar from '@/components/whatif/ChartToolbar';
+import LeverBar from '@/components/whatif/LeverBar';
 import MilestoneStrip from '@/components/whatif/MilestoneStrip';
 import ProjectionChart from '@/components/whatif/ProjectionChart';
 import { useRealState } from '@/components/whatif/useRealState';
@@ -52,6 +53,8 @@ export default function WhatIf() {
         <h1 className="text-2xl font-semibold">What-If</h1>
         <ChartToolbar />
       </div>
+
+      <LeverBar />
 
       <Card className="min-w-0">
         <CardHeader>
