@@ -89,6 +89,11 @@ export function computeConcentration(input: ConcentrationInput): ConcentrationRe
 
   const warnings: ConcentrationWarning[] = [];
   for (const t of perTicker) {
+    // Misc is a synthetic catch-all for the untracked tail of fund top-N
+    // weights — a large Misc share means little is known about the underlying,
+    // not that a single name is concentrated. Skip it in the warnings list
+    // while still leaving the row visible in normal breakdowns.
+    if (t.ticker === 'Misc') continue;
     if (t.pctOfPortfolio > 0.25) warnings.push({
       type: 'PER_TICKER_HIGH', severity: 'HIGH', ticker: t.ticker,
       exposurePct: t.pctOfPortfolio,
