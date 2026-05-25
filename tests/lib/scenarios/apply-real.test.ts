@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { applyAnnualReturn, applyLumpSum, monthlyReturnFromAnnual } from '@/lib/scenarios/apply-real';
-import type { LumpSumEvent } from '@/lib/scenarios/lever-types';
+import { applyAnnualReturn, applyLumpSum, monthlyExpenseDeltaFromPeriods, monthlyReturnFromAnnual } from '@/lib/scenarios/apply-real';
+import type { ExpensePeriod, LumpSumEvent } from '@/lib/scenarios/lever-types';
 import type { MonthlyState } from '@/lib/scenarios/engine';
 
 const seed = (overrides: Partial<MonthlyState> = {}): MonthlyState => ({
@@ -52,5 +52,25 @@ describe('applyLumpSum', () => {
     const next = applyLumpSum(seed({ investments: 100000, debtByLoan: { 1: 50000 }, homeEquity: 300000 }), inv);
     expect(next.debtByLoan[1]).toBe(50000);
     expect(next.homeEquity).toBe(300000);
+  });
+});
+
+describe('monthlyExpenseDeltaFromPeriods', () => {
+  const period: ExpensePeriod = { start: '2026-07-01', monthlyDelta: 1500, durationMonths: 6, label: 'Medical' };
+
+  it('returns 0 before the period starts', () => {
+    expect(monthlyExpenseDeltaFromPeriods([period], '2026-06')).toBe(0);
+  });
+  it('returns the delta during the period', () => {
+    expect(monthlyExpenseDeltaFromPeriods([period], '2026-07')).toBe(1500);
+    expect(monthlyExpenseDeltaFromPeriods([period], '2026-12')).toBe(1500);
+  });
+  it('returns 0 after the period ends', () => {
+    // 6-month period from 2026-07 → covers 2026-07..2026-12 inclusive; 2027-01 is outside
+    expect(monthlyExpenseDeltaFromPeriods([period], '2027-01')).toBe(0);
+  });
+  it('sums overlapping periods', () => {
+    const overlap: ExpensePeriod = { start: '2026-09-01', monthlyDelta: 500, durationMonths: 3 };
+    expect(monthlyExpenseDeltaFromPeriods([period, overlap], '2026-10')).toBe(2000);
   });
 });
