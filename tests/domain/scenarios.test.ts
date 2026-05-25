@@ -160,3 +160,34 @@ describe('ScenariosRepo.setActive', () => {
     expect(list.filter((s) => s.isActive).map((s) => s.id)).toEqual([baselineId]);
   });
 });
+
+describe('ScenariosRepo.delete baseline guard', () => {
+  let db: SqliteAdapter;
+  let repo: ScenariosRepo;
+
+  beforeEach(async () => {
+    db = new SqliteAdapter();
+    await runMigrations(db, await loadAllMigrations());
+    repo = new ScenariosRepo(db);
+  });
+
+  afterEach(async () => { await db.close(); });
+
+  it('refuses to delete the baseline scenario', async () => {
+    const baselineId = await repo.create(baseline());
+    await expect(repo.delete(baselineId)).rejects.toThrow(/cannot delete baseline/i);
+    const list = await repo.list();
+    expect(list.map((s) => s.id)).toContain(baselineId);
+  });
+
+  it('allows deletion of non-baseline scenarios', async () => {
+    await repo.create(baseline());
+    const variantId = await repo.create(variant());
+    await repo.delete(variantId);
+    expect((await repo.list()).map((s) => s.id)).not.toContain(variantId);
+  });
+
+  it('throws when deleting an unknown id', async () => {
+    await expect(repo.delete(999)).rejects.toThrow(/not found/);
+  });
+});

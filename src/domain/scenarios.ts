@@ -114,6 +114,11 @@ export class ScenariosRepo {
   }
 
   async delete(id: number): Promise<void> {
+    const existing = await this.findById(id);
+    if (!existing) throw new Error(`Scenario ${id} not found`);
+    if (existing.isBaseline) {
+      throw new Error('Cannot delete baseline scenario');
+    }
     await this.db.execute('DELETE FROM scenarios WHERE id = ?', [id]);
   }
 
