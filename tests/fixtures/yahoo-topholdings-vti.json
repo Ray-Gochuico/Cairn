@@ -5,6 +5,19 @@
         "holdings": [
           { "symbol": "AAPL", "holdingPercent": { "raw": 0.0762 } },
           { "symbol": "MSFT", "holdingPercent": { "raw": 0.0651 } }
+        ],
+        "sectorWeightings": [
+          { "realestate": { "raw": 0.0291 } },
+          { "consumer_cyclical": { "raw": 0.1052 } },
+          { "basic_materials": { "raw": 0.0203 } },
+          { "consumer_defensive": { "raw": 0.0568 } },
+          { "technology": { "raw": 0.2865 } },
+          { "communication_services": { "raw": 0.0813 } },
+          { "financial_services": { "raw": 0.1402 } },
+          { "utilities": { "raw": 0.0252 } },
+          { "industrials": { "raw": 0.0931 } },
+          { "energy": { "raw": 0.0379 } },
+          { "healthcare": { "raw": 0.1244 } }
         ]
       }
     }],

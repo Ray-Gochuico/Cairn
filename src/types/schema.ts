@@ -331,6 +331,14 @@ export const FundHoldingSchema = z.object({
 });
 export type FundHolding = z.infer<typeof FundHoldingSchema>;
 
+export const FundSectorSchema = z.object({
+  fundTicker: z.string().min(1).max(20),
+  sector: z.string().min(1).max(100),
+  weight: z.number().min(0).max(1),
+  asOfDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+export type FundSector = z.infer<typeof FundSectorSchema>;
+
 export const CategorySchema = z.object({
   id: z.number().int().positive().optional(),
   name: z.string().min(1),

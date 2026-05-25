@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { useTickersStore } from '@/stores/tickers-store';
+import { useFundSectorsStore } from '@/stores/fund-sectors-store';
 import type { ConcentrationReport } from '@/lib/concentration';
-import type { Ticker } from '@/types/schema';
+import type { FundSector, Ticker } from '@/types/schema';
 
 // Recharts in jsdom doesn't render real wedges; mock the Pie so we can
 // click named slices. See DonutChartCard.test.tsx for the same pattern.
@@ -85,6 +86,10 @@ function setTickers(tickers: Ticker[]) {
   useTickersStore.setState({ tickers, isLoading: false, error: null });
 }
 
+function setFundSectors(fundSectors: FundSector[]) {
+  useFundSectorsStore.setState({ fundSectors, isLoading: false, error: null });
+}
+
 beforeEach(() => {
   reportRef.current = {
     perTicker: [],
@@ -93,6 +98,14 @@ beforeEach(() => {
     warnings: [],
   };
   useTickersStore.setState({ tickers: [], isLoading: false, error: null });
+  // Override the async load() so the mount effect doesn't try to hit the
+  // database. Component tests set the state directly via setFundSectors.
+  useFundSectorsStore.setState({
+    fundSectors: [],
+    isLoading: false,
+    error: null,
+    load: async () => undefined,
+  });
 });
 
 describe('SectorDonut — sector view (default)', () => {
@@ -211,6 +224,44 @@ describe('SectorDonut — drill-view self-heals when the selected sector empties
     // Reset effect fires → sector view, Financials only.
     expect(screen.getByText('Sector exposure')).toBeTruthy();
     expect(screen.getByTestId('slice-Financials')).toBeTruthy();
+  });
+});
+
+describe('SectorDonut — fund sector look-through', () => {
+  it('distributes a fund exposure across its sector weightings instead of bucketing into Unclassified', () => {
+    // VTI is a US_TOTAL_MARKET fund whose pseudo-sector is "Unclassified".
+    // With fund sector weights it should split across the real sectors.
+    setTickers([
+      makeTicker({ ticker: 'VTI', assetClass: 'US_TOTAL_MARKET' }),
+    ]);
+    setReport([{ ticker: 'VTI', effectiveExposure: 10_000 }]);
+    setFundSectors([
+      { fundTicker: 'VTI', sector: 'Technology', weight: 0.30, asOfDate: '2026-01-01' },
+      { fundTicker: 'VTI', sector: 'Healthcare', weight: 0.20, asOfDate: '2026-01-01' },
+      { fundTicker: 'VTI', sector: 'Financial Services', weight: 0.15, asOfDate: '2026-01-01' },
+      { fundTicker: 'VTI', sector: 'Consumer Cyclical', weight: 0.35, asOfDate: '2026-01-01' },
+    ]);
+
+    render(<SectorDonut />);
+
+    expect(screen.getByTestId('slice-Technology')).toBeTruthy();
+    expect(screen.getByTestId('slice-Healthcare')).toBeTruthy();
+    expect(screen.getByTestId('slice-Financial Services')).toBeTruthy();
+    expect(screen.getByTestId('slice-Consumer Cyclical')).toBeTruthy();
+    expect(screen.queryByTestId('slice-Unclassified')).toBeNull();
+  });
+
+  it('falls back to Unclassified for a fund with no sector data', () => {
+    setTickers([
+      makeTicker({ ticker: 'VTI', assetClass: 'US_TOTAL_MARKET' }),
+    ]);
+    setReport([{ ticker: 'VTI', effectiveExposure: 10_000 }]);
+    // No fund sectors loaded — pseudo-sector path takes over.
+    setFundSectors([]);
+
+    render(<SectorDonut />);
+
+    expect(screen.getByTestId('slice-Unclassified')).toBeTruthy();
   });
 });
 

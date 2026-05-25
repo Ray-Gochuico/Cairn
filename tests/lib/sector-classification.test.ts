@@ -69,7 +69,92 @@ describe('aggregateBySector', () => {
   it('clamps SHORT (negative) exposures to 0', () => {
     const map = buildSectorMap(tickers as any);
     const slices = aggregateBySector([{ ticker: 'AAPL', effectiveExposure: -500 }], map);
-    expect(slices.find((s) => s.name === 'Technology')!.value).toBe(0);
+    // Zero-exposure tickers are dropped from the result; nothing should claim Technology.
+    expect(slices.find((s) => s.name === 'Technology')).toBeUndefined();
+  });
+});
+
+describe('aggregateBySector with fund sector weights', () => {
+  it('distributes a fund exposure across its sector weightings', () => {
+    const map = buildSectorMap(tickers as any);
+    // VTI is a US_TOTAL_MARKET fund — without weights it would lump into
+    // 'Unclassified' (the pseudo-sector for US_TOTAL_MARKET). With weights,
+    // its $10,000 exposure should distribute proportionally.
+    const fundWeights = new Map([
+      ['VTI', [
+        { sector: 'Technology', weight: 0.30 },
+        { sector: 'Financials', weight: 0.20 },
+        { sector: 'Healthcare', weight: 0.50 },
+      ]],
+    ]);
+    const slices = aggregateBySector(
+      [{ ticker: 'VTI', effectiveExposure: 10_000 }],
+      map,
+      fundWeights,
+    );
+    expect(slices.find((s) => s.name === 'Technology')!.value).toBeCloseTo(3_000, 6);
+    expect(slices.find((s) => s.name === 'Financials')!.value).toBeCloseTo(2_000, 6);
+    expect(slices.find((s) => s.name === 'Healthcare')!.value).toBeCloseTo(5_000, 6);
+    // No Unclassified leftover when weights sum to 1.0.
+    expect(slices.find((s) => s.name === 'Unclassified')).toBeUndefined();
+  });
+
+  it('attributes uncovered residual to the fund pseudo-sector when weights sum to < 1', () => {
+    const map = buildSectorMap(tickers as any);
+    // VTI's pseudo-sector falls back to 'Unclassified'. A partial breakdown
+    // covering only 70% leaves 30% for that fallback.
+    const fundWeights = new Map([
+      ['VTI', [
+        { sector: 'Technology', weight: 0.50 },
+        { sector: 'Financials', weight: 0.20 },
+      ]],
+    ]);
+    const slices = aggregateBySector(
+      [{ ticker: 'VTI', effectiveExposure: 10_000 }],
+      map,
+      fundWeights,
+    );
+    expect(slices.find((s) => s.name === 'Technology')!.value).toBeCloseTo(5_000, 6);
+    expect(slices.find((s) => s.name === 'Financials')!.value).toBeCloseTo(2_000, 6);
+    expect(slices.find((s) => s.name === 'Unclassified')!.value).toBeCloseTo(3_000, 6);
+  });
+
+  it('combines fund-distributed exposure with direct-equity exposure into shared sectors', () => {
+    const map = buildSectorMap(tickers as any);
+    const fundWeights = new Map([
+      ['VTI', [{ sector: 'Technology', weight: 1.0 }]],
+    ]);
+    const ex = [
+      { ticker: 'AAPL', effectiveExposure: 10_000 }, // direct Technology
+      { ticker: 'VTI', effectiveExposure: 5_000 },   // fund → 100% Technology
+    ];
+    const slices = aggregateBySector(ex, map, fundWeights);
+    expect(slices.find((s) => s.name === 'Technology')!.value).toBeCloseTo(15_000, 6);
+  });
+
+  it('falls back to default behavior when a ticker has no weights entry', () => {
+    const map = buildSectorMap(tickers as any);
+    const fundWeights = new Map<string, { sector: string; weight: number }[]>();
+    // Only VTI gets fund weights; AAPL still uses the sectorMap path.
+    fundWeights.set('VTI', [{ sector: 'Technology', weight: 1.0 }]);
+    const slices = aggregateBySector(exposures, map, fundWeights);
+    // AAPL contributes 10k Technology + VTI contributes 0 (not in exposures);
+    // none of the other tickers have fund weights so they keep the original behavior.
+    const tech = slices.find((s) => s.name === 'Technology');
+    expect(tech!.value).toBe(18_000); // unchanged: same as test 1 above
+  });
+
+  it('treats an empty weights array the same as no entry', () => {
+    const map = buildSectorMap(tickers as any);
+    // Bond ETFs typically return all-zero weights, which the YahooClient
+    // drops to empty. Empty weights should fall back to sectorMap entry.
+    const fundWeights = new Map([['BND', []]]);
+    const slices = aggregateBySector(
+      [{ ticker: 'BND', effectiveExposure: 4_000 }],
+      map,
+      fundWeights,
+    );
+    expect(slices.find((s) => s.name === 'Fixed Income')!.value).toBe(4_000);
   });
 });
 
