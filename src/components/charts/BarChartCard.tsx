@@ -134,6 +134,11 @@ export default function BarChartCard({
                 stackId={s.stackId}
                 fill={s.color ?? CHART_PALETTE[idx % CHART_PALETTE.length]}
                 radius={[2, 2, 0, 0]}
+                // Same recharts useAnimationId(props) churn that hits Pie also
+                // hits Bar — its key={animationId} on <JavascriptAnimate>
+                // remounts every render and loops via setIsAnimating. Mirrors
+                // ProjectionChart's stance.
+                isAnimationActive={false}
               />
             ))}
           </BarChart>
