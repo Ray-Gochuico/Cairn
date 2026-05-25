@@ -12,6 +12,7 @@ import { usePersonsStore } from '@/stores/persons-store';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
+import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { archiveStatementPdf } from '@/lib/statements-archive';
@@ -269,7 +270,10 @@ export default function Spending() {
     <div className="p-8 space-y-8">
       <div className="flex items-start justify-between gap-4">
         <h1 className="text-2xl font-semibold">Spending</h1>
-        <ExportCsvButton baseName="transactions" columns={csvColumns} rows={transactions} />
+        <div className="flex items-center gap-2">
+          <ExportCsvButton baseName="transactions" columns={csvColumns} rows={transactions} />
+          <ImportCsvButton entity="transaction" />
+        </div>
       </div>
 
       {/* Import area */}

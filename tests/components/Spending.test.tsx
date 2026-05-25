@@ -23,7 +23,11 @@ vi.mock('@/lib/statements-archive', () => ({
   archiveStatementPdf: vi.fn().mockResolvedValue(null),
   resolveArchivePath: vi.fn(),
 }));
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { useHouseholdStore } from '@/stores/household-store';
+import { TransactionsRepo } from '@/domain/transactions';
+import { AccountsRepo } from '@/domain/accounts';
+import { AccountType } from '@/types/enums';
 import { MemoryRouter } from 'react-router-dom';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { runMigrations } from '@/db/migrations';
@@ -383,5 +387,84 @@ describe('Spending page', () => {
       expect(screen.getAllByText(/money out/i).length).toBeGreaterThan(0);
       expect(screen.getAllByText(/^net$/i).length).toBeGreaterThan(0);
     });
+  });
+
+  it('(e) imports a transaction CSV end-to-end via ImportCsvButton', async () => {
+    await useCategoriesStore.getState().load();
+    useHouseholdStore.setState({
+      household: {
+        id: 1,
+        name: 'My household',
+        currency: 'USD',
+        monthlyExpenseBaseline: 5000,
+        emergencyFundMonths: 6,
+        equityCadence: 'YEARLY',
+      } as never,
+      isLoading: false,
+      error: null,
+    });
+    const accountsRepo = new AccountsRepo(db);
+    const accountId = await accountsRepo.create({
+      householdId: 1,
+      ownerPersonId: null,
+      beneficiaryDependentId: null,
+      name: 'Chase Checking',
+      institution: null,
+      type: AccountType.ACCOUNT_CASH,
+      cryptoWalletAddress: null,
+      autoFetchEnabled: false,
+      excludedFromNetWorth: false,
+      stateOfPlan: null,
+      accentColor: null,
+    });
+    useAccountsStore.setState({
+      accounts: [
+        {
+          id: accountId,
+          householdId: 1,
+          ownerPersonId: null,
+          beneficiaryDependentId: null,
+          name: 'Chase Checking',
+          institution: null,
+          type: AccountType.ACCOUNT_CASH,
+          cryptoWalletAddress: null,
+          autoFetchEnabled: false,
+          excludedFromNetWorth: false,
+          stateOfPlan: null,
+          accentColor: null,
+        },
+      ],
+      isLoading: false,
+      error: null,
+    });
+
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: /import csv/i }));
+
+    const file = new File(
+      ['date,account,amount,merchant,category,reimbursable\n2024-03-15,Chase Checking,20.00,STARBUCKS,,no\n'],
+      'txns.csv',
+      { type: 'text/csv' },
+    );
+    const input = screen.getByTestId('import-csv-file-input') as HTMLInputElement;
+    Object.defineProperty(input, 'files', { value: [file] });
+    fireEvent.change(input);
+
+    await screen.findByRole('dialog');
+    expect(screen.getByText(/import transactions from csv/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /^commit/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+
+    const repo = new TransactionsRepo(db);
+    const all = await repo.list();
+    const imported = all.find((t) => t.merchant === 'STARBUCKS');
+    expect(imported).toBeDefined();
+    expect(imported?.amount).toBe(20);
+    expect(imported?.sourceAccountId).toBe(accountId);
   });
 });

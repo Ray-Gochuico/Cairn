@@ -14,9 +14,13 @@ import {
   type ParseResultLite,
 } from '@/stores/import-preview-store';
 import { ImportPreviewTable } from './ImportPreviewTable';
-import { commitSnapshotImport } from '@/lib/import/commit';
+import { TransactionPreviewTable } from './TransactionPreviewTable';
+import { commitSnapshotImport, commitTransactionImport } from '@/lib/import/commit';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
+import { useTransactionsStore } from '@/stores/transactions-store';
+import { useHouseholdStore } from '@/stores/household-store';
 import { AccountSnapshotsRepo } from '@/domain/snapshots';
+import { TransactionsRepo } from '@/domain/transactions';
 import { getDatabase } from '@/db/db';
 import type { ImportEntity, ValidationContext } from '@/lib/import/types';
 
@@ -37,24 +41,36 @@ export function ImportPreviewModal({ entity, parsed, ctx, open, onOpenChange }: 
   const [committing, setCommitting] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
   const loadSnapshots = useSnapshotsStore((s) => s.load);
+  const loadTransactions = useTransactionsStore((s) => s.load);
+  const household = useHouseholdStore((s) => s.household);
 
-  const committableCount = state.summary.new + state.summary.update;
   const commitDisabled =
-    state.summary.error > 0 || committableCount === 0 || committing;
+    state.summary.error > 0
+    || state.committableRows().length === 0
+    || committing;
 
   const onCommit = async () => {
     setCommitting(true);
     setCommitError(null);
     try {
+      const db = getDatabase();
       if (entity === 'snapshot') {
         const snapshotState = state as unknown as ImportPreviewState<'snapshot'>;
         const rows = snapshotState.committableRows();
-        const db = getDatabase();
         await commitSnapshotImport(rows, {
           db,
           snapshots: new AccountSnapshotsRepo(db),
         });
         await loadSnapshots();
+      } else {
+        const transactionState = state as unknown as ImportPreviewState<'transaction'>;
+        const rows = transactionState.committableRows();
+        await commitTransactionImport(rows, {
+          db,
+          transactions: new TransactionsRepo(db),
+          householdId: household?.id ?? 1,
+        });
+        await loadTransactions();
       }
       onOpenChange(false);
     } catch (err) {
@@ -68,6 +84,8 @@ export function ImportPreviewModal({ entity, parsed, ctx, open, onOpenChange }: 
     entity === 'snapshot'
       ? 'Import account snapshots from CSV'
       : 'Import transactions from CSV';
+
+  const committableCount = state.committableRows().length;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -91,14 +109,17 @@ export function ImportPreviewModal({ entity, parsed, ctx, open, onOpenChange }: 
           </div>
         )}
 
-        {entity === 'snapshot' && (
-          <>
-            <SummaryBar state={state as unknown as ImportPreviewState<'snapshot'>} />
-            <div className="max-h-[55vh] overflow-y-auto">
-              <ImportPreviewTable state={state as unknown as ImportPreviewState<'snapshot'>} />
-            </div>
-          </>
-        )}
+        <SummaryBar
+          state={state as unknown as ImportPreviewState<'snapshot' | 'transaction'>}
+          entity={entity}
+        />
+        <div className="max-h-[55vh] overflow-y-auto">
+          {entity === 'snapshot' ? (
+            <ImportPreviewTable state={state as unknown as ImportPreviewState<'snapshot'>} />
+          ) : (
+            <TransactionPreviewTable state={state as unknown as ImportPreviewState<'transaction'>} />
+          )}
+        </div>
 
         {commitError && (
           <div className="text-xs text-red-700 italic bg-red-50 border border-red-200 rounded p-2">
@@ -125,17 +146,25 @@ export function ImportPreviewModal({ entity, parsed, ctx, open, onOpenChange }: 
   );
 }
 
-function SummaryBar({ state }: { state: ImportPreviewState<'snapshot'> }) {
+function SummaryBar({
+  state,
+  entity,
+}: {
+  state: ImportPreviewState<'snapshot' | 'transaction'>;
+  entity: ImportEntity;
+}) {
   return (
     <div className="flex gap-2 items-center text-xs flex-wrap">
       <span className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
         {state.summary.new} new
       </span>
-      <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
-        {state.summary.update} update
-      </span>
+      {state.summary.update > 0 && (
+        <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
+          {state.summary.update} update
+        </span>
+      )}
       {state.summary.duplicate > 0 && (
-        <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full">
+        <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded-full">
           {state.summary.duplicate} duplicate
         </span>
       )}
@@ -143,12 +172,26 @@ function SummaryBar({ state }: { state: ImportPreviewState<'snapshot'> }) {
         {state.summary.error} error{state.summary.error === 1 ? '' : 's'}
       </span>
       <div className="ml-auto flex gap-2">
-        <Button size="sm" variant="outline" onClick={() => state.bulkSetConflict('update')}>
-          Update all
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => state.bulkSetConflict('skip')}>
-          Skip all
-        </Button>
+        {entity === 'snapshot' && (
+          <>
+            <Button size="sm" variant="outline" onClick={() => state.bulkSetConflict('update')}>
+              Update all
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => state.bulkSetConflict('skip')}>
+              Skip all
+            </Button>
+          </>
+        )}
+        {entity === 'transaction' && state.summary.duplicate > 0 && (
+          <>
+            <Button size="sm" variant="outline" onClick={() => state.bulkSetConflict('update')}>
+              Insert all duplicates
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => state.bulkSetConflict('skip')}>
+              Skip all duplicates
+            </Button>
+          </>
+        )}
         {state.summary.error > 0 && (
           <Button
             size="sm"
