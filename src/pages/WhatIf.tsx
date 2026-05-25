@@ -18,6 +18,7 @@ export default function WhatIf() {
   const projectedScenarios = useScenariosStore((s) => s.projectedScenarios);
   const dollarMode         = useScenariosStore((s) => s.dollarMode);
   const inflation          = useScenariosStore((s) => s.inflation);
+  const horizonMonths      = useScenariosStore((s) => s.horizonMonths);
 
   const [manageOpen, setManageOpen] = useState(false);
 
@@ -43,7 +44,7 @@ export default function WhatIf() {
       ms.set(id, detectMilestones(states, FIRE_PARAMS));
     }
     return { projections: projs, milestones: ms };
-  }, [real, scenarios, projectedScenarios]);
+  }, [real, scenarios, projectedScenarios, horizonMonths]);
 
   if (!real) {
     return (
