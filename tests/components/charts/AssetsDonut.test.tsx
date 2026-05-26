@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { usePropertiesStore } from '@/stores/properties-store';
@@ -301,5 +302,88 @@ describe('AssetsDonut', () => {
   it('shows an empty-state hint when no entities to chart', () => {
     render(<AssetsDonut />);
     expect(screen.getByText(/no assets recorded/i)).toBeInTheDocument();
+  });
+
+  describe('entity picker', () => {
+    beforeEach(() => {
+      localStorage.clear();
+    });
+
+    function seedThreeAssets() {
+      useAccountsStore.setState({
+        accounts: [mkAccount(1, 'Brokerage'), mkAccount(2, 'Roth IRA')],
+        isLoading: false,
+        error: null,
+      });
+      useSnapshotsStore.setState({
+        snapshots: [
+          mkSnapshot(1, 1, '2026-04-01', 6000),
+          mkSnapshot(2, 2, '2026-04-01', 3400),
+        ],
+        isLoading: false,
+        error: null,
+      });
+      usePropertiesStore.setState({
+        properties: [mkProperty(10, 'Home', { currentEstimatedValue: 500000 })],
+        isLoading: false,
+        error: null,
+      });
+    }
+
+    it('renders an Entities picker button with the count of visible entities', () => {
+      seedThreeAssets();
+      render(<AssetsDonut />);
+      expect(
+        screen.getByRole('button', { name: /entities \(3\/3\)/i }),
+      ).toBeInTheDocument();
+    });
+
+    it('hiding an entity removes its slice from the donut', async () => {
+      seedThreeAssets();
+      render(<AssetsDonut />);
+      // All three slices present at start.
+      expect(screen.getByTestId('slice-Brokerage')).toBeInTheDocument();
+      expect(screen.getByTestId('slice-Roth IRA')).toBeInTheDocument();
+      expect(screen.getByTestId('slice-Home')).toBeInTheDocument();
+
+      const user = userEvent.setup();
+      await user.click(screen.getByRole('button', { name: /entities/i }));
+      await user.click(screen.getByLabelText(/Roth IRA/));
+
+      expect(screen.queryByTestId('slice-Roth IRA')).not.toBeInTheDocument();
+      expect(screen.getByTestId('slice-Brokerage')).toBeInTheDocument();
+      expect(screen.getByTestId('slice-Home')).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /entities \(2\/3\)/i }),
+      ).toBeInTheDocument();
+    });
+
+    it('persists hidden selection across remount', async () => {
+      seedThreeAssets();
+      const { unmount } = render(<AssetsDonut />);
+      const user = userEvent.setup();
+      await user.click(screen.getByRole('button', { name: /entities/i }));
+      await user.click(screen.getByLabelText(/Roth IRA/));
+      expect(screen.queryByTestId('slice-Roth IRA')).not.toBeInTheDocument();
+      unmount();
+
+      render(<AssetsDonut />);
+      expect(screen.queryByTestId('slice-Roth IRA')).not.toBeInTheDocument();
+      expect(screen.getByTestId('slice-Brokerage')).toBeInTheDocument();
+      expect(screen.getByTestId('slice-Home')).toBeInTheDocument();
+    });
+
+    it('shows the all-hidden message when every entity is hidden', async () => {
+      seedThreeAssets();
+      render(<AssetsDonut />);
+      const user = userEvent.setup();
+      await user.click(screen.getByRole('button', { name: /entities/i }));
+      await user.click(screen.getByRole('button', { name: /hide all/i }));
+      expect(screen.getByText(/all entities hidden/i)).toBeInTheDocument();
+      // Picker button still visible so the user can recover.
+      expect(
+        screen.getByRole('button', { name: /entities \(0\/3\)/i }),
+      ).toBeInTheDocument();
+    });
   });
 });

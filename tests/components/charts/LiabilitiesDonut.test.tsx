@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { useLoansStore } from '@/stores/loans-store';
 import { LoanType } from '@/types/enums';
 import type { Loan } from '@/types/schema';
@@ -149,5 +150,71 @@ describe('LiabilitiesDonut', () => {
   it('shows an empty-state hint when no loans are recorded', () => {
     render(<LiabilitiesDonut />);
     expect(screen.getByText(/no loans recorded/i)).toBeInTheDocument();
+  });
+
+  describe('entity picker', () => {
+    beforeEach(() => {
+      localStorage.clear();
+    });
+
+    function seedThreeLoans() {
+      useLoansStore.setState({
+        loans: [
+          mkLoan(1, 'Home mortgage', LoanType.MORTGAGE, 350000),
+          mkLoan(2, 'Car loan', LoanType.AUTO, 15000),
+          mkLoan(3, 'Student debt', LoanType.STUDENT, 22000),
+        ],
+        isLoading: false,
+        error: null,
+      });
+    }
+
+    it('renders an Entities picker button with the count of visible entities', () => {
+      seedThreeLoans();
+      render(<LiabilitiesDonut />);
+      expect(
+        screen.getByRole('button', { name: /entities \(3\/3\)/i }),
+      ).toBeInTheDocument();
+    });
+
+    it('hiding a loan removes its slice from the donut', async () => {
+      seedThreeLoans();
+      render(<LiabilitiesDonut />);
+      expect(screen.getByTestId('slice-Car loan')).toBeInTheDocument();
+
+      const user = userEvent.setup();
+      await user.click(screen.getByRole('button', { name: /entities/i }));
+      await user.click(screen.getByLabelText(/Car loan/));
+
+      expect(screen.queryByTestId('slice-Car loan')).not.toBeInTheDocument();
+      expect(screen.getByTestId('slice-Home mortgage')).toBeInTheDocument();
+      expect(screen.getByTestId('slice-Student debt')).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /entities \(2\/3\)/i }),
+      ).toBeInTheDocument();
+    });
+
+    it('persists hidden selection across remount', async () => {
+      seedThreeLoans();
+      const { unmount } = render(<LiabilitiesDonut />);
+      const user = userEvent.setup();
+      await user.click(screen.getByRole('button', { name: /entities/i }));
+      await user.click(screen.getByLabelText(/Car loan/));
+      expect(screen.queryByTestId('slice-Car loan')).not.toBeInTheDocument();
+      unmount();
+
+      render(<LiabilitiesDonut />);
+      expect(screen.queryByTestId('slice-Car loan')).not.toBeInTheDocument();
+      expect(screen.getByTestId('slice-Home mortgage')).toBeInTheDocument();
+    });
+
+    it('shows the all-hidden message when every loan is hidden', async () => {
+      seedThreeLoans();
+      render(<LiabilitiesDonut />);
+      const user = userEvent.setup();
+      await user.click(screen.getByRole('button', { name: /entities/i }));
+      await user.click(screen.getByRole('button', { name: /hide all/i }));
+      expect(screen.getByText(/all entities hidden/i)).toBeInTheDocument();
+    });
   });
 });
