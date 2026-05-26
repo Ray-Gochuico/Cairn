@@ -16,6 +16,38 @@ interface AppSettingsRow {
   default_projection_detail_level: 'single' | 'tax_bucket' | 'per_account';
   default_cash_apy: number | null;
   default_compounding_frequency: CompoundingFrequency;
+  property_utilities_category_ids: string | null;
+  vehicle_gas_category_ids: string | null;
+}
+
+/**
+ * Parse a JSON-encoded number[] from a TEXT column. Malformed JSON, missing
+ * value, or non-array contents fall back to null so the resolver treats the
+ * field as "unconfigured" and uses the seeded default. Non-integer or
+ * non-positive elements are filtered out; if filtering empties a non-empty
+ * input array we treat the column as null (defensive — schema would reject
+ * those values anyway).
+ *
+ * - null → null (column unset)
+ * - '[]' → []   (explicit empty)
+ * - '[1,2]' → [1, 2]
+ * - 'garbage' → null (malformed)
+ * - '"oops"' → null (non-array)
+ * - '[1, "x"]' → [1] (filter the bad element, keep the good)
+ */
+function parseIdArray(raw: string | null): number[] | null {
+  if (raw === null) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    const ids = parsed.filter(
+      (x): x is number => typeof x === 'number' && Number.isInteger(x) && x > 0,
+    );
+    if (parsed.length > 0 && ids.length === 0) return null;
+    return ids;
+  } catch {
+    return null;
+  }
 }
 
 function rowToAppSettings(row: AppSettingsRow): AppSettings {
@@ -36,6 +68,8 @@ function rowToAppSettings(row: AppSettingsRow): AppSettings {
     defaultProjectionDetailLevel: row.default_projection_detail_level,
     defaultCashApy: row.default_cash_apy,
     defaultCompoundingFrequency: row.default_compounding_frequency ?? CompoundingFrequency.MONTHLY,
+    propertyUtilitiesCategoryIds: parseIdArray(row.property_utilities_category_ids),
+    vehicleGasCategoryIds: parseIdArray(row.vehicle_gas_category_ids),
   });
 }
 
@@ -70,7 +104,9 @@ export class SettingsRepo {
         default_fi_pills_position = ?,
         default_projection_detail_level = ?,
         default_cash_apy = ?,
-        default_compounding_frequency = ?
+        default_compounding_frequency = ?,
+        property_utilities_category_ids = ?,
+        vehicle_gas_category_ids = ?
        WHERE id = 1`,
       [
         merged.sidebarLayout === null ? null : JSON.stringify(merged.sidebarLayout),
@@ -85,6 +121,12 @@ export class SettingsRepo {
         merged.defaultProjectionDetailLevel,
         merged.defaultCashApy ?? null,
         merged.defaultCompoundingFrequency,
+        merged.propertyUtilitiesCategoryIds === null
+          ? null
+          : JSON.stringify(merged.propertyUtilitiesCategoryIds),
+        merged.vehicleGasCategoryIds === null
+          ? null
+          : JSON.stringify(merged.vehicleGasCategoryIds),
       ],
     );
   }

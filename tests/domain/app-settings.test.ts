@@ -180,3 +180,60 @@ describe('SettingsRepo — defaultCashApy', () => {
     await expect(repo.update({ defaultCashApy: 0.20 })).rejects.toThrow();
   });
 });
+
+describe('SettingsRepo — utility category id columns', () => {
+  let db: SqliteAdapter;
+  let repo: SettingsRepo;
+
+  beforeEach(async () => {
+    db = new SqliteAdapter(':memory:');
+    await runMigrations(db, await loadAllMigrations());
+    repo = new SettingsRepo(db);
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  it('seeds both fields as null on a fresh DB', async () => {
+    const s = await repo.get();
+    expect(s.propertyUtilitiesCategoryIds).toBeNull();
+    expect(s.vehicleGasCategoryIds).toBeNull();
+  });
+
+  it('round-trips propertyUtilitiesCategoryIds and vehicleGasCategoryIds through get/update', async () => {
+    await repo.update({
+      propertyUtilitiesCategoryIds: [10, 20],
+      vehicleGasCategoryIds: [17],
+    });
+    const out = await repo.get();
+    expect(out.propertyUtilitiesCategoryIds).toEqual([10, 20]);
+    expect(out.vehicleGasCategoryIds).toEqual([17]);
+  });
+
+  it('persists empty arrays distinctly from null', async () => {
+    await repo.update({
+      propertyUtilitiesCategoryIds: [],
+      vehicleGasCategoryIds: [],
+    });
+    const out = await repo.get();
+    expect(out.propertyUtilitiesCategoryIds).toEqual([]);
+    expect(out.vehicleGasCategoryIds).toEqual([]);
+  });
+
+  it('persists null when explicitly cleared', async () => {
+    await repo.update({ propertyUtilitiesCategoryIds: [5] });
+    await repo.update({ propertyUtilitiesCategoryIds: null });
+    const out = await repo.get();
+    expect(out.propertyUtilitiesCategoryIds).toBeNull();
+  });
+
+  it('tolerates malformed JSON in the column by returning null', async () => {
+    // Write malformed JSON directly via raw SQL to simulate corruption.
+    await db.execute(
+      "UPDATE app_settings SET property_utilities_category_ids = '{not json}' WHERE id = 1",
+    );
+    const out = await repo.get();
+    expect(out.propertyUtilitiesCategoryIds).toBeNull();
+  });
+});
