@@ -32,6 +32,8 @@ let returnsPayload: { defaultRate: number; overrides: Record<string, number> } =
   defaultRate: 0.07,
   overrides: {},
 };
+// Allows individual tests to inject contribution segments.
+let contributionsPayload: any[] = [];
 
 vi.mock('@/stores/scenarios-store', () => {
   return {
@@ -52,7 +54,7 @@ vi.mock('@/stores/scenarios-store', () => {
             expensePeriods: [],
             returns: returnsPayload,
             income: { perPerson: [{ annualRaiseRate: 0.03, events: [] }] },
-            contributions: [],
+            contributions: contributionsPayload,
             retirementAgeOverride: null,
             swrOverride: activeScenarioOverride,
           },
@@ -86,6 +88,7 @@ vi.mock('@/stores/household-store', () => ({
 describe('LeverBar — SWR pill wiring', () => {
   beforeEach(() => {
     returnsPayload = { defaultRate: 0.07, overrides: {} };
+    contributionsPayload = [];
   });
 
   it('renders the SwrLeverPill in the bar', () => {
@@ -160,5 +163,26 @@ describe('LeverBar — Returns default hint', () => {
     returnsPayload = { defaultRate: 0.07, overrides: { '2026': -0.37 } };
     render(<LeverBar />);
     expect(screen.queryByTestId('returns-default-hint')).not.toBeInTheDocument();
+  });
+});
+
+describe('LeverBar — Contributions auto-invest icon', () => {
+  beforeEach(() => {
+    activeScenarioId = 1;
+    activeScenarioOverride = null;
+    householdRate = 0.04;
+    returnsPayload = { defaultRate: 0.07, overrides: {} };
+  });
+
+  it('shows the Info icon on the Contributions button when no segments are set', () => {
+    contributionsPayload = [];
+    render(<LeverBar />);
+    expect(screen.getByTestId('contributions-auto-invest-icon')).toBeInTheDocument();
+  });
+
+  it('hides the Info icon when at least one contribution segment exists', () => {
+    contributionsPayload = [{ startMonth: 0, endMonth: 59, monthlyAmount: 1000, label: 'Y1-Y5' }];
+    render(<LeverBar />);
+    expect(screen.queryByTestId('contributions-auto-invest-icon')).not.toBeInTheDocument();
   });
 });

@@ -31,6 +31,22 @@ describe('ContributionsPopover', () => {
     expect(screen.getByText(/no contribution segments yet/i)).toBeInTheDocument();
   });
 
+  it('shows the auto-invest notice when no segments are configured', () => {
+    render(<MemoryRouter><ContributionsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+    expect(screen.getByTestId('contributions-auto-invest-notice')).toBeInTheDocument();
+    expect(screen.getByTestId('contributions-auto-invest-notice')).toHaveTextContent(
+      /monthly surplus.*auto-invests/i,
+    );
+  });
+
+  it('hides the auto-invest notice once at least one segment is added', async () => {
+    resetStore({
+      contributions: [{ startMonth: 0, endMonth: 59, monthlyAmount: 1000, label: 'Y1-Y5' }],
+    });
+    render(<MemoryRouter><ContributionsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+    expect(screen.queryByTestId('contributions-auto-invest-notice')).not.toBeInTheDocument();
+  });
+
   it('clicking + Add segment appends a row with default year and amount inputs', async () => {
     const user = userEvent.setup();
     render(<MemoryRouter><ContributionsPopover open onOpenChange={() => {}} /></MemoryRouter>);

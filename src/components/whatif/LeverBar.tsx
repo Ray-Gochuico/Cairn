@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useScenariosStore } from '@/stores/scenarios-store';
 import { useHouseholdStore } from '@/stores/household-store';
@@ -79,7 +80,24 @@ export default function LeverBar() {
           )}
         </Button>
         <Pill k="income"        label="Income" />
-        <Pill k="contributions" label="Contributions" />
+        <Button
+          variant={openLever === 'contributions' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setOpenLever((cur) => (cur === 'contributions' ? null : 'contributions'))}
+          aria-label="Contributions"
+          title={counts.contributions === 0 ? 'Monthly surplus auto-invests when no segments are active' : undefined}
+          className="flex items-center gap-1"
+        >
+          Contributions
+          {counts.contributions === 0 && (
+            <Info
+              data-testid="contributions-auto-invest-icon"
+              className="h-3 w-3 text-muted-foreground"
+              aria-hidden
+            />
+          )}
+          {counts.contributions > 0 && ` · ${counts.contributions}`}
+        </Button>
         {active.id != null && household && (
           <SwrLeverPill
             swrOverride={lp.swrOverride}

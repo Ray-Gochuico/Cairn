@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Info } from 'lucide-react';
 import LeverPopoverShell from './LeverPopoverShell';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -159,9 +160,22 @@ export default function ContributionsPopover({ open, onOpenChange }: Props) {
           Set a fixed monthly contribution that flows into investments over a span
           of years. Any surplus above the contribution accumulates as cash; a
           shortfall lets cash drop (or go negative) while the contribution still
-          lands in investments. With no segments configured, all savings route to
-          investments as before.
+          lands in investments.
         </p>
+
+        {draft.length === 0 && (
+          <div
+            data-testid="contributions-auto-invest-notice"
+            className="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200"
+          >
+            <Info className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
+            <span>
+              When no contribution segments are active, your monthly surplus
+              (income &minus; expenses &minus; loan payments) auto-invests across
+              investment accounts.
+            </span>
+          </div>
+        )}
 
         <div className="space-y-2">
           {draft.length === 0 && (
