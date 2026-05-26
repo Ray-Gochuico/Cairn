@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { EquityGrantSchema, type EquityGrant } from '@/types/schema';
 import {
   applyVestingTemplate,
@@ -14,6 +15,19 @@ import DatePicker from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+
+// EquityGrantSchema declares the three calculator fields as
+// `z.number().nullable().default(null)`. Zod treats them as optional on input
+// (the default fills in undefined), which makes zodResolver derive a
+// Resolver<Partial<...>> that won't unify with the strict
+// EquityGrantFormValues type RHF expects. Stripping the .default()s here (the
+// runtime defaults still come from DEFAULT_EQUITY_GRANT below) keeps input
+// and output types aligned. Mirrors the pattern in AccountForm.tsx.
+const EquityGrantFormSchema = EquityGrantSchema.omit({ id: true }).extend({
+  companyValuation: z.number().nonnegative().nullable(),
+  companyOutstandingShares: z.number().positive().nullable(),
+  companyTotalDebt: z.number().nonnegative().nullable(),
+});
 
 export type EquityGrantFormValues = Omit<EquityGrant, 'id'>;
 
@@ -70,7 +84,7 @@ export default function EquityGrantForm({
   submitLabel = 'Save',
 }: EquityGrantFormProps) {
   const form = useForm<EquityGrantFormValues>({
-    resolver: zodResolver(EquityGrantSchema.omit({ id: true })),
+    resolver: zodResolver(EquityGrantFormSchema),
     defaultValues: initial,
   });
 
