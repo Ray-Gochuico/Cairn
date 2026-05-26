@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import AddCategoryDialog from '@/components/budget/AddCategoryDialog';
@@ -110,4 +110,34 @@ describe('AddCategoryDialog', () => {
     expect(screen.getByText(/Add a parent category in/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^save$/i })).toBeDisabled();
   });
+
+  it('shows "Added {name}" feedback immediately after Save', async () => {
+    // Use real timers — we just verify the success message appears;
+    // the auto-close timer (800ms) is a UX detail tested separately below.
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderDialog({ onClose });
+
+    await user.type(screen.getByLabelText(/name/i), 'Bakery');
+    await user.selectOptions(screen.getByLabelText(/parent/i), '1');
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+    // Success status message should be visible right after save
+    expect(screen.getByRole('status')).toHaveTextContent('Added Bakery');
+    // Save / Cancel buttons should be hidden while success is shown
+    expect(screen.queryByRole('button', { name: /^save$/i })).not.toBeInTheDocument();
+  });
+
+  it('auto-closes after the success feedback delay (real timers, waitFor)', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderDialog({ onClose });
+
+    await user.type(screen.getByLabelText(/name/i), 'Bakery');
+    await user.selectOptions(screen.getByLabelText(/parent/i), '1');
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+    // onClose should be called after the 800ms delay
+    await waitFor(() => expect(onClose).toHaveBeenCalledOnce(), { timeout: 2000 });
+  }, 10_000);
 });

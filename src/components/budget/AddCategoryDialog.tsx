@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -50,6 +50,8 @@ export default function AddCategoryDialog({
   const [name, setName] = useState('');
   const [parentId, setParentId] = useState<number | ''>('');
   const [type, setType] = useState<'NEED' | 'WANT'>(CategoryType.NEED);
+  const [justSavedName, setJustSavedName] = useState<string | null>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const noParents = parents.length === 0;
   const canSave = !noParents && name.trim().length > 0 && parentId !== '';
@@ -58,12 +60,21 @@ export default function AddCategoryDialog({
     setName('');
     setParentId('');
     setType(CategoryType.NEED);
+    setJustSavedName(null);
   };
+
+  // Clean up the auto-close timer on unmount
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    };
+  }, []);
 
   const handleSave = () => {
     if (!canSave) return;
+    const savedName = name.trim();
     onSave({
-      name: name.trim(),
+      name: savedName,
       parentCategoryId: parentId as number,
       type,
       color: null,
@@ -71,7 +82,12 @@ export default function AddCategoryDialog({
       isCapital: false,
       monthlyBudget: null,
     });
-    reset();
+    // Show transient success then auto-close after 800 ms
+    setJustSavedName(savedName);
+    closeTimerRef.current = setTimeout(() => {
+      reset();
+      onClose();
+    }, 800);
   };
 
   const handleCancel = () => {
@@ -158,12 +174,24 @@ export default function AddCategoryDialog({
         )}
 
         <DialogFooter>
-          <Button variant="outline" size="sm" onClick={handleCancel}>
-            Cancel
-          </Button>
-          <Button size="sm" onClick={handleSave} disabled={!canSave}>
-            Save
-          </Button>
+          {justSavedName ? (
+            <p
+              role="status"
+              className="text-sm font-medium text-green-600 dark:text-green-400"
+              data-testid="add-category-success"
+            >
+              ✓ Added {justSavedName}
+            </p>
+          ) : (
+            <>
+              <Button variant="outline" size="sm" onClick={handleCancel}>
+                Cancel
+              </Button>
+              <Button size="sm" onClick={handleSave} disabled={!canSave}>
+                Save
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
