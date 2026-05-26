@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { AdvancedSection } from '@/components/settings/AdvancedSection';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -19,6 +20,7 @@ function makeSettings(patch: Partial<AppSettings> = {}): AppSettings {
     defaultReturnRate: null,
     defaultFiPillsPosition: FiPillsPosition.ABOVE,
     defaultProjectionDetailLevel: ProjectionDetailLevel.TAX_BUCKET,
+    defaultCashApy: null,
     ...patch,
   };
 }
@@ -190,6 +192,7 @@ describe('AdvancedSection', () => {
       defaultReturnRate: 0.08,
       defaultFiPillsPosition: FiPillsPosition.ABOVE,
       defaultProjectionDetailLevel: ProjectionDetailLevel.TAX_BUCKET,
+      defaultCashApy: null,
     });
   });
 
@@ -213,6 +216,7 @@ describe('AdvancedSection', () => {
       defaultReturnRate: null,
       defaultFiPillsPosition: FiPillsPosition.ABOVE,
       defaultProjectionDetailLevel: ProjectionDetailLevel.TAX_BUCKET,
+      defaultCashApy: null,
     });
   });
 
@@ -257,6 +261,7 @@ describe('AdvancedSection', () => {
       defaultReturnRate: null,
       defaultFiPillsPosition: FiPillsPosition.BELOW,
       defaultProjectionDetailLevel: ProjectionDetailLevel.TAX_BUCKET,
+      defaultCashApy: null,
     });
   });
 });
@@ -338,6 +343,50 @@ describe('AdvancedSection — Projection detail level select', () => {
     await Promise.resolve();
     expect(updateSettings).toHaveBeenCalledWith(
       expect.objectContaining({ defaultProjectionDetailLevel: 'per_account' }),
+    );
+  });
+});
+
+describe('AdvancedSection — Default cash APY input', () => {
+  beforeEach(() => {
+    resetStore(makeHousehold());
+  });
+
+  it('renders a "Default cash APY" input in the What-If section', () => {
+    resetSettingsStore(makeSettings({ defaultCashApy: null }));
+    render(<AdvancedSection />);
+    const header = screen.getByRole('button', { name: /expand advanced/i });
+    fireEvent.click(header);
+    expect(screen.getByLabelText(/default cash apy/i)).toBeInTheDocument();
+  });
+
+  it('shows defaultCashApy as a percentage value when pre-filled (0.045 → "4.5")', () => {
+    resetSettingsStore(makeSettings({ defaultCashApy: 0.045 }));
+    render(<AdvancedSection />);
+    fireEvent.click(screen.getByRole('button', { name: /expand advanced/i }));
+    const input = screen.getByLabelText(/default cash apy/i) as HTMLInputElement;
+    expect(input.value).toBe('4.5');
+  });
+
+  it('calls updateSettings with defaultCashApy as fraction on save', async () => {
+    const update = resetSettingsStore(makeSettings({ defaultCashApy: null }));
+    render(<AdvancedSection />);
+    fireEvent.click(screen.getByRole('button', { name: /expand advanced/i }));
+    fireEvent.change(screen.getByLabelText(/default cash apy/i), { target: { value: '3.5' } });
+    await userEvent.click(screen.getByRole('button', { name: /save/i }));
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({ defaultCashApy: expect.closeTo(0.035, 5) }),
+    );
+  });
+
+  it('persists null when the Default cash APY field is cleared', async () => {
+    const update = resetSettingsStore(makeSettings({ defaultCashApy: 0.04 }));
+    render(<AdvancedSection />);
+    fireEvent.click(screen.getByRole('button', { name: /expand advanced/i }));
+    fireEvent.change(screen.getByLabelText(/default cash apy/i), { target: { value: '' } });
+    await userEvent.click(screen.getByRole('button', { name: /save/i }));
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({ defaultCashApy: null }),
     );
   });
 });

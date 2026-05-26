@@ -43,6 +43,7 @@ export function AdvancedSection() {
   const [projDetailLevel, setProjDetailLevel] = useState<ProjectionDetailLevel>(
     ProjectionDetailLevel.TAX_BUCKET,
   );
+  const [cashApy, setCashApy] = useState<string>('');
   const [resetOpen, setResetOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
@@ -98,6 +99,16 @@ export function AdvancedSection() {
     setProjDetailLevel(settings?.defaultProjectionDetailLevel ?? ProjectionDetailLevel.TAX_BUCKET);
   }, [settings?.defaultProjectionDetailLevel]);
 
+  // Default cash APY — household-level fallback used when an account's APY is
+  // blank. Persists as a fraction; surfaced as a percentage value.
+  useEffect(() => {
+    setCashApy(
+      settings?.defaultCashApy == null
+        ? ''
+        : String(Math.round(settings.defaultCashApy * 1000) / 10),
+    );
+  }, [settings?.defaultCashApy]);
+
   const lowNum = low.trim() === '' ? null : Number(low);
   const highNum = high.trim() === '' ? null : Number(high);
   const lowInvalid = lowNum !== null && (Number.isNaN(lowNum) || lowNum < 0 || lowNum > 100);
@@ -112,7 +123,11 @@ export function AdvancedSection() {
   const returnInvalid =
     returnNum !== null && (Number.isNaN(returnNum) || returnNum < -50 || returnNum > 50);
 
-  const invalid = thresholdInvalid || inflationInvalid || returnInvalid;
+  const cashApyNum = cashApy.trim() === '' ? null : Number(cashApy);
+  const cashApyInvalid =
+    cashApyNum !== null && (Number.isNaN(cashApyNum) || cashApyNum < 0 || cashApyNum > 15);
+
+  const invalid = thresholdInvalid || inflationInvalid || returnInvalid || cashApyInvalid;
 
   const handleSave = async () => {
     if (invalid || submitting) return;
@@ -127,6 +142,7 @@ export function AdvancedSection() {
         defaultReturnRate: returnNum === null ? null : returnNum / 100,
         defaultFiPillsPosition: pillsPosition,
         defaultProjectionDetailLevel: projDetailLevel,
+        defaultCashApy: cashApyNum === null ? null : cashApyNum / 100,
       });
       setSavedAt(Date.now());
     } finally {
@@ -266,6 +282,29 @@ export function AdvancedSection() {
                 <option value={ProjectionDetailLevel.PER_ACCOUNT}>Per account</option>
               </select>
             </div>
+            <div className="pt-1">
+              <Label htmlFor="default-cash-apy">Default cash APY (%)</Label>
+              <Input
+                id="default-cash-apy"
+                type="number"
+                step="0.01"
+                min="0"
+                max="15"
+                value={cashApy}
+                onChange={(e) => setCashApy(e.target.value)}
+                placeholder="0.0"
+                aria-invalid={cashApyInvalid}
+                className="w-32"
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                Used when an account&apos;s APY is blank. Falls through to 0% if also blank.
+              </p>
+            </div>
+            {cashApyInvalid && (
+              <div className="text-xs text-red-700 mt-2" role="alert">
+                Cash APY must be between 0 and 15.
+              </div>
+            )}
           </section>
 
           <div className="flex items-center gap-3">
