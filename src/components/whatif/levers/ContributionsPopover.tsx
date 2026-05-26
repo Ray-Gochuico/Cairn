@@ -34,6 +34,7 @@ function draftToSegments(rows: DraftRow[]): ContributionSegment[] {
       startMonth,
       endMonth,
       monthlyAmount: Math.max(0, r.monthlyAmount),
+      allocation: null,
     };
     if (r.label.trim()) seg.label = r.label.trim();
     return seg;

@@ -18,7 +18,7 @@ describe('LeverPayloadSchema', () => {
       expensePeriods: [{ start: '2026-07-01', monthlyDelta: 1500, durationMonths: 6, label: 'Medical' }],
       returns: { defaultRate: 0.07, overrides: { 2027: -0.15, 2028: 0.2 } as unknown as Record<string, number> },
       income: { perPerson: [{ annualRaiseRate: 0.03, events: [] }] },
-      contributions: [{ startMonth: 0, endMonth: 59, monthlyAmount: 1000, label: 'Year 1-5' }],
+      contributions: [{ startMonth: 0, endMonth: 59, monthlyAmount: 1000, label: 'Year 1-5', allocation: null }],
       retirementAgeOverride: null,
       swrOverride: null,
     };
@@ -86,6 +86,65 @@ describe('LeverPayloadSchema — swrOverride', () => {
   it('defaults swrOverride to null when omitted on parse', () => {
     const { swrOverride: _drop, ...withoutSwr } = emptyLeverPayload();
     expect(LeverPayloadSchema.parse(withoutSwr).swrOverride).toBeNull();
+  });
+});
+
+describe('ContributionSegmentSchema — allocation field', () => {
+  const baseSegment = { startMonth: 0, endMonth: 11, monthlyAmount: 1000 };
+
+  it('defaults allocation to null when omitted', () => {
+    const seg = LeverPayloadSchema.parse({
+      ...emptyLeverPayload(),
+      contributions: [baseSegment],
+    }).contributions[0];
+    expect(seg.allocation).toBeNull();
+  });
+
+  it('accepts explicit null allocation', () => {
+    const seg = LeverPayloadSchema.parse({
+      ...emptyLeverPayload(),
+      contributions: [{ ...baseSegment, allocation: null }],
+    }).contributions[0];
+    expect(seg.allocation).toBeNull();
+  });
+
+  it('accepts a valid allocation map that sums to 1', () => {
+    const seg = LeverPayloadSchema.parse({
+      ...emptyLeverPayload(),
+      contributions: [{ ...baseSegment, allocation: { '1': 0.6, '2': 0.4 } }],
+    }).contributions[0];
+    expect(seg.allocation).toEqual({ '1': 0.6, '2': 0.4 });
+  });
+
+  it('rejects an allocation map whose proportions do not sum to 1', () => {
+    expect(() =>
+      LeverPayloadSchema.parse({
+        ...emptyLeverPayload(),
+        contributions: [{ ...baseSegment, allocation: { '1': 0.6, '2': 0.5 } }],
+      }),
+    ).toThrow();
+  });
+
+  it('rejects an allocation map with a proportion > 1', () => {
+    expect(() =>
+      LeverPayloadSchema.parse({
+        ...emptyLeverPayload(),
+        contributions: [{ ...baseSegment, allocation: { '1': 1.5 } }],
+      }),
+    ).toThrow();
+  });
+
+  it('rejects an allocation map with a negative proportion', () => {
+    expect(() =>
+      LeverPayloadSchema.parse({
+        ...emptyLeverPayload(),
+        contributions: [{ ...baseSegment, allocation: { '1': -0.1, '2': 1.1 } }],
+      }),
+    ).toThrow();
+  });
+
+  it('preserves Track 2 swrOverride field (regression guard)', () => {
+    expect(emptyLeverPayload()).toHaveProperty('swrOverride', null);
   });
 });
 

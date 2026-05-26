@@ -58,6 +58,25 @@ export const ContributionSegmentSchema = z.object({
   endMonth: z.number().int().nonnegative().nullable(),
   monthlyAmount: z.number().nonnegative(),
   label: z.string().optional(),
+  /**
+   * Optional per-account allocation. Map of accountId (as string key) →
+   * proportion (0..1). Proportions must sum to 1.0 (validated within
+   * ±0.0001 tolerance). When null/undefined (default), the engine derives
+   * the allocation from real contribution history or falls back to even
+   * split across non-cash investment accounts.
+   * Stale accountIds (deleted accounts) are ignored and re-normalized at
+   * projection time — the raw data is preserved as-stored.
+   */
+  allocation: z
+    .record(z.string().regex(/^\d+$/), z.number().min(0).max(1))
+    .nullable()
+    .default(null)
+    .refine(
+      (a) =>
+        a == null ||
+        Math.abs(Object.values(a).reduce((s, p) => s + p, 0) - 1) < 0.0001,
+      { message: 'allocation proportions must sum to 1' },
+    ),
 });
 export type ContributionSegment = z.infer<typeof ContributionSegmentSchema>;
 
