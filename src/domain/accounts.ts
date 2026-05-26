@@ -21,6 +21,7 @@ interface AccountRow {
   employer_match_limit_pct: number | null;
   allows_mega_backdoor_rollover: number | null;
   has_high_fees: number | null;
+  apy_rate: number | null;
 }
 
 function nullableBool(v: number | null | undefined): boolean | null {
@@ -48,6 +49,7 @@ function rowToAccount(row: AccountRow): Account {
     employerMatchLimitPct: row.employer_match_limit_pct,
     allowsMegaBackdoorRollover: nullableBool(row.allows_mega_backdoor_rollover),
     hasHighFees: nullableBool(row.has_high_fees),
+    apyRate: row.apy_rate,
   });
 }
 
@@ -77,8 +79,8 @@ export class AccountsRepo {
         household_id, owner_person_id, beneficiary_dependent_id,
         name, institution, type, crypto_wallet_address,
         auto_fetch_enabled, excluded_from_net_worth, allow_margin, state_of_plan,
-        accent_color
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        accent_color, apy_rate
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         account.householdId,
         account.ownerPersonId ?? null,
@@ -92,6 +94,7 @@ export class AccountsRepo {
         account.allowMargin ? 1 : 0,
         account.stateOfPlan ?? null,
         account.accentColor ?? null,
+        account.apyRate ?? null,
       ]
     );
     if (!result.lastInsertId) {
@@ -122,6 +125,7 @@ export class AccountsRepo {
         allow_margin = ?,
         state_of_plan = ?,
         accent_color = ?,
+        apy_rate = ?,
         updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
       [
@@ -136,6 +140,7 @@ export class AccountsRepo {
         merged.allowMargin ? 1 : 0,
         merged.stateOfPlan ?? null,
         merged.accentColor ?? null,
+        merged.apyRate ?? null,
         id,
       ]
     );

@@ -130,6 +130,7 @@ export const AccountSchema = z.object({
   employerMatchLimitPct: z.number().nullable().default(null),
   allowsMegaBackdoorRollover: z.boolean().nullable().default(null),
   hasHighFees: z.boolean().nullable().default(null),
+  apyRate: z.number().min(0).max(0.15).nullable().default(null),
 });
 export type Account = z.infer<typeof AccountSchema>;
 

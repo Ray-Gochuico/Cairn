@@ -18,6 +18,10 @@ const loadAccountMarginMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0007_add_account_margin.sql'), 'utf-8');
 const loadAccentColorsMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0015_add_accent_colors.sql'), 'utf-8');
+const loadAppSettingsMigration = () =>
+  readFileSync(resolve(__dirname, '../../src/db/migrations/0014_add_app_settings.sql'), 'utf-8');
+const loadCashApyMigration = () =>
+  readFileSync(resolve(__dirname, '../../src/db/migrations/0024_cash_apy.sql'), 'utf-8');
 
 describe('AccountsRepo', () => {
   let db: SqliteAdapter;
@@ -32,7 +36,9 @@ describe('AccountsRepo', () => {
       { version: '0003_add_commission_columns', sql: loadCommissionMigration() },
       { version: '0005_add_employment_and_bonus_columns', sql: loadEmploymentBonusMigration() },
       { version: '0007_add_account_margin', sql: loadAccountMarginMigration() },
+      { version: '0014_add_app_settings', sql: loadAppSettingsMigration() },
       { version: '0015_add_accent_colors', sql: loadAccentColorsMigration() },
+      { version: '0024_cash_apy', sql: loadCashApyMigration() },
     ]);
     repo = new AccountsRepo(db);
     personsRepo = new PersonsRepo(db);
@@ -346,5 +352,83 @@ describe('AccountsRepo', () => {
     expect((await repo.findById(id))?.accentColor).toBe('#4c78a8');
     await repo.update(id, { accentColor: null });
     expect((await repo.findById(id))?.accentColor).toBeNull();
+  });
+
+  describe('AccountsRepo — apyRate round-trip', () => {
+    it('persists apyRate: 0.045 and reads it back', async () => {
+      const id = await repo.create({
+        householdId: 1,
+        ownerPersonId: null,
+        beneficiaryDependentId: null,
+        name: 'HYSA',
+        institution: null,
+        type: AccountType.ACCOUNT_SAVINGS,
+        cryptoWalletAddress: null,
+        autoFetchEnabled: false,
+        excludedFromNetWorth: false,
+        stateOfPlan: null,
+        accentColor: null,
+        apyRate: 0.045,
+      });
+      const account = await repo.findById(id);
+      expect(account?.apyRate).toBeCloseTo(0.045, 6);
+    });
+
+    it('persists apyRate: null and reads it back as null', async () => {
+      const id = await repo.create({
+        householdId: 1,
+        ownerPersonId: null,
+        beneficiaryDependentId: null,
+        name: 'Checking',
+        institution: null,
+        type: AccountType.ACCOUNT_CASH,
+        cryptoWalletAddress: null,
+        autoFetchEnabled: false,
+        excludedFromNetWorth: false,
+        stateOfPlan: null,
+        accentColor: null,
+        apyRate: null,
+      });
+      const account = await repo.findById(id);
+      expect(account?.apyRate).toBeNull();
+    });
+
+    it('updates apyRate from null to 0.05 via update()', async () => {
+      const id = await repo.create({
+        householdId: 1,
+        ownerPersonId: null,
+        beneficiaryDependentId: null,
+        name: 'HYSA2',
+        institution: null,
+        type: AccountType.ACCOUNT_SAVINGS,
+        cryptoWalletAddress: null,
+        autoFetchEnabled: false,
+        excludedFromNetWorth: false,
+        stateOfPlan: null,
+        accentColor: null,
+        apyRate: null,
+      });
+      await repo.update(id, { apyRate: 0.05 });
+      expect((await repo.findById(id))?.apyRate).toBeCloseTo(0.05, 6);
+    });
+
+    it('rejects apyRate > 0.15 (schema validates range)', async () => {
+      await expect(
+        repo.create({
+          householdId: 1,
+          ownerPersonId: null,
+          beneficiaryDependentId: null,
+          name: 'InvalidAPY',
+          institution: null,
+          type: AccountType.ACCOUNT_SAVINGS,
+          cryptoWalletAddress: null,
+          autoFetchEnabled: false,
+          excludedFromNetWorth: false,
+          stateOfPlan: null,
+          accentColor: null,
+          apyRate: 0.20,
+        }),
+      ).rejects.toThrow();
+    });
   });
 });
