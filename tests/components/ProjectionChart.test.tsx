@@ -1,6 +1,7 @@
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import type { Scenario } from '@/types/scenario';
 import { emptyLeverPayload } from '@/lib/scenarios';
@@ -527,5 +528,218 @@ describe('ProjectionChart — Y-axis domain anchored to data', () => {
     expect(floorFn(-100)).toBe(0);
     expect(floorFn(500000)).toBeCloseTo(400000);
     expect(floorFn(250000)).toBeCloseTo(200000);
+  });
+});
+
+describe('ProjectionChart — per-account visibility toggle row (Task #19)', () => {
+  // Three investment accounts + one cash. Sorted by name in the row:
+  // 401k (id=1) → Brokerage (id=2) → Roth IRA (id=4). Cash (id=3) excluded.
+  const toggleAccounts: any[] = [
+    { id: 1, householdId: 1, name: '401k', type: 'ACCOUNT_401K', excludedFromNetWorth: false },
+    { id: 2, householdId: 1, name: 'Brokerage', type: 'ACCOUNT_BROKERAGE', excludedFromNetWorth: false },
+    { id: 3, householdId: 1, name: 'Checking', type: 'ACCOUNT_CASH', excludedFromNetWorth: false },
+    { id: 4, householdId: 1, name: 'Roth IRA', type: 'ACCOUNT_ROTH_IRA', excludedFromNetWorth: false },
+  ];
+
+  const toggleStates = (): MonthlyState[] =>
+    Array.from({ length: 6 }, (_, i) => ({
+      monthISO: `2026-${String(i + 1).padStart(2, '0')}`,
+      investmentsByAccount: { 1: 60_000 + i * 500, 2: 40_000 + i * 300, 4: 20_000 + i * 200 },
+      homeEquity: 250_000,
+      cash: 10_000,
+      debtByLoan: {},
+      netWorth: 380_000 + i * 1000,
+      incomeAfterTax: 9_000,
+      expenses: 4_500,
+      savings: 4_500,
+      events: [],
+    }));
+
+  it('does NOT render the toggle row in SINGLE detail level', () => {
+    const projections = new Map([[1, toggleStates()]]);
+    const milestones = new Map<number, Milestones>([[1, {}]]);
+    render(
+      <MemoryRouter>
+        <ProjectionChart
+          scenarios={[baseline]}
+          projections={projections}
+          milestones={milestones}
+          dollarMode="nominal"
+          inflation={0.025}
+          startISO="2026-01"
+          detailLevel="single"
+          accounts={toggleAccounts}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByTestId('whatif-account-toggle-row')).not.toBeInTheDocument();
+  });
+
+  it('does NOT render the toggle row in TAX_BUCKET detail level', () => {
+    const projections = new Map([[1, toggleStates()]]);
+    const milestones = new Map<number, Milestones>([[1, {}]]);
+    render(
+      <MemoryRouter>
+        <ProjectionChart
+          scenarios={[baseline]}
+          projections={projections}
+          milestones={milestones}
+          dollarMode="nominal"
+          inflation={0.025}
+          startISO="2026-01"
+          detailLevel="tax_bucket"
+          accounts={toggleAccounts}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByTestId('whatif-account-toggle-row')).not.toBeInTheDocument();
+  });
+
+  it('renders the toggle row with one checkbox per investment account in PER_ACCOUNT mode', () => {
+    const projections = new Map([[1, toggleStates()]]);
+    const milestones = new Map<number, Milestones>([[1, {}]]);
+    render(
+      <MemoryRouter>
+        <ProjectionChart
+          scenarios={[baseline]}
+          projections={projections}
+          milestones={milestones}
+          dollarMode="nominal"
+          inflation={0.025}
+          startISO="2026-01"
+          detailLevel="per_account"
+          accounts={toggleAccounts}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('whatif-account-toggle-row')).toBeInTheDocument();
+    // Three investment accounts (cash excluded).
+    expect(screen.getByLabelText('401k')).toBeInTheDocument();
+    expect(screen.getByLabelText('Brokerage')).toBeInTheDocument();
+    expect(screen.getByLabelText('Roth IRA')).toBeInTheDocument();
+    // Cash account (Checking, id=3) must NOT have a toggle.
+    expect(screen.queryByLabelText('Checking')).not.toBeInTheDocument();
+    // All three checkboxes start checked (everything visible by default).
+    expect((screen.getByLabelText('401k') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('Brokerage') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('Roth IRA') as HTMLInputElement).checked).toBe(true);
+  });
+
+  it('toggling a checkbox OFF removes the corresponding Area from the chart', async () => {
+    const user = userEvent.setup();
+    const projections = new Map([[1, toggleStates()]]);
+    const milestones = new Map<number, Milestones>([[1, {}]]);
+    render(
+      <MemoryRouter>
+        <ProjectionChart
+          scenarios={[baseline]}
+          projections={projections}
+          milestones={milestones}
+          dollarMode="nominal"
+          inflation={0.025}
+          startISO="2026-01"
+          detailLevel="per_account"
+          accounts={toggleAccounts}
+        />
+      </MemoryRouter>,
+    );
+    // All three investment areas present initially.
+    expect(screen.getByTestId('rc-area-acct_1_1')).toBeInTheDocument();
+    expect(screen.getByTestId('rc-area-acct_2_1')).toBeInTheDocument();
+    expect(screen.getByTestId('rc-area-acct_4_1')).toBeInTheDocument();
+
+    // Uncheck "Brokerage" (id=2) — its Area should disappear; others stay.
+    await user.click(screen.getByLabelText('Brokerage'));
+
+    expect((screen.getByLabelText('Brokerage') as HTMLInputElement).checked).toBe(false);
+    expect(screen.queryByTestId('rc-area-acct_2_1')).not.toBeInTheDocument();
+    expect(screen.getByTestId('rc-area-acct_1_1')).toBeInTheDocument();
+    expect(screen.getByTestId('rc-area-acct_4_1')).toBeInTheDocument();
+  });
+
+  it('"Hide all" hides every account area; "Show all" restores them', async () => {
+    const user = userEvent.setup();
+    const projections = new Map([[1, toggleStates()]]);
+    const milestones = new Map<number, Milestones>([[1, {}]]);
+    render(
+      <MemoryRouter>
+        <ProjectionChart
+          scenarios={[baseline]}
+          projections={projections}
+          milestones={milestones}
+          dollarMode="nominal"
+          inflation={0.025}
+          startISO="2026-01"
+          detailLevel="per_account"
+          accounts={toggleAccounts}
+        />
+      </MemoryRouter>,
+    );
+    const toggleAll = screen.getByTestId('whatif-account-toggle-all');
+    expect(toggleAll).toHaveTextContent('Hide all');
+
+    // Click "Hide all" — every per-account Area should be gone.
+    await user.click(toggleAll);
+    expect(screen.queryByTestId('rc-area-acct_1_1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('rc-area-acct_2_1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('rc-area-acct_4_1')).not.toBeInTheDocument();
+    // Every checkbox is now unchecked.
+    expect((screen.getByLabelText('401k') as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByLabelText('Brokerage') as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByLabelText('Roth IRA') as HTMLInputElement).checked).toBe(false);
+    // Label flips to "Show all" when everything is hidden.
+    expect(toggleAll).toHaveTextContent('Show all');
+
+    // Click "Show all" — every Area returns.
+    await user.click(toggleAll);
+    expect(screen.getByTestId('rc-area-acct_1_1')).toBeInTheDocument();
+    expect(screen.getByTestId('rc-area-acct_2_1')).toBeInTheDocument();
+    expect(screen.getByTestId('rc-area-acct_4_1')).toBeInTheDocument();
+    expect(toggleAll).toHaveTextContent('Hide all');
+  });
+
+  it('hides the toggle row in lines-only mode (multi-scenario)', () => {
+    const variantScenario = { ...baseline, id: 2, name: 'Variant', isBaseline: false, isActive: false, color: '#5fbb7c' };
+    const projections = new Map([[1, toggleStates()], [2, toggleStates()]]);
+    const milestones = new Map<number, Milestones>([[1, {}], [2, {}]]);
+    render(
+      <MemoryRouter>
+        <ProjectionChart
+          scenarios={[baseline, variantScenario]}
+          projections={projections}
+          milestones={milestones}
+          dollarMode="nominal"
+          inflation={0.025}
+          startISO="2026-01"
+          detailLevel="per_account"
+          accounts={toggleAccounts}
+        />
+      </MemoryRouter>,
+    );
+    // Two visible scenarios → lines mode → no toggle row even though detail level is per_account.
+    expect(screen.queryByTestId('whatif-account-toggle-row')).not.toBeInTheDocument();
+  });
+
+  it('does NOT render the toggle row when there are no investment accounts', () => {
+    const noInvestmentAccounts: any[] = [
+      { id: 3, householdId: 1, name: 'Checking', type: 'ACCOUNT_CASH', excludedFromNetWorth: false },
+    ];
+    const projections = new Map([[1, toggleStates()]]);
+    const milestones = new Map<number, Milestones>([[1, {}]]);
+    render(
+      <MemoryRouter>
+        <ProjectionChart
+          scenarios={[baseline]}
+          projections={projections}
+          milestones={milestones}
+          dollarMode="nominal"
+          inflation={0.025}
+          startISO="2026-01"
+          detailLevel="per_account"
+          accounts={noInvestmentAccounts}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByTestId('whatif-account-toggle-row')).not.toBeInTheDocument();
   });
 });

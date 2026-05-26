@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Area,
   ComposedChart,
@@ -130,10 +130,67 @@ export default function ProjectionChart({
   const lowerRows = useMemo(() => buildLowerPaneRows(scenarios, display), [scenarios, display]);
 
   // Investment accounts (non-cash/savings) used by the per-account view.
+  // Sorted by name (then id) so the checkbox row + chart series stack are stable.
   const investmentAccounts = useMemo(
-    () => accounts.filter((a) => a.id != null && taxBucketForAccount(a) !== null),
+    () =>
+      accounts
+        .filter((a) => a.id != null && taxBucketForAccount(a) !== null)
+        .slice()
+        .sort((a, b) => {
+          const byName = a.name.localeCompare(b.name);
+          return byName !== 0 ? byName : (a.id ?? 0) - (b.id ?? 0);
+        }),
     [accounts],
   );
+
+  // Session-only per-account visibility filter for the per-account view.
+  // Stored as a Set of hidden account ids — defaulting to empty means every
+  // account is visible. Mirrors Track 3's FI pills inline override and Track 2's
+  // SWR pill: no persistence (Settings → Advanced controls the default detail
+  // level; this is a finer-grained transient view filter).
+  const [hiddenAccountIds, setHiddenAccountIds] = useState<Set<number>>(() => new Set());
+
+  // Reset visibility when the set of investment-account ids changes (user added
+  // / removed an account in Inputs). Identity-stable signature so we don't reset
+  // on every render.
+  const accountIdSignature = useMemo(
+    () =>
+      investmentAccounts
+        .map((a) => a.id)
+        .filter((id): id is number => id != null)
+        .sort((a, b) => a - b)
+        .join(','),
+    [investmentAccounts],
+  );
+  useEffect(() => {
+    setHiddenAccountIds(new Set());
+  }, [accountIdSignature]);
+
+  const toggleAccountVisibility = (id: number) => {
+    setHiddenAccountIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const hideAll = () => {
+    setHiddenAccountIds(
+      new Set(investmentAccounts.map((a) => a.id).filter((id): id is number => id != null)),
+    );
+  };
+  const showAll = () => setHiddenAccountIds(new Set());
+
+  // The per-account checkbox row only makes sense in PER_ACCOUNT mode AND when
+  // we're rendering areas (single-scenario composition mode). Multi-scenario
+  // "lines only" mode hides the row because no per-account areas are drawn.
+  const showAccountToggleRow =
+    detailLevel === ProjectionDetailLevel.PER_ACCOUNT &&
+    mode === 'composition' &&
+    investmentAccounts.length > 0;
+  const allHidden =
+    investmentAccounts.length > 0 &&
+    investmentAccounts.every((a) => a.id != null && hiddenAccountIds.has(a.id));
 
   const milestoneRefLines = scenarios
     .filter((sc) => sc.visible && sc.id != null)
@@ -279,19 +336,22 @@ export default function ProjectionChart({
                     </>
                   )}
                   {detailLevel === ProjectionDetailLevel.PER_ACCOUNT &&
-                    investmentAccounts.map((acct, idx) => (
-                      <Area
-                        key={`acct_${acct.id}`}
-                        type="monotone"
-                        dataKey={`acct_${acct.id}_${scId}`}
-                        name={acct.name}
-                        stackId="composition"
-                        stroke="none"
-                        fill={AREA_COLORS[idx % AREA_COLORS.length]}
-                        fillOpacity={0.25}
-                        isAnimationActive={false}
-                      />
-                    ))}
+                    investmentAccounts.map((acct, idx) => {
+                      if (acct.id == null || hiddenAccountIds.has(acct.id)) return null;
+                      return (
+                        <Area
+                          key={`acct_${acct.id}`}
+                          type="monotone"
+                          dataKey={`acct_${acct.id}_${scId}`}
+                          name={acct.name}
+                          stackId="composition"
+                          stroke="none"
+                          fill={AREA_COLORS[idx % AREA_COLORS.length]}
+                          fillOpacity={0.25}
+                          isAnimationActive={false}
+                        />
+                      );
+                    })}
                   <Area
                     type="monotone"
                     dataKey={`homeEquity_${scId}`}
@@ -381,6 +441,53 @@ export default function ProjectionChart({
           </ComposedChart>
         </ResponsiveContainer>
       </div>
+
+      {showAccountToggleRow && (
+        <div
+          data-testid="whatif-account-toggle-row"
+          className="flex flex-wrap items-center gap-3 mt-2 text-sm"
+        >
+          <button
+            type="button"
+            onClick={allHidden ? showAll : hideAll}
+            className="text-xs font-medium text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+            data-testid="whatif-account-toggle-all"
+          >
+            {allHidden ? 'Show all' : 'Hide all'}
+          </button>
+          {investmentAccounts.map((acct, idx) => {
+            if (acct.id == null) return null;
+            const id = acct.id;
+            const inputId = `whatif-account-toggle-${id}`;
+            const checked = !hiddenAccountIds.has(id);
+            return (
+              <label
+                key={id}
+                htmlFor={inputId}
+                className="flex items-center gap-1.5 cursor-pointer select-none"
+                data-testid={`whatif-account-toggle-label-${id}`}
+              >
+                <input
+                  id={inputId}
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggleAccountVisibility(id)}
+                  className="h-3.5 w-3.5 rounded border-border accent-foreground cursor-pointer"
+                  data-testid={`whatif-account-toggle-${id}`}
+                />
+                <span
+                  aria-hidden
+                  className="inline-block h-2.5 w-2.5 rounded-sm"
+                  style={{ backgroundColor: AREA_COLORS[idx % AREA_COLORS.length] }}
+                />
+                <span className={checked ? '' : 'text-muted-foreground line-through'}>
+                  {acct.name}
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
