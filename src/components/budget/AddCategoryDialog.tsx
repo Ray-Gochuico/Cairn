@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -49,6 +49,7 @@ export default function AddCategoryDialog({
 }: AddCategoryDialogProps) {
   const [name, setName] = useState('');
   const [parentId, setParentId] = useState<number | ''>('');
+  const [parentQuery, setParentQuery] = useState('');
   const [type, setType] = useState<'NEED' | 'WANT'>(CategoryType.NEED);
   const [justSavedName, setJustSavedName] = useState<string | null>(null);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -56,9 +57,20 @@ export default function AddCategoryDialog({
   const noParents = parents.length === 0;
   const canSave = !noParents && name.trim().length > 0 && parentId !== '';
 
+  // Case-insensitive substring filter on the parent <select>. The placeholder
+  // "Choose a parent…" row is always present, plus any parent whose name
+  // contains the query. Selecting a parent then narrowing the filter past it
+  // leaves the selection intact — the filter is purely visual.
+  const filteredParents = useMemo(() => {
+    const q = parentQuery.trim().toLowerCase();
+    if (q === '') return parents;
+    return parents.filter((p) => p.name.toLowerCase().includes(q));
+  }, [parents, parentQuery]);
+
   const reset = () => {
     setName('');
     setParentId('');
+    setParentQuery('');
     setType(CategoryType.NEED);
     setJustSavedName(null);
   };
@@ -132,6 +144,21 @@ export default function AddCategoryDialog({
 
             <div className="space-y-1">
               <Label htmlFor="add-cat-parent">Parent</Label>
+              {parents.length > 1 && (
+                <Input
+                  id="add-cat-parent-search"
+                  type="search"
+                  value={parentQuery}
+                  onChange={(e) => setParentQuery(e.target.value)}
+                  placeholder="Filter…"
+                  // Aria label intentionally avoids the word "parent" so the
+                  // existing `getByLabelText(/parent/i)` lookups for the select
+                  // resolve uniquely. UX-clear because the field is visually
+                  // adjacent to the "Parent" <Label>.
+                  aria-label="Filter list"
+                  className="mb-1"
+                />
+              )}
               <select
                 id="add-cat-parent"
                 className="w-full border rounded px-2 py-1.5 text-sm bg-background"
@@ -141,7 +168,7 @@ export default function AddCategoryDialog({
                 }
               >
                 <option value="">Choose a parent…</option>
-                {parents.map((p) => (
+                {filteredParents.map((p) => (
                   <option key={p.id} value={p.id!}>
                     {p.name}
                   </option>

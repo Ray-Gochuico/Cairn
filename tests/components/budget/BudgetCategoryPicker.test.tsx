@@ -370,4 +370,225 @@ describe('BudgetCategoryPicker', () => {
       expect(optionValues).not.toContain('99'); // Salary (INCOME)
     });
   });
+
+  // ─── Task #12 — Always-reachable "+ Add category" trigger ────────────────
+  // When every category is tracked (groups is empty) the picker used to bail
+  // out and render nothing, leaving the user with no way to create new leaves.
+  // With `onCreateCategory` wired, the trigger now renders unconditionally
+  // and the empty picker shows a friendly "all tracked" empty state with the
+  // "+ Add category" affordance still visible.
+  describe('always-reachable "+ Add category"', () => {
+    const parents: Category[] = [
+      {
+        id: 1,
+        name: 'Home',
+        parentCategoryId: null,
+        type: 'NEED',
+        color: null,
+        icon: null,
+        isCapital: false,
+        monthlyBudget: null,
+        systemManaged: false,
+      } as Category,
+    ];
+
+    it('renders the picker trigger even when there are zero untracked categories', () => {
+      render(
+        <MemoryRouter>
+          <BudgetCategoryPicker
+            groups={[]}
+            onConfirm={() => {}}
+            parents={parents}
+            onCreateCategory={() => {}}
+          />
+        </MemoryRouter>,
+      );
+      // With onCreateCategory wired the trigger must render even when there's
+      // nothing pickable — otherwise the user is locked out of adding new leaves.
+      expect(screen.getByRole('button', { name: /add categor/i })).toBeInTheDocument();
+    });
+
+    it('shows the "all tracked" empty state inside the picker when no untracked rows exist', async () => {
+      const user = userEvent.setup();
+      render(
+        <MemoryRouter>
+          <BudgetCategoryPicker
+            groups={[]}
+            onConfirm={() => {}}
+            parents={parents}
+            onCreateCategory={() => {}}
+          />
+        </MemoryRouter>,
+      );
+      await user.click(screen.getByRole('button', { name: /add categor/i }));
+      // Friendly empty-state copy in the dialog body.
+      expect(
+        screen.getByText(/all categories are tracked/i),
+      ).toBeInTheDocument();
+      // Apply button must be hidden when there's nothing to apply.
+      expect(
+        screen.queryByRole('button', { name: /add 0 categor/i }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('the "+ Add category" entry still works from the zero-untracked empty picker', async () => {
+      const user = userEvent.setup();
+      render(
+        <MemoryRouter>
+          <BudgetCategoryPicker
+            groups={[]}
+            onConfirm={() => {}}
+            parents={parents}
+            onCreateCategory={() => {}}
+          />
+        </MemoryRouter>,
+      );
+      await user.click(screen.getByRole('button', { name: /add categor/i }));
+      await user.click(screen.getByRole('button', { name: /\+ add category$/i }));
+      // The AddCategoryDialog's own DialogTitle appears.
+      expect(screen.getByRole('heading', { name: /^add category$/i })).toBeInTheDocument();
+    });
+
+    it('still renders nothing when groups is empty AND onCreateCategory is undefined (back-compat)', () => {
+      render(<BudgetCategoryPicker groups={[]} onConfirm={() => {}} />);
+      expect(
+        screen.queryByRole('button', { name: /add categor/i }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  // ─── Task #14 — Search filter ─────────────────────────────────────────────
+  // Inline search input narrows the visible leaves by case-insensitive
+  // substring match. Parent headers hide when all their children are filtered
+  // out. Selection is purely display — narrowing then widening the filter
+  // leaves already-checked leaves with their checked state intact.
+  describe('search filter', () => {
+    const groups: ParentGroup[] = [
+      {
+        parentId: 1,
+        parentName: 'Home',
+        options: [
+          { id: 11, name: 'Mortgage' },
+          { id: 12, name: 'Utilities' },
+        ],
+      },
+      {
+        parentId: 2,
+        parentName: 'Vehicles',
+        options: [
+          { id: 21, name: 'Gas/Fuel' },
+          { id: 22, name: 'Maintenance' },
+        ],
+      },
+    ];
+
+    it('filters leaf checkboxes by case-insensitive substring match', async () => {
+      const user = userEvent.setup();
+      render(<BudgetCategoryPicker groups={groups} onConfirm={() => {}} />);
+      await user.click(screen.getByRole('button', { name: /add categor/i }));
+
+      const search = screen.getByLabelText(/search categories/i);
+      await user.type(search, 'gas');
+
+      // Gas/Fuel survives the filter; nothing else does.
+      expect(screen.getByRole('checkbox', { name: 'Gas/Fuel' })).toBeInTheDocument();
+      expect(screen.queryByRole('checkbox', { name: 'Mortgage' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('checkbox', { name: 'Utilities' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('checkbox', { name: 'Maintenance' })).not.toBeInTheDocument();
+    });
+
+    it('hides parent headers when all their children are filtered out', async () => {
+      const user = userEvent.setup();
+      render(<BudgetCategoryPicker groups={groups} onConfirm={() => {}} />);
+      await user.click(screen.getByRole('button', { name: /add categor/i }));
+
+      // Type a query that matches only Vehicles' children — the Home header
+      // (and its 0/2 indicator) must disappear from the rendered list.
+      await user.type(screen.getByLabelText(/search categories/i), 'fuel');
+      expect(screen.queryByRole('group', { name: 'Home' })).not.toBeInTheDocument();
+      expect(screen.getByRole('group', { name: 'Vehicles' })).toBeInTheDocument();
+    });
+
+    it('case-insensitive — uppercase query matches lowercase names and vice versa', async () => {
+      const user = userEvent.setup();
+      render(<BudgetCategoryPicker groups={groups} onConfirm={() => {}} />);
+      await user.click(screen.getByRole('button', { name: /add categor/i }));
+
+      await user.type(screen.getByLabelText(/search categories/i), 'MORTG');
+      expect(screen.getByRole('checkbox', { name: 'Mortgage' })).toBeInTheDocument();
+      expect(screen.queryByRole('checkbox', { name: 'Gas/Fuel' })).not.toBeInTheDocument();
+    });
+
+    it('selection survives across filter narrow → widen (filter is purely display)', async () => {
+      const onConfirm = vi.fn();
+      const user = userEvent.setup();
+      render(<BudgetCategoryPicker groups={groups} onConfirm={onConfirm} />);
+      await user.click(screen.getByRole('button', { name: /add categor/i }));
+
+      // Check Mortgage (Home) and Gas/Fuel (Vehicles).
+      await user.click(screen.getByRole('checkbox', { name: 'Mortgage' }));
+      await user.click(screen.getByRole('checkbox', { name: 'Gas/Fuel' }));
+
+      // Narrow the filter to only Gas — Mortgage disappears from the DOM but
+      // its in-memory selection must persist.
+      const search = screen.getByLabelText(/search categories/i);
+      await user.type(search, 'gas');
+      expect(screen.queryByRole('checkbox', { name: 'Mortgage' })).not.toBeInTheDocument();
+      // Apply button still says "Add 2 categories" because both ids remain selected.
+      expect(screen.getByRole('button', { name: /add 2 categor/i })).toBeInTheDocument();
+
+      // Clear the filter — Mortgage reappears AND is still checked.
+      await user.clear(search);
+      const mortgage = screen.getByRole('checkbox', { name: 'Mortgage' }) as HTMLInputElement;
+      expect(mortgage.checked).toBe(true);
+      const gas = screen.getByRole('checkbox', { name: 'Gas/Fuel' }) as HTMLInputElement;
+      expect(gas.checked).toBe(true);
+
+      // Apply still emits both ids.
+      await user.click(screen.getByRole('button', { name: /add 2 categor/i }));
+      const arg = (onConfirm.mock.calls[0]?.[0] ?? []) as number[];
+      expect(arg.sort((a, b) => a - b)).toEqual([11, 21]);
+    });
+
+    it('preserves the (N/M selected) counter for visible groups under filter', async () => {
+      const user = userEvent.setup();
+      render(<BudgetCategoryPicker groups={groups} onConfirm={() => {}} />);
+      await user.click(screen.getByRole('button', { name: /add categor/i }));
+
+      // Check Mortgage so Home's counter shows 1/2 in the unfiltered view.
+      await user.click(screen.getByRole('checkbox', { name: 'Mortgage' }));
+      const homeGroup = screen.getByRole('group', { name: 'Home' });
+      expect(within(homeGroup).getByText(/1\s*\/\s*2/)).toBeInTheDocument();
+
+      // Filter to "mort" — Home group still rendered with the single visible
+      // leaf and the counter must show 1/1 (1 selected of 1 visible).
+      await user.type(screen.getByLabelText(/search categories/i), 'mort');
+      const homeGroupFiltered = screen.getByRole('group', { name: 'Home' });
+      expect(within(homeGroupFiltered).getByText(/1\s*\/\s*1/)).toBeInTheDocument();
+    });
+
+    it('shows a "no matches" hint when the query excludes every leaf', async () => {
+      const user = userEvent.setup();
+      render(<BudgetCategoryPicker groups={groups} onConfirm={() => {}} />);
+      await user.click(screen.getByRole('button', { name: /add categor/i }));
+
+      await user.type(screen.getByLabelText(/search categories/i), 'xyzzy');
+      expect(screen.getByText(/no categories match/i)).toBeInTheDocument();
+    });
+
+    it('clears the search query when the picker is closed and re-opened', async () => {
+      const user = userEvent.setup();
+      render(<BudgetCategoryPicker groups={groups} onConfirm={() => {}} />);
+
+      await user.click(screen.getByRole('button', { name: /add categor/i }));
+      await user.type(screen.getByLabelText(/search categories/i), 'gas');
+      // Close via the Dialog's sr-only close button.
+      await user.click(screen.getByRole('button', { name: /^close$/i }));
+
+      // Re-open: search input must be empty again.
+      await user.click(screen.getByRole('button', { name: /add categor/i }));
+      const search = screen.getByLabelText(/search categories/i) as HTMLInputElement;
+      expect(search.value).toBe('');
+    });
+  });
 });

@@ -191,16 +191,18 @@ export default function Budget() {
         </Card>
       )}
 
-      {untrackedRows.length > 0 && (
-        <div className="flex items-center text-sm">
-          <BudgetCategoryPicker
-            groups={pickerGroups}
-            onConfirm={handleAddCategories}
-            parents={categories}
-            onCreateCategory={handleCreateCategory}
-          />
-        </div>
-      )}
+      {/* Always render the picker so the "+ Add category" entry is reachable
+          even when every category is tracked. When pickerGroups is empty, the
+          picker shows an "All categories tracked" empty state with only the
+          create-category action available. */}
+      <div className="flex items-center text-sm">
+        <BudgetCategoryPicker
+          groups={pickerGroups}
+          onConfirm={handleAddCategories}
+          parents={categories}
+          onCreateCategory={handleCreateCategory}
+        />
+      </div>
 
       <div className="space-y-8">
         {groups.map(([parentName, rows]) => {

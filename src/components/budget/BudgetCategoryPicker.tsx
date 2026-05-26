@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -8,6 +8,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import AddCategoryDialog, {
   type AddCategoryPayload,
 } from '@/components/budget/AddCategoryDialog';
@@ -21,7 +22,10 @@ interface Props {
    * Grouped untracked categories. Each group renders as a small uppercase
    * parent-name header above its leaf checkboxes; the picker is a flat selection
    * model under the hood (selecting all leaves in a group flips the per-group
-   * "(N/M selected)" indicator). Pass an empty array to hide the trigger.
+   * "(N/M selected)" indicator). May be empty: when `onCreateCategory` is set,
+   * the trigger still renders so the user can reach the "+ Add category" flow
+   * from an all-tracked household. With no callback and zero groups, the
+   * picker renders nothing (back-compat).
    */
   groups: readonly ParentGroup[];
   onConfirm: (ids: number[]) => void;
@@ -49,16 +53,44 @@ export default function BudgetCategoryPicker({
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<number[]>([]);
   const [addOpen, setAddOpen] = useState(false);
+  const [query, setQuery] = useState('');
 
-  // Clear the in-flight selection whenever the picker closes (or there's
-  // nothing left to pick from). Selection state must never persist between
-  // open cycles — closing the picker discards any partial work.
+  // Clear in-flight selection AND the search query whenever the picker closes
+  // (or there's nothing left to pick from). Selection state must never persist
+  // between open cycles — closing the picker discards any partial work.
   useEffect(() => {
-    if (!open) setSelected([]);
+    if (!open) {
+      setSelected([]);
+      setQuery('');
+    }
   }, [open]);
 
+  // Case-insensitive substring filter over leaf names. Filtering hides parent
+  // headers whose children are all filtered out, but does NOT mutate the
+  // selection — toggling a check, then narrowing the filter, then widening it
+  // again must re-reveal the still-checked leaf with its check intact.
+  // NOTE: must run BEFORE any early return so Rules of Hooks holds.
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleGroups = useMemo(() => {
+    if (normalizedQuery === '') return groups;
+    const result: ParentGroup[] = [];
+    for (const g of groups) {
+      const matching = g.options.filter((o) =>
+        o.name.toLowerCase().includes(normalizedQuery),
+      );
+      if (matching.length > 0) {
+        result.push({ ...g, options: matching });
+      }
+    }
+    return result;
+  }, [groups, normalizedQuery]);
+
   const totalOptions = groups.reduce((s, g) => s + g.options.length, 0);
-  if (totalOptions === 0) return null;
+  // When there's nothing pickable AND no create-category callback, the picker
+  // has no purpose — render nothing (back-compat). When `onCreateCategory` is
+  // set, we keep rendering the trigger so the user can reach the "+ Add
+  // category" flow even when every category is already tracked.
+  if (totalOptions === 0 && onCreateCategory == null) return null;
 
   const toggle = (id: number) => {
     setSelected((prev) =>
@@ -75,6 +107,11 @@ export default function BudgetCategoryPicker({
     setOpen(false);
   };
 
+  // Empty-state copy when every category is tracked AND the create-category
+  // callback is wired up. The picker still opens (via the always-rendered
+  // trigger), shows this message, and exposes the "+ Add category" entry.
+  const allTracked = totalOptions === 0;
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -86,58 +123,79 @@ export default function BudgetCategoryPicker({
         <DialogHeader>
           <DialogTitle>Add categories to track</DialogTitle>
           <DialogDescription>
-            Check every category you want to add to the budget overlay.
+            {allTracked
+              ? 'All categories are tracked. Add a new one below.'
+              : 'Check every category you want to add to the budget overlay.'}
           </DialogDescription>
         </DialogHeader>
-        <div className="max-h-72 overflow-y-auto -mx-1 space-y-3">
-          {groups.map((group) => {
-            const selectedInGroup = group.options.filter((o) =>
-              selected.includes(o.id),
-            ).length;
-            // Aria-labelledby ties the group's <h3> header to the role="group"
-            // container so getByRole('group', { name: 'Home' }) finds it.
-            const headingId = `picker-group-${group.parentId ?? 'general'}`;
-            return (
-              <div
-                key={group.parentId ?? 'general'}
-                role="group"
-                aria-labelledby={headingId}
-              >
-                <div className="flex items-baseline justify-between border-b pb-1 mb-1 px-1">
-                  <h3
-                    id={headingId}
-                    className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+
+        {!allTracked && (
+          <Input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search categories"
+            aria-label="Search categories"
+          />
+        )}
+
+        {!allTracked && (
+          <div className="max-h-72 overflow-y-auto -mx-1 space-y-3">
+            {visibleGroups.length === 0 ? (
+              <p className="px-1 py-2 text-sm text-muted-foreground">
+                No categories match "{query}".
+              </p>
+            ) : (
+              visibleGroups.map((group) => {
+                const selectedInGroup = group.options.filter((o) =>
+                  selected.includes(o.id),
+                ).length;
+                // Aria-labelledby ties the group's <h3> header to the role="group"
+                // container so getByRole('group', { name: 'Home' }) finds it.
+                const headingId = `picker-group-${group.parentId ?? 'general'}`;
+                return (
+                  <div
+                    key={group.parentId ?? 'general'}
+                    role="group"
+                    aria-labelledby={headingId}
                   >
-                    {group.parentName}
-                  </h3>
-                  <span className="text-[10px] uppercase tracking-wider text-muted-foreground tabular-nums">
-                    {selectedInGroup}/{group.options.length}
-                  </span>
-                </div>
-                <div className="divide-y">
-                  {group.options.map((opt) => {
-                    const checked = selected.includes(opt.id);
-                    return (
-                      <label
-                        key={opt.id}
-                        className="flex items-center gap-3 px-1 py-2 text-sm cursor-pointer hover:bg-accent/50 rounded-sm"
+                    <div className="flex items-baseline justify-between border-b pb-1 mb-1 px-1">
+                      <h3
+                        id={headingId}
+                        className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
                       >
-                        <input
-                          type="checkbox"
-                          aria-label={opt.name}
-                          checked={checked}
-                          onChange={() => toggle(opt.id)}
-                          className="h-4 w-4"
-                        />
-                        <span>{opt.name}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                        {group.parentName}
+                      </h3>
+                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground tabular-nums">
+                        {selectedInGroup}/{group.options.length}
+                      </span>
+                    </div>
+                    <div className="divide-y">
+                      {group.options.map((opt) => {
+                        const checked = selected.includes(opt.id);
+                        return (
+                          <label
+                            key={opt.id}
+                            className="flex items-center gap-3 px-1 py-2 text-sm cursor-pointer hover:bg-accent/50 rounded-sm"
+                          >
+                            <input
+                              type="checkbox"
+                              aria-label={opt.name}
+                              checked={checked}
+                              onChange={() => toggle(opt.id)}
+                              className="h-4 w-4"
+                            />
+                            <span>{opt.name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
         {onCreateCategory != null && (
           <div className="pt-3 border-t mt-3">
             <Button
@@ -160,14 +218,16 @@ export default function BudgetCategoryPicker({
           >
             Cancel
           </Button>
-          <Button
-            type="button"
-            size="sm"
-            disabled={applyDisabled}
-            onClick={handleApply}
-          >
-            {applyLabel}
-          </Button>
+          {!allTracked && (
+            <Button
+              type="button"
+              size="sm"
+              disabled={applyDisabled}
+              onClick={handleApply}
+            >
+              {applyLabel}
+            </Button>
+          )}
         </div>
       </DialogContent>
       {onCreateCategory != null && (

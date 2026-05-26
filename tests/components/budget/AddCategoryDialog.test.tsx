@@ -140,4 +140,76 @@ describe('AddCategoryDialog', () => {
     // onClose should be called after the 800ms delay
     await waitFor(() => expect(onClose).toHaveBeenCalledOnce(), { timeout: 2000 });
   }, 10_000);
+
+  // ─── Task #14 — Parent-list search ───────────────────────────────────────
+  // A small "Filter list" Input above the native parent <select> narrows the
+  // rendered <option> list by case-insensitive substring match on parent name.
+  // Only mounts when there are ≥2 parents (single-parent case has nothing to
+  // filter).
+  describe('parent filter input', () => {
+    // Three parents to make filtering meaningful.
+    const threeParents: Category[] = [
+      ...parents,
+      {
+        id: 3,
+        name: 'Groceries Wholesale',
+        parentCategoryId: null,
+        type: 'NEED',
+        color: null,
+        icon: null,
+        isCapital: false,
+        monthlyBudget: null,
+        systemManaged: false,
+      } as Category,
+    ];
+
+    it('renders a "Filter list" input above the parent select when there are multiple parents', () => {
+      renderDialog({ parents: threeParents });
+      expect(screen.getByLabelText(/filter list/i)).toBeInTheDocument();
+    });
+
+    it('does NOT render the filter input when there is only one parent', () => {
+      renderDialog({ parents: [parents[0]!] });
+      expect(screen.queryByLabelText(/filter list/i)).not.toBeInTheDocument();
+    });
+
+    it('narrows the visible <option> list by substring match (case-insensitive)', async () => {
+      const user = userEvent.setup();
+      renderDialog({ parents: threeParents });
+
+      // Sanity: all three parents present pre-filter.
+      const selectBefore = screen.getByLabelText(/parent/i) as HTMLSelectElement;
+      const valuesBefore = Array.from(selectBefore.options).map((o) => o.value);
+      expect(valuesBefore).toContain('1');
+      expect(valuesBefore).toContain('2');
+      expect(valuesBefore).toContain('3');
+
+      // Type "veh" — uppercase to verify case insensitivity.
+      await user.type(screen.getByLabelText(/filter list/i), 'VEH');
+      const selectAfter = screen.getByLabelText(/parent/i) as HTMLSelectElement;
+      const valuesAfter = Array.from(selectAfter.options).map((o) => o.value);
+      // Placeholder option ("") is always present.
+      expect(valuesAfter).toContain('');
+      // Only Vehicles (id 2) matches.
+      expect(valuesAfter).toContain('2');
+      expect(valuesAfter).not.toContain('1'); // Home
+      expect(valuesAfter).not.toContain('3'); // Groceries Wholesale
+    });
+
+    it('Save still works after the filter narrows the list to the selected parent', async () => {
+      const user = userEvent.setup();
+      const onSave = vi.fn();
+      renderDialog({ parents: threeParents, onSave });
+
+      await user.type(screen.getByLabelText(/name/i), 'Bakery');
+      // Filter first, then select the only remaining option.
+      await user.type(screen.getByLabelText(/filter list/i), 'home');
+      await user.selectOptions(screen.getByLabelText(/parent/i), '1');
+      await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'Bakery', parentCategoryId: 1 }),
+      );
+    });
+  });
 });

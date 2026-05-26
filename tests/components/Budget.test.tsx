@@ -347,5 +347,40 @@ describe('Budget page', () => {
       const stored = JSON.parse(localStorage.getItem('trackedBudgetCategories.v1') ?? '[]');
       expect(stored).toEqual([33]);
     });
+
+    // ─── Task #12 — Always-reachable "+ Add category" from Budget.tsx ──────
+    // Previously the picker was only rendered when there were untracked rows.
+    // With every budgetable category tracked, the picker now renders anyway
+    // so the user can open it and reach the "+ Add category" flow.
+    it('picker trigger is reachable from the Budget page when every category is tracked', async () => {
+      // Track every budgetable category id so untrackedRows is empty.
+      const cats = await new CategoriesRepo(db).list();
+      const budgetable = cats.filter(
+        (c) => (c.type === 'NEED' || c.type === 'WANT') && !c.systemManaged,
+      );
+      // Filter out parents (anything with at least one child).
+      const parentIds = new Set(
+        cats.map((c) => c.parentCategoryId).filter((p): p is number => p != null),
+      );
+      const leafIds = budgetable
+        .filter((c) => c.id != null && !parentIds.has(c.id))
+        .map((c) => c.id!);
+      localStorage.setItem('trackedBudgetCategories.v1', JSON.stringify(leafIds));
+
+      render(<MemoryRouter><Budget /></MemoryRouter>);
+      const user = userEvent.setup();
+      // Wait for categories to load (any heading rendered).
+      await screen.findByRole('heading', { name: /^budget$/i });
+
+      // Trigger is rendered even with no untracked rows.
+      const trigger = screen.getByRole('button', { name: /add categor/i });
+      expect(trigger).toBeInTheDocument();
+
+      // Clicking it opens the dialog with the "all tracked" empty state and
+      // the "+ Add category" entry still available.
+      await user.click(trigger);
+      expect(screen.getByText(/all categories are tracked/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /\+ add category$/i })).toBeInTheDocument();
+    });
   });
 });
