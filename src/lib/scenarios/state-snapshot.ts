@@ -6,6 +6,7 @@ import { computeBaselineExpenses } from '@/lib/expense-baseline';
 export interface AppSettingsSlice {
   defaultInflation: number;
   defaultReturnRate: number;
+  defaultCashApy: number | null;
 }
 
 export interface RealStateInputs {
@@ -41,7 +42,13 @@ export interface RealState {
   initialCash: number;
   /** Per-account investment balances at projection start. Key = Account.id. */
   initialInvestmentsByAccount: Record<number, number>;
-  defaults: { inflation: number; returnRate: number };
+  /**
+   * Cash and savings accounts with their balance at projection start.
+   * Used by effectiveCashApy() to compute the balance-weighted APY, frozen at
+   * projection start. Only includes accounts not excluded from net worth.
+   */
+  cashAccountsWithBalances: Array<{ account: Account; balance: number }>;
+  defaults: { inflation: number; returnRate: number; defaultCashApy: number | null };
   startISO: string;
   taxBrackets: RealStateTaxBrackets;
 }
@@ -89,10 +96,15 @@ function computeInitialBalances(
   snapshots: AccountSnapshot[],
   holdings: Holding[],
   startISO: string,
-): { initialCash: number; initialInvestmentsByAccount: Record<number, number> } {
+): {
+  initialCash: number;
+  initialInvestmentsByAccount: Record<number, number>;
+  cashAccountsWithBalances: Array<{ account: Account; balance: number }>;
+} {
   const byAccount = latestSnapshotPerAccount(snapshots, startISO);
   let cash = 0;
   const investmentsByAccount: Record<number, number> = {};
+  const cashAccountsWithBalances: Array<{ account: Account; balance: number }> = [];
   const accountsWithSnapshot = new Set<number>();
   for (const account of accounts) {
     if (account.id === undefined) continue;
@@ -102,6 +114,7 @@ function computeInitialBalances(
       accountsWithSnapshot.add(account.id);
       if (isCashAccount(account)) {
         cash += snap.totalValue;
+        cashAccountsWithBalances.push({ account, balance: snap.totalValue });
       } else {
         investmentsByAccount[account.id] =
           (investmentsByAccount[account.id] ?? 0) + snap.totalValue;
@@ -129,7 +142,7 @@ function computeInitialBalances(
     }
   }
 
-  return { initialCash: cash, initialInvestmentsByAccount: investmentsByAccount };
+  return { initialCash: cash, initialInvestmentsByAccount: investmentsByAccount, cashAccountsWithBalances };
 }
 
 function pickBrackets(
@@ -171,7 +184,7 @@ export function captureRealState(inputs: RealStateInputs): RealState {
     standardDeduction: pickStandardDeduction(inputs.taxRules, filingStatus),
   };
 
-  const { initialCash, initialInvestmentsByAccount } = computeInitialBalances(
+  const { initialCash, initialInvestmentsByAccount, cashAccountsWithBalances } = computeInitialBalances(
     inputs.accounts,
     inputs.accountSnapshots ?? [],
     inputs.holdings,
@@ -188,9 +201,11 @@ export function captureRealState(inputs: RealStateInputs): RealState {
     baselineMonthlyExpenses,
     initialCash,
     initialInvestmentsByAccount,
+    cashAccountsWithBalances,
     defaults: {
       inflation: inputs.appSettings.defaultInflation,
       returnRate: inputs.appSettings.defaultReturnRate,
+      defaultCashApy: inputs.appSettings.defaultCashApy ?? null,
     },
     startISO: inputs.startISO,
     taxBrackets,

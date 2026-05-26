@@ -8,6 +8,7 @@ import { useAccountsStore } from '@/stores/accounts-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { useScenariosStore } from '@/stores/scenarios-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 
 function todayMonthISO(): string {
@@ -25,7 +26,9 @@ export function useRealState(): RealState | null {
   const transactions     = useTransactionsStore((s) => s.transactions);
   const inflation        = useScenariosStore((s) => s.inflation);
   const returnRate       = useScenariosStore((s) => s.defaultReturnRate);
+  const settings         = useSettingsStore((s) => s.settings);
   const taxRules         = useTaxRulesStore((s) => s.items);
+  const defaultCashApy   = settings?.defaultCashApy ?? null;
 
   return useMemo<RealState | null>(() => {
     if (!household) return null;
@@ -39,7 +42,11 @@ export function useRealState(): RealState | null {
       transactions,
       household,
       persons,
-      appSettings: { defaultInflation: inflation, defaultReturnRate: returnRate },
+      appSettings: {
+        defaultInflation: inflation,
+        defaultReturnRate: returnRate,
+        defaultCashApy,
+      },
       startISO,
       taxRules,
     });
@@ -48,5 +55,5 @@ export function useRealState(): RealState | null {
       return { ...real, baselineMonthlyExpenses: expensesOverride };
     }
     return real;
-  }, [household, persons, loans, holdings, accounts, accountSnapshots, transactions, inflation, returnRate, taxRules]);
+  }, [household, persons, loans, holdings, accounts, accountSnapshots, transactions, inflation, returnRate, defaultCashApy, taxRules]);
 }
