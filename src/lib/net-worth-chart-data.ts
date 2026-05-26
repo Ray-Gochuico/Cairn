@@ -1,5 +1,6 @@
 import {
-  bucketSnapshots,
+  absDays,
+  bucketSnapshotsByClosestDate,
   type Granularity,
   type TimeWindow,
 } from '@/lib/snapshot-bucketing';
@@ -196,12 +197,13 @@ export function buildNetWorthChartData(
   const from = bucketEnds[0];
   const to = bucketEnds[bucketEnds.length - 1];
 
-  // ----- Per-account carry-forward via bucketSnapshots -----
-  // We need bucketSnapshots to give us values at OUR bucketEnds — but it
-  // builds its own bucketEnds from the input snapshots. The simplest fix:
-  // run it once on the union of selected-account snapshots (filtered by
-  // cutoff), then snap its values to our bucketEnds via the same
-  // carry-forward semantics.
+  // ----- Per-account closest-date series via bucketSnapshotsByClosestDate -----
+  // The helper builds its own bucketEnds from the input snapshot dates,
+  // which may differ from OUR bucketEnds (e.g., the spine includes a
+  // "today" bucket beyond the latest snapshot, or starts earlier when
+  // loans-only selection synthesizes a 12-bucket spine). We align each
+  // account's series to OUR bucketEnds by picking the value at the
+  // closest series bucketEnd — same closest-date semantic, just nested.
   const accountValuesByKey = new Map<string, number[]>();
   if (selectedAccountIds.size > 0) {
     const filtered = snapshots.filter(
@@ -209,24 +211,35 @@ export function buildNetWorthChartData(
         selectedAccountIds.has(s.accountId) &&
         (cutoff === null || s.snapshotDate >= cutoff),
     );
-    const series = bucketSnapshots(filtered, granularity, MAX_BUCKETS);
-    // Snap each account's series to our bucketEnds with carry-forward.
+    const series = bucketSnapshotsByClosestDate(
+      filtered,
+      granularity,
+      MAX_BUCKETS,
+    );
     for (const accountId of selectedAccountIds) {
       const raw = series.valuesByAccount.get(accountId) ?? [];
       const aligned: number[] = new Array(bucketEnds.length);
-      let lastKnown: number | null = null;
-      let cursor = 0;
       for (let i = 0; i < bucketEnds.length; i++) {
-        const target = bucketEnds[i];
-        // Advance raw cursor while series.bucketEnds[cursor] <= target.
-        while (
-          cursor < series.bucketEnds.length &&
-          series.bucketEnds[cursor] <= target
-        ) {
-          lastKnown = raw[cursor];
-          cursor++;
+        if (series.bucketEnds.length === 0) {
+          aligned[i] = 0;
+          continue;
         }
-        aligned[i] = lastKnown ?? 0;
+        // Closest series bucketEnd to OUR bucketEnd; later wins ties to
+        // match the underlying helper's tiebreaker.
+        const target = bucketEnds[i];
+        let bestIdx = 0;
+        let bestDistance = Number.POSITIVE_INFINITY;
+        let bestEnd = '';
+        for (let j = 0; j < series.bucketEnds.length; j++) {
+          const end = series.bucketEnds[j];
+          const d = absDays(end, target);
+          if (d < bestDistance || (d === bestDistance && end > bestEnd)) {
+            bestDistance = d;
+            bestIdx = j;
+            bestEnd = end;
+          }
+        }
+        aligned[i] = raw[bestIdx] ?? 0;
       }
       accountValuesByKey.set(entityKey('account', accountId), aligned);
     }

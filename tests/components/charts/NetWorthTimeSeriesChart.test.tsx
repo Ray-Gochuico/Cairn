@@ -324,6 +324,33 @@ describe('buildNetWorthChartData', () => {
     expect(last[entityKey('property', 10)]).toBe(425000);
   });
 
+  it('anchors a March bucket with an April 1 snapshot if it is the closest data point', () => {
+    // March 23 (100) + April 1 (200) account snapshots. March bucket end =
+    // March 31. |Mar 23 − Mar 31| = 8, |Apr 1 − Mar 31| = 1 → April 1 wins
+    // the March bucket. Pins the closest-date sampling rule for the
+    // net-worth chart's account series.
+    const rows = buildNetWorthChartData({
+      accounts: [mkAccount(1, 'Brokerage')],
+      snapshots: [
+        mkSnapshot(1, 1, '2026-03-23', 100),
+        mkSnapshot(2, 1, '2026-04-01', 200),
+      ],
+      properties: [],
+      vehicles: [],
+      loans: [],
+      assetValueSnapshots: [],
+      selectedKeys: new Set([entityKey('account', 1)]),
+      granularity: 'MONTH',
+      cutoff: null,
+      today: '2026-04-30',
+    });
+    const marchRow = rows.find((r) =>
+      typeof r.bucketEnd === 'string' && r.bucketEnd.startsWith('2026-03'),
+    );
+    expect(marchRow).toBeDefined();
+    expect(marchRow![entityKey('account', 1)]).toBe(200);
+  });
+
   it('drops selected keys whose entities have been deleted', () => {
     const rows = buildNetWorthChartData({
       accounts: [],
