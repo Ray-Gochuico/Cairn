@@ -1,22 +1,25 @@
 import type { AssetValueSnapshot } from '@/types/schema';
 import type { AssetSnapshotOwnerType } from '@/types/enums';
-import type { Granularity } from '@/lib/snapshot-bucketing';
+import { absDays, type Granularity } from '@/lib/snapshot-bucketing';
 
 /**
  * Resolve a per-entity value at each bucket end. The chart's data builder
  * calls this once per property/vehicle slot to get one number per visible
  * bucket on the X axis.
  *
- * Semantics (parallel to bucketSnapshots' carry-forward, but for a single
- * owner instead of all-accounts):
+ * Semantics (closest-to-bucket-end, parallel to `bucketSnapshotsByClosestDate`
+ * for accounts, but for a single owner):
  *  - Filter `snapshots` down to those matching (ownerType, ownerId).
- *  - For each bucketEnd, pick the latest snapshot whose snapshotDate <=
- *    bucketEnd. That's the "value at the end of the period" — newer
- *    snapshots haven't happened yet in that bucket's slice of history.
- *  - For buckets before the earliest snapshot (or all buckets if no
- *    snapshots exist), fall back to `fallbackValue` (the entity's
- *    `currentEstimatedValue` typically). Spec § "Edge cases" — properties
- *    and vehicles with no asset_value_snapshot use the flat horizontal.
+ *  - For each bucketEnd, pick the snapshot whose snapshotDate is CLOSEST
+ *    (smallest absolute day-distance) to bucketEnd. A snapshot dated AFTER
+ *    a bucketEnd can still claim that bucket if it's the closest data
+ *    point. A single sparse snapshot anchors every bucket — the resulting
+ *    flat horizontal is the natural "best guess" rendering.
+ *  - Tiebreaker for equidistant snapshots: the LATER snapshotDate wins
+ *    (matches the "later overwrites earlier" pattern used elsewhere in
+ *    this codebase, and `bucketSnapshotsByClosestDate`).
+ *  - If NO snapshot exists for this entity at all, fall back to
+ *    `fallbackValue` (the entity's `currentEstimatedValue` typically).
  *  - If both fallback is null and no snapshot is available, the bucket
  *    is 0 — the segment effectively hides from the stack.
  *
@@ -32,23 +35,31 @@ export function bucketAssetSnapshots(
   _granularity: Granularity,
   fallbackValue: number | null,
 ): number[] {
-  const owned = snapshots
-    .filter((s) => s.ownerType === ownerType && s.ownerId === ownerId)
-    .slice()
-    .sort((a, b) => a.snapshotDate.localeCompare(b.snapshotDate));
+  const owned = snapshots.filter(
+    (s) => s.ownerType === ownerType && s.ownerId === ownerId,
+  );
+
+  if (owned.length === 0) {
+    return bucketEnds.map(() => fallbackValue ?? 0);
+  }
 
   return bucketEnds.map((end) => {
-    // Latest snapshot whose date <= end. The list is sorted ascending so
-    // we scan until we pass `end`.
-    let chosen: number | null = null;
+    let bestValue: number | null = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    let bestDate = '';
     for (const s of owned) {
-      if (s.snapshotDate <= end) {
-        chosen = s.value;
-      } else {
-        break;
+      const d = absDays(s.snapshotDate, end);
+      // Strict <: ties fall through to the dedicated later-wins
+      // tiebreaker on the next line.
+      if (
+        d < bestDistance ||
+        (d === bestDistance && s.snapshotDate > bestDate)
+      ) {
+        bestDistance = d;
+        bestValue = s.value;
+        bestDate = s.snapshotDate;
       }
     }
-    if (chosen != null) return chosen;
-    return fallbackValue ?? 0;
+    return bestValue ?? (fallbackValue ?? 0);
   });
 }
