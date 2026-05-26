@@ -3,6 +3,8 @@ export { toReal } from './real';
 export { detectMilestones, type Milestones, type FinancialIndependenceParams } from './milestones';
 export { captureRealState, type RealState, type RealStateInputs, type AppSettingsSlice } from './state-snapshot';
 export { effectiveSwr } from './effective-swr';
+export { totalInvestments, aggregateByTaxBucket } from './aggregate-investments';
+export type { TaxBucket } from '@/lib/account-tax-classification';
 export {
   LeverPayloadSchema, emptyLeverPayload,
   ExtraLoanPaymentSchema, LumpSumEventSchema, ExpensePeriodSchema, ReturnScheduleSchema,
