@@ -11,6 +11,8 @@ import IncomePopover from '@/components/whatif/levers/IncomePopover';
 import ContributionsPopover from '@/components/whatif/levers/ContributionsPopover';
 import InflationPopover from '@/components/whatif/levers/InflationPopover';
 import SwrLeverPill from '@/components/whatif/SwrLeverPill';
+import { useAutoInvestPreview } from '@/components/whatif/useAutoInvestPreview';
+import { formatCompactCurrency } from '@/lib/format';
 
 type LeverKey = 'loans' | 'lumpSums' | 'expenses' | 'returns' | 'income' | 'contributions' | 'inflation';
 
@@ -20,6 +22,13 @@ export default function LeverBar() {
   const household = useHouseholdStore((s) => s.household);
   const active = scenarios.find((s) => s.isActive);
   const [openLever, setOpenLever] = useState<LeverKey | null>(null);
+
+  // Task #25 — preview of the engine's auto-invest amount for the current
+  // month. Surfaced in the Contributions pill so the user sees the
+  // dominant "salary surplus → investments" flow without needing to read
+  // the popover banner. Hook is called unconditionally before the early
+  // return below to keep React's rules of hooks happy.
+  const autoInvestAmount = useAutoInvestPreview(active?.leverPayload ?? null);
 
   if (!active) {
     return (
@@ -82,24 +91,49 @@ export default function LeverBar() {
           )}
         </Button>
         <Pill k="income"        label="Income" />
-        <Button
-          variant={openLever === 'contributions' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setOpenLever((cur) => (cur === 'contributions' ? null : 'contributions'))}
-          aria-label="Contributions"
-          title={counts.contributions === 0 ? 'Monthly surplus auto-invests when no segments are active' : undefined}
-          className="flex items-center gap-1"
-        >
-          Contributions
-          {counts.contributions === 0 && (
-            <Info
-              data-testid="contributions-auto-invest-icon"
-              className="h-3 w-3 text-muted-foreground"
-              aria-hidden
-            />
-          )}
-          {counts.contributions > 0 && ` · ${counts.contributions}`}
-        </Button>
+        {/* Task #25 — Contributions pill surfaces the auto-invest amount when
+            no explicit segments are active. With segments configured, the
+            existing "Contributions · N" display is preserved unchanged. */}
+        {(() => {
+          const hasSegments = counts.contributions > 0;
+          const showAutoInvestBadge = !hasSegments && autoInvestAmount > 0;
+          const formattedAutoInvest = formatCompactCurrency(autoInvestAmount);
+          return (
+            <Button
+              variant={openLever === 'contributions' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setOpenLever((cur) => (cur === 'contributions' ? null : 'contributions'))}
+              aria-label="Contributions"
+              title={
+                hasSegments
+                  ? undefined
+                  : showAutoInvestBadge
+                  ? `Monthly surplus of ${formattedAutoInvest} auto-invests when no segments are active`
+                  : 'Monthly surplus auto-invests when no segments are active'
+              }
+              className="flex items-center gap-1"
+            >
+              Contributions
+              {hasSegments && ` · ${counts.contributions}`}
+              {showAutoInvestBadge && (
+                <span
+                  data-testid="contributions-auto-invest-badge"
+                  className="text-xs text-muted-foreground font-normal"
+                >
+                  {' · auto '}
+                  {formattedAutoInvest}/mo
+                </span>
+              )}
+              {!hasSegments && !showAutoInvestBadge && (
+                <Info
+                  data-testid="contributions-auto-invest-icon"
+                  className="h-3 w-3 text-muted-foreground"
+                  aria-hidden
+                />
+              )}
+            </Button>
+          );
+        })()}
         {active.id != null && household && (
           <SwrLeverPill
             swrOverride={lp.swrOverride}

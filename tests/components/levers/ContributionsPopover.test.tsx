@@ -31,20 +31,42 @@ describe('ContributionsPopover', () => {
     expect(screen.getByText(/no contribution segments yet/i)).toBeInTheDocument();
   });
 
-  it('shows the auto-invest notice when no segments are configured', () => {
+  it('shows the auto-invest read-only card when no segments are configured', () => {
     render(<MemoryRouter><ContributionsPopover open onOpenChange={() => {}} /></MemoryRouter>);
-    expect(screen.getByTestId('contributions-auto-invest-notice')).toBeInTheDocument();
-    expect(screen.getByTestId('contributions-auto-invest-notice')).toHaveTextContent(
-      /monthly surplus.*auto-invests/i,
-    );
+    // Task #25 — replaced the prior blue-banner notice with a read-only
+    // "Auto-invest" card carrying the dollar amount + helper text.
+    const card = screen.getByTestId('contributions-auto-invest-card');
+    expect(card).toBeInTheDocument();
+    expect(card).toHaveTextContent(/auto-invest/i);
+    expect(card).toHaveTextContent(/salary surplus/i);
+    // The card surfaces the dollar amount via the dedicated test id.
+    expect(screen.getByTestId('contributions-auto-invest-amount')).toBeInTheDocument();
   });
 
-  it('hides the auto-invest notice once at least one segment is added', async () => {
+  it('hides the auto-invest card once at least one segment is added', async () => {
     resetStore({
       contributions: [{ startMonth: 0, endMonth: 59, monthlyAmount: 1000, label: 'Y1-Y5' }],
     });
     render(<MemoryRouter><ContributionsPopover open onOpenChange={() => {}} /></MemoryRouter>);
-    expect(screen.queryByTestId('contributions-auto-invest-notice')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('contributions-auto-invest-card')).not.toBeInTheDocument();
+  });
+
+  it('auto-invest card is read-only (no inputs, no remove buttons inside it)', () => {
+    render(<MemoryRouter><ContributionsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+    const card = screen.getByTestId('contributions-auto-invest-card');
+    // No <input> elements live INSIDE the card — it's purely informational.
+    expect(card.querySelectorAll('input').length).toBe(0);
+    expect(card.querySelectorAll('button').length).toBe(0);
+  });
+
+  it('auto-invest card dollar amount renders as "$X/mo" formatted currency', () => {
+    render(<MemoryRouter><ContributionsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+    const amount = screen.getByTestId('contributions-auto-invest-amount');
+    // Without a real RealState (no household in test setup), the helper
+    // returns 0 — the popover renders "$0/mo" which still matches the
+    // /\$\d.*\/mo/ shape. We just confirm the suffix is present.
+    expect(amount.textContent).toMatch(/\/mo$/);
+    expect(amount.textContent).toMatch(/^\$/);
   });
 
   it('clicking + Add segment appends a row with default year and amount inputs', async () => {

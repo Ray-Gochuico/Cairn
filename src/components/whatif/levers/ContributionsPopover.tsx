@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Info } from 'lucide-react';
 import LeverPopoverShell from './LeverPopoverShell';
 import { Input } from '@/components/ui/input';
@@ -7,8 +7,11 @@ import { Button } from '@/components/ui/button';
 import { useScenariosStore } from '@/stores/scenarios-store';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { taxBucketForAccount } from '@/lib/account-tax-classification';
+import { currentMonthlySalarySurplus } from '@/lib/scenarios';
 import type { ContributionSegment } from '@/lib/scenarios';
 import type { Account } from '@/types/schema';
+import { useRealState } from '@/components/whatif/useRealState';
+import { formatCurrency } from '@/lib/format';
 
 interface Props { open: boolean; onOpenChange: (n: boolean) => void }
 
@@ -105,11 +108,23 @@ export default function ContributionsPopover({ open, onOpenChange }: Props) {
   const scenarios = useScenariosStore((s) => s.scenarios);
   const accounts = useAccountsStore((s) => s.accounts);
   const active = scenarios.find((s) => s.isActive);
+  const real = useRealState();
 
   const investmentAccounts: Account[] = accounts.filter((a) => taxBucketForAccount(a) !== null);
   const investmentAccountIds = investmentAccounts
     .map((a) => a.id)
     .filter((id): id is number => id != null);
+
+  // Auto-invest preview: what would auto-invest if no segments were active.
+  // Used by the read-only "Auto-invest" card at the top (Task #25). We use
+  // the active scenario's lever payload so other levers (income / expenses /
+  // loans) reflect the user's current configuration — only the contributions
+  // are stripped inside the helper. Falls back to 0 when there's no active
+  // scenario or no household yet.
+  const autoInvestPreview = useMemo(() => {
+    if (!real || !active) return 0;
+    return currentMonthlySalarySurplus(real, active.leverPayload);
+  }, [real, active]);
 
   const [draft, setDraft] = useState<DraftRow[]>(() =>
     segmentsToDraft(active?.leverPayload.contributions ?? [], investmentAccountIds),
@@ -163,17 +178,38 @@ export default function ContributionsPopover({ open, onOpenChange }: Props) {
           lands in investments.
         </p>
 
+        {/* Task #25 — Auto-invest read-only card. Visible only when there are
+            no explicit segments configured; mirrors the engine's actual
+            "no segment → s.savings → distributeToAccounts" routing so users
+            see the auto-invested salary number without having to read the
+            empty-state banner. */}
         {draft.length === 0 && (
           <div
-            data-testid="contributions-auto-invest-notice"
-            className="flex items-start gap-2 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200"
+            data-testid="contributions-auto-invest-card"
+            className="rounded-md border bg-muted/50 px-3 py-2 text-xs"
           >
-            <Info className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
-            <span>
-              When no contribution segments are active, your monthly surplus
-              (income &minus; expenses &minus; loan payments) auto-invests across
-              investment accounts.
-            </span>
+            <div className="flex items-baseline justify-between gap-2">
+              <div className="flex items-center gap-1.5 font-medium">
+                <span>Auto-invest</span>
+                <span
+                  title="This happens automatically when no contribution segments are active. Your monthly surplus (income − expenses − loan payments) flows into investments across all investment accounts."
+                  className="inline-flex"
+                  aria-label="Auto-invest explanation"
+                >
+                  <Info className="h-3 w-3 text-muted-foreground" aria-hidden />
+                </span>
+              </div>
+              <span
+                data-testid="contributions-auto-invest-amount"
+                className="font-mono tabular-nums text-foreground"
+              >
+                {formatCurrency(autoInvestPreview)}/mo
+              </span>
+            </div>
+            <p className="mt-1 text-muted-foreground">
+              From salary surplus (income &minus; expenses &minus; loan payments),
+              distributed across investment accounts.
+            </p>
           </div>
         )}
 

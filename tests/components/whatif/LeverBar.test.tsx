@@ -23,6 +23,14 @@ vi.mock('@/components/whatif/levers/ContributionsPopover', () => ({
   default: () => null,
 }));
 
+// Task #25 — auto-invest preview is computed via useAutoInvestPreview() which
+// wraps useRealState() + the engine. We mock the hook directly so each test
+// can dial in the auto-invest amount without standing up the full store graph.
+let autoInvestPreviewValue = 0;
+vi.mock('@/components/whatif/useAutoInvestPreview', () => ({
+  useAutoInvestPreview: () => autoInvestPreviewValue,
+}));
+
 const updateLeverMock = vi.fn().mockResolvedValue(undefined);
 let activeScenarioOverride: number | null = null;
 let activeScenarioId: number | null = 1;
@@ -166,23 +174,53 @@ describe('LeverBar — Returns default hint', () => {
   });
 });
 
-describe('LeverBar — Contributions auto-invest icon', () => {
+describe('LeverBar — Contributions auto-invest pill (Task #25)', () => {
   beforeEach(() => {
     activeScenarioId = 1;
     activeScenarioOverride = null;
     householdRate = 0.04;
     returnsPayload = { defaultRate: 0.07, overrides: {} };
+    autoInvestPreviewValue = 0;
   });
 
-  it('shows the Info icon on the Contributions button when no segments are set', () => {
+  it('shows the Info icon when no segments are set AND auto-invest preview is 0', () => {
     contributionsPayload = [];
+    autoInvestPreviewValue = 0;
     render(<LeverBar />);
     expect(screen.getByTestId('contributions-auto-invest-icon')).toBeInTheDocument();
+    expect(screen.queryByTestId('contributions-auto-invest-badge')).not.toBeInTheDocument();
   });
 
-  it('hides the Info icon when at least one contribution segment exists', () => {
-    contributionsPayload = [{ startMonth: 0, endMonth: 59, monthlyAmount: 1000, label: 'Y1-Y5' }];
+  it('shows the auto-invest dollar-amount badge when no segments AND preview > 0', () => {
+    contributionsPayload = [];
+    autoInvestPreviewValue = 4500;
     render(<LeverBar />);
+    const badge = screen.getByTestId('contributions-auto-invest-badge');
+    expect(badge).toBeInTheDocument();
+    // formatCompactCurrency(4500) → "$4.5k". The badge renders "· auto $4.5k/mo".
+    expect(badge.textContent).toContain('auto');
+    expect(badge.textContent).toContain('$4.5k');
+    expect(badge.textContent).toContain('/mo');
+    // When the dollar badge is showing, the Info icon is redundant — hide it.
+    expect(screen.queryByTestId('contributions-auto-invest-icon')).not.toBeInTheDocument();
+  });
+
+  it('hides BOTH the badge and Info icon when at least one segment exists', () => {
+    contributionsPayload = [{ startMonth: 0, endMonth: 59, monthlyAmount: 1000, label: 'Y1-Y5' }];
+    autoInvestPreviewValue = 4500;
+    render(<LeverBar />);
+    expect(screen.queryByTestId('contributions-auto-invest-icon')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('contributions-auto-invest-badge')).not.toBeInTheDocument();
+    // The existing "· N" count display is preserved.
+    expect(screen.getByLabelText(/contributions/i).textContent).toContain('· 1');
+  });
+
+  it('hides the badge when there is no active scenario (early-return branch)', () => {
+    activeScenarioId = null;
+    autoInvestPreviewValue = 4500;
+    render(<LeverBar />);
+    // No active scenario → empty-state message, no buttons at all.
+    expect(screen.queryByTestId('contributions-auto-invest-badge')).not.toBeInTheDocument();
     expect(screen.queryByTestId('contributions-auto-invest-icon')).not.toBeInTheDocument();
   });
 });
