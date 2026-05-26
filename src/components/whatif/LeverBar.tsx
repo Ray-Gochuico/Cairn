@@ -1,17 +1,21 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useScenariosStore } from '@/stores/scenarios-store';
+import { useHouseholdStore } from '@/stores/household-store';
 import ExtraLoanPaymentsPopover from '@/components/whatif/levers/ExtraLoanPaymentsPopover';
 import LumpSumsPopover from '@/components/whatif/levers/LumpSumsPopover';
 import ExpensePeriodsPopover from '@/components/whatif/levers/ExpensePeriodsPopover';
 import ReturnSchedulePopover from '@/components/whatif/levers/ReturnSchedulePopover';
 import IncomePopover from '@/components/whatif/levers/IncomePopover';
 import ContributionsPopover from '@/components/whatif/levers/ContributionsPopover';
+import SwrLeverPill from '@/components/whatif/SwrLeverPill';
 
 type LeverKey = 'loans' | 'lumpSums' | 'expenses' | 'returns' | 'income' | 'contributions';
 
 export default function LeverBar() {
   const scenarios = useScenariosStore((s) => s.scenarios);
+  const updateLever = useScenariosStore((s) => s.updateLever);
+  const household = useHouseholdStore((s) => s.household);
   const active = scenarios.find((s) => s.isActive);
   const [openLever, setOpenLever] = useState<LeverKey | null>(null);
 
@@ -53,6 +57,15 @@ export default function LeverBar() {
         <Pill k="returns"       label="Returns" />
         <Pill k="income"        label="Income" />
         <Pill k="contributions" label="Contributions" />
+        {active.id != null && household && (
+          <SwrLeverPill
+            swrOverride={lp.swrOverride}
+            householdWithdrawalRate={household.withdrawalRate}
+            onChange={(next) => {
+              void updateLever(active.id!, { swrOverride: next });
+            }}
+          />
+        )}
       </div>
 
       <ExtraLoanPaymentsPopover
