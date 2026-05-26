@@ -30,6 +30,8 @@ export type ExpensePeriod = z.infer<typeof ExpensePeriodSchema>;
 export const ReturnScheduleSchema = z.object({
   defaultRate: z.number().min(-1).max(1),
   overrides: z.record(z.string().regex(/^\d{4}$/), z.number().min(-1).max(1)),
+  /** Per-scenario cash APY override. null = use canonical balance-weighted APY. */
+  cashRate: z.number().min(0).max(0.15).nullable().default(null),
 });
 export type ReturnSchedule = z.infer<typeof ReturnScheduleSchema>;
 
@@ -111,7 +113,7 @@ export function emptyLeverPayload(): LeverPayload {
     extraLoanPayments: [],
     lumpSums: [],
     expensePeriods: [],
-    returns: { defaultRate: 0.07, overrides: {} },
+    returns: { defaultRate: 0.07, overrides: {}, cashRate: null },
     income: { perPerson: [{ annualRaiseRate: 0, events: [] }] },
     contributions: [],
     retirementAgeOverride: null,

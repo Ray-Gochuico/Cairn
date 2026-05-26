@@ -16,7 +16,7 @@ describe('LeverPayloadSchema', () => {
       extraLoanPayments: [{ loanId: 1, extraMonthly: 300 }],
       lumpSums: [{ when: '2030-06-01', amount: 25000, destination: 'investments', label: 'Inheritance' }],
       expensePeriods: [{ start: '2026-07-01', monthlyDelta: 1500, durationMonths: 6, label: 'Medical' }],
-      returns: { defaultRate: 0.07, overrides: { 2027: -0.15, 2028: 0.2 } as unknown as Record<string, number> },
+      returns: { defaultRate: 0.07, overrides: { 2027: -0.15, 2028: 0.2 } as unknown as Record<string, number>, cashRate: null },
       income: { perPerson: [{ annualRaiseRate: 0.03, events: [] }] },
       contributions: [{ startMonth: 0, endMonth: 59, monthlyAmount: 1000, label: 'Year 1-5', allocation: null }],
       retirementAgeOverride: null,
@@ -161,5 +161,69 @@ describe('IncomeEventSchema discriminated union', () => {
 
   it('rejects a promotion missing newSalary', () => {
     expect(() => IncomeEventSchema.parse({ when: '2028-04-01', type: 'promotion' })).toThrow();
+  });
+});
+
+describe('ReturnScheduleSchema — cashRate field', () => {
+  it('emptyLeverPayload has cashRate: null on returns', () => {
+    expect(emptyLeverPayload().returns.cashRate).toBeNull();
+  });
+
+  it('accepts cashRate: null', () => {
+    const payload = LeverPayloadSchema.parse({
+      ...emptyLeverPayload(),
+      returns: { defaultRate: 0.07, overrides: {}, cashRate: null },
+    });
+    expect(payload.returns.cashRate).toBeNull();
+  });
+
+  it('accepts cashRate: 0', () => {
+    const payload = LeverPayloadSchema.parse({
+      ...emptyLeverPayload(),
+      returns: { defaultRate: 0.07, overrides: {}, cashRate: 0 },
+    });
+    expect(payload.returns.cashRate).toBe(0);
+  });
+
+  it('accepts cashRate: 0.045', () => {
+    const payload = LeverPayloadSchema.parse({
+      ...emptyLeverPayload(),
+      returns: { defaultRate: 0.07, overrides: {}, cashRate: 0.045 },
+    });
+    expect(payload.returns.cashRate).toBeCloseTo(0.045, 6);
+  });
+
+  it('accepts cashRate: 0.15 (upper bound)', () => {
+    const payload = LeverPayloadSchema.parse({
+      ...emptyLeverPayload(),
+      returns: { defaultRate: 0.07, overrides: {}, cashRate: 0.15 },
+    });
+    expect(payload.returns.cashRate).toBe(0.15);
+  });
+
+  it('rejects cashRate: 0.2 (out of range)', () => {
+    expect(() =>
+      LeverPayloadSchema.parse({
+        ...emptyLeverPayload(),
+        returns: { defaultRate: 0.07, overrides: {}, cashRate: 0.2 },
+      }),
+    ).toThrow();
+  });
+
+  it('rejects cashRate: -0.01 (negative)', () => {
+    expect(() =>
+      LeverPayloadSchema.parse({
+        ...emptyLeverPayload(),
+        returns: { defaultRate: 0.07, overrides: {}, cashRate: -0.01 },
+      }),
+    ).toThrow();
+  });
+
+  it('defaults cashRate to null when returns is parsed without it (backward compat)', () => {
+    const payload = LeverPayloadSchema.parse({
+      ...emptyLeverPayload(),
+      returns: { defaultRate: 0.07, overrides: {} },
+    });
+    expect(payload.returns.cashRate).toBeNull();
   });
 });
