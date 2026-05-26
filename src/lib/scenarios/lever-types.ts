@@ -78,6 +78,12 @@ export const LeverPayloadSchema = z.object({
    * post-retirement expenses out of investments.
    */
   retirementAgeOverride: z.number().int().min(30).max(90).nullable().default(null),
+  /**
+   * Per-scenario Safe Withdrawal Rate override. When null (default), the
+   * FI / Coast FI math uses the household-level `withdrawalRate`. Lets the
+   * user A/B "FI at 3.5% vs 4.5%" without touching household-wide config.
+   */
+  swrOverride: z.number().min(0.005).max(0.15).nullable().default(null),
 });
 export type LeverPayload = z.infer<typeof LeverPayloadSchema>;
 
@@ -90,5 +96,6 @@ export function emptyLeverPayload(): LeverPayload {
     income: { perPerson: [{ annualRaiseRate: 0, events: [] }] },
     contributions: [],
     retirementAgeOverride: null,
+    swrOverride: null,
   };
 }

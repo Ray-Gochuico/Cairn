@@ -20,6 +20,7 @@ describe('LeverPayloadSchema', () => {
       income: { perPerson: [{ annualRaiseRate: 0.03, events: [] }] },
       contributions: [{ startMonth: 0, endMonth: 59, monthlyAmount: 1000, label: 'Year 1-5' }],
       retirementAgeOverride: null,
+      swrOverride: null,
     };
     expect(LeverPayloadSchema.parse(payload)).toEqual(payload);
   });
@@ -56,6 +57,35 @@ describe('LeverPayloadSchema', () => {
   it('rejects an unknown destination', () => {
     const bad = { ...emptyLeverPayload(), lumpSums: [{ when: '2030-06-01', amount: 25000, destination: 'crypto' }] };
     expect(() => LeverPayloadSchema.parse(bad)).toThrow();
+  });
+});
+
+describe('LeverPayloadSchema — swrOverride', () => {
+  it('emptyLeverPayload sets swrOverride to null', () => {
+    expect(emptyLeverPayload().swrOverride).toBeNull();
+  });
+
+  it('accepts swrOverride values between 0.005 and 0.15', () => {
+    const base = emptyLeverPayload();
+    expect(LeverPayloadSchema.parse({ ...base, swrOverride: 0.035 }).swrOverride).toBe(0.035);
+    expect(LeverPayloadSchema.parse({ ...base, swrOverride: 0.005 }).swrOverride).toBe(0.005);
+    expect(LeverPayloadSchema.parse({ ...base, swrOverride: 0.15 }).swrOverride).toBe(0.15);
+  });
+
+  it('accepts swrOverride: null', () => {
+    expect(LeverPayloadSchema.parse({ ...emptyLeverPayload(), swrOverride: null }).swrOverride).toBeNull();
+  });
+
+  it('rejects swrOverride outside the 0.005–0.15 range', () => {
+    const base = emptyLeverPayload();
+    expect(() => LeverPayloadSchema.parse({ ...base, swrOverride: 0 })).toThrow();
+    expect(() => LeverPayloadSchema.parse({ ...base, swrOverride: 0.2 })).toThrow();
+    expect(() => LeverPayloadSchema.parse({ ...base, swrOverride: -0.01 })).toThrow();
+  });
+
+  it('defaults swrOverride to null when omitted on parse', () => {
+    const { swrOverride: _drop, ...withoutSwr } = emptyLeverPayload();
+    expect(LeverPayloadSchema.parse(withoutSwr).swrOverride).toBeNull();
   });
 });
 
