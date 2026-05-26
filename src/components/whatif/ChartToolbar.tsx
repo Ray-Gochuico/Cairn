@@ -1,14 +1,26 @@
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useScenariosStore } from '@/stores/scenarios-store';
+import { ProjectionDetailLevel } from '@/types/enums';
 
-export default function ChartToolbar() {
+interface ChartToolbarProps {
+  detailLevel: ProjectionDetailLevel;
+  onDetailLevelChange: (level: ProjectionDetailLevel) => void;
+}
+
+export default function ChartToolbar({ detailLevel, onDetailLevelChange }: ChartToolbarProps) {
   const horizonMonths     = useScenariosStore((s) => s.horizonMonths);
   const dollarMode        = useScenariosStore((s) => s.dollarMode);
   const setHorizonMonths  = useScenariosStore((s) => s.setHorizonMonths);
   const setDollarMode     = useScenariosStore((s) => s.setDollarMode);
 
   const years = Math.round(horizonMonths / 12);
+
+  const levels: { value: ProjectionDetailLevel; label: string }[] = [
+    { value: ProjectionDetailLevel.SINGLE,      label: 'Single' },
+    { value: ProjectionDetailLevel.TAX_BUCKET,  label: 'Tax bucket' },
+    { value: ProjectionDetailLevel.PER_ACCOUNT, label: 'Per account' },
+  ];
 
   return (
     <div className="flex flex-wrap items-center gap-4">
@@ -47,6 +59,21 @@ export default function ChartToolbar() {
         >
           Real
         </Button>
+      </div>
+
+      <div className="flex items-center gap-1" role="group" aria-label="Projection detail level">
+        <Label className="text-sm">Detail:</Label>
+        {levels.map(({ value, label }) => (
+          <Button
+            key={value}
+            variant={detailLevel === value ? 'default' : 'outline'}
+            size="sm"
+            aria-pressed={detailLevel === value}
+            onClick={() => onDetailLevelChange(value)}
+          >
+            {label}
+          </Button>
+        ))}
       </div>
     </div>
   );

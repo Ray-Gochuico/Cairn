@@ -21,7 +21,7 @@ import { usePersonsStore } from '@/stores/persons-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { detectMilestones, effectiveSwr, type Milestones, type MonthlyState } from '@/lib/scenarios';
-import { FiPillsPosition } from '@/types/enums';
+import { FiPillsPosition, ProjectionDetailLevel } from '@/types/enums';
 
 export default function WhatIf() {
   const scenarios          = useScenariosStore((s) => s.scenarios);
@@ -59,6 +59,15 @@ export default function WhatIf() {
         : FiPillsPosition.ABOVE;
     });
   }, [defaultPillsPosition]);
+
+  // Projection detail level — household-default with session-only override.
+  // Reading the primitive directly avoids re-render churn on unrelated
+  // settings writes.
+  const defaultDetailLevel = useSettingsStore(
+    (s) => s.settings?.defaultProjectionDetailLevel ?? ProjectionDetailLevel.TAX_BUCKET,
+  );
+  const [detailLevel, setDetailLevel] =
+    useState<ProjectionDetailLevel>(defaultDetailLevel);
 
   const [manageOpen, setManageOpen] = useState(false);
 
@@ -170,7 +179,10 @@ export default function WhatIf() {
     <div className="p-6 space-y-4 min-w-0" data-testid="whatif-page-wrap">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h1 className="text-2xl font-semibold">What-If</h1>
-        <ChartToolbar />
+        <ChartToolbar
+          detailLevel={detailLevel}
+          onDetailLevelChange={setDetailLevel}
+        />
       </div>
 
       <LeverBar />
