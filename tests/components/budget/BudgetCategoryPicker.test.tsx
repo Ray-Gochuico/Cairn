@@ -1,8 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import BudgetCategoryPicker from '@/components/budget/BudgetCategoryPicker';
 import type { ParentGroup } from '@/lib/budget-analysis';
+import type { Category } from '@/types/schema';
 
 type Option = { id: number; name: string };
 
@@ -209,6 +211,163 @@ describe('BudgetCategoryPicker', () => {
       expect(onConfirm).toHaveBeenCalledTimes(1);
       const arg = (onConfirm.mock.calls[0]?.[0] ?? []) as number[];
       expect(arg.sort((a, b) => a - b)).toEqual([11, 21, 33]);
+    });
+  });
+
+  describe('Add category trigger', () => {
+    // Two top-level budgetable parents. The picker filters its caller-supplied
+    // parents list before passing it to AddCategoryDialog (top-level NEED/WANT/
+    // SAVINGS only).
+    const parents: Category[] = [
+      {
+        id: 1,
+        name: 'Home',
+        parentCategoryId: null,
+        type: 'NEED',
+        color: null,
+        icon: null,
+        isCapital: false,
+        monthlyBudget: null,
+        systemManaged: false,
+      } as Category,
+      {
+        id: 2,
+        name: 'Vehicles',
+        parentCategoryId: null,
+        type: 'NEED',
+        color: null,
+        icon: null,
+        isCapital: false,
+        monthlyBudget: null,
+        systemManaged: false,
+      } as Category,
+    ];
+
+    const groups: ParentGroup[] = [
+      { parentId: null, parentName: 'General', options: [{ id: 33, name: 'Groceries' }] },
+    ];
+
+    it('renders the "+ Add category" button at the bottom of the picker dialog', async () => {
+      const user = userEvent.setup();
+      render(
+        <MemoryRouter>
+          <BudgetCategoryPicker
+            groups={groups}
+            onConfirm={() => {}}
+            parents={parents}
+            onCreateCategory={() => {}}
+          />
+        </MemoryRouter>,
+      );
+      // Open the picker dialog first.
+      await user.click(screen.getByRole('button', { name: /add categor/i }));
+      // The "+ Add category" trigger appears inside the dialog.
+      expect(screen.getByRole('button', { name: /\+ add category$/i })).toBeInTheDocument();
+    });
+
+    it('clicking "+ Add category" opens AddCategoryDialog', async () => {
+      const user = userEvent.setup();
+      render(
+        <MemoryRouter>
+          <BudgetCategoryPicker
+            groups={groups}
+            onConfirm={() => {}}
+            parents={parents}
+            onCreateCategory={() => {}}
+          />
+        </MemoryRouter>,
+      );
+      await user.click(screen.getByRole('button', { name: /add categor/i }));
+      await user.click(screen.getByRole('button', { name: /\+ add category$/i }));
+      // The AddCategoryDialog renders its own DialogTitle "Add category"
+      // (distinct from the picker's "Add categories to track" title).
+      expect(screen.getByRole('heading', { name: /^add category$/i })).toBeInTheDocument();
+      expect(screen.getByLabelText(/name/i)).toBeInTheDocument();
+    });
+
+    it('Save in AddCategoryDialog calls onCreateCategory with the payload', async () => {
+      const user = userEvent.setup();
+      const onCreate = vi.fn();
+      render(
+        <MemoryRouter>
+          <BudgetCategoryPicker
+            groups={groups}
+            onConfirm={() => {}}
+            parents={parents}
+            onCreateCategory={onCreate}
+          />
+        </MemoryRouter>,
+      );
+      await user.click(screen.getByRole('button', { name: /add categor/i }));
+      await user.click(screen.getByRole('button', { name: /\+ add category$/i }));
+      await user.type(screen.getByLabelText(/name/i), 'Bakery');
+      await user.selectOptions(screen.getByLabelText(/parent/i), '1');
+      await user.click(screen.getByRole('button', { name: /^save$/i }));
+      expect(onCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'Bakery', parentCategoryId: 1, type: 'NEED' }),
+      );
+    });
+
+    it('does not render the "+ Add category" trigger when onCreateCategory is not provided', async () => {
+      const user = userEvent.setup();
+      render(
+        <MemoryRouter>
+          <BudgetCategoryPicker groups={groups} onConfirm={() => {}} />
+        </MemoryRouter>,
+      );
+      await user.click(screen.getByRole('button', { name: /add categor/i }));
+      // No "+ Add category" trigger (singular) when the create callback is absent.
+      expect(screen.queryByRole('button', { name: /\+ add category$/i })).not.toBeInTheDocument();
+    });
+
+    it('filters parents to top-level NEED/WANT/SAVINGS only', async () => {
+      const user = userEvent.setup();
+      // Mixed parents — only the top-level NEED/WANT/SAVINGS should show.
+      const mixedParents: Category[] = [
+        ...parents,
+        // child category (parentCategoryId != null) — should be filtered out
+        {
+          id: 10,
+          name: 'Utilities',
+          parentCategoryId: 1,
+          type: 'NEED',
+          color: null,
+          icon: null,
+          isCapital: false,
+          monthlyBudget: null,
+          systemManaged: false,
+        } as Category,
+        // top-level INCOME — should be filtered out
+        {
+          id: 99,
+          name: 'Salary',
+          parentCategoryId: null,
+          type: 'INCOME',
+          color: null,
+          icon: null,
+          isCapital: false,
+          monthlyBudget: null,
+          systemManaged: false,
+        } as Category,
+      ];
+      render(
+        <MemoryRouter>
+          <BudgetCategoryPicker
+            groups={groups}
+            onConfirm={() => {}}
+            parents={mixedParents}
+            onCreateCategory={() => {}}
+          />
+        </MemoryRouter>,
+      );
+      await user.click(screen.getByRole('button', { name: /add categor/i }));
+      await user.click(screen.getByRole('button', { name: /\+ add category$/i }));
+      const select = screen.getByLabelText(/parent/i) as HTMLSelectElement;
+      const optionValues = Array.from(select.options).map((o) => o.value);
+      expect(optionValues).toContain('1'); // Home
+      expect(optionValues).toContain('2'); // Vehicles
+      expect(optionValues).not.toContain('10'); // Utilities (child)
+      expect(optionValues).not.toContain('99'); // Salary (INCOME)
     });
   });
 });
