@@ -4,7 +4,13 @@ import userEvent from '@testing-library/user-event';
 import { AdvancedSection } from '@/components/settings/AdvancedSection';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useSettingsStore } from '@/stores/settings-store';
-import { FilingStatus, RefreshCadence, FiPillsPosition, ProjectionDetailLevel } from '@/types/enums';
+import {
+  FilingStatus,
+  RefreshCadence,
+  FiPillsPosition,
+  ProjectionDetailLevel,
+  CompoundingFrequency,
+} from '@/types/enums';
 import type { Household, AppSettings } from '@/types/schema';
 
 function makeSettings(patch: Partial<AppSettings> = {}): AppSettings {
@@ -21,6 +27,7 @@ function makeSettings(patch: Partial<AppSettings> = {}): AppSettings {
     defaultFiPillsPosition: FiPillsPosition.ABOVE,
     defaultProjectionDetailLevel: ProjectionDetailLevel.TAX_BUCKET,
     defaultCashApy: null,
+    defaultCompoundingFrequency: CompoundingFrequency.MONTHLY,
     ...patch,
   };
 }
@@ -193,6 +200,7 @@ describe('AdvancedSection', () => {
       defaultFiPillsPosition: FiPillsPosition.ABOVE,
       defaultProjectionDetailLevel: ProjectionDetailLevel.TAX_BUCKET,
       defaultCashApy: null,
+      defaultCompoundingFrequency: CompoundingFrequency.MONTHLY,
     });
   });
 
@@ -217,6 +225,7 @@ describe('AdvancedSection', () => {
       defaultFiPillsPosition: FiPillsPosition.ABOVE,
       defaultProjectionDetailLevel: ProjectionDetailLevel.TAX_BUCKET,
       defaultCashApy: null,
+      defaultCompoundingFrequency: CompoundingFrequency.MONTHLY,
     });
   });
 
@@ -262,6 +271,7 @@ describe('AdvancedSection', () => {
       defaultFiPillsPosition: FiPillsPosition.BELOW,
       defaultProjectionDetailLevel: ProjectionDetailLevel.TAX_BUCKET,
       defaultCashApy: null,
+      defaultCompoundingFrequency: CompoundingFrequency.MONTHLY,
     });
   });
 });

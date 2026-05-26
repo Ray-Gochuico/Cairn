@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import ReturnSchedulePopover from '@/components/whatif/levers/ReturnSchedulePopover';
 import { useScenariosStore } from '@/stores/scenarios-store';
 import { emptyLeverPayload } from '@/lib/scenarios';
+import { CompoundingFrequency } from '@/types/enums';
 import type { Scenario } from '@/types/scenario';
 
 function resetStore() {
@@ -204,5 +205,79 @@ describe('ReturnSchedulePopover — Cash APY override', () => {
     expect((cashApyInput as HTMLInputElement).value).toBe('8');
     await user.click(screen.getByRole('button', { name: /reset/i }));
     expect((cashApyInput as HTMLInputElement).value).toBe('');
+  });
+});
+
+describe('ReturnSchedulePopover — compounding frequency selector (Task #16)', () => {
+  beforeEach(() => { resetStore(); });
+
+  it('renders a "Compounding frequency" selector', () => {
+    render(<MemoryRouter><ReturnSchedulePopover open onOpenChange={() => {}} /></MemoryRouter>);
+    expect(screen.getByLabelText(/compounding frequency/i)).toBeInTheDocument();
+  });
+
+  it('defaults to MONTHLY when no override is set', () => {
+    render(<MemoryRouter><ReturnSchedulePopover open onOpenChange={() => {}} /></MemoryRouter>);
+    const select = screen.getByLabelText(/compounding frequency/i) as HTMLSelectElement;
+    expect(select.value).toBe(CompoundingFrequency.MONTHLY);
+  });
+
+  it('exposes all five frequency options', () => {
+    render(<MemoryRouter><ReturnSchedulePopover open onOpenChange={() => {}} /></MemoryRouter>);
+    const select = screen.getByLabelText(/compounding frequency/i) as HTMLSelectElement;
+    const optionValues = Array.from(select.options).map((o) => o.value);
+    expect(optionValues).toEqual(
+      expect.arrayContaining([
+        CompoundingFrequency.DAILY,
+        CompoundingFrequency.WEEKLY,
+        CompoundingFrequency.MONTHLY,
+        CompoundingFrequency.QUARTERLY,
+        CompoundingFrequency.ANNUALLY,
+      ]),
+    );
+  });
+
+  it('selecting DAILY and applying saves compoundingFrequency=DAILY to leverPayload', async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter><ReturnSchedulePopover open onOpenChange={() => {}} /></MemoryRouter>);
+    const select = screen.getByLabelText(/compounding frequency/i) as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: CompoundingFrequency.DAILY } });
+    await user.click(screen.getByRole('button', { name: /^apply$/i }));
+    const updateLever = (useScenariosStore.getState() as any).updateLever as ReturnType<typeof vi.fn>;
+    const call = updateLever.mock.calls.at(-1)!;
+    expect(call[1].returns.compoundingFrequency).toBe(CompoundingFrequency.DAILY);
+  });
+
+  it('prefills the selector from the existing leverPayload.compoundingFrequency', () => {
+    const payload = emptyLeverPayload();
+    payload.returns = { ...payload.returns, compoundingFrequency: CompoundingFrequency.QUARTERLY };
+    useScenariosStore.setState({
+      ...useScenariosStore.getState(),
+      scenarios: [{
+        id: 1, name: 'S1', isBaseline: true, color: '#000', lineStyle: 'solid',
+        visible: true, isActive: true, sortOrder: 0, leverPayload: payload,
+        createdAt: 't', updatedAt: 't',
+      } as Scenario],
+    });
+    render(<MemoryRouter><ReturnSchedulePopover open onOpenChange={() => {}} /></MemoryRouter>);
+    const select = screen.getByLabelText(/compounding frequency/i) as HTMLSelectElement;
+    expect(select.value).toBe(CompoundingFrequency.QUARTERLY);
+  });
+
+  it('Reset reverts the compounding frequency to the stored value', async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter><ReturnSchedulePopover open onOpenChange={() => {}} /></MemoryRouter>);
+    const select = screen.getByLabelText(/compounding frequency/i) as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: CompoundingFrequency.DAILY } });
+    expect(select.value).toBe(CompoundingFrequency.DAILY);
+    await user.click(screen.getByRole('button', { name: /reset/i }));
+    expect(select.value).toBe(CompoundingFrequency.MONTHLY);
+  });
+
+  it('renders the helper sentence near the selector', () => {
+    render(<MemoryRouter><ReturnSchedulePopover open onOpenChange={() => {}} /></MemoryRouter>);
+    expect(
+      screen.getByText(/compounding frequency applies to investment returns and cash apy/i),
+    ).toBeInTheDocument();
   });
 });

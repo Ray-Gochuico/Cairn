@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useScenariosStore } from '@/stores/scenarios-store';
 import type { ReturnSchedule } from '@/lib/scenarios';
+import { CompoundingFrequency } from '@/types/enums';
 
 interface Props { open: boolean; onOpenChange: (n: boolean) => void }
 
@@ -25,6 +26,15 @@ function decimalFromPctInput(s: string): number {
   return n / 100;
 }
 
+function emptyDraft(defaultRate: number): ReturnSchedule {
+  return {
+    defaultRate,
+    overrides: {},
+    cashRate: null,
+    compoundingFrequency: CompoundingFrequency.MONTHLY,
+  };
+}
+
 export default function ReturnSchedulePopover({ open, onOpenChange }: Props) {
   const scenarios = useScenariosStore((s) => s.scenarios);
   const defaultReturnRate = useScenariosStore((s) => s.defaultReturnRate);
@@ -36,21 +46,27 @@ export default function ReturnSchedulePopover({ open, onOpenChange }: Props) {
   const years = Array.from({ length: yearCount }, (_, i) => startYear + i);
 
   const [draft, setDraft] = useState<ReturnSchedule>(
-    active?.leverPayload.returns ?? { defaultRate: defaultReturnRate, overrides: {}, cashRate: null },
+    active?.leverPayload.returns ?? emptyDraft(defaultReturnRate),
   );
   const [selectedYear, setSelectedYear] = useState<number>(years[0]);
   const [constantPrompt, setConstantPrompt] = useState<string | null>(null);
   const [cashApyStr, setCashApyStr] = useState<string>('');
+  const [compoundingFrequency, setCompoundingFrequency] = useState<CompoundingFrequency>(
+    active?.leverPayload.returns.compoundingFrequency ?? CompoundingFrequency.MONTHLY,
+  );
 
   useEffect(() => {
     if (open) {
       const currentReturns =
-        active?.leverPayload.returns ?? { defaultRate: defaultReturnRate, overrides: {}, cashRate: null };
+        active?.leverPayload.returns ?? emptyDraft(defaultReturnRate);
       setDraft(currentReturns);
       setSelectedYear(years[0]);
       setConstantPrompt(null);
       setCashApyStr(
         currentReturns.cashRate != null ? (currentReturns.cashRate * 100).toFixed(2) : '',
+      );
+      setCompoundingFrequency(
+        currentReturns.compoundingFrequency ?? CompoundingFrequency.MONTHLY,
       );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -69,7 +85,12 @@ export default function ReturnSchedulePopover({ open, onOpenChange }: Props) {
 
   const applyPreset = (preset: 'constant7' | 'lostDecade' | 'recession2008') => {
     if (preset === 'constant7') {
-      setDraft((d) => ({ defaultRate: 0.07, overrides: {}, cashRate: d.cashRate }));
+      setDraft((d) => ({
+        defaultRate: 0.07,
+        overrides: {},
+        cashRate: d.cashRate,
+        compoundingFrequency: d.compoundingFrequency,
+      }));
       return;
     }
     if (preset === 'lostDecade') {
@@ -77,7 +98,12 @@ export default function ReturnSchedulePopover({ open, onOpenChange }: Props) {
       for (let i = 0; i < 10; i++) {
         overrides[String(startYear + i)] = LOST_DECADE[i];
       }
-      setDraft((d) => ({ defaultRate: defaultReturnRate, overrides, cashRate: d.cashRate }));
+      setDraft((d) => ({
+        defaultRate: defaultReturnRate,
+        overrides,
+        cashRate: d.cashRate,
+        compoundingFrequency: d.compoundingFrequency,
+      }));
       return;
     }
     if (preset === 'recession2008') {
@@ -85,7 +111,12 @@ export default function ReturnSchedulePopover({ open, onOpenChange }: Props) {
       for (let i = 0; i < 2; i++) {
         overrides[String(startYear + i)] = RECESSION_2008[i];
       }
-      setDraft((d) => ({ defaultRate: defaultReturnRate, overrides, cashRate: d.cashRate }));
+      setDraft((d) => ({
+        defaultRate: defaultReturnRate,
+        overrides,
+        cashRate: d.cashRate,
+        compoundingFrequency: d.compoundingFrequency,
+      }));
       return;
     }
   };
@@ -93,7 +124,12 @@ export default function ReturnSchedulePopover({ open, onOpenChange }: Props) {
   const applyConstantCustom = () => {
     if (constantPrompt == null) return;
     const decimal = decimalFromPctInput(constantPrompt);
-    setDraft((d) => ({ defaultRate: decimal, overrides: {}, cashRate: d.cashRate }));
+    setDraft((d) => ({
+      defaultRate: decimal,
+      overrides: {},
+      cashRate: d.cashRate,
+      compoundingFrequency: d.compoundingFrequency,
+    }));
     setConstantPrompt(null);
   };
 
@@ -101,17 +137,24 @@ export default function ReturnSchedulePopover({ open, onOpenChange }: Props) {
     if (!active?.id) return;
     const cashRateDecimal = cashApyStr.trim() === '' ? null : Number(cashApyStr) / 100;
     await useScenariosStore.getState().updateLever(active.id, {
-      returns: { ...draft, cashRate: cashRateDecimal },
+      returns: {
+        ...draft,
+        cashRate: cashRateDecimal,
+        compoundingFrequency,
+      },
     });
     onOpenChange(false);
   };
 
   const handleReset = () => {
     const baseReturns =
-      active?.leverPayload.returns ?? { defaultRate: defaultReturnRate, overrides: {}, cashRate: null };
+      active?.leverPayload.returns ?? emptyDraft(defaultReturnRate);
     setDraft(baseReturns);
     setCashApyStr(
       baseReturns.cashRate != null ? (baseReturns.cashRate * 100).toFixed(2) : '',
+    );
+    setCompoundingFrequency(
+      baseReturns.compoundingFrequency ?? CompoundingFrequency.MONTHLY,
     );
   };
 
@@ -213,6 +256,28 @@ export default function ReturnSchedulePopover({ open, onOpenChange }: Props) {
           />
           <p className="text-xs text-muted-foreground mt-1">
             Leave blank to use the canonical (balance-weighted) household APY.
+          </p>
+        </div>
+
+        <div className="pt-3">
+          <Label htmlFor="compounding-frequency" className="text-xs">
+            Compounding frequency
+          </Label>
+          <select
+            id="compounding-frequency"
+            aria-label="Compounding frequency"
+            className="mt-1 block h-10 w-48 rounded-md border border-input bg-background px-3 text-sm"
+            value={compoundingFrequency}
+            onChange={(e) => setCompoundingFrequency(e.target.value as CompoundingFrequency)}
+          >
+            <option value={CompoundingFrequency.DAILY}>Daily</option>
+            <option value={CompoundingFrequency.WEEKLY}>Weekly</option>
+            <option value={CompoundingFrequency.MONTHLY}>Monthly (default)</option>
+            <option value={CompoundingFrequency.QUARTERLY}>Quarterly</option>
+            <option value={CompoundingFrequency.ANNUALLY}>Annually</option>
+          </select>
+          <p className="text-xs text-muted-foreground mt-1">
+            Compounding frequency applies to investment returns and cash APY.
           </p>
         </div>
       </div>

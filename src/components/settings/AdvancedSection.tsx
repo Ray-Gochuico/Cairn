@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useSettingsStore } from '@/stores/settings-store';
-import { FiPillsPosition, ProjectionDetailLevel } from '@/types/enums';
+import { FiPillsPosition, ProjectionDetailLevel, CompoundingFrequency } from '@/types/enums';
 import { ResetDisclaimersDialog } from './ResetDisclaimersDialog';
 
 /**
@@ -44,6 +44,9 @@ export function AdvancedSection() {
     ProjectionDetailLevel.TAX_BUCKET,
   );
   const [cashApy, setCashApy] = useState<string>('');
+  const [compoundingFrequency, setCompoundingFrequency] = useState<CompoundingFrequency>(
+    CompoundingFrequency.MONTHLY,
+  );
   const [resetOpen, setResetOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
@@ -109,6 +112,14 @@ export function AdvancedSection() {
     );
   }, [settings?.defaultCashApy]);
 
+  // Default compounding frequency — household-level default for the Returns
+  // lever. Per-scenario overrides win at projection time.
+  useEffect(() => {
+    setCompoundingFrequency(
+      settings?.defaultCompoundingFrequency ?? CompoundingFrequency.MONTHLY,
+    );
+  }, [settings?.defaultCompoundingFrequency]);
+
   const lowNum = low.trim() === '' ? null : Number(low);
   const highNum = high.trim() === '' ? null : Number(high);
   const lowInvalid = lowNum !== null && (Number.isNaN(lowNum) || lowNum < 0 || lowNum > 100);
@@ -143,6 +154,7 @@ export function AdvancedSection() {
         defaultFiPillsPosition: pillsPosition,
         defaultProjectionDetailLevel: projDetailLevel,
         defaultCashApy: cashApyNum === null ? null : cashApyNum / 100,
+        defaultCompoundingFrequency: compoundingFrequency,
       });
       setSavedAt(Date.now());
     } finally {
@@ -305,6 +317,27 @@ export function AdvancedSection() {
                 Cash APY must be between 0 and 15.
               </div>
             )}
+            <div className="pt-1">
+              <Label htmlFor="default-compounding-frequency">Default compounding frequency</Label>
+              <select
+                id="default-compounding-frequency"
+                aria-label="Default compounding frequency"
+                className="mt-1 block h-10 w-48 rounded-md border border-input bg-background px-3 text-sm"
+                value={compoundingFrequency}
+                onChange={(e) =>
+                  setCompoundingFrequency(e.target.value as CompoundingFrequency)
+                }
+              >
+                <option value={CompoundingFrequency.DAILY}>Daily</option>
+                <option value={CompoundingFrequency.WEEKLY}>Weekly</option>
+                <option value={CompoundingFrequency.MONTHLY}>Monthly (default)</option>
+                <option value={CompoundingFrequency.QUARTERLY}>Quarterly</option>
+                <option value={CompoundingFrequency.ANNUALLY}>Annually</option>
+              </select>
+              <p className="text-xs text-slate-500 mt-1">
+                Applies to investment returns and cash APY in new scenarios.
+              </p>
+            </div>
           </section>
 
           <div className="flex items-center gap-3">
