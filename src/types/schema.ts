@@ -436,5 +436,11 @@ export const AppSettingsSchema = z.object({
   defaultCompoundingFrequency: z
     .nativeEnum(CompoundingFrequency)
     .default(CompoundingFrequency.MONTHLY),
+  // User-configurable category sets for the Property "Utilities" card and
+  // the Vehicle "Gas" card. null = unset (resolver falls back to seeded
+  // defaults — Home > Utilities / Vehicles > Gas/Fuel); [] = explicit empty
+  // (card shows empty state); [a, b, c] = sum across those category ids.
+  propertyUtilitiesCategoryIds: z.array(z.number().int().positive()).nullable().default(null),
+  vehicleGasCategoryIds: z.array(z.number().int().positive()).nullable().default(null),
 });
 export type AppSettings = z.infer<typeof AppSettingsSchema>;
