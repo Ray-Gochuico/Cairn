@@ -1,6 +1,7 @@
 import type { Database } from '@/db/db';
 import { PropertySchema, type Property } from '@/types/schema';
 import { PropertyType } from '@/types/enums';
+import { AssetValueSnapshotsRepo } from './asset-value-snapshots';
 
 interface PropertyRow {
   id: number;
@@ -116,6 +117,9 @@ export class PropertiesRepo {
   }
 
   async delete(id: number): Promise<void> {
+    // Cascade dated value snapshots first — owner_type is a discriminated
+    // union so there is no SQL FK to enforce this at the database layer.
+    await new AssetValueSnapshotsRepo(this.db).deleteForOwner('PROPERTY', id);
     await this.db.execute('DELETE FROM properties WHERE id = ?', [id]);
   }
 }

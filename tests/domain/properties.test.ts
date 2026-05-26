@@ -3,12 +3,19 @@ import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { runMigrations } from '@/db/migrations';
 import { PropertiesRepo } from '@/domain/properties';
 import { LoansRepo } from '@/domain/loans';
+import { AssetValueSnapshotsRepo } from '@/domain/asset-value-snapshots';
 import { PropertyType, LoanType } from '@/types/enums';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const loadInitialMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
+
+const loadAssetSnapshotsMigration = () =>
+  readFileSync(
+    resolve(__dirname, '../../src/db/migrations/0026_asset_value_snapshots.sql'),
+    'utf-8',
+  );
 
 describe('PropertiesRepo', () => {
   let db: SqliteAdapter;
@@ -17,7 +24,10 @@ describe('PropertiesRepo', () => {
 
   beforeEach(async () => {
     db = new SqliteAdapter(':memory:');
-    await runMigrations(db, [{ version: '0001_initial', sql: loadInitialMigration() }]);
+    await runMigrations(db, [
+      { version: '0001_initial', sql: loadInitialMigration() },
+      { version: '0026_asset_value_snapshots', sql: loadAssetSnapshotsMigration() },
+    ]);
     repo = new PropertiesRepo(db);
     loansRepo = new LoansRepo(db);
   });
@@ -163,6 +173,67 @@ describe('PropertiesRepo', () => {
     });
     await repo.delete(id);
     expect(await repo.list()).toEqual([]);
+  });
+
+  it('cascades delete to asset_value_snapshots', async () => {
+    const snapshotsRepo = new AssetValueSnapshotsRepo(db);
+    const propertyId = await repo.create({
+      householdId: 1,
+      ownerPersonId: null,
+      name: 'Home with history',
+      type: PropertyType.PRIMARY_RESIDENCE,
+      address: null,
+      purchaseDate: null,
+      purchasePrice: null,
+      currentEstimatedValue: 500000,
+      linkedLoanId: null,
+      excludedFromNetWorth: false,
+    });
+    // Snapshots for the target property
+    await snapshotsRepo.create({
+      ownerType: 'PROPERTY',
+      ownerId: propertyId,
+      snapshotDate: '2026-01-01',
+      value: 480000,
+    });
+    await snapshotsRepo.create({
+      ownerType: 'PROPERTY',
+      ownerId: propertyId,
+      snapshotDate: '2026-03-01',
+      value: 510000,
+    });
+    // Snapshot for a different property — must NOT be cleared
+    const otherPropertyId = await repo.create({
+      householdId: 1,
+      ownerPersonId: null,
+      name: 'Other home',
+      type: PropertyType.RENTAL,
+      address: null,
+      purchaseDate: null,
+      purchasePrice: null,
+      currentEstimatedValue: 300000,
+      linkedLoanId: null,
+      excludedFromNetWorth: false,
+    });
+    await snapshotsRepo.create({
+      ownerType: 'PROPERTY',
+      ownerId: otherPropertyId,
+      snapshotDate: '2026-02-01',
+      value: 310000,
+    });
+    // Vehicle snapshot at the same owner_id — must NOT be cleared either
+    await snapshotsRepo.create({
+      ownerType: 'VEHICLE',
+      ownerId: propertyId,
+      snapshotDate: '2026-01-01',
+      value: 22000,
+    });
+
+    await repo.delete(propertyId);
+
+    expect(await snapshotsRepo.listForOwner('PROPERTY', propertyId)).toHaveLength(0);
+    expect(await snapshotsRepo.listForOwner('PROPERTY', otherPropertyId)).toHaveLength(1);
+    expect(await snapshotsRepo.listForOwner('VEHICLE', propertyId)).toHaveLength(1);
   });
 
   it('listing returns properties in id order', async () => {

@@ -3,12 +3,19 @@ import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { runMigrations } from '@/db/migrations';
 import { VehiclesRepo } from '@/domain/vehicles';
 import { LoansRepo } from '@/domain/loans';
+import { AssetValueSnapshotsRepo } from '@/domain/asset-value-snapshots';
 import { LoanType } from '@/types/enums';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const loadInitialMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
+
+const loadAssetSnapshotsMigration = () =>
+  readFileSync(
+    resolve(__dirname, '../../src/db/migrations/0026_asset_value_snapshots.sql'),
+    'utf-8',
+  );
 
 describe('VehiclesRepo', () => {
   let db: SqliteAdapter;
@@ -17,7 +24,10 @@ describe('VehiclesRepo', () => {
 
   beforeEach(async () => {
     db = new SqliteAdapter(':memory:');
-    await runMigrations(db, [{ version: '0001_initial', sql: loadInitialMigration() }]);
+    await runMigrations(db, [
+      { version: '0001_initial', sql: loadInitialMigration() },
+      { version: '0026_asset_value_snapshots', sql: loadAssetSnapshotsMigration() },
+    ]);
     repo = new VehiclesRepo(db);
     loansRepo = new LoansRepo(db);
   });
@@ -171,6 +181,68 @@ describe('VehiclesRepo', () => {
     });
     await repo.delete(id);
     expect(await repo.list()).toEqual([]);
+  });
+
+  it('cascades delete to asset_value_snapshots', async () => {
+    const snapshotsRepo = new AssetValueSnapshotsRepo(db);
+    const vehicleId = await repo.create({
+      householdId: 1,
+      ownerPersonId: null,
+      name: 'Vehicle with history',
+      year: 2022,
+      make: 'Honda',
+      model: 'Civic',
+      purchaseDate: null,
+      purchasePrice: null,
+      currentEstimatedValue: 22000,
+      linkedLoanId: null,
+      excludedFromNetWorth: false,
+    });
+    await snapshotsRepo.create({
+      ownerType: 'VEHICLE',
+      ownerId: vehicleId,
+      snapshotDate: '2026-01-01',
+      value: 22000,
+    });
+    await snapshotsRepo.create({
+      ownerType: 'VEHICLE',
+      ownerId: vehicleId,
+      snapshotDate: '2026-04-01',
+      value: 20000,
+    });
+    // Sibling vehicle's snapshot stays put
+    const otherVehicleId = await repo.create({
+      householdId: 1,
+      ownerPersonId: null,
+      name: 'Other vehicle',
+      year: 2020,
+      make: 'Toyota',
+      model: 'Corolla',
+      purchaseDate: null,
+      purchasePrice: null,
+      currentEstimatedValue: 15000,
+      linkedLoanId: null,
+      excludedFromNetWorth: false,
+    });
+    await snapshotsRepo.create({
+      ownerType: 'VEHICLE',
+      ownerId: otherVehicleId,
+      snapshotDate: '2026-02-01',
+      value: 15000,
+    });
+    // Property snapshot with the same owner_id — must NOT be cleared
+    await snapshotsRepo.create({
+      ownerType: 'PROPERTY',
+      ownerId: vehicleId,
+      snapshotDate: '2026-01-01',
+      value: 400000,
+    });
+
+    await repo.delete(vehicleId);
+
+    expect(await snapshotsRepo.listForOwner('VEHICLE', vehicleId)).toHaveLength(0);
+    expect(await snapshotsRepo.listForOwner('VEHICLE', otherVehicleId)).toHaveLength(1);
+    expect(await snapshotsRepo.listForOwner('PROPERTY', vehicleId)).toHaveLength(1);
   });
 
   it('listing returns vehicles in id order', async () => {

@@ -1,5 +1,6 @@
 import type { Database } from '@/db/db';
 import { VehicleSchema, type Vehicle } from '@/types/schema';
+import { AssetValueSnapshotsRepo } from './asset-value-snapshots';
 
 interface VehicleRow {
   id: number;
@@ -120,6 +121,9 @@ export class VehiclesRepo {
   }
 
   async delete(id: number): Promise<void> {
+    // Cascade dated value snapshots first — owner_type is a discriminated
+    // union so there is no SQL FK to enforce this at the database layer.
+    await new AssetValueSnapshotsRepo(this.db).deleteForOwner('VEHICLE', id);
     await this.db.execute('DELETE FROM vehicles WHERE id = ?', [id]);
   }
 }
