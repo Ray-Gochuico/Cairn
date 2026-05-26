@@ -17,9 +17,7 @@ import { useTransactionsStore } from '@/stores/transactions-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
-import { detectMilestones, type Milestones, type MonthlyState } from '@/lib/scenarios';
-
-const FI_PARAMS = { withdrawalRate: 0.04 };
+import { detectMilestones, effectiveSwr, type Milestones, type MonthlyState } from '@/lib/scenarios';
 
 export default function WhatIf() {
   const scenarios          = useScenariosStore((s) => s.scenarios);
@@ -70,10 +68,12 @@ export default function WhatIf() {
     const projs = projectedScenarios(real);
     const ms = new Map<number, Milestones>();
     for (const [id, states] of projs) {
-      ms.set(id, detectMilestones(states, FI_PARAMS));
+      const scenario = scenarios.find((s) => s.id === id) ?? null;
+      const params = { withdrawalRate: effectiveSwr(scenario, household) };
+      ms.set(id, detectMilestones(states, params));
     }
     return { projections: projs, milestones: ms };
-  }, [real, scenarios, projectedScenarios, horizonMonths]);
+  }, [real, scenarios, projectedScenarios, horizonMonths, household]);
 
   if (!real) {
     return (
