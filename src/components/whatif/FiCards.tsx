@@ -4,6 +4,7 @@ import { Label } from '@/components/ui/label';
 import { coastFi } from '@/lib/coast-fi';
 import { currentAge } from '@/lib/dates';
 import { formatCurrency } from '@/lib/format';
+import { effectiveSwr } from '@/lib/scenarios/effective-swr';
 import type { MonthlyState } from '@/lib/scenarios';
 import { useScenariosStore } from '@/stores/scenarios-store';
 import type { Household, Person } from '@/types/schema';
@@ -23,6 +24,7 @@ interface ComputedRow {
   yearsUntilRetirement: number;
   rate: number;
   rateLabel: string;
+  swr: number;
 }
 
 function pickReferenceScenario(scenarios: Scenario[]): Scenario | null {
@@ -46,7 +48,6 @@ function pickRate(household: Household): { rate: number; label: string } | null 
 function computeCards(props: FiCardsProps): ComputedRow | null {
   const { scenarios, projections, household, persons } = props;
   if (!household || persons.length === 0) return null;
-  if (household.withdrawalRate <= 0) return null;
   const rate = pickRate(household);
   if (!rate) return null;
 
@@ -56,8 +57,11 @@ function computeCards(props: FiCardsProps): ComputedRow | null {
   if (!states || states.length === 0) return null;
   const seed = states[0];
 
+  const swr = effectiveSwr(ref, household);
+  if (swr <= 0) return null;
+
   const liquidNw = seed.investments + seed.cash;
-  const fiTarget = (household.monthlyExpenseBaseline * 12) / household.withdrawalRate;
+  const fiTarget = (household.monthlyExpenseBaseline * 12) / swr;
 
   const yearsByPerson = persons.map(
     (p) => p.targetRetirementAge - currentAge(p.dateOfBirth),
@@ -77,6 +81,7 @@ function computeCards(props: FiCardsProps): ComputedRow | null {
     yearsUntilRetirement,
     rate: rate.rate,
     rateLabel: rate.label,
+    swr,
   };
 }
 
@@ -169,9 +174,9 @@ export default function FiCards(props: FiCardsProps) {
   const computed = computeCards(props);
   if (!computed) return null;
 
-  const { liquidNw, fiTarget, coastFiTarget, yearsUntilRetirement, rate, rateLabel } = computed;
+  const { liquidNw, fiTarget, coastFiTarget, yearsUntilRetirement, rate, rateLabel, swr } = computed;
   const ratePct = (rate * 100).toFixed(1);
-  const withdrawalPct = (props.household.withdrawalRate * 100).toFixed(1);
+  const withdrawalPct = (swr * 100).toFixed(1);
 
   return (
     <div className="space-y-2" data-testid="whatif-fi-cards-wrap">

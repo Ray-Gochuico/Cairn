@@ -153,9 +153,12 @@ describe('FiCards', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('returns null when withdrawalRate is zero', () => {
+  it('falls back to 4% rule when household.withdrawalRate is zero (no scenario override)', () => {
+    // effectiveSwr() defensively falls back to 0.04 when both scenario override
+    // and household.withdrawalRate are unset/zero. This keeps the FI / Coast FI
+    // cards renderable during cold-start instead of disappearing.
     const projections = new Map<number, MonthlyState[]>([[1, seedState(100_000, 50_000)]]);
-    const { container } = render(
+    render(
       <FiCards
         scenarios={[makeScenario()]}
         projections={projections}
@@ -163,7 +166,9 @@ describe('FiCards', () => {
         persons={[makePerson()]}
       />,
     );
-    expect(container).toBeEmptyDOMElement();
+    const fi = screen.getByTestId('whatif-fi-number');
+    expect(fi).toHaveTextContent('$1,200,000'); // 4000 * 12 / 0.04
+    expect(fi).toHaveTextContent('4.0% rule');
   });
 
   it('returns null when there are no projections for the active scenario', () => {
@@ -211,6 +216,58 @@ describe('FiCards', () => {
     const input = screen.getByLabelText('Retirement age') as HTMLInputElement;
     expect(input.value).toBe('55');
     expect(screen.getByTestId('whatif-retirement-age-control')).toHaveTextContent('override');
+  });
+
+  describe('SWR override routing', () => {
+    it('FI target reflects scenario.leverPayload.swrOverride when set, not household.withdrawalRate', () => {
+      const projections = new Map<number, MonthlyState[]>([[1, seedState(100_000, 50_000)]]);
+      const lp = emptyLeverPayload();
+      lp.swrOverride = 0.05; // 4000 * 12 / 0.05 = 960,000
+      render(
+        <FiCards
+          scenarios={[makeScenario({ leverPayload: lp })]}
+          projections={projections}
+          household={makeHousehold()} // withdrawalRate = 0.04 → would give $1,200,000
+          persons={[makePerson()]}
+        />,
+      );
+      const fi = screen.getByTestId('whatif-fi-number');
+      expect(fi).toHaveTextContent('$960,000');
+      // The household-default-derived target ($1,200,000) MUST NOT appear:
+      expect(fi).not.toHaveTextContent('$1,200,000');
+    });
+
+    it('FI target reflects household.withdrawalRate when scenario.swrOverride is null', () => {
+      const projections = new Map<number, MonthlyState[]>([[1, seedState(100_000, 50_000)]]);
+      render(
+        <FiCards
+          scenarios={[makeScenario()]} // empty payload → swrOverride: null
+          projections={projections}
+          household={makeHousehold()} // withdrawalRate = 0.04
+          persons={[makePerson()]}
+        />,
+      );
+      const fi = screen.getByTestId('whatif-fi-number');
+      expect(fi).toHaveTextContent('$1,200,000');
+    });
+
+    it('displayed withdrawal-rate label reflects the effective SWR (override)', () => {
+      const projections = new Map<number, MonthlyState[]>([[1, seedState(100_000, 50_000)]]);
+      const lp = emptyLeverPayload();
+      lp.swrOverride = 0.035;
+      render(
+        <FiCards
+          scenarios={[makeScenario({ leverPayload: lp })]}
+          projections={projections}
+          household={makeHousehold()} // withdrawalRate = 0.04
+          persons={[makePerson()]}
+        />,
+      );
+      const fi = screen.getByTestId('whatif-fi-number');
+      expect(fi).toHaveTextContent('3.5% rule');
+      // Should not show 4.0% (the household-default rate)
+      expect(fi).not.toHaveTextContent('4.0% rule');
+    });
   });
 
   it('prefers active scenario over baseline when both are present', () => {
