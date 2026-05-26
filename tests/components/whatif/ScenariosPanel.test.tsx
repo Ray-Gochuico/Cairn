@@ -83,11 +83,15 @@ describe('ScenariosPanel', () => {
     duplicate.mockClear();
     remove.mockClear();
     rename.mockClear();
+    // Ensure panel starts expanded (clear any persisted collapsed state)
+    localStorage.removeItem('scenariosPanel.collapsed');
   });
 
   it('renders one row per scenario with name + active tag on the active row', () => {
     setup();
-    expect(screen.getByText('Baseline')).toBeInTheDocument();
+    // "Baseline" appears twice: once in the header (active name) and once in
+    // the scenario list row — use getAllByText to accommodate both.
+    expect(screen.getAllByText('Baseline').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Aggressive payoff')).toBeInTheDocument();
     expect(screen.getByText(/\bactive\b/i)).toBeInTheDocument();
   });
@@ -126,7 +130,9 @@ describe('ScenariosPanel', () => {
 
   it('Delete in the ⋯ menu is disabled on the baseline row', async () => {
     const { user } = setup();
-    const baselineRow = screen.getByText('Baseline').closest('[data-row-id]')!;
+    // Use data-row-id attribute directly to find the baseline row (avoids
+    // ambiguity since "Baseline" now also appears in the panel header).
+    const baselineRow = screen.getByTestId('scenarios-panel').querySelector('[data-row-id="1"]')!;
     await user.click(within(baselineRow as HTMLElement).getByLabelText(/more actions/i));
     const deleteItem = await screen.findByRole('menuitem', { name: /delete/i });
     expect(deleteItem).toHaveAttribute('aria-disabled', 'true');
@@ -146,5 +152,51 @@ describe('ScenariosPanel', () => {
     await user.click(within(row as HTMLElement).getByLabelText(/more actions/i));
     await user.click(await screen.findByRole('menuitem', { name: /edit levers/i }));
     expect(onEditLevers).toHaveBeenCalledWith(2);
+  });
+
+  it('renders with a collapse toggle button', () => {
+    setup();
+    expect(screen.getByTestId('scenarios-panel-toggle')).toBeInTheDocument();
+  });
+
+  it('clicking the collapse toggle hides the scenarios list', async () => {
+    const { user } = setup();
+    // Panel starts expanded — "Aggressive payoff" is only in the list, not the header
+    expect(screen.getByText('Aggressive payoff')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /save current/i })).toBeInTheDocument();
+
+    // Collapse
+    await user.click(screen.getByTestId('scenarios-panel-toggle'));
+
+    // Scenario list rows should no longer be in the document
+    expect(screen.queryByText('Aggressive payoff')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /save current/i })).not.toBeInTheDocument();
+  });
+
+  it('clicking the toggle again re-expands the panel', async () => {
+    const { user } = setup();
+    const toggle = screen.getByTestId('scenarios-panel-toggle');
+
+    // Collapse then expand
+    await user.click(toggle);
+    expect(screen.queryByText('Aggressive payoff')).not.toBeInTheDocument();
+
+    await user.click(toggle);
+    expect(screen.getByText('Aggressive payoff')).toBeInTheDocument();
+  });
+
+  it('persists collapsed state to localStorage', async () => {
+    const { user } = setup();
+    await user.click(screen.getByTestId('scenarios-panel-toggle'));
+    expect(localStorage.getItem('scenariosPanel.collapsed')).toBe('true');
+  });
+
+  it('starts collapsed when localStorage flag is set', () => {
+    localStorage.setItem('scenariosPanel.collapsed', 'true');
+    setup();
+    // The header shows only the active scenario name; the list is hidden.
+    // "Aggressive payoff" is only in the list, so it should be absent.
+    expect(screen.queryByText('Aggressive payoff')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /save current/i })).not.toBeInTheDocument();
   });
 });

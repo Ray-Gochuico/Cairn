@@ -153,27 +153,27 @@ export default function WhatIf() {
 
   const projectionChart = (
     <Card className="min-w-0" data-testid="whatif-projection-chart-wrap">
-      <CardHeader>
-        <CardTitle className="text-base">Net worth & total debt projection</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="relative">
-          <ProjectionChart
-            scenarios={scenarios}
-            projections={projections}
-            milestones={milestones}
-            dollarMode={dollarMode}
-            inflation={inflation}
-            startISO={real.startISO}
-            detailLevel={detailLevel}
-            accounts={accounts}
-          />
+      <CardHeader className="pb-2">
+        <div className="flex items-start justify-between gap-4">
+          <CardTitle className="text-base">Net worth & total debt projection</CardTitle>
           <ScenariosPanel
             milestones={milestones}
             onOpenManage={() => setManageOpen(true)}
             onEditLevers={openLeversFor}
           />
         </div>
+      </CardHeader>
+      <CardContent>
+        <ProjectionChart
+          scenarios={scenarios}
+          projections={projections}
+          milestones={milestones}
+          dollarMode={dollarMode}
+          inflation={inflation}
+          startISO={real.startISO}
+          detailLevel={detailLevel}
+          accounts={accounts}
+        />
       </CardContent>
     </Card>
   );
