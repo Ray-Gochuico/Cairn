@@ -54,3 +54,32 @@ export function computeEquityValue(grant: GrantInput, today: Date): EquityValueR
     upcomingVestDates,
   };
 }
+
+/**
+ * Rough per-share FMV from a private-company snapshot.
+ *
+ * Formula: (companyValuation − totalDebt) ÷ outstandingShares.
+ *
+ * Returns null when any input is null or outstandingShares is non-positive
+ * (the form should disable "Use this value" in that state). When
+ * totalDebt > companyValuation the numerator clamps to 0 and the result
+ * includes warning='OVER_LEVERAGED' so the UI can surface "over-leveraged".
+ * Debt exactly equal to valuation returns { value: 0, warning: null } —
+ * that's a degenerate-but-valid wipe-out, not an over-leveraged state.
+ */
+export function computeFmvFromCompanyValuation(
+  companyValuation: number | null,
+  totalDebt: number | null,
+  outstandingShares: number | null,
+): { value: number; warning: 'OVER_LEVERAGED' | null } | null {
+  if (companyValuation == null) return null;
+  if (totalDebt == null) return null;
+  if (outstandingShares == null) return null;
+  if (outstandingShares <= 0) return null;
+
+  const equityValue = companyValuation - totalDebt;
+  if (equityValue < 0) {
+    return { value: 0, warning: 'OVER_LEVERAGED' };
+  }
+  return { value: equityValue / outstandingShares, warning: null };
+}
