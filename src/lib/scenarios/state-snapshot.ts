@@ -39,8 +39,8 @@ export interface RealState {
   baselineMonthlyExpenses: number;
   /** Total cash bucket (CASH + SAVINGS) at projection start, from latest per-account snapshot. */
   initialCash: number;
-  /** Total invested bucket (everything not CASH/SAVINGS, excluding excluded-from-NW) at projection start. */
-  initialInvestments: number;
+  /** Per-account investment balances at projection start. Key = Account.id. */
+  initialInvestmentsByAccount: Record<number, number>;
   defaults: { inflation: number; returnRate: number };
   startISO: string;
   taxBrackets: RealStateTaxBrackets;
@@ -89,10 +89,10 @@ function computeInitialBalances(
   snapshots: AccountSnapshot[],
   holdings: Holding[],
   startISO: string,
-): { initialCash: number; initialInvestments: number } {
+): { initialCash: number; initialInvestmentsByAccount: Record<number, number> } {
   const byAccount = latestSnapshotPerAccount(snapshots, startISO);
   let cash = 0;
-  let invested = 0;
+  const investmentsByAccount: Record<number, number> = {};
   const accountsWithSnapshot = new Set<number>();
   for (const account of accounts) {
     if (account.id === undefined) continue;
@@ -100,8 +100,12 @@ function computeInitialBalances(
     const snap = byAccount.get(account.id);
     if (snap) {
       accountsWithSnapshot.add(account.id);
-      if (isCashAccount(account)) cash += snap.totalValue;
-      else invested += snap.totalValue;
+      if (isCashAccount(account)) {
+        cash += snap.totalValue;
+      } else {
+        investmentsByAccount[account.id] =
+          (investmentsByAccount[account.id] ?? 0) + snap.totalValue;
+      }
     }
   }
 
@@ -115,12 +119,17 @@ function computeInitialBalances(
     if (accountsWithSnapshot.has(account.id)) continue;
     if (isCashAccount(account)) continue;
     const accountHoldings = holdings.filter((h) => h.accountId === account.id);
+    let holdingsValue = 0;
     for (const h of accountHoldings) {
-      invested += h.shareCount * (h.costBasis ?? 0);
+      holdingsValue += h.shareCount * (h.costBasis ?? 0);
+    }
+    if (holdingsValue > 0) {
+      investmentsByAccount[account.id] =
+        (investmentsByAccount[account.id] ?? 0) + holdingsValue;
     }
   }
 
-  return { initialCash: cash, initialInvestments: invested };
+  return { initialCash: cash, initialInvestmentsByAccount: investmentsByAccount };
 }
 
 function pickBrackets(
@@ -162,7 +171,7 @@ export function captureRealState(inputs: RealStateInputs): RealState {
     standardDeduction: pickStandardDeduction(inputs.taxRules, filingStatus),
   };
 
-  const { initialCash, initialInvestments } = computeInitialBalances(
+  const { initialCash, initialInvestmentsByAccount } = computeInitialBalances(
     inputs.accounts,
     inputs.accountSnapshots ?? [],
     inputs.holdings,
@@ -178,7 +187,7 @@ export function captureRealState(inputs: RealStateInputs): RealState {
     persons: inputs.persons,
     baselineMonthlyExpenses,
     initialCash,
-    initialInvestments,
+    initialInvestmentsByAccount,
     defaults: {
       inflation: inputs.appSettings.defaultInflation,
       returnRate: inputs.appSettings.defaultReturnRate,

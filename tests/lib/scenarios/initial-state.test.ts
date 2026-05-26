@@ -4,6 +4,11 @@ import { captureRealState } from '@/lib/scenarios/state-snapshot';
 import { emptyLeverPayload } from '@/lib/scenarios/lever-types';
 import type { Holding, Loan, Household, Person, Account, AccountSnapshot, TaxRule } from '@/types/schema';
 import type { Bracket } from '@/lib/tax';
+import { totalInvestments } from '@/lib/scenarios/aggregate-investments';
+
+// Helper: total invested across all accounts for assertion clarity.
+const sumInvestments = (real: { initialInvestmentsByAccount: Record<number, number> }): number =>
+  Object.values(real.initialInvestmentsByAccount).reduce((s, v) => s + v, 0);
 
 const federal2026Single: Bracket[] = [
   { min: 0, max: 11600, rate: 0.10 },
@@ -82,7 +87,7 @@ describe('captureRealState — initial cash and investments', () => {
       taxRules: baseTaxRules,
     });
 
-    expect(real.initialInvestments).toBe(80000);
+    expect(sumInvestments(real)).toBe(80000);
     expect(real.initialCash).toBe(0);
   });
 
@@ -102,7 +107,7 @@ describe('captureRealState — initial cash and investments', () => {
     });
 
     expect(real.initialCash).toBe(30000);
-    expect(real.initialInvestments).toBe(0);
+    expect(sumInvestments(real)).toBe(0);
   });
 
   it('skips accounts marked excludedFromNetWorth', () => {
@@ -120,7 +125,7 @@ describe('captureRealState — initial cash and investments', () => {
       taxRules: baseTaxRules,
     });
 
-    expect(real.initialInvestments).toBe(50000);
+    expect(sumInvestments(real)).toBe(50000);
   });
 
   it('uses latest snapshot when an account has multiple', () => {
@@ -139,7 +144,7 @@ describe('captureRealState — initial cash and investments', () => {
       taxRules: baseTaxRules,
     });
 
-    expect(real.initialInvestments).toBe(50000);
+    expect(sumInvestments(real)).toBe(50000);
   });
 
   it('ignores snapshots dated after startISO month', () => {
@@ -158,7 +163,7 @@ describe('captureRealState — initial cash and investments', () => {
     });
 
     // March snapshot wins; July ignored.
-    expect(real.initialInvestments).toBe(50000);
+    expect(sumInvestments(real)).toBe(50000);
   });
 
   it('falls back to holdings (shareCount * costBasis) when an investment account has no snapshot', () => {
@@ -178,7 +183,7 @@ describe('captureRealState — initial cash and investments', () => {
       taxRules: baseTaxRules,
     });
 
-    expect(real.initialInvestments).toBe(20000);
+    expect(sumInvestments(real)).toBe(20000);
   });
 });
 
@@ -200,7 +205,7 @@ describe('projectScenario — initial-state regression for negative-growth chart
     });
 
     const states = projectScenario(real, emptyLeverPayload(), { startISO: '2026-05', months: 24 });
-    expect(states[0].investments).toBe(50000);
+    expect(totalInvestments(states[0])).toBe(50000);
     expect(states[0].cash).toBe(5000);
   });
 
@@ -230,7 +235,7 @@ describe('projectScenario — initial-state regression for negative-growth chart
     expect(states[359].netWorth).toBeGreaterThan(states[60].netWorth);
     // Investments must never go negative in this scenario.
     for (let i = 0; i < states.length; i++) {
-      expect(states[i].investments).toBeGreaterThanOrEqual(0);
+      expect(totalInvestments(states[i])).toBeGreaterThanOrEqual(0);
     }
   });
 });
