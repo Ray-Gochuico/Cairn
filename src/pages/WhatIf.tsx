@@ -82,6 +82,13 @@ export default function WhatIf() {
   // modal can pass an onEditLevers callback without breaking.
   const openLeversFor = useCallback((_scenarioId: number) => {}, []);
 
+  // Subscribe to the full settings object for the inflation display path
+  // (consumed below to resolve `displayInflation`). MUST be declared above
+  // the `if (!real)` early return — otherwise the hook count differs
+  // between the loading and loaded renders and React 19 trips
+  // "Rendered more hooks than during the previous render".
+  const settingsForDisplay = useSettingsStore((s) => s.settings) ?? null;
+
   useEffect(() => {
     load();
     loadLoans();
@@ -167,7 +174,6 @@ export default function WhatIf() {
   // for v1 per spec §6.
   const activeScenario =
     scenarios.find((s) => s.isActive) ?? scenarios.find((s) => s.isBaseline) ?? null;
-  const settingsForDisplay = useSettingsStore((s) => s.settings) ?? null;
   const displayInflation = effectiveBaselineInflation(
     activeScenario,
     household ?? null,
