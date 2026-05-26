@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { useTickersStore } from '@/stores/tickers-store';
 import { useFundSectorsStore } from '@/stores/fund-sectors-store';
 import type { ConcentrationReport } from '@/lib/concentration';
@@ -100,6 +101,7 @@ function setFundSectors(fundSectors: FundSector[]) {
 }
 
 beforeEach(() => {
+  localStorage.clear();
   reportRef.current = {
     perTicker: [],
     tickerExposures: [],
@@ -425,5 +427,82 @@ describe('SectorDonut — colors', () => {
     expect(w1.dataset.color).toMatch(/^#[0-9a-f]{6}$/);
     expect(w2.dataset.color).toMatch(/^#[0-9a-f]{6}$/);
     expect(w1.dataset.color).not.toBe(w2.dataset.color);
+  });
+});
+
+describe('SectorDonut — entity picker', () => {
+  function seedTwoSectors() {
+    setTickers([
+      makeTicker({ ticker: 'AAPL', sector: 'Technology', industry: 'Consumer Electronics' }),
+      makeTicker({ ticker: 'MSFT', sector: 'Technology', industry: 'Software—Infrastructure' }),
+      makeTicker({ ticker: 'JPM', sector: 'Financial Services', industry: 'Banks—Diversified' }),
+    ]);
+    setReport([
+      { ticker: 'AAPL', effectiveExposure: 1000 },
+      { ticker: 'MSFT', effectiveExposure: 500 },
+      { ticker: 'JPM', effectiveExposure: 750 },
+    ]);
+  }
+
+  it('renders an Entities picker button with the sector count', () => {
+    seedTwoSectors();
+    render(<SectorDonut />);
+    expect(
+      screen.getByRole('button', { name: /entities \(2\/2\)/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('hiding a sector removes its wedge from the donut', async () => {
+    seedTwoSectors();
+    render(<SectorDonut />);
+    expect(screen.getByTestId('slice-Technology')).toBeInTheDocument();
+    expect(screen.getByTestId('slice-Financial Services')).toBeInTheDocument();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /entities/i }));
+    await user.click(screen.getByLabelText(/Financial Services/));
+
+    expect(screen.queryByTestId('slice-Financial Services')).not.toBeInTheDocument();
+    expect(screen.getByTestId('slice-Technology')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /entities \(1\/2\)/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('hides the picker button while drilled into an industry view', () => {
+    seedTwoSectors();
+    render(<SectorDonut />);
+    // Picker is visible in sector view
+    expect(screen.getByRole('button', { name: /entities/i })).toBeInTheDocument();
+    // Drill into Technology
+    fireEvent.click(screen.getByTestId('slice-Technology'));
+    expect(screen.getByText('Industries — Technology')).toBeInTheDocument();
+    // Picker should be hidden — the picker operates on sectors only.
+    expect(screen.queryByRole('button', { name: /entities/i })).toBeNull();
+  });
+
+  it('picker reappears when returning to sector view via "Back to sectors"', () => {
+    seedTwoSectors();
+    render(<SectorDonut />);
+    fireEvent.click(screen.getByTestId('slice-Technology'));
+    expect(screen.queryByRole('button', { name: /entities/i })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /back to sectors/i }));
+    expect(
+      screen.getByRole('button', { name: /entities \(2\/2\)/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('persists hidden sector across remount', async () => {
+    seedTwoSectors();
+    const { unmount } = render(<SectorDonut />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /entities/i }));
+    await user.click(screen.getByLabelText(/Financial Services/));
+    expect(screen.queryByTestId('slice-Financial Services')).not.toBeInTheDocument();
+    unmount();
+
+    render(<SectorDonut />);
+    expect(screen.queryByTestId('slice-Financial Services')).not.toBeInTheDocument();
+    expect(screen.getByTestId('slice-Technology')).toBeInTheDocument();
   });
 });

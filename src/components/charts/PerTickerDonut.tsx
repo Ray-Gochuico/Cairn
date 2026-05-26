@@ -1,11 +1,13 @@
 import { useCallback, useMemo } from 'react';
 import DonutChartCard, { type DonutSlice } from './DonutChartCard';
+import { DonutEntityPicker, useDonutSelected, type DonutEntityPickerItem } from './DonutEntityPicker';
 import { CHART_NEUTRAL } from './palette';
 import { colorForTicker } from '@/lib/chart-colors';
 import { withMiscLast } from '@/lib/concentration';
 import { useConcentration } from '@/lib/use-concentration';
 import { useTickersStore } from '@/stores/tickers-store';
 import { formatCurrency } from '@/lib/format';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { AssetClass } from '@/types/schema';
 
 // Module-level empty-data sentinel so the empty-state donut passes the
@@ -13,6 +15,7 @@ import type { AssetClass } from '@/types/schema';
 // animation id on each new props object, and an inline `[]` would
 // re-animate on every parent re-render.
 const EMPTY_DONUT_DATA: DonutSlice[] = [];
+const STORAGE_KEY = 'donut.perTicker.hidden';
 
 /**
  * Per-company effective exposure donut with top-10 + Misc rollup.
@@ -22,6 +25,10 @@ const EMPTY_DONUT_DATA: DonutSlice[] = [];
  * look-through. SHORT-direction holdings produce negative
  * effectiveExposure; we clamp to non-negative so the donut renders
  * meaningfully (SHORT-aware viz is Phase 5+).
+ *
+ * Picker: a header popover lets the user hide individual tickers; the
+ * hidden set persists in localStorage under `donut.perTicker.hidden`.
+ * Keys are ticker symbol strings (already unique by definition).
  */
 
 // Asset classes that imply a fund (and therefore expect look-through
@@ -80,6 +87,23 @@ export function PerTickerDonut() {
     [report.perTicker, tickerColorMap],
   );
 
+  // Picker items mirror slices 1:1 — ticker symbol is the picker key.
+  const pickerItems = useMemo<DonutEntityPickerItem[]>(
+    () =>
+      slices.map((s) => ({
+        key: s.name,
+        label: s.name,
+        color: s.color,
+      })),
+    [slices],
+  );
+  const allKeys = useMemo(() => pickerItems.map((i) => i.key), [pickerItems]);
+  const selected = useDonutSelected(STORAGE_KEY, allKeys);
+  const filteredSlices = useMemo(
+    () => slices.filter((s) => selected.has(s.name)),
+    [slices, selected],
+  );
+
   // Identify wedges whose ticker is itself classified as a fund — these are
   // funds whose look-through failed (concentration's math falls back to
   // "opaque holding" and credits the fund's ticker directly). Surfacing
@@ -111,14 +135,40 @@ export function PerTickerDonut() {
     ? `After fund look-through · ${opaqueFunds.join(', ')} couldn't be looked through (click "Refresh fund data")`
     : 'After fund look-through';
 
+  const picker = (
+    <DonutEntityPicker localStorageKey={STORAGE_KEY} items={pickerItems} />
+  );
+
+  // All entities hidden — keep the picker visible so the user can re-show.
+  if (filteredSlices.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle>Per-company exposure</CardTitle>
+            {picker}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground py-8 text-center">
+            All entities hidden. Open the picker above to show at least one.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
-    <DonutChartCard
-      title="Per-company exposure"
-      subtitle={subtitle}
-      data={slices}
-      valueFormatter={formatCurrency}
-      tooltipNameFormatter={tooltipNameFormatter}
-    />
+    <div className="relative">
+      <div className="absolute top-4 right-4 z-10">{picker}</div>
+      <DonutChartCard
+        title="Per-company exposure"
+        subtitle={subtitle}
+        data={filteredSlices}
+        valueFormatter={formatCurrency}
+        tooltipNameFormatter={tooltipNameFormatter}
+      />
+    </div>
   );
 }
 
