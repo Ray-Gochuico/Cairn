@@ -8,7 +8,11 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import AddCategoryDialog, {
+  type AddCategoryPayload,
+} from '@/components/budget/AddCategoryDialog';
 import type { ParentGroup } from '@/lib/budget-analysis';
+import type { Category } from '@/types/schema';
 
 export type PickerOption = { id: number; name: string };
 
@@ -21,11 +25,30 @@ interface Props {
    */
   groups: readonly ParentGroup[];
   onConfirm: (ids: number[]) => void;
+  /**
+   * All persisted categories — passed to AddCategoryDialog for the parent
+   * <select>. The picker filters this to top-level NEED/WANT/SAVINGS parents
+   * itself; pass the unfiltered list. Required when onCreateCategory is set.
+   */
+  parents?: ReadonlyArray<Category>;
+  /**
+   * When provided, renders an inline "+ Add category" button at the bottom of
+   * the picker dialog. Save → invokes this with the dialog's payload and the
+   * caller is responsible for persisting + appending to the tracked list.
+   * If omitted, the "+ Add category" trigger is not rendered (back-compat).
+   */
+  onCreateCategory?: (payload: AddCategoryPayload) => void;
 }
 
-export default function BudgetCategoryPicker({ groups, onConfirm }: Props) {
+export default function BudgetCategoryPicker({
+  groups,
+  onConfirm,
+  parents,
+  onCreateCategory,
+}: Props) {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<number[]>([]);
+  const [addOpen, setAddOpen] = useState(false);
 
   // Clear the in-flight selection whenever the picker closes (or there's
   // nothing left to pick from). Selection state must never persist between
@@ -115,6 +138,19 @@ export default function BudgetCategoryPicker({ groups, onConfirm }: Props) {
             );
           })}
         </div>
+        {onCreateCategory != null && (
+          <div className="pt-3 border-t mt-3">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground"
+              onClick={() => setAddOpen(true)}
+            >
+              + Add category
+            </Button>
+          </div>
+        )}
         <div className="flex justify-end gap-2 pt-2">
           <Button
             type="button"
@@ -134,6 +170,21 @@ export default function BudgetCategoryPicker({ groups, onConfirm }: Props) {
           </Button>
         </div>
       </DialogContent>
+      {onCreateCategory != null && (
+        <AddCategoryDialog
+          open={addOpen}
+          parents={(parents ?? []).filter(
+            (p) =>
+              p.parentCategoryId == null &&
+              (p.type === 'NEED' || p.type === 'WANT' || p.type === 'SAVINGS'),
+          )}
+          onSave={(payload) => {
+            onCreateCategory(payload);
+            setAddOpen(false);
+          }}
+          onClose={() => setAddOpen(false)}
+        />
+      )}
     </Dialog>
   );
 }
