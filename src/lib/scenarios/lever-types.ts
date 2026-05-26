@@ -35,6 +35,29 @@ export const ReturnScheduleSchema = z.object({
 });
 export type ReturnSchedule = z.infer<typeof ReturnScheduleSchema>;
 
+/**
+ * Per-scenario inflation schedule. Mirrors {@link ReturnScheduleSchema}:
+ *
+ *   - `defaultRate`   — scenario-wide annual inflation. null = fall through to
+ *                       household.inflationAssumption / app_settings.defaultInflation.
+ *   - `overrides`     — per-year overrides keyed by 4-digit year string. Lets
+ *                       the user model a high-inflation 2027 shock without
+ *                       changing the rest of the curve.
+ *
+ * Range is wider than typical (-5% deflation to +20% inflation) so users can
+ * model deflationary scenarios and 1970s-style stagflation.
+ */
+export const InflationScheduleSchema = z.object({
+  /**
+   * Per-scenario default annual inflation rate (fraction). null = use
+   * household.inflationAssumption → app_settings.defaultInflation → 0.03.
+   */
+  defaultRate: z.number().min(-0.05).max(0.20).nullable().default(null),
+  /** Per-year overrides keyed by 4-digit year string. */
+  overrides: z.record(z.string().regex(/^\d{4}$/), z.number().min(-0.05).max(0.20)).default({}),
+});
+export type InflationSchedule = z.infer<typeof InflationScheduleSchema>;
+
 export const IncomeEventSchema = z.discriminatedUnion('type', [
   z.object({ when: isoDate, type: z.literal('raise'),       deltaAmount: z.number(),        label: z.string().optional() }),
   z.object({ when: isoDate, type: z.literal('promotion'),   newSalary: z.number().nonnegative(), label: z.string().optional() }),
@@ -105,6 +128,11 @@ export const LeverPayloadSchema = z.object({
    * user A/B "FI at 3.5% vs 4.5%" without touching household-wide config.
    */
   swrOverride: z.number().min(0.005).max(0.15).nullable().default(null),
+  /**
+   * Per-scenario inflation schedule. Defaults to "use household /
+   * settings defaults" so existing scenarios pick up the canonical value.
+   */
+  inflation: InflationScheduleSchema.default({ defaultRate: null, overrides: {} }),
 });
 export type LeverPayload = z.infer<typeof LeverPayloadSchema>;
 
@@ -118,5 +146,6 @@ export function emptyLeverPayload(): LeverPayload {
     contributions: [],
     retirementAgeOverride: null,
     swrOverride: null,
+    inflation: { defaultRate: null, overrides: {} },
   };
 }

@@ -13,6 +13,10 @@ import { totalInvestments } from './aggregate-investments';
 import { computeTotalTax } from '@/lib/tax';
 import { ageAtMonth } from '@/lib/dates';
 import { effectiveCashApy } from './effective-cash-apy';
+import {
+  effectiveAnnualInflationFromSlice,
+  type InflationSlice,
+} from './effective-inflation';
 
 export interface MonthlyState {
   monthISO: string;
@@ -81,6 +85,24 @@ export function projectScenario(
     ? Math.pow(1 + effectiveCashApy_frozen, 1 / 12) - 1
     : 0;
 
+  // Capture the inflation slice frozen at projection start. The per-year
+  // override LOOKUP happens per-step (effectiveAnnualInflationFromSlice) but
+  // the precedence-chain sources are resolved once here.
+  //
+  // Engine note: the engine's authoritative "household / settings inflation"
+  // has always been `real.defaults.inflation` (sourced via captureRealState
+  // from appSettings.defaultInflation). The Household.inflationAssumption
+  // field has not historically been threaded into the engine — only the
+  // resolver's UI-facing precedence chain consults it. To preserve existing
+  // engine behavior we leave householdInflation null here and let
+  // settingsInflation carry the canonical pre-Task-15 value.
+  const inflationSlice: InflationSlice = {
+    scenarioDefault: payload.inflation?.defaultRate ?? null,
+    scenarioOverrides: payload.inflation?.overrides ?? {},
+    householdInflation: null,
+    settingsInflation: real.defaults?.inflation ?? null,
+  };
+
   let state: MonthlyState = {
     monthISO: horizon.startISO,
     investmentsByAccount: { ...real.initialInvestmentsByAccount },
@@ -97,7 +119,7 @@ export function projectScenario(
   out.push(state);
 
   for (let i = 1; i < horizon.months; i++) {
-    state = stepMonth(state, real, payload, startYear, i, cashMonthlyRate);
+    state = stepMonth(state, real, payload, startYear, i, cashMonthlyRate, inflationSlice);
     out.push(state);
   }
   return out;
@@ -198,6 +220,7 @@ function stepMonth(
   startYear: number,
   monthIndex: number,
   cashMonthlyRate: number,   // pre-computed, frozen at projection start
+  inflationSlice: InflationSlice,
 ): MonthlyState {
   const monthISO = addMonths(prev.monthISO, 1);
   let s: MonthlyState = { ...prev, monthISO, events: [] };
@@ -245,9 +268,48 @@ function stepMonth(
   const annualTax = annualHouseholdTax(real, annualGross);
   s.incomeAfterTax = (annualGross - annualTax) / 12;
 
-  // 4. Expenses: baseline trended + period deltas
-  const yearsElapsed = monthIndex / 12;
-  const inflationFactor = Math.pow(1 + real.defaults.inflation, yearsElapsed);
+  // 4. Expenses: baseline trended + period deltas.
+  //
+  // Inflation compounds monthly. The annual rate is year-aware — sourced
+  // from the inflationSlice via effectiveAnnualInflationFromSlice(year).
+  // Pre-Task-15 the engine used Math.pow(1 + flatRate, monthIndex / 12)
+  // which is mathematically equivalent to compounding the SAME monthly
+  // factor monthIndex times. We preserve that semantics for the
+  // no-override path (slice falls through to real.defaults.inflation)
+  // while letting per-year overrides "kink" the curve at calendar-year
+  // boundaries.
+  //
+  // The factor is rebuilt from scratch each step to keep the engine
+  // pure — no carried state beyond `prev`. For a 40-year horizon
+  // (480 months) this is O(480 * 480) = 230k multiplications in the
+  // worst case, which is fine.
+  const currentYear = Number(monthISO.slice(0, 4));
+  let inflationFactor = 1;
+  // Step from the startISO month FORWARD by monthIndex steps, applying
+  // the per-year monthly rate at each step. We do this by walking
+  // year-by-year so we only compute one monthly rate per year-of-step.
+  let stepYear = startYear;
+  let stepsLeft = monthIndex;
+  // Months into stepYear at projection start. startISO is "YYYY-MM";
+  // month 5 means 4 months have already elapsed inside startYear when
+  // monthIndex=0 — but we anchor the factor at monthIndex=0 (factor=1)
+  // and only compound steps 1..monthIndex. So the FIRST monthly step
+  // lands in startYear's month "startMonth+1" (clamped to year boundary).
+  let monthsAvailableInCurrentYear = 12 - Number(real.startISO.slice(5, 7));
+  while (stepsLeft > 0) {
+    const annualRate = effectiveAnnualInflationFromSlice(inflationSlice, stepYear);
+    const monthlyFactor = Math.pow(1 + annualRate, 1 / 12);
+    const stepsToTake = Math.min(stepsLeft, Math.max(0, monthsAvailableInCurrentYear));
+    if (stepsToTake > 0) {
+      inflationFactor *= Math.pow(monthlyFactor, stepsToTake);
+      stepsLeft -= stepsToTake;
+    }
+    stepYear += 1;
+    monthsAvailableInCurrentYear = 12;
+    // Defensive — never run past currentYear, this loop should bottom
+    // out via stepsLeft == 0 before stepYear exceeds currentYear+1.
+    if (stepYear > currentYear + 1) break;
+  }
   const baseExpenses = real.baselineMonthlyExpenses * inflationFactor;
   const periodDelta = monthlyExpenseDeltaFromPeriods(payload.expensePeriods, monthISO);
   s.expenses = baseExpenses + periodDelta;

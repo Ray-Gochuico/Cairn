@@ -21,6 +21,7 @@ describe('LeverPayloadSchema', () => {
       contributions: [{ startMonth: 0, endMonth: 59, monthlyAmount: 1000, label: 'Year 1-5', allocation: null }],
       retirementAgeOverride: null,
       swrOverride: null,
+      inflation: { defaultRate: null, overrides: {} },
     };
     expect(LeverPayloadSchema.parse(payload)).toEqual(payload);
   });
