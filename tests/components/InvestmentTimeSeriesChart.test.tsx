@@ -202,4 +202,181 @@ describe('InvestmentTimeSeriesChart', () => {
     const swatch = brokerageRow.querySelector('span[aria-hidden="true"]') as HTMLElement;
     expect(swatch.style.background).toBe('rgb(18, 52, 86)'); // #123456
   });
+
+  it('includes cash/savings accounts that have a snapshot but no holdings', async () => {
+    const user = userEvent.setup();
+    const cashSavingsAccounts: Account[] = [
+      {
+        id: 10,
+        householdId: 1,
+        ownerPersonId: null,
+        beneficiaryDependentId: null,
+        name: 'Big Bank Checking',
+        institution: null,
+        type: AccountType.ACCOUNT_CASH,
+        cryptoWalletAddress: null,
+        autoFetchEnabled: false,
+        excludedFromNetWorth: false,
+        allowMargin: false,
+        stateOfPlan: null,
+        accentColor: null,
+      },
+      {
+        id: 11,
+        householdId: 1,
+        ownerPersonId: null,
+        beneficiaryDependentId: null,
+        name: 'High Yield Savings',
+        institution: null,
+        type: AccountType.ACCOUNT_SAVINGS,
+        cryptoWalletAddress: null,
+        autoFetchEnabled: false,
+        excludedFromNetWorth: false,
+        allowMargin: false,
+        stateOfPlan: null,
+        accentColor: null,
+      },
+    ];
+    const cashSavingsSnapshots: AccountSnapshot[] = [
+      { id: 100, accountId: 10, snapshotDate: '2026-01-15', totalValue: 2500, source: SnapshotSource.MANUAL },
+      { id: 101, accountId: 10, snapshotDate: '2026-02-15', totalValue: 2700, source: SnapshotSource.MANUAL },
+      { id: 102, accountId: 11, snapshotDate: '2026-01-15', totalValue: 15000, source: SnapshotSource.MANUAL },
+      { id: 103, accountId: 11, snapshotDate: '2026-02-15', totalValue: 15100, source: SnapshotSource.MANUAL },
+    ];
+    render(
+      <div style={{ width: 800, height: 400 }}>
+        <InvestmentTimeSeriesChart
+          accounts={cashSavingsAccounts}
+          holdings={[]}
+          snapshots={cashSavingsSnapshots}
+        />
+      </div>,
+    );
+    await user.click(screen.getByRole('button', { name: /accounts/i }));
+    const picker = screen.getByRole('dialog', { name: /select accounts/i });
+    expect(within(picker).getByLabelText(/big bank checking/i)).toBeInTheDocument();
+    expect(within(picker).getByLabelText(/high yield savings/i)).toBeInTheDocument();
+  });
+
+  it('stacks cash/savings values alongside investment accounts', async () => {
+    const user = userEvent.setup();
+    const mixedAccounts: Account[] = [
+      {
+        id: 20,
+        householdId: 1,
+        ownerPersonId: null,
+        beneficiaryDependentId: null,
+        name: 'Taxable Brokerage',
+        institution: null,
+        type: AccountType.ACCOUNT_BROKERAGE,
+        cryptoWalletAddress: null,
+        autoFetchEnabled: false,
+        excludedFromNetWorth: false,
+        allowMargin: false,
+        stateOfPlan: null,
+        accentColor: null,
+      },
+      {
+        id: 21,
+        householdId: 1,
+        ownerPersonId: null,
+        beneficiaryDependentId: null,
+        name: 'Everyday Checking',
+        institution: null,
+        type: AccountType.ACCOUNT_CASH,
+        cryptoWalletAddress: null,
+        autoFetchEnabled: false,
+        excludedFromNetWorth: false,
+        allowMargin: false,
+        stateOfPlan: null,
+        accentColor: null,
+      },
+    ];
+    const mixedHoldings: Holding[] = [
+      { id: 200, accountId: 20, ticker: 'VOO', shareCount: 4, targetAllocationPct: null, costBasis: null },
+    ];
+    // Both accounts have snapshots in the same bucket — the chart should
+    // include both as eligible AND default-select both, so the stack at the
+    // latest bucket is the sum of their latest snapshot values.
+    const mixedSnapshots: AccountSnapshot[] = [
+      { id: 200, accountId: 20, snapshotDate: '2026-01-31', totalValue: 8000, source: SnapshotSource.MANUAL },
+      { id: 201, accountId: 20, snapshotDate: '2026-02-28', totalValue: 9000, source: SnapshotSource.MANUAL },
+      { id: 202, accountId: 21, snapshotDate: '2026-01-31', totalValue: 3000, source: SnapshotSource.MANUAL },
+      { id: 203, accountId: 21, snapshotDate: '2026-02-28', totalValue: 3500, source: SnapshotSource.MANUAL },
+    ];
+    render(
+      <div style={{ width: 800, height: 400 }}>
+        <InvestmentTimeSeriesChart
+          accounts={mixedAccounts}
+          holdings={mixedHoldings}
+          snapshots={mixedSnapshots}
+        />
+      </div>,
+    );
+    // The picker exposes the eligible-and-selected set that drives the
+    // stack. With the cash-inclusion change, the cash account joins the
+    // brokerage account, and both default to checked — meaning both bars
+    // stack and the Total line sums them. jsdom doesn't lay recharts out
+    // (container width = 0), so the picker is the most reliable surface
+    // to confirm "both contribute to the stack".
+    const trigger = screen.getByRole('button', { name: /accounts/i });
+    // Trigger label confirms 2/2 eligible-and-selected.
+    expect(trigger).toHaveTextContent('Accounts (2/2)');
+    await user.click(trigger);
+    const picker = screen.getByRole('dialog', { name: /select accounts/i });
+    expect(within(picker).getByLabelText(/taxable brokerage/i)).toBeChecked();
+    expect(within(picker).getByLabelText(/everyday checking/i)).toBeChecked();
+  });
+
+  it('does NOT include accounts with no snapshots at all', async () => {
+    const user = userEvent.setup();
+    const orphanAccounts: Account[] = [
+      {
+        id: 30,
+        householdId: 1,
+        ownerPersonId: null,
+        beneficiaryDependentId: null,
+        name: 'Roth With Snapshot',
+        institution: null,
+        type: AccountType.ACCOUNT_ROTH_IRA,
+        cryptoWalletAddress: null,
+        autoFetchEnabled: false,
+        excludedFromNetWorth: false,
+        allowMargin: false,
+        stateOfPlan: null,
+        accentColor: null,
+      },
+      {
+        id: 31,
+        householdId: 1,
+        ownerPersonId: null,
+        beneficiaryDependentId: null,
+        name: 'Lonely Checking',
+        institution: null,
+        type: AccountType.ACCOUNT_CASH,
+        cryptoWalletAddress: null,
+        autoFetchEnabled: false,
+        excludedFromNetWorth: false,
+        allowMargin: false,
+        stateOfPlan: null,
+        accentColor: null,
+      },
+    ];
+    const orphanSnapshots: AccountSnapshot[] = [
+      { id: 300, accountId: 30, snapshotDate: '2026-02-15', totalValue: 4000, source: SnapshotSource.MANUAL },
+    ];
+    render(
+      <div style={{ width: 800, height: 400 }}>
+        <InvestmentTimeSeriesChart
+          accounts={orphanAccounts}
+          holdings={[]}
+          snapshots={orphanSnapshots}
+        />
+      </div>,
+    );
+    await user.click(screen.getByRole('button', { name: /accounts/i }));
+    const picker = screen.getByRole('dialog', { name: /select accounts/i });
+    expect(within(picker).getByLabelText(/roth with snapshot/i)).toBeInTheDocument();
+    expect(within(picker).queryByLabelText(/lonely checking/i)).toBeNull();
+  });
 });

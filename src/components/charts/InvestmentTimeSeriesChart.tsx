@@ -120,13 +120,17 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
 
 export default function InvestmentTimeSeriesChart({
   accounts,
-  holdings,
+  holdings: _holdings,
   snapshots,
 }: InvestmentTimeSeriesChartProps) {
-  // Accounts with at least one holding — these are the only ones picker shows.
+  // Accounts with at least one snapshot — covers investment accounts (which always
+  // have snapshots when they have holdings) AND cash/savings accounts that record
+  // balances via snapshots without any holding rows. The `holdings` prop is still
+  // accepted by this component for parent symmetry; eligibility no longer depends
+  // on it.
   const eligibleAccounts = useMemo(
-    () => accounts.filter((a) => a.id != null && holdings.some((h) => h.accountId === a.id)),
-    [accounts, holdings],
+    () => accounts.filter((a) => a.id != null && snapshots.some((s) => s.accountId === a.id)),
+    [accounts, snapshots],
   );
 
   const [granularity, setGranularityState] = useState<Granularity>('MONTH');
