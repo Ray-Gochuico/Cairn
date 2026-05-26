@@ -143,3 +143,10 @@ export const FiPillsPosition = {
   BELOW: 'below',
 } as const;
 export type FiPillsPosition = typeof FiPillsPosition[keyof typeof FiPillsPosition];
+
+export const ProjectionDetailLevel = {
+  SINGLE: 'single',
+  TAX_BUCKET: 'tax_bucket',
+  PER_ACCOUNT: 'per_account',
+} as const;
+export type ProjectionDetailLevel = typeof ProjectionDetailLevel[keyof typeof ProjectionDetailLevel];

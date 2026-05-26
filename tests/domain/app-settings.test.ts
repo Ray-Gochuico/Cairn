@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { runMigrations, loadAllMigrations } from '@/db/migrations';
 import { SettingsRepo } from '@/domain/app-settings';
-import { FiPillsPosition } from '@/types/enums';
+import { FiPillsPosition, ProjectionDetailLevel } from '@/types/enums';
 
 describe('SettingsRepo', () => {
   let db: SqliteAdapter;
@@ -104,5 +104,42 @@ describe('SettingsRepo', () => {
     await repo.update({ defaultFiPillsPosition: FiPillsPosition.ABOVE });
     const s = await repo.get();
     expect(s.defaultFiPillsPosition).toBe(FiPillsPosition.ABOVE);
+  });
+});
+
+describe('SettingsRepo — ProjectionDetailLevel', () => {
+  let db: SqliteAdapter;
+  let repo: SettingsRepo;
+
+  beforeEach(async () => {
+    db = new SqliteAdapter(':memory:');
+    await runMigrations(db, await loadAllMigrations());
+    repo = new SettingsRepo(db);
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  it('reads default_projection_detail_level as tax_bucket from a fresh DB', async () => {
+    const s = await repo.get();
+    expect(s.defaultProjectionDetailLevel).toBe('tax_bucket');
+  });
+
+  it('round-trips defaultProjectionDetailLevel through update + get', async () => {
+    await repo.update({ defaultProjectionDetailLevel: 'per_account' });
+    expect((await repo.get()).defaultProjectionDetailLevel).toBe('per_account');
+
+    await repo.update({ defaultProjectionDetailLevel: 'single' });
+    expect((await repo.get()).defaultProjectionDetailLevel).toBe('single');
+
+    await repo.update({ defaultProjectionDetailLevel: 'tax_bucket' });
+    expect((await repo.get()).defaultProjectionDetailLevel).toBe('tax_bucket');
+  });
+
+  it('rejects an invalid defaultProjectionDetailLevel on update', async () => {
+    await expect(
+      repo.update({ defaultProjectionDetailLevel: 'bogus' as never }),
+    ).rejects.toThrow();
   });
 });

@@ -11,6 +11,7 @@ import {
   CategoryType,
   RefreshCadence,
   FiPillsPosition,
+  ProjectionDetailLevel,
 } from './enums';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -408,5 +409,6 @@ export const AppSettingsSchema = z.object({
   defaultInflation: z.number().min(0).max(0.2).nullable().default(null),
   defaultReturnRate: z.number().min(-0.5).max(0.5).nullable().default(null),
   defaultFiPillsPosition: z.nativeEnum(FiPillsPosition).default(FiPillsPosition.ABOVE),
+  defaultProjectionDetailLevel: z.nativeEnum(ProjectionDetailLevel).default('tax_bucket'),
 });
 export type AppSettings = z.infer<typeof AppSettingsSchema>;
