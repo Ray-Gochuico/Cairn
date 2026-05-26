@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useEquityGrantsStore } from '@/stores/equity-grants-store';
 import { usePersonsStore } from '@/stores/persons-store';
@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
+import AddEquityGrantDialog from '@/components/equity-grants/AddEquityGrantDialog';
 import type { CsvColumn } from '@/lib/csv';
 import { formatCurrency } from '@/lib/format';
 
@@ -165,6 +166,10 @@ export default function EquityGrants() {
   const loadGrants = useEquityGrantsStore((s) => s.load);
   const loadPersons = usePersonsStore((s) => s.load);
 
+  // Controls the in-page Add Equity Grant dialog. Sits on the page (not in
+  // the header div) so opening from the empty-state CTA stays trivial later.
+  const [addOpen, setAddOpen] = useState(false);
+
   useEffect(() => {
     loadGrants();
     loadPersons();
@@ -256,6 +261,9 @@ export default function EquityGrants() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button size="sm" onClick={() => setAddOpen(true)}>
+            + Add grant
+          </Button>
           <ExportCsvButton
             baseName="equity-grants"
             columns={csvColumns}
@@ -303,6 +311,8 @@ export default function EquityGrants() {
           <EquityGrantCard key={p.grant.id} projection={p} />
         ))}
       </div>
+
+      <AddEquityGrantDialog open={addOpen} onOpenChange={setAddOpen} />
     </div>
   );
 }

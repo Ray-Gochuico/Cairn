@@ -272,6 +272,27 @@ describe('EquityGrants page', () => {
     expect(link).toHaveAttribute('href', '/inputs/equity-grants');
   });
 
+  it('renders a "+ Add grant" button in the page header when grants exist', () => {
+    primeStores({ grants: [{ name: 'Some Grant' }] });
+    render(
+      <MemoryRouter>
+        <EquityGrants />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('button', { name: /add grant/i })).toBeInTheDocument();
+  });
+
+  it('clicking "+ Add grant" opens AddEquityGrantDialog', async () => {
+    primeStores({ grants: [{ name: 'Some Grant' }] });
+    render(
+      <MemoryRouter>
+        <EquityGrants />
+      </MemoryRouter>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /add grant/i }));
+    expect(await screen.findByText(/^add equity grant$/i)).toBeInTheDocument();
+  });
+
   it('Export CSV button downloads the equity grants table with the owner name resolved', async () => {
     primeStores({
       persons: [
