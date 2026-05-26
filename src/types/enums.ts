@@ -150,3 +150,12 @@ export const ProjectionDetailLevel = {
   PER_ACCOUNT: 'per_account',
 } as const;
 export type ProjectionDetailLevel = typeof ProjectionDetailLevel[keyof typeof ProjectionDetailLevel];
+
+export const CompoundingFrequency = {
+  DAILY: 'DAILY',
+  WEEKLY: 'WEEKLY',
+  MONTHLY: 'MONTHLY',
+  QUARTERLY: 'QUARTERLY',
+  ANNUALLY: 'ANNUALLY',
+} as const;
+export type CompoundingFrequency = typeof CompoundingFrequency[keyof typeof CompoundingFrequency];

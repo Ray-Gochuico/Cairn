@@ -1,5 +1,6 @@
 import type { Database } from '@/db/db';
 import { AppSettingsSchema, type AppSettings, type SidebarLayoutEntry } from '@/types/schema';
+import { CompoundingFrequency } from '@/types/enums';
 
 interface AppSettingsRow {
   id: number;
@@ -14,6 +15,7 @@ interface AppSettingsRow {
   default_fi_pills_position: 'above' | 'below';
   default_projection_detail_level: 'single' | 'tax_bucket' | 'per_account';
   default_cash_apy: number | null;
+  default_compounding_frequency: CompoundingFrequency;
 }
 
 function rowToAppSettings(row: AppSettingsRow): AppSettings {
@@ -33,6 +35,7 @@ function rowToAppSettings(row: AppSettingsRow): AppSettings {
     defaultFiPillsPosition: row.default_fi_pills_position,
     defaultProjectionDetailLevel: row.default_projection_detail_level,
     defaultCashApy: row.default_cash_apy,
+    defaultCompoundingFrequency: row.default_compounding_frequency ?? CompoundingFrequency.MONTHLY,
   });
 }
 
@@ -66,7 +69,8 @@ export class SettingsRepo {
         default_return_rate = ?,
         default_fi_pills_position = ?,
         default_projection_detail_level = ?,
-        default_cash_apy = ?
+        default_cash_apy = ?,
+        default_compounding_frequency = ?
        WHERE id = 1`,
       [
         merged.sidebarLayout === null ? null : JSON.stringify(merged.sidebarLayout),
@@ -80,6 +84,7 @@ export class SettingsRepo {
         merged.defaultFiPillsPosition,
         merged.defaultProjectionDetailLevel,
         merged.defaultCashApy ?? null,
+        merged.defaultCompoundingFrequency,
       ],
     );
   }

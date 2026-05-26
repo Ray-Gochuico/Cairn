@@ -12,6 +12,7 @@ import {
   RefreshCadence,
   FiPillsPosition,
   ProjectionDetailLevel,
+  CompoundingFrequency,
 } from './enums';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -412,5 +413,8 @@ export const AppSettingsSchema = z.object({
   defaultFiPillsPosition: z.nativeEnum(FiPillsPosition).default(FiPillsPosition.ABOVE),
   defaultProjectionDetailLevel: z.nativeEnum(ProjectionDetailLevel).default('tax_bucket'),
   defaultCashApy: z.number().min(0).max(0.15).nullable().default(null),
+  defaultCompoundingFrequency: z
+    .nativeEnum(CompoundingFrequency)
+    .default(CompoundingFrequency.MONTHLY),
 });
 export type AppSettings = z.infer<typeof AppSettingsSchema>;
