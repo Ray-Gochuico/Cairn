@@ -48,13 +48,36 @@ export default function LeverBar() {
     </Button>
   );
 
+  // Determine whether the returns lever is in its untouched default state
+  // (7% compounding, no per-year overrides). When true, surface a muted
+  // "(default)" hint so users know the 7% assumption is active.
+  const returnsIsDefault =
+    lp.returns.defaultRate === 0.07 &&
+    Object.keys(lp.returns.overrides).length === 0;
+
   return (
     <>
       <div className="flex flex-wrap items-center gap-2">
         <Pill k="loans"         label="Loans" />
         <Pill k="lumpSums"      label="Lump sums" />
         <Pill k="expenses"      label="Expenses" />
-        <Pill k="returns"       label="Returns" />
+        <Button
+          variant={openLever === 'returns' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setOpenLever((cur) => (cur === 'returns' ? null : 'returns'))}
+          aria-label="Returns"
+          className="flex flex-col items-start h-auto py-1 leading-tight"
+        >
+          <span>Returns</span>
+          {returnsIsDefault && (
+            <span
+              data-testid="returns-default-hint"
+              className="text-xs text-muted-foreground italic font-normal"
+            >
+              using default 7%
+            </span>
+          )}
+        </Button>
         <Pill k="income"        label="Income" />
         <Pill k="contributions" label="Contributions" />
         {active.id != null && household && (

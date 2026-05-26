@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import LeverBar from '@/components/whatif/LeverBar';
@@ -27,6 +27,11 @@ const updateLeverMock = vi.fn().mockResolvedValue(undefined);
 let activeScenarioOverride: number | null = null;
 let activeScenarioId: number | null = 1;
 let householdRate = 0.04;
+// Allows individual tests to override the returns lever payload.
+let returnsPayload: { defaultRate: number; overrides: Record<string, number> } = {
+  defaultRate: 0.07,
+  overrides: {},
+};
 
 vi.mock('@/stores/scenarios-store', () => {
   return {
@@ -45,7 +50,7 @@ vi.mock('@/stores/scenarios-store', () => {
             extraLoanPayments: [],
             lumpSums: [],
             expensePeriods: [],
-            returns: { defaultRate: 0.07, overrides: {} },
+            returns: returnsPayload,
             income: { perPerson: [{ annualRaiseRate: 0.03, events: [] }] },
             contributions: [],
             retirementAgeOverride: null,
@@ -79,6 +84,10 @@ vi.mock('@/stores/household-store', () => ({
 }));
 
 describe('LeverBar — SWR pill wiring', () => {
+  beforeEach(() => {
+    returnsPayload = { defaultRate: 0.07, overrides: {} };
+  });
+
   it('renders the SwrLeverPill in the bar', () => {
     activeScenarioId = 1;
     activeScenarioOverride = null;
@@ -124,5 +133,32 @@ describe('LeverBar — SWR pill wiring', () => {
     householdRate = 0.04;
     render(<LeverBar />);
     expect(screen.queryByTestId('swr-lever-pill')).toBeNull();
+  });
+});
+
+describe('LeverBar — Returns default hint', () => {
+  beforeEach(() => {
+    activeScenarioId = 1;
+    activeScenarioOverride = null;
+    householdRate = 0.04;
+  });
+
+  it('shows the "using default 7%" hint when returns are at the pristine 7% baseline', () => {
+    returnsPayload = { defaultRate: 0.07, overrides: {} };
+    render(<LeverBar />);
+    expect(screen.getByTestId('returns-default-hint')).toBeInTheDocument();
+    expect(screen.getByTestId('returns-default-hint')).toHaveTextContent(/using default 7%/i);
+  });
+
+  it('hides the hint when defaultRate is customised (e.g. 5%)', () => {
+    returnsPayload = { defaultRate: 0.05, overrides: {} };
+    render(<LeverBar />);
+    expect(screen.queryByTestId('returns-default-hint')).not.toBeInTheDocument();
+  });
+
+  it('hides the hint when at least one per-year override is set even if defaultRate is 7%', () => {
+    returnsPayload = { defaultRate: 0.07, overrides: { '2026': -0.37 } };
+    render(<LeverBar />);
+    expect(screen.queryByTestId('returns-default-hint')).not.toBeInTheDocument();
   });
 });
