@@ -8,9 +8,40 @@ import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { useCategoriesStore } from '@/stores/categories-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
-import { FilingStatus, PropertyType } from '@/types/enums';
+import {
+  FilingStatus,
+  PropertyType,
+  RefreshCadence,
+  FiPillsPosition,
+  ProjectionDetailLevel,
+  CompoundingFrequency,
+  CategoryType,
+} from '@/types/enums';
+import type { AppSettings, Category, Transaction } from '@/types/schema';
 import Property from '@/pages/Property';
+
+function makeSettings(patch: Partial<AppSettings> = {}): AppSettings {
+  return {
+    id: 1,
+    sidebarLayout: null,
+    notificationsEnabled: true,
+    notificationDay: 1,
+    refreshCadence: RefreshCadence.EVERY_LAUNCH,
+    lastRefreshAt: null,
+    statementsFolderPath: null,
+    defaultInflation: null,
+    defaultReturnRate: null,
+    defaultFiPillsPosition: FiPillsPosition.ABOVE,
+    defaultProjectionDetailLevel: ProjectionDetailLevel.TAX_BUCKET,
+    defaultCashApy: null,
+    defaultCompoundingFrequency: CompoundingFrequency.MONTHLY,
+    propertyUtilitiesCategoryIds: null,
+    vehicleGasCategoryIds: null,
+    ...patch,
+  };
+}
 
 function resetStores() {
   usePropertiesStore.setState({ properties: [], isLoading: false, error: null, load: async () => {} });
@@ -31,12 +62,104 @@ function resetStores() {
   usePersonsStore.setState({ persons: [], isLoading: false, error: null, load: async () => {} });
   useTransactionsStore.setState({ transactions: [], isLoading: false, error: null, load: async () => {} });
   useCategoriesStore.setState({ categories: [], isLoading: false, error: null, load: async () => {} });
+  useSettingsStore.setState({
+    settings: makeSettings(),
+    isLoading: false,
+    error: null,
+    load: async () => {},
+    update: async () => {},
+  } as never);
   useAssetValueSnapshotsStore.setState({
     assetValueSnapshots: [],
     isLoading: false,
     error: null,
     load: async () => {},
   });
+}
+
+const baseCat = (overrides: Partial<Category>): Category => ({
+  id: 0,
+  name: '',
+  parentCategoryId: null,
+  color: null,
+  icon: null,
+  type: CategoryType.NEED,
+  isCapital: false,
+  systemManaged: false,
+  monthlyBudget: null,
+  ...overrides,
+});
+
+const HOME_AND_UTILITIES: Category[] = [
+  baseCat({ id: 1, name: 'Home' }),
+  baseCat({ id: 10, name: 'Utilities', parentCategoryId: 1 }),
+  baseCat({ id: 11, name: 'Internet', parentCategoryId: 1 }),
+];
+
+function seedPropertyWithUtilities(): void {
+  usePropertiesStore.setState({
+    properties: [
+      {
+        id: 7,
+        householdId: 1,
+        ownerPersonId: null,
+        name: 'My Home',
+        type: PropertyType.PRIMARY_RESIDENCE,
+        address: null,
+        purchasePrice: 400000,
+        purchaseDate: '2020-01-01',
+        currentEstimatedValue: 450000,
+        linkedLoanId: null,
+        excludedFromNetWorth: false,
+        notes: null,
+      } as never,
+    ],
+    isLoading: false,
+    error: null,
+    load: async () => {},
+  } as never);
+  useCategoriesStore.setState({
+    categories: HOME_AND_UTILITIES,
+    isLoading: false,
+    error: null,
+    load: async () => {},
+  } as never);
+}
+
+function seedUtilitiesTransactions(transactions: Transaction[]): void {
+  useTransactionsStore.setState({
+    transactions,
+    isLoading: false,
+    error: null,
+    load: async () => {},
+  } as never);
+}
+
+function makeUtilitiesTx(
+  id: number,
+  date: string,
+  amount: number,
+  categoryId: number,
+): Transaction {
+  return {
+    id,
+    householdId: 1,
+    date,
+    merchant: 'Utility Co',
+    merchantRaw: 'Utility Co',
+    amount,
+    categoryId,
+    sourceAccountId: null,
+    propertyId: 7,
+    vehicleId: null,
+    personId: null,
+    sourcePdfFilename: null,
+    reimbursable: false,
+    reimbursedAt: null,
+    reimbursedAmount: null,
+    isRecurring: false,
+    notes: null,
+  };
 }
 
 function renderPage() {
@@ -358,5 +481,108 @@ describe('Property page', () => {
 
     createSpy.mockRestore();
     revokeSpy.mockRestore();
+  });
+});
+
+describe('Property page — utilities card with configurable category set', () => {
+  beforeEach(() => {
+    resetStores();
+  });
+
+  it('uses the seeded "Home > Utilities" when propertyUtilitiesCategoryIds is null', () => {
+    seedPropertyWithUtilities();
+    // Single $100 utilities tx today (this month) → avg $100/mo over 1 month.
+    seedUtilitiesTransactions([makeUtilitiesTx(1, '2026-05-15', 100, 10)]);
+    useSettingsStore.setState({
+      settings: makeSettings({ propertyUtilitiesCategoryIds: null }),
+      isLoading: false,
+      error: null,
+      load: async () => {},
+      update: async () => {},
+    } as never);
+
+    renderPage();
+
+    // Card title "Utilities" appears as text + $100 in the card body.
+    expect(screen.getAllByText(/^Utilities$/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('$100').length).toBeGreaterThan(0);
+  });
+
+  it('sums across multiple configured category ids', () => {
+    seedPropertyWithUtilities();
+    // Pin both transactions to the same recent month → total $150 / 1 month
+    // = $150/mo average.
+    seedUtilitiesTransactions([
+      makeUtilitiesTx(1, '2026-05-15', 100, 10),
+      makeUtilitiesTx(2, '2026-05-15', 50, 11),
+    ]);
+    useSettingsStore.setState({
+      settings: makeSettings({ propertyUtilitiesCategoryIds: [10, 11] }),
+      isLoading: false,
+      error: null,
+      load: async () => {},
+      update: async () => {},
+    } as never);
+
+    renderPage();
+
+    // $100 utilities + $50 internet, same month = $150/mo average.
+    expect(screen.getAllByText('$150').length).toBeGreaterThan(0);
+  });
+
+  it('shows the empty state when propertyUtilitiesCategoryIds = []', () => {
+    seedPropertyWithUtilities();
+    useSettingsStore.setState({
+      settings: makeSettings({ propertyUtilitiesCategoryIds: [] }),
+      isLoading: false,
+      error: null,
+      load: async () => {},
+      update: async () => {},
+    } as never);
+
+    renderPage();
+
+    expect(screen.getByText(/no categories configured/i)).toBeInTheDocument();
+  });
+
+  it('renders an inline picker that opens an inline popover with utilities categories', async () => {
+    const user = userEvent.setup();
+    seedPropertyWithUtilities();
+    useSettingsStore.setState({
+      settings: makeSettings(),
+      isLoading: false,
+      error: null,
+      load: async () => {},
+      update: async () => {},
+    } as never);
+
+    renderPage();
+
+    const trigger = screen.getByRole('button', { name: /edit utilities categories/i });
+    expect(trigger).toBeInTheDocument();
+    await user.click(trigger);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Utilities$/)).toBeInTheDocument();
+  });
+
+  it('saves an inline picker selection to the settings store', async () => {
+    const user = userEvent.setup();
+    seedPropertyWithUtilities();
+    const update = vi.fn().mockResolvedValue(undefined);
+    useSettingsStore.setState({
+      settings: makeSettings(),
+      isLoading: false,
+      error: null,
+      load: async () => {},
+      update,
+    } as never);
+
+    renderPage();
+
+    await user.click(
+      screen.getByRole('button', { name: /edit utilities categories/i }),
+    );
+    await user.click(screen.getByLabelText(/^Internet$/));
+    expect(update).toHaveBeenCalledWith({ propertyUtilitiesCategoryIds: [11] });
   });
 });
