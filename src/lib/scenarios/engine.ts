@@ -37,6 +37,40 @@ export interface MonthlyState {
   expenses: number;
   savings: number;
   events: string[];
+
+  // ---------------------------------------------------------------------------
+  // Optional flow decomposition fields (Task #25).
+  //
+  // Pure observability — do NOT participate in any engine math. Populated by
+  // stepMonth and consumed by the projection chart's hover tooltip (and the
+  // ContributionsPopover auto-invest preview card). All values are in nominal
+  // dollars, scoped to THIS step only (not cumulative). Optional so tests /
+  // fixtures that construct MonthlyState literals continue to compile —
+  // missing fields default to 0 at consumption time.
+  // ---------------------------------------------------------------------------
+  /** Gain credited to investments this step from `applyAnnualReturn`. */
+  compoundReturnAdded?: number;
+  /**
+   * Amount of `s.savings` (income − expenses − loan payments) routed into
+   * investments this step WITHOUT an explicit contribution segment driving it.
+   * Zero when an active segment covers this month (the segment amount lands
+   * in `leverContributionsInvested` instead and any positive remainder flows
+   * to cash, not investments).
+   */
+  autoInvestedSalarySurplus?: number;
+  /**
+   * `segment.monthlyAmount` distributed to investments this step when a
+   * contribution segment was active. Zero when no segment covers this month.
+   */
+  leverContributionsInvested?: number;
+  /** Sum of lump-sum events firing this step with `destination === 'investments'`. */
+  lumpSumInvested?: number;
+  /**
+   * Investments drawn down by `applyCashFloorShortfall` this step (positive
+   * number; the actual investment balance change is negative). Triggered when
+   * cash + this step's surplus can't cover expenses + loan payments.
+   */
+  withdrawnFromInvestments?: number;
 }
 
 export interface Horizon {
@@ -242,7 +276,19 @@ function stepMonth(
   compoundingFrequency: CompoundingFrequency,  // frozen at projection start
 ): MonthlyState {
   const monthISO = addMonths(prev.monthISO, 1);
-  let s: MonthlyState = { ...prev, monthISO, events: [] };
+  let s: MonthlyState = {
+    ...prev,
+    monthISO,
+    events: [],
+    // Reset per-step flow decomposition. Optional fields default to 0 each
+    // step so a consumer can sum across an interval without worrying about
+    // undefined arithmetic.
+    compoundReturnAdded: 0,
+    autoInvestedSalarySurplus: 0,
+    leverContributionsInvested: 0,
+    lumpSumInvested: 0,
+    withdrawnFromInvestments: 0,
+  };
 
   // 0. Apply this month's cash APY growth on last month's ending balance,
   //    BEFORE the savings/contribution step adds new inflows.
@@ -256,11 +302,16 @@ function stepMonth(
   const allocation = resolveAllocation(payload, monthIndex, s.investmentsByAccount);
 
   // 1. Lump-sum events firing this month
+  let lumpSumInvested = 0;
   for (const evt of payload.lumpSums) {
     if (evt.when.slice(0, 7) === monthISO) {
+      if (evt.destination === 'investments') {
+        lumpSumInvested += evt.amount;
+      }
       s = applyLumpSum(s, evt, allocation);
     }
   }
+  s.lumpSumInvested = lumpSumInvested;
 
   // 2. Compute monthly income across persons. After a person reaches their
   // retirement age (Person.targetRetirementAge, or LeverPayload.retirementAgeOverride
@@ -372,14 +423,20 @@ function stepMonth(
   const contribution = activeContributionAmount(payload.contributions, monthIndex);
   if (contribution !== null) {
     s.investmentsByAccount = distributeToAccounts(s.investmentsByAccount, contribution, allocation);
+    s.leverContributionsInvested = contribution;
     const remainder = s.savings - contribution;
     if (remainder >= 0) {
+      // Cash remainder — does NOT land in investments, so we don't tag it as
+      // auto-invested. This matches the engine's actual routing: with an
+      // active segment the only investment-bound salary money is the segment
+      // amount itself.
       s.cash += remainder;
     } else {
       applyCashFloorShortfall(s, -remainder);
     }
   } else if (s.savings > 0) {
     s.investmentsByAccount = distributeToAccounts(s.investmentsByAccount, s.savings, allocation);
+    s.autoInvestedSalarySurplus = s.savings;
   } else if (s.savings < 0) {
     applyCashFloorShortfall(s, -s.savings);
   }
@@ -387,9 +444,15 @@ function stepMonth(
   // 7. Apply this month's return to investments. The compounding frequency
   // is per-scenario (defaults to MONTHLY — identical to the legacy
   // (1+annual)^(1/12)-1 monthly rate). See applyAnnualReturnWithFrequency.
+  // We snapshot total investments immediately before and after the call so
+  // we can attribute the gain to `compoundReturnAdded` (Task #25) without
+  // changing the math. The snapshot wraps whichever variant of applyReturn
+  // is in use — frequency-aware or otherwise.
+  const investmentsBeforeReturn = totalInvestments(s);
   const year = Number(monthISO.slice(0, 4));
   const annualReturn = payload.returns.overrides[String(year)] ?? payload.returns.defaultRate;
   s = applyAnnualReturnWithFrequency(s, annualReturn, compoundingFrequency);
+  s.compoundReturnAdded = totalInvestments(s) - investmentsBeforeReturn;
 
   s.netWorth = computeNetWorth(s);
   return s;
@@ -399,6 +462,13 @@ function stepMonth(
 // floor cash at zero and pull the rest from investments. Investments may go
 // negative if the deficit exceeds both buckets — we don't clamp, since that
 // would silently hide an insolvent projection from the user.
+//
+// Side-effect: when the helper draws from investments it accumulates the
+// drawn amount into `s.withdrawnFromInvestments` (Task #25 decomposition).
+// Accumulates because a single step may invoke this twice (e.g. with an
+// active contribution segment whose remainder goes negative AND a savings
+// branch that also triggers — though in practice only one branch fires per
+// step). Using += keeps the contract safe either way.
 function applyCashFloorShortfall(s: MonthlyState, deficit: number): void {
   if (s.cash >= deficit) {
     s.cash -= deficit;
@@ -407,6 +477,7 @@ function applyCashFloorShortfall(s: MonthlyState, deficit: number): void {
   const fromInvestments = deficit - s.cash;
   s.cash = 0;
   s.investmentsByAccount = withdrawProportionally(s.investmentsByAccount, fromInvestments);
+  s.withdrawnFromInvestments = (s.withdrawnFromInvestments ?? 0) + fromInvestments;
 }
 
 export function computeNetWorth(s: MonthlyState): number {
