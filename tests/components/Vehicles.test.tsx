@@ -8,9 +8,39 @@ import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { useCategoriesStore } from '@/stores/categories-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
-import { FilingStatus } from '@/types/enums';
+import {
+  FilingStatus,
+  RefreshCadence,
+  FiPillsPosition,
+  ProjectionDetailLevel,
+  CompoundingFrequency,
+  CategoryType,
+} from '@/types/enums';
+import type { AppSettings, Category, Transaction } from '@/types/schema';
 import Vehicles from '@/pages/Vehicles';
+
+function makeSettings(patch: Partial<AppSettings> = {}): AppSettings {
+  return {
+    id: 1,
+    sidebarLayout: null,
+    notificationsEnabled: true,
+    notificationDay: 1,
+    refreshCadence: RefreshCadence.EVERY_LAUNCH,
+    lastRefreshAt: null,
+    statementsFolderPath: null,
+    defaultInflation: null,
+    defaultReturnRate: null,
+    defaultFiPillsPosition: FiPillsPosition.ABOVE,
+    defaultProjectionDetailLevel: ProjectionDetailLevel.TAX_BUCKET,
+    defaultCashApy: null,
+    defaultCompoundingFrequency: CompoundingFrequency.MONTHLY,
+    propertyUtilitiesCategoryIds: null,
+    vehicleGasCategoryIds: null,
+    ...patch,
+  };
+}
 
 function resetStores() {
   useVehiclesStore.setState({ vehicles: [], isLoading: false, error: null, load: async () => {} });
@@ -31,12 +61,105 @@ function resetStores() {
   usePersonsStore.setState({ persons: [], isLoading: false, error: null, load: async () => {} });
   useTransactionsStore.setState({ transactions: [], isLoading: false, error: null, load: async () => {} });
   useCategoriesStore.setState({ categories: [], isLoading: false, error: null, load: async () => {} });
+  useSettingsStore.setState({
+    settings: makeSettings(),
+    isLoading: false,
+    error: null,
+    load: async () => {},
+    update: async () => {},
+  } as never);
   useAssetValueSnapshotsStore.setState({
     assetValueSnapshots: [],
     isLoading: false,
     error: null,
     load: async () => {},
   });
+}
+
+const baseCat = (overrides: Partial<Category>): Category => ({
+  id: 0,
+  name: '',
+  parentCategoryId: null,
+  color: null,
+  icon: null,
+  type: CategoryType.NEED,
+  isCapital: false,
+  systemManaged: false,
+  monthlyBudget: null,
+  ...overrides,
+});
+
+const VEHICLES_AND_GAS: Category[] = [
+  baseCat({ id: 2, name: 'Vehicles' }),
+  baseCat({ id: 17, name: 'Gas/Fuel', parentCategoryId: 2 }),
+  baseCat({ id: 18, name: 'Auto Insurance', parentCategoryId: 2 }),
+];
+
+function seedVehicleWithGas(): void {
+  useVehiclesStore.setState({
+    vehicles: [
+      {
+        id: 5,
+        householdId: 1,
+        ownerPersonId: null,
+        name: 'My Car',
+        make: 'Toyota',
+        model: 'RAV4',
+        year: 2022,
+        purchasePrice: 35000,
+        purchaseDate: '2022-03-01',
+        currentEstimatedValue: 28000,
+        linkedLoanId: null,
+        excludedFromNetWorth: false,
+        notes: null,
+      } as never,
+    ],
+    isLoading: false,
+    error: null,
+    load: async () => {},
+  } as never);
+  useCategoriesStore.setState({
+    categories: VEHICLES_AND_GAS,
+    isLoading: false,
+    error: null,
+    load: async () => {},
+  } as never);
+}
+
+function seedGasTransactions(transactions: Transaction[]): void {
+  useTransactionsStore.setState({
+    transactions,
+    isLoading: false,
+    error: null,
+    load: async () => {},
+  } as never);
+}
+
+function makeGasTx(
+  id: number,
+  date: string,
+  amount: number,
+  categoryId: number,
+): Transaction {
+  return {
+    id,
+    householdId: 1,
+    date,
+    merchant: 'Gas Station',
+    merchantRaw: 'Gas Station',
+    amount,
+    categoryId,
+    sourceAccountId: null,
+    propertyId: null,
+    vehicleId: 5,
+    personId: null,
+    sourcePdfFilename: null,
+    reimbursable: false,
+    reimbursedAt: null,
+    reimbursedAmount: null,
+    isRecurring: false,
+    notes: null,
+  };
 }
 
 function renderPage() {
@@ -267,5 +390,104 @@ describe('Vehicles page', () => {
 
     createSpy.mockRestore();
     revokeSpy.mockRestore();
+  });
+});
+
+describe('Vehicles page — gas card with configurable category set', () => {
+  beforeEach(() => {
+    resetStores();
+  });
+
+  it('uses the seeded "Vehicles > Gas/Fuel" when vehicleGasCategoryIds is null', () => {
+    seedVehicleWithGas();
+    // Single $40 gas tx today (this month) → avg $40/mo over 1 month.
+    seedGasTransactions([makeGasTx(1, '2026-05-15', 40, 17)]);
+    useSettingsStore.setState({
+      settings: makeSettings({ vehicleGasCategoryIds: null }),
+      isLoading: false,
+      error: null,
+      load: async () => {},
+      update: async () => {},
+    } as never);
+
+    renderPage();
+
+    // Card title "Gas" appears as text + $40 in the card body.
+    expect(screen.getAllByText(/^Gas$/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('$40').length).toBeGreaterThan(0);
+  });
+
+  it('sums across multiple configured gas categories', () => {
+    seedVehicleWithGas();
+    // Pin both transactions to the same recent month → total $90 / 1 month.
+    seedGasTransactions([
+      makeGasTx(1, '2026-05-15', 40, 17),
+      makeGasTx(2, '2026-05-15', 50, 18),
+    ]);
+    useSettingsStore.setState({
+      settings: makeSettings({ vehicleGasCategoryIds: [17, 18] }),
+      isLoading: false,
+      error: null,
+      load: async () => {},
+      update: async () => {},
+    } as never);
+
+    renderPage();
+
+    expect(screen.getAllByText('$90').length).toBeGreaterThan(0);
+  });
+
+  it('shows the empty state when vehicleGasCategoryIds = []', () => {
+    seedVehicleWithGas();
+    useSettingsStore.setState({
+      settings: makeSettings({ vehicleGasCategoryIds: [] }),
+      isLoading: false,
+      error: null,
+      load: async () => {},
+      update: async () => {},
+    } as never);
+
+    renderPage();
+
+    expect(screen.getByText(/no categories configured/i)).toBeInTheDocument();
+  });
+
+  it('renders an inline picker that opens an inline popover with gas categories', async () => {
+    const user = userEvent.setup();
+    seedVehicleWithGas();
+    useSettingsStore.setState({
+      settings: makeSettings(),
+      isLoading: false,
+      error: null,
+      load: async () => {},
+      update: async () => {},
+    } as never);
+
+    renderPage();
+
+    const trigger = screen.getByRole('button', { name: /edit gas categories/i });
+    expect(trigger).toBeInTheDocument();
+    await user.click(trigger);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Gas\/Fuel$/)).toBeInTheDocument();
+  });
+
+  it('saves an inline picker selection to the settings store', async () => {
+    const user = userEvent.setup();
+    seedVehicleWithGas();
+    const update = vi.fn().mockResolvedValue(undefined);
+    useSettingsStore.setState({
+      settings: makeSettings(),
+      isLoading: false,
+      error: null,
+      load: async () => {},
+      update,
+    } as never);
+
+    renderPage();
+
+    await user.click(screen.getByRole('button', { name: /edit gas categories/i }));
+    await user.click(screen.getByLabelText(/^Auto Insurance$/));
+    expect(update).toHaveBeenCalledWith({ vehicleGasCategoryIds: [18] });
   });
 });

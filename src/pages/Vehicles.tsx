@@ -4,8 +4,11 @@ import { useVehiclesStore } from '@/stores/vehicles-store';
 import { useLoansStore } from '@/stores/loans-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { useCategoriesStore } from '@/stores/categories-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import { filterByOwnerPersonId } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
+import { resolveUtilityCategoryIds } from '@/lib/category-config';
+import { CategoryMultiSelect } from '@/components/categories/CategoryMultiSelect';
 import { LoanType } from '@/types/enums';
 import {
   rollingExpense,
@@ -13,7 +16,7 @@ import {
   allLinkedSpending,
   averageMonthlySpending,
 } from '@/lib/cost-basis';
-import type { Vehicle, Transaction } from '@/types/schema';
+import type { Vehicle, Transaction, Category } from '@/types/schema';
 import {
   Card,
   CardContent,
@@ -212,6 +215,9 @@ interface VehicleGasCardProps {
   gasCategoryFound: boolean;
   avgMonthlyGas: number;
   gasTxCount: number;
+  categories: Category[];
+  selectedGasIds: number[];
+  onSelectedGasIdsChange: (ids: number[]) => void;
 }
 
 function VehicleGasCard({
@@ -219,12 +225,25 @@ function VehicleGasCard({
   gasCategoryFound,
   avgMonthlyGas,
   gasTxCount,
+  categories,
+  selectedGasIds,
+  onSelectedGasIdsChange,
 }: VehicleGasCardProps) {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">Gas</CardTitle>
-        <CardDescription className="text-xs truncate">{vehicleName}</CardDescription>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <CardTitle className="text-base">Gas</CardTitle>
+            <CardDescription className="text-xs truncate">{vehicleName}</CardDescription>
+          </div>
+          <CategoryMultiSelect
+            categories={categories}
+            selected={selectedGasIds}
+            onChange={onSelectedGasIdsChange}
+            label="Edit gas categories"
+          />
+        </div>
       </CardHeader>
       <CardContent className="space-y-3">
         <div>
@@ -236,7 +255,7 @@ function VehicleGasCard({
           </div>
           <div className="text-xs text-muted-foreground">
             {!gasCategoryFound
-              ? 'No "Gas/Fuel" category configured.'
+              ? 'No categories configured. Click the picker to choose some, or set defaults in Settings → Advanced.'
               : gasTxCount === 0
                 ? 'No gas-categorized transactions linked to this vehicle.'
                 : `Across ${gasTxCount} linked transaction${gasTxCount === 1 ? '' : 's'}`}
@@ -265,6 +284,10 @@ export default function Vehicles() {
   const categories = useCategoriesStore((s) => s.categories);
   const loadCategories = useCategoriesStore((s) => s.load);
 
+  const settings = useSettingsStore((s) => s.settings);
+  const loadSettings = useSettingsStore((s) => s.load);
+  const updateSettings = useSettingsStore((s) => s.update);
+
   const [editing, setEditing] = useState<EditTarget>(null);
 
   useEffect(() => {
@@ -272,27 +295,28 @@ export default function Vehicles() {
     loadLoans();
     loadTransactions();
     loadCategories();
-  }, [loadVehicles, loadLoans, loadTransactions, loadCategories]);
+    loadSettings();
+  }, [loadVehicles, loadLoans, loadTransactions, loadCategories, loadSettings]);
 
   const visibleVehicles = useMemo(
     () => filterByOwnerPersonId(vehicles, filter, persons),
     [vehicles, filter, persons],
   );
 
-  // Look up the seeded "Vehicles > Gas/Fuel" category id for the Gas card.
-  // Robust to renumbering: matches by name within the Vehicles parent rather
-  // than hardcoding the seed id. Returns null if the tree doesn't have it.
-  const gasCategoryId = useMemo(() => {
-    const vehiclesParent = categories.find(
-      (c) => c.name === 'Vehicles' && c.parentCategoryId === null,
-    );
-    if (!vehiclesParent) return null;
-    return (
-      categories.find(
-        (c) => c.name === 'Gas/Fuel' && c.parentCategoryId === vehiclesParent.id,
-      )?.id ?? null
-    );
-  }, [categories]);
+  // Resolve the effective category-id set for the Gas card from the user's
+  // saved configuration in app_settings (or the seeded "Vehicles > Gas/Fuel"
+  // fallback when nothing is configured). See src/lib/category-config.ts for
+  // precedence rules.
+  const gasIds = useMemo(
+    () =>
+      resolveUtilityCategoryIds(
+        settings?.vehicleGasCategoryIds ?? null,
+        categories,
+        'vehicle_gas',
+      ),
+    [settings?.vehicleGasCategoryIds, categories],
+  );
+  const gasIdSet = useMemo(() => new Set(gasIds), [gasIds]);
 
   const autoLoanById = useMemo(() => {
     const map = new Map<number, number>();
@@ -386,9 +410,9 @@ export default function Vehicles() {
           const rolling12moExpense = rollingExpense(transactions, { vehicleId: v.id! }, 12, categories);
           const allLinked = allLinkedSpending(transactions, { vehicleId: v.id! }, categories);
           const annualAverage = averageMonthlySpending(allLinked) * 12;
-          const gasTx = gasCategoryId != null
-            ? allLinked.filter((t) => t.categoryId === gasCategoryId)
-            : [];
+          const gasTx = allLinked.filter(
+            (t) => t.categoryId != null && gasIdSet.has(t.categoryId),
+          );
           const avgMonthlyGas = averageMonthlySpending(gasTx);
           return (
             <div key={v.id} className="space-y-3">
@@ -409,9 +433,16 @@ export default function Vehicles() {
                 />
                 <VehicleGasCard
                   vehicleName={v.name}
-                  gasCategoryFound={gasCategoryId != null}
+                  gasCategoryFound={gasIds.length > 0}
                   avgMonthlyGas={avgMonthlyGas}
                   gasTxCount={gasTx.length}
+                  categories={categories}
+                  selectedGasIds={settings?.vehicleGasCategoryIds ?? []}
+                  onSelectedGasIdsChange={(ids) =>
+                    void updateSettings({
+                      vehicleGasCategoryIds: ids.length === 0 ? null : ids,
+                    })
+                  }
                 />
               </div>
               {v.id != null ? (
