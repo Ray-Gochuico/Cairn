@@ -189,6 +189,82 @@ describe('EquityGrantsTab', () => {
     });
   });
 
+  it('pre-fills the calculator section when editing a grant with saved valuation inputs', async () => {
+    const user = userEvent.setup();
+    const repo = new EquityGrantsRepo(db);
+    await repo.create({
+      householdId: 1,
+      ownerPersonId: alexId,
+      name: 'With Calculator',
+      companyName: 'PrivateCo',
+      grantDate: '2024-01-15',
+      strikePrice: 0,
+      totalShares: 500,
+      vestingSchedule: sampleSchedule,
+      currentFmv: 10,
+      companyValuation: 10_000_000,
+      companyOutstandingShares: 5_000_000,
+      companyTotalDebt: 2_000_000,
+    });
+
+    render(<MemoryRouter><EquityGrantsTab /></MemoryRouter>);
+    await waitFor(() => screen.getByText('With Calculator'));
+    await user.click(screen.getByRole('button', { name: /edit/i }));
+
+    // The <details> section should be open because all three values are non-null.
+    const summary = await screen.findByText(/estimate it from company valuation/i);
+    const details = summary.closest('details');
+    expect(details?.open).toBe(true);
+
+    // Inputs reflect the persisted values.
+    expect(
+      (screen.getByLabelText(/company valuation/i) as HTMLInputElement).value,
+    ).toBe('10000000');
+    expect(
+      (screen.getByLabelText(/outstanding shares/i) as HTMLInputElement).value,
+    ).toBe('5000000');
+    expect(
+      (screen.getByLabelText(/total debt/i) as HTMLInputElement).value,
+    ).toBe('2000000');
+  });
+
+  it('round-trips updated calculator fields through the edit form', async () => {
+    const user = userEvent.setup();
+    const repo = new EquityGrantsRepo(db);
+    const id = await repo.create({
+      householdId: 1,
+      ownerPersonId: alexId,
+      name: 'Round Trip',
+      companyName: 'PrivateCo',
+      grantDate: '2024-01-15',
+      strikePrice: 0,
+      totalShares: 500,
+      vestingSchedule: sampleSchedule,
+      currentFmv: 10,
+      companyValuation: null,
+      companyOutstandingShares: null,
+      companyTotalDebt: null,
+    });
+
+    render(<MemoryRouter><EquityGrantsTab /></MemoryRouter>);
+    await waitFor(() => screen.getByText('Round Trip'));
+    await user.click(screen.getByRole('button', { name: /edit/i }));
+
+    // Open calculator (it starts closed since the fields were null).
+    await user.click(screen.getByText(/estimate it from company valuation/i));
+    await user.type(screen.getByLabelText(/company valuation/i), '20000000');
+    await user.type(screen.getByLabelText(/total debt/i), '5000000');
+    await user.type(screen.getByLabelText(/outstanding shares/i), '4000000');
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(async () => {
+      const out = await repo.findById(id);
+      expect(out?.companyValuation).toBe(20_000_000);
+      expect(out?.companyTotalDebt).toBe(5_000_000);
+      expect(out?.companyOutstandingShares).toBe(4_000_000);
+    });
+  });
+
   it('editing a single vesting row updates cumulativePct', async () => {
     const user = userEvent.setup();
     render(<MemoryRouter><EquityGrantsTab /></MemoryRouter>);

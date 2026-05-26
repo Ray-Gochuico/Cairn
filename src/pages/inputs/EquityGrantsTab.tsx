@@ -71,6 +71,9 @@ export default function EquityGrantsTab() {
             totalShares: target.totalShares,
             currentFmv: target.currentFmv,
             vestingSchedule: target.vestingSchedule,
+            companyValuation: target.companyValuation,
+            companyOutstandingShares: target.companyOutstandingShares,
+            companyTotalDebt: target.companyTotalDebt,
           }}
           persons={personOptions}
           onSubmit={async (v) => {
