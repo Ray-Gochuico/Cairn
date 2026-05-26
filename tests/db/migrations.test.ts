@@ -287,6 +287,36 @@ it('0020 adds default_inflation + default_return_rate to app_settings (nullable)
   await db.close();
 });
 
+describe('0022 adds default_fi_pills_position to app_settings', () => {
+  let db: SqliteAdapter;
+  beforeEach(async () => {
+    db = new SqliteAdapter(':memory:');
+    await runMigrations(db, await loadAllMigrations());
+  });
+  afterEach(async () => {
+    await db.close();
+  });
+
+  it('adds the default_fi_pills_position column with default "above"', async () => {
+    const cols = await db.select<{ name: string }>("PRAGMA table_info(app_settings)");
+    expect(cols.map((c) => c.name)).toContain('default_fi_pills_position');
+    const rows = await db.select<{ default_fi_pills_position: string }>(
+      'SELECT default_fi_pills_position FROM app_settings WHERE id = 1',
+    );
+    expect(rows[0]?.default_fi_pills_position).toBe('above');
+  });
+
+  it('CHECK constraint rejects values other than "above" or "below"', async () => {
+    await expect(
+      db.execute("UPDATE app_settings SET default_fi_pills_position = 'sideways' WHERE id = 1"),
+    ).rejects.toThrow(/CHECK constraint failed/i);
+  });
+
+  it('is idempotent — running loadAllMigrations again does not error', async () => {
+    await expect(runMigrations(db, await loadAllMigrations())).resolves.not.toThrow();
+  });
+});
+
 it('0015 adds accent_color columns to accounts and tickers, accepting NULL and hex', async () => {
   const db = new SqliteAdapter(':memory:');
   await runMigrations(db, await loadAllMigrations());
