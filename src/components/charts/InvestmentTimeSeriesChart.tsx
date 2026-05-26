@@ -19,7 +19,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import {
-  bucketSnapshots,
+  bucketSnapshotsByClosestDate,
   cutoffForWindow,
   type Granularity,
   type TimeWindow,
@@ -202,7 +202,11 @@ export default function InvestmentTimeSeriesChart({
     if (selectedAccounts.length === 0 || filteredSnapshots.length === 0) {
       return EMPTY_CHART_DATA;
     }
-    const bucketed = bucketSnapshots(filteredSnapshots, granularity, MAX_BUCKETS);
+    const bucketed = bucketSnapshotsByClosestDate(
+      filteredSnapshots,
+      granularity,
+      MAX_BUCKETS,
+    );
     return bucketed.bucketEnds.map((bEnd, i) => {
       const row: Record<string, number | string> = { bucketEnd: bEnd };
       let total = 0;
