@@ -6,6 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useSettingsStore } from '@/stores/settings-store';
+import { useCategoriesStore } from '@/stores/categories-store';
+import { CategoryMultiSelect } from '@/components/categories/CategoryMultiSelect';
 import { FiPillsPosition, ProjectionDetailLevel, CompoundingFrequency } from '@/types/enums';
 import { ResetDisclaimersDialog } from './ResetDisclaimersDialog';
 
@@ -33,6 +35,13 @@ export function AdvancedSection() {
   const settings = useSettingsStore((s) => s.settings);
   const loadSettings = useSettingsStore((s) => s.load);
   const updateSettings = useSettingsStore((s) => s.update);
+
+  const categories = useCategoriesStore((s) => s.categories);
+  const loadCategories = useCategoriesStore((s) => s.load);
+
+  useEffect(() => {
+    void loadCategories();
+  }, [loadCategories]);
 
   const [open, setOpen] = useState(false);
   const [low, setLow] = useState<string>('');
@@ -348,6 +357,52 @@ export function AdvancedSection() {
               <span className="text-xs text-emerald-700">Saved</span>
             )}
           </div>
+
+          <section className="space-y-3">
+            <h4 className="text-sm font-medium mb-1">Property &amp; Vehicle stat categories</h4>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <Label className="text-sm font-normal">
+                    Property utilities categories
+                  </Label>
+                  <p className="text-xs text-slate-500">
+                    Used by the Utilities card on every Property page. Falls back to
+                    &quot;Home &rsaquo; Utilities&quot; when nothing is selected.
+                  </p>
+                </div>
+                <CategoryMultiSelect
+                  categories={categories}
+                  selected={settings?.propertyUtilitiesCategoryIds ?? []}
+                  onChange={(ids) =>
+                    void updateSettings({
+                      propertyUtilitiesCategoryIds: ids.length === 0 ? null : ids,
+                    })
+                  }
+                  label="Utilities categories"
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <Label className="text-sm font-normal">Vehicle gas categories</Label>
+                  <p className="text-xs text-slate-500">
+                    Used by the Gas card on every Vehicle page. Falls back to
+                    &quot;Vehicles &rsaquo; Gas/Fuel&quot; when nothing is selected.
+                  </p>
+                </div>
+                <CategoryMultiSelect
+                  categories={categories}
+                  selected={settings?.vehicleGasCategoryIds ?? []}
+                  onChange={(ids) =>
+                    void updateSettings({
+                      vehicleGasCategoryIds: ids.length === 0 ? null : ids,
+                    })
+                  }
+                  label="Gas categories"
+                />
+              </div>
+            </div>
+          </section>
 
           <section>
             <h4 className="text-sm font-medium mb-1">

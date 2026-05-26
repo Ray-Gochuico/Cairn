@@ -4,14 +4,16 @@ import userEvent from '@testing-library/user-event';
 import { AdvancedSection } from '@/components/settings/AdvancedSection';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useSettingsStore } from '@/stores/settings-store';
+import { useCategoriesStore } from '@/stores/categories-store';
 import {
   FilingStatus,
   RefreshCadence,
   FiPillsPosition,
   ProjectionDetailLevel,
   CompoundingFrequency,
+  CategoryType,
 } from '@/types/enums';
-import type { Household, AppSettings } from '@/types/schema';
+import type { Household, AppSettings, Category } from '@/types/schema';
 
 function makeSettings(patch: Partial<AppSettings> = {}): AppSettings {
   return {
@@ -28,8 +30,41 @@ function makeSettings(patch: Partial<AppSettings> = {}): AppSettings {
     defaultProjectionDetailLevel: ProjectionDetailLevel.TAX_BUCKET,
     defaultCashApy: null,
     defaultCompoundingFrequency: CompoundingFrequency.MONTHLY,
+    propertyUtilitiesCategoryIds: null,
+    vehicleGasCategoryIds: null,
     ...patch,
   };
+}
+
+const baseCat = (overrides: Partial<Category>): Category => ({
+  id: 0,
+  name: '',
+  parentCategoryId: null,
+  color: null,
+  icon: null,
+  type: CategoryType.NEED,
+  isCapital: false,
+  systemManaged: false,
+  monthlyBudget: null,
+  ...overrides,
+});
+
+const SEED_CATEGORIES: Category[] = [
+  baseCat({ id: 1, name: 'Home' }),
+  baseCat({ id: 10, name: 'Utilities', parentCategoryId: 1 }),
+  baseCat({ id: 11, name: 'Internet', parentCategoryId: 1 }),
+  baseCat({ id: 2, name: 'Vehicles' }),
+  baseCat({ id: 17, name: 'Gas/Fuel', parentCategoryId: 2 }),
+  baseCat({ id: 18, name: 'Auto Insurance', parentCategoryId: 2 }),
+];
+
+function resetCategoriesStore(categories: Category[] = SEED_CATEGORIES) {
+  useCategoriesStore.setState({
+    categories,
+    isLoading: false,
+    error: null,
+    load: async () => {},
+  } as never);
 }
 
 function resetSettingsStore(
@@ -354,6 +389,73 @@ describe('AdvancedSection — Projection detail level select', () => {
     expect(updateSettings).toHaveBeenCalledWith(
       expect.objectContaining({ defaultProjectionDetailLevel: 'per_account' }),
     );
+  });
+});
+
+describe('AdvancedSection — Property & Vehicle stat categories', () => {
+  beforeEach(() => {
+    resetStore(makeHousehold());
+    resetCategoriesStore();
+  });
+
+  it('renders the "Property & Vehicle stat categories" heading with two pickers', () => {
+    resetSettingsStore(makeSettings());
+    render(<AdvancedSection />);
+    fireEvent.click(screen.getByRole('button', { name: /expand advanced/i }));
+    expect(screen.getByText(/property & vehicle stat categories/i)).toBeInTheDocument();
+    // Two picker buttons (one per bucket).
+    expect(
+      screen.getByRole('button', { name: /utilities categories \(/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /gas categories \(/i })).toBeInTheDocument();
+  });
+
+  it('saves a property-utilities selection to the settings store', async () => {
+    const update = vi.fn().mockResolvedValue(undefined);
+    resetSettingsStore(makeSettings(), update);
+    render(<AdvancedSection />);
+    fireEvent.click(screen.getByRole('button', { name: /expand advanced/i }));
+    await userEvent.click(
+      screen.getByRole('button', { name: /utilities categories \(/i }),
+    );
+    await userEvent.click(screen.getByLabelText(/^Utilities$/));
+    expect(update).toHaveBeenCalledWith({ propertyUtilitiesCategoryIds: [10] });
+  });
+
+  it('saves a vehicle-gas selection to the settings store', async () => {
+    const update = vi.fn().mockResolvedValue(undefined);
+    resetSettingsStore(makeSettings(), update);
+    render(<AdvancedSection />);
+    fireEvent.click(screen.getByRole('button', { name: /expand advanced/i }));
+    await userEvent.click(screen.getByRole('button', { name: /gas categories \(/i }));
+    await userEvent.click(screen.getByLabelText(/^Gas\/Fuel$/));
+    expect(update).toHaveBeenCalledWith({ vehicleGasCategoryIds: [17] });
+  });
+
+  it('persists null when the user clears the last selection', async () => {
+    // Make the mock actually mutate the store between clicks so the
+    // picker's `selected` prop reflects the in-flight state.
+    const update = vi.fn(async (patch: Partial<AppSettings>) => {
+      useSettingsStore.setState(
+        (prev: any) => ({
+          ...prev,
+          settings: { ...prev.settings, ...patch },
+        }) as never,
+      );
+    });
+    resetSettingsStore(
+      makeSettings({ propertyUtilitiesCategoryIds: [10] }),
+      update,
+    );
+    render(<AdvancedSection />);
+    fireEvent.click(screen.getByRole('button', { name: /expand advanced/i }));
+    await userEvent.click(
+      screen.getByRole('button', { name: /utilities categories \(/i }),
+    );
+    // Uncheck the only selected leaf → onChange fires with [], the block
+    // maps [] → null to preserve the seeded-defaults fallback semantics.
+    await userEvent.click(screen.getByLabelText(/^Utilities$/));
+    expect(update).toHaveBeenLastCalledWith({ propertyUtilitiesCategoryIds: null });
   });
 });
 
