@@ -92,7 +92,9 @@ describe('WhatIf page management surfaces', () => {
         <WhatIf />
       </MemoryRouter>,
     );
-    expect(screen.getByText('Baseline')).toBeInTheDocument();
+    // "Baseline" appears in both the panel header and the scenario list row —
+    // use getAllByText to accommodate the new inline panel design.
+    expect(screen.getAllByText('Baseline').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByRole('button', { name: /save current/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /manage/i })).toBeInTheDocument();
   });
