@@ -13,6 +13,10 @@ const loadAccountMarginMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0007_add_account_margin.sql'), 'utf-8');
 const loadAccentColorsMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0015_add_accent_colors.sql'), 'utf-8');
+const loadAppSettingsMigration = () =>
+  readFileSync(resolve(__dirname, '../../src/db/migrations/0014_add_app_settings.sql'), 'utf-8');
+const loadCashApyMigration = () =>
+  readFileSync(resolve(__dirname, '../../src/db/migrations/0024_cash_apy.sql'), 'utf-8');
 
 const makeAccount = async (accountsRepo: AccountsRepo, name = 'Brokerage'): Promise<number> => {
   return accountsRepo.create({
@@ -41,6 +45,8 @@ describe('HoldingsRepo', () => {
       { version: '0001_initial', sql: loadInitialMigration() },
       { version: '0007_add_account_margin', sql: loadAccountMarginMigration() },
       { version: '0015_add_accent_colors', sql: loadAccentColorsMigration() },
+      { version: '0014_add_app_settings', sql: loadAppSettingsMigration() },
+      { version: '0024_cash_apy', sql: loadCashApyMigration() },
     ]);
     repo = new HoldingsRepo(db);
     accountsRepo = new AccountsRepo(db);

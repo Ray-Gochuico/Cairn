@@ -30,7 +30,9 @@ describe('AnnualTotalDialog', () => {
     await runMigrations(db, [
       mig('0001_initial'),
       mig('0007_add_account_margin'),
+      mig('0014_add_app_settings'),
       mig('0015_add_accent_colors'),
+      mig('0024_cash_apy'),
     ]);
     setDatabase(db);
 

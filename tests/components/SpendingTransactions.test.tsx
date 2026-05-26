@@ -70,6 +70,7 @@ describe('SpendingTransactions page', () => {
       mig('0013_add_category_budget'),
       mig('0014_add_app_settings'),
       mig('0015_add_accent_colors'),
+      mig('0024_cash_apy'),
     ]);
     setDatabase(db);
     useCategoriesStore.setState({ categories: [], isLoading: false, error: null });
