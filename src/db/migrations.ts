@@ -73,6 +73,7 @@ export async function loadAllMigrations(): Promise<Migration[]> {
   const m0024 = (await import('./migrations/0024_cash_apy.sql?raw')).default;
   const m0025 = (await import('./migrations/0025_compounding_frequency.sql?raw')).default;
   const m0026 = (await import('./migrations/0026_asset_value_snapshots.sql?raw')).default;
+  const m0027 = (await import('./migrations/0027_equity_grant_company_valuation.sql?raw')).default;
   return [
     { version: '0001_initial', sql: m0001 },
     { version: '0002_seed_tax_rules', sql: m0002 },
@@ -100,5 +101,6 @@ export async function loadAllMigrations(): Promise<Migration[]> {
     { version: '0024_cash_apy', sql: m0024 },
     { version: '0025_compounding_frequency', sql: m0025 },
     { version: '0026_asset_value_snapshots', sql: m0026 },
+    { version: '0027_equity_grant_company_valuation', sql: m0027 },
   ];
 }
