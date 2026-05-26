@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { runMigrations, loadAllMigrations } from '@/db/migrations';
 import { SettingsRepo } from '@/domain/app-settings';
+import { FiPillsPosition } from '@/types/enums';
 
 describe('SettingsRepo', () => {
   let db: SqliteAdapter;
@@ -85,5 +86,23 @@ describe('SettingsRepo', () => {
     const s = await repo.get();
     expect(s.defaultInflation).toBeNull();
     expect(s.defaultReturnRate).toBeNull();
+  });
+
+  it('reads the seeded defaultFiPillsPosition as "above" on a fresh DB', async () => {
+    const s = await repo.get();
+    expect(s.defaultFiPillsPosition).toBe(FiPillsPosition.ABOVE);
+  });
+
+  it('updates and re-reads defaultFiPillsPosition = "below"', async () => {
+    await repo.update({ defaultFiPillsPosition: FiPillsPosition.BELOW });
+    const s = await repo.get();
+    expect(s.defaultFiPillsPosition).toBe(FiPillsPosition.BELOW);
+  });
+
+  it('round-trips defaultFiPillsPosition back to "above"', async () => {
+    await repo.update({ defaultFiPillsPosition: FiPillsPosition.BELOW });
+    await repo.update({ defaultFiPillsPosition: FiPillsPosition.ABOVE });
+    const s = await repo.get();
+    expect(s.defaultFiPillsPosition).toBe(FiPillsPosition.ABOVE);
   });
 });

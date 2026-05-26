@@ -137,3 +137,9 @@ export const RefreshCadence = {
   MANUAL: 'MANUAL',
 } as const;
 export type RefreshCadence = typeof RefreshCadence[keyof typeof RefreshCadence];
+
+export const FiPillsPosition = {
+  ABOVE: 'above',
+  BELOW: 'below',
+} as const;
+export type FiPillsPosition = typeof FiPillsPosition[keyof typeof FiPillsPosition];

@@ -10,6 +10,7 @@ import {
   GoalType,
   CategoryType,
   RefreshCadence,
+  FiPillsPosition,
 } from './enums';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -406,5 +407,6 @@ export const AppSettingsSchema = z.object({
   statementsFolderPath: z.string().nullable(),
   defaultInflation: z.number().min(0).max(0.2).nullable().default(null),
   defaultReturnRate: z.number().min(-0.5).max(0.5).nullable().default(null),
+  defaultFiPillsPosition: z.nativeEnum(FiPillsPosition).default(FiPillsPosition.ABOVE),
 });
 export type AppSettings = z.infer<typeof AppSettingsSchema>;

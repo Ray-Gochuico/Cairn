@@ -11,6 +11,7 @@ interface AppSettingsRow {
   statements_folder_path: string | null;
   default_inflation: number | null;
   default_return_rate: number | null;
+  default_fi_pills_position: 'above' | 'below';
 }
 
 function rowToAppSettings(row: AppSettingsRow): AppSettings {
@@ -27,6 +28,7 @@ function rowToAppSettings(row: AppSettingsRow): AppSettings {
     statementsFolderPath: row.statements_folder_path,
     defaultInflation: row.default_inflation,
     defaultReturnRate: row.default_return_rate,
+    defaultFiPillsPosition: row.default_fi_pills_position,
   });
 }
 
@@ -57,7 +59,8 @@ export class SettingsRepo {
         last_refresh_at = ?,
         statements_folder_path = ?,
         default_inflation = ?,
-        default_return_rate = ?
+        default_return_rate = ?,
+        default_fi_pills_position = ?
        WHERE id = 1`,
       [
         merged.sidebarLayout === null ? null : JSON.stringify(merged.sidebarLayout),
@@ -68,6 +71,7 @@ export class SettingsRepo {
         merged.statementsFolderPath,
         merged.defaultInflation,
         merged.defaultReturnRate,
+        merged.defaultFiPillsPosition,
       ],
     );
   }
