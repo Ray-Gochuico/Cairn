@@ -159,3 +159,10 @@ export const CompoundingFrequency = {
   ANNUALLY: 'ANNUALLY',
 } as const;
 export type CompoundingFrequency = typeof CompoundingFrequency[keyof typeof CompoundingFrequency];
+
+export const AssetSnapshotOwnerType = {
+  PROPERTY: 'PROPERTY',
+  VEHICLE: 'VEHICLE',
+} as const;
+export type AssetSnapshotOwnerType =
+  typeof AssetSnapshotOwnerType[keyof typeof AssetSnapshotOwnerType];

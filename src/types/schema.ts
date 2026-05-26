@@ -13,6 +13,7 @@ import {
   FiPillsPosition,
   ProjectionDetailLevel,
   CompoundingFrequency,
+  AssetSnapshotOwnerType,
 } from './enums';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -163,6 +164,18 @@ export const AccountSnapshotSchema = z.object({
   source: z.nativeEnum(SnapshotSource),
 });
 export type AccountSnapshot = z.infer<typeof AccountSnapshotSchema>;
+
+// Manually entered dated value snapshot for a property or vehicle. The
+// discriminated union (PROPERTY | VEHICLE) means cascading deletes are
+// repo-layer concerns — see PropertiesRepo.delete / VehiclesRepo.delete.
+export const AssetValueSnapshotSchema = z.object({
+  id: z.number().int().positive().optional(),
+  ownerType: z.nativeEnum(AssetSnapshotOwnerType),
+  ownerId: z.number().int().positive(),
+  snapshotDate: isoDateString,
+  value: z.number().nonnegative(),
+});
+export type AssetValueSnapshot = z.infer<typeof AssetValueSnapshotSchema>;
 
 export const LoanSchema = z.object({
   id: z.number().int().positive().optional(),
