@@ -12,9 +12,14 @@ import {
 } from 'recharts';
 import React from 'react';
 import type { Scenario } from '@/types/scenario';
+import type { Account } from '@/types/schema';
 import type { MonthlyState, Milestones } from '@/lib/scenarios';
-import { toReal, totalInvestments } from '@/lib/scenarios';
+import { toReal, totalInvestments, aggregateByTaxBucket } from '@/lib/scenarios';
+import { taxBucketForAccount } from '@/lib/account-tax-classification';
+import { ProjectionDetailLevel } from '@/types/enums';
 import { formatCompactCurrency } from '@/lib/format';
+
+const AREA_COLORS = ['#4f86f7', '#5fbb7c', '#e6b54b', '#ef8b5a', '#9b5de5', '#f15bb5'];
 
 export interface ProjectionChartProps {
   scenarios: Scenario[];
@@ -23,6 +28,8 @@ export interface ProjectionChartProps {
   dollarMode: 'nominal' | 'real';
   inflation: number;
   startISO: string;
+  detailLevel: ProjectionDetailLevel;
+  accounts: Account[];
 }
 
 interface Row {
@@ -44,7 +51,12 @@ function deriveDisplayProjections(
   return out;
 }
 
-function buildUpperPaneRows(scenarios: Scenario[], display: Map<number, MonthlyState[]>): Row[] {
+function buildUpperPaneRows(
+  scenarios: Scenario[],
+  display: Map<number, MonthlyState[]>,
+  accounts: Account[],
+  detailLevel: ProjectionDetailLevel,
+): Row[] {
   const visible = scenarios.filter((s) => s.visible && s.id != null);
   if (visible.length === 0) return [];
   const spine = display.get(visible[0].id!);
@@ -54,10 +66,25 @@ function buildUpperPaneRows(scenarios: Scenario[], display: Map<number, MonthlyS
     for (const sc of visible) {
       const arr = display.get(sc.id!);
       if (!arr || !arr[i]) continue;
-      row[`net_${sc.id}`] = arr[i].netWorth;
-      row[`investments_${sc.id}`] = totalInvestments(arr[i]);
-      row[`homeEquity_${sc.id}`]  = arr[i].homeEquity;
-      row[`cash_${sc.id}`]        = arr[i].cash;
+      const state = arr[i];
+      row[`net_${sc.id}`] = state.netWorth;
+      row[`homeEquity_${sc.id}`]  = state.homeEquity;
+      row[`cash_${sc.id}`]        = state.cash;
+
+      if (detailLevel === ProjectionDetailLevel.SINGLE) {
+        row[`investments_${sc.id}`] = totalInvestments(state);
+      } else if (detailLevel === ProjectionDetailLevel.TAX_BUCKET) {
+        const agg = aggregateByTaxBucket(state, accounts);
+        row[`taxAdvantaged_${sc.id}`] = agg.taxAdvantaged;
+        row[`taxable_${sc.id}`] = agg.taxable;
+      } else {
+        // per_account
+        for (const acct of accounts) {
+          if (acct.id == null) continue;
+          if (taxBucketForAccount(acct) === null) continue;
+          row[`acct_${acct.id}_${sc.id}`] = state.investmentsByAccount[acct.id] ?? 0;
+        }
+      }
     }
     return row;
   });
@@ -86,6 +113,8 @@ export default function ProjectionChart({
   dollarMode,
   inflation,
   startISO,
+  detailLevel,
+  accounts,
 }: ProjectionChartProps) {
   const visible = scenarios.filter((s) => s.visible);
   const mode: 'composition' | 'lines' = visible.length === 1 ? 'composition' : 'lines';
@@ -94,8 +123,17 @@ export default function ProjectionChart({
     () => deriveDisplayProjections(projections, dollarMode, inflation, startISO),
     [projections, dollarMode, inflation, startISO],
   );
-  const upperRows = useMemo(() => buildUpperPaneRows(scenarios, display), [scenarios, display]);
+  const upperRows = useMemo(
+    () => buildUpperPaneRows(scenarios, display, accounts, detailLevel),
+    [scenarios, display, accounts, detailLevel],
+  );
   const lowerRows = useMemo(() => buildLowerPaneRows(scenarios, display), [scenarios, display]);
+
+  // Investment accounts (non-cash/savings) used by the per-account view.
+  const investmentAccounts = useMemo(
+    () => accounts.filter((a) => a.id != null && taxBucketForAccount(a) !== null),
+    [accounts],
+  );
 
   const milestoneRefLines = scenarios
     .filter((sc) => sc.visible && sc.id != null)
@@ -199,16 +237,56 @@ export default function ProjectionChart({
               const scId = sc.id!;
               return (
                 <>
-                  <Area
-                    type="monotone"
-                    dataKey={`investments_${scId}`}
-                    name="Investments"
-                    stackId="composition"
-                    stroke="none"
-                    fill="#4f86f7"
-                    fillOpacity={0.25}
-                    isAnimationActive={false}
-                  />
+                  {detailLevel === ProjectionDetailLevel.SINGLE && (
+                    <Area
+                      type="monotone"
+                      dataKey={`investments_${scId}`}
+                      name="Investments"
+                      stackId="composition"
+                      stroke="none"
+                      fill="#4f86f7"
+                      fillOpacity={0.25}
+                      isAnimationActive={false}
+                    />
+                  )}
+                  {detailLevel === ProjectionDetailLevel.TAX_BUCKET && (
+                    <>
+                      <Area
+                        type="monotone"
+                        dataKey={`taxAdvantaged_${scId}`}
+                        name="Tax-advantaged"
+                        stackId="composition"
+                        stroke="none"
+                        fill="#9b5de5"
+                        fillOpacity={0.25}
+                        isAnimationActive={false}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey={`taxable_${scId}`}
+                        name="Taxable"
+                        stackId="composition"
+                        stroke="none"
+                        fill="#4f86f7"
+                        fillOpacity={0.25}
+                        isAnimationActive={false}
+                      />
+                    </>
+                  )}
+                  {detailLevel === ProjectionDetailLevel.PER_ACCOUNT &&
+                    investmentAccounts.map((acct, idx) => (
+                      <Area
+                        key={`acct_${acct.id}`}
+                        type="monotone"
+                        dataKey={`acct_${acct.id}_${scId}`}
+                        name={acct.name}
+                        stackId="composition"
+                        stroke="none"
+                        fill={AREA_COLORS[idx % AREA_COLORS.length]}
+                        fillOpacity={0.25}
+                        isAnimationActive={false}
+                      />
+                    ))}
                   <Area
                     type="monotone"
                     dataKey={`homeEquity_${scId}`}

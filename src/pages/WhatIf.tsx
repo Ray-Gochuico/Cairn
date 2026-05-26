@@ -41,6 +41,7 @@ export default function WhatIf() {
 
   const household          = useHouseholdStore((s) => s.household);
   const persons            = usePersonsStore((s) => s.persons);
+  const accounts           = useAccountsStore((s) => s.accounts);
 
   // Household-default position for the FI / Coast FI pill row, with a
   // session-only inline override (chevron next to the row). Selecting a
@@ -164,6 +165,8 @@ export default function WhatIf() {
             dollarMode={dollarMode}
             inflation={inflation}
             startISO={real.startISO}
+            detailLevel={detailLevel}
+            accounts={accounts}
           />
           <ScenariosPanel
             milestones={milestones}

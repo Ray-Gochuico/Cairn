@@ -88,6 +88,8 @@ describe('ProjectionChart — lines-only mode (2+ scenarios visible)', () => {
           dollarMode="nominal"
           inflation={0.025}
           startISO="2026-01"
+        detailLevel="single"
+        accounts={[]}
         />
       </MemoryRouter>,
     );
@@ -107,6 +109,8 @@ describe('ProjectionChart — lines-only mode (2+ scenarios visible)', () => {
           dollarMode="nominal"
           inflation={0.025}
           startISO="2026-01"
+        detailLevel="single"
+        accounts={[]}
         />
       </MemoryRouter>,
     );
@@ -125,6 +129,8 @@ describe('ProjectionChart — lines-only mode (2+ scenarios visible)', () => {
           dollarMode="nominal"
           inflation={0.025}
           startISO="2026-01"
+        detailLevel="single"
+        accounts={[]}
         />
       </MemoryRouter>,
     );
@@ -145,6 +151,8 @@ describe('ProjectionChart — composition mode (exactly 1 scenario visible)', ()
           dollarMode="nominal"
           inflation={0.025}
           startISO="2026-01"
+        detailLevel="single"
+        accounts={[]}
         />
       </MemoryRouter>,
     );
@@ -164,6 +172,8 @@ describe('ProjectionChart — composition mode (exactly 1 scenario visible)', ()
           dollarMode="nominal"
           inflation={0.025}
           startISO="2026-01"
+        detailLevel="single"
+        accounts={[]}
         />
       </MemoryRouter>,
     );
@@ -177,6 +187,8 @@ describe('ProjectionChart — composition mode (exactly 1 scenario visible)', ()
           dollarMode="nominal"
           inflation={0.025}
           startISO="2026-01"
+        detailLevel="single"
+        accounts={[]}
         />
       </MemoryRouter>,
     );
@@ -201,6 +213,8 @@ describe('ProjectionChart — lower pane (debt lines)', () => {
           dollarMode="nominal"
           inflation={0.025}
           startISO="2026-01"
+        detailLevel="single"
+        accounts={[]}
         />
       </MemoryRouter>,
     );
@@ -220,6 +234,8 @@ describe('ProjectionChart — lower pane (debt lines)', () => {
           dollarMode="nominal"
           inflation={0.025}
           startISO="2026-01"
+        detailLevel="single"
+        accounts={[]}
         />
       </MemoryRouter>,
     );
@@ -253,6 +269,8 @@ describe('ProjectionChart — lower pane (debt lines)', () => {
           dollarMode="nominal"
           inflation={0.025}
           startISO="2026-01"
+        detailLevel="single"
+        accounts={[]}
         />
       </MemoryRouter>,
     );
@@ -272,6 +290,8 @@ describe('ProjectionChart — lower pane (debt lines)', () => {
           dollarMode="nominal"
           inflation={0.025}
           startISO="2026-01"
+        detailLevel="single"
+        accounts={[]}
         />
       </MemoryRouter>,
     );
@@ -295,6 +315,8 @@ describe('ProjectionChart — milestone reference lines', () => {
           dollarMode="nominal"
           inflation={0.025}
           startISO="2026-01"
+        detailLevel="single"
+        accounts={[]}
         />
       </MemoryRouter>,
     );
@@ -314,6 +336,8 @@ describe('ProjectionChart — milestone reference lines', () => {
           dollarMode="nominal"
           inflation={0.025}
           startISO="2026-01"
+        detailLevel="single"
+        accounts={[]}
         />
       </MemoryRouter>,
     );
@@ -333,9 +357,132 @@ describe('ProjectionChart — milestone reference lines', () => {
           dollarMode="nominal"
           inflation={0.025}
           startISO="2026-01"
+        detailLevel="single"
+        accounts={[]}
         />
       </MemoryRouter>,
     );
     expect(container.querySelectorAll('.recharts-reference-line-line').length).toBe(0);
+  });
+});
+
+describe('ProjectionChart — detail level rendering', () => {
+  // Two investment accounts (401k + brokerage) + one cash (excluded from
+  // per-account areas) for level=per_account assertions.
+  const mockAccounts: any[] = [
+    { id: 1, householdId: 1, name: '401k', type: 'ACCOUNT_401K', excludedFromNetWorth: false },
+    { id: 2, householdId: 1, name: 'Brokerage', type: 'ACCOUNT_BROKERAGE', excludedFromNetWorth: false },
+    { id: 3, householdId: 1, name: 'Checking', type: 'ACCOUNT_CASH', excludedFromNetWorth: false },
+  ];
+
+  // Build fixture states that have balances in both accounts (1 and 2).
+  const multiAccountStates = (): MonthlyState[] =>
+    Array.from({ length: 12 }, (_, i) => ({
+      monthISO: `2026-${String(i + 1).padStart(2, '0')}`,
+      investmentsByAccount: { 1: 60_000 + i * 500, 2: 40_000 + i * 300 },
+      homeEquity: 250_000,
+      cash: 10_000,
+      debtByLoan: {},
+      netWorth: 360_000 + i * 800,
+      incomeAfterTax: 9_000,
+      expenses: 4_500,
+      savings: 4_500,
+      events: [],
+    }));
+
+  it('single detail level: renders exactly 1 investments area', () => {
+    const projections = new Map([[1, multiAccountStates()]]);
+    const milestones = new Map<number, Milestones>([[1, {}]]);
+    render(
+      <MemoryRouter>
+        <ProjectionChart
+          scenarios={[baseline]}
+          projections={projections}
+          milestones={milestones}
+          dollarMode="nominal"
+          inflation={0.025}
+          startISO="2026-01"
+          detailLevel="single"
+          accounts={mockAccounts}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('rc-area-investments_1')).toBeInTheDocument();
+    // Tax-bucket and per-account areas must NOT be present.
+    expect(screen.queryByTestId('rc-area-taxAdvantaged_1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('rc-area-acct_1_1')).not.toBeInTheDocument();
+  });
+
+  it('tax_bucket detail level: renders taxAdvantaged + taxable areas (no single investments)', () => {
+    const projections = new Map([[1, multiAccountStates()]]);
+    const milestones = new Map<number, Milestones>([[1, {}]]);
+    render(
+      <MemoryRouter>
+        <ProjectionChart
+          scenarios={[baseline]}
+          projections={projections}
+          milestones={milestones}
+          dollarMode="nominal"
+          inflation={0.025}
+          startISO="2026-01"
+          detailLevel="tax_bucket"
+          accounts={mockAccounts}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('rc-area-taxAdvantaged_1')).toBeInTheDocument();
+    expect(screen.getByTestId('rc-area-taxable_1')).toBeInTheDocument();
+    expect(screen.queryByTestId('rc-area-investments_1')).not.toBeInTheDocument();
+  });
+
+  it('per_account detail level: renders one area per investment account (cash excluded)', () => {
+    const projections = new Map([[1, multiAccountStates()]]);
+    const milestones = new Map<number, Milestones>([[1, {}]]);
+    render(
+      <MemoryRouter>
+        <ProjectionChart
+          scenarios={[baseline]}
+          projections={projections}
+          milestones={milestones}
+          dollarMode="nominal"
+          inflation={0.025}
+          startISO="2026-01"
+          detailLevel="per_account"
+          accounts={mockAccounts}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('rc-area-acct_1_1')).toBeInTheDocument();
+    expect(screen.getByTestId('rc-area-acct_2_1')).toBeInTheDocument();
+    // Cash account (id=3) must not have an area.
+    expect(screen.queryByTestId('rc-area-acct_3_1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('rc-area-investments_1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('rc-area-taxAdvantaged_1')).not.toBeInTheDocument();
+  });
+
+  it('lines-only mode (2+ visible scenarios) still renders net-worth lines but no investment areas', () => {
+    const variantScenario = { ...baseline, id: 2, name: 'Variant', isBaseline: false, isActive: false, color: '#5fbb7c' };
+    const projections = new Map([[1, multiAccountStates()], [2, multiAccountStates()]]);
+    const milestones = new Map<number, Milestones>([[1, {}], [2, {}]]);
+    render(
+      <MemoryRouter>
+        <ProjectionChart
+          scenarios={[baseline, variantScenario]}
+          projections={projections}
+          milestones={milestones}
+          dollarMode="nominal"
+          inflation={0.025}
+          startISO="2026-01"
+          detailLevel="tax_bucket"
+          accounts={mockAccounts}
+        />
+      </MemoryRouter>,
+    );
+    // No investment areas in lines mode.
+    expect(screen.queryByTestId('rc-area-taxAdvantaged_1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('rc-area-acct_1_1')).not.toBeInTheDocument();
+    // But net-worth lines are present for both scenarios.
+    expect(screen.getByTestId('rc-line-net_1')).toBeInTheDocument();
+    expect(screen.getByTestId('rc-line-net_2')).toBeInTheDocument();
   });
 });
