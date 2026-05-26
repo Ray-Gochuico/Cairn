@@ -18,6 +18,7 @@ import {
 } from '@/lib/tracked-budget-categories';
 import BudgetOverlayRow from '@/components/budget/BudgetOverlayRow';
 import BudgetCategoryPicker from '@/components/budget/BudgetCategoryPicker';
+import type { AddCategoryPayload } from '@/components/budget/AddCategoryDialog';
 import { Card, CardContent } from '@/components/ui/card';
 
 const currency = (n: number) =>
@@ -27,6 +28,7 @@ export default function Budget() {
   const categories = useCategoriesStore((s) => s.categories);
   const loadCategories = useCategoriesStore((s) => s.load);
   const updateCategory = useCategoriesStore((s) => s.update);
+  const createCategory = useCategoriesStore((s) => s.create);
   const transactions = useTransactionsStore((s) => s.transactions);
   const loadTransactions = useTransactionsStore((s) => s.load);
 
@@ -143,6 +145,18 @@ export default function Budget() {
     });
   };
 
+  // Inline-create flow from the picker's AddCategoryDialog. Persist via the
+  // categories store (which reloads internally), then append the new id to the
+  // tracked-list selection so the leaf renders checked under its parent group.
+  const handleCreateCategory = async (payload: AddCategoryPayload) => {
+    const newId = await createCategory({
+      ...payload,
+      systemManaged: false,
+    });
+    trackBudgetCategories([newId]);
+    setTrackedIds((current) => (current.includes(newId) ? current : [...current, newId]));
+  };
+
   return (
     <div className="p-8 max-w-4xl space-y-6">
       <div className="flex items-start justify-between gap-4">
@@ -182,6 +196,8 @@ export default function Budget() {
           <BudgetCategoryPicker
             groups={pickerGroups}
             onConfirm={handleAddCategories}
+            parents={categories}
+            onCreateCategory={handleCreateCategory}
           />
         </div>
       )}
