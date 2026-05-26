@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { RotateCcw } from 'lucide-react';
+import { Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -77,7 +77,7 @@ export default function SwrLeverPill({
         aria-label="Reset SWR to household default"
         title="Reset to household default"
       >
-        <RotateCcw className="h-3 w-3" />
+        <Undo2 className="h-3 w-3" />
       </Button>
     </div>
   );
