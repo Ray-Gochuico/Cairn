@@ -5,6 +5,7 @@ import {
   IncomeEventSchema,
   type LeverPayload,
 } from '@/lib/scenarios/lever-types';
+import { CompoundingFrequency } from '@/types/enums';
 
 describe('LeverPayloadSchema', () => {
   it('accepts an empty payload', () => {
@@ -16,7 +17,12 @@ describe('LeverPayloadSchema', () => {
       extraLoanPayments: [{ loanId: 1, extraMonthly: 300 }],
       lumpSums: [{ when: '2030-06-01', amount: 25000, destination: 'investments', label: 'Inheritance' }],
       expensePeriods: [{ start: '2026-07-01', monthlyDelta: 1500, durationMonths: 6, label: 'Medical' }],
-      returns: { defaultRate: 0.07, overrides: { 2027: -0.15, 2028: 0.2 } as unknown as Record<string, number>, cashRate: null },
+      returns: {
+        defaultRate: 0.07,
+        overrides: { 2027: -0.15, 2028: 0.2 } as unknown as Record<string, number>,
+        cashRate: null,
+        compoundingFrequency: CompoundingFrequency.MONTHLY,
+      },
       income: { perPerson: [{ annualRaiseRate: 0.03, events: [] }] },
       contributions: [{ startMonth: 0, endMonth: 59, monthlyAmount: 1000, label: 'Year 1-5', allocation: null }],
       retirementAgeOverride: null,

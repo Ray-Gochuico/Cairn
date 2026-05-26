@@ -7,14 +7,109 @@ import type {
   LumpSumEvent,
   PersonIncomePlan,
 } from './lever-types';
+import { CompoundingFrequency } from '@/types/enums';
 
 /** Converts an annual return to a monthly return that compounds back to the annual. */
 export function monthlyReturnFromAnnual(annual: number): number {
   return Math.pow(1 + annual, 1 / 12) - 1;
 }
 
+/**
+ * Periods-per-year mapping for {@link CompoundingFrequency}.
+ *
+ * - DAILY → 365 (calendar-perfect alternatives would use 365.25; 365 keeps the
+ *   math symbolic and matches the typical HYSA quoting convention).
+ * - WEEKLY → 52.
+ * - MONTHLY → 12. Identical to the legacy `monthlyReturnFromAnnual`.
+ * - QUARTERLY → 4.
+ * - ANNUALLY → 1. The full annual rate lands in one month per year — for the
+ *   12-month-balanced projection this still compounds to (1 + annual) over the
+ *   year, but the per-step rate is 0 for 11 of the 12 months.
+ *
+ * NOTE: the engine still steps month-by-month. For frequencies coarser than
+ * monthly, the periodic interest rate is decomposed into 12 equal monthly
+ * sub-rates so the projection retains its monthly cadence without losing
+ * total annual yield.
+ */
+export function periodsPerYear(frequency: CompoundingFrequency): number {
+  switch (frequency) {
+    case CompoundingFrequency.DAILY:
+      return 365;
+    case CompoundingFrequency.WEEKLY:
+      return 52;
+    case CompoundingFrequency.MONTHLY:
+      return 12;
+    case CompoundingFrequency.QUARTERLY:
+      return 4;
+    case CompoundingFrequency.ANNUALLY:
+      return 1;
+  }
+}
+
+/**
+ * Converts an annual rate to a monthly rate consistent with the supplied
+ * compounding frequency.
+ *
+ * Interpretation: the user-supplied `annual` is the EFFECTIVE annual rate
+ * regardless of frequency. The math derives a per-period rate that compounds
+ * over `N` periods to equal (1 + annual), then re-spreads that periodic rate
+ * over the 12 monthly engine steps so total annual yield is preserved.
+ *
+ * Identity for MONTHLY (the default): collapses to
+ *   `Math.pow(1 + annual, 1/12) - 1`
+ * which is the exact pre-Task-16 `monthlyReturnFromAnnual` formula. Tests
+ * pin that identity so existing $100k @ 7% baselines (line 105 of the
+ * 2026-05-26 current-state spec) keep producing $107,000.00 at month 12.
+ *
+ * For ANY frequency, the value at month 12 is still
+ *   start * (1 + annual)
+ * because the 12 monthly factors multiply to `(1 + periodicRate)^N` and
+ * `(1 + periodicRate)^N === 1 + annual` by construction. DAILY / WEEKLY /
+ * QUARTERLY differ from MONTHLY only in INTRA-year balances (where
+ * "per-month" growth is non-uniform), not in the full-year total.
+ */
+export function monthlyReturnFromAnnualWithFrequency(
+  annual: number,
+  frequency: CompoundingFrequency,
+): number {
+  // Negative annual rates are valid for projection (loss-year overrides like
+  // the Lost Decade preset). Math.pow handles negative bases fine when the
+  // exponent is rational, but a -100%+ rate (1+annual <= 0) is degenerate;
+  // clamp to -1 + epsilon to avoid NaN. The schema already restricts the
+  // range to [-1, 1] so this is defensive.
+  const safeBase = Math.max(1 + annual, 1e-12);
+  const N = periodsPerYear(frequency);
+  // Periodic rate that compounds N times per year to give (1 + annual).
+  const periodicRate = Math.pow(safeBase, 1 / N) - 1;
+  // Convert periodic rate back to a monthly rate. (1 + periodicRate)^N over
+  // a full year equals (1 + annual), so the equivalent monthly rate that
+  // multiplies to the same annual total across 12 months is:
+  //   Math.pow(1 + periodicRate, N / 12) - 1.
+  // For MONTHLY (N=12) this collapses to (1 + annual)^(1/12) - 1 exactly,
+  // preserving the legacy formula bit-for-bit.
+  return Math.pow(1 + periodicRate, N / 12) - 1;
+}
+
 export function applyAnnualReturn(state: MonthlyState, annualReturn: number): MonthlyState {
   const m = monthlyReturnFromAnnual(annualReturn);
+  const grown: Record<number, number> = {};
+  for (const [idStr, balance] of Object.entries(state.investmentsByAccount)) {
+    grown[Number(idStr)] = balance * (1 + m);
+  }
+  return { ...state, investmentsByAccount: grown };
+}
+
+/**
+ * Frequency-aware variant of {@link applyAnnualReturn}. Used by the engine
+ * when the per-scenario Returns lever sets a non-default compounding
+ * frequency. Routes via {@link monthlyReturnFromAnnualWithFrequency}.
+ */
+export function applyAnnualReturnWithFrequency(
+  state: MonthlyState,
+  annualReturn: number,
+  frequency: CompoundingFrequency,
+): MonthlyState {
+  const m = monthlyReturnFromAnnualWithFrequency(annualReturn, frequency);
   const grown: Record<number, number> = {};
   for (const [idStr, balance] of Object.entries(state.investmentsByAccount)) {
     grown[Number(idStr)] = balance * (1 + m);

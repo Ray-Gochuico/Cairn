@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CompoundingFrequency } from '@/types/enums';
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const isoDate = z.string().regex(ISO_DATE, 'must be YYYY-MM-DD');
@@ -32,6 +33,14 @@ export const ReturnScheduleSchema = z.object({
   overrides: z.record(z.string().regex(/^\d{4}$/), z.number().min(-1).max(1)),
   /** Per-scenario cash APY override. null = use canonical balance-weighted APY. */
   cashRate: z.number().min(0).max(0.15).nullable().default(null),
+  /**
+   * Per-scenario compounding frequency. Applies to BOTH investment returns
+   * and cash APY — for v1 the two share a single frequency. Defaults to
+   * MONTHLY, which preserves pre-Task-16 engine semantics exactly.
+   */
+  compoundingFrequency: z
+    .nativeEnum(CompoundingFrequency)
+    .default(CompoundingFrequency.MONTHLY),
 });
 export type ReturnSchedule = z.infer<typeof ReturnScheduleSchema>;
 
@@ -141,7 +150,12 @@ export function emptyLeverPayload(): LeverPayload {
     extraLoanPayments: [],
     lumpSums: [],
     expensePeriods: [],
-    returns: { defaultRate: 0.07, overrides: {}, cashRate: null },
+    returns: {
+      defaultRate: 0.07,
+      overrides: {},
+      cashRate: null,
+      compoundingFrequency: CompoundingFrequency.MONTHLY,
+    },
     income: { perPerson: [{ annualRaiseRate: 0, events: [] }] },
     contributions: [],
     retirementAgeOverride: null,

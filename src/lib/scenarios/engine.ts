@@ -2,13 +2,15 @@ import type { LeverPayload } from './lever-types';
 import type { RealState } from './state-snapshot';
 import {
   activeContributionAmount,
-  applyAnnualReturn,
+  applyAnnualReturnWithFrequency,
   applyLumpSum,
   applyExtraLoanPayment,
   computeMonthlyIncomeForPerson,
   monthlyExpenseDeltaFromPeriods,
+  monthlyReturnFromAnnualWithFrequency,
   type LoanMonthlyContext,
 } from './apply-real';
+import { CompoundingFrequency } from '@/types/enums';
 import { totalInvestments } from './aggregate-investments';
 import { computeTotalTax } from '@/lib/tax';
 import { ageAtMonth } from '@/lib/dates';
@@ -81,8 +83,15 @@ export function projectScenario(
     real.cashAccountsWithBalances ?? [],
     settingsShim,
   );
+  // Task #16: cash APY uses the SAME compounding frequency as investment
+  // returns (per-scenario; defaults to MONTHLY which preserves the legacy
+  // (1+APY)^(1/12)-1 formula bit-for-bit). For coarser frequencies the
+  // periodic rate is decomposed into 12 equal monthly factors via
+  // monthlyReturnFromAnnualWithFrequency — total annual yield is preserved.
+  const compoundingFrequency: CompoundingFrequency =
+    payload.returns.compoundingFrequency ?? CompoundingFrequency.MONTHLY;
   const cashMonthlyRate = effectiveCashApy_frozen > 0
-    ? Math.pow(1 + effectiveCashApy_frozen, 1 / 12) - 1
+    ? monthlyReturnFromAnnualWithFrequency(effectiveCashApy_frozen, compoundingFrequency)
     : 0;
 
   // Capture the inflation slice frozen at projection start. The per-year
@@ -119,7 +128,16 @@ export function projectScenario(
   out.push(state);
 
   for (let i = 1; i < horizon.months; i++) {
-    state = stepMonth(state, real, payload, startYear, i, cashMonthlyRate, inflationSlice);
+    state = stepMonth(
+      state,
+      real,
+      payload,
+      startYear,
+      i,
+      cashMonthlyRate,
+      inflationSlice,
+      compoundingFrequency,
+    );
     out.push(state);
   }
   return out;
@@ -221,6 +239,7 @@ function stepMonth(
   monthIndex: number,
   cashMonthlyRate: number,   // pre-computed, frozen at projection start
   inflationSlice: InflationSlice,
+  compoundingFrequency: CompoundingFrequency,  // frozen at projection start
 ): MonthlyState {
   const monthISO = addMonths(prev.monthISO, 1);
   let s: MonthlyState = { ...prev, monthISO, events: [] };
@@ -365,10 +384,12 @@ function stepMonth(
     applyCashFloorShortfall(s, -s.savings);
   }
 
-  // 7. Apply this month's return to investments
+  // 7. Apply this month's return to investments. The compounding frequency
+  // is per-scenario (defaults to MONTHLY — identical to the legacy
+  // (1+annual)^(1/12)-1 monthly rate). See applyAnnualReturnWithFrequency.
   const year = Number(monthISO.slice(0, 4));
   const annualReturn = payload.returns.overrides[String(year)] ?? payload.returns.defaultRate;
-  s = applyAnnualReturn(s, annualReturn);
+  s = applyAnnualReturnWithFrequency(s, annualReturn, compoundingFrequency);
 
   s.netWorth = computeNetWorth(s);
   return s;
