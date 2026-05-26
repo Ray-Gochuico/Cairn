@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ArrowDownUp } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import ChartToolbar from '@/components/whatif/ChartToolbar';
 import FiCards from '@/components/whatif/FiCards';
@@ -16,8 +18,10 @@ import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { detectMilestones, type Milestones, type MonthlyState } from '@/lib/scenarios';
+import { FiPillsPosition } from '@/types/enums';
 
 const FI_PARAMS = { withdrawalRate: 0.04 };
 
@@ -39,6 +43,24 @@ export default function WhatIf() {
 
   const household          = useHouseholdStore((s) => s.household);
   const persons            = usePersonsStore((s) => s.persons);
+
+  // Household-default position for the FI / Coast FI pill row, with a
+  // session-only inline override (chevron next to the row). Selecting a
+  // primitive keeps unrelated Settings writes from re-rendering WhatIf.
+  const defaultPillsPosition = useSettingsStore(
+    (s) => s.settings?.defaultFiPillsPosition ?? FiPillsPosition.ABOVE,
+  );
+  const [pillsPositionOverride, setPillsPositionOverride] =
+    useState<FiPillsPosition | null>(null);
+  const pillsPosition = pillsPositionOverride ?? defaultPillsPosition;
+  const togglePillsPosition = useCallback(() => {
+    setPillsPositionOverride((prev) => {
+      const current = prev ?? defaultPillsPosition;
+      return current === FiPillsPosition.ABOVE
+        ? FiPillsPosition.BELOW
+        : FiPillsPosition.ABOVE;
+    });
+  }, [defaultPillsPosition]);
 
   const [manageOpen, setManageOpen] = useState(false);
 
@@ -86,8 +108,66 @@ export default function WhatIf() {
     );
   }
 
+  const fiCardsRow =
+    household && persons.length > 0 ? (
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <FiCards
+            scenarios={scenarios}
+            projections={projections}
+            household={household}
+            persons={persons}
+          />
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={togglePillsPosition}
+          aria-label={
+            pillsPosition === FiPillsPosition.ABOVE
+              ? 'Move pills below charts'
+              : 'Move pills above charts'
+          }
+          title={
+            pillsPosition === FiPillsPosition.ABOVE
+              ? 'Move pills below charts'
+              : 'Move pills above charts'
+          }
+          className="h-6 w-6 mt-1 shrink-0"
+        >
+          <ArrowDownUp className="h-3 w-3" />
+        </Button>
+      </div>
+    ) : null;
+
+  const projectionChart = (
+    <Card className="min-w-0" data-testid="whatif-projection-chart-wrap">
+      <CardHeader>
+        <CardTitle className="text-base">Net worth & total debt projection</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="relative">
+          <ProjectionChart
+            scenarios={scenarios}
+            projections={projections}
+            milestones={milestones}
+            dollarMode={dollarMode}
+            inflation={inflation}
+            startISO={real.startISO}
+          />
+          <ScenariosPanel
+            milestones={milestones}
+            onOpenManage={() => setManageOpen(true)}
+            onEditLevers={openLeversFor}
+          />
+        </div>
+      </CardContent>
+    </Card>
+  );
+
   return (
-    <div className="p-6 space-y-4 min-w-0">
+    <div className="p-6 space-y-4 min-w-0" data-testid="whatif-page-wrap">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <h1 className="text-2xl font-semibold">What-If</h1>
         <ChartToolbar />
@@ -95,37 +175,17 @@ export default function WhatIf() {
 
       <LeverBar />
 
-      {household && persons.length > 0 && (
-        <FiCards
-          scenarios={scenarios}
-          projections={projections}
-          household={household}
-          persons={persons}
-        />
+      {pillsPosition === FiPillsPosition.ABOVE ? (
+        <>
+          {fiCardsRow}
+          {projectionChart}
+        </>
+      ) : (
+        <>
+          {projectionChart}
+          {fiCardsRow}
+        </>
       )}
-
-      <Card className="min-w-0">
-        <CardHeader>
-          <CardTitle className="text-base">Net worth & total debt projection</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="relative">
-            <ProjectionChart
-              scenarios={scenarios}
-              projections={projections}
-              milestones={milestones}
-              dollarMode={dollarMode}
-              inflation={inflation}
-              startISO={real.startISO}
-            />
-            <ScenariosPanel
-              milestones={milestones}
-              onOpenManage={() => setManageOpen(true)}
-              onEditLevers={openLeversFor}
-            />
-          </div>
-        </CardContent>
-      </Card>
 
       <MilestoneStrip scenarios={scenarios} milestones={milestones} />
 
