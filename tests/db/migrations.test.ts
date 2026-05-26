@@ -353,3 +353,26 @@ it('0015 adds accent_color columns to accounts and tickers, accepting NULL and h
 
   await db.close();
 });
+
+describe('0023_projection_detail_level migration', () => {
+  it('adds default_projection_detail_level column with default tax_bucket', async () => {
+    const db = new SqliteAdapter(':memory:');
+    await runMigrations(db, await loadAllMigrations());
+    const rows = await db.select<{ default_projection_detail_level: string }>(
+      'SELECT default_projection_detail_level FROM app_settings WHERE id = 1',
+    );
+    expect(rows[0].default_projection_detail_level).toBe('tax_bucket');
+    await db.close();
+  });
+
+  it('rejects an invalid value for default_projection_detail_level', async () => {
+    const db = new SqliteAdapter(':memory:');
+    await runMigrations(db, await loadAllMigrations());
+    await expect(
+      db.execute(
+        "UPDATE app_settings SET default_projection_detail_level = 'bogus' WHERE id = 1",
+      ),
+    ).rejects.toThrow();
+    await db.close();
+  });
+});

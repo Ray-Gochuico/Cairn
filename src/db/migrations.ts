@@ -69,6 +69,7 @@ export async function loadAllMigrations(): Promise<Migration[]> {
   const m0020 = (await import('./migrations/0020_whatif_defaults.sql?raw')).default;
   const m0021 = (await import('./migrations/0021_fund_sectors.sql?raw')).default;
   const m0022 = (await import('./migrations/0022_fi_pills_position.sql?raw')).default;
+  const m0023 = (await import('./migrations/0023_projection_detail_level.sql?raw')).default;
   return [
     { version: '0001_initial', sql: m0001 },
     { version: '0002_seed_tax_rules', sql: m0002 },
@@ -92,5 +93,6 @@ export async function loadAllMigrations(): Promise<Migration[]> {
     { version: '0020_whatif_defaults', sql: m0020 },
     { version: '0021_fund_sectors', sql: m0021 },
     { version: '0022_fi_pills_position', sql: m0022 },
+    { version: '0023_projection_detail_level', sql: m0023 },
   ];
 }
