@@ -262,3 +262,91 @@ describe('projectScenario — tax behavior', () => {
     expect(caAfter12[12].incomeAfterTax).toBeLessThan(txAfter12[12].incomeAfterTax);
   });
 });
+
+describe('projectScenario — contribution allocation routing', () => {
+  // Two-account fixture (10 = "Acct A" 60k, 11 = "Acct B" 40k).
+  // The household keeps its $135k salary and a low expense baseline so monthly
+  // savings stays well above any contribution we test below; that keeps the
+  // contribution routing the only signal moving per-account balances. 0% return
+  // + 0% inflation keeps the math exact.
+  const twoAccountReal: RealState = {
+    ...realState,
+    initialInvestmentsByAccount: { 10: 60_000, 11: 40_000 },
+    initialCash: 50_000, // ample buffer; contribution remainders flow here
+    baselineMonthlyExpenses: 2000,
+    defaults: { inflation: 0, returnRate: 0 },
+    loans: [], // strip the auto loan so the only signal is the contribution
+  };
+
+  function zeroReturnPayload() {
+    const p = emptyLeverPayload();
+    p.returns = { defaultRate: 0, overrides: {} };
+    return p;
+  }
+
+  it('distributes contributions evenly when no allocation is set', () => {
+    const payload = {
+      ...zeroReturnPayload(),
+      contributions: [{ startMonth: 0, endMonth: 11, monthlyAmount: 2000, allocation: null }],
+    };
+    const states = projectScenario(twoAccountReal, payload, { startISO: '2026-05', months: 2 });
+    // Month 1 applies the first contribution. Even split across 2 accounts → +1000 each.
+    expect(states[1].investmentsByAccount[10]).toBeCloseTo(60_000 + 1000, 5);
+    expect(states[1].investmentsByAccount[11]).toBeCloseTo(40_000 + 1000, 5);
+  });
+
+  it('routes contributions according to explicit allocation map', () => {
+    const payload = {
+      ...zeroReturnPayload(),
+      contributions: [{
+        startMonth: 0,
+        endMonth: 11,
+        monthlyAmount: 1000,
+        allocation: { '10': 0.8, '11': 0.2 },
+      }],
+    };
+    const states = projectScenario(twoAccountReal, payload, { startISO: '2026-05', months: 2 });
+    expect(states[1].investmentsByAccount[10]).toBeCloseTo(60_000 + 800, 5);
+    expect(states[1].investmentsByAccount[11]).toBeCloseTo(40_000 + 200, 5);
+  });
+
+  it('drops stale allocation IDs and renormalizes remaining proportions', () => {
+    // Account 99 is stale (not in initialInvestmentsByAccount). 50/50 over IDs
+    // 10 and 11 — proportion on 99 is dropped and the remaining map is already
+    // normalized so the engine must still divide $1000 evenly.
+    const payload = {
+      ...zeroReturnPayload(),
+      contributions: [{
+        startMonth: 0,
+        endMonth: 11,
+        monthlyAmount: 1000,
+        allocation: { '10': 0.5, '11': 0.5, '99': 0.0 },
+      }],
+    };
+    const states = projectScenario(twoAccountReal, payload, { startISO: '2026-05', months: 2 });
+    expect(states[1].investmentsByAccount[10]).toBeCloseTo(60_000 + 500, 5);
+    expect(states[1].investmentsByAccount[11]).toBeCloseTo(40_000 + 500, 5);
+    // Stale ID never gets added.
+    expect(states[1].investmentsByAccount[99]).toBeUndefined();
+  });
+
+  it('drawdown from investments is proportional to current per-account balances', () => {
+    // Hostile household: zero income (persons=[]), zero cash, high expenses,
+    // zero return. Each month produces a deficit that hits investments after
+    // cash floors at zero. With initial 60/40 split, the proportional draw
+    // should keep the ratio roughly intact: account 10 (60%) loses more in
+    // absolute terms.
+    const shortfallReal: RealState = {
+      ...twoAccountReal,
+      persons: [],
+      initialCash: 0,
+      baselineMonthlyExpenses: 5000,
+    };
+    const states = projectScenario(shortfallReal, zeroReturnPayload(), { startISO: '2026-05', months: 2 });
+    const drop10 = states[0].investmentsByAccount[10]! - states[1].investmentsByAccount[10]!;
+    const drop11 = states[0].investmentsByAccount[11]! - states[1].investmentsByAccount[11]!;
+    expect(drop10).toBeGreaterThan(drop11);
+    // The ratio of drops should match the ratio of starting balances (60/40 = 1.5).
+    expect(drop10 / drop11).toBeCloseTo(60 / 40, 2);
+  });
+});
