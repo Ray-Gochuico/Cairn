@@ -20,6 +20,11 @@ interface EquityGrantRow {
   total_shares: number;
   vesting_schedule: string; // JSON-encoded VestingEntry[]
   current_fmv: number;
+  // Calculator inputs (migration 0027). All nullable — populated only when
+  // the user used the in-form company-valuation helper.
+  company_valuation: number | null;
+  company_outstanding_shares: number | null;
+  company_total_debt: number | null;
 }
 
 function rowToEquityGrant(row: EquityGrantRow): EquityGrant {
@@ -46,6 +51,9 @@ function rowToEquityGrant(row: EquityGrantRow): EquityGrant {
     totalShares: row.total_shares,
     vestingSchedule: schedule,
     currentFmv: row.current_fmv,
+    companyValuation: row.company_valuation,
+    companyOutstandingShares: row.company_outstanding_shares,
+    companyTotalDebt: row.company_total_debt,
   });
 }
 
@@ -81,22 +89,30 @@ export class EquityGrantsRepo {
   }
 
   async create(grant: Omit<EquityGrant, 'id'>): Promise<number> {
-    EquityGrantSchema.omit({ id: true }).parse(grant);
+    // Zod parse fills in defaults (e.g. companyValuation -> null when caller
+    // omits the key), then we destructure the validated payload into the
+    // INSERT. This avoids `undefined` reaching better-sqlite3 (which rejects
+    // it) when callers leave the calculator fields off.
+    const parsed = EquityGrantSchema.omit({ id: true }).parse(grant);
     const result = await this.db.execute(
       `INSERT INTO equity_grants (
         household_id, owner_person_id, name, company_name,
-        grant_date, strike_price, total_shares, vesting_schedule, current_fmv
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        grant_date, strike_price, total_shares, vesting_schedule, current_fmv,
+        company_valuation, company_outstanding_shares, company_total_debt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        grant.householdId,
-        grant.ownerPersonId,
-        grant.name,
-        grant.companyName,
-        grant.grantDate,
-        grant.strikePrice,
-        grant.totalShares,
-        JSON.stringify(grant.vestingSchedule),
-        grant.currentFmv,
+        parsed.householdId,
+        parsed.ownerPersonId,
+        parsed.name,
+        parsed.companyName,
+        parsed.grantDate,
+        parsed.strikePrice,
+        parsed.totalShares,
+        JSON.stringify(parsed.vestingSchedule),
+        parsed.currentFmv,
+        parsed.companyValuation,
+        parsed.companyOutstandingShares,
+        parsed.companyTotalDebt,
       ]
     );
     if (!result.lastInsertId) {
@@ -124,6 +140,9 @@ export class EquityGrantsRepo {
         total_shares = ?,
         vesting_schedule = ?,
         current_fmv = ?,
+        company_valuation = ?,
+        company_outstanding_shares = ?,
+        company_total_debt = ?,
         updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
       [
@@ -135,6 +154,9 @@ export class EquityGrantsRepo {
         merged.totalShares,
         JSON.stringify(merged.vestingSchedule),
         merged.currentFmv,
+        merged.companyValuation,
+        merged.companyOutstandingShares,
+        merged.companyTotalDebt,
         id,
       ]
     );

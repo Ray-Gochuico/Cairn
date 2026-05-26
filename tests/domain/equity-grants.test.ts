@@ -12,6 +12,8 @@ const loadCommissionMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0003_add_commission_columns.sql'), 'utf-8');
 const loadEmploymentBonusMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0005_add_employment_and_bonus_columns.sql'), 'utf-8');
+const loadEquityGrantCompanyValuationMigration = () =>
+  readFileSync(resolve(__dirname, '../../src/db/migrations/0027_equity_grant_company_valuation.sql'), 'utf-8');
 
 const seedPerson = async (
   personsRepo: PersonsRepo,
@@ -78,6 +80,7 @@ describe('EquityGrantsRepo', () => {
       { version: '0001_initial', sql: loadInitialMigration() },
       { version: '0003_add_commission_columns', sql: loadCommissionMigration() },
       { version: '0005_add_employment_and_bonus_columns', sql: loadEmploymentBonusMigration() },
+      { version: '0027_equity_grant_company_valuation', sql: loadEquityGrantCompanyValuationMigration() },
     ]);
     repo = new EquityGrantsRepo(db);
     personsRepo = new PersonsRepo(db);
@@ -251,5 +254,79 @@ describe('EquityGrantsRepo', () => {
     await expect(
       makeGrant(repo, personId, { companyName: '' }),
     ).rejects.toThrow();
+  });
+
+  it('round-trips the three calculator fields through create + findById', async () => {
+    const id = await makeGrant(repo, personId, {
+      companyValuation: 10_000_000,
+      companyOutstandingShares: 5_000_000,
+      companyTotalDebt: 2_000_000,
+    });
+    const out = await repo.findById(id);
+    expect(out?.companyValuation).toBe(10_000_000);
+    expect(out?.companyOutstandingShares).toBe(5_000_000);
+    expect(out?.companyTotalDebt).toBe(2_000_000);
+  });
+
+  it('persists nulls when calculator fields are omitted', async () => {
+    const id = await makeGrant(repo, personId);
+    const out = await repo.findById(id);
+    expect(out?.companyValuation).toBeNull();
+    expect(out?.companyOutstandingShares).toBeNull();
+    expect(out?.companyTotalDebt).toBeNull();
+  });
+
+  it('persists explicit nulls when calculator fields are passed as null', async () => {
+    const id = await makeGrant(repo, personId, {
+      companyValuation: null,
+      companyOutstandingShares: null,
+      companyTotalDebt: null,
+    });
+    const out = await repo.findById(id);
+    expect(out?.companyValuation).toBeNull();
+    expect(out?.companyOutstandingShares).toBeNull();
+    expect(out?.companyTotalDebt).toBeNull();
+  });
+
+  it('updates the calculator fields via update()', async () => {
+    const id = await makeGrant(repo, personId);
+    await repo.update(id, {
+      companyValuation: 5_000_000,
+      companyOutstandingShares: 1_000_000,
+      companyTotalDebt: 0,
+    });
+    const out = await repo.findById(id);
+    expect(out?.companyValuation).toBe(5_000_000);
+    expect(out?.companyOutstandingShares).toBe(1_000_000);
+    expect(out?.companyTotalDebt).toBe(0);
+    // Other persisted fields unchanged
+    expect(out?.currentFmv).toBe(145.50);
+    expect(out?.totalShares).toBe(1200);
+  });
+
+  it('list() round-trips the three calculator fields', async () => {
+    await makeGrant(repo, personId, {
+      name: 'With calculator',
+      companyValuation: 12_345_678,
+      companyOutstandingShares: 1_234_567,
+      companyTotalDebt: 123_456,
+    });
+    const [out] = await repo.list();
+    expect(out.companyValuation).toBe(12_345_678);
+    expect(out.companyOutstandingShares).toBe(1_234_567);
+    expect(out.companyTotalDebt).toBe(123_456);
+  });
+
+  it('listForPerson() round-trips the three calculator fields', async () => {
+    await makeGrant(repo, personId, {
+      name: 'Per-person',
+      companyValuation: 9_000_000,
+      companyOutstandingShares: 3_000_000,
+      companyTotalDebt: 1_000_000,
+    });
+    const [out] = await repo.listForPerson(personId);
+    expect(out.companyValuation).toBe(9_000_000);
+    expect(out.companyOutstandingShares).toBe(3_000_000);
+    expect(out.companyTotalDebt).toBe(1_000_000);
   });
 });
