@@ -27,7 +27,7 @@ import { valueHoldings, type HoldingValuation } from '@/lib/holdings-value';
 import type { Dependent, AccountSnapshot, Household, Holding } from '@/types/schema';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import type { CsvColumn } from '@/lib/csv';
-import type { ConcentrationWarning } from '@/lib/concentration';
+import { topEffectiveExposures, type ConcentrationWarning } from '@/lib/concentration';
 import { AlertTriangleIcon } from 'lucide-react';
 import { YahooClient } from '@/market/yahoo-client';
 import { TickersRepo } from '@/domain/tickers';
@@ -855,23 +855,27 @@ export default function Investments() {
             </ul>
           )}
 
-          {concentration.perTicker.filter((t) => t.pctOfPortfolio > 0).length > 0 && (
-            <div className="mt-6 border-t pt-4">
-              <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
-                Top 3 effective exposures
+          {(() => {
+            const top = topEffectiveExposures(concentration.perTicker, 3);
+            if (top.length === 0) return null;
+            return (
+              <div className="mt-6 border-t pt-4">
+                <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
+                  Top 3 effective exposures
+                </div>
+                <ul className="space-y-1 text-sm">
+                  {top.map((t) => (
+                    <li key={t.ticker} className="flex justify-between gap-2 tabular-nums">
+                      <span className="font-mono">{t.ticker}</span>
+                      <span className="text-muted-foreground">
+                        {(t.pctOfPortfolio * 100).toFixed(1)}%
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <ul className="space-y-1 text-sm">
-                {concentration.perTicker.slice(0, 3).map((t) => (
-                  <li key={t.ticker} className="flex justify-between gap-2 tabular-nums">
-                    <span className="font-mono">{t.ticker}</span>
-                    <span className="text-muted-foreground">
-                      {(t.pctOfPortfolio * 100).toFixed(1)}%
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+            );
+          })()}
         </CardContent>
       </Card>
 

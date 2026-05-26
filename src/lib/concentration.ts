@@ -168,3 +168,26 @@ export function withMiscLast(
   const named = perTicker.filter((s) => s.ticker !== 'Misc');
   return [...named, misc];
 }
+
+/**
+ * Pick the top-N effective-exposure rows for the Concentration Health
+ * summary, excluding the synthetic 'Misc' bucket. Misc represents the
+ * untracked tail of fund top-N weights (i.e., a diversified residual),
+ * so a large Misc share doesn't indicate concentration in any single
+ * name and shouldn't crowd out real exposures in the headline list.
+ *
+ * Mirrors the warning-loop exclusion at the top of computeConcentration.
+ * Skips zero-or-negative pct rows so a household with only Misc renders
+ * an empty top-N list rather than a list of dead rows.
+ *
+ * Returns at most `n` rows (default 3) preserving the input's descending
+ * pctOfPortfolio order.
+ */
+export function topEffectiveExposures(
+  perTicker: Array<{ ticker: string; effectiveExposure: number; pctOfPortfolio: number }>,
+  n = 3,
+): Array<{ ticker: string; effectiveExposure: number; pctOfPortfolio: number }> {
+  return perTicker
+    .filter((t) => t.ticker !== 'Misc' && t.pctOfPortfolio > 0)
+    .slice(0, n);
+}

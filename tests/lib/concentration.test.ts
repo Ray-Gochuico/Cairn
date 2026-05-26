@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeConcentration, withMiscLast } from '@/lib/concentration';
+import { computeConcentration, withMiscLast, topEffectiveExposures } from '@/lib/concentration';
 
 describe('computeConcentration', () => {
   it('single stock contributes 100% to its own exposure', () => {
@@ -336,5 +336,54 @@ describe('withMiscLast', () => {
       ticker: `T${i}`, effectiveExposure: 100, pctOfPortfolio: 0.02,
     }));
     expect(withMiscLast(items)).toHaveLength(50);
+  });
+});
+
+describe('topEffectiveExposures', () => {
+  it('excludes Misc even when it is the largest exposure', () => {
+    const input = [
+      { ticker: 'Misc', effectiveExposure: 6530, pctOfPortfolio: 0.653 },
+      { ticker: 'NVDA', effectiveExposure: 700,  pctOfPortfolio: 0.07 },
+      { ticker: 'AAPL', effectiveExposure: 600,  pctOfPortfolio: 0.06 },
+      { ticker: 'MSFT', effectiveExposure: 500,  pctOfPortfolio: 0.05 },
+    ];
+    const top = topEffectiveExposures(input, 3);
+    expect(top.map((t) => t.ticker)).toEqual(['NVDA', 'AAPL', 'MSFT']);
+  });
+
+  it('returns at most N rows', () => {
+    const input = Array.from({ length: 20 }, (_, i) => ({
+      ticker: `T${i}`,
+      effectiveExposure: 100 - i,
+      pctOfPortfolio: (100 - i) / 1000,
+    }));
+    expect(topEffectiveExposures(input, 3)).toHaveLength(3);
+    expect(topEffectiveExposures(input, 5)).toHaveLength(5);
+  });
+
+  it('drops zero-or-negative pct rows', () => {
+    const input = [
+      { ticker: 'AAPL', effectiveExposure: 100, pctOfPortfolio: 0.5 },
+      { ticker: 'ZERO', effectiveExposure: 0,   pctOfPortfolio: 0 },
+      { ticker: 'NEG',  effectiveExposure: -50, pctOfPortfolio: -0.25 },
+    ];
+    expect(topEffectiveExposures(input, 5).map((t) => t.ticker)).toEqual(['AAPL']);
+  });
+
+  it('returns an empty list when only Misc has non-zero pct', () => {
+    const input = [
+      { ticker: 'Misc', effectiveExposure: 1000, pctOfPortfolio: 1.0 },
+    ];
+    expect(topEffectiveExposures(input)).toEqual([]);
+  });
+
+  it('preserves the input descending order among non-Misc rows', () => {
+    const input = [
+      { ticker: 'A', effectiveExposure: 80, pctOfPortfolio: 0.4 },
+      { ticker: 'Misc', effectiveExposure: 60, pctOfPortfolio: 0.3 },
+      { ticker: 'B', effectiveExposure: 40, pctOfPortfolio: 0.2 },
+      { ticker: 'C', effectiveExposure: 20, pctOfPortfolio: 0.1 },
+    ];
+    expect(topEffectiveExposures(input, 3).map((t) => t.ticker)).toEqual(['A', 'B', 'C']);
   });
 });
