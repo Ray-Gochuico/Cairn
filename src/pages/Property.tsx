@@ -26,6 +26,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { ValueEditor, EquityRow } from '@/components/AssetCardParts';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
+import ValueHistorySection from '@/components/inputs/ValueHistorySection';
 import type { CsvColumn } from '@/lib/csv';
 
 /**
@@ -401,28 +402,37 @@ export default function Property() {
             : [];
           const avgMonthlyUtilities = averageMonthlySpending(utilitiesTx);
           return (
-            <div key={p.id} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <PropertyAssetCard
-                property={p}
-                mortgageBalance={mortgageBalance}
-                costBasis={costBasis}
-                isEditing={isEditing}
-                onEdit={() => setEditing({ id: p.id! })}
-                onCancelEdit={() => setEditing(null)}
-                onSaveValue={(v) => handleSaveProperty(p.id!, v)}
-              />
-              <PropertyExpensesCard
-                propertyName={p.name}
-                rolling12moExpense={rolling12moExpense}
-                annualAverage={annualAverage}
-                linkedTransactions={linkedTransactions}
-              />
-              <PropertyUtilitiesCard
-                propertyName={p.name}
-                utilitiesCategoryFound={utilitiesCategoryId != null}
-                avgMonthlyUtilities={avgMonthlyUtilities}
-                utilitiesTxCount={utilitiesTx.length}
-              />
+            <div key={p.id} className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <PropertyAssetCard
+                  property={p}
+                  mortgageBalance={mortgageBalance}
+                  costBasis={costBasis}
+                  isEditing={isEditing}
+                  onEdit={() => setEditing({ id: p.id! })}
+                  onCancelEdit={() => setEditing(null)}
+                  onSaveValue={(v) => handleSaveProperty(p.id!, v)}
+                />
+                <PropertyExpensesCard
+                  propertyName={p.name}
+                  rolling12moExpense={rolling12moExpense}
+                  annualAverage={annualAverage}
+                  linkedTransactions={linkedTransactions}
+                />
+                <PropertyUtilitiesCard
+                  propertyName={p.name}
+                  utilitiesCategoryFound={utilitiesCategoryId != null}
+                  avgMonthlyUtilities={avgMonthlyUtilities}
+                  utilitiesTxCount={utilitiesTx.length}
+                />
+              </div>
+              {p.id != null ? (
+                <ValueHistorySection
+                  ownerType="PROPERTY"
+                  ownerId={p.id}
+                  fallbackValue={p.currentEstimatedValue}
+                />
+              ) : null}
             </div>
           );
         })}

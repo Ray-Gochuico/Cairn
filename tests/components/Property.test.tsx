@@ -8,6 +8,7 @@ import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { useCategoriesStore } from '@/stores/categories-store';
+import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
 import { FilingStatus, PropertyType } from '@/types/enums';
 import Property from '@/pages/Property';
 
@@ -30,6 +31,12 @@ function resetStores() {
   usePersonsStore.setState({ persons: [], isLoading: false, error: null, load: async () => {} });
   useTransactionsStore.setState({ transactions: [], isLoading: false, error: null, load: async () => {} });
   useCategoriesStore.setState({ categories: [], isLoading: false, error: null, load: async () => {} });
+  useAssetValueSnapshotsStore.setState({
+    assetValueSnapshots: [],
+    isLoading: false,
+    error: null,
+    load: async () => {},
+  });
 }
 
 function renderPage() {
@@ -266,6 +273,36 @@ describe('Property page', () => {
     expect(screen.getByText(/12-mo rolling/i)).toBeInTheDocument();
     // $750 maintenance transaction linked to property 7 within 12 months
     expect(screen.getAllByText('$750').length).toBeGreaterThan(0);
+  });
+
+  it('renders the Value history section per property', () => {
+    usePropertiesStore.setState({
+      properties: [
+        {
+          id: 42,
+          householdId: 1,
+          ownerPersonId: null,
+          name: 'Family Home',
+          type: PropertyType.PRIMARY_RESIDENCE,
+          address: null,
+          purchasePrice: 400000,
+          purchaseDate: '2020-01-01',
+          currentEstimatedValue: 450000,
+          linkedLoanId: null,
+          excludedFromNetWorth: false,
+        } as never,
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    });
+
+    renderPage();
+
+    // Empty-state copy from ValueHistorySection
+    expect(screen.getByText(/Using current estimated value/i)).toBeInTheDocument();
+    // The summary label confirms section is mounted
+    expect(screen.getByText(/Value history \(0\)/i)).toBeInTheDocument();
   });
 
   it('exports the full properties table to CSV with the owner name resolved', async () => {
