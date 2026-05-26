@@ -123,6 +123,7 @@ export default function Plan529Tab() {
             allowMargin: target.allowMargin,
             stateOfPlan: target.stateOfPlan,
             accentColor: target.accentColor,
+            apyRate: target.apyRate,
           }}
           persons={personOptions}
           dependents={dependentOptions}

@@ -74,6 +74,7 @@ export default function AccountsTab() {
             allowMargin: target.allowMargin,
             stateOfPlan: target.stateOfPlan,
             accentColor: target.accentColor,
+            apyRate: target.apyRate,
           }}
           persons={personOptions}
           dependents={dependentOptions}

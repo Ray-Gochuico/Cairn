@@ -23,6 +23,7 @@ const AccountFormSchema = AccountSchema.omit({
   hasHighFees: true,
 }).extend({
   allowMargin: z.boolean(),
+  apyRate: z.number().min(0).max(0.15).nullable(),
 });
 
 // Strip roadmap rule-engine chart-answer columns; those are written by
@@ -50,6 +51,7 @@ export const DEFAULT_ACCOUNT: AccountFormValues = {
   allowMargin: false,
   stateOfPlan: null,
   accentColor: null,
+  apyRate: null,
 };
 
 export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
@@ -96,6 +98,8 @@ export default function AccountForm({
   const currentType = form.watch('type');
   const is529 = currentType === AccountType.ACCOUNT_529;
   const isCrypto = currentType === AccountType.ACCOUNT_CRYPTO;
+  const isCashOrSavings =
+    currentType === AccountType.ACCOUNT_CASH || currentType === AccountType.ACCOUNT_SAVINGS;
   const onlyOnePerson = persons.length === 1;
   const noPersons = persons.length === 0;
 
@@ -230,6 +234,33 @@ export default function AccountForm({
                 id="cryptoWalletAddress"
                 {...form.register('cryptoWalletAddress', { setValueAs: (v) => (v === '' ? null : v) })}
               />
+            </div>
+          )}
+
+          {isCashOrSavings && (
+            <div>
+              <Label htmlFor="apyRate">Annual percent yield (APY %)</Label>
+              <Input
+                id="apyRate"
+                type="number"
+                step="0.01"
+                min="0"
+                max="15"
+                placeholder="0.0"
+                defaultValue={
+                  initial.apyRate != null ? String(Math.round(initial.apyRate * 10000) / 100) : ''
+                }
+                {...form.register('apyRate', {
+                  setValueAs: (v) => {
+                    if (v === '' || v === null || v === undefined) return null;
+                    const n = Number(v);
+                    return Number.isFinite(n) ? n / 100 : null;
+                  },
+                })}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Leave blank to use the household default.
+              </p>
             </div>
           )}
 
