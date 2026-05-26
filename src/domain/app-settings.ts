@@ -13,6 +13,7 @@ interface AppSettingsRow {
   default_return_rate: number | null;
   default_fi_pills_position: 'above' | 'below';
   default_projection_detail_level: 'single' | 'tax_bucket' | 'per_account';
+  default_cash_apy: number | null;
 }
 
 function rowToAppSettings(row: AppSettingsRow): AppSettings {
@@ -31,6 +32,7 @@ function rowToAppSettings(row: AppSettingsRow): AppSettings {
     defaultReturnRate: row.default_return_rate,
     defaultFiPillsPosition: row.default_fi_pills_position,
     defaultProjectionDetailLevel: row.default_projection_detail_level,
+    defaultCashApy: row.default_cash_apy,
   });
 }
 
@@ -63,7 +65,8 @@ export class SettingsRepo {
         default_inflation = ?,
         default_return_rate = ?,
         default_fi_pills_position = ?,
-        default_projection_detail_level = ?
+        default_projection_detail_level = ?,
+        default_cash_apy = ?
        WHERE id = 1`,
       [
         merged.sidebarLayout === null ? null : JSON.stringify(merged.sidebarLayout),
@@ -76,6 +79,7 @@ export class SettingsRepo {
         merged.defaultReturnRate,
         merged.defaultFiPillsPosition,
         merged.defaultProjectionDetailLevel,
+        merged.defaultCashApy ?? null,
       ],
     );
   }

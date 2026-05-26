@@ -411,5 +411,6 @@ export const AppSettingsSchema = z.object({
   defaultReturnRate: z.number().min(-0.5).max(0.5).nullable().default(null),
   defaultFiPillsPosition: z.nativeEnum(FiPillsPosition).default(FiPillsPosition.ABOVE),
   defaultProjectionDetailLevel: z.nativeEnum(ProjectionDetailLevel).default('tax_bucket'),
+  defaultCashApy: z.number().min(0).max(0.15).nullable().default(null),
 });
 export type AppSettings = z.infer<typeof AppSettingsSchema>;

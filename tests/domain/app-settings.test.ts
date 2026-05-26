@@ -143,3 +143,40 @@ describe('SettingsRepo — ProjectionDetailLevel', () => {
     ).rejects.toThrow();
   });
 });
+
+describe('SettingsRepo — defaultCashApy', () => {
+  let db: SqliteAdapter;
+  let repo: SettingsRepo;
+
+  beforeEach(async () => {
+    db = new SqliteAdapter(':memory:');
+    await runMigrations(db, await loadAllMigrations());
+    repo = new SettingsRepo(db);
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  it('seeds defaultCashApy as null on a fresh DB', async () => {
+    const s = await repo.get();
+    expect(s.defaultCashApy).toBeNull();
+  });
+
+  it('round-trips defaultCashApy through update + get', async () => {
+    await repo.update({ defaultCashApy: 0.045 });
+    const s = await repo.get();
+    expect(s.defaultCashApy).toBeCloseTo(0.045, 6);
+  });
+
+  it('writes null when defaultCashApy is cleared', async () => {
+    await repo.update({ defaultCashApy: 0.04 });
+    await repo.update({ defaultCashApy: null });
+    const s = await repo.get();
+    expect(s.defaultCashApy).toBeNull();
+  });
+
+  it('rejects defaultCashApy > 0.15', async () => {
+    await expect(repo.update({ defaultCashApy: 0.20 })).rejects.toThrow();
+  });
+});
