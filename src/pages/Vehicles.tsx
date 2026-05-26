@@ -24,6 +24,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { ValueEditor, EquityRow } from '@/components/AssetCardParts';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
+import ValueHistorySection from '@/components/inputs/ValueHistorySection';
 import type { CsvColumn } from '@/lib/csv';
 
 /**
@@ -390,27 +391,36 @@ export default function Vehicles() {
             : [];
           const avgMonthlyGas = averageMonthlySpending(gasTx);
           return (
-            <div key={v.id} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <VehicleAssetCard
-                vehicle={v}
-                loanBalance={loanBalance}
-                isEditing={isEditing}
-                onEdit={() => setEditing({ id: v.id! })}
-                onCancelEdit={() => setEditing(null)}
-                onSaveValue={(val) => handleSaveVehicle(v.id!, val)}
-              />
-              <VehicleExpensesCard
-                vehicleName={v.name}
-                rolling12moExpense={rolling12moExpense}
-                annualAverage={annualAverage}
-                linkedTransactions={linkedTransactions}
-              />
-              <VehicleGasCard
-                vehicleName={v.name}
-                gasCategoryFound={gasCategoryId != null}
-                avgMonthlyGas={avgMonthlyGas}
-                gasTxCount={gasTx.length}
-              />
+            <div key={v.id} className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <VehicleAssetCard
+                  vehicle={v}
+                  loanBalance={loanBalance}
+                  isEditing={isEditing}
+                  onEdit={() => setEditing({ id: v.id! })}
+                  onCancelEdit={() => setEditing(null)}
+                  onSaveValue={(val) => handleSaveVehicle(v.id!, val)}
+                />
+                <VehicleExpensesCard
+                  vehicleName={v.name}
+                  rolling12moExpense={rolling12moExpense}
+                  annualAverage={annualAverage}
+                  linkedTransactions={linkedTransactions}
+                />
+                <VehicleGasCard
+                  vehicleName={v.name}
+                  gasCategoryFound={gasCategoryId != null}
+                  avgMonthlyGas={avgMonthlyGas}
+                  gasTxCount={gasTx.length}
+                />
+              </div>
+              {v.id != null ? (
+                <ValueHistorySection
+                  ownerType="VEHICLE"
+                  ownerId={v.id}
+                  fallbackValue={v.currentEstimatedValue}
+                />
+              ) : null}
             </div>
           );
         })}

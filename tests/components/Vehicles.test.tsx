@@ -8,6 +8,7 @@ import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { useCategoriesStore } from '@/stores/categories-store';
+import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
 import { FilingStatus } from '@/types/enums';
 import Vehicles from '@/pages/Vehicles';
 
@@ -30,6 +31,12 @@ function resetStores() {
   usePersonsStore.setState({ persons: [], isLoading: false, error: null, load: async () => {} });
   useTransactionsStore.setState({ transactions: [], isLoading: false, error: null, load: async () => {} });
   useCategoriesStore.setState({ categories: [], isLoading: false, error: null, load: async () => {} });
+  useAssetValueSnapshotsStore.setState({
+    assetValueSnapshots: [],
+    isLoading: false,
+    error: null,
+    load: async () => {},
+  });
 }
 
 function renderPage() {
@@ -174,6 +181,36 @@ describe('Vehicles page', () => {
     expect(screen.getByText(/12-mo rolling/i)).toBeInTheDocument();
     // $350 linked to vehicle 5 is within 12 months
     expect(screen.getAllByText('$350').length).toBeGreaterThan(0);
+  });
+
+  it('renders the Value history section per vehicle', () => {
+    useVehiclesStore.setState({
+      vehicles: [
+        {
+          id: 17,
+          householdId: 1,
+          ownerPersonId: null,
+          name: 'Family SUV',
+          make: 'Toyota',
+          model: 'RAV4',
+          year: 2022,
+          purchasePrice: 35000,
+          purchaseDate: '2022-03-01',
+          currentEstimatedValue: 28000,
+          linkedLoanId: null,
+          excludedFromNetWorth: false,
+        } as never,
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    });
+
+    renderPage();
+
+    // Empty-state copy from ValueHistorySection
+    expect(screen.getByText(/Using current estimated value/i)).toBeInTheDocument();
+    expect(screen.getByText(/Value history \(0\)/i)).toBeInTheDocument();
   });
 
   it('exports the full vehicles table to CSV with the owner name resolved', async () => {
