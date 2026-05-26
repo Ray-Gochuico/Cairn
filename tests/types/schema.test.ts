@@ -740,6 +740,63 @@ describe('EquityGrantSchema', () => {
       })
     ).toThrow();
   });
+
+  describe('company-valuation fields', () => {
+    it('defaults the three calculator fields to null when omitted', () => {
+      const parsed = EquityGrantSchema.parse(valid);
+      expect(parsed.companyValuation).toBeNull();
+      expect(parsed.companyOutstandingShares).toBeNull();
+      expect(parsed.companyTotalDebt).toBeNull();
+    });
+
+    it('accepts non-null values for all three fields', () => {
+      const parsed = EquityGrantSchema.parse({
+        ...valid,
+        companyValuation: 10_000_000,
+        companyOutstandingShares: 5_000_000,
+        companyTotalDebt: 2_000_000,
+      });
+      expect(parsed.companyValuation).toBe(10_000_000);
+      expect(parsed.companyOutstandingShares).toBe(5_000_000);
+      expect(parsed.companyTotalDebt).toBe(2_000_000);
+    });
+
+    it('accepts companyValuation = 0 (distressed company is unusual but legal)', () => {
+      expect(() =>
+        EquityGrantSchema.parse({ ...valid, companyValuation: 0 }),
+      ).not.toThrow();
+    });
+
+    it('rejects negative companyValuation', () => {
+      expect(() =>
+        EquityGrantSchema.parse({ ...valid, companyValuation: -1 }),
+      ).toThrow();
+    });
+
+    it('rejects zero companyOutstandingShares (would crash the formula)', () => {
+      expect(() =>
+        EquityGrantSchema.parse({ ...valid, companyOutstandingShares: 0 }),
+      ).toThrow();
+    });
+
+    it('rejects negative companyOutstandingShares', () => {
+      expect(() =>
+        EquityGrantSchema.parse({ ...valid, companyOutstandingShares: -1 }),
+      ).toThrow();
+    });
+
+    it('accepts companyTotalDebt = 0', () => {
+      expect(() =>
+        EquityGrantSchema.parse({ ...valid, companyTotalDebt: 0 }),
+      ).not.toThrow();
+    });
+
+    it('rejects negative companyTotalDebt', () => {
+      expect(() =>
+        EquityGrantSchema.parse({ ...valid, companyTotalDebt: -1 }),
+      ).toThrow();
+    });
+  });
 });
 
 describe('TickerSchema', () => {

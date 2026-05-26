@@ -299,6 +299,13 @@ export const EquityGrantSchema = z.object({
     'last vesting entry must reach cumulativePct = 1.0',
   ),
   currentFmv: z.number().nonnegative(),
+  // Optional inputs for the in-form FMV calculator. The engine never reads
+  // these — they're metadata so the user can revisit and edit the breakdown
+  // that produced their per-share FMV. See computeFmvFromCompanyValuation
+  // in src/lib/equity-value.ts.
+  companyValuation: z.number().nonnegative().nullable().default(null),
+  companyOutstandingShares: z.number().positive().nullable().default(null),
+  companyTotalDebt: z.number().nonnegative().nullable().default(null),
 });
 export type EquityGrant = z.infer<typeof EquityGrantSchema>;
 
