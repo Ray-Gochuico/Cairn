@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useSettingsStore } from '@/stores/settings-store';
-import { FiPillsPosition } from '@/types/enums';
+import { FiPillsPosition, ProjectionDetailLevel } from '@/types/enums';
 import { ResetDisclaimersDialog } from './ResetDisclaimersDialog';
 
 /**
@@ -40,6 +40,9 @@ export function AdvancedSection() {
   const [inflation, setInflation] = useState<string>('');
   const [returnRate, setReturnRate] = useState<string>('');
   const [pillsPosition, setPillsPosition] = useState<FiPillsPosition>(FiPillsPosition.ABOVE);
+  const [projDetailLevel, setProjDetailLevel] = useState<ProjectionDetailLevel>(
+    ProjectionDetailLevel.TAX_BUCKET,
+  );
   const [resetOpen, setResetOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
@@ -89,6 +92,12 @@ export function AdvancedSection() {
     setPillsPosition(settings?.defaultFiPillsPosition ?? FiPillsPosition.ABOVE);
   }, [settings?.defaultFiPillsPosition]);
 
+  // Projection detail level — household-default surfaced alongside the
+  // FI/Coast FI pill position select.
+  useEffect(() => {
+    setProjDetailLevel(settings?.defaultProjectionDetailLevel ?? ProjectionDetailLevel.TAX_BUCKET);
+  }, [settings?.defaultProjectionDetailLevel]);
+
   const lowNum = low.trim() === '' ? null : Number(low);
   const highNum = high.trim() === '' ? null : Number(high);
   const lowInvalid = lowNum !== null && (Number.isNaN(lowNum) || lowNum < 0 || lowNum > 100);
@@ -117,6 +126,7 @@ export function AdvancedSection() {
         defaultInflation: inflationNum === null ? null : inflationNum / 100,
         defaultReturnRate: returnNum === null ? null : returnNum / 100,
         defaultFiPillsPosition: pillsPosition,
+        defaultProjectionDetailLevel: projDetailLevel,
       });
       setSavedAt(Date.now());
     } finally {
@@ -240,6 +250,20 @@ export function AdvancedSection() {
               >
                 <option value={FiPillsPosition.ABOVE}>Above charts</option>
                 <option value={FiPillsPosition.BELOW}>Below charts</option>
+              </select>
+            </div>
+            <div className="pt-1">
+              <Label htmlFor="default-projection-detail-level">Projection detail level</Label>
+              <select
+                id="default-projection-detail-level"
+                aria-label="Projection detail level"
+                className="mt-1 block h-10 w-48 rounded-md border border-input bg-background px-3 text-sm"
+                value={projDetailLevel}
+                onChange={(e) => setProjDetailLevel(e.target.value as ProjectionDetailLevel)}
+              >
+                <option value={ProjectionDetailLevel.SINGLE}>Single line</option>
+                <option value={ProjectionDetailLevel.TAX_BUCKET}>Tax bucket (default)</option>
+                <option value={ProjectionDetailLevel.PER_ACCOUNT}>Per account</option>
               </select>
             </div>
           </section>

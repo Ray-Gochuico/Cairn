@@ -3,7 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { AdvancedSection } from '@/components/settings/AdvancedSection';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useSettingsStore } from '@/stores/settings-store';
-import { FilingStatus, RefreshCadence, FiPillsPosition } from '@/types/enums';
+import { FilingStatus, RefreshCadence, FiPillsPosition, ProjectionDetailLevel } from '@/types/enums';
 import type { Household, AppSettings } from '@/types/schema';
 
 function makeSettings(patch: Partial<AppSettings> = {}): AppSettings {
@@ -18,6 +18,7 @@ function makeSettings(patch: Partial<AppSettings> = {}): AppSettings {
     defaultInflation: null,
     defaultReturnRate: null,
     defaultFiPillsPosition: FiPillsPosition.ABOVE,
+    defaultProjectionDetailLevel: ProjectionDetailLevel.TAX_BUCKET,
     ...patch,
   };
 }
@@ -188,6 +189,7 @@ describe('AdvancedSection', () => {
       defaultInflation: 0.03,
       defaultReturnRate: 0.08,
       defaultFiPillsPosition: FiPillsPosition.ABOVE,
+      defaultProjectionDetailLevel: ProjectionDetailLevel.TAX_BUCKET,
     });
   });
 
@@ -210,6 +212,7 @@ describe('AdvancedSection', () => {
       defaultInflation: null,
       defaultReturnRate: null,
       defaultFiPillsPosition: FiPillsPosition.ABOVE,
+      defaultProjectionDetailLevel: ProjectionDetailLevel.TAX_BUCKET,
     });
   });
 
@@ -253,6 +256,7 @@ describe('AdvancedSection', () => {
       defaultInflation: null,
       defaultReturnRate: null,
       defaultFiPillsPosition: FiPillsPosition.BELOW,
+      defaultProjectionDetailLevel: ProjectionDetailLevel.TAX_BUCKET,
     });
   });
 });
@@ -287,5 +291,53 @@ describe('ResetDisclaimersDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: /reset disclaimers/i }));
     fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
     expect(update).not.toHaveBeenCalled();
+  });
+});
+
+describe('AdvancedSection — Projection detail level select', () => {
+  it('renders a "Projection detail level" select inside the What-If projection defaults section', () => {
+    resetStore(makeHousehold());
+    resetSettingsStore(makeSettings());
+    render(<AdvancedSection />);
+    fireEvent.click(screen.getByRole('button', { name: /expand advanced/i }));
+    expect(screen.getByLabelText(/projection detail level/i)).toBeInTheDocument();
+  });
+
+  it('has three options: single, tax_bucket, per_account', () => {
+    resetStore(makeHousehold());
+    resetSettingsStore(makeSettings());
+    render(<AdvancedSection />);
+    fireEvent.click(screen.getByRole('button', { name: /expand advanced/i }));
+    const select = screen.getByLabelText(/projection detail level/i) as HTMLSelectElement;
+    const opts = Array.from(select.options).map((o) => o.value);
+    expect(opts).toContain('single');
+    expect(opts).toContain('tax_bucket');
+    expect(opts).toContain('per_account');
+  });
+
+  it('reflects the seeded default (tax_bucket) on first render', () => {
+    resetStore(makeHousehold());
+    resetSettingsStore(makeSettings());
+    render(<AdvancedSection />);
+    fireEvent.click(screen.getByRole('button', { name: /expand advanced/i }));
+    const select = screen.getByLabelText(/projection detail level/i) as HTMLSelectElement;
+    expect(select.value).toBe('tax_bucket');
+  });
+
+  it('persists a change through updateSettings on Save', async () => {
+    const updateSettings = vi.fn().mockResolvedValue(undefined);
+    resetStore(makeHousehold());
+    resetSettingsStore(makeSettings(), updateSettings);
+    render(<AdvancedSection />);
+    fireEvent.click(screen.getByRole('button', { name: /expand advanced/i }));
+    const select = screen.getByLabelText(/projection detail level/i) as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: 'per_account' } });
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    // Wait a tick for the async save handler to invoke updateSettings.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ defaultProjectionDetailLevel: 'per_account' }),
+    );
   });
 });
