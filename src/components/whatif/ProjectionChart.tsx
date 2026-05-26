@@ -18,6 +18,7 @@ import { toReal, totalInvestments, aggregateByTaxBucket } from '@/lib/scenarios'
 import { taxBucketForAccount } from '@/lib/account-tax-classification';
 import { ProjectionDetailLevel } from '@/types/enums';
 import { formatCompactCurrency } from '@/lib/format';
+import { DecomposedTooltipContent } from './ProjectionTooltip';
 
 const AREA_COLORS = ['#4f86f7', '#5fbb7c', '#e6b54b', '#ef8b5a', '#9b5de5', '#f15bb5'];
 
@@ -288,10 +289,23 @@ export default function ProjectionChart({
               width={72}
               domain={[(dataMin: number) => Math.max(0, dataMin * 0.8), 'auto']}
             />
+            {/* Task #25 — replace the single-number tooltip with a per-
+                scenario decomposition (compound vs auto-invested salary vs
+                lever contributions vs lump sums vs withdrawals). Driven by
+                a named-export content function so tests can call it directly
+                with a synthetic payload (recharts tooltips don't render well
+                in jsdom). */}
             <Tooltip
-              formatter={(value, name) => [formatCompactCurrency(Number(value)), String(name)]}
-              labelFormatter={(label) => String(label ?? '')}
               cursor={{ strokeDasharray: '3 3' }}
+              isAnimationActive={false}
+              content={(p) => (
+                <DecomposedTooltipContent
+                  label={p.label}
+                  active={p.active}
+                  scenarios={scenarios}
+                  displayProjections={display}
+                />
+              )}
             />
 
             {mode === 'composition' && visible.length === 1 && visible[0]?.id != null && (() => {

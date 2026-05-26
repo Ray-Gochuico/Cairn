@@ -11,6 +11,12 @@ export function toReal(states: MonthlyState[], inflation: number, startISO: stri
     for (const [idStr, balance] of Object.entries(s.investmentsByAccount)) {
       deflatedAccounts[Number(idStr)] = balance * factor;
     }
+    // Optional flow decomposition fields (Task #25) — same `factor` applies.
+    // Defined as a small helper so we keep `undefined` distinct from 0
+    // (the engine deliberately leaves the seed month undefined; only stepped
+    // months populate these fields).
+    const scaleOpt = (n: number | undefined): number | undefined =>
+      n === undefined ? undefined : n * factor;
     return {
       ...s,
       investmentsByAccount: deflatedAccounts,
@@ -21,6 +27,11 @@ export function toReal(states: MonthlyState[], inflation: number, startISO: stri
       expenses: s.expenses * factor,
       savings: s.savings * factor,
       debtByLoan: Object.fromEntries(Object.entries(s.debtByLoan).map(([k, v]) => [k, v * factor])),
+      compoundReturnAdded: scaleOpt(s.compoundReturnAdded),
+      autoInvestedSalarySurplus: scaleOpt(s.autoInvestedSalarySurplus),
+      leverContributionsInvested: scaleOpt(s.leverContributionsInvested),
+      lumpSumInvested: scaleOpt(s.lumpSumInvested),
+      withdrawnFromInvestments: scaleOpt(s.withdrawnFromInvestments),
     };
   });
 }
