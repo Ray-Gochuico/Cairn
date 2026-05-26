@@ -376,3 +376,43 @@ describe('0023_projection_detail_level migration', () => {
     await db.close();
   });
 });
+
+describe('0024_cash_apy migration', () => {
+  it('adds apy_rate column to accounts (nullable)', async () => {
+    const db = new SqliteAdapter(':memory:');
+    await runMigrations(db, await loadAllMigrations());
+    const cols = await db.select<{ name: string }>('PRAGMA table_info(accounts)');
+    expect(cols.map((c) => c.name)).toContain('apy_rate');
+
+    // Verify that the column is nullable by inserting a row with NULL.
+    await db.execute(
+      `INSERT INTO accounts (
+        household_id, owner_person_id, beneficiary_dependent_id, name, institution,
+        type, crypto_wallet_address, auto_fetch_enabled, excluded_from_net_worth,
+        allow_margin, state_of_plan
+      ) VALUES (1, NULL, NULL, 'HYSA', NULL, 'ACCOUNT_SAVINGS', NULL, 0, 0, 0, NULL)`,
+    );
+    const rows = await db.select<{ apy_rate: number | null }>('SELECT apy_rate FROM accounts');
+    expect(rows[0].apy_rate).toBeNull();
+    await db.close();
+  });
+
+  it('adds default_cash_apy column to app_settings (nullable)', async () => {
+    const db = new SqliteAdapter(':memory:');
+    await runMigrations(db, await loadAllMigrations());
+    const cols = await db.select<{ name: string }>('PRAGMA table_info(app_settings)');
+    expect(cols.map((c) => c.name)).toContain('default_cash_apy');
+    const seed = await db.select<{ default_cash_apy: number | null }>(
+      'SELECT default_cash_apy FROM app_settings WHERE id = 1',
+    );
+    expect(seed[0].default_cash_apy).toBeNull();
+    await db.close();
+  });
+
+  it('is idempotent — running loadAllMigrations twice does not error', async () => {
+    const db = new SqliteAdapter(':memory:');
+    await runMigrations(db, await loadAllMigrations());
+    await expect(runMigrations(db, await loadAllMigrations())).resolves.not.toThrow();
+    await db.close();
+  });
+});
