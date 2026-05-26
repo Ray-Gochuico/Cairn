@@ -90,11 +90,15 @@ describe('Spending page', () => {
   it('(a) renders the import button and an empty-state message when there are no transactions', async () => {
     renderPage();
 
-    // Import button should be visible
-    expect(screen.getByRole('button', { name: /import statement/i })).toBeInTheDocument();
+    // Import button should be visible (unified statements + CSVs)
+    expect(
+      screen.getByRole('button', { name: /import statements or csvs/i }),
+    ).toBeInTheDocument();
 
     // File input for drag-and-drop should be present
-    expect(screen.getByLabelText(/statement pdf/i)).toBeInTheDocument();
+    expect(
+      screen.getByLabelText(/statement pdf or transactions csv/i),
+    ).toBeInTheDocument();
 
     // Empty state message
     await waitFor(() => {
@@ -102,6 +106,16 @@ describe('Spending page', () => {
         screen.getByText(/no transactions yet/i),
       ).toBeInTheDocument();
     });
+  });
+
+  it('(a2) removes the standalone "Import CSV" button from the header', () => {
+    renderPage();
+    // The unified button is present.
+    expect(
+      screen.getByRole('button', { name: /import statements or csvs/i }),
+    ).toBeInTheDocument();
+    // The old standalone "Import CSV" button is gone.
+    expect(screen.queryByRole('button', { name: /^import csv$/i })).toBeNull();
   });
 
   it('(b) with seeded transactions in the store, the list renders them with category names', async () => {
@@ -326,7 +340,7 @@ describe('Spending page', () => {
     renderPage();
 
     const user = userEvent.setup();
-    const fileInput = screen.getByLabelText('Statement PDF');
+    const fileInput = screen.getByLabelText('Statement PDF or transactions CSV');
     // A minimal File — extractTextItems/parseStatement are mocked in this
     // suite's setup, so the bytes content is irrelevant.
     const file = new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], 'mar.pdf', {
@@ -405,7 +419,7 @@ describe('Spending page', () => {
     });
   });
 
-  it('(e) imports a transaction CSV end-to-end via ImportCsvButton', async () => {
+  it('(e) imports a transaction CSV end-to-end via the unified import surface', async () => {
     await useCategoriesStore.getState().load();
     useHouseholdStore.setState({
       household: {
@@ -456,15 +470,14 @@ describe('Spending page', () => {
 
     renderPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: /import csv/i }));
-
+    // Drop a CSV onto the unified file input (no separate "Import CSV" button anymore).
     const file = new File(
       ['date,account,amount,merchant,category,reimbursable\n2024-03-15,Chase Checking,20.00,STARBUCKS,,no\n'],
       'txns.csv',
       { type: 'text/csv' },
     );
-    const input = screen.getByTestId('import-csv-file-input') as HTMLInputElement;
-    Object.defineProperty(input, 'files', { value: [file] });
+    const input = screen.getByLabelText(/statement pdf or transactions csv/i) as HTMLInputElement;
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
     fireEvent.change(input);
 
     await screen.findByRole('dialog');
@@ -482,5 +495,127 @@ describe('Spending page', () => {
     expect(imported).toBeDefined();
     expect(imported?.amount).toBe(20);
     expect(imported?.sourceAccountId).toBe(accountId);
+  });
+
+  it('(unified-csv) routes a dropped CSV through the CSV preview modal', async () => {
+    await useCategoriesStore.getState().load();
+    useHouseholdStore.setState({
+      household: { id: 1, name: 'My household', currency: 'USD', monthlyExpenseBaseline: 5000, emergencyFundMonths: 6, equityCadence: 'YEARLY' } as never,
+      isLoading: false,
+      error: null,
+    });
+    const accountsRepo = new AccountsRepo(db);
+    const accountId = await accountsRepo.create({
+      householdId: 1, ownerPersonId: null, beneficiaryDependentId: null,
+      name: 'Chase Checking', institution: null, type: AccountType.ACCOUNT_CASH,
+      cryptoWalletAddress: null, autoFetchEnabled: false, excludedFromNetWorth: false,
+      stateOfPlan: null, accentColor: null,
+    });
+    useAccountsStore.setState({
+      accounts: [{
+        id: accountId, householdId: 1, ownerPersonId: null, beneficiaryDependentId: null,
+        name: 'Chase Checking', institution: null, type: AccountType.ACCOUNT_CASH,
+        cryptoWalletAddress: null, autoFetchEnabled: false, excludedFromNetWorth: false,
+        stateOfPlan: null, accentColor: null,
+      }],
+      isLoading: false,
+      error: null,
+    });
+
+    renderPage();
+
+    const file = new File(
+      ['date,account,amount,merchant,category,reimbursable\n2024-03-15,Chase Checking,20.00,STARBUCKS,,no\n'],
+      'txns.csv',
+      { type: 'text/csv' },
+    );
+    const input = screen.getByLabelText(/statement pdf or transactions csv/i) as HTMLInputElement;
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
+    fireEvent.change(input);
+
+    // The CSV preview modal opens (not the PDF Review modal).
+    await screen.findByRole('dialog');
+    expect(screen.getByText(/import transactions from csv/i)).toBeInTheDocument();
+    expect(screen.queryByText(/review transactions/i)).toBeNull();
+  });
+
+  it('(unified-pdf) still routes a dropped PDF through the PDF review modal (regression)', async () => {
+    await useCategoriesStore.getState().load();
+    renderPage();
+
+    const user = userEvent.setup();
+    const fileInput = screen.getByLabelText(/statement pdf or transactions csv/i);
+    const pdf = new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], 'mar.pdf', {
+      type: 'application/pdf',
+    });
+    await user.upload(fileInput, pdf);
+
+    // The PDF review modal opens (not the CSV import modal).
+    await screen.findByText(/review transactions/i);
+    expect(screen.queryByText(/import transactions from csv/i)).toBeNull();
+  });
+
+  it('(unified-skip) silently skips unsupported file types in the drop handler', async () => {
+    await useCategoriesStore.getState().load();
+    renderPage();
+
+    // Drop a .txt file — filtered out at the drop layer; no modal opens.
+    const handle = screen.getByText(/drag and drop/i).closest('div')!;
+    const txt = new File(['hello'], 'notes.txt', { type: 'text/plain' });
+    const dataTransfer = { files: [txt], types: ['Files'] };
+    fireEvent.drop(handle, { dataTransfer });
+
+    // No modal opens.
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByText(/review transactions/i)).toBeNull();
+  });
+
+  it('(unified-errors) surfaces a per-file error pane when a CSV file read fails', async () => {
+    await useCategoriesStore.getState().load();
+    useHouseholdStore.setState({
+      household: { id: 1, name: 'My household', currency: 'USD', monthlyExpenseBaseline: 5000, emergencyFundMonths: 6, equityCadence: 'YEARLY' } as never,
+      isLoading: false,
+      error: null,
+    });
+    const accountsRepo = new AccountsRepo(db);
+    const accountId = await accountsRepo.create({
+      householdId: 1, ownerPersonId: null, beneficiaryDependentId: null,
+      name: 'Chase Checking', institution: null, type: AccountType.ACCOUNT_CASH,
+      cryptoWalletAddress: null, autoFetchEnabled: false, excludedFromNetWorth: false,
+      stateOfPlan: null, accentColor: null,
+    });
+    useAccountsStore.setState({
+      accounts: [{
+        id: accountId, householdId: 1, ownerPersonId: null, beneficiaryDependentId: null,
+        name: 'Chase Checking', institution: null, type: AccountType.ACCOUNT_CASH,
+        cryptoWalletAddress: null, autoFetchEnabled: false, excludedFromNetWorth: false,
+        stateOfPlan: null, accentColor: null,
+      }],
+      isLoading: false,
+      error: null,
+    });
+
+    renderPage();
+
+    const goodFile = new File(
+      ['date,account,amount,merchant,category,reimbursable\n2024-03-15,Chase Checking,20.00,STARBUCKS,,no\n'],
+      'good.csv',
+      { type: 'text/csv' },
+    );
+    const badFile = new File(['x'], 'bad.csv', { type: 'text/csv' });
+    // Force the bad file's .text() to reject.
+    Object.defineProperty(badFile, 'text', {
+      value: () => Promise.reject(new Error('read failed')),
+      configurable: true,
+    });
+
+    const input = screen.getByLabelText(/statement pdf or transactions csv/i) as HTMLInputElement;
+    Object.defineProperty(input, 'files', { value: [goodFile, badFile], configurable: true });
+    fireEvent.change(input);
+
+    // Error pane lists the bad file.
+    await waitFor(() => expect(screen.getByText(/bad\.csv/)).toBeInTheDocument());
+    // The good file still opens the CSV modal.
+    expect(screen.getByText(/import transactions from csv/i)).toBeInTheDocument();
   });
 });
