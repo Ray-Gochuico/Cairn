@@ -49,11 +49,17 @@ const basePerson: Person = {
 // The page reads asset_class for each ticker via getDatabase().select(...).
 // We don't have a SQLite singleton here and we don't care about the tickers
 // table for the 529 section, so the easiest path is to stub getDatabase().
+// Mutable controller for the DB mock so individual tests can pin
+// `select()` results without re-mocking the whole module. The default is
+// "always returns []", matching the 529-section tests' expectation of
+// "no holding values". The asset-allocation donut test overrides this
+// to seed asset_class rows for the tickers it asserts on.
+const dbSelectImpl: { current: (sql: string, params?: unknown[]) => Promise<unknown[]> } = {
+  current: async () => [],
+};
 vi.mock('@/db/db', () => ({
   getDatabase: () => ({
-    // The page only calls select() when there's at least one holding; we
-    // resolve to an empty array so any unexpected call is a no-op.
-    select: async () => [],
+    select: (sql: string, params?: unknown[]) => dbSelectImpl.current(sql, params),
   }),
 }));
 
@@ -186,6 +192,8 @@ function primeStores(opts: PrimeOpts = {}) {
 describe('Investments page — 529 section', () => {
   beforeEach(() => {
     resetStores();
+    dbSelectImpl.current = async () => [];
+    localStorage.clear();
   });
 
   it('does NOT render 529 Plans section when no 529 accounts exist', () => {
@@ -390,6 +398,118 @@ describe('Investments page — 529 section', () => {
 
     createSpy.mockRestore();
     revokeSpy.mockRestore();
+  });
+
+  describe('asset allocation donut — entity picker', () => {
+    beforeEach(() => {
+      // Pin asset_class lookups so the allocation aggregation sees multiple
+      // distinct slices instead of everything collapsing to "Other".
+      dbSelectImpl.current = async () => [
+        { ticker: 'VTI', asset_class: 'US_TOTAL_MARKET' },
+        { ticker: 'BND', asset_class: 'US_BONDS' },
+        { ticker: 'BTC', asset_class: 'CRYPTO' },
+      ];
+    });
+
+    it('renders a picker button with the count of visible asset classes', async () => {
+      primeStores({
+        accounts: [
+          { id: 1, name: 'Brokerage', type: AccountType.ACCOUNT_BROKERAGE },
+        ],
+        holdings: [
+          { id: 1, accountId: 1, ticker: 'VTI', shareCount: 10 },
+          { id: 2, accountId: 1, ticker: 'BND', shareCount: 5 },
+          { id: 3, accountId: 1, ticker: 'BTC', shareCount: 1 },
+        ],
+        snapshotValues: [
+          { accountId: 1, snapshotDate: '2026-04-01', totalValue: 30_000 },
+        ],
+      });
+
+      render(
+        <MemoryRouter>
+          <Investments />
+        </MemoryRouter>,
+      );
+
+      // The Asset allocation card hosts both the title and the picker
+      // button. Scope queries to that card so the per-company / sector
+      // pickers (which also render "Entities (N/M)" buttons) don't
+      // collide with our assertions.
+      const allocCard = await waitFor(() => {
+        const title = screen.getByText('Asset allocation');
+        // Climb to the relative wrapper that contains BOTH the picker
+        // (rendered as an absolute sibling) and the underlying Card. We
+        // mark that wrapper with data-testid in Investments.tsx.
+        const wrap = title.closest('[data-testid="asset-allocation-card"]');
+        if (!wrap) throw new Error('Asset allocation card not found');
+        // Wait until the asset-class lookup resolves and the donut legend
+        // shows all three slices — only then is the picker fully wired.
+        const legend = within(wrap as HTMLElement).queryByLabelText('Chart legend');
+        if (!legend) throw new Error('legend not yet rendered');
+        const items = within(legend as HTMLElement).queryAllByRole('listitem');
+        if (items.length < 3) throw new Error('not all slices loaded yet');
+        return wrap as HTMLElement;
+      });
+
+      expect(
+        within(allocCard).getByRole('button', { name: /entities \(3\/3\)/i }),
+      ).toBeInTheDocument();
+    });
+
+    it('hiding an asset class removes its slice from the legend', async () => {
+      primeStores({
+        accounts: [
+          { id: 1, name: 'Brokerage', type: AccountType.ACCOUNT_BROKERAGE },
+        ],
+        holdings: [
+          { id: 1, accountId: 1, ticker: 'VTI', shareCount: 10 },
+          { id: 2, accountId: 1, ticker: 'BND', shareCount: 5 },
+          { id: 3, accountId: 1, ticker: 'BTC', shareCount: 1 },
+        ],
+        snapshotValues: [
+          { accountId: 1, snapshotDate: '2026-04-01', totalValue: 30_000 },
+        ],
+      });
+
+      render(
+        <MemoryRouter>
+          <Investments />
+        </MemoryRouter>,
+      );
+
+      const allocCard = await waitFor(() => {
+        const title = screen.getByText('Asset allocation');
+        const wrap = title.closest('[data-testid="asset-allocation-card"]');
+        if (!wrap) throw new Error('Asset allocation card not found');
+        const legend = within(wrap as HTMLElement).queryByLabelText('Chart legend');
+        if (!legend) throw new Error('legend not yet rendered');
+        const items = within(legend as HTMLElement).queryAllByRole('listitem');
+        if (items.length < 3) throw new Error('not all slices loaded yet');
+        return wrap as HTMLElement;
+      });
+
+      // All three asset classes visible in the legend initially.
+      const legend = within(allocCard).getByLabelText('Chart legend');
+      expect(within(legend).getByText('US Bonds')).toBeInTheDocument();
+      expect(within(legend).getByText('Crypto')).toBeInTheDocument();
+      expect(within(legend).getByText('US Total Market')).toBeInTheDocument();
+
+      const user = userEvent.setup();
+      await user.click(
+        within(allocCard).getByRole('button', { name: /entities \(3\/3\)/i }),
+      );
+      await user.click(within(allocCard).getByLabelText(/US Bonds/));
+
+      // US Bonds slice gone from the legend; the other two remain.
+      const legend2 = within(allocCard).getByLabelText('Chart legend');
+      expect(within(legend2).queryByText('US Bonds')).toBeNull();
+      expect(within(legend2).getByText('Crypto')).toBeInTheDocument();
+      expect(within(legend2).getByText('US Total Market')).toBeInTheDocument();
+      expect(
+        within(allocCard).getByRole('button', { name: /entities \(2\/3\)/i }),
+      ).toBeInTheDocument();
+    });
   });
 
   it('renders the three-up donut grid with asset, per-ticker, and sector cards', () => {

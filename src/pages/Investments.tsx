@@ -17,6 +17,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import ContributionsByBucketChart from '@/components/charts/ContributionsByBucketChart';
 import DonutChartCard from '@/components/charts/DonutChartCard';
+import { DonutEntityPicker, useDonutSelected, type DonutEntityPickerItem } from '@/components/charts/DonutEntityPicker';
+import { CHART_PALETTE } from '@/components/charts/palette';
 import InvestmentTimeSeriesChart from '@/components/charts/InvestmentTimeSeriesChart';
 import PerTickerDonut from '@/components/charts/PerTickerDonut';
 import SectorDonut from '@/components/charts/SectorDonut';
@@ -520,6 +522,34 @@ export default function Investments() {
     [valuations],
   );
 
+  // Asset-allocation donut entity picker. Keys are the asset-class display
+  // labels (already unique by definition); persisted under
+  // `donut.assetAllocation.hidden`. We can't inject the picker into
+  // DonutChartCard's CardHeader without modifying the primitive, so we
+  // float it over the card via an absolute wrapper — same pattern as the
+  // Assets / Liabilities donuts.
+  const allocationPickerItems = useMemo<DonutEntityPickerItem[]>(
+    () =>
+      allocation.map((s, idx) => ({
+        key: s.name,
+        label: s.name,
+        color: CHART_PALETTE[idx % CHART_PALETTE.length],
+      })),
+    [allocation],
+  );
+  const allocationKeys = useMemo(
+    () => allocationPickerItems.map((i) => i.key),
+    [allocationPickerItems],
+  );
+  const allocationSelected = useDonutSelected(
+    'donut.assetAllocation.hidden',
+    allocationKeys,
+  );
+  const filteredAllocation = useMemo(
+    () => allocation.filter((s) => allocationSelected.has(s.name)),
+    [allocation, allocationSelected],
+  );
+
   const drift = useMemo(() => computeDrift(valuations), [valuations]);
   const driftWithTarget = useMemo(
     () => drift.filter((d) => d.targetPct != null),
@@ -686,14 +716,38 @@ export default function Investments() {
       {/* Donuts row — asset class, per-ticker, sector. Stacks on narrow widths. */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {allocation.length > 0 ? (
-          <DonutChartCard
-            title="Asset allocation"
-            subtitle="Approximate, using latest snapshot per account"
-            data={allocation}
-            valueFormatter={formatCurrency}
-          />
+          <div className="relative" data-testid="asset-allocation-card">
+            <div className="absolute top-4 right-4 z-10">
+              <DonutEntityPicker
+                localStorageKey="donut.assetAllocation.hidden"
+                items={allocationPickerItems}
+              />
+            </div>
+            {filteredAllocation.length > 0 ? (
+              <DonutChartCard
+                title="Asset allocation"
+                subtitle="Approximate, using latest snapshot per account"
+                data={filteredAllocation}
+                valueFormatter={formatCurrency}
+              />
+            ) : (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Asset allocation</CardTitle>
+                  <CardDescription>
+                    Approximate, using latest snapshot per account
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground py-8 text-center">
+                    All entities hidden. Open the picker above to show at least one.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         ) : (
-          <Card>
+          <Card data-testid="asset-allocation-card">
             <CardHeader>
               <CardTitle>Asset allocation</CardTitle>
               <CardDescription>
