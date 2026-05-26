@@ -3,7 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { AdvancedSection } from '@/components/settings/AdvancedSection';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useSettingsStore } from '@/stores/settings-store';
-import { FilingStatus, RefreshCadence } from '@/types/enums';
+import { FilingStatus, RefreshCadence, FiPillsPosition } from '@/types/enums';
 import type { Household, AppSettings } from '@/types/schema';
 
 function makeSettings(patch: Partial<AppSettings> = {}): AppSettings {
@@ -17,6 +17,7 @@ function makeSettings(patch: Partial<AppSettings> = {}): AppSettings {
     statementsFolderPath: null,
     defaultInflation: null,
     defaultReturnRate: null,
+    defaultFiPillsPosition: FiPillsPosition.ABOVE,
     ...patch,
   };
 }
@@ -186,6 +187,7 @@ describe('AdvancedSection', () => {
     expect(settingsUpdate).toHaveBeenCalledWith({
       defaultInflation: 0.03,
       defaultReturnRate: 0.08,
+      defaultFiPillsPosition: FiPillsPosition.ABOVE,
     });
   });
 
@@ -207,6 +209,7 @@ describe('AdvancedSection', () => {
     expect(settingsUpdate).toHaveBeenCalledWith({
       defaultInflation: null,
       defaultReturnRate: null,
+      defaultFiPillsPosition: FiPillsPosition.ABOVE,
     });
   });
 
@@ -217,6 +220,40 @@ describe('AdvancedSection', () => {
       target: { value: '25' },
     });
     expect(screen.getByRole('button', { name: /^save$/i })).toBeDisabled();
+  });
+
+  it('renders the FI / Coast FI pills position select inside the What-If section', () => {
+    render(<AdvancedSection />);
+    fireEvent.click(screen.getByText('Advanced'));
+    const select = screen.getByLabelText(/FI \/ Coast FI pills position/i) as HTMLSelectElement;
+    expect(select).toBeInTheDocument();
+    expect(select.value).toBe('above');
+  });
+
+  it('prefills the FI pills position select from settings when "below"', () => {
+    resetSettingsStore(makeSettings({ defaultFiPillsPosition: FiPillsPosition.BELOW }));
+    render(<AdvancedSection />);
+    fireEvent.click(screen.getByText('Advanced'));
+    const select = screen.getByLabelText(/FI \/ Coast FI pills position/i) as HTMLSelectElement;
+    expect(select.value).toBe('below');
+  });
+
+  it('persists the FI pills position selection through useSettingsStore.update', async () => {
+    const settingsUpdate = vi.fn().mockResolvedValue(undefined);
+    resetSettingsStore(makeSettings(), settingsUpdate);
+    render(<AdvancedSection />);
+    fireEvent.click(screen.getByText('Advanced'));
+    fireEvent.change(screen.getByLabelText(/FI \/ Coast FI pills position/i), {
+      target: { value: 'below' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(settingsUpdate).toHaveBeenCalledWith({
+      defaultInflation: null,
+      defaultReturnRate: null,
+      defaultFiPillsPosition: FiPillsPosition.BELOW,
+    });
   });
 });
 

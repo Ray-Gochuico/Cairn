@@ -281,6 +281,51 @@ describe('Budget page', () => {
       expect(within(homeGroup).queryByRole('checkbox', { name: 'Gas/Fuel' })).not.toBeInTheDocument();
     });
 
+    it('creating a category from the picker adds it to the tracked list and renders it', async () => {
+      // Pre-seed: Groceries (33) is tracked + budgeted so the picker mounts
+      // (Budget.tsx only renders it when there are untracked rows). The seed
+      // categories include other budgetable leaves that supply that condition.
+      const repo = new CategoriesRepo(db);
+      await repo.update(33, { monthlyBudget: 600 });
+      localStorage.setItem('trackedBudgetCategories.v1', JSON.stringify([33]));
+
+      render(<MemoryRouter><Budget /></MemoryRouter>);
+      const user = userEvent.setup();
+      await screen.findByText('Groceries');
+
+      // Sanity: "Bakery" doesn't exist yet.
+      expect(screen.queryByText('Bakery')).not.toBeInTheDocument();
+
+      // Open the picker → click "+ Add category" trigger → fill form.
+      await user.click(screen.getByRole('button', { name: /add categor/i }));
+      await user.click(screen.getByRole('button', { name: /\+ add category$/i }));
+
+      await user.type(screen.getByLabelText(/name/i), 'Bakery');
+      // Home (id 1) is a top-level NEED — should appear in the parent select.
+      await user.selectOptions(screen.getByLabelText(/parent/i), '1');
+      await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+      // The new "Bakery" row renders under its parent (Home) in the tracked area.
+      await waitFor(() => {
+        expect(screen.getByText('Bakery')).toBeInTheDocument();
+      });
+
+      // localStorage carries the new id (whatever the DB assigned) on top of 33.
+      const stored = JSON.parse(
+        localStorage.getItem('trackedBudgetCategories.v1') ?? '[]',
+      ) as number[];
+      expect(stored.length).toBeGreaterThan(1);
+      expect(stored).toContain(33);
+
+      // The new id corresponds to the Bakery row we just persisted.
+      const cats = await new CategoriesRepo(db).list();
+      const bakery = cats.find((c) => c.name === 'Bakery');
+      expect(bakery).toBeDefined();
+      expect(bakery?.parentCategoryId).toBe(1);
+      expect(bakery?.type).toBe('NEED');
+      expect(stored).toContain(bakery!.id);
+    });
+
     it('opening the picker, closing without applying, leaves the tracked list unchanged', async () => {
       const repo = new CategoriesRepo(db);
       await repo.update(33, { monthlyBudget: 600 });

@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useSettingsStore } from '@/stores/settings-store';
+import { FiPillsPosition } from '@/types/enums';
 import { ResetDisclaimersDialog } from './ResetDisclaimersDialog';
 
 /**
@@ -38,6 +39,7 @@ export function AdvancedSection() {
   const [high, setHigh] = useState<string>('');
   const [inflation, setInflation] = useState<string>('');
   const [returnRate, setReturnRate] = useState<string>('');
+  const [pillsPosition, setPillsPosition] = useState<FiPillsPosition>(FiPillsPosition.ABOVE);
   const [resetOpen, setResetOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
@@ -81,6 +83,12 @@ export function AdvancedSection() {
     );
   }, [settings?.defaultInflation, settings?.defaultReturnRate]);
 
+  // FI/Coast FI pill row position — household-default surfaced in the same
+  // What-If section as the projection-default inputs.
+  useEffect(() => {
+    setPillsPosition(settings?.defaultFiPillsPosition ?? FiPillsPosition.ABOVE);
+  }, [settings?.defaultFiPillsPosition]);
+
   const lowNum = low.trim() === '' ? null : Number(low);
   const highNum = high.trim() === '' ? null : Number(high);
   const lowInvalid = lowNum !== null && (Number.isNaN(lowNum) || lowNum < 0 || lowNum > 100);
@@ -108,6 +116,7 @@ export function AdvancedSection() {
       await updateSettings({
         defaultInflation: inflationNum === null ? null : inflationNum / 100,
         defaultReturnRate: returnNum === null ? null : returnNum / 100,
+        defaultFiPillsPosition: pillsPosition,
       });
       setSavedAt(Date.now());
     } finally {
@@ -221,6 +230,18 @@ export function AdvancedSection() {
                   : 'Return rate must be between -50 and 50.'}
               </div>
             )}
+            <div className="pt-1">
+              <Label htmlFor="default-fi-pills-position">FI / Coast FI pills position</Label>
+              <select
+                id="default-fi-pills-position"
+                className="mt-1 block h-10 w-48 rounded-md border border-input bg-background px-3 text-sm"
+                value={pillsPosition}
+                onChange={(e) => setPillsPosition(e.target.value as FiPillsPosition)}
+              >
+                <option value={FiPillsPosition.ABOVE}>Above charts</option>
+                <option value={FiPillsPosition.BELOW}>Below charts</option>
+              </select>
+            </div>
           </section>
 
           <div className="flex items-center gap-3">
