@@ -225,7 +225,12 @@ export default function ProjectionChart({
           <ComposedChart data={upperRows} margin={{ top: 16, right: 16, bottom: 4, left: 4 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis dataKey="monthISO" tick={{ fontSize: 11 }} minTickGap={32} />
-            <YAxis tick={{ fontSize: 11 }} tickFormatter={formatCompactCurrency} width={72} />
+            <YAxis
+              tick={{ fontSize: 11 }}
+              tickFormatter={formatCompactCurrency}
+              width={72}
+              domain={[(dataMin: number) => Math.max(0, dataMin * 0.8), 'auto']}
+            />
             <Tooltip
               formatter={(value, name) => [formatCompactCurrency(Number(value)), String(name)]}
               labelFormatter={(label) => String(label ?? '')}
@@ -347,7 +352,12 @@ export default function ProjectionChart({
           <ComposedChart data={lowerRows} margin={{ top: 4, right: 16, bottom: 16, left: 4 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis dataKey="monthISO" tick={{ fontSize: 11 }} minTickGap={32} />
-            <YAxis tick={{ fontSize: 11 }} tickFormatter={formatCompactCurrency} width={72} />
+            <YAxis
+              tick={{ fontSize: 11 }}
+              tickFormatter={formatCompactCurrency}
+              width={72}
+              domain={[(dataMin: number) => Math.max(0, dataMin * 0.8), 'auto']}
+            />
             <Tooltip
               formatter={(value, name) => [formatCompactCurrency(Number(value)), String(name)]}
               labelFormatter={(label) => String(label ?? '')}
