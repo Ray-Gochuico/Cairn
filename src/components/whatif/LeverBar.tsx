@@ -9,9 +9,10 @@ import ExpensePeriodsPopover from '@/components/whatif/levers/ExpensePeriodsPopo
 import ReturnSchedulePopover from '@/components/whatif/levers/ReturnSchedulePopover';
 import IncomePopover from '@/components/whatif/levers/IncomePopover';
 import ContributionsPopover from '@/components/whatif/levers/ContributionsPopover';
+import InflationPopover from '@/components/whatif/levers/InflationPopover';
 import SwrLeverPill from '@/components/whatif/SwrLeverPill';
 
-type LeverKey = 'loans' | 'lumpSums' | 'expenses' | 'returns' | 'income' | 'contributions';
+type LeverKey = 'loans' | 'lumpSums' | 'expenses' | 'returns' | 'income' | 'contributions' | 'inflation';
 
 export default function LeverBar() {
   const scenarios = useScenariosStore((s) => s.scenarios);
@@ -36,6 +37,7 @@ export default function LeverBar() {
     returns: Object.keys(lp.returns.overrides).length,
     income: lp.income.perPerson.reduce((acc, p) => acc + p.events.length, 0),
     contributions: lp.contributions.length,
+    inflation: Object.keys(lp.inflation?.overrides ?? {}).length,
   };
 
   const Pill = ({ k, label }: { k: LeverKey; label: string }) => (
@@ -107,6 +109,9 @@ export default function LeverBar() {
             }}
           />
         )}
+        {/* 8th pill — per-scenario inflation lever (Task #15). Appended LAST
+            to avoid conflict with Wave B's Contributions pill rework (T25). */}
+        <Pill k="inflation" label="Inflation" />
       </div>
 
       <ExtraLoanPaymentsPopover
@@ -132,6 +137,10 @@ export default function LeverBar() {
       <ContributionsPopover
         open={openLever === 'contributions'}
         onOpenChange={(o) => setOpenLever(o ? 'contributions' : null)}
+      />
+      <InflationPopover
+        open={openLever === 'inflation'}
+        onOpenChange={(o) => setOpenLever(o ? 'inflation' : null)}
       />
     </>
   );

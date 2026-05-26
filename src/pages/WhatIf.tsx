@@ -20,7 +20,13 @@ import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
-import { detectMilestones, effectiveSwr, type Milestones, type MonthlyState } from '@/lib/scenarios';
+import {
+  detectMilestones,
+  effectiveSwr,
+  effectiveBaselineInflation,
+  type Milestones,
+  type MonthlyState,
+} from '@/lib/scenarios';
 import { FiPillsPosition, ProjectionDetailLevel } from '@/types/enums';
 
 export default function WhatIf() {
@@ -28,7 +34,6 @@ export default function WhatIf() {
   const load               = useScenariosStore((s) => s.load);
   const projectedScenarios = useScenariosStore((s) => s.projectedScenarios);
   const dollarMode         = useScenariosStore((s) => s.dollarMode);
-  const inflation          = useScenariosStore((s) => s.inflation);
   const horizonMonths      = useScenariosStore((s) => s.horizonMonths);
 
   const loadLoans          = useLoansStore((s) => s.load);
@@ -151,6 +156,24 @@ export default function WhatIf() {
       </div>
     ) : null;
 
+  // Resolve the "headline" inflation rate used for the nominal → real
+  // display conversion. Task #15 (v1) chooses the simple baseline-rate
+  // approach over computing per-year deflators — see
+  // effectiveBaselineInflation() for the precedence chain. The active
+  // scenario wins; otherwise we fall back to household / settings.
+  // TODO(task15/v2): if the active scenario has per-year inflation
+  // overrides, the display path could compute per-year deflators in
+  // toReal() for a more accurate real-dollar view. Picked (a) baseline
+  // for v1 per spec §6.
+  const activeScenario =
+    scenarios.find((s) => s.isActive) ?? scenarios.find((s) => s.isBaseline) ?? null;
+  const settingsForDisplay = useSettingsStore((s) => s.settings) ?? null;
+  const displayInflation = effectiveBaselineInflation(
+    activeScenario,
+    household ?? null,
+    settingsForDisplay,
+  );
+
   const projectionChart = (
     <Card className="min-w-0" data-testid="whatif-projection-chart-wrap">
       <CardHeader className="pb-2">
@@ -169,7 +192,7 @@ export default function WhatIf() {
           projections={projections}
           milestones={milestones}
           dollarMode={dollarMode}
-          inflation={inflation}
+          inflation={displayInflation}
           startISO={real.startISO}
           detailLevel={detailLevel}
           accounts={accounts}
