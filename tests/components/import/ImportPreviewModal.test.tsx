@@ -106,3 +106,83 @@ describe('ImportPreviewModal — snapshot mode', () => {
     expect(screen.getByText(/fix and re-upload/i)).toBeInTheDocument();
   });
 });
+
+describe('ImportPreviewModal queuePosition + onSaved props', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('does not render "File N of M" when queuePosition is undefined', () => {
+    render(
+      <ImportPreviewModal
+        entity="snapshot"
+        parsed={cleanParsed}
+        ctx={{ accounts }}
+        open
+        onOpenChange={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText(/File \d+ of \d+/)).toBeNull();
+  });
+
+  it('renders "File N of M" subtitle when queuePosition.total > 1', () => {
+    render(
+      <ImportPreviewModal
+        entity="snapshot"
+        parsed={cleanParsed}
+        ctx={{ accounts }}
+        open
+        onOpenChange={vi.fn()}
+        queuePosition={{ current: 2, total: 5 }}
+      />,
+    );
+    expect(screen.getByText(/File 2 of 5/)).toBeInTheDocument();
+  });
+
+  it('does NOT render "File 1 of 1" when total is 1 (single-file caller)', () => {
+    render(
+      <ImportPreviewModal
+        entity="snapshot"
+        parsed={cleanParsed}
+        ctx={{ accounts }}
+        open
+        onOpenChange={vi.fn()}
+        queuePosition={{ current: 1, total: 1 }}
+      />,
+    );
+    expect(screen.queryByText(/File 1 of 1/)).toBeNull();
+  });
+
+  it('calls onSaved (not onOpenChange(false)) after a successful commit when onSaved is provided', async () => {
+    const onOpenChange = vi.fn();
+    const onSaved = vi.fn();
+    render(
+      <ImportPreviewModal
+        entity="snapshot"
+        parsed={cleanParsed}
+        ctx={{ accounts }}
+        open
+        onOpenChange={onOpenChange}
+        onSaved={onSaved}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^commit/i }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1));
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+  });
+
+  it('calls onOpenChange(false) after a successful commit when onSaved is NOT provided (backwards-compat)', async () => {
+    const onOpenChange = vi.fn();
+    render(
+      <ImportPreviewModal
+        entity="snapshot"
+        parsed={cleanParsed}
+        ctx={{ accounts }}
+        open
+        onOpenChange={onOpenChange}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^commit/i }));
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+  });
+});

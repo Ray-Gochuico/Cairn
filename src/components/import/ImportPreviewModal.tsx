@@ -30,9 +30,27 @@ interface Props {
   ctx: ValidationContext;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Shown as "File {current} of {total}" subtitle when total > 1. Omit for single-file callers. */
+  queuePosition?: { current: number; total: number };
+  /**
+   * Called after a successful import. Receives the row count just inserted.
+   * When provided, the modal does NOT auto-close — the caller is in charge
+   * of advancing or closing (used by the multi-file queue to advance to the
+   * next file without flicker). When absent, the modal auto-closes via
+   * `onOpenChange(false)` as today.
+   */
+  onSaved?: (insertedCount: number) => void;
 }
 
-export function ImportPreviewModal({ entity, parsed, ctx, open, onOpenChange }: Props) {
+export function ImportPreviewModal({
+  entity,
+  parsed,
+  ctx,
+  open,
+  onOpenChange,
+  queuePosition,
+  onSaved,
+}: Props) {
   const storeRef = useMemo(
     () => createImportPreviewStore(entity, parsed, ctx),
     [entity, parsed, ctx],
@@ -54,25 +72,32 @@ export function ImportPreviewModal({ entity, parsed, ctx, open, onOpenChange }: 
     setCommitError(null);
     try {
       const db = getDatabase();
+      let insertedCount = 0;
       if (entity === 'snapshot') {
         const snapshotState = state as unknown as ImportPreviewState<'snapshot'>;
         const rows = snapshotState.committableRows();
-        await commitSnapshotImport(rows, {
+        const result = await commitSnapshotImport(rows, {
           db,
           snapshots: new AccountSnapshotsRepo(db),
         });
+        insertedCount = result?.inserted ?? rows.length;
         await loadSnapshots();
       } else {
         const transactionState = state as unknown as ImportPreviewState<'transaction'>;
         const rows = transactionState.committableRows();
-        await commitTransactionImport(rows, {
+        const result = await commitTransactionImport(rows, {
           db,
           transactions: new TransactionsRepo(db),
           householdId: household?.id ?? 1,
         });
+        insertedCount = result?.inserted ?? rows.length;
         await loadTransactions();
       }
-      onOpenChange(false);
+      if (onSaved) {
+        onSaved(insertedCount);
+      } else {
+        onOpenChange(false);
+      }
     } catch (err) {
       setCommitError(err instanceof Error ? err.message : 'Commit failed');
     } finally {
@@ -92,6 +117,11 @@ export function ImportPreviewModal({ entity, parsed, ctx, open, onOpenChange }: 
       <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
+          {queuePosition && queuePosition.total > 1 && (
+            <div className="text-xs text-muted-foreground">
+              File {queuePosition.current} of {queuePosition.total}
+            </div>
+          )}
           <div className="text-xs text-slate-500">
             {parsed.rows.length} rows parsed
             {parsed.errors.length > 0 && (
