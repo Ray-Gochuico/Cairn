@@ -12,6 +12,7 @@ import {
 import { totalInvestments } from './aggregate-investments';
 import { computeTotalTax } from '@/lib/tax';
 import { ageAtMonth } from '@/lib/dates';
+import { effectiveCashApy } from './effective-cash-apy';
 
 export interface MonthlyState {
   monthISO: string;
@@ -60,6 +61,26 @@ export function projectScenario(
   const out: MonthlyState[] = [];
   const startYear = Number(horizon.startISO.slice(0, 4));
 
+  // Freeze the effective cash APY at projection start. The resolver checks
+  // payload.returns.cashRate first (scenario override), then falls through to
+  // the balance-weighted average across real.cashAccountsWithBalances. We
+  // construct a minimal Scenario shim so effectiveCashApy() can read the
+  // payload's cashRate via its scenario parameter.
+  const scenarioShim = {
+    leverPayload: payload,
+  } as Parameters<typeof effectiveCashApy>[0];
+  const settingsShim = real.defaults?.defaultCashApy != null
+    ? ({ defaultCashApy: real.defaults.defaultCashApy } as Parameters<typeof effectiveCashApy>[2])
+    : null;
+  const effectiveCashApy_frozen = effectiveCashApy(
+    scenarioShim,
+    real.cashAccountsWithBalances ?? [],
+    settingsShim,
+  );
+  const cashMonthlyRate = effectiveCashApy_frozen > 0
+    ? Math.pow(1 + effectiveCashApy_frozen, 1 / 12) - 1
+    : 0;
+
   let state: MonthlyState = {
     monthISO: horizon.startISO,
     investmentsByAccount: { ...real.initialInvestmentsByAccount },
@@ -76,7 +97,7 @@ export function projectScenario(
   out.push(state);
 
   for (let i = 1; i < horizon.months; i++) {
-    state = stepMonth(state, real, payload, startYear, i);
+    state = stepMonth(state, real, payload, startYear, i, cashMonthlyRate);
     out.push(state);
   }
   return out;
@@ -176,9 +197,17 @@ function stepMonth(
   payload: LeverPayload,
   startYear: number,
   monthIndex: number,
+  cashMonthlyRate: number,   // pre-computed, frozen at projection start
 ): MonthlyState {
   const monthISO = addMonths(prev.monthISO, 1);
   let s: MonthlyState = { ...prev, monthISO, events: [] };
+
+  // 0. Apply this month's cash APY growth on last month's ending balance,
+  //    BEFORE the savings/contribution step adds new inflows.
+  //    cashMonthlyRate is frozen at projection start via effectiveCashApy_frozen.
+  if (cashMonthlyRate > 0) {
+    s.cash *= 1 + cashMonthlyRate;
+  }
 
   // Resolve the contribution allocation for this month once. Used by both
   // lump-sum routing (when destination=investments) and contribution routing.

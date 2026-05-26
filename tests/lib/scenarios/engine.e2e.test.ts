@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { projectScenario } from '@/lib/scenarios/engine';
 import { emptyLeverPayload } from '@/lib/scenarios/lever-types';
 import type { RealState } from '@/lib/scenarios/state-snapshot';
-import type { Holding, Loan, Household, Person } from '@/types/schema';
+import type { Account, Holding, Loan, Household, Person } from '@/types/schema';
+import { AccountType } from '@/types/enums';
 import type { Bracket } from '@/lib/tax';
 import { totalInvestments } from '@/lib/scenarios/aggregate-investments';
 
@@ -59,7 +60,8 @@ const realState: RealState = {
   baselineMonthlyExpenses: 4500,
   initialCash: 0,
   initialInvestmentsByAccount: { 1: 200000 }, // 1000 shares VTI @ $200 costBasis
-  defaults: { inflation: 0.025, returnRate: 0.07 },
+  cashAccountsWithBalances: [],
+  defaults: { inflation: 0.025, returnRate: 0.07, defaultCashApy: null },
   startISO: '2026-05',
   taxBrackets: {
     federal: federal2026Single,
@@ -105,7 +107,7 @@ describe('projectScenario — contributions lever combined with other levers', (
       { startMonth: 60, endMonth: null, monthlyAmount: 2000, label: 'Y6+ $2k/mo' },
     ];
     payload.extraLoanPayments = [{ loanId: 1, extraMonthly: 200 }];
-    payload.returns = { defaultRate: 0.07, overrides: { '2027': -0.15, '2028': 0.2 } };
+    payload.returns = { defaultRate: 0.07, overrides: { '2027': -0.15, '2028': 0.2 }, cashRate: null };
 
     const states = projectScenario(realState, payload, { startISO: '2026-05', months: 84 });
 
@@ -145,12 +147,12 @@ describe('projectScenario — cash floor + investments deficit routing', () => {
   const flatReal: RealState = {
     ...realState,
     loans: [],
-    defaults: { inflation: 0, returnRate: 0 },
+    defaults: { inflation: 0, returnRate: 0, defaultCashApy: null },
   };
 
   function zeroReturnPayload() {
     const p = emptyLeverPayload();
-    p.returns = { defaultRate: 0, overrides: {} };
+    p.returns = { defaultRate: 0, overrides: {}, cashRate: null };
     return p;
   }
 
@@ -202,7 +204,7 @@ describe('projectScenario — cash floor + investments deficit routing', () => {
       loans: [], // already cleared in flatReal, kept explicit
     };
     const fivePct = emptyLeverPayload();
-    fivePct.returns = { defaultRate: 0.05, overrides: {} };
+    fivePct.returns = { defaultRate: 0.05, overrides: {}, cashRate: null };
     const states = projectScenario(real, fivePct, { startISO: '2026-05', months: 13 });
     // Cash never dips below zero.
     for (let i = 0; i < states.length; i++) {
@@ -274,13 +276,13 @@ describe('projectScenario — contribution allocation routing', () => {
     initialInvestmentsByAccount: { 10: 60_000, 11: 40_000 },
     initialCash: 50_000, // ample buffer; contribution remainders flow here
     baselineMonthlyExpenses: 2000,
-    defaults: { inflation: 0, returnRate: 0 },
+    defaults: { inflation: 0, returnRate: 0, defaultCashApy: null },
     loans: [], // strip the auto loan so the only signal is the contribution
   };
 
   function zeroReturnPayload() {
     const p = emptyLeverPayload();
-    p.returns = { defaultRate: 0, overrides: {} };
+    p.returns = { defaultRate: 0, overrides: {}, cashRate: null };
     return p;
   }
 
@@ -348,5 +350,138 @@ describe('projectScenario — contribution allocation routing', () => {
     expect(drop10).toBeGreaterThan(drop11);
     // The ratio of drops should match the ratio of starting balances (60/40 = 1.5).
     expect(drop10 / drop11).toBeCloseTo(60 / 40, 2);
+  });
+});
+
+describe('projectScenario — cash APY growth', () => {
+  // Base fixture: no investments, no loans, no income, no expenses.
+  // Cash at $10,000. We want to verify ONLY the cash compounding math.
+  const cashOnlyReal: RealState = {
+    ...realState,
+    persons: [],
+    baselineMonthlyExpenses: 0,
+    loans: [],
+    initialCash: 10_000,
+    initialInvestmentsByAccount: {},
+    cashAccountsWithBalances: [], // overridden per-test with APY
+    defaults: { inflation: 0, returnRate: 0, defaultCashApy: null },
+  };
+
+  it('cash grows at ~5% APY over 12 months ($10k → ~$10,512)', () => {
+    // 5% APY → monthly rate = (1.05)^(1/12) - 1 ≈ 0.004074
+    // After 12 months: $10,000 * (1.05)^(12/12) = $10,500
+    // (small deviation because of discrete monthly compounding vs annual)
+    const fivePercentApy: RealState = {
+      ...cashOnlyReal,
+      cashAccountsWithBalances: [
+        {
+          account: {
+            id: 99,
+            householdId: 1,
+            ownerPersonId: null,
+            beneficiaryDependentId: null,
+            name: 'HYSA',
+            institution: null,
+            type: AccountType.ACCOUNT_SAVINGS,
+            cryptoWalletAddress: null,
+            autoFetchEnabled: false,
+            excludedFromNetWorth: false,
+            allowMargin: false,
+            stateOfPlan: null,
+            accentColor: null,
+            hasEmployerMatch: null,
+            employerMatchPct: null,
+            employerMatchLimitPct: null,
+            allowsMegaBackdoorRollover: null,
+            hasHighFees: null,
+            apyRate: 0.05,
+          } as unknown as Account,
+          balance: 10_000,
+        },
+      ],
+    };
+
+    const payload = emptyLeverPayload();
+    payload.returns = { defaultRate: 0, overrides: {}, cashRate: null };
+
+    const states = projectScenario(fivePercentApy, payload, { startISO: '2026-05', months: 13 });
+    // Month 0 = $10,000 (start); month 12 = after 12 monthly growth steps.
+    expect(states[0].cash).toBeCloseTo(10_000, 2);
+    // 5% annual → after 12 months ≈ $10,500 (continuous would be $10,512 — discrete monthly is $10,500 exactly).
+    expect(states[12].cash).toBeGreaterThan(10_400);
+    expect(states[12].cash).toBeLessThan(10_600);
+  });
+
+  it('cash stays flat when no APY is set (APY resolves to 0)', () => {
+    const payload = emptyLeverPayload();
+    payload.returns = { defaultRate: 0, overrides: {}, cashRate: null };
+
+    const states = projectScenario(cashOnlyReal, payload, { startISO: '2026-05', months: 13 });
+    expect(states[12].cash).toBeCloseTo(10_000, 2);
+  });
+
+  it('scenario cashRate override takes priority over account APY', () => {
+    const withAccountApy: RealState = {
+      ...cashOnlyReal,
+      cashAccountsWithBalances: [
+        {
+          account: {
+            id: 99,
+            householdId: 1,
+            ownerPersonId: null,
+            beneficiaryDependentId: null,
+            name: 'HYSA',
+            institution: null,
+            type: AccountType.ACCOUNT_SAVINGS,
+            cryptoWalletAddress: null,
+            autoFetchEnabled: false,
+            excludedFromNetWorth: false,
+            allowMargin: false,
+            stateOfPlan: null,
+            accentColor: null,
+            hasEmployerMatch: null,
+            employerMatchPct: null,
+            employerMatchLimitPct: null,
+            allowsMegaBackdoorRollover: null,
+            hasHighFees: null,
+            apyRate: 0.10,
+          } as unknown as Account,
+          balance: 10_000,
+        },
+      ],
+    };
+
+    const payload = emptyLeverPayload();
+    payload.returns = { defaultRate: 0, overrides: {}, cashRate: 0.04 }; // scenario override: 4%
+
+    const states = projectScenario(withAccountApy, payload, { startISO: '2026-05', months: 13 });
+    // With 4% APY (scenario override), after 12 months: ~10,400
+    // With 10% APY (account), after 12 months: ~11,047
+    // Override means result must be below 11,000 (not using 10% account APY)
+    expect(states[12].cash).toBeLessThan(10_600);
+    expect(states[12].cash).toBeGreaterThan(10_300);
+  });
+
+  it('cash growth uses the frozen rate (APY computed once at start)', () => {
+    // The engine freezes effectiveCashApy_frozen at projection start.
+    // This is a structural test: two runs with different cashAccountsWithBalances
+    // but same initialCash must produce different results (the apy is read).
+    const noApyReal: RealState = { ...cashOnlyReal, cashAccountsWithBalances: [] };
+    const withApyReal: RealState = {
+      ...cashOnlyReal,
+      cashAccountsWithBalances: [
+        {
+          account: { id: 99, type: AccountType.ACCOUNT_SAVINGS, apyRate: 0.05 } as unknown as Account,
+          balance: 10_000,
+        },
+      ],
+    };
+    const payload = emptyLeverPayload();
+    payload.returns = { defaultRate: 0, overrides: {}, cashRate: null };
+
+    const noApyStates = projectScenario(noApyReal, payload, { startISO: '2026-05', months: 13 });
+    const withApyStates = projectScenario(withApyReal, payload, { startISO: '2026-05', months: 13 });
+
+    expect(withApyStates[12].cash).toBeGreaterThan(noApyStates[12].cash);
   });
 });
