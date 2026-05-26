@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { EquityGrantSchema, type EquityGrant } from '@/types/schema';
@@ -8,6 +8,7 @@ import {
   type VestingTemplateId,
   type VestingEntry,
 } from '@/lib/vesting-templates';
+import { computeFmvFromCompanyValuation } from '@/lib/equity-value';
 import { Button } from '@/components/ui/button';
 import DatePicker from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/input';
@@ -31,6 +32,12 @@ export const DEFAULT_EQUITY_GRANT: EquityGrantFormValues = {
   totalShares: 0,
   currentFmv: 0,
   vestingSchedule: [{ date: '', cumulativePct: 1.0 }],
+  // Optional company-valuation calculator inputs. Default to null so the
+  // calculator section starts collapsed in create mode (it auto-expands in
+  // edit mode if any of these is non-null).
+  companyValuation: null,
+  companyOutstandingShares: null,
+  companyTotalDebt: null,
 };
 
 export interface EquityGrantFormProps {
@@ -79,6 +86,30 @@ export default function EquityGrantForm({
   }, [initial]);
 
   const grantDate = form.watch('grantDate');
+
+  // Live preview of the (val − debt) ÷ shares derivation. Watching the
+  // three fields individually keeps the memoisation cheap; if any input
+  // returns to '' the register's setValueAs collapses it to null and the
+  // helper returns null, which we render as a placeholder dash.
+  const watchedValuation = form.watch('companyValuation');
+  const watchedShares = form.watch('companyOutstandingShares');
+  const watchedDebt = form.watch('companyTotalDebt');
+  const computedFmv = useMemo(
+    () => computeFmvFromCompanyValuation(watchedValuation, watchedDebt, watchedShares),
+    [watchedValuation, watchedDebt, watchedShares],
+  );
+
+  // Auto-expand the calculator section on first render if any of the three
+  // inputs is populated (edit mode for grants that previously used the
+  // calculator). The native <details> element manages its own open state
+  // after that — we only set the initial `open` attribute.
+  const calculatorOpenByDefault = useMemo(
+    () =>
+      initial.companyValuation != null ||
+      initial.companyOutstandingShares != null ||
+      initial.companyTotalDebt != null,
+    [initial.companyValuation, initial.companyOutstandingShares, initial.companyTotalDebt],
+  );
 
   function syncSchedule(next: VestingEntry[]) {
     setScheduleRows(next);
@@ -216,6 +247,83 @@ export default function EquityGrantForm({
               />
             </div>
           </div>
+
+          <details open={calculatorOpenByDefault} className="border rounded-md p-3 bg-muted/30">
+            <summary className="cursor-pointer text-sm font-medium select-none">
+              Don't know the FMV? Estimate it from company valuation
+            </summary>
+            <div className="mt-3 space-y-3 pl-2 border-l">
+              <p className="text-xs text-muted-foreground">
+                Per-share value ={' '}
+                <span className="font-mono">(company valuation − total debt) ÷ outstanding shares</span>.
+              </p>
+              <div>
+                <Label htmlFor="company-valuation">Company valuation</Label>
+                <Input
+                  id="company-valuation"
+                  type="number"
+                  step="any"
+                  placeholder="e.g., 100000000"
+                  {...form.register('companyValuation', {
+                    setValueAs: (v) => (v === '' || v == null ? null : Number(v)),
+                  })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="company-total-debt">Total debt</Label>
+                <Input
+                  id="company-total-debt"
+                  type="number"
+                  step="any"
+                  placeholder="e.g., 5000000"
+                  {...form.register('companyTotalDebt', {
+                    setValueAs: (v) => (v === '' || v == null ? null : Number(v)),
+                  })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="company-outstanding-shares">Outstanding shares</Label>
+                <Input
+                  id="company-outstanding-shares"
+                  type="number"
+                  step="any"
+                  placeholder="e.g., 10000000"
+                  {...form.register('companyOutstandingShares', {
+                    setValueAs: (v) => (v === '' || v == null ? null : Number(v)),
+                  })}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="text-sm">
+                  Per-share value:{' '}
+                  <span className="font-mono">
+                    {computedFmv == null ? '—' : `$${computedFmv.value.toFixed(2)}`}
+                  </span>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={computedFmv == null}
+                  onClick={() => {
+                    if (computedFmv != null) {
+                      form.setValue('currentFmv', computedFmv.value, {
+                        shouldDirty: true,
+                        shouldTouch: true,
+                      });
+                    }
+                  }}
+                >
+                  Use this value
+                </Button>
+              </div>
+              {computedFmv?.warning === 'OVER_LEVERAGED' && (
+                <p className="text-xs text-muted-foreground">
+                  Total debt exceeds company valuation — equity value would be ≤ 0. Using $0 as a floor.
+                </p>
+              )}
+            </div>
+          </details>
 
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">
