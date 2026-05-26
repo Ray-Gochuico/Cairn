@@ -133,3 +133,76 @@ describe('ReturnSchedulePopover', () => {
     expect(call[1].returns.overrides).toEqual({});
   });
 });
+
+describe('ReturnSchedulePopover — Cash APY override', () => {
+  beforeEach(() => { resetStore(); });
+
+  it('renders a "Cash APY" input below investment returns', () => {
+    render(<MemoryRouter><ReturnSchedulePopover open onOpenChange={() => {}} /></MemoryRouter>);
+    expect(screen.getByLabelText(/cash apy.*this scenario/i)).toBeInTheDocument();
+  });
+
+  it('shows empty input when cashRate is null in leverPayload', () => {
+    render(<MemoryRouter><ReturnSchedulePopover open onOpenChange={() => {}} /></MemoryRouter>);
+    const input = screen.getByLabelText(/cash apy.*this scenario/i) as HTMLInputElement;
+    expect(input.value).toBe('');
+  });
+
+  it('shows cashRate as a percentage when pre-set (0.045 → "4.50")', () => {
+    const payload = emptyLeverPayload();
+    payload.returns = { ...payload.returns, cashRate: 0.045 };
+    useScenariosStore.setState({
+      ...useScenariosStore.getState(),
+      scenarios: [{
+        id: 1, name: 'S1', isBaseline: true, color: '#000', lineStyle: 'solid',
+        visible: true, isActive: true, sortOrder: 0, leverPayload: payload,
+        createdAt: 't', updatedAt: 't',
+      } as Scenario],
+    });
+    render(<MemoryRouter><ReturnSchedulePopover open onOpenChange={() => {}} /></MemoryRouter>);
+    const input = screen.getByLabelText(/cash apy.*this scenario/i) as HTMLInputElement;
+    expect(input.value).toBe('4.50');
+  });
+
+  it('typing a Cash APY value and applying writes cashRate as decimal to leverPayload', async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter><ReturnSchedulePopover open onOpenChange={() => {}} /></MemoryRouter>);
+    const cashApyInput = screen.getByLabelText(/cash apy.*this scenario/i);
+    fireEvent.change(cashApyInput, { target: { value: '3.5' } });
+    await user.click(screen.getByRole('button', { name: /^apply$/i }));
+    const updateLever = (useScenariosStore.getState() as any).updateLever as ReturnType<typeof vi.fn>;
+    const call = updateLever.mock.calls.at(-1)!;
+    expect(call[1].returns.cashRate).toBeCloseTo(0.035, 6);
+  });
+
+  it('clearing the Cash APY input and applying writes cashRate as null', async () => {
+    const user = userEvent.setup();
+    const payload = emptyLeverPayload();
+    payload.returns = { ...payload.returns, cashRate: 0.04 };
+    useScenariosStore.setState({
+      ...useScenariosStore.getState(),
+      scenarios: [{
+        id: 1, name: 'S1', isBaseline: true, color: '#000', lineStyle: 'solid',
+        visible: true, isActive: true, sortOrder: 0, leverPayload: payload,
+        createdAt: 't', updatedAt: 't',
+      } as Scenario],
+    });
+    render(<MemoryRouter><ReturnSchedulePopover open onOpenChange={() => {}} /></MemoryRouter>);
+    const cashApyInput = screen.getByLabelText(/cash apy.*this scenario/i);
+    await user.clear(cashApyInput);
+    await user.click(screen.getByRole('button', { name: /^apply$/i }));
+    const updateLever = (useScenariosStore.getState() as any).updateLever as ReturnType<typeof vi.fn>;
+    const call = updateLever.mock.calls.at(-1)!;
+    expect(call[1].returns.cashRate).toBeNull();
+  });
+
+  it('Reset reverts the Cash APY input to the stored value', async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter><ReturnSchedulePopover open onOpenChange={() => {}} /></MemoryRouter>);
+    const cashApyInput = screen.getByLabelText(/cash apy.*this scenario/i);
+    fireEvent.change(cashApyInput, { target: { value: '8' } });
+    expect((cashApyInput as HTMLInputElement).value).toBe('8');
+    await user.click(screen.getByRole('button', { name: /reset/i }));
+    expect((cashApyInput as HTMLInputElement).value).toBe('');
+  });
+});

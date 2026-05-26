@@ -36,16 +36,22 @@ export default function ReturnSchedulePopover({ open, onOpenChange }: Props) {
   const years = Array.from({ length: yearCount }, (_, i) => startYear + i);
 
   const [draft, setDraft] = useState<ReturnSchedule>(
-    active?.leverPayload.returns ?? { defaultRate: defaultReturnRate, overrides: {} },
+    active?.leverPayload.returns ?? { defaultRate: defaultReturnRate, overrides: {}, cashRate: null },
   );
   const [selectedYear, setSelectedYear] = useState<number>(years[0]);
   const [constantPrompt, setConstantPrompt] = useState<string | null>(null);
+  const [cashApyStr, setCashApyStr] = useState<string>('');
 
   useEffect(() => {
     if (open) {
-      setDraft(active?.leverPayload.returns ?? { defaultRate: defaultReturnRate, overrides: {} });
+      const currentReturns =
+        active?.leverPayload.returns ?? { defaultRate: defaultReturnRate, overrides: {}, cashRate: null };
+      setDraft(currentReturns);
       setSelectedYear(years[0]);
       setConstantPrompt(null);
+      setCashApyStr(
+        currentReturns.cashRate != null ? (currentReturns.cashRate * 100).toFixed(2) : '',
+      );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, active?.leverPayload, defaultReturnRate]);
@@ -63,7 +69,7 @@ export default function ReturnSchedulePopover({ open, onOpenChange }: Props) {
 
   const applyPreset = (preset: 'constant7' | 'lostDecade' | 'recession2008') => {
     if (preset === 'constant7') {
-      setDraft({ defaultRate: 0.07, overrides: {} });
+      setDraft((d) => ({ defaultRate: 0.07, overrides: {}, cashRate: d.cashRate }));
       return;
     }
     if (preset === 'lostDecade') {
@@ -71,7 +77,7 @@ export default function ReturnSchedulePopover({ open, onOpenChange }: Props) {
       for (let i = 0; i < 10; i++) {
         overrides[String(startYear + i)] = LOST_DECADE[i];
       }
-      setDraft({ defaultRate: defaultReturnRate, overrides });
+      setDraft((d) => ({ defaultRate: defaultReturnRate, overrides, cashRate: d.cashRate }));
       return;
     }
     if (preset === 'recession2008') {
@@ -79,7 +85,7 @@ export default function ReturnSchedulePopover({ open, onOpenChange }: Props) {
       for (let i = 0; i < 2; i++) {
         overrides[String(startYear + i)] = RECESSION_2008[i];
       }
-      setDraft({ defaultRate: defaultReturnRate, overrides });
+      setDraft((d) => ({ defaultRate: defaultReturnRate, overrides, cashRate: d.cashRate }));
       return;
     }
   };
@@ -87,18 +93,27 @@ export default function ReturnSchedulePopover({ open, onOpenChange }: Props) {
   const applyConstantCustom = () => {
     if (constantPrompt == null) return;
     const decimal = decimalFromPctInput(constantPrompt);
-    setDraft({ defaultRate: decimal, overrides: {} });
+    setDraft((d) => ({ defaultRate: decimal, overrides: {}, cashRate: d.cashRate }));
     setConstantPrompt(null);
   };
 
   const handleApply = async () => {
     if (!active?.id) return;
-    await useScenariosStore.getState().updateLever(active.id, { returns: draft });
+    const cashRateDecimal = cashApyStr.trim() === '' ? null : Number(cashApyStr) / 100;
+    await useScenariosStore.getState().updateLever(active.id, {
+      returns: { ...draft, cashRate: cashRateDecimal },
+    });
     onOpenChange(false);
   };
 
-  const handleReset = () =>
-    setDraft(active?.leverPayload.returns ?? { defaultRate: defaultReturnRate, overrides: {} });
+  const handleReset = () => {
+    const baseReturns =
+      active?.leverPayload.returns ?? { defaultRate: defaultReturnRate, overrides: {}, cashRate: null };
+    setDraft(baseReturns);
+    setCashApyStr(
+      baseReturns.cashRate != null ? (baseReturns.cashRate * 100).toFixed(2) : '',
+    );
+  };
 
   const selectedDisplayValue =
     selectedOverride != null ? pctFromDecimal(selectedOverride) : pctFromDecimal(draft.defaultRate);
@@ -181,6 +196,25 @@ export default function ReturnSchedulePopover({ open, onOpenChange }: Props) {
             <Button size="sm" variant="ghost" onClick={() => setConstantPrompt(null)} aria-label="Cancel constant rate">Cancel</Button>
           </div>
         )}
+
+        <div className="pt-3 border-t mt-2">
+          <Label htmlFor="cash-apy-override" className="text-xs">Cash APY (this scenario) (%)</Label>
+          <Input
+            id="cash-apy-override"
+            aria-label="Cash APY (this scenario)"
+            type="number"
+            step={0.01}
+            min={0}
+            max={15}
+            value={cashApyStr}
+            onChange={(e) => setCashApyStr(e.target.value)}
+            placeholder="e.g. 4.5"
+            className="mt-1"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Leave blank to use the canonical (balance-weighted) household APY.
+          </p>
+        </div>
       </div>
     </LeverPopoverShell>
   );
