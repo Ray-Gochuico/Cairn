@@ -9,12 +9,19 @@ import {
   monthlyExpenseDeltaFromPeriods,
   type LoanMonthlyContext,
 } from './apply-real';
+import { totalInvestments } from './aggregate-investments';
 import { computeTotalTax } from '@/lib/tax';
 import { ageAtMonth } from '@/lib/dates';
 
 export interface MonthlyState {
   monthISO: string;
-  investments: number;
+  /**
+   * Per-account investment balances. Key = Account.id, value = current balance.
+   * Cash/savings accounts are NOT included (they flow into `cash`).
+   * Aggregation to tax-bucket totals or a single scalar happens at render
+   * time via `totalInvestments(state)` / `aggregateByTaxBucket(state, accounts)`.
+   */
+  investmentsByAccount: Record<number, number>;
   homeEquity: number;
   cash: number;
   debtByLoan: Record<number, number>;
@@ -55,7 +62,7 @@ export function projectScenario(
 
   let state: MonthlyState = {
     monthISO: horizon.startISO,
-    investments: real.initialInvestments,
+    investmentsByAccount: { ...real.initialInvestmentsByAccount },
     homeEquity: 0,
     cash: real.initialCash,
     debtByLoan: Object.fromEntries(real.loans.map((l) => [l.id!, l.currentBalance])),
@@ -75,6 +82,94 @@ export function projectScenario(
   return out;
 }
 
+/**
+ * Resolve the per-account contribution allocation for a given month.
+ * Priority: segment.allocation (explicit override) → historical mix (v2) → even split.
+ * v1: historical-mix derivation is not yet implemented; falls back directly to even split.
+ *
+ * Stale account IDs in segment.allocation (those not present in
+ * investmentsByAccount) are filtered out and the remaining proportions are
+ * re-normalized to sum to 1. If the override map has zero valid IDs, we fall
+ * through to the even-split fallback.
+ */
+function resolveAllocation(
+  payload: LeverPayload,
+  monthIndex: number,
+  investmentsByAccount: Record<number, number>,
+): Record<number, number> {
+  const segment = payload.contributions.find(
+    (seg) =>
+      monthIndex >= seg.startMonth &&
+      (seg.endMonth === null || monthIndex <= seg.endMonth),
+  );
+
+  if (segment?.allocation) {
+    const validIds = new Set(Object.keys(investmentsByAccount).map(Number));
+    const filtered: Record<number, number> = {};
+    for (const [idStr, proportion] of Object.entries(segment.allocation)) {
+      const id = Number(idStr);
+      if (validIds.has(id)) {
+        filtered[id] = proportion;
+      }
+    }
+    const total = Object.values(filtered).reduce((s, p) => s + p, 0);
+    if (total > 0) {
+      return Object.fromEntries(
+        Object.entries(filtered).map(([k, v]) => [Number(k), v / total]),
+      );
+    }
+  }
+
+  // Even split across all investment accounts currently tracked.
+  const ids = Object.keys(investmentsByAccount).map(Number);
+  if (ids.length === 0) return {};
+  const share = 1 / ids.length;
+  return Object.fromEntries(ids.map((id) => [id, share]));
+}
+
+function distributeToAccounts(
+  investmentsByAccount: Record<number, number>,
+  amount: number,
+  allocation: Record<number, number>,
+): Record<number, number> {
+  const result = { ...investmentsByAccount };
+  for (const [idStr, proportion] of Object.entries(allocation)) {
+    const id = Number(idStr);
+    result[id] = (result[id] ?? 0) + amount * proportion;
+  }
+  return result;
+}
+
+/**
+ * Withdraw `deficit` (positive) proportionally across all accounts.
+ * If the total is non-positive, deduct an equal share from each account
+ * (or no-op if there are no accounts at all). Accounts may go negative
+ * if the deficit exceeds the total — we don't clamp, since that would
+ * silently hide an insolvent projection from the user.
+ */
+function withdrawProportionally(
+  investmentsByAccount: Record<number, number>,
+  deficit: number,
+): Record<number, number> {
+  const ids = Object.keys(investmentsByAccount).map(Number);
+  if (ids.length === 0) return investmentsByAccount;
+
+  const total = ids.reduce((sum, id) => sum + (investmentsByAccount[id] ?? 0), 0);
+
+  if (total <= 0) {
+    const share = deficit / ids.length;
+    return Object.fromEntries(ids.map((id) => [id, (investmentsByAccount[id] ?? 0) - share]));
+  }
+
+  const result: Record<number, number> = {};
+  for (const id of ids) {
+    const balance = investmentsByAccount[id] ?? 0;
+    const proportion = balance / total;
+    result[id] = balance - deficit * proportion;
+  }
+  return result;
+}
+
 function stepMonth(
   prev: MonthlyState,
   real: RealState,
@@ -85,10 +180,14 @@ function stepMonth(
   const monthISO = addMonths(prev.monthISO, 1);
   let s: MonthlyState = { ...prev, monthISO, events: [] };
 
+  // Resolve the contribution allocation for this month once. Used by both
+  // lump-sum routing (when destination=investments) and contribution routing.
+  const allocation = resolveAllocation(payload, monthIndex, s.investmentsByAccount);
+
   // 1. Lump-sum events firing this month
   for (const evt of payload.lumpSums) {
     if (evt.when.slice(0, 7) === monthISO) {
-      s = applyLumpSum(s, evt);
+      s = applyLumpSum(s, evt, allocation);
     }
   }
 
@@ -162,7 +261,7 @@ function stepMonth(
   s.savings = s.incomeAfterTax - s.expenses - regularLoanPayments - extraLoanPayments;
   const contribution = activeContributionAmount(payload.contributions, monthIndex);
   if (contribution !== null) {
-    s.investments += contribution;
+    s.investmentsByAccount = distributeToAccounts(s.investmentsByAccount, contribution, allocation);
     const remainder = s.savings - contribution;
     if (remainder >= 0) {
       s.cash += remainder;
@@ -170,7 +269,7 @@ function stepMonth(
       applyCashFloorShortfall(s, -remainder);
     }
   } else if (s.savings > 0) {
-    s.investments += s.savings;
+    s.investmentsByAccount = distributeToAccounts(s.investmentsByAccount, s.savings, allocation);
   } else if (s.savings < 0) {
     applyCashFloorShortfall(s, -s.savings);
   }
@@ -195,12 +294,12 @@ function applyCashFloorShortfall(s: MonthlyState, deficit: number): void {
   }
   const fromInvestments = deficit - s.cash;
   s.cash = 0;
-  s.investments -= fromInvestments;
+  s.investmentsByAccount = withdrawProportionally(s.investmentsByAccount, fromInvestments);
 }
 
-function computeNetWorth(s: MonthlyState): number {
+export function computeNetWorth(s: MonthlyState): number {
   const debt = Object.values(s.debtByLoan).reduce((a, b) => a + b, 0);
-  return s.investments + s.homeEquity + s.cash - debt;
+  return totalInvestments(s) + s.homeEquity + s.cash - debt;
 }
 
 function addMonths(monthISO: string, n: number): string {

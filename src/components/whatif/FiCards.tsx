@@ -5,6 +5,7 @@ import { coastFi } from '@/lib/coast-fi';
 import { currentAge } from '@/lib/dates';
 import { formatCurrency } from '@/lib/format';
 import { effectiveSwr } from '@/lib/scenarios/effective-swr';
+import { totalInvestments } from '@/lib/scenarios/aggregate-investments';
 import type { MonthlyState } from '@/lib/scenarios';
 import { useScenariosStore } from '@/stores/scenarios-store';
 import type { Household, Person } from '@/types/schema';
@@ -60,7 +61,7 @@ function computeCards(props: FiCardsProps): ComputedRow | null {
   const swr = effectiveSwr(ref, household);
   if (swr <= 0) return null;
 
-  const liquidNw = seed.investments + seed.cash;
+  const liquidNw = totalInvestments(seed) + seed.cash;
   const fiTarget = (household.monthlyExpenseBaseline * 12) / swr;
 
   const yearsByPerson = persons.map(

@@ -61,7 +61,7 @@ const fixtureStates = (offset = 0): MonthlyState[] => {
     const month = `2026-${String((i % 12) + 1).padStart(2, '0')}`;
     out.push({
       monthISO: month,
-      investments: 100000 + i * 1000 + offset,
+      investmentsByAccount: { 1: 100000 + i * 1000 + offset },
       homeEquity: 250000,
       cash: 10000,
       debtByLoan: { 1: Math.max(0, 18000 - i * 500) },
@@ -232,7 +232,7 @@ describe('ProjectionChart — lower pane (debt lines)', () => {
     // Line still renders (recharts just draws a flat zero curve).
     const noDebtStates: MonthlyState[] = Array.from({ length: 12 }, (_, i) => ({
       monthISO: `2026-${String(i + 1).padStart(2, '0')}`,
-      investments: 100000 + i * 1000,
+      investmentsByAccount: { 1: 100000 + i * 1000 },
       homeEquity: 250000,
       cash: 10000,
       debtByLoan: {},  // no loans

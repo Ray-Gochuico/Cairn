@@ -15,14 +15,35 @@ export function monthlyReturnFromAnnual(annual: number): number {
 
 export function applyAnnualReturn(state: MonthlyState, annualReturn: number): MonthlyState {
   const m = monthlyReturnFromAnnual(annualReturn);
-  return { ...state, investments: state.investments * (1 + m) };
+  const grown: Record<number, number> = {};
+  for (const [idStr, balance] of Object.entries(state.investmentsByAccount)) {
+    grown[Number(idStr)] = balance * (1 + m);
+  }
+  return { ...state, investmentsByAccount: grown };
 }
 
-export function applyLumpSum(state: MonthlyState, evt: LumpSumEvent): MonthlyState {
+export function applyLumpSum(
+  state: MonthlyState,
+  evt: LumpSumEvent,
+  allocation: Record<number, number>,
+): MonthlyState {
   if (evt.destination === 'investments') {
-    return { ...state, investments: state.investments + evt.amount, events: [...state.events, `lump_sum:${evt.label ?? 'event'}`] };
+    const grown = { ...state.investmentsByAccount };
+    for (const [idStr, proportion] of Object.entries(allocation)) {
+      const id = Number(idStr);
+      grown[id] = (grown[id] ?? 0) + evt.amount * proportion;
+    }
+    return {
+      ...state,
+      investmentsByAccount: grown,
+      events: [...state.events, `lump_sum:${evt.label ?? 'event'}`],
+    };
   }
-  return { ...state, cash: state.cash + evt.amount, events: [...state.events, `lump_sum:${evt.label ?? 'event'}`] };
+  return {
+    ...state,
+    cash: state.cash + evt.amount,
+    events: [...state.events, `lump_sum:${evt.label ?? 'event'}`],
+  };
 }
 
 /** Returns the total expense-delta active for the given YYYY-MM, summed across overlapping periods. */

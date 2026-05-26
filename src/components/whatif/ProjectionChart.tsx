@@ -13,7 +13,7 @@ import {
 import React from 'react';
 import type { Scenario } from '@/types/scenario';
 import type { MonthlyState, Milestones } from '@/lib/scenarios';
-import { toReal } from '@/lib/scenarios';
+import { toReal, totalInvestments } from '@/lib/scenarios';
 import { formatCompactCurrency } from '@/lib/format';
 
 export interface ProjectionChartProps {
@@ -55,7 +55,7 @@ function buildUpperPaneRows(scenarios: Scenario[], display: Map<number, MonthlyS
       const arr = display.get(sc.id!);
       if (!arr || !arr[i]) continue;
       row[`net_${sc.id}`] = arr[i].netWorth;
-      row[`investments_${sc.id}`] = arr[i].investments;
+      row[`investments_${sc.id}`] = totalInvestments(arr[i]);
       row[`homeEquity_${sc.id}`]  = arr[i].homeEquity;
       row[`cash_${sc.id}`]        = arr[i].cash;
     }

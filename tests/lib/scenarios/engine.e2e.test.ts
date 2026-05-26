@@ -4,6 +4,7 @@ import { emptyLeverPayload } from '@/lib/scenarios/lever-types';
 import type { RealState } from '@/lib/scenarios/state-snapshot';
 import type { Holding, Loan, Household, Person } from '@/types/schema';
 import type { Bracket } from '@/lib/tax';
+import { totalInvestments } from '@/lib/scenarios/aggregate-investments';
 
 const holdings = [
   { id: 1, accountId: 1, ticker: 'VTI', shareCount: 1000, costBasis: 200, targetAllocationPct: null },
@@ -57,7 +58,7 @@ const realState: RealState = {
   persons,
   baselineMonthlyExpenses: 4500,
   initialCash: 0,
-  initialInvestments: 200000, // 1000 shares VTI @ $200 costBasis
+  initialInvestmentsByAccount: { 1: 200000 }, // 1000 shares VTI @ $200 costBasis
   defaults: { inflation: 0.025, returnRate: 0.07 },
   startISO: '2026-05',
   taxBrackets: {
@@ -78,8 +79,8 @@ describe('projectScenario (end-to-end)', () => {
 
   it('investments compound under the default 7% return when no overrides are set', () => {
     const states = projectScenario(realState, emptyLeverPayload(), { startISO: '2026-05', months: 13 });
-    const inv0 = states[0].investments;
-    const inv12 = states[12].investments;
+    const inv0 = totalInvestments(states[0]);
+    const inv12 = totalInvestments(states[12]);
     expect(inv12).toBeGreaterThan(inv0);
   });
 
@@ -117,7 +118,7 @@ describe('projectScenario — contributions lever combined with other levers', (
     // the horizon — the combination of negative-year returns, extra debt service,
     // and contribution routing must not produce NaN or Infinity.
     expect(Number.isFinite(states[60].netWorth)).toBe(true);
-    expect(Number.isFinite(states[83].investments)).toBe(true);
+    expect(Number.isFinite(totalInvestments(states[83]))).toBe(true);
   });
 
   it('shortfall is permitted: cash floors at zero and investments absorb the deficit', () => {
@@ -133,7 +134,7 @@ describe('projectScenario — contributions lever combined with other levers', (
     const states = projectScenario(hostileReal, payload, { startISO: '2026-05', months: 13 });
     expect(states[11].cash).toBe(0);
     // Run never produces NaN/Infinity even when the household is insolvent.
-    expect(Number.isFinite(states[11].investments)).toBe(true);
+    expect(Number.isFinite(totalInvestments(states[11]))).toBe(true);
   });
 });
 
@@ -164,13 +165,13 @@ describe('projectScenario — cash floor + investments deficit routing', () => {
     };
     const sevenPct = emptyLeverPayload(); // defaultRate: 0.07
     const states = projectScenario(real, sevenPct, { startISO: '2026-05', months: 13 });
-    expect(states[12].investments).toBeGreaterThan(states[0].investments);
+    expect(totalInvestments(states[12])).toBeGreaterThan(totalInvestments(states[0]));
     expect(states[12].cash).toBeGreaterThanOrEqual(0);
     // Compare with-return vs no-return trajectory. The 7% one must end
     // higher than the 0% one, confirming returns are applied AFTER the
     // savings routing.
     const noReturnStates = projectScenario(real, zeroReturnPayload(), { startISO: '2026-05', months: 13 });
-    expect(states[12].investments).toBeGreaterThan(noReturnStates[12].investments);
+    expect(totalInvestments(states[12])).toBeGreaterThan(totalInvestments(noReturnStates[12]));
   });
 
   it('moderate deficit with cash buffer: cash drawn down (not negative)', () => {
@@ -181,7 +182,7 @@ describe('projectScenario — cash floor + investments deficit routing', () => {
     payload.contributions = [{ startMonth: 0, endMonth: 5, monthlyAmount: 100 }];
     const states = projectScenario(flatReal, payload, { startISO: '2026-05', months: 7 });
     expect(states[6].cash).toBeGreaterThan(0);
-    expect(states[6].investments).toBeGreaterThan(states[0].investments);
+    expect(totalInvestments(states[6])).toBeGreaterThan(totalInvestments(states[0]));
   });
 
   it('heavy deficit: cash floors at zero, investments draws down, returns still applied each month', () => {
@@ -208,11 +209,11 @@ describe('projectScenario — cash floor + investments deficit routing', () => {
       expect(states[i].cash).toBeGreaterThanOrEqual(0);
     }
     // Investments stay positive across the horizon and absorb the deficit.
-    expect(states[12].investments).toBeGreaterThan(0);
-    expect(states[12].investments).toBeLessThan(states[0].investments);
+    expect(totalInvestments(states[12])).toBeGreaterThan(0);
+    expect(totalInvestments(states[12])).toBeLessThan(totalInvestments(states[0]));
     // Returns are still applied each month: 5%-return ends higher than 0%.
     const noReturnStates = projectScenario(real, zeroReturnPayload(), { startISO: '2026-05', months: 13 });
-    expect(states[12].investments).toBeGreaterThan(noReturnStates[12].investments);
+    expect(totalInvestments(states[12])).toBeGreaterThan(totalInvestments(noReturnStates[12]));
   });
 
   it('parity: saving household without contributions behaves identically to pre-change routing', () => {
@@ -223,9 +224,9 @@ describe('projectScenario — cash floor + investments deficit routing', () => {
     // so the monthly investment delta should be identical month 1 vs month 12.
     const states = projectScenario(flatReal, zeroReturnPayload(), { startISO: '2026-05', months: 13 });
     expect(states[12].cash).toBe(0);
-    expect(states[12].investments).toBeGreaterThan(states[0].investments);
-    const delta1 = states[1].investments - states[0].investments;
-    const delta12 = states[12].investments - states[11].investments;
+    expect(totalInvestments(states[12])).toBeGreaterThan(totalInvestments(states[0]));
+    const delta1 = totalInvestments(states[1]) - totalInvestments(states[0]);
+    const delta12 = totalInvestments(states[12]) - totalInvestments(states[11]);
     expect(delta1).toBeCloseTo(delta12, 5);
   });
 });

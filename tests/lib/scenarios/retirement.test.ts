@@ -5,6 +5,7 @@ import type { RealState } from '@/lib/scenarios/state-snapshot';
 import type { Holding, Loan, Household, Person } from '@/types/schema';
 import type { Bracket } from '@/lib/tax';
 import { ageAtMonth } from '@/lib/dates';
+import { totalInvestments } from '@/lib/scenarios/aggregate-investments';
 
 const federal2026Single: Bracket[] = [
   { min: 0, max: 11600, rate: 0.10 },
@@ -34,8 +35,13 @@ const holdings: Holding[] = [];
 const loans: Loan[] = [];
 
 function makeRealState(
-  overrides: Partial<Pick<RealState, 'persons' | 'initialCash' | 'initialInvestments' | 'baselineMonthlyExpenses'>> = {},
+  overrides: Partial<Pick<RealState, 'persons' | 'initialCash' | 'initialInvestmentsByAccount' | 'baselineMonthlyExpenses'>> & {
+    initialInvestments?: number; // backward-compat shorthand for legacy single-account tests
+  } = {},
 ): RealState {
+  const { initialInvestments, initialInvestmentsByAccount, ...rest } = overrides;
+  const byAccount = initialInvestmentsByAccount
+    ?? (initialInvestments !== undefined ? { 1: initialInvestments } : { 1: 500000 });
   return {
     accounts: [],
     holdings,
@@ -45,7 +51,7 @@ function makeRealState(
     persons: [person45],
     baselineMonthlyExpenses: 4500,
     initialCash: 5000,
-    initialInvestments: 500000,
+    initialInvestmentsByAccount: byAccount,
     defaults: { inflation: 0, returnRate: 0.07 },
     startISO: '2026-05',
     taxBrackets: {
@@ -54,7 +60,7 @@ function makeRealState(
       city: null,
       standardDeduction: 14600,
     },
-    ...overrides,
+    ...rest,
   };
 }
 
@@ -101,10 +107,10 @@ describe('projectScenario — retirement age transition', () => {
     const states = projectScenario(realLowReturn, payload, { startISO: '2026-05', months: 120 });
 
     // Pre-retirement (year 1): investments grow from savings (no return).
-    expect(states[12].investments).toBeGreaterThan(states[0].investments);
+    expect(totalInvestments(states[12])).toBeGreaterThan(totalInvestments(states[0]));
 
     // Post-retirement, with no income, investments are eroded by expenses.
-    expect(states[108].investments).toBeLessThan(states[70].investments);
+    expect(totalInvestments(states[108])).toBeLessThan(totalInvestments(states[70]));
 
     // Cash stays at zero through the drawdown.
     for (let i = 70; i < states.length; i++) {

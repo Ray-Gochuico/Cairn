@@ -5,6 +5,7 @@ import { activeContributionAmount } from '@/lib/scenarios/apply-real';
 import type { RealState } from '@/lib/scenarios/state-snapshot';
 import type { Holding, Loan, Household, Person } from '@/types/schema';
 import type { Bracket } from '@/lib/tax';
+import { totalInvestments } from '@/lib/scenarios/aggregate-investments';
 
 const holdings = [
   { id: 1, accountId: 1, ticker: 'VTI', shareCount: 1000, costBasis: 200, targetAllocationPct: null },
@@ -41,7 +42,7 @@ const realState: RealState = {
   persons,
   baselineMonthlyExpenses: 4500,
   initialCash: 0,
-  initialInvestments: 200000, // 1000 shares VTI @ $200 costBasis
+  initialInvestmentsByAccount: { 1: 200000 }, // 1000 shares VTI @ $200 costBasis
   defaults: { inflation: 0, returnRate: 0 }, // 0% return → no growth drift, easier math
   startISO: '2026-05',
   taxBrackets: {
@@ -92,7 +93,7 @@ describe('projectScenario — contributions lever', () => {
     empty.contributions = [];
     const withEmpty = projectScenario(realState, empty, { startISO: '2026-05', months: 60 });
     for (let i = 0; i < baseline.length; i++) {
-      expect(withEmpty[i].investments).toBeCloseTo(baseline[i].investments, 5);
+      expect(totalInvestments(withEmpty[i])).toBeCloseTo(totalInvestments(baseline[i]), 5);
       expect(withEmpty[i].cash).toBeCloseTo(baseline[i].cash, 5);
       expect(withEmpty[i].netWorth).toBeCloseTo(baseline[i].netWorth, 5);
     }
@@ -109,14 +110,14 @@ describe('projectScenario — contributions lever', () => {
     payload.contributions = [{ startMonth: 0, endMonth: 59, monthlyAmount: 1000 }];
 
     const states = projectScenario(realState, payload, { startISO: '2026-05', months: 60 });
-    const initial = states[0].investments;
+    const initial = totalInvestments(states[0]);
 
     // Spot-check linearity month-over-month.
     for (let i = 1; i < 60; i++) {
-      expect(states[i].investments - states[i - 1].investments).toBeCloseTo(1000, 5);
+      expect(totalInvestments(states[i]) - totalInvestments(states[i - 1])).toBeCloseTo(1000, 5);
     }
     // Total accumulated contributions across 59 steps = 59,000.
-    expect(states[59].investments - initial).toBeCloseTo(59 * 1000, 5);
+    expect(totalInvestments(states[59]) - initial).toBeCloseTo(59 * 1000, 5);
   });
 
   it('routes surplus above contributions to cash', () => {
@@ -132,7 +133,7 @@ describe('projectScenario — contributions lever', () => {
     const states = projectScenario(realState, payload, { startISO: '2026-05', months: 13 });
     // After month 11, cash must be > 0 and investments must have grown by
     // exactly 11 * 500 = 5,500 from contributions (months 1..11).
-    expect(states[11].investments - states[0].investments).toBeCloseTo(11 * 500, 5);
+    expect(totalInvestments(states[11]) - totalInvestments(states[0])).toBeCloseTo(11 * 500, 5);
     expect(states[11].cash).toBeGreaterThan(0);
   });
 
@@ -156,7 +157,7 @@ describe('projectScenario — contributions lever', () => {
     // contribution still routes in first, but the shortfall (savings - 1000,
     // which is very negative) hits investments after cash hits zero, so
     // investments end below their starting balance.
-    expect(states[11].investments).toBeLessThan(states[0].investments);
+    expect(totalInvestments(states[11])).toBeLessThan(totalInvestments(states[0]));
   });
 
   it('reverts to default savings-routing after the segment ends', () => {
@@ -170,8 +171,8 @@ describe('projectScenario — contributions lever', () => {
     payload.contributions = [{ startMonth: 0, endMonth: 11, monthlyAmount: 1000 }];
 
     const states = projectScenario(realState, payload, { startISO: '2026-05', months: 24 });
-    const inSegmentDelta = states[11].investments - states[10].investments;
-    const postSegmentDelta = states[13].investments - states[12].investments;
+    const inSegmentDelta = totalInvestments(states[11]) - totalInvestments(states[10]);
+    const postSegmentDelta = totalInvestments(states[13]) - totalInvestments(states[12]);
     expect(inSegmentDelta).toBeCloseTo(1000, 5);
     expect(postSegmentDelta).toBeGreaterThan(inSegmentDelta + 100);
   });

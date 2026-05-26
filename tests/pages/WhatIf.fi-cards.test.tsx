@@ -62,7 +62,7 @@ vi.mock('@/components/whatif/useRealState', () => ({
   useRealState: () => ({
     startISO: '2026-05-01',
     cash: 0,
-    investments: 100000,
+    investmentsByAccount: { 1: 100000 },
     homeEquity: 0,
     incomeAfterTax: 7000,
     expenses: 4000,
@@ -97,7 +97,7 @@ vi.mock('@/stores/scenarios-store', () => {
   };
   const seedState = {
     monthISO: '2026-05',
-    investments: 200_000,
+    investmentsByAccount: { 1: 200_000 },
     homeEquity: 0,
     cash: 50_000,
     debtByLoan: {},

@@ -10,12 +10,31 @@ import {
 } from '@/lib/scenarios/apply-real';
 import type { ExpensePeriod, LumpSumEvent, PersonIncomePlan } from '@/lib/scenarios/lever-types';
 import type { MonthlyState } from '@/lib/scenarios/engine';
+import { totalInvestments } from '@/lib/scenarios/aggregate-investments';
 
-const seed = (overrides: Partial<MonthlyState> = {}): MonthlyState => ({
-  monthISO: '2027-01', investments: 100000, homeEquity: 0, cash: 0,
-  debtByLoan: {}, netWorth: 100000, incomeAfterTax: 0, expenses: 0, savings: 0, events: [],
-  ...overrides,
-});
+interface SeedOverrides extends Partial<Omit<MonthlyState, 'investmentsByAccount'>> {
+  investments?: number;
+  investmentsByAccount?: Record<number, number>;
+}
+
+const seed = (overrides: SeedOverrides = {}): MonthlyState => {
+  const { investments, investmentsByAccount, ...rest } = overrides;
+  const byAccount = investmentsByAccount
+    ?? (investments !== undefined ? { 1: investments } : { 1: 100000 });
+  return {
+    monthISO: '2027-01',
+    investmentsByAccount: byAccount,
+    homeEquity: 0,
+    cash: 0,
+    debtByLoan: {},
+    netWorth: 100000,
+    incomeAfterTax: 0,
+    expenses: 0,
+    savings: 0,
+    events: [],
+    ...rest,
+  };
+};
 
 describe('monthlyReturnFromAnnual', () => {
   it('converts 12% annual to ~0.949% monthly (compounded)', () => {
@@ -29,7 +48,7 @@ describe('monthlyReturnFromAnnual', () => {
 describe('applyAnnualReturn', () => {
   it('grows investments by the monthly-compounded return', () => {
     const next = applyAnnualReturn(seed({ investments: 100000 }), 0.12);
-    expect(next.investments).toBeCloseTo(100000 * 1.00949, 0);
+    expect(totalInvestments(next)).toBeCloseTo(100000 * 1.00949, 0);
   });
   it('does not touch cash, debt, or home equity', () => {
     const next = applyAnnualReturn(seed({ investments: 50000, cash: 10000, homeEquity: 300000, debtByLoan: { 1: 200000 } }), 0.07);
@@ -37,29 +56,45 @@ describe('applyAnnualReturn', () => {
     expect(next.homeEquity).toBe(300000);
     expect(next.debtByLoan[1]).toBe(200000);
   });
+  it('grows per-account balances proportionally when given a multi-account record', () => {
+    const next = applyAnnualReturn(seed({ investmentsByAccount: { 1: 60000, 2: 40000 } }), 0.12);
+    expect(next.investmentsByAccount[1]).toBeCloseTo(60000 * 1.00949, 0);
+    expect(next.investmentsByAccount[2]).toBeCloseTo(40000 * 1.00949, 0);
+  });
 });
 
 describe('applyLumpSum', () => {
   const inv: LumpSumEvent = { when: '2030-06-01', amount: 25000, destination: 'investments', label: 'Inheritance' };
-  const cash: LumpSumEvent = { when: '2030-06-01', amount: 8000, destination: 'cash' };
+  const cashEvt: LumpSumEvent = { when: '2030-06-01', amount: 8000, destination: 'cash' };
   const out: LumpSumEvent = { when: '2030-06-01', amount: -8000, destination: 'investments' };
+  // Single-account allocation: 100% of any investment lump goes to account 1.
+  const allocSingle = { 1: 1 };
 
-  it('routes positive inflows to investments', () => {
-    const next = applyLumpSum(seed({ investments: 100000 }), inv);
-    expect(next.investments).toBe(125000);
+  it('routes positive inflows to investments via the allocation map', () => {
+    const next = applyLumpSum(seed({ investments: 100000 }), inv, allocSingle);
+    expect(totalInvestments(next)).toBe(125000);
   });
-  it('routes positive inflows to cash when destination=cash', () => {
-    const next = applyLumpSum(seed({ cash: 10000 }), cash);
+  it('routes positive inflows to cash when destination=cash (allocation ignored)', () => {
+    const next = applyLumpSum(seed({ cash: 10000 }), cashEvt, allocSingle);
     expect(next.cash).toBe(18000);
   });
   it('subtracts negative amounts from the chosen destination', () => {
-    const next = applyLumpSum(seed({ investments: 100000 }), out);
-    expect(next.investments).toBe(92000);
+    const next = applyLumpSum(seed({ investments: 100000 }), out, allocSingle);
+    expect(totalInvestments(next)).toBe(92000);
   });
   it('does not affect debt or home equity', () => {
-    const next = applyLumpSum(seed({ investments: 100000, debtByLoan: { 1: 50000 }, homeEquity: 300000 }), inv);
+    const next = applyLumpSum(seed({ investments: 100000, debtByLoan: { 1: 50000 }, homeEquity: 300000 }), inv, allocSingle);
     expect(next.debtByLoan[1]).toBe(50000);
     expect(next.homeEquity).toBe(300000);
+  });
+  it('distributes investment lump sums across accounts according to allocation', () => {
+    const next = applyLumpSum(
+      seed({ investmentsByAccount: { 1: 60000, 2: 40000 } }),
+      inv, // +25k
+      { 1: 0.8, 2: 0.2 },
+    );
+    expect(next.investmentsByAccount[1]).toBe(60000 + 25000 * 0.8);
+    expect(next.investmentsByAccount[2]).toBe(40000 + 25000 * 0.2);
   });
 });
 

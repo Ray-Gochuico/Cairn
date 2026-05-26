@@ -73,7 +73,7 @@ function seedState(investments: number, cash: number): MonthlyState[] {
   return [
     {
       monthISO: '2026-05',
-      investments,
+      investmentsByAccount: { 1: investments },
       homeEquity: 0,
       cash,
       debtByLoan: {},
