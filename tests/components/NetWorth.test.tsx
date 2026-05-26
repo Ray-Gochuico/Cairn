@@ -10,6 +10,7 @@ import { useVehiclesStore } from '@/stores/vehicles-store';
 import { useLoansStore } from '@/stores/loans-store';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { usePersonsStore } from '@/stores/persons-store';
+import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
 import { AccountsRepo } from '@/domain/accounts';
 import { AccountSnapshotsRepo } from '@/domain/snapshots';
 import { PropertiesRepo } from '@/domain/properties';
@@ -59,6 +60,11 @@ const loadAppSettingsMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0014_add_app_settings.sql'), 'utf-8');
 const loadCashApyMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0024_cash_apy.sql'), 'utf-8');
+const loadAssetValueSnapshotsMigration = () =>
+  readFileSync(
+    resolve(__dirname, '../../src/db/migrations/0026_asset_value_snapshots.sql'),
+    'utf-8',
+  );
 
 function resetStores() {
   useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null });
@@ -67,6 +73,11 @@ function resetStores() {
   useLoansStore.setState({ loans: [], isLoading: false, error: null });
   useAccountsStore.setState({ accounts: [], isLoading: false, error: null });
   usePersonsStore.setState({ persons: [], isLoading: false, error: null });
+  useAssetValueSnapshotsStore.setState({
+    assetValueSnapshots: [],
+    isLoading: false,
+    error: null,
+  });
 }
 
 async function seedAccount(
@@ -173,6 +184,10 @@ describe('NetWorth page', () => {
       { version: '0015_add_accent_colors', sql: loadAccentColorsMigration() },
       { version: '0014_add_app_settings', sql: loadAppSettingsMigration() },
       { version: '0024_cash_apy', sql: loadCashApyMigration() },
+      {
+        version: '0026_asset_value_snapshots',
+        sql: loadAssetValueSnapshotsMigration(),
+      },
     ]);
     setDatabase(db);
     resetStores();
@@ -215,7 +230,7 @@ describe('NetWorth page', () => {
     expect(await screen.findByText('$425,000')).toBeInTheDocument();
   });
 
-  it('renders the 12-month chart card and asset breakdown', async () => {
+  it('renders the new time-series chart and dual donuts', async () => {
     const accountId = await seedAccount(db, 'Schwab');
     await seedSnapshot(db, accountId, '2024-05-31', 100000);
     await seedSnapshot(db, accountId, '2024-06-28', 105000);
@@ -228,20 +243,50 @@ describe('NetWorth page', () => {
       </MemoryRouter>,
     );
 
-    // LineChartCard title text — sufficient signal that the chart card
-    // mounted (Recharts' SVG is finicky in jsdom; see ChartCards.test.tsx).
+    // The MetricCard tile heading stays.
     await waitFor(() => {
-      expect(screen.getByText('Net Worth')).toBeInTheDocument();
+      expect(screen.getByText('Current Net Worth')).toBeInTheDocument();
     });
-    expect(screen.getByText(/last 12 months/i)).toBeInTheDocument();
 
-    // Assets-by-category breakdown card present.
-    expect(screen.getByText(/Assets by category/i)).toBeInTheDocument();
-    expect(screen.getByText('Investments')).toBeInTheDocument();
-    expect(screen.getByText('Property')).toBeInTheDocument();
+    // The new chart card and the two donuts render their card titles.
+    expect(screen.getByText('Net Worth Over Time')).toBeInTheDocument();
+    expect(screen.getByText('Assets')).toBeInTheDocument();
+    expect(screen.getByText('Liabilities')).toBeInTheDocument();
+  });
 
-    // Liabilities card present.
-    expect(screen.getByText(/Liabilities by type/i)).toBeInTheDocument();
+  it('does NOT render the legacy LineChartCard "Last 12 months" subtitle', async () => {
+    const accountId = await seedAccount(db, 'Schwab');
+    await seedSnapshot(db, accountId, '2024-06-28', 100000);
+
+    render(
+      <MemoryRouter>
+        <NetWorth />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText(/Current Net Worth/i)).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/last 12 months/i)).not.toBeInTheDocument();
+  });
+
+  it('does NOT render the legacy "Assets by category" or "Liabilities by type" widgets', async () => {
+    const accountId = await seedAccount(db, 'Schwab');
+    await seedSnapshot(db, accountId, '2024-06-28', 100000);
+    await seedProperty(db, 400000);
+    await seedLoan(db, LoanType.AUTO, 15000);
+
+    render(
+      <MemoryRouter>
+        <NetWorth />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText(/Current Net Worth/i)).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/Assets by category/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Liabilities by type/i)).not.toBeInTheDocument();
   });
 
   it('view filter ?view=p1 scopes the current net worth to p1-owned items only', async () => {
