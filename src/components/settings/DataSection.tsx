@@ -135,7 +135,7 @@ export function DataSection() {
     try {
       const data = snapshotStores();
       const json = serializeBackup(data);
-      const filename = `finance-app-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      const filename = `cairn-backup-${new Date().toISOString().slice(0, 10)}.json`;
       downloadJson(filename, json);
       setExportMessage('Exported backup successfully.');
     } catch (e) {
