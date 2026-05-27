@@ -10,6 +10,14 @@ export class TauriAdapter implements DatabaseInterface {
 
   static async load(path: string = 'sqlite:finance.db'): Promise<TauriAdapter> {
     const db = await Database.load(path);
+    // SQLite defaults `foreign_keys = OFF` per connection, and
+    // `tauri-plugin-sql` (2.x) calls `Pool::connect` without any PRAGMA
+    // setup. Without this, the 29 `ON DELETE CASCADE` / `ON DELETE SET NULL`
+    // clauses declared in migration 0001 are silent no-ops in production —
+    // tests and the browser shim both enable FKs at construction, so the
+    // adapter drift was invisible until the 2026-05-27 backend review.
+    // Migration 0030 sweeps the orphans that accumulated while this was off.
+    await db.execute('PRAGMA foreign_keys = ON');
     return new TauriAdapter(db);
   }
 
