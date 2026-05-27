@@ -23,12 +23,20 @@ vi.mock('@/components/whatif/levers/ContributionsPopover', () => ({
   default: () => null,
 }));
 
-// Task #25 — auto-invest preview is computed via useAutoInvestPreview() which
-// wraps useRealState() + the engine. We mock the hook directly so each test
-// can dial in the auto-invest amount without standing up the full store graph.
+// Task #25 — surplus-flow preview is computed via useSurplusFlowPreview()
+// which wraps useRealState() + the engine and reads the auto-invest setting.
+// We mock the hook directly so each test can dial in the amount + destination
+// without standing up the full store graph. β2 task wires destination-aware
+// copy onto the pill; for now the LeverBar UX is unchanged from β0 and only
+// reads `.amount` (we default destination to 'investments' to mirror the
+// pre-migration-0029 default behavior so legacy tests keep passing).
 let autoInvestPreviewValue = 0;
-vi.mock('@/components/whatif/useAutoInvestPreview', () => ({
-  useAutoInvestPreview: () => autoInvestPreviewValue,
+let surplusDestination: 'cash' | 'investments' = 'investments';
+vi.mock('@/components/whatif/useSurplusFlowPreview', () => ({
+  useSurplusFlowPreview: () => ({
+    amount: autoInvestPreviewValue,
+    destination: surplusDestination,
+  }),
 }));
 
 const updateLeverMock = vi.fn().mockResolvedValue(undefined);

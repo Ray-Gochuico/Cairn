@@ -11,7 +11,7 @@ import IncomePopover from '@/components/whatif/levers/IncomePopover';
 import ContributionsPopover from '@/components/whatif/levers/ContributionsPopover';
 import InflationPopover from '@/components/whatif/levers/InflationPopover';
 import SwrLeverPill from '@/components/whatif/SwrLeverPill';
-import { useAutoInvestPreview } from '@/components/whatif/useAutoInvestPreview';
+import { useSurplusFlowPreview } from '@/components/whatif/useSurplusFlowPreview';
 import { formatCompactCurrency } from '@/lib/format';
 
 type LeverKey = 'loans' | 'lumpSums' | 'expenses' | 'returns' | 'income' | 'contributions' | 'inflation';
@@ -23,12 +23,16 @@ export default function LeverBar() {
   const active = scenarios.find((s) => s.isActive);
   const [openLever, setOpenLever] = useState<LeverKey | null>(null);
 
-  // Task #25 — preview of the engine's auto-invest amount for the current
-  // month. Surfaced in the Contributions pill so the user sees the
-  // dominant "salary surplus → investments" flow without needing to read
-  // the popover banner. Hook is called unconditionally before the early
-  // return below to keep React's rules of hooks happy.
-  const autoInvestAmount = useAutoInvestPreview(active?.leverPayload ?? null);
+  // Task #25 — preview of the engine's salary-surplus routing for the
+  // current month. Surfaced in the Contributions pill so the user sees the
+  // dominant "salary surplus → cash/investments" flow without needing to
+  // read the popover banner. β2 will branch on `.destination`; for this
+  // intermediate commit we only consume `.amount` to keep the existing
+  // pill UX intact until the next task wires the destination-aware copy.
+  // Hook is called unconditionally before the early return below to keep
+  // React's rules of hooks happy.
+  const surplus = useSurplusFlowPreview(active?.leverPayload ?? null);
+  const autoInvestAmount = surplus.amount;
 
   if (!active) {
     return (
