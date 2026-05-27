@@ -87,16 +87,28 @@ npm test
 ### Pre-commit hook
 
 `npm run install-hooks` copies `scripts/hooks/pre-commit` into the
-repo's git hooks directory. The hook runs `npx vitest run --reporter=dot
---bail=1` + `npx tsc --noEmit` before letting a commit land, so the
-recharts animation-policy test (and the rest of the suite) gates every
-commit. Runtime is roughly 45 seconds locally.
+repo's git hooks directory. The hook runs `vitest` + `npx tsc --noEmit`
+before letting a commit land, so the recharts animation-policy test
+(and the rest of the suite) gates every commit.
+
+The hook has two modes:
+
+| Mode                | Command                                  | Runtime  | When                                                          |
+| ------------------- | ---------------------------------------- | -------- | ------------------------------------------------------------- |
+| Fast lane (default) | `vitest run --changed --passWithNoTests` | 2–10 s   | Every `git commit`. Runs only tests affected by staged files. |
+| Full                | `vitest run` (no `--bail`)               | 45–200 s | `SKIP_PRE_COMMIT=full git commit -m "…"` (e.g. pre-tag push). |
+
+CI (`.github/workflows/test.yml`) runs the full suite on every push +
+PR, so the fast lane at commit time is safe — anything the changed-files
+heuristic misses is caught before merge. `--bail=1` was dropped so a
+single flake no longer hides other (real) regressions from the developer.
 
 Escape hatches when you need to land a WIP commit:
 
 ```bash
-git commit --no-verify -m "WIP"        # one-off skip
-SKIP_PRE_COMMIT=1 git commit -m "..."  # env-level skip (same effect)
+git commit --no-verify -m "WIP"           # one-off skip
+SKIP_PRE_COMMIT=1 git commit -m "..."     # env-level skip (same effect)
+SKIP_PRE_COMMIT=full git commit -m "..."  # opt into the full suite locally
 ```
 
 The hook is repo-tracked at `scripts/hooks/pre-commit` — edit there and

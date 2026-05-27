@@ -1,21 +1,35 @@
 #!/bin/sh
-# pre-commit hook — runs the test suite + type check before allowing a commit.
+# pre-commit hook — runs vitest + tsc before letting a commit land.
 #
-# Why: catches the recharts render-loop policy violation (and other suite
-# regressions) at commit time rather than at runtime. See
-# docs/reviews/2026-05-27-testing-rereview.md § "CI / pre-commit (Goal #1)".
+# Modes (see docs/reviews/2026-05-27-testing-wave3.md § N2):
+#
+#   default                   Fast lane: `vitest --changed` (only tests
+#                             affected by staged files). No --bail so all
+#                             failures surface, not just the first. Falls
+#                             back to "no tests" pass when staged changes
+#                             don't touch testable code (docs-only commits).
+#
+#   SKIP_PRE_COMMIT=full      Full suite, no --bail. Same surface area as
+#                             the previous behavior but every failure
+#                             surfaces in one run (no bail mask).
+#
+#   SKIP_PRE_COMMIT=1         Skip the hook entirely. For scripted /
+#                             non-interactive use and emergency commits.
+#
+# Why we moved off `vitest run --bail=1` on the full suite:
+#   - Full suite is ~45s clean, 60–200s under CPU load.
+#   - With ~3100 tests, any single flake blocks the commit. The
+#     EquityGrantsTab flake (now fixed) demonstrated this: pre-commit
+#     becomes the bottleneck and developers fall back to --no-verify.
+#   - `--changed` runs only tests related to staged files, which is
+#     usually 5–50 tests in 2–10s. The commit-time signal stays tight
+#     and CI (`.github/workflows/test.yml`) catches everything else.
+#
+# Type checking always runs. `tsc --noEmit` is ~5s and catches the
+# class of breakage that vitest can't see across unchanged files.
 #
 # Install:    npm run install-hooks
 # Skip once:  git commit --no-verify
-#
-# Runtime: roughly 45 seconds locally (full vitest + tsc). The policy test
-# alone is ~256ms, but we run the whole suite because skipping coverage at
-# commit time defeats the purpose of the gate.
-#
-# To shrink runtime, replace the vitest line below with:
-#   npx vitest run --changed --reporter=dot --bail=1
-# which only re-runs tests related to changed files. The default (full
-# suite) is the safe choice; --changed is the fast lane.
 
 set -e
 
@@ -25,8 +39,17 @@ if [ "${SKIP_PRE_COMMIT:-0}" = "1" ]; then
   exit 0
 fi
 
-echo "[pre-commit] running vitest (use --no-verify to skip)..."
-npx vitest run --reporter=dot --bail=1
+if [ "${SKIP_PRE_COMMIT:-0}" = "full" ]; then
+  echo "[pre-commit] SKIP_PRE_COMMIT=full — running FULL vitest suite (no --bail)..."
+  npx vitest run --reporter=dot
+else
+  echo "[pre-commit] running vitest --changed (fast lane)..."
+  # --changed compares against HEAD so unstaged-only files don't get run;
+  # vitest uses git internally to figure out which test files depend on
+  # the changed source files. --passWithNoTests is a safety net for
+  # docs-only commits.
+  npx vitest run --changed --reporter=dot --passWithNoTests
+fi
 
 echo "[pre-commit] running tsc --noEmit..."
 npx tsc --noEmit
