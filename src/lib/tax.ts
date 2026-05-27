@@ -281,6 +281,16 @@ export function computeTotalTax(input: TotalTaxInput): TotalTaxOutput {
   // FICA is levied on wages only — NOT on dividends, cap gains, or interest.
   // Per IRS Pub 15-A, qualified divs are not earned income; non-qualified
   // divs aren't either. So FICA stays on input.gross.
+  //
+  // FICA base correctness (Wave-3 Task 3): we deliberately do NOT subtract
+  // any pretax items from the FICA base. Per IRS Pub 15 + 26 CFR §31.3121:
+  //   - §401(k) elective deferrals ARE subject to FICA (federal income
+  //     tax withholding reduces; FICA does not).
+  //   - §125 cafeteria-plan items (pre-tax health insurance, FSA, payroll-
+  //     deduction HSA) ARE excluded from FICA — but the engine does not
+  //     currently track this distinction. The slight over-collection of
+  //     FICA for cafeteria-plan users is flagged in the app_wide v1.3
+  //     "What we don't model" disclosure.
   const fica = computeFica(input.gross, input.filingStatus);
   const state = input.stateBrackets.length > 0 ? evaluateBrackets(input.stateBrackets, stateTaxableTotal) : 0;
   const city = input.cityBrackets ? evaluateBrackets(input.cityBrackets, cityTaxableTotal) : 0;
