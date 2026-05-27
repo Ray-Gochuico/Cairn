@@ -2,14 +2,36 @@ name: Release
 
 # Build, sign, and publish a Cairn release whenever a v* tag is pushed.
 #
-# REQUIRED SECRETS (set under Settings → Secrets and variables → Actions):
+# REQUIRED SECRETS (set under Settings → Secrets and variables → Actions
+# before pushing your first v* tag — the workflow fails fast otherwise):
 #   TAURI_UPDATER_PRIVATE_KEY           — base64 minisign private key
+#                                         (matches the pubkey embedded in
+#                                          src-tauri/tauri.conf.json)
 #   TAURI_UPDATER_PRIVATE_KEY_PASSWORD  — only if the key has a password
-#                                         (current key has none — leave unset)
+#                                         (the current key has none — leave unset)
 #
-# If TAURI_UPDATER_PRIVATE_KEY is not set, the build step fails and no
-# release is created. That's intentional — an unsigned update wouldn't
-# verify against the public key shipped in the app.
+# If TAURI_UPDATER_PRIVATE_KEY is not set, the "Sign .app.zip" step fails
+# and no release is published. That's intentional — an unsigned update
+# wouldn't verify against the public key shipped in the app, and the
+# updater plugin would refuse to install it.
+#
+# WHY EXPLICIT STEPS (NOT tauri-apps/tauri-action):
+#   - tauri-action with bundle.targets = ["app"] (our config) emits
+#     `.app.tar.gz` for the updater path, but the manual maintainer flow
+#     in docs/RELEASING.md uses `.app.zip` (a plain `zip -r`). Mixing
+#     `.tar.gz` from CI with `.zip` from manual releases would mean the
+#     latest.json URL conventions diverge — and the in-app updater
+#     hard-codes the URL pattern.
+#   - Keeping CI on `.app.zip` means a CI-built release and a manually
+#     built release are byte-for-byte interchangeable as far as the
+#     updater plugin is concerned. Future-you can ship a hotfix from
+#     a laptop and the updater URL stays correct.
+#
+# WHY MACOS-14 RUNNER:
+#   - macos-14 is GitHub's Apple Silicon (M1) runner. Building Tauri on
+#     x86_64 and cross-compiling to aarch64 requires extra Rust target
+#     setup + a universal binary path. Native arm64 build is simpler and
+#     produces the artifact we actually ship.
 
 on:
   push:
@@ -18,10 +40,15 @@ on:
 
 jobs:
   build-macos-arm64:
-    runs-on: macos-14  # Apple Silicon runner
+    runs-on: macos-14  # Apple Silicon — native aarch64 build
     permissions:
       contents: write  # create release + upload assets
+
     env:
+      # Both env vars are read by `npx tauri signer sign` directly.
+      # The Tauri build step does NOT auto-sign because bundle.targets
+      # is ["app"] (no .app.tar.gz updater artifact emitted) — we sign
+      # the manual .app.zip in a later step.
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_UPDATER_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_UPDATER_PRIVATE_KEY_PASSWORD }}
 
@@ -30,49 +57,105 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
+          # Match test.yml. Node 20 LTS = maintainer's local version.
           node-version: '20'
           cache: 'npm'
 
       - uses: dtolnay/rust-toolchain@stable
         with:
+          # Native arm64 build — runner IS aarch64-apple-darwin.
           targets: aarch64-apple-darwin
+
+      - name: Fail fast if updater key is missing
+        # Without the secret, the sign step would fail mid-build and the
+        # release would be half-uploaded. Better to fail at step 1 with
+        # a clear message than to leave a partial release artifact.
+        run: |
+          if [ -z "${TAURI_SIGNING_PRIVATE_KEY}" ]; then
+            echo "ERROR: TAURI_UPDATER_PRIVATE_KEY secret is not set."
+            echo "Add it under Settings → Secrets and variables → Actions"
+            echo "before tagging a release. See docs/RELEASING.md."
+            exit 1
+          fi
 
       - name: Install npm deps
         run: npm ci
 
-      - name: Build + sign .dmg
-        run: npm run tauri build -- --target aarch64-apple-darwin
-        # tauri-cli reads TAURI_SIGNING_PRIVATE_KEY automatically and writes
-        # a .sig file alongside each bundle artifact.
-
       - name: Extract version from tag
+        # v0.1.0 → 0.1.0. Used for the artifact filename and latest.json.
         id: ver
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Write latest.json
+      - name: Verify tag version matches package.json
+        # Catches the easy mistake of tagging v0.1.1 without bumping
+        # package.json / Cargo.toml / tauri.conf.json. The three sources
+        # of truth for the version must agree or the updater URL points
+        # to a file that doesn't exist.
         run: |
-          DMG="src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/Cairn_${{ steps.ver.outputs.version }}_aarch64.dmg"
-          SIG=$(cat "${DMG}.sig")
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          TAG_VERSION="${{ steps.ver.outputs.version }}"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "ERROR: tag v${TAG_VERSION} doesn't match package.json version ${PKG_VERSION}"
+            echo "Bump package.json + src-tauri/Cargo.toml + src-tauri/tauri.conf.json first."
+            exit 1
+          fi
+
+      - name: Build .app bundle
+        # bundle.targets = ["app"] in tauri.conf.json, so this emits only
+        # Cairn.app (no .dmg attempt — `bundle_dmg.sh` fails on macOS 26).
+        # Wall time on the macos-14 runner: ~5 min cold (no cargo cache).
+        run: npm run tauri build
+
+      - name: Zip the .app bundle
+        # Mirrors `docs/RELEASING.md` step 3 exactly. Working directly in
+        # the bundle dir so the zip's top-level entry is `Cairn.app/` (not
+        # `release/bundle/macos/Cairn.app/`) — required by the updater.
+        run: |
+          cd src-tauri/target/release/bundle/macos
+          zip -r "Cairn_${{ steps.ver.outputs.version }}_aarch64.app.zip" Cairn.app
+
+      - name: Sign .app.zip with the updater private key
+        # Reads TAURI_SIGNING_PRIVATE_KEY from the job env (set above).
+        # Produces `<file>.sig` next to the .app.zip.
+        run: |
+          npx tauri signer sign \
+            "src-tauri/target/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_aarch64.app.zip"
+
+      - name: Write latest.json (Tauri 2 updater manifest)
+        # Schema: https://v2.tauri.app/plugin/updater/#static-json-file
+        # darwin-aarch64 is the only platform we ship — the macos-14
+        # runner is M1, and Tauri's updater plugin will refuse to install
+        # an aarch64 update on a (hypothetical future) x86_64 install
+        # unless we also publish a darwin-x86_64 entry. v1 is arm64-only
+        # by maintainer policy; x86_64 support is a v1.x milestone.
+        run: |
+          APP_ZIP="src-tauri/target/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_aarch64.app.zip"
+          SIG=$(cat "${APP_ZIP}.sig")
           cat > latest.json <<EOF
           {
             "version": "${{ steps.ver.outputs.version }}",
-            "notes": "Release ${{ github.ref_name }}.",
+            "notes": "Release ${{ github.ref_name }}. See the GitHub Release page for changelog.",
             "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
             "platforms": {
               "darwin-aarch64": {
                 "signature": "${SIG}",
-                "url": "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Cairn_${{ steps.ver.outputs.version }}_aarch64.dmg"
+                "url": "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Cairn_${{ steps.ver.outputs.version }}_aarch64.app.zip"
               }
             }
           }
           EOF
 
       - name: Publish GitHub Release
+        # softprops/action-gh-release is the de-facto standard for "create
+        # release + attach files." It creates the release if the tag
+        # doesn't already have one, otherwise it appends assets.
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: Cairn ${{ steps.ver.outputs.version }}
+          # Drafts default to off so the moment this step succeeds, the
+          # in-app updater's poll URL starts returning the new version.
           files: |
-            src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/Cairn_${{ steps.ver.outputs.version }}_aarch64.dmg
-            src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/Cairn_${{ steps.ver.outputs.version }}_aarch64.dmg.sig
+            src-tauri/target/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_aarch64.app.zip
+            src-tauri/target/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_aarch64.app.zip.sig
             latest.json
