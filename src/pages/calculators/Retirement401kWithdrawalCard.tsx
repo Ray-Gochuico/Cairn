@@ -93,7 +93,14 @@ export function Retirement401kWithdrawalCard({
       federalBrackets: federal.brackets,
       stateBrackets: state.brackets,
       cityBrackets: city?.brackets ?? null,
-      federalStandardDeduction: federal.standardDeduction,
+      // R3 wiring-sweep: per-jurisdiction SD. The retired person's W-2
+      // income flowing through state tax now correctly uses the state's
+      // own SD instead of the federal SD.
+      federalStandardDeduction: {
+        federal: federal.standardDeduction,
+        state: state.standardDeduction,
+        city: city?.standardDeduction ?? 0,
+      },
       taxYear: resolvedYear ?? new Date().getFullYear(),
       ltcgBrackets: ltcg?.brackets,
     });

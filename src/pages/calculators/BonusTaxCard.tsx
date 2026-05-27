@@ -105,7 +105,13 @@ export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
       federalBrackets: federal.brackets,
       stateBrackets: state.brackets,
       cityBrackets: city?.brackets ?? null,
-      standardDeduction: federal.standardDeduction,
+      // R3 wiring-sweep: per-jurisdiction SD (was scalar federal SD —
+      // MA-MFJ ~$1,610/yr state-tax under-collection).
+      standardDeduction: {
+        federal: federal.standardDeduction,
+        state: state.standardDeduction,
+        city: city?.standardDeduction ?? 0,
+      },
     });
   }, [household, persons, dependents, taxItems, resolvedYear, annualBonus]); // eslint-disable-line react-hooks/exhaustive-deps
 

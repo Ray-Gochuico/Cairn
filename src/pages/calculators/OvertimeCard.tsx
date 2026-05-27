@@ -137,7 +137,12 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
       federalBrackets: federal.brackets,
       stateBrackets: state.brackets,
       cityBrackets: city?.brackets ?? null,
-      standardDeduction: federal.standardDeduction,
+      // R3 wiring-sweep: per-jurisdiction SD (was scalar federal SD).
+      standardDeduction: {
+        federal: federal.standardDeduction,
+        state: state.standardDeduction,
+        city: city?.standardDeduction ?? 0,
+      },
     });
   }, [household, eligiblePerson, persons, dependents, taxItems, resolvedYear, totalGross]); // eslint-disable-line react-hooks/exhaustive-deps
 

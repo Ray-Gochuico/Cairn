@@ -83,7 +83,13 @@ export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
       federalBrackets: federal.brackets,
       stateBrackets: state.brackets,
       cityBrackets: city?.brackets ?? null,
-      standardDeduction: federal.standardDeduction,
+      // R3 wiring-sweep: per-jurisdiction SD (pre-fix: scalar federal SD
+      // was applied to state/city tax too — MA-MFJ ~$1,610/yr under-collection).
+      standardDeduction: {
+        federal: federal.standardDeduction,
+        state: state.standardDeduction,
+        city: city?.standardDeduction ?? 0,
+      },
     });
 
     const pretaxTotal =

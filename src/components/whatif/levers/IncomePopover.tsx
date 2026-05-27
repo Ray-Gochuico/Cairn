@@ -91,17 +91,18 @@ export default function IncomePopover({ open, onOpenChange }: Props) {
       r.jurisdictionType === 'FEDERAL' && r.filingStatus === filingStatus,
     );
     const federalBrackets = fedRule?.brackets ?? [];
-    const stateBrackets = state
-      ? (taxRules.find((r) =>
+    const stateRule = state
+      ? taxRules.find((r) =>
           r.jurisdictionType === 'STATE' && r.jurisdictionCode === state && r.filingStatus === filingStatus,
-        )?.brackets ?? [])
-      : [];
-    const cityBrackets = city
-      ? (taxRules.find((r) =>
-          r.jurisdictionType === 'CITY' && r.jurisdictionCode === city && r.filingStatus === filingStatus,
-        )?.brackets ?? null)
+        ) ?? null
       : null;
-    const stdDed = fedRule?.standardDeduction ?? 0;
+    const stateBrackets = stateRule?.brackets ?? [];
+    const cityRule = city
+      ? taxRules.find((r) =>
+          r.jurisdictionType === 'CITY' && r.jurisdictionCode === city && r.filingStatus === filingStatus,
+        ) ?? null
+      : null;
+    const cityBrackets = cityRule?.brackets ?? null;
 
     return Array.from({ length: personCount }, (_, idx) => {
       const annual = persons[idx]?.annualSalaryPretax ?? 0;
@@ -112,7 +113,13 @@ export default function IncomePopover({ open, onOpenChange }: Props) {
         federalBrackets,
         stateBrackets,
         cityBrackets,
-        standardDeduction: stdDed,
+        // R3 wiring-sweep: per-jurisdiction SD (was scalar federal SD —
+        // MA-MFJ ~$1,610/yr state-tax under-collection).
+        standardDeduction: {
+          federal: fedRule?.standardDeduction ?? 0,
+          state: stateRule?.standardDeduction ?? 0,
+          city: cityRule?.standardDeduction ?? 0,
+        },
         pretax: { pretax401k: 0, pretaxHealth: 0, pretaxDcfsa: 0, pretaxHsa: 0 },
       });
       return (annual - tax.total) / 12;

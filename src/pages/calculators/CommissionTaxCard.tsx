@@ -105,7 +105,12 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
       federalBrackets: federal.brackets,
       stateBrackets: state.brackets,
       cityBrackets: city?.brackets ?? null,
-      standardDeduction: federal.standardDeduction,
+      // R3 wiring-sweep: per-jurisdiction SD (was scalar federal SD).
+      standardDeduction: {
+        federal: federal.standardDeduction,
+        state: state.standardDeduction,
+        city: city?.standardDeduction ?? 0,
+      },
     });
 
     // 401(k) from commission: weighted-average pct across persons by salary share.
