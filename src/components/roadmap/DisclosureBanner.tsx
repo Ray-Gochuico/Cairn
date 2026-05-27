@@ -11,13 +11,13 @@ export function DisclosureBanner() {
   return (
     <>
       <div
-        className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 flex items-center justify-between gap-3"
+        className="rounded-md border border-warning/40 bg-warning-soft px-3 py-2 text-xs text-warning-foreground flex items-center justify-between gap-3"
         role="note"
       >
         <span>Educational tool — not financial advice.</span>
         <button
           type="button"
-          className="text-amber-900 underline hover:no-underline"
+          className="text-warning-foreground underline hover:no-underline"
           onClick={() => setOpen(true)}
         >
           Read full →

@@ -14,17 +14,17 @@ interface Props {
 }
 
 const STATUS_BADGE: Record<PreviewStatus, string> = {
-  new: 'bg-emerald-100 text-emerald-800',
-  update: 'bg-amber-100 text-amber-800',
+  new: 'bg-success-soft text-success-foreground',
+  update: 'bg-warning-soft text-warning-foreground',
   duplicate: 'bg-slate-100 text-slate-600',
-  error: 'bg-red-100 text-red-800',
+  error: 'bg-destructive/15 text-destructive',
 };
 
 const ROW_BG: Record<PreviewStatus, string> = {
   new: '',
-  update: 'bg-amber-50',
-  duplicate: 'bg-slate-50',
-  error: 'bg-red-50',
+  update: 'bg-warning-soft',
+  duplicate: 'bg-muted',
+  error: 'bg-destructive/10',
 };
 
 function formatExisting(existing: unknown): string {
@@ -84,7 +84,7 @@ export function ImportPreviewRow({ row, accounts, conflictMode, onEdit, onDelete
       <td className="px-2 py-2">
         <button
           aria-label="Remove row"
-          className="text-slate-400 hover:text-red-600 text-sm"
+          className="text-muted-foreground hover:text-destructive text-sm"
           onClick={() => onDelete(row.rowId)}
         >×</button>
       </td>

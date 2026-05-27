@@ -18,13 +18,13 @@ export function ReimbursableCell({ value, error, onChange }: Props) {
       <select
         value={current}
         onChange={(e) => onChange(e.target.value)}
-        className={`w-full px-2 py-1 text-sm border rounded ${error ? 'border-red-500 bg-red-50' : 'border-slate-300'}`}
+        className={`w-full px-2 py-1 text-sm border rounded ${error ? 'border-destructive bg-destructive/10' : 'border-input'}`}
       >
         <option value="">—</option>
         <option value="true">Yes</option>
         <option value="false">No</option>
       </select>
-      {error && <div className="text-xs text-red-700 italic mt-0.5">{error.message}</div>}
+      {error && <div className="text-xs text-destructive italic mt-0.5">{error.message}</div>}
     </div>
   );
 }

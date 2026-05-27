@@ -215,7 +215,7 @@ export default function ValueHistorySection({
                         Cancel
                       </Button>
                       {editError ? (
-                        <span className="text-xs text-red-600 w-full">
+                        <span className="text-xs text-destructive w-full">
                           {editError}
                         </span>
                       ) : null}
@@ -290,7 +290,7 @@ export default function ValueHistorySection({
             {adding ? 'Adding…' : 'Add entry'}
           </Button>
           {addError ? (
-            <span className="text-xs text-red-600 w-full">{addError}</span>
+            <span className="text-xs text-destructive w-full">{addError}</span>
           ) : null}
         </form>
 

@@ -119,11 +119,11 @@ export function DisclosureModal({
         </div>
 
         {document.diffFromPrevious && (
-          <div className="mx-6 mt-3 p-3 bg-amber-50 border border-amber-200 rounded text-sm">
-            <div className="font-semibold text-amber-900 mb-1">
+          <div className="mx-6 mt-3 p-3 bg-warning-soft border border-warning/40 rounded text-sm">
+            <div className="font-semibold text-warning-foreground mb-1">
               What changed since you last accepted:
             </div>
-            <div className="text-amber-900 space-y-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_strong]:font-semibold">
+            <div className="text-warning-foreground space-y-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_strong]:font-semibold">
               <ReactMarkdown>{document.diffFromPrevious}</ReactMarkdown>
             </div>
           </div>
@@ -150,7 +150,7 @@ export function DisclosureModal({
         </div>
 
         {error && (
-          <div className="px-6 py-2 text-sm text-red-700 bg-red-50 border-t border-red-200">
+          <div className="px-6 py-2 text-sm text-destructive bg-destructive/10 border-t border-destructive/30">
             {error}
           </div>
         )}

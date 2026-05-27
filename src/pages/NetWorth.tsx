@@ -137,9 +137,9 @@ function MetricCard({
 }) {
   const valueColor =
     tone === 'positive'
-      ? 'text-emerald-600'
+      ? 'text-success'
       : tone === 'negative'
-        ? 'text-red-600'
+        ? 'text-destructive'
         : 'text-foreground';
   return (
     <Card>

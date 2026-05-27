@@ -299,7 +299,7 @@ export function PdfReviewModal({
                             onChange={(e) => updateRow(i, { merchant: e.target.value })}
                           />
                           {row.isDuplicate && (
-                            <span className="text-xs bg-yellow-100 text-yellow-800 px-1 rounded">
+                            <span className="text-xs bg-warning-soft text-warning-foreground px-1 rounded">
                               duplicate
                             </span>
                           )}

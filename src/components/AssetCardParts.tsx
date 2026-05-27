@@ -68,7 +68,7 @@ export function ValueEditor({ initialValue, onSave, onCancel }: ValueEditorProps
         disabled={saving}
       />
       {error ? (
-        <div className="text-xs text-red-600">{error}</div>
+        <div className="text-xs text-destructive">{error}</div>
       ) : null}
       <div className="flex gap-2 justify-end">
         <Button
@@ -102,7 +102,7 @@ export function EquityRow({ label, value, tone }: EquityRowProps) {
       </span>
       <span
         className={`text-lg font-semibold ${
-          isNegative ? 'text-red-600' : 'text-emerald-600'
+          isNegative ? 'text-destructive' : 'text-success'
         }`}
       >
         {currencyFormatter.format(value)}

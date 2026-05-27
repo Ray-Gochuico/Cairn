@@ -213,8 +213,8 @@ function MiniGoalCard({ projection }: { projection: GoalProjection }) {
         <span
           className={
             onTrack
-              ? 'text-xs px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-100 whitespace-nowrap'
-              : 'text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-100 whitespace-nowrap'
+              ? 'text-xs px-1.5 py-0.5 rounded bg-success-soft text-success-foreground whitespace-nowrap'
+              : 'text-xs px-1.5 py-0.5 rounded bg-warning-soft text-warning-foreground whitespace-nowrap'
           }
         >
           {onTrack ? 'On track' : 'Off track'}
@@ -229,7 +229,7 @@ function MiniGoalCard({ projection }: { projection: GoalProjection }) {
         aria-label={`${goal.name} progress`}
       >
         <div
-          className={onTrack ? 'h-full bg-emerald-500' : 'h-full bg-amber-500'}
+          className={onTrack ? 'h-full bg-success' : 'h-full bg-warning'}
           style={{ width: `${pct * 100}%` }}
         />
       </div>
@@ -801,10 +801,10 @@ export default function Dashboard() {
       <NextMoveCard />
 
       {isInputPending && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-4 flex flex-wrap items-center justify-between gap-4">
+        <div className="rounded-md border border-warning/40 bg-warning-soft p-4 flex flex-wrap items-center justify-between gap-4">
           <div className="min-w-0">
-            <div className="font-medium text-amber-900">Monthly input pending</div>
-            <div className="text-sm text-amber-900/80">
+            <div className="font-medium text-warning-foreground">Monthly input pending</div>
+            <div className="text-sm text-warning-foreground/80">
               Confirm this month's account balances and loan payments.
             </div>
           </div>

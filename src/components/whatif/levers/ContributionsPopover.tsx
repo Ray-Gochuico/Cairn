@@ -344,7 +344,7 @@ export default function ContributionsPopover({ open, onOpenChange }: Props) {
                             );
                           })}
                           {!allocSumOk && investmentAccounts.length > 0 && (
-                            <div role="alert" className="text-xs text-red-700">
+                            <div role="alert" className="text-xs text-destructive">
                               Allocations must sum to 100% (current: {allocTotal.toFixed(1)}%)
                             </div>
                           )}

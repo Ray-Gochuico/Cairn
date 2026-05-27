@@ -198,7 +198,7 @@ export function GapAllocationEditor(props: GapAllocationEditorProps) {
               </span>
             </div>
             {showWarning && (
-              <div role="alert" className="text-xs text-amber-700 ml-40 mt-1">
+              <div role="alert" className="text-xs text-warning-foreground ml-40 mt-1">
                 You have no {bucket === 'taxAdvantaged' ? 'tax-advantaged' : 'brokerage'} accounts.
                 The {mode === 'percent' ? `${valueForInput}%` : formatCurrency(cfg!.value)}{' '}
                 allocated here is being redirected to cash.

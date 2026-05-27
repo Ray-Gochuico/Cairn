@@ -225,7 +225,7 @@ export function AdvancedSection() {
               </div>
             </div>
             {thresholdInvalid && (
-              <div className="text-xs text-red-700 mt-2" role="alert">
+              <div className="text-xs text-destructive mt-2" role="alert">
                 {orderInvalid
                   ? 'Low cutoff must be less than high cutoff.'
                   : 'Both cutoffs must be between 0 and 100.'}
@@ -272,7 +272,7 @@ export function AdvancedSection() {
               </div>
             </div>
             {(inflationInvalid || returnInvalid) && (
-              <div className="text-xs text-red-700 mt-2" role="alert">
+              <div className="text-xs text-destructive mt-2" role="alert">
                 {inflationInvalid
                   ? 'Inflation rate must be between 0 and 20.'
                   : 'Return rate must be between -50 and 50.'}
@@ -333,7 +333,7 @@ export function AdvancedSection() {
               </p>
             </div>
             {cashApyInvalid && (
-              <div className="text-xs text-red-700 mt-2" role="alert">
+              <div className="text-xs text-destructive mt-2" role="alert">
                 Cash APY must be between 0 and 15.
               </div>
             )}
@@ -374,7 +374,7 @@ export function AdvancedSection() {
               Save
             </Button>
             {savedAt && !invalid && (
-              <span className="text-xs text-emerald-700">Saved</span>
+              <span className="text-xs text-success">Saved</span>
             )}
           </div>
 

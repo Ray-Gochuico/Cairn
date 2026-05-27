@@ -144,11 +144,11 @@ function GoalProgressCard({
   const valuenow = Math.round(pct * 100);
 
   const onTrackBadge = projection.onTrack ? (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-900 dark:bg-emerald-900/30 dark:text-emerald-100">
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-success-soft text-success-foreground">
       On track
     </span>
   ) : (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-100">
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-warning-soft text-warning-foreground">
       Off track
     </span>
   );
@@ -194,8 +194,8 @@ function GoalProgressCard({
             <div
               className={
                 projection.onTrack
-                  ? 'h-full bg-emerald-500 transition-all'
-                  : 'h-full bg-amber-500 transition-all'
+                  ? 'h-full bg-success transition-all'
+                  : 'h-full bg-warning transition-all'
               }
               style={{ width: `${pct * 100}%` }}
             />

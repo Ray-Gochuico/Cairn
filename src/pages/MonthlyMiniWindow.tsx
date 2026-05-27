@@ -134,7 +134,7 @@ function DerivedValueCard({ account, snapshot }: DerivedValueCardProps) {
             </div>
           </div>
           {mode === 'confirmed' && (
-            <span className="text-sm font-medium text-emerald-700">Confirmed</span>
+            <span className="text-sm font-medium text-success">Confirmed</span>
           )}
           {mode === 'skipped' && (
             <span className="text-sm text-muted-foreground">Skipped</span>
@@ -255,7 +255,7 @@ function LoanPaymentCard({ loan, nextEntry }: LoanPaymentCardProps) {
             </div>
           </div>
           {mode === 'confirmed' && (
-            <span className="text-sm font-medium text-emerald-700">Recorded</span>
+            <span className="text-sm font-medium text-success">Recorded</span>
           )}
           {mode === 'skipped' && (
             <span className="text-sm text-muted-foreground">Skipped</span>
@@ -339,7 +339,7 @@ function CashBalanceCard({ account, latestBalance }: CashBalanceCardProps) {
             </div>
           </div>
           {mode === 'confirmed' && (
-            <span className="text-sm font-medium text-emerald-700">Saved</span>
+            <span className="text-sm font-medium text-success">Saved</span>
           )}
           {mode === 'skipped' && (
             <span className="text-sm text-muted-foreground">Skipped</span>
@@ -426,7 +426,7 @@ function AssetValueCard({ name, currentValue, kind, onSave }: AssetValueCardProp
             </div>
           </div>
           {mode === 'confirmed' && (
-            <span className="text-sm font-medium text-emerald-700">Updated</span>
+            <span className="text-sm font-medium text-success">Updated</span>
           )}
           {mode === 'skipped' && (
             <span className="text-sm text-muted-foreground">Skipped</span>

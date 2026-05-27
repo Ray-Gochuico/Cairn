@@ -50,10 +50,10 @@ export function VestingScheduleCell({ value, onChange, error }: Props) {
           onBlur={() => setEditing(false)}
           rows={4}
           className={`w-full text-xs font-mono px-2 py-1 border rounded ${
-            error ? 'border-red-500 bg-red-50' : 'border-slate-300'
+            error ? 'border-destructive bg-destructive/10' : 'border-input'
           }`}
         />
-        {error && <div className="text-xs text-red-700 italic">{error.message}</div>}
+        {error && <div className="text-xs text-destructive italic">{error.message}</div>}
       </div>
     );
   }
@@ -65,7 +65,7 @@ export function VestingScheduleCell({ value, onChange, error }: Props) {
 
   return (
     <div className="flex items-center gap-2">
-      <span className={`text-xs ${error ? 'text-red-700' : 'text-slate-700'}`}>
+      <span className={`text-xs ${error ? 'text-destructive' : 'text-foreground'}`}>
         {summary}
       </span>
       <Button
@@ -77,7 +77,7 @@ export function VestingScheduleCell({ value, onChange, error }: Props) {
       >
         Edit
       </Button>
-      {error && <span className="text-xs text-red-700 italic">{error.message}</span>}
+      {error && <span className="text-xs text-destructive italic">{error.message}</span>}
     </div>
   );
 }

@@ -294,7 +294,7 @@ export default function SpendingTransactions() {
                   )}
                   <td className="py-2 pr-3 text-right">
                     {t.amount < 0 ? (
-                      <span className="text-green-600">-${Math.abs(t.amount).toFixed(2)}</span>
+                      <span className="text-success">-${Math.abs(t.amount).toFixed(2)}</span>
                     ) : (
                       <span>${t.amount.toFixed(2)}</span>
                     )}

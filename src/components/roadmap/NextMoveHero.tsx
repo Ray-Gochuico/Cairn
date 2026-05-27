@@ -15,12 +15,12 @@ export function NextMoveHero({ results }: { results: ReadonlyMap<NodeId, NodeRes
 
   if (!active) {
     return (
-      <Card className="p-4 bg-emerald-50 border-emerald-200">
-        <div className="text-xs uppercase text-emerald-700 tracking-wider">
+      <Card className="p-4 bg-success-soft border-success/30">
+        <div className="text-xs uppercase text-success-foreground tracking-wider">
           Your next move
         </div>
         <div className="text-lg font-semibold mt-1">You&rsquo;re caught up</div>
-        <div className="text-sm text-slate-600 mt-1">
+        <div className="text-sm text-muted-foreground mt-1">
           Review the sections below or revisit your inputs.
         </div>
       </Card>
@@ -29,18 +29,18 @@ export function NextMoveHero({ results }: { results: ReadonlyMap<NodeId, NodeRes
 
   const result = results.get(active.id)!;
   return (
-    <Card className="p-4 bg-blue-50 border-blue-200">
-      <div className="text-xs uppercase text-blue-700 tracking-wider">
+    <Card className="p-4 bg-info-soft border-info/30">
+      <div className="text-xs uppercase text-info-foreground tracking-wider">
         Your next move
       </div>
       <div className="text-lg font-semibold mt-1">{active.title}</div>
       {result.evidence && (
-        <div className="text-sm text-slate-600 mt-1">{result.evidence}</div>
+        <div className="text-sm text-muted-foreground mt-1">{result.evidence}</div>
       )}
       {result.cta && (
         <Link
           to={result.cta.href}
-          className="text-sm text-blue-700 underline mt-2 inline-block"
+          className="text-sm text-info-foreground underline mt-2 inline-block"
         >
           {result.cta.label}
         </Link>

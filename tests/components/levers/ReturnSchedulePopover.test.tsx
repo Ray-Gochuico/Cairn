@@ -112,11 +112,13 @@ describe('ReturnSchedulePopover', () => {
     // Set year 0 to a positive value below the default rate — must still be green.
     await user.click(cells[0]);
     fireEvent.change(screen.getByLabelText(/selected year return/i), { target: { value: '3' } });
-    expect(cells[0].className).toMatch(/bg-green-200/);
-    // Set year 1 to a negative value — must be red.
+    // After the 2026-05-27 semantic-token sweep, positive overrides carry
+    // the --success token tint and negatives carry --destructive.
+    expect(cells[0].className).toMatch(/bg-success/);
+    // Set year 1 to a negative value — must be the destructive (red) tint.
     await user.click(cells[1]);
     fireEvent.change(screen.getByLabelText(/selected year return/i), { target: { value: '-2' } });
-    expect(cells[1].className).toMatch(/bg-red-200/);
+    expect(cells[1].className).toMatch(/bg-destructive/);
   });
 
   it('Constant X% preset opens an input and writes a new defaultRate', async () => {

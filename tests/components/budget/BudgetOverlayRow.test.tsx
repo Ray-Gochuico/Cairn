@@ -22,8 +22,8 @@ describe('BudgetOverlayRow', () => {
       expect(screen.getByText('Groceries')).toBeInTheDocument();
       const left = screen.getByText('$400 left');
       expect(left).toBeInTheDocument();
-      // The "$X left" label should carry the under-budget (green) color class.
-      expect(left.className).toMatch(/text-(green|emerald)-/);
+      // The "$X left" label should carry the under-budget (success) color class.
+      expect(left.className).toMatch(/text-(green|emerald)-|text-success/);
     });
 
     it('renders an "$actual of $budget" caption below the bar', () => {
@@ -35,14 +35,14 @@ describe('BudgetOverlayRow', () => {
       render(<BudgetOverlayRow row={row({ actual: 300, remaining: 300, pct: 0.5 })} />);
       const fill = screen.getByTestId('budget-overlay-fill');
       expect(fill).toHaveStyle({ width: '50%' });
-      expect(fill.className).toMatch(/bg-(green|emerald)-/);
+      expect(fill.className).toMatch(/bg-(green|emerald)-|bg-success/);
     });
 
     it('caps the fill at 100% when actual exactly equals budget', () => {
       render(<BudgetOverlayRow row={row({ actual: 600, remaining: 0, pct: 1 })} />);
       const fill = screen.getByTestId('budget-overlay-fill');
       expect(fill).toHaveStyle({ width: '100%' });
-      expect(fill.className).toMatch(/bg-(green|emerald)-/);
+      expect(fill.className).toMatch(/bg-(green|emerald)-|bg-success/);
     });
   });
 
@@ -55,7 +55,7 @@ describe('BudgetOverlayRow', () => {
       );
       const over = screen.getByText('$150 over');
       expect(over).toBeInTheDocument();
-      expect(over.className).toMatch(/text-(red|rose|pink)-/);
+      expect(over.className).toMatch(/text-(red|rose|pink)-|text-destructive/);
     });
 
     it('caps the fill at 100% width with a red fill', () => {
@@ -66,7 +66,7 @@ describe('BudgetOverlayRow', () => {
       );
       const fill = screen.getByTestId('budget-overlay-fill');
       expect(fill).toHaveStyle({ width: '100%' });
-      expect(fill.className).toMatch(/bg-(red|rose|pink)-/);
+      expect(fill.className).toMatch(/bg-(red|rose|pink)-|bg-destructive/);
     });
 
     it('renders an "$actual of $budget" caption with the actual amount', () => {

@@ -86,7 +86,7 @@ export function EditableWidget({
                 type="button"
                 aria-label={`Hide ${label}`}
                 onClick={onRemove}
-                className="flex h-7 w-7 items-center justify-center rounded-md bg-red-500/90 text-white shadow hover:bg-red-500"
+                className="flex h-7 w-7 items-center justify-center rounded-md bg-destructive/90 text-destructive-foreground shadow hover:bg-destructive"
                 data-testid={`widget-${id}-remove`}
               >
                 <XIcon className="h-4 w-4" />

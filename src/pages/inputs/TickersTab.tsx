@@ -358,8 +358,8 @@ export default function TickersTab() {
                     <span
                       className={`shrink-0 text-xs px-1.5 py-0.5 rounded font-medium ${
                         t.direction === Direction.SHORT
-                          ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-                          : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                          ? 'bg-destructive/15 text-destructive'
+                          : 'bg-success-soft text-success-foreground'
                       }`}
                     >
                       {t.direction}

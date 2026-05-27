@@ -92,11 +92,11 @@ function EquityGrantCard({ projection }: EquityGrantCardProps) {
       <CardContent className="space-y-4">
         <div>
           <div className="flex justify-between text-xs text-muted-foreground mb-1">
-            <span className="text-emerald-700 dark:text-emerald-400">
+            <span className="text-success-foreground">
               Vested{' '}
               <span className="tabular-nums">{formatCurrency(vestedValue)}</span>
             </span>
-            <span className="text-amber-700 dark:text-amber-400">
+            <span className="text-warning-foreground">
               Unvested{' '}
               <span className="tabular-nums">{formatCurrency(unvestedValue)}</span>
             </span>
@@ -106,12 +106,12 @@ function EquityGrantCard({ projection }: EquityGrantCardProps) {
             aria-label={`${grant.name} vesting progress`}
           >
             <div
-              className="h-full bg-emerald-500"
+              className="h-full bg-success"
               style={{ width: `${vestedPct}%` }}
               aria-hidden
             />
             <div
-              className="h-full bg-amber-500"
+              className="h-full bg-warning"
               style={{ width: `${100 - vestedPct}%` }}
               aria-hidden
             />

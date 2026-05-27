@@ -12,10 +12,10 @@ import { useConcentration } from '@/lib/use-concentration';
  */
 function severityColor(severity: 'HIGH' | 'MEDIUM' | 'LOW'): string {
   switch (severity) {
-    case 'HIGH': return 'text-red-500';
-    case 'MEDIUM': return 'text-amber-500';
+    case 'HIGH': return 'text-destructive';
+    case 'MEDIUM': return 'text-warning';
     case 'LOW':
-    default: return 'text-blue-500';
+    default: return 'text-info';
   }
 }
 

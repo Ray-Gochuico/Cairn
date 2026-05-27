@@ -143,7 +143,7 @@ export default function CalculatorsLayout() {
       {showBanner && !dismissed && (
         <div
           role="alert"
-          className="flex items-center justify-between gap-4 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-100"
+          className="flex items-center justify-between gap-4 rounded-md border border-warning/40 bg-warning-soft px-4 py-3 text-sm text-warning-foreground"
         >
           <span>
             Using {resolvedYear} tax brackets — update the app for newer rates.
@@ -154,7 +154,7 @@ export default function CalculatorsLayout() {
             size="sm"
             onClick={handleDismiss}
             aria-label="Dismiss stale tax year banner"
-            className="text-amber-900 hover:bg-amber-100 dark:text-amber-100 dark:hover:bg-amber-900/40"
+            className="text-warning-foreground hover:bg-warning/10"
           >
             Dismiss
           </Button>

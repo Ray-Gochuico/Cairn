@@ -35,9 +35,9 @@ export function ValueCell({ value, error, onChange }: Props) {
             if (e.key === 'Enter') commit();
             if (e.key === 'Escape') { setDraft(value); setEditing(!!error); }
           }}
-          className={`w-full px-2 py-1 text-sm border rounded text-right tabular-nums ${error ? 'border-red-500 bg-red-50' : 'border-slate-300'}`}
+          className={`w-full px-2 py-1 text-sm border rounded text-right tabular-nums ${error ? 'border-destructive bg-destructive/10' : 'border-input'}`}
         />
-        {error && <div className="text-xs text-red-700 italic mt-0.5">{error.message}</div>}
+        {error && <div className="text-xs text-destructive italic mt-0.5">{error.message}</div>}
       </div>
     );
   }
