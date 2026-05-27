@@ -247,6 +247,7 @@ export function SpendingWidget({
                           innerRadius={70}
                           outerRadius={100}
                           paddingAngle={1}
+                          isAnimationActive={false}
                         >
                           {donutSlices.map((slice, idx) => (
                             <Cell key={`${slice.name}-${idx}`} fill={slice.color} />

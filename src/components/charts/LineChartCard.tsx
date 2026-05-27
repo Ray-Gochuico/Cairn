@@ -82,6 +82,7 @@ export default function LineChartCard({
                 strokeWidth={2}
                 dot={false}
                 activeDot={{ r: 4 }}
+                isAnimationActive={false}
               />
             ))}
           </LineChart>
