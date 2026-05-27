@@ -10,6 +10,7 @@ import { useTransactionsStore } from '@/stores/transactions-store';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
+import { useHousingPaymentsStore } from '@/stores/housing-payments-store';
 import {
   FilingStatus,
   PropertyType,
@@ -75,6 +76,12 @@ function resetStores() {
     error: null,
     load: async () => {},
   });
+  useHousingPaymentsStore.setState({
+    housingPayments: [],
+    isLoading: false,
+    error: null,
+    load: async () => {},
+  } as never);
 }
 
 const baseCat = (overrides: Partial<Category>): Category => ({
@@ -178,7 +185,7 @@ describe('Property page', () => {
   it('shows empty-state when there are no properties', () => {
     renderPage();
     expect(screen.getByText(/Property/i)).toBeInTheDocument();
-    expect(screen.getByText(/Add properties from/i)).toBeInTheDocument();
+    expect(screen.getByText(/Add properties or rentals from/i)).toBeInTheDocument();
   });
 
   it('renders a property card with name and current value', () => {
@@ -426,6 +433,42 @@ describe('Property page', () => {
     expect(screen.getByText(/Using current estimated value/i)).toBeInTheDocument();
     // The summary label confirms section is mounted
     expect(screen.getByText(/Value history \(0\)/i)).toBeInTheDocument();
+  });
+
+  it('renders a rental card and total monthly obligation when housing payments exist', async () => {
+    useHousingPaymentsStore.setState({
+      housingPayments: [
+        {
+          id: 1,
+          householdId: 1,
+          ownerPersonId: null,
+          name: 'Brooklyn apt',
+          monthlyAmount: 2400,
+          startDate: '2025-01-01',
+          endDate: null,
+        },
+        {
+          id: 2,
+          householdId: 1,
+          ownerPersonId: null,
+          name: 'Storage unit',
+          monthlyAmount: 150,
+          startDate: '2025-06-01',
+          endDate: null,
+        },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+
+    renderPage();
+
+    expect(await screen.findByText('Brooklyn apt')).toBeInTheDocument();
+    expect(screen.getByText('Storage unit')).toBeInTheDocument();
+    // 2400 + 150 = 2550
+    expect(screen.getByText(/Total monthly obligation/i)).toBeInTheDocument();
+    expect(screen.getByText(/\$2,550/)).toBeInTheDocument();
   });
 
   it('exports the full properties table to CSV with the owner name resolved', async () => {
