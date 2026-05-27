@@ -371,6 +371,57 @@ describe('FiCards', () => {
     });
   });
 
+  // Wave-7 UX MF-8: FiCards renders an empty-state stub (instead of
+  // silently returning null) when the household isn't set up yet or
+  // the persons array is empty. Gives cold-start users a visible CTA
+  // to the input pages instead of a confusing blank gap on /what-if.
+  describe('Empty-state stub (W7-UX MF-8)', () => {
+    it('renders the empty-state CTA when persons array is empty', () => {
+      renderWithRouter(
+        <FiCards
+          scenarios={[makeScenario()]}
+          projections={new Map()}
+          household={makeHousehold()}
+          persons={[]}
+        />,
+      );
+      const empty = screen.getByTestId('whatif-fi-cards-empty');
+      expect(empty).toBeInTheDocument();
+      expect(empty).toHaveTextContent(/Add a household and at least one person/i);
+    });
+
+    it('empty-state CTA links to /inputs/household and /inputs/persons', () => {
+      renderWithRouter(
+        <FiCards
+          scenarios={[makeScenario()]}
+          projections={new Map()}
+          household={makeHousehold()}
+          persons={[]}
+        />,
+      );
+      const householdLink = screen.getByTestId('whatif-fi-cards-empty-household-link');
+      const personsLink = screen.getByTestId('whatif-fi-cards-empty-persons-link');
+      expect(householdLink).toHaveAttribute('href', '/inputs/household');
+      expect(personsLink).toHaveAttribute('href', '/inputs/persons');
+    });
+
+    it('still returns null when the household has no growth scenarios (not a setup gap)', () => {
+      // Sanity check that the empty-state stub is *scoped* to the
+      // missing-household / no-persons branches — having a household
+      // with persons but no growthScenarios is a "transient null"
+      // condition and should keep the existing silent behavior.
+      const { container } = renderWithRouter(
+        <FiCards
+          scenarios={[makeScenario()]}
+          projections={new Map([[1, seedState(100_000, 50_000)]])}
+          household={makeHousehold({ growthScenarios: [] })}
+          persons={[makePerson()]}
+        />,
+      );
+      expect(container).toBeEmptyDOMElement();
+    });
+  });
+
   // Wave-7 UX MF-6: surface the Settings → Advanced `defaultDrawdownTaxRate`
   // inline on the FI cards when the active scenario uses the SEQUENTIAL
   // withdrawal strategy, so users have a visible cue that an assumption is

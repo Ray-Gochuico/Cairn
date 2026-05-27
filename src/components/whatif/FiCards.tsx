@@ -68,9 +68,20 @@ function realRateOf(nominalRate: number, inflation: number): number {
   return Math.max(0, real);
 }
 
-function computeCards(props: FiCardsProps): ComputedRow | null {
+/**
+ * Sentinel return for `computeCards` when the household/persons setup
+ * isn't done yet. Distinct from "transient null" (no projection state
+ * available for the current scenario) — callers render an empty-state
+ * stub with a setup CTA only for this branch.
+ */
+const SETUP_REQUIRED = 'setup-required' as const;
+type ComputeResult = ComputedRow | null | typeof SETUP_REQUIRED;
+
+function computeCards(props: FiCardsProps): ComputeResult {
   const { scenarios, projections, household, persons } = props;
-  if (!household || persons.length === 0) return null;
+  // Cold-start: no household yet, or zero persons → caller renders the
+  // setup-CTA empty state (W7-UX MF-8).
+  if (!household || persons.length === 0) return SETUP_REQUIRED;
   const rate = pickRate(household);
   if (!rate) return null;
 
@@ -309,8 +320,47 @@ function DrawdownTaxRateInline({
   );
 }
 
+/**
+ * Empty-state stub (W7-UX MF-8) shown when the user lands on the
+ * What-If page before completing first-run setup — no household saved,
+ * or zero persons in the household. Previously the FI cards silently
+ * returned null in this case, leaving a confusing gap on the page;
+ * the stub gives users a card-styled prompt with two deep-link CTAs.
+ */
+function FiCardsEmptyState() {
+  return (
+    <Card data-testid="whatif-fi-cards-empty">
+      <CardContent className="py-6 text-center text-sm text-muted-foreground space-y-2">
+        <p>
+          Add a household and at least one person to see FI projections.
+        </p>
+        <div className="text-xs space-x-1">
+          <Link
+            to="/inputs/household"
+            className="underline hover:text-foreground"
+            data-testid="whatif-fi-cards-empty-household-link"
+          >
+            Set up household
+          </Link>
+          <span>·</span>
+          <Link
+            to="/inputs/persons"
+            className="underline hover:text-foreground"
+            data-testid="whatif-fi-cards-empty-persons-link"
+          >
+            Add persons
+          </Link>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function FiCards(props: FiCardsProps) {
   const computed = computeCards(props);
+  if (computed === SETUP_REQUIRED) {
+    return <FiCardsEmptyState />;
+  }
   if (!computed) return null;
 
   const { liquidNw, fiTarget, coastFiTarget, yearsUntilRetirement, rate, rateLabel, swr } = computed;
