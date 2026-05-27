@@ -1,13 +1,9 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { extractTextItems } from '@/pdf/extract';
-import { parseStatement } from '@/pdf/parse-statement';
-import { PdfReviewModal } from '@/components/dialogs/PdfReviewModal';
 import { MarkReimbursedDialog } from '@/components/dialogs/MarkReimbursedDialog';
 import { TransactionEditDialog } from '@/components/dialogs/TransactionEditDialog';
 import BarChartCard from '@/components/charts/BarChartCard';
-import { Button } from '@/components/ui/button';
-import { ImportPreviewModal } from '@/components/import/ImportPreviewModal';
+import TransactionsSectionImporter from '@/components/setup/TransactionsSectionImporter';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useHouseholdStore } from '@/stores/household-store';
@@ -16,50 +12,16 @@ import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import { useAccountsStore } from '@/stores/accounts-store';
-import { useSettingsStore } from '@/stores/settings-store';
-import { archiveStatementPdf } from '@/lib/statements-archive';
 import type { CsvColumn } from '@/lib/csv';
 import { summarizeSpending } from '@/lib/spending-analysis';
 import { detectRecurring } from '@/lib/recurring';
 import { cashflowWindow } from '@/lib/cashflow';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { filterByPersonId } from '@/lib/filter-by-view';
-import { parseCsv, type ParseResult as CsvParseResult } from '@/lib/import/parse-csv';
-import { buildTransactionDuplicateKeys } from '@/lib/import/conflict-detector';
-import type { ValidationContext } from '@/lib/import/types';
-import type { ParseResult as PdfParseResult } from '@/pdf/parse-statement';
 import type { Transaction } from '@/types/schema';
 
-type PendingImport =
-  | {
-      kind: 'pdf';
-      filename: string;
-      result: PdfParseResult;
-      fileBytes: Uint8Array;
-    }
-  | {
-      kind: 'csv';
-      filename: string;
-      parsed: CsvParseResult;
-    };
-
-interface BatchImportError {
-  filename: string;
-  message: string;
-}
-
 export default function Spending() {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [queue, setQueue] = useState<PendingImport[]>([]);
-  const [errors, setErrors] = useState<BatchImportError[]>([]);
-  // totalRef tracks the size of the current batch for the optional
-  // "File N of M" subtitle on the CSV preview modal. It's a ref (not state)
-  // because we derive position from `queue.length` which already triggers
-  // re-renders.
-  const totalRef = useRef<number>(0);
-  const [importError, setImportError] = useState<string | null>(null);
   const [archiveWarning, setArchiveWarning] = useState<string | null>(null);
-  const [dragOver, setDragOver] = useState(false);
   const [reimbursedTarget, setReimbursedTarget] = useState<Transaction | null>(null);
   const [editTarget, setEditTarget] = useState<Transaction | null>(null);
 
@@ -221,137 +183,6 @@ export default function Spending() {
   // Recurring total
   const recurringTotal = recurring.reduce((s, g) => s + g.averageAmount, 0);
 
-  // ValidationContext used by the CSV preview modal for transaction imports.
-  // Mirrors the block in ImportCsvButton so the unified flow does not depend
-  // on the standalone button.
-  const csvCtx: ValidationContext = useMemo(() => ({
-    accounts: accounts.map((a) => ({ id: a.id!, name: a.name })),
-    persons: persons.map((p) => ({ id: p.id!, name: p.name })),
-    categories: categories.map((c) => ({ id: c.id!, name: c.name })),
-    existingTransactionKeys: buildTransactionDuplicateKeys(
-      transactions
-        .filter((t) => t.sourceAccountId != null)
-        .map((t) => ({
-          accountId: t.sourceAccountId!,
-          date: t.date,
-          amount: t.amount,
-          merchant: t.merchant,
-        })),
-    ),
-  }), [accounts, persons, categories, transactions]);
-
-  // --- Import handlers ---
-  const processFiles = useCallback(async (files: File[]) => {
-    setImportError(null);
-    setArchiveWarning(null);
-
-    const next: PendingImport[] = [];
-    const newErrors: BatchImportError[] = [];
-
-    for (const file of files) {
-      const lower = file.name.toLowerCase();
-      const isPdf = file.type === 'application/pdf' || lower.endsWith('.pdf');
-      const isCsv = file.type === 'text/csv' || lower.endsWith('.csv');
-
-      try {
-        if (isPdf) {
-          const bytes = new Uint8Array(await file.arrayBuffer());
-          const items = await extractTextItems(bytes);
-          const result = parseStatement(items);
-          next.push({ kind: 'pdf', filename: file.name, result, fileBytes: bytes });
-        } else if (isCsv) {
-          const text = await file.text();
-          const parsed = parseCsv(text);
-          next.push({ kind: 'csv', filename: file.name, parsed });
-        }
-        // Unsupported file types: silent skip (matches existing behavior for
-        // non-PDFs and avoids spamming the error pane with unrelated drops).
-      } catch (err) {
-        newErrors.push({
-          filename: file.name,
-          message: err instanceof Error ? err.message : String(err),
-        });
-      }
-    }
-
-    if (next.length > 0) {
-      setQueue((prev) => {
-        const wasEmpty = prev.length === 0;
-        const updated = [...prev, ...next];
-        if (wasEmpty) totalRef.current = updated.length;
-        else totalRef.current += next.length;
-        return updated;
-      });
-    }
-    if (newErrors.length > 0) setErrors((prev) => [...prev, ...newErrors]);
-  }, []);
-
-  const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
-    e.target.value = '';
-    if (files.length > 0) await processFiles(files);
-  };
-
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setDragOver(true);
-  };
-  const handleDragLeave = () => setDragOver(false);
-  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setDragOver(false);
-    const files = Array.from(e.dataTransfer.files).filter((f) => {
-      const lower = f.name.toLowerCase();
-      return (
-        f.type === 'application/pdf' || lower.endsWith('.pdf') ||
-        f.type === 'text/csv' || lower.endsWith('.csv')
-      );
-    });
-    if (files.length > 0) await processFiles(files);
-  };
-
-  // Best-effort archive step for PDF imports. Splits the post-save side
-  // effects (loadTransactions + archiveStatementPdf) from the queue advance,
-  // so the modal's `onSaved` callback can advance the queue separately.
-  const archivePdfAfterSave = async (filename: string, fileBytes: Uint8Array) => {
-    await loadTransactions();
-    // Read settings on-demand via getState() so Spending doesn't subscribe to
-    // settings changes (see the comment above the mount useEffect). Defensive
-    // load() in case Sidebar's mount load hasn't completed by the time of the
-    // very first import on a fresh app start.
-    let settings = useSettingsStore.getState().settings;
-    if (settings === null) {
-      await useSettingsStore.getState().load();
-      settings = useSettingsStore.getState().settings;
-    }
-    const folder = settings?.statementsFolderPath ?? null;
-    // archiveStatementPdf never throws — a failure returns a warning string.
-    if (folder) {
-      const warning = await archiveStatementPdf(folder, filename, fileBytes);
-      setArchiveWarning(warning);
-    } else {
-      setArchiveWarning(null);
-    }
-  };
-
-  const advance = () => {
-    setQueue((prev) => {
-      const next = prev.slice(1);
-      if (next.length === 0) totalRef.current = 0;
-      return next;
-    });
-  };
-  const dropAll = () => {
-    setQueue([]);
-    totalRef.current = 0;
-  };
-
-  const current = queue[0];
-  const position =
-    current && totalRef.current > 1
-      ? { current: totalRef.current - queue.length + 1, total: totalRef.current }
-      : undefined;
-
   return (
     <div className="p-8 space-y-8">
       <div className="flex items-start justify-between gap-4">
@@ -361,69 +192,10 @@ export default function Spending() {
         </div>
       </div>
 
-      {/* Import area — accepts mixed PDF + CSV via click-to-browse or drag-drop. */}
-      <div
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        className={`border-2 border-dashed rounded-lg p-6 text-center space-y-3 transition-colors ${
-          dragOver ? 'border-primary bg-primary/5' : 'border-muted-foreground/30'
-        }`}
-      >
-        <p className="text-sm text-muted-foreground">
-          Import credit card statement PDFs or transaction CSVs to track spending.
-        </p>
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90"
-        >
-          Import statements or CSVs
-        </button>
-        <p className="text-xs text-muted-foreground">or drag and drop PDFs / CSVs here</p>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="application/pdf,.csv,text/csv"
-          multiple
-          className="hidden"
-          onChange={handleFileInput}
-          aria-label="Statement PDF or transactions CSV"
-        />
-      </div>
+      {/* Unified PDF + CSV import surface, extracted so the wizard's Section 4
+          can mount the same primitive without duplicating queue logic. */}
+      <TransactionsSectionImporter onArchiveWarning={setArchiveWarning} />
 
-      {errors.length > 0 && (
-        <div
-          role="alert"
-          data-testid="batch-import-errors"
-          className="rounded-md border border-amber-500/30 bg-amber-50/50 p-3 text-sm"
-        >
-          <div className="font-medium text-amber-900 mb-1">
-            Couldn&apos;t import {errors.length} {errors.length === 1 ? 'file' : 'files'}:
-          </div>
-          <ul className="space-y-0.5 text-xs">
-            {errors.map((e, i) => (
-              <li key={i}>
-                <span className="font-mono">{e.filename}</span>: {e.message}
-              </li>
-            ))}
-          </ul>
-          <Button
-            variant="link"
-            size="sm"
-            onClick={() => setErrors([])}
-            className="mt-1 h-auto p-0"
-          >
-            Dismiss
-          </Button>
-        </div>
-      )}
-
-      {importError && (
-        <p className="text-sm text-destructive" role="alert">
-          {importError}
-        </p>
-      )}
       {archiveWarning && (
         <p className="text-sm text-amber-600" role="status">
           {archiveWarning}
@@ -697,33 +469,7 @@ export default function Spending() {
         )}
       </section>
 
-      {/* Modals */}
-      {current?.kind === 'pdf' && (
-        <PdfReviewModal
-          result={current.result}
-          filename={current.filename}
-          fileBytes={current.fileBytes}
-          existing={transactions}
-          onClose={dropAll}
-          onSaved={async (_insertedCount, fileBytes) => {
-            await archivePdfAfterSave(current.filename, fileBytes);
-            advance();
-          }}
-        />
-      )}
-      {current?.kind === 'csv' && (
-        <ImportPreviewModal
-          entity="transaction"
-          parsed={current.parsed}
-          ctx={csvCtx}
-          open={true}
-          onOpenChange={(o) => {
-            if (!o) dropAll();
-          }}
-          queuePosition={position}
-          onSaved={() => advance()}
-        />
-      )}
+      {/* Modals (PDF + CSV preview modals live inside TransactionsSectionImporter) */}
       {reimbursedTarget && (
         <MarkReimbursedDialog
           transaction={reimbursedTarget}

@@ -87,17 +87,17 @@ describe('Spending page', () => {
     await db.close();
   });
 
-  it('(a) renders the import button and an empty-state message when there are no transactions', async () => {
+  it('(a) renders the unified drop zone and an empty-state message when there are no transactions', async () => {
     renderPage();
 
-    // Import button should be visible (unified statements + CSVs)
+    // Drop zone is visible (unified statements + CSVs)
     expect(
-      screen.getByRole('button', { name: /import statements or csvs/i }),
+      screen.getByText(/drop pdfs or csvs here/i),
     ).toBeInTheDocument();
 
     // File input for drag-and-drop should be present
     expect(
-      screen.getByLabelText(/statement pdf or transactions csv/i),
+      screen.getByLabelText(/transactions pdf or csv/i),
     ).toBeInTheDocument();
 
     // Empty state message
@@ -108,11 +108,11 @@ describe('Spending page', () => {
     });
   });
 
-  it('(a2) removes the standalone "Import CSV" button from the header', () => {
+  it('(a2) does not render the legacy standalone "Import CSV" button in the header', () => {
     renderPage();
-    // The unified button is present.
+    // The unified drop zone is present.
     expect(
-      screen.getByRole('button', { name: /import statements or csvs/i }),
+      screen.getByText(/drop pdfs or csvs here/i),
     ).toBeInTheDocument();
     // The old standalone "Import CSV" button is gone.
     expect(screen.queryByRole('button', { name: /^import csv$/i })).toBeNull();
@@ -340,7 +340,7 @@ describe('Spending page', () => {
     renderPage();
 
     const user = userEvent.setup();
-    const fileInput = screen.getByLabelText('Statement PDF or transactions CSV');
+    const fileInput = screen.getByLabelText('Transactions PDF or CSV');
     // A minimal File — extractTextItems/parseStatement are mocked in this
     // suite's setup, so the bytes content is irrelevant.
     const file = new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], 'mar.pdf', {
@@ -476,7 +476,7 @@ describe('Spending page', () => {
       'txns.csv',
       { type: 'text/csv' },
     );
-    const input = screen.getByLabelText(/statement pdf or transactions csv/i) as HTMLInputElement;
+    const input = screen.getByLabelText(/transactions pdf or csv/i) as HTMLInputElement;
     Object.defineProperty(input, 'files', { value: [file], configurable: true });
     fireEvent.change(input);
 
@@ -529,7 +529,7 @@ describe('Spending page', () => {
       'txns.csv',
       { type: 'text/csv' },
     );
-    const input = screen.getByLabelText(/statement pdf or transactions csv/i) as HTMLInputElement;
+    const input = screen.getByLabelText(/transactions pdf or csv/i) as HTMLInputElement;
     Object.defineProperty(input, 'files', { value: [file], configurable: true });
     fireEvent.change(input);
 
@@ -544,7 +544,7 @@ describe('Spending page', () => {
     renderPage();
 
     const user = userEvent.setup();
-    const fileInput = screen.getByLabelText(/statement pdf or transactions csv/i);
+    const fileInput = screen.getByLabelText(/transactions pdf or csv/i);
     const pdf = new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], 'mar.pdf', {
       type: 'application/pdf',
     });
@@ -560,7 +560,7 @@ describe('Spending page', () => {
     renderPage();
 
     // Drop a .txt file — filtered out at the drop layer; no modal opens.
-    const handle = screen.getByText(/drag and drop/i).closest('div')!;
+    const handle = screen.getByText(/drop pdfs or csvs here/i).closest('div')!;
     const txt = new File(['hello'], 'notes.txt', { type: 'text/plain' });
     const dataTransfer = { files: [txt], types: ['Files'] };
     fireEvent.drop(handle, { dataTransfer });
@@ -609,7 +609,7 @@ describe('Spending page', () => {
       configurable: true,
     });
 
-    const input = screen.getByLabelText(/statement pdf or transactions csv/i) as HTMLInputElement;
+    const input = screen.getByLabelText(/transactions pdf or csv/i) as HTMLInputElement;
     Object.defineProperty(input, 'files', { value: [goodFile, badFile], configurable: true });
     fireEvent.change(input);
 
