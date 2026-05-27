@@ -35,6 +35,37 @@ export default defineConfig(async () => ({
     ],
   },
 
+  // Vendor chunk splitting. Without manualChunks Rollup folds every static
+  // dependency into a single ~1.7 MB App-*.js. The split below pulls the
+  // heaviest libraries into their own files so they:
+  //   1. cache independently across releases (changing app code no longer
+  //      invalidates 1.7 MB of recharts/radix/etc.)
+  //   2. parallel-download alongside the entry chunk
+  //   3. keep the entry chunk under the Vite 500 kB warning threshold
+  // pdfjs-dist is included so that even if a caller forgets to use the
+  // dynamic-import handler (TransactionsSectionImporter does), the worker
+  // doesn't end up inlined into the entry.
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          recharts: ["recharts"],
+          radix: [
+            "@radix-ui/react-dialog",
+            "@radix-ui/react-popover",
+            "@radix-ui/react-label",
+            "@radix-ui/react-slot",
+            "@radix-ui/react-tabs",
+            "@radix-ui/react-select",
+          ],
+          router: ["react-router-dom"],
+          forms: ["react-hook-form", "@hookform/resolvers", "zod"],
+          pdf: ["pdfjs-dist"],
+        },
+      },
+    },
+  },
+
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent Vite from obscuring rust errors

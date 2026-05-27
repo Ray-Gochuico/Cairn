@@ -31,5 +31,14 @@ export default defineConfig({
     exclude: stressEnabled
       ? configDefaults.exclude
       : [...configDefaults.exclude, 'tests/stress/**'],
+    // Default is 5_000 ms. The EquityGrantsTab vesting-template tests
+    // mount a 37-row schedule (each row is a DatePicker + Input + button)
+    // and the FOUR_YR_MONTHLY_ONE_YR_CLIFF tests sit at ~5.2s under the
+    // full-suite parallel contention introduced by additional store
+    // imports (transactions / snapshots / asset-value-snapshots now ship
+    // optimistic mutation paths in their module bodies). 10s is a
+    // comfortable margin that doesn't hide actual hangs — most tests
+    // continue to complete in under 1 second.
+    testTimeout: 10_000,
   },
 });

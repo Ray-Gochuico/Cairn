@@ -32,6 +32,23 @@ interface SnapshotRow {
   source: SnapshotSource;
 }
 
+let nextTempId = -1;
+const allocTempId = () => nextTempId--;
+
+/**
+ * Sort by snapshot_date asc, then id asc — mirrors the SELECT ordering in
+ * load() below so the optimistic insert path produces the same final array
+ * as a full reload would.
+ */
+function sortSnapshots(rows: AccountSnapshot[]): AccountSnapshot[] {
+  return [...rows].sort((a, b) => {
+    if (a.snapshotDate !== b.snapshotDate) {
+      return a.snapshotDate < b.snapshotDate ? -1 : 1;
+    }
+    return (a.id ?? 0) - (b.id ?? 0);
+  });
+}
+
 /**
  * Snapshots use upsert (not create) because AccountSnapshotsRepo enforces a
  * unique (account_id, snapshot_date) constraint — re-deriving a month or
@@ -39,6 +56,10 @@ interface SnapshotRow {
  *
  * Loads ALL snapshots across every account; per-account or per-month scoping
  * happens in memory or directly via AccountSnapshotsRepo.
+ *
+ * Optimistic updates: upsert/remove apply the change to the local array
+ * synchronously and roll back on DB failure, eliminating the post-write
+ * full-table SELECT that previously kicked every subscriber on every edit.
  */
 export const useSnapshotsStore = create<SnapshotsState>((set, get) => ({
   snapshots: [],
@@ -68,15 +89,60 @@ export const useSnapshotsStore = create<SnapshotsState>((set, get) => ({
 
   upsert: async (snapshot) => {
     const repo = new AccountSnapshotsRepo(getDatabase());
-    const id = await repo.upsert(snapshot);
-    await get().load();
-    return id;
+    const current = get().snapshots;
+    // Determine whether this is an insert or an update by the natural key
+    // (accountId, snapshotDate). If a matching row exists, replace it in
+    // memory; otherwise append a temp-id row.
+    const existingIdx = current.findIndex(
+      (s) =>
+        s.accountId === snapshot.accountId &&
+        s.snapshotDate === snapshot.snapshotDate,
+    );
+    const tempId = existingIdx >= 0 ? current[existingIdx].id! : allocTempId();
+    const optimistic: AccountSnapshot = { ...snapshot, id: tempId };
+    const nextArr = [...current];
+    if (existingIdx >= 0) {
+      nextArr[existingIdx] = optimistic;
+    } else {
+      nextArr.push(optimistic);
+    }
+    set({ snapshots: sortSnapshots(nextArr) });
+    try {
+      const realId = await repo.upsert(snapshot);
+      // For inserts, swap the temp ID for the real one. For updates, the
+      // ID is already correct (existingIdx path used the real id above).
+      if (tempId !== realId) {
+        set({
+          snapshots: sortSnapshots(
+            get().snapshots.map((s) =>
+              s.id === tempId ? { ...s, id: realId } : s,
+            ),
+          ),
+        });
+      }
+      return realId;
+    } catch (e) {
+      // Rollback: restore the original snapshot array.
+      set({ snapshots: current });
+      throw e;
+    }
   },
 
   remove: async (id) => {
     const repo = new AccountSnapshotsRepo(getDatabase());
-    await repo.delete(id);
-    await get().load();
+    const prev = get().snapshots;
+    const target = prev.find((s) => s.id === id);
+    set({ snapshots: prev.filter((s) => s.id !== id) });
+    try {
+      await repo.delete(id);
+    } catch (e) {
+      // Restore: re-insert and re-sort (target may have been the only
+      // row at that date so position matters).
+      if (target) {
+        set({ snapshots: sortSnapshots([...get().snapshots, target]) });
+      }
+      throw e;
+    }
   },
 
   refresh: async () => {
