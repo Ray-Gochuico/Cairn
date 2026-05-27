@@ -64,10 +64,23 @@ export default function SectionLayout({ initialSection }: Props) {
 
   const setStatus = useCallback(
     (idx: SectionIndex, status: SectionStatus) => {
-      setProgress((prev) => ({
-        ...prev,
-        sectionStatus: { ...prev.sectionStatus, [idx]: status },
-      }));
+      setProgress((prev) => {
+        const next = {
+          ...prev,
+          sectionStatus: { ...prev.sectionStatus, [idx]: status },
+        };
+        // Smoke-test 2026-05-27 finding: clicking "Skip — none of this
+        // applies" on the SectionEntryGate marked the section as skipped
+        // but didn't advance the wizard. Users had to also click "Next
+        // section" at the bottom, which read as the skip not working.
+        // Treat skipping the CURRENT section as a one-click advance —
+        // they're saying "none of this applies, move on". Re-skipping a
+        // non-current section (rare; user clicking back) stays put.
+        if (status === 'skipped' && idx === prev.currentSection && idx < 4) {
+          next.currentSection = (idx + 1) as SectionIndex;
+        }
+        return next;
+      });
     },
     [],
   );

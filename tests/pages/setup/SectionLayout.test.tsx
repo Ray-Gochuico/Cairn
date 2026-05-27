@@ -138,6 +138,35 @@ describe('SectionLayout', () => {
     expect(prev).toBeDisabled();
   });
 
+  it('auto-advances when the user clicks Skip on the entry gate', async () => {
+    // Smoke-test 2026-05-27 finding: clicking "Skip — none of this applies"
+    // marked the section as skipped but stayed on the same entry-gate
+    // card; users had to also click "Next section" at the bottom of the
+    // wizard chrome, which read as the skip not working. Treat skip on
+    // the CURRENT section as a one-click mark-and-advance.
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <SectionLayout />
+      </MemoryRouter>,
+    );
+    // Section 1 starts at the entry gate ("Start" / "Skip" buttons).
+    await user.click(
+      screen.getByRole('button', { name: /skip — none of this applies/i }),
+    );
+    // Should land on Section 2's heading.
+    expect(
+      screen.getByRole('heading', { name: /Section 2 of 4/i }),
+    ).toBeInTheDocument();
+    // localStorage should reflect both: section 1 marked skipped + cursor
+    // on section 2.
+    const stored = JSON.parse(
+      localStorage.getItem('setupWizard.progress.v1') ?? '{}',
+    );
+    expect(stored.currentSection).toBe(2);
+    expect(stored.sectionStatus[1]).toBe('skipped');
+  });
+
   it('renders "Finish setup" instead of "Next section" on Section 4', () => {
     localStorage.setItem(
       'setupWizard.progress.v1',

@@ -113,6 +113,52 @@ describe('useHouseholdStore — acceptDisclaimer', () => {
     expect(household!.disclaimerVersionAccepted).toBe('1.1');
   });
 
+  it('Smoke-2026-05-27: post-COMMIT cache refresh failure is non-fatal — acceptance still resolves', async () => {
+    // The live Tauri build was observed once where the post-COMMIT
+    // `householdRepo.get()` threw after a successful BEGIN/COMMIT
+    // (likely a transient tauri-plugin-sql SELECT-after-write race),
+    // bubbling up to DisclosureModal as "Failed to record acceptance"
+    // even though the acceptance had committed. Symptom-fix: update
+    // Zustand optimistically from the values we just committed, then
+    // attempt a best-effort refresh that swallows errors.
+
+    // Spy the post-COMMIT read to force it to throw on this call.
+    const HouseholdRepoModule = await import('@/domain/household');
+    const spy = vi
+      .spyOn(HouseholdRepoModule.HouseholdRepo.prototype, 'get')
+      // First call is the existing store.load() in beforeEach (already
+      // happened) — we only need to fail subsequent calls. mockRejectedValue
+      // applies to ALL future calls so we use mockImplementationOnce to
+      // target only the post-COMMIT refresh.
+      .mockImplementationOnce(async () => {
+        throw new Error('synthetic post-commit SELECT race');
+      });
+
+    // Should resolve, NOT throw, despite the inner get() failure.
+    await expect(
+      useHouseholdStore.getState().acceptDisclaimer('roadmap', '1.0'),
+    ).resolves.toBeUndefined();
+
+    spy.mockRestore();
+
+    // Optimistic cache update: the gate's selector should now see the
+    // version we just accepted, even though the fresh read failed.
+    const { household } = useHouseholdStore.getState();
+    expect(household!.roadmapDisclaimerVersionAccepted).toBe('1.0');
+    expect(household!.roadmapDisclaimerAcceptedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+
+    // DB writes ARE durable — both the cache columns and the audit row
+    // landed before the read threw.
+    const dbRows = await db.select<{
+      roadmap_disclaimer_version_accepted: string | null;
+    }>(`SELECT roadmap_disclaimer_version_accepted FROM household WHERE id = 1`);
+    expect(dbRows[0].roadmap_disclaimer_version_accepted).toBe('1.0');
+    const auditRows = await db.select<{ count: number }>(
+      `SELECT COUNT(*) as count FROM disclosure_acceptances WHERE document_id = 'roadmap'`,
+    );
+    expect(auditRows[0].count).toBe(1);
+  });
+
   it('W7-Data #1: rolls back cache columns when the audit insert fails (atomic)', async () => {
     // Pre-fix the two writes ran sequentially without a transaction —
     // if `acceptancesRepo.record` threw after the cache update landed,
