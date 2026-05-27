@@ -3,10 +3,13 @@ import type {
   ContributionSegment,
   ExpensePeriod,
   ExtraLoanPayment,
+  GapAllocation,
   IncomeEvent,
   LumpSumEvent,
+  PerAccountSplit,
   PersonIncomePlan,
 } from './lever-types';
+import type { Account } from '@/types/schema';
 import { CompoundingFrequency } from '@/types/enums';
 
 /** Converts an annual return to a monthly return that compounds back to the annual. */
@@ -141,18 +144,170 @@ export function applyLumpSum(
   };
 }
 
-/** Returns the total expense-delta active for the given YYYY-MM, summed across overlapping periods. */
-export function monthlyExpenseDeltaFromPeriods(periods: ExpensePeriod[], monthISO: string): number {
+/**
+ * Returns the total monthly expense amount active for the given YYYY-MM,
+ * summed across overlapping periods. Each period's `monthlyDelta` is an
+ * ABSOLUTE monthly expense amount in today's dollars (see ExpensePeriodSchema
+ * JSDoc). Negative values let users overlay reductions on top of overlapping
+ * positive periods.
+ *
+ * SEMANTIC (since 2026-05-26 revamp): the engine no longer adds a
+ * transaction-derived baseline. The sum returned here IS the scenario's
+ * monthly expense (before inflation).
+ */
+export function monthlyExpenseFromPeriods(periods: ExpensePeriod[], monthISO: string): number {
   const monthDate = new Date(`${monthISO}-01T00:00:00Z`);
-  let delta = 0;
+  let total = 0;
   for (const p of periods) {
     const startDate = new Date(p.start.length === 7 ? `${p.start}-01T00:00:00Z` : `${p.start}T00:00:00Z`);
     const endDate = addMonthsUTC(startDate, p.durationMonths);
     if (monthDate >= startDate && monthDate < endDate) {
-      delta += p.monthlyDelta;
+      total += p.monthlyDelta;
     }
   }
-  return delta;
+  return total;
+}
+
+/**
+ * Distributes `amount` into `s.investmentsByAccount` across the bucket's
+ * accounts. Honors `accountSplits` when present (filtering stale account ids
+ * and re-normalizing the survivors). Falls back to even split when splits are
+ * null OR every split id is stale. No-op when `amount <= 0` or accounts is
+ * empty.
+ *
+ * Note: this function MUTATES `s.investmentsByAccount`. The engine's gap
+ * routing block already operates on a draft state so this is fine — keeps the
+ * helper symmetrical with `applyGapAllocation` below.
+ */
+export function distributeWithinBucket(
+  s: MonthlyState,
+  _bucket: 'taxAdvantaged' | 'brokerage',
+  amount: number,
+  accountSplits: PerAccountSplit[] | null,
+  accounts: Account[],
+): void {
+  if (amount <= 0 || accounts.length === 0) return;
+
+  const validIds = new Set(
+    accounts.map((a) => a.id).filter((id): id is number => id != null),
+  );
+
+  // Try the user-configured splits first.
+  if (accountSplits && accountSplits.length > 0) {
+    const filtered = accountSplits.filter((sp) => validIds.has(sp.accountId));
+    const sum = filtered.reduce((acc, sp) => acc + sp.pct, 0);
+    if (sum > 0) {
+      for (const sp of filtered) {
+        const share = amount * (sp.pct / sum);
+        s.investmentsByAccount[sp.accountId] =
+          (s.investmentsByAccount[sp.accountId] ?? 0) + share;
+      }
+      return;
+    }
+    // All splits stale — fall through to even split.
+  }
+
+  // Even-split fallback across valid bucket accounts.
+  const ids = [...validIds];
+  if (ids.length === 0) return;
+  const share = amount / ids.length;
+  for (const id of ids) {
+    s.investmentsByAccount[id] = (s.investmentsByAccount[id] ?? 0) + share;
+  }
+}
+
+/**
+ * Routes a positive monthly gap into tax-advantaged accounts, brokerage,
+ * and/or cash per a two-level allocation. See the spec's §E3 for the
+ * full algorithm — corrected from the spec's pseudocode here:
+ *
+ * Phase 1 — Compute fixed-bucket amounts (clamped to the gap; empty buckets
+ *           skipped, their value stays in `remaining` and flows to cash).
+ * Phase 1b — If sum-of-fixed > original gap, scale all fixed amounts
+ *           proportionally so they fit. Percent buckets get $0 that month.
+ * Phase 2 — Compute percent-bucket amounts over `remaining` (post-fixed).
+ * Phase 2b — If sum-of-percent > 1.0, normalize the percent values
+ *           proportionally before computing amounts.
+ * Phase 3 — Distribute via distributeWithinBucket. Tag decomposition fields.
+ * Phase 4 — Any positive `remaining` flows to cash.
+ *
+ * Mutates `s` in place: `s.cash`, `s.investmentsByAccount`, and the three
+ * new `gapTo*` decomposition fields. Always exits with the three `gapTo*`
+ * fields set (possibly 0).
+ */
+export function applyGapAllocation(
+  s: MonthlyState,
+  alloc: GapAllocation,
+  accountsByBucket: Record<'taxAdvantaged' | 'brokerage', Account[]>,
+): void {
+  s.gapToTaxAdvantaged = 0;
+  s.gapToBrokerage = 0;
+  s.gapToCash = 0;
+  if (s.savings <= 0) return;
+
+  const originalGap = s.savings;
+  let remaining = originalGap;
+
+  // ---- Phase 1: fixed-dollar buckets ----------------------------------------
+  const fixedAmounts: { taxAdvantaged: number; brokerage: number } = {
+    taxAdvantaged: 0,
+    brokerage: 0,
+  };
+  for (const bucket of ['taxAdvantaged', 'brokerage'] as const) {
+    const cfg = alloc[bucket];
+    if (cfg?.mode !== 'fixed') continue;
+    if (accountsByBucket[bucket].length === 0) continue;  // empty bucket → flows to cash
+    fixedAmounts[bucket] = Math.min(cfg.value, originalGap);
+  }
+  const fixedSum = fixedAmounts.taxAdvantaged + fixedAmounts.brokerage;
+
+  // ---- Phase 1b: proportional clamp when fixed sum > gap --------------------
+  if (fixedSum > originalGap && fixedSum > 0) {
+    const scale = originalGap / fixedSum;
+    fixedAmounts.taxAdvantaged *= scale;
+    fixedAmounts.brokerage     *= scale;
+  }
+  remaining = originalGap - (fixedAmounts.taxAdvantaged + fixedAmounts.brokerage);
+
+  // ---- Phase 2: percent buckets over `remaining` ----------------------------
+  // First normalize sum-of-percent > 1 in-place (creates a clone so we don't
+  // mutate the user's payload).
+  const pctValues: { taxAdvantaged: number; brokerage: number } = {
+    taxAdvantaged:
+      alloc.taxAdvantaged?.mode === 'percent' && accountsByBucket.taxAdvantaged.length > 0
+        ? alloc.taxAdvantaged.value
+        : 0,
+    brokerage:
+      alloc.brokerage?.mode === 'percent' && accountsByBucket.brokerage.length > 0
+        ? alloc.brokerage.value
+        : 0,
+  };
+  const pctSum = pctValues.taxAdvantaged + pctValues.brokerage;
+  if (pctSum > 1 && pctSum > 0) {
+    pctValues.taxAdvantaged /= pctSum;
+    pctValues.brokerage     /= pctSum;
+  }
+
+  const percentAmounts: { taxAdvantaged: number; brokerage: number } = {
+    taxAdvantaged: remaining * pctValues.taxAdvantaged,
+    brokerage:     remaining * pctValues.brokerage,
+  };
+  remaining -= percentAmounts.taxAdvantaged + percentAmounts.brokerage;
+
+  // ---- Phase 3: distribute + tag --------------------------------------------
+  for (const bucket of ['taxAdvantaged', 'brokerage'] as const) {
+    const amount = fixedAmounts[bucket] + percentAmounts[bucket];
+    if (amount <= 0) continue;
+    const cfg = alloc[bucket];
+    distributeWithinBucket(s, bucket, amount, cfg?.accountSplits ?? null, accountsByBucket[bucket]);
+    if (bucket === 'taxAdvantaged') s.gapToTaxAdvantaged = amount;
+    else                            s.gapToBrokerage     = amount;
+  }
+
+  // ---- Phase 4: cash overflow ----------------------------------------------
+  const cashAmount = Math.max(0, remaining);
+  s.cash += cashAmount;
+  s.gapToCash = cashAmount;
 }
 
 function addMonthsUTC(d: Date, months: number): Date {

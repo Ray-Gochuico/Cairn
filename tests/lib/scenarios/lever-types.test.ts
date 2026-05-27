@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
+  BucketAllocationSchema,
+  GapAllocationSchema,
   LeverPayloadSchema,
   emptyLeverPayload,
   IncomeEventSchema,
@@ -25,6 +27,7 @@ describe('LeverPayloadSchema', () => {
       },
       income: { perPerson: [{ annualRaiseRate: 0.03, events: [] }] },
       contributions: [{ startMonth: 0, endMonth: 59, monthlyAmount: 1000, label: 'Year 1-5', allocation: null }],
+      gapAllocation: { taxAdvantaged: null, brokerage: null },
       retirementAgeOverride: null,
       swrOverride: null,
       inflation: { defaultRate: null, overrides: {} },
@@ -232,5 +235,66 @@ describe('ReturnScheduleSchema — cashRate field', () => {
       returns: { defaultRate: 0.07, overrides: {} },
     });
     expect(payload.returns.cashRate).toBeNull();
+  });
+});
+
+describe('GapAllocationSchema', () => {
+  it('defaults both buckets to null (all-cash)', () => {
+    const parsed = GapAllocationSchema.parse({});
+    expect(parsed).toEqual({ taxAdvantaged: null, brokerage: null });
+  });
+
+  it('accepts a percent bucket with no account splits', () => {
+    const parsed = GapAllocationSchema.parse({
+      taxAdvantaged: { mode: 'percent', value: 0.5 },
+    });
+    expect(parsed.taxAdvantaged).toEqual({ mode: 'percent', value: 0.5, accountSplits: null });
+    expect(parsed.brokerage).toBeNull();
+  });
+
+  it('accepts a fixed-dollar bucket with explicit account splits', () => {
+    const parsed = GapAllocationSchema.parse({
+      brokerage: {
+        mode: 'fixed',
+        value: 1000,
+        accountSplits: [{ accountId: 20, pct: 1.0 }],
+      },
+    });
+    expect(parsed.brokerage?.mode).toBe('fixed');
+    expect(parsed.brokerage?.value).toBe(1000);
+    expect(parsed.brokerage?.accountSplits).toEqual([{ accountId: 20, pct: 1.0 }]);
+  });
+
+  it('rejects negative value', () => {
+    expect(() =>
+      BucketAllocationSchema.parse({ mode: 'fixed', value: -10 }),
+    ).toThrow();
+  });
+
+  it('rejects mode outside {percent, fixed}', () => {
+    expect(() =>
+      BucketAllocationSchema.parse({ mode: 'wat', value: 0.5 }),
+    ).toThrow();
+  });
+});
+
+describe('emptyLeverPayload — gapAllocation', () => {
+  it('defaults to { taxAdvantaged: null, brokerage: null }', () => {
+    const p = emptyLeverPayload();
+    expect(p.gapAllocation).toEqual({ taxAdvantaged: null, brokerage: null });
+  });
+});
+
+describe('LeverPayloadSchema — gapAllocation default', () => {
+  it('coalesces gapAllocation when omitted from input', () => {
+    const parsed = LeverPayloadSchema.parse({
+      extraLoanPayments: [],
+      lumpSums: [],
+      expensePeriods: [],
+      returns: { defaultRate: 0.07, overrides: {} },
+      income: { perPerson: [{ annualRaiseRate: 0, events: [] }] },
+      // gapAllocation intentionally omitted
+    });
+    expect(parsed.gapAllocation).toEqual({ taxAdvantaged: null, brokerage: null });
   });
 });

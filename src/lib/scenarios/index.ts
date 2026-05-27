@@ -19,7 +19,11 @@ export {
   InflationScheduleSchema,
   IncomeEventSchema, PersonIncomePlanSchema, IncomeLeverSchema,
   ContributionSegmentSchema, ContributionsLeverSchema,
+  // NEW (2026-05-26 revamp):
+  BucketAllocationSchema, GapAllocationSchema, PerAccountSplitSchema,
   type LeverPayload, type ExtraLoanPayment, type LumpSumEvent, type ExpensePeriod,
   type ReturnSchedule, type InflationSchedule, type IncomeEvent, type PersonIncomePlan, type IncomeLever,
   type ContributionSegment, type ContributionsLever,
+  // NEW:
+  type BucketAllocation, type BucketAllocationMode, type GapAllocation, type PerAccountSplit,
 } from './lever-types';

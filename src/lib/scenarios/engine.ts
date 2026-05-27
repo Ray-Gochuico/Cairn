@@ -6,7 +6,7 @@ import {
   applyLumpSum,
   applyExtraLoanPayment,
   computeMonthlyIncomeForPerson,
-  monthlyExpenseDeltaFromPeriods,
+  monthlyExpenseFromPeriods,
   monthlyReturnFromAnnualWithFrequency,
   type LoanMonthlyContext,
 } from './apply-real';
@@ -69,6 +69,23 @@ export interface MonthlyState {
    * not the auto-invest opt-out path).
    */
   salarySurplusToCash?: number;
+  /**
+   * Amount of `s.savings` routed into TAX-ADVANTAGED accounts this step via
+   * the gapAllocation lever (when no segment fully absorbed the surplus).
+   * Zero in every other case. The three `gapTo*` fields sum to the post-
+   * segment positive surplus that flowed through `applyGapAllocation`.
+   */
+  gapToTaxAdvantaged?: number;
+  /** Amount routed into BROKERAGE / taxable accounts this step via gapAllocation. Zero otherwise. */
+  gapToBrokerage?: number;
+  /**
+   * Amount that flowed to CASH via gapAllocation this step (whether routed
+   * explicitly by the user's allocation or as the default "remainder to cash"
+   * overflow). Note: this is the gap-flow path only; cash that lands here
+   * from the "active segment + positive remainder" branch in `stepMonth` is
+   * NOT counted (that's segment leftover, not gap allocation).
+   */
+  gapToCash?: number;
   /**
    * `segment.monthlyAmount` distributed to investments this step when a
    * contribution segment was active. Zero when no segment covers this month.
@@ -393,7 +410,7 @@ function stepMonth(
     if (stepYear > currentYear + 1) break;
   }
   const baseExpenses = real.baselineMonthlyExpenses * inflationFactor;
-  const periodDelta = monthlyExpenseDeltaFromPeriods(payload.expensePeriods, monthISO);
+  const periodDelta = monthlyExpenseFromPeriods(payload.expensePeriods, monthISO);
   s.expenses = baseExpenses + periodDelta;
 
   // 5. Debt servicing

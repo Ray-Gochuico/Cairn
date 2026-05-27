@@ -20,6 +20,15 @@ export const LumpSumEventSchema = z.object({
 });
 export type LumpSumEvent = z.infer<typeof LumpSumEventSchema>;
 
+/**
+ * One absolute monthly expense amount that applies during a fixed window.
+ *
+ * SEMANTIC (since 2026-05-26): `monthlyDelta` is the monthly expense amount
+ * in today's-dollars during this window. Engine sums active periods and
+ * inflates the sum. Negative values overlay reductions on top of overlapping
+ * periods. The field name was kept as-is to avoid a SQL migration; the UI
+ * label is "Monthly expense" since this revamp.
+ */
 export const ExpensePeriodSchema = z.object({
   start: isoDate,
   monthlyDelta: z.number(),
@@ -27,6 +36,49 @@ export const ExpensePeriodSchema = z.object({
   label: z.string().optional(),
 });
 export type ExpensePeriod = z.infer<typeof ExpensePeriodSchema>;
+
+// ---------------------------------------------------------------------------
+// Gap allocation — routes monthly surplus (income − expenses − loan payments
+// minus any active Contributions segment) into tax-advantaged accounts,
+// brokerage, and/or cash. See docs/superpowers/specs/2026-05-26-whatif-lever
+// -revamp-design.md §E3.
+//
+// Two levels:
+//   - Per-bucket mode + value: 'percent' (0..1 of remaining-after-fixed) or
+//     'fixed' (nominal $/mo, clamped to the gap).
+//   - Per-account splits within each non-cash bucket: optional; null means
+//     even-split across the bucket's accounts. Stale account ids are filtered
+//     and the remaining splits re-normalize.
+//
+// Cash is implicit: whatever's left after the other two buckets flows to cash.
+// ---------------------------------------------------------------------------
+
+const BucketAllocationModeSchema = z.enum(['percent', 'fixed']);
+export type BucketAllocationMode = z.infer<typeof BucketAllocationModeSchema>;
+
+export const PerAccountSplitSchema = z.object({
+  accountId: z.number().int().positive(),
+  /** 0..1 share of the bucket's allocated amount. */
+  pct: z.number().min(0).max(1),
+});
+export type PerAccountSplit = z.infer<typeof PerAccountSplitSchema>;
+
+export const BucketAllocationSchema = z.object({
+  mode: BucketAllocationModeSchema,
+  /** When mode='percent': 0..1 (share of the post-fixed remaining gap). When mode='fixed': nominal $/mo. */
+  value: z.number().nonnegative(),
+  /** Per-account split within this bucket. null = even split across accountsByBucket[bucket]. */
+  accountSplits: z.array(PerAccountSplitSchema).nullable().default(null),
+});
+export type BucketAllocation = z.infer<typeof BucketAllocationSchema>;
+
+export const GapAllocationSchema = z.object({
+  taxAdvantaged: BucketAllocationSchema.nullable().default(null),
+  brokerage:     BucketAllocationSchema.nullable().default(null),
+  // Cash is implicit — no explicit allocation. The engine's applyGapAllocation
+  // routes whatever's left after the other two buckets into cash.
+});
+export type GapAllocation = z.infer<typeof GapAllocationSchema>;
 
 export const ReturnScheduleSchema = z.object({
   defaultRate: z.number().min(-1).max(1),
@@ -125,6 +177,13 @@ export const LeverPayloadSchema = z.object({
   income: IncomeLeverSchema,
   contributions: ContributionsLeverSchema.default([]),
   /**
+   * Routes positive monthly surplus (after expenses, loans, and any active
+   * Contributions segment) into tax-advantaged accounts, brokerage, and/or
+   * cash. Default: all-cash (both fields null). See GapAllocationSchema +
+   * applyGapAllocation in apply-real.ts.
+   */
+  gapAllocation: GapAllocationSchema.default({ taxAdvantaged: null, brokerage: null }),
+  /**
    * Household-level override for the retirement age at which each person's
    * salary income drops to zero. When null (default), each person retires at
    * their own Person.targetRetirementAge. The cash-floor rule then routes
@@ -158,6 +217,7 @@ export function emptyLeverPayload(): LeverPayload {
     },
     income: { perPerson: [{ annualRaiseRate: 0, events: [] }] },
     contributions: [],
+    gapAllocation: { taxAdvantaged: null, brokerage: null },
     retirementAgeOverride: null,
     swrOverride: null,
     inflation: { defaultRate: null, overrides: {} },
