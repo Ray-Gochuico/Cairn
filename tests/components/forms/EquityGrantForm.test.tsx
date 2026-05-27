@@ -154,12 +154,15 @@ describe('EquityGrantForm — calculator section', () => {
     await user.type(screen.getByLabelText(/outstanding shares/i), '5000000');
 
     await user.click(screen.getByRole('button', { name: /^save$/i }));
-    await vi.waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    await vi.waitFor(() => expect(onSubmit).toHaveBeenCalled(), { timeout: 10_000 });
     const submitted = onSubmit.mock.calls[0][0] as EquityGrantFormValues;
     expect(submitted.companyValuation).toBe(10_000_000);
     expect(submitted.companyTotalDebt).toBe(2_000_000);
     expect(submitted.companyOutstandingShares).toBe(5_000_000);
-  });
+  }, 15000);
+  // ↑ 15s + explicit 10s vi.waitFor timeout — 14+ sequential user-events
+  // (including 2 selectDate helpers = 6 events) routinely cross the
+  // default 5s envelope under full-suite parallelism (wave3 N1).
 
   it('clearing a calculator input blanks the per-share preview but keeps currentFmv unchanged', async () => {
     const user = userEvent.setup();
@@ -172,11 +175,13 @@ describe('EquityGrantForm — calculator section', () => {
       },
     });
     // Edit mode: calculator already open. Preview shows $10.00.
-    expect(await screen.findByText('$10.00')).toBeInTheDocument();
+    expect(await screen.findByText('$10.00', undefined, { timeout: 5000 })).toBeInTheDocument();
     const sharesInput = screen.getByLabelText(/outstanding shares/i);
     await user.clear(sharesInput);
-    // Per-share blanks to a placeholder dash:
-    expect(await screen.findByText('—')).toBeInTheDocument();
+    // Per-share blanks to a placeholder dash. findByText defaults to 1s
+    // timeout which is tight under full-suite parallelism; 5s budget
+    // matches wave3 N1 budget reasoning.
+    expect(await screen.findByText('—', undefined, { timeout: 5000 })).toBeInTheDocument();
     // currentFmv unchanged:
     expect((screen.getByLabelText(/current fmv/i) as HTMLInputElement).value).toBe('10');
   });
