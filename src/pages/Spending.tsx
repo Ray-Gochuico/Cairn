@@ -10,15 +10,24 @@ import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
+import { useHousingPaymentsStore } from '@/stores/housing-payments-store';
+import { useVehicleLeasesStore } from '@/stores/vehicle-leases-store';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import { useAccountsStore } from '@/stores/accounts-store';
 import type { CsvColumn } from '@/lib/csv';
 import { summarizeSpending } from '@/lib/spending-analysis';
 import { detectRecurring } from '@/lib/recurring';
 import { cashflowWindow } from '@/lib/cashflow';
+import { monthlyRecurringObligation } from '@/lib/recurring-obligations';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { filterByPersonId } from '@/lib/filter-by-view';
 import type { Transaction } from '@/types/schema';
+
+const obligationCurrencyFormatter = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  maximumFractionDigits: 0,
+});
 
 export default function Spending() {
   const [archiveWarning, setArchiveWarning] = useState<string | null>(null);
@@ -40,6 +49,10 @@ export default function Spending() {
   const loadVehicles = useVehiclesStore((s) => s.load);
   const accounts = useAccountsStore((s) => s.accounts);
   const loadAccounts = useAccountsStore((s) => s.load);
+  const housingPayments = useHousingPaymentsStore((s) => s.housingPayments);
+  const loadHousingPayments = useHousingPaymentsStore((s) => s.load);
+  const vehicleLeases = useVehicleLeasesStore((s) => s.vehicleLeases);
+  const loadVehicleLeases = useVehicleLeasesStore((s) => s.load);
 
   const { filter } = useViewFilter();
 
@@ -59,8 +72,21 @@ export default function Spending() {
       loadProperties(),
       loadVehicles(),
       loadAccounts(),
+      loadHousingPayments(),
+      loadVehicleLeases(),
     ]).then(() => syncRecurring(useCategoriesStore.getState().categories));
-  }, [loadTransactions, loadCategories, loadHousehold, loadPersons, loadProperties, loadVehicles, loadAccounts, syncRecurring]);
+  }, [
+    loadTransactions,
+    loadCategories,
+    loadHousehold,
+    loadPersons,
+    loadProperties,
+    loadVehicles,
+    loadAccounts,
+    loadHousingPayments,
+    loadVehicleLeases,
+    syncRecurring,
+  ]);
 
   // Filtered slice — honours the ?view=p1|p2|joint|household query param
   const visibleTransactions = useMemo(
@@ -183,6 +209,13 @@ export default function Spending() {
   // Recurring total
   const recurringTotal = recurring.reduce((s, g) => s + g.averageAmount, 0);
 
+  // Recurring obligations (rent + vehicle leases) active today.
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const recurringObligation = useMemo(
+    () => monthlyRecurringObligation(housingPayments, vehicleLeases, todayISO),
+    [housingPayments, vehicleLeases, todayISO],
+  );
+
   return (
     <div className="p-8 space-y-8">
       <div className="flex items-start justify-between gap-4">
@@ -200,6 +233,26 @@ export default function Spending() {
         <p className="text-sm text-warning-foreground" role="status">
           {archiveWarning}
         </p>
+      )}
+
+      {(housingPayments.length > 0 || vehicleLeases.length > 0) && (
+        <section aria-label="Recurring obligations">
+          <div className="border rounded-lg p-4 space-y-1">
+            <h2 className="text-sm font-medium text-muted-foreground">
+              Recurring obligations
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Active rent + vehicle leases.
+            </p>
+            <div className="text-2xl font-semibold font-mono">
+              {obligationCurrencyFormatter.format(recurringObligation)}/mo
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {housingPayments.length} rental{housingPayments.length === 1 ? '' : 's'},{' '}
+              {vehicleLeases.length} lease{vehicleLeases.length === 1 ? '' : 's'}
+            </div>
+          </div>
+        </section>
       )}
 
       {/* Only render analysis sections when there are transactions */}

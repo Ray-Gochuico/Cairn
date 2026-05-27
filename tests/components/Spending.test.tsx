@@ -37,6 +37,10 @@ import { useTransactionsStore } from '@/stores/transactions-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useSettingsStore } from '@/stores/settings-store';
+import { useHousingPaymentsStore } from '@/stores/housing-payments-store';
+import { useVehicleLeasesStore } from '@/stores/vehicle-leases-store';
+import { HousingPaymentsRepo } from '@/domain/housing-payments';
+import { VehicleLeasesRepo } from '@/domain/vehicle-leases';
 import Spending from '@/pages/Spending';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -74,6 +78,7 @@ describe('Spending page', () => {
       mig('0014_add_app_settings'),
       mig('0015_add_accent_colors'),
       mig('0024_cash_apy'),
+      mig('0036_add_rent_lease_tracking'),
     ]);
     setDatabase(db);
     useCategoriesStore.setState({ categories: [], isLoading: false, error: null });
@@ -81,6 +86,16 @@ describe('Spending page', () => {
     usePersonsStore.setState({ persons: [], isLoading: false, error: null });
     useAccountsStore.setState({ accounts: [], isLoading: false, error: null });
     useSettingsStore.setState({ settings: null, isLoading: false, error: null });
+    useHousingPaymentsStore.setState({
+      housingPayments: [],
+      isLoading: false,
+      error: null,
+    });
+    useVehicleLeasesStore.setState({
+      vehicleLeases: [],
+      isLoading: false,
+      error: null,
+    });
   });
 
   afterEach(async () => {
@@ -568,6 +583,34 @@ describe('Spending page', () => {
     // No modal opens.
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.queryByText(/review transactions/i)).toBeNull();
+  });
+
+  it('(recurring-obligations) shows the tile when rentals/leases exist', async () => {
+    await useCategoriesStore.getState().load();
+
+    await new HousingPaymentsRepo(db).create({
+      householdId: 1,
+      ownerPersonId: null,
+      name: 'Apt',
+      monthlyAmount: 2400,
+      startDate: '2025-01-01',
+      endDate: null,
+    });
+    await new VehicleLeasesRepo(db).create({
+      householdId: 1,
+      ownerPersonId: null,
+      name: 'Tesla',
+      monthlyAmount: 599,
+      startDate: '2025-01-01',
+      endDate: null,
+    });
+
+    renderPage();
+
+    expect(
+      await screen.findByText(/Recurring obligations/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/\$2,999/)).toBeInTheDocument();
   });
 
   it('(unified-errors) surfaces a per-file error pane when a CSV file read fails', async () => {
