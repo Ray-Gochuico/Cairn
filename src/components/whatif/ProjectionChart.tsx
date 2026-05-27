@@ -131,6 +131,27 @@ export default function ProjectionChart({
   );
   const lowerRows = useMemo(() => buildLowerPaneRows(scenarios, display), [scenarios, display]);
 
+  // Wave-5 design A+ #2 / Wave-3 W3-3 follow-up: in TAX_BUCKET mode,
+  // Recharts emits ~48 `width(-1) and height(-1)` warnings per render when
+  // the bucket areas have no non-zero values across any row. The page-level
+  // `hasProjectionData` guard catches the truly-empty case (no scenarios /
+  // no rows) but a household with 1 person + 0 investment accounts still
+  // produces non-empty rows (cash + homeEquity + net worth), so the bucket
+  // Areas mount and fail to lay out. Gate the bucket Areas on actual
+  // non-zero bucket data — when none, fall back to the SINGLE detail-level
+  // view (cash + home equity + net worth line), which lays out correctly.
+  // This mirrors the empty-state pattern used at the WhatIf page level.
+  const hasBucketData = useMemo(() => {
+    if (detailLevel !== ProjectionDetailLevel.TAX_BUCKET) return true;
+    for (const row of upperRows) {
+      for (const key of Object.keys(row)) {
+        if (!key.startsWith('taxAdvantaged_') && !key.startsWith('taxable_')) continue;
+        if (typeof row[key] === 'number' && (row[key] as number) > 0) return true;
+      }
+    }
+    return false;
+  }, [detailLevel, upperRows]);
+
   // Investment accounts (non-cash/savings) used by the per-account view.
   // Sorted by name (then id) so the checkbox row + chart series stack are stable.
   const investmentAccounts = useMemo(
@@ -326,7 +347,7 @@ export default function ProjectionChart({
                       isAnimationActive={false}
                     />
                   )}
-                  {detailLevel === ProjectionDetailLevel.TAX_BUCKET && (
+                  {detailLevel === ProjectionDetailLevel.TAX_BUCKET && hasBucketData && (
                     <>
                       <Area
                         type="monotone"
