@@ -20,8 +20,31 @@ import { ProjectionDetailLevel } from '@/types/enums';
 import { formatCompactCurrency } from '@/lib/format';
 import { DecomposedTooltipContent } from './ProjectionTooltip';
 import { CHART_TOOLTIP_PROPS } from '@/components/charts/ChartTooltip';
+import { CHART_PALETTE } from '@/components/charts/palette';
 
-const AREA_COLORS = ['#4f86f7', '#5fbb7c', '#e6b54b', '#ef8b5a', '#9b5de5', '#f15bb5'];
+/**
+ * Named-fill assignments for the upper pane's composition Areas.
+ *
+ * Picked from CHART_PALETTE so the chart shares the same Vega category10
+ * palette as every other chart in the app (Donut, Bar, Line, sector and
+ * per-account series). Index choices: blue/green/yellow track the
+ * canonical money/wealth/cash mental model, purple is reserved for the
+ * tax-advantaged bucket so it stays distinct from blue (taxable). The
+ * per-account stack reuses CHART_PALETTE directly via `paletteAt`.
+ *
+ * Note: these are palette-token hexes — they are theme-stable because
+ * the palette is a single source of truth, but they don't switch with
+ * .dark. Recharts paints SVG fills using hex/HSL strings and Tailwind
+ * class names don't resolve inside `fill=` props, so we read the palette
+ * as static values. Dark-mode legibility is preserved because the area
+ * fillOpacity is 0.25 (the palette tints sit on a near-black canvas).
+ */
+const INVESTMENTS_FILL    = CHART_PALETTE[0]; // blue
+const HOME_EQUITY_FILL    = CHART_PALETTE[4]; // green
+const CASH_FILL           = CHART_PALETTE[5]; // yellow
+const TAX_ADVANTAGED_FILL = CHART_PALETTE[6]; // purple
+const TAXABLE_FILL        = CHART_PALETTE[0]; // blue
+const paletteAt = (i: number) => CHART_PALETTE[i % CHART_PALETTE.length];
 
 export interface ProjectionChartProps {
   scenarios: Scenario[];
@@ -342,7 +365,7 @@ export default function ProjectionChart({
                       name="Investments"
                       stackId="composition"
                       stroke="none"
-                      fill="#4f86f7"
+                      fill={INVESTMENTS_FILL}
                       fillOpacity={0.25}
                       isAnimationActive={false}
                     />
@@ -355,7 +378,7 @@ export default function ProjectionChart({
                         name="Tax-advantaged"
                         stackId="composition"
                         stroke="none"
-                        fill="#9b5de5"
+                        fill={TAX_ADVANTAGED_FILL}
                         fillOpacity={0.25}
                         isAnimationActive={false}
                       />
@@ -365,7 +388,7 @@ export default function ProjectionChart({
                         name="Taxable"
                         stackId="composition"
                         stroke="none"
-                        fill="#4f86f7"
+                        fill={TAXABLE_FILL}
                         fillOpacity={0.25}
                         isAnimationActive={false}
                       />
@@ -382,7 +405,7 @@ export default function ProjectionChart({
                           name={acct.name}
                           stackId="composition"
                           stroke="none"
-                          fill={AREA_COLORS[idx % AREA_COLORS.length]}
+                          fill={paletteAt(idx)}
                           fillOpacity={0.25}
                           isAnimationActive={false}
                         />
@@ -394,7 +417,7 @@ export default function ProjectionChart({
                     name="Home equity"
                     stackId="composition"
                     stroke="none"
-                    fill="#5fbb7c"
+                    fill={HOME_EQUITY_FILL}
                     fillOpacity={0.25}
                     isAnimationActive={false}
                   />
@@ -404,7 +427,7 @@ export default function ProjectionChart({
                     name="Cash"
                     stackId="composition"
                     stroke="none"
-                    fill="#e6b54b"
+                    fill={CASH_FILL}
                     fillOpacity={0.25}
                     isAnimationActive={false}
                   />
@@ -515,7 +538,7 @@ export default function ProjectionChart({
                 <span
                   aria-hidden
                   className="inline-block h-2.5 w-2.5 rounded-sm"
-                  style={{ backgroundColor: AREA_COLORS[idx % AREA_COLORS.length] }}
+                  style={{ backgroundColor: paletteAt(idx) }}
                 />
                 <span className={checked ? '' : 'text-muted-foreground line-through'}>
                   {acct.name}
