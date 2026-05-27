@@ -16,7 +16,7 @@
  * § A.0 "Full draft disclosure copy".
  */
 
-const APP_WIDE_TEXT_v1_1 = `**This app is an educational and personal-tracking tool. It is not financial, investment, tax, legal, or accounting advice.**
+const APP_WIDE_TEXT_v1_2 = `**This app is an educational and personal-tracking tool. It is not financial, investment, tax, legal, or accounting advice.**
 
 The app's developer is not a registered investment advisor, broker-dealer, certified financial planner, CPA, or attorney, and no fiduciary relationship is created by your use of it.
 
@@ -32,7 +32,7 @@ Use of this app is **at your own risk**. The software is provided "as is" withou
 
 **Intended audience — U.S. only.** This software is provided for use by U.S. residents performing personal financial tracking on their own data. It is not localized for any other jurisdiction. Tax brackets, contribution limits, retirement account types, and other reference data reflect U.S. federal and state rules. If you are outside the United States, treat every tax calculation and contribution-limit comparison in this app as illustrative only — they will not match your local rules.
 
-**Governing law.** These terms are governed by the laws of the State of [PLACEHOLDER — fill in the developer's home state before public release], without regard to its conflict-of-laws principles.`;
+**Governing law.** These terms are governed by the laws of the State of New York, without regard to its conflict-of-laws principles.`;
 
 const ROADMAP_TEXT_v1_0 = `**About the Roadmap feature**
 
@@ -64,10 +64,10 @@ export interface DisclosureDocument {
 
 export const DISCLOSURES = {
   app_wide: {
-    version: '1.1',
-    body: APP_WIDE_TEXT_v1_1,
+    version: '1.2',
+    body: APP_WIDE_TEXT_v1_2,
     diffFromPrevious:
-      'Version 1.1 adds three things the previous version was missing: an all-caps UCC § 2-316 conspicuous disclaimer of the implied warranties of merchantability, fitness for a particular purpose, and non-infringement; an explicit U.S.-only intended-audience scope, since the tax brackets and retirement-account types are all U.S.-based; and a governing-law sentence. Please re-read and re-accept.',
+      'Version 1.2 fills in the governing-law clause: it now references the State of New York as the governing law (previously a placeholder string). No other substantive change. Please re-read and re-accept.',
     acceptanceCheckboxLabel:
       'I have read and understand the above. I accept that this app is not financial advice and I use it at my own risk.',
   } satisfies DisclosureDocument,

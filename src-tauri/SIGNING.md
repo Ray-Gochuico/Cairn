@@ -1,47 +1,47 @@
-# macOS code-signing — enrollment, cert, sign, build
+# Distribution & Signing — Cairn (formerly Finance App)
 
-`tauri.conf.json` ships a `bundle.macOS` scaffold with
-`signingIdentity: null` + `hardenedRuntime: true`. Filling in the
-identity is the only edit needed once the steps below are done.
+## Decision
 
-## 1. Enroll in the Apple Developer Program
+This app is distributed **unsigned** via GitHub Releases. No Apple Developer
+Program enrollment ($99/yr) is required. The trade-off: macOS Gatekeeper
+will show an "unidentified developer" warning the first time a friend opens
+the app. Documented workaround in README.
 
-- <https://developer.apple.com/programs/enroll/> — sign in with the
-  Apple ID that should own the cert. $99/yr, ~24–48h review.
-
-## 2. Create a Developer ID Application certificate
-
-- **Xcode → Settings → Accounts → your team → Manage Certificates → +
-  → Developer ID Application**. Xcode stores the private key in your
-  login Keychain.
-- Verify and copy the identity string:
-
-  ```bash
-  security find-identity -v -p codesigning
-  ```
-
-  Format: `Developer ID Application: Your Name (TEAMID)`.
-
-## 3. Wire it into Tauri (one-line edit)
-
-In `tauri.conf.json`, replace `bundle.macOS.signingIdentity`'s `null`
-with that exact string. That is the only required edit.
-
-## 4. Build the signed `.dmg`
+## Build (macOS)
 
 ```bash
 . "$HOME/.cargo/env"
 npm run tauri build
 ```
 
-Output: `src-tauri/target/release/bundle/dmg/`. Verify with
-`codesign --verify --deep --strict --verbose=2 "<built .app>"`.
+Produces under `src-tauri/target/release/bundle/`:
 
-## TODO — Notarization (deferred)
+- `dmg/Cairn_0.1.0_aarch64.dmg` (Apple Silicon)
+- `macos/Cairn.app` (raw bundle, inside the .dmg)
 
-Signing alone produces a `.dmg` that opens cleanly on the developer's
-own Mac. To avoid the "unidentified developer" warning on *other* Macs,
-the bundle must additionally be notarized. Set `APPLE_ID`,
-`APPLE_PASSWORD` (app-specific), and `APPLE_TEAM_ID` env vars and
-`tauri build` runs notarytool automatically. Out of scope for this
-scaffold.
+## How a friend installs (document this in README too)
+
+1. Download `Cairn_0.1.0_aarch64.dmg` from the GitHub Releases page.
+2. Double-click the `.dmg` to mount it.
+3. Drag `Cairn.app` into the `Applications` folder.
+4. First-launch only: **right-click `Cairn.app` → Open → "Open" again** in the
+   Gatekeeper dialog. macOS remembers the approval; subsequent launches are
+   double-click.
+5. Alternative: `xattr -d com.apple.quarantine /Applications/Cairn.app`
+   from Terminal removes the quarantine flag entirely (no right-click needed).
+
+## Cross-target builds
+
+- macOS Intel: `npm run tauri build -- --target x86_64-apple-darwin`
+- Windows: `npm run tauri build -- --target x86_64-pc-windows-msvc` (requires
+  building on Windows; cross-compile not in scope for v1)
+
+## Future: code signing
+
+If/when distribution scales beyond friends, the path is:
+
+1. Enroll in Apple Developer Program ($99/yr)
+2. Issue a Developer ID Application certificate via Xcode or developer.apple.com
+3. Add `signingIdentity: "Developer ID Application: <Name> (<TEAMID>)"`
+   to `bundle.macOS` in `tauri.conf.json`
+4. Notarize via `notarytool` (separate step; outside the build)

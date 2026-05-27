@@ -24,6 +24,44 @@ it may access. Tax reference data is **U.S.-only** and reflects the
 author's best effort at the time of publication; tax law changes
 frequently.
 
+## Install
+
+The app is distributed as an unsigned `.dmg` (Apple Silicon Macs).
+No App Store, no installer — just download, drag, and open.
+
+**Download the latest build:**
+<https://github.com/raymondgochuico/cairn/releases/latest>
+
+Grab the file named `Cairn_<version>_aarch64.dmg`.
+
+**Then:**
+
+1. Double-click the downloaded `.dmg` to mount it.
+2. Drag `Cairn.app` into the `Applications` folder.
+3. Eject the mounted `.dmg` (drag it to the Trash, or right-click → Eject).
+4. **First time only — right-click `Cairn.app` in `Applications`, choose
+   "Open", then click "Open" again in the dialog that appears.** macOS
+   remembers the approval, so every launch after the first one is a normal
+   double-click.
+5. *Alternative* (Terminal one-liner that skips step 4 entirely):
+
+   ```bash
+   xattr -d com.apple.quarantine /Applications/Cairn.app
+   ```
+
+### Why the security warning?
+
+Cairn is distributed **unsigned** because it's a personal-finance side
+project, not commercial software — paying $99/yr for an Apple Developer
+account just so a handful of friends can install it isn't worth it. macOS
+shows a one-time scary "unidentified developer" dialog the first time you
+open any unsigned app from outside the App Store. After approving once, the
+dialog never appears again. The app itself is the same code you can read in
+this repo; nothing is hidden by the signing absence.
+
+If/when Cairn ever scales beyond friends, the build process is set up to
+add code signing in one line — see `src-tauri/SIGNING.md`.
+
 ## Status
 
 Phase 1 complete: app boots, household + persons + dependents are editable and persistent.

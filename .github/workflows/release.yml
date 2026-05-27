@@ -1,0 +1,78 @@
+name: Release
+
+# Build, sign, and publish a Cairn release whenever a v* tag is pushed.
+#
+# REQUIRED SECRETS (set under Settings → Secrets and variables → Actions):
+#   TAURI_UPDATER_PRIVATE_KEY           — base64 minisign private key
+#   TAURI_UPDATER_PRIVATE_KEY_PASSWORD  — only if the key has a password
+#                                         (current key has none — leave unset)
+#
+# If TAURI_UPDATER_PRIVATE_KEY is not set, the build step fails and no
+# release is created. That's intentional — an unsigned update wouldn't
+# verify against the public key shipped in the app.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-macos-arm64:
+    runs-on: macos-14  # Apple Silicon runner
+    permissions:
+      contents: write  # create release + upload assets
+    env:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_UPDATER_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_UPDATER_PRIVATE_KEY_PASSWORD }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Install npm deps
+        run: npm ci
+
+      - name: Build + sign .dmg
+        run: npm run tauri build -- --target aarch64-apple-darwin
+        # tauri-cli reads TAURI_SIGNING_PRIVATE_KEY automatically and writes
+        # a .sig file alongside each bundle artifact.
+
+      - name: Extract version from tag
+        id: ver
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Write latest.json
+        run: |
+          DMG="src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/Cairn_${{ steps.ver.outputs.version }}_aarch64.dmg"
+          SIG=$(cat "${DMG}.sig")
+          cat > latest.json <<EOF
+          {
+            "version": "${{ steps.ver.outputs.version }}",
+            "notes": "Release ${{ github.ref_name }}.",
+            "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "platforms": {
+              "darwin-aarch64": {
+                "signature": "${SIG}",
+                "url": "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Cairn_${{ steps.ver.outputs.version }}_aarch64.dmg"
+              }
+            }
+          }
+          EOF
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Cairn ${{ steps.ver.outputs.version }}
+          files: |
+            src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/Cairn_${{ steps.ver.outputs.version }}_aarch64.dmg
+            src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/Cairn_${{ steps.ver.outputs.version }}_aarch64.dmg.sig
+            latest.json

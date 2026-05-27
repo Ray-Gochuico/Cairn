@@ -3,12 +3,12 @@ import { DISCLOSURES } from '@/legal/disclosures';
 
 describe('DISCLOSURES', () => {
   it('defines an app_wide disclosure with a version + body + checkbox label', () => {
-    expect(DISCLOSURES.app_wide.version).toBe('1.1');
+    expect(DISCLOSURES.app_wide.version).toBe('1.2');
     expect(DISCLOSURES.app_wide.body.length).toBeGreaterThan(200);
     expect(DISCLOSURES.app_wide.acceptanceCheckboxLabel).toMatch(/at my own risk/i);
   });
 
-  it('app_wide v1.1 body adds the UCC § 2-316 implied-warranty disclaimer + US-only scope + governing law', () => {
+  it('app_wide v1.2 body retains the UCC § 2-316 implied-warranty disclaimer + US-only scope + governing law', () => {
     const body = DISCLOSURES.app_wide.body;
     expect(body).toMatch(/MERCHANTABILITY/);
     expect(body).toMatch(/FITNESS FOR A PARTICULAR PURPOSE/);
@@ -17,9 +17,16 @@ describe('DISCLOSURES', () => {
     expect(body).toMatch(/governed by the laws/i);
   });
 
-  it('app_wide v1.1 ships a diffFromPrevious so the re-prompt explains what changed', () => {
+  it('app_wide v1.2 names a concrete governing-law state (no [PLACEHOLDER] leakage)', () => {
+    const body = DISCLOSURES.app_wide.body;
+    expect(body).not.toMatch(/\[PLACEHOLDER/i);
+    expect(body).toMatch(/State of New York/);
+  });
+
+  it('app_wide v1.2 ships a diffFromPrevious so the re-prompt explains what changed', () => {
     expect(DISCLOSURES.app_wide.diffFromPrevious).toBeTruthy();
     expect(DISCLOSURES.app_wide.diffFromPrevious!.length).toBeGreaterThan(40);
+    expect(DISCLOSURES.app_wide.diffFromPrevious).toMatch(/New York/);
   });
 
   it('defines a roadmap disclosure with a version + body + checkbox label', () => {

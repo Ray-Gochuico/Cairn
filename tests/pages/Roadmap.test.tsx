@@ -14,7 +14,9 @@ import { FilingStatus } from '@/types/enums';
 import type { Household } from '@/types/schema';
 
 // Roadmap document is still on v1.0; app_wide bumped to v1.1 in
-// 2026-05-27 to add UCC § 2-316 / US-only / governing-law clauses.
+// 2026-05-27 to add UCC § 2-316 / US-only / governing-law clauses,
+// then to v1.2 to replace the [PLACEHOLDER] string in the governing-
+// law clause with "the State of New York".
 const ACCEPTED_VERSION = '1.0';
 
 function makeHousehold(patch: Partial<Household> = {}): Household {
@@ -29,7 +31,7 @@ function makeHousehold(patch: Partial<Household> = {}): Household {
     inflationAssumption: 0.03,
     growthScenarios: [],
     disclaimerAcceptedAt: '2026-05-01T00:00:00Z',
-    disclaimerVersionAccepted: '1.1',
+    disclaimerVersionAccepted: '1.2',
     roadmapDisclaimerAcceptedAt: null,
     roadmapDisclaimerVersionAccepted: null,
     interestThresholdLowPct: null,
