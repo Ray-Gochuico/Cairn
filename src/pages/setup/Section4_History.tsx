@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
   Dialog,
   DialogContent,
@@ -7,10 +7,17 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import DatePicker from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ImportCsvButton } from '@/components/import/ImportCsvButton';
+import TransactionsSectionImporter from '@/components/setup/TransactionsSectionImporter';
 import EntityCard from './EntityCard';
 import SectionEntryGate from './SectionEntryGate';
 import GoalForm from './forms/GoalForm';
@@ -21,6 +28,7 @@ import { useContributionsStore } from '@/stores/contributions-store';
 import { useGoalsStore } from '@/stores/goals-store';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
+import { useTransactionsStore } from '@/stores/transactions-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
 import {
   AssetSnapshotOwnerType,
@@ -42,8 +50,6 @@ interface Props {
 }
 
 export default function Section4_History({ status, onSetStatus }: Props) {
-  const navigate = useNavigate();
-
   const accounts = useAccountsStore((s) => s.accounts);
   const loadAccounts = useAccountsStore((s) => s.load);
   const snapshots = useSnapshotsStore((s) => s.snapshots);
@@ -62,6 +68,8 @@ export default function Section4_History({ status, onSetStatus }: Props) {
   const loadVehicles = useVehiclesStore((s) => s.load);
   const goals = useGoalsStore((s) => s.goals);
   const loadGoals = useGoalsStore((s) => s.load);
+  const transactions = useTransactionsStore((s) => s.transactions);
+  const loadTransactions = useTransactionsStore((s) => s.load);
   const [dialog, setDialog] = useState<ActiveDialog>(null);
 
   useEffect(() => {
@@ -85,6 +93,9 @@ export default function Section4_History({ status, onSetStatus }: Props) {
   useEffect(() => {
     void loadGoals();
   }, [loadGoals]);
+  useEffect(() => {
+    void loadTransactions();
+  }, [loadTransactions]);
 
   const meta = SECTIONS[3];
 
@@ -124,12 +135,31 @@ export default function Section4_History({ status, onSetStatus }: Props) {
         importEnabled
         importTrigger={<ImportCsvButton entity="contribution" />}
       />
-      <EntityCard
-        title="Transactions"
-        description="Past transactions (CSV or PDF statements). PDF statements and transaction CSVs are imported on the Spending page."
-        count={0}
-        onAddManual={() => navigate('/spending')}
-      />
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">Transactions</CardTitle>
+            <span className="text-xs text-muted-foreground">
+              {transactions.length} added
+            </span>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Backfill past transactions. Statements (PDF) and CSVs are both
+            accepted.
+          </p>
+          <TransactionsSectionImporter />
+          <div className="flex justify-end">
+            <Link
+              to="/spending"
+              className="text-xs text-muted-foreground underline"
+            >
+              Manage on Spending page →
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
       <EntityCard
         title="Goals"
         description="Retirement, education, home, custom."

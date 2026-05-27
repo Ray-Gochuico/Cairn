@@ -1,4 +1,22 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+// TransactionsSectionImporter pulls in the PDF extract + parse pipeline,
+// neither of which works in jsdom. Mock both at the module level so
+// Section 4 can render the importer without booting pdfjs.
+vi.mock('@/pdf/extract', () => ({
+  extractTextItems: vi.fn().mockResolvedValue([]),
+}));
+vi.mock('@/pdf/parse-statement', () => ({
+  parseStatement: vi.fn().mockReturnValue({
+    issuer: 'GENERIC',
+    transactions: [],
+  }),
+}));
+vi.mock('@/lib/statements-archive', () => ({
+  archiveStatementPdf: vi.fn().mockResolvedValue(null),
+  resolveArchivePath: vi.fn(),
+}));
+
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -107,31 +125,21 @@ describe('Section4_History', () => {
     expect(screen.getByText(/^Goals$/)).toBeInTheDocument();
   });
 
-  it('clicking Add manually on the Transactions card navigates to /spending', async () => {
-    const user = userEvent.setup();
+  it('Transactions card embeds the unified PDF/CSV drop zone', () => {
     renderWithRouter();
-    // Five Add manually buttons exist; find the one inside the
-    // Transactions card via its heading.
-    const transactionsHeading = screen.getByText(/^Transactions$/);
-    const transactionsCard = transactionsHeading.closest(
-      'div[class*="rounded"]',
-    );
-    expect(transactionsCard).not.toBeNull();
-    const addBtn = transactionsCard!.querySelector(
-      'button',
-    ) as HTMLButtonElement | null;
-    expect(addBtn).not.toBeNull();
-    // The card has multiple buttons; navigate-trigger is the "Add
-    // manually" one.
-    const buttons = Array.from(
-      (transactionsCard as HTMLElement).querySelectorAll('button'),
-    );
-    const addManually = buttons.find((b) =>
-      /add manually/i.test(b.textContent ?? ''),
-    );
-    expect(addManually).toBeTruthy();
-    await user.click(addManually!);
-    expect(screen.getByText('Spending page')).toBeInTheDocument();
+    const card = findCard(/^Transactions$/);
+    expect(
+      within(card).getByText(/drop pdfs or csvs here/i),
+    ).toBeInTheDocument();
+  });
+
+  it('Transactions card exposes a "Manage on Spending page" link to /spending', () => {
+    renderWithRouter();
+    const card = findCard(/^Transactions$/);
+    const link = within(card).getByRole('link', {
+      name: /manage on spending page/i,
+    });
+    expect(link).toHaveAttribute('href', '/spending');
   });
 
   it('clicking Skip flips status to skipped', async () => {
