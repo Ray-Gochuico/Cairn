@@ -91,33 +91,33 @@ export default function LeverBar() {
           )}
         </Button>
         <Pill k="income"        label="Income" />
-        {/* Task β2 — Contributions pill UX branches on the surplus destination:
+        {/* Contributions pill UX (revamp 2026-05-26 — γ3):
             - segments configured → "Contributions · N" (unchanged)
-            - no segments, destination=investments, amount > 0 → "auto $X/mo" badge
-            - no segments, destination=cash,        amount > 0 → cash-hint Info icon
-            - no segments, amount = 0 → fallback generic Info icon
-            The title attribute carries the discoverable hover copy. */}
+            - no segments + ANY non-cash routing > 0 → "auto $X/mo" badge,
+              where $X is the routed-to-investments amount (tax-adv + brokerage),
+              NOT the full surplus magnitude
+            - no segments + routing is all cash → cash-hint Info icon
+            - no segments + amount = 0 → fallback generic Info icon
+            The title attribute carries the discoverable hover copy describing
+            the per-bucket routing. */}
         {(() => {
           const hasSegments = counts.contributions > 0;
           const hasSurplus = surplus.amount > 0;
-          // Transitional bridge (α3 → γ3): the surplus now exposes a per-bucket
-          // breakdown rather than a 'cash'|'investments' destination tag. We
-          // surface the auto-invest badge whenever ANY non-cash routing is
-          // configured; the cash-hint icon when everything flows to cash.
-          // γ3 will rewrite the rendered copy to be per-bucket aware.
           const routedToInvestments = surplus.taxAdvantaged + surplus.brokerage;
           const showAutoInvestBadge =
             !hasSegments && hasSurplus && routedToInvestments > 0;
           const showCashHint =
             !hasSegments && hasSurplus && routedToInvestments === 0;
           const showFallbackIcon = !hasSegments && !hasSurplus;
-          const formattedAmount = formatCompactCurrency(surplus.amount);
+          const formattedInvestAmount = formatCompactCurrency(routedToInvestments);
+          const formattedSurplusAmount = formatCompactCurrency(surplus.amount);
+          const formattedCashAmount = formatCompactCurrency(surplus.cash);
           const pillTitle = hasSegments
             ? undefined
             : showAutoInvestBadge
-            ? `Monthly surplus of ${formattedAmount} auto-invests when no segments are active`
+            ? `Monthly surplus of ${formattedSurplusAmount} routes to ${formattedInvestAmount} investments + ${formattedCashAmount} cash`
             : showCashHint
-            ? 'Surplus is going to cash. Add a segment to invest.'
+            ? 'Surplus is going to cash. Configure gap allocation in the Income lever to invest some.'
             : 'Monthly surplus accumulates here when no segments are active';
           return (
             <Button
@@ -136,7 +136,7 @@ export default function LeverBar() {
                   className="text-xs text-muted-foreground font-normal"
                 >
                   {' · auto '}
-                  {formattedAmount}/mo
+                  {formattedInvestAmount}/mo
                 </span>
               )}
               {showCashHint && (

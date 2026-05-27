@@ -276,6 +276,29 @@ describe('LeverBar — Contributions pill (Task β2: branched by surplus destina
     expect(screen.getByLabelText(/contributions/i).textContent).toContain('· 1');
   });
 
+  it('badge surfaces ROUTED-TO-INVESTMENTS amount, not the full surplus (revamp γ3)', () => {
+    // Revamp 2026-05-26 — the per-bucket mock routes the full
+    // autoInvestPreviewValue into brokerage when destination='investments',
+    // so the badge surfaces $X = the brokerage amount = autoInvestPreviewValue.
+    // (A mixed 50/50 cash/brokerage case is covered by the per-bucket
+    // breakdown test below.)
+    contributionsPayload = [];
+    autoInvestPreviewValue = 1500;
+    surplusDestination = 'investments';
+    render(<LeverBar />);
+    const badge = screen.getByTestId('contributions-auto-invest-badge');
+    expect(badge.textContent).toContain('$1.5k');
+  });
+
+  it('pill title surfaces the per-bucket routing copy (revamp γ3)', () => {
+    contributionsPayload = [];
+    autoInvestPreviewValue = 1500;
+    surplusDestination = 'investments';
+    render(<LeverBar />);
+    const pill = screen.getByLabelText(/contributions/i);
+    expect(pill.getAttribute('title')).toMatch(/surplus.*routes/i);
+  });
+
   it('renders nothing for the pill region when there is no active scenario (early-return branch)', () => {
     activeScenarioId = null;
     autoInvestPreviewValue = 4500;
