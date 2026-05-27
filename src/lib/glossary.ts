@@ -263,6 +263,114 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     fullDefinition:
       'Textbook tax-efficient sequencing — keeps tax-advantaged accounts compounding longer and gives more room for Roth-conversion-ladder planning. The alternative is proportional withdrawal, which pulls from every account in proportion to balance.',
   },
+
+  // ─── Calculator + paycheck terms ──────────────────────────────────────
+  'PRETAX 401(K)': {
+    term: 'Pretax 401(k)',
+    shortDefinition:
+      'The portion of your paycheck routed into a traditional 401(k) before income tax is withheld.',
+    fullDefinition:
+      'Lowers your taxable income now; the money + growth are taxed as ordinary income when you withdraw in retirement.',
+  },
+  'PRETAX DCFSA': {
+    term: 'Pretax DCFSA',
+    shortDefinition:
+      'The portion of your paycheck routed into a Dependent Care FSA before tax is withheld — used for daycare, summer camp, etc.',
+  },
+  'PRETAX HSA': {
+    term: 'Pretax HSA',
+    shortDefinition:
+      'The portion of your paycheck routed into a Health Savings Account before tax is withheld (HDHP enrollees only).',
+  },
+  'EARLY-WITHDRAWAL PENALTY': {
+    term: 'Early-withdrawal penalty',
+    shortDefinition:
+      'An extra 10% federal tax on retirement-account withdrawals taken before age 59½.',
+    fullDefinition:
+      'Applies on top of regular income tax. Limited exceptions exist (separation from service at 55, hardship, SEPP/72(t)) but the default rule is: < 59½ → +10%.',
+  },
+  AGI: {
+    term: 'AGI',
+    shortDefinition:
+      'Adjusted Gross Income — your total income minus a handful of above-the-line deductions (401k, HSA, etc.).',
+  },
+  MAGI: {
+    term: 'MAGI',
+    shortDefinition:
+      'Modified AGI — your AGI plus a few add-backs (foreign-earned-income exclusion, etc.). Used as the threshold for Roth IRA contributions, NIIT, IRMAA, etc.',
+  },
+
+  // ─── What-If chart / lever copy ───────────────────────────────────────
+  SURPLUS: {
+    term: 'Surplus (gap)',
+    shortDefinition:
+      "Money left over each month after expenses and loan payments — what's available to invest or save.",
+    fullDefinition:
+      'Sometimes called "the gap" — gap allocation routes this surplus into tax-advantaged accounts, brokerage, and/or cash.',
+  },
+  'DROP DEAD BASELINE': {
+    term: 'Drop dead baseline',
+    shortDefinition:
+      "Your minimum monthly spending — what you'd cut to if income disappeared (rent, food, utilities, healthcare).",
+    fullDefinition:
+      'The floor used in worst-case scenario modelling. Useful for deciding how much liquid cash counts as an emergency fund.',
+  },
+  'SALARY TRAJECTORY': {
+    term: 'Salary trajectory',
+    shortDefinition:
+      'Your projected year-over-year salary path including raises, promotions, job changes, and any sabbatical or cut events.',
+  },
+  'PER ACCOUNT': {
+    term: 'Per account',
+    shortDefinition:
+      "A projection chart detail mode that draws one line per investment account, so you can see each account's trajectory separately.",
+  },
+  'NOMINAL VS REAL': {
+    term: 'Nominal vs Real',
+    shortDefinition:
+      'Nominal dollars are today\'s sticker amounts; real dollars discount future amounts back to today\'s purchasing power using inflation.',
+  },
+
+  // ─── Settings: Advanced ───────────────────────────────────────────────
+  APY: {
+    term: 'APY',
+    shortDefinition:
+      'Annual Percentage Yield — the effective annual return after compounding is applied. Use this (not APR) when comparing savings/CD rates.',
+  },
+  'COMPOUNDING FREQUENCY': {
+    term: 'Compounding frequency',
+    shortDefinition:
+      'How often returns are reinvested (daily, monthly, quarterly, annually). Higher frequency yields a slightly higher effective return for the same nominal rate.',
+  },
+  'PROJECTION DETAIL LEVEL': {
+    term: 'Projection detail level',
+    shortDefinition:
+      'How the projection chart slices your investments: a single line, three lines by tax bucket, or one line per account.',
+  },
+
+  // ─── Roadmap section titles ───────────────────────────────────────────
+  IRA: {
+    term: 'IRA',
+    shortDefinition:
+      'Individual Retirement Account — a tax-advantaged account you fund yourself (separate from a workplace 401(k)).',
+  },
+  'AFTER-TAX & TAXABLE': {
+    term: 'After-Tax & Taxable',
+    shortDefinition:
+      'The "taxable brokerage" tier — money already taxed as wages; sales realize capital gains.',
+  },
+
+  // ─── Sidebar nav terms (proper-noun, do not rename) ───────────────────
+  TICKERS: {
+    term: 'Tickers',
+    shortDefinition:
+      'The short symbols used to identify stocks, ETFs, and mutual funds on an exchange (e.g., VTI, AAPL, VOO).',
+  },
+  'GROWTH & TAX': {
+    term: 'Growth & Tax',
+    shortDefinition:
+      'The Inputs page where you tune assumptions about long-term growth rates and tax-rule schedules used by every projection.',
+  },
 };
 
 /**

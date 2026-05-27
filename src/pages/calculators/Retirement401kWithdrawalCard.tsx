@@ -7,6 +7,7 @@ import { calculate401kWithdrawalTax } from '@/lib/tax';
 import { getCurrentTaxYear } from '@/lib/current-tax-year';
 import { formatCurrency, formatPercent } from '@/lib/format';
 import { Input } from '@/components/ui/input';
+import { TermTooltip } from '@/components/ui/glossary-tooltip';
 
 interface Retirement401kWithdrawalCardProps {
   cardId?: string;
@@ -256,7 +257,9 @@ export function Retirement401kWithdrawalCard({
             </span>
           </div>
           <div className="flex justify-between">
-            <span>FICA</span>
+            <span>
+              <TermTooltip term="FICA" />
+            </span>
             <span className="tabular-nums text-muted-foreground">
               N/A on 401k withdrawals
             </span>
@@ -266,7 +269,11 @@ export function Retirement401kWithdrawalCard({
               earlyPenaltyApplies ? 'text-destructive' : ''
             }`}
           >
-            <span>Early-withdrawal penalty (10% if &lt; 59½)</span>
+            <span>
+              <TermTooltip term="Early-withdrawal penalty">
+                Early-withdrawal penalty (10% if &lt; 59½)
+              </TermTooltip>
+            </span>
             <span className="tabular-nums">
               {formatCurrency(breakdown.earlyWithdrawalPenalty)}
             </span>

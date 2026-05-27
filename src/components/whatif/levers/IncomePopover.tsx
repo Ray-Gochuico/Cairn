@@ -15,6 +15,7 @@ import { computeTotalTax } from '@/lib/tax';
 import { taxBucketForAccount } from '@/lib/account-tax-classification';
 import { monthlyExpenseFromPeriods } from '@/lib/scenarios/apply-real';
 import { GapAllocationEditor } from './GapAllocationEditor';
+import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import type {
   GapAllocation,
   PersonIncomePlan,
@@ -275,7 +276,15 @@ export default function IncomePopover({ open, onOpenChange }: Props) {
             <span>After-tax income:</span><span>{formatCurrency(householdAfterTaxMonthly)}</span>
             <span>Expenses:</span><span>−{formatCurrency(currentExpensesMonthly)}</span>
             <span>Loan payments:</span><span>−{formatCurrency(currentLoansMonthly)}</span>
-            <span className="font-medium border-t pt-1">{isShortfall ? 'Shortfall:' : 'Surplus (gap):'}</span>
+            <span className="font-medium border-t pt-1">
+              {isShortfall ? (
+                'Shortfall:'
+              ) : (
+                <>
+                  <TermTooltip term="Surplus (gap)">Surplus (gap)</TermTooltip>:
+                </>
+              )}
+            </span>
             <span data-testid="income-monthly-gap" className="font-medium border-t pt-1">
               {isShortfall ? '−' : ''}{formatCurrency(Math.abs(rawGap))} / mo
             </span>
@@ -406,7 +415,9 @@ export default function IncomePopover({ open, onOpenChange }: Props) {
         </div>
 
         <div className="pt-3 border-t" data-testid="income-trajectory-preview">
-          <div className="text-xs font-medium mb-1 text-muted-foreground">Salary trajectory ({trajectory[0]?.year} – {trajectory[trajectory.length - 1]?.year})</div>
+          <div className="text-xs font-medium mb-1 text-muted-foreground">
+            <TermTooltip term="Salary trajectory">Salary trajectory</TermTooltip> ({trajectory[0]?.year} – {trajectory[trajectory.length - 1]?.year})
+          </div>
           <ul className="grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-1 text-xs">
             {trajectory.map((p) => (
               <li key={p.year} className="tabular-nums">

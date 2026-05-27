@@ -9,6 +9,7 @@ import { formatCurrency } from '@/lib/format';
 import { Input } from '@/components/ui/input';
 import { CONTRIBUTION_LIMITS_2026 } from '@/lib/contribution-limits';
 import { getCurrentTaxYear } from '@/lib/current-tax-year';
+import { TermTooltip } from '@/components/ui/glossary-tooltip';
 
 type CommissionFrequency = 'MONTHLY' | 'QUARTERLY';
 
@@ -227,7 +228,9 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
           </div>
         </div>
         <div>
-          <div className="text-muted-foreground">FICA</div>
+          <div className="text-muted-foreground">
+            <TermTooltip term="FICA" />
+          </div>
           <div className="font-medium tabular-nums">
             {formatCurrency(result.bonusBreakdown.fica / periods)}
           </div>

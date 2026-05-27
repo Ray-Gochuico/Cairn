@@ -29,6 +29,20 @@ const SECTION_TITLES: Record<(typeof SECTIONS)[number], string> = {
 };
 
 /**
+ * Optional glossary key per section. When set, the SectionCard header
+ * carries a native `title` attribute sourced from src/lib/glossary.ts —
+ * matches the Sidebar pattern (proper-noun label visible, hover/tap reveals
+ * a short definition). HSA, IRA, and After-Tax & Taxable carry hints;
+ * the wordier "Employer Match & Emergency Fund" / "Additional Savings"
+ * are self-explanatory.
+ */
+const SECTION_GLOSSARY: Partial<Record<(typeof SECTIONS)[number], string>> = {
+  3: 'HSA',
+  4: 'IRA',
+  6: 'After-Tax & Taxable',
+};
+
+/**
  * Roadmap page. Wraps the actual content behind a roadmap-specific
  * disclosure gate so a user who has accepted the app-wide disclaimer
  * still has to opt into the educational chart's caveats before they see
@@ -125,6 +139,7 @@ export default function Roadmap() {
           key={s}
           section={s}
           title={SECTION_TITLES[s]}
+          glossaryTerm={SECTION_GLOSSARY[s]}
           nodes={NODES.filter((n) => n.section === s)}
           results={results}
           ctx={ctx}

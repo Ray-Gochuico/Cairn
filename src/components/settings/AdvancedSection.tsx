@@ -10,6 +10,7 @@ import { useCategoriesStore } from '@/stores/categories-store';
 import { CategoryMultiSelect } from '@/components/categories/CategoryMultiSelect';
 import { FiPillsPosition, ProjectionDetailLevel, CompoundingFrequency } from '@/types/enums';
 import { ResetDisclaimersDialog } from './ResetDisclaimersDialog';
+import { TermTooltip } from '@/components/ui/glossary-tooltip';
 
 /**
  * Settings → Advanced. Collapsed by default to keep the section
@@ -290,7 +291,12 @@ export function AdvancedSection() {
               </select>
             </div>
             <div className="pt-1">
-              <Label htmlFor="default-projection-detail-level">Projection detail level</Label>
+              <div className="flex items-center gap-1">
+                <Label htmlFor="default-projection-detail-level">Projection detail level</Label>
+                <TermTooltip term="Projection detail level">
+                  <span className="sr-only">Projection detail level</span>
+                </TermTooltip>
+              </div>
               <select
                 id="default-projection-detail-level"
                 aria-label="Projection detail level"
@@ -304,7 +310,12 @@ export function AdvancedSection() {
               </select>
             </div>
             <div className="pt-1">
-              <Label htmlFor="default-cash-apy">Default cash APY (%)</Label>
+              <div className="flex items-center gap-1">
+                <Label htmlFor="default-cash-apy">Default cash APY (%)</Label>
+                <TermTooltip term="APY">
+                  <span className="sr-only">APY</span>
+                </TermTooltip>
+              </div>
               <Input
                 id="default-cash-apy"
                 type="number"
@@ -327,7 +338,12 @@ export function AdvancedSection() {
               </div>
             )}
             <div className="pt-1">
-              <Label htmlFor="default-compounding-frequency">Default compounding frequency</Label>
+              <div className="flex items-center gap-1">
+                <Label htmlFor="default-compounding-frequency">Default compounding frequency</Label>
+                <TermTooltip term="Compounding frequency">
+                  <span className="sr-only">Compounding frequency</span>
+                </TermTooltip>
+              </div>
               <select
                 id="default-compounding-frequency"
                 aria-label="Default compounding frequency"

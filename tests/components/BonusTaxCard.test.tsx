@@ -183,9 +183,35 @@ describe('BonusTaxCard', () => {
     fireEvent.change(input, { target: { value: '10000' } });
     await screen.findByTestId('bonus-takehome');
     expect(screen.getByText(/Federal on bonus/i)).toBeInTheDocument();
-    expect(screen.getByText(/FICA on bonus/i)).toBeInTheDocument();
+    // FICA is wrapped in a TermTooltip (R7a glossary coverage), so the
+    // div text becomes "FICA ⓘ on bonus" — split + an info-icon character.
+    // Strip the ⓘ before matching.
+    const matches = screen.queryAllByText(
+      (_, el) => {
+        if (!el) return false;
+        const txt = (el.textContent ?? '')
+          .replace(/[\u{2400}-\u{FFFD}]/gu, '') // strip glyphs incl. ⓘ
+          .toLowerCase()
+          .replace(/\s+/g, ' ')
+          .trim();
+        return txt === 'fica on bonus';
+      },
+    );
+    expect(matches.length).toBeGreaterThan(0);
     expect(screen.getByText(/State on bonus/i)).toBeInTheDocument();
-    expect(screen.getByText(/Marginal rate/i)).toBeInTheDocument();
+    // "Marginal rate" is also TermTooltip-wrapped; verify via textContent.
+    const marginalMatches = screen.queryAllByText(
+      (_, el) => {
+        if (!el) return false;
+        const txt = (el.textContent ?? '')
+          .replace(/[\u{2400}-\u{FFFD}]/gu, '')
+          .toLowerCase()
+          .replace(/\s+/g, ' ')
+          .trim();
+        return txt === 'marginal rate';
+      },
+    );
+    expect(marginalMatches.length).toBeGreaterThan(0);
   });
 
   it('shows Quarterly frequency and adjusts annual bonus total', async () => {
