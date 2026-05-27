@@ -140,8 +140,10 @@ describe('NextMoveCard', () => {
     // engine's small-EF rule still goes active (cash=0 < target=1000)
     // and tracking is active too. Both will end up in the same hero
     // selection since hero picks the lowest-section active node.
-    // We assert the card renders SOMETHING with the next-move header
-    // — that's the contract.
-    expect(screen.getAllByText(/your next move/i).length).toBeGreaterThan(0);
+    // We assert the card renders SOMETHING with the suggested-next-step
+    // header — that's the contract. (Header copy was rephrased from
+    // "Your next move" to "Suggested next step" in W7-Legal R-LWI-3 to
+    // avoid framing the heuristic suggestion as a personal recommendation.)
+    expect(screen.getAllByText(/suggested next step/i).length).toBeGreaterThan(0);
   });
 });

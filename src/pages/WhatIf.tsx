@@ -283,6 +283,47 @@ export default function WhatIf() {
 
       <MilestoneStrip scenarios={scenarios} milestones={milestones} />
 
+      {/*
+        Page-level projection footnote — surfaces three modeling
+        omissions specific to long-horizon What-If projections.
+        See W7-Legal R-LWI-4. Full disclosures live in
+        Settings → Disclosures.
+      */}
+      <footer
+        className="text-xs text-muted-foreground space-y-1 pt-2 border-t border-border/50"
+        data-testid="whatif-projection-footnote"
+      >
+        <div className="font-medium text-foreground/80">
+          What this projection doesn&rsquo;t model:
+        </div>
+        <ul className="list-disc pl-5 space-y-1">
+          <li>
+            <span className="font-medium">Sequence-of-returns risk</span> —
+            the engine compounds returns deterministically. Real-world
+            retirement outcomes can differ significantly under poor
+            early-retirement market years.
+          </li>
+          <li>
+            <span className="font-medium">
+              Medicare premiums + IRMAA surcharges
+            </span>{' '}
+            — retirement-year tax projections omit Medicare-related costs
+            that can add $2k&ndash;$8k/yr per person at higher MAGI tiers.
+          </li>
+          <li>
+            <span className="font-medium">
+              Roth-conversion ladder timing
+            </span>{' '}
+            — the 5-year seasoning rule on converted amounts is not
+            enforced; early withdrawals from converted balances may
+            trigger penalties not reflected here.
+          </li>
+        </ul>
+        <div className="pt-1">
+          See Settings &rarr; Disclosures for full model assumptions.
+        </div>
+      </footer>
+
       {manageOpen && (
         <ManageScenariosModal
           milestones={milestones}

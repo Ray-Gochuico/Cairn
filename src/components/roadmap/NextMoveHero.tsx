@@ -8,6 +8,10 @@ import type { NodeId, NodeResult } from '@/types/roadmap';
  * the first `active` node in section order; falls back to a "caught up"
  * card when nothing is active. Reused by the Dashboard's `<NextMoveCard />`
  * in Sub-Plan D.
+ *
+ * Label intentionally reads "Suggested next step" (not "Your next move")
+ * so users see the hero as a heuristic suggestion derived from inputs,
+ * not a personalized recommendation. See W7-Legal R-LWI-3.
  */
 export function NextMoveHero({ results }: { results: ReadonlyMap<NodeId, NodeResult> }) {
   const sorted = [...NODES].sort((a, b) => a.section - b.section);
@@ -17,7 +21,7 @@ export function NextMoveHero({ results }: { results: ReadonlyMap<NodeId, NodeRes
     return (
       <Card className="p-4 bg-success-soft border-success/30">
         <div className="text-xs uppercase text-success-foreground tracking-wider">
-          Your next move
+          Suggested next step
         </div>
         <div className="text-lg font-semibold mt-1">You&rsquo;re caught up</div>
         <div className="text-sm text-muted-foreground mt-1">
@@ -31,7 +35,7 @@ export function NextMoveHero({ results }: { results: ReadonlyMap<NodeId, NodeRes
   return (
     <Card className="p-4 bg-info-soft border-info/30">
       <div className="text-xs uppercase text-info-foreground tracking-wider">
-        Your next move
+        Suggested next step
       </div>
       <div className="text-lg font-semibold mt-1">{active.title}</div>
       {result.evidence && (

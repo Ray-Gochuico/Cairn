@@ -44,6 +44,25 @@ describe('OverrideDialog', () => {
     expect(screen.getByRole('radio', { name: /^skipped/i })).toBeInTheDocument();
   });
 
+  it('renders the warning explaining override semantics (W7-Legal R-LWI-5)', () => {
+    render(
+      <OverrideDialog
+        node={makeNode()}
+        open
+        onOpenChange={vi.fn()}
+      />,
+    );
+    // The warning sits above the radio fieldset and explains that an
+    // override pins a status against the engine's mechanical reading
+    // and persists until cleared.
+    expect(
+      screen.getByText(/pinning a status against the engine.s mechanical reading/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/persists until you clear it/i),
+    ).toBeInTheDocument();
+  });
+
   it('writes the chosen status + note via the overrides store on Save', async () => {
     const onOpenChange = vi.fn();
     render(

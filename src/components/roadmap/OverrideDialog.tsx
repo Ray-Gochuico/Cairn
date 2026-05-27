@@ -73,6 +73,11 @@ export function OverrideDialog({ node, open, onOpenChange }: Props) {
           <DialogDescription>{node.title}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            By overriding, you&rsquo;re pinning a status against the
+            engine&rsquo;s mechanical reading. Your override persists until
+            you clear it.
+          </p>
           <fieldset className="space-y-2">
             <legend className="text-xs uppercase text-slate-500 tracking-wider">
               New status

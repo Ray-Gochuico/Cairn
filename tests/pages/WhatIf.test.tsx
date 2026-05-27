@@ -277,3 +277,55 @@ describe('WhatIf — FI pills layout', () => {
     ).toBeTruthy();
   });
 });
+
+describe('WhatIf — projection footnote (W7-Legal R-LWI-4)', () => {
+  beforeEach(() => {
+    setPosition(FiPillsPosition.ABOVE);
+  });
+
+  it('renders the page-level footnote naming the three modeling omissions', () => {
+    render(
+      <MemoryRouter>
+        <WhatIf />
+      </MemoryRouter>,
+    );
+    const footnote = screen.getByTestId('whatif-projection-footnote');
+    expect(footnote).toBeInTheDocument();
+    // Heading line.
+    expect(
+      within(footnote).getByText(/what this projection doesn.t model/i),
+    ).toBeInTheDocument();
+    // Three bullets: sequence-of-returns risk, Medicare/IRMAA, Roth ladder.
+    expect(
+      within(footnote).getByText(/sequence-of-returns risk/i),
+    ).toBeInTheDocument();
+    expect(
+      within(footnote).getByText(/IRMAA/i),
+    ).toBeInTheDocument();
+    expect(
+      within(footnote).getByText(/Roth-conversion ladder timing/i),
+    ).toBeInTheDocument();
+    expect(
+      within(footnote).getByText(/5-year seasoning rule/i),
+    ).toBeInTheDocument();
+    // Pointer to full disclosures.
+    expect(
+      within(footnote).getByText(/full model assumptions/i),
+    ).toBeInTheDocument();
+  });
+
+  it('renders the footnote after the milestone strip in DOM order', () => {
+    render(
+      <MemoryRouter>
+        <WhatIf />
+      </MemoryRouter>,
+    );
+    const wrap = screen.getByTestId('whatif-page-wrap');
+    const milestoneStrip = within(wrap).getByTestId('milestone-strip-stub');
+    const footnote = within(wrap).getByTestId('whatif-projection-footnote');
+    expect(
+      milestoneStrip.compareDocumentPosition(footnote) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+});
