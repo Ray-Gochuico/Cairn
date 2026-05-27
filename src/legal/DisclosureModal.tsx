@@ -101,6 +101,12 @@ export function DisclosureModal({
   return (
     <Dialog open onOpenChange={handleOpenChange}>
       <DialogContent
+        // Wave-5 frontend A+ #4: explicit aria-modal. Radix infers this via
+        // role="dialog" + portal-and-focus-trap, but older AT (VoiceOver
+        // <=12, some Windows narrator builds, JAWS in browse mode) reads
+        // the inferred value inconsistently. Setting it explicitly closes
+        // the gap with no behavior change for modern AT.
+        aria-modal="true"
         // Hide the shadcn-default close ("X") button: it's the last child
         // of <DialogContent>. Composition is keyboard-friendly + the
         // explicit Cancel/Continue buttons remain the only acceptance

@@ -16,7 +16,7 @@ export function ImportPreviewTable({ state }: Props) {
   return (
     <div className="border rounded overflow-hidden">
       <table className="w-full text-sm">
-        <thead className="bg-slate-50 text-xs uppercase text-slate-600">
+        <thead className="bg-muted text-xs uppercase text-muted-foreground">
           <tr>
             <th className="px-3 py-2 text-left w-20">Status</th>
             <th className="px-3 py-2 text-left">Account</th>

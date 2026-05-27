@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -35,7 +36,7 @@ function deltaClass(tone: MetricCardTone | undefined): string {
   }
 }
 
-export default function MetricCard({
+function MetricCardImpl({
   label,
   value,
   delta,
@@ -120,3 +121,14 @@ export default function MetricCard({
   }
   return card;
 }
+
+// Wave-5 frontend A+ #3: memo wraps a pure render that only depends on
+// preformatted-string props. Dashboard renders 5+ pills per render; if the
+// parent re-renders for another reason (any pill stat changing, filter
+// toggle, etc.) the unchanged pills should skip reconciliation. Props are
+// primitives + a single optional string, so React.memo's default shallow
+// compare is sufficient.
+const MetricCard = memo(MetricCardImpl);
+MetricCard.displayName = 'MetricCard';
+
+export default MetricCard;

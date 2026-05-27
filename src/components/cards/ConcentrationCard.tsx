@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangleIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -20,7 +21,7 @@ function severityColor(severity: 'HIGH' | 'MEDIUM' | 'LOW'): string {
   }
 }
 
-export function ConcentrationCard() {
+function ConcentrationCardImpl() {
   const report = useConcentration();
   const count = report.warnings.length;
 
@@ -66,3 +67,12 @@ export function ConcentrationCard() {
     </Card>
   );
 }
+
+// Wave-5 frontend A+ #3: takes no props and its render is driven entirely by
+// the useConcentration hook's memoized result, so a parent re-render (any
+// other Dashboard pill changing, etc.) shouldn't recompute the card. The
+// hook itself short-circuits when its upstream stores haven't changed.
+const ConcentrationCardMemo = memo(ConcentrationCardImpl);
+ConcentrationCardMemo.displayName = 'ConcentrationCard';
+
+export { ConcentrationCardMemo as ConcentrationCard };

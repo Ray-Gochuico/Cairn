@@ -3,6 +3,7 @@ import { useStore } from 'zustand';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -267,19 +268,19 @@ export function ImportPreviewModal({
       <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          {queuePosition && queuePosition.total > 1 && (
-            <div className="text-xs text-muted-foreground">
-              File {queuePosition.current} of {queuePosition.total}
-            </div>
-          )}
-          <div className="text-xs text-slate-500">
+          <DialogDescription>
+            {queuePosition && queuePosition.total > 1 ? (
+              <>
+                File {queuePosition.current} of {queuePosition.total} ·{' '}
+              </>
+            ) : null}
             {parsed.rows.length} rows parsed
             {parsed.errors.length > 0 && (
               <span className="text-destructive ml-2">
                 · {parsed.errors.length} lines could not be parsed
               </span>
             )}
-          </div>
+          </DialogDescription>
         </DialogHeader>
 
         {parsed.errors.length > 0 && (

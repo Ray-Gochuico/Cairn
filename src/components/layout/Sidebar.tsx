@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { memo, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -16,6 +16,7 @@ import {
   GitBranch,
   PenSquare,
   Settings as SettingsIcon,
+  type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -68,6 +69,50 @@ export const DEFAULT_SECTIONS: SidebarSectionShape[] = [
   },
 ];
 
+interface SidebarLinkProps {
+  to: string;
+  label: string;
+  icon: LucideIcon;
+  glossaryTerm?: string;
+}
+
+/**
+ * Wave-5 frontend A+ #3: a memoized navigation link. Its props are
+ * effectively stable across re-renders (the `to`/`label`/`icon` for every
+ * sidebar item come from the static DEFAULT_SECTIONS constant or a
+ * persisted layout); the only thing that changes on route nav is the
+ * NavLink's internal `isActive`, which react-router handles inside this
+ * component. Memo-ing means that when the surrounding Sidebar re-renders
+ * (e.g. settings store update for an unrelated field), the 14 sidebar
+ * links don't all reconcile.
+ */
+const SidebarLink = memo(function SidebarLink({
+  to,
+  label,
+  icon: Icon,
+  glossaryTerm,
+}: SidebarLinkProps) {
+  const entry = glossaryTerm ? getGlossaryEntry(glossaryTerm) : null;
+  return (
+    <NavLink
+      to={to}
+      end={to === '/'}
+      title={entry ? entry.shortDefinition : undefined}
+      className={({ isActive }) =>
+        cn(
+          'flex items-center gap-2 px-3 py-2 rounded-md text-sm transition',
+          isActive
+            ? 'bg-primary/10 text-primary font-medium'
+            : 'hover:bg-accent text-foreground'
+        )
+      }
+    >
+      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+      <span>{label}</span>
+    </NavLink>
+  );
+});
+
 export default function Sidebar() {
   const layout = useSettingsStore((s) => s.settings?.sidebarLayout ?? null);
   const load = useSettingsStore((s) => s.load);
@@ -88,29 +133,15 @@ export default function Sidebar() {
           <div className="px-3 pt-3 pb-1 text-xs uppercase tracking-wider text-muted-foreground">
             {s.label}
           </div>
-          {s.items.map((i) => {
-            const entry = i.glossaryTerm ? getGlossaryEntry(i.glossaryTerm) : null;
-            const Icon = i.icon;
-            return (
-              <NavLink
-                key={i.to}
-                to={i.to}
-                end={i.to === '/'}
-                title={entry ? entry.shortDefinition : undefined}
-                className={({ isActive }) =>
-                  cn(
-                    'flex items-center gap-2 px-3 py-2 rounded-md text-sm transition',
-                    isActive
-                      ? 'bg-primary/10 text-primary font-medium'
-                      : 'hover:bg-accent text-foreground'
-                  )
-                }
-              >
-                <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                <span>{i.label}</span>
-              </NavLink>
-            );
-          })}
+          {s.items.map((i) => (
+            <SidebarLink
+              key={i.to}
+              to={i.to}
+              label={i.label}
+              icon={i.icon}
+              glossaryTerm={i.glossaryTerm}
+            />
+          ))}
         </div>
       ))}
     </aside>

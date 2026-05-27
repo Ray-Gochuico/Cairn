@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -54,18 +55,16 @@ export function ResetDisclaimersDialog({ open, onOpenChange }: Props) {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Reset disclaimer acceptances?</DialogTitle>
+          <DialogDescription>
+            Clears your accepted-version flags. The app-wide disclaimer will
+            reappear on next launch; the Roadmap disclaimer will reappear
+            next time you open the Roadmap.
+          </DialogDescription>
         </DialogHeader>
-        <div className="text-sm text-slate-700 space-y-2">
-          <p>
-            This clears your accepted-version flags. The app-wide
-            disclaimer will reappear on next launch; the Roadmap
-            disclaimer will reappear next time you open the Roadmap.
-          </p>
-          <p className="text-xs text-slate-500">
-            The audit log of past acceptances is preserved — only the
-            fast-path cache is cleared.
-          </p>
-        </div>
+        <p className="text-xs text-muted-foreground">
+          The audit log of past acceptances is preserved — only the
+          fast-path cache is cleared.
+        </p>
         {error && (
           <div className="text-xs text-destructive" role="alert">
             {error}

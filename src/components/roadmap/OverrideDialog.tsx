@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -69,9 +70,9 @@ export function OverrideDialog({ node, open, onOpenChange }: Props) {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Override status</DialogTitle>
+          <DialogDescription>{node.title}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <div className="text-sm text-slate-600">{node.title}</div>
           <fieldset className="space-y-2">
             <legend className="text-xs uppercase text-slate-500 tracking-wider">
               New status

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -63,10 +64,10 @@ export function MarkReimbursedDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Mark as reimbursed</DialogTitle>
+          <DialogDescription>
+            {transaction.merchant} — ${transaction.amount.toFixed(2)}
+          </DialogDescription>
         </DialogHeader>
-        <p className="text-sm text-muted-foreground">
-          {transaction.merchant} — ${transaction.amount.toFixed(2)}
-        </p>
         <div className="space-y-3 py-2">
           <div>
             <Label htmlFor="reimbursed-amount">Reimbursed amount</Label>
