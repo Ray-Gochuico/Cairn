@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import EquityGrantForm, { DEFAULT_EQUITY_GRANT } from '@/components/forms/EquityGrantForm';
 import { formatCurrency } from '@/lib/format';
+import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 
 export default function EquityGrantsTab() {
   const { equityGrants, load, create, update, remove } = useEquityGrantsStore();
@@ -88,7 +89,10 @@ export default function EquityGrantsTab() {
 
   return (
     <div className="p-6 max-w-3xl">
-      <h2 className="text-2xl font-semibold mb-1">Equity grants</h2>
+      <div className="flex items-start justify-between mb-1">
+        <h2 className="text-2xl font-semibold">Equity grants</h2>
+        <ImportCsvButton entity="equity_grant" />
+      </div>
       <p className="text-sm text-muted-foreground mb-6">
         RSUs, options, and other equity awards with their vesting schedules. Drives the Equity
         Grants page and net worth calculations.

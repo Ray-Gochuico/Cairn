@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AddAnnualTotalButton } from '@/components/contributions/AddAnnualTotalButton';
+import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 
 type FormValues = Omit<Contribution, 'id'>;
 
@@ -178,7 +179,10 @@ export default function ContributionsTab() {
   if (accounts.length === 0) {
     return (
       <div className="p-6 max-w-3xl">
-        <h2 className="text-2xl font-semibold mb-1">Contributions</h2>
+        <div className="flex items-start justify-between mb-1">
+          <h2 className="text-2xl font-semibold">Contributions</h2>
+          <ImportCsvButton entity="contribution" />
+        </div>
         <p className="text-sm text-muted-foreground mb-6">
           Money flowing into your accounts — paychecks, bonuses, manual transfers.
         </p>
@@ -241,7 +245,10 @@ export default function ContributionsTab() {
 
   return (
     <div className="p-6 max-w-3xl">
-      <h2 className="text-2xl font-semibold mb-1">Contributions</h2>
+      <div className="flex items-start justify-between mb-1">
+        <h2 className="text-2xl font-semibold">Contributions</h2>
+        <ImportCsvButton entity="contribution" />
+      </div>
       <p className="text-sm text-muted-foreground mb-6">
         Money flowing into your accounts — paychecks, bonuses, manual transfers.
       </p>

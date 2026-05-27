@@ -186,4 +186,18 @@ describe('LoansTab', () => {
       expect(loans[0].name).toBe('NewName');
     });
   });
+
+  it('renders an Import CSV button in the page header', async () => {
+    render(<MemoryRouter><LoansTab /></MemoryRouter>);
+    expect(
+      await screen.findByRole('button', { name: /import csv/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('Import CSV button has the hidden file input wired', async () => {
+    render(<MemoryRouter><LoansTab /></MemoryRouter>);
+    expect(
+      await screen.findByTestId('import-csv-file-input'),
+    ).toBeInTheDocument();
+  });
 });

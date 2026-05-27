@@ -9,6 +9,7 @@ import PropertyForm, {
   DEFAULT_PROPERTY,
   PROPERTY_TYPE_LABELS,
 } from '@/components/forms/PropertyForm';
+import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 
 export default function PropertiesTab() {
   const { properties, load, create, update, remove } = usePropertiesStore();
@@ -87,7 +88,10 @@ export default function PropertiesTab() {
 
   return (
     <div className="p-6 max-w-3xl">
-      <h2 className="text-2xl font-semibold mb-1">Properties</h2>
+      <div className="flex items-start justify-between mb-1">
+        <h2 className="text-2xl font-semibold">Properties</h2>
+        <ImportCsvButton entity="property" />
+      </div>
       <p className="text-sm text-muted-foreground mb-6">
         Homes, rentals, vacation properties, and land — with optional mortgage linkage.
       </p>

@@ -8,6 +8,7 @@ import AccountForm, {
   ACCOUNT_TYPE_LABELS,
   DEFAULT_ACCOUNT,
 } from '@/components/forms/AccountForm';
+import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 
 export default function AccountsTab() {
   const { accounts, load, create, update, remove } = useAccountsStore();
@@ -87,7 +88,10 @@ export default function AccountsTab() {
 
   return (
     <div className="p-6 max-w-3xl">
-      <h2 className="text-2xl font-semibold mb-1">Accounts</h2>
+      <div className="flex items-start justify-between mb-1">
+        <h2 className="text-2xl font-semibold">Accounts</h2>
+        <ImportCsvButton entity="account" />
+      </div>
       <p className="text-sm text-muted-foreground mb-6">
         Every investment, savings, cash, crypto, and 529 account you want to track.
       </p>

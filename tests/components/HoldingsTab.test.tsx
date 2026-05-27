@@ -303,4 +303,21 @@ describe('HoldingsTab', () => {
     // Silence within unused-import lint by referencing it (kept for explanatory value if extended)
     void within;
   });
+
+  it('renders an Import CSV button in the page header', async () => {
+    // Seed an account so the tab renders the main list (not the "Add accounts first" empty state).
+    await seedAccount(db, 'Brokerage');
+    render(<MemoryRouter><HoldingsTab /></MemoryRouter>);
+    expect(
+      await screen.findByRole('button', { name: /import csv/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('Import CSV button has the hidden file input wired', async () => {
+    await seedAccount(db, 'Brokerage');
+    render(<MemoryRouter><HoldingsTab /></MemoryRouter>);
+    expect(
+      await screen.findByTestId('import-csv-file-input'),
+    ).toBeInTheDocument();
+  });
 });

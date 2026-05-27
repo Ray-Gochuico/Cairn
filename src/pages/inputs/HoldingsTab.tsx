@@ -4,6 +4,7 @@ import { useHoldingsStore } from '@/stores/holdings-store';
 import { useTickersStore } from '@/stores/tickers-store';
 import { Card, CardContent } from '@/components/ui/card';
 import HoldingForm, { type HoldingFormValues } from '@/components/forms/HoldingForm';
+import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 import { enrichTickerIfMissing } from '@/market/ticker-enrichment';
 import { YahooClient } from '@/market/yahoo-client';
 import { TickersRepo } from '@/domain/tickers';
@@ -79,7 +80,10 @@ export default function HoldingsTab() {
   if (accounts.length === 0) {
     return (
       <div className="p-6 max-w-3xl">
-        <h2 className="text-2xl font-semibold mb-1">Holdings</h2>
+        <div className="flex items-start justify-between mb-1">
+          <h2 className="text-2xl font-semibold">Holdings</h2>
+          <ImportCsvButton entity="holding" />
+        </div>
         <p className="text-sm text-muted-foreground mb-6">
           Per-account tickers and share counts. Used by the Investments page and the
           Net Worth chart.
@@ -101,7 +105,10 @@ export default function HoldingsTab() {
 
   return (
     <div className="p-6 max-w-4xl">
-      <h2 className="text-2xl font-semibold mb-1">Holdings</h2>
+      <div className="flex items-start justify-between mb-1">
+        <h2 className="text-2xl font-semibold">Holdings</h2>
+        <ImportCsvButton entity="holding" />
+      </div>
       <p className="text-sm text-muted-foreground mb-6">
         Per-account tickers and share counts. Used by the Investments page and the
         Net Worth chart.

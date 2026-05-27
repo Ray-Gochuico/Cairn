@@ -6,6 +6,7 @@ import { useVehiclesStore } from '@/stores/vehicles-store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import LoanForm, { DEFAULT_LOAN, LOAN_TYPE_LABELS } from '@/components/forms/LoanForm';
+import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 
 export default function LoansTab() {
   const { loans, load, create, update, remove } = useLoansStore();
@@ -92,7 +93,10 @@ export default function LoansTab() {
 
   return (
     <div className="p-6 max-w-3xl">
-      <h2 className="text-2xl font-semibold mb-1">Loans</h2>
+      <div className="flex items-start justify-between mb-1">
+        <h2 className="text-2xl font-semibold">Loans</h2>
+        <ImportCsvButton entity="loan" />
+      </div>
       <p className="text-sm text-muted-foreground mb-6">
         Every loan you carry — mortgage, auto, student, credit card, or other.
       </p>

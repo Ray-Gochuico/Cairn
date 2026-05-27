@@ -359,4 +359,18 @@ describe('EquityGrantsTab', () => {
     expect(screen.getAllByText(/Acme/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Globex/i).length).toBeGreaterThan(0);
   });
+
+  it('renders an Import CSV button in the page header', async () => {
+    render(<MemoryRouter><EquityGrantsTab /></MemoryRouter>);
+    expect(
+      await screen.findByRole('button', { name: /import csv/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('Import CSV button has the hidden file input wired', async () => {
+    render(<MemoryRouter><EquityGrantsTab /></MemoryRouter>);
+    expect(
+      await screen.findByTestId('import-csv-file-input'),
+    ).toBeInTheDocument();
+  });
 });

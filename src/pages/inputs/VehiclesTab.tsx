@@ -6,6 +6,7 @@ import { LoanType } from '@/types/enums';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import VehicleForm, { DEFAULT_VEHICLE } from '@/components/forms/VehicleForm';
+import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 
 export default function VehiclesTab() {
   const { vehicles, load, create, update, remove } = useVehiclesStore();
@@ -85,7 +86,10 @@ export default function VehiclesTab() {
 
   return (
     <div className="p-6 max-w-3xl">
-      <h2 className="text-2xl font-semibold mb-1">Vehicles</h2>
+      <div className="flex items-start justify-between mb-1">
+        <h2 className="text-2xl font-semibold">Vehicles</h2>
+        <ImportCsvButton entity="vehicle" />
+      </div>
       <p className="text-sm text-muted-foreground mb-6">
         Cars, trucks, motorcycles, and boats — with optional auto-loan linkage.
       </p>
