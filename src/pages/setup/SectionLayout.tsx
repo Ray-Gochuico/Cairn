@@ -138,7 +138,7 @@ export default function SectionLayout({ initialSection }: Props) {
                 isCurrent
                   ? 'border-primary bg-primary/5 font-medium'
                   : status === 'completed'
-                    ? 'border-emerald-500/40 text-emerald-600'
+                    ? 'border-success/40 text-success'
                     : status === 'skipped'
                       ? 'border-muted-foreground/30 text-muted-foreground'
                       : 'border-muted-foreground/20 text-muted-foreground'

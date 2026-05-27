@@ -111,12 +111,13 @@ export function SidebarSection() {
                 {section.items.map((item, itemIndex) => {
                   const isHidden = hiddenSet.has(item.to);
                   const isLocked = item.to === NON_HIDEABLE;
+                  const Icon = item.icon;
                   return (
                     <li
                       key={item.to}
                       className="flex items-center gap-2 rounded-md border px-2 py-1 text-sm"
                     >
-                      <span className="w-5 text-center">{item.icon}</span>
+                      <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                       <span
                         className={
                           isHidden

@@ -169,7 +169,7 @@ export default function ReturnSchedulePopover({ open, onOpenChange }: Props) {
             const override = draft.overrides[String(y)];
             const isSelected = y === selectedYear;
             let bg = 'bg-muted';
-            if (override != null) bg = override >= 0 ? 'bg-green-200' : 'bg-red-200';
+            if (override != null) bg = override >= 0 ? 'bg-success/30' : 'bg-destructive/20';
             return (
               <Button
                 key={y}

@@ -97,7 +97,7 @@ export function DisclosureModal({
         <DialogPrimitive.Content
           className={cn(
             'fixed left-[50%] top-[50%] z-[101] -translate-x-1/2 -translate-y-1/2',
-            'bg-white rounded-lg max-w-2xl w-[calc(100vw-2rem)] max-h-[90vh]',
+            'bg-background text-foreground rounded-lg max-w-2xl w-[calc(100vw-2rem)] max-h-[90vh]',
             'flex flex-col shadow-xl outline-none',
           )}
           aria-describedby={undefined}
@@ -115,22 +115,22 @@ export function DisclosureModal({
           >
             {title}
           </DialogPrimitive.Title>
-          <div className="text-xs text-slate-500">Version {document.version}</div>
+          <div className="text-xs text-muted-foreground">Version {document.version}</div>
         </div>
 
         {document.diffFromPrevious && (
-          <div className="mx-6 mt-3 p-3 bg-amber-50 border border-amber-200 rounded text-sm">
-            <div className="font-semibold text-amber-900 mb-1">
+          <div className="mx-6 mt-3 p-3 bg-warning-soft border border-warning/40 rounded text-sm">
+            <div className="font-semibold text-warning-foreground mb-1">
               What changed since you last accepted:
             </div>
-            <div className="text-amber-900 space-y-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_strong]:font-semibold">
+            <div className="text-warning-foreground space-y-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_strong]:font-semibold">
               <ReactMarkdown>{document.diffFromPrevious}</ReactMarkdown>
             </div>
           </div>
         )}
 
         <div
-          className="px-6 py-4 overflow-y-auto flex-1 text-sm leading-relaxed text-slate-700 space-y-3 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:mt-3 [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_strong]:font-semibold [&_em]:italic [&_a]:text-primary [&_a]:underline"
+          className="px-6 py-4 overflow-y-auto flex-1 text-sm leading-relaxed text-foreground space-y-3 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:mt-3 [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_strong]:font-semibold [&_em]:italic [&_a]:text-primary [&_a]:underline"
           data-testid="disclosure-modal-body"
         >
           <ReactMarkdown>{document.body}</ReactMarkdown>
@@ -150,7 +150,7 @@ export function DisclosureModal({
         </div>
 
         {error && (
-          <div className="px-6 py-2 text-sm text-red-700 bg-red-50 border-t border-red-200">
+          <div className="px-6 py-2 text-sm text-destructive bg-destructive/10 border-t border-destructive/30">
             {error}
           </div>
         )}

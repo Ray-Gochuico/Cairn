@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Option 1 — "Classic Cairn"
+  Five organic stones stacked on a soft circular base. Hand-drawn, slightly
+  irregular silhouettes — feels like a roadside trail marker. Warm earth
+  palette (deep ochre + sandstone + slate). The implied weight bottom-to-top
+  reads as "stable footing under big plans" which is the app's narrative.
+-->
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 1024 1024"
+  width="1024"
+  height="1024"
+  role="img"
+  aria-label="Cairn — stacked stones trail marker"
+>
+  <!-- Rounded-square plate. macOS will mask it anyway, but the plate gives
+       Linux + Windows ICO/PNG a self-contained background. -->
+  <rect width="1024" height="1024" rx="224" ry="224" fill="#F5E9D6"/>
+
+  <!-- Implied ground shadow under the cairn. -->
+  <ellipse cx="512" cy="848" rx="220" ry="34" fill="#1F2937" opacity="0.10"/>
+
+  <!-- Stone 1 — base (widest, slate). -->
+  <path
+    d="M276 826
+       C 256 814 250 794 270 778
+       L 442 716
+       C 478 704 546 704 582 716
+       L 754 778
+       C 774 794 768 814 748 826
+       Z"
+    fill="#475569" stroke="#1F2937" stroke-width="6" stroke-linejoin="round"/>
+
+  <!-- Stone 2 — second layer (warm taupe). -->
+  <path
+    d="M324 706
+       C 308 696 304 678 320 666
+       L 442 612
+       C 472 600 552 600 582 612
+       L 704 666
+       C 720 678 716 696 700 706
+       Z"
+    fill="#A88562" stroke="#1F2937" stroke-width="6" stroke-linejoin="round"/>
+
+  <!-- Stone 3 — middle (ochre, the most prominent). -->
+  <path
+    d="M362 600
+       C 348 590 344 574 358 562
+       L 446 510
+       C 468 500 556 500 578 510
+       L 666 562
+       C 680 574 676 590 662 600
+       Z"
+    fill="#D89D4C" stroke="#1F2937" stroke-width="6" stroke-linejoin="round"/>
+
+  <!-- Stone 4 — second from top (sandstone). -->
+  <path
+    d="M398 502
+       C 386 494 384 482 396 472
+       L 462 432
+       C 478 424 542 424 558 432
+       L 624 472
+       C 636 482 634 494 622 502
+       Z"
+    fill="#E8C895" stroke="#1F2937" stroke-width="6" stroke-linejoin="round"/>
+
+  <!-- Stone 5 — top (small, ochre-warm, anchors the eye). -->
+  <path
+    d="M438 420
+       C 432 414 432 406 440 402
+       L 488 384
+       C 502 380 518 380 532 384
+       L 580 402
+       C 588 406 588 414 582 420
+       Z"
+    fill="#C38334" stroke="#1F2937" stroke-width="6" stroke-linejoin="round"/>
+</svg>

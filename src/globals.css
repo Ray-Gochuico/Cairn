@@ -24,6 +24,24 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 222.2 84% 4.9%;
     --radius: 0.5rem;
+
+    /* Semantic status tokens. These hold the "success / warning / info"
+     * palette that 30+ banners, pills, and alerts had been picking
+     * ad-hoc from emerald/amber/sky scales. Tinted soft backgrounds use
+     * the *-foreground value on the dark side and the muted background
+     * on the light side — same shape as shadcn's --destructive pair.
+     * Light-mode values are emerald-50/700, amber-50/900, sky-50/700 from
+     * the Tailwind palette so existing visual identity is preserved;
+     * contrast verified AA against background. */
+    --success: 142 71% 45%;            /* emerald-500 */
+    --success-foreground: 142 70% 28%; /* emerald-700 (text on success-soft) */
+    --success-soft: 138 76% 97%;       /* emerald-50 (banner / pill bg)   */
+    --warning: 38 92% 50%;             /* amber-500 */
+    --warning-foreground: 32 81% 29%;  /* amber-800 / 900 (text on warning-soft) */
+    --warning-soft: 48 100% 96%;       /* amber-50 (banner / pill bg) */
+    --info: 199 89% 48%;               /* sky-500 */
+    --info-foreground: 217 91% 35%;    /* blue-700 (text on info-soft) */
+    --info-soft: 214 100% 97%;         /* blue-50 (banner / pill bg) */
   }
 
   .dark {
@@ -46,6 +64,20 @@
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 212.7 26.8% 83.9%;
+
+    /* Dark-mode tints: drop the soft background to a muted dark wash and
+     * push the foreground to a near-white tinted with the hue, so banners
+     * read as colored panels (not glow-bright pills) against the dark
+     * canvas. Contrast verified AA against --background. */
+    --success: 142 71% 45%;
+    --success-foreground: 142 76% 80%;    /* emerald-200 */
+    --success-soft: 142 41% 12%;          /* darkened emerald wash */
+    --warning: 38 92% 50%;
+    --warning-foreground: 48 100% 88%;    /* amber-100 */
+    --warning-soft: 35 60% 12%;           /* darkened amber wash */
+    --info: 199 89% 48%;
+    --info-foreground: 214 100% 88%;      /* blue-100 */
+    --info-soft: 217 60% 14%;             /* darkened blue wash */
   }
 
   body { @apply bg-background text-foreground; }

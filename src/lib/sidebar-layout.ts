@@ -1,14 +1,22 @@
+import type { LucideIcon } from 'lucide-react';
 import type { SidebarLayoutEntry } from '@/types/schema';
 
 /**
  * Shape of one sidebar section. Mirrors `NavSection` in
  * `src/components/layout/Sidebar.tsx` — kept here as a standalone type so
  * this pure helper has no dependency on the component module.
+ *
+ * `icon` carries the lucide-react component (e.g. `LayoutDashboard`) so
+ * the sidebar can render it with proper sizing / accessibility instead of
+ * the old emoji glyph (which got blocked by some font stacks and shifted
+ * vertical alignment by a couple of pixels). It must remain a *component*
+ * reference, not a JSX node, so the consumer can apply size / color
+ * classes at the render site.
  */
 export interface SidebarNavItem {
   to: string;
   label: string;
-  icon: string;
+  icon: LucideIcon;
   /**
    * Optional glossary lookup key (mirrors `NavItem.glossaryTerm` in
    * `Sidebar.tsx`). The sidebar component resolves this against

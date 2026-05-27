@@ -149,7 +149,7 @@ export default function InflationPopover({ open, onOpenChange }: Props) {
             const isSelected = y === selectedYear;
             let bg = 'bg-muted';
             if (override != null) {
-              bg = override >= referenceRate ? 'bg-orange-200' : 'bg-blue-200';
+              bg = override >= referenceRate ? 'bg-warning/30' : 'bg-info/30';
             }
             return (
               <Button

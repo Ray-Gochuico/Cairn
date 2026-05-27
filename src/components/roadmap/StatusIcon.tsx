@@ -11,12 +11,12 @@ import { cn } from '@/lib/utils';
 import type { NodeStatus } from '@/types/roadmap';
 
 const MAP: Record<NodeStatus, { Icon: LucideIcon; cls: string; label: string }> = {
-  done: { Icon: Check, cls: 'text-emerald-600', label: 'done' },
-  active: { Icon: ArrowRight, cls: 'text-blue-600', label: 'active' },
-  unanswered: { Icon: HelpCircle, cls: 'text-amber-600', label: 'unanswered' },
-  'not-started': { Icon: Circle, cls: 'text-slate-400', label: 'not started' },
-  skipped: { Icon: MinusCircle, cls: 'text-slate-400', label: 'skipped' },
-  info: { Icon: Info, cls: 'text-slate-500', label: 'info' },
+  done: { Icon: Check, cls: 'text-success', label: 'done' },
+  active: { Icon: ArrowRight, cls: 'text-info', label: 'active' },
+  unanswered: { Icon: HelpCircle, cls: 'text-warning', label: 'unanswered' },
+  'not-started': { Icon: Circle, cls: 'text-muted-foreground', label: 'not started' },
+  skipped: { Icon: MinusCircle, cls: 'text-muted-foreground', label: 'skipped' },
+  info: { Icon: Info, cls: 'text-muted-foreground', label: 'info' },
 };
 
 interface StatusIconProps {

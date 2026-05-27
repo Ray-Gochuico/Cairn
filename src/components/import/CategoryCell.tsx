@@ -24,14 +24,14 @@ export function CategoryCell({ value, error, categories, onChange }: Props) {
             onChange(e.target.value);
             if (!error) setEditing(false);
           }}
-          className={`w-full px-2 py-1 text-sm border rounded ${error ? 'border-red-500 bg-red-50' : 'border-slate-300'}`}
+          className={`w-full px-2 py-1 text-sm border rounded ${error ? 'border-destructive bg-destructive/10' : 'border-input'}`}
         >
           <option value="">— (none)</option>
           {categories.map((c) => (
             <option key={c.id} value={c.name}>{c.name}</option>
           ))}
         </select>
-        {error && <div className="text-xs text-red-700 italic mt-0.5">{error.message}</div>}
+        {error && <div className="text-xs text-destructive italic mt-0.5">{error.message}</div>}
       </div>
     );
   }

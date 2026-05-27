@@ -253,9 +253,9 @@ export function ImportCsvButton({ entity }: Props) {
         <div
           role="alert"
           data-testid="csv-parse-errors"
-          className="mt-2 rounded-md border border-amber-500/30 bg-amber-50/50 p-2 text-xs"
+          className="mt-2 rounded-md border border-warning/40 bg-warning-soft p-2 text-xs"
         >
-          <div className="font-medium text-amber-900 mb-1">
+          <div className="font-medium text-warning-foreground mb-1">
             Couldn&apos;t parse {errors.length} {errors.length === 1 ? 'file' : 'files'}:
           </div>
           <ul className="space-y-0.5">

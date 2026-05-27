@@ -27,9 +27,9 @@ export default function BudgetOverlayRow({ row, onBudgetCommit }: BudgetOverlayR
   // Fill color tracks state — green for under, red/pink for over, transparent
   // when no spending so the muted track shows through.
   const fillColor = overBudget
-    ? 'bg-rose-500'
+    ? 'bg-destructive'
     : actual > 0
-      ? 'bg-emerald-500'
+      ? 'bg-success'
       : 'bg-transparent';
 
   // Right-side label — "$X over" (red) when over, "$X left" (green when there
@@ -39,9 +39,9 @@ export default function BudgetOverlayRow({ row, onBudgetCommit }: BudgetOverlayR
     ? `${currency(remaining as number)} over`
     : `${currency(remaining as number)} left`;
   const labelColor = overBudget
-    ? 'text-rose-600'
+    ? 'text-destructive'
     : actual > 0
-      ? 'text-emerald-600'
+      ? 'text-success'
       : 'text-muted-foreground';
 
   return (

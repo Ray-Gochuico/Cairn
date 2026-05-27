@@ -7,17 +7,17 @@ interface Props {
 }
 
 const STATUS_BADGE: Record<PreviewStatus, string> = {
-  new: 'bg-emerald-100 text-emerald-800',
-  update: 'bg-amber-100 text-amber-800',
-  duplicate: 'bg-slate-200 text-slate-700',
-  error: 'bg-red-100 text-red-800',
+  new: 'bg-success-soft text-success-foreground',
+  update: 'bg-warning-soft text-warning-foreground',
+  duplicate: 'bg-muted text-muted-foreground',
+  error: 'bg-destructive/15 text-destructive',
 };
 
 const ROW_BG: Record<PreviewStatus, string> = {
   new: '',
-  update: 'bg-amber-50',
-  duplicate: 'bg-slate-50',
-  error: 'bg-red-50',
+  update: 'bg-warning-soft',
+  duplicate: 'bg-muted',
+  error: 'bg-destructive/10',
 };
 
 export function HoldingPreviewTable({ state }: Props) {
@@ -31,7 +31,7 @@ export function HoldingPreviewTable({ state }: Props) {
   return (
     <div className="border rounded overflow-hidden">
       <table className="w-full text-sm">
-        <thead className="bg-slate-50 text-xs uppercase text-slate-600">
+        <thead className="bg-muted text-xs uppercase text-slate-600">
           <tr>
             <th className="px-3 py-2 text-left w-20">Status</th>
             <th className="px-3 py-2 text-left">Account</th>
@@ -63,13 +63,13 @@ export function HoldingPreviewTable({ state }: Props) {
                 <td className="px-3 py-2 font-mono">
                   {row.resolved.ticker || row.raw.ticker || '—'}
                   {err('ticker') && (
-                    <div className="text-xs text-red-700 italic mt-0.5">{err('ticker')!.message}</div>
+                    <div className="text-xs text-destructive italic mt-0.5">{err('ticker')!.message}</div>
                   )}
                 </td>
                 <td className="px-3 py-2 tabular-nums text-right">
                   {row.raw.share_count || '—'}
                   {err('share_count') && (
-                    <div className="text-xs text-red-700 italic mt-0.5">
+                    <div className="text-xs text-destructive italic mt-0.5">
                       {err('share_count')!.message}
                     </div>
                   )}
@@ -79,7 +79,7 @@ export function HoldingPreviewTable({ state }: Props) {
                     ? `$${row.resolved.costBasis.toLocaleString()}`
                     : '—'}
                   {err('cost_basis_per_share') && (
-                    <div className="text-xs text-red-700 italic mt-0.5">
+                    <div className="text-xs text-destructive italic mt-0.5">
                       {err('cost_basis_per_share')!.message}
                     </div>
                   )}
@@ -89,7 +89,7 @@ export function HoldingPreviewTable({ state }: Props) {
                     ? `${(row.resolved.targetAllocationPct * 100).toFixed(1)}%`
                     : '—'}
                   {err('target_allocation_pct') && (
-                    <div className="text-xs text-red-700 italic mt-0.5">
+                    <div className="text-xs text-destructive italic mt-0.5">
                       {err('target_allocation_pct')!.message}
                     </div>
                   )}
@@ -97,7 +97,7 @@ export function HoldingPreviewTable({ state }: Props) {
                 <td className="px-2 py-2">
                   <button
                     aria-label="Remove row"
-                    className="text-slate-400 hover:text-red-600 text-sm"
+                    className="text-muted-foreground hover:text-destructive text-sm"
                     onClick={() => state.delete(row.rowId)}
                   >
                     ×

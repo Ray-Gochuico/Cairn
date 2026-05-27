@@ -4,13 +4,16 @@ import { StatusIcon } from '@/components/roadmap/StatusIcon';
 import type { NodeStatus } from '@/types/roadmap';
 
 describe('StatusIcon', () => {
+  // Semantic-token classes (--success / --info / --warning / muted) replaced
+  // the raw emerald/blue/amber/slate utilities in the 2026-05-27 design
+  // polish sweep. Asserts shape, not exact hex.
   const STATUS_COLOR: Record<NodeStatus, string> = {
-    done: 'text-emerald-600',
-    active: 'text-blue-600',
-    unanswered: 'text-amber-600',
-    'not-started': 'text-slate-400',
-    skipped: 'text-slate-400',
-    info: 'text-slate-500',
+    done: 'text-success',
+    active: 'text-info',
+    unanswered: 'text-warning',
+    'not-started': 'text-muted-foreground',
+    skipped: 'text-muted-foreground',
+    info: 'text-muted-foreground',
   };
 
   for (const [status, cls] of Object.entries(STATUS_COLOR) as [NodeStatus, string][]) {

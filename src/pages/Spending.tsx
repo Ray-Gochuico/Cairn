@@ -197,7 +197,7 @@ export default function Spending() {
       <TransactionsSectionImporter onArchiveWarning={setArchiveWarning} />
 
       {archiveWarning && (
-        <p className="text-sm text-amber-600" role="status">
+        <p className="text-sm text-warning-foreground" role="status">
           {archiveWarning}
         </p>
       )}
@@ -264,7 +264,7 @@ export default function Spending() {
                 </p>
               </div>
               {summary.previousMonthTotal > 0 && (
-                <p className={`text-xs ${momDelta === 0 ? 'text-muted-foreground' : momDelta > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                <p className={`text-xs ${momDelta === 0 ? 'text-muted-foreground' : momDelta > 0 ? 'text-destructive' : 'text-success'}`}>
                   {momDelta === 0
                     ? 'Same as last month so far'
                     : `${momDelta > 0 ? '+' : ''}$${Math.abs(momDelta).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} vs last month's full total (month in progress)`}
@@ -279,7 +279,7 @@ export default function Spending() {
             <div className="grid grid-cols-3 gap-4">
               <div className="border rounded-lg p-4 space-y-1">
                 <p className="text-xs uppercase tracking-wider text-muted-foreground">Money in</p>
-                <p className="text-2xl font-semibold text-emerald-600">
+                <p className="text-2xl font-semibold text-success">
                   ${cashflow.inflow.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
                 <p className="text-xs text-muted-foreground">Estimated from salary</p>
@@ -293,7 +293,7 @@ export default function Spending() {
               </div>
               <div className="border rounded-lg p-4 space-y-1">
                 <p className="text-xs uppercase tracking-wider text-muted-foreground">Net</p>
-                <p className={`text-2xl font-semibold ${cashflow.net >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                <p className={`text-2xl font-semibold ${cashflow.net >= 0 ? 'text-success' : 'text-destructive'}`}>
                   {cashflow.net >= 0 ? '+' : ''}${cashflow.net.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
                 <p className="text-xs text-muted-foreground">
@@ -447,7 +447,7 @@ export default function Spending() {
                     )}
                     <td className="py-2 text-right">
                       {t.amount < 0 ? (
-                        <span className="text-green-600">-${Math.abs(t.amount).toFixed(2)}</span>
+                        <span className="text-success">-${Math.abs(t.amount).toFixed(2)}</span>
                       ) : (
                         <span>${t.amount.toFixed(2)}</span>
                       )}

@@ -48,7 +48,7 @@ export function NodeRow({ node, result, ctx }: Props) {
           {result.cta && (
             <Link
               to={result.cta.href}
-              className="text-xs text-blue-600 hover:underline mt-1 inline-block"
+              className="text-xs text-info-foreground hover:underline mt-1 inline-block"
             >
               {result.cta.label}
             </Link>

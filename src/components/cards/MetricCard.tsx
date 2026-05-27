@@ -27,8 +27,8 @@ export interface MetricCardProps {
 
 function deltaClass(tone: MetricCardTone | undefined): string {
   switch (tone) {
-    case 'positive': return 'text-emerald-600';
-    case 'negative': return 'text-red-600';
+    case 'positive': return 'text-success';
+    case 'negative': return 'text-destructive';
     case 'neutral':
     case undefined:
     default: return 'text-muted-foreground';
@@ -112,7 +112,7 @@ export default function MetricCard({
       <Link
         to={href}
         aria-label={ariaLabel}
-        className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl"
+        className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-xl"
       >
         {card}
       </Link>

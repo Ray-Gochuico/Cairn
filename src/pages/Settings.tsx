@@ -1,3 +1,4 @@
+import { AppearanceSection } from '@/components/settings/AppearanceSection';
 import { SidebarSection } from '@/components/settings/SidebarSection';
 import { NotificationsSection } from '@/components/settings/NotificationsSection';
 import { RefreshSection } from '@/components/settings/RefreshSection';
@@ -13,6 +14,7 @@ export default function Settings() {
         <h1 className="text-2xl font-semibold">Settings</h1>
         <p className="mt-1 text-muted-foreground">Manage your app preferences.</p>
       </div>
+      <AppearanceSection />
       <SidebarSection />
       <NotificationsSection />
       <RefreshSection />

@@ -74,10 +74,10 @@ const CONCENTRATION_TOOLTIP: Record<ConcentrationWarning['type'], string> = {
 
 function severityColor(severity: ConcentrationWarning['severity']): string {
   switch (severity) {
-    case 'HIGH': return 'text-red-500';
-    case 'MEDIUM': return 'text-amber-500';
+    case 'HIGH': return 'text-destructive';
+    case 'MEDIUM': return 'text-warning';
     case 'LOW':
-    default: return 'text-blue-500';
+    default: return 'text-info';
   }
 }
 
@@ -689,12 +689,12 @@ export default function Investments() {
                 <div key={row.ticker} className="flex items-center gap-2 font-mono">
                   <span className="w-16">{row.ticker}</span>
                   {row.status === 'ok' && (
-                    <span className="text-emerald-600">
+                    <span className="text-success">
                       ok · {row.sectorCount} sectors loaded
                     </span>
                   )}
                   {row.status === 'empty' && (
-                    <span className="text-amber-600">
+                    <span className="text-warning">
                       empty · Yahoo returned no sectorWeightings (bond/commodity fund?)
                     </span>
                   )}
@@ -802,7 +802,7 @@ export default function Investments() {
                         {(row.actualPct * 100).toFixed(1)}%
                       </td>
                       <td className={`py-2 pl-2 text-right ${
-                        row.drift >= 0 ? 'text-emerald-600' : 'text-red-600'
+                        row.drift >= 0 ? 'text-success' : 'text-destructive'
                       }`}>
                         {row.drift >= 0 ? '+' : ''}
                         {(row.drift * 100).toFixed(1)}%

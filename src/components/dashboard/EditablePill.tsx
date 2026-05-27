@@ -96,7 +96,7 @@ export function EditablePill({
                 type="button"
                 aria-label={`Remove ${label}`}
                 onClick={onRemove}
-                className="flex h-6 w-6 items-center justify-center rounded-md bg-red-500/90 text-white hover:bg-red-500"
+                className="flex h-6 w-6 items-center justify-center rounded-md bg-destructive/90 text-destructive-foreground hover:bg-destructive"
                 data-testid={`pill-${id}-remove`}
               >
                 <XIcon className="h-3.5 w-3.5" />

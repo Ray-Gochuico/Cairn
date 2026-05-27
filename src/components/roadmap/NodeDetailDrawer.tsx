@@ -52,18 +52,18 @@ export function NodeDetailDrawer({ node, result, open, onOpenChange }: Props) {
         onClick={handleBackdropClick}
       >
         <div
-          className="bg-white w-full sm:max-w-md h-full overflow-y-auto shadow-xl"
+          className="bg-background text-foreground w-full sm:max-w-md h-full overflow-y-auto shadow-xl"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="px-6 py-4 border-b flex items-center justify-between">
             <div>
               <h3 className="text-base font-semibold">{node.title}</h3>
-              <div className="text-xs text-slate-500">Section {node.section}</div>
+              <div className="text-xs text-muted-foreground">Section {node.section}</div>
             </div>
             <button
               type="button"
               onClick={() => onOpenChange(false)}
-              className="text-slate-500 hover:text-slate-900"
+              className="text-muted-foreground hover:text-foreground"
               aria-label="Close"
             >
               ✕
@@ -71,15 +71,15 @@ export function NodeDetailDrawer({ node, result, open, onOpenChange }: Props) {
           </div>
           <div className="px-6 py-4 space-y-5">
             <section>
-              <h4 className="text-xs uppercase text-slate-500 tracking-wider mb-1">
+              <h4 className="text-xs uppercase text-muted-foreground tracking-wider mb-1">
                 From the chart
               </h4>
-              <div className="text-sm leading-relaxed text-slate-700 whitespace-pre-wrap">
+              <div className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
                 {node.body}
               </div>
             </section>
             <section>
-              <h4 className="text-xs uppercase text-slate-500 tracking-wider mb-1">
+              <h4 className="text-xs uppercase text-muted-foreground tracking-wider mb-1">
                 How this was calculated
               </h4>
               <div className="flex items-start gap-2 text-sm">
@@ -87,7 +87,7 @@ export function NodeDetailDrawer({ node, result, open, onOpenChange }: Props) {
                 <div>{result.evidence ?? 'No calculation yet.'}</div>
               </div>
               {result.autoResult && (
-                <div className="text-xs text-slate-500 italic mt-2">
+                <div className="text-xs text-muted-foreground italic mt-2">
                   Auto: {result.autoResult.status} · You marked: {result.status}
                 </div>
               )}

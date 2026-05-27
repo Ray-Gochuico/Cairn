@@ -270,7 +270,7 @@ function LoanCard({ projection, expanded, onToggleExpand, schedule }: LoanCardPr
             aria-label={`${loan.name} paid down`}
           >
             <div
-              className="h-full bg-emerald-500 transition-all"
+              className="h-full bg-success transition-all"
               style={{ width: `${paidPct}%` }}
             />
           </div>
@@ -307,7 +307,7 @@ function LoanCard({ projection, expanded, onToggleExpand, schedule }: LoanCardPr
         </dl>
 
         {hasExtra ? (
-          <div className="rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2 text-sm text-emerald-900">
+          <div className="rounded-md bg-success-soft border border-success/30 px-3 py-2 text-sm text-success-foreground">
             <div className="font-medium">
               With {formatCurrency(loan.extraPaymentDefault)}/mo extra
             </div>

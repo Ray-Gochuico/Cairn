@@ -69,7 +69,7 @@ export default function Plan529Tab() {
   const tooltipBlock = deduction && (
     <div
       role="status"
-      className="text-sm rounded-md border border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20 p-3 text-blue-900 dark:text-blue-100"
+      className="text-sm rounded-md border border-info/40 bg-info-soft p-3 text-info-foreground"
     >
       Your state ({deduction.state}) allows up to{' '}
       {formatCurrency(deduction.maxAmount)}/yr state income tax deduction for 529

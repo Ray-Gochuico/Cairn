@@ -170,9 +170,10 @@ describe('ConcentrationCard', () => {
     );
 
     // At 100% AAPL, both PER_TICKER_HIGH (HIGH/red) and PER_ASSET_CLASS_HIGH
-    // (HIGH/red) fire. There must be at least one red icon.
+    // (HIGH/red) fire. There must be at least one icon carrying the
+    // destructive semantic token (--destructive maps to red in the palette).
     const icons = screen.getAllByLabelText(/HIGH severity/i);
     expect(icons.length).toBeGreaterThan(0);
-    expect(icons[0]).toHaveClass('text-red-500');
+    expect(icons[0]).toHaveClass('text-destructive');
   });
 });

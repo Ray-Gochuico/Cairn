@@ -30,15 +30,15 @@ export function NextMoveCard() {
   if (!household) {
     return (
       <Card className="p-4">
-        <div className="text-xs uppercase text-slate-500 tracking-wider">
+        <div className="text-xs uppercase text-muted-foreground tracking-wider">
           Your next move
         </div>
-        <div className="text-sm text-slate-700 mt-1">
+        <div className="text-sm text-foreground mt-1">
           Finish setting up to see your next move.
         </div>
         <Link
           to="/setup"
-          className="text-sm text-blue-700 underline mt-2 inline-block"
+          className="text-sm text-info-foreground underline mt-2 inline-block"
         >
           Continue Setup →
         </Link>
@@ -49,16 +49,16 @@ export function NextMoveCard() {
   if (gate.state === 'needs-acceptance') {
     return (
       <Card className="p-4">
-        <div className="text-xs uppercase text-slate-500 tracking-wider">
+        <div className="text-xs uppercase text-muted-foreground tracking-wider">
           Your next move
         </div>
         <div className="text-sm font-medium mt-1">Set up your roadmap</div>
-        <div className="text-xs text-slate-600">
+        <div className="text-xs text-muted-foreground">
           See where you stand on the Financial Independence flow chart.
         </div>
         <Link
           to="/roadmap"
-          className="text-sm text-blue-700 underline mt-2 inline-block"
+          className="text-sm text-info-foreground underline mt-2 inline-block"
         >
           Open Roadmap →
         </Link>
@@ -74,8 +74,8 @@ export function NextMoveCard() {
 
   if (!active) {
     return (
-      <Card className="p-4 bg-emerald-50 border-emerald-200">
-        <div className="text-xs uppercase text-emerald-700 tracking-wider flex items-center justify-between">
+      <Card className="p-4 bg-success-soft border-success/30">
+        <div className="text-xs uppercase text-success-foreground tracking-wider flex items-center justify-between">
           <span>Your next move</span>
           <Link to="/roadmap" className="text-xs underline">
             View →
@@ -85,7 +85,7 @@ export function NextMoveCard() {
         {unanswered > 0 && (
           <Link
             to="/roadmap"
-            className="text-xs text-amber-700 mt-2 inline-block"
+            className="text-xs text-warning-foreground mt-2 inline-block"
           >
             ⓘ {unanswered} unanswered question{unanswered === 1 ? '' : 's'}
           </Link>
@@ -96,8 +96,8 @@ export function NextMoveCard() {
 
   const result = results.get(active.id)!;
   return (
-    <Card className="p-4 bg-blue-50 border-blue-200">
-      <div className="text-xs uppercase text-blue-700 tracking-wider flex items-center justify-between">
+    <Card className="p-4 bg-info-soft border-info/30">
+      <div className="text-xs uppercase text-info-foreground tracking-wider flex items-center justify-between">
         <span>Your next move</span>
         <Link to="/roadmap" className="text-xs underline">
           View →
@@ -105,19 +105,19 @@ export function NextMoveCard() {
       </div>
       <div className="text-sm font-semibold mt-1">{active.title}</div>
       {result.evidence && (
-        <div className="text-xs text-slate-700 mt-1">{result.evidence}</div>
+        <div className="text-xs text-foreground mt-1">{result.evidence}</div>
       )}
       <div className="mt-2 flex items-center gap-3">
         {result.cta && (
           <Link
             to={result.cta.href}
-            className="text-sm text-blue-700 underline"
+            className="text-sm text-info-foreground underline"
           >
             {result.cta.label}
           </Link>
         )}
         {unanswered > 0 && (
-          <Link to="/roadmap" className="text-xs text-amber-700">
+          <Link to="/roadmap" className="text-xs text-warning-foreground">
             ⓘ {unanswered} unanswered question{unanswered === 1 ? '' : 's'}
           </Link>
         )}

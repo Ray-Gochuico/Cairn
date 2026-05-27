@@ -110,7 +110,7 @@ export function OverrideDialog({ node, open, onOpenChange }: Props) {
             />
           </label>
           {error && (
-            <div className="text-xs text-red-700" role="alert">
+            <div className="text-xs text-destructive" role="alert">
               {error}
             </div>
           )}

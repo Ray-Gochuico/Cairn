@@ -59,12 +59,15 @@ async function bootstrap() {
     // the subsequent URL change.
     const { default: App } = await import('./App');
     const { AppDisclaimerGate } = await import('./legal/AppDisclaimerGate');
+    const { ThemeProvider } = await import('./components/theme/ThemeProvider');
 
     ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
       <React.StrictMode>
-        <AppDisclaimerGate>
-          <App />
-        </AppDisclaimerGate>
+        <ThemeProvider>
+          <AppDisclaimerGate>
+            <App />
+          </AppDisclaimerGate>
+        </ThemeProvider>
       </React.StrictMode>,
     );
   } catch (e) {
