@@ -63,6 +63,20 @@ export default function IncomePopover({ open, onOpenChange }: Props) {
   );
   const [tab, setTab] = useState(0);
 
+  // Investment-income draft (Wave-3 Task 1 — surfaces the engine fields
+  // annualLongTermGains / annualQualifiedDividends / annualNonQualifiedDividends
+  // that have been engine-side since 2026-05-27 but had no UI surface).
+  // Default to the active scenario's payload values; reset on every open.
+  const [ltcgDraft, setLtcgDraft] = useState<number>(
+    active?.leverPayload.annualLongTermGains ?? 0,
+  );
+  const [qualDivDraft, setQualDivDraft] = useState<number>(
+    active?.leverPayload.annualQualifiedDividends ?? 0,
+  );
+  const [nonQualDivDraft, setNonQualDivDraft] = useState<number>(
+    active?.leverPayload.annualNonQualifiedDividends ?? 0,
+  );
+
   useEffect(() => {
     if (open) {
       setDraft(
@@ -70,6 +84,9 @@ export default function IncomePopover({ open, onOpenChange }: Props) {
           active?.leverPayload.income.perPerson[i] ?? defaultPersonPlan(),
         ),
       );
+      setLtcgDraft(active?.leverPayload.annualLongTermGains ?? 0);
+      setQualDivDraft(active?.leverPayload.annualQualifiedDividends ?? 0);
+      setNonQualDivDraft(active?.leverPayload.annualNonQualifiedDividends ?? 0);
       setTab(0);
     }
   }, [open, active?.leverPayload, personCount]);
@@ -214,7 +231,12 @@ export default function IncomePopover({ open, onOpenChange }: Props) {
 
   const handleApply = async () => {
     if (!active?.id) return;
-    await useScenariosStore.getState().updateLever(active.id, { income: { perPerson: draft } });
+    await useScenariosStore.getState().updateLever(active.id, {
+      income: { perPerson: draft },
+      annualLongTermGains: Math.max(0, ltcgDraft),
+      annualQualifiedDividends: Math.max(0, qualDivDraft),
+      annualNonQualifiedDividends: Math.max(0, nonQualDivDraft),
+    });
     onOpenChange(false);
   };
 
@@ -222,6 +244,9 @@ export default function IncomePopover({ open, onOpenChange }: Props) {
     setDraft(Array.from({ length: personCount }, (_, i) =>
       active?.leverPayload.income.perPerson[i] ?? defaultPersonPlan(),
     ));
+    setLtcgDraft(active?.leverPayload.annualLongTermGains ?? 0);
+    setQualDivDraft(active?.leverPayload.annualQualifiedDividends ?? 0);
+    setNonQualDivDraft(active?.leverPayload.annualNonQualifiedDividends ?? 0);
   };
 
   const trajectoryYears = Math.max(5, Math.min(20, Math.round(horizonMonths / 12)));
@@ -425,6 +450,66 @@ export default function IncomePopover({ open, onOpenChange }: Props) {
               </li>
             ))}
           </ul>
+        </div>
+
+        {/* Investment income (Wave-3 Task 1 — wires the dormant engine fields).
+            All three values are annual, applied household-wide. The engine
+            taxes LTCG + qualified dividends via the LTCG schedule (0/15/20%
+            stacking on ordinary income), non-qualified divs as ordinary, and
+            sums all three into NIIT MAGI/net-II once thresholds are met. */}
+        <div className="pt-3 border-t" data-testid="income-investment-income">
+          <div className="text-xs font-medium mb-2 text-muted-foreground">
+            Investment income (annual, household)
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <Label htmlFor="ltcg-amount" className="text-xs">
+                <TermTooltip term="LTCG">Long-term capital gains</TermTooltip>
+              </Label>
+              <Input
+                id="ltcg-amount"
+                type="number"
+                min={0}
+                step={1000}
+                value={ltcgDraft}
+                onChange={(e) => setLtcgDraft(Math.max(0, Number(e.target.value) || 0))}
+                aria-label="Annual long-term capital gains"
+              />
+            </div>
+            <div>
+              <Label htmlFor="qualified-divs" className="text-xs">
+                <TermTooltip term="Qualified dividend">Qualified dividends</TermTooltip>
+              </Label>
+              <Input
+                id="qualified-divs"
+                type="number"
+                min={0}
+                step={500}
+                value={qualDivDraft}
+                onChange={(e) => setQualDivDraft(Math.max(0, Number(e.target.value) || 0))}
+                aria-label="Annual qualified dividends"
+              />
+            </div>
+            <div>
+              <Label htmlFor="nonqualified-divs" className="text-xs">
+                Non-qualified dividends
+              </Label>
+              <Input
+                id="nonqualified-divs"
+                type="number"
+                min={0}
+                step={500}
+                value={nonQualDivDraft}
+                onChange={(e) => setNonQualDivDraft(Math.max(0, Number(e.target.value) || 0))}
+                aria-label="Annual non-qualified dividends"
+              />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            LTCG and qualified dividends are taxed at the federal 0% / 15% / 20% schedule.
+            Non-qualified dividends are taxed at ordinary brackets. Above MAGI ~$200k single /
+            $250k MFJ, an additional 3.8% <TermTooltip term="NIIT">NIIT</TermTooltip> applies.
+          </p>
         </div>
       </div>
     </LeverPopoverShell>
