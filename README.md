@@ -1,6 +1,6 @@
-# Finance App
+# Cairn
 
-Personal finance tracking and planning app for households. Standalone Tauri desktop app with local SQLite storage.
+Local-only personal finance tracker for households. Standalone Tauri desktop app with local SQLite storage.
 
 ## Disclaimer
 
