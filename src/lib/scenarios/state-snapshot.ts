@@ -27,7 +27,23 @@ export interface RealStateTaxBrackets {
   federal: Bracket[];
   state: Bracket[];
   city: Bracket[] | null;
-  standardDeduction: number;
+  /**
+   * Per-jurisdiction standard deduction. Pre-fix this was a single scalar
+   * sourced from the FEDERAL row and applied to state/city tax as well —
+   * MA (state SD = $0) was getting the federal $32,200 SD against its
+   * 5% bracket, under-collecting ~$1,460/year for a $300k MFJ household.
+   * Now each jurisdiction's own seeded SD is consulted (see
+   * pickStandardDeductionFor below).
+   *
+   * Cities that tax gross wages (Ohio cities, Kentucky cities, the PA
+   * EIT cities, NYC) seed standardDeduction = 0 and that 0 flows through
+   * here cleanly.
+   */
+  standardDeduction: {
+    federal: number;
+    state: number;
+    city: number;
+  };
 }
 
 export interface RealState {
@@ -178,11 +194,24 @@ function pickBrackets(
   return match ? match.brackets : [];
 }
 
-function pickStandardDeduction(rules: TaxRule[], filingStatus: FilingStatus): number {
-  const fed = rules.find(
-    (r) => r.jurisdictionType === 'FEDERAL' && r.filingStatus === filingStatus,
+/**
+ * Look up the standard deduction for a specific jurisdiction (federal / state /
+ * city). Returns 0 when no rule matches — that's the correct fall-through for
+ * no-state-tax states (TX, FL) and for cities that tax gross wages.
+ */
+function pickStandardDeductionFor(
+  rules: TaxRule[],
+  jurisdictionType: JurisdictionType,
+  jurisdictionCode: string,
+  filingStatus: FilingStatus,
+): number {
+  const match = rules.find(
+    (r) =>
+      r.jurisdictionType === jurisdictionType &&
+      r.jurisdictionCode === jurisdictionCode &&
+      r.filingStatus === filingStatus,
   );
-  return fed?.standardDeduction ?? 0;
+  return match?.standardDeduction ?? 0;
 }
 
 export function captureRealState(inputs: RealStateInputs): RealState {
@@ -198,7 +227,11 @@ export function captureRealState(inputs: RealStateInputs): RealState {
     federal,
     state: stateBrackets,
     city: cityBrackets.length > 0 ? cityBrackets : null,
-    standardDeduction: pickStandardDeduction(inputs.taxRules, filingStatus),
+    standardDeduction: {
+      federal: pickStandardDeductionFor(inputs.taxRules, 'FEDERAL', 'US', filingStatus),
+      state: state ? pickStandardDeductionFor(inputs.taxRules, 'STATE', state, filingStatus) : 0,
+      city: city ? pickStandardDeductionFor(inputs.taxRules, 'CITY', city, filingStatus) : 0,
+    },
   };
 
   const { initialCash, initialInvestmentsByAccount, cashAccountsWithBalances } = computeInitialBalances(

@@ -201,6 +201,21 @@ export const LeverPayloadSchema = z.object({
    * settings defaults" so existing scenarios pick up the canonical value.
    */
   inflation: InflationScheduleSchema.default({ defaultRate: null, overrides: {} }),
+  /**
+   * How to source investment-account withdrawals when expenses exceed cash
+   * + monthly inflows (cash-floor shortfall):
+   *
+   *   - `proportional` (default, legacy v1 behavior): pulls from every
+   *     investment account in proportion to its balance.
+   *   - `sequential`: textbook tax-bucket sequencing — taxable brokerage
+   *     first, then tax-deferred (Trad 401k/IRA, HSA), then Roth last.
+   *     Each tier is drained in proportion to balance within the tier
+   *     before moving to the next.
+   *
+   * Backward-compat: existing scenarios that don't set this default to
+   * proportional so projection sentinels don't shift under feet.
+   */
+  withdrawalStrategy: z.enum(['proportional', 'sequential']).default('proportional'),
 });
 export type LeverPayload = z.infer<typeof LeverPayloadSchema>;
 
@@ -221,5 +236,6 @@ export function emptyLeverPayload(): LeverPayload {
     retirementAgeOverride: null,
     swrOverride: null,
     inflation: { defaultRate: null, overrides: {} },
+    withdrawalStrategy: 'proportional',
   };
 }

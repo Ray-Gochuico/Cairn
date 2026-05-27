@@ -58,7 +58,7 @@ const realState: RealState = {
     federal: federal2026Single,
     state: [],
     city: null,
-    standardDeduction: 14600,
+    standardDeduction: { federal: 14600, state: 0, city: 0 },
   },
 };
 

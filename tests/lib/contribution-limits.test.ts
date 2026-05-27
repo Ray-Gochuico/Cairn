@@ -6,9 +6,9 @@ describe('CONTRIBUTION_LIMITS_2026', () => {
     expect(CONTRIBUTION_LIMITS_2026.EMPLOYEE_401K).toBe(24500);
     expect(CONTRIBUTION_LIMITS_2026.HSA_SELF_ONLY).toBe(4400);
     expect(CONTRIBUTION_LIMITS_2026.HSA_FAMILY).toBe(8750);
-    expect(CONTRIBUTION_LIMITS_2026.DCFSA_MFJ_SINGLE_HOH).toBe(5000);
-    expect(CONTRIBUTION_LIMITS_2026.DCFSA_MFS).toBe(2500);
-    expect(CONTRIBUTION_LIMITS_2026.SOCIAL_SECURITY_WAGE_BASE).toBe(176100);
+    expect(CONTRIBUTION_LIMITS_2026.DCFSA_MFJ_SINGLE_HOH).toBe(7500);
+    expect(CONTRIBUTION_LIMITS_2026.DCFSA_MFS).toBe(3750);
+    expect(CONTRIBUTION_LIMITS_2026.SOCIAL_SECURITY_WAGE_BASE).toBe(184500);
   });
 });
 
@@ -25,12 +25,12 @@ describe('hsaLimitForHousehold', () => {
 });
 
 describe('dcfsaLimit', () => {
-  it('returns 2500 for MFS filing status', () => {
-    expect(dcfsaLimit('MFS')).toBe(2500);
+  it('returns 3750 for MFS filing status (OBBBA 2026)', () => {
+    expect(dcfsaLimit('MFS')).toBe(3750);
   });
-  it('returns 5000 for SINGLE, MFJ, and HOH filing statuses', () => {
-    expect(dcfsaLimit('SINGLE')).toBe(5000);
-    expect(dcfsaLimit('MFJ')).toBe(5000);
-    expect(dcfsaLimit('HOH')).toBe(5000);
+  it('returns 7500 for SINGLE, MFJ, and HOH filing statuses (OBBBA 2026)', () => {
+    expect(dcfsaLimit('SINGLE')).toBe(7500);
+    expect(dcfsaLimit('MFJ')).toBe(7500);
+    expect(dcfsaLimit('HOH')).toBe(7500);
   });
 });

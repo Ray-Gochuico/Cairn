@@ -135,7 +135,7 @@ describe('WhatIf page', () => {
         accountsByBucket: { taxAdvantaged: [], brokerage: [], cash: [] },
         defaults: { inflation: 0.025, returnRate: 0.07 },
         startISO: '2026-05',
-        taxBrackets: { federal: [], state: [], city: null, standardDeduction: 0 },
+        taxBrackets: { federal: [], state: [], city: null, standardDeduction: { federal: 0, state: 0, city: 0 } },
       };
       const result = useScenariosStore.getState().projectedScenarios(real as any);
       expect(result.get(baselineId)?.length).toBe(120);

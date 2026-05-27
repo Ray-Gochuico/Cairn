@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { captureRealState, type RealStateInputs } from '@/lib/scenarios/state-snapshot';
+import { computeTotalTax } from '@/lib/tax';
 import type { Account, Holding, Loan, Transaction, Household, TaxRule } from '@/types/schema';
 import { AccountType } from '@/types/enums';
 
@@ -134,7 +135,8 @@ describe('captureRealState — tax brackets', () => {
     expect(s.taxBrackets.federal[0].rate).toBeCloseTo(0.10, 4);
     expect(s.taxBrackets.state.length).toBeGreaterThan(0);
     expect(s.taxBrackets.city).toBeNull();
-    expect(s.taxBrackets.standardDeduction).toBe(14600);
+    // Per-jurisdiction SD lookup (Task 2): federal $14,600 + CA $5,363.
+    expect(s.taxBrackets.standardDeduction).toEqual({ federal: 14600, state: 5363, city: 0 });
   });
 
   it('falls back to empty brackets when no rule matches the household (TX no-state-tax case)', () => {
@@ -153,5 +155,134 @@ describe('captureRealState — autoInvestSalarySurplus removed (2026-05-26 revam
   it('does not expose autoInvestSalarySurplus on RealState.defaults', () => {
     const s = captureRealState(inputs);
     expect((s.defaults as Record<string, unknown>).autoInvestSalarySurplus).toBeUndefined();
+  });
+});
+
+// -----------------------------------------------------------------------------
+// Per-jurisdiction standard deductions (Task 2, P0 #3).
+//
+// Pre-fix: state tax was computed against the federal standard deduction —
+// a Massachusetts household at $300k MFJ was getting $32,200 SD applied to
+// MA's bracket (MA SD = $0), under-collecting state tax by ~$1,460/year.
+// California single at $200k was getting federal $16,100 instead of CA's
+// per-filer SD, under-collecting state tax there too.
+//
+// Post-fix: RealStateTaxBrackets.standardDeduction is { federal, state, city }
+// with values pulled from each jurisdiction's own tax_rules row.
+// -----------------------------------------------------------------------------
+describe('captureRealState — per-jurisdiction standard deductions', () => {
+  const fedMFJ: TaxRule = {
+    year: 2026,
+    jurisdictionType: 'FEDERAL',
+    jurisdictionCode: 'US',
+    filingStatus: 'MFJ',
+    brackets: [{ min: 0, max: null, rate: 0.22 }],
+    standardDeduction: 32200,
+  };
+  const fedSingle: TaxRule = {
+    year: 2026,
+    jurisdictionType: 'FEDERAL',
+    jurisdictionCode: 'US',
+    filingStatus: 'SINGLE',
+    brackets: [{ min: 0, max: null, rate: 0.22 }],
+    standardDeduction: 16100,
+  };
+  const maMFJ: TaxRule = {
+    year: 2026,
+    jurisdictionType: 'STATE',
+    jurisdictionCode: 'MA',
+    filingStatus: 'MFJ',
+    brackets: [{ min: 0, max: null, rate: 0.05 }],
+    standardDeduction: 0, // MA has no state SD
+  };
+  const caSingle: TaxRule = {
+    year: 2026,
+    jurisdictionType: 'STATE',
+    jurisdictionCode: 'CA',
+    filingStatus: 'SINGLE',
+    brackets: [{ min: 0, max: null, rate: 0.05 }],
+    standardDeduction: 5540, // CA single 2026
+  };
+  const nycMFJ: TaxRule = {
+    year: 2026,
+    jurisdictionType: 'CITY',
+    jurisdictionCode: 'NYC',
+    filingStatus: 'MFJ',
+    brackets: [{ min: 0, max: null, rate: 0.0388 }],
+    standardDeduction: 0, // NYC has no city SD
+  };
+
+  it('MA MFJ household — state SD is 0 (not federal $32,200)', () => {
+    const s = captureRealState({
+      ...inputs,
+      household: { ...inputs.household, filingStatus: 'MFJ', state: 'MA', city: null } as Household,
+      taxRules: [fedMFJ, maMFJ],
+    });
+    expect(s.taxBrackets.standardDeduction).toEqual({
+      federal: 32200,
+      state: 0,
+      city: 0,
+    });
+  });
+
+  it('CA SINGLE household — state SD is $5,540 (not federal $16,100)', () => {
+    const s = captureRealState({
+      ...inputs,
+      household: { ...inputs.household, filingStatus: 'SINGLE', state: 'CA', city: null } as Household,
+      taxRules: [fedSingle, caSingle],
+    });
+    expect(s.taxBrackets.standardDeduction).toEqual({
+      federal: 16100,
+      state: 5540,
+      city: 0,
+    });
+  });
+
+  it('FL household — no state tax → state SD is 0', () => {
+    const s = captureRealState({
+      ...inputs,
+      household: { ...inputs.household, filingStatus: 'SINGLE', state: 'FL', city: null } as Household,
+      taxRules: [fedSingle],
+    });
+    expect(s.taxBrackets.standardDeduction).toEqual({
+      federal: 16100,
+      state: 0,
+      city: 0,
+    });
+  });
+
+  it('end-to-end: MA MFJ at $300k → state tax = $15,000 (5% × $300k, no SD applied)', () => {
+    // Concrete example from the Finance review (finding #2).
+    // Pre-fix: state tax used $32,200 federal SD → MA tax = $13,540
+    //          (under-collected by ~$1,460/year).
+    // Post-fix: state SD = $0 (MA's actual rule) → MA tax = $15,000.
+    const s = captureRealState({
+      ...inputs,
+      household: { ...inputs.household, filingStatus: 'MFJ', state: 'MA', city: null } as Household,
+      taxRules: [fedMFJ, maMFJ],
+    });
+    const out = computeTotalTax({
+      gross: 300000,
+      filingStatus: 'MFJ',
+      federalBrackets: s.taxBrackets.federal,
+      stateBrackets: s.taxBrackets.state,
+      cityBrackets: s.taxBrackets.city,
+      standardDeduction: s.taxBrackets.standardDeduction,
+      pretax: { pretax401k: 0, pretaxHealth: 0, pretaxDcfsa: 0, pretaxHsa: 0 },
+    });
+    expect(out.state).toBeCloseTo(15000, 0);
+  });
+
+  it('NYC MFJ household — city SD is 0 (NYC has no city SD)', () => {
+    const s = captureRealState({
+      ...inputs,
+      household: { ...inputs.household, filingStatus: 'MFJ', state: 'MA', city: 'NYC' } as Household,
+      taxRules: [fedMFJ, maMFJ, nycMFJ],
+    });
+    expect(s.taxBrackets.standardDeduction).toEqual({
+      federal: 32200,
+      state: 0,
+      city: 0,
+    });
   });
 });

@@ -63,7 +63,7 @@ function realStateFactory(overrides: AutoInvestFactoryOverrides = {}): RealState
       federal: federal2026Single,
       state: [],
       city: null,
-      standardDeduction: 14_600,
+      standardDeduction: { federal: 14_600, state: 0, city: 0 },
     },
     ...rest,
   };
