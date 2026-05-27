@@ -8,11 +8,13 @@ import { useCategoriesStore } from '@/stores/categories-store';
 import { useContributionsStore } from '@/stores/contributions-store';
 import { useEquityGrantsStore } from '@/stores/equity-grants-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
+import { useHousingPaymentsStore } from '@/stores/housing-payments-store';
 import { useLoansStore } from '@/stores/loans-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
+import { useVehicleLeasesStore } from '@/stores/vehicle-leases-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
 import Section2_WhatYouOwn from '@/pages/setup/Section2_WhatYouOwn';
 
@@ -29,6 +31,8 @@ function resetStores() {
   useHoldingsStore.setState({ holdings: [], ...base } as any);
   usePropertiesStore.setState({ properties: [], ...base } as any);
   useVehiclesStore.setState({ vehicles: [], ...base } as any);
+  useHousingPaymentsStore.setState({ housingPayments: [], ...base } as any);
+  useVehicleLeasesStore.setState({ vehicleLeases: [], ...base } as any);
   useEquityGrantsStore.setState({ equityGrants: [], ...base } as any);
   usePersonsStore.setState({ persons: [{ id: 1, name: 'Alice' }], ...base } as any);
   useLoansStore.setState({ loans: [], ...base } as any);
@@ -76,14 +80,16 @@ describe('Section2_WhatYouOwn', () => {
     ).toBeInTheDocument();
   });
 
-  it('renders the five cards when status is in_progress', () => {
+  it('renders the seven cards when status is in_progress', () => {
     render(
       <Section2_WhatYouOwn status="in_progress" onSetStatus={() => {}} />,
     );
     expect(screen.getByText(/^Accounts$/)).toBeInTheDocument();
     expect(screen.getByText(/^Holdings$/)).toBeInTheDocument();
     expect(screen.getByText(/^Properties$/)).toBeInTheDocument();
+    expect(screen.getByText(/^Rent \/ housing payment$/i)).toBeInTheDocument();
     expect(screen.getByText(/^Vehicles$/)).toBeInTheDocument();
+    expect(screen.getByText(/^Vehicle lease$/i)).toBeInTheDocument();
     expect(screen.getByText(/^Equity grants$/i)).toBeInTheDocument();
   });
 
