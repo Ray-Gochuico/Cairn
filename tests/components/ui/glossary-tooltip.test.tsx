@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import { getGlossaryEntry } from '@/lib/glossary';
@@ -37,7 +37,12 @@ describe('TermTooltip', () => {
     expect(await screen.findByRole('tooltip')).toBeInTheDocument();
 
     await user.unhover(trigger);
-    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    // The Radix-backed implementation debounces hover-out by ~120 ms so
+    // the user can move the cursor into the popover without it closing
+    // prematurely. Wait for the eventual dismissal.
+    await waitFor(() =>
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument(),
+    );
   });
 
   it('accepts a child to render alongside the lookup key (e.g., a custom label)', () => {

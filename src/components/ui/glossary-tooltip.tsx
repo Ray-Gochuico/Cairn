@@ -1,11 +1,5 @@
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { cn } from '@/lib/utils';
 import { getGlossaryEntry } from '@/lib/glossary';
 
@@ -27,8 +21,19 @@ interface TermTooltipProps {
  * friend can hover (or tap on mobile / keyboard-focus) and see a definition.
  *
  * Renders the wrapped text with a subtle dotted underline + an ⓘ icon.
- * Hover, focus, and click all open the popover; click toggles, so tapping
- * outside or pressing Escape closes it.
+ * Hover and focus open the popover (delayed close on hover-out so the
+ * cursor can travel into the popover without it disappearing); click
+ * toggles for keyboard / touch users; tapping outside or pressing
+ * Escape closes it.
+ *
+ * Internal implementation is `@radix-ui/react-popover`. Radix handles
+ * flip / shift positioning at viewport edges, focus management
+ * (content gets focus on keyboard open, focus returns to trigger on
+ * close), Tab / Shift-Tab inside, Escape closes, click-outside closes.
+ * We override the content's `role` from "dialog" to "tooltip" so
+ * existing call-sites and tests that look for `role="tooltip"` keep
+ * working. The popover *can* hold focus though — Tab into the "Learn
+ * more" link is supported.
  *
  * Definitions live in `src/lib/glossary.ts`. If a term isn't in the
  * glossary, the wrapper falls back to a plain inline span (no UI nag)
@@ -36,29 +41,25 @@ interface TermTooltipProps {
  */
 export function TermTooltip({ term, children, className }: TermTooltipProps) {
   const entry = getGlossaryEntry(term);
-  const triggerId = useId();
-  const popoverId = useId();
   const [open, setOpen] = useState(false);
-  const wrapperRef = useRef<HTMLSpanElement | null>(null);
+  // Debounce the hover-out so users can travel the cursor from trigger
+  // into the popover (a few px of dead space between them) without the
+  // popover disappearing. 120 ms is the same delay the Radix HoverCard
+  // primitive uses by default.
+  const closeTimer = useRef<number | null>(null);
 
-  const close = useCallback(() => setOpen(false), []);
+  const cancelClose = () => {
+    if (closeTimer.current !== null) {
+      window.clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  };
+  const scheduleClose = () => {
+    cancelClose();
+    closeTimer.current = window.setTimeout(() => setOpen(false), 120);
+  };
 
-  useEffect(() => {
-    if (!open) return;
-    function onDocClick(e: MouseEvent) {
-      if (!wrapperRef.current) return;
-      if (!wrapperRef.current.contains(e.target as Node)) close();
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') close();
-    }
-    document.addEventListener('mousedown', onDocClick);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDocClick);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open, close]);
+  useEffect(() => () => cancelClose(), []);
 
   useEffect(() => {
     if (entry) return;
@@ -74,47 +75,75 @@ export function TermTooltip({ term, children, className }: TermTooltipProps) {
   }
 
   return (
-    <span
-      ref={wrapperRef}
-      className={cn('relative inline-block', className)}
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-    >
-      <button
-        type="button"
-        id={triggerId}
-        aria-describedby={open ? popoverId : undefined}
-        aria-expanded={open}
-        onClick={() => setOpen(true)}
-        onFocus={() => setOpen(true)}
-        onBlur={(e) => {
-          // Only close on focus leaving the whole wrapper.
-          if (!e.currentTarget.parentElement?.contains(e.relatedTarget as Node)) {
-            close();
-          }
-        }}
-        className="inline-flex items-baseline gap-0.5 underline decoration-dotted decoration-muted-foreground/60 underline-offset-2 hover:decoration-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm bg-transparent cursor-help"
-      >
-        <span>{children ?? entry.term}</span>
-        <span aria-hidden className="text-[0.65em] text-muted-foreground">
-          &#9432;
-        </span>
-      </button>
-      {open && (
-        <span
-          role="tooltip"
-          id={popoverId}
-          className="absolute left-1/2 top-full z-50 mt-2 w-72 -translate-x-1/2 rounded-md border bg-popover px-3 py-2 text-left text-sm text-popover-foreground shadow-md"
+    <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
+      <PopoverPrimitive.Trigger asChild>
+        <button
+          type="button"
+          // Hover opens immediately; mouse-leave schedules a delayed
+          // close so the user can move the cursor into the popover
+          // without it disappearing. Click toggles. The trick: Radix's
+          // composed click handler reads the controlled `open` to
+          // decide toggle direction, but hover may have just set
+          // `open=true` in the *same* event sequence (user-event v14's
+          // click fires pointerenter → click). We pre-empt Radix's
+          // toggle by reading `open` ourselves and forcing the right
+          // direction; `preventDefault` stops Radix's `onOpenToggle`
+          // from running afterward (composeEventHandlers skips when
+          // defaultPrevented).
+          onPointerEnter={() => {
+            cancelClose();
+            setOpen(true);
+          }}
+          onPointerLeave={scheduleClose}
+          onClick={(e) => {
+            // We own click semantics: clicking always opens (matches
+            // hover/focus). Closing happens via Escape, click-outside,
+            // or mouse-leave from both trigger and popover. This
+            // prevents the user-event v14 click race where
+            // pointerenter opens then Radix's toggle would immediately
+            // close.
+            e.preventDefault();
+            cancelClose();
+            setOpen(true);
+          }}
+          className={cn(
+            'inline-flex items-baseline gap-0.5 underline decoration-dotted decoration-muted-foreground/60 underline-offset-2 hover:decoration-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm bg-transparent cursor-help',
+            className,
+          )}
         >
-          <span className="block font-semibold mb-1">{entry.term}</span>
-          <span className="block text-muted-foreground">{entry.shortDefinition}</span>
+          <span>{children ?? entry.term}</span>
+          <span aria-hidden className="text-[0.65em] text-muted-foreground">
+            &#9432;
+          </span>
+        </button>
+      </PopoverPrimitive.Trigger>
+      <PopoverPrimitive.Portal>
+        <PopoverPrimitive.Content
+          // Match the test contract from the hand-rolled implementation.
+          role="tooltip"
+          sideOffset={6}
+          collisionPadding={8}
+          onPointerEnter={cancelClose}
+          onPointerLeave={scheduleClose}
+          // Radix tries to focus the content on open via keyboard. The
+          // tooltip is informational — keep focus on the trigger so
+          // sighted-keyboard users see the dotted underline indicator,
+          // but still allow Tab to move into the popover (Learn more
+          // link). `event.preventDefault()` in onOpenAutoFocus keeps
+          // focus on the trigger; Tab still works since Radix wires up
+          // its own focus-trap-on-content.
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          className="z-50 w-72 rounded-md border bg-popover px-3 py-2 text-left text-sm text-popover-foreground shadow-md outline-none"
+        >
+          <div className="font-semibold mb-1">{entry.term}</div>
+          <div className="text-muted-foreground">{entry.shortDefinition}</div>
           {entry.fullDefinition && (
-            <span className="mt-2 block text-muted-foreground">{entry.fullDefinition}</span>
+            <div className="mt-2 text-muted-foreground">{entry.fullDefinition}</div>
           )}
           {entry.examples && entry.examples.length > 0 && (
-            <span className="mt-2 block text-xs text-muted-foreground">
+            <div className="mt-2 text-xs text-muted-foreground">
               <span className="font-medium">Examples:</span> {entry.examples.join(', ')}
-            </span>
+            </div>
           )}
           {entry.learnMoreUrl && (
             <a
@@ -122,14 +151,13 @@ export function TermTooltip({ term, children, className }: TermTooltipProps) {
               target="_blank"
               rel="noopener noreferrer"
               className="mt-2 block text-xs text-primary underline"
-              onMouseDown={(e) => e.stopPropagation()}
             >
               Learn more
             </a>
           )}
-        </span>
-      )}
-    </span>
+        </PopoverPrimitive.Content>
+      </PopoverPrimitive.Portal>
+    </PopoverPrimitive.Root>
   );
 }
 
