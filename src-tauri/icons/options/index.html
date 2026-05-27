@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Cairn icon options</title>
+  <style>
+    :root {
+      --light-bg: #f5f5f5;
+      --light-card: #ffffff;
+      --light-fg: #18181b;
+      --light-muted: #71717a;
+      --dark-bg: #1c1c1e;
+      --dark-card: #2c2c2e;
+      --dark-fg: #f4f4f5;
+      --dark-muted: #a1a1aa;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "SF Pro", "Helvetica Neue", sans-serif; }
+    body {
+      background: var(--light-bg);
+      color: var(--light-fg);
+      padding: 32px 24px 64px;
+      line-height: 1.5;
+    }
+    body.dark { background: var(--dark-bg); color: var(--dark-fg); }
+    body.dark .card { background: var(--dark-card); }
+    body.dark .label { color: var(--dark-muted); }
+    h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; }
+    .sub { color: var(--light-muted); font-size: 14px; margin-bottom: 28px; }
+    body.dark .sub { color: var(--dark-muted); }
+    .toolbar {
+      display: flex; gap: 12px; align-items: center;
+      margin-bottom: 24px;
+    }
+    button {
+      font: inherit;
+      background: transparent;
+      border: 1px solid #d4d4d8;
+      border-radius: 8px;
+      padding: 8px 14px;
+      cursor: pointer;
+      color: inherit;
+    }
+    body.dark button { border-color: #3f3f46; }
+    button[aria-pressed="true"] {
+      background: #18181b;
+      color: white;
+      border-color: #18181b;
+    }
+    body.dark button[aria-pressed="true"] {
+      background: #f4f4f5;
+      color: #18181b;
+      border-color: #f4f4f5;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 24px;
+    }
+    .card {
+      background: var(--light-card);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .card h2 {
+      font-size: 16px;
+      font-weight: 600;
+      margin: 0 0 4px;
+      display: flex; justify-content: space-between; align-items: baseline;
+    }
+    .card h2 .id {
+      font-size: 12px;
+      color: var(--light-muted);
+      font-weight: 500;
+    }
+    body.dark .card h2 .id { color: var(--dark-muted); }
+    .card p {
+      font-size: 13px;
+      color: var(--light-muted);
+      margin: 0 0 14px;
+      min-height: 36px;
+    }
+    body.dark .card p { color: var(--dark-muted); }
+    .hero {
+      display: flex; justify-content: center; align-items: center;
+      padding: 8px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #e4e4e7 0%, #fafafa 50%, #f4f4f5 100%);
+      margin-bottom: 16px;
+    }
+    body.dark .hero {
+      background: linear-gradient(135deg, #27272a 0%, #3f3f46 50%, #18181b 100%);
+    }
+    .hero img { display: block; }
+    .sizes {
+      display: flex; align-items: flex-end; justify-content: space-around;
+      gap: 8px;
+      padding: 12px 8px 0;
+      border-top: 1px dashed rgba(0,0,0,0.08);
+    }
+    body.dark .sizes { border-top-color: rgba(255,255,255,0.1); }
+    .size { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    .label { font-size: 11px; color: var(--light-muted); }
+    .docks {
+      margin-top: 14px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .dock {
+      padding: 14px 10px 10px;
+      border-radius: 10px;
+      text-align: center;
+    }
+    .dock.light {
+      background: linear-gradient(180deg, #fafafa, #e4e4e7);
+      color: #71717a;
+    }
+    .dock.dark {
+      background: linear-gradient(180deg, #3f3f46, #18181b);
+      color: #a1a1aa;
+    }
+    .dock img { display: block; margin: 0 auto; }
+    .dock .caption { font-size: 10px; margin-top: 6px; }
+    .recommend {
+      margin-top: 24px;
+      padding: 16px 20px;
+      background: rgba(234, 179, 8, 0.08);
+      border-left: 4px solid #eab308;
+      border-radius: 8px;
+      font-size: 13px;
+    }
+    body.dark .recommend {
+      background: rgba(234, 179, 8, 0.15);
+    }
+    .recommend strong { color: #ca8a04; }
+    body.dark .recommend strong { color: #fde047; }
+  </style>
+</head>
+<body>
+  <h1>Cairn — pick an app icon</h1>
+  <p class="sub">5 mockups by the design-polish teammate. Each shown full-size (256px) + at every size the app actually ships (.icns/.ico render). Toggle dark to see how each looks in macOS dark dock.</p>
+
+  <div class="toolbar">
+    <strong style="font-size:13px;">Background:</strong>
+    <button id="btn-light" aria-pressed="true">Light</button>
+    <button id="btn-dark" aria-pressed="false">Dark</button>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <div class="recommend">
+    <strong>How to interpret:</strong>
+    The 16px row matches what users see in their browser tab/favicon and macOS Spotlight. The 32px row is the system menubar.
+    The 128px row is the dock at default magnification. Anything that turns into a blob at 16px is a dock-only icon — pick a different one
+    if you want it to read as Cairn everywhere.
+  </div>
+
+  <script>
+    const options = [
+      { id: 1, name: "Classic Cairn", desc: "Five organic stones, warm earth palette (ochre + slate + taupe)." },
+      { id: 2, name: "Geometric Cairn", desc: "Five flat polygon stones, off-white silhouette on deep forest plate." },
+      { id: 3, name: "Trail Marker", desc: "Cairn on a horizon with an S-curve path leading to it." },
+      { id: 4, name: "Compass-stone", desc: "Uniform sage stack with a tiny compass-rose etched into one stone." },
+      { id: 5, name: "Minimal mark", desc: "Three rounded-rect stones, brand-warm orange plate. Favicon-ready." },
+    ];
+
+    const sizes = [16, 32, 64, 128];
+
+    const grid = document.getElementById("grid");
+    options.forEach((opt) => {
+      const card = document.createElement("div");
+      card.className = "card";
+      card.innerHTML = `
+        <h2>${opt.name} <span class="id">cairn-${opt.id}</span></h2>
+        <p>${opt.desc}</p>
+        <div class="hero"><img src="cairn-${opt.id}.preview.png" width="160" height="160" alt="cairn-${opt.id} at 160px" /></div>
+        <div class="sizes">
+          ${sizes.map(s => `
+            <div class="size">
+              <img src="cairn-${opt.id}.preview.png" width="${s}" height="${s}" alt="${s}px" />
+              <span class="label">${s}px</span>
+            </div>
+          `).join("")}
+        </div>
+        <div class="docks">
+          <div class="dock light">
+            <img src="cairn-${opt.id}.preview.png" width="48" height="48" alt="light dock" />
+            <div class="caption">light dock</div>
+          </div>
+          <div class="dock dark">
+            <img src="cairn-${opt.id}.preview.png" width="48" height="48" alt="dark dock" />
+            <div class="caption">dark dock</div>
+          </div>
+        </div>
+      `;
+      grid.appendChild(card);
+    });
+
+    const setMode = (mode) => {
+      document.body.classList.toggle("dark", mode === "dark");
+      document.getElementById("btn-light").setAttribute("aria-pressed", mode === "light");
+      document.getElementById("btn-dark").setAttribute("aria-pressed", mode === "dark");
+    };
+    document.getElementById("btn-light").addEventListener("click", () => setMode("light"));
+    document.getElementById("btn-dark").addEventListener("click", () => setMode("dark"));
+  </script>
+</body>
+</html>

@@ -1,5 +1,11 @@
 # Cairn icon mockups (2026-05-27)
 
+> **Selected:** **`cairn-2.svg` (Geometric Cairn)** — chosen for v1
+> release on 2026-05-27. Rendered to all required sizes via
+> `npm run tauri -- icon src-tauri/icons/options/cairn-2.svg`. The
+> live `src-tauri/icons/*.png`, `.icns`, and `.ico` files all derive
+> from cairn-2. The other 4 SVGs are kept here for historical context.
+
 Five hand-coded SVG icon options to replace the placeholder `icon.png`
 the app currently ships with. Each follows the **stacked-stones cairn**
 metaphor (matches the brand name Cairn and the app's "roadmap to FI"
