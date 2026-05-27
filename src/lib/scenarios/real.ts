@@ -29,6 +29,7 @@ export function toReal(states: MonthlyState[], inflation: number, startISO: stri
       debtByLoan: Object.fromEntries(Object.entries(s.debtByLoan).map(([k, v]) => [k, v * factor])),
       compoundReturnAdded: scaleOpt(s.compoundReturnAdded),
       autoInvestedSalarySurplus: scaleOpt(s.autoInvestedSalarySurplus),
+      salarySurplusToCash: scaleOpt(s.salarySurplusToCash),
       leverContributionsInvested: scaleOpt(s.leverContributionsInvested),
       lumpSumInvested: scaleOpt(s.lumpSumInvested),
       withdrawnFromInvestments: scaleOpt(s.withdrawnFromInvestments),

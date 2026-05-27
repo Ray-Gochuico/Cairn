@@ -57,7 +57,17 @@ function realStateFactory(overrides: Partial<RealState> = {}): RealState {
     initialCash: 0,
     initialInvestmentsByAccount: { 1: 200_000 },
     cashAccountsWithBalances: [],
-    defaults: { inflation: 0, returnRate: 0, defaultCashApy: null },
+    // Pre-existing tests in this file pinned the OLD default (auto-invest ON).
+    // Now that migration 0029 flips it to OFF, the factory keeps prior behavior
+    // explicit so each pre-existing test continues to assert against its
+    // original intent. New OFF-default tests pass `autoInvestSalarySurplus: false`
+    // in their own overrides.
+    defaults: {
+      inflation: 0,
+      returnRate: 0,
+      defaultCashApy: null,
+      autoInvestSalarySurplus: true,
+    },
     startISO: '2026-05',
     taxBrackets: {
       federal: federal2026Single,
@@ -265,6 +275,122 @@ describe('engine decomposition — math invariants', () => {
       expect(totalInvestments(a[i])).toBeCloseTo(totalInvestments(b[i]), 6);
       expect(a[i].cash).toBeCloseTo(b[i].cash, 6);
       expect(a[i].netWorth).toBeCloseTo(b[i].netWorth, 6);
+    }
+  });
+});
+
+// Migration 0029 — household `autoInvestSalarySurplus` toggle. When OFF (the
+// new default since 2026-05-26), positive salary surplus with no Contributions
+// segment routes to cash and is tagged `salarySurplusToCash` for the projection
+// tooltip. The auto-invest path is preserved when the toggle is ON.
+describe('stepMonth — autoInvestSalarySurplus OFF default', () => {
+  it('routes positive surplus to cash when setting is OFF + no segments', () => {
+    const real = realStateFactory({
+      defaults: {
+        inflation: 0,
+        returnRate: 0,
+        defaultCashApy: null,
+        autoInvestSalarySurplus: false,
+      },
+    });
+    // Strip the default 7% return so investments-bucket growth is solely from
+    // the auto-invest branch (which should be off).
+    const payload = emptyLeverPayload();
+    payload.returns.defaultRate = 0;
+    const states = projectScenario(real, payload, {
+      startISO: '2026-05',
+      months: 6,
+    });
+
+    for (let i = 1; i < states.length; i++) {
+      const s = states[i];
+      expect(s.salarySurplusToCash).toBeCloseTo(Math.max(0, s.savings), 4);
+      // Auto-invest field is reset to 0 each step but never populated on OFF path.
+      expect(s.autoInvestedSalarySurplus).toBe(0);
+      // Investments unchanged step-over-step (no return, no segment, no auto-invest).
+      expect(totalInvestments(s)).toBeCloseTo(totalInvestments(states[i - 1]), 4);
+    }
+    // Cash should have accumulated positive surplus over 5 stepped months.
+    expect(states[states.length - 1].cash).toBeGreaterThan(0);
+  });
+
+  it('routes positive surplus to investments when setting is ON + no segments', () => {
+    const real = realStateFactory({
+      defaults: {
+        inflation: 0,
+        returnRate: 0,
+        defaultCashApy: null,
+        autoInvestSalarySurplus: true,
+      },
+    });
+    const payload = emptyLeverPayload();
+    payload.returns.defaultRate = 0;
+    const states = projectScenario(real, payload, {
+      startISO: '2026-05',
+      months: 6,
+    });
+
+    for (let i = 1; i < states.length; i++) {
+      const s = states[i];
+      expect(s.autoInvestedSalarySurplus).toBeCloseTo(Math.max(0, s.savings), 4);
+      expect(s.salarySurplusToCash).toBe(0);
+      // Cash unchanged when surplus is routed to investments (no return + no overflow).
+      expect(s.cash).toBeCloseTo(states[i - 1].cash, 4);
+    }
+    expect(totalInvestments(states[states.length - 1])).toBeGreaterThan(
+      totalInvestments(states[0]),
+    );
+  });
+
+  it('respects explicit segment regardless of setting (segment + remainder)', () => {
+    const real = realStateFactory({
+      defaults: {
+        inflation: 0,
+        returnRate: 0,
+        defaultCashApy: null,
+        autoInvestSalarySurplus: false,
+      },
+    });
+    const payload = emptyLeverPayload();
+    payload.contributions = [
+      { startMonth: 0, endMonth: 59, monthlyAmount: 500, allocation: null },
+    ];
+    const states = projectScenario(real, payload, { startISO: '2026-05', months: 6 });
+
+    for (let i = 1; i < states.length; i++) {
+      const s = states[i];
+      // Segment lands in investments; remainder lands in cash via the existing
+      // segment-active routing — NOT tagged as salarySurplusToCash (that field
+      // tracks only the no-segment OFF-path routing, per the spec).
+      expect(s.leverContributionsInvested).toBe(500);
+      expect(s.salarySurplusToCash).toBe(0);
+      expect(s.autoInvestedSalarySurplus).toBe(0);
+    }
+  });
+
+  it('sets salarySurplusToCash = 0 when savings is negative (cash-floor path)', () => {
+    // Zero-salary retiree with no cash → cash-floor pulls from investments.
+    // The new field stays at 0 since the OFF branch only fires on positive savings.
+    const zeroSalaryPersons = [{ ...persons[0], annualSalaryPretax: 0 } as Person];
+    const real = realStateFactory({
+      defaults: {
+        inflation: 0,
+        returnRate: 0,
+        defaultCashApy: null,
+        autoInvestSalarySurplus: false,
+      },
+      persons: zeroSalaryPersons,
+      initialInvestmentsByAccount: { 1: 500_000 },
+      initialCash: 0,
+      baselineMonthlyExpenses: 5_000,
+    });
+    const states = projectScenario(real, emptyLeverPayload(), {
+      startISO: '2026-05',
+      months: 6,
+    });
+    for (let i = 1; i < states.length; i++) {
+      expect(states[i].salarySurplusToCash).toBe(0);
+      expect(states[i].withdrawnFromInvestments).toBeGreaterThan(0);
     }
   });
 });

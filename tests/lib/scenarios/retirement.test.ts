@@ -52,7 +52,15 @@ function makeRealState(
     baselineMonthlyExpenses: 4500,
     initialCash: 5000,
     initialInvestmentsByAccount: byAccount,
-    defaults: { inflation: 0, returnRate: 0.07 },
+    // Pre-migration-0029 fixture: retirement tests pin the auto-invest path
+    // ("investments grow from savings pre-retirement"). Opt back in so test
+    // intent is preserved under the new OFF default.
+    defaults: {
+      inflation: 0,
+      returnRate: 0.07,
+      defaultCashApy: null,
+      autoInvestSalarySurplus: true,
+    },
     startISO: '2026-05',
     taxBrackets: {
       federal: federal2026Single,
@@ -100,7 +108,12 @@ describe('projectScenario — retirement age transition', () => {
     // investments shrink by $54K/yr post-retirement.
     const realLowReturn: RealState = {
       ...makeRealState({ initialCash: 5000, initialInvestments: 500000 }),
-      defaults: { inflation: 0, returnRate: 0 },
+      defaults: {
+        inflation: 0,
+        returnRate: 0,
+        defaultCashApy: null,
+        autoInvestSalarySurplus: true,
+      },
     };
     const payload = emptyLeverPayload();
     payload.returns = { defaultRate: 0, overrides: {} };

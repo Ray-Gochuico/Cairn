@@ -61,7 +61,16 @@ const realState: RealState = {
   initialCash: 0,
   initialInvestmentsByAccount: { 1: 200000 }, // 1000 shares VTI @ $200 costBasis
   cashAccountsWithBalances: [],
-  defaults: { inflation: 0.025, returnRate: 0.07, defaultCashApy: null },
+  // Migration 0029 — these e2e fixtures predate the OFF default and pin
+  // auto-invest behavior on the savings → investments path. Opt back in here
+  // so the "saving household: investments rise" / "parity: cash stays at 0"
+  // assertions keep their original intent.
+  defaults: {
+    inflation: 0.025,
+    returnRate: 0.07,
+    defaultCashApy: null,
+    autoInvestSalarySurplus: true,
+  },
   startISO: '2026-05',
   taxBrackets: {
     federal: federal2026Single,
@@ -147,7 +156,12 @@ describe('projectScenario — cash floor + investments deficit routing', () => {
   const flatReal: RealState = {
     ...realState,
     loans: [],
-    defaults: { inflation: 0, returnRate: 0, defaultCashApy: null },
+    defaults: {
+      inflation: 0,
+      returnRate: 0,
+      defaultCashApy: null,
+      autoInvestSalarySurplus: true,
+    },
   };
 
   function zeroReturnPayload() {
@@ -276,7 +290,12 @@ describe('projectScenario — contribution allocation routing', () => {
     initialInvestmentsByAccount: { 10: 60_000, 11: 40_000 },
     initialCash: 50_000, // ample buffer; contribution remainders flow here
     baselineMonthlyExpenses: 2000,
-    defaults: { inflation: 0, returnRate: 0, defaultCashApy: null },
+    defaults: {
+      inflation: 0,
+      returnRate: 0,
+      defaultCashApy: null,
+      autoInvestSalarySurplus: true,
+    },
     loans: [], // strip the auto loan so the only signal is the contribution
   };
 
@@ -364,7 +383,12 @@ describe('projectScenario — cash APY growth', () => {
     initialCash: 10_000,
     initialInvestmentsByAccount: {},
     cashAccountsWithBalances: [], // overridden per-test with APY
-    defaults: { inflation: 0, returnRate: 0, defaultCashApy: null },
+    defaults: {
+      inflation: 0,
+      returnRate: 0,
+      defaultCashApy: null,
+      autoInvestSalarySurplus: true,
+    },
   };
 
   it('cash grows at ~5% APY over 12 months ($10k → ~$10,512)', () => {

@@ -55,9 +55,20 @@ export interface MonthlyState {
    * investments this step WITHOUT an explicit contribution segment driving it.
    * Zero when an active segment covers this month (the segment amount lands
    * in `leverContributionsInvested` instead and any positive remainder flows
-   * to cash, not investments).
+   * to cash, not investments). Also zero when the household has opted OUT of
+   * the auto-invest setting (migration 0029) — surplus routes to
+   * `salarySurplusToCash` instead.
    */
   autoInvestedSalarySurplus?: number;
+  /**
+   * Amount of `s.savings` routed to cash this step BECAUSE the household has
+   * `auto_invest_salary_surplus` set to off (migration 0029, the new default
+   * since 2026-05-26) AND no Contributions segment was active. Zero in every
+   * other case — specifically, the "segment active + positive remainder"
+   * cash routing is NOT counted here (that's an explicit segment leftover,
+   * not the auto-invest opt-out path).
+   */
+  salarySurplusToCash?: number;
   /**
    * `segment.monthlyAmount` distributed to investments this step when a
    * contribution segment was active. Zero when no segment covers this month.
@@ -285,6 +296,7 @@ function stepMonth(
     // undefined arithmetic.
     compoundReturnAdded: 0,
     autoInvestedSalarySurplus: 0,
+    salarySurplusToCash: 0,
     leverContributionsInvested: 0,
     lumpSumInvested: 0,
     withdrawnFromInvestments: 0,
@@ -435,8 +447,21 @@ function stepMonth(
       applyCashFloorShortfall(s, -remainder);
     }
   } else if (s.savings > 0) {
-    s.investmentsByAccount = distributeToAccounts(s.investmentsByAccount, s.savings, allocation);
-    s.autoInvestedSalarySurplus = s.savings;
+    // Migration 0029 — household opt-in for auto-investing the surplus when
+    // no Contributions segment is active. Default OFF (since 2026-05-26):
+    // surplus accumulates in cash instead of silently flowing to investments.
+    // When ON the prior behavior is preserved (auto-invest via
+    // distributeToAccounts), with the gain tagged as `autoInvestedSalarySurplus`
+    // for the projection tooltip; when OFF the surplus is added to cash and
+    // tagged as `salarySurplusToCash`. The two fields are mutually exclusive
+    // per step.
+    if (real.defaults.autoInvestSalarySurplus) {
+      s.investmentsByAccount = distributeToAccounts(s.investmentsByAccount, s.savings, allocation);
+      s.autoInvestedSalarySurplus = s.savings;
+    } else {
+      s.cash += s.savings;
+      s.salarySurplusToCash = s.savings;
+    }
   } else if (s.savings < 0) {
     applyCashFloorShortfall(s, -s.savings);
   }

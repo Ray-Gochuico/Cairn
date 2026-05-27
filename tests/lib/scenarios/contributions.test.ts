@@ -32,7 +32,10 @@ const federal2026Single: Bracket[] = [
 ];
 
 // Use TX (no state tax) + zero loans so the v1 surplus-vs-shortfall logic is
-// easy to reason about and assert exactly.
+// easy to reason about and assert exactly. These tests pre-date migration 0029
+// and pin the auto-invest behavior; we opt in explicitly via
+// autoInvestSalarySurplus: true so the assertions about "post-segment surplus
+// flows to investments" remain valid under the new OFF-default routing rules.
 const realState: RealState = {
   accounts: [],
   holdings,
@@ -43,7 +46,13 @@ const realState: RealState = {
   baselineMonthlyExpenses: 4500,
   initialCash: 0,
   initialInvestmentsByAccount: { 1: 200000 }, // 1000 shares VTI @ $200 costBasis
-  defaults: { inflation: 0, returnRate: 0 }, // 0% return → no growth drift, easier math
+  cashAccountsWithBalances: [],
+  defaults: {
+    inflation: 0,
+    returnRate: 0,
+    defaultCashApy: null,
+    autoInvestSalarySurplus: true,
+  },
   startISO: '2026-05',
   taxBrackets: {
     federal: federal2026Single,

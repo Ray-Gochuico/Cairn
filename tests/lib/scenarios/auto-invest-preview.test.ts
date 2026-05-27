@@ -41,7 +41,15 @@ function realStateFactory(overrides: Partial<RealState> = {}): RealState {
     initialCash: 0,
     initialInvestmentsByAccount: { 1: 200_000 },
     cashAccountsWithBalances: [],
-    defaults: { inflation: 0, returnRate: 0, defaultCashApy: null },
+    // currentMonthlySalarySurplus sums both routing destinations so the helper
+    // is invariant to the setting; leaving it at the new default (false) here
+    // confirms the cash branch reports the correct magnitude.
+    defaults: {
+      inflation: 0,
+      returnRate: 0,
+      defaultCashApy: null,
+      autoInvestSalarySurplus: false,
+    },
     startISO: '2026-05',
     taxBrackets: {
       federal: federal2026Single,
@@ -101,5 +109,32 @@ describe('currentMonthlySalarySurplus', () => {
     const baseline = currentMonthlySalarySurplus(real, emptyLeverPayload());
     expect(surplus).toBeGreaterThan(baseline);
     expect(surplus - baseline).toBeCloseTo(2_000, 0);
+  });
+
+  it('reports the same magnitude regardless of autoInvestSalarySurplus setting', () => {
+    // The helper surfaces the "magnitude of salary surplus" — invariant to
+    // whether the engine routes it to investments (ON) or cash (OFF). It
+    // sums both decomposition fields so the popover and pill show the same
+    // number in either mode.
+    const realOff = realStateFactory({
+      defaults: {
+        inflation: 0,
+        returnRate: 0,
+        defaultCashApy: null,
+        autoInvestSalarySurplus: false,
+      },
+    });
+    const realOn = realStateFactory({
+      defaults: {
+        inflation: 0,
+        returnRate: 0,
+        defaultCashApy: null,
+        autoInvestSalarySurplus: true,
+      },
+    });
+    const offAmount = currentMonthlySalarySurplus(realOff, emptyLeverPayload());
+    const onAmount = currentMonthlySalarySurplus(realOn, emptyLeverPayload());
+    expect(offAmount).toBeCloseTo(onAmount, 4);
+    expect(offAmount).toBeGreaterThan(0);
   });
 });

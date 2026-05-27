@@ -35,4 +35,27 @@ describe('toReal', () => {
     toReal(states, 0.025, '2026-05');
     expect(totalInvestments(states[0])).toBe(100000);
   });
+
+  it('scales salarySurplusToCash by the inflation factor (Task α3)', () => {
+    // Mirror the existing decomposition-field scaling: nominal $/step amounts
+    // are deflated by the same per-step factor as cash / investments. After
+    // 1 year @ 3% inflation, $1000 nominal ≈ $970.87 real (1 / 1.03).
+    const states: MonthlyState[] = [
+      { ...make('2026-05', 100_000), salarySurplusToCash: 0 },
+      { ...make('2027-05', 100_000), salarySurplusToCash: 1000 },
+    ];
+    const realStates = toReal(states, 0.03, '2026-05');
+    expect(realStates[1].salarySurplusToCash).toBeCloseTo(1000 / 1.03, 2);
+    // Month 0 explicit zero stays at zero (preserved through the scale).
+    expect(realStates[0].salarySurplusToCash).toBe(0);
+  });
+
+  it('preserves undefined salarySurplusToCash distinctly from 0', () => {
+    // Seed state (month 0) doesn't step through stepMonth → field is undefined,
+    // not 0. toReal must keep that distinction so tooltips don't render a row
+    // for a state that never ran the auto-invest branch.
+    const states: MonthlyState[] = [make('2027-05', 100_000)];
+    const realStates = toReal(states, 0.03, '2026-05');
+    expect(realStates[0].salarySurplusToCash).toBeUndefined();
+  });
 });
