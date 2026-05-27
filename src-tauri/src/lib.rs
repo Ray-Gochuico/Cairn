@@ -3,11 +3,6 @@ mod yahoo;
 
 use yahoo::{yahoo_quote_summary, YahooState};
 
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -21,7 +16,7 @@ pub fn run() {
         // YahooState is a singleton (single reqwest cookie jar + shared crumb
         // cache) used by `yahoo_quote_summary`. See `src/yahoo.rs`.
         .manage(YahooState::new())
-        .invoke_handler(tauri::generate_handler![greet, yahoo_quote_summary])
+        .invoke_handler(tauri::generate_handler![yahoo_quote_summary])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
