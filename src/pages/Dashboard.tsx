@@ -662,9 +662,19 @@ export default function Dashboard() {
   const widgetLayout = useWidgetLayout(widgetIds);
 
   const pillsSectionContent: ReactNode = (
+    // Pill grid breakpoints are chosen so the *default* 5 pills never strand
+    // a single card on its own row. Prior layout was `md:grid-cols-4`, which
+    // renders 4-up at md/lg/xl/2xl — leaving the 5th pill (Spending vs
+    // Budget) alone on row 2 at every reasonable desktop width. New ladder:
+    //   <sm  (mobile)         : 2 cols  → 2+2+1 (acceptable; tall stacks)
+    //   sm/md (640-1023px)    : 3 cols  → 3+2  (no stranded card)
+    //   lg+   (≥1024px)       : 5 cols  → 5-in-a-row (no stranded card)
+    // Wave-4 cohesion review found the strand happened at both 1024px and
+    // 1440px, the two widths the design QA tracks. Both now land on the
+    // lg breakpoint and render as a single row.
     <div className="space-y-4">
       <div
-        className="grid grid-cols-2 md:grid-cols-4 gap-4"
+        className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4"
         data-testid="dashboard-pill-grid"
       >
         {visiblePills.length === 0 ? (

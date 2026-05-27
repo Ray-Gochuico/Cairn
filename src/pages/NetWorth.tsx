@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
@@ -19,6 +20,7 @@ import {
   CardDescription,
   CardHeader,
 } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 import { FreshnessBadge } from '@/components/ui/freshness-badge';
 import NetWorthTimeSeriesChart from '@/components/charts/NetWorthTimeSeriesChart';
@@ -260,13 +262,22 @@ export default function NetWorth() {
           </div>
           <ImportCsvButton entity="snapshot" />
         </div>
+        {/*
+         * Empty-state pattern mirrors Goals (src/pages/Goals.tsx:435-442) so
+         * the three "you haven't entered data yet" pages — Goals, Net Worth,
+         * Investments — surface the same Card + friendly copy + primary-button
+         * CTA. Prior layout was a single inline `<a>` to Inputs which dropped
+         * the user into the sidebar with no obvious next step. Routing the
+         * CTA at /inputs/accounts is the right entry: Net Worth combines
+         * account snapshots, properties, vehicles, and loan balances — and
+         * accounts is where most users start.
+         */}
         <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            No data yet — set up your accounts in{' '}
-            <a href="/inputs/accounts" className="underline text-foreground">
-              Inputs
-            </a>
-            .
+          <CardContent className="py-12 text-center text-muted-foreground space-y-3">
+            <div>No net worth snapshots yet — set up your accounts in Inputs.</div>
+            <Button asChild>
+              <Link to="/inputs/accounts">Add an account</Link>
+            </Button>
           </CardContent>
         </Card>
       </div>

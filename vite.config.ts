@@ -21,6 +21,7 @@ const shimAliases = browserShim
       { find: "@tauri-apps/plugin-notification", replacement: path.join(shimDir, "plugin-notification.ts") },
       { find: "@tauri-apps/plugin-http", replacement: path.join(shimDir, "plugin-http.ts") },
       { find: "@tauri-apps/plugin-opener", replacement: path.join(shimDir, "plugin-opener.ts") },
+      { find: "@tauri-apps/plugin-updater", replacement: path.join(shimDir, "plugin-updater.ts") },
       { find: "@tauri-apps/api/core", replacement: path.join(shimDir, "api-core.ts") },
     ]
   : [];

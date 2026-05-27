@@ -203,9 +203,17 @@ describe('NetWorth page', () => {
         <NetWorth />
       </MemoryRouter>,
     );
+    // Wave-4 polish elevated this empty state to match Goals' Card +
+    // friendly copy + primary-CTA-button pattern. Verify the new copy AND
+    // the CTA so a future refactor that drops the button is caught — the
+    // CTA is the user-research-validated next step, not optional.
     await waitFor(() => {
-      expect(screen.getByText(/no data yet/i)).toBeInTheDocument();
+      expect(screen.getByText(/no net worth snapshots yet/i)).toBeInTheDocument();
     });
+    expect(screen.getByRole('link', { name: /add an account/i })).toHaveAttribute(
+      'href',
+      '/inputs/accounts',
+    );
     // Should NOT render the chart card title in the empty state.
     expect(screen.queryByText('Current Net Worth')).not.toBeInTheDocument();
   });
