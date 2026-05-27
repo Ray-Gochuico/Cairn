@@ -19,7 +19,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
-import { runMigrations } from '@/db/migrations';
+import { runMigrations, loadAllMigrations } from '@/db/migrations';
 import { setDatabase, getDatabase } from '@/db/db';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useMerchantOverridesStore } from '@/stores/merchant-overrides-store';
@@ -32,14 +32,7 @@ import CategoriesTab from '@/pages/inputs/CategoriesTab';
 import PersonsTab from '@/pages/inputs/PersonsTab';
 import TickersTab from '@/pages/inputs/TickersTab';
 import HouseholdTab from '@/pages/inputs/HouseholdTab';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { AssetClass, Direction } from '@/types/schema';
-
-const mig = (file: string) => ({
-  version: file,
-  sql: readFileSync(resolve(__dirname, `../../src/db/migrations/${file}.sql`), 'utf-8'),
-});
 
 function assertCompactRow(row: HTMLElement) {
   // The row's outer card-content flex container should gap its children so
@@ -63,18 +56,12 @@ describe('Inputs layout smoke — cramped-row fix', () => {
 
   beforeEach(async () => {
     db = new SqliteAdapter(':memory:');
-    await runMigrations(db, [
-      mig('0001_initial'),
-      mig('0003_add_commission_columns'),
-      mig('0005_add_employment_and_bonus_columns'),
-      mig('0008_add_transaction_property_links'),
-      mig('0009_seed_categories'),
-      mig('0010_seed_merchant_mappings'),
-      mig('0011_seed_payment_categories'),
-      mig('0013_add_category_budget'),
-      mig('0015_add_accent_colors'),
-      mig('0016_add_ticker_sector_industry'),
-    ]);
+    // Use loadAllMigrations() instead of a hand-curated subset so that
+    // schema additions in future migrations don't silently break this
+    // file. See docs/reviews/2026-05-27-testing-rereview.md finding N3
+    // ("InputsLayoutSmoke.test.tsx reintroduces the hand-curated-
+    // migrations anti-pattern").
+    await runMigrations(db, await loadAllMigrations());
     setDatabase(db);
     useCategoriesStore.setState({ categories: [], isLoading: false, error: null });
     useMerchantOverridesStore.setState({ overrides: [], isLoading: false, error: null });
