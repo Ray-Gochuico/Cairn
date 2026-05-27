@@ -36,7 +36,9 @@ const HoldingsTab = lazy(() => import('./pages/inputs/HoldingsTab'));
 const ContributionsTab = lazy(() => import('./pages/inputs/ContributionsTab'));
 const LoansTab = lazy(() => import('./pages/inputs/LoansTab'));
 const PropertiesTab = lazy(() => import('./pages/inputs/PropertiesTab'));
+const HousingPaymentsTab = lazy(() => import('./pages/inputs/HousingPaymentsTab'));
 const VehiclesTab = lazy(() => import('./pages/inputs/VehiclesTab'));
+const VehicleLeasesTab = lazy(() => import('./pages/inputs/VehicleLeasesTab'));
 const GoalsTab = lazy(() => import('./pages/inputs/GoalsTab'));
 const EquityGrantsTab = lazy(() => import('./pages/inputs/EquityGrantsTab'));
 const Plan529Tab = lazy(() => import('./pages/inputs/Plan529Tab'));
@@ -108,7 +110,9 @@ const router = createBrowserRouter([
           { path: 'loans', element: lazyRoute(LoansTab) },
           { path: 'equity-grants', element: lazyRoute(EquityGrantsTab) },
           { path: 'properties', element: lazyRoute(PropertiesTab) },
+          { path: 'housing-payments', element: lazyRoute(HousingPaymentsTab) },
           { path: 'vehicles', element: lazyRoute(VehiclesTab) },
+          { path: 'vehicle-leases', element: lazyRoute(VehicleLeasesTab) },
           { path: 'goals', element: lazyRoute(GoalsTab) },
           { path: 'plans-529', element: lazyRoute(Plan529Tab) },
           {
