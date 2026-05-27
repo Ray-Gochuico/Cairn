@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import {
+  CreditCard,
+  GraduationCap,
+  Home,
+  LifeBuoy,
+  Palmtree,
+  Target,
+  type LucideIcon,
+} from 'lucide-react';
 import { useGoalsStore } from '@/stores/goals-store';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
@@ -49,13 +58,18 @@ import type { CsvColumn } from '@/lib/csv';
  *     Mirrors FinancialIndependenceCard's resolution so the two pages agree on one default.
  */
 
-const TYPE_ICONS: Record<GoalType, string> = {
-  [GoalType.RETIREMENT]: '🏖️',
-  [GoalType.DOWN_PAYMENT]: '🏠',
-  [GoalType.DEBT_PAYOFF]: '💳',
-  [GoalType.EDUCATION]: '🎓',
-  [GoalType.EMERGENCY_FUND]: '🛟',
-  [GoalType.GENERIC]: '🎯',
+// Lucide-icon mapping for goal types. Replaces the prior emoji vocabulary
+// (Design Wave-3 must-have #5): the sidebar already moved to lucide; the
+// goal-type icons survived in this surface + Dashboard mirror. lucide
+// gives consistent stroke width, font-fallback safety, and SVG-rendered
+// crispness at every size.
+const TYPE_ICONS: Record<GoalType, LucideIcon> = {
+  [GoalType.RETIREMENT]: Palmtree,
+  [GoalType.DOWN_PAYMENT]: Home,
+  [GoalType.DEBT_PAYOFF]: CreditCard,
+  [GoalType.EDUCATION]: GraduationCap,
+  [GoalType.EMERGENCY_FUND]: LifeBuoy,
+  [GoalType.GENERIC]: Target,
 };
 
 /**
@@ -159,12 +173,16 @@ function GoalProgressCard({
     ? formatCurrency(projection.linearMonthlyNeeded)
     : '—';
 
+  // Resolve the lucide icon for this goal type; default to the generic
+  // Target icon if a new GoalType is added without a mapping.
+  const Icon = TYPE_ICONS[goal.type] ?? Target;
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-start justify-between gap-3 pb-3">
         <div className="min-w-0">
           <CardTitle className="text-base flex items-center gap-2">
-            <span aria-hidden>{TYPE_ICONS[goal.type] ?? '🎯'}</span>
+            <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
             <span className="truncate">{goal.name}</span>
           </CardTitle>
           <div className="text-xs text-muted-foreground mt-1">

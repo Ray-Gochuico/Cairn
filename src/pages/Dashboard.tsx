@@ -1,6 +1,17 @@
 import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { PencilIcon, CheckIcon, PlusIcon } from 'lucide-react';
+import {
+  CheckIcon,
+  CreditCard,
+  GraduationCap,
+  Home,
+  LifeBuoy,
+  Palmtree,
+  PencilIcon,
+  PlusIcon,
+  Target,
+  type LucideIcon,
+} from 'lucide-react';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useLoansStore } from '@/stores/loans-store';
@@ -122,16 +133,20 @@ function priorYyyymm(yyyymm: string): string {
 }
 
 /**
- * Goals strip: emoji per GoalType, mirrors the icon set on the Goals page.
- * Kept inline to avoid an extra util module for two render sites.
+ * Goals strip: lucide-icon per GoalType, mirrors the icon set on the
+ * Goals page (must stay in sync — kept inline rather than shared to
+ * keep this dashboard widget independent of Goals.tsx's module
+ * structure). Wave-3 Design must-have #5 — emoji vocabulary moved to
+ * lucide so the type system can lint the mapping and dark-mode
+ * doesn't see emoji-vs-text-color drift.
  */
-const GOAL_TYPE_ICONS: Record<GoalType, string> = {
-  [GoalType.RETIREMENT]: '🏖️',
-  [GoalType.DOWN_PAYMENT]: '🏠',
-  [GoalType.DEBT_PAYOFF]: '💳',
-  [GoalType.EDUCATION]: '🎓',
-  [GoalType.EMERGENCY_FUND]: '🛟',
-  [GoalType.GENERIC]: '🎯',
+const GOAL_TYPE_ICONS: Record<GoalType, LucideIcon> = {
+  [GoalType.RETIREMENT]: Palmtree,
+  [GoalType.DOWN_PAYMENT]: Home,
+  [GoalType.DEBT_PAYOFF]: CreditCard,
+  [GoalType.EDUCATION]: GraduationCap,
+  [GoalType.EMERGENCY_FUND]: LifeBuoy,
+  [GoalType.GENERIC]: Target,
 };
 
 /**
@@ -207,7 +222,12 @@ function MiniGoalCard({ projection }: { projection: GoalProjection }) {
     >
       <div className="flex items-center justify-between gap-2 mb-2 min-w-0">
         <div className="flex items-center gap-2 min-w-0">
-          <span aria-hidden>{GOAL_TYPE_ICONS[goal.type] ?? '🎯'}</span>
+          {(() => {
+            // Resolve at render time; the lookup is O(1) and the IIFE keeps
+            // the lucide component reference scoped to this JSX block.
+            const Icon = GOAL_TYPE_ICONS[goal.type] ?? Target;
+            return <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />;
+          })()}
           <span className="text-sm font-medium truncate">{goal.name}</span>
         </div>
         <span
