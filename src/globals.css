@@ -3,6 +3,19 @@
 @tailwind utilities;
 
 @layer base {
+  /* Theme-aware default border color. shadcn defines --border as a CSS
+   * variable that switches with .dark, but Tailwind's default border-*
+   * classes still resolve to `currentColor` unless `border-border` is
+   * explicitly applied. Cards/dividers that omit the explicit class pick
+   * up text color as their stroke, which produces wrong borders in dark
+   * mode (e.g., a divider next to white text becomes nearly invisible
+   * against the dark canvas). Wiring `border-border` into the universal
+   * selector restores theme-correct defaults without breaking the
+   * existing explicit usages. */
+  * {
+    @apply border-border;
+  }
+
   :root {
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
