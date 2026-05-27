@@ -8,6 +8,13 @@ export class SqliteAdapter implements DatabaseInterface {
     this.db = new BetterSqlite3(path);
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
+    // Match TauriAdapter — without busy_timeout, transient locks surface
+    // as immediate "database is locked" errors with no retry. The test
+    // adapter mostly runs against :memory: where contention is impossible,
+    // but full PRAGMA parity keeps `tests/db/pragma-parity.test.ts` from
+    // drifting between adapters (the same drift pattern that masked the
+    // FK bug pre-Sprint 4). See Backend Wave-5 finding B.
+    this.db.pragma('busy_timeout = 5000');
   }
 
   async execute(sql: string, params: unknown[] = []): Promise<QueryResult> {
