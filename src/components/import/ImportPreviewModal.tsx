@@ -15,14 +15,46 @@ import {
 } from '@/stores/import-preview-store';
 import { ImportPreviewTable } from './ImportPreviewTable';
 import { TransactionPreviewTable } from './TransactionPreviewTable';
+import { AccountPreviewTable } from './AccountPreviewTable';
+import { HoldingPreviewTable } from './HoldingPreviewTable';
+import { LoanPreviewTable } from './LoanPreviewTable';
+import { PropertyPreviewTable } from './PropertyPreviewTable';
+import { VehiclePreviewTable } from './VehiclePreviewTable';
+import { ContributionPreviewTable } from './ContributionPreviewTable';
+import { AssetValueSnapshotPreviewTable } from './AssetValueSnapshotPreviewTable';
+import { EquityGrantPreviewTable } from './EquityGrantPreviewTable';
 import { commitSnapshotImport, commitTransactionImport } from '@/lib/import/commit';
+import { commitAccountImport } from '@/lib/import/commit/account';
+import { commitHoldingImport } from '@/lib/import/commit/holding';
+import { commitLoanImport } from '@/lib/import/commit/loan';
+import { commitPropertyImport } from '@/lib/import/commit/property';
+import { commitVehicleImport } from '@/lib/import/commit/vehicle';
+import { commitContributionImport } from '@/lib/import/commit/contribution';
+import { commitAssetValueSnapshotImport } from '@/lib/import/commit/asset-value-snapshot';
+import { commitEquityGrantImport } from '@/lib/import/commit/equity-grant';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
+import { useAccountsStore } from '@/stores/accounts-store';
+import { useHoldingsStore } from '@/stores/holdings-store';
+import { useLoansStore } from '@/stores/loans-store';
+import { usePropertiesStore } from '@/stores/properties-store';
+import { useVehiclesStore } from '@/stores/vehicles-store';
+import { useContributionsStore } from '@/stores/contributions-store';
+import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
+import { useEquityGrantsStore } from '@/stores/equity-grants-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { AccountSnapshotsRepo } from '@/domain/snapshots';
 import { TransactionsRepo } from '@/domain/transactions';
+import { AccountsRepo } from '@/domain/accounts';
+import { HoldingsRepo } from '@/domain/holdings';
+import { LoansRepo } from '@/domain/loans';
+import { PropertiesRepo } from '@/domain/properties';
+import { VehiclesRepo } from '@/domain/vehicles';
+import { ContributionsRepo } from '@/domain/contributions';
+import { AssetValueSnapshotsRepo } from '@/domain/asset-value-snapshots';
+import { EquityGrantsRepo } from '@/domain/equity-grants';
 import { getDatabase } from '@/db/db';
-import type { ImportEntity, ValidationContext } from '@/lib/import/types';
+import type { ImportEntity, ValidationContext, CommitResult } from '@/lib/import/types';
 
 interface Props {
   entity: ImportEntity;
@@ -42,6 +74,19 @@ interface Props {
   onSaved?: (insertedCount: number) => void;
 }
 
+const ENTITY_TITLES: Record<ImportEntity, string> = {
+  snapshot: 'Import account snapshots from CSV',
+  transaction: 'Import transactions from CSV',
+  account: 'Import accounts from CSV',
+  holding: 'Import holdings from CSV',
+  loan: 'Import loans from CSV',
+  property: 'Import properties from CSV',
+  vehicle: 'Import vehicles from CSV',
+  equity_grant: 'Import equity grants from CSV',
+  contribution: 'Import contributions from CSV',
+  asset_value_snapshot: 'Import asset value snapshots from CSV',
+};
+
 export function ImportPreviewModal({
   entity,
   parsed,
@@ -60,6 +105,14 @@ export function ImportPreviewModal({
   const [commitError, setCommitError] = useState<string | null>(null);
   const loadSnapshots = useSnapshotsStore((s) => s.load);
   const loadTransactions = useTransactionsStore((s) => s.load);
+  const loadAccounts = useAccountsStore((s) => s.load);
+  const loadHoldings = useHoldingsStore((s) => s.load);
+  const loadLoans = useLoansStore((s) => s.load);
+  const loadProperties = usePropertiesStore((s) => s.load);
+  const loadVehicles = useVehiclesStore((s) => s.load);
+  const loadContributions = useContributionsStore((s) => s.load);
+  const loadAssetValueSnapshots = useAssetValueSnapshotsStore((s) => s.load);
+  const loadEquityGrants = useEquityGrantsStore((s) => s.load);
   const household = useHouseholdStore((s) => s.household);
 
   const commitDisabled =
@@ -72,26 +125,102 @@ export function ImportPreviewModal({
     setCommitError(null);
     try {
       const db = getDatabase();
+      const householdId = household?.id ?? 1;
+      let result: CommitResult | undefined;
       let insertedCount = 0;
-      if (entity === 'snapshot') {
-        const snapshotState = state as unknown as ImportPreviewState<'snapshot'>;
-        const rows = snapshotState.committableRows();
-        const result = await commitSnapshotImport(rows, {
-          db,
-          snapshots: new AccountSnapshotsRepo(db),
-        });
-        insertedCount = result?.inserted ?? rows.length;
-        await loadSnapshots();
-      } else {
-        const transactionState = state as unknown as ImportPreviewState<'transaction'>;
-        const rows = transactionState.committableRows();
-        const result = await commitTransactionImport(rows, {
-          db,
-          transactions: new TransactionsRepo(db),
-          householdId: household?.id ?? 1,
-        });
-        insertedCount = result?.inserted ?? rows.length;
-        await loadTransactions();
+      const rows = state.committableRows();
+
+      switch (entity) {
+        case 'snapshot': {
+          result = await commitSnapshotImport(rows as any, {
+            db,
+            snapshots: new AccountSnapshotsRepo(db),
+          });
+          await loadSnapshots();
+          break;
+        }
+        case 'transaction': {
+          result = await commitTransactionImport(rows as any, {
+            db,
+            transactions: new TransactionsRepo(db),
+            householdId,
+          });
+          await loadTransactions();
+          break;
+        }
+        case 'account': {
+          result = await commitAccountImport(rows as any, {
+            db,
+            accounts: new AccountsRepo(db),
+            householdId,
+          });
+          await loadAccounts();
+          break;
+        }
+        case 'holding': {
+          result = await commitHoldingImport(rows as any, {
+            db,
+            holdings: new HoldingsRepo(db),
+          });
+          await loadHoldings();
+          break;
+        }
+        case 'loan': {
+          result = await commitLoanImport(rows as any, {
+            db,
+            loans: new LoansRepo(db),
+            householdId,
+          });
+          await loadLoans();
+          break;
+        }
+        case 'property': {
+          result = await commitPropertyImport(rows as any, {
+            db,
+            properties: new PropertiesRepo(db),
+            householdId,
+          });
+          await loadProperties();
+          break;
+        }
+        case 'vehicle': {
+          result = await commitVehicleImport(rows as any, {
+            db,
+            vehicles: new VehiclesRepo(db),
+            householdId,
+          });
+          await loadVehicles();
+          break;
+        }
+        case 'contribution': {
+          result = await commitContributionImport(rows as any, {
+            db,
+            contributions: new ContributionsRepo(db),
+          });
+          await loadContributions();
+          break;
+        }
+        case 'asset_value_snapshot': {
+          result = await commitAssetValueSnapshotImport(rows as any, {
+            db,
+            assetValueSnapshots: new AssetValueSnapshotsRepo(db),
+          });
+          await loadAssetValueSnapshots();
+          break;
+        }
+        case 'equity_grant': {
+          result = await commitEquityGrantImport(rows as any, {
+            db,
+            equityGrants: new EquityGrantsRepo(db),
+            householdId,
+          });
+          await loadEquityGrants();
+          break;
+        }
+      }
+      insertedCount = (result?.inserted ?? 0) + (result?.updated ?? 0);
+      if (insertedCount === 0) {
+        insertedCount = rows.length;
       }
       if (onSaved) {
         onSaved(insertedCount);
@@ -105,12 +234,33 @@ export function ImportPreviewModal({
     }
   };
 
-  const title =
-    entity === 'snapshot'
-      ? 'Import account snapshots from CSV'
-      : 'Import transactions from CSV';
-
+  const title = ENTITY_TITLES[entity] ?? 'Import from CSV';
   const committableCount = state.committableRows().length;
+
+  const previewTable = (() => {
+    switch (entity) {
+      case 'snapshot':
+        return <ImportPreviewTable state={state as unknown as ImportPreviewState<'snapshot'>} />;
+      case 'transaction':
+        return <TransactionPreviewTable state={state as unknown as ImportPreviewState<'transaction'>} />;
+      case 'account':
+        return <AccountPreviewTable state={state as unknown as ImportPreviewState<'account'>} />;
+      case 'holding':
+        return <HoldingPreviewTable state={state as unknown as ImportPreviewState<'holding'>} />;
+      case 'loan':
+        return <LoanPreviewTable state={state as unknown as ImportPreviewState<'loan'>} />;
+      case 'property':
+        return <PropertyPreviewTable state={state as unknown as ImportPreviewState<'property'>} />;
+      case 'vehicle':
+        return <VehiclePreviewTable state={state as unknown as ImportPreviewState<'vehicle'>} />;
+      case 'contribution':
+        return <ContributionPreviewTable state={state as unknown as ImportPreviewState<'contribution'>} />;
+      case 'asset_value_snapshot':
+        return <AssetValueSnapshotPreviewTable state={state as unknown as ImportPreviewState<'asset_value_snapshot'>} />;
+      case 'equity_grant':
+        return <EquityGrantPreviewTable state={state as unknown as ImportPreviewState<'equity_grant'>} />;
+    }
+  })();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -140,16 +290,10 @@ export function ImportPreviewModal({
         )}
 
         <SummaryBar
-          state={state as unknown as ImportPreviewState<'snapshot' | 'transaction'>}
+          state={state as unknown as ImportPreviewState<ImportEntity>}
           entity={entity}
         />
-        <div className="max-h-[55vh] overflow-y-auto">
-          {entity === 'snapshot' ? (
-            <ImportPreviewTable state={state as unknown as ImportPreviewState<'snapshot'>} />
-          ) : (
-            <TransactionPreviewTable state={state as unknown as ImportPreviewState<'transaction'>} />
-          )}
-        </div>
+        <div className="max-h-[55vh] overflow-y-auto">{previewTable}</div>
 
         {commitError && (
           <div className="text-xs text-red-700 italic bg-red-50 border border-red-200 rounded p-2">
@@ -180,7 +324,7 @@ function SummaryBar({
   state,
   entity,
 }: {
-  state: ImportPreviewState<'snapshot' | 'transaction'>;
+  state: ImportPreviewState<ImportEntity>;
   entity: ImportEntity;
 }) {
   return (
@@ -212,7 +356,7 @@ function SummaryBar({
             </Button>
           </>
         )}
-        {entity === 'transaction' && state.summary.duplicate > 0 && (
+        {(entity === 'transaction' || entity === 'contribution') && state.summary.duplicate > 0 && (
           <>
             <Button size="sm" variant="outline" onClick={() => state.bulkSetConflict('update')}>
               Insert all duplicates

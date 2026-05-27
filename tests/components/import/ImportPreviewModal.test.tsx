@@ -186,3 +186,154 @@ describe('ImportPreviewModal queuePosition + onSaved props', () => {
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
   });
 });
+
+describe('ImportPreviewModal — N2 entity routing', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const baseCtx = {
+    accounts: [{ id: 10, name: 'Brokerage' }],
+    persons: [{ id: 1, name: 'Alice' }],
+    categories: [],
+    properties: [{ id: 5, name: 'Main Residence' }],
+    vehicles: [{ id: 9, name: 'Daily' }],
+  };
+
+  it('renders AccountPreviewTable when entity=account (shows the Type column)', () => {
+    render(
+      <ImportPreviewModal
+        entity="account"
+        parsed={{
+          headers: ['name', 'type'],
+          rows: [{ name: 'Chase Checking', type: 'ACCOUNT_CASH' }],
+          errors: [],
+        }}
+        ctx={baseCtx}
+        open
+        onOpenChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/Import accounts from CSV/i)).toBeInTheDocument();
+    expect(screen.getByText('Type')).toBeInTheDocument();
+  });
+
+  it('renders HoldingPreviewTable when entity=holding', () => {
+    render(
+      <ImportPreviewModal
+        entity="holding"
+        parsed={{
+          headers: ['account_name', 'ticker', 'share_count'],
+          rows: [{ account_name: 'Brokerage', ticker: 'AAPL', share_count: '10' }],
+          errors: [],
+        }}
+        ctx={baseCtx}
+        open
+        onOpenChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Ticker')).toBeInTheDocument();
+  });
+
+  it('renders LoanPreviewTable when entity=loan', () => {
+    render(
+      <ImportPreviewModal
+        entity="loan"
+        parsed={{
+          headers: ['name'],
+          rows: [{ name: 'X' }],
+          errors: [],
+        }}
+        ctx={baseCtx}
+        open
+        onOpenChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Term')).toBeInTheDocument();
+  });
+
+  it('renders PropertyPreviewTable when entity=property', () => {
+    render(
+      <ImportPreviewModal
+        entity="property"
+        parsed={{
+          headers: ['name'],
+          rows: [{ name: 'X' }],
+          errors: [],
+        }}
+        ctx={baseCtx}
+        open
+        onOpenChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Est. value')).toBeInTheDocument();
+  });
+
+  it('renders VehiclePreviewTable when entity=vehicle', () => {
+    render(
+      <ImportPreviewModal
+        entity="vehicle"
+        parsed={{
+          headers: ['name'],
+          rows: [{ name: 'X' }],
+          errors: [],
+        }}
+        ctx={baseCtx}
+        open
+        onOpenChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/Make \/ Model \/ Year/)).toBeInTheDocument();
+  });
+
+  it('renders EquityGrantPreviewTable when entity=equity_grant', () => {
+    render(
+      <ImportPreviewModal
+        entity="equity_grant"
+        parsed={{
+          headers: ['name'],
+          rows: [{ name: 'X' }],
+          errors: [],
+        }}
+        ctx={baseCtx}
+        open
+        onOpenChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Vesting')).toBeInTheDocument();
+  });
+
+  it('renders ContributionPreviewTable when entity=contribution', () => {
+    render(
+      <ImportPreviewModal
+        entity="contribution"
+        parsed={{
+          headers: ['account_name'],
+          rows: [{ account_name: 'Brokerage' }],
+          errors: [],
+        }}
+        ctx={baseCtx}
+        open
+        onOpenChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Source')).toBeInTheDocument();
+  });
+
+  it('renders AssetValueSnapshotPreviewTable when entity=asset_value_snapshot', () => {
+    render(
+      <ImportPreviewModal
+        entity="asset_value_snapshot"
+        parsed={{
+          headers: ['owner_type'],
+          rows: [{ owner_type: 'PROPERTY' }],
+          errors: [],
+        }}
+        ctx={baseCtx}
+        open
+        onOpenChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Owner type')).toBeInTheDocument();
+  });
+});
