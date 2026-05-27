@@ -206,7 +206,7 @@ describe('Retirement401kWithdrawalCard', () => {
     ).toBeInTheDocument();
   });
 
-  it('surfaces "Total taxes paid" and "Net to you" as the two summary lines', async () => {
+  it('surfaces "Estimated total taxes" and "Estimated net to you" as the two summary lines (Wave-3 Task 6 framing)', async () => {
     primeStores();
     render(
       <MemoryRouter>
@@ -221,14 +221,14 @@ describe('Retirement401kWithdrawalCard', () => {
       target: { value: '50000' },
     });
 
-    expect(await screen.findByText(/^total taxes paid$/i)).toBeInTheDocument();
-    expect(screen.getByText(/^net to you$/i)).toBeInTheDocument();
+    expect(await screen.findByText(/^estimated total taxes$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^estimated net to you$/i)).toBeInTheDocument();
     // Legacy ambiguous labels are gone.
     expect(screen.queryByText(/total tax on withdrawal/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/^net to user$/i)).not.toBeInTheDocument();
   });
 
-  it('renders "Total taxes paid" and "Net to you" rows with equal-weight styling', async () => {
+  it('renders the two summary rows with equal-weight styling', async () => {
     primeStores();
     render(
       <MemoryRouter>
@@ -243,8 +243,8 @@ describe('Retirement401kWithdrawalCard', () => {
       target: { value: '50000' },
     });
 
-    const taxLabel = await screen.findByText(/^total taxes paid$/i);
-    const netLabel = screen.getByText(/^net to you$/i);
+    const taxLabel = await screen.findByText(/^estimated total taxes$/i);
+    const netLabel = screen.getByText(/^estimated net to you$/i);
     const taxRow = taxLabel.closest('[data-summary-row]') as HTMLElement;
     const netRow = netLabel.closest('[data-summary-row]') as HTMLElement;
     expect(taxRow).not.toBeNull();
@@ -252,6 +252,30 @@ describe('Retirement401kWithdrawalCard', () => {
     // Equal visual weight: same className signature on both summary rows so
     // neither one reads as "the answer" and the other as a footnote.
     expect(taxRow.className).toBe(netRow.className);
+  });
+
+  it('exposes a "What this calculator does NOT model" disclosure (Wave-3 Task 6)', async () => {
+    primeStores();
+    render(
+      <MemoryRouter>
+        <Retirement401kWithdrawalCard />
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText(/age at withdrawal/i), {
+      target: { value: '67' },
+    });
+    fireEvent.change(screen.getByLabelText(/withdrawal amount/i), {
+      target: { value: '50000' },
+    });
+
+    expect(await screen.findByText(/what this calculator does NOT model/i)).toBeInTheDocument();
+    // The disclosure body covers the named omissions.
+    expect(screen.getByText(/NIIT/)).toBeInTheDocument();
+    expect(screen.getByText(/AMT/)).toBeInTheDocument();
+    expect(screen.getByText(/Rule of 55/i)).toBeInTheDocument();
+    expect(screen.getByText(/SEPP/)).toBeInTheDocument();
+    expect(screen.getByText(/RMD/)).toBeInTheDocument();
   });
 
   it('uses Net-to-you as the card headline (not take-home of the full salary)', async () => {
@@ -270,7 +294,7 @@ describe('Retirement401kWithdrawalCard', () => {
     });
 
     const headline = await screen.findByTestId('401k-withdrawal-net');
-    const netRow = screen.getByText(/^net to you$/i).closest('[data-summary-row]') as HTMLElement;
+    const netRow = screen.getByText(/^estimated net to you$/i).closest('[data-summary-row]') as HTMLElement;
     // Headline value matches the Net-to-you line value so the meaning is
     // unambiguous: the big number is "what you keep", not "what tax you owe".
     expect(within(netRow).getByText(headline.textContent ?? '_MISMATCH_')).toBeInTheDocument();

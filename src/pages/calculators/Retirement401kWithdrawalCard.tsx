@@ -284,7 +284,7 @@ export function Retirement401kWithdrawalCard({
               className="rounded-md border bg-muted/30 px-3 py-2"
             >
               <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                Total taxes paid
+                Estimated total taxes
               </div>
               <div className="text-lg font-semibold tabular-nums">
                 {formatCurrency(breakdown.totalTaxOnWithdrawal)}
@@ -295,7 +295,7 @@ export function Retirement401kWithdrawalCard({
               className="rounded-md border bg-muted/30 px-3 py-2"
             >
               <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                Net to you
+                Estimated net to you
               </div>
               <div className="text-lg font-semibold tabular-nums">
                 {formatCurrency(breakdown.netToUser)}
@@ -308,6 +308,51 @@ export function Retirement401kWithdrawalCard({
               {formatPercent(breakdown.effectiveRate)}
             </span>
           </div>
+          {/* Wave-3 Task 6 — calculator framing. The headline numbers are
+              labelled "Estimated" because this calculator deliberately
+              omits several tax items that materially shift the real-world
+              outcome. List them here so a user thinking of acting on the
+              number knows what they're not getting. Native <details> keeps
+              the card compact by default; click to expand. */}
+          <details className="text-xs mt-2 border-t pt-2 text-muted-foreground">
+            <summary className="cursor-pointer font-medium hover:text-foreground">
+              What this calculator does NOT model
+            </summary>
+            <ul className="mt-2 list-disc pl-5 space-y-1">
+              <li>
+                <TermTooltip term="NIIT">NIIT</TermTooltip> (Net Investment Income Tax — 3.8% on
+                investment income above $200k/$250k MAGI). The engine added this 2026-05-26
+                but this calculator's incremental-tax path does not yet route through it.
+              </li>
+              <li>
+                <TermTooltip term="AMT">AMT</TermTooltip> (Alternative Minimum Tax) on
+                ISO exercises landing in the same year as the withdrawal.
+              </li>
+              <li>
+                State-specific retirement-income exemptions (PA fully excludes
+                401k distributions; IL, MS, IA exclude most pension income).
+                The state-tax line above applies your regular state brackets.
+              </li>
+              <li>
+                Separation-at-55 / Rule of 55 exception (waives the 10% penalty
+                if you left the job in the year you turn 55+).
+              </li>
+              <li>
+                SEPP / Rule 72(t) substantially-equal periodic payments
+                (alternative penalty waiver for under-59½ withdrawals).
+              </li>
+              <li>
+                <TermTooltip term="RMD">RMD</TermTooltip>s at age 73+ (Required Minimum
+                Distributions force pre-tax withdrawals on a schedule;
+                this calculator only computes a single voluntary withdrawal).
+              </li>
+            </ul>
+            <p className="mt-2">
+              For an actual withdrawal decision, run the numbers past a CFP or
+              tax professional — the items above can each shift the bottom line
+              by several thousand dollars.
+            </p>
+          </details>
         </div>
       )}
     </CalculatorCard>
