@@ -112,7 +112,7 @@ export default function MetricCard({
       <Link
         to={href}
         aria-label={ariaLabel}
-        className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl"
+        className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-xl"
       >
         {card}
       </Link>

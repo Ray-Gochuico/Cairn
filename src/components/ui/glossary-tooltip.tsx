@@ -93,7 +93,7 @@ export function TermTooltip({ term, children, className }: TermTooltipProps) {
             close();
           }
         }}
-        className="inline-flex items-baseline gap-0.5 underline decoration-dotted decoration-muted-foreground/60 underline-offset-2 hover:decoration-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-sm bg-transparent cursor-help"
+        className="inline-flex items-baseline gap-0.5 underline decoration-dotted decoration-muted-foreground/60 underline-offset-2 hover:decoration-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-sm bg-transparent cursor-help"
       >
         <span>{children ?? entry.term}</span>
         <span aria-hidden className="text-[0.65em] text-muted-foreground">

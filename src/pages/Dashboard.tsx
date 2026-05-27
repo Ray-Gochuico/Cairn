@@ -203,7 +203,7 @@ function MiniGoalCard({ projection }: { projection: GoalProjection }) {
   return (
     <Link
       to="/goals"
-      className="block rounded-lg border bg-card p-3 hover:bg-accent/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="block rounded-lg border bg-card p-3 hover:bg-accent/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
       <div className="flex items-center justify-between gap-2 mb-2 min-w-0">
         <div className="flex items-center gap-2 min-w-0">
