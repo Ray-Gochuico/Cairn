@@ -12,6 +12,7 @@
     "tauri": "tauri",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
+    "test:stress": "STRESS=1 vitest run tests/stress --passWithNoTests",
     "install-hooks": "sh scripts/hooks/install.sh"
   },
   "dependencies": {

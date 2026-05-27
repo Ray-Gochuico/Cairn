@@ -1,0 +1,94 @@
+name: Test
+
+# Companion to release.yml. release.yml builds + signs on tag push;
+# this workflow gates every push + PR with the unit suite + type check
+# + a Rust syntax check. No Tauri build (that's release.yml's job) — the
+# unit tests use better-sqlite3 + jsdom and don't need a Tauri runner.
+#
+# Runs on ubuntu-latest because:
+#   - vitest + better-sqlite3 + jsdom are platform-agnostic
+#   - macOS runners cost 10x; we save them for release.yml
+#   - `cargo check` on Linux still catches Rust syntax / type errors in
+#     src-tauri/, which is what we want at PR time. The macOS-specific
+#     bundle issues surface in release.yml on tag push.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Cancel in-flight runs on the same ref when a new push arrives. Saves CI
+# minutes and surfaces the latest commit's status faster.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: Unit tests + typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Match release.yml. Node 20 LTS is what the maintainer runs
+          # locally; bumping the matrix is out-of-scope for this CI job
+          # (release.yml ships the actual artifact, not this one).
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install npm deps
+        run: npm ci
+
+      - name: Run unit suite
+        # The pre-commit hook uses `--bail=1`; CI deliberately does NOT
+        # bail so a single flake doesn't hide other regressions.
+        run: npm test
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+  rust-check:
+    name: cargo check (src-tauri)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # System packages required for Tauri's Linux build deps even when
+      # we're only running `cargo check`. webkit2gtk + libsoup are the
+      # ones cargo needs to resolve the tauri crate graph.
+      - name: Install Linux system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libsoup-3.0-dev
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          # Hashing Cargo.lock invalidates the cache on dependency
+          # upgrades. The `src-tauri/target` path saves the build graph
+          # so `cargo check` is incremental across runs.
+          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: cargo check
+        working-directory: src-tauri
+        run: cargo check --all-targets
