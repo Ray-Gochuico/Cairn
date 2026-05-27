@@ -175,6 +175,30 @@ export default function ProjectionChart({
     return false;
   }, [detailLevel, upperRows]);
 
+  // Item 25 follow-up: the lower-pane debt chart suffers the same
+  // Recharts width(-1)/height(-1) console-warning storm as the
+  // tax-bucket areas when there are no debts to draw (no loans, or
+  // every loan balance has already amortized to zero). The page-level
+  // `hasProjectionData` guard in WhatIf.tsx mounts the chart whenever
+  // any projection rows exist — but rows do exist for households with
+  // 0 loans (debt_${id} just stays 0 across the whole spine), so the
+  // <ComposedChart> mounts with all-zero series and Recharts can't lay
+  // out the y-axis. Mirror the upper-pane guard: compute a single
+  // boolean over `lowerRows` and skip the lower pane entirely when
+  // every debt series is zero. We still render the divider + an empty
+  // hint so the layout below the upper chart stays predictable for
+  // tests + screenshots.
+  const hasDebtData = useMemo(() => {
+    if (lowerRows.length === 0) return false;
+    for (const row of lowerRows) {
+      for (const key of Object.keys(row)) {
+        if (!key.startsWith('debt_')) continue;
+        if (typeof row[key] === 'number' && (row[key] as number) > 0) return true;
+      }
+    }
+    return false;
+  }, [lowerRows]);
+
   // Investment accounts (non-cash/savings) used by the per-account view.
   // Sorted by name (then id) so the checkbox row + chart series stack are stable.
   const investmentAccounts = useMemo(
@@ -466,41 +490,54 @@ export default function ProjectionChart({
 
       <div className="border-t my-2" aria-hidden />
 
-      <div className="w-full" style={{ height: 110 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={lowerRows} margin={{ top: 4, right: 16, bottom: 16, left: 4 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-            <XAxis dataKey="monthISO" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} minTickGap={32} />
-            <YAxis
-              tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
-              tickFormatter={formatCompactCurrency}
-              width={72}
-              domain={[(dataMin: number) => Math.max(0, dataMin * 0.8), 'auto']}
-            />
-            <Tooltip
-              {...CHART_TOOLTIP_PROPS}
-              formatter={(value, name) => [formatCompactCurrency(Number(value)), String(name)]}
-              labelFormatter={(label) => String(label ?? '')}
-              cursor={{ strokeDasharray: '3 3' }}
-            />
-            {visible.map((sc) => (
-              <Line
-                key={`debt_${sc.id}`}
-                type="monotone"
-                dataKey={`debt_${sc.id}`}
-                name={`${sc.name} debt`}
-                stroke={sc.color}
-                strokeDasharray={sc.lineStyle === 'dashed' ? '6 4' : undefined}
-                strokeWidth={1.5}
-                dot={false}
-                isAnimationActive={false}
+      {hasDebtData ? (
+        <div
+          className="w-full"
+          style={{ height: 110 }}
+          data-testid="whatif-debt-chart"
+        >
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={lowerRows} margin={{ top: 4, right: 16, bottom: 16, left: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis dataKey="monthISO" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} minTickGap={32} />
+              <YAxis
+                tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                tickFormatter={formatCompactCurrency}
+                width={72}
+                domain={[(dataMin: number) => Math.max(0, dataMin * 0.8), 'auto']}
               />
-            ))}
+              <Tooltip
+                {...CHART_TOOLTIP_PROPS}
+                formatter={(value, name) => [formatCompactCurrency(Number(value)), String(name)]}
+                labelFormatter={(label) => String(label ?? '')}
+                cursor={{ strokeDasharray: '3 3' }}
+              />
+              {visible.map((sc) => (
+                <Line
+                  key={`debt_${sc.id}`}
+                  type="monotone"
+                  dataKey={`debt_${sc.id}`}
+                  name={`${sc.name} debt`}
+                  stroke={sc.color}
+                  strokeDasharray={sc.lineStyle === 'dashed' ? '6 4' : undefined}
+                  strokeWidth={1.5}
+                  dot={false}
+                  isAnimationActive={false}
+                />
+              ))}
 
-            {milestoneRefLinesLower}
-          </ComposedChart>
-        </ResponsiveContainer>
-      </div>
+              {milestoneRefLinesLower}
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      ) : (
+        <div
+          className="text-xs text-muted-foreground px-1 py-2"
+          data-testid="whatif-debt-chart-empty"
+        >
+          No debt to project.
+        </div>
+      )}
 
       {showAccountToggleRow && (
         <div

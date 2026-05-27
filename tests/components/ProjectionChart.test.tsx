@@ -204,8 +204,12 @@ describe('ProjectionChart — composition mode (exactly 1 scenario visible)', ()
 
 describe('ProjectionChart — lower pane (debt lines)', () => {
   // Regression: the lower debt pane was reported as "not rendering" after the
-  // initial-state seeding fix landed. These tests pin that the debt Line always
-  // appears for each visible scenario with a valid id, regardless of loan count.
+  // initial-state seeding fix landed. These tests pin that the debt Line
+  // appears for each visible scenario when at least one scenario has a non-
+  // zero debt balance in any month. When *every* visible scenario has
+  // entirely zero debt (no loans), the chart is replaced with an empty-state
+  // hint to avoid Recharts width(-1)/height(-1) console warnings — see
+  // Wave-7 Design item 25.
 
   it('renders a debt line in the lower pane for each visible scenario', () => {
     const projections = new Map([[1, fixtureStates()]]);
@@ -249,9 +253,11 @@ describe('ProjectionChart — lower pane (debt lines)', () => {
     expect(screen.getByTestId('rc-line-debt_2')).toBeInTheDocument();
   });
 
-  it('renders debt line even when all debts are zero (no loans)', () => {
-    // When debtByLoan is empty the debt sum is zero for every month — the
-    // Line still renders (recharts just draws a flat zero curve).
+  it('replaces the debt chart with an empty-state hint when no loans exist (no Recharts width warnings)', () => {
+    // When debtByLoan is empty the debt sum is zero for every month and across
+    // every scenario. Mounting the <ComposedChart> on an all-zero series makes
+    // Recharts emit width(-1)/height(-1) warnings during layout. Gate the
+    // chart on hasDebtData and render a small empty-state hint instead.
     const noDebtStates: MonthlyState[] = Array.from({ length: 12 }, (_, i) => ({
       monthISO: `2026-${String(i + 1).padStart(2, '0')}`,
       investmentsByAccount: { 1: 100000 + i * 1000 },
@@ -266,6 +272,10 @@ describe('ProjectionChart — lower pane (debt lines)', () => {
     }));
     const projections = new Map([[1, noDebtStates]]);
     const milestones = new Map<number, Milestones>([[1, {}]]);
+
+    // Spy on console.warn to confirm no Recharts width(-1) warnings escape.
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
     render(
       <MemoryRouter>
         <ProjectionChart
@@ -280,8 +290,17 @@ describe('ProjectionChart — lower pane (debt lines)', () => {
         />
       </MemoryRouter>,
     );
-    // Even with no loans the lower pane renders a debt line (flat at zero).
-    expect(screen.getByTestId('rc-line-debt_1')).toBeInTheDocument();
+    // Lower pane: chart is replaced with an empty-state hint; debt line is
+    // absent (the whole ComposedChart isn't mounted).
+    expect(screen.queryByTestId('rc-line-debt_1')).toBeNull();
+    expect(screen.getByTestId('whatif-debt-chart-empty')).toBeInTheDocument();
+    // No width(-1)/height(-1) warnings should have been emitted.
+    const widthWarnings = warnSpy.mock.calls.filter((args) =>
+      args.some((a) => typeof a === 'string' && /width\(-1\)|height\(-1\)/.test(a)),
+    );
+    expect(widthWarnings.length).toBe(0);
+
+    warnSpy.mockRestore();
   });
 
   it('omits debt line for a hidden scenario', () => {
