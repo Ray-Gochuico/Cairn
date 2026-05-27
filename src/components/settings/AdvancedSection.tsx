@@ -404,6 +404,18 @@ export function AdvancedSection() {
             </div>
           </section>
 
+          <section className="space-y-2">
+            <h4 className="text-sm font-medium mb-1">Bulk data import</h4>
+            <p className="text-xs text-slate-500 mb-2">
+              Re-open the setup wizard&apos;s history section to bulk-import
+              account snapshots, asset value snapshots, contributions, or
+              transactions.
+            </p>
+            <Button variant="outline" size="sm" asChild>
+              <a href="/setup?section=4">Open import wizard →</a>
+            </Button>
+          </section>
+
           <section>
             <h4 className="text-sm font-medium mb-1">
               Reset disclaimer acceptances

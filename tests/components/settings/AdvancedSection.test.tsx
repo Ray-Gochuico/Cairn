@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { AdvancedSection } from '@/components/settings/AdvancedSection';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -500,5 +501,24 @@ describe('AdvancedSection — Default cash APY input', () => {
     expect(update).toHaveBeenCalledWith(
       expect.objectContaining({ defaultCashApy: null }),
     );
+  });
+});
+
+describe('AdvancedSection — Bulk data import link', () => {
+  beforeEach(() => {
+    resetStore(makeHousehold());
+    resetSettingsStore(makeSettings());
+  });
+
+  it('renders a "Bulk data import" section with a link to /setup?section=4', () => {
+    render(
+      <MemoryRouter>
+        <AdvancedSection />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /expand advanced/i }));
+    expect(screen.getByText(/Bulk data import/i)).toBeInTheDocument();
+    const link = screen.getByRole('link', { name: /open import wizard/i });
+    expect(link).toHaveAttribute('href', '/setup?section=4');
   });
 });
