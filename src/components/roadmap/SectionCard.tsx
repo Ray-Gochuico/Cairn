@@ -63,7 +63,7 @@ export function SectionCard({ section, title, glossaryTerm, nodes, results, ctx 
     <Card>
       <button
         type="button"
-        className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-50 text-left"
+        className="w-full px-4 py-3 flex items-center justify-between hover:bg-muted text-left"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-controls={`section-${section}-body`}
