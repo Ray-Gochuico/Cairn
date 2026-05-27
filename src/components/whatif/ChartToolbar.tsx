@@ -9,6 +9,25 @@ interface ChartToolbarProps {
   onDetailLevelChange: (level: ProjectionDetailLevel) => void;
 }
 
+/**
+ * Inline ⓘ info-button placed beside a toggle button. We can't put a
+ * <TermTooltip> *inside* the toggle button (nested <button> is invalid
+ * HTML and would break the toggle's aria-pressed semantics). Placing a
+ * separately-focusable TermTooltip beside it preserves the toggle role,
+ * keeps every glossary term hoverable / focus-reachable, and matches
+ * the pattern Wave-3 UX W3-2 recommended for closing the jargon-spike
+ * on the What-If toolbar.
+ */
+function LabelTooltip({ term }: { term: string }) {
+  return (
+    <span className="inline-flex items-center text-muted-foreground">
+      <TermTooltip term={term}>
+        <span className="sr-only">Definition for {term}</span>
+      </TermTooltip>
+    </span>
+  );
+}
+
 export default function ChartToolbar({ detailLevel, onDetailLevelChange }: ChartToolbarProps) {
   const horizonMonths     = useScenariosStore((s) => s.horizonMonths);
   const dollarMode        = useScenariosStore((s) => s.dollarMode);
@@ -17,11 +36,13 @@ export default function ChartToolbar({ detailLevel, onDetailLevelChange }: Chart
 
   const years = Math.round(horizonMonths / 12);
 
-  // Labels with optional glossary keys per item. The render block wraps the
-  // label in <TermTooltip> when a glossaryTerm is set.
-  const levels: { value: ProjectionDetailLevel; label: string; glossaryTerm?: string }[] = [
-    { value: ProjectionDetailLevel.SINGLE,      label: 'Single' },
-    { value: ProjectionDetailLevel.TAX_BUCKET,  label: 'Tax bucket', glossaryTerm: 'tax bucket' },
+  // Labels with their glossary keys. The render block emits both the
+  // toggle Button (carrying aria-pressed) AND a sibling TermTooltip
+  // info-button so each term gets its own definition popover without
+  // breaking the toggle role.
+  const levels: { value: ProjectionDetailLevel; label: string; glossaryTerm: string }[] = [
+    { value: ProjectionDetailLevel.SINGLE,      label: 'Single',      glossaryTerm: 'Single' },
+    { value: ProjectionDetailLevel.TAX_BUCKET,  label: 'Tax bucket',  glossaryTerm: 'tax bucket' },
     { value: ProjectionDetailLevel.PER_ACCOUNT, label: 'Per account', glossaryTerm: 'Per account' },
   ];
 
@@ -44,7 +65,7 @@ export default function ChartToolbar({ detailLevel, onDetailLevelChange }: Chart
         />
       </div>
 
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1" role="group" aria-label="Dollar mode">
         <Label className="text-sm">
           <TermTooltip term="Nominal vs Real">Dollars</TermTooltip>:
         </Label>
@@ -56,6 +77,7 @@ export default function ChartToolbar({ detailLevel, onDetailLevelChange }: Chart
         >
           Nominal
         </Button>
+        <LabelTooltip term="Nominal" />
         <Button
           variant={dollarMode === 'real' ? 'default' : 'outline'}
           size="sm"
@@ -64,35 +86,28 @@ export default function ChartToolbar({ detailLevel, onDetailLevelChange }: Chart
         >
           Real
         </Button>
+        <LabelTooltip term="Real" />
       </div>
 
       <div className="flex items-center gap-1" role="group" aria-label="Projection detail level">
         <Label className="text-sm">
           <TermTooltip term="Projection detail level">Detail</TermTooltip>:
         </Label>
-        {levels.map(({ value, label, glossaryTerm }) => {
-          // For glossary-bearing labels we surface a quiet help-text hint via
-          // the button's title attribute so the proper term remains the
-          // clickable affordance. Full tooltip lives on the section Label
-          // above; per-button TermTooltip would interleave a focusable
-          // affordance inside the toggle button, which breaks aria-pressed.
-          const entry = glossaryTerm
-            ? // Static lookup at render time — see src/lib/glossary.ts.
-              `Detail mode: ${label}`
-            : undefined;
-          return (
+        {levels.map(({ value, label, glossaryTerm }) => (
+          // Per Wave-3 UX W3-2: each toggle gets its own glossary
+          // definition via a sibling info button (TermTooltip).
+          <span key={value} className="inline-flex items-center gap-1">
             <Button
-              key={value}
               variant={detailLevel === value ? 'default' : 'outline'}
               size="sm"
               aria-pressed={detailLevel === value}
               onClick={() => onDetailLevelChange(value)}
-              title={entry}
             >
               {label}
             </Button>
-          );
-        })}
+            <LabelTooltip term={glossaryTerm} />
+          </span>
+        ))}
       </div>
     </div>
   );

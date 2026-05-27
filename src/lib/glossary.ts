@@ -330,6 +330,27 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     shortDefinition:
       'Nominal dollars are today\'s sticker amounts; real dollars discount future amounts back to today\'s purchasing power using inflation.',
   },
+  NOMINAL: {
+    term: 'Nominal',
+    shortDefinition:
+      'Sticker-price dollars — what a number says without adjusting for inflation.',
+    fullDefinition:
+      'Nominal mode shows future projections in raw future dollars. Useful for "what will the account balance read" questions, but a $1M nominal balance in 30 years buys far less than $1M today.',
+  },
+  REAL: {
+    term: 'Real',
+    shortDefinition:
+      "Today's-dollar amounts — future projections discounted back using your inflation assumption so they're comparable to today's prices.",
+    fullDefinition:
+      'Real mode shows what a future balance is worth in today\'s purchasing power. Better for "can I retire on this?" planning since expenses also tend to move with inflation.',
+  },
+  SINGLE: {
+    term: 'Single',
+    shortDefinition:
+      'A projection chart detail mode that draws one line for total investments — no breakdown by tax treatment or account.',
+    fullDefinition:
+      'The simplest view. Use Tax bucket to split into pre-tax / Roth / taxable, or Per account to see each account separately.',
+  },
 
   // ─── Settings: Advanced ───────────────────────────────────────────────
   APY: {
