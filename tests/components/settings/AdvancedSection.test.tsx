@@ -31,6 +31,7 @@ function makeSettings(patch: Partial<AppSettings> = {}): AppSettings {
     defaultProjectionDetailLevel: ProjectionDetailLevel.TAX_BUCKET,
     defaultCashApy: null,
     defaultCompoundingFrequency: CompoundingFrequency.MONTHLY,
+    defaultDrawdownTaxRate: null,
     propertyUtilitiesCategoryIds: null,
     vehicleGasCategoryIds: null,
     ...patch,
@@ -237,6 +238,7 @@ describe('AdvancedSection', () => {
       defaultProjectionDetailLevel: ProjectionDetailLevel.TAX_BUCKET,
       defaultCashApy: null,
       defaultCompoundingFrequency: CompoundingFrequency.MONTHLY,
+      defaultDrawdownTaxRate: null,
     });
   });
 
@@ -262,6 +264,7 @@ describe('AdvancedSection', () => {
       defaultProjectionDetailLevel: ProjectionDetailLevel.TAX_BUCKET,
       defaultCashApy: null,
       defaultCompoundingFrequency: CompoundingFrequency.MONTHLY,
+      defaultDrawdownTaxRate: null,
     });
   });
 
@@ -308,6 +311,7 @@ describe('AdvancedSection', () => {
       defaultProjectionDetailLevel: ProjectionDetailLevel.TAX_BUCKET,
       defaultCashApy: null,
       defaultCompoundingFrequency: CompoundingFrequency.MONTHLY,
+      defaultDrawdownTaxRate: null,
     });
   });
 });

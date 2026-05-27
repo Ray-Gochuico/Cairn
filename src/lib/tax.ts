@@ -417,6 +417,19 @@ export interface WithdrawalTaxBreakdown {
   incrementalState: number;
   incrementalCity: number;
   earlyWithdrawalPenalty: number;
+  /**
+   * Incremental NIIT (3.8% Net Investment Income Tax under IRC §1411)
+   * triggered by the withdrawal pushing MAGI above the filing-status
+   * threshold ($200k SINGLE/HOH, $250k MFJ, $125k MFS). Zero when the
+   * caller provides no investment income OR the household's MAGI stays
+   * below threshold both with and without the withdrawal.
+   *
+   * The 401k distribution itself is NOT investment income (it's ordinary
+   * income from a qualified plan, IRC §1411(c)(5)), but the resulting
+   * MAGI bump can newly trigger or increase NIIT on the OTHER investment
+   * income the household reports (interest, dividends, cap gains, rental).
+   */
+  incrementalNiit: number;
   totalTaxOnWithdrawal: number;
   netToUser: number;
   effectiveRate: number;
@@ -446,6 +459,16 @@ export interface WithdrawalTaxInput {
    * the LTCG schedule yet don't silently change results).
    */
   ltcgBrackets?: Bracket[];
+  /**
+   * Other investment income (interest, non-qualified dividends, royalties,
+   * passive rental) for the year — used by the NIIT delta computation.
+   * `annualCapitalGains` is added to this internally to form the
+   * net-investment-income base under IRC §1411(c). Defaults to 0; when
+   * the resulting NII + MAGI falls below the filing-status threshold,
+   * the incremental NIIT is 0 and the caller's existing breakdown lines
+   * are unchanged.
+   */
+  existingInvestmentIncome?: number;
 }
 
 /**
@@ -525,7 +548,41 @@ export function calculate401kWithdrawalTax(input: WithdrawalTaxInput): Withdrawa
   const incrementalCity = cityWith - cityWithout;
 
   const earlyWithdrawalPenalty = input.ageAtWithdrawal < 59.5 ? input.withdrawalAmount * 0.10 : 0;
-  const totalTaxOnWithdrawal = incrementalFederal + incrementalState + incrementalCity + earlyWithdrawalPenalty;
+
+  // NIIT delta — the 401k withdrawal isn't itself investment income (IRC
+  // §1411(c)(5) excludes qualified-plan distributions), but the resulting
+  // MAGI bump can newly trigger or increase NIIT on the household's OTHER
+  // investment income. We compute NIIT with and without the withdrawal and
+  // take the diff. When the caller passes no investment income OR MAGI
+  // stays below threshold both ways, the delta is 0.
+  const existingInvestmentIncome = input.existingInvestmentIncome ?? 0;
+  const netInvestmentIncome = existingInvestmentIncome + input.annualCapitalGains;
+  let incrementalNiit = 0;
+  if (netInvestmentIncome > 0) {
+    // MAGI for NIIT purposes ≈ AGI for v1 (no foreign-earned-income
+    // exclusion add-back modeled). Use pre-SD ordinary income +
+    // capital gains + other investment income as the proxy.
+    const magiBase =
+      input.annualW2Income + input.annualCapitalGains + existingInvestmentIncome;
+    const niitWithout = computeNiit({
+      magi: magiBase,
+      netInvestmentIncome,
+      filingStatus: input.filingStatus,
+    }).niit;
+    const niitWith = computeNiit({
+      magi: magiBase + input.withdrawalAmount,
+      netInvestmentIncome,
+      filingStatus: input.filingStatus,
+    }).niit;
+    incrementalNiit = niitWith - niitWithout;
+  }
+
+  const totalTaxOnWithdrawal =
+    incrementalFederal +
+    incrementalState +
+    incrementalCity +
+    earlyWithdrawalPenalty +
+    incrementalNiit;
   const netToUser = input.withdrawalAmount - totalTaxOnWithdrawal;
   const effectiveRate = input.withdrawalAmount > 0 ? totalTaxOnWithdrawal / input.withdrawalAmount : 0;
 
@@ -534,6 +591,7 @@ export function calculate401kWithdrawalTax(input: WithdrawalTaxInput): Withdrawa
     incrementalState,
     incrementalCity,
     earlyWithdrawalPenalty,
+    incrementalNiit,
     totalTaxOnWithdrawal,
     netToUser,
     effectiveRate,

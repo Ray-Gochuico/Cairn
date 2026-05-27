@@ -179,6 +179,33 @@ describe('SettingsRepo — defaultCashApy', () => {
   it('rejects defaultCashApy > 0.15', async () => {
     await expect(repo.update({ defaultCashApy: 0.20 })).rejects.toThrow();
   });
+
+  // ─── defaultDrawdownTaxRate (migration 0035) ─────────────────────────
+  it('seeds defaultDrawdownTaxRate as null on a fresh DB', async () => {
+    const s = await repo.get();
+    expect(s.defaultDrawdownTaxRate).toBeNull();
+  });
+
+  it('round-trips defaultDrawdownTaxRate through update + get', async () => {
+    await repo.update({ defaultDrawdownTaxRate: 0.22 });
+    const s = await repo.get();
+    expect(s.defaultDrawdownTaxRate).toBeCloseTo(0.22, 6);
+  });
+
+  it('writes null when defaultDrawdownTaxRate is cleared', async () => {
+    await repo.update({ defaultDrawdownTaxRate: 0.18 });
+    await repo.update({ defaultDrawdownTaxRate: null });
+    const s = await repo.get();
+    expect(s.defaultDrawdownTaxRate).toBeNull();
+  });
+
+  it('rejects defaultDrawdownTaxRate > 0.5', async () => {
+    await expect(repo.update({ defaultDrawdownTaxRate: 0.55 })).rejects.toThrow();
+  });
+
+  it('rejects defaultDrawdownTaxRate < 0', async () => {
+    await expect(repo.update({ defaultDrawdownTaxRate: -0.01 })).rejects.toThrow();
+  });
 });
 
 describe('SettingsRepo — utility category id columns', () => {

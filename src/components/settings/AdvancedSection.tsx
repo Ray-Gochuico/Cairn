@@ -57,6 +57,13 @@ export function AdvancedSection() {
   const [compoundingFrequency, setCompoundingFrequency] = useState<CompoundingFrequency>(
     CompoundingFrequency.MONTHLY,
   );
+  // Default effective tax rate on retirement withdrawals (Trad bucket).
+  // Persists on app_settings as a fraction (0.22), surfaced as whole-percent.
+  // The 22% UI default (when the field is empty/unset) reflects Finance
+  // review NEW-W5-1 guidance: blended federal + FICA + average state for
+  // a typical $60k/yr drawdown. Users can blank the field to set the
+  // setting to null (engine falls back to legacy net-equals-gross).
+  const [drawdownTaxRate, setDrawdownTaxRate] = useState<string>('');
   const [resetOpen, setResetOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
@@ -130,6 +137,17 @@ export function AdvancedSection() {
     );
   }, [settings?.defaultCompoundingFrequency]);
 
+  // Default drawdown tax rate — household-level default for the engine's
+  // Trad-bucket gross-up under the sequential withdrawal strategy. Persists
+  // as a fraction; surfaced as a whole-percent value.
+  useEffect(() => {
+    setDrawdownTaxRate(
+      settings?.defaultDrawdownTaxRate == null
+        ? ''
+        : String(Math.round(settings.defaultDrawdownTaxRate * 1000) / 10),
+    );
+  }, [settings?.defaultDrawdownTaxRate]);
+
   const lowNum = low.trim() === '' ? null : Number(low);
   const highNum = high.trim() === '' ? null : Number(high);
   const lowInvalid = lowNum !== null && (Number.isNaN(lowNum) || lowNum < 0 || lowNum > 100);
@@ -148,7 +166,20 @@ export function AdvancedSection() {
   const cashApyInvalid =
     cashApyNum !== null && (Number.isNaN(cashApyNum) || cashApyNum < 0 || cashApyNum > 15);
 
-  const invalid = thresholdInvalid || inflationInvalid || returnInvalid || cashApyInvalid;
+  // Drawdown tax rate: 0..50% range (matches Zod min(0).max(0.5) on the
+  // app_settings column). Blank → null persisted; user gets a clear
+  // "no household default" state.
+  const drawdownTaxRateNum = drawdownTaxRate.trim() === '' ? null : Number(drawdownTaxRate);
+  const drawdownTaxRateInvalid =
+    drawdownTaxRateNum !== null &&
+    (Number.isNaN(drawdownTaxRateNum) || drawdownTaxRateNum < 0 || drawdownTaxRateNum > 50);
+
+  const invalid =
+    thresholdInvalid ||
+    inflationInvalid ||
+    returnInvalid ||
+    cashApyInvalid ||
+    drawdownTaxRateInvalid;
 
   const handleSave = async () => {
     if (invalid || submitting) return;
@@ -165,6 +196,8 @@ export function AdvancedSection() {
         defaultProjectionDetailLevel: projDetailLevel,
         defaultCashApy: cashApyNum === null ? null : cashApyNum / 100,
         defaultCompoundingFrequency: compoundingFrequency,
+        defaultDrawdownTaxRate:
+          drawdownTaxRateNum === null ? null : drawdownTaxRateNum / 100,
       });
       setSavedAt(Date.now());
     } finally {
@@ -363,6 +396,39 @@ export function AdvancedSection() {
                 Applies to investment returns and cash APY in new scenarios.
               </p>
             </div>
+            <div className="pt-1">
+              <div className="flex items-center gap-1">
+                <Label htmlFor="default-drawdown-tax-rate">
+                  Default effective tax rate on retirement withdrawals (%)
+                </Label>
+                <TermTooltip term="Drawdown tax rate">
+                  <span className="sr-only">Drawdown tax rate</span>
+                </TermTooltip>
+              </div>
+              <Input
+                id="default-drawdown-tax-rate"
+                type="number"
+                step="0.1"
+                min="0"
+                max="50"
+                value={drawdownTaxRate}
+                onChange={(e) => setDrawdownTaxRate(e.target.value)}
+                placeholder="22"
+                aria-invalid={drawdownTaxRateInvalid}
+                className="w-32"
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                Applied when What-If scenarios use the &quot;sequential&quot;
+                withdrawal strategy. Default 22% (covers federal + FICA +
+                average state for a $60k/yr drawdown). Leave blank to model
+                net-of-tax withdrawals manually.
+              </p>
+            </div>
+            {drawdownTaxRateInvalid && (
+              <div className="text-xs text-destructive mt-2" role="alert">
+                Drawdown tax rate must be between 0 and 50.
+              </div>
+            )}
             {/* NOTE (2026-05-26 revamp): the "Auto-invest salary surplus
                 by default" toggle was removed. Routing now happens via the
                 per-scenario gap allocation lever (Income popover). The

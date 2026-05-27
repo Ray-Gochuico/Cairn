@@ -16,6 +16,7 @@ interface AppSettingsRow {
   default_projection_detail_level: 'single' | 'tax_bucket' | 'per_account';
   default_cash_apy: number | null;
   default_compounding_frequency: CompoundingFrequency;
+  default_drawdown_tax_rate: number | null;
   property_utilities_category_ids: string | null;
   vehicle_gas_category_ids: string | null;
   // NOTE: the `auto_invest_salary_surplus` column (migration 0029) still
@@ -72,6 +73,7 @@ function rowToAppSettings(row: AppSettingsRow): AppSettings {
     defaultProjectionDetailLevel: row.default_projection_detail_level,
     defaultCashApy: row.default_cash_apy,
     defaultCompoundingFrequency: row.default_compounding_frequency ?? CompoundingFrequency.MONTHLY,
+    defaultDrawdownTaxRate: row.default_drawdown_tax_rate,
     propertyUtilitiesCategoryIds: parseIdArray(row.property_utilities_category_ids),
     vehicleGasCategoryIds: parseIdArray(row.vehicle_gas_category_ids),
   });
@@ -109,6 +111,7 @@ export class SettingsRepo {
         default_projection_detail_level = ?,
         default_cash_apy = ?,
         default_compounding_frequency = ?,
+        default_drawdown_tax_rate = ?,
         property_utilities_category_ids = ?,
         vehicle_gas_category_ids = ?
        WHERE id = 1`,
@@ -125,6 +128,7 @@ export class SettingsRepo {
         merged.defaultProjectionDetailLevel,
         merged.defaultCashApy ?? null,
         merged.defaultCompoundingFrequency,
+        merged.defaultDrawdownTaxRate ?? null,
         merged.propertyUtilitiesCategoryIds === null
           ? null
           : JSON.stringify(merged.propertyUtilitiesCategoryIds),

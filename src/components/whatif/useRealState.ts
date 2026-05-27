@@ -29,6 +29,7 @@ export function useRealState(): RealState | null {
   const settings         = useSettingsStore((s) => s.settings);
   const taxRules         = useTaxRulesStore((s) => s.items);
   const defaultCashApy   = settings?.defaultCashApy ?? null;
+  const defaultDrawdownTaxRate = settings?.defaultDrawdownTaxRate ?? null;
 
   return useMemo<RealState | null>(() => {
     if (!household) return null;
@@ -46,6 +47,7 @@ export function useRealState(): RealState | null {
         defaultInflation: inflation,
         defaultReturnRate: returnRate,
         defaultCashApy,
+        defaultDrawdownTaxRate,
       },
       startISO,
       taxRules,
@@ -57,5 +59,5 @@ export function useRealState(): RealState | null {
     // - The pre-revamp hook also threaded `settings.autoInvestSalarySurplus`
     //   into RealState.defaults. Dropped — routing now flows through
     //   `payload.gapAllocation` instead of a household-level setting.
-  }, [household, persons, loans, holdings, accounts, accountSnapshots, transactions, inflation, returnRate, defaultCashApy, taxRules]);
+  }, [household, persons, loans, holdings, accounts, accountSnapshots, transactions, inflation, returnRate, defaultCashApy, defaultDrawdownTaxRate, taxRules]);
 }

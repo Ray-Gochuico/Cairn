@@ -270,12 +270,16 @@ describe('Retirement401kWithdrawalCard', () => {
     });
 
     expect(await screen.findByText(/what this calculator does NOT model/i)).toBeInTheDocument();
-    // The disclosure body covers the named omissions.
-    expect(screen.getByText(/NIIT/)).toBeInTheDocument();
+    // The disclosure body covers the named omissions. (Wave-5 NEW-W5-2:
+    // NIIT was removed from this list once the calculator started routing
+    // through the incremental-tax path. NIIT delta now appears as its
+    // own breakdown line — see Retirement401kWithdrawalCard.niit.test.tsx.)
     expect(screen.getByText(/AMT/)).toBeInTheDocument();
     expect(screen.getByText(/Rule of 55/i)).toBeInTheDocument();
     expect(screen.getByText(/SEPP/)).toBeInTheDocument();
-    expect(screen.getByText(/RMD/)).toBeInTheDocument();
+    // RMD appears twice now (NIIT row TermTooltip + RMD disclosure bullet),
+    // so use getAllByText for safety.
+    expect(screen.getAllByText(/RMD/).length).toBeGreaterThanOrEqual(1);
   });
 
   it('uses Net-to-you as the card headline (not take-home of the full salary)', async () => {

@@ -7,6 +7,16 @@ export interface AppSettingsSlice {
   defaultInflation: number;
   defaultReturnRate: number;
   defaultCashApy: number | null;
+  /**
+   * Household-default blended effective tax rate applied to gross-up Trad
+   * 401k / Trad IRA / HSA / 529 withdrawals under the SEQUENTIAL drawdown
+   * strategy. Stored as a fraction (0.22 = 22%). null = unset; the engine
+   * falls through to the per-scenario lever value (which itself defaults
+   * to 0 = legacy net-equals-gross behavior).
+   *
+   * Surfaced via Settings → Advanced. See Finance Wave-5 review NEW-W5-1.
+   */
+  defaultDrawdownTaxRate: number | null;
 }
 
 export interface RealStateInputs {
@@ -91,6 +101,13 @@ export interface RealState {
     inflation: number;
     returnRate: number;
     defaultCashApy: number | null;
+    /**
+     * Household-level fallback for the Trad-bucket gross-up rate when a
+     * scenario's per-lever value is 0 (the schema default). null = unset
+     * (engine treats as 0 — legacy behavior). Sourced from
+     * AppSettings.defaultDrawdownTaxRate, surfaced via Settings → Advanced.
+     */
+    defaultDrawdownTaxRate: number | null;
   };
   startISO: string;
   taxBrackets: RealStateTaxBrackets;
@@ -289,6 +306,7 @@ export function captureRealState(inputs: RealStateInputs): RealState {
       inflation: inputs.appSettings.defaultInflation,
       returnRate: inputs.appSettings.defaultReturnRate,
       defaultCashApy: inputs.appSettings.defaultCashApy ?? null,
+      defaultDrawdownTaxRate: inputs.appSettings.defaultDrawdownTaxRate ?? null,
     },
     startISO: inputs.startISO,
     taxBrackets,
