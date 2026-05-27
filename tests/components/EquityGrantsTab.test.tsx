@@ -267,7 +267,8 @@ describe('EquityGrantsTab', () => {
       expect(out?.companyTotalDebt).toBe(5_000_000);
       expect(out?.companyOutstandingShares).toBe(4_000_000);
     });
-  });
+  }, 15000);
+  // ↑ 15s timeout — same wave3 N1 pattern (7 sequential user events).
 
   it('editing a single vesting row updates cumulativePct', async () => {
     const user = userEvent.setup();
@@ -300,7 +301,9 @@ describe('EquityGrantsTab', () => {
       expect(equityGrants[0].vestingSchedule[0].cumulativePct).toBeCloseTo(1.0, 9);
       expect(equityGrants[0].vestingSchedule[0].date).toBe('2025-01-15');
     });
-  });
+  }, 15000);
+  // ↑ 15s timeout — same wave3 N1 pattern (8 sequential user events
+  // including a selectDate that itself is 3 user-events).
 
   it('switching template fills the schedule from grant date', async () => {
     const user = userEvent.setup();
@@ -351,7 +354,11 @@ describe('EquityGrantsTab', () => {
       // Some error surface should be shown from RHF/zod validation.
       expect(screen.getByText(/ownerPersonId/i)).toBeInTheDocument();
     });
-  });
+  }, 15000);
+  // ↑ Same per-test timeout as the "creates a grant via the form" test —
+  // this test makes 7 sequential user-event calls before the waitFor and
+  // exhibits the same parallelism-induced latency under full-suite load.
+  // See docs/reviews/2026-05-27-testing-wave3.md § N1.
 
   it('lists multiple grants with company and shares', async () => {
     await seedGrant(db, alexId, { name: 'RSU 2023', companyName: 'Acme', totalShares: 500 });
