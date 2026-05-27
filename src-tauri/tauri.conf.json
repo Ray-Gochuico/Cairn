@@ -38,5 +38,13 @@
       "entitlements": null,
       "hardenedRuntime": true
     }
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://example.invalid/updater/{{target}}/{{current_version}}"
+      ],
+      "pubkey": ""
+    }
   }
 }

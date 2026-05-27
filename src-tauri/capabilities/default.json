@@ -38,6 +38,7 @@
       "identifier": "fs:allow-mkdir",
       "__comment__": "Static $HOME-scoped mkdir access. Same rationale as fs:allow-write-file above: dialog-granted fs scope from tauri-plugin-dialog 2.7.1 is session-only; this static scope provides cross-restart persistence. Does not cover paths outside $HOME.",
       "allow": [{ "path": "$HOME/**/*" }]
-    }
+    },
+    "updater:default"
   ]
 }
