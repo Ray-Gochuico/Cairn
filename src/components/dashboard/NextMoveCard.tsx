@@ -20,6 +20,10 @@ import { NODES } from '@/domain/roadmap/nodes';
  * Surfaces "ⓘ N unanswered question(s)" alongside the CTA when there
  * are nodes the engine cannot score until the user answers a prompt.
  * The link routes back to the Roadmap so they can answer inline.
+ *
+ * Header label intentionally reads "Suggested next step" (not "Your next
+ * move") so users see this as a heuristic suggestion derived from inputs,
+ * not a personalized recommendation. See W7-Legal R-LWI-3.
  */
 export function NextMoveCard() {
   const household = useHouseholdStore((s) => s.household);
@@ -31,7 +35,7 @@ export function NextMoveCard() {
     return (
       <Card className="p-4">
         <div className="text-xs uppercase text-muted-foreground tracking-wider">
-          Your next move
+          Suggested next step
         </div>
         <div className="text-sm text-foreground mt-1">
           Finish setting up to see your next move.
@@ -50,7 +54,7 @@ export function NextMoveCard() {
     return (
       <Card className="p-4">
         <div className="text-xs uppercase text-muted-foreground tracking-wider">
-          Your next move
+          Suggested next step
         </div>
         <div className="text-sm font-medium mt-1">Set up your roadmap</div>
         <div className="text-xs text-muted-foreground">
@@ -76,7 +80,7 @@ export function NextMoveCard() {
     return (
       <Card className="p-4 bg-success-soft border-success/30">
         <div className="text-xs uppercase text-success-foreground tracking-wider flex items-center justify-between">
-          <span>Your next move</span>
+          <span>Suggested next step</span>
           <Link to="/roadmap" className="text-xs underline">
             View →
           </Link>
@@ -98,7 +102,7 @@ export function NextMoveCard() {
   return (
     <Card className="p-4 bg-info-soft border-info/30">
       <div className="text-xs uppercase text-info-foreground tracking-wider flex items-center justify-between">
-        <span>Your next move</span>
+        <span>Suggested next step</span>
         <Link to="/roadmap" className="text-xs underline">
           View →
         </Link>
