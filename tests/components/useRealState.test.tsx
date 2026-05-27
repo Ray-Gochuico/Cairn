@@ -9,6 +9,7 @@ import { useHoldingsStore } from '@/stores/holdings-store';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { useScenariosStore } from '@/stores/scenarios-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { FilingStatus } from '@/types/enums';
 import type { TaxRule } from '@/types/schema';
@@ -39,6 +40,15 @@ function resetStores() {
     inflation: 0.025, defaultReturnRate: 0.07,
   });
   useTaxRulesStore.setState({ year: null, items: [], isLoading: false, error: null });
+  // Default settings: nothing set (settings.defaultInflation === null
+  // means "fall back to the scenarios-store default").
+  useSettingsStore.setState({
+    settings: null,
+    isLoading: false,
+    error: null,
+    load: async () => {},
+    update: async () => {},
+  } as any);
 }
 
 const wrapper = ({ children }: { children: React.ReactNode }) => <MemoryRouter>{children}</MemoryRouter>;
@@ -69,6 +79,67 @@ describe('useRealState', () => {
     // Expenses are now sourced entirely from the lever's `expensePeriods`
     // payload. The hook no longer rewrites `real.baselineMonthlyExpenses`.
     expect((result.current as Record<string, unknown>).baselineMonthlyExpenses).toBeUndefined();
+  });
+
+  it('NEW-W7-WI1: settings.defaultInflation overrides scenarios-store default when set', () => {
+    // Pre-fix the engine only saw the scenarios-store value (0.025 default).
+    // Settings → Advanced → Default inflation now wins when set.
+    useSettingsStore.setState({
+      settings: {
+        id: 1,
+        sidebarLayout: null,
+        notificationsEnabled: true,
+        notificationDay: 1,
+        refreshCadence: 'EVERY_LAUNCH',
+        lastRefreshAt: null,
+        statementsFolderPath: null,
+        defaultInflation: 0.04,
+        defaultReturnRate: null,
+        defaultCashApy: null,
+        defaultDrawdownTaxRate: null,
+      } as any,
+      isLoading: false,
+      error: null,
+      load: async () => {},
+      update: async () => {},
+    } as any);
+    useScenariosStore.setState({
+      scenarios: [], isLoading: false, error: null,
+      horizonMonths: 360, dollarMode: 'nominal',
+      inflation: 0.025, defaultReturnRate: 0.07,
+    });
+    const { result } = renderHook(() => useRealState(), { wrapper });
+    expect(result.current!.defaults.inflation).toBeCloseTo(0.04, 4);
+  });
+
+  it('NEW-W7-WI1: falls back to scenarios-store inflation when settings.defaultInflation is null', () => {
+    // null = unset; scenarios-store default (0.025) wins.
+    useSettingsStore.setState({
+      settings: {
+        id: 1,
+        sidebarLayout: null,
+        notificationsEnabled: true,
+        notificationDay: 1,
+        refreshCadence: 'EVERY_LAUNCH',
+        lastRefreshAt: null,
+        statementsFolderPath: null,
+        defaultInflation: null,
+        defaultReturnRate: null,
+        defaultCashApy: null,
+        defaultDrawdownTaxRate: null,
+      } as any,
+      isLoading: false,
+      error: null,
+      load: async () => {},
+      update: async () => {},
+    } as any);
+    useScenariosStore.setState({
+      scenarios: [], isLoading: false, error: null,
+      horizonMonths: 360, dollarMode: 'nominal',
+      inflation: 0.025, defaultReturnRate: 0.07,
+    });
+    const { result } = renderHook(() => useRealState(), { wrapper });
+    expect(result.current!.defaults.inflation).toBeCloseTo(0.025, 4);
   });
 
   it('threads tax-rules-store items onto RealState.taxBrackets for the household jurisdiction', () => {
