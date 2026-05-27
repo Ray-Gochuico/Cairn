@@ -78,9 +78,11 @@ describe('adapter PRAGMA parity (test ↔ prod drift guard)', () => {
   it('SqliteAdapter source uses the same PRAGMA set as TauriAdapter', () => {
     // Cross-adapter parity: every PRAGMA that prod sets must also be in
     // the test adapter, otherwise tests passed while prod drifted (the
-    // exact failure mode that masked the FK bug).
+    // exact failure mode that masked the FK bug). All three PRAGMAs that
+    // TauriAdapter sets in Sprint 4 must be mirrored here.
     const sqliteSrc = readFileSync(SQLITE_ADAPTER_PATH, 'utf-8');
     expect(sqliteSrc).toMatch(/journal_mode = WAL/);
     expect(sqliteSrc).toMatch(/foreign_keys = ON/);
+    expect(sqliteSrc).toMatch(/busy_timeout = 5000/);
   });
 });
