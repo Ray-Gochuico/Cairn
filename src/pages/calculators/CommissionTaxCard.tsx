@@ -173,7 +173,7 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
 
   if (!household || persons.length === 0 || !result) {
     return (
-      <CalculatorCard title="Commission take-home" headline="—" cardId={cardId} onHide={onHide}>
+      <CalculatorCard title="Estimated commission take-home" headline="—" cardId={cardId} onHide={onHide}>
         {commissionInputs}
         <p className="text-sm text-muted-foreground">
           Set up your household profile + tax rules to see commission tax.
@@ -184,7 +184,7 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
 
   if (commissionPerCheck === 0) {
     return (
-      <CalculatorCard title="Commission take-home" headline="—" cardId={cardId} onHide={onHide}>
+      <CalculatorCard title="Estimated commission take-home" headline="—" cardId={cardId} onHide={onHide}>
         {commissionInputs}
         <p className="text-sm text-muted-foreground">
           Enter a commission amount to see the tax breakdown.
@@ -202,7 +202,7 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
 
   return (
     <CalculatorCard
-      title="Commission take-home"
+      title="Estimated commission take-home"
       cardId={cardId}
       onHide={onHide}
       headline={
@@ -222,7 +222,7 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
           <div className="font-medium tabular-nums">{formatCurrency(commission401kPerCheck)}</div>
         </div>
         <div>
-          <div className="text-muted-foreground">Federal tax</div>
+          <div className="text-muted-foreground">Estimated federal tax</div>
           <div className="font-medium tabular-nums">
             {formatCurrency(result.bonusBreakdown.federal / periods)}
           </div>
@@ -236,19 +236,19 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
           </div>
         </div>
         <div>
-          <div className="text-muted-foreground">State tax</div>
+          <div className="text-muted-foreground">Estimated state tax</div>
           <div className="font-medium tabular-nums">
             {formatCurrency(result.bonusBreakdown.state / periods)}
           </div>
         </div>
         <div>
-          <div className="text-muted-foreground">City tax</div>
+          <div className="text-muted-foreground">Estimated city tax</div>
           <div className="font-medium tabular-nums">
             {formatCurrency(result.bonusBreakdown.city / periods)}
           </div>
         </div>
         <div>
-          <div className="text-muted-foreground">Net to bank</div>
+          <div className="text-muted-foreground">Estimated net to bank</div>
           <div className="font-semibold tabular-nums">{formatCurrency(netPerCheck)}</div>
         </div>
       </div>
@@ -270,11 +270,11 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
           </div>
         </div>
         <div>
-          <div className="text-muted-foreground">Annual tax on commission</div>
+          <div className="text-muted-foreground">Estimated annual tax on commission</div>
           <div className="font-medium tabular-nums">{formatCurrency(annualTaxOnCommission)}</div>
         </div>
         <div>
-          <div className="text-muted-foreground">Annual net</div>
+          <div className="text-muted-foreground">Estimated annual net</div>
           <div className="font-semibold tabular-nums">{formatCurrency(annualNet)}</div>
         </div>
       </div>
@@ -283,6 +283,53 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
         Commission is taxed as supplemental wages. 401(k) contributions from commission are shown
         but the tax calc uses your salary pretax only (matches bonus card).
       </p>
+      {/* Wave-5 W5-5 — calculator framing parity with the 401k card.
+          Commission income shares the supplemental-wage withholding ambiguity
+          and several state-rule complications that the engine does not model. */}
+      <details className="text-xs mt-3 border-t pt-2 text-muted-foreground">
+        <summary className="cursor-pointer font-medium hover:text-foreground">
+          What this calculator does NOT model
+        </summary>
+        <ul className="mt-2 list-disc pl-5 space-y-1">
+          <li>
+            <strong>Aggregate vs. flat-rate withholding.</strong> Like bonuses,
+            commission is a "supplemental wage" — the IRS allows either the 22%
+            flat rate or the aggregate method. The engine uses the aggregate
+            method; your payroll may use the flat rate.
+          </li>
+          <li>
+            <strong>State-specific supplemental-wage flat rates.</strong> CA, GA,
+            NY, NJ, and others tax supplemental wages at a flat statutory rate
+            that may differ from your W-4 ordinary rate. The engine applies
+            your state's ordinary brackets.
+          </li>
+          <li>
+            <strong>Clawback / chargeback adjustments.</strong> Many commission
+            plans claw back unearned commission if the underlying deal cancels.
+            The engine treats each commission check as final.
+          </li>
+          <li>
+            <TermTooltip term="NIIT">NIIT</TermTooltip> + Additional Medicare
+            surtax (0.9% above $200k single / $250k MFJ) — secondary effects
+            for high earners.
+          </li>
+          <li>
+            <TermTooltip term="AMT">AMT</TermTooltip> on ISO exercises landing
+            in the same period.
+          </li>
+          <li>
+            <strong>Self-employment tax</strong> if any portion is paid as 1099
+            commission (independent contractor) rather than W-2. The engine
+            assumes W-2 employee withholding throughout.
+          </li>
+        </ul>
+        <p className="mt-2">
+          For a planning decision tied to commission (mortgage qualification,
+          quarterly estimated taxes), run the numbers past a CPA — the items
+          above can each shift the bottom line by hundreds to thousands of
+          dollars per check.
+        </p>
+      </details>
     </CalculatorCard>
   );
 }

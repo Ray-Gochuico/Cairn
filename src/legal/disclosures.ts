@@ -16,7 +16,7 @@
  * § A.0 "Full draft disclosure copy".
  */
 
-const APP_WIDE_TEXT_v1_3 = `**This app is an educational and personal-tracking tool. It is not financial, investment, tax, legal, or accounting advice.**
+const APP_WIDE_TEXT_v1_4 = `**This app is an educational and personal-tracking tool. It is not financial, investment, tax, legal, or accounting advice.**
 
 The app's developer is not a registered investment advisor, broker-dealer, certified financial planner, CPA, or attorney, and no fiduciary relationship is created by your use of it.
 
@@ -34,7 +34,7 @@ Use of this app is **at your own risk**. The software is provided "as is" withou
 
 **What this app does NOT model.** The projections, calculators, and roadmap heuristics in this app omit several federal and state tax items that can materially shift the real-world outcome. Treat any number that depends on the items below as illustrative only:
 
-- **Capital-gains state taxes.** State LTCG treatment varies widely — WA imposes a 7% tax on gains above ~$262k, while CA/NY/HI/NJ tax LTCG as ordinary income, and TX/FL/NV/SD/TN/WY/AK have no state income tax at all. The app applies your state's ordinary brackets to any cap gains, which over-collects for some states and under-collects for others.
+- **Capital-gains state taxes.** State LTCG treatment varies widely — WA imposes a 7% tax on gains above ~$278k (2025 inflation-adjusted threshold), while CA/NY/HI/NJ tax LTCG as ordinary income, and TX/FL/NV/SD/TN/WY/AK have no state income tax at all. The app applies your state's ordinary brackets to any cap gains, which over-collects for some states and under-collects for others.
 - **AMT (Alternative Minimum Tax)** for ISO exercises, large SALT add-backs, or other AMT preference items. Households exercising ISOs can owe substantial AMT in the exercise year.
 - **Social Security retirement income.** The app does not project SS benefits or apply the federal 50%/85% taxation rules. Households relying primarily on SS in retirement will see different effective rates than projected.
 - **Required Minimum Distributions (RMDs)** at age 73+. Pre-tax retirement accounts (Trad 401k/IRA) must distribute on a schedule; the app does not force these distributions into its projections.
@@ -75,10 +75,10 @@ export interface DisclosureDocument {
 
 export const DISCLOSURES = {
   app_wide: {
-    version: '1.3',
-    body: APP_WIDE_TEXT_v1_3,
+    version: '1.4',
+    body: APP_WIDE_TEXT_v1_4,
     diffFromPrevious:
-      'Version 1.3 adds a "What this app does NOT model" section listing the federal + state tax items the app currently omits (state-specific LTCG rates, AMT on ISOs, Social Security retirement income + 50/85% taxation, RMDs at age 73+, §121 home-sale exclusion, SALT cap, the 1% stock-buyback excise tax, and the cafeteria-plan FICA exclusion). The State of New York governing-law clause from v1.2 is unchanged. Please re-read and re-accept.',
+      'Version 1.4 updates the Washington capital-gains-tax threshold in the "Capital-gains state taxes" bullet from the stale ~$262k figure to the current ~$278k (2025 inflation-adjusted) value. No other content changes since v1.3. Please re-read and re-accept.',
     acceptanceCheckboxLabel:
       'I have read and understand the above. I accept that this app is not financial advice and I use it at my own risk.',
   } satisfies DisclosureDocument,

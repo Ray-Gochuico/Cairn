@@ -69,6 +69,65 @@ this repo; nothing is hidden by the signing absence.
 If/when Cairn ever scales beyond friends, the build process is set up to
 add code signing in one line — see `src-tauri/SIGNING.md`.
 
+## Privacy
+
+Cairn is built around a strict "100% local" guarantee. **Your financial
+data never leaves your device unless you explicitly export a CSV.** No
+account, no sync, no telemetry, no crash reporter, no analytics SDK.
+
+This section spells out the three concrete facts that back the
+guarantee, so you can verify it for yourself. The same content is
+mirrored inside the app at **Settings → Privacy & data**.
+
+### Where your data lives
+
+Everything Cairn knows — your accounts, transactions, settings, and
+price cache — lives in a single SQLite file on this Mac at:
+
+```
+~/Library/Application Support/com.raymondgochuico.cairn/finance.db
+```
+
+The parent directory's permissions are `drwx------` (owner-only), so
+no other macOS user on the same machine can read it. Settings →
+Privacy & data has a **Show in Finder** button that opens the folder
+for you.
+
+### What network calls happen
+
+Exactly two outbound calls, both user-controlled:
+
+1. **Yahoo Finance refresh** — fetches current quotes for the tickers
+   in your portfolio. Cadence is configurable on Settings → Market
+   data (every launch / daily / weekly / **manual**). Pick *manual*
+   to disable automatic refreshes; the *Refresh now* button still
+   works on demand. The request body contains only the ticker
+   symbols you have entered — no PII, no identifiers.
+2. **Updater check** — fetches `latest.json` from the GitHub Releases
+   page to compare against your installed version. **Only fires when
+   you click "Check for updates"** in Settings → Updates — never on
+   launch, never in the background.
+
+Launch Cairn with Wi-Fi off and every feature except those two
+opt-in calls still works.
+
+### Encryption at rest
+
+Cairn does not currently implement its own SQLite encryption (that's
+on the v1.1 roadmap). macOS file-mode permissions protect the file
+from other users on the same machine, but a thief who pulls the disk
+out of an unlocked Mac could read the data in plaintext.
+
+The recommended safeguard is **macOS FileVault**, which encrypts the
+entire disk with your login password:
+
+> *System Settings → Privacy & Security → FileVault*
+
+FileVault is on by default for new Macs since macOS 11, but is **not**
+retroactively enabled on machines that were upgraded from earlier
+versions. If you imported a transaction history with sensitive
+balances, take 30 seconds to verify FileVault is on.
+
 ## Status
 
 Phase 5 / Sprint 4 in flight — A-grade v1 ship target close. All v1 feature

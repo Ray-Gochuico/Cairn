@@ -513,7 +513,7 @@ describe('CalculatorsLayout', () => {
       await screen.findByText(/Bonus take-home/i);
 
       // 1) hide Bonus card
-      const bonusHideBtn = screen.getByRole('button', { name: /^hide bonus take-home/i });
+      const bonusHideBtn = screen.getByRole('button', { name: /^hide estimated bonus take-home/i });
       await userEvent.click(bonusHideBtn);
       expect(screen.queryByText(/Bonus take-home/i)).not.toBeInTheDocument();
       expect(await screen.findByText(/1 card hidden/i)).toBeInTheDocument();
@@ -527,7 +527,7 @@ describe('CalculatorsLayout', () => {
       expect(screen.queryByText(/card hidden/i)).not.toBeInTheDocument();
 
       // 3) hide it again — the layout must update again without re-mounting
-      const bonusHideBtnAgain = screen.getByRole('button', { name: /^hide bonus take-home/i });
+      const bonusHideBtnAgain = screen.getByRole('button', { name: /^hide estimated bonus take-home/i });
       await userEvent.click(bonusHideBtnAgain);
       expect(screen.queryByText(/Bonus take-home/i)).not.toBeInTheDocument();
       expect(await screen.findByText(/1 card hidden/i)).toBeInTheDocument();
@@ -545,9 +545,9 @@ describe('CalculatorsLayout', () => {
       await screen.findByText(/Bonus take-home/i);
 
       // Hide Bonus
-      await userEvent.click(screen.getByRole('button', { name: /^hide bonus take-home/i }));
+      await userEvent.click(screen.getByRole('button', { name: /^hide estimated bonus take-home/i }));
       // Hide Commission
-      await userEvent.click(screen.getByRole('button', { name: /^hide commission take-home/i }));
+      await userEvent.click(screen.getByRole('button', { name: /^hide estimated commission take-home/i }));
 
       expect(screen.queryByText(/Bonus take-home/i)).not.toBeInTheDocument();
       expect(screen.queryByText(/Commission take-home/i)).not.toBeInTheDocument();

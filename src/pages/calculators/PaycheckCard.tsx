@@ -116,7 +116,12 @@ export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
 
   if (!annual) {
     return (
-      <CalculatorCard title="Paycheck (take-home)" headline="—" cardId={cardId} onHide={onHide}>
+      <CalculatorCard
+        title="Paycheck (estimated take-home)"
+        headline="—"
+        cardId={cardId}
+        onHide={onHide}
+      >
         <p className="text-sm text-muted-foreground">
           Set up your household profile + tax rules to see take-home.
         </p>
@@ -140,7 +145,7 @@ export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
 
   return (
     <CalculatorCard
-      title="Paycheck (take-home)"
+      title="Paycheck (estimated take-home)"
       cardId={cardId}
       onHide={onHide}
       headline={
@@ -194,7 +199,7 @@ export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
           <div className="font-medium tabular-nums">{formatCurrency(perPeriod.pretaxHsa)}</div>
         </div>
         <div>
-          <div className="text-muted-foreground">Federal tax</div>
+          <div className="text-muted-foreground">Estimated federal tax</div>
           <div className="font-medium tabular-nums">{formatCurrency(perPeriod.federalTax)}</div>
         </div>
         <div>
@@ -204,14 +209,62 @@ export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
           <div className="font-medium tabular-nums">{formatCurrency(perPeriod.fica)}</div>
         </div>
         <div>
-          <div className="text-muted-foreground">State tax</div>
+          <div className="text-muted-foreground">Estimated state tax</div>
           <div className="font-medium tabular-nums">{formatCurrency(perPeriod.stateTax)}</div>
         </div>
         <div>
-          <div className="text-muted-foreground">City tax</div>
+          <div className="text-muted-foreground">Estimated city tax</div>
           <div className="font-medium tabular-nums">{formatCurrency(perPeriod.cityTax)}</div>
         </div>
       </div>
+      {/* Wave-5 W5-5 — calculator framing parity with the 401k card.
+          The take-home headline is an estimate because this engine omits
+          items that materially shift the real number. List them so the user
+          knows what isn't included. */}
+      <details className="text-xs mt-3 border-t pt-2 text-muted-foreground">
+        <summary className="cursor-pointer font-medium hover:text-foreground">
+          What this calculator does NOT model
+        </summary>
+        <ul className="mt-2 list-disc pl-5 space-y-1">
+          <li>
+            <TermTooltip term="FICA" /> wage-base limits — the OASDI portion stops
+            after $168,600 (2026 base); above that, federal-tax line is right but
+            FICA over-collects for high earners.
+          </li>
+          <li>
+            <TermTooltip term="NIIT">NIIT</TermTooltip> + Additional Medicare surtax
+            (0.9% above $200k single / $250k MFJ) — secondary effects on the
+            high-earner federal column.
+          </li>
+          <li>
+            <TermTooltip term="AMT">AMT</TermTooltip> on ISO exercises landing in
+            the same period.
+          </li>
+          <li>
+            State Disability Insurance (CA SDI, NJ SDI, NY DBL, HI TDI) and state
+            PFML deductions (MA, WA, CO, etc.) — separate from FICA, withheld
+            on top of state tax.
+          </li>
+          <li>
+            Post-tax deductions (Roth 401k, union dues, garnishments) — these
+            reduce take-home but the engine treats only pre-tax 401k / health /
+            DCFSA / HSA.
+          </li>
+          <li>
+            DCFSA / HSA mid-year contribution changes — the engine uses your
+            current monthly election applied to the full year.
+          </li>
+          <li>
+            W-4 4(c) extra-withholding line — if you ask your employer to
+            withhold an extra $X per check, that's not reflected here.
+          </li>
+        </ul>
+        <p className="mt-2">
+          For an actual reconciliation, compare against a real pay
+          stub or run the numbers past a CPA — the items above can each shift
+          the bottom line by tens or hundreds of dollars per period.
+        </p>
+      </details>
     </CalculatorCard>
   );
 }

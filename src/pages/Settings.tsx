@@ -1,4 +1,5 @@
 import { AppearanceSection } from '@/components/settings/AppearanceSection';
+import { PrivacySection } from '@/components/settings/PrivacySection';
 import { SidebarSection } from '@/components/settings/SidebarSection';
 import { NotificationsSection } from '@/components/settings/NotificationsSection';
 import { RefreshSection } from '@/components/settings/RefreshSection';
@@ -16,6 +17,7 @@ export default function Settings() {
         <p className="mt-1 text-muted-foreground">Manage your app preferences.</p>
       </div>
       <AppearanceSection />
+      <PrivacySection />
       <SidebarSection />
       <NotificationsSection />
       <RefreshSection />
