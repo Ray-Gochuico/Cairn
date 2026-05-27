@@ -29,6 +29,11 @@ export function useRealState(): RealState | null {
   const settings         = useSettingsStore((s) => s.settings);
   const taxRules         = useTaxRulesStore((s) => s.items);
   const defaultCashApy   = settings?.defaultCashApy ?? null;
+  // Migration 0029 — household opt-in for auto-investing salary surplus when
+  // no Contributions segment is active. Default false (surplus → cash). Mirror
+  // of the defaultCashApy plumbing above so the engine sees the user's
+  // Settings → Advanced toggle without a separate refresh path.
+  const autoInvestSalarySurplus = settings?.autoInvestSalarySurplus ?? false;
 
   return useMemo<RealState | null>(() => {
     if (!household) return null;
@@ -46,6 +51,7 @@ export function useRealState(): RealState | null {
         defaultInflation: inflation,
         defaultReturnRate: returnRate,
         defaultCashApy,
+        autoInvestSalarySurplus,
       },
       startISO,
       taxRules,
@@ -55,5 +61,5 @@ export function useRealState(): RealState | null {
       return { ...real, baselineMonthlyExpenses: expensesOverride };
     }
     return real;
-  }, [household, persons, loans, holdings, accounts, accountSnapshots, transactions, inflation, returnRate, defaultCashApy, taxRules]);
+  }, [household, persons, loans, holdings, accounts, accountSnapshots, transactions, inflation, returnRate, defaultCashApy, autoInvestSalarySurplus, taxRules]);
 }
