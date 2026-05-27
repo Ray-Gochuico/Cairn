@@ -24,16 +24,46 @@ describe('MetricCard text overflow', () => {
     expect(value).not.toHaveClass('break-words');
   });
 
-  it('renders label with truncate so long labels show "Net Wor..." not "NET WOR"', () => {
+  it('renders label with line-clamp-2 so long labels wrap to 2 lines without mid-word ellipsis', () => {
+    // The prior contract used `truncate` (overflow-hidden + ellipsis + nowrap),
+    // which at <1280px ellipsed Liquid Investments / Awaiting Reimbursement /
+    // Spending vs Budget mid-word in the Dashboard pill grid. We now allow the
+    // label to wrap onto 2 lines on whitespace before falling back to an
+    // ellipsis — that resolves the readability regression at 1024px.
+    render(
+      <MemoryRouter>
+        <MetricCard label="Awaiting Reimbursement" value="$1" />
+      </MemoryRouter>,
+    );
+    const label = screen.getByTestId('metric-card-label');
+    expect(label).toHaveClass('line-clamp-2');
+    expect(label).not.toHaveClass('truncate'); // explicit anti-regression
+    expect(label).toHaveClass('break-words');
+    // Full text remains available via title for mouse-hover discovery.
+    expect(label).toHaveAttribute('title', 'Awaiting Reimbursement');
+  });
+
+  it('exposes the full label and value via aria-label on the wrapping link for keyboard/screen-reader users', () => {
+    // line-clamp-2 still produces a trailing ellipsis if a label is so long
+    // that two lines aren't enough. The wrapping <Link>'s aria-label is the
+    // accessibility-safety-net: screen readers and keyboard-focus users
+    // always hear the full label and value regardless of what's visible.
+    render(
+      <MemoryRouter>
+        <MetricCard label="Awaiting Reimbursement" value="$12,345" href="/spending" />
+      </MemoryRouter>,
+    );
+    const link = screen.getByRole('link');
+    expect(link).toHaveAttribute('aria-label', 'Awaiting Reimbursement: $12,345');
+  });
+
+  it('does not set aria-label when no href is provided (no link to label)', () => {
     render(
       <MemoryRouter>
         <MetricCard label="Net Worth" value="$1" />
       </MemoryRouter>,
     );
-    const label = screen.getByTestId('metric-card-label');
-    expect(label).toHaveClass('truncate');
-    // Full text available via title for hover.
-    expect(label).toHaveAttribute('title', 'Net Worth');
+    expect(screen.queryByRole('link')).toBeNull();
   });
 
   it('exposes the full value as a title attribute for hover discovery', () => {

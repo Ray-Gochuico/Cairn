@@ -52,8 +52,20 @@ export default function MetricCard({
       data-testid="metric-card"
     >
       <CardHeader className="pb-2">
+        {/*
+         * Label readability across viewport widths is the headline contract
+         * here. A prior iteration used Tailwind's `truncate` (overflow-hidden +
+         * text-ellipsis + nowrap) which produced mid-word ellipses at <1280px
+         * — "AWAITING REIMBU…" / "SPENDING VS BU…" — for our default
+         * Dashboard pills. We now line-clamp to 2 lines instead: the label
+         * wraps on whitespace (no mid-word splits) and falls back to a single
+         * trailing ellipsis only when even two lines aren't enough. The native
+         * `title` and `aria-label` (applied on the wrapping link below) ensure
+         * the full text is still reachable for keyboard/screen-reader users
+         * and as a hover tooltip for mouse users.
+         */}
         <div
-          className="text-[11px] sm:text-xs uppercase tracking-wider text-muted-foreground truncate"
+          className="text-[11px] sm:text-xs uppercase tracking-wider text-muted-foreground line-clamp-2 break-words [overflow-wrap:anywhere] min-h-[1.5em]"
           title={label}
           data-testid="metric-card-label"
         >
@@ -91,8 +103,17 @@ export default function MetricCard({
   );
 
   if (href) {
+    // The composed accessible name on the wrapping link gives screen-reader
+    // and keyboard-focus users the full label even when the visible label
+    // line-clamps. Delta/subtitle are intentionally excluded to keep the
+    // announcement short; they're available via the visible text on hover.
+    const ariaLabel = `${label}: ${value}`;
     return (
-      <Link to={href} className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl">
+      <Link
+        to={href}
+        aria-label={ariaLabel}
+        className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-xl"
+      >
         {card}
       </Link>
     );
