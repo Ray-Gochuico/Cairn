@@ -173,6 +173,61 @@ function RetirementAgeControl({
   );
 }
 
+/**
+ * Withdrawal-strategy selector (R2 wiring-sweep — Finance review NEW-3).
+ *
+ * Surfaces the LeverPayload.withdrawalStrategy field that's been engine-side
+ * since b41227c. Two choices:
+ *   - Proportional (default) — pull from every account in proportion to balance.
+ *   - Sequential              — taxable → tax-deferred → Roth.
+ *
+ * No persistence shape change; relies on the existing scenario lever update path.
+ */
+function WithdrawalStrategyControl({
+  scenarios,
+}: {
+  scenarios: Scenario[];
+}) {
+  const active = scenarios.find((s) => s.isActive);
+  if (!active?.id) return null;
+
+  const current =
+    (active.leverPayload as { withdrawalStrategy?: 'proportional' | 'sequential' }).withdrawalStrategy
+    ?? 'proportional';
+
+  const handleChange = async (next: 'proportional' | 'sequential') => {
+    await useScenariosStore
+      .getState()
+      .updateLever(active.id!, { withdrawalStrategy: next });
+  };
+
+  return (
+    <div
+      className="flex items-center gap-2 text-sm"
+      data-testid="whatif-withdrawal-strategy-control"
+    >
+      <Label htmlFor="whatif-withdrawal-strategy" className="text-xs text-muted-foreground">
+        Withdrawal order
+      </Label>
+      <select
+        id="whatif-withdrawal-strategy"
+        className="h-8 rounded-md border border-input bg-background px-2 py-1 text-sm shadow-sm"
+        value={current}
+        onChange={(e) => void handleChange(e.target.value as 'proportional' | 'sequential')}
+        aria-label="Withdrawal strategy"
+      >
+        <option value="proportional">Proportional (default)</option>
+        <option value="sequential">Sequential (taxable → pre-tax → Roth)</option>
+      </select>
+      <TermTooltip term="sequential withdrawal">
+        <span className="text-xs text-muted-foreground underline-offset-2">
+          What&#39;s this?
+        </span>
+      </TermTooltip>
+    </div>
+  );
+}
+
 export default function FiCards(props: FiCardsProps) {
   const computed = computeCards(props);
   if (!computed) return null;
@@ -214,6 +269,7 @@ export default function FiCards(props: FiCardsProps) {
         />
       </div>
       <RetirementAgeControl scenarios={props.scenarios} persons={props.persons} />
+      <WithdrawalStrategyControl scenarios={props.scenarios} />
     </div>
   );
 }

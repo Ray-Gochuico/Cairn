@@ -257,6 +257,12 @@ const BracketSchema = z.object({
 
 export const JurisdictionType = {
   FEDERAL: 'FEDERAL',
+  /**
+   * Long-term capital gains + qualified dividends federal schedule
+   * (0% / 15% / 20%). Seeded in migration 0032 (2026 brackets).
+   * Threaded through computeTotalTax via TotalTaxInput.ltcgBrackets.
+   */
+  FEDERAL_LTCG: 'FEDERAL_LTCG',
   FICA: 'FICA',
   STATE: 'STATE',
   CITY: 'CITY',

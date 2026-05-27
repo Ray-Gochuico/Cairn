@@ -140,8 +140,11 @@ describe('Retirement401kWithdrawalCard', () => {
     const withdrawalInput = screen.getByLabelText(/withdrawal amount/i);
     fireEvent.change(withdrawalInput, { target: { value: '50000' } });
 
+    // R7a: "Early-withdrawal penalty" is now wrapped in a TermTooltip so
+    // findByText returns the inner span. Walk up to the flex row via closest.
     const penaltyLabel = await screen.findByText(/early-withdrawal penalty/i);
-    const row = penaltyLabel.parentElement as HTMLElement;
+    const row = penaltyLabel.closest('.flex.justify-between') as HTMLElement;
+    expect(row).not.toBeNull();
     expect(within(row).getByText('$5,000')).toBeInTheDocument();
   });
 
@@ -160,7 +163,8 @@ describe('Retirement401kWithdrawalCard', () => {
     fireEvent.change(withdrawalInput, { target: { value: '50000' } });
 
     const penaltyLabel = await screen.findByText(/early-withdrawal penalty/i);
-    const row = penaltyLabel.parentElement as HTMLElement;
+    const row = penaltyLabel.closest('.flex.justify-between') as HTMLElement;
+    expect(row).not.toBeNull();
     expect(within(row).getByText('$0')).toBeInTheDocument();
   });
 

@@ -9,6 +9,7 @@ import { formatCurrency } from '@/lib/format';
 import { Input } from '@/components/ui/input';
 import { CONTRIBUTION_LIMITS_2026 } from '@/lib/contribution-limits';
 import { getCurrentTaxYear } from '@/lib/current-tax-year';
+import { TermTooltip } from '@/components/ui/glossary-tooltip';
 
 type CommissionFrequency = 'MONTHLY' | 'QUARTERLY';
 
@@ -105,7 +106,12 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
       federalBrackets: federal.brackets,
       stateBrackets: state.brackets,
       cityBrackets: city?.brackets ?? null,
-      standardDeduction: federal.standardDeduction,
+      // R3 wiring-sweep: per-jurisdiction SD (was scalar federal SD).
+      standardDeduction: {
+        federal: federal.standardDeduction,
+        state: state.standardDeduction,
+        city: city?.standardDeduction ?? 0,
+      },
     });
 
     // 401(k) from commission: weighted-average pct across persons by salary share.
@@ -222,7 +228,9 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
           </div>
         </div>
         <div>
-          <div className="text-muted-foreground">FICA</div>
+          <div className="text-muted-foreground">
+            <TermTooltip term="FICA" />
+          </div>
           <div className="font-medium tabular-nums">
             {formatCurrency(result.bonusBreakdown.fica / periods)}
           </div>

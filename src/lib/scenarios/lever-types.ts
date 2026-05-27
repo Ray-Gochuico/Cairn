@@ -216,6 +216,25 @@ export const LeverPayloadSchema = z.object({
    * proportional so projection sentinels don't shift under feet.
    */
   withdrawalStrategy: z.enum(['proportional', 'sequential']).default('proportional'),
+  /**
+   * Annual long-term capital gains realized — taxed at the LTCG schedule
+   * (RealStateTaxBrackets.ltcg) instead of ordinary brackets.
+   *
+   * Pre-fix the engine had no way to surface LTCG distinct from ordinary
+   * income, so projections silently treated it as ordinary (Finance
+   * re-review NEW-1). Defaults to 0 — existing scenarios are unchanged.
+   */
+  annualLongTermGains: z.number().nonnegative().default(0),
+  /**
+   * Annual qualified dividends — taxed at the LTCG schedule alongside
+   * long-term gains. Defaults to 0.
+   */
+  annualQualifiedDividends: z.number().nonnegative().default(0),
+  /**
+   * Annual non-qualified (ordinary) dividends — taxed at the ordinary
+   * federal brackets stacked above wages. Defaults to 0.
+   */
+  annualNonQualifiedDividends: z.number().nonnegative().default(0),
 });
 export type LeverPayload = z.infer<typeof LeverPayloadSchema>;
 
@@ -237,5 +256,8 @@ export function emptyLeverPayload(): LeverPayload {
     swrOverride: null,
     inflation: { defaultRate: null, overrides: {} },
     withdrawalStrategy: 'proportional',
+    annualLongTermGains: 0,
+    annualQualifiedDividends: 0,
+    annualNonQualifiedDividends: 0,
   };
 }

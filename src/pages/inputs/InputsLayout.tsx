@@ -27,9 +27,9 @@ const tabs: TabDef[] = [
   { path: 'vehicles', label: 'Vehicles' },
   { path: 'goals', label: 'Goals' },
   { path: 'plans-529', label: '529 Plans', glossaryTerm: '529 PLAN' },
-  { path: 'growth-tax', label: 'Growth & Tax' },
+  { path: 'growth-tax', label: 'Growth & Tax', glossaryTerm: 'GROWTH & TAX' },
   { path: 'categories', label: 'Categories' },
-  { path: 'tickers', label: 'Tickers' },
+  { path: 'tickers', label: 'Tickers', glossaryTerm: 'TICKERS' },
 ];
 
 export default function InputsLayout() {

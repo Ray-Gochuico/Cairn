@@ -28,6 +28,15 @@ export interface RealStateTaxBrackets {
   state: Bracket[];
   city: Bracket[] | null;
   /**
+   * Long-term capital gains + qualified dividend federal schedule
+   * (0% / 15% / 20%). Pre-2026-05-27 the engine treated cap gains as
+   * ordinary income, applying the 10–37% federal schedule. Now sourced
+   * from tax_rules where jurisdiction_type = 'FEDERAL_LTCG' (seeded by
+   * migration 0032). Empty array when no LTCG row is seeded for the
+   * filing status (back-compat for fixtures + older tax-year fall-throughs).
+   */
+  ltcg: Bracket[];
+  /**
    * Per-jurisdiction standard deduction. Pre-fix this was a single scalar
    * sourced from the FEDERAL row and applied to state/city tax as well —
    * MA (state SD = $0) was getting the federal $32,200 SD against its
@@ -222,11 +231,17 @@ export function captureRealState(inputs: RealStateInputs): RealState {
   const federal = pickBrackets(inputs.taxRules, 'FEDERAL', 'US', filingStatus);
   const stateBrackets = state ? pickBrackets(inputs.taxRules, 'STATE', state, filingStatus) : [];
   const cityBrackets = city ? pickBrackets(inputs.taxRules, 'CITY', city, filingStatus) : [];
+  // LTCG schedule seeded by migration 0032 under jurisdiction_type
+  // 'FEDERAL_LTCG'. Fixtures + older tax years that don't seed it fall
+  // through to []; computeTotalTax treats an empty/absent ltcgBrackets
+  // as "no LTCG schedule — taxed at ordinary brackets like the legacy code".
+  const ltcgBrackets = pickBrackets(inputs.taxRules, 'FEDERAL_LTCG', 'US', filingStatus);
 
   const taxBrackets: RealStateTaxBrackets = {
     federal,
     state: stateBrackets,
     city: cityBrackets.length > 0 ? cityBrackets : null,
+    ltcg: ltcgBrackets,
     standardDeduction: {
       federal: pickStandardDeductionFor(inputs.taxRules, 'FEDERAL', 'US', filingStatus),
       state: state ? pickStandardDeductionFor(inputs.taxRules, 'STATE', state, filingStatus) : 0,

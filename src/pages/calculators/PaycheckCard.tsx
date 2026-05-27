@@ -8,6 +8,7 @@ import { computePretaxDeductions, computeBonusTax } from '@/lib/tax';
 import { formatCurrency } from '@/lib/format';
 import { PAYCHECK_PERIODS, periodsPerYear, type PaycheckPeriod } from '@/lib/paycheck-periods';
 import { getCurrentTaxYear } from '@/lib/current-tax-year';
+import { TermTooltip } from '@/components/ui/glossary-tooltip';
 
 interface PaycheckCardProps {
   cardId?: string;
@@ -83,7 +84,13 @@ export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
       federalBrackets: federal.brackets,
       stateBrackets: state.brackets,
       cityBrackets: city?.brackets ?? null,
-      standardDeduction: federal.standardDeduction,
+      // R3 wiring-sweep: per-jurisdiction SD (pre-fix: scalar federal SD
+      // was applied to state/city tax too — MA-MFJ ~$1,610/yr under-collection).
+      standardDeduction: {
+        federal: federal.standardDeduction,
+        state: state.standardDeduction,
+        city: city?.standardDeduction ?? 0,
+      },
     });
 
     const pretaxTotal =
@@ -165,7 +172,9 @@ export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
           <div className="font-medium tabular-nums">{formatCurrency(perPeriod.gross)}</div>
         </div>
         <div>
-          <div className="text-muted-foreground">Pretax 401(k)</div>
+          <div className="text-muted-foreground">
+            <TermTooltip term="Pretax 401(k)" />
+          </div>
           <div className="font-medium tabular-nums">{formatCurrency(perPeriod.pretax401k)}</div>
         </div>
         <div>
@@ -173,11 +182,15 @@ export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
           <div className="font-medium tabular-nums">{formatCurrency(perPeriod.pretaxHealth)}</div>
         </div>
         <div>
-          <div className="text-muted-foreground">Pretax DCFSA</div>
+          <div className="text-muted-foreground">
+            <TermTooltip term="Pretax DCFSA" />
+          </div>
           <div className="font-medium tabular-nums">{formatCurrency(perPeriod.pretaxDcfsa)}</div>
         </div>
         <div>
-          <div className="text-muted-foreground">Pretax HSA</div>
+          <div className="text-muted-foreground">
+            <TermTooltip term="Pretax HSA" />
+          </div>
           <div className="font-medium tabular-nums">{formatCurrency(perPeriod.pretaxHsa)}</div>
         </div>
         <div>
@@ -185,7 +198,9 @@ export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
           <div className="font-medium tabular-nums">{formatCurrency(perPeriod.federalTax)}</div>
         </div>
         <div>
-          <div className="text-muted-foreground">FICA</div>
+          <div className="text-muted-foreground">
+            <TermTooltip term="FICA" />
+          </div>
           <div className="font-medium tabular-nums">{formatCurrency(perPeriod.fica)}</div>
         </div>
         <div>

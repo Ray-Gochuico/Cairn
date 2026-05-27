@@ -7,6 +7,7 @@ import { calculate401kWithdrawalTax } from '@/lib/tax';
 import { getCurrentTaxYear } from '@/lib/current-tax-year';
 import { formatCurrency, formatPercent } from '@/lib/format';
 import { Input } from '@/components/ui/input';
+import { TermTooltip } from '@/components/ui/glossary-tooltip';
 
 interface Retirement401kWithdrawalCardProps {
   cardId?: string;
@@ -58,7 +59,11 @@ export function Retirement401kWithdrawalCard({
   const annualW2Income = w2Override ?? defaultW2;
   const ageAtWithdrawal = ageOverride ?? defaultAge;
 
-  const lookup = (jt: 'FEDERAL' | 'STATE' | 'CITY', code: string, fs: string) =>
+  const lookup = (
+    jt: 'FEDERAL' | 'FEDERAL_LTCG' | 'STATE' | 'CITY',
+    code: string,
+    fs: string,
+  ) =>
     taxItems.find(
       (r) =>
         r.year === resolvedYear &&
@@ -75,6 +80,10 @@ export function Retirement401kWithdrawalCard({
       ? lookup('CITY', household.city, household.filingStatus)
       : null;
     if (!federal || !state) return null;
+    // LTCG schedule lookup (post-0032). When seeded, capGains are taxed
+    // at the LTCG schedule instead of ordinary brackets. Falls through to
+    // legacy behavior (ordinary brackets) for older tax years.
+    const ltcg = lookup('FEDERAL_LTCG', 'US', household.filingStatus);
 
     return calculate401kWithdrawalTax({
       withdrawalAmount,
@@ -85,8 +94,16 @@ export function Retirement401kWithdrawalCard({
       federalBrackets: federal.brackets,
       stateBrackets: state.brackets,
       cityBrackets: city?.brackets ?? null,
-      federalStandardDeduction: federal.standardDeduction,
+      // R3 wiring-sweep: per-jurisdiction SD. The retired person's W-2
+      // income flowing through state tax now correctly uses the state's
+      // own SD instead of the federal SD.
+      federalStandardDeduction: {
+        federal: federal.standardDeduction,
+        state: state.standardDeduction,
+        city: city?.standardDeduction ?? 0,
+      },
       taxYear: resolvedYear ?? new Date().getFullYear(),
+      ltcgBrackets: ltcg?.brackets,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -240,7 +257,9 @@ export function Retirement401kWithdrawalCard({
             </span>
           </div>
           <div className="flex justify-between">
-            <span>FICA</span>
+            <span>
+              <TermTooltip term="FICA" />
+            </span>
             <span className="tabular-nums text-muted-foreground">
               N/A on 401k withdrawals
             </span>
@@ -250,7 +269,11 @@ export function Retirement401kWithdrawalCard({
               earlyPenaltyApplies ? 'text-destructive' : ''
             }`}
           >
-            <span>Early-withdrawal penalty (10% if &lt; 59½)</span>
+            <span>
+              <TermTooltip term="Early-withdrawal penalty">
+                Early-withdrawal penalty (10% if &lt; 59½)
+              </TermTooltip>
+            </span>
             <span className="tabular-nums">
               {formatCurrency(breakdown.earlyWithdrawalPenalty)}
             </span>

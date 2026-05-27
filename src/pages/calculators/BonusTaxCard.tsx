@@ -8,6 +8,7 @@ import { computePretaxDeductions, computeBonusTax } from '@/lib/tax';
 import { formatCurrency, formatPercent } from '@/lib/format';
 import { Input } from '@/components/ui/input';
 import { getCurrentTaxYear } from '@/lib/current-tax-year';
+import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import type { BonusFrequency } from '@/types/schema';
 
 interface BonusTaxCardProps {
@@ -105,7 +106,13 @@ export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
       federalBrackets: federal.brackets,
       stateBrackets: state.brackets,
       cityBrackets: city?.brackets ?? null,
-      standardDeduction: federal.standardDeduction,
+      // R3 wiring-sweep: per-jurisdiction SD (was scalar federal SD —
+      // MA-MFJ ~$1,610/yr state-tax under-collection).
+      standardDeduction: {
+        federal: federal.standardDeduction,
+        state: state.standardDeduction,
+        city: city?.standardDeduction ?? 0,
+      },
     });
   }, [household, persons, dependents, taxItems, resolvedYear, annualBonus]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -208,7 +215,9 @@ export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
           </div>
         </div>
         <div>
-          <div className="text-muted-foreground">FICA on bonus</div>
+          <div className="text-muted-foreground">
+            <TermTooltip term="FICA" /> on bonus
+          </div>
           <div className="font-medium tabular-nums">
             {formatCurrency(result.bonusBreakdown.fica / bonusesPerYear)}
           </div>
@@ -232,7 +241,9 @@ export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
           </div>
         </div>
         <div>
-          <div className="text-muted-foreground">Marginal rate</div>
+          <div className="text-muted-foreground">
+            <TermTooltip term="marginal rate" />
+          </div>
           <div className="font-medium tabular-nums">
             {formatPercent(result.marginalRateOnBonus)}
           </div>

@@ -122,4 +122,21 @@ describe('DisclosureModal', () => {
     // Continue button should be enabled again so the user can retry.
     expect(screen.getByRole('button', { name: /continue/i })).toBeEnabled();
   });
+
+  it('R14: renders inside a Radix Dialog (data-state=open + role=dialog)', () => {
+    // Confirms the migration from hand-rolled <div role="dialog"> to
+    // @radix-ui/react-dialog. The Radix primitive surfaces role="dialog"
+    // on the Content element and data-state="open" while mounted. Focus
+    // trap + aria-modal handling are tested implicitly by the Radix
+    // primitive's own test suite — the integration test here just
+    // pins that we're using the primitive.
+    render(<DisclosureModal document={appWideDoc} onAccept={vi.fn()} />);
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toBeInTheDocument();
+    expect(dialog.getAttribute('data-state')).toBe('open');
+    // Radix emits aria-modal on the Content (or on a focus-guard sibling
+    // depending on version). Either way the dialog has labeled itself —
+    // the title element is reachable and labels the dialog.
+    expect(screen.getByRole('heading', { name: /disclaimer/i })).toBeInTheDocument();
+  });
 });
