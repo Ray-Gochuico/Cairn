@@ -19,7 +19,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://fc.yahoo.com"
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ipc: http://ipc.localhost https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://fc.yahoo.com"
     }
   },
   "bundle": {
