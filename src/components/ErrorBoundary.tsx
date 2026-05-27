@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from 'react';
+import { Frown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface Props {
@@ -127,9 +128,10 @@ export default class ErrorBoundary extends Component<Props, State> {
       >
         <div className="rounded-lg border bg-card text-card-foreground p-6 shadow-sm space-y-4">
           <div className="flex items-start gap-3">
-            <div className="text-3xl" aria-hidden>
-              😵
-            </div>
+            <Frown
+              className="h-8 w-8 shrink-0 text-muted-foreground"
+              aria-hidden="true"
+            />
             <div className="min-w-0 flex-1">
               <h1 className="text-xl font-semibold">Something didn&apos;t load right</h1>
               <p className="text-sm text-muted-foreground mt-1">

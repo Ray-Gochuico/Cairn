@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/select';
 import BarChartCard from '@/components/charts/BarChartCard';
 import { CHART_PALETTE, CHART_NEUTRAL } from '@/components/charts/palette';
+import { CHART_TOOLTIP_PROPS } from '@/components/charts/ChartTooltip';
 import { rangeBounds, summarizeSpendingForRange, type SpendingRange } from '@/lib/spending-widget';
 import type { Account, Category, Transaction } from '@/types/schema';
 import { cn } from '@/lib/utils';
@@ -254,6 +255,7 @@ export function SpendingWidget({
                           ))}
                         </Pie>
                         <Tooltip
+                          {...CHART_TOOLTIP_PROPS}
                           formatter={(value, name) => {
                             if (typeof value !== 'number') return [String(value), String(name)];
                             const pct = summary.total > 0

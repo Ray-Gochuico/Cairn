@@ -1,4 +1,5 @@
 import { Link, useNavigate, useRouteError } from 'react-router-dom';
+import { Compass } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
@@ -22,9 +23,10 @@ export default function NotFound() {
     <div className="min-h-screen flex items-center justify-center p-6 bg-background text-foreground">
       <Card className="max-w-md w-full">
         <CardContent className="py-10 px-6 space-y-4 text-center">
-          <div className="text-6xl" aria-hidden>
-            🧭
-          </div>
+          <Compass
+            className="h-16 w-16 mx-auto text-muted-foreground"
+            aria-hidden="true"
+          />
           <h1 className="text-2xl font-semibold">We couldn&apos;t find that page</h1>
           <p className="text-sm text-muted-foreground">
             The link may be out of date, or the page has moved. Head back to your

@@ -1,5 +1,53 @@
 import '@testing-library/jest-dom/vitest';
-import { beforeEach } from 'vitest';
+import { afterEach, beforeEach, vi } from 'vitest';
+
+/**
+ * Regression-policy console.error spy.
+ *
+ * Wave-3 UX W3-1: the AppDisclaimerGate emitted 96 "DialogContent
+ * requires a DialogTitle" Radix dev warnings on app boot because the
+ * old hand-rolled primitive composition didn't register its Title with
+ * Radix's accessibility-check context. The shadcn Dialog wrapper fix
+ * landed (a9ca333) but nothing in the test suite would catch a future
+ * regression — vitest doesn't fail on console.error by default.
+ *
+ * This spy fails any test that prints the specific Radix warning, while
+ * letting through other expected console.error calls (act warnings,
+ * jsdom navigation noise, etc.). Restoring the original implementation
+ * after each test keeps individual tests free to assert their own
+ * console.error contracts if needed.
+ *
+ * If a new test legitimately needs to trigger the message (e.g. a
+ * negative case asserting the warning fires), it can locally
+ * `vi.spyOn(console, 'error').mockImplementation(() => {})` before
+ * rendering — that takes precedence over this setup-level spy.
+ */
+const FORBIDDEN_CONSOLE_ERROR_SUBSTRINGS = [
+  'DialogContent` requires a `DialogTitle`',
+  'DialogContent requires a DialogTitle',
+];
+
+let originalConsoleError: typeof console.error | null = null;
+
+beforeEach(() => {
+  originalConsoleError = console.error.bind(console);
+  vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+    const first = args[0];
+    const message = typeof first === 'string' ? first : '';
+    for (const forbidden of FORBIDDEN_CONSOLE_ERROR_SUBSTRINGS) {
+      if (message.includes(forbidden)) {
+        throw new Error(
+          `Forbidden console.error fired (caught by tests/setup.ts policy):\n${message}`,
+        );
+      }
+    }
+    originalConsoleError?.(...args);
+  });
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 // Node 25 ships an experimental built-in `localStorage` global as an empty
 // stub object that shadows jsdom's Storage. Install a real in-memory Storage

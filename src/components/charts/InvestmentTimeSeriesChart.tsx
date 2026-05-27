@@ -59,6 +59,11 @@ const MAX_BUCKETS = 90;
 // the RenderedTicksReporter loop in the live crash was driving.
 const CHART_MARGIN = { top: 8, right: 16, bottom: 8, left: 8 } as const;
 const LINE_DOT = { r: 3 } as const;
+// CSS-variable references so axes / grid flip with the theme (Wave-3
+// Design must-have #2). See NetWorthTimeSeriesChart for context.
+const GRID_STROKE = 'hsl(var(--border))' as const;
+const AXIS_STROKE = 'hsl(var(--muted-foreground))' as const;
+const TOTAL_LINE_STROKE = 'hsl(var(--foreground))' as const;
 const EMPTY_CHART_DATA: Array<Record<string, number | string>> = [];
 
 interface InvestmentTimeSeriesChartProps {
@@ -336,13 +341,19 @@ export default function InvestmentTimeSeriesChart({
         ) : (
           <ResponsiveContainer width="100%" height={320}>
             <ComposedChart data={chartData} margin={CHART_MARGIN}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis dataKey="bucketEnd" stroke="#64748b" fontSize={11} />
+              <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+              <XAxis
+                dataKey="bucketEnd"
+                stroke={AXIS_STROKE}
+                fontSize={11}
+                tick={{ fill: AXIS_STROKE }}
+              />
               <YAxis
                 tickFormatter={formatCompactCurrency}
-                stroke="#64748b"
+                stroke={AXIS_STROKE}
                 fontSize={11}
                 width={64}
+                tick={{ fill: AXIS_STROKE }}
               />
               <Tooltip content={tooltipContent} />
               <Legend />
@@ -362,7 +373,7 @@ export default function InvestmentTimeSeriesChart({
               ))}
               <Line
                 dataKey="total"
-                stroke="#0f172a"
+                stroke={TOTAL_LINE_STROKE}
                 strokeWidth={2.5}
                 dot={LINE_DOT}
                 name="Total"

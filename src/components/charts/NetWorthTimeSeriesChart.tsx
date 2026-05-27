@@ -65,8 +65,14 @@ const TIME_WINDOW_OPTIONS: Array<{ value: TimeWindow; label: string }> = [
 // comment about RenderedTicksReporter loops).
 const CHART_MARGIN = { top: 8, right: 16, bottom: 8, left: 8 } as const;
 const LINE_DOT = { r: 3 } as const;
-const ZERO_REFERENCE_STROKE = '#64748b' as const;
-const NET_WORTH_LINE_STROKE = '#0f172a' as const;
+// CSS-variable references so the axis / grid / reference-line strokes
+// flip with the theme (Wave-3 Design must-have #2). The Recharts default
+// of a hardcoded `#e2e8f0` / `#64748b` / `#0f172a` read fine in light
+// mode but inverted incorrectly in dark.
+const GRID_STROKE = 'hsl(var(--border))' as const;
+const AXIS_STROKE = 'hsl(var(--muted-foreground))' as const;
+const ZERO_REFERENCE_STROKE = 'hsl(var(--muted-foreground))' as const;
+const NET_WORTH_LINE_STROKE = 'hsl(var(--foreground))' as const;
 const EMPTY_CHART_DATA: Array<Record<string, number | string>> = [];
 
 interface EligibleEntity extends SelectedEntity {
@@ -519,13 +525,19 @@ export default function NetWorthTimeSeriesChart() {
         ) : (
           <ResponsiveContainer width="100%" height={360}>
             <ComposedChart data={chartData} margin={CHART_MARGIN}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis dataKey="bucketEnd" stroke="#64748b" fontSize={11} />
+              <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+              <XAxis
+                dataKey="bucketEnd"
+                stroke={AXIS_STROKE}
+                fontSize={11}
+                tick={{ fill: AXIS_STROKE }}
+              />
               <YAxis
                 tickFormatter={formatCompactCurrency}
-                stroke="#64748b"
+                stroke={AXIS_STROKE}
                 fontSize={11}
                 width={64}
+                tick={{ fill: AXIS_STROKE }}
               />
               <ReferenceLine y={0} stroke={ZERO_REFERENCE_STROKE} />
               <Tooltip content={tooltipContent} />

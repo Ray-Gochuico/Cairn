@@ -50,8 +50,18 @@ describe('ChartToolbar', () => {
         <ChartToolbar detailLevel={ProjectionDetailLevel.TAX_BUCKET} onDetailLevelChange={noopChange} />
       </MemoryRouter>,
     );
-    expect(screen.getByRole('button', { name: /nominal/i })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: /^real/i })).toHaveAttribute('aria-pressed', 'false');
+    // The toggle Buttons have exact text "Nominal" / "Real"; the
+    // sibling TermTooltip info-buttons added in UX W3-2 use the
+    // accessible name "Definition for ..." which the ^...$ anchors
+    // exclude so each test selects exactly one button.
+    expect(screen.getByRole('button', { name: /^nominal$/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: /^real$/i })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
   });
 
   it('clicking Real flips dollarMode and aria-pressed state', async () => {
@@ -61,10 +71,16 @@ describe('ChartToolbar', () => {
         <ChartToolbar detailLevel={ProjectionDetailLevel.TAX_BUCKET} onDetailLevelChange={noopChange} />
       </MemoryRouter>,
     );
-    await user.click(screen.getByRole('button', { name: /^real/i }));
+    await user.click(screen.getByRole('button', { name: /^real$/i }));
     expect(useScenariosStore.getState().dollarMode).toBe('real');
-    expect(screen.getByRole('button', { name: /^real/i })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: /nominal/i })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: /^real$/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: /^nominal$/i })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
   });
 
   it('reflects the store state when horizonMonths changes externally', () => {
@@ -126,5 +142,23 @@ describe('ChartToolbar — projection detail level segmented control', () => {
       </MemoryRouter>,
     );
     expect(screen.getByRole('group', { name: /projection detail level/i })).toBeInTheDocument();
+  });
+
+  // UX W3-2: each toggle button must have its own glossary popover
+  // trigger via a sibling TermTooltip (we can't nest a TermTooltip
+  // button inside the toggle Button without breaking aria-pressed).
+  // The TermTooltip trigger renders an sr-only "Definition for X"
+  // label so screen readers reach each term.
+  it('UX W3-2: every dollar-mode + detail-level toggle has a sibling TermTooltip', () => {
+    render(
+      <MemoryRouter>
+        <ChartToolbar detailLevel={ProjectionDetailLevel.TAX_BUCKET} onDetailLevelChange={noopChange} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('button', { name: /definition for nominal/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /definition for real/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /definition for single/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /definition for tax bucket/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /definition for per account/i })).toBeInTheDocument();
   });
 });

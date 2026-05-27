@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Gift } from 'lucide-react';
 import { useEquityGrantsStore } from '@/stores/equity-grants-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { computeEquityValue, type EquityValueResult } from '@/lib/equity-value';
@@ -79,7 +80,7 @@ function EquityGrantCard({ projection }: EquityGrantCardProps) {
       <CardHeader className="flex flex-row items-start justify-between gap-3 pb-3">
         <div className="min-w-0">
           <CardTitle className="text-base flex items-center gap-2">
-            <span aria-hidden>🎁</span>
+            <Gift className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
             <span className="truncate">{grant.name}</span>
           </CardTitle>
           <div className="text-xs text-muted-foreground mt-1">
