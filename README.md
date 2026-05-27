@@ -36,12 +36,35 @@ See `docs/superpowers/specs/2026-05-11-finance-app-design.md` for the full spec,
 # install dependencies
 npm install
 
+# install the pre-commit hook (one-time per checkout / worktree)
+npm run install-hooks
+
 # run in dev mode (opens a native window)
 npm run tauri dev
 
 # run unit tests
 npm test
 ```
+
+### Pre-commit hook
+
+`npm run install-hooks` copies `scripts/hooks/pre-commit` into the
+repo's git hooks directory. The hook runs `npx vitest run --reporter=dot
+--bail=1` + `npx tsc --noEmit` before letting a commit land, so the
+recharts animation-policy test (and the rest of the suite) gates every
+commit. Runtime is roughly 45 seconds locally.
+
+Escape hatches when you need to land a WIP commit:
+
+```bash
+git commit --no-verify -m "WIP"        # one-off skip
+SKIP_PRE_COMMIT=1 git commit -m "..."  # env-level skip (same effect)
+```
+
+The hook is repo-tracked at `scripts/hooks/pre-commit` — edit there and
+re-run `npm run install-hooks` to refresh the installed copy. Worktrees
+share the same hooks dir as the main checkout, so installing once is
+enough.
 
 ## Tech stack
 
