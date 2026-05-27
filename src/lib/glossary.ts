@@ -399,6 +399,71 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     shortDefinition:
       'The Inputs page where you tune assumptions about long-term growth rates and tax-rule schedules used by every projection.',
   },
+
+  // ─── Roadmap node-body terms (W7-UX MF-3: glossarize Roadmap bodies) ──
+  BACKDOOR: {
+    term: 'Backdoor Roth',
+    shortDefinition:
+      'A two-step workaround for high earners: contribute (non-deductible) to a traditional IRA, then convert it to a Roth IRA.',
+    fullDefinition:
+      'Direct Roth IRA contributions phase out at higher MAGI. The "backdoor" route deposits after-tax dollars into a traditional IRA and immediately converts to Roth — legal, but the pro-rata rule on existing pre-tax IRA balances can sting if you have a SEP / SIMPLE / Trad IRA balance.',
+  },
+  'PRO-RATA': {
+    term: 'Pro-rata rule',
+    shortDefinition:
+      'IRS rule that taxes a Roth conversion in proportion to your pre-tax IRA balances — including Traditional, SEP, and SIMPLE IRAs.',
+    fullDefinition:
+      'When converting any IRA dollar to Roth, the IRS treats *all* of your non-Roth IRAs as one pot. Pre-tax balance / total balance = the fraction of the conversion taxed as ordinary income. The fix is usually to roll pre-tax IRA balances into a 401(k) or solo-401(k) first, isolating only after-tax basis for the backdoor conversion.',
+  },
+  'SOLO-401(K)': {
+    term: 'Solo-401(k)',
+    shortDefinition:
+      'A 401(k) for self-employed people with no employees other than a spouse.',
+    fullDefinition:
+      'Lets you contribute as both employee (elective deferral up to the annual IRS cap) and employer (~20% of net self-employment income, up to the combined IRS limit). Also accepts rollovers from Trad/SEP/SIMPLE IRAs — useful to clear pre-tax IRA balances before a backdoor Roth conversion.',
+  },
+  SEP: {
+    term: 'SEP-IRA',
+    shortDefinition:
+      'Simplified Employee Pension IRA — a retirement plan for self-employed people and small businesses.',
+    fullDefinition:
+      'Employer-funded (employee contributions not allowed). Limit is ~25% of net self-employment income, up to the same IRS combined cap as a solo-401(k). Counts as pre-tax IRA balance for the pro-rata rule.',
+  },
+  SIMPLE: {
+    term: 'SIMPLE IRA',
+    shortDefinition:
+      'Savings Incentive Match Plan for Employees — a workplace IRA-based plan for small businesses.',
+    fullDefinition:
+      'Allows employee elective deferral up to a lower annual limit than a 401(k), plus an employer match or non-elective contribution. Counts as pre-tax IRA balance for the pro-rata rule.',
+  },
+  '457(B)': {
+    term: '457(b)',
+    shortDefinition:
+      'A retirement plan for state, local, and some non-profit employees — like a 401(k), but with no 10% early-withdrawal penalty.',
+    fullDefinition:
+      'Governmental 457(b)s are unusual in that withdrawals before age 59½ skip the 10% early-withdrawal penalty (you still owe ordinary income tax). That makes them especially valuable to people targeting an early retirement bridge.',
+  },
+  ESA: {
+    term: 'Coverdell ESA',
+    shortDefinition:
+      'Coverdell Education Savings Account — a tax-advantaged account for K-12 and college expenses.',
+    fullDefinition:
+      'Lower annual contribution cap than a 529 (~$2k/yr) and income-limited contributors, but a wider menu of qualified K-12 expenses. Earnings grow tax-free; qualified withdrawals are tax-free.',
+  },
+  'SECURE 2.0': {
+    term: 'SECURE 2.0',
+    shortDefinition:
+      'The 2022 federal law that updated retirement-account rules — Roth-401(k) RMD relief, 529-to-Roth rollovers, higher catch-up contributions, and more.',
+    fullDefinition:
+      'Notable Roadmap-relevant pieces: unused 529 dollars can be rolled to the beneficiary\'s Roth IRA up to a $35k lifetime cap (with age and account-age conditions); RMDs no longer apply to Roth 401(k) balances; catch-up contributions get an extra boost between ages 60 and 63.',
+  },
+  IPS: {
+    term: 'IPS',
+    shortDefinition:
+      'Investment Policy Statement — a short written set of rules (target allocation, rebalancing triggers, contribution defaults) you commit to in calm conditions.',
+    fullDefinition:
+      'The point is to take decision-making out of the moment: when markets panic or boom, you follow the rules you wrote before the emotional pressure arrived. Typical contents: target asset allocation, rebalancing band or schedule, contribution rules, criteria for selling.',
+  },
 };
 
 /**

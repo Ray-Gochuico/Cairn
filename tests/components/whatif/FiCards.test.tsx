@@ -1,10 +1,23 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import FiCards from '@/components/whatif/FiCards';
 import { emptyLeverPayload } from '@/lib/scenarios';
 import type { MonthlyState } from '@/lib/scenarios';
 import type { Scenario } from '@/types/scenario';
 import type { Household, Person } from '@/types/schema';
+import { useSettingsStore } from '@/stores/settings-store';
+
+/**
+ * Wave-7 UX MF-6: FiCards now renders a deep-link to Settings → Advanced
+ * when the active scenario uses the SEQUENTIAL withdrawal strategy. The
+ * link requires a Router ancestor — wrap every render() in a
+ * MemoryRouter so the new component (and the existing test bodies)
+ * keep working.
+ */
+function renderWithRouter(ui: React.ReactElement) {
+  return render(<MemoryRouter>{ui}</MemoryRouter>);
+}
 
 function makeHousehold(overrides: Partial<Household> = {}): Household {
   return {
@@ -87,9 +100,20 @@ function seedState(investments: number, cash: number): MonthlyState[] {
 }
 
 describe('FiCards', () => {
+  beforeEach(() => {
+    // FiCards now reads useSettingsStore for the drawdown tax rate
+    // inline indicator (W7-UX MF-6). Reset between tests so a previous
+    // test's settings don't bleed across.
+    useSettingsStore.setState({
+      settings: null,
+      isLoading: false,
+      error: null,
+    } as never);
+  });
+
   it('renders Financial Independence number = annual_expenses / withdrawal_rate', () => {
     const projections = new Map<number, MonthlyState[]>([[1, seedState(100_000, 50_000)]]);
-    render(
+    renderWithRouter(
       <FiCards
         scenarios={[makeScenario()]}
         projections={projections}
@@ -105,7 +129,7 @@ describe('FiCards', () => {
 
   it('renders Coast FI target derived from the moderate growth rate', () => {
     const projections = new Map<number, MonthlyState[]>([[1, seedState(100_000, 50_000)]]);
-    render(
+    renderWithRouter(
       <FiCards
         scenarios={[makeScenario()]}
         projections={projections}
@@ -131,7 +155,7 @@ describe('FiCards', () => {
     // → liquid = 300k. Home equity (here baked into the seed snapshot at 0
     // anyway) MUST NOT be included.
     const projections = new Map<number, MonthlyState[]>([[1, seedState(200_000, 100_000)]]);
-    render(
+    renderWithRouter(
       <FiCards
         scenarios={[makeScenario()]}
         projections={projections}
@@ -146,7 +170,7 @@ describe('FiCards', () => {
 
   it('returns null when household has no growth scenarios', () => {
     const projections = new Map<number, MonthlyState[]>([[1, seedState(100_000, 50_000)]]);
-    const { container } = render(
+    const { container } = renderWithRouter(
       <FiCards
         scenarios={[makeScenario()]}
         projections={projections}
@@ -162,7 +186,7 @@ describe('FiCards', () => {
     // and household.withdrawalRate are unset/zero. This keeps the FI / Coast FI
     // cards renderable during cold-start instead of disappearing.
     const projections = new Map<number, MonthlyState[]>([[1, seedState(100_000, 50_000)]]);
-    render(
+    renderWithRouter(
       <FiCards
         scenarios={[makeScenario()]}
         projections={projections}
@@ -176,7 +200,7 @@ describe('FiCards', () => {
   });
 
   it('returns null when there are no projections for the active scenario', () => {
-    const { container } = render(
+    const { container } = renderWithRouter(
       <FiCards
         scenarios={[makeScenario()]}
         projections={new Map()}
@@ -189,7 +213,7 @@ describe('FiCards', () => {
 
   it('renders the retirement-age control with the person default when no override is set', () => {
     const projections = new Map<number, MonthlyState[]>([[1, seedState(100_000, 50_000)]]);
-    render(
+    renderWithRouter(
       <FiCards
         scenarios={[makeScenario()]}
         projections={projections}
@@ -209,7 +233,7 @@ describe('FiCards', () => {
     const projections = new Map<number, MonthlyState[]>([[1, seedState(100_000, 50_000)]]);
     const lp = emptyLeverPayload();
     lp.retirementAgeOverride = 55;
-    render(
+    renderWithRouter(
       <FiCards
         scenarios={[makeScenario({ leverPayload: lp })]}
         projections={projections}
@@ -227,7 +251,7 @@ describe('FiCards', () => {
       const projections = new Map<number, MonthlyState[]>([[1, seedState(100_000, 50_000)]]);
       const lp = emptyLeverPayload();
       lp.swrOverride = 0.05; // 4000 * 12 / 0.05 = 960,000
-      render(
+      renderWithRouter(
         <FiCards
           scenarios={[makeScenario({ leverPayload: lp })]}
           projections={projections}
@@ -243,7 +267,7 @@ describe('FiCards', () => {
 
     it('FI target reflects household.withdrawalRate when scenario.swrOverride is null', () => {
       const projections = new Map<number, MonthlyState[]>([[1, seedState(100_000, 50_000)]]);
-      render(
+      renderWithRouter(
         <FiCards
           scenarios={[makeScenario()]} // empty payload → swrOverride: null
           projections={projections}
@@ -259,7 +283,7 @@ describe('FiCards', () => {
       const projections = new Map<number, MonthlyState[]>([[1, seedState(100_000, 50_000)]]);
       const lp = emptyLeverPayload();
       lp.swrOverride = 0.035;
-      render(
+      renderWithRouter(
         <FiCards
           scenarios={[makeScenario({ leverPayload: lp })]}
           projections={projections}
@@ -302,7 +326,7 @@ describe('FiCards', () => {
       const projections = new Map<number, MonthlyState[]>([
         [1, seedState(0, 0)],
       ]);
-      render(
+      renderWithRouter(
         <FiCards
           scenarios={[makeScenario()]}
           projections={projections}
@@ -333,7 +357,7 @@ describe('FiCards', () => {
       const projections = new Map<number, MonthlyState[]>([
         [1, seedState(0, 0)],
       ]);
-      render(
+      renderWithRouter(
         <FiCards
           scenarios={[makeScenario()]}
           projections={projections}
@@ -344,6 +368,137 @@ describe('FiCards', () => {
       // Real rate floored at 0 → coast == fiTarget == $2,000,000.
       const coast = screen.getByTestId('whatif-coastfi-number');
       expect(coast).toHaveTextContent('$2,000,000');
+    });
+  });
+
+  // Wave-7 UX MF-8: FiCards renders an empty-state stub (instead of
+  // silently returning null) when the household isn't set up yet or
+  // the persons array is empty. Gives cold-start users a visible CTA
+  // to the input pages instead of a confusing blank gap on /what-if.
+  describe('Empty-state stub (W7-UX MF-8)', () => {
+    it('renders the empty-state CTA when persons array is empty', () => {
+      renderWithRouter(
+        <FiCards
+          scenarios={[makeScenario()]}
+          projections={new Map()}
+          household={makeHousehold()}
+          persons={[]}
+        />,
+      );
+      const empty = screen.getByTestId('whatif-fi-cards-empty');
+      expect(empty).toBeInTheDocument();
+      expect(empty).toHaveTextContent(/Add a household and at least one person/i);
+    });
+
+    it('empty-state CTA links to /inputs/household and /inputs/persons', () => {
+      renderWithRouter(
+        <FiCards
+          scenarios={[makeScenario()]}
+          projections={new Map()}
+          household={makeHousehold()}
+          persons={[]}
+        />,
+      );
+      const householdLink = screen.getByTestId('whatif-fi-cards-empty-household-link');
+      const personsLink = screen.getByTestId('whatif-fi-cards-empty-persons-link');
+      expect(householdLink).toHaveAttribute('href', '/inputs/household');
+      expect(personsLink).toHaveAttribute('href', '/inputs/persons');
+    });
+
+    it('still returns null when the household has no growth scenarios (not a setup gap)', () => {
+      // Sanity check that the empty-state stub is *scoped* to the
+      // missing-household / no-persons branches — having a household
+      // with persons but no growthScenarios is a "transient null"
+      // condition and should keep the existing silent behavior.
+      const { container } = renderWithRouter(
+        <FiCards
+          scenarios={[makeScenario()]}
+          projections={new Map([[1, seedState(100_000, 50_000)]])}
+          household={makeHousehold({ growthScenarios: [] })}
+          persons={[makePerson()]}
+        />,
+      );
+      expect(container).toBeEmptyDOMElement();
+    });
+  });
+
+  // Wave-7 UX MF-6: surface the Settings → Advanced `defaultDrawdownTaxRate`
+  // inline on the FI cards when the active scenario uses the SEQUENTIAL
+  // withdrawal strategy, so users have a visible cue that an assumption is
+  // in effect and a one-click route to change it.
+  describe('Drawdown tax rate inline (W7-UX MF-6)', () => {
+    function sequentialScenario(): Scenario {
+      const lp = emptyLeverPayload();
+      // Cast through unknown — the `withdrawalStrategy` field exists in the
+      // engine-side LeverPayload type but the public emptyLeverPayload
+      // factory doesn't surface it yet (added per b41227c).
+      (lp as unknown as { withdrawalStrategy: 'sequential' }).withdrawalStrategy =
+        'sequential';
+      return makeScenario({ leverPayload: lp });
+    }
+
+    it('does NOT render the indicator when strategy is the default (proportional)', () => {
+      const projections = new Map<number, MonthlyState[]>([
+        [1, seedState(100_000, 50_000)],
+      ]);
+      renderWithRouter(
+        <FiCards
+          scenarios={[makeScenario()]}
+          projections={projections}
+          household={makeHousehold()}
+          persons={[makePerson()]}
+        />,
+      );
+      expect(
+        screen.queryByTestId('whatif-drawdown-tax-rate-inline'),
+      ).toBeNull();
+    });
+
+    it('renders the indicator with "Not set" when strategy=sequential and settings has no defaultDrawdownTaxRate', () => {
+      const projections = new Map<number, MonthlyState[]>([
+        [1, seedState(100_000, 50_000)],
+      ]);
+      renderWithRouter(
+        <FiCards
+          scenarios={[sequentialScenario()]}
+          projections={projections}
+          household={makeHousehold()}
+          persons={[makePerson()]}
+        />,
+      );
+      const inline = screen.getByTestId('whatif-drawdown-tax-rate-inline');
+      expect(inline).toBeInTheDocument();
+      expect(inline).toHaveTextContent(/Drawdown tax rate/i);
+      expect(inline).toHaveTextContent(/Not set/);
+      // Settings → Advanced deep link is present.
+      const link = screen.getByTestId('whatif-drawdown-tax-rate-settings-link');
+      expect(link).toBeInTheDocument();
+      expect(link).toHaveAttribute('href', '/settings');
+    });
+
+    it('renders the saved percentage when settings.defaultDrawdownTaxRate is set', () => {
+      // Seed the settings store with a 22% drawdown tax rate (0.22).
+      useSettingsStore.setState({
+        settings: {
+          id: 1,
+          defaultDrawdownTaxRate: 0.22,
+        } as never,
+        isLoading: false,
+        error: null,
+      } as never);
+      const projections = new Map<number, MonthlyState[]>([
+        [1, seedState(100_000, 50_000)],
+      ]);
+      renderWithRouter(
+        <FiCards
+          scenarios={[sequentialScenario()]}
+          projections={projections}
+          household={makeHousehold()}
+          persons={[makePerson()]}
+        />,
+      );
+      const inline = screen.getByTestId('whatif-drawdown-tax-rate-inline');
+      expect(inline).toHaveTextContent('22%');
     });
   });
 
@@ -361,7 +516,7 @@ describe('FiCards', () => {
       [1, seedState(50_000, 25_000)],   // baseline liquid = 75k
       [2, seedState(500_000, 100_000)], // active liquid = 600k
     ]);
-    render(
+    renderWithRouter(
       <FiCards
         scenarios={[baseline, active]}
         projections={projections}

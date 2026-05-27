@@ -110,6 +110,22 @@ describe('Roadmap page', () => {
     expect(screen.getByText('Budget and Essentials')).toBeInTheDocument();
   });
 
+  it('renders the status legend above the section cards (W7-UX MF-2)', () => {
+    resetStores(
+      makeHousehold({ roadmapDisclaimerVersionAccepted: ACCEPTED_VERSION }),
+    );
+    render(
+      <MemoryRouter>
+        <Roadmap />
+      </MemoryRouter>,
+    );
+    // The legend is a list labelled "Status legend" — both the
+    // accessible name and the data-testid hook are stable contracts.
+    const legend = screen.getByTestId('roadmap-status-legend');
+    expect(legend).toBeInTheDocument();
+    expect(legend).toHaveAttribute('aria-label', 'Status legend');
+  });
+
   it('shows a setup prompt when the household has not loaded yet', () => {
     resetStores(null);
     render(

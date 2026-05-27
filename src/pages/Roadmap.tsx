@@ -16,6 +16,7 @@ import { NODES } from '@/domain/roadmap/nodes';
 import { DisclosureBanner } from '@/components/roadmap/DisclosureBanner';
 import { NextMoveHero } from '@/components/roadmap/NextMoveHero';
 import { SectionCard } from '@/components/roadmap/SectionCard';
+import { StatusLegend } from '@/components/roadmap/StatusIcon';
 
 const SECTIONS = [0, 1, 2, 3, 4, 5, 6] as const;
 const SECTION_TITLES: Record<(typeof SECTIONS)[number], string> = {
@@ -134,6 +135,10 @@ export default function Roadmap() {
     <div className="p-6 max-w-5xl mx-auto space-y-4">
       <DisclosureBanner />
       <NextMoveHero results={results} />
+      {/* Status legend explains the six possible node-status icons. Lives
+          above the section cards so users have an at-a-glance reference
+          before they start scanning rows. W7-UX MF-2. */}
+      <StatusLegend />
       {SECTIONS.map((s) => (
         <SectionCard
           key={s}

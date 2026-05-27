@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,6 +11,7 @@ import { effectiveSwr } from '@/lib/scenarios/effective-swr';
 import { totalInvestments } from '@/lib/scenarios/aggregate-investments';
 import type { MonthlyState } from '@/lib/scenarios';
 import { useScenariosStore } from '@/stores/scenarios-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import type { Household, Person } from '@/types/schema';
 import type { Scenario } from '@/types/scenario';
 
@@ -66,9 +68,20 @@ function realRateOf(nominalRate: number, inflation: number): number {
   return Math.max(0, real);
 }
 
-function computeCards(props: FiCardsProps): ComputedRow | null {
+/**
+ * Sentinel return for `computeCards` when the household/persons setup
+ * isn't done yet. Distinct from "transient null" (no projection state
+ * available for the current scenario) — callers render an empty-state
+ * stub with a setup CTA only for this branch.
+ */
+const SETUP_REQUIRED = 'setup-required' as const;
+type ComputeResult = ComputedRow | null | typeof SETUP_REQUIRED;
+
+function computeCards(props: FiCardsProps): ComputeResult {
   const { scenarios, projections, household, persons } = props;
-  if (!household || persons.length === 0) return null;
+  // Cold-start: no household yet, or zero persons → caller renders the
+  // setup-CTA empty state (W7-UX MF-8).
+  if (!household || persons.length === 0) return SETUP_REQUIRED;
   const rate = pickRate(household);
   if (!rate) return null;
 
@@ -250,8 +263,104 @@ function WithdrawalStrategyControl({
   );
 }
 
+/**
+ * Inline drawdown-tax-rate indicator (W7-UX MF-6).
+ *
+ * The `effectiveDrawdownTaxRate` setting lives only in Settings → Advanced,
+ * which means What-If users who pick the SEQUENTIAL withdrawal strategy
+ * have no inline cue that an assumption is in effect or what value is
+ * being applied. Pre-fix the projection silently gross-ups Trad-401(k)
+ * withdrawals by 0% (if Settings is unset) or by the user's saved
+ * percentage — with no surfacing on the page that does the math.
+ *
+ * Renders only when strategy === 'sequential'. Shows the resolved
+ * effective rate (`defaultDrawdownTaxRate` from Settings, or "Not set"
+ * when null) alongside a deep-link to Settings → Advanced for one-click
+ * adjustment. Wrapped in a TermTooltip so the abbreviation is reachable.
+ */
+function DrawdownTaxRateInline({
+  scenarios,
+}: {
+  scenarios: Scenario[];
+}) {
+  const active = scenarios.find((s) => s.isActive);
+  const strategy =
+    (active?.leverPayload as { withdrawalStrategy?: 'proportional' | 'sequential' })
+      ?.withdrawalStrategy ?? 'proportional';
+  // Hook order constraint: useSettingsStore must be called unconditionally
+  // (it's a Zustand hook). The strategy check gates the *render*, not the
+  // hook call.
+  const settings = useSettingsStore((s) => s.settings);
+
+  if (strategy !== 'sequential') return null;
+
+  const rate = settings?.defaultDrawdownTaxRate ?? null;
+  const display =
+    rate === null ? 'Not set' : `${(rate * 100).toFixed(0)}%`;
+
+  return (
+    <div
+      className="flex items-center gap-1.5 text-xs text-muted-foreground"
+      data-testid="whatif-drawdown-tax-rate-inline"
+    >
+      <TermTooltip term="DRAWDOWN TAX RATE">
+        <span>Drawdown tax rate</span>
+      </TermTooltip>
+      <span>:</span>
+      <span className="tabular-nums font-medium text-foreground">{display}</span>
+      <span>·</span>
+      <Link
+        to="/settings"
+        className="underline hover:text-foreground"
+        data-testid="whatif-drawdown-tax-rate-settings-link"
+      >
+        Settings &rsaquo; Advanced
+      </Link>
+    </div>
+  );
+}
+
+/**
+ * Empty-state stub (W7-UX MF-8) shown when the user lands on the
+ * What-If page before completing first-run setup — no household saved,
+ * or zero persons in the household. Previously the FI cards silently
+ * returned null in this case, leaving a confusing gap on the page;
+ * the stub gives users a card-styled prompt with two deep-link CTAs.
+ */
+function FiCardsEmptyState() {
+  return (
+    <Card data-testid="whatif-fi-cards-empty">
+      <CardContent className="py-6 text-center text-sm text-muted-foreground space-y-2">
+        <p>
+          Add a household and at least one person to see FI projections.
+        </p>
+        <div className="text-xs space-x-1">
+          <Link
+            to="/inputs/household"
+            className="underline hover:text-foreground"
+            data-testid="whatif-fi-cards-empty-household-link"
+          >
+            Set up household
+          </Link>
+          <span>·</span>
+          <Link
+            to="/inputs/persons"
+            className="underline hover:text-foreground"
+            data-testid="whatif-fi-cards-empty-persons-link"
+          >
+            Add persons
+          </Link>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function FiCards(props: FiCardsProps) {
   const computed = computeCards(props);
+  if (computed === SETUP_REQUIRED) {
+    return <FiCardsEmptyState />;
+  }
   if (!computed) return null;
 
   const { liquidNw, fiTarget, coastFiTarget, yearsUntilRetirement, rate, rateLabel, swr } = computed;
@@ -292,6 +401,7 @@ export default function FiCards(props: FiCardsProps) {
       </div>
       <RetirementAgeControl scenarios={props.scenarios} persons={props.persons} />
       <WithdrawalStrategyControl scenarios={props.scenarios} />
+      <DrawdownTaxRateInline scenarios={props.scenarios} />
     </div>
   );
 }
