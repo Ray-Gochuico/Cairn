@@ -1,12 +1,18 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { useAccountsStore } from '@/stores/accounts-store';
+import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
+import { useCategoriesStore } from '@/stores/categories-store';
+import { useContributionsStore } from '@/stores/contributions-store';
 import { useEquityGrantsStore } from '@/stores/equity-grants-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
 import { useLoansStore } from '@/stores/loans-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { usePropertiesStore } from '@/stores/properties-store';
+import { useSnapshotsStore } from '@/stores/snapshots-store';
+import { useTransactionsStore } from '@/stores/transactions-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
 import Section2_WhatYouOwn from '@/pages/setup/Section2_WhatYouOwn';
 
@@ -26,6 +32,33 @@ function resetStores() {
   useEquityGrantsStore.setState({ equityGrants: [], ...base } as any);
   usePersonsStore.setState({ persons: [{ id: 1, name: 'Alice' }], ...base } as any);
   useLoansStore.setState({ loans: [], ...base } as any);
+  // ImportCsvButton subscribes to these stores for ValidationContext —
+  // seed empty arrays so the component mounts without errors.
+  useCategoriesStore.setState({ categories: [], ...base } as any);
+  useSnapshotsStore.setState({
+    snapshots: [],
+    ...base,
+    upsert: async () => 1,
+    refresh: async () => {},
+  } as any);
+  useTransactionsStore.setState({ transactions: [], ...base } as any);
+  useContributionsStore.setState({ contributions: [], ...base } as any);
+  useAssetValueSnapshotsStore.setState({
+    assetValueSnapshots: [],
+    ...base,
+    removeForOwner: async () => {},
+  } as any);
+}
+
+/**
+ * Find the EntityCard container by matching its title heading. EntityCard
+ * renders a shadcn <Card> whose root has a class containing "rounded".
+ */
+function findCard(title: RegExp): HTMLElement {
+  const heading = screen.getByText(title);
+  const card = heading.closest('div[class*="rounded"]');
+  if (!card) throw new Error(`Card not found for ${title}`);
+  return card as HTMLElement;
 }
 
 describe('Section2_WhatYouOwn', () => {
@@ -74,5 +107,54 @@ describe('Section2_WhatYouOwn', () => {
     );
     await user.click(screen.getByRole('button', { name: /skip/i }));
     expect(onSetStatus).toHaveBeenCalledWith('skipped');
+  });
+
+  describe('Section2_WhatYouOwn — import buttons enabled', () => {
+    function renderSection() {
+      render(
+        <MemoryRouter>
+          <Section2_WhatYouOwn status="in_progress" onSetStatus={() => {}} />
+        </MemoryRouter>,
+      );
+    }
+
+    it('Accounts card has a functional Import CSV button (not the placeholder)', () => {
+      renderSection();
+      const card = findCard(/^Accounts$/);
+      const btn = within(card).getByRole('button', { name: /^import csv$/i });
+      expect(btn).not.toBeDisabled();
+      // The disabled "(coming soon)" placeholder must NOT also be present.
+      expect(
+        within(card).queryByRole('button', { name: /import csv \(coming soon\)/i }),
+      ).toBeNull();
+    });
+
+    it('Holdings card has a functional Import CSV button', () => {
+      renderSection();
+      const card = findCard(/^Holdings$/);
+      const btn = within(card).getByRole('button', { name: /^import csv$/i });
+      expect(btn).not.toBeDisabled();
+    });
+
+    it('Properties card has a functional Import CSV button', () => {
+      renderSection();
+      const card = findCard(/^Properties$/);
+      const btn = within(card).getByRole('button', { name: /^import csv$/i });
+      expect(btn).not.toBeDisabled();
+    });
+
+    it('Vehicles card has a functional Import CSV button', () => {
+      renderSection();
+      const card = findCard(/^Vehicles$/);
+      const btn = within(card).getByRole('button', { name: /^import csv$/i });
+      expect(btn).not.toBeDisabled();
+    });
+
+    it('Equity grants card has a functional Import CSV button', () => {
+      renderSection();
+      const card = findCard(/^Equity grants$/i);
+      const btn = within(card).getByRole('button', { name: /^import csv$/i });
+      expect(btn).not.toBeDisabled();
+    });
   });
 });

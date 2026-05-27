@@ -5,6 +5,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 import EntityCard from './EntityCard';
 import SectionEntryGate from './SectionEntryGate';
 import AccountForm from './forms/AccountForm';
@@ -91,30 +92,40 @@ export default function Section2_WhatYouOwn({ status, onSetStatus }: Props) {
         description="Checking, savings, brokerage, 401k, IRA, HSA, 529, etc."
         count={accounts.length}
         onAddManual={() => setDialog('accounts')}
+        importEnabled
+        importTrigger={<ImportCsvButton entity="account" />}
       />
       <EntityCard
         title="Holdings"
         description="Stocks, ETFs, mutual funds inside your accounts."
         count={holdings.length}
         onAddManual={() => setDialog('holdings')}
+        importEnabled
+        importTrigger={<ImportCsvButton entity="holding" />}
       />
       <EntityCard
         title="Properties"
         description="Real estate you own."
         count={properties.length}
         onAddManual={() => setDialog('properties')}
+        importEnabled
+        importTrigger={<ImportCsvButton entity="property" />}
       />
       <EntityCard
         title="Vehicles"
         description="Cars, motorcycles, boats, RVs."
         count={vehicles.length}
         onAddManual={() => setDialog('vehicles')}
+        importEnabled
+        importTrigger={<ImportCsvButton entity="vehicle" />}
       />
       <EntityCard
         title="Equity grants"
         description="RSUs, stock options with vesting schedules."
         count={equityGrants.length}
         onAddManual={() => setDialog('equity_grants')}
+        importEnabled
+        importTrigger={<ImportCsvButton entity="equity_grant" />}
       />
 
       <Dialog
