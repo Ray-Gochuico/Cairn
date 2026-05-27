@@ -56,6 +56,20 @@ describe('DataSection', () => {
     ).toBeInTheDocument();
   });
 
+  it('Restore button is disabled with a "not yet implemented" hint (R5)', () => {
+    render(
+      <MemoryRouter>
+        <DataSection />
+      </MemoryRouter>,
+    );
+    const restoreBtn = screen.getByRole('button', { name: /restore from json/i });
+    expect(restoreBtn).toBeDisabled();
+    expect(restoreBtn.getAttribute('aria-disabled')).toBe('true');
+    expect(
+      screen.getByTestId('restore-not-implemented-hint'),
+    ).toHaveTextContent(/not yet implemented/i);
+  });
+
   it('renders a hidden file input for restore', () => {
     const { container } = render(
       <MemoryRouter>

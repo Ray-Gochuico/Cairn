@@ -145,11 +145,9 @@ export function DataSection() {
     }
   }
 
-  function handleRestoreClick() {
-    setRestoreError(null);
-    setRestoreSuccess(null);
-    fileInputRef.current?.click();
-  }
+  // handleRestoreClick removed (R5) — the Restore button is disabled in v1
+  // pending a real applyBackup implementation. The file-input + handlers
+  // below remain so re-enabling later is a one-line button change.
 
   async function handleFileChange(
     event: React.ChangeEvent<HTMLInputElement>,
@@ -231,12 +229,32 @@ export function DataSection() {
           <div className="space-y-3">
             <h3 className="text-sm font-medium">Restore</h3>
             <p className="text-sm text-muted-foreground">
-              Pick a backup JSON file. You'll be asked to confirm before any
-              changes are made.
+              Restore from a previous backup file. Currently disabled —
+              only Export works in v1.
             </p>
-            <Button variant="outline" onClick={handleRestoreClick}>
+            <Button
+              variant="outline"
+              disabled
+              aria-disabled="true"
+              data-testid="restore-button-disabled"
+              title="Restore is not yet implemented — only Export works in v1"
+            >
               Restore from JSON
             </Button>
+            <p
+              className="text-xs text-muted-foreground"
+              data-testid="restore-not-implemented-hint"
+            >
+              Restore is not yet implemented — only Export works in v1.
+              Export your data periodically; importing back to the app will
+              ship in a later release.
+            </p>
+            {/*
+              The hidden file input + restoreError/restoreSuccess state are
+              left in place so the future "real Restore" can re-enable the
+              button without re-wiring the plumbing. The handlers below are
+              dormant while the button is disabled.
+            */}
             <input
               ref={fileInputRef}
               type="file"
