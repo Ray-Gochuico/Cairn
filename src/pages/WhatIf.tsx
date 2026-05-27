@@ -26,6 +26,7 @@ import {
   detectMilestones,
   effectiveSwr,
   effectiveBaselineInflation,
+  totalInvestments,
   type Milestones,
   type MonthlyState,
 } from '@/lib/scenarios';
@@ -130,6 +131,15 @@ export default function WhatIf() {
   // clear "set things up" CTA instead of a misleading zero chart.
   // (Wave-3 UX W3-3 + Wave-1 #9.)
   //
+  // W7-UX MF-1: pre-fix this guard only checked `states.length > 0`.
+  // That's true even when a seeded baseline scenario produces an array
+  // of `MonthlyState` rows where every monetary field is 0 (no holdings,
+  // no persons fully wired). Recharts then auto-domains the y-axis from
+  // those sentinel zeros and paints $0/$1/$2/$3/$4 raw-dollar ticks,
+  // which looks broken. Now we also require at least one state with a
+  // non-zero balance signal (cash, netWorth, or any investment account)
+  // so the chart only renders when there's something meaningful to plot.
+  //
   // RM-1: This useMemo MUST live above the `if (!real)` early return
   // (and any other early returns) so React's hook-order invariant
   // holds across renders. Commit 31e9f09 fixed the same pattern for
@@ -138,7 +148,12 @@ export default function WhatIf() {
   const hasProjectionData = useMemo(() => {
     if (projections.size === 0) return false;
     for (const states of projections.values()) {
-      if (states.length > 0) return true;
+      if (states.length === 0) continue;
+      for (const s of states) {
+        if (s.cash > 0 || s.netWorth > 0 || totalInvestments(s) > 0) {
+          return true;
+        }
+      }
     }
     return false;
   }, [projections]);
