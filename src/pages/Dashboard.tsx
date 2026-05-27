@@ -668,13 +668,16 @@ export default function Dashboard() {
     // Budget) alone on row 2 at every reasonable desktop width. New ladder:
     //   <sm  (mobile)         : 2 cols  → 2+2+1 (acceptable; tall stacks)
     //   sm/md (640-1023px)    : 3 cols  → 3+2  (no stranded card)
-    //   lg+   (≥1024px)       : 5 cols  → 5-in-a-row (no stranded card)
-    // Wave-4 cohesion review found the strand happened at both 1024px and
-    // 1440px, the two widths the design QA tracks. Both now land on the
-    // lg breakpoint and render as a single row.
+    //   lg    (1024-1279px)   : 4 cols  → 4+1  (acceptable; labels stay legible)
+    //   xl+   (≥1280px)       : 5 cols  → 5-in-a-row (no stranded card)
+    // Wave-5 UX review found `lg:grid-cols-5` (introduced in Wave-4 polish)
+    // was tight enough at 1024px to reintroduce mid-word label truncation on
+    // longer pill names ("AWAITING REIMBU…"). Bumping the 5-col jump to xl
+    // gives those labels breathing room at lg while still going wide at the
+    // 1280px+ widths the design QA tracks.
     <div className="space-y-4">
       <div
-        className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4"
+        className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4"
         data-testid="dashboard-pill-grid"
       >
         {visiblePills.length === 0 ? (

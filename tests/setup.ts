@@ -25,6 +25,13 @@ import { afterEach, beforeEach, vi } from 'vitest';
 const FORBIDDEN_CONSOLE_ERROR_SUBSTRINGS = [
   'DialogContent` requires a `DialogTitle`',
   'DialogContent requires a DialogTitle',
+  // Wave-5 UX W5-8: Radix logs `Missing Description or aria-describedby={undefined}
+  // for {DialogContent}` whenever DialogContent renders without either a wired
+  // <DialogDescription> or an explicit aria-describedby. The shadcn wrapper now
+  // defaults that prop to undefined so consumers opt in; this guard catches any
+  // future regression that removes the default.
+  'Missing `Description` or `aria-describedby={undefined}`',
+  'Missing Description',
 ];
 
 let originalConsoleError: typeof console.error | null = null;
