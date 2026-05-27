@@ -16,7 +16,7 @@
  * § A.0 "Full draft disclosure copy".
  */
 
-const APP_WIDE_TEXT_v1_4 = `**This app is an educational and personal-tracking tool. It is not financial, investment, tax, legal, or accounting advice.**
+const APP_WIDE_TEXT_v1_5 = `**This app is an educational and personal-tracking tool. It is not financial, investment, tax, legal, or accounting advice.**
 
 The app's developer is not a registered investment advisor, broker-dealer, certified financial planner, CPA, or attorney, and no fiduciary relationship is created by your use of it.
 
@@ -42,6 +42,8 @@ Use of this app is **at your own risk**. The software is provided "as is" withou
 - **SALT cap / itemized-vs-standard election.** The app uses the standard deduction at every projection step; high-SALT households (NY/NJ/CA + property taxes) who itemize may see different federal tax outcomes.
 - **Stock buyback excise tax (1%)** on corporate share repurchases — affects fund-level returns indirectly but is not modeled in any of the per-account growth projections.
 - **Cafeteria-plan FICA exclusion.** §125 pre-tax health insurance, FSA, and payroll-deduction HSA contributions reduce the FICA base in payroll reality; the app applies FICA to raw gross. The over-collection is typically <\$500/yr for a household at the maximum cafeteria-plan deferral.
+- **Drawdown tax gross-up assumption.** When What-If scenarios apply a non-zero drawdown tax rate (Settings → Advanced or per-scenario), the engine grosses up withdrawal amounts so the *net* expense baseline is met. This implicitly assumes the entire withdrawal is from pre-tax accounts. Households with significant Roth or after-tax balances will see actual taxes lower than projected.
+- **Frozen tax brackets.** Tax brackets, IRS contribution limits, and HSA/HDHP thresholds are loaded from the snapshot baked into the app at build time (currently 2026 tax year). They are not auto-updated when the IRS publishes future-year values; long-horizon projections silently assume today's brackets persist nominally. Cross-check long-horizon strategies against the current IRS publication before acting.
 
 **Governing law.** These terms are governed by the laws of the State of New York, without regard to its conflict-of-laws principles.`;
 
@@ -75,10 +77,10 @@ export interface DisclosureDocument {
 
 export const DISCLOSURES = {
   app_wide: {
-    version: '1.4',
-    body: APP_WIDE_TEXT_v1_4,
+    version: '1.5',
+    body: APP_WIDE_TEXT_v1_5,
     diffFromPrevious:
-      'Version 1.4 updates the Washington capital-gains-tax threshold in the "Capital-gains state taxes" bullet from the stale ~$262k figure to the current ~$278k (2025 inflation-adjusted) value. No other content changes since v1.3. Please re-read and re-accept.',
+      "Version 1.5 adds two new bullets to 'What this app does NOT model': drawdown tax gross-up assumption (engine treats withdrawals as fully pre-tax) and frozen-bracket assumption (built-in tax tables don't auto-update for future years). No other content changes since v1.4. Please re-read and re-accept.",
     acceptanceCheckboxLabel:
       'I have read and understand the above. I accept that this app is not financial advice and I use it at my own risk.',
   } satisfies DisclosureDocument,
