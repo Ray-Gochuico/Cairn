@@ -79,7 +79,7 @@ export function OverrideDialog({ node, open, onOpenChange }: Props) {
             you clear it.
           </p>
           <fieldset className="space-y-2">
-            <legend className="text-xs uppercase text-slate-500 tracking-wider">
+            <legend className="text-xs uppercase text-muted-foreground tracking-wider">
               New status
             </legend>
             {STATUS_CHOICES.map((c) => (
@@ -97,13 +97,13 @@ export function OverrideDialog({ node, open, onOpenChange }: Props) {
                 />
                 <span>
                   <span className="font-medium">{c.label}</span>
-                  <span className="text-xs text-slate-500 block">{c.help}</span>
+                  <span className="text-xs text-muted-foreground block">{c.help}</span>
                 </span>
               </label>
             ))}
           </fieldset>
           <label className="block">
-            <span className="text-xs uppercase text-slate-500 tracking-wider">
+            <span className="text-xs uppercase text-muted-foreground tracking-wider">
               Note (optional)
             </span>
             <textarea
