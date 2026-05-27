@@ -149,27 +149,9 @@ describe('captureRealState — tax brackets', () => {
   });
 });
 
-describe('captureRealState — autoInvestSalarySurplus default', () => {
-  it('threads autoInvestSalarySurplus=true into RealState.defaults', () => {
-    const s = captureRealState({
-      ...inputs,
-      appSettings: { ...inputs.appSettings, autoInvestSalarySurplus: true },
-    });
-    expect(s.defaults.autoInvestSalarySurplus).toBe(true);
-  });
-
-  it('threads autoInvestSalarySurplus=false into RealState.defaults', () => {
-    const s = captureRealState({
-      ...inputs,
-      appSettings: { ...inputs.appSettings, autoInvestSalarySurplus: false },
-    });
-    expect(s.defaults.autoInvestSalarySurplus).toBe(false);
-  });
-
-  it('defaults to false when appSettings.autoInvestSalarySurplus is undefined', () => {
-    // The existing AppSettingsSlice fixture omits autoInvestSalarySurplus; the
-    // captureRealState helper should treat that as false (the default).
+describe('captureRealState — autoInvestSalarySurplus removed (2026-05-26 revamp)', () => {
+  it('does not expose autoInvestSalarySurplus on RealState.defaults', () => {
     const s = captureRealState(inputs);
-    expect(s.defaults.autoInvestSalarySurplus).toBe(false);
+    expect((s.defaults as Record<string, unknown>).autoInvestSalarySurplus).toBeUndefined();
   });
 });

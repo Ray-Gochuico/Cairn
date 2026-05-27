@@ -29,11 +29,6 @@ export function useRealState(): RealState | null {
   const settings         = useSettingsStore((s) => s.settings);
   const taxRules         = useTaxRulesStore((s) => s.items);
   const defaultCashApy   = settings?.defaultCashApy ?? null;
-  // Migration 0029 — household opt-in for auto-investing salary surplus when
-  // no Contributions segment is active. Default false (surplus → cash). Mirror
-  // of the defaultCashApy plumbing above so the engine sees the user's
-  // Settings → Advanced toggle without a separate refresh path.
-  const autoInvestSalarySurplus = settings?.autoInvestSalarySurplus ?? false;
 
   return useMemo<RealState | null>(() => {
     if (!household) return null;
@@ -51,14 +46,16 @@ export function useRealState(): RealState | null {
         defaultInflation: inflation,
         defaultReturnRate: returnRate,
         defaultCashApy,
-        autoInvestSalarySurplus,
       },
       startISO,
       taxRules,
     });
-    // NOTE: pre-revamp this hook also rewrote `real.baselineMonthlyExpenses`
-    // when the household had a custom monthlyExpenseBaseline. Dropped 2026-05-26:
-    // the engine no longer reads that field; expenses are sourced entirely from
-    // the lever's `expensePeriods` payload.
-  }, [household, persons, loans, holdings, accounts, accountSnapshots, transactions, inflation, returnRate, defaultCashApy, autoInvestSalarySurplus, taxRules]);
+    // NOTE (2026-05-26 revamp):
+    // - The pre-revamp hook rewrote `real.baselineMonthlyExpenses` when the
+    //   household had a custom monthlyExpenseBaseline. Dropped — the engine
+    //   no longer reads that field; expenses come from `payload.expensePeriods`.
+    // - The pre-revamp hook also threaded `settings.autoInvestSalarySurplus`
+    //   into RealState.defaults. Dropped — routing now flows through
+    //   `payload.gapAllocation` instead of a household-level setting.
+  }, [household, persons, loans, holdings, accounts, accountSnapshots, transactions, inflation, returnRate, defaultCashApy, taxRules]);
 }

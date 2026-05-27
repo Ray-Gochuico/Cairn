@@ -238,7 +238,7 @@ describe('SettingsRepo — utility category id columns', () => {
   });
 });
 
-describe('SettingsRepo — autoInvestSalarySurplus', () => {
+describe('SettingsRepo — autoInvestSalarySurplus removed (2026-05-26 revamp)', () => {
   let db: SqliteAdapter;
   let repo: SettingsRepo;
 
@@ -252,29 +252,18 @@ describe('SettingsRepo — autoInvestSalarySurplus', () => {
     await db.close();
   });
 
-  it('reads false from the default row', async () => {
+  it('does NOT expose autoInvestSalarySurplus on the returned object', async () => {
     const out = await repo.get();
-    expect(out.autoInvestSalarySurplus).toBe(false);
+    expect((out as Record<string, unknown>).autoInvestSalarySurplus).toBeUndefined();
   });
 
-  it('round-trips autoInvestSalarySurplus through update + get', async () => {
-    await repo.update({ autoInvestSalarySurplus: true });
+  it('update() silently drops autoInvestSalarySurplus from the patch (unknown key)', async () => {
+    // The migration 0029 column still exists in SQL but the repo no longer
+    // reads or writes it. Passing the legacy key through .update() is a
+    // no-op — the Zod parse strips the key, the SQL UPDATE doesn't touch
+    // the zombie column.
+    await repo.update({ autoInvestSalarySurplus: true } as never);
     const out = await repo.get();
-    expect(out.autoInvestSalarySurplus).toBe(true);
-  });
-
-  it('toggling true → false persists', async () => {
-    await repo.update({ autoInvestSalarySurplus: true });
-    await repo.update({ autoInvestSalarySurplus: false });
-    const out = await repo.get();
-    expect(out.autoInvestSalarySurplus).toBe(false);
-  });
-
-  it('a partial patch does not unset autoInvestSalarySurplus', async () => {
-    await repo.update({ autoInvestSalarySurplus: true });
-    await repo.update({ notificationDay: 7 });
-    const out = await repo.get();
-    expect(out.autoInvestSalarySurplus).toBe(true);
-    expect(out.notificationDay).toBe(7);
+    expect((out as Record<string, unknown>).autoInvestSalarySurplus).toBeUndefined();
   });
 });

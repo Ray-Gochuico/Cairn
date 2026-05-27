@@ -442,10 +442,10 @@ export const AppSettingsSchema = z.object({
   // (card shows empty state); [a, b, c] = sum across those category ids.
   propertyUtilitiesCategoryIds: z.array(z.number().int().positive()).nullable().default(null),
   vehicleGasCategoryIds: z.array(z.number().int().positive()).nullable().default(null),
-  // Household-level opt-in: when true, the What-If engine auto-invests
-  // positive monthly surplus into investment accounts when no Contributions
-  // segment is active. Default false — surplus stays in cash unless the user
-  // opts in (migration 0029, default 0).
-  autoInvestSalarySurplus: z.boolean().default(false),
+  // NOTE: autoInvestSalarySurplus field removed 2026-05-26 (What-If revamp).
+  // The migration 0029 column auto_invest_salary_surplus stays in SQL as a
+  // zombie (SQLite forward-only convention); SettingsRepo no longer reads or
+  // writes it. The engine's surplus routing now flows through
+  // LeverPayload.gapAllocation instead of a household-level toggle.
 });
 export type AppSettings = z.infer<typeof AppSettingsSchema>;

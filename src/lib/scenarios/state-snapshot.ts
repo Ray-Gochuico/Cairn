@@ -7,13 +7,6 @@ export interface AppSettingsSlice {
   defaultInflation: number;
   defaultReturnRate: number;
   defaultCashApy: number | null;
-  /**
-   * Household opt-in for auto-investing positive monthly surplus when no
-   * Contributions segment is active. Default false (surplus → cash). Migration
-   * 0029. Optional on the slice so older fixtures that pre-date the field
-   * continue to compile — captureRealState coalesces to false.
-   */
-  autoInvestSalarySurplus?: boolean;
 }
 
 export interface RealStateInputs {
@@ -73,13 +66,6 @@ export interface RealState {
     inflation: number;
     returnRate: number;
     defaultCashApy: number | null;
-    /**
-     * Household setting: when true, the engine routes positive monthly surplus
-     * (no Contributions segment active) into investments via the auto-invest
-     * branch. When false (the new default since 2026-05-26), surplus stays in
-     * cash. See `stepMonth`'s `else if (s.savings > 0)` branch.
-     */
-    autoInvestSalarySurplus: boolean;
   };
   startISO: string;
   taxBrackets: RealStateTaxBrackets;
@@ -255,7 +241,6 @@ export function captureRealState(inputs: RealStateInputs): RealState {
       inflation: inputs.appSettings.defaultInflation,
       returnRate: inputs.appSettings.defaultReturnRate,
       defaultCashApy: inputs.appSettings.defaultCashApy ?? null,
-      autoInvestSalarySurplus: inputs.appSettings.autoInvestSalarySurplus ?? false,
     },
     startISO: inputs.startISO,
     taxBrackets,

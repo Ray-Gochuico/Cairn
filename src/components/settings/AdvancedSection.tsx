@@ -347,34 +347,10 @@ export function AdvancedSection() {
                 Applies to investment returns and cash APY in new scenarios.
               </p>
             </div>
-            {/* Migration 0029 — household opt-in for auto-investing monthly
-                surplus when no Contributions segment is active. Default OFF
-                since 2026-05-26. Persists immediately on click via the
-                Settings store (no Save click needed) so the projection
-                refreshes the moment the user flips it. */}
-            <div className="pt-3 flex items-start justify-between gap-3 border-t pt-3">
-              <div className="min-w-0 flex-1">
-                <Label htmlFor="setting-auto-invest" className="text-sm font-normal">
-                  Auto-invest salary surplus by default
-                </Label>
-                <p className="text-xs text-slate-500">
-                  When on, monthly surplus (income &minus; expenses &minus; loans)
-                  automatically flows into your investment accounts in projections.
-                  When off, surplus stays in cash unless you add a Contributions
-                  segment.
-                </p>
-              </div>
-              <input
-                id="setting-auto-invest"
-                type="checkbox"
-                aria-label="Auto-invest salary surplus by default"
-                checked={settings?.autoInvestSalarySurplus ?? false}
-                onChange={(e) =>
-                  void updateSettings({ autoInvestSalarySurplus: e.target.checked })
-                }
-                className="h-4 w-4 cursor-pointer mt-1 flex-shrink-0"
-              />
-            </div>
+            {/* NOTE (2026-05-26 revamp): the "Auto-invest salary surplus
+                by default" toggle was removed. Routing now happens via the
+                per-scenario gap allocation lever (Income popover). The
+                migration 0029 column stays in the DB as a zombie. */}
           </section>
 
           <div className="flex items-center gap-3">

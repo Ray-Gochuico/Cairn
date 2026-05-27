@@ -74,34 +74,21 @@ describe('AppSettingsSchema — utility category fields', () => {
   });
 });
 
-describe('AppSettingsSchema — autoInvestSalarySurplus', () => {
-  it('defaults to false when omitted', () => {
+describe('AppSettingsSchema — autoInvestSalarySurplus removed', () => {
+  // The autoInvestSalarySurplus field was removed in the 2026-05-26 What-If
+  // revamp. Replaced by LeverPayload.gapAllocation (per-scenario routing).
+  // The migration 0029 column lives on as a zombie in SQLite (forward-only
+  // migrations) but no app code reads or writes it.
+  it('does not expose autoInvestSalarySurplus on the parsed output', () => {
     const parsed = AppSettingsSchema.parse(VALID_BASE);
-    expect(parsed.autoInvestSalarySurplus).toBe(false);
+    expect((parsed as Record<string, unknown>).autoInvestSalarySurplus).toBeUndefined();
   });
 
-  it('accepts true', () => {
+  it('drops any provided autoInvestSalarySurplus input (unknown key)', () => {
     const parsed = AppSettingsSchema.parse({
       ...VALID_BASE,
       autoInvestSalarySurplus: true,
     });
-    expect(parsed.autoInvestSalarySurplus).toBe(true);
-  });
-
-  it('accepts false explicitly', () => {
-    const parsed = AppSettingsSchema.parse({
-      ...VALID_BASE,
-      autoInvestSalarySurplus: false,
-    });
-    expect(parsed.autoInvestSalarySurplus).toBe(false);
-  });
-
-  it('rejects non-boolean values', () => {
-    expect(() =>
-      AppSettingsSchema.parse({
-        ...VALID_BASE,
-        autoInvestSalarySurplus: 'yes' as unknown as boolean,
-      }),
-    ).toThrow();
+    expect((parsed as Record<string, unknown>).autoInvestSalarySurplus).toBeUndefined();
   });
 });
