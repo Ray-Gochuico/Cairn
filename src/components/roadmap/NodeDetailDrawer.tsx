@@ -1,5 +1,12 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { OverrideDialog } from './OverrideDialog';
 import { StatusIcon } from './StatusIcon';
 import { useRoadmapOverridesStore } from '@/stores/roadmap-overrides-store';
@@ -24,18 +31,20 @@ interface Props {
  *   3. Actions — Override Status (opens dialog) and, when an override is
  *      active, Clear Override (revert to the auto result).
  *
- * Rendered as a fixed-position panel rather than via @radix/react-sheet
- * to avoid pulling in a new dependency for one component. The behavior
- * is the same: clicking the backdrop or pressing Escape closes the panel.
+ * Built on shadcn `<Sheet>` (W7-Frontend RM-3 — previously a hand-rolled
+ * fixed-position panel that lacked focus trap, animated slide-in, and
+ * Escape-key wiring outside of click-outside). The Sheet primitive is
+ * backed by `@radix-ui/react-dialog`, which gives us:
+ *   • focus trapped while the drawer is open
+ *   • Escape closes
+ *   • click-outside closes (via the Sheet's overlay)
+ *   • inert background while open
+ *   • animated slide-in / slide-out from the right side
  */
 export function NodeDetailDrawer({ node, result, open, onOpenChange }: Props) {
   const [overrideOpen, setOverrideOpen] = useState(false);
   const clearOverride = useRoadmapOverridesStore((s) => s.clearOverride);
   const overridden = result.autoResult !== undefined;
-
-  if (!open) return null;
-
-  const handleBackdropClick = () => onOpenChange(false);
 
   const handleClear = async () => {
     await clearOverride(node.id);
@@ -44,31 +53,20 @@ export function NodeDetailDrawer({ node, result, open, onOpenChange }: Props) {
 
   return (
     <>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={node.title}
-        className="fixed inset-0 z-50 bg-black/40 flex justify-end"
-        onClick={handleBackdropClick}
-      >
-        <div
-          className="bg-background text-foreground w-full sm:max-w-md h-full overflow-y-auto shadow-xl"
-          onClick={(e) => e.stopPropagation()}
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent
+          side="right"
+          aria-label={node.title}
+          className="w-full sm:max-w-md overflow-y-auto p-0"
         >
-          <div className="px-6 py-4 border-b flex items-center justify-between">
-            <div>
-              <h3 className="text-base font-semibold">{node.title}</h3>
-              <div className="text-xs text-muted-foreground">Section {node.section}</div>
-            </div>
-            <button
-              type="button"
-              onClick={() => onOpenChange(false)}
-              className="text-muted-foreground hover:text-foreground"
-              aria-label="Close"
-            >
-              ✕
-            </button>
-          </div>
+          <SheetHeader className="px-6 py-4 border-b text-left space-y-1">
+            <SheetTitle className="text-base font-semibold">
+              {node.title}
+            </SheetTitle>
+            <SheetDescription className="text-xs text-muted-foreground">
+              Section {node.section}
+            </SheetDescription>
+          </SheetHeader>
           <div className="px-6 py-4 space-y-5">
             <section>
               <h4 className="text-xs uppercase text-muted-foreground tracking-wider mb-1">
@@ -107,8 +105,8 @@ export function NodeDetailDrawer({ node, result, open, onOpenChange }: Props) {
               )}
             </section>
           </div>
-        </div>
-      </div>
+        </SheetContent>
+      </Sheet>
       <OverrideDialog
         node={node}
         open={overrideOpen}

@@ -86,11 +86,13 @@ describe('NodeDetailDrawer', () => {
   });
 
   it('renders nothing when open=false', () => {
-    const { container } = renderDrawer({
+    renderDrawer({
       result: { status: 'active' },
       open: false,
     });
-    expect(container).toBeEmptyDOMElement();
+    // Sheet is closed → Radix unmounts the Portal/Content, so no dialog
+    // role is in the DOM.
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('renders the three sections: chart text, calculation, actions', () => {
@@ -136,11 +138,32 @@ describe('NodeDetailDrawer', () => {
     expect(screen.queryByRole('button', { name: /clear override/i })).toBeNull();
   });
 
-  it('closes when the backdrop is clicked', () => {
+  it('closes when Escape is pressed', () => {
+    // shadcn Sheet (Radix Dialog) handles Escape natively — replaces the
+    // pre-refactor click-backdrop test, which doesn't apply cleanly when
+    // the overlay sits in a portal sibling. The Escape contract is what
+    // matters for the focus-trap promise.
     const onOpenChange = vi.fn();
     renderDrawer({ result: { status: 'active' }, onOpenChange });
-    fireEvent.click(screen.getByRole('dialog'));
+    fireEvent.keyDown(document.activeElement ?? document.body, {
+      key: 'Escape',
+      code: 'Escape',
+    });
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('exposes a dialog role with the node title as the accessible name', () => {
+    // Sheet content is rendered into a portal as role="dialog". The
+    // accessible name comes from <SheetTitle> via aria-labelledby; we
+    // also keep aria-label as a belt-and-suspenders fallback so screen
+    // readers in either mode announce the node title.
+    renderDrawer({ result: { status: 'active' } });
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toBeInTheDocument();
+    // The node title from makeNode() shows up in the dialog header.
+    expect(
+      screen.getByRole('heading', { name: /capture the full employer match/i }),
+    ).toBeInTheDocument();
   });
 
   it('opens the OverrideDialog when Override status is clicked', () => {
