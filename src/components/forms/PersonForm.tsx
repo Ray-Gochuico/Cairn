@@ -107,6 +107,11 @@ export default function PersonForm({
   const showHourlyFields = employmentType !== 'SALARY_NO_OT';
   const showAnnualSalary = employmentType !== 'HOURLY';
 
+  const fieldErrors = Object.entries(form.formState.errors).map(([field, err]) => ({
+    field,
+    message: (err as { message?: string })?.message ?? 'invalid',
+  }));
+
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
       <Card>
@@ -307,6 +312,22 @@ export default function PersonForm({
         </CardContent>
       </Card>
 
+      {fieldErrors.length > 0 && (
+        <div
+          role="alert"
+          className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive"
+        >
+          <div className="font-medium mb-1">Fix these before saving:</div>
+          <ul className="list-disc pl-5">
+            {fieldErrors.map((e) => (
+              <li key={e.field}>
+                <span className="font-mono">{e.field}</span>: {e.message}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="flex justify-end items-center gap-3">
         <span
           className="text-sm text-muted-foreground transition-opacity duration-200"
@@ -327,7 +348,7 @@ export default function PersonForm({
         )}
         <Button
           type="submit"
-          disabled={form.formState.isSubmitting || !form.formState.isDirty}
+          disabled={form.formState.isSubmitting}
         >
           {submitLabel}
         </Button>
