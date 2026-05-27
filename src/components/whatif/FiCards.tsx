@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,6 +11,7 @@ import { effectiveSwr } from '@/lib/scenarios/effective-swr';
 import { totalInvestments } from '@/lib/scenarios/aggregate-investments';
 import type { MonthlyState } from '@/lib/scenarios';
 import { useScenariosStore } from '@/stores/scenarios-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import type { Household, Person } from '@/types/schema';
 import type { Scenario } from '@/types/scenario';
 
@@ -250,6 +252,63 @@ function WithdrawalStrategyControl({
   );
 }
 
+/**
+ * Inline drawdown-tax-rate indicator (W7-UX MF-6).
+ *
+ * The `effectiveDrawdownTaxRate` setting lives only in Settings → Advanced,
+ * which means What-If users who pick the SEQUENTIAL withdrawal strategy
+ * have no inline cue that an assumption is in effect or what value is
+ * being applied. Pre-fix the projection silently gross-ups Trad-401(k)
+ * withdrawals by 0% (if Settings is unset) or by the user's saved
+ * percentage — with no surfacing on the page that does the math.
+ *
+ * Renders only when strategy === 'sequential'. Shows the resolved
+ * effective rate (`defaultDrawdownTaxRate` from Settings, or "Not set"
+ * when null) alongside a deep-link to Settings → Advanced for one-click
+ * adjustment. Wrapped in a TermTooltip so the abbreviation is reachable.
+ */
+function DrawdownTaxRateInline({
+  scenarios,
+}: {
+  scenarios: Scenario[];
+}) {
+  const active = scenarios.find((s) => s.isActive);
+  const strategy =
+    (active?.leverPayload as { withdrawalStrategy?: 'proportional' | 'sequential' })
+      ?.withdrawalStrategy ?? 'proportional';
+  // Hook order constraint: useSettingsStore must be called unconditionally
+  // (it's a Zustand hook). The strategy check gates the *render*, not the
+  // hook call.
+  const settings = useSettingsStore((s) => s.settings);
+
+  if (strategy !== 'sequential') return null;
+
+  const rate = settings?.defaultDrawdownTaxRate ?? null;
+  const display =
+    rate === null ? 'Not set' : `${(rate * 100).toFixed(0)}%`;
+
+  return (
+    <div
+      className="flex items-center gap-1.5 text-xs text-muted-foreground"
+      data-testid="whatif-drawdown-tax-rate-inline"
+    >
+      <TermTooltip term="DRAWDOWN TAX RATE">
+        <span>Drawdown tax rate</span>
+      </TermTooltip>
+      <span>:</span>
+      <span className="tabular-nums font-medium text-foreground">{display}</span>
+      <span>·</span>
+      <Link
+        to="/settings"
+        className="underline hover:text-foreground"
+        data-testid="whatif-drawdown-tax-rate-settings-link"
+      >
+        Settings &rsaquo; Advanced
+      </Link>
+    </div>
+  );
+}
+
 export default function FiCards(props: FiCardsProps) {
   const computed = computeCards(props);
   if (!computed) return null;
@@ -292,6 +351,7 @@ export default function FiCards(props: FiCardsProps) {
       </div>
       <RetirementAgeControl scenarios={props.scenarios} persons={props.persons} />
       <WithdrawalStrategyControl scenarios={props.scenarios} />
+      <DrawdownTaxRateInline scenarios={props.scenarios} />
     </div>
   );
 }
