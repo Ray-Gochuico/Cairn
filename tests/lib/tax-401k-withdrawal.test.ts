@@ -149,6 +149,96 @@ describe('calculate401kWithdrawalTax — city coverage', () => {
   });
 });
 
+describe('calculate401kWithdrawalTax — NIIT delta (Wave-5 NEW-W5-2)', () => {
+  it('zero NIIT when MAGI stays below threshold both with + without the withdrawal', () => {
+    // SINGLE $50k W-2 + $20k other inv inc + $50k withdrawal = $120k MAGI;
+    // both with and without are below $200k SINGLE threshold → 0 NIIT.
+    const r = calculate401kWithdrawalTax({
+      ...baseInput,
+      annualW2Income: 50_000,
+      withdrawalAmount: 50_000,
+      ageAtWithdrawal: 67,
+      existingInvestmentIncome: 20_000,
+    });
+    expect(r.incrementalNiit).toBe(0);
+  });
+
+  it('MFJ — withdrawal pushes MAGI from $250k to $350k → NIIT = 3.8% × $50k = $1,900', () => {
+    // The headline Wave-5 bundle scenario:
+    //   $200k W-2 + $50k other inv inc → MAGI=$250k (exactly at threshold,
+    //   magiExcess=0 → 0 NIIT without).
+    //   +$100k withdrawal → MAGI=$350k, magiExcess=$100k,
+    //   base=min(NII=$50k, $100k)=$50k → NIIT = 3.8% × $50k = $1,900.
+    const r = calculate401kWithdrawalTax({
+      annualW2Income: 200_000,
+      annualCapitalGains: 0,
+      withdrawalAmount: 100_000,
+      ageAtWithdrawal: 67,
+      filingStatus: 'MFJ',
+      federalBrackets: FED_MFJ_2026,
+      stateBrackets: STATE_TX_NONE,
+      cityBrackets: null,
+      federalStandardDeduction: FED_STD_MFJ,
+      taxYear: 2026,
+      existingInvestmentIncome: 50_000,
+    });
+    expect(r.incrementalNiit).toBeCloseTo(1_900, 2);
+  });
+
+  it('SINGLE — increases existing NIIT when MAGI was already above threshold', () => {
+    // SINGLE $150k W-2 + $80k other inv inc → MAGI=$230k.
+    //   Without: magiExcess=$30k, base=min($80k, $30k)=$30k → NIIT=$1,140.
+    //   With $50k withdrawal: MAGI=$280k, magiExcess=$80k,
+    //   base=min($80k, $80k)=$80k → NIIT=$3,040.
+    //   Delta = $1,900.
+    const r = calculate401kWithdrawalTax({
+      ...baseInput,
+      annualW2Income: 150_000,
+      withdrawalAmount: 50_000,
+      ageAtWithdrawal: 67,
+      existingInvestmentIncome: 80_000,
+    });
+    expect(r.incrementalNiit).toBeCloseTo(1_900, 2);
+  });
+
+  it('zero NIIT when caller passes no investment income at all', () => {
+    // The 401k distribution alone (no other inv inc) cannot trigger NIIT
+    // because NII is 0 — IRC §1411(c)(5) excludes qualified-plan
+    // distributions from NII. Verifies the early-return path.
+    const r = calculate401kWithdrawalTax({
+      annualW2Income: 200_000,
+      annualCapitalGains: 0,
+      withdrawalAmount: 100_000,
+      ageAtWithdrawal: 67,
+      filingStatus: 'MFJ',
+      federalBrackets: FED_MFJ_2026,
+      stateBrackets: STATE_TX_NONE,
+      cityBrackets: null,
+      federalStandardDeduction: FED_STD_MFJ,
+      taxYear: 2026,
+    });
+    expect(r.incrementalNiit).toBe(0);
+  });
+
+  it('totalTaxOnWithdrawal includes incrementalNiit (sum holds)', () => {
+    const r = calculate401kWithdrawalTax({
+      ...baseInput,
+      annualW2Income: 150_000,
+      withdrawalAmount: 50_000,
+      ageAtWithdrawal: 67,
+      existingInvestmentIncome: 80_000,
+    });
+    expect(r.totalTaxOnWithdrawal).toBeCloseTo(
+      r.incrementalFederal +
+        r.incrementalState +
+        r.incrementalCity +
+        r.earlyWithdrawalPenalty +
+        r.incrementalNiit,
+      6,
+    );
+  });
+});
+
 describe('calculate401kWithdrawalTax — output shape', () => {
   it('net + total = withdrawal', () => {
     const r = calculate401kWithdrawalTax({ ...baseInput, withdrawalAmount: 50_000, ageAtWithdrawal: 67 });

@@ -53,6 +53,11 @@ export function Retirement401kWithdrawalCard({
   const [withdrawalAmount, setWithdrawalAmount] = useState<number>(0);
   const [w2Override, setW2Override] = useState<number | null>(null);
   const [capGains, setCapGains] = useState<number>(0);
+  // Wave-5 NEW-W5-2: existing investment income (interest + non-qualified
+  // dividends + passive rental) feeds the NIIT delta computation. The
+  // 401k withdrawal itself isn't NII (IRC §1411(c)(5)) but the resulting
+  // MAGI bump can newly trigger NIIT on this OTHER investment income.
+  const [otherInvestmentIncome, setOtherInvestmentIncome] = useState<number>(0);
   const [ageOverride, setAgeOverride] = useState<number | null>(null);
   const [planType, setPlanType] = useState<'TRADITIONAL' | 'ROTH'>('TRADITIONAL');
 
@@ -104,6 +109,7 @@ export function Retirement401kWithdrawalCard({
       },
       taxYear: resolvedYear ?? new Date().getFullYear(),
       ltcgBrackets: ltcg?.brackets,
+      existingInvestmentIncome: otherInvestmentIncome,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -113,6 +119,7 @@ export function Retirement401kWithdrawalCard({
     withdrawalAmount,
     annualW2Income,
     capGains,
+    otherInvestmentIncome,
     ageAtWithdrawal,
   ]);
 
@@ -165,6 +172,26 @@ export function Retirement401kWithdrawalCard({
           onChange={(e) => setCapGains(Math.max(0, Number(e.target.value)))}
           aria-label="Capital gains for the year"
         />
+      </div>
+      <div className="space-y-1">
+        <label htmlFor="other-investment-income" className="text-sm font-medium">
+          Other investment income
+        </label>
+        <Input
+          id="other-investment-income"
+          type="number"
+          min="0"
+          step="500"
+          value={otherInvestmentIncome}
+          onChange={(e) =>
+            setOtherInvestmentIncome(Math.max(0, Number(e.target.value)))
+          }
+          aria-label="Other investment income"
+        />
+        <p className="text-xs text-muted-foreground">
+          Interest, non-qualified dividends, passive rental — for{' '}
+          <TermTooltip term="NIIT" /> delta.
+        </p>
       </div>
       <div className="space-y-1">
         <label htmlFor="age-at-withdrawal" className="text-sm font-medium">
@@ -256,6 +283,17 @@ export function Retirement401kWithdrawalCard({
               {formatCurrency(breakdown.incrementalCity)}
             </span>
           </div>
+          <div
+            className="flex justify-between"
+            data-testid="401k-withdrawal-niit-row"
+          >
+            <span>
+              <TermTooltip term="NIIT">NIIT delta</TermTooltip>
+            </span>
+            <span className="tabular-nums">
+              {formatCurrency(breakdown.incrementalNiit)}
+            </span>
+          </div>
           <div className="flex justify-between">
             <span>
               <TermTooltip term="FICA" />
@@ -313,17 +351,17 @@ export function Retirement401kWithdrawalCard({
               omits several tax items that materially shift the real-world
               outcome. List them here so a user thinking of acting on the
               number knows what they're not getting. Native <details> keeps
-              the card compact by default; click to expand. */}
+              the card compact by default; click to expand.
+
+              Wave-5 NEW-W5-2 (2026-05-27): NIIT was added to the
+              incremental-tax path via the "NIIT delta" line above (uses
+              Other investment income input + filing-status threshold).
+              Its bullet was removed from this list since it is now modeled. */}
           <details className="text-xs mt-2 border-t pt-2 text-muted-foreground">
             <summary className="cursor-pointer font-medium hover:text-foreground">
               What this calculator does NOT model
             </summary>
             <ul className="mt-2 list-disc pl-5 space-y-1">
-              <li>
-                <TermTooltip term="NIIT">NIIT</TermTooltip> (Net Investment Income Tax — 3.8% on
-                investment income above $200k/$250k MAGI). The engine added this 2026-05-26
-                but this calculator's incremental-tax path does not yet route through it.
-              </li>
               <li>
                 <TermTooltip term="AMT">AMT</TermTooltip> (Alternative Minimum Tax) on
                 ISO exercises landing in the same year as the withdrawal.
