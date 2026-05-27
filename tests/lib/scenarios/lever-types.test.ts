@@ -31,6 +31,7 @@ describe('LeverPayloadSchema', () => {
       retirementAgeOverride: null,
       swrOverride: null,
       inflation: { defaultRate: null, overrides: {} },
+      withdrawalStrategy: 'proportional',
     };
     expect(LeverPayloadSchema.parse(payload)).toEqual(payload);
   });

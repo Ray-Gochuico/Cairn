@@ -20,6 +20,11 @@ import {
   effectiveAnnualInflationFromSlice,
   type InflationSlice,
 } from './effective-inflation';
+import {
+  sequencingBucketForAccount,
+  type SequencingBucket,
+} from '@/lib/account-tax-classification';
+import type { Account } from '@/types/schema';
 
 export interface MonthlyState {
   monthISO: string;
@@ -275,6 +280,89 @@ function withdrawProportionally(
   return result;
 }
 
+/**
+ * Sequential drawdown (Task 3D) — textbook tax-efficient withdrawal order:
+ * taxable → tax-deferred → Roth. Each tier is drawn within its bucket
+ * proportionally to balance, then any unmet deficit cascades to the next tier.
+ * If all three tiers are exhausted, the remaining deficit is split across
+ * any negative-balance accounts proportionally (matching the legacy
+ * pro-rata fallback for insolvent projections).
+ *
+ * Accounts that aren't in the engine's accounts list (rare — usually only
+ * happens when test fixtures stub `investmentsByAccount` without an Account
+ * entry) fall through to the legacy proportional logic.
+ */
+function withdrawSequential(
+  investmentsByAccount: Record<number, number>,
+  deficit: number,
+  accounts: Account[],
+): Record<number, number> {
+  const accountById = new Map<number, Account>();
+  for (const a of accounts) if (a.id !== undefined) accountById.set(a.id, a);
+
+  const bucketIds: Record<SequencingBucket, number[]> = {
+    taxable: [],
+    taxDeferred: [],
+    roth: [],
+  };
+  const unbucketed: number[] = [];
+  for (const idStr of Object.keys(investmentsByAccount)) {
+    const id = Number(idStr);
+    const acc = accountById.get(id);
+    const bucket = acc ? sequencingBucketForAccount(acc) : null;
+    if (bucket) bucketIds[bucket].push(id);
+    else unbucketed.push(id);
+  }
+
+  // No account metadata available → degrade to proportional. This keeps
+  // legacy fixture mocks (that pass investmentsByAccount but stub
+  // accounts: []) behaving consistently.
+  if (
+    bucketIds.taxable.length + bucketIds.taxDeferred.length + bucketIds.roth.length === 0
+  ) {
+    return withdrawProportionally(investmentsByAccount, deficit);
+  }
+
+  let remaining = deficit;
+  const result: Record<number, number> = { ...investmentsByAccount };
+
+  function drainTier(ids: number[]): void {
+    if (remaining <= 0 || ids.length === 0) return;
+    const tierTotal = ids.reduce((s, id) => s + (result[id] ?? 0), 0);
+    if (tierTotal <= 0) return; // tier already empty; let next tier absorb
+    const drawFromTier = Math.min(tierTotal, remaining);
+    for (const id of ids) {
+      const balance = result[id] ?? 0;
+      if (tierTotal > 0) {
+        result[id] = balance - drawFromTier * (balance / tierTotal);
+      }
+    }
+    remaining -= drawFromTier;
+  }
+
+  drainTier(bucketIds.taxable);
+  drainTier(bucketIds.taxDeferred);
+  drainTier(bucketIds.roth);
+
+  // Anything left? Push it onto either the unbucketed accounts (if any) or,
+  // failing that, distribute pro-rata across all known accounts (matching the
+  // insolvent-projection behavior of withdrawProportionally — we don't clamp).
+  if (remaining > 0) {
+    if (unbucketed.length > 0) {
+      const share = remaining / unbucketed.length;
+      for (const id of unbucketed) result[id] = (result[id] ?? 0) - share;
+    } else {
+      const ids = Object.keys(result).map(Number);
+      if (ids.length > 0) {
+        const share = remaining / ids.length;
+        for (const id of ids) result[id] = (result[id] ?? 0) - share;
+      }
+    }
+  }
+
+  return result;
+}
+
 function stepMonth(
   prev: MonthlyState,
   real: RealState,
@@ -441,6 +529,13 @@ function stepMonth(
   // routing (step 7), so investments still receive their monthly growth on
   // whatever balance remains.
   s.savings = s.incomeAfterTax - s.expenses - regularLoanPayments - extraLoanPayments;
+  // Resolve the withdrawal strategy once per step. Field is optional on
+  // older saved scenarios (lever-types schema parses missing values as
+  // 'proportional'); the explicit ?? lets unparsed in-memory payloads
+  // fall back too.
+  const withdrawalStrategy =
+    (payload as { withdrawalStrategy?: 'proportional' | 'sequential' }).withdrawalStrategy
+    ?? 'proportional';
   const contribution = activeContributionAmount(payload.contributions, monthIndex);
   if (contribution !== null) {
     s.investmentsByAccount = distributeToAccounts(s.investmentsByAccount, contribution, allocation);
@@ -456,7 +551,7 @@ function stepMonth(
       applyGapAllocation(s, payload.gapAllocation, real.accountsByBucket);
       s.savings = original;
     } else if (remainder < 0) {
-      applyCashFloorShortfall(s, -remainder);
+      applyCashFloorShortfall(s, -remainder, withdrawalStrategy, real.accounts);
     }
   } else if (s.savings > 0) {
     // Gap allocation lever (revamp 2026-05-26) — routes the positive surplus
@@ -465,7 +560,7 @@ function stepMonth(
     // configured anything.
     applyGapAllocation(s, payload.gapAllocation, real.accountsByBucket);
   } else if (s.savings < 0) {
-    applyCashFloorShortfall(s, -s.savings);
+    applyCashFloorShortfall(s, -s.savings, withdrawalStrategy, real.accounts);
   }
 
   // 7. Apply this month's return to investments. The compounding frequency
@@ -496,14 +591,22 @@ function stepMonth(
 // active contribution segment whose remainder goes negative AND a savings
 // branch that also triggers — though in practice only one branch fires per
 // step). Using += keeps the contract safe either way.
-function applyCashFloorShortfall(s: MonthlyState, deficit: number): void {
+function applyCashFloorShortfall(
+  s: MonthlyState,
+  deficit: number,
+  strategy: 'proportional' | 'sequential',
+  accounts: Account[],
+): void {
   if (s.cash >= deficit) {
     s.cash -= deficit;
     return;
   }
   const fromInvestments = deficit - s.cash;
   s.cash = 0;
-  s.investmentsByAccount = withdrawProportionally(s.investmentsByAccount, fromInvestments);
+  s.investmentsByAccount =
+    strategy === 'sequential'
+      ? withdrawSequential(s.investmentsByAccount, fromInvestments, accounts)
+      : withdrawProportionally(s.investmentsByAccount, fromInvestments);
   s.withdrawnFromInvestments = (s.withdrawnFromInvestments ?? 0) + fromInvestments;
 }
 
