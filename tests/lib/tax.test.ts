@@ -40,18 +40,18 @@ describe('computeFica', () => {
     // 100000 × 0.062 = 6200; 100000 × 0.0145 = 1450; total 7650
     expect(computeFica(100000, 'SINGLE')).toBeCloseTo(7650, 2);
   });
-  it('caps SS at the 2026 wage base ($176,100)', () => {
-    // SS: 176100 × 0.062 = 10918.2 (capped); Medicare: 200000 × 0.0145 = 2900; total 13818.2
-    expect(computeFica(200000, 'SINGLE')).toBeCloseTo(13818.2, 1);
+  it('caps SS at the 2026 wage base ($184,500)', () => {
+    // SS: 184500 × 0.062 = 11439 (capped); Medicare: 200000 × 0.0145 = 2900; total 14339
+    expect(computeFica(200000, 'SINGLE')).toBeCloseTo(14339, 1);
   });
   it('applies +0.9% Additional Medicare Tax above $200k SINGLE', () => {
-    // 250000: SS capped = 10918.2; Medicare: 250000 × 0.0145 + (250000-200000) × 0.009 = 3625 + 450 = 4075; total 14993.2
-    expect(computeFica(250000, 'SINGLE')).toBeCloseTo(14993.2, 1);
+    // 250000: SS capped = 11439; Medicare: 250000 × 0.0145 + (250000-200000) × 0.009 = 3625 + 450 = 4075; total 15514
+    expect(computeFica(250000, 'SINGLE')).toBeCloseTo(15514, 1);
   });
   it('uses $250k MFJ threshold for Additional Medicare Tax', () => {
-    // 300000 MFJ: SS capped; Medicare: 300000 × 0.0145 + (300000-250000) × 0.009 = 4350 + 450 = 4800
-    // total: 10918.2 + 4800 = 15718.2
-    expect(computeFica(300000, 'MFJ')).toBeCloseTo(15718.2, 1);
+    // 300000 MFJ: SS capped = 11439; Medicare: 300000 × 0.0145 + (300000-250000) × 0.009 = 4350 + 450 = 4800
+    // total: 11439 + 4800 = 16239
+    expect(computeFica(300000, 'MFJ')).toBeCloseTo(16239, 1);
   });
 });
 
@@ -70,14 +70,14 @@ describe('computePretaxDeductions', () => {
     });
     expect(result.pretax401k).toBe(24500);
   });
-  it('caps DCFSA at $5k for SINGLE', () => {
+  it('caps DCFSA at $7.5k for SINGLE (OBBBA 2026)', () => {
     const result = computePretaxDeductions({
       salary: 100000, pretax401kPct: 0, healthInsuranceMonthlyPremium: 0,
-      dcfsaMonthly: 1000,                         // 12k > 5k cap
+      dcfsaMonthly: 1000,                         // 12k > 7.5k cap
       hsaMonthly: 0, hsaEligible: false,
       filingStatus: 'SINGLE', personCount: 1, dependentCount: 0,
     });
-    expect(result.pretaxDcfsa).toBe(5000);
+    expect(result.pretaxDcfsa).toBe(7500);
   });
   it('caps HSA at family limit when household has 2 persons', () => {
     const result = computePretaxDeductions({
