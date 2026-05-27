@@ -8,6 +8,7 @@ import { validateHoldingRow, type HoldingResolved } from '@/lib/import/validator
 import { validateLoanRow, type LoanResolved } from '@/lib/import/validators/loan';
 import { validatePropertyRow, type PropertyResolved } from '@/lib/import/validators/property';
 import { validateVehicleRow, type VehicleResolved } from '@/lib/import/validators/vehicle';
+import { validateContributionRow, type ContributionResolved } from '@/lib/import/validators/contribution';
 
 export interface ParseResultLite {
   headers: string[];
@@ -28,6 +29,7 @@ type ResolvedFor<E extends ImportEntity> =
   E extends 'loan' ? LoanResolved :
   E extends 'property' ? PropertyResolved :
   E extends 'vehicle' ? VehicleResolved :
+  E extends 'contribution' ? ContributionResolved :
   unknown;
 
 interface ImportSummary {
@@ -68,6 +70,7 @@ function selectValidator(entity: ImportEntity): AnyValidator {
     case 'loan':        return validateLoanRow as unknown as AnyValidator;
     case 'property':    return validatePropertyRow as unknown as AnyValidator;
     case 'vehicle':     return validateVehicleRow as unknown as AnyValidator;
+    case 'contribution': return validateContributionRow as unknown as AnyValidator;
     // Remaining entities wired in δ1 as their validators land.
     default:
       throw new Error(`No validator registered for entity "${entity}"`);
