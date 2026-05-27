@@ -49,7 +49,7 @@ const QUOTE_SUMMARY_BASE: &str = "https://query2.finance.yahoo.com/v10/finance/q
 /// Settings → Advanced opt-in toggle (off by default) if Yahoo starts
 /// refusing requests.
 const USER_AGENT: &str = concat!(
-    "Finance App (https://github.com/raymondgochuico/finance-app; finance-app/",
+    "Finance App (https://github.com/raymondgochuico/cairn; finance-app/",
     env!("CARGO_PKG_VERSION"),
     ")"
 );
