@@ -2,7 +2,7 @@
 name = "finance-app"
 version = "0.1.0"
 description = "Personal Finance Spreadsheet App"
-authors = ["you"]
+authors = ["Raymond Gochuico"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

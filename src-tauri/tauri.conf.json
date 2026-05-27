@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "finance-app",
+  "productName": "Finance App",
   "version": "0.1.0",
   "identifier": "app.finance.local",
   "build": {
@@ -12,14 +12,14 @@
   "app": {
     "windows": [
       {
-        "title": "finance-app",
+        "title": "Finance App",
         "width": 800,
         "height": 600,
         "dragDropEnabled": false
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://fc.yahoo.com"
     }
   },
   "bundle": {
