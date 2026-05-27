@@ -273,15 +273,15 @@ export default function CategoriesTab() {
             {grouped.map((cat) => {
               const isChild = cat.parentCategoryId !== null;
               return (
-                <Card key={cat.id}>
-                  <CardContent className="flex items-center justify-between py-2 px-4">
-                    <div className={`flex items-center gap-2 min-w-0 ${isChild ? 'pl-6' : ''}`}>
-                      {cat.icon && <span>{cat.icon}</span>}
-                      <div>
+                <Card key={cat.id} data-testid="categories-row">
+                  <CardContent className="flex items-center justify-between gap-3 py-2 px-4">
+                    <div className={`flex items-center gap-2 min-w-0 flex-1 ${isChild ? 'pl-6' : ''}`}>
+                      {cat.icon && <span className="shrink-0">{cat.icon}</span>}
+                      <div className="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-2">
                         <span className="font-medium truncate">{cat.name}</span>
-                        <span className="ml-2 text-xs text-muted-foreground">{cat.type}</span>
+                        <span className="text-xs text-muted-foreground shrink-0">{cat.type}</span>
                         {cat.systemManaged && (
-                          <span className="ml-2 text-xs text-muted-foreground" title="System managed">
+                          <span className="text-xs text-muted-foreground shrink-0" title="System managed">
                             🔒
                           </span>
                         )}
@@ -331,8 +331,8 @@ export default function CategoriesTab() {
               const catName = categoryById.get(ov.categoryId)?.name ?? `#${ov.categoryId}`;
               return (
                 <Card key={ov.id}>
-                  <CardContent className="flex items-center justify-between py-2 px-4">
-                    <div className="min-w-0">
+                  <CardContent className="flex items-center justify-between gap-3 py-2 px-4">
+                    <div className="min-w-0 flex-1 truncate">
                       <span className="font-mono text-sm">{ov.merchantPattern}</span>
                       <span className="mx-2 text-muted-foreground">→</span>
                       <span className="text-sm">{catName}</span>
@@ -341,6 +341,7 @@ export default function CategoriesTab() {
                       size="sm"
                       variant="destructive"
                       onClick={() => removeOverride(ov.id!)}
+                      className="shrink-0"
                     >
                       Delete
                     </Button>

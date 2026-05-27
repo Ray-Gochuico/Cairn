@@ -116,8 +116,12 @@ describe('FiCards', () => {
     // Coast FI = 1,200,000 / (1.06 ^ yearsUntilRetirement). Don't depend on
     // current calendar time precisely — just check the card renders and
     // contains a dollar figure plus the explainer fragment.
+    // Note: "Coast FI" is now wrapped in <TermTooltip>, which inserts an
+    // inline ⓘ icon between "Coast FI" and " target today". Match the two
+    // halves independently rather than as a contiguous substring.
     const coast = screen.getByTestId('whatif-coastfi-number');
-    expect(coast).toHaveTextContent('Coast FI target today');
+    expect(coast).toHaveTextContent(/Coast FI/);
+    expect(coast).toHaveTextContent(/target today/);
     expect(coast).toHaveTextContent('Moderate 6.0% growth');
     expect(coast).toHaveTextContent('$');
   });

@@ -6,6 +6,7 @@ import { useContributionsStore } from '@/stores/contributions-store';
 import { CalculatorCard } from './CalculatorCard';
 import { financialIndependenceSeries } from '@/lib/financial-independence';
 import { formatCurrency } from '@/lib/format';
+import { TermTooltip } from '@/components/ui/glossary-tooltip';
 
 interface FinancialIndependenceCardProps {
   cardId?: string;
@@ -60,7 +61,13 @@ export function FinancialIndependenceCard({
 
   if (!series || !household) {
     return (
-      <CalculatorCard cardId={cardId} onHide={onHide} title="Years to FI" headline="—">
+      <CalculatorCard
+        cardId={cardId}
+        onHide={onHide}
+        title={<>Years to <TermTooltip term="FI">FI</TermTooltip></>}
+        titleText="Years to FI"
+        headline="—"
+      >
         <p className="text-sm text-muted-foreground">Add your inputs to see Years to FI.</p>
       </CalculatorCard>
     );
@@ -83,14 +90,18 @@ export function FinancialIndependenceCard({
     <CalculatorCard
       cardId={cardId}
       onHide={onHide}
-      title="Years to FI"
+      title={<>Years to <TermTooltip term="FI">FI</TermTooltip></>}
+      titleText="Years to FI"
       headline={<span data-testid="fi-headline">{yearsLabel}</span>}
     >
       <p className="text-sm text-muted-foreground mb-3">
         Target portfolio:{' '}
         <span className="tabular-nums">{formatCurrency(targetFv)}</span>{' '}
         (= 12 × ${household.monthlyExpenseBaseline.toLocaleString()} /{' '}
-        {(household.withdrawalRate * 100).toFixed(1)}%)
+        <TermTooltip term="SWR">
+          {(household.withdrawalRate * 100).toFixed(1)}%
+        </TermTooltip>
+        )
       </p>
       <table className="w-full text-sm">
         <thead>

@@ -33,15 +33,29 @@ import TickersTab from './pages/inputs/TickersTab';
 import ComingSoonTab from './pages/inputs/tabs-coming-soon';
 import CategoriesTab from './pages/inputs/CategoriesTab';
 import SetupWizard from './pages/setup/SetupWizard';
+import NotFound from './pages/NotFound';
 
 const router = createBrowserRouter([
   {
     path: '/setup',
     element: <SetupWizard />,
+    errorElement: <NotFound />,
+  },
+  {
+    // Top-level catch-all for unmatched URLs. Without this, react-router
+    // falls back to its built-in "Hey developer 👋" 404 message. Lives at
+    // the same level as `/` so deep-link rot lands on NotFound regardless
+    // of which path segment is wrong.
+    path: '*',
+    element: <NotFound />,
   },
   {
     path: '/',
     element: <PageShell />,
+    // errorElement: catches uncaught render errors from descendant routes
+    // — the inner ErrorBoundary in PageShell handles most in-page errors
+    // first, so this is the belt-and-suspenders for anything that escapes.
+    errorElement: <NotFound />,
     children: [
       { index: true, element: <Dashboard /> },
       { path: 'net-worth', element: <NetWorth /> },

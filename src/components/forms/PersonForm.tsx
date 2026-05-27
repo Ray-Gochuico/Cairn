@@ -12,6 +12,7 @@ import DatePicker from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { TermTooltip } from '@/components/ui/glossary-tooltip';
 
 // PersonFormValues mirrors Person but drops the DB-only id and the
 // roadmap rule-engine chart-answer columns (those are written by
@@ -106,6 +107,11 @@ export default function PersonForm({
   const employmentType = form.watch('employmentType');
   const showHourlyFields = employmentType !== 'SALARY_NO_OT';
   const showAnnualSalary = employmentType !== 'HOURLY';
+
+  const fieldErrors = Object.entries(form.formState.errors).map(([field, err]) => ({
+    field,
+    message: (err as { message?: string })?.message ?? 'invalid',
+  }));
 
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -255,7 +261,9 @@ export default function PersonForm({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <Label htmlFor="pretax401kPct">Pre-tax 401k contribution (e.g. 0.10 = 10%)</Label>
+              <Label htmlFor="pretax401kPct">
+                Pre-tax <TermTooltip term="401(K)">401k</TermTooltip> contribution (e.g. 0.10 = 10%)
+              </Label>
               <Input
                 id="pretax401kPct"
                 type="number"
@@ -276,7 +284,9 @@ export default function PersonForm({
               />
             </div>
             <div>
-              <Label htmlFor="dependentCareFsaMonthly">DCFSA /mo</Label>
+              <Label htmlFor="dependentCareFsaMonthly">
+                <TermTooltip term="DCFSA">DCFSA</TermTooltip> /mo
+              </Label>
               <Input
                 id="dependentCareFsaMonthly"
                 type="number"
@@ -285,7 +295,9 @@ export default function PersonForm({
               />
             </div>
             <div>
-              <Label htmlFor="hsaMonthlyContribution">HSA /mo</Label>
+              <Label htmlFor="hsaMonthlyContribution">
+                <TermTooltip term="HSA">HSA</TermTooltip> /mo
+              </Label>
               <Input
                 id="hsaMonthlyContribution"
                 type="number"
@@ -301,11 +313,28 @@ export default function PersonForm({
                 type="checkbox"
                 {...form.register('hsaEligible')}
               />
-              HSA eligible (on a HDHP plan)
+              <TermTooltip term="HSA">HSA</TermTooltip> eligible (on a{' '}
+              <TermTooltip term="HDHP">HDHP</TermTooltip> plan)
             </label>
           </div>
         </CardContent>
       </Card>
+
+      {fieldErrors.length > 0 && (
+        <div
+          role="alert"
+          className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive"
+        >
+          <div className="font-medium mb-1">Fix these before saving:</div>
+          <ul className="list-disc pl-5">
+            {fieldErrors.map((e) => (
+              <li key={e.field}>
+                <span className="font-mono">{e.field}</span>: {e.message}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="flex justify-end items-center gap-3">
         <span
@@ -327,7 +356,7 @@ export default function PersonForm({
         )}
         <Button
           type="submit"
-          disabled={form.formState.isSubmitting || !form.formState.isDirty}
+          disabled={form.formState.isSubmitting}
         >
           {submitLabel}
         </Button>

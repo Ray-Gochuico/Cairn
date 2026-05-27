@@ -23,6 +23,29 @@ describe('DisclosureModal', () => {
     expect(screen.getByText(/second paragraph/i)).toBeInTheDocument();
   });
 
+  it('parses Markdown — **bold** source becomes a <strong> element, not literal asterisks', () => {
+    render(<DisclosureModal document={appWideDoc} onAccept={vi.fn()} />);
+    const body = screen.getByTestId('disclosure-modal-body');
+    // The source has `**body**`; after react-markdown, the word "body"
+    // lives inside a <strong> element and the asterisks are gone.
+    const strong = body.querySelector('strong');
+    expect(strong, 'expected a <strong> element from Markdown parsing').not.toBeNull();
+    expect(strong!.textContent).toMatch(/body/i);
+    // The literal asterisks should not appear in the rendered output.
+    expect(body.textContent).not.toMatch(/\*\*/);
+  });
+
+  it('parses Markdown bullets and renders them inside a <ul>', () => {
+    const bulletedDoc = {
+      ...appWideDoc,
+      body: 'Intro.\n\n- first point\n- second point\n',
+    };
+    render(<DisclosureModal document={bulletedDoc} onAccept={vi.fn()} />);
+    const body = screen.getByTestId('disclosure-modal-body');
+    expect(body.querySelector('ul')).not.toBeNull();
+    expect(body.querySelectorAll('li').length).toBe(2);
+  });
+
   it('uses "Disclaimer" as the title for app_wide', () => {
     render(<DisclosureModal document={appWideDoc} onAccept={vi.fn()} />);
     expect(screen.getByRole('heading', { name: 'Disclaimer' })).toBeInTheDocument();

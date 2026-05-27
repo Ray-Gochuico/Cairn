@@ -24,7 +24,7 @@ export default function HouseholdTab() {
   }, [load]);
 
   return (
-    <div className="p-6 max-w-2xl">
+    <div className="p-6 max-w-2xl min-w-0" data-testid="household-tab">
       <h2 className="text-2xl font-semibold mb-1">Household</h2>
       <p className="text-sm text-muted-foreground mb-6">
         Settings shared across the household — filing status, location, expense baseline, and assumptions used by every calculator.

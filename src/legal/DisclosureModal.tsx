@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { Button } from '@/components/ui/button';
 import type { DisclosureDocument } from './disclosures';
 import type { DisclosureId } from './disclosures';
@@ -13,11 +14,12 @@ interface Props {
 /**
  * Full-screen disclosure modal used by both the Setup Wizard's Step 0
  * and the top-level AppDisclaimerGate (for version-bump re-prompts).
- * The body is rendered as preformatted text rather than parsed markdown
- * to avoid pulling in react-markdown for a single component — the
- * source strings in `disclosures.ts` use Markdown-ish syntax (`**bold**`,
- * `- bullet`) that reads fine raw, and switching to a renderer later is
- * a one-line change.
+ *
+ * The body is rendered as Markdown via react-markdown. The source
+ * strings in `disclosures.ts` use Markdown-ish syntax (`**bold**`,
+ * `- bullet`); prior to this they rendered inside `<pre>` so users
+ * saw literal asterisks — confusing on a legal-grade modal that
+ * users must check a checkbox attesting to.
  *
  * Continue is disabled until the required acknowledgment checkbox is
  * checked. Cancel is only rendered when an `onCancel` is provided —
@@ -72,16 +74,17 @@ export function DisclosureModal({
             <div className="font-semibold text-amber-900 mb-1">
               What changed since you last accepted:
             </div>
-            <pre className="whitespace-pre-wrap font-sans text-amber-900">
-              {document.diffFromPrevious}
-            </pre>
+            <div className="text-amber-900 space-y-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_strong]:font-semibold">
+              <ReactMarkdown>{document.diffFromPrevious}</ReactMarkdown>
+            </div>
           </div>
         )}
 
-        <div className="px-6 py-4 overflow-y-auto flex-1">
-          <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-slate-700">
-            {document.body}
-          </pre>
+        <div
+          className="px-6 py-4 overflow-y-auto flex-1 text-sm leading-relaxed text-slate-700 space-y-3 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:mt-3 [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_strong]:font-semibold [&_em]:italic [&_a]:text-primary [&_a]:underline"
+          data-testid="disclosure-modal-body"
+        >
+          <ReactMarkdown>{document.body}</ReactMarkdown>
         </div>
 
         <div className="px-6 py-3 border-t bg-slate-50">

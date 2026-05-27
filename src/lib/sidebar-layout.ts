@@ -9,6 +9,13 @@ export interface SidebarNavItem {
   to: string;
   label: string;
   icon: string;
+  /**
+   * Optional glossary lookup key (mirrors `NavItem.glossaryTerm` in
+   * `Sidebar.tsx`). The sidebar component resolves this against
+   * `src/lib/glossary.ts` to surface a hover-tip for jargon-laden labels
+   * like "Equity Grants" without losing the literal label.
+   */
+  glossaryTerm?: string;
 }
 
 export interface SidebarSectionShape {

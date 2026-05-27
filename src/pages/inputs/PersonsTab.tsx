@@ -92,15 +92,15 @@ export default function PersonsTab() {
       ) : (
         <div className="space-y-2">
           {persons.map((p) => (
-            <Card key={p.id}>
-              <CardContent className="flex items-center justify-between py-3">
-                <div>
-                  <div className="font-medium">{p.name}</div>
-                  <div className="text-xs text-muted-foreground">
+            <Card key={p.id} data-testid="persons-row">
+              <CardContent className="flex items-center justify-between gap-3 py-3">
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium truncate">{p.name}</div>
+                  <div className="text-xs text-muted-foreground truncate">
                     DOB: {p.dateOfBirth} · Retire at {p.targetRetirementAge} · Salary ${p.annualSalaryPretax.toLocaleString()}
                   </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 shrink-0">
                   <Button size="sm" variant="outline" onClick={() => setMode({ type: 'edit', id: p.id! })}>Edit</Button>
                   <Button size="sm" variant="destructive" onClick={() => remove(p.id!)}>Delete</Button>
                 </div>

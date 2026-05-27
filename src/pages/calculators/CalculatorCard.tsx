@@ -4,7 +4,18 @@ import { Button } from '@/components/ui/button';
 import { ChevronDownIcon, ChevronUpIcon, SettingsIcon } from 'lucide-react';
 
 interface CalculatorCardProps {
-  title: string;
+  /**
+   * The card title. Accepts a ReactNode so callers can wrap parts of the
+   * label in `<TermTooltip>` for in-place glossary definitions without
+   * losing the literal text (e.g., "Years to FI" with FI defined inline).
+   */
+  title: string | ReactNode;
+  /**
+   * Plain-text version of `title` used for accessibility (`aria-label` on
+   * the Hide button, etc.). Defaults to `title` when it's a string. Provide
+   * this whenever `title` is a ReactNode (e.g., wraps a `<TermTooltip>`).
+   */
+  titleText?: string;
   headline: string | ReactNode;
   defaultExpanded?: boolean;
   overridePanel?: ReactNode;
@@ -21,6 +32,7 @@ interface CalculatorCardProps {
 
 export function CalculatorCard({
   title,
+  titleText,
   headline,
   defaultExpanded = true,
   overridePanel,
@@ -28,6 +40,8 @@ export function CalculatorCard({
   onHide,
   children,
 }: CalculatorCardProps) {
+  const resolvedTitleText =
+    titleText ?? (typeof title === 'string' ? title : undefined);
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [showOverride, setShowOverride] = useState(false);
 
@@ -67,7 +81,7 @@ export function CalculatorCard({
               variant="ghost"
               size="sm"
               onClick={handleHide}
-              aria-label={`Hide ${title} card`}
+              aria-label={resolvedTitleText ? `Hide ${resolvedTitleText} card` : 'Hide card'}
               className="text-muted-foreground"
             >
               Hide
