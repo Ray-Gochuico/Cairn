@@ -5,6 +5,7 @@ import { RefreshSection } from '@/components/settings/RefreshSection';
 import { DataSection } from '@/components/settings/DataSection';
 import { ChartColorsSection } from '@/components/settings/ChartColorsSection';
 import { StatementsSection } from '@/components/settings/StatementsSection';
+import { UpdaterSection } from '@/components/settings/UpdaterSection';
 import { AdvancedSection } from '@/components/settings/AdvancedSection';
 
 export default function Settings() {
@@ -21,6 +22,7 @@ export default function Settings() {
       <DataSection />
       <ChartColorsSection />
       <StatementsSection />
+      <UpdaterSection />
       <AdvancedSection />
     </div>
   );

@@ -26,8 +26,15 @@ frequently.
 
 ## Install
 
-The app is distributed as an unsigned `.app.zip` (Apple Silicon Macs).
-No App Store, no installer — just download, unzip, and open.
+The app is distributed as an unsigned zipped `.app` bundle (Apple Silicon
+Macs). No App Store, no installer — just download, unzip, drag, and open.
+
+> **Why `.app.zip` and not `.dmg`?** `bundle_dmg.sh` (Tauri's DMG bundler)
+> fails on macOS 26 because its AppleScript-driven Finder window positioning
+> step needs Automation permissions that don't exist in a headless build
+> context. The zipped `.app` flow ships the same binary without the broken
+> intermediate step. We can revisit `.dmg` once Tauri or macOS resolves the
+> `bundle_dmg.sh` issue.
 
 **Download the latest build:**
 <https://github.com/raymondgochuico/cairn/releases/latest>
@@ -36,7 +43,8 @@ Grab the file named `Cairn_<version>_aarch64.app.zip`.
 
 **Then:**
 
-1. Double-click the downloaded `.app.zip` to unzip it — `Cairn.app` appears next to it.
+1. Double-click the downloaded `.app.zip` to unzip it. macOS produces
+   `Cairn.app` in the same folder.
 2. Drag `Cairn.app` into the `Applications` folder.
 3. **First time only — right-click `Cairn.app` in `Applications`, choose
    "Open", then click "Open" again in the dialog that appears.** macOS
