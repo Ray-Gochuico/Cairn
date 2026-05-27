@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ArrowDownUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -180,6 +181,22 @@ export default function WhatIf() {
     settingsForDisplay,
   );
 
+  // Empty-state guard: if there are no projection rows (no visible
+  // scenarios, no accounts with holdings, or persons.length === 0 so
+  // payroll can't drive contributions), Recharts emits 32+ console
+  // warnings about width(-1)/height(-1) and the chart paints an empty
+  // $0 / $1 / $2 / $3 frame that looks broken on first open. Mirror
+  // the empty-state card pattern from Investments.tsx so users see a
+  // clear "set things up" CTA instead of a misleading zero chart.
+  // (Wave-3 UX W3-3 + Wave-1 #9.)
+  const hasProjectionData = useMemo(() => {
+    if (projections.size === 0) return false;
+    for (const states of projections.values()) {
+      if (states.length > 0) return true;
+    }
+    return false;
+  }, [projections]);
+
   const projectionChart = (
     <Card className="min-w-0" data-testid="whatif-projection-chart-wrap">
       <CardHeader className="pb-2">
@@ -193,16 +210,36 @@ export default function WhatIf() {
         </div>
       </CardHeader>
       <CardContent>
-        <ProjectionChart
-          scenarios={scenarios}
-          projections={projections}
-          milestones={milestones}
-          dollarMode={dollarMode}
-          inflation={displayInflation}
-          startISO={real.startISO}
-          detailLevel={detailLevel}
-          accounts={accounts}
-        />
+        {hasProjectionData ? (
+          <ProjectionChart
+            scenarios={scenarios}
+            projections={projections}
+            milestones={milestones}
+            dollarMode={dollarMode}
+            inflation={displayInflation}
+            startISO={real.startISO}
+            detailLevel={detailLevel}
+            accounts={accounts}
+          />
+        ) : (
+          <div
+            className="py-12 text-center text-muted-foreground"
+            data-testid="whatif-projection-empty"
+          >
+            <p className="mb-3 text-sm">
+              Add a person and at least one account to see your projection.
+            </p>
+            <div className="flex flex-wrap justify-center gap-2 text-sm">
+              <Link to="/inputs/persons" className="underline text-foreground">
+                Set up persons
+              </Link>
+              <span aria-hidden="true">·</span>
+              <Link to="/inputs/accounts" className="underline text-foreground">
+                Set up accounts
+              </Link>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
