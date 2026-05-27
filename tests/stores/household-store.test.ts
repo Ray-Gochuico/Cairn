@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { loadAllMigrations, runMigrations } from '@/db/migrations';
 import { setDatabase } from '@/db/db';
 import { useHouseholdStore } from '@/stores/household-store';
+import { DisclosureAcceptancesRepo } from '@/domain/disclosure-acceptances';
 import { FilingStatus } from '@/types/enums';
 
 describe('useHouseholdStore', () => {
@@ -110,5 +111,48 @@ describe('useHouseholdStore — acceptDisclaimer', () => {
     expect(rows[0].count).toBe(2);
     const { household } = useHouseholdStore.getState();
     expect(household!.disclaimerVersionAccepted).toBe('1.1');
+  });
+
+  it('W7-Data #1: rolls back cache columns when the audit insert fails (atomic)', async () => {
+    // Pre-fix the two writes ran sequentially without a transaction —
+    // if `acceptancesRepo.record` threw after the cache update landed,
+    // the household showed "accepted" but the audit trail was empty.
+    // The fix wraps the pair in BEGIN/COMMIT (ROLLBACK on throw).
+
+    // Spy + throw on the audit insert. We must spy on the prototype
+    // because the store constructs a fresh DisclosureAcceptancesRepo
+    // on each call.
+    const spy = vi
+      .spyOn(DisclosureAcceptancesRepo.prototype, 'record')
+      .mockRejectedValueOnce(new Error('synthetic audit-write failure'));
+
+    // Capture the cache-column state before the failing call so we can
+    // assert it didn't move.
+    const before = useHouseholdStore.getState().household;
+    expect(before!.disclaimerVersionAccepted).toBeNull();
+    expect(before!.disclaimerAcceptedAt).toBeNull();
+
+    await expect(
+      useHouseholdStore.getState().acceptDisclaimer('app_wide', '1.0'),
+    ).rejects.toThrow(/synthetic audit-write failure/);
+
+    spy.mockRestore();
+
+    // Cache columns must NOT show the version — the transaction rolled
+    // back the household UPDATE when the audit INSERT threw.
+    const rows = await db.select<{
+      disclaimer_version_accepted: string | null;
+      disclaimer_accepted_at: string | null;
+    }>(
+      `SELECT disclaimer_version_accepted, disclaimer_accepted_at FROM household WHERE id = 1`,
+    );
+    expect(rows[0].disclaimer_version_accepted).toBeNull();
+    expect(rows[0].disclaimer_accepted_at).toBeNull();
+
+    // Audit table must remain empty.
+    const auditRows = await db.select<{ count: number }>(
+      `SELECT COUNT(*) as count FROM disclosure_acceptances WHERE document_id = 'app_wide'`,
+    );
+    expect(auditRows[0].count).toBe(0);
   });
 });
