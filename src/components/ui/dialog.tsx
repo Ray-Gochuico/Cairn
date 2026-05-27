@@ -31,21 +31,27 @@ const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
 >(({ className, children, ...props }, ref) => {
-  // Radix dev mode warns "Missing `Description` for {DialogContent}" when
-  // neither a `<DialogDescription>` nor an explicit `aria-describedby` is
-  // attached. Most of our dialogs (17/19 surveyed in Wave-5) are tight
-  // confirm/edit modals where the title alone is the accessible name and
-  // an extra description line is noise. Defaulting `aria-describedby` to
-  // `undefined` opts those callers out of the warning while still letting
-  // consumers wire their own description by passing `aria-describedby` (or
-  // by rendering a `<DialogDescription id="…">` and pointing this prop at
-  // it). Wave-5 UX W5-8.
+  // W6-Design (Wave-6 follow-up): the prior implementation forced
+  // `aria-describedby={undefined}` to silence Radix's "Missing
+  // Description" dev warning for the 17/19 confirm-style dialogs that
+  // have no separate description body. The side effect was that even
+  // when a caller *did* render `<DialogDescription>`, Radix's
+  // context-based auto-wiring of `aria-describedby` was overwritten by
+  // `undefined` — so screen readers never announced the description.
+  //
+  // We now let Radix manage `aria-describedby`:
+  //   • If the caller renders `<DialogDescription>`, Radix wires it via
+  //     context and the prop reaches the DOM as the description's id.
+  //   • If the caller passes their own `aria-describedby`, it flows
+  //     through `{...props}` and wins.
+  //   • If neither is present, Radix logs the dev-mode warning, which
+  //     is the right developer-facing signal — those 17 dialogs need a
+  //     description (or an explicit `aria-describedby`) follow-up.
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Content
         ref={ref}
-        aria-describedby={undefined}
         className={cn(
           "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg max-h-[85vh] overflow-y-auto translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
           className
