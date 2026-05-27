@@ -4,24 +4,27 @@ import type { MonthlyState } from '@/lib/scenarios';
 import { formatCurrency } from '@/lib/format';
 
 /**
- * Task #25 — decomposed projection-chart tooltip.
+ * Decomposed projection-chart tooltip.
  *
- * Replaces the previous single-line "$X,XXX,XXX  net worth" tooltip with a
- * per-scenario breakdown of the net change month-over-month:
+ * Per-scenario breakdown of the net-worth change month-over-month. The
+ * "auto-invested salary" / "surplus to cash" row pair (Task #25 + migration
+ * 0029) was replaced 2026-05-26 by three gap-allocation rows; only non-zero
+ * rows render.
  *
  *   Scenario: Baseline
  *   Net worth: $1,200,000
- *   Net change vs prev month: +$11,500
+ *   Net change MoM: +$11,500
  *     · Compound return: +$4,200
- *     · Auto-invested salary: +$7,300
+ *     · Gap → Tax-advantaged: +$3,500
+ *     · Gap → Brokerage: +$2,000
+ *     · Gap → Cash: +$1,800
  *     · Lever contributions: +$0
  *     · Lump sums: +$0
  *     · Withdrawals: −$0
  *
- * Zero-valued decomposition rows are OMITTED for cleanliness. The "auto-
- * invested salary" line is the dominant term in early-accumulation years
- * (see docs/superpowers/specs/2026-05-26-current-state.md §99-117) — making
- * it visible is the whole point of T25.
+ * Zero-valued decomposition rows are OMITTED for cleanliness. The three
+ * Gap → bucket rows surface the per-scenario routing decision the user
+ * configured in the Income lever's gap-allocation editor.
  *
  * Exported as a named function so tests can call it directly with a
  * synthetic payload, sidestepping the brittle recharts-tooltip-in-jsdom path.
