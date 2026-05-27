@@ -1,8 +1,12 @@
 import { useState } from 'react';
-import * as DialogPrimitive from '@radix-ui/react-dialog';
 import ReactMarkdown from 'react-markdown';
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 import type { DisclosureDocument } from './disclosures';
 import type { DisclosureId } from './disclosures';
 
@@ -19,22 +23,32 @@ interface Props {
  *
  * The body is rendered as Markdown via react-markdown (commit 3fa829e).
  *
- * Focus management (R14 wiring-sweep, prior to 2026-05-27 this was a
- * hand-rolled `<div role="dialog">` with no focus trap — focus could
- * leak to background controls and the visible Tab/Shift+Tab order was
- * indeterminate. Now built on @radix-ui/react-dialog which is the
- * shadcn/ui Dialog primitive's underlying library and gives us:
+ * Focus management (R14 wiring-sweep): built on the shadcn `<Dialog>` /
+ * `<DialogContent>` wrappers which compose `@radix-ui/react-dialog`
+ * (shadcn ships with `DialogTitle` registered in the same context the
+ * `DialogContent` consumes, so Radix's accessibility check fires cleanly
+ * without the 96-warning spew the hand-rolled primitive composition had).
+ * Per the Wave-3 UX review (W3-1), the prior `DialogPrimitive.Root` + raw
+ * `Content` composition was emitting `DialogContent requires a DialogTitle`
+ * warnings even though a Title was present — moving onto the shadcn
+ * wrapper resolves this because that wrapper's `DialogContent` uses the
+ * exact `forwardRef` pattern Radix's runtime check is designed to detect.
+ *
+ * Gives us:
  *   - focus trap inside the modal while open
  *   - returns focus to the element that opened the modal on close
- *   - Escape closes (handled via DialogPrimitive)
+ *   - Escape closes (handled via Radix)
  *   - aria-modal, aria-labelledby, role="dialog" emitted automatically
  *   - blocks page scroll while open
  *
- * We do NOT use the shadcn `Dialog` wrapper directly because that
- * component renders a built-in close ("X") button which is wrong for
- * an attestation modal — the user must click "Continue" or "Cancel".
- * Composing the primitive lets us keep the existing checkbox-gated
- * Continue button as the only acceptance path.
+ * Shadcn's `DialogContent` ships a built-in close ("X") button which is
+ * wrong for an attestation modal — the user must click "Continue" or
+ * "Cancel". We hide that close button via the `[&>button:last-child]:hidden`
+ * className override (the close is rendered as the LAST child of Content)
+ * AND we wire `onPointerDownOutside` / `onInteractOutside` / `onEscapeKeyDown`
+ * to preventDefault so overlay-click / Escape don't close either. The
+ * Cancel button (when provided) is the only legitimate exit besides
+ * Continue.
  *
  * Continue is disabled until the required acknowledgment checkbox is
  * checked. Cancel is only rendered when an `onCancel` is provided —
@@ -85,37 +99,28 @@ export function DisclosureModal({
   };
 
   return (
-    <DialogPrimitive.Root open onOpenChange={handleOpenChange}>
-      <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay
-          className={cn(
-            'fixed inset-0 z-[100] bg-black/40',
-            'data-[state=open]:animate-in data-[state=closed]:animate-out',
-            'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
-          )}
-        />
-        <DialogPrimitive.Content
-          className={cn(
-            'fixed left-[50%] top-[50%] z-[101] -translate-x-1/2 -translate-y-1/2',
-            'bg-background text-foreground rounded-lg max-w-2xl w-[calc(100vw-2rem)] max-h-[90vh]',
-            'flex flex-col shadow-xl outline-none',
-          )}
-          aria-describedby={undefined}
-          // Suppress the Radix-default close-on-pointer-down-outside;
-          // the Cancel/Continue buttons are the only legitimate exits.
-          // When onCancel is missing, even Escape stays a no-op (handled
-          // in handleOpenChange above).
-          onPointerDownOutside={(e) => e.preventDefault()}
-          onInteractOutside={(e) => e.preventDefault()}
-        >
+    <Dialog open onOpenChange={handleOpenChange}>
+      <DialogContent
+        // Hide the shadcn-default close ("X") button: it's the last child
+        // of <DialogContent>. Composition is keyboard-friendly + the
+        // explicit Cancel/Continue buttons remain the only acceptance
+        // affordances.
+        className="max-w-2xl w-[calc(100vw-2rem)] max-h-[90vh] p-0 flex flex-col gap-0 overflow-hidden [&>button:last-child]:hidden"
+        // Suppress the Radix-default close-on-pointer-down-outside;
+        // the Cancel/Continue buttons are the only legitimate exits.
+        // When onCancel is missing, even Escape stays a no-op (handled
+        // in handleOpenChange above).
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => {
+          if (!onCancel) e.preventDefault();
+        }}
+      >
         <div className="px-6 py-4 border-b">
-          <DialogPrimitive.Title
-            id="disclosure-modal-title"
-            className="text-lg font-semibold"
-          >
-            {title}
-          </DialogPrimitive.Title>
-          <div className="text-xs text-muted-foreground">Version {document.version}</div>
+          <DialogTitle className="text-lg font-semibold">{title}</DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">
+            Version {document.version}
+          </DialogDescription>
         </div>
 
         {document.diffFromPrevious && (
@@ -136,7 +141,7 @@ export function DisclosureModal({
           <ReactMarkdown>{document.body}</ReactMarkdown>
         </div>
 
-        <div className="px-6 py-3 border-t bg-slate-50">
+        <div className="px-6 py-3 border-t bg-muted">
           <label className="flex items-start gap-2 text-sm cursor-pointer">
             <input
               type="checkbox"
@@ -165,9 +170,8 @@ export function DisclosureModal({
             {continueLabel}
           </Button>
         </div>
-        </DialogPrimitive.Content>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+      </DialogContent>
+    </Dialog>
   );
 }
 
