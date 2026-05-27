@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useVirtualizer, observeElementRect, observeElementOffset } from '@tanstack/react-virtual';
 import { ChevronLeftIcon, PencilIcon, XIcon, CheckIcon } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import DatePicker from '@/components/ui/DatePicker';
@@ -9,10 +10,18 @@ import { useAccountsStore } from '@/stores/accounts-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { filterByPersonId } from '@/lib/filter-by-view';
-import type { Transaction } from '@/types/schema';
+import type { Transaction, Category } from '@/types/schema';
 
 const selectClass =
   'h-8 w-full rounded-md border border-input bg-transparent px-1.5 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
+
+// Tunables for the virtualizer. ROW_HEIGHT is the estimate the virtualizer
+// uses to compute offsets — actual heights are measured after mount, so a
+// minor mis-estimate just costs one extra scroll-position recalculation.
+// OVERSCAN keeps a buffer of rows mounted just outside the viewport so that
+// scrolling never reveals an empty placeholder.
+const ROW_HEIGHT = 36;
+const OVERSCAN = 8;
 
 interface RowEditState {
   date: string;
@@ -21,6 +30,114 @@ interface RowEditState {
   categoryId: number | null;
   sourceAccountId: number | null;
 }
+
+// Row props are intentionally narrow so React.memo's default shallow compare
+// is meaningful — only changes to the row's own transaction or to one of
+// the lookup maps trigger a re-render. The maps come from `useMemo`s in the
+// parent, so under Task 4's optimistic updates a no-op store touch keeps
+// the same reference and no row re-renders.
+interface TransactionRowProps {
+  t: Transaction;
+  categoryById: Map<number, Category>;
+  accountById: Map<number, string>;
+  persons: Array<{ id?: number | null; name: string }>;
+  isConfirmingDelete: boolean;
+  busy: boolean;
+  onStartEdit: (t: Transaction) => void;
+  onAskDelete: (id: number) => void;
+  onConfirmDelete: (id: number) => void;
+  onCancelDelete: () => void;
+  showPersonColumn: boolean;
+}
+
+const TransactionRow = memo(function TransactionRow({
+  t,
+  categoryById,
+  accountById,
+  persons,
+  isConfirmingDelete,
+  busy,
+  onStartEdit,
+  onAskDelete,
+  onConfirmDelete,
+  onCancelDelete,
+  showPersonColumn,
+}: TransactionRowProps) {
+  return (
+    <tr className="border-b">
+      <td className="py-2 pr-3">{t.date}</td>
+      <td className="py-2 pr-3">{t.merchant}</td>
+      <td className="py-2 pr-3 text-muted-foreground">
+        {t.categoryId != null
+          ? (categoryById.get(t.categoryId)?.name ?? '—')
+          : '—'}
+      </td>
+      <td className="py-2 pr-3 text-muted-foreground">
+        {t.sourceAccountId != null
+          ? (accountById.get(t.sourceAccountId) ?? '—')
+          : '—'}
+      </td>
+      {showPersonColumn && (
+        <td className="py-2 pr-3 text-muted-foreground">
+          {t.personId != null
+            ? (persons.find((p) => p.id === t.personId)?.name ?? '—')
+            : 'Joint'}
+        </td>
+      )}
+      <td className="py-2 pr-3 text-right">
+        {t.amount < 0 ? (
+          <span className="text-success">-${Math.abs(t.amount).toFixed(2)}</span>
+        ) : (
+          <span>${t.amount.toFixed(2)}</span>
+        )}
+      </td>
+      <td className="py-2 text-right">
+        {isConfirmingDelete ? (
+          <div className="inline-flex items-center gap-1">
+            <span className="text-xs text-destructive mr-1">Delete?</span>
+            <button
+              type="button"
+              aria-label={`Confirm delete ${t.merchant}`}
+              onClick={() => t.id != null && onConfirmDelete(t.id)}
+              disabled={busy}
+              className="text-xs px-2 py-1 rounded border bg-destructive text-destructive-foreground hover:opacity-90 disabled:opacity-40"
+            >
+              Confirm
+            </button>
+            <button
+              type="button"
+              aria-label="Cancel delete"
+              onClick={onCancelDelete}
+              disabled={busy}
+              className="text-xs px-2 py-1 rounded border hover:bg-muted disabled:opacity-40"
+            >
+              Keep
+            </button>
+          </div>
+        ) : (
+          <div className="inline-flex items-center gap-1">
+            <button
+              type="button"
+              aria-label={`Edit ${t.merchant}`}
+              onClick={() => onStartEdit(t)}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border hover:bg-muted"
+            >
+              <PencilIcon className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              aria-label={`Delete ${t.merchant}`}
+              onClick={() => t.id != null && onAskDelete(t.id)}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border hover:bg-muted text-destructive"
+            >
+              <XIcon className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+      </td>
+    </tr>
+  );
+});
 
 export default function SpendingTransactions() {
   const transactions = useTransactionsStore((s) => s.transactions);
@@ -65,7 +182,8 @@ export default function SpendingTransactions() {
     [visibleTransactions],
   );
 
-  const startEdit = (t: Transaction) => {
+  // Stable callbacks so TransactionRow's React.memo doesn't break each render.
+  const startEdit = useCallback((t: Transaction) => {
     if (t.id == null) return;
     setEditingId(t.id);
     setRowError(null);
@@ -77,13 +195,13 @@ export default function SpendingTransactions() {
       categoryId: t.categoryId,
       sourceAccountId: t.sourceAccountId,
     });
-  };
+  }, []);
 
-  const cancelEdit = () => {
+  const cancelEdit = useCallback(() => {
     setEditingId(null);
     setDraft(null);
     setRowError(null);
-  };
+  }, []);
 
   const saveEdit = async (id: number) => {
     if (draft == null) return;
@@ -119,21 +237,72 @@ export default function SpendingTransactions() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    setBusy(true);
-    setRowError(null);
-    try {
-      await remove(id);
-      setConfirmingDeleteId(null);
-    } catch (e) {
-      setRowError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
+  const handleDelete = useCallback(
+    async (id: number) => {
+      setBusy(true);
+      setRowError(null);
+      try {
+        await remove(id);
+        setConfirmingDeleteId(null);
+      } catch (e) {
+        setRowError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setBusy(false);
+      }
+    },
+    [remove],
+  );
+
+  const askDelete = useCallback((id: number) => setConfirmingDeleteId(id), []);
+  const cancelDelete = useCallback(() => setConfirmingDeleteId(null), []);
+
+  // Virtualization — only the visible window of rows is mounted to the DOM.
+  // Without this, 25 k transactions render 25 k <tr>s and jsdom mount takes
+  // 6+ seconds (real WebKit 3-4× worse).
+  const scrollParentRef = useRef<HTMLDivElement | null>(null);
+  const showPersonColumn = persons.length === 2;
+  const virtualizer = useVirtualizer({
+    count: sorted.length,
+    getScrollElement: () => scrollParentRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: OVERSCAN,
+    // The currently-edited row uses inline inputs which are taller than a
+    // display row, so giving the virtualizer the transaction id as a key
+    // lets it preserve measured heights even as the user scrolls and
+    // returns. Also keeps row identity stable across optimistic store
+    // updates (Task 4).
+    getItemKey: (index) => sorted[index]?.id ?? index,
+    // Fallback for environments that don't paint layout — primarily jsdom
+    // in vitest, where offsetWidth/offsetHeight are always 0. Without this,
+    // observeElementRect would clamp the viewport to {0,0} and the
+    // virtualizer would render zero rows, breaking every existing test
+    // that relies on getByText / getByRole('row'). Real browsers get
+    // accurate measurements via the unchanged offset observer.
+    observeElementRect: (instance, cb) => {
+      const stop = observeElementRect(instance, (rect) => {
+        if (rect.height === 0 && rect.width === 0) {
+          cb({ width: 1000, height: 800 });
+        } else {
+          cb(rect);
+        }
+      });
+      return stop;
+    },
+    observeElementOffset,
+  });
+
+  const virtualItems = virtualizer.getVirtualItems();
+  const totalSize = virtualizer.getTotalSize();
+  // Padding spacers around the rendered slice — keeps the scrollbar height
+  // accurate even though only ~30 rows are in the DOM at any moment.
+  const paddingTop = virtualItems.length > 0 ? virtualItems[0].start : 0;
+  const paddingBottom =
+    virtualItems.length > 0
+      ? totalSize - virtualItems[virtualItems.length - 1].end
+      : 0;
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-8 space-y-6 h-full flex flex-col">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <Link
@@ -158,196 +327,161 @@ export default function SpendingTransactions() {
       ) : sorted.length === 0 ? (
         <p className="text-sm text-muted-foreground">No transactions match the current view.</p>
       ) : (
-        <table className="w-full text-sm border-collapse">
-          <thead>
-            <tr className="border-b text-left">
-              <th className="py-2 pr-3 w-36">Date</th>
-              <th className="py-2 pr-3">Merchant</th>
-              <th className="py-2 pr-3">Category</th>
-              <th className="py-2 pr-3">Account</th>
-              {persons.length === 2 && <th className="py-2 pr-3">Person</th>}
-              <th className="py-2 pr-3 text-right w-28">Amount</th>
-              <th className="py-2 w-28 text-right"><span className="sr-only">Actions</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((t) => {
-              const isEditing = t.id != null && editingId === t.id;
-              const isConfirmingDelete = t.id != null && confirmingDeleteId === t.id;
-              if (isEditing && draft) {
-                return (
-                  <tr key={t.id} className="border-b align-top bg-muted/30">
-                    <td className="py-2 pr-3">
-                      <DatePicker
-                        id={`edit-date-${t.id}`}
-                        value={draft.date}
-                        onChange={(v) => setDraft({ ...draft, date: v })}
-                      />
-                    </td>
-                    <td className="py-2 pr-3">
-                      <Input
-                        aria-label={`Edit merchant for ${t.merchant}`}
-                        value={draft.merchant}
-                        onChange={(e) => setDraft({ ...draft, merchant: e.target.value })}
-                        className="h-8"
-                      />
-                    </td>
-                    <td className="py-2 pr-3">
-                      <select
-                        aria-label={`Edit category for ${t.merchant}`}
-                        className={selectClass}
-                        value={draft.categoryId ?? ''}
-                        onChange={(e) =>
-                          setDraft({
-                            ...draft,
-                            categoryId: e.target.value === '' ? null : Number(e.target.value),
-                          })
-                        }
-                      >
-                        <option value="">— uncategorized —</option>
-                        {categories.map((c) => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="py-2 pr-3">
-                      <select
-                        aria-label={`Edit account for ${t.merchant}`}
-                        className={selectClass}
-                        value={draft.sourceAccountId ?? ''}
-                        onChange={(e) =>
-                          setDraft({
-                            ...draft,
-                            sourceAccountId: e.target.value === '' ? null : Number(e.target.value),
-                          })
-                        }
-                      >
-                        <option value="">— none —</option>
-                        {accounts.map((a) => (
-                          <option key={a.id} value={a.id}>{a.name}</option>
-                        ))}
-                      </select>
-                    </td>
-                    {persons.length === 2 && (
-                      <td className="py-2 pr-3 text-muted-foreground">
-                        {t.personId != null ? (persons.find((p) => p.id === t.personId)?.name ?? '—') : 'Joint'}
-                      </td>
-                    )}
-                    <td className="py-2 pr-3 text-right">
-                      <Input
-                        aria-label={`Edit amount for ${t.merchant}`}
-                        type="number"
-                        step="0.01"
-                        value={draft.amount}
-                        onChange={(e) => setDraft({ ...draft, amount: e.target.value })}
-                        className="h-8 text-right"
-                      />
-                    </td>
-                    <td className="py-2">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          type="button"
-                          aria-label="Save changes"
-                          onClick={() => t.id != null && void saveEdit(t.id)}
-                          disabled={busy}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border hover:bg-muted disabled:opacity-40"
-                        >
-                          <CheckIcon className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          aria-label="Cancel edit"
-                          onClick={cancelEdit}
-                          disabled={busy}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border hover:bg-muted disabled:opacity-40"
-                        >
-                          <XIcon className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                      {rowError && (
-                        <p className="text-xs text-destructive mt-1" role="alert">{rowError}</p>
-                      )}
-                    </td>
-                  </tr>
-                );
-              }
-              return (
-                <tr key={t.id} className="border-b">
-                  <td className="py-2 pr-3">{t.date}</td>
-                  <td className="py-2 pr-3">{t.merchant}</td>
-                  <td className="py-2 pr-3 text-muted-foreground">
-                    {t.categoryId != null
-                      ? (categoryById.get(t.categoryId)?.name ?? '—')
-                      : '—'}
-                  </td>
-                  <td className="py-2 pr-3 text-muted-foreground">
-                    {t.sourceAccountId != null
-                      ? (accountById.get(t.sourceAccountId) ?? '—')
-                      : '—'}
-                  </td>
-                  {persons.length === 2 && (
-                    <td className="py-2 pr-3 text-muted-foreground">
-                      {t.personId != null
-                        ? (persons.find((p) => p.id === t.personId)?.name ?? '—')
-                        : 'Joint'}
-                    </td>
-                  )}
-                  <td className="py-2 pr-3 text-right">
-                    {t.amount < 0 ? (
-                      <span className="text-success">-${Math.abs(t.amount).toFixed(2)}</span>
-                    ) : (
-                      <span>${t.amount.toFixed(2)}</span>
-                    )}
-                  </td>
-                  <td className="py-2 text-right">
-                    {isConfirmingDelete ? (
-                      <div className="inline-flex items-center gap-1">
-                        <span className="text-xs text-destructive mr-1">Delete?</span>
-                        <button
-                          type="button"
-                          aria-label={`Confirm delete ${t.merchant}`}
-                          onClick={() => t.id != null && void handleDelete(t.id)}
-                          disabled={busy}
-                          className="text-xs px-2 py-1 rounded border bg-destructive text-destructive-foreground hover:opacity-90 disabled:opacity-40"
-                        >
-                          Confirm
-                        </button>
-                        <button
-                          type="button"
-                          aria-label="Cancel delete"
-                          onClick={() => setConfirmingDeleteId(null)}
-                          disabled={busy}
-                          className="text-xs px-2 py-1 rounded border hover:bg-muted disabled:opacity-40"
-                        >
-                          Keep
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="inline-flex items-center gap-1">
-                        <button
-                          type="button"
-                          aria-label={`Edit ${t.merchant}`}
-                          onClick={() => startEdit(t)}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border hover:bg-muted"
-                        >
-                          <PencilIcon className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          aria-label={`Delete ${t.merchant}`}
-                          onClick={() => t.id != null && setConfirmingDeleteId(t.id)}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border hover:bg-muted text-destructive"
-                        >
-                          <XIcon className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    )}
-                  </td>
+        <div
+          ref={scrollParentRef}
+          className="flex-1 min-h-0 overflow-auto"
+          data-testid="transactions-scroll-parent"
+        >
+          <table className="w-full text-sm border-collapse">
+            <thead>
+              <tr className="border-b text-left">
+                <th className="py-2 pr-3 w-36">Date</th>
+                <th className="py-2 pr-3">Merchant</th>
+                <th className="py-2 pr-3">Category</th>
+                <th className="py-2 pr-3">Account</th>
+                {showPersonColumn && <th className="py-2 pr-3">Person</th>}
+                <th className="py-2 pr-3 text-right w-28">Amount</th>
+                <th className="py-2 w-28 text-right"><span className="sr-only">Actions</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              {paddingTop > 0 && (
+                <tr aria-hidden="true" style={{ height: paddingTop }}>
+                  <td colSpan={showPersonColumn ? 7 : 6} />
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              )}
+              {virtualItems.map((vi) => {
+                const t = sorted[vi.index];
+                if (!t) return null;
+                const isEditing = t.id != null && editingId === t.id;
+                const isConfirmingDelete = t.id != null && confirmingDeleteId === t.id;
+                if (isEditing && draft) {
+                  return (
+                    <tr
+                      key={vi.key}
+                      className="border-b align-top bg-muted/30"
+                      ref={virtualizer.measureElement}
+                      data-index={vi.index}
+                    >
+                      <td className="py-2 pr-3">
+                        <DatePicker
+                          id={`edit-date-${t.id}`}
+                          value={draft.date}
+                          onChange={(v) => setDraft({ ...draft, date: v })}
+                        />
+                      </td>
+                      <td className="py-2 pr-3">
+                        <Input
+                          aria-label={`Edit merchant for ${t.merchant}`}
+                          value={draft.merchant}
+                          onChange={(e) => setDraft({ ...draft, merchant: e.target.value })}
+                          className="h-8"
+                        />
+                      </td>
+                      <td className="py-2 pr-3">
+                        <select
+                          aria-label={`Edit category for ${t.merchant}`}
+                          className={selectClass}
+                          value={draft.categoryId ?? ''}
+                          onChange={(e) =>
+                            setDraft({
+                              ...draft,
+                              categoryId: e.target.value === '' ? null : Number(e.target.value),
+                            })
+                          }
+                        >
+                          <option value="">— uncategorized —</option>
+                          {categories.map((c) => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="py-2 pr-3">
+                        <select
+                          aria-label={`Edit account for ${t.merchant}`}
+                          className={selectClass}
+                          value={draft.sourceAccountId ?? ''}
+                          onChange={(e) =>
+                            setDraft({
+                              ...draft,
+                              sourceAccountId: e.target.value === '' ? null : Number(e.target.value),
+                            })
+                          }
+                        >
+                          <option value="">— none —</option>
+                          {accounts.map((a) => (
+                            <option key={a.id} value={a.id}>{a.name}</option>
+                          ))}
+                        </select>
+                      </td>
+                      {showPersonColumn && (
+                        <td className="py-2 pr-3 text-muted-foreground">
+                          {t.personId != null ? (persons.find((p) => p.id === t.personId)?.name ?? '—') : 'Joint'}
+                        </td>
+                      )}
+                      <td className="py-2 pr-3 text-right">
+                        <Input
+                          aria-label={`Edit amount for ${t.merchant}`}
+                          type="number"
+                          step="0.01"
+                          value={draft.amount}
+                          onChange={(e) => setDraft({ ...draft, amount: e.target.value })}
+                          className="h-8 text-right"
+                        />
+                      </td>
+                      <td className="py-2">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            type="button"
+                            aria-label="Save changes"
+                            onClick={() => t.id != null && void saveEdit(t.id)}
+                            disabled={busy}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md border hover:bg-muted disabled:opacity-40"
+                          >
+                            <CheckIcon className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="Cancel edit"
+                            onClick={cancelEdit}
+                            disabled={busy}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-md border hover:bg-muted disabled:opacity-40"
+                          >
+                            <XIcon className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        {rowError && (
+                          <p className="text-xs text-destructive mt-1" role="alert">{rowError}</p>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                }
+                return (
+                  <TransactionRow
+                    key={vi.key}
+                    t={t}
+                    categoryById={categoryById}
+                    accountById={accountById}
+                    persons={persons}
+                    isConfirmingDelete={isConfirmingDelete}
+                    busy={busy}
+                    onStartEdit={startEdit}
+                    onAskDelete={askDelete}
+                    onConfirmDelete={handleDelete}
+                    onCancelDelete={cancelDelete}
+                    showPersonColumn={showPersonColumn}
+                  />
+                );
+              })}
+              {paddingBottom > 0 && (
+                <tr aria-hidden="true" style={{ height: paddingBottom }}>
+                  <td colSpan={showPersonColumn ? 7 : 6} />
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
