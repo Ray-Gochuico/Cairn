@@ -121,7 +121,9 @@ describe('engine decomposition — compoundReturnAdded', () => {
       const expectedGain = prevTotal * monthlyRate;
       expect(states[i].compoundReturnAdded).toBeCloseTo(expectedGain, 4);
       // All other flow fields should be 0 (no salary, no expenses, no events).
-      expect(states[i].autoInvestedSalarySurplus).toBe(0);
+      expect(states[i].gapToTaxAdvantaged).toBe(0);
+      expect(states[i].gapToBrokerage).toBe(0);
+      expect(states[i].gapToCash).toBe(0);
       expect(states[i].leverContributionsInvested).toBe(0);
       expect(states[i].lumpSumInvested).toBe(0);
       expect(states[i].withdrawnFromInvestments).toBe(0);
@@ -134,15 +136,17 @@ describe('engine decomposition — compoundReturnAdded', () => {
     // Seed state is constructed directly in projectScenario; it does not
     // step through stepMonth so the optional fields are simply absent.
     expect(states[0].compoundReturnAdded).toBeUndefined();
-    expect(states[0].autoInvestedSalarySurplus).toBeUndefined();
+    expect(states[0].gapToTaxAdvantaged).toBeUndefined();
+    expect(states[0].gapToBrokerage).toBeUndefined();
+    expect(states[0].gapToCash).toBeUndefined();
     expect(states[0].leverContributionsInvested).toBeUndefined();
     expect(states[0].lumpSumInvested).toBeUndefined();
     expect(states[0].withdrawnFromInvestments).toBeUndefined();
   });
 });
 
-describe('engine decomposition — leverContributionsInvested vs autoInvestedSalarySurplus', () => {
-  it('with an active contribution segment, leverContributionsInvested === segment.monthlyAmount and auto-invest is 0', () => {
+describe('engine decomposition — leverContributionsInvested + gap allocation (revamp)', () => {
+  it('with an active contribution segment, leverContributionsInvested === segment.monthlyAmount; gap rows route the remainder', () => {
     const real = realStateFactory();
     const payload = emptyLeverPayload();
     // Years 1..5 → months 0..59. Monthly contribution of $1,000.
@@ -153,21 +157,52 @@ describe('engine decomposition — leverContributionsInvested vs autoInvestedSal
 
     for (let i = 1; i < states.length; i++) {
       expect(states[i].leverContributionsInvested).toBe(1000);
-      expect(states[i].autoInvestedSalarySurplus).toBe(0);
+      // Default all-cash gap allocation: the segment-leftover surplus flows to cash.
+      expect(states[i].gapToTaxAdvantaged).toBe(0);
+      expect(states[i].gapToBrokerage).toBe(0);
     }
   });
 
-  it('with NO segment active, autoInvestedSalarySurplus === s.savings and leverContributionsInvested is 0', () => {
-    // No contributions configured → all positive surplus auto-invests.
+  it('with NO segment active + default all-cash gapAllocation, gapToCash === s.savings and leverContributionsInvested is 0', () => {
+    // No contributions configured + default gap allocation → all positive
+    // surplus flows to cash via the gap-allocation cash overflow path.
     const real = realStateFactory();
     const states = projectScenario(real, emptyLeverPayload(), { startISO: '2026-05', months: 6 });
 
     for (let i = 1; i < states.length; i++) {
       const s = states[i];
       expect(s.leverContributionsInvested).toBe(0);
-      // s.savings is the same value the engine routes to investments when
-      // positive. It includes income − expenses − loan payments.
-      expect(s.autoInvestedSalarySurplus).toBeCloseTo(Math.max(0, s.savings), 4);
+      // s.savings is the same value the engine routes to cash when positive
+      // under the default gap allocation. It includes income − expenses − loan
+      // payments.
+      expect(s.gapToCash).toBeCloseTo(Math.max(0, s.savings), 4);
+      expect(s.gapToTaxAdvantaged).toBe(0);
+      expect(s.gapToBrokerage).toBe(0);
+    }
+  });
+
+  it('with 50% percent allocation to brokerage + brokerage account, routes 50% to brokerage and 50% to cash', () => {
+    const real = realStateFactory({
+      accounts: [
+        { id: 1, householdId: 1, name: 'Brk', type: 'ACCOUNT_BROKERAGE', excludedFromNetWorth: false } as never,
+      ],
+      accountsByBucket: {
+        taxAdvantaged: [],
+        brokerage: [{ id: 1, householdId: 1, name: 'Brk', type: 'ACCOUNT_BROKERAGE', excludedFromNetWorth: false } as never],
+        cash: [],
+      },
+    });
+    const payload = emptyLeverPayload();
+    payload.gapAllocation = {
+      taxAdvantaged: null,
+      brokerage:     { mode: 'percent', value: 0.5, accountSplits: null },
+    };
+    const states = projectScenario(real, payload, { startISO: '2026-05', months: 6 });
+    for (let i = 1; i < states.length; i++) {
+      const s = states[i];
+      expect(s.gapToBrokerage).toBeCloseTo(Math.max(0, s.savings) * 0.5, 2);
+      expect(s.gapToCash).toBeCloseTo(Math.max(0, s.savings) * 0.5, 2);
+      expect(s.gapToTaxAdvantaged).toBe(0);
     }
   });
 });
@@ -270,9 +305,12 @@ describe('engine decomposition — math invariants', () => {
       const actualDelta = after - before;
 
       const s = states[i];
+      // Only the gap-to-investments rows (tax-adv + brokerage) hit the
+      // investmentsByAccount pile; gapToCash routes to s.cash, not investments.
       const reconstructed =
         (s.compoundReturnAdded ?? 0) +
-        (s.autoInvestedSalarySurplus ?? 0) +
+        (s.gapToTaxAdvantaged ?? 0) +
+        (s.gapToBrokerage ?? 0) +
         (s.leverContributionsInvested ?? 0) +
         (s.lumpSumInvested ?? 0) -
         (s.withdrawnFromInvestments ?? 0);
@@ -299,22 +337,13 @@ describe('engine decomposition — math invariants', () => {
   });
 });
 
-// Migration 0029 — household `autoInvestSalarySurplus` toggle. When OFF (the
-// new default since 2026-05-26), positive salary surplus with no Contributions
-// segment routes to cash and is tagged `salarySurplusToCash` for the projection
-// tooltip. The auto-invest path is preserved when the toggle is ON.
-describe('stepMonth — autoInvestSalarySurplus OFF default', () => {
-  it('routes positive surplus to cash when setting is OFF + no segments', () => {
-    const real = realStateFactory({
-      defaults: {
-        inflation: 0,
-        returnRate: 0,
-        defaultCashApy: null,
-        autoInvestSalarySurplus: false,
-      },
-    });
-    // Strip the default 7% return so investments-bucket growth is solely from
-    // the auto-invest branch (which should be off).
+// Gap allocation — replaces the legacy migration-0029 `autoInvestSalarySurplus`
+// toggle (2026-05-26 revamp). Routing decisions are now per-bucket on the lever
+// payload's `gapAllocation` field. Default (both buckets null) routes everything
+// to cash.
+describe('stepMonth — gapAllocation routing', () => {
+  it('default all-cash routing: positive surplus flows entirely to gapToCash', () => {
+    const real = realStateFactory();
     const payload = emptyLeverPayload();
     payload.returns.defaultRate = 0;
     const states = projectScenario(real, payload, {
@@ -324,27 +353,31 @@ describe('stepMonth — autoInvestSalarySurplus OFF default', () => {
 
     for (let i = 1; i < states.length; i++) {
       const s = states[i];
-      expect(s.salarySurplusToCash).toBeCloseTo(Math.max(0, s.savings), 4);
-      // Auto-invest field is reset to 0 each step but never populated on OFF path.
-      expect(s.autoInvestedSalarySurplus).toBe(0);
-      // Investments unchanged step-over-step (no return, no segment, no auto-invest).
+      expect(s.gapToCash).toBeCloseTo(Math.max(0, s.savings), 4);
+      expect(s.gapToTaxAdvantaged).toBe(0);
+      expect(s.gapToBrokerage).toBe(0);
+      // Investments unchanged step-over-step (no return, no segment, no gap→invest).
       expect(totalInvestments(s)).toBeCloseTo(totalInvestments(states[i - 1]), 4);
     }
     // Cash should have accumulated positive surplus over 5 stepped months.
     expect(states[states.length - 1].cash).toBeGreaterThan(0);
   });
 
-  it('routes positive surplus to investments when setting is ON + no segments', () => {
+  it('100% brokerage allocation: positive surplus flows to brokerage; cash unchanged', () => {
     const real = realStateFactory({
-      defaults: {
-        inflation: 0,
-        returnRate: 0,
-        defaultCashApy: null,
-        autoInvestSalarySurplus: true,
+      initialInvestmentsByAccount: { 1: 200_000 },
+      accountsByBucket: {
+        taxAdvantaged: [],
+        brokerage: [{ id: 1, householdId: 1, name: 'Brk', type: 'ACCOUNT_BROKERAGE', excludedFromNetWorth: false } as never],
+        cash: [],
       },
     });
     const payload = emptyLeverPayload();
     payload.returns.defaultRate = 0;
+    payload.gapAllocation = {
+      taxAdvantaged: null,
+      brokerage:     { mode: 'percent', value: 1.0, accountSplits: null },
+    };
     const states = projectScenario(real, payload, {
       startISO: '2026-05',
       months: 6,
@@ -352,9 +385,10 @@ describe('stepMonth — autoInvestSalarySurplus OFF default', () => {
 
     for (let i = 1; i < states.length; i++) {
       const s = states[i];
-      expect(s.autoInvestedSalarySurplus).toBeCloseTo(Math.max(0, s.savings), 4);
-      expect(s.salarySurplusToCash).toBe(0);
-      // Cash unchanged when surplus is routed to investments (no return + no overflow).
+      expect(s.gapToBrokerage).toBeCloseTo(Math.max(0, s.savings), 4);
+      expect(s.gapToTaxAdvantaged).toBe(0);
+      expect(s.gapToCash).toBe(0);
+      // Cash unchanged when 100% of surplus is routed to investments.
       expect(s.cash).toBeCloseTo(states[i - 1].cash, 4);
     }
     expect(totalInvestments(states[states.length - 1])).toBeGreaterThan(
@@ -362,15 +396,8 @@ describe('stepMonth — autoInvestSalarySurplus OFF default', () => {
     );
   });
 
-  it('respects explicit segment regardless of setting (segment + remainder)', () => {
-    const real = realStateFactory({
-      defaults: {
-        inflation: 0,
-        returnRate: 0,
-        defaultCashApy: null,
-        autoInvestSalarySurplus: false,
-      },
-    });
+  it('explicit contribution segment: leftover surplus flows through gap allocation', () => {
+    const real = realStateFactory();
     const payload = emptyLeverPayload();
     payload.contributions = [
       { startMonth: 0, endMonth: 59, monthlyAmount: 500, allocation: null },
@@ -379,26 +406,19 @@ describe('stepMonth — autoInvestSalarySurplus OFF default', () => {
 
     for (let i = 1; i < states.length; i++) {
       const s = states[i];
-      // Segment lands in investments; remainder lands in cash via the existing
-      // segment-active routing — NOT tagged as salarySurplusToCash (that field
-      // tracks only the no-segment OFF-path routing, per the spec).
+      // Segment lands in investments.
       expect(s.leverContributionsInvested).toBe(500);
-      expect(s.salarySurplusToCash).toBe(0);
-      expect(s.autoInvestedSalarySurplus).toBe(0);
+      // Default all-cash gap allocation routes the leftover (s.savings - 500)
+      // to cash via the gap-cash overflow path.
+      expect(s.gapToCash).toBeCloseTo(Math.max(0, s.savings - 500), 4);
+      expect(s.gapToTaxAdvantaged).toBe(0);
+      expect(s.gapToBrokerage).toBe(0);
     }
   });
 
-  it('sets salarySurplusToCash = 0 when savings is negative (cash-floor path)', () => {
-    // Zero-salary retiree with no cash → cash-floor pulls from investments.
-    // The new field stays at 0 since the OFF branch only fires on positive savings.
+  it('negative savings: gapTo* fields stay at 0; cash-floor pulls from investments', () => {
     const zeroSalaryPersons = [{ ...persons[0], annualSalaryPretax: 0 } as Person];
     const real = realStateFactory({
-      defaults: {
-        inflation: 0,
-        returnRate: 0,
-        defaultCashApy: null,
-        autoInvestSalarySurplus: false,
-      },
       persons: zeroSalaryPersons,
       initialInvestmentsByAccount: { 1: 500_000 },
       initialCash: 0,
@@ -410,7 +430,9 @@ describe('stepMonth — autoInvestSalarySurplus OFF default', () => {
       months: 6,
     });
     for (let i = 1; i < states.length; i++) {
-      expect(states[i].salarySurplusToCash).toBe(0);
+      expect(states[i].gapToTaxAdvantaged).toBe(0);
+      expect(states[i].gapToBrokerage).toBe(0);
+      expect(states[i].gapToCash).toBe(0);
       expect(states[i].withdrawnFromInvestments).toBeGreaterThan(0);
     }
   });

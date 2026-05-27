@@ -184,25 +184,28 @@ export default function ContributionsPopover({ open, onOpenChange }: Props) {
             data-testid="contributions-surplus-flow-card"
             className="rounded-md border bg-muted/50 px-3 py-2 text-xs space-y-1"
           >
-            {surplus.destination === 'cash' ? (
+            {/* Transitional bridge (α3 → γ2): the surplus preview is now a
+                per-bucket breakdown. We branch on "any non-cash routing
+                configured?" to preserve the prior copy semantics; γ2 will
+                rewrite this card to show the three-row breakdown directly. */}
+            {surplus.taxAdvantaged + surplus.brokerage === 0 ? (
               <>
                 <div className="font-medium">
                   {formatCurrency(surplus.amount)}/mo of monthly surplus is going to cash.
                 </div>
                 <p className="text-muted-foreground">
                   Add a segment below to invest some or all of it each month, or
-                  flip the &quot;Auto-invest salary surplus&quot; toggle in Settings
-                  &rsaquo; Advanced.
+                  configure routing in the Income lever (gap allocation).
                 </p>
               </>
             ) : (
               <>
                 <div className="font-medium">
-                  Auto-investing {formatCurrency(surplus.amount)}/mo from salary surplus.
+                  Auto-investing {formatCurrency(surplus.taxAdvantaged + surplus.brokerage)}/mo from salary surplus.
                 </div>
                 <p className="text-muted-foreground">
-                  (income &minus; expenses &minus; loan payments) — distributed across
-                  investment accounts. Disable in Settings &rsaquo; Advanced.
+                  (income &minus; expenses &minus; loan payments) — routed via the
+                  gap allocation lever. Tune in the Income popover.
                 </p>
               </>
             )}

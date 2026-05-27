@@ -2,40 +2,34 @@ import { projectScenario, type MonthlyState } from './engine';
 import type { LeverPayload } from './lever-types';
 import type { RealState } from './state-snapshot';
 
+export interface SurplusFlowBreakdown {
+  /** Total monthly surplus (income − expenses − loan payments) at month 1, with segments stripped. */
+  amount: number;
+  /** Amount routed into tax-advantaged accounts per the current scenario's gapAllocation. */
+  taxAdvantaged: number;
+  /** Amount routed into brokerage / taxable accounts. */
+  brokerage: number;
+  /** Amount that flows to cash (whether explicit or default-overflow). */
+  cash: number;
+}
+
 /**
- * Compute the "what would the monthly surplus be right now" preview amount
- * used by the Contributions popover and lever-bar pill (Task #25). Surfaces
- * the magnitude of the income − expenses − loan-payments flow that
- * `stepMonth` would route either to investments (autoInvestSalarySurplus ON)
- * or to cash (OFF, migration 0029).
+ * Compute the "where does my surplus go right now" preview used by the
+ * Contributions popover, the LeverBar pill, and any other UI surface.
  *
- * Defined as: income − expenses − loan payments at the FIRST stepped month
- * (monthIndex = 1) of the projection. This mirrors the engine's actual
- * routing for the empty-contributions case — when no explicit segment is
- * active and the monthly surplus is positive, ALL of it lands in either
- * investments (ON branch → `autoInvestedSalarySurplus`) or cash (OFF branch
- * → `salarySurplusToCash`). We sum the two so the preview is invariant to
- * the household setting: it always reports the positive-surplus magnitude.
+ * Per-bucket breakdown (rewritten 2026-05-26 revamp). Strips contribution
+ * segments before projecting so the user sees the "if you had no segment,
+ * here's what the engine would do" amount. Other levers stay intact so the
+ * surplus reflects the user's current income / expense / loan / inflation
+ * configuration AND their gapAllocation.
  *
- * To stay independent of whether the user has configured any contribution
- * segments today, we run the engine with the segments STRIPPED. That gives
- * a stable "auto-invest if you had no segments" preview the UI can surface
- * even when the user is mid-edit. The returns / lump-sums / income /
- * expenses / loan-payment levers stay intact so the surplus reflects the
- * user's other configured levers.
- *
- * Returns 0 (never negative) — a negative surplus is not "auto-invested";
- * the engine treats it as a cash-floor shortfall (potentially withdrawing
- * from investments). The preview surfaces only the positive-flow case.
+ * Returns zeros (never negative) when the surplus is non-positive, the real
+ * state hasn't loaded, or the projection throws.
  */
-export function currentMonthlySalarySurplus(
+export function currentSurplusFlow(
   real: RealState,
   payload: LeverPayload,
-): number {
-  // Strip contributions so the engine reports the "what would the surplus
-  // be" value. Two months: seed + one step. The seed itself does NOT step
-  // through stepMonth (the optional fields are undefined on month 0),
-  // which is fine — we want the value AT month 1.
+): SurplusFlowBreakdown {
   const previewPayload: LeverPayload = { ...payload, contributions: [] };
   // Normalize startISO to YYYY-MM. captureRealState produces YYYY-MM but
   // some test fixtures pass the YYYY-MM-DD form. The engine's addMonths
@@ -48,14 +42,26 @@ export function currentMonthlySalarySurplus(
       startISO,
       months: 2,
     });
-    if (states.length < 2) return 0;
-    // Sum both routing destinations — exactly one is non-zero per step
-    // (the engine's else-if branching guarantees this). This makes the
-    // helper invariant to the household's auto-invest setting.
-    const investBranch = states[1].autoInvestedSalarySurplus ?? 0;
-    const cashBranch = states[1].salarySurplusToCash ?? 0;
-    return Math.max(0, investBranch + cashBranch);
+    if (states.length < 2) return { amount: 0, taxAdvantaged: 0, brokerage: 0, cash: 0 };
+    const m1 = states[1];
+    const taxAdvantaged = Math.max(0, m1.gapToTaxAdvantaged ?? 0);
+    const brokerage     = Math.max(0, m1.gapToBrokerage ?? 0);
+    const cash          = Math.max(0, m1.gapToCash ?? 0);
+    const amount        = taxAdvantaged + brokerage + cash;
+    return { amount, taxAdvantaged, brokerage, cash };
   } catch {
-    return 0;
+    return { amount: 0, taxAdvantaged: 0, brokerage: 0, cash: 0 };
   }
 }
+
+/**
+ * Backwards-compat alias for the v0 import name. Returns the new
+ * `SurplusFlowBreakdown` object — call sites that previously treated the
+ * return value as a scalar `number` must migrate to read `.amount`. The plan
+ * intentionally chose this shape (vs keeping a separate scalar export) so
+ * the TypeScript surface forces an explicit migration at each call site.
+ *
+ * Will be deleted in a follow-up cleanup once every caller uses
+ * {@link currentSurplusFlow} directly.
+ */
+export const currentMonthlySalarySurplus = currentSurplusFlow;

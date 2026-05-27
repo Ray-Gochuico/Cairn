@@ -8,17 +8,33 @@ import { useAccountsStore } from '@/stores/accounts-store';
 import { emptyLeverPayload } from '@/lib/scenarios';
 import type { Scenario } from '@/types/scenario';
 
-// Task β2 — the preview card branches on the destination returned by
-// useSurplusFlowPreview. We mock the hook directly so tests can dial in
-// each (amount, destination) combination without standing up the full
-// settings store + engine path. Tests that don't care about the preview
+// The preview card now reads the per-bucket breakdown from
+// useSurplusFlowPreview (revamp 2026-05-26). Tests express their intent
+// via a legacy `destination` toggle which the mock translates into the
+// new shape — 'cash' routes everything to the cash bucket; 'investments'
+// routes everything to brokerage. Tests that don't care about the preview
 // (allocation, year-input plumbing) get the default amount=0 → preview hidden.
 let surplusFlowPreviewMock: { amount: number; destination: 'cash' | 'investments' } = {
   amount: 0,
   destination: 'cash',
 };
 vi.mock('@/components/whatif/useSurplusFlowPreview', () => ({
-  useSurplusFlowPreview: () => surplusFlowPreviewMock,
+  useSurplusFlowPreview: () => {
+    if (surplusFlowPreviewMock.destination === 'cash') {
+      return {
+        amount: surplusFlowPreviewMock.amount,
+        taxAdvantaged: 0,
+        brokerage: 0,
+        cash: surplusFlowPreviewMock.amount,
+      };
+    }
+    return {
+      amount: surplusFlowPreviewMock.amount,
+      taxAdvantaged: 0,
+      brokerage: surplusFlowPreviewMock.amount,
+      cash: 0,
+    };
+  },
 }));
 
 function resetStore(payloadOverrides: Partial<ReturnType<typeof emptyLeverPayload>> = {}) {

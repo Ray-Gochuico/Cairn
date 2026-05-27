@@ -3,6 +3,7 @@ import type { RealState } from './state-snapshot';
 import {
   activeContributionAmount,
   applyAnnualReturnWithFrequency,
+  applyGapAllocation,
   applyLumpSum,
   applyExtraLoanPayment,
   computeMonthlyIncomeForPerson,
@@ -50,25 +51,6 @@ export interface MonthlyState {
   // ---------------------------------------------------------------------------
   /** Gain credited to investments this step from `applyAnnualReturn`. */
   compoundReturnAdded?: number;
-  /**
-   * Amount of `s.savings` (income − expenses − loan payments) routed into
-   * investments this step WITHOUT an explicit contribution segment driving it.
-   * Zero when an active segment covers this month (the segment amount lands
-   * in `leverContributionsInvested` instead and any positive remainder flows
-   * to cash, not investments). Also zero when the household has opted OUT of
-   * the auto-invest setting (migration 0029) — surplus routes to
-   * `salarySurplusToCash` instead.
-   */
-  autoInvestedSalarySurplus?: number;
-  /**
-   * Amount of `s.savings` routed to cash this step BECAUSE the household has
-   * `auto_invest_salary_surplus` set to off (migration 0029, the new default
-   * since 2026-05-26) AND no Contributions segment was active. Zero in every
-   * other case — specifically, the "segment active + positive remainder"
-   * cash routing is NOT counted here (that's an explicit segment leftover,
-   * not the auto-invest opt-out path).
-   */
-  salarySurplusToCash?: number;
   /**
    * Amount of `s.savings` routed into TAX-ADVANTAGED accounts this step via
    * the gapAllocation lever (when no segment fully absorbed the surplus).
@@ -312,11 +294,19 @@ function stepMonth(
     // step so a consumer can sum across an interval without worrying about
     // undefined arithmetic.
     compoundReturnAdded: 0,
-    autoInvestedSalarySurplus: 0,
-    salarySurplusToCash: 0,
+    gapToTaxAdvantaged: 0,
+    gapToBrokerage: 0,
+    gapToCash: 0,
     leverContributionsInvested: 0,
     lumpSumInvested: 0,
     withdrawnFromInvestments: 0,
+    // Clone `investmentsByAccount` and `debtByLoan` so this step's mutations
+    // (applyGapAllocation / distributeWithinBucket mutate in place) don't
+    // ripple back into earlier states in the projection array. The previous
+    // routing helpers all returned fresh objects; the gap-allocation helper
+    // is intentionally mutating for symmetry inside its phases.
+    investmentsByAccount: { ...prev.investmentsByAccount },
+    debtByLoan: { ...prev.debtByLoan },
   };
 
   // 0. Apply this month's cash APY growth on last month's ending balance,
@@ -456,31 +446,24 @@ function stepMonth(
     s.investmentsByAccount = distributeToAccounts(s.investmentsByAccount, contribution, allocation);
     s.leverContributionsInvested = contribution;
     const remainder = s.savings - contribution;
-    if (remainder >= 0) {
-      // Cash remainder — does NOT land in investments, so we don't tag it as
-      // auto-invested. This matches the engine's actual routing: with an
-      // active segment the only investment-bound salary money is the segment
-      // amount itself.
-      s.cash += remainder;
-    } else {
+    if (remainder > 0) {
+      // Route the segment-leftover surplus through gap allocation (per spec
+      // §"Engine routing order"). Mutate s.savings in-place so the helper
+      // operates on the segment-leftover amount, then restore the original
+      // `s.savings` for the rest of stepMonth.
+      const original = s.savings;
+      s.savings = remainder;
+      applyGapAllocation(s, payload.gapAllocation, real.accountsByBucket);
+      s.savings = original;
+    } else if (remainder < 0) {
       applyCashFloorShortfall(s, -remainder);
     }
   } else if (s.savings > 0) {
-    // Migration 0029 — household opt-in for auto-investing the surplus when
-    // no Contributions segment is active. Default OFF (since 2026-05-26):
-    // surplus accumulates in cash instead of silently flowing to investments.
-    // When ON the prior behavior is preserved (auto-invest via
-    // distributeToAccounts), with the gain tagged as `autoInvestedSalarySurplus`
-    // for the projection tooltip; when OFF the surplus is added to cash and
-    // tagged as `salarySurplusToCash`. The two fields are mutually exclusive
-    // per step.
-    if (real.defaults.autoInvestSalarySurplus) {
-      s.investmentsByAccount = distributeToAccounts(s.investmentsByAccount, s.savings, allocation);
-      s.autoInvestedSalarySurplus = s.savings;
-    } else {
-      s.cash += s.savings;
-      s.salarySurplusToCash = s.savings;
-    }
+    // Gap allocation lever (revamp 2026-05-26) — routes the positive surplus
+    // into tax-advantaged accounts, brokerage, and/or cash per
+    // payload.gapAllocation. Defaults to all-cash when the user hasn't
+    // configured anything.
+    applyGapAllocation(s, payload.gapAllocation, real.accountsByBucket);
   } else if (s.savings < 0) {
     applyCashFloorShortfall(s, -s.savings);
   }

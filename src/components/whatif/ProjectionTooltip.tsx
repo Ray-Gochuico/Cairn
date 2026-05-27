@@ -51,12 +51,14 @@ interface DecompRow {
 export function decomposeStep(state: MonthlyState): DecompRow[] {
   return [
     { label: 'Compound return', value: state.compoundReturnAdded ?? 0, direction: 'in' },
-    { label: 'Auto-invested salary', value: state.autoInvestedSalarySurplus ?? 0, direction: 'in' },
-    // Task β2 — surfaces the salary surplus that the engine routed to cash
-    // (migration 0029, auto-invest OFF path). The engine guarantees this
-    // field and `autoInvestedSalarySurplus` are mutually exclusive per step,
-    // so the user sees one or the other (or neither) — not both.
-    { label: 'Surplus to cash', value: state.salarySurplusToCash ?? 0, direction: 'in' },
+    // Gap allocation decomposition (revamp 2026-05-26). Each row is the
+    // amount routed THIS step into the named bucket; the three are mutually
+    // additive but only non-zero rows render. The arrow glyph mirrors the
+    // copy used in the projection tooltip spec — replaces the legacy
+    // "Auto-invested salary" + "Surplus to cash" rows.
+    { label: 'Gap → Tax-advantaged', value: state.gapToTaxAdvantaged ?? 0, direction: 'in' },
+    { label: 'Gap → Brokerage',      value: state.gapToBrokerage     ?? 0, direction: 'in' },
+    { label: 'Gap → Cash',           value: state.gapToCash          ?? 0, direction: 'in' },
     { label: 'Lever contributions', value: state.leverContributionsInvested ?? 0, direction: 'in' },
     { label: 'Lump sums', value: state.lumpSumInvested ?? 0, direction: 'in' },
     { label: 'Withdrawals', value: state.withdrawnFromInvestments ?? 0, direction: 'out' },

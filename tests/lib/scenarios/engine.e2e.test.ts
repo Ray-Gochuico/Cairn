@@ -242,13 +242,25 @@ describe('projectScenario — cash floor + investments deficit routing', () => {
     expect(totalInvestments(states[12])).toBeGreaterThan(totalInvestments(noReturnStates[12]));
   });
 
-  it('parity: saving household without contributions behaves identically to pre-change routing', () => {
-    // Saving household → savings > 0 path. The cash-floor change leaves this
-    // code path untouched. Investments must accumulate the full savings each
-    // month, cash must stay at zero (no flow into cash).
-    // Use 0% return + 0% inflation → savings is constant month over month,
-    // so the monthly investment delta should be identical month 1 vs month 12.
-    const states = projectScenario(flatReal, zeroReturnPayload(), { startISO: '2026-05', months: 13 });
+  it('parity: saving household without contributions, 100% brokerage gap allocation routes surplus to investments', () => {
+    // Saving household → savings > 0 path. Configure a 100% brokerage gap
+    // allocation so the surplus routes to investments (mirroring the
+    // pre-revamp auto-invest path). Cash stays at zero; the monthly
+    // investment delta is constant under 0% return + 0% inflation.
+    const investingReal: RealState = {
+      ...flatReal,
+      accountsByBucket: {
+        taxAdvantaged: [],
+        brokerage: [{ id: 1, householdId: 1, name: 'Brk', type: 'ACCOUNT_BROKERAGE', excludedFromNetWorth: false } as never],
+        cash: [],
+      },
+    };
+    const payload = zeroReturnPayload();
+    payload.gapAllocation = {
+      taxAdvantaged: null,
+      brokerage: { mode: 'percent', value: 1.0, accountSplits: null },
+    };
+    const states = projectScenario(investingReal, payload, { startISO: '2026-05', months: 13 });
     expect(states[12].cash).toBe(0);
     expect(totalInvestments(states[12])).toBeGreaterThan(totalInvestments(states[0]));
     const delta1 = totalInvestments(states[1]) - totalInvestments(states[0]);

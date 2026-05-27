@@ -36,26 +36,37 @@ describe('toReal', () => {
     expect(totalInvestments(states[0])).toBe(100000);
   });
 
-  it('scales salarySurplusToCash by the inflation factor (Task α3)', () => {
+  it('scales gapToTaxAdvantaged + gapToBrokerage + gapToCash by the inflation factor (2026-05-26 revamp)', () => {
     // Mirror the existing decomposition-field scaling: nominal $/step amounts
     // are deflated by the same per-step factor as cash / investments. After
     // 1 year @ 3% inflation, $1000 nominal ≈ $970.87 real (1 / 1.03).
     const states: MonthlyState[] = [
-      { ...make('2026-05', 100_000), salarySurplusToCash: 0 },
-      { ...make('2027-05', 100_000), salarySurplusToCash: 1000 },
+      { ...make('2026-05', 100_000), gapToTaxAdvantaged: 0, gapToBrokerage: 0, gapToCash: 0 },
+      {
+        ...make('2027-05', 100_000),
+        gapToTaxAdvantaged: 1000,
+        gapToBrokerage: 500,
+        gapToCash: 250,
+      },
     ];
     const realStates = toReal(states, 0.03, '2026-05');
-    expect(realStates[1].salarySurplusToCash).toBeCloseTo(1000 / 1.03, 2);
-    // Month 0 explicit zero stays at zero (preserved through the scale).
-    expect(realStates[0].salarySurplusToCash).toBe(0);
+    expect(realStates[1].gapToTaxAdvantaged).toBeCloseTo(1000 / 1.03, 2);
+    expect(realStates[1].gapToBrokerage).toBeCloseTo(500 / 1.03, 2);
+    expect(realStates[1].gapToCash).toBeCloseTo(250 / 1.03, 2);
+    // Month 0 explicit zeros stay at zero (preserved through the scale).
+    expect(realStates[0].gapToTaxAdvantaged).toBe(0);
+    expect(realStates[0].gapToBrokerage).toBe(0);
+    expect(realStates[0].gapToCash).toBe(0);
   });
 
-  it('preserves undefined salarySurplusToCash distinctly from 0', () => {
-    // Seed state (month 0) doesn't step through stepMonth → field is undefined,
-    // not 0. toReal must keep that distinction so tooltips don't render a row
-    // for a state that never ran the auto-invest branch.
+  it('preserves undefined gapTo* fields distinctly from 0', () => {
+    // Seed state (month 0) doesn't step through stepMonth → fields are
+    // undefined, not 0. toReal must keep that distinction so tooltips don't
+    // render a row for a state that never ran the gap-allocation branch.
     const states: MonthlyState[] = [make('2027-05', 100_000)];
     const realStates = toReal(states, 0.03, '2026-05');
-    expect(realStates[0].salarySurplusToCash).toBeUndefined();
+    expect(realStates[0].gapToTaxAdvantaged).toBeUndefined();
+    expect(realStates[0].gapToBrokerage).toBeUndefined();
+    expect(realStates[0].gapToCash).toBeUndefined();
   });
 });

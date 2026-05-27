@@ -11,7 +11,11 @@ export {
   type InflationSlice,
 } from './effective-inflation';
 export { totalInvestments, aggregateByTaxBucket } from './aggregate-investments';
-export { currentMonthlySalarySurplus } from './auto-invest-preview';
+export {
+  currentSurplusFlow,
+  currentMonthlySalarySurplus,
+  type SurplusFlowBreakdown,
+} from './auto-invest-preview';
 export type { TaxBucket } from '@/lib/account-tax-classification';
 export {
   LeverPayloadSchema, emptyLeverPayload,

@@ -100,10 +100,16 @@ export default function LeverBar() {
         {(() => {
           const hasSegments = counts.contributions > 0;
           const hasSurplus = surplus.amount > 0;
+          // Transitional bridge (α3 → γ3): the surplus now exposes a per-bucket
+          // breakdown rather than a 'cash'|'investments' destination tag. We
+          // surface the auto-invest badge whenever ANY non-cash routing is
+          // configured; the cash-hint icon when everything flows to cash.
+          // γ3 will rewrite the rendered copy to be per-bucket aware.
+          const routedToInvestments = surplus.taxAdvantaged + surplus.brokerage;
           const showAutoInvestBadge =
-            !hasSegments && hasSurplus && surplus.destination === 'investments';
+            !hasSegments && hasSurplus && routedToInvestments > 0;
           const showCashHint =
-            !hasSegments && hasSurplus && surplus.destination === 'cash';
+            !hasSegments && hasSurplus && routedToInvestments === 0;
           const showFallbackIcon = !hasSegments && !hasSurplus;
           const formattedAmount = formatCompactCurrency(surplus.amount);
           const pillTitle = hasSegments

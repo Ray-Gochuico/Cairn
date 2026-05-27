@@ -119,9 +119,17 @@ describe('projectScenario — retirement age transition', () => {
   it('post-retirement expenses are drawn from investments via the cash-floor rule', () => {
     // Hostile drawdown: 0% return + high expenses so the monthly post-retirement
     // deficit clearly erodes investments. With $4500/mo expenses and 0% return,
-    // investments shrink by $54K/yr post-retirement.
+    // investments shrink by $54K/yr post-retirement. To preserve the
+    // pre-retirement growth signal we route 100% of the gap to a brokerage
+    // account (2026-05-26 revamp swaps the household auto-invest setting for
+    // the per-scenario gap allocation lever).
     const realLowReturn: RealState = {
       ...makeRealState({ initialCash: 5000, initialInvestments: 500000 }),
+      accountsByBucket: {
+        taxAdvantaged: [],
+        brokerage: [{ id: 1, householdId: 1, name: 'Brk', type: 'ACCOUNT_BROKERAGE', excludedFromNetWorth: false } as never],
+        cash: [],
+      },
       defaults: {
         inflation: 0,
         returnRate: 0,
@@ -131,9 +139,13 @@ describe('projectScenario — retirement age transition', () => {
     };
     const payload = applyDefaultExpenses(emptyLeverPayload());
     payload.returns = { defaultRate: 0, overrides: {} };
+    payload.gapAllocation = {
+      taxAdvantaged: null,
+      brokerage: { mode: 'percent', value: 1.0, accountSplits: null },
+    };
     const states = projectScenario(realLowReturn, payload, { startISO: '2026-05', months: 120 });
 
-    // Pre-retirement (year 1): investments grow from savings (no return).
+    // Pre-retirement (year 1): investments grow from gap allocation (no return).
     expect(totalInvestments(states[12])).toBeGreaterThan(totalInvestments(states[0]));
 
     // Post-retirement, with no income, investments are eroded by expenses.

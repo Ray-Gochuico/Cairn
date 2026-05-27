@@ -23,20 +23,34 @@ vi.mock('@/components/whatif/levers/ContributionsPopover', () => ({
   default: () => null,
 }));
 
-// Task #25 — surplus-flow preview is computed via useSurplusFlowPreview()
-// which wraps useRealState() + the engine and reads the auto-invest setting.
-// We mock the hook directly so each test can dial in the amount + destination
-// without standing up the full store graph. β2 task wires destination-aware
-// copy onto the pill; for now the LeverBar UX is unchanged from β0 and only
-// reads `.amount` (we default destination to 'investments' to mirror the
-// pre-migration-0029 default behavior so legacy tests keep passing).
+// The surplus-flow preview hook wraps useRealState() + the engine. We mock
+// the hook directly so each test can dial in the per-bucket breakdown without
+// standing up the full store graph. The new return shape (post 2026-05-26
+// revamp) is { amount, taxAdvantaged, brokerage, cash }; we derive the bucket
+// values from the legacy `surplusDestination` toggle to preserve test intent
+// while the LeverBar component reads the per-bucket fields directly.
 let autoInvestPreviewValue = 0;
 let surplusDestination: 'cash' | 'investments' = 'investments';
 vi.mock('@/components/whatif/useSurplusFlowPreview', () => ({
-  useSurplusFlowPreview: () => ({
-    amount: autoInvestPreviewValue,
-    destination: surplusDestination,
-  }),
+  useSurplusFlowPreview: () => {
+    if (surplusDestination === 'cash') {
+      return {
+        amount: autoInvestPreviewValue,
+        taxAdvantaged: 0,
+        brokerage: 0,
+        cash: autoInvestPreviewValue,
+      };
+    }
+    // 'investments' → route the full amount into brokerage for the per-bucket
+    // breakdown. The exact tax-adv vs brokerage split doesn't matter for
+    // these tests — only "non-cash routing > 0".
+    return {
+      amount: autoInvestPreviewValue,
+      taxAdvantaged: 0,
+      brokerage: autoInvestPreviewValue,
+      cash: 0,
+    };
+  },
 }));
 
 const updateLeverMock = vi.fn().mockResolvedValue(undefined);
