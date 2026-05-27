@@ -33,6 +33,15 @@ function nullableBool(v: number | null | undefined): boolean | null {
   return v === 1;
 }
 
+/**
+ * Map nullable boolean → SQLite INTEGER (0/1) or NULL for write side.
+ * Inverse of {@link nullableBool}.
+ */
+function boolToInt(v: boolean | null | undefined): number | null {
+  if (v === null || v === undefined) return null;
+  return v ? 1 : 0;
+}
+
 function rowToPerson(row: PersonRow): Person {
   return PersonSchema.parse({
     id: row.id,
@@ -137,6 +146,10 @@ export class PersonsRepo {
         dependent_care_fsa_monthly = ?,
         hsa_monthly_contribution = ?,
         hsa_eligible = ?,
+        job_stability = ?,
+        expects_higher_future_income = ?,
+        on_parent_health_insurance = ?,
+        is_relatively_healthy = ?,
         updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
       [
@@ -158,6 +171,10 @@ export class PersonsRepo {
         merged.dependentCareFsaMonthly,
         merged.hsaMonthlyContribution,
         merged.hsaEligible ? 1 : 0,
+        merged.jobStability,
+        boolToInt(merged.expectsHigherFutureIncome),
+        boolToInt(merged.onParentHealthInsurance),
+        boolToInt(merged.isRelativelyHealthy),
         id,
       ]
     );

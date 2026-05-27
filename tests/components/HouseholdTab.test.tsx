@@ -3,22 +3,19 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
-import { runMigrations } from '@/db/migrations';
+import { loadAllMigrations, runMigrations } from '@/db/migrations';
 import { setDatabase } from '@/db/db';
 import { useHouseholdStore } from '@/stores/household-store';
 import HouseholdTab from '@/pages/inputs/HouseholdTab';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-
-const loadInitialMigration = () =>
-  readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
 
 describe('HouseholdTab', () => {
   let db: SqliteAdapter;
 
   beforeEach(async () => {
     db = new SqliteAdapter(':memory:');
-    await runMigrations(db, [{ version: '0001_initial', sql: loadInitialMigration() }]);
+    // Full migration chain — HouseholdRepo.update() references 0018
+    // roadmap rule-engine columns (W7-R1).
+    await runMigrations(db, await loadAllMigrations());
     setDatabase(db);
     useHouseholdStore.setState({ household: null, isLoading: false, error: null });
   });

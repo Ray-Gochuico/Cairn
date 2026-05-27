@@ -5,23 +5,25 @@ import { AccountsRepo } from '@/domain/accounts';
 import { PersonsRepo } from '@/domain/persons';
 import { DependentsRepo } from '@/domain/dependents';
 import { AccountType, DependentType } from '@/types/enums';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const loadInitialMigration = () =>
-  readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
-const loadCommissionMigration = () =>
-  readFileSync(resolve(__dirname, '../../src/db/migrations/0003_add_commission_columns.sql'), 'utf-8');
-const loadEmploymentBonusMigration = () =>
-  readFileSync(resolve(__dirname, '../../src/db/migrations/0005_add_employment_and_bonus_columns.sql'), 'utf-8');
-const loadAccountMarginMigration = () =>
-  readFileSync(resolve(__dirname, '../../src/db/migrations/0007_add_account_margin.sql'), 'utf-8');
-const loadAccentColorsMigration = () =>
-  readFileSync(resolve(__dirname, '../../src/db/migrations/0015_add_accent_colors.sql'), 'utf-8');
-const loadAppSettingsMigration = () =>
-  readFileSync(resolve(__dirname, '../../src/db/migrations/0014_add_app_settings.sql'), 'utf-8');
-const loadCashApyMigration = () =>
-  readFileSync(resolve(__dirname, '../../src/db/migrations/0024_cash_apy.sql'), 'utf-8');
+const MIGRATIONS_DIR = resolve(__dirname, '../../src/db/migrations');
+
+/**
+ * Load every migration file from src/db/migrations (in lexicographic order)
+ * so repo round-trip tests see the latest schema. Required to catch
+ * UPDATE-SQL-vs-migration column drift (W7-R1).
+ */
+function loadAllMigrationsSync(): { version: string; sql: string }[] {
+  return readdirSync(MIGRATIONS_DIR)
+    .filter((f) => f.endsWith('.sql'))
+    .sort()
+    .map((f) => ({
+      version: f.replace(/\.sql$/, ''),
+      sql: readFileSync(resolve(MIGRATIONS_DIR, f), 'utf-8'),
+    }));
+}
 
 describe('AccountsRepo', () => {
   let db: SqliteAdapter;
@@ -31,15 +33,10 @@ describe('AccountsRepo', () => {
 
   beforeEach(async () => {
     db = new SqliteAdapter(':memory:');
-    await runMigrations(db, [
-      { version: '0001_initial', sql: loadInitialMigration() },
-      { version: '0003_add_commission_columns', sql: loadCommissionMigration() },
-      { version: '0005_add_employment_and_bonus_columns', sql: loadEmploymentBonusMigration() },
-      { version: '0007_add_account_margin', sql: loadAccountMarginMigration() },
-      { version: '0014_add_app_settings', sql: loadAppSettingsMigration() },
-      { version: '0015_add_accent_colors', sql: loadAccentColorsMigration() },
-      { version: '0024_cash_apy', sql: loadCashApyMigration() },
-    ]);
+    // Load the full migration chain so UPDATE statements that reference
+    // later-added columns (0018 roadmap rule-engine) don't fail with
+    // "no such column" — see W7-R1.
+    await runMigrations(db, loadAllMigrationsSync());
     repo = new AccountsRepo(db);
     personsRepo = new PersonsRepo(db);
     dependentsRepo = new DependentsRepo(db);
@@ -429,6 +426,57 @@ describe('AccountsRepo', () => {
           apyRate: 0.20,
         }),
       ).rejects.toThrow();
+    });
+  });
+
+  // W7-R1: Roadmap rule-engine columns added in 0018 must round-trip via update()
+  describe('W7-R1 roadmap rule-engine columns round-trip', () => {
+    async function makeAccount() {
+      return repo.create({
+        householdId: 1,
+        ownerPersonId: null,
+        beneficiaryDependentId: null,
+        name: '401k Account',
+        institution: 'Fidelity',
+        type: AccountType.ACCOUNT_401K,
+        cryptoWalletAddress: null,
+        autoFetchEnabled: false,
+        excludedFromNetWorth: false,
+        stateOfPlan: null,
+        accentColor: null,
+      });
+    }
+
+    it('round-trips hasEmployerMatch boolean (true/false/null)', async () => {
+      const id = await makeAccount();
+      await repo.update(id, { hasEmployerMatch: true });
+      expect((await repo.findById(id))?.hasEmployerMatch).toBe(true);
+      await repo.update(id, { hasEmployerMatch: false });
+      expect((await repo.findById(id))?.hasEmployerMatch).toBe(false);
+      await repo.update(id, { hasEmployerMatch: null });
+      expect((await repo.findById(id))?.hasEmployerMatch).toBeNull();
+    });
+
+    it('round-trips employerMatchPct and employerMatchLimitPct (REAL)', async () => {
+      const id = await makeAccount();
+      await repo.update(id, { employerMatchPct: 50, employerMatchLimitPct: 6 });
+      const acc = await repo.findById(id);
+      expect(acc?.employerMatchPct).toBe(50);
+      expect(acc?.employerMatchLimitPct).toBe(6);
+    });
+
+    it('round-trips allowsMegaBackdoorRollover boolean', async () => {
+      const id = await makeAccount();
+      await repo.update(id, { allowsMegaBackdoorRollover: true });
+      expect((await repo.findById(id))?.allowsMegaBackdoorRollover).toBe(true);
+    });
+
+    it('round-trips hasHighFees boolean', async () => {
+      const id = await makeAccount();
+      await repo.update(id, { hasHighFees: true });
+      expect((await repo.findById(id))?.hasHighFees).toBe(true);
+      await repo.update(id, { hasHighFees: false });
+      expect((await repo.findById(id))?.hasHighFees).toBe(false);
     });
   });
 });

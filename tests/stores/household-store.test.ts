@@ -4,18 +4,15 @@ import { loadAllMigrations, runMigrations } from '@/db/migrations';
 import { setDatabase } from '@/db/db';
 import { useHouseholdStore } from '@/stores/household-store';
 import { FilingStatus } from '@/types/enums';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-
-const loadInitialMigration = () =>
-  readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
 
 describe('useHouseholdStore', () => {
   let db: SqliteAdapter;
 
   beforeEach(async () => {
     db = new SqliteAdapter(':memory:');
-    await runMigrations(db, [{ version: '0001_initial', sql: loadInitialMigration() }]);
+    // Full migration chain so HouseholdRepo.update() sees the 0018
+    // roadmap rule-engine columns and doesn't throw on "no such column".
+    await runMigrations(db, await loadAllMigrations());
     setDatabase(db);
     useHouseholdStore.setState({ household: null, isLoading: false, error: null });
   });

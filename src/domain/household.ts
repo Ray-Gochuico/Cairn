@@ -30,6 +30,15 @@ function nullableBool(v: number | null | undefined): boolean | null {
   return v === 1;
 }
 
+/**
+ * Map nullable boolean → SQLite INTEGER (0/1) or NULL for write side.
+ * Inverse of {@link nullableBool}.
+ */
+function boolToInt(v: boolean | null | undefined): number | null {
+  if (v === null || v === undefined) return null;
+  return v ? 1 : 0;
+}
+
 function rowToHousehold(row: HouseholdRow): Household {
   const growthScenarios: GrowthScenario[] = JSON.parse(row.growth_scenarios);
   return HouseholdSchema.parse({
@@ -88,6 +97,14 @@ export class HouseholdRepo {
         withdrawal_rate = ?,
         inflation_assumption = ?,
         growth_scenarios = ?,
+        interest_threshold_low_pct = ?,
+        interest_threshold_high_pct = ?,
+        has_written_ips = ?,
+        has_hsa_qualified_hdhp = ?,
+        makes_charitable_gifts = ?,
+        upcoming_large_purchase = ?,
+        upcoming_purchase_amount = ?,
+        upcoming_purchase_months = ?,
         updated_at = CURRENT_TIMESTAMP
        WHERE id = 1`,
       [
@@ -99,6 +116,14 @@ export class HouseholdRepo {
         merged.withdrawalRate,
         merged.inflationAssumption,
         JSON.stringify(merged.growthScenarios),
+        merged.interestThresholdLowPct,
+        merged.interestThresholdHighPct,
+        boolToInt(merged.hasWrittenIps),
+        boolToInt(merged.hasHsaQualifiedHdhp),
+        boolToInt(merged.makesCharitableGifts),
+        boolToInt(merged.upcomingLargePurchase),
+        merged.upcomingPurchaseAmount,
+        merged.upcomingPurchaseMonths,
       ]
     );
   }

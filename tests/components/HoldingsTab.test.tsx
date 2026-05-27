@@ -4,7 +4,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
-import { runMigrations } from '@/db/migrations';
+import { loadAllMigrations, runMigrations } from '@/db/migrations';
 import { setDatabase } from '@/db/db';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
@@ -12,19 +12,6 @@ import { AccountsRepo } from '@/domain/accounts';
 import { HoldingsRepo } from '@/domain/holdings';
 import { AccountType } from '@/types/enums';
 import HoldingsTab from '@/pages/inputs/HoldingsTab';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-
-const loadInitialMigration = () =>
-  readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
-const loadAccountMarginMigration = () =>
-  readFileSync(resolve(__dirname, '../../src/db/migrations/0007_add_account_margin.sql'), 'utf-8');
-const loadAccentColorsMigration = () =>
-  readFileSync(resolve(__dirname, '../../src/db/migrations/0015_add_accent_colors.sql'), 'utf-8');
-const loadAppSettingsMigration = () =>
-  readFileSync(resolve(__dirname, '../../src/db/migrations/0014_add_app_settings.sql'), 'utf-8');
-const loadCashApyMigration = () =>
-  readFileSync(resolve(__dirname, '../../src/db/migrations/0024_cash_apy.sql'), 'utf-8');
 
 async function seedAccount(
   db: SqliteAdapter,
@@ -70,13 +57,9 @@ describe('HoldingsTab', () => {
 
   beforeEach(async () => {
     db = new SqliteAdapter(':memory:');
-    await runMigrations(db, [
-      { version: '0001_initial', sql: loadInitialMigration() },
-      { version: '0007_add_account_margin', sql: loadAccountMarginMigration() },
-      { version: '0015_add_accent_colors', sql: loadAccentColorsMigration() },
-      { version: '0014_add_app_settings', sql: loadAppSettingsMigration() },
-      { version: '0024_cash_apy', sql: loadCashApyMigration() },
-    ]);
+    // Full migration chain — AccountsRepo.update() references 0018 columns
+    // (has_employer_match, etc.) added by the roadmap rule engine (W7-R1).
+    await runMigrations(db, await loadAllMigrations());
     setDatabase(db);
     useAccountsStore.setState({ accounts: [], isLoading: false, error: null });
     useHoldingsStore.setState({ holdings: [], isLoading: false, error: null });

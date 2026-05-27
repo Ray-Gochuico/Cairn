@@ -1,22 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
-import { runMigrations } from '@/db/migrations';
+import { loadAllMigrations, runMigrations } from '@/db/migrations';
 import { setDatabase } from '@/db/db';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { AccountType } from '@/types/enums';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-
-const loadInitialMigration = () =>
-  readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
-const loadAccountMarginMigration = () =>
-  readFileSync(resolve(__dirname, '../../src/db/migrations/0007_add_account_margin.sql'), 'utf-8');
-const loadAccentColorsMigration = () =>
-  readFileSync(resolve(__dirname, '../../src/db/migrations/0015_add_accent_colors.sql'), 'utf-8');
-const loadAppSettingsMigration = () =>
-  readFileSync(resolve(__dirname, '../../src/db/migrations/0014_add_app_settings.sql'), 'utf-8');
-const loadCashApyMigration = () =>
-  readFileSync(resolve(__dirname, '../../src/db/migrations/0024_cash_apy.sql'), 'utf-8');
 
 const sampleAccount = {
   householdId: 1,
@@ -37,13 +24,10 @@ describe('useAccountsStore', () => {
 
   beforeEach(async () => {
     db = new SqliteAdapter(':memory:');
-    await runMigrations(db, [
-      { version: '0001_initial', sql: loadInitialMigration() },
-      { version: '0007_add_account_margin', sql: loadAccountMarginMigration() },
-      { version: '0015_add_accent_colors', sql: loadAccentColorsMigration() },
-      { version: '0014_add_app_settings', sql: loadAppSettingsMigration() },
-      { version: '0024_cash_apy', sql: loadCashApyMigration() },
-    ]);
+    // Full migration chain so AccountsRepo.update() sees the 0018 roadmap
+    // rule-engine columns (has_employer_match, etc.) and doesn't throw on
+    // "no such column" — W7-R1.
+    await runMigrations(db, await loadAllMigrations());
     setDatabase(db);
     useAccountsStore.setState({ accounts: [], isLoading: false, error: null });
   });

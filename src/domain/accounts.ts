@@ -29,6 +29,15 @@ function nullableBool(v: number | null | undefined): boolean | null {
   return v === 1;
 }
 
+/**
+ * Map nullable boolean → SQLite INTEGER (0/1) or NULL for write side.
+ * Inverse of {@link nullableBool}.
+ */
+function boolToInt(v: boolean | null | undefined): number | null {
+  if (v === null || v === undefined) return null;
+  return v ? 1 : 0;
+}
+
 function rowToAccount(row: AccountRow): Account {
   return AccountSchema.parse({
     id: row.id,
@@ -126,6 +135,11 @@ export class AccountsRepo {
         state_of_plan = ?,
         accent_color = ?,
         apy_rate = ?,
+        has_employer_match = ?,
+        employer_match_pct = ?,
+        employer_match_limit_pct = ?,
+        allows_mega_backdoor_rollover = ?,
+        has_high_fees = ?,
         updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
       [
@@ -141,6 +155,11 @@ export class AccountsRepo {
         merged.stateOfPlan ?? null,
         merged.accentColor ?? null,
         merged.apyRate ?? null,
+        boolToInt(merged.hasEmployerMatch),
+        merged.employerMatchPct ?? null,
+        merged.employerMatchLimitPct ?? null,
+        boolToInt(merged.allowsMegaBackdoorRollover),
+        boolToInt(merged.hasHighFees),
         id,
       ]
     );

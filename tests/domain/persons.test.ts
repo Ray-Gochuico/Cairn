@@ -2,15 +2,25 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { runMigrations } from '@/db/migrations';
 import { PersonsRepo } from '@/domain/persons';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const loadInitialMigration = () =>
-  readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
-const loadCommissionMigration = () =>
-  readFileSync(resolve(__dirname, '../../src/db/migrations/0003_add_commission_columns.sql'), 'utf-8');
-const loadEmploymentBonusMigration = () =>
-  readFileSync(resolve(__dirname, '../../src/db/migrations/0005_add_employment_and_bonus_columns.sql'), 'utf-8');
+const MIGRATIONS_DIR = resolve(__dirname, '../../src/db/migrations');
+
+/**
+ * Load every migration file from src/db/migrations (in lexicographic order)
+ * so repo round-trip tests see the latest schema. Required to catch
+ * UPDATE-SQL-vs-migration column drift (W7-R1).
+ */
+function loadAllMigrationsSync(): { version: string; sql: string }[] {
+  return readdirSync(MIGRATIONS_DIR)
+    .filter((f) => f.endsWith('.sql'))
+    .sort()
+    .map((f) => ({
+      version: f.replace(/\.sql$/, ''),
+      sql: readFileSync(resolve(MIGRATIONS_DIR, f), 'utf-8'),
+    }));
+}
 
 describe('PersonsRepo', () => {
   let db: SqliteAdapter;
@@ -18,11 +28,10 @@ describe('PersonsRepo', () => {
 
   beforeEach(async () => {
     db = new SqliteAdapter(':memory:');
-    await runMigrations(db, [
-      { version: '0001_initial', sql: loadInitialMigration() },
-      { version: '0003_add_commission_columns', sql: loadCommissionMigration() },
-      { version: '0005_add_employment_and_bonus_columns', sql: loadEmploymentBonusMigration() },
-    ]);
+    // Load the full migration chain so UPDATE statements that reference
+    // later-added columns (0018 roadmap rule-engine) don't fail with
+    // "no such column" — see W7-R1.
+    await runMigrations(db, loadAllMigrationsSync());
     repo = new PersonsRepo(db);
   });
 
@@ -190,5 +199,66 @@ describe('PersonsRepo', () => {
     expect(p?.employmentType).toBe('SALARY_NO_OT');
     expect(p?.expectedBonusFrequency).toBe('ANNUAL');
     expect(p?.bonusIsConsistent).toBe(true);
+  });
+
+  // W7-R1: Roadmap rule-engine columns added in 0018 must round-trip via update()
+  describe('W7-R1 roadmap rule-engine columns round-trip', () => {
+    async function makePerson() {
+      return repo.create({
+        householdId: 1,
+        name: 'Test',
+        dateOfBirth: '1990-01-01',
+        targetRetirementAge: 60,
+        annualSalaryPretax: 100000,
+        expectedCommission: 0,
+        expectedCommissionFrequency: 'MONTHLY',
+        pretax401kPct: 0,
+        healthInsuranceMonthlyPremium: 0,
+        dependentCareFsaMonthly: 0,
+        hsaMonthlyContribution: 0,
+        hsaEligible: false,
+      });
+    }
+
+    it("round-trips jobStability='stable'", async () => {
+      const id = await makePerson();
+      await repo.update(id, { jobStability: 'stable' });
+      expect((await repo.findById(id))?.jobStability).toBe('stable');
+    });
+
+    it("round-trips jobStability='unstable'", async () => {
+      const id = await makePerson();
+      await repo.update(id, { jobStability: 'unstable' });
+      expect((await repo.findById(id))?.jobStability).toBe('unstable');
+    });
+
+    it('round-trips jobStability back to null', async () => {
+      const id = await makePerson();
+      await repo.update(id, { jobStability: 'stable' });
+      await repo.update(id, { jobStability: null });
+      expect((await repo.findById(id))?.jobStability).toBeNull();
+    });
+
+    it('round-trips expectsHigherFutureIncome boolean (true/false/null)', async () => {
+      const id = await makePerson();
+      await repo.update(id, { expectsHigherFutureIncome: true });
+      expect((await repo.findById(id))?.expectsHigherFutureIncome).toBe(true);
+      await repo.update(id, { expectsHigherFutureIncome: false });
+      expect((await repo.findById(id))?.expectsHigherFutureIncome).toBe(false);
+      await repo.update(id, { expectsHigherFutureIncome: null });
+      expect((await repo.findById(id))?.expectsHigherFutureIncome).toBeNull();
+    });
+
+    it('round-trips onParentHealthInsurance boolean', async () => {
+      const id = await makePerson();
+      await repo.update(id, { onParentHealthInsurance: true });
+      expect((await repo.findById(id))?.onParentHealthInsurance).toBe(true);
+    });
+
+    it('round-trips isRelativelyHealthy boolean', async () => {
+      const id = await makePerson();
+      await repo.update(id, { isRelativelyHealthy: true });
+      expect((await repo.findById(id))?.isRelativelyHealthy).toBe(true);
+    });
   });
 });
