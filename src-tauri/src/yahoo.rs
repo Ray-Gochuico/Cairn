@@ -31,10 +31,28 @@ const COOKIE_URL: &str = "https://fc.yahoo.com";
 const CRUMB_URL: &str = "https://query1.finance.yahoo.com/v1/test/getcrumb";
 const QUOTE_SUMMARY_BASE: &str = "https://query2.finance.yahoo.com/v10/finance/quoteSummary";
 
-/// Matches a recent desktop Chrome on macOS so Yahoo treats us as a normal
-/// browser session. Yahoo has been known to gate `getcrumb` on a non-default
-/// UA, so we set one explicitly rather than relying on `reqwest`'s default.
-const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+/// Honest identifier carrying the cargo package name + version.
+///
+/// History: previously this masqueraded as `Mozilla/5.0 ... Chrome/120.0.0.0
+/// ... Safari/537.36` because Yahoo's getcrumb endpoint was observed gating
+/// on a non-default UA. Per Legal review (docs/reviews/2026-05-26-legal-review.md
+/// finding #1), the spoofed UA was the single most visible ToS-violation
+/// surface in the codebase — it reads as documented intent to bypass Yahoo's
+/// automated-access restriction (Yahoo ToS § 2(d)(ix)).
+///
+/// The new UA identifies the app honestly. Yahoo may rate-limit non-browser
+/// UAs more aggressively or refuse service entirely; the existing market-
+/// refresh code (`src/market/run-market-data-refresh.ts`) swallows errors in
+/// every IIFE and falls back to whatever is already in `price_cache`, so the
+/// worst case is "no fresh prices today," not "the app crashes." Monitor
+/// refresh success after rollout and consider staging this behind a
+/// Settings → Advanced opt-in toggle (off by default) if Yahoo starts
+/// refusing requests.
+const USER_AGENT: &str = concat!(
+    "Finance App (https://github.com/raymondgochuico/finance-app; finance-app/",
+    env!("CARGO_PKG_VERSION"),
+    ")"
+);
 
 /// Singleton state managed on the Tauri builder. Holds a `reqwest::Client`
 /// with cookie jar enabled and the cached crumb. `.manage(YahooState::new())`
