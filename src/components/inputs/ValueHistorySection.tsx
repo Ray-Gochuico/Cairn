@@ -4,6 +4,7 @@ import type { AssetSnapshotOwnerType } from '@/types/enums';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 
 const currencyFormatter = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -292,6 +293,10 @@ export default function ValueHistorySection({
             <span className="text-xs text-red-600 w-full">{addError}</span>
           ) : null}
         </form>
+
+        <div className="flex justify-end border-t pt-3">
+          <ImportCsvButton entity="asset_value_snapshot" />
+        </div>
       </div>
     </details>
   );

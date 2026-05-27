@@ -158,4 +158,16 @@ describe('ValueHistorySection', () => {
 
     expect(await screen.findByText(/non-negative/i)).toBeInTheDocument();
   });
+
+  it('renders an Import CSV button in the section body', () => {
+    renderSection({ ownerType: 'PROPERTY', ownerId: 1, fallbackValue: 400000 });
+    expect(
+      screen.getByRole('button', { name: /import csv/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('Import CSV button has the hidden file input wired', () => {
+    renderSection({ ownerType: 'PROPERTY', ownerId: 1, fallbackValue: 400000 });
+    expect(screen.getByTestId('import-csv-file-input')).toBeInTheDocument();
+  });
 });
