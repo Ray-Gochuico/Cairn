@@ -60,9 +60,11 @@ export function AdvancedSection() {
   // Default effective tax rate on retirement withdrawals (Trad bucket).
   // Persists on app_settings as a fraction (0.22), surfaced as whole-percent.
   // The 22% UI default (when the field is empty/unset) reflects Finance
-  // review NEW-W5-1 guidance: blended federal + FICA + average state for
-  // a typical $60k/yr drawdown. Users can blank the field to set the
-  // setting to null (engine falls back to legacy net-equals-gross).
+  // review NEW-W5-1 guidance: blended federal + average state for a
+  // typical $60k/yr drawdown. (FICA does NOT apply to 401k/Trad IRA
+  // withdrawals — the engine correctly omits it.) Users can blank the
+  // field to set the setting to null (engine falls back to legacy
+  // net-equals-gross).
   const [drawdownTaxRate, setDrawdownTaxRate] = useState<string>('');
   const [resetOpen, setResetOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -419,8 +421,8 @@ export function AdvancedSection() {
               />
               <p className="text-xs text-slate-500 mt-1">
                 Applied when What-If scenarios use the &quot;sequential&quot;
-                withdrawal strategy. Default 22% (covers federal + FICA +
-                average state for a $60k/yr drawdown). Leave blank to model
+                withdrawal strategy. Default 22% (covers federal + average
+                state for a $60k/yr drawdown). Leave blank to model
                 net-of-tax withdrawals manually.
               </p>
             </div>
