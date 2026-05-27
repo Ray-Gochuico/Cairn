@@ -52,6 +52,11 @@ export function decomposeStep(state: MonthlyState): DecompRow[] {
   return [
     { label: 'Compound return', value: state.compoundReturnAdded ?? 0, direction: 'in' },
     { label: 'Auto-invested salary', value: state.autoInvestedSalarySurplus ?? 0, direction: 'in' },
+    // Task β2 — surfaces the salary surplus that the engine routed to cash
+    // (migration 0029, auto-invest OFF path). The engine guarantees this
+    // field and `autoInvestedSalarySurplus` are mutually exclusive per step,
+    // so the user sees one or the other (or neither) — not both.
+    { label: 'Surplus to cash', value: state.salarySurplusToCash ?? 0, direction: 'in' },
     { label: 'Lever contributions', value: state.leverContributionsInvested ?? 0, direction: 'in' },
     { label: 'Lump sums', value: state.lumpSumInvested ?? 0, direction: 'in' },
     { label: 'Withdrawals', value: state.withdrawnFromInvestments ?? 0, direction: 'out' },

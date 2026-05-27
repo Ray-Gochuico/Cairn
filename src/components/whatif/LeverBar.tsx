@@ -23,16 +23,12 @@ export default function LeverBar() {
   const active = scenarios.find((s) => s.isActive);
   const [openLever, setOpenLever] = useState<LeverKey | null>(null);
 
-  // Task #25 — preview of the engine's salary-surplus routing for the
-  // current month. Surfaced in the Contributions pill so the user sees the
-  // dominant "salary surplus → cash/investments" flow without needing to
-  // read the popover banner. β2 will branch on `.destination`; for this
-  // intermediate commit we only consume `.amount` to keep the existing
-  // pill UX intact until the next task wires the destination-aware copy.
-  // Hook is called unconditionally before the early return below to keep
-  // React's rules of hooks happy.
+  // Task β2 — preview of the engine's salary-surplus routing for the current
+  // month. The pill below branches on `.destination` to show either an
+  // "auto $X/mo" badge (investments) or a "going to cash" Info icon (the new
+  // default since migration 0029). Hook is called unconditionally before the
+  // early return below to keep React's rules of hooks happy.
   const surplus = useSurplusFlowPreview(active?.leverPayload ?? null);
-  const autoInvestAmount = surplus.amount;
 
   if (!active) {
     return (
@@ -95,26 +91,35 @@ export default function LeverBar() {
           )}
         </Button>
         <Pill k="income"        label="Income" />
-        {/* Task #25 — Contributions pill surfaces the auto-invest amount when
-            no explicit segments are active. With segments configured, the
-            existing "Contributions · N" display is preserved unchanged. */}
+        {/* Task β2 — Contributions pill UX branches on the surplus destination:
+            - segments configured → "Contributions · N" (unchanged)
+            - no segments, destination=investments, amount > 0 → "auto $X/mo" badge
+            - no segments, destination=cash,        amount > 0 → cash-hint Info icon
+            - no segments, amount = 0 → fallback generic Info icon
+            The title attribute carries the discoverable hover copy. */}
         {(() => {
           const hasSegments = counts.contributions > 0;
-          const showAutoInvestBadge = !hasSegments && autoInvestAmount > 0;
-          const formattedAutoInvest = formatCompactCurrency(autoInvestAmount);
+          const hasSurplus = surplus.amount > 0;
+          const showAutoInvestBadge =
+            !hasSegments && hasSurplus && surplus.destination === 'investments';
+          const showCashHint =
+            !hasSegments && hasSurplus && surplus.destination === 'cash';
+          const showFallbackIcon = !hasSegments && !hasSurplus;
+          const formattedAmount = formatCompactCurrency(surplus.amount);
+          const pillTitle = hasSegments
+            ? undefined
+            : showAutoInvestBadge
+            ? `Monthly surplus of ${formattedAmount} auto-invests when no segments are active`
+            : showCashHint
+            ? 'Surplus is going to cash. Add a segment to invest.'
+            : 'Monthly surplus accumulates here when no segments are active';
           return (
             <Button
               variant={openLever === 'contributions' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setOpenLever((cur) => (cur === 'contributions' ? null : 'contributions'))}
               aria-label="Contributions"
-              title={
-                hasSegments
-                  ? undefined
-                  : showAutoInvestBadge
-                  ? `Monthly surplus of ${formattedAutoInvest} auto-invests when no segments are active`
-                  : 'Monthly surplus auto-invests when no segments are active'
-              }
+              title={pillTitle}
               className="flex items-center gap-1"
             >
               Contributions
@@ -125,10 +130,17 @@ export default function LeverBar() {
                   className="text-xs text-muted-foreground font-normal"
                 >
                   {' · auto '}
-                  {formattedAutoInvest}/mo
+                  {formattedAmount}/mo
                 </span>
               )}
-              {!hasSegments && !showAutoInvestBadge && (
+              {showCashHint && (
+                <Info
+                  data-testid="contributions-cash-hint-icon"
+                  className="h-3 w-3 text-muted-foreground"
+                  aria-hidden
+                />
+              )}
+              {showFallbackIcon && (
                 <Info
                   data-testid="contributions-auto-invest-icon"
                   className="h-3 w-3 text-muted-foreground"

@@ -33,6 +33,7 @@ function makeSettings(patch: Partial<AppSettings> = {}): AppSettings {
     defaultCompoundingFrequency: CompoundingFrequency.MONTHLY,
     propertyUtilitiesCategoryIds: null,
     vehicleGasCategoryIds: null,
+    autoInvestSalarySurplus: false,
     ...patch,
   };
 }
@@ -520,5 +521,49 @@ describe('AdvancedSection — Bulk data import link', () => {
     expect(screen.getByText(/Bulk data import/i)).toBeInTheDocument();
     const link = screen.getByRole('link', { name: /open import wizard/i });
     expect(link).toHaveAttribute('href', '/setup?section=4');
+  });
+});
+
+describe('AdvancedSection — Auto-invest salary surplus toggle (Task β2)', () => {
+  beforeEach(() => {
+    resetCategoriesStore();
+    resetStore(makeHousehold());
+    resetSettingsStore(makeSettings());
+  });
+
+  it('renders the toggle inside the What-If projection defaults section', () => {
+    render(<AdvancedSection />);
+    fireEvent.click(screen.getByText('Advanced'));
+    const checkbox = screen.getByLabelText(/auto-invest salary surplus/i);
+    expect(checkbox).toBeInTheDocument();
+    // Toggle defaults to unchecked (migration 0029 default: false).
+    expect(checkbox).not.toBeChecked();
+  });
+
+  it('prefills as checked when settings.autoInvestSalarySurplus is true', () => {
+    resetSettingsStore(makeSettings({ autoInvestSalarySurplus: true }));
+    render(<AdvancedSection />);
+    fireEvent.click(screen.getByText('Advanced'));
+    expect(screen.getByLabelText(/auto-invest salary surplus/i)).toBeChecked();
+  });
+
+  it('calls useSettingsStore.update with autoInvestSalarySurplus=true when toggled on', async () => {
+    const settingsUpdate = vi.fn().mockResolvedValue(undefined);
+    resetSettingsStore(makeSettings(), settingsUpdate);
+    const user = userEvent.setup();
+    render(<AdvancedSection />);
+    fireEvent.click(screen.getByText('Advanced'));
+    await user.click(screen.getByLabelText(/auto-invest salary surplus/i));
+    expect(settingsUpdate).toHaveBeenCalledWith({ autoInvestSalarySurplus: true });
+  });
+
+  it('calls useSettingsStore.update with autoInvestSalarySurplus=false when toggled off', async () => {
+    const settingsUpdate = vi.fn().mockResolvedValue(undefined);
+    resetSettingsStore(makeSettings({ autoInvestSalarySurplus: true }), settingsUpdate);
+    const user = userEvent.setup();
+    render(<AdvancedSection />);
+    fireEvent.click(screen.getByText('Advanced'));
+    await user.click(screen.getByLabelText(/auto-invest salary surplus/i));
+    expect(settingsUpdate).toHaveBeenCalledWith({ autoInvestSalarySurplus: false });
   });
 });

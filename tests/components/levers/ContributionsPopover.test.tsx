@@ -8,6 +8,19 @@ import { useAccountsStore } from '@/stores/accounts-store';
 import { emptyLeverPayload } from '@/lib/scenarios';
 import type { Scenario } from '@/types/scenario';
 
+// Task β2 — the preview card branches on the destination returned by
+// useSurplusFlowPreview. We mock the hook directly so tests can dial in
+// each (amount, destination) combination without standing up the full
+// settings store + engine path. Tests that don't care about the preview
+// (allocation, year-input plumbing) get the default amount=0 → preview hidden.
+let surplusFlowPreviewMock: { amount: number; destination: 'cash' | 'investments' } = {
+  amount: 0,
+  destination: 'cash',
+};
+vi.mock('@/components/whatif/useSurplusFlowPreview', () => ({
+  useSurplusFlowPreview: () => surplusFlowPreviewMock,
+}));
+
 function resetStore(payloadOverrides: Partial<ReturnType<typeof emptyLeverPayload>> = {}) {
   useScenariosStore.setState({
     scenarios: [{
@@ -24,49 +37,60 @@ function resetStore(payloadOverrides: Partial<ReturnType<typeof emptyLeverPayloa
 }
 
 describe('ContributionsPopover', () => {
-  beforeEach(() => { resetStore(); });
+  beforeEach(() => {
+    resetStore();
+    surplusFlowPreviewMock = { amount: 0, destination: 'cash' };
+  });
 
   it('renders an empty-state message when no segments are configured', () => {
     render(<MemoryRouter><ContributionsPopover open onOpenChange={() => {}} /></MemoryRouter>);
     expect(screen.getByText(/no contribution segments yet/i)).toBeInTheDocument();
   });
 
-  it('shows the auto-invest read-only card when no segments are configured', () => {
+  it('shows the auto-invest preview card when no segments + destination=investments + amount > 0', () => {
+    surplusFlowPreviewMock = { amount: 4500, destination: 'investments' };
     render(<MemoryRouter><ContributionsPopover open onOpenChange={() => {}} /></MemoryRouter>);
-    // Task #25 — replaced the prior blue-banner notice with a read-only
-    // "Auto-invest" card carrying the dollar amount + helper text.
-    const card = screen.getByTestId('contributions-auto-invest-card');
+    // Task β2 — preview card now branches by destination. With destination
+    // = 'investments' (autoInvestSalarySurplus = true) the card surfaces
+    // the "Auto-investing" copy.
+    const card = screen.getByTestId('contributions-surplus-flow-card');
     expect(card).toBeInTheDocument();
-    expect(card).toHaveTextContent(/auto-invest/i);
+    expect(card).toHaveTextContent(/auto-investing/i);
     expect(card).toHaveTextContent(/salary surplus/i);
-    // The card surfaces the dollar amount via the dedicated test id.
-    expect(screen.getByTestId('contributions-auto-invest-amount')).toBeInTheDocument();
+    expect(card.textContent).toContain('$4,500');
   });
 
-  it('hides the auto-invest card once at least one segment is added', async () => {
+  it('shows the "surplus going to cash" preview card when destination=cash + amount > 0', () => {
+    surplusFlowPreviewMock = { amount: 4500, destination: 'cash' };
+    render(<MemoryRouter><ContributionsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+    const card = screen.getByTestId('contributions-surplus-flow-card');
+    expect(card).toBeInTheDocument();
+    expect(card).toHaveTextContent(/going to cash/i);
+    expect(card).toHaveTextContent(/add a segment/i);
+    expect(card.textContent).toContain('$4,500');
+  });
+
+  it('hides the preview card once at least one segment is added', () => {
+    surplusFlowPreviewMock = { amount: 4500, destination: 'investments' };
     resetStore({
       contributions: [{ startMonth: 0, endMonth: 59, monthlyAmount: 1000, label: 'Y1-Y5' }],
     });
     render(<MemoryRouter><ContributionsPopover open onOpenChange={() => {}} /></MemoryRouter>);
-    expect(screen.queryByTestId('contributions-auto-invest-card')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('contributions-surplus-flow-card')).not.toBeInTheDocument();
   });
 
-  it('auto-invest card is read-only (no inputs, no remove buttons inside it)', () => {
+  it('hides the preview card when the surplus amount is 0', () => {
+    surplusFlowPreviewMock = { amount: 0, destination: 'cash' };
     render(<MemoryRouter><ContributionsPopover open onOpenChange={() => {}} /></MemoryRouter>);
-    const card = screen.getByTestId('contributions-auto-invest-card');
-    // No <input> elements live INSIDE the card — it's purely informational.
+    expect(screen.queryByTestId('contributions-surplus-flow-card')).not.toBeInTheDocument();
+  });
+
+  it('preview card is read-only (no inputs, no buttons inside it)', () => {
+    surplusFlowPreviewMock = { amount: 4500, destination: 'investments' };
+    render(<MemoryRouter><ContributionsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+    const card = screen.getByTestId('contributions-surplus-flow-card');
     expect(card.querySelectorAll('input').length).toBe(0);
     expect(card.querySelectorAll('button').length).toBe(0);
-  });
-
-  it('auto-invest card dollar amount renders as "$X/mo" formatted currency', () => {
-    render(<MemoryRouter><ContributionsPopover open onOpenChange={() => {}} /></MemoryRouter>);
-    const amount = screen.getByTestId('contributions-auto-invest-amount');
-    // Without a real RealState (no household in test setup), the helper
-    // returns 0 — the popover renders "$0/mo" which still matches the
-    // /\$\d.*\/mo/ shape. We just confirm the suffix is present.
-    expect(amount.textContent).toMatch(/\/mo$/);
-    expect(amount.textContent).toMatch(/^\$/);
   });
 
   it('clicking + Add segment appends a row with default year and amount inputs', async () => {

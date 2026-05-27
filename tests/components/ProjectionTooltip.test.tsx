@@ -41,6 +41,7 @@ function stateAt(monthISO: string, overrides: Partial<MonthlyState> = {}): Month
     events: [],
     compoundReturnAdded: 0,
     autoInvestedSalarySurplus: 0,
+    salarySurplusToCash: 0,
     leverContributionsInvested: 0,
     lumpSumInvested: 0,
     withdrawnFromInvestments: 0,
@@ -53,27 +54,33 @@ describe('decomposeStep', () => {
     const state = stateAt('2026-06', {
       compoundReturnAdded: 1_200,
       autoInvestedSalarySurplus: 4_500,
+      salarySurplusToCash: 0,
       leverContributionsInvested: 0,
       lumpSumInvested: 20_000,
       withdrawnFromInvestments: 0,
     });
     const rows = decomposeStep(state);
+    // Task β2 — "Surplus to cash" row sits between Auto-invested salary and
+    // Lever contributions so the user reads the auto-invest opt-out path
+    // right next to the auto-invest-on path it replaces.
     expect(rows.map((r) => r.label)).toEqual([
       'Compound return',
       'Auto-invested salary',
+      'Surplus to cash',
       'Lever contributions',
       'Lump sums',
       'Withdrawals',
     ]);
     expect(rows[0].value).toBe(1_200);
-    expect(rows[3].value).toBe(20_000);
-    expect(rows[4].direction).toBe('out');
+    expect(rows[4].value).toBe(20_000);
+    expect(rows[5].direction).toBe('out');
   });
 
   it('defaults missing fields to 0 (the seed state has no decomposition)', () => {
     const state = stateAt('2026-05', {
       compoundReturnAdded: undefined,
       autoInvestedSalarySurplus: undefined,
+      salarySurplusToCash: undefined,
       leverContributionsInvested: undefined,
       lumpSumInvested: undefined,
       withdrawnFromInvestments: undefined,
@@ -82,6 +89,18 @@ describe('decomposeStep', () => {
     for (const row of rows) {
       expect(row.value).toBe(0);
     }
+  });
+
+  it('populates the Surplus to cash row from MonthlyState.salarySurplusToCash', () => {
+    const state = stateAt('2026-06', {
+      autoInvestedSalarySurplus: 0,
+      salarySurplusToCash: 3_200,
+    });
+    const rows = decomposeStep(state);
+    const cashRow = rows.find((r) => r.label === 'Surplus to cash');
+    expect(cashRow).toBeDefined();
+    expect(cashRow!.value).toBe(3_200);
+    expect(cashRow!.direction).toBe('in');
   });
 });
 
@@ -193,6 +212,7 @@ describe('DecomposedTooltipContent — net change + decomposition rows', () => {
       stateAt('2026-06', {
         compoundReturnAdded: 1_200,        // non-zero → shown
         autoInvestedSalarySurplus: 4_500,  // non-zero → shown
+        salarySurplusToCash: 0,             // zero → omitted
         leverContributionsInvested: 0,     // zero → omitted
         lumpSumInvested: 0,                 // zero → omitted
         withdrawnFromInvestments: 0,        // zero → omitted
@@ -209,9 +229,38 @@ describe('DecomposedTooltipContent — net change + decomposition rows', () => {
     );
     expect(screen.getByTestId('whatif-projection-tooltip-row-1-compound-return')).toBeInTheDocument();
     expect(screen.getByTestId('whatif-projection-tooltip-row-1-auto-invested-salary')).toBeInTheDocument();
+    expect(screen.queryByTestId('whatif-projection-tooltip-row-1-surplus-to-cash')).not.toBeInTheDocument();
     expect(screen.queryByTestId('whatif-projection-tooltip-row-1-lever-contributions')).not.toBeInTheDocument();
     expect(screen.queryByTestId('whatif-projection-tooltip-row-1-lump-sums')).not.toBeInTheDocument();
     expect(screen.queryByTestId('whatif-projection-tooltip-row-1-withdrawals')).not.toBeInTheDocument();
+  });
+
+  it('renders the Surplus to cash row when salarySurplusToCash > 0 (auto-invest OFF path)', () => {
+    const states = [
+      stateAt('2026-05'),
+      stateAt('2026-06', {
+        compoundReturnAdded: 800,
+        autoInvestedSalarySurplus: 0,
+        salarySurplusToCash: 3_200,
+      }),
+    ];
+    const projections = new Map<number, MonthlyState[]>([[1, states]]);
+    render(
+      <DecomposedTooltipContent
+        label="2026-06"
+        active
+        scenarios={[baseline]}
+        displayProjections={projections}
+      />,
+    );
+    const row = screen.getByTestId('whatif-projection-tooltip-row-1-surplus-to-cash');
+    expect(row).toBeInTheDocument();
+    expect(row.textContent).toContain('+$3,200');
+    // The Auto-invested salary row is mutually exclusive — engine guarantees
+    // exactly one of the two fields is non-zero per step.
+    expect(
+      screen.queryByTestId('whatif-projection-tooltip-row-1-auto-invested-salary'),
+    ).not.toBeInTheDocument();
   });
 
   it('shows the Withdrawals row with a negative sign when investments are drawn down', () => {

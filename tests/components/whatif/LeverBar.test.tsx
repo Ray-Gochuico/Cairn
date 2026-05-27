@@ -182,53 +182,93 @@ describe('LeverBar — Returns default hint', () => {
   });
 });
 
-describe('LeverBar — Contributions auto-invest pill (Task #25)', () => {
+describe('LeverBar — Contributions pill (Task β2: branched by surplus destination)', () => {
   beforeEach(() => {
     activeScenarioId = 1;
     activeScenarioOverride = null;
     householdRate = 0.04;
     returnsPayload = { defaultRate: 0.07, overrides: {} };
     autoInvestPreviewValue = 0;
+    surplusDestination = 'investments';
   });
 
-  it('shows the Info icon when no segments are set AND auto-invest preview is 0', () => {
+  // -------------------------------------------------------------------------
+  // destination === 'investments' (autoInvestSalarySurplus = true)
+  // -------------------------------------------------------------------------
+  it('shows the Info icon when no segments + destination=investments + amount=0', () => {
     contributionsPayload = [];
     autoInvestPreviewValue = 0;
+    surplusDestination = 'investments';
     render(<LeverBar />);
     expect(screen.getByTestId('contributions-auto-invest-icon')).toBeInTheDocument();
     expect(screen.queryByTestId('contributions-auto-invest-badge')).not.toBeInTheDocument();
   });
 
-  it('shows the auto-invest dollar-amount badge when no segments AND preview > 0', () => {
+  it('shows the "auto $X/mo" badge when no segments + destination=investments + amount > 0', () => {
     contributionsPayload = [];
     autoInvestPreviewValue = 4500;
+    surplusDestination = 'investments';
     render(<LeverBar />);
     const badge = screen.getByTestId('contributions-auto-invest-badge');
     expect(badge).toBeInTheDocument();
-    // formatCompactCurrency(4500) → "$4.5k". The badge renders "· auto $4.5k/mo".
     expect(badge.textContent).toContain('auto');
     expect(badge.textContent).toContain('$4.5k');
     expect(badge.textContent).toContain('/mo');
-    // When the dollar badge is showing, the Info icon is redundant — hide it.
     expect(screen.queryByTestId('contributions-auto-invest-icon')).not.toBeInTheDocument();
   });
 
-  it('hides BOTH the badge and Info icon when at least one segment exists', () => {
+  // -------------------------------------------------------------------------
+  // destination === 'cash' (the new default since 2026-05-26)
+  // -------------------------------------------------------------------------
+  it('shows the cash-hint Info icon when no segments + destination=cash + amount > 0', () => {
+    contributionsPayload = [];
+    autoInvestPreviewValue = 4500;
+    surplusDestination = 'cash';
+    render(<LeverBar />);
+    // The cash-destination pill replaces the dollar-amount badge with an
+    // explanatory Info icon. Tooltip copy: "Surplus is going to cash. Add a
+    // segment to invest." (surfaced via the button's title attribute).
+    const icon = screen.getByTestId('contributions-cash-hint-icon');
+    expect(icon).toBeInTheDocument();
+    expect(screen.queryByTestId('contributions-auto-invest-badge')).not.toBeInTheDocument();
+    // The pill title carries the hint copy for hover discovery.
+    const pill = screen.getByLabelText(/contributions/i);
+    expect(pill.getAttribute('title')).toMatch(/going to cash/i);
+  });
+
+  it('shows the cash-hint icon when no segments + destination=cash + amount=0 (zero-surplus fallthrough)', () => {
+    contributionsPayload = [];
+    autoInvestPreviewValue = 0;
+    surplusDestination = 'cash';
+    render(<LeverBar />);
+    // With no surplus and destination=cash, the pill falls back to the
+    // generic auto-invest Info icon (pre-β2 behavior preserved).
+    expect(screen.getByTestId('contributions-auto-invest-icon')).toBeInTheDocument();
+    expect(screen.queryByTestId('contributions-cash-hint-icon')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('contributions-auto-invest-badge')).not.toBeInTheDocument();
+  });
+
+  // -------------------------------------------------------------------------
+  // Shared invariants — segments active OR no active scenario
+  // -------------------------------------------------------------------------
+  it('hides all hint UI when at least one segment exists (regardless of destination)', () => {
     contributionsPayload = [{ startMonth: 0, endMonth: 59, monthlyAmount: 1000, label: 'Y1-Y5' }];
     autoInvestPreviewValue = 4500;
+    surplusDestination = 'cash';
     render(<LeverBar />);
     expect(screen.queryByTestId('contributions-auto-invest-icon')).not.toBeInTheDocument();
     expect(screen.queryByTestId('contributions-auto-invest-badge')).not.toBeInTheDocument();
-    // The existing "· N" count display is preserved.
+    expect(screen.queryByTestId('contributions-cash-hint-icon')).not.toBeInTheDocument();
     expect(screen.getByLabelText(/contributions/i).textContent).toContain('· 1');
   });
 
-  it('hides the badge when there is no active scenario (early-return branch)', () => {
+  it('renders nothing for the pill region when there is no active scenario (early-return branch)', () => {
     activeScenarioId = null;
     autoInvestPreviewValue = 4500;
+    surplusDestination = 'investments';
     render(<LeverBar />);
-    // No active scenario → empty-state message, no buttons at all.
     expect(screen.queryByTestId('contributions-auto-invest-badge')).not.toBeInTheDocument();
     expect(screen.queryByTestId('contributions-auto-invest-icon')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('contributions-cash-hint-icon')).not.toBeInTheDocument();
   });
 });
