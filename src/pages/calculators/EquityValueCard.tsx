@@ -5,6 +5,7 @@ import { usePersonsStore } from '@/stores/persons-store';
 import { CalculatorCard } from './CalculatorCard';
 import { computeEquityValue } from '@/lib/equity-value';
 import { formatCurrency } from '@/lib/format';
+import { FreshnessBadge } from '@/components/ui/freshness-badge';
 
 interface EquityValueCardProps {
   cardId?: string;
@@ -87,10 +88,13 @@ export function EquityValueCard({ cardId, onHide }: EquityValueCardProps = {}) {
         </span>
       }
     >
-      <p className="text-sm text-muted-foreground mb-3">
-        Total vested across {equityGrants.length}{' '}
-        {equityGrants.length === 1 ? 'grant' : 'grants'}.
-      </p>
+      <div className="flex items-center gap-2 flex-wrap mb-3">
+        <p className="text-sm text-muted-foreground">
+          Total vested across {equityGrants.length}{' '}
+          {equityGrants.length === 1 ? 'grant' : 'grants'}.
+        </p>
+        <FreshnessBadge size="sm" />
+      </div>
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-muted-foreground">

@@ -20,6 +20,7 @@ import {
   CardHeader,
 } from '@/components/ui/card';
 import { ImportCsvButton } from '@/components/import/ImportCsvButton';
+import { FreshnessBadge } from '@/components/ui/freshness-badge';
 import NetWorthTimeSeriesChart from '@/components/charts/NetWorthTimeSeriesChart';
 import AssetsDonut from '@/components/charts/AssetsDonut';
 import LiabilitiesDonut from '@/components/charts/LiabilitiesDonut';
@@ -276,7 +277,10 @@ export default function NetWorth() {
     <div className="p-8 max-w-6xl space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold mb-1">Net Worth</h1>
+          <div className="flex items-center gap-3 mb-1 flex-wrap">
+            <h1 className="text-2xl font-semibold">Net Worth</h1>
+            <FreshnessBadge size="sm" />
+          </div>
           <p className="text-sm text-muted-foreground">
             As of {currentMonth}. Investments include the latest confirmed
             snapshot per account.

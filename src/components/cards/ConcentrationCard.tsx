@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { AlertTriangleIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { useConcentration } from '@/lib/use-concentration';
+import { FreshnessBadge } from '@/components/ui/freshness-badge';
 
 /**
  * Dashboard-sized concentration summary. Shows the warning count as the
@@ -26,8 +27,11 @@ export function ConcentrationCard() {
   return (
     <Card className="min-w-0 h-full" data-testid="concentration-card">
       <CardHeader className="pb-2">
-        <div className="text-[11px] sm:text-xs uppercase tracking-wider text-muted-foreground truncate">
-          Concentration
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-[11px] sm:text-xs uppercase tracking-wider text-muted-foreground truncate">
+            Concentration
+          </div>
+          <FreshnessBadge size="sm" />
         </div>
         <div className="text-xl sm:text-2xl md:text-3xl font-semibold leading-tight tabular-nums whitespace-nowrap overflow-hidden text-ellipsis">
           {count} {count === 1 ? 'warning' : 'warnings'}
