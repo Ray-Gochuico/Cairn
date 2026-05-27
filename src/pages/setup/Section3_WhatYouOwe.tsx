@@ -5,6 +5,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 import EntityCard from './EntityCard';
 import SectionEntryGate from './SectionEntryGate';
 import LoanForm from './forms/LoanForm';
@@ -48,6 +49,8 @@ export default function Section3_WhatYouOwe({ status, onSetStatus }: Props) {
         description="Mortgages, auto, student, personal, credit cards, etc."
         count={loans.length}
         onAddManual={() => setDialog('loans')}
+        importEnabled
+        importTrigger={<ImportCsvButton entity="loan" />}
       />
 
       <Dialog

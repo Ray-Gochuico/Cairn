@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import DatePicker from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 import EntityCard from './EntityCard';
 import SectionEntryGate from './SectionEntryGate';
 import GoalForm from './forms/GoalForm';
@@ -106,6 +107,8 @@ export default function Section4_History({ status, onSetStatus }: Props) {
         description="Historical balances per account."
         count={snapshots.length}
         onAddManual={() => setDialog('snapshots')}
+        importEnabled
+        importTrigger={<ImportCsvButton entity="snapshot" />}
       />
       <EntityCard
         title="Property / vehicle values"
@@ -118,6 +121,8 @@ export default function Section4_History({ status, onSetStatus }: Props) {
         description="Past contributions per account."
         count={contributions.length}
         onAddManual={() => setDialog('contributions')}
+        importEnabled
+        importTrigger={<ImportCsvButton entity="contribution" />}
       />
       <EntityCard
         title="Transactions"
