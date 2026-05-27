@@ -620,13 +620,22 @@ export default function Investments() {
         <p className="text-sm text-muted-foreground mb-6">
           Asset allocation, <TermTooltip term="DRIFT">drift</TermTooltip> from your targets, and contribution trends.
         </p>
+        {/*
+         * Empty-state pattern mirrors Goals (src/pages/Goals.tsx:435-442) so
+         * the three "you haven't entered data yet" pages — Goals, Net Worth,
+         * Investments — surface the same Card + friendly copy + primary-button
+         * CTA. Prior layout was a single inline link to Inputs which dropped
+         * the user into the sidebar with no obvious next step. Routing the
+         * CTA at /inputs/accounts is the right entry: Investments combines
+         * account-level holdings and snapshots — and accounts is the parent
+         * of both. (529 plans also live under /inputs/accounts.)
+         */}
         <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            Set up accounts and holdings in{' '}
-            <Link to="/inputs/accounts" className="underline text-foreground">
-              Inputs
-            </Link>
-            .
+          <CardContent className="py-12 text-center text-muted-foreground space-y-3">
+            <div>No investment holdings yet — set up accounts and holdings in Inputs.</div>
+            <Button asChild>
+              <Link to="/inputs/accounts">Add an account</Link>
+            </Button>
           </CardContent>
         </Card>
       </div>
