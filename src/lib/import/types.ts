@@ -1,4 +1,13 @@
 // src/lib/import/types.ts
+import type {
+  Account,
+  Holding,
+  Loan,
+  Property,
+  Vehicle,
+  EquityGrant,
+  AssetValueSnapshot,
+} from '@/types/schema';
 
 /**
  * Row identity inside a single import session.
@@ -45,13 +54,25 @@ export interface PreviewRow<TResolved = unknown> {
   errors: CellError[];
   /** For UPDATE/DUPLICATE: the existing DB row this conflicts with. */
   existing?: unknown;
+  /** For UPDATE: the id of the existing row this conflicts with. */
+  existingId?: number;
 }
 
 /**
  * Which entity is being imported. Drives validator selection and the
  * commit path.
  */
-export type ImportEntity = 'snapshot' | 'transaction';
+export type ImportEntity =
+  | 'snapshot'
+  | 'transaction'
+  | 'account'
+  | 'holding'
+  | 'loan'
+  | 'property'
+  | 'vehicle'
+  | 'equity_grant'
+  | 'contribution'
+  | 'asset_value_snapshot';
 
 /**
  * The result of a successful commit batch.
@@ -70,8 +91,22 @@ export interface ValidationContext {
   accounts: ReadonlyArray<{ id: number; name: string }>;
   persons?: ReadonlyArray<{ id: number; name: string }>;
   categories?: ReadonlyArray<{ id: number; name: string }>;
+  /** Properties pool for FK resolution (loans linked-property, asset-value-snapshot owner). */
+  properties?: ReadonlyArray<{ id: number; name: string }>;
+  /** Vehicles pool for FK resolution (loans linked-vehicle, asset-value-snapshot owner). */
+  vehicles?: ReadonlyArray<{ id: number; name: string }>;
   /** Map of existing snapshots: `${accountId}|${YYYY-MM-DD}` → totalValue */
   existingSnapshots?: ReadonlyMap<string, number>;
   /** Existing transactions keyed by `${accountId}|${date}|${amount}|${lowercased+trimmed merchant}` */
   existingTransactionKeys?: ReadonlySet<string>;
+
+  /** NEW — per-entity conflict maps for N2 entities. */
+  existingAccountConflicts?: ReadonlyMap<string, Account>;
+  existingHoldingConflicts?: ReadonlyMap<string, Holding>;
+  existingLoanConflicts?: ReadonlyMap<string, Loan>;
+  existingPropertyConflicts?: ReadonlyMap<string, Property>;
+  existingVehicleConflicts?: ReadonlyMap<string, Vehicle>;
+  existingEquityGrantConflicts?: ReadonlyMap<string, EquityGrant>;
+  existingContributionDupKeys?: ReadonlySet<string>;
+  existingAssetValueSnapshotConflicts?: ReadonlyMap<string, AssetValueSnapshot>;
 }
