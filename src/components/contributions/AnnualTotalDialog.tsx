@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -129,6 +130,11 @@ export function AnnualTotalDialog({ open, onOpenChange, accounts, persons }: Pro
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add annual contribution total</DialogTitle>
+          <DialogDescription>
+            Records a full-year contribution amount (filed on Dec 31) for an
+            account. Use this for retroactive year-end totals when you don't
+            have per-month detail.
+          </DialogDescription>
         </DialogHeader>
 
         {confirming ? (

@@ -1,4 +1,13 @@
 import { useState, useEffect } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import { categorize } from '@/lib/categorize';
 import { transactionDedupKey, filterDuplicates } from '@/lib/dedup';
 import { useCategoriesStore } from '@/stores/categories-store';
@@ -36,6 +45,20 @@ interface EditableRow {
   isDuplicate: boolean;
 }
 
+/**
+ * Modal for reviewing transactions parsed from a PDF statement before saving.
+ *
+ * Wave-5 design A+ #4 / frontend A+ #3: migrated from a hand-rolled
+ * `<div role="dialog">` to the shadcn `<Dialog>` wrapper for focus-trap +
+ * standard a11y (mirrors the DisclosureModal.tsx pattern). The shadcn
+ * wrapper also defaults `aria-describedby` to undefined so the Radix
+ * dev-mode "Missing Description" warning stays quiet unless the consumer
+ * opts in (we opt in here — the issuer/filename line is a meaningful
+ * description for screen readers).
+ *
+ * The dialog opens once on mount and closes only via Cancel / Save —
+ * the parent unmounts on close.
+ */
 export function PdfReviewModal({
   result,
   filename,
@@ -208,34 +231,33 @@ export function PdfReviewModal({
     }
   };
 
+  const includedCount = rows.filter((r) => r.included).length;
+
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={`Review transactions from ${filename}`}
-      className="fixed inset-0 z-50 flex items-center justify-center"
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
     >
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      {/* Panel */}
-      <div className="relative z-10 bg-background rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b">
-          <div>
-            <h2 className="text-lg font-semibold">Review transactions</h2>
-            <p className="text-sm text-muted-foreground">
-              {result.issuer} · {filename}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-muted-foreground hover:text-foreground"
-            aria-label="Close"
-          >
-            ✕
-          </button>
-        </div>
+      <DialogContent
+        // Wider than the default max-w-lg to fit the review table. Replace the
+        // shadcn default vertical-center grid with a flex column so the body
+        // can scroll while the header/footer stay pinned (mirrors the original
+        // hand-rolled layout).
+        className="max-w-5xl w-[calc(100vw-2rem)] max-h-[90vh] p-0 flex flex-col gap-0 overflow-hidden"
+        // Suppress backdrop-click close: in-flight edits are stored only in
+        // local state, so a stray click would silently throw work away. The
+        // explicit Cancel button is the only outside-of-Save exit.
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+      >
+        <DialogHeader className="px-6 py-4 border-b text-left">
+          <DialogTitle>Review transactions</DialogTitle>
+          <DialogDescription>
+            {result.issuer} · {filename}
+          </DialogDescription>
+        </DialogHeader>
 
         {/* Body */}
         <div className="flex-1 overflow-auto px-6 py-4">
@@ -429,10 +451,9 @@ export function PdfReviewModal({
           )}
         </div>
 
-        {/* Footer */}
-        <div className="px-6 py-4 border-t flex items-center justify-between">
+        <DialogFooter className="px-6 py-4 border-t flex items-center justify-between sm:justify-between">
           <div className="text-sm text-muted-foreground">
-            {rows.filter((r) => r.included).length} of {rows.length} rows will be saved
+            {includedCount} of {rows.length} rows will be saved
           </div>
           <div className="flex items-center gap-3">
             {error && (
@@ -440,25 +461,24 @@ export function PdfReviewModal({
                 {error}
               </span>
             )}
-            <button
+            <Button
               type="button"
+              variant="ghost"
               onClick={onClose}
               disabled={saving}
-              className="px-4 py-2 text-sm border rounded hover:bg-muted disabled:opacity-50"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               onClick={handleSave}
-              disabled={saving || rows.filter((r) => r.included).length === 0}
-              className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
+              disabled={saving || includedCount === 0}
             >
               {saving ? 'Saving…' : 'Save'}
-            </button>
+            </Button>
           </div>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
