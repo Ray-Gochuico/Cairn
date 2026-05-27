@@ -126,7 +126,7 @@ function buildStates(): MonthlyState[] {
     const month = ((monthIndex % 12) + 1).toString().padStart(2, '0');
     states.push({
       monthISO: `${year}-${month}`,
-      investments,
+      investmentsByAccount: { 1: investments },
       homeEquity: 0,
       cash: 0,
       debtByLoan: {},
