@@ -13,6 +13,8 @@ import { useRoadmapOverridesStore } from '@/stores/roadmap-overrides-store';
 import { FilingStatus } from '@/types/enums';
 import type { Household } from '@/types/schema';
 
+// Roadmap document is still on v1.0; app_wide bumped to v1.1 in
+// 2026-05-27 to add UCC § 2-316 / US-only / governing-law clauses.
 const ACCEPTED_VERSION = '1.0';
 
 function makeHousehold(patch: Partial<Household> = {}): Household {
@@ -27,7 +29,7 @@ function makeHousehold(patch: Partial<Household> = {}): Household {
     inflationAssumption: 0.03,
     growthScenarios: [],
     disclaimerAcceptedAt: '2026-05-01T00:00:00Z',
-    disclaimerVersionAccepted: '1.0',
+    disclaimerVersionAccepted: '1.1',
     roadmapDisclaimerAcceptedAt: null,
     roadmapDisclaimerVersionAccepted: null,
     interestThresholdLowPct: null,

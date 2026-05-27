@@ -21,9 +21,22 @@ interface Props {
 export function Step0Disclaimer({ onComplete }: Props) {
   const acceptDisclaimer = useHouseholdStore((s) => s.acceptDisclaimer);
 
+  // First-run path — the user has nothing to "diff from." Build a
+  // first-run document that drops diffFromPrevious so the modal doesn't
+  // surface a confusing "what changed since you last accepted" banner
+  // to someone who hasn't accepted anything yet. Re-prompts come through
+  // AppDisclaimerGate, which DOES preserve diffFromPrevious — see
+  // that file.
+  const firstRunDoc = {
+    id: 'app_wide' as const,
+    version: DISCLOSURES.app_wide.version,
+    body: DISCLOSURES.app_wide.body,
+    acceptanceCheckboxLabel: DISCLOSURES.app_wide.acceptanceCheckboxLabel,
+  };
+
   return (
     <DisclosureModal
-      document={{ id: 'app_wide', ...DISCLOSURES.app_wide }}
+      document={firstRunDoc}
       continueLabel="Continue to setup"
       onAccept={async (version) => {
         await acceptDisclaimer('app_wide', version);
