@@ -42,7 +42,10 @@ describe('NODES registry', () => {
   });
 
   it('nodeById returns the matching node, or undefined for a missing id', () => {
-    expect(nodeById('s0_create_budget')?.title).toBe('Create a budget');
+    // Title text is paraphrased from the source chart (see nodes.ts header
+    // comment + docs/reviews/2026-05-26-legal-review.md #2). Assert the
+    // current paraphrase rather than the original chart wording.
+    expect(nodeById('s0_create_budget')?.title).toBe('Set up a working budget');
     expect(nodeById('does_not_exist')).toBeUndefined();
   });
 
