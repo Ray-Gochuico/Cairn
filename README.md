@@ -130,19 +130,17 @@ balances, take 30 seconds to verify FileVault is on.
 
 ## Status
 
-Phase 5 / Sprint 4 in flight — A-grade v1 ship target close. All v1 feature
-work is shipped (tracking, calculators, What-If, spending, budget, roadmap,
-disclosures, equity grants, monthly mini-window). Sprint 4 is closing the
-last-mile gaps (`.app.zip` build, manual updater wiring, dark-mode chart
-adapt, finance UI inputs for cap gains, virtualization, lazy routes) ahead
-of the Wave-4 cohesion review and the first GitHub Release.
+Phase 5 / Bundle FINAL2 — final sprint before v1.0.0 ship. All feature work
+shipped; 25-item polish + ship-blocker bundle remains (~1 day). See
+[`docs/superpowers/specs/2026-05-28-a-plus-ship-plan.md`](docs/superpowers/specs/2026-05-28-a-plus-ship-plan.md).
 
 The app supports **light + dark** via system theme (Settings → Appearance).
 
 For the full picture:
 
-- [`docs/superpowers/specs/2026-05-27-current-state.md`](docs/superpowers/specs/2026-05-27-current-state.md) — cross-cutting snapshot, **read this first**.
-- [`docs/reviews/2026-05-27-wave3-scorecard.md`](docs/reviews/2026-05-27-wave3-scorecard.md) — the 9-day A-grade roadmap.
+- [`docs/superpowers/specs/2026-05-28-current-state.md`](docs/superpowers/specs/2026-05-28-current-state.md) — post-Wave-6 + page-scoped cross-cutting snapshot, **read this first**.
+- [`docs/superpowers/specs/2026-05-28-a-plus-ship-plan.md`](docs/superpowers/specs/2026-05-28-a-plus-ship-plan.md) — Bundle FINAL2 queue + the canonical "what's next".
+- [`docs/reviews/2026-05-27-mega-scorecard.md`](docs/reviews/2026-05-27-mega-scorecard.md) — Wave-6 broad + Roadmap/What-If page-scoped consolidated scorecard.
 - [`docs/superpowers/specs/2026-05-11-finance-app-design.md`](docs/superpowers/specs/2026-05-11-finance-app-design.md) — master design spec (build phases + current status amendment).
 - [`docs/superpowers/conventions.md`](docs/superpowers/conventions.md) — engineering patterns.
 - [`docs/superpowers/plans/`](docs/superpowers/plans/) — per-feature plans.
