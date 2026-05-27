@@ -63,26 +63,29 @@ describe('ContributionsPopover', () => {
     expect(screen.getByText(/no contribution segments yet/i)).toBeInTheDocument();
   });
 
-  it('shows the auto-invest preview card when no segments + destination=investments + amount > 0', () => {
+  it('shows the per-bucket breakdown when no segments + amount > 0 (investments)', () => {
+    // Revamp 2026-05-26 — the preview card now shows a three-row breakdown
+    // (tax-advantaged / brokerage / cash). When `destination` is 'investments'
+    // the per-bucket mock routes the full amount to brokerage.
     surplusFlowPreviewMock = { amount: 4500, destination: 'investments' };
     render(<MemoryRouter><ContributionsPopover open onOpenChange={() => {}} /></MemoryRouter>);
-    // Task β2 — preview card now branches by destination. With destination
-    // = 'investments' (autoInvestSalarySurplus = true) the card surfaces
-    // the "Auto-investing" copy.
     const card = screen.getByTestId('contributions-surplus-flow-card');
     expect(card).toBeInTheDocument();
-    expect(card).toHaveTextContent(/auto-investing/i);
-    expect(card).toHaveTextContent(/salary surplus/i);
+    expect(card).toHaveTextContent(/Monthly surplus:/i);
+    expect(card).toHaveTextContent(/Brokerage/);
     expect(card.textContent).toContain('$4,500');
+    // No "going to cash" hint when investments are non-zero.
+    expect(card).not.toHaveTextContent(/configure how to route surplus/i);
   });
 
-  it('shows the "surplus going to cash" preview card when destination=cash + amount > 0', () => {
+  it('shows the cash-routing hint when surplus is entirely cash', () => {
     surplusFlowPreviewMock = { amount: 4500, destination: 'cash' };
     render(<MemoryRouter><ContributionsPopover open onOpenChange={() => {}} /></MemoryRouter>);
     const card = screen.getByTestId('contributions-surplus-flow-card');
     expect(card).toBeInTheDocument();
-    expect(card).toHaveTextContent(/going to cash/i);
-    expect(card).toHaveTextContent(/add a segment/i);
+    expect(card).toHaveTextContent(/Monthly surplus:/i);
+    expect(card).toHaveTextContent(/Cash/);
+    expect(card).toHaveTextContent(/configure how to route surplus/i);
     expect(card.textContent).toContain('$4,500');
   });
 

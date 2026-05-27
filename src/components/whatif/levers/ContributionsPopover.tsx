@@ -171,43 +171,44 @@ export default function ContributionsPopover({ open, onOpenChange }: Props) {
           lands in investments.
         </p>
 
-        {/* Task β2 — read-only surplus-flow card. Visible only when there are
-            no segments AND the surplus magnitude is positive. Copy branches on
-            the household's auto-invest setting (migration 0029):
-            - 'cash' (the new default since 2026-05-26): nudges the user to add
-              a segment so some of the surplus actually invests.
-            - 'investments': preserves the legacy "Auto-invest" framing.
-            The same dollar amount appears either way (it's the surplus
-            magnitude, not the routed-to-investments amount). */}
+        {/* Gap-flow preview (read-only). Visible only when there are no
+            segments AND the surplus magnitude is positive. Three rows for
+            tax-advantaged / brokerage / cash — only non-zero rows render.
+            When the gap is entirely cash (no allocation configured), nudge
+            the user toward the Income lever where the allocation editor
+            lives. (Revamp 2026-05-26.) */}
         {draft.length === 0 && surplus.amount > 0 && (
           <div
             data-testid="contributions-surplus-flow-card"
             className="rounded-md border bg-muted/50 px-3 py-2 text-xs space-y-1"
           >
-            {/* Transitional bridge (α3 → γ2): the surplus preview is now a
-                per-bucket breakdown. We branch on "any non-cash routing
-                configured?" to preserve the prior copy semantics; γ2 will
-                rewrite this card to show the three-row breakdown directly. */}
-            {surplus.taxAdvantaged + surplus.brokerage === 0 ? (
-              <>
-                <div className="font-medium">
-                  {formatCurrency(surplus.amount)}/mo of monthly surplus is going to cash.
-                </div>
-                <p className="text-muted-foreground">
-                  Add a segment below to invest some or all of it each month, or
-                  configure routing in the Income lever (gap allocation).
-                </p>
-              </>
-            ) : (
-              <>
-                <div className="font-medium">
-                  Auto-investing {formatCurrency(surplus.taxAdvantaged + surplus.brokerage)}/mo from salary surplus.
-                </div>
-                <p className="text-muted-foreground">
-                  (income &minus; expenses &minus; loan payments) — routed via the
-                  gap allocation lever. Tune in the Income popover.
-                </p>
-              </>
+            <div className="font-medium">
+              Monthly surplus: {formatCurrency(surplus.amount)}
+            </div>
+            <ul className="space-y-0.5 text-muted-foreground">
+              {surplus.taxAdvantaged > 0 && (
+                <li className="flex items-baseline justify-between">
+                  <span>· Tax-advantaged</span>
+                  <span className="font-mono tabular-nums">{formatCurrency(surplus.taxAdvantaged)}</span>
+                </li>
+              )}
+              {surplus.brokerage > 0 && (
+                <li className="flex items-baseline justify-between">
+                  <span>· Brokerage</span>
+                  <span className="font-mono tabular-nums">{formatCurrency(surplus.brokerage)}</span>
+                </li>
+              )}
+              {surplus.cash > 0 && (
+                <li className="flex items-baseline justify-between">
+                  <span>· Cash</span>
+                  <span className="font-mono tabular-nums">{formatCurrency(surplus.cash)}</span>
+                </li>
+              )}
+            </ul>
+            {surplus.cash === surplus.amount && (
+              <p className="text-muted-foreground pt-1 border-t">
+                Configure how to route surplus in the Income lever (gap allocation).
+              </p>
             )}
           </div>
         )}
