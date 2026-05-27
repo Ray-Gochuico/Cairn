@@ -274,6 +274,79 @@ describe('FiCards', () => {
     });
   });
 
+  // W7-Finance: Coast FI was discounting a real-dollar FI target with the
+  // NOMINAL growth rate, which under-stated the target by ~52% at typical
+  // inputs (e.g. 7% / 3% / 25y / $2M). The fix is to convert nominal → real
+  // via the Fisher equation before passing to coastFi(). Anchor values:
+  //   nominal=0.07, inflation=0.03, years=25, fiTarget=$2,000,000
+  //   real = (1.07 / 1.03) - 1 ≈ 0.038835
+  //   coast = 2,000,000 / 1.038835^25 ≈ $771,554  (pre-fix: ~$368,498)
+  describe('Coast FI uses real rate, not nominal (W7-Finance)', () => {
+    it('uses Fisher real rate so a real-$ target gets a real-rate discount', () => {
+      // monthlyExpense $10k → annual $120k → fiTarget = $120k / 0.06 = $2,000,000
+      // (use a 6% SWR to dodge a 4%-rule label clash and land on a clean $2M).
+      // person born 2026-25y=2001 → age 0 at retirement target 25... use DOB
+      // 1990-01-01 and targetRetirementAge=61 (age 36 today → 25y).
+      const dob = '1990-01-01';
+      // currentAge(1990-01-01) at today=2026-05-27 = 36; retire at 61 → 25y.
+      const household = makeHousehold({
+        monthlyExpenseBaseline: 10000,
+        withdrawalRate: 0.06,
+        inflationAssumption: 0.03,
+        growthScenarios: [{ label: 'Moderate', rate: 0.07 }],
+      });
+      const person = makePerson({
+        dateOfBirth: dob,
+        targetRetirementAge: 61,
+      });
+      const projections = new Map<number, MonthlyState[]>([
+        [1, seedState(0, 0)],
+      ]);
+      render(
+        <FiCards
+          scenarios={[makeScenario()]}
+          projections={projections}
+          household={household}
+          persons={[person]}
+        />,
+      );
+      const coast = screen.getByTestId('whatif-coastfi-number');
+      // Real-rate answer ≈ $771,554 → formatted as $771,554 (rounded).
+      // Allow ±$1k of slack to absorb date-arithmetic month rounding.
+      expect(coast).toHaveTextContent(/\$77[01],\d{3}/);
+      // The wrong (nominal) answer is ~$368,498 — must NOT appear.
+      expect(coast).not.toHaveTextContent('$368,498');
+    });
+
+    it('floors the real rate at zero when inflation exceeds nominal growth', () => {
+      // Nominal 2%, inflation 5% → real = -0.0286 → clamped to 0 → coast = fiTarget.
+      const household = makeHousehold({
+        monthlyExpenseBaseline: 10000,
+        withdrawalRate: 0.06,
+        inflationAssumption: 0.05,
+        growthScenarios: [{ label: 'Moderate', rate: 0.02 }],
+      });
+      const person = makePerson({
+        dateOfBirth: '1990-01-01',
+        targetRetirementAge: 61,
+      });
+      const projections = new Map<number, MonthlyState[]>([
+        [1, seedState(0, 0)],
+      ]);
+      render(
+        <FiCards
+          scenarios={[makeScenario()]}
+          projections={projections}
+          household={household}
+          persons={[person]}
+        />,
+      );
+      // Real rate floored at 0 → coast == fiTarget == $2,000,000.
+      const coast = screen.getByTestId('whatif-coastfi-number');
+      expect(coast).toHaveTextContent('$2,000,000');
+    });
+  });
+
   it('prefers active scenario over baseline when both are present', () => {
     // Active scenario has different liquid NW than baseline. Card should
     // display the active one's liquid NW in the progress row.

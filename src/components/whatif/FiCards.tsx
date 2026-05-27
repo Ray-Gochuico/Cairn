@@ -48,6 +48,24 @@ function pickRate(household: Household): { rate: number; label: string } | null 
   return { rate: pick.rate, label: pick.label };
 }
 
+/**
+ * Convert a nominal annual return rate into the real (inflation-adjusted) rate
+ * via the Fisher equation: (1 + r_real) = (1 + r_nominal) / (1 + inflation).
+ *
+ * Floored at 0 because a negative real rate makes Coast FI compounding
+ * nonsensical for this UI (we'd be telling the user to save MORE than the FI
+ * target today to "coast" — at that point the framing breaks down).
+ *
+ * Why this matters: `fiTarget` is in today's purchasing power (real $), so
+ * discounting it back with a NOMINAL rate dramatically under-states the
+ * required Coast FI portfolio. Pre-fix the card showed ~$369k at 7%/3% over
+ * 25 years against a $2M FI target; the correct real-rate answer is ~$772k.
+ */
+function realRateOf(nominalRate: number, inflation: number): number {
+  const real = (1 + nominalRate) / (1 + inflation) - 1;
+  return Math.max(0, real);
+}
+
 function computeCards(props: FiCardsProps): ComputedRow | null {
   const { scenarios, projections, household, persons } = props;
   if (!household || persons.length === 0) return null;
@@ -71,9 +89,13 @@ function computeCards(props: FiCardsProps): ComputedRow | null {
   );
   const yearsUntilRetirement = Math.max(0, Math.min(...yearsByPerson));
 
+  // Coast FI: discount the today's-$ FI target by the REAL growth rate.
+  // Mixing a real target with a nominal rate is the bug we're fixing — see
+  // realRateOf() above for the math and rationale (W7-Finance).
+  const realRate = realRateOf(rate.rate, household.inflationAssumption);
   const coastFiTarget = coastFi({
     requiredAtRetirement: fiTarget,
-    annualRate: rate.rate,
+    annualRate: realRate,
     yearsUntilRetirement,
   });
 
