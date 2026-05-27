@@ -312,3 +312,100 @@ describe('useScenariosStore.projectedScenarios — memoization', () => {
     expect(stillNominal).toBe(nominal);
   });
 });
+
+describe('useScenariosStore.projectedScenarios — RealState fingerprint (NEW-W7-WI2)', () => {
+  let db: SqliteAdapter;
+
+  beforeEach(async () => {
+    db = new SqliteAdapter();
+    await runMigrations(db, await loadAllMigrations());
+    setDatabase(db);
+    resetStore();
+    await useScenariosStore.getState().load();
+  });
+
+  afterEach(async () => { await db.close(); });
+
+  it('invalidates cached projection when an account is added to RealState', () => {
+    const baselineId = useScenariosStore.getState().scenarios.find((s) => s.isBaseline)!.id!;
+    const realA = sampleRealState();
+    const before = useScenariosStore.getState().projectedScenarios(realA).get(baselineId)!;
+
+    // Mutate: add an account (length changes).
+    const realB: RealState = {
+      ...realA,
+      accounts: [{ id: 99, type: 'BROKERAGE', name: 'New' } as any],
+    };
+    const after = useScenariosStore.getState().projectedScenarios(realB).get(baselineId)!;
+    expect(after).not.toBe(before);
+  });
+
+  it('invalidates cached projection when a holding/snapshot balance changes (initialInvestmentsByAccount sum delta)', () => {
+    const baselineId = useScenariosStore.getState().scenarios.find((s) => s.isBaseline)!.id!;
+    const realA = sampleRealState();
+    const before = useScenariosStore.getState().projectedScenarios(realA).get(baselineId)!;
+
+    const realB: RealState = {
+      ...realA,
+      initialInvestmentsByAccount: { 1: 250_000 }, // was 200_000
+    };
+    const after = useScenariosStore.getState().projectedScenarios(realB).get(baselineId)!;
+    expect(after).not.toBe(before);
+  });
+
+  it('invalidates cached projection when a loan balance changes', () => {
+    const baselineId = useScenariosStore.getState().scenarios.find((s) => s.isBaseline)!.id!;
+    const realA = sampleRealState();
+    const before = useScenariosStore.getState().projectedScenarios(realA).get(baselineId)!;
+
+    const realB: RealState = {
+      ...realA,
+      loans: [{ ...realA.loans[0], currentBalance: 15000 } as any],
+    };
+    const after = useScenariosStore.getState().projectedScenarios(realB).get(baselineId)!;
+    expect(after).not.toBe(before);
+  });
+
+  it('invalidates cached projection when persons.length changes', () => {
+    const baselineId = useScenariosStore.getState().scenarios.find((s) => s.isBaseline)!.id!;
+    const realA = sampleRealState();
+    const before = useScenariosStore.getState().projectedScenarios(realA).get(baselineId)!;
+
+    const realB: RealState = {
+      ...realA,
+      persons: [...realA.persons, { id: 2, annualSalaryPretax: 95000 } as any],
+    };
+    const after = useScenariosStore.getState().projectedScenarios(realB).get(baselineId)!;
+    expect(after).not.toBe(before);
+  });
+
+  it('invalidates cached projection when household.monthlyExpenseBaseline changes', () => {
+    const baselineId = useScenariosStore.getState().scenarios.find((s) => s.isBaseline)!.id!;
+    const realA: RealState = {
+      ...sampleRealState(),
+      household: {
+        id: 1, filingStatus: 'SINGLE', state: 'CA', city: null,
+        monthlyExpenseBaseline: 4500,
+      } as any,
+    };
+    const before = useScenariosStore.getState().projectedScenarios(realA).get(baselineId)!;
+
+    const realB: RealState = {
+      ...realA,
+      household: { ...realA.household, monthlyExpenseBaseline: 6000 },
+    };
+    const after = useScenariosStore.getState().projectedScenarios(realB).get(baselineId)!;
+    expect(after).not.toBe(before);
+  });
+
+  it('still returns cached references when RealState is unchanged', () => {
+    const baselineId = useScenariosStore.getState().scenarios.find((s) => s.isBaseline)!.id!;
+    const real = sampleRealState();
+    const a = useScenariosStore.getState().projectedScenarios(real).get(baselineId)!;
+    // A second call with the same (fresh-but-equivalent) RealState object
+    // — the fingerprint is structural, so caching survives reference change.
+    const real2 = sampleRealState();
+    const b = useScenariosStore.getState().projectedScenarios(real2).get(baselineId)!;
+    expect(b).toBe(a);
+  });
+});

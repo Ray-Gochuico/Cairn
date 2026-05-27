@@ -210,13 +210,14 @@ export const useScenariosStore = create<ScenariosState>((set, get) => ({
 
     const defaultsKey = `${state.inflation}|${state.defaultReturnRate}`;
     const horizonKey = `${real.startISO}|${state.horizonMonths}`;
+    const realKey = realFingerprint(real);
 
     for (const sc of state.scenarios) {
       if (!sc.visible) continue;
       if (sc.id == null) continue;
       const id = sc.id;
       const leverKey = JSON.stringify(sc.leverPayload);
-      const key = `${leverKey}|${horizonKey}|${defaultsKey}`;
+      const key = `${leverKey}|${horizonKey}|${defaultsKey}|${realKey}`;
 
       const cached = projectionCache.get(id);
       if (cached && cached.key === key) {
@@ -235,6 +236,84 @@ export const useScenariosStore = create<ScenariosState>((set, get) => ({
     return out;
   },
 }));
+
+/**
+ * Cheap stable fingerprint of the user-data slice of RealState. Used as
+ * part of the projection cache key so that mutations to accounts,
+ * snapshots, persons, loans, household defaults, or tax rules
+ * invalidate cached projections — without this, the engine returns
+ * stale results after the user adds an account or edits a balance.
+ *
+ * Design notes (NEW-W7-WI2):
+ *   - The fingerprint covers everything `captureRealState` reads from
+ *     the user's stores. The cached `MonthlyState[]` is a pure function
+ *     of (RealState, LeverPayload, horizon), and only RealState was
+ *     missing from the prior cache key.
+ *   - We hash counts + summed balance totals + identifying scalars, not
+ *     full JSON dumps — JSON.stringify on the entire RealState would
+ *     dominate the projection cost it's meant to gate.
+ *   - `initialInvestmentsByAccount` is the projection's actual starting
+ *     point, so its sum is the most direct collision-resistant signal
+ *     for "snapshots / holdings / per-account balances changed".
+ *   - Standard deductions and tax bracket counts are folded in so that
+ *     a tax-year change (or a jurisdiction edit on household) flips
+ *     the key as well.
+ */
+function realFingerprint(real: RealState): string {
+  // Every field below is defensive against partial RealState shapes —
+  // tests + back-compat callers may pass fixtures that omit slices
+  // captureRealState always populates. A missing field hashes to 0 /
+  // 'null' rather than throwing, which preserves the invariant
+  // "same inputs → same key" while never crashing the projection path.
+  const h = real.household ?? ({} as RealState['household']);
+  const accounts = real.accounts ?? [];
+  const persons = real.persons ?? [];
+  const loans = real.loans ?? [];
+  const holdings = real.holdings ?? [];
+  const accountsByBucket = real.accountsByBucket ?? {
+    taxAdvantaged: [],
+    brokerage: [],
+    cash: [],
+  };
+  const initialInvestmentsByAccount = real.initialInvestmentsByAccount ?? {};
+  const investmentSum = Object.values(initialInvestmentsByAccount)
+    .reduce((sum, v) => sum + (typeof v === 'number' ? v : 0), 0);
+  const loanSum = loans.reduce((sum, l) => sum + (l?.currentBalance ?? 0), 0);
+  const tb = real.taxBrackets ?? null;
+  const td = tb?.standardDeduction;
+  const defaults = real.defaults ?? ({} as RealState['defaults']);
+  return [
+    accounts.length,
+    persons.length,
+    loans.length,
+    holdings.length,
+    h.id ?? 'no-id',
+    h.filingStatus ?? '',
+    h.state ?? '',
+    h.city ?? '',
+    h.monthlyExpenseBaseline ?? 0,
+    h.withdrawalRate ?? 0,
+    h.inflationAssumption ?? 0,
+    real.startISO ?? '',
+    accountsByBucket.taxAdvantaged.length,
+    accountsByBucket.brokerage.length,
+    accountsByBucket.cash.length,
+    Math.round(real.initialCash ?? 0),
+    Math.round(investmentSum),
+    Math.round(loanSum),
+    tb?.federal?.length ?? 0,
+    tb?.state?.length ?? 0,
+    tb?.city?.length ?? 0,
+    tb?.ltcg?.length ?? 0,
+    td?.federal ?? 0,
+    td?.state ?? 0,
+    td?.city ?? 0,
+    defaults.inflation ?? 'null',
+    defaults.returnRate ?? 'null',
+    defaults.defaultCashApy ?? 'null',
+    defaults.defaultDrawdownTaxRate ?? 'null',
+  ].join('|');
+}
 
 function invalidateProjectionFor(id: number) {
   projectionCache.delete(id);

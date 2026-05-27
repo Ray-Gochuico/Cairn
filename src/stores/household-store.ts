@@ -55,10 +55,29 @@ export const useHouseholdStore = create<HouseholdState>((set, get) => ({
     const householdRepo = new HouseholdRepo(db);
     const acceptancesRepo = new DisclosureAcceptancesRepo(db);
 
-    await householdRepo.updateDisclosure(documentId, version, acceptedAt);
-    await acceptancesRepo.record({ householdId, documentId, version, acceptedAt });
+    // W7-Data #1: cache columns + audit row must be atomic. Pre-fix
+    // this ran the two writes as separate awaits — if the audit insert
+    // failed after the cache update succeeded, the household showed
+    // "accepted" but the source-of-truth audit trail was missing,
+    // breaking the documented invariant "the audit table is the only
+    // record that matters; cache is a derived fast-path read".
+    //
+    // SQLite transaction pattern mirrors the import/commit/*.ts files
+    // (db.execute BEGIN ... COMMIT, rollback on any throw).
+    await db.execute('BEGIN');
+    try {
+      await householdRepo.updateDisclosure(documentId, version, acceptedAt);
+      await acceptancesRepo.record({ householdId, documentId, version, acceptedAt });
+      await db.execute('COMMIT');
+    } catch (err) {
+      await db.execute('ROLLBACK');
+      throw err;
+    }
 
-    // Re-read household so subscribers see the new cache columns.
+    // Re-read household so subscribers see the new cache columns. This
+    // intentionally runs outside the transaction — if the read itself
+    // fails the writes are already committed and durable; we should
+    // surface the read error but not lose the acceptance.
     const household = await householdRepo.get();
     set({ household });
   },

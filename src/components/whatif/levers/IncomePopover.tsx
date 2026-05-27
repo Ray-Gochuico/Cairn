@@ -306,7 +306,7 @@ export default function IncomePopover({ open, onOpenChange }: Props) {
                 'Shortfall:'
               ) : (
                 <>
-                  <TermTooltip term="Surplus (gap)">Surplus (gap)</TermTooltip>:
+                  <TermTooltip term="SURPLUS">Surplus (gap)</TermTooltip>:
                 </>
               )}
             </span>

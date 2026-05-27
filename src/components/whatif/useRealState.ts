@@ -24,7 +24,16 @@ export function useRealState(): RealState | null {
   const accounts         = useAccountsStore((s) => s.accounts);
   const accountSnapshots = useSnapshotsStore((s) => s.snapshots);
   const transactions     = useTransactionsStore((s) => s.transactions);
-  const inflation        = useScenariosStore((s) => s.inflation);
+  // NEW-W7-WI1: prefer Settings → Advanced → Default inflation, fall
+  // back to the scenarios-store default (which itself defaults to
+  // 0.025). Pre-fix the engine only read the scenarios-store value, so
+  // changing Default inflation in Settings had no effect on projections
+  // until the user re-seeded the store from settings somehow — a
+  // silent override that broke the documented "Settings is the source
+  // of truth for household-default rates" invariant.
+  const settingsInflation = useSettingsStore((s) => s.settings?.defaultInflation);
+  const scenariosInflation = useScenariosStore((s) => s.inflation);
+  const inflation        = settingsInflation ?? scenariosInflation;
   const returnRate       = useScenariosStore((s) => s.defaultReturnRate);
   const settings         = useSettingsStore((s) => s.settings);
   const taxRules         = useTaxRulesStore((s) => s.items);

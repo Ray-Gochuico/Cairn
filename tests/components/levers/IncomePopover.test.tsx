@@ -248,6 +248,21 @@ describe('IncomePopover — per-person + household + gap summary (revamp 2026-05
     expect(screen.getByTestId('gap-allocation-editor')).toBeInTheDocument();
   });
 
+  it('Surplus label wraps in a TermTooltip wired to the SURPLUS glossary key (W6-Design #5)', () => {
+    // Regression: pre-fix the term was "Surplus (gap)" which uppercases to
+    // "SURPLUS (GAP)" — not a glossary key, so TermTooltip silently fell
+    // back to a plain span (no tooltip affordance, no popover on hover).
+    // The fix points the term at the actual key (SURPLUS); the visible
+    // label "Surplus (gap)" lives in `children`.
+    render(<MemoryRouter><IncomePopover open onOpenChange={() => {}} /></MemoryRouter>);
+    // The TermTooltip renders as a <button> whose accessible name is the
+    // children — "Surplus (gap)" — when the lookup resolves. When the
+    // lookup fails the wrapper drops to a plain <span> with no role, so
+    // the button query is a precise signal that the key resolved.
+    const trigger = screen.getByRole('button', { name: /surplus \(gap\)/i });
+    expect(trigger).toBeInTheDocument();
+  });
+
   // ---- Wave-3 Task 1: investment-income inputs (LTCG / qualified divs /
   // non-qualified divs) -------------------------------------------------------
   describe('investment income inputs (Wave-3)', () => {
