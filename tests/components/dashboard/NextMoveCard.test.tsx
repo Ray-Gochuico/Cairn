@@ -98,8 +98,9 @@ describe('NextMoveCard', () => {
     // Default household has monthlyExpenseBaseline=5000 and no cash
     // accounts, so s1_emergency_small is active with target $5,000.
     renderCard();
-    // The hero shows the active node title.
-    expect(screen.getByText(/build a small emergency fund/i)).toBeInTheDocument();
+    // The hero shows the active node title. (Title paraphrased from the
+    // source chart — see src/domain/roadmap/nodes.ts header comment.)
+    expect(screen.getByText(/build a starter emergency cushion/i)).toBeInTheDocument();
     // The evidence string includes the $0 / $5,000 progress.
     expect(screen.getByText(/\$0/i)).toBeInTheDocument();
     expect(screen.getByText(/\$5,000/i)).toBeInTheDocument();

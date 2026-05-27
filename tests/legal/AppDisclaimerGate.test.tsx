@@ -58,38 +58,43 @@ describe('AppDisclaimerGate', () => {
   });
 
   it('renders children when the accepted version matches the current version', () => {
-    setHousehold({ disclaimerVersionAccepted: '1.0' });
+    setHousehold({ disclaimerVersionAccepted: '1.1' });
     render(<AppDisclaimerGate>{CHILD}</AppDisclaimerGate>);
     expect(screen.getByTestId('app-child')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Disclaimer' })).toBeNull();
   });
 
   it('renders the modal (and hides children) when the accepted version is stale', () => {
-    setHousehold({ disclaimerVersionAccepted: '0.9' });
+    // A user on the old v1.0 must be re-prompted on the v1.1 bump (which
+    // added the UCC § 2-316 merchantability/fitness/non-infringement
+    // disclaimer, US-only scope, and governing-law sentence).
+    setHousehold({ disclaimerVersionAccepted: '1.0' });
     render(<AppDisclaimerGate>{CHILD}</AppDisclaimerGate>);
     expect(screen.getByRole('heading', { name: 'Disclaimer' })).toBeInTheDocument();
     expect(screen.queryByTestId('app-child')).toBeNull();
   });
 
-  it('surfaces a default "what changed" hint that references prior + current versions', () => {
-    setHousehold({ disclaimerVersionAccepted: '0.9' });
+  it('surfaces a "what changed" hint when the stale version is re-prompted', () => {
+    setHousehold({ disclaimerVersionAccepted: '1.0' });
     render(<AppDisclaimerGate>{CHILD}</AppDisclaimerGate>);
     const changes = screen.getByText(/what changed since you last accepted/i);
     expect(changes).toBeInTheDocument();
-    // The fallback message references both the prior and current versions.
-    expect(screen.getByText(/version 0\.9/i)).toBeInTheDocument();
-    expect(screen.getByText(/current version is 1\.0/i)).toBeInTheDocument();
+    // For v1.1 the disclosures.ts ships an explicit diffFromPrevious that
+    // names the new sections; that takes precedence over the fallback.
+    // The diff banner is rendered inside its own <pre>, distinct from the
+    // body — find that specific node.
+    expect(screen.getByText(/Version 1\.1 adds three things/i)).toBeInTheDocument();
   });
 
   it('calls acceptDisclaimer when the user accepts the new version', async () => {
     const acceptDisclaimer = vi.fn().mockResolvedValue(undefined);
-    setHousehold({ disclaimerVersionAccepted: '0.9' });
+    setHousehold({ disclaimerVersionAccepted: '1.0' });
     useHouseholdStore.setState({ acceptDisclaimer } as any);
     render(<AppDisclaimerGate>{CHILD}</AppDisclaimerGate>);
     fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', { name: /accept and continue/i }));
     await waitFor(() => {
-      expect(acceptDisclaimer).toHaveBeenCalledWith('app_wide', '1.0');
+      expect(acceptDisclaimer).toHaveBeenCalledWith('app_wide', '1.1');
     });
   });
 });

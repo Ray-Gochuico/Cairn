@@ -50,3 +50,11 @@ Desktop.ini
 ~$*.xlsx
 ~$*.xls
 
+# Third-party copyrighted content that must not be redistributed in this repo.
+# /u/happyasianpanda's FIRE flow chart (Reddit-community work) — the Roadmap
+# feature is *adapted* from it (attribution in src/legal/disclosures.ts) but
+# the PDF + transcription themselves are not ours to ship. Keep them out of
+# both the working tree and the public repo.
+FinFlowChartv43.pdf
+FinFlowChartv43.md
+

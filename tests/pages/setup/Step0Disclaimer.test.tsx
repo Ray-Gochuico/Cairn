@@ -16,7 +16,7 @@ describe('Step0Disclaimer', () => {
   it('renders the app_wide disclaimer modal', () => {
     render(<Step0Disclaimer onComplete={vi.fn()} />);
     expect(screen.getByRole('heading', { name: 'Disclaimer' })).toBeInTheDocument();
-    expect(screen.getByText(/version 1\.0/i)).toBeInTheDocument();
+    expect(screen.getByText(/version 1\.1/i)).toBeInTheDocument();
   });
 
   it('disables Continue until the checkbox is checked', () => {
@@ -27,14 +27,14 @@ describe('Step0Disclaimer', () => {
     expect(button).toBeEnabled();
   });
 
-  it('calls acceptDisclaimer("app_wide", "1.0") on Continue', async () => {
+  it('calls acceptDisclaimer("app_wide", current version) on Continue', async () => {
     const acceptDisclaimer = vi.fn().mockResolvedValue(undefined);
     useHouseholdStore.setState({ acceptDisclaimer } as any);
     render(<Step0Disclaimer onComplete={vi.fn()} />);
     fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', { name: /continue to setup/i }));
     await waitFor(() => {
-      expect(acceptDisclaimer).toHaveBeenCalledWith('app_wide', '1.0');
+      expect(acceptDisclaimer).toHaveBeenCalledWith('app_wide', '1.1');
     });
   });
 
