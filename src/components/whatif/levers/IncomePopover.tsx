@@ -1,13 +1,26 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import LeverPopoverShell from './LeverPopoverShell';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useScenariosStore } from '@/stores/scenarios-store';
 import { usePersonsStore } from '@/stores/persons-store';
+import { useHouseholdStore } from '@/stores/household-store';
+import { useTaxRulesStore } from '@/stores/tax-rules-store';
+import { useLoansStore } from '@/stores/loans-store';
+import { useAccountsStore } from '@/stores/accounts-store';
 import { incomeTrajectory } from '@/lib/whatif/income-trajectory';
 import { formatCurrency } from '@/lib/format';
-import type { PersonIncomePlan, IncomeEvent } from '@/lib/scenarios';
+import { computeTotalTax } from '@/lib/tax';
+import { taxBucketForAccount } from '@/lib/account-tax-classification';
+import { monthlyExpenseFromPeriods } from '@/lib/scenarios/apply-real';
+import { GapAllocationEditor } from './GapAllocationEditor';
+import type {
+  GapAllocation,
+  PersonIncomePlan,
+  IncomeEvent,
+} from '@/lib/scenarios';
+import type { Account } from '@/types/schema';
 
 interface Props { open: boolean; onOpenChange: (n: boolean) => void }
 
@@ -32,6 +45,10 @@ function defaultPersonPlan(): PersonIncomePlan {
 export default function IncomePopover({ open, onOpenChange }: Props) {
   const scenarios = useScenariosStore((s) => s.scenarios);
   const persons = usePersonsStore((s) => s.persons);
+  const household = useHouseholdStore((s) => s.household);
+  const taxRules = useTaxRulesStore((s) => s.items);
+  const loans = useLoansStore((s) => s.loans);
+  const accounts = useAccountsStore((s) => s.accounts);
   const horizonMonths = useScenariosStore((s) => s.horizonMonths);
   const active = scenarios.find((s) => s.isActive);
 
@@ -58,6 +75,88 @@ export default function IncomePopover({ open, onOpenChange }: Props) {
 
   const plan = draft[tab] ?? defaultPersonPlan();
   const personSalary = persons[tab]?.annualSalaryPretax ?? 0;
+
+  // -----------------------------------------------------------------
+  // Per-person + household after-tax summary (revamp 2026-05-26).
+  // Mirrors the engine's monthly-income calculation: take annualSalaryPretax
+  // through computeTotalTax with the household's filingStatus + brackets,
+  // then divide by 12.
+  // -----------------------------------------------------------------
+  const perPersonAfterTaxMonthly = useMemo(() => {
+    if (!household) return [] as number[];
+    const filingStatus = (household as { filingStatus: 'SINGLE' | 'MFJ' | 'MFS' | 'HOH' }).filingStatus;
+    const state = (household as { state?: string | null }).state ?? null;
+    const city  = (household as { city?: string | null }).city ?? null;
+    const fedRule = taxRules.find((r) =>
+      r.jurisdictionType === 'FEDERAL' && r.filingStatus === filingStatus,
+    );
+    const federalBrackets = fedRule?.brackets ?? [];
+    const stateBrackets = state
+      ? (taxRules.find((r) =>
+          r.jurisdictionType === 'STATE' && r.jurisdictionCode === state && r.filingStatus === filingStatus,
+        )?.brackets ?? [])
+      : [];
+    const cityBrackets = city
+      ? (taxRules.find((r) =>
+          r.jurisdictionType === 'CITY' && r.jurisdictionCode === city && r.filingStatus === filingStatus,
+        )?.brackets ?? null)
+      : null;
+    const stdDed = fedRule?.standardDeduction ?? 0;
+
+    return Array.from({ length: personCount }, (_, idx) => {
+      const annual = persons[idx]?.annualSalaryPretax ?? 0;
+      if (annual <= 0) return 0;
+      const tax = computeTotalTax({
+        gross: annual,
+        filingStatus,
+        federalBrackets,
+        stateBrackets,
+        cityBrackets,
+        standardDeduction: stdDed,
+        pretax: { pretax401k: 0, pretaxHealth: 0, pretaxDcfsa: 0, pretaxHsa: 0 },
+      });
+      return (annual - tax.total) / 12;
+    });
+  }, [household, persons, taxRules, personCount]);
+
+  const householdAfterTaxMonthly = useMemo(
+    () => perPersonAfterTaxMonthly.reduce((a, b) => a + b, 0),
+    [perPersonAfterTaxMonthly],
+  );
+
+  const todayMonthISO = useMemo(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }, []);
+
+  const currentExpensesMonthly = useMemo(() => {
+    return monthlyExpenseFromPeriods(active?.leverPayload.expensePeriods ?? [], todayMonthISO);
+  }, [active?.leverPayload.expensePeriods, todayMonthISO]);
+
+  const currentLoansMonthly = useMemo(
+    () => loans.reduce((sum, l) => sum + (l.currentBalance > 0 ? l.monthlyPayment : 0), 0),
+    [loans],
+  );
+
+  const rawGap = householdAfterTaxMonthly - currentExpensesMonthly - currentLoansMonthly;
+  const gap = Math.max(0, rawGap);
+  const isShortfall = rawGap < 0;
+
+  const accountsByBucket = useMemo(() => {
+    const out = { taxAdvantaged: [] as Account[], brokerage: [] as Account[], cash: [] as Account[] };
+    for (const a of accounts) {
+      if (a.excludedFromNetWorth) continue;
+      const bucket = taxBucketForAccount(a);
+      if (bucket === 'taxAdvantaged') out.taxAdvantaged.push(a);
+      else if (bucket === 'taxable') out.brokerage.push(a);
+    }
+    return out;
+  }, [accounts]);
+
+  const updateGapAllocation = async (next: GapAllocation) => {
+    if (!active?.id) return;
+    await useScenariosStore.getState().updateLever(active.id, { gapAllocation: next });
+  };
 
   const updatePlan = (patch: Partial<PersonIncomePlan>) => {
     setDraft((d) => d.map((p, i) => (i === tab ? { ...p, ...patch } : p)));
@@ -128,6 +227,64 @@ export default function IncomePopover({ open, onOpenChange }: Props) {
   return (
     <LeverPopoverShell open={open} title="Income / raises" onOpenChange={onOpenChange} onApply={handleApply} onReset={handleReset}>
       <div className="space-y-3">
+        {/* Per-person summary (revamp 2026-05-26): one card per person showing
+            annual salary, monthly pre-tax, monthly after-tax. */}
+        <div className="space-y-2">
+          {labels.map((lbl, i) => {
+            const annualSalary = persons[i]?.annualSalaryPretax ?? 0;
+            const monthlyPretax = annualSalary / 12;
+            const monthlyAfterTax = perPersonAfterTaxMonthly[i] ?? 0;
+            return (
+              <div key={lbl} data-testid={`income-person-summary-${i}`} className="rounded-md border px-3 py-2 text-sm">
+                <div className="font-medium">{lbl}</div>
+                <div className="grid grid-cols-2 gap-x-3 text-xs tabular-nums">
+                  <span>Annual salary (pre-tax):</span><span>{formatCurrency(annualSalary)}</span>
+                  <span>Monthly:</span>
+                  <span>
+                    {formatCurrency(monthlyPretax)} pre-tax · {' '}
+                    <span data-testid={`income-after-tax-monthly-${i}`}>{formatCurrency(monthlyAfterTax)}</span> after-tax
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Household total — only when 2 persons */}
+        {personCount === 2 && (
+          <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+            <span className="font-medium">Household total</span>{' — '}
+            <span>After-tax monthly: </span>
+            <span data-testid="income-household-after-tax-monthly" className="font-mono tabular-nums">
+              {formatCurrency(householdAfterTaxMonthly)}
+            </span>
+          </div>
+        )}
+
+        {/* Monthly cash-flow summary */}
+        <div className="rounded-md border px-3 py-2 text-sm">
+          <div className="font-medium text-xs uppercase tracking-wider text-muted-foreground">Monthly cash flow</div>
+          <div className="grid grid-cols-2 gap-x-3 text-xs tabular-nums">
+            <span>After-tax income:</span><span>{formatCurrency(householdAfterTaxMonthly)}</span>
+            <span>Expenses:</span><span>−{formatCurrency(currentExpensesMonthly)}</span>
+            <span>Loan payments:</span><span>−{formatCurrency(currentLoansMonthly)}</span>
+            <span className="font-medium border-t pt-1">{isShortfall ? 'Shortfall:' : 'Surplus (gap):'}</span>
+            <span data-testid="income-monthly-gap" className="font-medium border-t pt-1">
+              {isShortfall ? '−' : ''}{formatCurrency(Math.abs(rawGap))} / mo
+            </span>
+          </div>
+        </div>
+
+        {/* Allocation editor — hidden when shortfall (no surplus to allocate) */}
+        {!isShortfall && (
+          <GapAllocationEditor
+            gap={gap}
+            gapAllocation={active?.leverPayload.gapAllocation ?? { taxAdvantaged: null, brokerage: null }}
+            accountsByBucket={accountsByBucket}
+            onChange={updateGapAllocation}
+          />
+        )}
+
         {personCount === 2 && (
           <div role="tablist" className="flex gap-1 border-b">
             {labels.map((lbl, i) => (
