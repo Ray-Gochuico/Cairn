@@ -986,3 +986,94 @@ describe('AppSettingsSchema', () => {
     expect(s.statementsFolderPath).toBe('/Users/me/Statements');
   });
 });
+
+import {
+  HousingPaymentSchema,
+  HousingPaymentBaseSchema,
+  VehicleLeaseSchema,
+  VehicleLeaseBaseSchema,
+} from '@/types/schema';
+
+// Zod 4 disallows .omit() on a refined object schema, so the create-shape
+// schema used by repos/forms is the *Base.omit({id:true}).refine(...) shape.
+// The refinement helper here keeps each test case readable.
+const refine = (s: { startDate: string; endDate: string | null }) =>
+  s.endDate == null || s.endDate >= s.startDate;
+const refineMsg = { message: 'End date must be on or after start date', path: ['endDate'] };
+
+const housingCreateSchema = HousingPaymentBaseSchema.omit({ id: true }).refine(refine, refineMsg);
+const leaseCreateSchema = VehicleLeaseBaseSchema.omit({ id: true }).refine(refine, refineMsg);
+
+describe('HousingPaymentSchema', () => {
+  const valid = {
+    householdId: 1,
+    ownerPersonId: null,
+    name: 'Apt rent',
+    monthlyAmount: 2400,
+    startDate: '2026-01-01',
+    endDate: null,
+  };
+
+  it('accepts a valid open-ended rental', () => {
+    expect(() => housingCreateSchema.parse(valid)).not.toThrow();
+  });
+
+  it('accepts an end-dated rental', () => {
+    expect(() => housingCreateSchema.parse({ ...valid, endDate: '2027-06-30' })).not.toThrow();
+  });
+
+  it('rejects negative monthly amount', () => {
+    expect(() => housingCreateSchema.parse({ ...valid, monthlyAmount: -100 })).toThrow();
+  });
+
+  it('rejects end date earlier than start date', () => {
+    expect(() =>
+      housingCreateSchema.parse({
+        ...valid,
+        startDate: '2026-06-01',
+        endDate: '2026-05-31',
+      }),
+    ).toThrow();
+  });
+
+  it('rejects blank name', () => {
+    expect(() => housingCreateSchema.parse({ ...valid, name: '' })).toThrow();
+  });
+
+  it('round-trips an id-bearing row via the refined schema', () => {
+    expect(() => HousingPaymentSchema.parse({ ...valid, id: 5 })).not.toThrow();
+  });
+});
+
+describe('VehicleLeaseSchema', () => {
+  const valid = {
+    householdId: 1,
+    ownerPersonId: null,
+    name: 'Tesla lease',
+    monthlyAmount: 599,
+    startDate: '2026-03-01',
+    endDate: '2029-02-28',
+  };
+
+  it('accepts a valid lease with end date', () => {
+    expect(() => leaseCreateSchema.parse(valid)).not.toThrow();
+  });
+
+  it('accepts an open-ended lease (null end date)', () => {
+    expect(() => leaseCreateSchema.parse({ ...valid, endDate: null })).not.toThrow();
+  });
+
+  it('rejects end date earlier than start date', () => {
+    expect(() =>
+      leaseCreateSchema.parse({
+        ...valid,
+        startDate: '2026-03-01',
+        endDate: '2025-12-01',
+      }),
+    ).toThrow();
+  });
+
+  it('round-trips an id-bearing row via the refined schema', () => {
+    expect(() => VehicleLeaseSchema.parse({ ...valid, id: 7 })).not.toThrow();
+  });
+});

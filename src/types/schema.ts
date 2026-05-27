@@ -468,3 +468,60 @@ export const AppSettingsSchema = z.object({
   // LeverPayload.gapAllocation instead of a household-level toggle.
 });
 export type AppSettings = z.infer<typeof AppSettingsSchema>;
+
+// ---------------------------------------------------------------------------
+// Recurring monthly obligations (added 2026-05-27, v1.1).
+//
+// Renters and lessees don't have a cost basis, market value, or linked loan —
+// just a name, a monthly amount, a start date, and an optional end date. They
+// live in tables separate from `properties` / `vehicles` so the UI and engine
+// code for owned-vs-rented stay readable, and so a v2 can grow them
+// independently (e.g., add security deposit, mileage cap).
+//
+// The end-date >= start-date refinement is applied at the schema level so
+// repo writes always validate; the UI surfaces the message via the
+// form-errors pane near the Save button.
+//
+// Zod 4 rejects `.omit()` on a refined schema, so we expose the plain
+// `*Base` object (for `.omit({ id: true })` use in repos / forms) and apply
+// the refinement on top. Both base and refined variants are exported so
+// callers can pick the right one for their slot.
+// ---------------------------------------------------------------------------
+
+const recurringObligationRefine = (
+  v: { startDate: string; endDate: string | null },
+) => v.endDate == null || v.endDate >= v.startDate;
+const recurringObligationRefineMsg = {
+  message: 'End date must be on or after start date',
+  path: ['endDate'],
+};
+
+export const HousingPaymentBaseSchema = z.object({
+  id: z.number().int().positive().optional(),
+  householdId: z.number().int().positive(),
+  ownerPersonId: z.number().int().positive().nullable(),
+  name: z.string().min(1).max(100),
+  monthlyAmount: z.number().nonnegative(),
+  startDate: isoDateString,
+  endDate: isoDateString.nullable(),
+});
+export const HousingPaymentSchema = HousingPaymentBaseSchema.refine(
+  recurringObligationRefine,
+  recurringObligationRefineMsg,
+);
+export type HousingPayment = z.infer<typeof HousingPaymentSchema>;
+
+export const VehicleLeaseBaseSchema = z.object({
+  id: z.number().int().positive().optional(),
+  householdId: z.number().int().positive(),
+  ownerPersonId: z.number().int().positive().nullable(),
+  name: z.string().min(1).max(100),
+  monthlyAmount: z.number().nonnegative(),
+  startDate: isoDateString,
+  endDate: isoDateString.nullable(),
+});
+export const VehicleLeaseSchema = VehicleLeaseBaseSchema.refine(
+  recurringObligationRefine,
+  recurringObligationRefineMsg,
+);
+export type VehicleLease = z.infer<typeof VehicleLeaseSchema>;
