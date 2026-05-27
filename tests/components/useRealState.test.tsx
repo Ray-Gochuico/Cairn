@@ -97,6 +97,7 @@ describe('useRealState', () => {
     const real = result.current!;
     expect(real.taxBrackets.federal.length).toBeGreaterThan(0);
     expect(real.taxBrackets.state.length).toBeGreaterThan(0);
-    expect(real.taxBrackets.standardDeduction).toBe(14600);
+    // Post-Task-2: per-jurisdiction SD object. CA state SD = $5,540 for SINGLE.
+    expect(real.taxBrackets.standardDeduction).toMatchObject({ federal: 14600 });
   });
 });

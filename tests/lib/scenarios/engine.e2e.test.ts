@@ -76,7 +76,7 @@ const realState: RealState = {
     federal: federal2026Single,
     state: caSingle,
     city: null,
-    standardDeduction: 14600,
+    standardDeduction: { federal: 14600, state: 5363, city: 0 },
   },
 };
 
@@ -287,12 +287,12 @@ describe('projectScenario — tax behavior', () => {
     const realCA: RealState = {
       ...realState,
       household: { ...realState.household, state: 'CA' } as Household,
-      taxBrackets: { federal: federal2026Single, state: caSingle, city: null, standardDeduction: 14600 },
+      taxBrackets: { federal: federal2026Single, state: caSingle, city: null, standardDeduction: { federal: 14600, state: 5363, city: 0 } },
     };
     const realTX: RealState = {
       ...realState,
       household: { ...realState.household, state: 'TX' } as Household,
-      taxBrackets: { federal: federal2026Single, state: [], city: null, standardDeduction: 14600 },
+      taxBrackets: { federal: federal2026Single, state: [], city: null, standardDeduction: { federal: 14600, state: 0, city: 0 } },
     };
     const caAfter12 = projectScenario(realCA, emptyLeverPayload(), { startISO: '2026-05', months: 13 });
     const txAfter12 = projectScenario(realTX, emptyLeverPayload(), { startISO: '2026-05', months: 13 });

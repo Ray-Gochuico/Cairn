@@ -51,7 +51,7 @@ function realStateWithSettingsInflation(settingsInflation: number): RealState {
       federal,
       state: [],
       city: null,
-      standardDeduction: 0,
+      standardDeduction: { federal: 0, state: 0, city: 0 },
     },
   };
 }

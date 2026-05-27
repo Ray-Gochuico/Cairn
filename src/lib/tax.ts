@@ -69,13 +69,46 @@ export function computePretaxDeductions(input: PretaxDeductionsInput): PretaxDed
   return { pretax401k, pretaxHealth, pretaxDcfsa, pretaxHsa, total: pretax401k + pretaxHealth + pretaxDcfsa + pretaxHsa };
 }
 
+/**
+ * Per-jurisdiction standard deductions. The engine threads three distinct
+ * values; calculators that have always operated on federal-only (e.g.,
+ * `BonusTaxCard`, `PaycheckCard`) still pass a single `number` and the
+ * legacy semantics apply (same SD to all three jurisdictions).
+ *
+ * Bug-fix history: pre-2026-05-27 the engine seeded the federal SD into
+ * the state computation, materially under-collecting state tax for MA
+ * ($0 state SD) and CA (per-state SD ≠ federal). Per-jurisdiction
+ * threading lands the correct math.
+ */
+export type StandardDeductionInput =
+  | number
+  | { federal: number; state: number; city: number };
+
+function normalizeStandardDeduction(input: StandardDeductionInput): {
+  federal: number;
+  state: number;
+  city: number;
+} {
+  if (typeof input === 'number') {
+    return { federal: input, state: input, city: input };
+  }
+  return input;
+}
+
 export interface TotalTaxInput {
   gross: number;                       // person or household gross income for the period
   filingStatus: 'SINGLE' | 'MFJ' | 'MFS' | 'HOH';
   federalBrackets: Bracket[];
   stateBrackets: Bracket[];            // [] for no-state-tax jurisdictions (TX, FL, etc.)
   cityBrackets: Bracket[] | null;      // null for no city tax
-  standardDeduction: number;
+  /**
+   * Standard deduction. Either:
+   *   - a single `number` (legacy single-jurisdiction calculator behavior:
+   *     applied to federal, state, AND city taxable amounts), or
+   *   - `{ federal, state, city }` for engine-driven projections that need
+   *     to compute each jurisdiction's taxable income against its own SD.
+   */
+  standardDeduction: StandardDeductionInput;
   pretax: {
     pretax401k: number;
     pretaxHealth: number;
@@ -106,12 +139,15 @@ export function computeTotalTax(input: TotalTaxInput): TotalTaxOutput {
     input.pretax.pretaxDcfsa +
     input.pretax.pretaxHsa;
 
-  const taxable = Math.max(0, input.gross - pretaxTotal - input.standardDeduction);
+  const sd = normalizeStandardDeduction(input.standardDeduction);
+  const federalTaxable = Math.max(0, input.gross - pretaxTotal - sd.federal);
+  const stateTaxable = Math.max(0, input.gross - pretaxTotal - sd.state);
+  const cityTaxable = Math.max(0, input.gross - pretaxTotal - sd.city);
 
-  const federal = input.gross > 0 ? evaluateBrackets(input.federalBrackets, taxable) : 0;
+  const federal = input.gross > 0 ? evaluateBrackets(input.federalBrackets, federalTaxable) : 0;
   const fica = computeFica(input.gross, input.filingStatus);
-  const state = input.stateBrackets.length > 0 ? evaluateBrackets(input.stateBrackets, taxable) : 0;
-  const city = input.cityBrackets ? evaluateBrackets(input.cityBrackets, taxable) : 0;
+  const state = input.stateBrackets.length > 0 ? evaluateBrackets(input.stateBrackets, stateTaxable) : 0;
+  const city = input.cityBrackets ? evaluateBrackets(input.cityBrackets, cityTaxable) : 0;
   const total = federal + fica + state + city;
 
   return {
@@ -132,7 +168,7 @@ export interface BonusTaxInput {
   federalBrackets: Bracket[];
   stateBrackets: Bracket[];
   cityBrackets: Bracket[] | null;
-  standardDeduction: number;
+  standardDeduction: StandardDeductionInput;
 }
 
 export interface BonusTaxOutput {

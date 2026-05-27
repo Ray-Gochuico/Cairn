@@ -45,7 +45,7 @@ const realState: RealState = {
   initialInvestmentsByAccount: { 1: 20000 }, // 100 shares VTI @ $200 costBasis
   defaults: { inflation: 0.025, returnRate: 0.07 },
   startISO: '2026-05',
-  taxBrackets: { federal: federal2026Single, state: caSingle, city: null, standardDeduction: 14600 },
+  taxBrackets: { federal: federal2026Single, state: caSingle, city: null, standardDeduction: { federal: 14600, state: 5363, city: 0 } },
 };
 
 /** Equivalent of the pre-revamp `baselineMonthlyExpenses: 3000` factory field. */
