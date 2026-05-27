@@ -3,12 +3,12 @@ import { DISCLOSURES } from '@/legal/disclosures';
 
 describe('DISCLOSURES', () => {
   it('defines an app_wide disclosure with a version + body + checkbox label', () => {
-    expect(DISCLOSURES.app_wide.version).toBe('1.2');
+    expect(DISCLOSURES.app_wide.version).toBe('1.3');
     expect(DISCLOSURES.app_wide.body.length).toBeGreaterThan(200);
     expect(DISCLOSURES.app_wide.acceptanceCheckboxLabel).toMatch(/at my own risk/i);
   });
 
-  it('app_wide v1.2 body retains the UCC § 2-316 implied-warranty disclaimer + US-only scope + governing law', () => {
+  it('app_wide v1.3 body retains the UCC § 2-316 implied-warranty disclaimer + US-only scope + governing law', () => {
     const body = DISCLOSURES.app_wide.body;
     expect(body).toMatch(/MERCHANTABILITY/);
     expect(body).toMatch(/FITNESS FOR A PARTICULAR PURPOSE/);
@@ -17,16 +17,29 @@ describe('DISCLOSURES', () => {
     expect(body).toMatch(/governed by the laws/i);
   });
 
-  it('app_wide v1.2 names a concrete governing-law state (no [PLACEHOLDER] leakage)', () => {
+  it('app_wide v1.3 still names New York as the governing-law state', () => {
     const body = DISCLOSURES.app_wide.body;
     expect(body).not.toMatch(/\[PLACEHOLDER/i);
     expect(body).toMatch(/State of New York/);
   });
 
-  it('app_wide v1.2 ships a diffFromPrevious so the re-prompt explains what changed', () => {
+  it('app_wide v1.3 ships a diffFromPrevious that mentions the unmodeled-items list', () => {
     expect(DISCLOSURES.app_wide.diffFromPrevious).toBeTruthy();
     expect(DISCLOSURES.app_wide.diffFromPrevious!.length).toBeGreaterThan(40);
-    expect(DISCLOSURES.app_wide.diffFromPrevious).toMatch(/New York/);
+    expect(DISCLOSURES.app_wide.diffFromPrevious).toMatch(/does NOT model|not model/i);
+  });
+
+  it('app_wide v1.3 body lists the tax items the app does NOT model (Wave-3 Task 7)', () => {
+    const body = DISCLOSURES.app_wide.body;
+    expect(body).toMatch(/What this app does NOT model/i);
+    expect(body).toMatch(/AMT/);
+    expect(body).toMatch(/RMD/);
+    expect(body).toMatch(/§121|home sale exclusion/i);
+    expect(body).toMatch(/SALT/i);
+    expect(body).toMatch(/Social Security/i);
+    expect(body).toMatch(/stock buyback|buyback excise/i);
+    expect(body).toMatch(/cafeteria/i);
+    expect(body).toMatch(/state.*(LTCG|capital.gain)/i);
   });
 
   it('defines a roadmap disclosure with a version + body + checkbox label', () => {
