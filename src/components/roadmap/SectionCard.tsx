@@ -70,7 +70,7 @@ export function SectionCard({ section, title, glossaryTerm, nodes, results, ctx 
         title={glossaryEntry?.shortDefinition}
       >
         <div className="flex items-center gap-3">
-          <span className="text-xs uppercase text-slate-500 tracking-wider">
+          <span className="text-xs uppercase text-muted-foreground tracking-wider">
             Section {section}
           </span>
           <span className="font-semibold">{title}</span>
@@ -80,7 +80,7 @@ export function SectionCard({ section, title, glossaryTerm, nodes, results, ctx 
             </span>
           )}
         </div>
-        <div className="flex items-center gap-3 text-xs text-slate-600">
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <span aria-label="progress">
             {counts.done}/{counts.total}
             {progressIndicator}

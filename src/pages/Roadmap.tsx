@@ -102,7 +102,7 @@ export default function Roadmap() {
   if (!household) {
     return (
       <div className="p-6 max-w-5xl mx-auto">
-        <div className="text-sm text-slate-600">
+        <div className="text-sm text-muted-foreground">
           Set up your household to see your Roadmap.
         </div>
       </div>
@@ -123,7 +123,7 @@ export default function Roadmap() {
   if (!ctx) {
     return (
       <div className="p-6 max-w-5xl mx-auto">
-        <div className="text-sm text-slate-600">
+        <div className="text-sm text-muted-foreground">
           Set up your household to see your Roadmap.
         </div>
       </div>

@@ -45,7 +45,7 @@ export function DecisionPrompt({ question }: Props) {
 
   return (
     <div className="mt-2 space-y-1">
-      <div className="text-xs text-slate-700">{question.prompt}</div>
+      <div className="text-xs text-foreground">{question.prompt}</div>
       <div className="flex gap-2 flex-wrap">
         {options.map((o) => (
           <Button

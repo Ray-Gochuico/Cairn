@@ -33,17 +33,17 @@ export function NodeRow({ node, result, ctx }: Props) {
         <StatusIcon status={result.status} className="mt-0.5 shrink-0" />
         <div className="flex-1 min-w-0">
           <div
-            className={`text-sm font-medium ${skipped ? 'line-through text-slate-500' : ''}`}
+            className={`text-sm font-medium ${skipped ? 'line-through text-muted-foreground' : ''}`}
           >
             {node.title}
             {overridden && (
-              <span className="ml-2 text-xs text-slate-500 italic">
+              <span className="ml-2 text-xs text-muted-foreground italic">
                 (overridden)
               </span>
             )}
           </div>
           {result.evidence && (
-            <div className="text-xs text-slate-500">{result.evidence}</div>
+            <div className="text-xs text-muted-foreground">{result.evidence}</div>
           )}
           {result.cta && (
             <Link
@@ -58,7 +58,7 @@ export function NodeRow({ node, result, ctx }: Props) {
         <button
           type="button"
           onClick={() => setDrawerOpen(true)}
-          className="text-slate-400 hover:text-slate-700 shrink-0"
+          className="text-muted-foreground hover:text-foreground shrink-0"
           aria-label={`Details for ${node.title}`}
         >
           <Info className="h-4 w-4" />
