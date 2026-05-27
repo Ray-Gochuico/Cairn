@@ -151,10 +151,19 @@ describe('InvestmentTimeSeriesChart', () => {
   // recharts' internal store sees as fresh references and dispatches
   // updates on. Mount under StrictMode with realistic data, mount-unmount-
   // remount to mirror tab navigation, and assert no setState-in-render or
-  // Maximum-update-depth warnings reached console.error. jsdom does not run
-  // recharts' real animation lifecycle so this cannot reproduce the exact
-  // production loop — it catches the easier setState-in-render class going
-  // forward and documents the fix's intent.
+  // Maximum-update-depth warnings reached console.error.
+  //
+  // Scope of THIS test: catches setState-in-render regressions and
+  // reference-stability of memoized props (margin, dot, CustomTooltip) under
+  // StrictMode mount-unmount-remount. It cannot reproduce the recharts
+  // useAnimationId animation-loop class of crash because jsdom doesn't run
+  // recharts' real animation lifecycle.
+  //
+  // The animation-loop class is now guarded at the source level by a
+  // policy test that asserts every <Pie|<Bar|<Line|<Area JSX usage in
+  // src/ sets isAnimationActive={false}. If a future chart is added
+  // without the flag, the policy test fails with the file + line.
+  // see: tests/policy/recharts-animation-policy.test.ts
   it('does not emit setState-in-render or Maximum-update-depth warnings', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
