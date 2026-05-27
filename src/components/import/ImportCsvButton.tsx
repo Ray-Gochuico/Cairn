@@ -7,11 +7,69 @@ import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useCategoriesStore } from '@/stores/categories-store';
+import { useHoldingsStore } from '@/stores/holdings-store';
+import { useLoansStore } from '@/stores/loans-store';
+import { usePropertiesStore } from '@/stores/properties-store';
+import { useVehiclesStore } from '@/stores/vehicles-store';
+import { useEquityGrantsStore } from '@/stores/equity-grants-store';
+import { useContributionsStore } from '@/stores/contributions-store';
+import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
 import {
   buildSnapshotConflictMap,
   buildTransactionDuplicateKeys,
+  buildAccountConflictMap,
+  buildHoldingConflictMap,
+  buildLoanConflictMap,
+  buildPropertyConflictMap,
+  buildVehicleConflictMap,
+  buildEquityGrantConflictMap,
+  buildContributionDuplicateKeys,
+  buildAssetValueSnapshotConflictMap,
 } from '@/lib/import/conflict-detector';
+import { downloadCsv } from '@/lib/csv';
+import { accountTemplateCsv } from '@/lib/import/validators/account';
+import { holdingTemplateCsv } from '@/lib/import/validators/holding';
+import { loanTemplateCsv } from '@/lib/import/validators/loan';
+import { propertyTemplateCsv } from '@/lib/import/validators/property';
+import { vehicleTemplateCsv } from '@/lib/import/validators/vehicle';
+import { equityGrantTemplateCsv } from '@/lib/import/validators/equity-grant';
+import { contributionTemplateCsv } from '@/lib/import/validators/contribution';
+import { assetValueSnapshotTemplateCsv } from '@/lib/import/validators/asset-value-snapshot';
 import type { ImportEntity, ValidationContext } from '@/lib/import/types';
+
+const ENTITY_LABEL: Record<ImportEntity, string> = {
+  snapshot: 'snapshot',
+  transaction: 'transaction',
+  account: 'account',
+  holding: 'holding',
+  loan: 'loan',
+  property: 'property',
+  vehicle: 'vehicle',
+  equity_grant: 'equity grant',
+  contribution: 'contribution',
+  asset_value_snapshot: 'asset value snapshot',
+};
+
+/**
+ * Return the downloadable CSV template body for a given entity. Snapshot
+ * and transaction templates are not provided yet (P1/P2's validators
+ * never exposed a template helper) — the link is hidden for those.
+ */
+function getTemplateCsv(entity: ImportEntity): string | null {
+  switch (entity) {
+    case 'account': return accountTemplateCsv();
+    case 'holding': return holdingTemplateCsv();
+    case 'loan': return loanTemplateCsv();
+    case 'property': return propertyTemplateCsv();
+    case 'vehicle': return vehicleTemplateCsv();
+    case 'equity_grant': return equityGrantTemplateCsv();
+    case 'contribution': return contributionTemplateCsv();
+    case 'asset_value_snapshot': return assetValueSnapshotTemplateCsv();
+    case 'snapshot':
+    case 'transaction':
+      return null;
+  }
+}
 
 interface Props {
   entity: ImportEntity;
@@ -41,11 +99,20 @@ export function ImportCsvButton({ entity }: Props) {
   const categories = useCategoriesStore((s) => s.categories);
   const snapshots = useSnapshotsStore((s) => s.snapshots);
   const transactions = useTransactionsStore((s) => s.transactions);
+  const holdings = useHoldingsStore((s) => s.holdings);
+  const loans = useLoansStore((s) => s.loans);
+  const properties = usePropertiesStore((s) => s.properties);
+  const vehicles = useVehiclesStore((s) => s.vehicles);
+  const equityGrants = useEquityGrantsStore((s) => s.equityGrants);
+  const contributions = useContributionsStore((s) => s.contributions);
+  const assetValueSnapshots = useAssetValueSnapshotsStore((s) => s.assetValueSnapshots);
 
   const ctx: ValidationContext = useMemo(() => ({
     accounts: accounts.map((a) => ({ id: a.id!, name: a.name })),
     persons: persons.map((p) => ({ id: p.id!, name: p.name })),
     categories: categories.map((c) => ({ id: c.id!, name: c.name })),
+    properties: properties.map((p) => ({ id: p.id!, name: p.name })),
+    vehicles: vehicles.map((v) => ({ id: v.id!, name: v.name })),
     existingSnapshots: entity === 'snapshot'
       ? buildSnapshotConflictMap(
           snapshots
@@ -69,7 +136,39 @@ export function ImportCsvButton({ entity }: Props) {
             })),
         )
       : undefined,
-  }), [accounts, persons, categories, snapshots, transactions, entity]);
+    existingAccountConflicts:
+      entity === 'account' ? buildAccountConflictMap(accounts) : undefined,
+    existingHoldingConflicts:
+      entity === 'holding' ? buildHoldingConflictMap(holdings) : undefined,
+    existingLoanConflicts:
+      entity === 'loan' ? buildLoanConflictMap(loans) : undefined,
+    existingPropertyConflicts:
+      entity === 'property' ? buildPropertyConflictMap(properties) : undefined,
+    existingVehicleConflicts:
+      entity === 'vehicle' ? buildVehicleConflictMap(vehicles) : undefined,
+    existingEquityGrantConflicts:
+      entity === 'equity_grant' ? buildEquityGrantConflictMap(equityGrants) : undefined,
+    existingContributionDupKeys:
+      entity === 'contribution' ? buildContributionDuplicateKeys(contributions) : undefined,
+    existingAssetValueSnapshotConflicts:
+      entity === 'asset_value_snapshot'
+        ? buildAssetValueSnapshotConflictMap(assetValueSnapshots)
+        : undefined,
+  }), [
+    accounts,
+    persons,
+    categories,
+    snapshots,
+    transactions,
+    holdings,
+    loans,
+    properties,
+    vehicles,
+    equityGrants,
+    contributions,
+    assetValueSnapshots,
+    entity,
+  ]);
 
   async function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
@@ -121,11 +220,26 @@ export function ImportCsvButton({ entity }: Props) {
     totalRef.current = 0;
   };
 
+  const templateCsv = getTemplateCsv(entity);
+
   return (
     <>
-      <Button variant="outline" onClick={() => fileRef.current?.click()}>
-        Import CSV
-      </Button>
+      <div className="flex items-center gap-3">
+        <Button variant="outline" onClick={() => fileRef.current?.click()}>
+          Import CSV
+        </Button>
+        {templateCsv && (
+          <Button
+            variant="link"
+            size="sm"
+            data-testid="download-template-link"
+            onClick={() => downloadCsv(`${entity}-template.csv`, templateCsv)}
+            className="text-xs h-auto p-0"
+          >
+            Download {ENTITY_LABEL[entity]} template ↓
+          </Button>
+        )}
+      </div>
       <input
         ref={fileRef}
         type="file"

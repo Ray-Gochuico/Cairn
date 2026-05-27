@@ -8,6 +8,10 @@ vi.mock('@/lib/import/commit', () => ({
   commitSnapshotImport: vi.fn().mockResolvedValue({ inserted: 1, updated: 0, skipped: 0 }),
 }));
 
+vi.mock('@/lib/csv', () => ({
+  downloadCsv: vi.fn(),
+}));
+
 vi.mock('@/db/db', () => ({
   getDatabase: () => ({
     execute: vi.fn().mockResolvedValue({ rowsAffected: 1 }),
@@ -173,5 +177,58 @@ describe('ImportCsvButton multi-file', () => {
       expect(screen.queryByText(/File \d+ of \d+/)).toBeNull();
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
+  });
+});
+
+describe('ImportCsvButton template downloads', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useAccountsStore.setState({
+      accounts: [{ id: 1, name: 'Fidelity 401k' } as never],
+    });
+    useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null });
+  });
+
+  it('does NOT render a Download template link for snapshot (no template defined)', () => {
+    render(<ImportCsvButton entity="snapshot" />);
+    expect(screen.queryByTestId('download-template-link')).toBeNull();
+  });
+
+  it('does NOT render a Download template link for transaction', () => {
+    render(<ImportCsvButton entity="transaction" />);
+    expect(screen.queryByTestId('download-template-link')).toBeNull();
+  });
+
+  it('renders a Download template link for entity=account and calls downloadCsv with account-template.csv', async () => {
+    render(<ImportCsvButton entity="account" />);
+    const link = screen.getByTestId('download-template-link');
+    expect(link).toHaveTextContent(/Download account template/i);
+    fireEvent.click(link);
+    const { downloadCsv } = await import('@/lib/csv') as unknown as { downloadCsv: ReturnType<typeof vi.fn> };
+    expect(downloadCsv).toHaveBeenCalledTimes(1);
+    expect(downloadCsv).toHaveBeenCalledWith(
+      'account-template.csv',
+      expect.stringContaining('name'),
+    );
+  });
+
+  it('uses the correct filename per entity (loan)', async () => {
+    render(<ImportCsvButton entity="loan" />);
+    fireEvent.click(screen.getByTestId('download-template-link'));
+    const { downloadCsv } = await import('@/lib/csv') as unknown as { downloadCsv: ReturnType<typeof vi.fn> };
+    expect(downloadCsv).toHaveBeenCalledWith(
+      'loan-template.csv',
+      expect.stringContaining('term_months'),
+    );
+  });
+
+  it('emits the equity_grant template with vesting_schedule_json in the header', async () => {
+    render(<ImportCsvButton entity="equity_grant" />);
+    fireEvent.click(screen.getByTestId('download-template-link'));
+    const { downloadCsv } = await import('@/lib/csv') as unknown as { downloadCsv: ReturnType<typeof vi.fn> };
+    expect(downloadCsv).toHaveBeenCalledWith(
+      'equity_grant-template.csv',
+      expect.stringContaining('vesting_schedule_json'),
+    );
   });
 });
