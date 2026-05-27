@@ -96,7 +96,7 @@ function normalizeStandardDeduction(input: StandardDeductionInput): {
 }
 
 export interface TotalTaxInput {
-  gross: number;                       // person or household gross income for the period
+  gross: number;                       // person or household gross income for the period (ordinary wages)
   filingStatus: 'SINGLE' | 'MFJ' | 'MFS' | 'HOH';
   federalBrackets: Bracket[];
   stateBrackets: Bracket[];            // [] for no-state-tax jurisdictions (TX, FL, etc.)
@@ -115,6 +115,21 @@ export interface TotalTaxInput {
     pretaxDcfsa: number;
     pretaxHsa: number;
   };
+  // ---------------------------------------------------------------------------
+  // Investment income (Task 3 — Finance review #5).
+  // All optional. When omitted the legacy ordinary-only math runs unchanged.
+  // ---------------------------------------------------------------------------
+  /** Long-term capital gains. Taxed via the LTCG schedule stacking on ordinary income. */
+  longTermGains?: number;
+  /** Qualified dividends — taxed at the same LTCG schedule as long-term gains. */
+  qualifiedDividends?: number;
+  /** Non-qualified (ordinary) dividends — taxed at ordinary brackets, added to wages stack. */
+  nonQualifiedDividends?: number;
+  /**
+   * LTCG brackets (0% / 15% / 20%) for the filing status. Required iff any
+   * of {longTermGains, qualifiedDividends} > 0; otherwise ignored.
+   */
+  ltcgBrackets?: Bracket[];
 }
 
 export interface TotalTaxOutput {
@@ -122,9 +137,99 @@ export interface TotalTaxOutput {
   fica: number;
   state: number;
   city: number;
+  /**
+   * 3.8% Net Investment Income Tax (IRC §1411) on the lesser of net investment
+   * income or MAGI excess above the filing-status threshold. Always present in
+   * the output; 0 when no LTCG/qualified income provided OR MAGI below
+   * threshold. See computeNiit for the standalone helper.
+   */
+  niit: number;
   total: number;
   /** total / gross — 0 when gross is 0 */
   effectiveRate: number;
+}
+
+// -----------------------------------------------------------------------------
+// Long-term capital gains (LTCG) + qualified dividends.
+//
+// Pre-2026-05-27 the engine treated cap gains as ordinary income, applying
+// the 10–37% federal schedule. The IRS taxes LTCG and qualified dividends
+// against a separate 0% / 15% / 20% schedule that *stacks on top of*
+// ordinary income — meaning the brackets are evaluated as if the ordinary
+// income filled the lowest tiers first.
+// -----------------------------------------------------------------------------
+export interface LtcgInput {
+  /** Ordinary income that sits "below" qualified income in the stack. */
+  ordinaryIncome: number;
+  /** Long-term capital gains (held > 1 year). */
+  longTermGains: number;
+  /** Qualified dividends — taxed at the same LTCG schedule. */
+  qualifiedDividends: number;
+  /** LTCG brackets (0% / 15% / 20%) for the filing status. */
+  ltcgBrackets: Bracket[];
+  /** Filing status — kept for symmetry with other tax helpers; not currently used inside computeLtcgTax (brackets carry status). */
+  filingStatus: 'SINGLE' | 'MFJ' | 'MFS' | 'HOH';
+}
+
+export interface LtcgOutput {
+  federalLtcgTax: number;
+}
+
+/**
+ * Apply the LTCG schedule to long-term gains + qualified dividends, with the
+ * income "stacking" semantics: gains are taxed starting at the bracket where
+ * ordinary income leaves off. Equivalent to:
+ *   tax_on(ordinary + gains) - tax_on(ordinary)
+ * using the LTCG bracket schedule.
+ */
+export function computeLtcgTax(input: LtcgInput): LtcgOutput {
+  const qualifiedIncome = input.longTermGains + input.qualifiedDividends;
+  if (qualifiedIncome <= 0) return { federalLtcgTax: 0 };
+  if (input.ordinaryIncome < 0) throw new Error('ordinaryIncome must be non-negative');
+
+  const stackBottom = input.ordinaryIncome;
+  const stackTop = input.ordinaryIncome + qualifiedIncome;
+
+  // Apply the bracket schedule between stackBottom and stackTop.
+  const taxAtTop = evaluateBrackets(input.ltcgBrackets, stackTop);
+  const taxAtBottom = evaluateBrackets(input.ltcgBrackets, stackBottom);
+  return { federalLtcgTax: Math.max(0, taxAtTop - taxAtBottom) };
+}
+
+// -----------------------------------------------------------------------------
+// Net Investment Income Tax (NIIT) — IRC §1411.
+//
+// 3.8% surtax on the LESSER of net investment income (interest + dividends +
+// cap gains + passive rental/royalty/partnership income) or MAGI excess above
+// the filing-status threshold. Thresholds have been static since 2013 (not
+// inflation-indexed):
+//   SINGLE / HOH:  $200,000
+//   MFJ:           $250,000
+//   MFS:           $125,000
+// -----------------------------------------------------------------------------
+export interface NiitInput {
+  magi: number;
+  netInvestmentIncome: number;
+  filingStatus: 'SINGLE' | 'MFJ' | 'MFS' | 'HOH';
+}
+
+export interface NiitOutput {
+  niit: number;
+}
+
+const NIIT_THRESHOLD = {
+  SINGLE: 200_000,
+  HOH:    200_000,
+  MFJ:    250_000,
+  MFS:    125_000,
+} as const;
+
+export function computeNiit(input: NiitInput): NiitOutput {
+  if (input.netInvestmentIncome < 0) return { niit: 0 };
+  const threshold = NIIT_THRESHOLD[input.filingStatus];
+  const magiExcess = Math.max(0, input.magi - threshold);
+  const base = Math.min(input.netInvestmentIncome, magiExcess);
+  return { niit: base * 0.038 };
 }
 
 /**
@@ -139,24 +244,76 @@ export function computeTotalTax(input: TotalTaxInput): TotalTaxOutput {
     input.pretax.pretaxDcfsa +
     input.pretax.pretaxHsa;
 
-  const sd = normalizeStandardDeduction(input.standardDeduction);
-  const federalTaxable = Math.max(0, input.gross - pretaxTotal - sd.federal);
-  const stateTaxable = Math.max(0, input.gross - pretaxTotal - sd.state);
-  const cityTaxable = Math.max(0, input.gross - pretaxTotal - sd.city);
+  const longTermGains = input.longTermGains ?? 0;
+  const qualifiedDividends = input.qualifiedDividends ?? 0;
+  const nonQualifiedDividends = input.nonQualifiedDividends ?? 0;
+  const qualifiedIncome = longTermGains + qualifiedDividends;
 
-  const federal = input.gross > 0 ? evaluateBrackets(input.federalBrackets, federalTaxable) : 0;
+  // Ordinary income includes W-2/gross + non-qualified dividends. Qualified
+  // income runs through its own bracket schedule on top of the ordinary stack.
+  const ordinaryIncome = input.gross + nonQualifiedDividends;
+
+  const sd = normalizeStandardDeduction(input.standardDeduction);
+  const federalTaxable = Math.max(0, ordinaryIncome - pretaxTotal - sd.federal);
+  // State and city tax ordinary AND qualified income at the same bracket
+  // schedule — most states don't have a separate LTCG schedule. This matches
+  // the pre-fix behavior at the state level and avoids over-engineering for
+  // the small handful of states that do (WA cap gains, MA Part B, etc.).
+  const stateTaxableTotal = Math.max(0, ordinaryIncome + qualifiedIncome - pretaxTotal - sd.state);
+  const cityTaxableTotal  = Math.max(0, ordinaryIncome + qualifiedIncome - pretaxTotal - sd.city);
+
+  const federalOrdinary = ordinaryIncome > 0 ? evaluateBrackets(input.federalBrackets, federalTaxable) : 0;
+  // LTCG federal tax — stacks on the ordinary federal taxable amount. This is
+  // the closest single-pass equivalent to the IRS Qualified Dividends and
+  // Capital Gain Tax Worksheet for a v1 model.
+  let federalLtcg = 0;
+  if (qualifiedIncome > 0 && input.ltcgBrackets && input.ltcgBrackets.length > 0) {
+    federalLtcg = computeLtcgTax({
+      ordinaryIncome: federalTaxable,
+      longTermGains,
+      qualifiedDividends,
+      ltcgBrackets: input.ltcgBrackets,
+      filingStatus: input.filingStatus,
+    }).federalLtcgTax;
+  }
+  const federal = federalOrdinary + federalLtcg;
+
+  // FICA is levied on wages only — NOT on dividends, cap gains, or interest.
+  // Per IRS Pub 15-A, qualified divs are not earned income; non-qualified
+  // divs aren't either. So FICA stays on input.gross.
   const fica = computeFica(input.gross, input.filingStatus);
-  const state = input.stateBrackets.length > 0 ? evaluateBrackets(input.stateBrackets, stateTaxable) : 0;
-  const city = input.cityBrackets ? evaluateBrackets(input.cityBrackets, cityTaxable) : 0;
-  const total = federal + fica + state + city;
+  const state = input.stateBrackets.length > 0 ? evaluateBrackets(input.stateBrackets, stateTaxableTotal) : 0;
+  const city = input.cityBrackets ? evaluateBrackets(input.cityBrackets, cityTaxableTotal) : 0;
+
+  // NIIT — 3.8% on the lesser of net investment income or MAGI excess.
+  // Net II = qualified divs + non-qualified divs + LTCG (interest income
+  // not modeled separately yet — would also flow here when threaded).
+  // MAGI ≈ ordinary + qualified income for v1; the engine doesn't model the
+  // foreign-earned-income exclusion add-back.
+  const netInvestmentIncome = qualifiedIncome + nonQualifiedDividends;
+  const magi = ordinaryIncome + qualifiedIncome;
+  const niit = netInvestmentIncome > 0
+    ? computeNiit({
+        magi,
+        netInvestmentIncome,
+        filingStatus: input.filingStatus,
+      }).niit
+    : 0;
+
+  const total = federal + fica + state + city + niit;
+  // For effectiveRate we keep the historical denominator (gross/W-2) unchanged
+  // — adding investment income to the denominator would silently shift
+  // effective-rate sentinels across hundreds of existing tests.
+  const denominator = input.gross > 0 ? input.gross : 0;
 
   return {
     federal,
     fica,
     state,
     city,
+    niit,
     total,
-    effectiveRate: input.gross > 0 ? total / input.gross : 0,
+    effectiveRate: denominator > 0 ? total / denominator : 0,
   };
 }
 
