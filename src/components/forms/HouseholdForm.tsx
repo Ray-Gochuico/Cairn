@@ -267,9 +267,19 @@ export default function HouseholdForm({
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <Label htmlFor="withdrawalRate">Withdrawal rate (e.g. 0.04 = 4% rule)</Label>
+          {/*
+            Long labels like "Withdrawal rate (e.g. 0.04 = 4% rule)" previously
+            stacked one-word-per-line at narrow Inputs widths (sidebar +
+            sub-nav consume ~250 px). Bumped to md:grid-cols-2 so each cell
+            keeps the label readable until the viewport has real room for two
+            columns, and added break-words so a forced-narrow viewport still
+            wraps gracefully instead of overflowing.
+          */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="min-w-0">
+              <Label htmlFor="withdrawalRate" className="break-words">
+                Withdrawal rate (e.g. 0.04 = 4% rule)
+              </Label>
               <Input
                 id="withdrawalRate"
                 type="number"
@@ -277,8 +287,10 @@ export default function HouseholdForm({
                 {...form.register('withdrawalRate', { valueAsNumber: true })}
               />
             </div>
-            <div>
-              <Label htmlFor="inflationAssumption">Inflation assumption</Label>
+            <div className="min-w-0">
+              <Label htmlFor="inflationAssumption" className="break-words">
+                Inflation assumption
+              </Label>
               <Input
                 id="inflationAssumption"
                 type="number"

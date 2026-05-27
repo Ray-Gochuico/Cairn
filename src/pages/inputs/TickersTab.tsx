@@ -350,13 +350,13 @@ export default function TickersTab() {
       {sorted.length > 0 && (
         <div className="space-y-2">
           {sorted.map((t) => (
-            <Card key={t.ticker}>
-              <CardContent className="flex items-center justify-between py-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold font-mono">{t.ticker}</span>
+            <Card key={t.ticker} data-testid="tickers-row">
+              <CardContent className="flex items-center justify-between gap-3 py-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-bold font-mono truncate">{t.ticker}</span>
                     <span
-                      className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                      className={`shrink-0 text-xs px-1.5 py-0.5 rounded font-medium ${
                         t.direction === Direction.SHORT
                           ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
                           : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
@@ -365,7 +365,17 @@ export default function TickersTab() {
                       {t.direction}
                     </span>
                   </div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
+                  <div
+                    className="text-xs text-muted-foreground mt-0.5 truncate"
+                    title={[
+                      t.name,
+                      ASSET_CLASS_LABELS[t.assetClass],
+                      `${t.leverageFactor.toFixed(1)}x`,
+                      !t.userAdded ? 'system' : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  >
                     {t.name && <span>{t.name} · </span>}
                     {ASSET_CLASS_LABELS[t.assetClass]}
                     {' · '}
