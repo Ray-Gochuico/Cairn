@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { DISCLOSURES } from '@/legal/disclosures';
 
 /**
@@ -46,9 +47,15 @@ export function DisclosureBanner() {
                 ✕
               </button>
             </div>
-            <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
-              {DISCLOSURES.roadmap.body}
-            </pre>
+            {/*
+             * Render the disclosure body as Markdown so **bold** and other
+             * inline formatting render correctly, matching DisclosureModal.
+             * Pre-fix this lived inside a <pre>, which printed the literal
+             * asterisks to the user. (Wave-6 design review.)
+             */}
+            <div className="prose prose-sm max-w-none text-sm leading-relaxed text-foreground">
+              <ReactMarkdown>{DISCLOSURES.roadmap.body}</ReactMarkdown>
+            </div>
             <div className="text-xs text-muted-foreground mt-3">
               Version {DISCLOSURES.roadmap.version}
             </div>

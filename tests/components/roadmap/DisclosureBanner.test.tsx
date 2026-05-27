@@ -37,4 +37,32 @@ describe('DisclosureBanner', () => {
       screen.queryByRole('heading', { name: /about the roadmap/i }),
     ).toBeNull();
   });
+
+  // W6-Design: the side panel used to wrap the body in <pre>, which
+  // rendered `**About the Roadmap feature**` as literal asterisks. After
+  // switching to ReactMarkdown the same source string should produce a
+  // real <strong> element and the asterisks must disappear from the
+  // rendered text.
+  it('renders **bold** body markdown as <strong>, not literal asterisks', () => {
+    render(<DisclosureBanner />);
+    fireEvent.click(screen.getByRole('button', { name: /read full/i }));
+
+    // The exact string is "**About the Roadmap feature**" at the top of
+    // the body. ReactMarkdown should produce a <strong> wrapping
+    // "About the Roadmap feature" — no asterisks in the DOM text.
+    const strongs = screen.getAllByText('About the Roadmap feature');
+    // One copy is the h3 heading we render ourselves; another is the
+    // markdown-rendered <strong>. We only care that at least one is a
+    // <strong>.
+    const renderedStrong = strongs.find(
+      (el) => el.tagName.toLowerCase() === 'strong',
+    );
+    expect(renderedStrong).toBeDefined();
+
+    // Literal "**About the Roadmap feature**" must NOT appear in the
+    // rendered text (the regression we're guarding against).
+    expect(
+      screen.queryByText(/\*\*About the Roadmap feature\*\*/),
+    ).toBeNull();
+  });
 });
