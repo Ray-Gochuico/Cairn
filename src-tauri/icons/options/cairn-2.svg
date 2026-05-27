@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Option 2 — "Geometric Cairn"
+  Modern, flat, single-color stones on an accent plate. Reads cleanly at
+  16x16 (Finder sidebar, dock badge) because every stone is a clean
+  convex polygon with no fine detail. Inspired by Apple SF Symbols
+  silhouettes — minimal, recognizable, brand-neutral.
+-->
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 1024 1024"
+  width="1024"
+  height="1024"
+  role="img"
+  aria-label="Cairn — geometric stacked stones"
+>
+  <!-- Plate: deep navy/forest — the inverse of the stones. -->
+  <rect width="1024" height="1024" rx="224" ry="224" fill="#1F3A36"/>
+
+  <!-- Stones, all rendered in one warm off-white so the silhouette pops
+       even when scaled down to the 16x16 favicon size. -->
+  <g fill="#F5EFE2">
+    <!-- Stone 1 — base, widest, flat top -->
+    <path d="M252 832
+             L 232 786
+             L 360 712
+             L 664 712
+             L 792 786
+             L 772 832 Z"/>
+    <!-- Stone 2 — second tier -->
+    <path d="M304 700
+             L 296 652
+             L 392 590
+             L 632 590
+             L 728 652
+             L 720 700 Z"/>
+    <!-- Stone 3 — middle, slightly taller -->
+    <path d="M348 580
+             L 344 520
+             L 432 470
+             L 592 470
+             L 680 520
+             L 676 580 Z"/>
+    <!-- Stone 4 — small second from top -->
+    <path d="M396 462
+             L 396 422
+             L 460 392
+             L 564 392
+             L 628 422
+             L 628 462 Z"/>
+    <!-- Stone 5 — pebble on top -->
+    <path d="M444 384
+             L 448 360
+             L 488 344
+             L 536 344
+             L 576 360
+             L 580 384 Z"/>
+  </g>
+</svg>

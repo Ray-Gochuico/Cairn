@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Option 5 — "Minimal mark"
+  Three stones, single-color silhouette, no plate background — designed
+  as a monogram-friendly mark that holds together at 16x16 and reads as
+  Cairn-shaped without the literal "stones on a path" reading. Best
+  candidate for favicon and small toolbar usage. Plate is the brand's
+  primary color so it doubles as a one-color logo for letterhead etc.
+-->
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 1024 1024"
+  width="1024"
+  height="1024"
+  role="img"
+  aria-label="Cairn — minimal three-stone mark"
+>
+  <!-- Plate: brand-warm, a single accent color. -->
+  <rect width="1024" height="1024" rx="224" ry="224" fill="#C2440D"/>
+
+  <!-- Three stones at increasing weights from top, single off-white fill.
+       Rounded rectangles rather than organic shapes — keeps edges crisp
+       under nearest-neighbor downscaling for 16x16 favicons. -->
+  <g fill="#F8EEDD">
+    <!-- Top stone -->
+    <rect x="404" y="320" width="216" height="100" rx="50" ry="50"/>
+    <!-- Middle stone -->
+    <rect x="332" y="456" width="360" height="128" rx="64" ry="64"/>
+    <!-- Bottom stone -->
+    <rect x="232" y="620" width="560" height="172" rx="86" ry="86"/>
+  </g>
+</svg>

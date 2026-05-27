@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Option 4 — "Compass-stone"
+  Cairn whose top stone has a subtle compass-rose etched on it. Stronger
+  "wayfinding" semantic than Option 1 — the compass etch only reads at
+  ~256px+ but at smaller sizes it just looks like a stack with a slightly
+  decorated top stone. Plate uses deep forest green for the contrast that
+  makes app icons stand out in macOS Dock crowds.
+-->
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 1024 1024"
+  width="1024"
+  height="1024"
+  role="img"
+  aria-label="Cairn — stones with compass on top"
+>
+  <!-- Plate: deep forest. -->
+  <rect width="1024" height="1024" rx="224" ry="224" fill="#1B3328"/>
+
+  <!-- Stones — a more uniform gray-green palette so the top stone's
+       compass detail isn't fighting for attention. -->
+  <g stroke="#0E1F18" stroke-width="6" stroke-linejoin="round">
+    <!-- Base -->
+    <path
+      d="M260 836
+         C 240 824 236 802 260 788
+         L 440 716
+         C 478 702 546 702 584 716
+         L 764 788
+         C 788 802 784 824 764 836
+         Z"
+      fill="#7E9484"/>
+    <!-- Second -->
+    <path
+      d="M312 712
+         C 296 700 294 682 312 670
+         L 442 612
+         C 470 600 554 600 582 612
+         L 712 670
+         C 730 682 728 700 712 712
+         Z"
+      fill="#A4B8A6"/>
+    <!-- Third -->
+    <path
+      d="M360 600
+         C 348 590 346 574 362 562
+         L 460 514
+         C 478 506 546 506 564 514
+         L 662 562
+         C 678 574 676 590 664 600
+         Z"
+      fill="#C7D2B8"/>
+    <!-- Fourth (this one carries the compass rose) -->
+    <g>
+      <path
+        d="M400 500
+           C 388 492 386 478 400 468
+           L 472 432
+           C 488 426 536 426 552 432
+           L 624 468
+           C 638 478 636 492 624 500
+           Z"
+        fill="#E4E6D2"/>
+      <!-- Compass rose: four-pointed star + inner dot. Centered on top stone. -->
+      <g transform="translate(512 466)" fill="#1B3328" stroke="none">
+        <polygon points="0,-30 6,-6 30,0 6,6 0,30 -6,6 -30,0 -6,-6"/>
+        <circle cx="0" cy="0" r="4"/>
+      </g>
+    </g>
+    <!-- Tiny pebble on top -->
+    <ellipse cx="512" cy="408" rx="36" ry="14" fill="#F5EFE2"/>
+  </g>
+</svg>
