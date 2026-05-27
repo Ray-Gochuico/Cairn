@@ -16,8 +16,10 @@ interface Props {
 /**
  * Right-side sheet that pops out when the user hits the `(i)` button on a
  * node row. Three blocks per the design spec:
- *   1. Verbatim chart text (`node.body`) — what the source Financial Independence flow
- *      chart says, unmodified, so users can verify the app's reading.
+ *   1. Developer's paraphrase of the source Financial Independence flow
+ *      chart (`node.body`) — not verbatim chart text. Surfaced so users
+ *      can see how the engine reads the chart prompt, not as a substitute
+ *      for the source chart itself. See W7-Legal R-LWI-2.
  *   2. How this was calculated — the engine's `evidence` plus, when the
  *      user has overridden the node, a side-by-side "Auto: X · You
  *      marked: Y" line so they can spot divergence.
@@ -72,7 +74,7 @@ export function NodeDetailDrawer({ node, result, open, onOpenChange }: Props) {
           <div className="px-6 py-4 space-y-5">
             <section>
               <h4 className="text-xs uppercase text-muted-foreground tracking-wider mb-1">
-                From the chart
+                From the developer&rsquo;s paraphrase
               </h4>
               <div className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
                 {node.body}

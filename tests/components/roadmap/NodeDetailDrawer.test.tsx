@@ -97,7 +97,7 @@ describe('NodeDetailDrawer', () => {
     renderDrawer({ result: { status: 'active', evidence: '2 loans ≥ 8%' } });
     // Section headings render as uppercase short labels.
     expect(
-      screen.getByRole('heading', { name: /^from the chart$/i }),
+      screen.getByRole('heading', { name: /^from the developer.s paraphrase$/i }),
     ).toBeInTheDocument();
     expect(screen.getByText('Match details from the chart.')).toBeInTheDocument();
     expect(
