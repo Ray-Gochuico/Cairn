@@ -69,12 +69,29 @@ async function bootstrap() {
     );
   } catch (e) {
     const root = document.getElementById('root') as HTMLElement;
-    root.innerHTML = `<div style="padding:24px;font-family:system-ui;color:#dc2626">
-      <h1>Database initialization failed</h1>
-      <pre style="background:#f3f4f6;padding:12px;border-radius:6px;white-space:pre-wrap;">${
-        e instanceof Error ? e.message + '\n\n' + e.stack : String(e)
-      }</pre>
-    </div>`;
+    // Use createElement + textContent instead of innerHTML: error messages
+    // can carry user-controlled file paths (XSS-adjacent), and the new CSP
+    // lacks 'unsafe-inline' for scripts. textContent is the safe sink for
+    // raw strings (innerText would trigger layout reflow).
+    const container = document.createElement('div');
+    container.style.padding = '24px';
+    container.style.fontFamily = 'system-ui';
+    container.style.color = '#dc2626';
+
+    const heading = document.createElement('h1');
+    heading.textContent = 'Database initialization failed';
+
+    const pre = document.createElement('pre');
+    pre.style.background = '#f3f4f6';
+    pre.style.padding = '12px';
+    pre.style.borderRadius = '6px';
+    pre.style.whiteSpace = 'pre-wrap';
+    pre.textContent = e instanceof Error ? e.message + '\n\n' + e.stack : String(e);
+
+    container.appendChild(heading);
+    container.appendChild(pre);
+
+    root.replaceChildren(container);
   }
 }
 
