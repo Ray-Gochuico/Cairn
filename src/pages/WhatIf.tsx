@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowDownUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { FreshnessBadge } from '@/components/ui/freshness-badge';
 import ChartToolbar from '@/components/whatif/ChartToolbar';
 import FiCards from '@/components/whatif/FiCards';
 import LeverBar from '@/components/whatif/LeverBar';
@@ -247,7 +248,10 @@ export default function WhatIf() {
   return (
     <div className="p-6 space-y-4 min-w-0" data-testid="whatif-page-wrap">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <h1 className="text-2xl font-semibold">What-If</h1>
+        <div className="flex items-center gap-3 flex-wrap">
+          <h1 className="text-2xl font-semibold">What-If</h1>
+          <FreshnessBadge size="sm" />
+        </div>
         <ChartToolbar
           detailLevel={detailLevel}
           onDetailLevelChange={setDetailLevel}

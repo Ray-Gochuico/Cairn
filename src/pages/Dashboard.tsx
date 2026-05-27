@@ -41,6 +41,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import MetricCard from '@/components/cards/MetricCard';
 import { ConcentrationCard } from '@/components/cards/ConcentrationCard';
+import { FreshnessBadge } from '@/components/ui/freshness-badge';
 import { NextMoveCard } from '@/components/dashboard/NextMoveCard';
 import { EditablePill } from '@/components/dashboard/EditablePill';
 import { EditableWidget } from '@/components/dashboard/EditableWidget';
@@ -793,7 +794,10 @@ export default function Dashboard() {
           <h1 className="text-3xl font-semibold">
             {household?.name ? `Hi, ${household.name}` : 'Dashboard'}
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">{todayLabel}</p>
+          <div className="flex items-center gap-3 mt-1 flex-wrap">
+            <p className="text-sm text-muted-foreground">{todayLabel}</p>
+            <FreshnessBadge size="sm" />
+          </div>
         </div>
         <Button
           type="button"

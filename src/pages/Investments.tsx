@@ -27,6 +27,7 @@ import { valueHoldings, type HoldingValuation } from '@/lib/holdings-value';
 import type { Dependent, AccountSnapshot, Household, Holding } from '@/types/schema';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
+import { FreshnessBadge } from '@/components/ui/freshness-badge';
 import type { CsvColumn } from '@/lib/csv';
 import { topEffectiveExposures, type ConcentrationWarning } from '@/lib/concentration';
 import { AlertTriangleIcon } from 'lucide-react';
@@ -636,7 +637,10 @@ export default function Investments() {
     <div className="p-8 max-w-6xl space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold mb-1">Investments</h1>
+          <div className="flex items-center gap-3 mb-1 flex-wrap">
+            <h1 className="text-2xl font-semibold">Investments</h1>
+            <FreshnessBadge size="sm" />
+          </div>
           <p className="text-sm text-muted-foreground">
             Allocation across asset classes,{' '}
             <TermTooltip term="DRIFT">drift</TermTooltip> from your targets, and contribution trends.

@@ -88,6 +88,23 @@ For the full picture:
 - [`docs/superpowers/conventions.md`](docs/superpowers/conventions.md) — engineering patterns.
 - [`docs/superpowers/plans/`](docs/superpowers/plans/) — per-feature plans.
 
+### Market data freshness
+
+Every market-dependent value in the app (portfolio totals, net worth,
+What-If projections, equity-grant FMV, concentration breakdown) carries
+a small "Updated *X* ago" pill so you always know how recent the
+underlying prices are. The pill turns amber with an alert icon when the
+data has aged past 1.5× your configured refresh cadence — by default,
+36 hours for the daily cadence or 10.5 days for the weekly cadence.
+Hover the pill to see the exact timestamp, plus a one-click *Refresh
+now* action.
+
+The refresh cadence (every launch / daily / weekly / manual) is set on
+**Settings → Market data**. *Manual* disables the staleness warning
+entirely — opt out and the pill still surfaces the timestamp, but
+never nags. The "Refresh now" button there triggers an immediate price
+refresh from Yahoo Finance regardless of the chosen cadence.
+
 ## Development
 
 ```bash
