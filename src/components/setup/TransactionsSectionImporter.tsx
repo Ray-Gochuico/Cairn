@@ -1,6 +1,9 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { extractTextItems } from '@/pdf/extract';
+// pdfjs-dist is ~1.2 MB worker + ~200 kB core that the majority of users
+// never touch (CSV-only or manual-entry flows skip statement parsing). We
+// dynamic-import `@/pdf/extract` inside the user's drop/select handler
+// below, which lets Vite emit those bytes as a separate lazy chunk.
 import { parseStatement } from '@/pdf/parse-statement';
 import { PdfReviewModal } from '@/components/dialogs/PdfReviewModal';
 import { ImportPreviewModal } from '@/components/import/ImportPreviewModal';
@@ -100,6 +103,17 @@ export default function TransactionsSectionImporter({
     const next: PendingImport[] = [];
     const newErrors: BatchImportError[] = [];
 
+    // Lazy-load the PDF extractor only when this batch actually contains
+    // a PDF. The browser doesn't pay the ~1.2 MB pdfjs cost on cold start,
+    // and CSV-only batches don't pay it here either.
+    const hasPdf = files.some((file) => {
+      const lower = file.name.toLowerCase();
+      return file.type === 'application/pdf' || lower.endsWith('.pdf');
+    });
+    const extractTextItems = hasPdf
+      ? (await import('@/pdf/extract')).extractTextItems
+      : null;
+
     for (const file of files) {
       const lower = file.name.toLowerCase();
       const isPdf =
@@ -107,7 +121,7 @@ export default function TransactionsSectionImporter({
       const isCsv = file.type === 'text/csv' || lower.endsWith('.csv');
 
       try {
-        if (isPdf) {
+        if (isPdf && extractTextItems) {
           const bytes = new Uint8Array(await file.arrayBuffer());
           const items = await extractTextItems(bytes);
           const result = parseStatement(items);
