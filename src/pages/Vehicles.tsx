@@ -5,9 +5,11 @@ import { useLoansStore } from '@/stores/loans-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useSettingsStore } from '@/stores/settings-store';
+import { useVehicleLeasesStore } from '@/stores/vehicle-leases-store';
 import { filterByOwnerPersonId } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { resolveUtilityCategoryIds } from '@/lib/category-config';
+import { monthlyLeaseObligation } from '@/lib/recurring-obligations';
 import { CategoryMultiSelect } from '@/components/categories/CategoryMultiSelect';
 import { LoanType } from '@/types/enums';
 import {
@@ -16,7 +18,12 @@ import {
   allLinkedSpending,
   averageMonthlySpending,
 } from '@/lib/cost-basis';
-import type { Vehicle, Transaction, Category } from '@/types/schema';
+import type {
+  Vehicle,
+  Transaction,
+  Category,
+  VehicleLease,
+} from '@/types/schema';
 import {
   Card,
   CardContent,
@@ -266,6 +273,53 @@ function VehicleGasCard({
   );
 }
 
+interface LeaseCardProps {
+  lease: VehicleLease;
+  onRemove: () => void;
+}
+
+function LeaseCard({ lease, onRemove }: LeaseCardProps) {
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <CardTitle className="text-base truncate">{lease.name}</CardTitle>
+            <CardDescription className="text-xs">Lease</CardDescription>
+          </div>
+          <Button size="sm" variant="destructive" onClick={onRemove}>
+            Remove
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div>
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">
+            Monthly
+          </div>
+          <div className="text-2xl font-semibold">
+            {formatCurrency(lease.monthlyAmount)}
+          </div>
+        </div>
+        <dl className="grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <dt className="text-xs uppercase tracking-wider text-muted-foreground">
+              From
+            </dt>
+            <dd className="font-mono">{lease.startDate}</dd>
+          </div>
+          <div>
+            <dt className="text-xs uppercase tracking-wider text-muted-foreground">
+              Until
+            </dt>
+            <dd className="font-mono">{lease.endDate ?? 'ongoing'}</dd>
+          </div>
+        </dl>
+      </CardContent>
+    </Card>
+  );
+}
+
 type EditTarget = null | { id: number };
 
 export default function Vehicles() {
@@ -288,6 +342,9 @@ export default function Vehicles() {
   const loadSettings = useSettingsStore((s) => s.load);
   const updateSettings = useSettingsStore((s) => s.update);
 
+  const vehicleLeases = useVehicleLeasesStore((s) => s.vehicleLeases);
+  const loadVehicleLeases = useVehicleLeasesStore((s) => s.load);
+
   const [editing, setEditing] = useState<EditTarget>(null);
 
   useEffect(() => {
@@ -296,11 +353,30 @@ export default function Vehicles() {
     loadTransactions();
     loadCategories();
     loadSettings();
-  }, [loadVehicles, loadLoans, loadTransactions, loadCategories, loadSettings]);
+    loadVehicleLeases();
+  }, [
+    loadVehicles,
+    loadLoans,
+    loadTransactions,
+    loadCategories,
+    loadSettings,
+    loadVehicleLeases,
+  ]);
 
   const visibleVehicles = useMemo(
     () => filterByOwnerPersonId(vehicles, filter, persons),
     [vehicles, filter, persons],
+  );
+
+  const visibleLeases = useMemo(
+    () => filterByOwnerPersonId(vehicleLeases, filter, persons),
+    [vehicleLeases, filter, persons],
+  );
+
+  const today = new Date().toISOString().slice(0, 10);
+  const totalMonthlyLeaseObligation = useMemo(
+    () => monthlyLeaseObligation(visibleLeases, today),
+    [visibleLeases, today],
   );
 
   // Resolve the effective category-id set for the Gas card from the user's
@@ -363,7 +439,7 @@ export default function Vehicles() {
     }
   }, [editing, visibleVehicles]);
 
-  if (vehicles.length === 0) {
+  if (vehicles.length === 0 && vehicleLeases.length === 0) {
     return (
       <div className="p-8 max-w-6xl">
         <h1 className="text-2xl font-semibold mb-1">Vehicles</h1>
@@ -372,7 +448,7 @@ export default function Vehicles() {
         </p>
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
-            Add vehicles from{' '}
+            Add vehicles or leases from{' '}
             <Link to="/inputs/vehicles" className="underline text-foreground">
               Inputs
             </Link>
@@ -456,6 +532,31 @@ export default function Vehicles() {
           );
         })}
       </div>
+
+      {visibleLeases.length > 0 && (
+        <section aria-label="Leases" className="space-y-3">
+          <div className="flex items-baseline justify-between gap-4">
+            <h2 className="text-xl font-semibold">Leases</h2>
+            <div className="text-sm text-muted-foreground">
+              <span className="mr-2">Total monthly obligation</span>
+              <span className="font-mono text-base text-foreground">
+                {formatCurrency(totalMonthlyLeaseObligation)}
+              </span>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {visibleLeases.map((l) => (
+              <LeaseCard
+                key={l.id}
+                lease={l}
+                onRemove={() =>
+                  void useVehicleLeasesStore.getState().remove(l.id!)
+                }
+              />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

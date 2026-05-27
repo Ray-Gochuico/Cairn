@@ -10,6 +10,7 @@ import { useTransactionsStore } from '@/stores/transactions-store';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
+import { useVehicleLeasesStore } from '@/stores/vehicle-leases-store';
 import {
   FilingStatus,
   RefreshCadence,
@@ -74,6 +75,12 @@ function resetStores() {
     error: null,
     load: async () => {},
   });
+  useVehicleLeasesStore.setState({
+    vehicleLeases: [],
+    isLoading: false,
+    error: null,
+    load: async () => {},
+  } as never);
 }
 
 const baseCat = (overrides: Partial<Category>): Category => ({
@@ -178,7 +185,7 @@ describe('Vehicles page', () => {
   it('shows empty-state when there are no vehicles', () => {
     renderPage();
     expect(screen.getAllByText(/Vehicles/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/Add vehicles from/i)).toBeInTheDocument();
+    expect(screen.getByText(/Add vehicles or leases from/i)).toBeInTheDocument();
   });
 
   it('renders a vehicle card with name and current value', () => {
@@ -334,6 +341,42 @@ describe('Vehicles page', () => {
     // Empty-state copy from ValueHistorySection
     expect(screen.getByText(/Using current estimated value/i)).toBeInTheDocument();
     expect(screen.getByText(/Value history \(0\)/i)).toBeInTheDocument();
+  });
+
+  it('renders a lease card and total monthly obligation when vehicle leases exist', async () => {
+    useVehicleLeasesStore.setState({
+      vehicleLeases: [
+        {
+          id: 1,
+          householdId: 1,
+          ownerPersonId: null,
+          name: 'Tesla Model 3',
+          monthlyAmount: 599,
+          startDate: '2025-01-01',
+          endDate: '2028-12-31',
+        },
+        {
+          id: 2,
+          householdId: 1,
+          ownerPersonId: null,
+          name: 'BMW i4',
+          monthlyAmount: 700,
+          startDate: '2025-06-01',
+          endDate: null,
+        },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+
+    renderPage();
+
+    expect(await screen.findByText('Tesla Model 3')).toBeInTheDocument();
+    expect(screen.getByText('BMW i4')).toBeInTheDocument();
+    // 599 + 700 = 1299
+    expect(screen.getByText(/Total monthly obligation/i)).toBeInTheDocument();
+    expect(screen.getByText(/\$1,299/)).toBeInTheDocument();
   });
 
   it('exports the full vehicles table to CSV with the owner name resolved', async () => {
