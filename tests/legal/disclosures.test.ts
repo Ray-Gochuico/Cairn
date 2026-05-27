@@ -3,12 +3,12 @@ import { DISCLOSURES } from '@/legal/disclosures';
 
 describe('DISCLOSURES', () => {
   it('defines an app_wide disclosure with a version + body + checkbox label', () => {
-    expect(DISCLOSURES.app_wide.version).toBe('1.3');
+    expect(DISCLOSURES.app_wide.version).toBe('1.4');
     expect(DISCLOSURES.app_wide.body.length).toBeGreaterThan(200);
     expect(DISCLOSURES.app_wide.acceptanceCheckboxLabel).toMatch(/at my own risk/i);
   });
 
-  it('app_wide v1.3 body retains the UCC § 2-316 implied-warranty disclaimer + US-only scope + governing law', () => {
+  it('app_wide v1.4 body retains the UCC § 2-316 implied-warranty disclaimer + US-only scope + governing law', () => {
     const body = DISCLOSURES.app_wide.body;
     expect(body).toMatch(/MERCHANTABILITY/);
     expect(body).toMatch(/FITNESS FOR A PARTICULAR PURPOSE/);
@@ -17,19 +17,19 @@ describe('DISCLOSURES', () => {
     expect(body).toMatch(/governed by the laws/i);
   });
 
-  it('app_wide v1.3 still names New York as the governing-law state', () => {
+  it('app_wide v1.4 still names New York as the governing-law state', () => {
     const body = DISCLOSURES.app_wide.body;
     expect(body).not.toMatch(/\[PLACEHOLDER/i);
     expect(body).toMatch(/State of New York/);
   });
 
-  it('app_wide v1.3 ships a diffFromPrevious that mentions the unmodeled-items list', () => {
+  it('app_wide v1.4 ships a diffFromPrevious that mentions the WA threshold refresh', () => {
     expect(DISCLOSURES.app_wide.diffFromPrevious).toBeTruthy();
     expect(DISCLOSURES.app_wide.diffFromPrevious!.length).toBeGreaterThan(40);
-    expect(DISCLOSURES.app_wide.diffFromPrevious).toMatch(/does NOT model|not model/i);
+    expect(DISCLOSURES.app_wide.diffFromPrevious).toMatch(/Washington capital-gains-tax threshold|WA.*threshold/i);
   });
 
-  it('app_wide v1.3 body lists the tax items the app does NOT model (Wave-3 Task 7)', () => {
+  it('app_wide v1.4 body lists the tax items the app does NOT model (Wave-3 Task 7, Wave-5 #7 refresh)', () => {
     const body = DISCLOSURES.app_wide.body;
     expect(body).toMatch(/What this app does NOT model/i);
     expect(body).toMatch(/AMT/);
@@ -40,6 +40,12 @@ describe('DISCLOSURES', () => {
     expect(body).toMatch(/stock buyback|buyback excise/i);
     expect(body).toMatch(/cafeteria/i);
     expect(body).toMatch(/state.*(LTCG|capital.gain)/i);
+  });
+
+  it('app_wide v1.4 cites the current ~$278k WA cap-gains threshold (was stale ~$262k in v1.3)', () => {
+    const body = DISCLOSURES.app_wide.body;
+    expect(body).toMatch(/~\$?278k|\$278k/i);
+    expect(body).not.toMatch(/~?\$?262k/i);
   });
 
   it('defines a roadmap disclosure with a version + body + checkbox label', () => {

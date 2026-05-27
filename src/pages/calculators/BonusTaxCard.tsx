@@ -163,7 +163,7 @@ export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
 
   if (!result) {
     return (
-      <CalculatorCard title="Bonus take-home" headline="—" cardId={cardId} onHide={onHide}>
+      <CalculatorCard title="Estimated bonus take-home" headline="—" cardId={cardId} onHide={onHide}>
         {controls}
         <p className="text-sm text-muted-foreground">
           Set up your household profile + tax rules to see bonus tax.
@@ -174,7 +174,7 @@ export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
 
   if (effectiveBonus <= 0) {
     return (
-      <CalculatorCard title="Bonus take-home" headline="—" cardId={cardId} onHide={onHide}>
+      <CalculatorCard title="Estimated bonus take-home" headline="—" cardId={cardId} onHide={onHide}>
         {controls}
         <p className="text-sm text-muted-foreground">
           Enter a bonus amount to see the bonus tax breakdown.
@@ -191,7 +191,7 @@ export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
 
   return (
     <CalculatorCard
-      title="Bonus take-home"
+      title="Estimated bonus take-home"
       cardId={cardId}
       onHide={onHide}
       headline={
@@ -209,7 +209,7 @@ export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-sm">
         <div>
-          <div className="text-muted-foreground">Federal on bonus</div>
+          <div className="text-muted-foreground">Estimated federal on bonus</div>
           <div className="font-medium tabular-nums">
             {formatCurrency(result.bonusBreakdown.federal / bonusesPerYear)}
           </div>
@@ -223,19 +223,19 @@ export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
           </div>
         </div>
         <div>
-          <div className="text-muted-foreground">State on bonus</div>
+          <div className="text-muted-foreground">Estimated state on bonus</div>
           <div className="font-medium tabular-nums">
             {formatCurrency(result.bonusBreakdown.state / bonusesPerYear)}
           </div>
         </div>
         <div>
-          <div className="text-muted-foreground">City on bonus</div>
+          <div className="text-muted-foreground">Estimated city on bonus</div>
           <div className="font-medium tabular-nums">
             {formatCurrency(result.bonusBreakdown.city / bonusesPerYear)}
           </div>
         </div>
         <div>
-          <div className="text-muted-foreground">Total tax on bonus</div>
+          <div className="text-muted-foreground">Estimated total tax on bonus</div>
           <div className="font-medium tabular-nums">
             {formatCurrency(result.bonusBreakdown.total / bonusesPerYear)}
           </div>
@@ -251,7 +251,7 @@ export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
       </div>
       {isConsistent && (
         <div className="mt-3 pt-3 border-t text-sm">
-          <span className="text-muted-foreground">Total take-home for the year:</span>{' '}
+          <span className="text-muted-foreground">Estimated total take-home for the year:</span>{' '}
           <span className="font-medium tabular-nums">{formatCurrency(annualBonusTakeHome)}</span>
           {bonusesPerYear > 1 && (
             <span className="text-muted-foreground">
@@ -263,6 +263,54 @@ export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
       <p className="text-xs text-muted-foreground mt-2">
         Enter a one-time bonus amount above. Editing here doesn&#39;t persist.
       </p>
+      {/* Wave-5 W5-5 — calculator framing parity with the 401k card.
+          The bonus take-home headline is an estimate because this engine
+          uses the federal aggregate method by default and omits several
+          items that materially shift the real number. */}
+      <details className="text-xs mt-3 border-t pt-2 text-muted-foreground">
+        <summary className="cursor-pointer font-medium hover:text-foreground">
+          What this calculator does NOT model
+        </summary>
+        <ul className="mt-2 list-disc pl-5 space-y-1">
+          <li>
+            <strong>Aggregate vs. 22% flat method.</strong> The IRS lets your
+            employer pick between the 22% supplemental-wage flat rate (37% over
+            $1M) and the aggregate method (annualized W-4 brackets). This card
+            uses the aggregate method; your actual withholding may differ if
+            your payroll uses the flat rate.
+          </li>
+          <li>
+            <strong>State-specific supplemental-wage flat rates.</strong> CA, GA,
+            NY, NJ, and others tax supplemental wages at a flat statutory rate
+            that may differ from your W-4 ordinary rate. The engine applies
+            your state's ordinary brackets.
+          </li>
+          <li>
+            <TermTooltip term="NIIT">NIIT</TermTooltip> + Additional Medicare
+            surtax (0.9% above $200k single / $250k MFJ) — secondary effects on
+            the high-earner federal column.
+          </li>
+          <li>
+            <TermTooltip term="AMT">AMT</TermTooltip> preference items if the
+            bonus comes from an ISO disqualifying disposition.
+          </li>
+          <li>
+            <strong>Bonus-period 401(k) catch-up elections.</strong> Some plans
+            let you set a one-time bonus contribution % distinct from your
+            regular salary deferral; the engine reuses your salary pretax %.
+          </li>
+          <li>
+            <strong>RSU vesting taxes.</strong> If part of the bonus is in
+            equity, the engine treats it all as cash. RSUs are taxed at FMV on
+            vest and may push the same shares into a higher bracket.
+          </li>
+        </ul>
+        <p className="mt-2">
+          For a high-stakes bonus decision (negotiating, deciding whether to
+          defer), run the numbers past a CPA — the items above can each shift
+          the bottom line by hundreds to thousands of dollars.
+        </p>
+      </details>
     </CalculatorCard>
   );
 }

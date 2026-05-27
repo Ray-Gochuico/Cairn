@@ -45,42 +45,51 @@ describe('useDisclosureGate', () => {
     expect(result.current.state).toBe('needs-acceptance');
     if (result.current.state === 'needs-acceptance') {
       expect(result.current.document.id).toBe('app_wide');
-      expect(result.current.document.version).toBe('1.3');
+      expect(result.current.document.version).toBe('1.4');
     }
   });
 
   it('returns ready when the accepted version matches the current version', () => {
-    setHousehold({ disclaimerVersionAccepted: '1.3' });
+    setHousehold({ disclaimerVersionAccepted: '1.4' });
     const { result } = renderHook(() => useDisclosureGate('app_wide'));
     expect(result.current.state).toBe('ready');
   });
 
   it('returns needs-acceptance when the accepted version is stale (v1.0)', () => {
-    // A user on the now-superseded v1.0 must be re-prompted at app_wide v1.3.
+    // A user on the now-superseded v1.0 must be re-prompted at app_wide v1.4.
     setHousehold({ disclaimerVersionAccepted: '1.0' });
     const { result } = renderHook(() => useDisclosureGate('app_wide'));
     expect(result.current.state).toBe('needs-acceptance');
   });
 
-  it('returns needs-acceptance when the accepted version is stale (v1.1 → v1.3)', () => {
+  it('returns needs-acceptance when the accepted version is stale (v1.1 → v1.4)', () => {
     // A user on v1.1 (which shipped with the [PLACEHOLDER] governing-law
-    // string) must be re-prompted at v1.3 (which added the "what we don't
-    // model" tax-items list).
+    // string) must be re-prompted at v1.4 (which refreshed the WA cap-gains
+    // threshold in the "what we don't model" tax-items list).
     setHousehold({ disclaimerVersionAccepted: '1.1' });
     const { result } = renderHook(() => useDisclosureGate('app_wide'));
     expect(result.current.state).toBe('needs-acceptance');
   });
 
-  it('returns needs-acceptance when the accepted version is stale (v1.2 → v1.3)', () => {
+  it('returns needs-acceptance when the accepted version is stale (v1.2 → v1.4)', () => {
     // A user on v1.2 (governing-law sentence only) must be re-prompted at
-    // v1.3 (which added the unmodeled-items list).
+    // v1.4 (which added the unmodeled-items list at v1.3 and bumped the WA
+    // threshold to its 2025 inflation-adjusted value at v1.4).
     setHousehold({ disclaimerVersionAccepted: '1.2' });
     const { result } = renderHook(() => useDisclosureGate('app_wide'));
     expect(result.current.state).toBe('needs-acceptance');
   });
 
+  it('returns needs-acceptance when the accepted version is stale (v1.3 → v1.4)', () => {
+    // A user on v1.3 (current as of Wave-3) must be re-prompted at v1.4
+    // (which updated the WA cap-gains threshold to its 2025 value).
+    setHousehold({ disclaimerVersionAccepted: '1.3' });
+    const { result } = renderHook(() => useDisclosureGate('app_wide'));
+    expect(result.current.state).toBe('needs-acceptance');
+  });
+
   it('reads the roadmap version cache when id is roadmap', () => {
-    setHousehold({ disclaimerVersionAccepted: '1.3', roadmapDisclaimerVersionAccepted: null });
+    setHousehold({ disclaimerVersionAccepted: '1.4', roadmapDisclaimerVersionAccepted: null });
     const { result } = renderHook(() => useDisclosureGate('roadmap'));
     expect(result.current.state).toBe('needs-acceptance');
     if (result.current.state === 'needs-acceptance') {
@@ -89,7 +98,7 @@ describe('useDisclosureGate', () => {
   });
 
   it('app_wide and roadmap gates are independent', () => {
-    setHousehold({ disclaimerVersionAccepted: '1.3', roadmapDisclaimerVersionAccepted: '1.0' });
+    setHousehold({ disclaimerVersionAccepted: '1.4', roadmapDisclaimerVersionAccepted: '1.0' });
     const appWide = renderHook(() => useDisclosureGate('app_wide'));
     const roadmap = renderHook(() => useDisclosureGate('roadmap'));
     expect(appWide.result.current.state).toBe('ready');

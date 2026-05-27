@@ -16,7 +16,7 @@ describe('Step0Disclaimer', () => {
   it('renders the app_wide disclaimer modal', () => {
     render(<Step0Disclaimer onComplete={vi.fn()} />);
     expect(screen.getByRole('heading', { name: 'Disclaimer' })).toBeInTheDocument();
-    expect(screen.getByText(/version 1\.3/i)).toBeInTheDocument();
+    expect(screen.getByText(/version 1\.4/i)).toBeInTheDocument();
   });
 
   it('disables Continue until the checkbox is checked', () => {
@@ -34,7 +34,7 @@ describe('Step0Disclaimer', () => {
     fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', { name: /continue to setup/i }));
     await waitFor(() => {
-      expect(acceptDisclaimer).toHaveBeenCalledWith('app_wide', '1.3');
+      expect(acceptDisclaimer).toHaveBeenCalledWith('app_wide', '1.4');
     });
   });
 
