@@ -2,12 +2,29 @@ import { describe, it, expect } from 'vitest';
 import { detectMilestones, type FinancialIndependenceParams } from '@/lib/scenarios/milestones';
 import type { MonthlyState } from '@/lib/scenarios/engine';
 
-function buildStates(values: Array<{ month: string; netWorth: number; debt: number; expenses: number }>): MonthlyState[] {
-  return values.map((v) => ({
-    monthISO: v.month, investments: v.netWorth + v.debt, homeEquity: 0, cash: 0,
-    debtByLoan: v.debt > 0 ? { 1: v.debt } : {},
-    netWorth: v.netWorth, incomeAfterTax: 0, expenses: v.expenses, savings: 0, events: [],
-  }));
+function buildStates(values: Array<{
+  month: string;
+  netWorth: number;
+  debt: number;
+  expenses: number;
+  /** Optional override: liquid (investments + cash). Defaults to netWorth + debt
+   *  (i.e. all of net-worth is held as liquid). Pass an explicit value when
+   *  testing the home-equity-inflation fix (Wave-3 Task 4). */
+  liquid?: number;
+  /** Optional home-equity overlay. Defaults to 0. */
+  homeEquity?: number;
+}>): MonthlyState[] {
+  return values.map((v) => {
+    const investments = v.liquid ?? v.netWorth + v.debt;
+    return {
+      monthISO: v.month,
+      investmentsByAccount: investments > 0 ? { 1: investments } : {},
+      homeEquity: v.homeEquity ?? 0,
+      cash: 0,
+      debtByLoan: v.debt > 0 ? { 1: v.debt } : {},
+      netWorth: v.netWorth, incomeAfterTax: 0, expenses: v.expenses, savings: 0, events: [],
+    };
+  });
 }
 
 describe('detectMilestones', () => {
@@ -47,7 +64,7 @@ describe('detectMilestones', () => {
     for (let i = 0; i < 400; i++) {
       states.push({
         monthISO: '2026-01',
-        investments: 0,
+        investmentsByAccount: {},
         homeEquity: 0,
         cash: 0,
         debtByLoan: {},
@@ -75,19 +92,46 @@ describe('detectMilestones', () => {
 
   it('detects the retirement month (first month where incomeAfterTax transitions to 0)', () => {
     const states: MonthlyState[] = [
-      { monthISO: '2026-05', investments: 0, homeEquity: 0, cash: 0, debtByLoan: {}, netWorth: 0, incomeAfterTax: 8000, expenses: 4000, savings: 4000, events: [] },
-      { monthISO: '2026-06', investments: 0, homeEquity: 0, cash: 0, debtByLoan: {}, netWorth: 0, incomeAfterTax: 8000, expenses: 4000, savings: 4000, events: [] },
-      { monthISO: '2031-06', investments: 0, homeEquity: 0, cash: 0, debtByLoan: {}, netWorth: 0, incomeAfterTax: 0,    expenses: 4000, savings: -4000, events: [] },
-      { monthISO: '2031-07', investments: 0, homeEquity: 0, cash: 0, debtByLoan: {}, netWorth: 0, incomeAfterTax: 0,    expenses: 4000, savings: -4000, events: [] },
+      { monthISO: '2026-05', investmentsByAccount: {}, homeEquity: 0, cash: 0, debtByLoan: {}, netWorth: 0, incomeAfterTax: 8000, expenses: 4000, savings: 4000, events: [] },
+      { monthISO: '2026-06', investmentsByAccount: {}, homeEquity: 0, cash: 0, debtByLoan: {}, netWorth: 0, incomeAfterTax: 8000, expenses: 4000, savings: 4000, events: [] },
+      { monthISO: '2031-06', investmentsByAccount: {}, homeEquity: 0, cash: 0, debtByLoan: {}, netWorth: 0, incomeAfterTax: 0,    expenses: 4000, savings: -4000, events: [] },
+      { monthISO: '2031-07', investmentsByAccount: {}, homeEquity: 0, cash: 0, debtByLoan: {}, netWorth: 0, incomeAfterTax: 0,    expenses: 4000, savings: -4000, events: [] },
     ];
     expect(detectMilestones(states, fiParams).retirementISO).toBe('2031-06');
   });
 
   it('returns undefined retirementISO when income never transitions to zero', () => {
     const states: MonthlyState[] = [
-      { monthISO: '2026-05', investments: 0, homeEquity: 0, cash: 0, debtByLoan: {}, netWorth: 0, incomeAfterTax: 8000, expenses: 4000, savings: 4000, events: [] },
-      { monthISO: '2026-06', investments: 0, homeEquity: 0, cash: 0, debtByLoan: {}, netWorth: 0, incomeAfterTax: 8000, expenses: 4000, savings: 4000, events: [] },
+      { monthISO: '2026-05', investmentsByAccount: {}, homeEquity: 0, cash: 0, debtByLoan: {}, netWorth: 0, incomeAfterTax: 8000, expenses: 4000, savings: 4000, events: [] },
+      { monthISO: '2026-06', investmentsByAccount: {}, homeEquity: 0, cash: 0, debtByLoan: {}, netWorth: 0, incomeAfterTax: 8000, expenses: 4000, savings: 4000, events: [] },
     ];
     expect(detectMilestones(states, fiParams).retirementISO).toBeUndefined();
+  });
+
+  // ----- Wave-3 Task 4 — FI milestone uses LIQUID, not net worth ------------
+  describe('FI milestone uses liquid (investments + cash), excludes home equity', () => {
+    it('a $1M home owner with $0 investments NEVER reaches FI by the 4% rule', () => {
+      // Pre-fix: netWorth = 1M home equity → 1M * 4% / 12 = $3,333/mo, which
+      // crosses an expense floor of $3k. The user "reaches FI" — clearly
+      // wrong since they cannot actually draw 4% from their home.
+      const states = buildStates([
+        { month: '2026-01', netWorth: 1_000_000, debt: 0, expenses: 3_000, liquid: 0, homeEquity: 1_000_000 },
+        { month: '2026-06', netWorth: 1_000_000, debt: 0, expenses: 3_000, liquid: 0, homeEquity: 1_000_000 },
+      ]);
+      // Post-fix: liquid = 0, so FI is never reached.
+      expect(detectMilestones(states, fiParams).financialIndependenceISO).toBeUndefined();
+    });
+
+    it('homeowner with $900k investments + $1M home equity still reaches FI at the right month', () => {
+      // 900k * 4% = 36k/yr = 3k/mo — exactly hits the expense floor.
+      // The pre-fix calculation would have crossed FI much earlier (with
+      // any investments + 1M home equity inflating the SWR pool).
+      const states = buildStates([
+        { month: '2026-01', netWorth: 500_000,   debt: 0, expenses: 3_000, liquid: 0,       homeEquity: 1_000_000 },
+        { month: '2030-01', netWorth: 1_400_000, debt: 0, expenses: 3_000, liquid: 400_000, homeEquity: 1_000_000 },
+        { month: '2040-01', netWorth: 1_900_000, debt: 0, expenses: 3_000, liquid: 900_000, homeEquity: 1_000_000 },
+      ]);
+      expect(detectMilestones(states, fiParams).financialIndependenceISO).toBe('2040-01');
+    });
   });
 });

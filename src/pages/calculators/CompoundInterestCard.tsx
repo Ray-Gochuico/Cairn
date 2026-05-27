@@ -8,6 +8,7 @@ import {
   type CompoundFrequency,
 } from '@/lib/compound-interest';
 import { formatCurrency } from '@/lib/format';
+import { TermTooltip } from '@/components/ui/glossary-tooltip';
 
 interface CompoundInterestCardProps {
   cardId?: string;
@@ -22,6 +23,34 @@ const FREQUENCY_OPTIONS: Array<{ value: CompoundFrequency; label: string }> = [
   { value: 'ANNUALLY', label: 'Annually' },
 ];
 
+const PERIODS_PER_YEAR: Record<CompoundFrequency, number> = {
+  DAILY: 365,
+  WEEKLY: 52,
+  MONTHLY: 12,
+  QUARTERLY: 4,
+  ANNUALLY: 1,
+};
+
+/**
+ * Convert an APY (the effective annual yield after compounding) into the
+ * nominal APR that, when compounded `ppy` times per year, reproduces that
+ * yield exactly. APY = (1 + APR/ppy)^ppy − 1, so APR = ppy * ((1 + APY)^(1/ppy) − 1).
+ *
+ * Wave-3 Task 5 fix: the underlying compoundInterestSeries() compounds
+ * `annualRate / ppy` per period — i.e. it interprets its input as APR. Pre-
+ * fix the input was labelled an ambiguous "Estimated rate (%)" which most
+ * users would read as APY. A user entering 5% expecting APY (the apples-to-
+ * apples savings-comparison number) was actually getting APR — which
+ * compounds to a HIGHER yield, over-stating the projection. The conversion
+ * runs at the card boundary so the underlying engine math is unchanged
+ * (and stays consistent with everything else in the app that expects APR).
+ */
+function apyToApr(apy: number, ppy: number): number {
+  if (apy === 0) return 0;
+  if (ppy === 1) return apy;                                  // annual = APR
+  return ppy * (Math.pow(1 + apy, 1 / ppy) - 1);
+}
+
 export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardProps = {}) {
   // Inputs are local component state — this card is interactive what-if, not persisted.
   const [pv, setPv] = useState<string>('1000');
@@ -35,14 +64,29 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
     const pvNum = Number(pv) || 0;
     const pmtNum = Number(monthlyContribution) || 0;
     const yearsNum = Math.max(0, Math.floor(Number(years) || 0));
-    const rateNum = (Number(ratePercent) || 0) / 100;
-    const varNum = variancePercent === '' ? undefined : (Number(variancePercent) || 0) / 100;
+    const apyNum = (Number(ratePercent) || 0) / 100;
+    const apyVarianceNum = variancePercent === '' ? undefined : (Number(variancePercent) || 0) / 100;
     if (yearsNum === 0) return null;
+    // The user-facing input is APY (effective annual yield), but
+    // compoundInterestSeries() interprets its rate input as APR. Convert
+    // at the boundary so the engine math stays APR-consistent across the app
+    // while the input matches what users see on a savings/CD comparison.
+    const ppy = PERIODS_PER_YEAR[frequency];
+    const aprRate = apyToApr(apyNum, ppy);
+    // Variance preserves symmetry around APY → APR by converting low/high
+    // bands first then differencing back to a single APR-variance number.
+    // Approximation is fine: variance is a what-if knob, not a SOX number.
+    let aprVariance: number | undefined;
+    if (apyVarianceNum != null && apyVarianceNum > 0) {
+      const lowApr = apyToApr(Math.max(-0.99, apyNum - apyVarianceNum), ppy);
+      const highApr = apyToApr(apyNum + apyVarianceNum, ppy);
+      aprVariance = (highApr - lowApr) / 2;
+    }
     return compoundInterestSeries({
       pv: pvNum,
       monthlyContribution: pmtNum,
-      annualRate: rateNum,
-      varianceRate: varNum,
+      annualRate: aprRate,
+      varianceRate: aprVariance,
       years: yearsNum,
       frequency,
     });
@@ -92,8 +136,10 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
           <Input id="ci-years" type="number" step="1" min="1" value={years} onChange={(e) => setYears(e.target.value)} />
         </div>
         <div>
-          <Label htmlFor="ci-rate">Estimated rate (%)</Label>
-          <Input id="ci-rate" type="number" step="0.1" value={ratePercent} onChange={(e) => setRatePercent(e.target.value)} />
+          <Label htmlFor="ci-rate">
+            <TermTooltip term="APY">APY</TermTooltip> (%)
+          </Label>
+          <Input id="ci-rate" type="number" step="0.1" value={ratePercent} onChange={(e) => setRatePercent(e.target.value)} aria-label="Annual percentage yield" />
         </div>
         <div>
           <Label htmlFor="ci-variance">Variance ± (%)</Label>

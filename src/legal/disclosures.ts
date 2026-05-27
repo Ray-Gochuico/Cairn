@@ -16,7 +16,7 @@
  * § A.0 "Full draft disclosure copy".
  */
 
-const APP_WIDE_TEXT_v1_2 = `**This app is an educational and personal-tracking tool. It is not financial, investment, tax, legal, or accounting advice.**
+const APP_WIDE_TEXT_v1_3 = `**This app is an educational and personal-tracking tool. It is not financial, investment, tax, legal, or accounting advice.**
 
 The app's developer is not a registered investment advisor, broker-dealer, certified financial planner, CPA, or attorney, and no fiduciary relationship is created by your use of it.
 
@@ -31,6 +31,17 @@ Use of this app is **at your own risk**. The software is provided "as is" withou
 **NO IMPLIED WARRANTIES.** TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE IMPLIED WARRANTIES OF **MERCHANTABILITY**, **FITNESS FOR A PARTICULAR PURPOSE**, ACCURACY, AND **NON-INFRINGEMENT**.
 
 **Intended audience — U.S. only.** This software is provided for use by U.S. residents performing personal financial tracking on their own data. It is not localized for any other jurisdiction. Tax brackets, contribution limits, retirement account types, and other reference data reflect U.S. federal and state rules. If you are outside the United States, treat every tax calculation and contribution-limit comparison in this app as illustrative only — they will not match your local rules.
+
+**What this app does NOT model.** The projections, calculators, and roadmap heuristics in this app omit several federal and state tax items that can materially shift the real-world outcome. Treat any number that depends on the items below as illustrative only:
+
+- **Capital-gains state taxes.** State LTCG treatment varies widely — WA imposes a 7% tax on gains above ~$262k, while CA/NY/HI/NJ tax LTCG as ordinary income, and TX/FL/NV/SD/TN/WY/AK have no state income tax at all. The app applies your state's ordinary brackets to any cap gains, which over-collects for some states and under-collects for others.
+- **AMT (Alternative Minimum Tax)** for ISO exercises, large SALT add-backs, or other AMT preference items. Households exercising ISOs can owe substantial AMT in the exercise year.
+- **Social Security retirement income.** The app does not project SS benefits or apply the federal 50%/85% taxation rules. Households relying primarily on SS in retirement will see different effective rates than projected.
+- **Required Minimum Distributions (RMDs)** at age 73+. Pre-tax retirement accounts (Trad 401k/IRA) must distribute on a schedule; the app does not force these distributions into its projections.
+- **§121 home sale exclusion** — \$250k single / \$500k MFJ of gain on the sale of a primary residence is excluded from tax. The app does not model home-sale events.
+- **SALT cap / itemized-vs-standard election.** The app uses the standard deduction at every projection step; high-SALT households (NY/NJ/CA + property taxes) who itemize may see different federal tax outcomes.
+- **Stock buyback excise tax (1%)** on corporate share repurchases — affects fund-level returns indirectly but is not modeled in any of the per-account growth projections.
+- **Cafeteria-plan FICA exclusion.** §125 pre-tax health insurance, FSA, and payroll-deduction HSA contributions reduce the FICA base in payroll reality; the app applies FICA to raw gross. The over-collection is typically <\$500/yr for a household at the maximum cafeteria-plan deferral.
 
 **Governing law.** These terms are governed by the laws of the State of New York, without regard to its conflict-of-laws principles.`;
 
@@ -64,10 +75,10 @@ export interface DisclosureDocument {
 
 export const DISCLOSURES = {
   app_wide: {
-    version: '1.2',
-    body: APP_WIDE_TEXT_v1_2,
+    version: '1.3',
+    body: APP_WIDE_TEXT_v1_3,
     diffFromPrevious:
-      'Version 1.2 fills in the governing-law clause: it now references the State of New York as the governing law (previously a placeholder string). No other substantive change. Please re-read and re-accept.',
+      'Version 1.3 adds a "What this app does NOT model" section listing the federal + state tax items the app currently omits (state-specific LTCG rates, AMT on ISOs, Social Security retirement income + 50/85% taxation, RMDs at age 73+, §121 home-sale exclusion, SALT cap, the 1% stock-buyback excise tax, and the cafeteria-plan FICA exclusion). The State of New York governing-law clause from v1.2 is unchanged. Please re-read and re-accept.',
     acceptanceCheckboxLabel:
       'I have read and understand the above. I accept that this app is not financial advice and I use it at my own risk.',
   } satisfies DisclosureDocument,

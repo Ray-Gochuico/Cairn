@@ -235,6 +235,26 @@ export const LeverPayloadSchema = z.object({
    * federal brackets stacked above wages. Defaults to 0.
    */
   annualNonQualifiedDividends: z.number().nonnegative().default(0),
+  /**
+   * Blended effective tax rate applied to gross-up withdrawals from
+   * tax-deferred (Trad 401k / Trad IRA / HSA / 529) accounts under the
+   * sequential drawdown strategy.
+   *
+   * Why this exists: pre-fix, the engine treated `applyCashFloorShortfall`
+   * drawdowns as net-to-user — but Trad-bucket withdrawals are taxable as
+   * ordinary income, so a retiree needing $60k of net spend actually has to
+   * pull ~$73k pre-tax. Without gross-up, a 30-year Trad-heavy projection
+   * over-stated the ending balance by ~$200-300k.
+   *
+   * v1 keeps this as a single blended rate (Settings → Advanced lever)
+   * rather than per-step bracket math. 0 = legacy net-equals-gross behavior,
+   * preserving existing projection sentinels exactly. 0.22 (22%) is the
+   * typical blended federal+state retirement rate.
+   *
+   * Only applies when `withdrawalStrategy === 'sequential'` AND the tier
+   * being drained is `taxDeferred`. Taxable + Roth tiers ignore this.
+   */
+  effectiveDrawdownTaxRate: z.number().min(0).max(0.6).default(0),
 });
 export type LeverPayload = z.infer<typeof LeverPayloadSchema>;
 
@@ -259,5 +279,6 @@ export function emptyLeverPayload(): LeverPayload {
     annualLongTermGains: 0,
     annualQualifiedDividends: 0,
     annualNonQualifiedDividends: 0,
+    effectiveDrawdownTaxRate: 0,
   };
 }

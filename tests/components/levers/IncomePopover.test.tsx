@@ -247,4 +247,54 @@ describe('IncomePopover — per-person + household + gap summary (revamp 2026-05
     render(<MemoryRouter><IncomePopover open onOpenChange={() => {}} /></MemoryRouter>);
     expect(screen.getByTestId('gap-allocation-editor')).toBeInTheDocument();
   });
+
+  // ---- Wave-3 Task 1: investment-income inputs (LTCG / qualified divs /
+  // non-qualified divs) -------------------------------------------------------
+  describe('investment income inputs (Wave-3)', () => {
+    it('renders all three investment-income inputs', () => {
+      render(<MemoryRouter><IncomePopover open onOpenChange={() => {}} /></MemoryRouter>);
+      expect(screen.getByLabelText(/annual long-term capital gains/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/annual qualified dividends/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/annual non-qualified dividends/i)).toBeInTheDocument();
+    });
+
+    it('seeds the inputs from the active scenario payload', () => {
+      resetStores({
+        payload: {
+          annualLongTermGains: 50_000,
+          annualQualifiedDividends: 3_000,
+          annualNonQualifiedDividends: 1_500,
+        },
+      });
+      render(<MemoryRouter><IncomePopover open onOpenChange={() => {}} /></MemoryRouter>);
+      expect((screen.getByLabelText(/annual long-term capital gains/i) as HTMLInputElement).value).toBe('50000');
+      expect((screen.getByLabelText(/annual qualified dividends/i) as HTMLInputElement).value).toBe('3000');
+      expect((screen.getByLabelText(/annual non-qualified dividends/i) as HTMLInputElement).value).toBe('1500');
+    });
+
+    it('Apply pushes all three values to updateLever', async () => {
+      const user = userEvent.setup();
+      const updateLever = vi.fn().mockResolvedValue(undefined);
+      useScenariosStore.setState({ updateLever } as any);
+      render(<MemoryRouter><IncomePopover open onOpenChange={() => {}} /></MemoryRouter>);
+
+      const ltcgInput = screen.getByLabelText(/annual long-term capital gains/i);
+      await user.clear(ltcgInput);
+      await user.type(ltcgInput, '50000');
+      const qdInput = screen.getByLabelText(/annual qualified dividends/i);
+      await user.clear(qdInput);
+      await user.type(qdInput, '3000');
+
+      await user.click(screen.getByRole('button', { name: /^Apply$/i }));
+
+      expect(updateLever).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          annualLongTermGains: 50000,
+          annualQualifiedDividends: 3000,
+          annualNonQualifiedDividends: 0,
+        }),
+      );
+    });
+  });
 });

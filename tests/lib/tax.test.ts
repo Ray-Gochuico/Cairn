@@ -55,6 +55,70 @@ describe('computeFica', () => {
   });
 });
 
+// -----------------------------------------------------------------------------
+// FICA base correctness — Wave-3 Task 3 documentation tests.
+//
+// Per IRS Pub 15 and 26 CFR §31.3121(a):
+//   - Section 401(k) elective deferrals ARE subject to FICA. The pre-tax
+//     reduction applies to FEDERAL income tax withholding only, not FICA.
+//   - HSA contributions made through a §125 cafeteria plan ARE excluded
+//     from FICA wages (but stand-alone HSA contributions made directly
+//     to the custodian are NOT — they only reduce federal income tax via
+//     the above-the-line deduction).
+//
+// The engine's current implementation passes `input.gross` (the raw W-2)
+// to computeFica WITHOUT subtracting pretax. That matches the §401(k)
+// rule exactly. For the (rarer) cafeteria-plan HSA / health-insurance
+// path, the engine slightly over-collects FICA — flagged as a future
+// refinement in the disclosure (see v1.3 "What we don't model").
+// -----------------------------------------------------------------------------
+describe('computeTotalTax — FICA base does NOT exclude pretax 401k', () => {
+  const baseFedSingle: Bracket[] = [
+    { min: 0, max: 11600, rate: 0.10 },
+    { min: 11600, max: 47150, rate: 0.12 },
+    { min: 47150, max: 100525, rate: 0.22 },
+    { min: 100525, max: null, rate: 0.24 },
+  ];
+
+  it('FICA is identical whether pretax401k is 0 or $24,500 (gross same in both cases)', () => {
+    const baseInput: TotalTaxInput = {
+      gross: 120_000,
+      filingStatus: 'SINGLE',
+      federalBrackets: baseFedSingle,
+      stateBrackets: [],
+      cityBrackets: null,
+      standardDeduction: 14_600,
+      pretax: { pretax401k: 0, pretaxHealth: 0, pretaxDcfsa: 0, pretaxHsa: 0 },
+    };
+    const noPretax = computeTotalTax(baseInput);
+    const withPretax401k = computeTotalTax({
+      ...baseInput,
+      pretax: { pretax401k: 24_500, pretaxHealth: 0, pretaxDcfsa: 0, pretaxHsa: 0 },
+    });
+    // Federal drops (401k reduces federal taxable). FICA stays identical
+    // because the engine correctly bases it on input.gross (raw W-2), per
+    // IRS Pub 15 §401(k) elective-deferral rules.
+    expect(withPretax401k.federal).toBeLessThan(noPretax.federal);
+    expect(withPretax401k.fica).toBeCloseTo(noPretax.fica, 2);
+  });
+
+  it('FICA on $120k matches the canonical 6.2% + 1.45% = 7.65% × gross (gross < SS wage base)', () => {
+    const out = computeTotalTax({
+      gross: 120_000,
+      filingStatus: 'SINGLE',
+      federalBrackets: baseFedSingle,
+      stateBrackets: [],
+      cityBrackets: null,
+      standardDeduction: 14_600,
+      pretax: { pretax401k: 20_000, pretaxHealth: 5_000, pretaxDcfsa: 0, pretaxHsa: 0 },
+    });
+    // FICA base IS the raw 120k. 120k × (0.062 + 0.0145) = 9180 exactly.
+    // This is the desired behavior; cafeteria-plan exclusions are a known
+    // limitation flagged in the v1.3 "What we don't model" disclosure.
+    expect(out.fica).toBeCloseTo(9180, 1);
+  });
+});
+
 describe('computePretaxDeductions', () => {
   it('caps 401k at $24,500', () => {
     const result = computePretaxDeductions({

@@ -39,4 +39,44 @@ describe('CompoundInterestCard', () => {
     await user.clear(yearsInput);
     expect(screen.getByText(/enter a length in years/i)).toBeInTheDocument();
   });
+
+  it('labels the rate input as APY (Wave-3 Task 5)', () => {
+    render(<CompoundInterestCard />);
+    // The label uses a TermTooltip "APY" — visible text contains "APY".
+    expect(screen.getByLabelText(/annual percentage yield/i)).toBeInTheDocument();
+  });
+
+  it('annual compounding @ 7% input yields ~1.07^N * PV (APY semantics, no compounding amplification)', async () => {
+    const user = userEvent.setup();
+    render(<CompoundInterestCard />);
+    // PV=1000, PMT=0, 10y, 7%, ANNUAL compounding. With APY=7% the final
+    // balance should be exactly 1000 * 1.07^10 = $1967.15.
+    // Pre-fix (APR semantics): 1000 * (1+0.07/1)^10 = 1967.15 (matches at annual).
+    // The test below using monthly checks the case where APY/APR diverge.
+    await user.clear(screen.getByLabelText(/initial amount/i));
+    await user.type(screen.getByLabelText(/initial amount/i), '1000');
+    await user.clear(screen.getByLabelText(/monthly contribution/i));
+    await user.type(screen.getByLabelText(/monthly contribution/i), '0');
+    await user.selectOptions(screen.getByLabelText(/compound frequency/i), 'ANNUALLY');
+    const headline = screen.getByTestId('compound-headline');
+    // Match $1,9XX (any value between 1900 and 1999).
+    expect(headline.textContent).toMatch(/\$1,9\d{2}/);
+  });
+
+  it('monthly compounding @ 7% APY yields a SMALLER final than monthly @ 7% APR (semantic diff)', async () => {
+    // Same input number "7" but interpreted as APY → APR conversion gives
+    // ~6.78% APR, yielding less FV than 7% APR-direct would have.
+    const user = userEvent.setup();
+    render(<CompoundInterestCard />);
+    await user.clear(screen.getByLabelText(/initial amount/i));
+    await user.type(screen.getByLabelText(/initial amount/i), '10000');
+    await user.clear(screen.getByLabelText(/monthly contribution/i));
+    await user.type(screen.getByLabelText(/monthly contribution/i), '0');
+    const headlineAfter = screen.getByTestId('compound-headline').textContent ?? '';
+    // With APR=7% (pre-fix), monthly compounding for 10y on $10k = $20,096.
+    // With APY=7% (post-fix), monthly compounding for 10y on $10k = $19,672
+    // (≈ 1.07^10 * 10k since APY semantics make per-period rate compound
+    // exactly to 7% annual).
+    expect(headlineAfter).toMatch(/\$19,[5-7]\d{2}/);
+  });
 });

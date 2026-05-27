@@ -1,4 +1,5 @@
 import type { MonthlyState } from './engine';
+import { totalInvestments } from './aggregate-investments';
 
 export interface FinancialIndependenceParams {
   /** Safe withdrawal rate, e.g. 0.04 for the 4% rule. */
@@ -24,6 +25,26 @@ export interface Milestones {
 
 const MONTHS_30Y = 360;
 
+/**
+ * Liquid / investable assets used for the FI milestone test. Excludes home
+ * equity and vehicles (which can't realistically fund a 4%-SWR drawdown
+ * without selling) and excludes outstanding debt (debt is paid down via
+ * the household cash-flow plan, not from the SWR pool).
+ *
+ * Wave-3 Task 4 fix: previously the milestone test used `s.netWorth`, which
+ * inflated the SWR pool by home equity. A $1M home owner needed only $500k
+ * in investments to "reach FI" by the 4% rule — clearly wrong, since they
+ * can't draw 4% from their primary residence.
+ *
+ * Defensive against legacy state shapes that may lack `investmentsByAccount`
+ * (older test fixtures, hand-built mocks). When the field is missing we
+ * treat investments as 0.
+ */
+function liquidAssets(s: MonthlyState): number {
+  const investments = s.investmentsByAccount ? totalInvestments(s) : 0;
+  return investments + (s.cash ?? 0);
+}
+
 export function detectMilestones(
   states: MonthlyState[],
   params: FinancialIndependenceParams,
@@ -39,7 +60,10 @@ export function detectMilestones(
       debtFreeISO = s.monthISO;
     }
     if (!financialIndependenceISO) {
-      const monthlyWithdrawalCapacity = (s.netWorth * params.withdrawalRate) / 12;
+      // Use LIQUID (investments + cash), not netWorth. Home equity does not
+      // sustain a 4% SWR. The previous calculation inflated FI estimates by
+      // years for homeowners.
+      const monthlyWithdrawalCapacity = (liquidAssets(s) * params.withdrawalRate) / 12;
       if (monthlyWithdrawalCapacity >= s.expenses && s.expenses > 0) {
         financialIndependenceISO = s.monthISO;
       }

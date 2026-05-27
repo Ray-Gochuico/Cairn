@@ -35,8 +35,27 @@ describe('LeverPayloadSchema', () => {
       annualLongTermGains: 0,
       annualQualifiedDividends: 0,
       annualNonQualifiedDividends: 0,
+      effectiveDrawdownTaxRate: 0,
     };
     expect(LeverPayloadSchema.parse(payload)).toEqual(payload);
+  });
+
+  it('accepts effectiveDrawdownTaxRate between 0 and 0.6', () => {
+    const base = emptyLeverPayload();
+    expect(LeverPayloadSchema.parse({ ...base, effectiveDrawdownTaxRate: 0 }).effectiveDrawdownTaxRate).toBe(0);
+    expect(LeverPayloadSchema.parse({ ...base, effectiveDrawdownTaxRate: 0.22 }).effectiveDrawdownTaxRate).toBe(0.22);
+    expect(LeverPayloadSchema.parse({ ...base, effectiveDrawdownTaxRate: 0.6 }).effectiveDrawdownTaxRate).toBe(0.6);
+  });
+
+  it('rejects effectiveDrawdownTaxRate outside the 0–0.6 range', () => {
+    const base = emptyLeverPayload();
+    expect(() => LeverPayloadSchema.parse({ ...base, effectiveDrawdownTaxRate: -0.01 })).toThrow();
+    expect(() => LeverPayloadSchema.parse({ ...base, effectiveDrawdownTaxRate: 0.7 })).toThrow();
+  });
+
+  it('defaults effectiveDrawdownTaxRate to 0 (legacy net-equals-gross behavior)', () => {
+    const { effectiveDrawdownTaxRate: _drop, ...withoutRate } = emptyLeverPayload();
+    expect(LeverPayloadSchema.parse(withoutRate).effectiveDrawdownTaxRate).toBe(0);
   });
 
   it('defaults contributions to an empty array when omitted (back-compat)', () => {

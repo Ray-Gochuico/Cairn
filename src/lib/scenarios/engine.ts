@@ -86,6 +86,15 @@ export interface MonthlyState {
    * cash + this step's surplus can't cover expenses + loan payments.
    */
   withdrawnFromInvestments?: number;
+  /**
+   * Implied tax accrued from grossing up a sequential Trad-bucket withdrawal
+   * this step. Zero unless (a) sequential strategy AND (b) the household
+   * actually drained the taxDeferred tier this step AND (c)
+   * payload.effectiveDrawdownTaxRate > 0. Observability-only — does not
+   * affect any other engine math (the gross-up has already reduced the
+   * Trad balance for us).
+   */
+  withdrawalTaxAccrued?: number;
 }
 
 export interface Horizon {
@@ -304,12 +313,32 @@ function withdrawProportionally(
  * Accounts that aren't in the engine's accounts list (rare — usually only
  * happens when test fixtures stub `investmentsByAccount` without an Account
  * entry) fall through to the legacy proportional logic.
+ *
+ * Tax gross-up (Wave-3 Task 2): when `effectiveTaxRate > 0` AND the
+ * tier being drained is `taxDeferred` (Trad 401k / Trad IRA / HSA / 529),
+ * the withdrawal is grossed up so the NET amount reaching the user equals
+ * the requested deficit:
+ *     grossWithdrawal = netNeeded / (1 - rate)
+ * `taxable` and `roth` tiers ignore this — taxable principal is already
+ * after-tax (gains already taxed at LTCG schedule via annualLongTermGains;
+ * pre-realisation basis is not modelled here), and Roth distributions are
+ * tax-free at 59.5+. Returns a {balances, taxPaid} tuple so the caller can
+ * surface the implied tax via withdrawalTaxAccrued for tooltip / disclosure.
  */
+interface SequentialWithdrawResult {
+  balances: Record<number, number>;
+  /** Gross dollars actually pulled from the taxDeferred tier (gross = net / (1 - rate)). */
+  taxDeferredGross: number;
+  /** Implied tax = taxDeferredGross * rate. Zero when rate == 0 or no Trad bucket drained. */
+  taxPaid: number;
+}
+
 function withdrawSequential(
   investmentsByAccount: Record<number, number>,
   deficit: number,
   accounts: Account[],
-): Record<number, number> {
+  effectiveTaxRate: number = 0,
+): SequentialWithdrawResult {
   const accountById = new Map<number, Account>();
   for (const a of accounts) if (a.id !== undefined) accountById.set(a.id, a);
 
@@ -333,29 +362,47 @@ function withdrawSequential(
   if (
     bucketIds.taxable.length + bucketIds.taxDeferred.length + bucketIds.roth.length === 0
   ) {
-    return withdrawProportionally(investmentsByAccount, deficit);
+    return {
+      balances: withdrawProportionally(investmentsByAccount, deficit),
+      taxDeferredGross: 0,
+      taxPaid: 0,
+    };
   }
 
   let remaining = deficit;
+  let taxDeferredGross = 0;
   const result: Record<number, number> = { ...investmentsByAccount };
 
-  function drainTier(ids: number[]): void {
+  // tier-with-gross-up: the BALANCE drawn from the tier is potentially the
+  // grossed-up amount (gross = net / (1 - rate)). `remaining` represents
+  // the NET cash still needed — so when we draw $X gross we reduce
+  // `remaining` by `X * (1 - rate)` (the net portion delivered to the user).
+  // Tier balances may not be sufficient to satisfy the grossed-up draw —
+  // in that case we drain the whole tier and convert what was actually
+  // drawn into its net contribution.
+  function drainTier(ids: number[], grossUp: boolean): void {
     if (remaining <= 0 || ids.length === 0) return;
     const tierTotal = ids.reduce((s, id) => s + (result[id] ?? 0), 0);
-    if (tierTotal <= 0) return; // tier already empty; let next tier absorb
-    const drawFromTier = Math.min(tierTotal, remaining);
+    if (tierTotal <= 0) return;
+    // If grossing up: the ideal gross draw is `remaining / (1 - rate)`,
+    // but cap at the tier total. The net delivered equals
+    // (actualGross) * (1 - rate). For non-gross-up tiers, gross == net.
+    const idealGross = grossUp && effectiveTaxRate < 1
+      ? remaining / (1 - effectiveTaxRate)
+      : remaining;
+    const actualGross = Math.min(tierTotal, idealGross);
     for (const id of ids) {
       const balance = result[id] ?? 0;
-      if (tierTotal > 0) {
-        result[id] = balance - drawFromTier * (balance / tierTotal);
-      }
+      result[id] = balance - actualGross * (balance / tierTotal);
     }
-    remaining -= drawFromTier;
+    const netDelivered = grossUp ? actualGross * (1 - effectiveTaxRate) : actualGross;
+    remaining -= netDelivered;
+    if (grossUp) taxDeferredGross += actualGross;
   }
 
-  drainTier(bucketIds.taxable);
-  drainTier(bucketIds.taxDeferred);
-  drainTier(bucketIds.roth);
+  drainTier(bucketIds.taxable, false);
+  drainTier(bucketIds.taxDeferred, effectiveTaxRate > 0);
+  drainTier(bucketIds.roth, false);
 
   // Anything left? Push it onto either the unbucketed accounts (if any) or,
   // failing that, distribute pro-rata across all known accounts (matching the
@@ -373,7 +420,11 @@ function withdrawSequential(
     }
   }
 
-  return result;
+  return {
+    balances: result,
+    taxDeferredGross,
+    taxPaid: taxDeferredGross * effectiveTaxRate,
+  };
 }
 
 function stepMonth(
@@ -401,6 +452,7 @@ function stepMonth(
     leverContributionsInvested: 0,
     lumpSumInvested: 0,
     withdrawnFromInvestments: 0,
+    withdrawalTaxAccrued: 0,
     // Clone `investmentsByAccount` and `debtByLoan` so this step's mutations
     // (applyGapAllocation / distributeWithinBucket mutate in place) don't
     // ripple back into earlier states in the projection array. The previous
@@ -552,6 +604,8 @@ function stepMonth(
   const withdrawalStrategy =
     (payload as { withdrawalStrategy?: 'proportional' | 'sequential' }).withdrawalStrategy
     ?? 'proportional';
+  const effectiveDrawdownTaxRate =
+    (payload as { effectiveDrawdownTaxRate?: number }).effectiveDrawdownTaxRate ?? 0;
   const contribution = activeContributionAmount(payload.contributions, monthIndex);
   if (contribution !== null) {
     s.investmentsByAccount = distributeToAccounts(s.investmentsByAccount, contribution, allocation);
@@ -567,7 +621,7 @@ function stepMonth(
       applyGapAllocation(s, payload.gapAllocation, real.accountsByBucket);
       s.savings = original;
     } else if (remainder < 0) {
-      applyCashFloorShortfall(s, -remainder, withdrawalStrategy, real.accounts);
+      applyCashFloorShortfall(s, -remainder, withdrawalStrategy, real.accounts, effectiveDrawdownTaxRate);
     }
   } else if (s.savings > 0) {
     // Gap allocation lever (revamp 2026-05-26) — routes the positive surplus
@@ -576,7 +630,7 @@ function stepMonth(
     // configured anything.
     applyGapAllocation(s, payload.gapAllocation, real.accountsByBucket);
   } else if (s.savings < 0) {
-    applyCashFloorShortfall(s, -s.savings, withdrawalStrategy, real.accounts);
+    applyCashFloorShortfall(s, -s.savings, withdrawalStrategy, real.accounts, effectiveDrawdownTaxRate);
   }
 
   // 7. Apply this month's return to investments. The compounding frequency
@@ -612,6 +666,7 @@ function applyCashFloorShortfall(
   deficit: number,
   strategy: 'proportional' | 'sequential',
   accounts: Account[],
+  effectiveDrawdownTaxRate: number = 0,
 ): void {
   if (s.cash >= deficit) {
     s.cash -= deficit;
@@ -619,11 +674,29 @@ function applyCashFloorShortfall(
   }
   const fromInvestments = deficit - s.cash;
   s.cash = 0;
-  s.investmentsByAccount =
-    strategy === 'sequential'
-      ? withdrawSequential(s.investmentsByAccount, fromInvestments, accounts)
-      : withdrawProportionally(s.investmentsByAccount, fromInvestments);
-  s.withdrawnFromInvestments = (s.withdrawnFromInvestments ?? 0) + fromInvestments;
+  if (strategy === 'sequential') {
+    const r = withdrawSequential(
+      s.investmentsByAccount,
+      fromInvestments,
+      accounts,
+      effectiveDrawdownTaxRate,
+    );
+    s.investmentsByAccount = r.balances;
+    // Implied tax is accrued for tooltip / decomposition. The grossed-up
+    // gross amount has ALREADY reduced the Trad balances, so the net
+    // delivered = fromInvestments + r.taxPaid is what reached the user
+    // (matches: cash absorbed `s.cash` worth of the deficit, then we
+    // pulled fromInvestments-net from accounts after gross-up shenanigans).
+    s.withdrawalTaxAccrued = (s.withdrawalTaxAccrued ?? 0) + r.taxPaid;
+    // withdrawnFromInvestments tracks the *gross* hit to portfolio balances
+    // (taxable principal + grossed-up Trad gross + Roth principal); that's
+    // the right value for "how much smaller did your portfolio just get."
+    s.withdrawnFromInvestments =
+      (s.withdrawnFromInvestments ?? 0) + fromInvestments + r.taxPaid;
+  } else {
+    s.investmentsByAccount = withdrawProportionally(s.investmentsByAccount, fromInvestments);
+    s.withdrawnFromInvestments = (s.withdrawnFromInvestments ?? 0) + fromInvestments;
+  }
 }
 
 export function computeNetWorth(s: MonthlyState): number {
