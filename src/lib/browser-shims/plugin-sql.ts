@@ -2,7 +2,6 @@ import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from 'sql
 
 const IDB_NAME = 'finance-app-shim';
 const IDB_STORE = 'sqlite';
-const IDB_KEY = 'db';
 
 let sqlPromise: Promise<SqlJsStatic> | null = null;
 function getSqlJs(): Promise<SqlJsStatic> {
