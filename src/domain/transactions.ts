@@ -98,8 +98,20 @@ export class TransactionsRepo {
   }
 
   async createMany(rows: Array<Omit<Transaction, 'id'>>): Promise<number[]> {
+    // P2-A4: wrap the N inserts in a single SQLite transaction. Without
+    // this, each row pays the full WAL fsync / statement-prep cost,
+    // running ~10-30x slower at 1k rows. Mirror the pattern already used
+    // in `src/lib/import/commit.ts` (BEGIN / COMMIT / ROLLBACK on throw).
+    if (rows.length === 0) return [];
     const ids: number[] = [];
-    for (const r of rows) ids.push(await this.create(r));
+    await this.db.execute('BEGIN');
+    try {
+      for (const r of rows) ids.push(await this.create(r));
+      await this.db.execute('COMMIT');
+    } catch (err) {
+      await this.db.execute('ROLLBACK');
+      throw err;
+    }
     return ids;
   }
 
