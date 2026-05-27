@@ -16,6 +16,14 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { CHART_PALETTE } from './palette';
+import { CHART_TOOLTIP_PROPS } from './ChartTooltip';
+
+// CSS-variable references so axes / grid flip with the theme (Wave-3
+// Design must-have #2). ProjectionChart established the pattern; chart
+// cards now mirror it.
+const GRID_STROKE = 'hsl(var(--border))';
+const AXIS_STROKE = 'hsl(var(--muted-foreground))';
+const AXIS_TICK = { fill: AXIS_STROKE };
 
 export interface BarChartPoint {
   [key: string]: number | string;
@@ -100,20 +108,22 @@ export default function BarChartCard({
             layout={layout}
             margin={{ top: 8, right: 16, bottom: 8, left: 8 }}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+            <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
             {isVertical ? (
               <>
                 <XAxis
                   type="number"
-                  stroke="#64748b"
+                  stroke={AXIS_STROKE}
                   fontSize={12}
+                  tick={AXIS_TICK}
                   tickFormatter={yFormatter}
                 />
                 <YAxis
                   type="category"
                   dataKey={xKey}
-                  stroke="#64748b"
+                  stroke={AXIS_STROKE}
                   fontSize={12}
+                  tick={AXIS_TICK}
                   width={YAXIS_VERTICAL_WIDTH}
                   interval={0}
                   tickFormatter={truncateTick}
@@ -123,20 +133,23 @@ export default function BarChartCard({
               <>
                 <XAxis
                   dataKey={xKey}
-                  stroke="#64748b"
+                  stroke={AXIS_STROKE}
                   fontSize={12}
+                  tick={AXIS_TICK}
                   {...(xAxisInterval !== undefined ? { interval: xAxisInterval } : {})}
                   {...(xTickFormatter !== undefined ? { tickFormatter: xTickFormatter } : {})}
                 />
                 <YAxis
-                  stroke="#64748b"
+                  stroke={AXIS_STROKE}
                   fontSize={12}
+                  tick={AXIS_TICK}
                   tickFormatter={yFormatter}
                   width={yFormatter ? 64 : 48}
                 />
               </>
             )}
             <Tooltip
+              {...CHART_TOOLTIP_PROPS}
               formatter={
                 yFormatter
                   ? (value) =>

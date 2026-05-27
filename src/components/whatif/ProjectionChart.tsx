@@ -19,6 +19,7 @@ import { taxBucketForAccount } from '@/lib/account-tax-classification';
 import { ProjectionDetailLevel } from '@/types/enums';
 import { formatCompactCurrency } from '@/lib/format';
 import { DecomposedTooltipContent } from './ProjectionTooltip';
+import { CHART_TOOLTIP_PROPS } from '@/components/charts/ChartTooltip';
 
 const AREA_COLORS = ['#4f86f7', '#5fbb7c', '#e6b54b', '#ef8b5a', '#9b5de5', '#f15bb5'];
 
@@ -282,9 +283,9 @@ export default function ProjectionChart({
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={upperRows} margin={{ top: 16, right: 16, bottom: 4, left: 4 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-            <XAxis dataKey="monthISO" tick={{ fontSize: 11 }} minTickGap={32} />
+            <XAxis dataKey="monthISO" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} minTickGap={32} />
             <YAxis
-              tick={{ fontSize: 11 }}
+              tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
               tickFormatter={formatCompactCurrency}
               width={72}
               domain={[(dataMin: number) => Math.max(0, dataMin * 0.8), 'auto']}
@@ -425,14 +426,15 @@ export default function ProjectionChart({
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={lowerRows} margin={{ top: 4, right: 16, bottom: 16, left: 4 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-            <XAxis dataKey="monthISO" tick={{ fontSize: 11 }} minTickGap={32} />
+            <XAxis dataKey="monthISO" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} minTickGap={32} />
             <YAxis
-              tick={{ fontSize: 11 }}
+              tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
               tickFormatter={formatCompactCurrency}
               width={72}
               domain={[(dataMin: number) => Math.max(0, dataMin * 0.8), 'auto']}
             />
             <Tooltip
+              {...CHART_TOOLTIP_PROPS}
               formatter={(value, name) => [formatCompactCurrency(Number(value)), String(name)]}
               labelFormatter={(label) => String(label ?? '')}
               cursor={{ strokeDasharray: '3 3' }}

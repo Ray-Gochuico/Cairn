@@ -8,6 +8,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { CHART_PALETTE } from './palette';
+import { CHART_TOOLTIP_PROPS } from './ChartTooltip';
 
 export interface DonutSlice {
   name: string;
@@ -118,6 +119,7 @@ export default function DonutChartCard({
                 ))}
               </Pie>
               <Tooltip
+                {...CHART_TOOLTIP_PROPS}
                 formatter={(value, name) => {
                   const displayName = tooltipNameFormatter && typeof name === 'string'
                     ? tooltipNameFormatter(name)
