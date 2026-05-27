@@ -10,6 +10,8 @@ import { useTransactionsStore } from '@/stores/transactions-store';
 import { useScenariosStore } from '@/stores/scenarios-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
+import { useHousingPaymentsStore } from '@/stores/housing-payments-store';
+import { useVehicleLeasesStore } from '@/stores/vehicle-leases-store';
 
 function todayMonthISO(): string {
   const d = new Date();
@@ -39,6 +41,8 @@ export function useRealState(): RealState | null {
   const taxRules         = useTaxRulesStore((s) => s.items);
   const defaultCashApy   = settings?.defaultCashApy ?? null;
   const defaultDrawdownTaxRate = settings?.defaultDrawdownTaxRate ?? null;
+  const housingPayments  = useHousingPaymentsStore((s) => s.housingPayments);
+  const vehicleLeases    = useVehicleLeasesStore((s) => s.vehicleLeases);
 
   return useMemo<RealState | null>(() => {
     if (!household) return null;
@@ -60,6 +64,8 @@ export function useRealState(): RealState | null {
       },
       startISO,
       taxRules,
+      housingPayments,
+      vehicleLeases,
     });
     // NOTE (2026-05-26 revamp):
     // - The pre-revamp hook rewrote `real.baselineMonthlyExpenses` when the
@@ -68,5 +74,8 @@ export function useRealState(): RealState | null {
     // - The pre-revamp hook also threaded `settings.autoInvestSalarySurplus`
     //   into RealState.defaults. Dropped — routing now flows through
     //   `payload.gapAllocation` instead of a household-level setting.
-  }, [household, persons, loans, holdings, accounts, accountSnapshots, transactions, inflation, returnRate, defaultCashApy, defaultDrawdownTaxRate, taxRules]);
+    // - 2026-05-27 v1.1: housingPayments + vehicleLeases are summed into
+    //   step.expenses per projection month so rentals/leases that end stop
+    //   contributing automatically.
+  }, [household, persons, loans, holdings, accounts, accountSnapshots, transactions, inflation, returnRate, defaultCashApy, defaultDrawdownTaxRate, taxRules, housingPayments, vehicleLeases]);
 }

@@ -16,6 +16,7 @@ import { totalInvestments } from './aggregate-investments';
 import { computeTotalTax } from '@/lib/tax';
 import { ageAtMonth } from '@/lib/dates';
 import { effectiveCashApy } from './effective-cash-apy';
+import { monthlyRecurringObligation } from '@/lib/recurring-obligations';
 import {
   effectiveAnnualInflationFromSlice,
   type InflationSlice,
@@ -559,7 +560,20 @@ function stepMonth(
   // derived baseline. Expenses are sourced entirely from active expense periods
   // (in today's-dollars) then inflated to the current month's nominal value.
   const periodDelta = monthlyExpenseFromPeriods(payload.expensePeriods, monthISO);
-  s.expenses = periodDelta * inflationFactor;
+  // v1.1 (2026-05-27): recurring monthly obligations (rent + vehicle leases)
+  // are summed per projection month so leases that end stop contributing
+  // automatically. The total inflates alongside the rest of expenses. The
+  // `-15` suffix is a stable mid-month date — isActiveOn's lexicographic
+  // comparison works on any date in the month; mid-month avoids edge-case
+  // ambiguity at month boundaries when endDate falls on the last day of a
+  // month. The `?? []` guards against hand-constructed RealState fixtures
+  // in legacy engine tests that pre-date the v1.1 field.
+  const obligationDelta = monthlyRecurringObligation(
+    real.housingPayments ?? [],
+    real.vehicleLeases ?? [],
+    `${monthISO}-15`,
+  );
+  s.expenses = (periodDelta + obligationDelta) * inflationFactor;
 
   // 5. Debt servicing
   let regularLoanPayments = 0;

@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings-store';
+import { useHousingPaymentsStore } from '@/stores/housing-payments-store';
+import { useVehicleLeasesStore } from '@/stores/vehicle-leases-store';
 import { applySidebarLayout, type SidebarSectionShape } from '@/lib/sidebar-layout';
 import { getGlossaryEntry } from '@/lib/glossary';
 
@@ -116,13 +118,23 @@ const SidebarLink = memo(function SidebarLink({
 export default function Sidebar() {
   const layout = useSettingsStore((s) => s.settings?.sidebarLayout ?? null);
   const load = useSettingsStore((s) => s.load);
+  const loadHousingPayments = useHousingPaymentsStore((s) => s.load);
+  const loadVehicleLeases = useVehicleLeasesStore((s) => s.load);
 
   // Sidebar is always mounted (PageShell), so loading the settings store
   // here makes the layout overlay take effect on every page. load()
   // swallows its own errors — a missing DB during tests is harmless.
+  //
+  // 2026-05-27 v1.1: housing-payments + vehicle-leases stores are also
+  // loaded here so the What-If engine's useRealState sees populated
+  // arrays from first render (otherwise the projection wouldn't reflect
+  // new rentals/leases until the user navigated to Property/Vehicles
+  // and back).
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadHousingPayments();
+    void loadVehicleLeases();
+  }, [load, loadHousingPayments, loadVehicleLeases]);
 
   const sections = applySidebarLayout(DEFAULT_SECTIONS, layout);
 

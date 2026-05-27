@@ -1,4 +1,4 @@
-import type { Account, AccountSnapshot, Holding, Loan, LoanPayment, Transaction, Household, Person, TaxRule, JurisdictionType } from '@/types/schema';
+import type { Account, AccountSnapshot, Holding, Loan, LoanPayment, Transaction, Household, Person, TaxRule, JurisdictionType, HousingPayment, VehicleLease } from '@/types/schema';
 import type { Bracket } from '@/lib/tax';
 import { AccountType, type FilingStatus } from '@/types/enums';
 import { taxBucketForAccount } from '@/lib/account-tax-classification';
@@ -31,6 +31,17 @@ export interface RealStateInputs {
   appSettings: AppSettingsSlice;
   startISO: string;
   taxRules: TaxRule[];
+  /**
+   * Recurring monthly housing obligations (rent). Optional — defaults to
+   * empty array. Engine sums active items into per-month expenses via
+   * monthlyHousingObligation in src/lib/recurring-obligations.ts.
+   */
+  housingPayments?: HousingPayment[];
+  /**
+   * Recurring monthly vehicle leases. Same shape + treatment as
+   * housingPayments.
+   */
+  vehicleLeases?: VehicleLease[];
 }
 
 export interface RealStateTaxBrackets {
@@ -111,6 +122,15 @@ export interface RealState {
   };
   startISO: string;
   taxBrackets: RealStateTaxBrackets;
+  /**
+   * Recurring monthly housing obligations active during the projection. The
+   * engine sums per-month active items into step.expenses via
+   * monthlyRecurringObligation (see src/lib/recurring-obligations.ts), so a
+   * rental with an endDate in the past stops contributing automatically.
+   */
+  housingPayments: HousingPayment[];
+  /** Recurring monthly vehicle leases — same treatment as housingPayments. */
+  vehicleLeases: VehicleLease[];
 }
 
 const CASH_ACCOUNT_TYPES = new Set<string>([
@@ -310,5 +330,7 @@ export function captureRealState(inputs: RealStateInputs): RealState {
     },
     startISO: inputs.startISO,
     taxBrackets,
+    housingPayments: inputs.housingPayments ?? [],
+    vehicleLeases: inputs.vehicleLeases ?? [],
   };
 }
