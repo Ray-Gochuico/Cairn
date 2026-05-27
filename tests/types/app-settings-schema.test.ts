@@ -73,3 +73,35 @@ describe('AppSettingsSchema — utility category fields', () => {
     ).toThrow();
   });
 });
+
+describe('AppSettingsSchema — autoInvestSalarySurplus', () => {
+  it('defaults to false when omitted', () => {
+    const parsed = AppSettingsSchema.parse(VALID_BASE);
+    expect(parsed.autoInvestSalarySurplus).toBe(false);
+  });
+
+  it('accepts true', () => {
+    const parsed = AppSettingsSchema.parse({
+      ...VALID_BASE,
+      autoInvestSalarySurplus: true,
+    });
+    expect(parsed.autoInvestSalarySurplus).toBe(true);
+  });
+
+  it('accepts false explicitly', () => {
+    const parsed = AppSettingsSchema.parse({
+      ...VALID_BASE,
+      autoInvestSalarySurplus: false,
+    });
+    expect(parsed.autoInvestSalarySurplus).toBe(false);
+  });
+
+  it('rejects non-boolean values', () => {
+    expect(() =>
+      AppSettingsSchema.parse({
+        ...VALID_BASE,
+        autoInvestSalarySurplus: 'yes' as unknown as boolean,
+      }),
+    ).toThrow();
+  });
+});

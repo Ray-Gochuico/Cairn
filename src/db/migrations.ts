@@ -75,6 +75,7 @@ export async function loadAllMigrations(): Promise<Migration[]> {
   const m0026 = (await import('./migrations/0026_asset_value_snapshots.sql?raw')).default;
   const m0027 = (await import('./migrations/0027_equity_grant_company_valuation.sql?raw')).default;
   const m0028 = (await import('./migrations/0028_utility_category_config.sql?raw')).default;
+  const m0029 = (await import('./migrations/0029_auto_invest_salary_surplus.sql?raw')).default;
   return [
     { version: '0001_initial', sql: m0001 },
     { version: '0002_seed_tax_rules', sql: m0002 },
@@ -104,5 +105,6 @@ export async function loadAllMigrations(): Promise<Migration[]> {
     { version: '0026_asset_value_snapshots', sql: m0026 },
     { version: '0027_equity_grant_company_valuation', sql: m0027 },
     { version: '0028_utility_category_config', sql: m0028 },
+    { version: '0029_auto_invest_salary_surplus', sql: m0029 },
   ];
 }

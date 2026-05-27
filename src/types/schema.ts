@@ -442,5 +442,10 @@ export const AppSettingsSchema = z.object({
   // (card shows empty state); [a, b, c] = sum across those category ids.
   propertyUtilitiesCategoryIds: z.array(z.number().int().positive()).nullable().default(null),
   vehicleGasCategoryIds: z.array(z.number().int().positive()).nullable().default(null),
+  // Household-level opt-in: when true, the What-If engine auto-invests
+  // positive monthly surplus into investment accounts when no Contributions
+  // segment is active. Default false — surplus stays in cash unless the user
+  // opts in (migration 0029, default 0).
+  autoInvestSalarySurplus: z.boolean().default(false),
 });
 export type AppSettings = z.infer<typeof AppSettingsSchema>;

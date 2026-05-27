@@ -237,3 +237,44 @@ describe('SettingsRepo — utility category id columns', () => {
     expect(out.propertyUtilitiesCategoryIds).toBeNull();
   });
 });
+
+describe('SettingsRepo — autoInvestSalarySurplus', () => {
+  let db: SqliteAdapter;
+  let repo: SettingsRepo;
+
+  beforeEach(async () => {
+    db = new SqliteAdapter(':memory:');
+    await runMigrations(db, await loadAllMigrations());
+    repo = new SettingsRepo(db);
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  it('reads false from the default row', async () => {
+    const out = await repo.get();
+    expect(out.autoInvestSalarySurplus).toBe(false);
+  });
+
+  it('round-trips autoInvestSalarySurplus through update + get', async () => {
+    await repo.update({ autoInvestSalarySurplus: true });
+    const out = await repo.get();
+    expect(out.autoInvestSalarySurplus).toBe(true);
+  });
+
+  it('toggling true → false persists', async () => {
+    await repo.update({ autoInvestSalarySurplus: true });
+    await repo.update({ autoInvestSalarySurplus: false });
+    const out = await repo.get();
+    expect(out.autoInvestSalarySurplus).toBe(false);
+  });
+
+  it('a partial patch does not unset autoInvestSalarySurplus', async () => {
+    await repo.update({ autoInvestSalarySurplus: true });
+    await repo.update({ notificationDay: 7 });
+    const out = await repo.get();
+    expect(out.autoInvestSalarySurplus).toBe(true);
+    expect(out.notificationDay).toBe(7);
+  });
+});

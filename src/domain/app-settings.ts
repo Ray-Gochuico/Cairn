@@ -18,6 +18,7 @@ interface AppSettingsRow {
   default_compounding_frequency: CompoundingFrequency;
   property_utilities_category_ids: string | null;
   vehicle_gas_category_ids: string | null;
+  auto_invest_salary_surplus: number;
 }
 
 /**
@@ -70,6 +71,7 @@ function rowToAppSettings(row: AppSettingsRow): AppSettings {
     defaultCompoundingFrequency: row.default_compounding_frequency ?? CompoundingFrequency.MONTHLY,
     propertyUtilitiesCategoryIds: parseIdArray(row.property_utilities_category_ids),
     vehicleGasCategoryIds: parseIdArray(row.vehicle_gas_category_ids),
+    autoInvestSalarySurplus: row.auto_invest_salary_surplus === 1,
   });
 }
 
@@ -106,7 +108,8 @@ export class SettingsRepo {
         default_cash_apy = ?,
         default_compounding_frequency = ?,
         property_utilities_category_ids = ?,
-        vehicle_gas_category_ids = ?
+        vehicle_gas_category_ids = ?,
+        auto_invest_salary_surplus = ?
        WHERE id = 1`,
       [
         merged.sidebarLayout === null ? null : JSON.stringify(merged.sidebarLayout),
@@ -127,6 +130,7 @@ export class SettingsRepo {
         merged.vehicleGasCategoryIds === null
           ? null
           : JSON.stringify(merged.vehicleGasCategoryIds),
+        merged.autoInvestSalarySurplus ? 1 : 0,
       ],
     );
   }
