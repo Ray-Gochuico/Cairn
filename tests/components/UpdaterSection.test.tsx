@@ -144,6 +144,13 @@ describe('UpdaterSection — architectural invariant (no other module imports pl
     // UpdaterSection imports the updater plugin. This is the guard
     // that catches a well-meaning future patch that wires `check()`
     // into a launch effect — the exact thing the user said NOT to do.
+    //
+    // `lib/browser-shims/plugin-updater.ts` is an allowed exception: it's
+    // the dev-shim stand-in that resolves under `VITE_BROWSER_SHIM=1` so
+    // the Settings page lazy chunk can load in a plain browser. The shim
+    // never makes a network call (its `check()` resolves to `null`), so
+    // it cannot reintroduce auto-polling — Vite swaps it in via the
+    // `shimAliases` block in `vite.config.ts`.
     const projectRoot = resolve(__dirname, '../..');
     const srcRoot = resolve(projectRoot, 'src');
     const found: string[] = [];
@@ -154,6 +161,11 @@ describe('UpdaterSection — architectural invariant (no other module imports pl
         found.push(f);
       }
     }
-    expect(found).toEqual(['components/settings/UpdaterSection.tsx']);
+    expect(found.sort()).toEqual(
+      [
+        'components/settings/UpdaterSection.tsx',
+        'lib/browser-shims/plugin-updater.ts',
+      ].sort(),
+    );
   });
 });
