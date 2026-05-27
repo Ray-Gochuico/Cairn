@@ -1,0 +1,34 @@
+#!/bin/sh
+# pre-commit hook — runs the test suite + type check before allowing a commit.
+#
+# Why: catches the recharts render-loop policy violation (and other suite
+# regressions) at commit time rather than at runtime. See
+# docs/reviews/2026-05-27-testing-rereview.md § "CI / pre-commit (Goal #1)".
+#
+# Install:    npm run install-hooks
+# Skip once:  git commit --no-verify
+#
+# Runtime: roughly 45 seconds locally (full vitest + tsc). The policy test
+# alone is ~256ms, but we run the whole suite because skipping coverage at
+# commit time defeats the purpose of the gate.
+#
+# To shrink runtime, replace the vitest line below with:
+#   npx vitest run --changed --reporter=dot --bail=1
+# which only re-runs tests related to changed files. The default (full
+# suite) is the safe choice; --changed is the fast lane.
+
+set -e
+
+# Honor an environment-level skip for scripted or non-interactive use.
+if [ "${SKIP_PRE_COMMIT:-0}" = "1" ]; then
+  echo "[pre-commit] SKIP_PRE_COMMIT=1 — skipping tests + typecheck." >&2
+  exit 0
+fi
+
+echo "[pre-commit] running vitest (use --no-verify to skip)..."
+npx vitest run --reporter=dot --bail=1
+
+echo "[pre-commit] running tsc --noEmit..."
+npx tsc --noEmit
+
+echo "[pre-commit] ok."

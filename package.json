@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "test": "vitest run --passWithNoTests",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "install-hooks": "sh scripts/hooks/install.sh"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
