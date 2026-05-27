@@ -121,6 +121,31 @@ export default function WhatIf() {
     return { projections: projs, milestones: ms };
   }, [real, scenarios, projectedScenarios, horizonMonths, household]);
 
+  // Empty-state guard: if there are no projection rows (no visible
+  // scenarios, no accounts with holdings, or persons.length === 0 so
+  // payroll can't drive contributions), Recharts emits 32+ console
+  // warnings about width(-1)/height(-1) and the chart paints an empty
+  // $0 / $1 / $2 / $3 frame that looks broken on first open. Mirror
+  // the empty-state card pattern from Investments.tsx so users see a
+  // clear "set things up" CTA instead of a misleading zero chart.
+  // (Wave-3 UX W3-3 + Wave-1 #9.)
+  //
+  // RM-1: This useMemo MUST live above the `if (!real)` early return
+  // (and any other early returns) so React's hook-order invariant
+  // holds across renders. Commit 31e9f09 fixed the same pattern for
+  // settingsForDisplay; commit 1747c01 then reintroduced it when this
+  // memo was added — Wave-7 review RM-1 caught the regression.
+  const hasProjectionData = useMemo(() => {
+    if (projections.size === 0) return false;
+    for (const states of projections.values()) {
+      if (states.length > 0) return true;
+    }
+    return false;
+  }, [projections]);
+
+  // IMPORTANT: All useMemo / useState / useEffect declarations MUST be
+  // above this early return. Hooks must always run in the same order
+  // regardless of guard outcome. See commit 31e9f09 + Wave-7 RM-1.
   if (!real) {
     return (
       <div className="p-8">
@@ -181,22 +206,6 @@ export default function WhatIf() {
     household ?? null,
     settingsForDisplay,
   );
-
-  // Empty-state guard: if there are no projection rows (no visible
-  // scenarios, no accounts with holdings, or persons.length === 0 so
-  // payroll can't drive contributions), Recharts emits 32+ console
-  // warnings about width(-1)/height(-1) and the chart paints an empty
-  // $0 / $1 / $2 / $3 frame that looks broken on first open. Mirror
-  // the empty-state card pattern from Investments.tsx so users see a
-  // clear "set things up" CTA instead of a misleading zero chart.
-  // (Wave-3 UX W3-3 + Wave-1 #9.)
-  const hasProjectionData = useMemo(() => {
-    if (projections.size === 0) return false;
-    for (const states of projections.values()) {
-      if (states.length > 0) return true;
-    }
-    return false;
-  }, [projections]);
 
   const projectionChart = (
     <Card className="min-w-0" data-testid="whatif-projection-chart-wrap">
