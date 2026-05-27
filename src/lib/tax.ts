@@ -421,8 +421,21 @@ export interface WithdrawalTaxInput {
   federalBrackets: Bracket[];
   stateBrackets: Bracket[];
   cityBrackets: Bracket[] | null;
-  federalStandardDeduction: number;
+  /**
+   * Per-jurisdiction standard deduction. Accepts the legacy scalar
+   * (applied to federal AND state) or the per-jurisdiction object for
+   * callers that have state SD data.
+   */
+  federalStandardDeduction: StandardDeductionInput;
   taxYear: number;
+  /**
+   * LTCG (0% / 15% / 20%) federal schedule. When provided, `annualCapitalGains`
+   * are treated as long-term gains taxed at the LTCG schedule stacking on
+   * ordinary income. When omitted, gains flow through ordinary brackets
+   * (legacy v1 behavior — kept so existing callers that haven't sourced
+   * the LTCG schedule yet don't silently change results).
+   */
+  ltcgBrackets?: Bracket[];
 }
 
 /**
@@ -438,20 +451,67 @@ export function calculate401kWithdrawalTax(input: WithdrawalTaxInput): Withdrawa
   if (input.annualCapitalGains < 0) throw new Error('annualCapitalGains must be non-negative');
   if (input.ageAtWithdrawal < 0 || input.ageAtWithdrawal > 130) throw new Error('ageAtWithdrawal out of range');
 
-  const ordinaryWithoutWithdrawal = input.annualW2Income + input.annualCapitalGains;
-  const adjustedWithout = Math.max(0, ordinaryWithoutWithdrawal - input.federalStandardDeduction);
-  const adjustedWith = Math.max(0, ordinaryWithoutWithdrawal + input.withdrawalAmount - input.federalStandardDeduction);
+  // Standard deduction widens to per-jurisdiction (R3 wiring-sweep). Legacy
+  // scalar callers continue to work — same SD applied to fed + state.
+  const sd = normalizeStandardDeduction(input.federalStandardDeduction);
+  const useLtcg = input.ltcgBrackets !== undefined && input.ltcgBrackets.length > 0;
 
-  const federalWithout = evaluateBrackets(input.federalBrackets, adjustedWithout);
-  const federalWith = evaluateBrackets(input.federalBrackets, adjustedWith);
-  const incrementalFederal = federalWith - federalWithout;
+  // Ordinary-income stack: W-2 only when LTCG schedule is provided, else
+  // legacy "ordinary + gains" lump for back-compat.
+  const ordinaryBase = useLtcg
+    ? input.annualW2Income
+    : input.annualW2Income + input.annualCapitalGains;
 
-  const stateWithout = input.stateBrackets.length > 0 ? evaluateBrackets(input.stateBrackets, adjustedWithout) : 0;
-  const stateWith = input.stateBrackets.length > 0 ? evaluateBrackets(input.stateBrackets, adjustedWith) : 0;
+  const adjustedOrdinaryWithout = Math.max(0, ordinaryBase - sd.federal);
+  const adjustedOrdinaryWith = Math.max(0, ordinaryBase + input.withdrawalAmount - sd.federal);
+
+  // Federal ordinary tax (before + after the withdrawal lands as ordinary income).
+  const federalOrdinaryWithout = evaluateBrackets(input.federalBrackets, adjustedOrdinaryWithout);
+  const federalOrdinaryWith = evaluateBrackets(input.federalBrackets, adjustedOrdinaryWith);
+
+  // Federal LTCG tax — stacks on the ordinary post-SD amount. Both with
+  // and without the withdrawal use the same `annualCapitalGains`; the
+  // withdrawal increases the ordinary stack-bottom, potentially pushing
+  // cap gains into a higher LTCG bracket. That delta is the
+  // "withdrawal triggered higher LTCG bracket" effect.
+  let federalLtcgWithout = 0;
+  let federalLtcgWith = 0;
+  if (useLtcg && input.annualCapitalGains > 0) {
+    federalLtcgWithout = computeLtcgTax({
+      ordinaryIncome: adjustedOrdinaryWithout,
+      longTermGains: input.annualCapitalGains,
+      qualifiedDividends: 0,
+      ltcgBrackets: input.ltcgBrackets!,
+      filingStatus: input.filingStatus,
+    }).federalLtcgTax;
+    federalLtcgWith = computeLtcgTax({
+      ordinaryIncome: adjustedOrdinaryWith,
+      longTermGains: input.annualCapitalGains,
+      qualifiedDividends: 0,
+      ltcgBrackets: input.ltcgBrackets!,
+      filingStatus: input.filingStatus,
+    }).federalLtcgTax;
+  }
+
+  const incrementalFederal =
+    (federalOrdinaryWith + federalLtcgWith) -
+    (federalOrdinaryWithout + federalLtcgWithout);
+
+  // State + city: most states tax LTCG as ordinary income, so the simplest
+  // model is "all income — wages, cap gains, and withdrawal — runs through
+  // state brackets after the state SD." That matches the engine's behavior
+  // in src/lib/tax.ts:262.
+  const stateBase = input.annualW2Income + input.annualCapitalGains;
+  const adjustedStateWithout = Math.max(0, stateBase - sd.state);
+  const adjustedStateWith = Math.max(0, stateBase + input.withdrawalAmount - sd.state);
+  const stateWithout = input.stateBrackets.length > 0 ? evaluateBrackets(input.stateBrackets, adjustedStateWithout) : 0;
+  const stateWith = input.stateBrackets.length > 0 ? evaluateBrackets(input.stateBrackets, adjustedStateWith) : 0;
   const incrementalState = stateWith - stateWithout;
 
-  const cityWithout = input.cityBrackets ? evaluateBrackets(input.cityBrackets, adjustedWithout) : 0;
-  const cityWith = input.cityBrackets ? evaluateBrackets(input.cityBrackets, adjustedWith) : 0;
+  const adjustedCityWithout = Math.max(0, stateBase - sd.city);
+  const adjustedCityWith = Math.max(0, stateBase + input.withdrawalAmount - sd.city);
+  const cityWithout = input.cityBrackets ? evaluateBrackets(input.cityBrackets, adjustedCityWithout) : 0;
+  const cityWith = input.cityBrackets ? evaluateBrackets(input.cityBrackets, adjustedCityWith) : 0;
   const incrementalCity = cityWith - cityWithout;
 
   const earlyWithdrawalPenalty = input.ageAtWithdrawal < 59.5 ? input.withdrawalAmount * 0.10 : 0;

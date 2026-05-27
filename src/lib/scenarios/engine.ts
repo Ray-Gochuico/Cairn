@@ -96,7 +96,16 @@ export interface Horizon {
 // V1 ASSUMPTION: brackets are loaded once from tax_rules at projection start
 // (RealState.taxBrackets) and apply unchanged across the entire 5-40y horizon.
 // Year-over-year bracket inflation indexing is not modeled in v1.
-function annualHouseholdTax(real: RealState, annualHouseholdGross: number): number {
+//
+// Investment income (LTCG / qualified divs / non-qualified divs) is sourced
+// from the LeverPayload's annual* fields (introduced 2026-05-27 R2 wiring
+// sweep). Zero-defaults preserve legacy projection sentinels for scenarios
+// that don't model investment income.
+function annualHouseholdTax(
+  real: RealState,
+  annualHouseholdGross: number,
+  payload: LeverPayload,
+): number {
   return computeTotalTax({
     gross: annualHouseholdGross,
     filingStatus: real.household.filingStatus,
@@ -105,6 +114,10 @@ function annualHouseholdTax(real: RealState, annualHouseholdGross: number): numb
     cityBrackets: real.taxBrackets.city,
     standardDeduction: real.taxBrackets.standardDeduction,
     pretax: { pretax401k: 0, pretaxHealth: 0, pretaxDcfsa: 0, pretaxHsa: 0 },
+    longTermGains: payload.annualLongTermGains ?? 0,
+    qualifiedDividends: payload.annualQualifiedDividends ?? 0,
+    nonQualifiedDividends: payload.annualNonQualifiedDividends ?? 0,
+    ltcgBrackets: real.taxBrackets.ltcg,
   }).total;
 }
 
@@ -441,8 +454,11 @@ function stepMonth(
   // 3. Bracket-real federal + FICA + state + city tax via computeTotalTax.
   // Annualize monthly gross, compute annual tax once, amortize back to monthly drag.
   // (Pretax deductions stay at zero in v1 — a follow-up can thread household pretax in.)
+  // LTCG / qualified / non-qualified dividends flow through the payload's
+  // annual* fields so they're taxed at the LTCG schedule (when present) and
+  // contribute to NIIT MAGI/net-II calculation.
   const annualGross = monthlyGrossIncome * 12;
-  const annualTax = annualHouseholdTax(real, annualGross);
+  const annualTax = annualHouseholdTax(real, annualGross, payload);
   s.incomeAfterTax = (annualGross - annualTax) / 12;
 
   // 4. Expenses: baseline trended + period deltas.

@@ -254,6 +254,15 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     fullDefinition:
       'Mixing buckets matters in retirement: pre-tax withdrawals are taxed as income, Roth is tax-free, and taxable enjoys LTCG rates.',
   },
+
+  // ─── Retirement drawdown strategy ─────────────────────────────────────
+  'SEQUENTIAL WITHDRAWAL': {
+    term: 'sequential withdrawal',
+    shortDefinition:
+      'A retirement drawdown order: drain taxable brokerage first, then pre-tax (401k/IRA), then Roth last.',
+    fullDefinition:
+      'Textbook tax-efficient sequencing — keeps tax-advantaged accounts compounding longer and gives more room for Roth-conversion-ladder planning. The alternative is proportional withdrawal, which pulls from every account in proportion to balance.',
+  },
 };
 
 /**

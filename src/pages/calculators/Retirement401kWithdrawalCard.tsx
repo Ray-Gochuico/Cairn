@@ -58,7 +58,11 @@ export function Retirement401kWithdrawalCard({
   const annualW2Income = w2Override ?? defaultW2;
   const ageAtWithdrawal = ageOverride ?? defaultAge;
 
-  const lookup = (jt: 'FEDERAL' | 'STATE' | 'CITY', code: string, fs: string) =>
+  const lookup = (
+    jt: 'FEDERAL' | 'FEDERAL_LTCG' | 'STATE' | 'CITY',
+    code: string,
+    fs: string,
+  ) =>
     taxItems.find(
       (r) =>
         r.year === resolvedYear &&
@@ -75,6 +79,10 @@ export function Retirement401kWithdrawalCard({
       ? lookup('CITY', household.city, household.filingStatus)
       : null;
     if (!federal || !state) return null;
+    // LTCG schedule lookup (post-0032). When seeded, capGains are taxed
+    // at the LTCG schedule instead of ordinary brackets. Falls through to
+    // legacy behavior (ordinary brackets) for older tax years.
+    const ltcg = lookup('FEDERAL_LTCG', 'US', household.filingStatus);
 
     return calculate401kWithdrawalTax({
       withdrawalAmount,
@@ -87,6 +95,7 @@ export function Retirement401kWithdrawalCard({
       cityBrackets: city?.brackets ?? null,
       federalStandardDeduction: federal.standardDeduction,
       taxYear: resolvedYear ?? new Date().getFullYear(),
+      ltcgBrackets: ltcg?.brackets,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
