@@ -165,7 +165,11 @@ describe('EquityGrantsTab', () => {
     });
 
     expect(await screen.findByText('2024 RSU grant')).toBeInTheDocument();
-  });
+  }, 15000);
+  // ↑ 15s timeout (vs vitest's 5s default) because this test makes 9 sequential
+  // user-event calls before the failing waitFor. Under full-suite parallelism
+  // each user-event microtask costs ~500ms, blowing the default budget. See
+  // docs/reviews/2026-05-27-testing-wave3.md § N1.
 
   it('opens the edit form prefilled when clicking Edit', async () => {
     const user = userEvent.setup();
