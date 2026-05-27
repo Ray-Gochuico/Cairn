@@ -26,24 +26,23 @@ frequently.
 
 ## Install
 
-The app is distributed as an unsigned `.dmg` (Apple Silicon Macs).
-No App Store, no installer — just download, drag, and open.
+The app is distributed as an unsigned `.app.zip` (Apple Silicon Macs).
+No App Store, no installer — just download, unzip, and open.
 
 **Download the latest build:**
 <https://github.com/raymondgochuico/cairn/releases/latest>
 
-Grab the file named `Cairn_<version>_aarch64.dmg`.
+Grab the file named `Cairn_<version>_aarch64.app.zip`.
 
 **Then:**
 
-1. Double-click the downloaded `.dmg` to mount it.
+1. Double-click the downloaded `.app.zip` to unzip it — `Cairn.app` appears next to it.
 2. Drag `Cairn.app` into the `Applications` folder.
-3. Eject the mounted `.dmg` (drag it to the Trash, or right-click → Eject).
-4. **First time only — right-click `Cairn.app` in `Applications`, choose
+3. **First time only — right-click `Cairn.app` in `Applications`, choose
    "Open", then click "Open" again in the dialog that appears.** macOS
    remembers the approval, so every launch after the first one is a normal
    double-click.
-5. *Alternative* (Terminal one-liner that skips step 4 entirely):
+4. *Alternative* (Terminal one-liner that skips step 3 entirely):
 
    ```bash
    xattr -d com.apple.quarantine /Applications/Cairn.app
@@ -64,9 +63,22 @@ add code signing in one line — see `src-tauri/SIGNING.md`.
 
 ## Status
 
-Phase 1 complete: app boots, household + persons + dependents are editable and persistent.
+Phase 5 / Sprint 4 in flight — A-grade v1 ship target close. All v1 feature
+work is shipped (tracking, calculators, What-If, spending, budget, roadmap,
+disclosures, equity grants, monthly mini-window). Sprint 4 is closing the
+last-mile gaps (`.app.zip` build, manual updater wiring, dark-mode chart
+adapt, finance UI inputs for cap gains, virtualization, lazy routes) ahead
+of the Wave-4 cohesion review and the first GitHub Release.
 
-See `docs/superpowers/specs/2026-05-11-finance-app-design.md` for the full spec, and `docs/superpowers/plans/` for phase plans.
+The app supports **light + dark** via system theme (Settings → Appearance).
+
+For the full picture:
+
+- [`docs/superpowers/specs/2026-05-27-current-state.md`](docs/superpowers/specs/2026-05-27-current-state.md) — cross-cutting snapshot, **read this first**.
+- [`docs/reviews/2026-05-27-wave3-scorecard.md`](docs/reviews/2026-05-27-wave3-scorecard.md) — the 9-day A-grade roadmap.
+- [`docs/superpowers/specs/2026-05-11-finance-app-design.md`](docs/superpowers/specs/2026-05-11-finance-app-design.md) — master design spec (build phases + current status amendment).
+- [`docs/superpowers/conventions.md`](docs/superpowers/conventions.md) — engineering patterns.
+- [`docs/superpowers/plans/`](docs/superpowers/plans/) — per-feature plans.
 
 ## Development
 
@@ -118,10 +130,12 @@ enough.
 
 ## Tech stack
 
-- Tauri 2.x (Rust shell, macOS + Windows)
-- React 19 + TypeScript + Vite
-- Tailwind CSS + shadcn/ui
-- SQLite (via `@tauri-apps/plugin-sql` in production; `better-sqlite3` in tests)
-- Zustand (state) + Zod (validation) + React Hook Form
-- Vitest + React Testing Library
-- yahoo-finance2 (market data — used in Phase 2+)
+- Tauri 2.x (Rust shell, macOS-first; Windows wired but not the primary ship target)
+- React 19 + TypeScript + Vite 7
+- Tailwind CSS v3 + shadcn/ui (slate base, New York style)
+- Radix UI primitives (Dialog, Popover) + lucide-react icons + next-themes (light / dark / system)
+- Recharts (charting; animation explicitly disabled via repo-tracked policy test)
+- SQLite (via `@tauri-apps/plugin-sql` in production; `better-sqlite3` in tests). Browser-mode shim under `src/lib/browser-shims/` (env-gated via `VITE_BROWSER_SHIM=1`) backs `npm run dev:browser` for preview-tool review.
+- Zustand 5 (state) + Zod 4 (validation) + React Hook Form
+- Vitest + React Testing Library; repo-tracked pre-commit hook gates every commit on `vitest run` + `tsc --noEmit`
+- Custom Yahoo Finance client routed through `@tauri-apps/plugin-http` (no API key; avoids browser CORS)
