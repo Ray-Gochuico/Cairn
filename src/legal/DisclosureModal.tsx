@@ -97,7 +97,7 @@ export function DisclosureModal({
         <DialogPrimitive.Content
           className={cn(
             'fixed left-[50%] top-[50%] z-[101] -translate-x-1/2 -translate-y-1/2',
-            'bg-white rounded-lg max-w-2xl w-[calc(100vw-2rem)] max-h-[90vh]',
+            'bg-background text-foreground rounded-lg max-w-2xl w-[calc(100vw-2rem)] max-h-[90vh]',
             'flex flex-col shadow-xl outline-none',
           )}
           aria-describedby={undefined}
@@ -115,7 +115,7 @@ export function DisclosureModal({
           >
             {title}
           </DialogPrimitive.Title>
-          <div className="text-xs text-slate-500">Version {document.version}</div>
+          <div className="text-xs text-muted-foreground">Version {document.version}</div>
         </div>
 
         {document.diffFromPrevious && (
@@ -130,7 +130,7 @@ export function DisclosureModal({
         )}
 
         <div
-          className="px-6 py-4 overflow-y-auto flex-1 text-sm leading-relaxed text-slate-700 space-y-3 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:mt-3 [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_strong]:font-semibold [&_em]:italic [&_a]:text-primary [&_a]:underline"
+          className="px-6 py-4 overflow-y-auto flex-1 text-sm leading-relaxed text-foreground space-y-3 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:mt-3 [&_p]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_strong]:font-semibold [&_em]:italic [&_a]:text-primary [&_a]:underline"
           data-testid="disclosure-modal-body"
         >
           <ReactMarkdown>{document.body}</ReactMarkdown>
