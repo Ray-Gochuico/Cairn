@@ -263,6 +263,13 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     fullDefinition:
       'Textbook tax-efficient sequencing — keeps tax-advantaged accounts compounding longer and gives more room for Roth-conversion-ladder planning. The alternative is proportional withdrawal, which pulls from every account in proportion to balance.',
   },
+  'DRAWDOWN TAX RATE': {
+    term: 'Drawdown tax rate',
+    shortDefinition:
+      'Blended federal + FICA + state effective tax rate the projection applies to pre-tax (Trad 401k/IRA) withdrawals during retirement.',
+    fullDefinition:
+      'Pre-tax retirement balances are taxed as ordinary income when withdrawn — a $60k/yr expense needs ~$77k of gross Trad withdrawals at a 22% effective rate. Without this gross-up, the projection silently over-states ending balances for Trad-heavy retirees by tens of thousands per year. Applies only when a What-If scenario uses the "sequential" withdrawal strategy.',
+  },
 
   // ─── Calculator + paycheck terms ──────────────────────────────────────
   'PRETAX 401(K)': {

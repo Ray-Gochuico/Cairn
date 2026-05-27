@@ -442,6 +442,19 @@ export const AppSettingsSchema = z.object({
   defaultCompoundingFrequency: z
     .nativeEnum(CompoundingFrequency)
     .default(CompoundingFrequency.MONTHLY),
+  /**
+   * Household-default blended effective tax rate applied to gross-up Trad
+   * 401k / Trad IRA / HSA / 529 withdrawals under the SEQUENTIAL drawdown
+   * strategy in the What-If projection engine. Stored as a fraction
+   * (0.22 = 22%). null = unset (engine falls through to the lever payload's
+   * own default of 0 — legacy net-equals-gross behavior). Surfaced via
+   * Settings → Advanced as a 0..50% percent input.
+   *
+   * See: Finance Wave-5 review NEW-W5-1; engine.ts:607-608 reads this
+   * value via real.defaults.defaultDrawdownTaxRate when the per-scenario
+   * lever value is 0.
+   */
+  defaultDrawdownTaxRate: z.number().min(0).max(0.5).nullable().default(null),
   // User-configurable category sets for the Property "Utilities" card and
   // the Vehicle "Gas" card. null = unset (resolver falls back to seeded
   // defaults — Home > Utilities / Vehicles > Gas/Fuel); [] = explicit empty

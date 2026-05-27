@@ -147,6 +147,7 @@ export async function loadAllMigrations(): Promise<Migration[]> {
   const m0032 = (await import('./migrations/0032_ltcg_brackets_2026.sql?raw')).default;
   const m0033 = (await import('./migrations/0033_fix_disclosure_acceptance_fk_actions.sql?raw')).default;
   const m0034 = (await import('./migrations/0034_add_query_indexes.sql?raw')).default;
+  const m0035 = (await import('./migrations/0035_add_default_drawdown_tax_rate.sql?raw')).default;
   return [
     { version: '0001_initial', sql: m0001 },
     { version: '0002_seed_tax_rules', sql: m0002 },
@@ -182,5 +183,6 @@ export async function loadAllMigrations(): Promise<Migration[]> {
     { version: '0032_ltcg_brackets_2026', sql: m0032 },
     { version: '0033_fix_disclosure_acceptance_fk_actions', sql: m0033 },
     { version: '0034_add_query_indexes', sql: m0034 },
+    { version: '0035_add_default_drawdown_tax_rate', sql: m0035 },
   ];
 }

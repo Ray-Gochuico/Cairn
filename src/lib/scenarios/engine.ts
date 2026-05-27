@@ -604,8 +604,17 @@ function stepMonth(
   const withdrawalStrategy =
     (payload as { withdrawalStrategy?: 'proportional' | 'sequential' }).withdrawalStrategy
     ?? 'proportional';
-  const effectiveDrawdownTaxRate =
+  // Precedence: per-scenario lever value wins when set to a non-zero rate
+  // (explicit override), otherwise fall back to the household-level
+  // AppSettings.defaultDrawdownTaxRate surfaced via Settings → Advanced.
+  // 0 anywhere in the chain ⇒ legacy net-equals-gross behavior. Mirrors
+  // the inflation / cash-APY / SWR precedence convention.
+  const perScenarioRate =
     (payload as { effectiveDrawdownTaxRate?: number }).effectiveDrawdownTaxRate ?? 0;
+  const effectiveDrawdownTaxRate =
+    perScenarioRate > 0
+      ? perScenarioRate
+      : real.defaults?.defaultDrawdownTaxRate ?? 0;
   const contribution = activeContributionAmount(payload.contributions, monthIndex);
   if (contribution !== null) {
     s.investmentsByAccount = distributeToAccounts(s.investmentsByAccount, contribution, allocation);

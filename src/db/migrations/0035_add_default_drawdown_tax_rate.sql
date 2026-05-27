@@ -1,0 +1,23 @@
+-- Migration 0035 — Default effective tax rate on retirement (Trad bucket)
+-- withdrawals under the sequential drawdown strategy.
+--
+-- Adds one nullable column to the app_settings singleton row. It backs the
+-- "Default effective tax rate on retirement withdrawals" input exposed by
+-- Settings → Advanced and feeds the What-If projection engine's fallback
+-- when a scenario's LeverPayload.effectiveDrawdownTaxRate is its schema
+-- default (0).
+--
+-- WHY this exists: Sprint-4 wired engine + schema for Trad-bucket gross-up
+-- (lever-types.ts:257, engine.ts:336-428) but no UI surfaced the rate, so
+-- every What-If user toggling sequential drawdown got rate=0 silently —
+-- the engine treated Trad draws as net-equal-gross. A $80k/yr-spend MFJ
+-- retiree's Trad balance was over-stated by ~$138,600 over a 15-year
+-- Phase-2 drawdown. (Finance Wave-5 review NEW-W5-1.)
+--
+-- Nullable so the seed row reads as NULL until the user supplies a value.
+-- The engine treats NULL as "use the schema default" (0 = legacy
+-- net-equals-gross), but the AdvancedSection UI defaults the input to 22%
+-- so the typical first-time user gets a reasonable gross-up out of the
+-- box. 22% covers federal + FICA + average state for a $60k/yr drawdown.
+
+ALTER TABLE app_settings ADD COLUMN default_drawdown_tax_rate REAL;
