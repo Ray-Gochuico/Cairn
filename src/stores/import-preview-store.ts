@@ -3,6 +3,7 @@ import { createStore } from 'zustand/vanilla';
 import type { PreviewRow, RawRow, RowId, ValidationContext, ImportEntity, PreviewStatus } from '@/lib/import/types';
 import { validateSnapshotRow, type SnapshotResolved } from '@/lib/import/validators/snapshot-validator';
 import { validateTransactionRow, type TransactionResolved } from '@/lib/import/validators/transaction-validator';
+import { validateAccountRow, type AccountResolved } from '@/lib/import/validators/account';
 
 export interface ParseResultLite {
   headers: string[];
@@ -10,7 +11,16 @@ export interface ParseResultLite {
   errors: Array<{ line: number; message: string }>;
 }
 
-type ResolvedFor<E extends ImportEntity> = E extends 'snapshot' ? SnapshotResolved : TransactionResolved;
+// ResolvedFor maps each ImportEntity to its validator's resolved payload
+// type. The mapped-conditional approach keeps the type per-call narrow so
+// e.g. `ImportPreviewState<'account'>` exposes AccountResolved-shaped rows.
+// Entities whose validators land in later N2 tasks fall back to `unknown`
+// here and are tightened when those validators get imported in δ1.
+type ResolvedFor<E extends ImportEntity> =
+  E extends 'snapshot' ? SnapshotResolved :
+  E extends 'transaction' ? TransactionResolved :
+  E extends 'account' ? AccountResolved :
+  unknown;
 
 interface ImportSummary {
   new: number;
@@ -39,8 +49,17 @@ export interface ImportPreviewState<E extends ImportEntity> {
   committableRows(): PreviewRow<ResolvedFor<E>>[];
 }
 
-function selectValidator<E extends ImportEntity>(entity: E) {
-  return entity === 'snapshot' ? validateSnapshotRow : validateTransactionRow;
+type AnyValidator = (raw: RawRow, rowId: RowId, ctx: ValidationContext) => PreviewRow<unknown>;
+
+function selectValidator(entity: ImportEntity): AnyValidator {
+  switch (entity) {
+    case 'snapshot':    return validateSnapshotRow as unknown as AnyValidator;
+    case 'transaction': return validateTransactionRow as unknown as AnyValidator;
+    case 'account':     return validateAccountRow as unknown as AnyValidator;
+    // Remaining entities wired in δ1 as their validators land.
+    default:
+      throw new Error(`No validator registered for entity "${entity}"`);
+  }
 }
 
 function deriveRows<E extends ImportEntity>(
