@@ -26,24 +26,31 @@ frequently.
 
 ## Install
 
-The app is distributed as an unsigned `.dmg` (Apple Silicon Macs).
-No App Store, no installer — just download, drag, and open.
+The app is distributed as an unsigned zipped `.app` bundle (Apple Silicon
+Macs). No App Store, no installer — just download, unzip, drag, and open.
+
+> **Why `.app.zip` and not `.dmg`?** `bundle_dmg.sh` (Tauri's DMG bundler)
+> fails on macOS 26 because its AppleScript-driven Finder window positioning
+> step needs Automation permissions that don't exist in a headless build
+> context. The zipped `.app` flow ships the same binary without the broken
+> intermediate step. We can revisit `.dmg` once Tauri or macOS resolves the
+> `bundle_dmg.sh` issue.
 
 **Download the latest build:**
 <https://github.com/raymondgochuico/cairn/releases/latest>
 
-Grab the file named `Cairn_<version>_aarch64.dmg`.
+Grab the file named `Cairn_<version>_aarch64.app.zip`.
 
 **Then:**
 
-1. Double-click the downloaded `.dmg` to mount it.
+1. Double-click the downloaded `.app.zip` to unzip it. macOS produces
+   `Cairn.app` in the same folder.
 2. Drag `Cairn.app` into the `Applications` folder.
-3. Eject the mounted `.dmg` (drag it to the Trash, or right-click → Eject).
-4. **First time only — right-click `Cairn.app` in `Applications`, choose
+3. **First time only — right-click `Cairn.app` in `Applications`, choose
    "Open", then click "Open" again in the dialog that appears.** macOS
    remembers the approval, so every launch after the first one is a normal
    double-click.
-5. *Alternative* (Terminal one-liner that skips step 4 entirely):
+4. *Alternative* (Terminal one-liner that skips step 3 entirely):
 
    ```bash
    xattr -d com.apple.quarantine /Applications/Cairn.app
