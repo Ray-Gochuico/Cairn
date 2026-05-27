@@ -64,6 +64,15 @@ const emptyToNullNumber = (v: unknown): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
+// Convert the storage fraction (0..1) to a friendly percent (0..100)
+// without floating-point trailing noise (0.10 * 100 → 10.000000000000002
+// in JS; toFixed + parseFloat strips that).
+const fractionToPercent = (fraction: number): number =>
+  parseFloat((fraction * 100).toFixed(10));
+
+const percentToFraction = (percent: number): number =>
+  parseFloat((percent / 100).toFixed(10));
+
 // Form-shaped schema. PersonSchema has `.default(...)` on several
 // fields, which makes Zod's *input* type partial (those keys become
 // optional). RHF derives its resolver type from the schema's input
@@ -71,12 +80,19 @@ const emptyToNullNumber = (v: unknown): number | null => {
 // with our strict `PersonFormValues` (= Omit<Person, 'id'>). We rebuild
 // without the defaults so input and output coincide. DEFAULT_PERSON
 // already provides equivalent runtime defaults for new persons.
+//
+// The 401(k) deferral input uses a separate form-only field
+// `pretax401kPctPercent` (0..100) instead of the storage fraction
+// (0..1). Friends would otherwise enter `10` for 10% and the form
+// would silently store 1000% — the trap UX re-review #2 flagged.
+// `pretax401kPct` is omitted here; we translate at the submit boundary.
 const PersonFormSchema = PersonSchema.omit({
   id: true,
   jobStability: true,
   expectsHigherFutureIncome: true,
   onParentHealthInsurance: true,
   isRelativelyHealthy: true,
+  pretax401kPct: true,
 }).extend({
   expectedBonus: z.number().min(0),
   expectedBonusFrequency: BonusFrequencySchema,
@@ -85,7 +101,13 @@ const PersonFormSchema = PersonSchema.omit({
   hourlyRate: z.number().positive().nullable(),
   regularHoursPerWeek: z.number().positive(),
   otThresholdHoursPerWeek: z.number().positive().nullable(),
+  pretax401kPctPercent: z
+    .number()
+    .min(0, 'must be at least 0')
+    .max(100, 'must be at most 100'),
 });
+
+type InternalFormValues = z.infer<typeof PersonFormSchema>;
 
 /**
  * Standalone person form. Used by both the PersonsTab create/edit
@@ -99,10 +121,30 @@ export default function PersonForm({
   onCancel,
   submitLabel = 'Save',
 }: PersonFormProps) {
-  const form = useForm<PersonFormValues>({
+  // Translate storage shape → internal form shape: drop pretax401kPct,
+  // synthesize pretax401kPctPercent (0..100). Reverse on submit below.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { pretax401kPct: _initialFraction, ...initialRest } = initial;
+  const internalInitial: InternalFormValues = {
+    ...initialRest,
+    pretax401kPctPercent: fractionToPercent(_initialFraction),
+  };
+
+  const form = useForm<InternalFormValues>({
     resolver: zodResolver(PersonFormSchema),
-    defaultValues: initial,
+    defaultValues: internalInitial,
   });
+
+  // Wrap parent onSubmit so callers still receive PersonFormValues with
+  // the storage-shaped pretax401kPct fraction.
+  const wrappedSubmit = (values: InternalFormValues): Promise<void> => {
+    const { pretax401kPctPercent, ...rest } = values;
+    const personValues: PersonFormValues = {
+      ...rest,
+      pretax401kPct: percentToFraction(pretax401kPctPercent),
+    };
+    return onSubmit(personValues);
+  };
 
   const employmentType = form.watch('employmentType');
   const showHourlyFields = employmentType !== 'SALARY_NO_OT';
@@ -114,7 +156,7 @@ export default function PersonForm({
   }));
 
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+    <form onSubmit={form.handleSubmit(wrappedSubmit)} className="space-y-4">
       <Card>
         <CardHeader><CardTitle className="text-base">Person details</CardTitle></CardHeader>
         <CardContent className="space-y-3">
@@ -261,15 +303,24 @@ export default function PersonForm({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <Label htmlFor="pretax401kPct">
-                Pre-tax <TermTooltip term="401(K)">401k</TermTooltip> contribution (e.g. 0.10 = 10%)
+              <Label htmlFor="pretax401kPctPercent">
+                Pre-tax 401(k) contribution percent
               </Label>
-              <Input
-                id="pretax401kPct"
-                type="number"
-                step="0.01"
-                {...form.register('pretax401kPct', { valueAsNumber: true })}
-              />
+              <div className="relative">
+                <Input
+                  id="pretax401kPctPercent"
+                  type="number"
+                  step="0.1"
+                  className="pr-8"
+                  {...form.register('pretax401kPctPercent', { valueAsNumber: true })}
+                />
+                <span
+                  aria-hidden="true"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground pointer-events-none"
+                >
+                  %
+                </span>
+              </div>
             </div>
           </div>
 
