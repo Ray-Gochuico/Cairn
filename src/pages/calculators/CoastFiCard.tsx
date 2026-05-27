@@ -6,6 +6,7 @@ import { CalculatorCard } from './CalculatorCard';
 import { coastFi } from '@/lib/coast-fi';
 import { currentAge } from '@/lib/dates';
 import { formatCurrency } from '@/lib/format';
+import { TermTooltip } from '@/components/ui/glossary-tooltip';
 
 interface CoastFiCardProps {
   cardId?: string;
@@ -68,7 +69,13 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
 
   if (!computed || !household) {
     return (
-      <CalculatorCard cardId={cardId} onHide={onHide} title="CoastFI" headline="—">
+      <CalculatorCard
+        cardId={cardId}
+        onHide={onHide}
+        title={<TermTooltip term="COAST FI">CoastFI</TermTooltip>}
+        titleText="CoastFI"
+        headline="—"
+      >
         <p className="text-sm text-muted-foreground">Add your inputs to see CoastFI.</p>
       </CalculatorCard>
     );
@@ -92,7 +99,8 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
     <CalculatorCard
       cardId={cardId}
       onHide={onHide}
-      title="CoastFI"
+      title={<TermTooltip term="COAST FI">CoastFI</TermTooltip>}
+      titleText="CoastFI"
       headline={<span data-testid="coastfi-headline">{headlineLabel}</span>}
     >
       <p className="text-sm text-muted-foreground mb-3">

@@ -26,6 +26,7 @@ import { useConcentration } from '@/lib/use-concentration';
 import { valueHoldings, type HoldingValuation } from '@/lib/holdings-value';
 import type { Dependent, AccountSnapshot, Household, Holding } from '@/types/schema';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
+import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import type { CsvColumn } from '@/lib/csv';
 import { topEffectiveExposures, type ConcentrationWarning } from '@/lib/concentration';
 import { AlertTriangleIcon } from 'lucide-react';
@@ -616,7 +617,7 @@ export default function Investments() {
       <div className="p-8 max-w-6xl">
         <h1 className="text-2xl font-semibold mb-1">Investments</h1>
         <p className="text-sm text-muted-foreground mb-6">
-          Asset allocation, drift from your targets, and contribution trends.
+          Asset allocation, <TermTooltip term="DRIFT">drift</TermTooltip> from your targets, and contribution trends.
         </p>
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
@@ -637,7 +638,8 @@ export default function Investments() {
         <div>
           <h1 className="text-2xl font-semibold mb-1">Investments</h1>
           <p className="text-sm text-muted-foreground">
-            Allocation across asset classes, drift from your targets, and contribution trends.
+            Allocation across asset classes,{' '}
+            <TermTooltip term="DRIFT">drift</TermTooltip> from your targets, and contribution trends.
           </p>
           <div className="flex flex-wrap items-center gap-3 mt-3">
             <Button
@@ -816,7 +818,9 @@ export default function Investments() {
 
       <Card data-testid="concentration-section">
         <CardHeader>
-          <CardTitle>Concentration Health</CardTitle>
+          <CardTitle>
+            <TermTooltip term="CONCENTRATION">Concentration</TermTooltip> Health
+          </CardTitle>
           <CardDescription>
             Effective exposure after fund look-through and leverage. Warnings
             fire when a single ticker exceeds 25%, an asset class exceeds 60%,

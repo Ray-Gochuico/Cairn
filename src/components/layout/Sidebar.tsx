@@ -3,11 +3,19 @@ import { NavLink } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings-store';
 import { applySidebarLayout } from '@/lib/sidebar-layout';
+import { getGlossaryEntry } from '@/lib/glossary';
 
 interface NavItem {
   to: string;
   label: string;
   icon: string;
+  /**
+   * Optional glossary lookup key. When set, the nav item gets a native
+   * `title` tooltip with the term's short definition — keeps the proper
+   * label visible (per user directive) while giving non-financial friends
+   * an explanation on hover/tap.
+   */
+  glossaryTerm?: string;
 }
 
 interface NavSection {
@@ -31,7 +39,7 @@ export const DEFAULT_SECTIONS: NavSection[] = [
       { to: '/loans', label: 'Loans', icon: '💳' },
       { to: '/property', label: 'Property', icon: '🏠' },
       { to: '/vehicles', label: 'Vehicles', icon: '🚗' },
-      { to: '/equity-grants', label: 'Equity Grants', icon: '🎁' },
+      { to: '/equity-grants', label: 'Equity Grants', icon: '🎁', glossaryTerm: 'RSU' },
       { to: '/spending', label: 'Spending', icon: '💸' },
     ],
   },
@@ -73,24 +81,28 @@ export default function Sidebar() {
           <div className="px-3 pt-3 pb-1 text-xs uppercase tracking-wider text-muted-foreground">
             {s.label}
           </div>
-          {s.items.map((i) => (
-            <NavLink
-              key={i.to}
-              to={i.to}
-              end={i.to === '/'}
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-2 px-3 py-2 rounded-md text-sm transition',
-                  isActive
-                    ? 'bg-primary/10 text-primary font-medium'
-                    : 'hover:bg-accent text-foreground'
-                )
-              }
-            >
-              <span>{i.icon}</span>
-              <span>{i.label}</span>
-            </NavLink>
-          ))}
+          {s.items.map((i) => {
+            const entry = i.glossaryTerm ? getGlossaryEntry(i.glossaryTerm) : null;
+            return (
+              <NavLink
+                key={i.to}
+                to={i.to}
+                end={i.to === '/'}
+                title={entry ? entry.shortDefinition : undefined}
+                className={({ isActive }) =>
+                  cn(
+                    'flex items-center gap-2 px-3 py-2 rounded-md text-sm transition',
+                    isActive
+                      ? 'bg-primary/10 text-primary font-medium'
+                      : 'hover:bg-accent text-foreground'
+                  )
+                }
+              >
+                <span>{i.icon}</span>
+                <span>{i.label}</span>
+              </NavLink>
+            );
+          })}
         </div>
       ))}
     </aside>

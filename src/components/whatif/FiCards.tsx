@@ -1,6 +1,8 @@
+import type { ReactNode } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import { coastFi } from '@/lib/coast-fi';
 import { currentAge } from '@/lib/dates';
 import { formatCurrency } from '@/lib/format';
@@ -88,10 +90,10 @@ function computeCards(props: FiCardsProps): ComputedRow | null {
 
 interface FiCardProps {
   testId: string;
-  title: string;
+  title: ReactNode;
   target: number;
   liquidNw: number;
-  explainer: string;
+  explainer: ReactNode;
 }
 
 function FiCard({ testId, title, target, liquidNw, explainer }: FiCardProps) {
@@ -184,14 +186,28 @@ export default function FiCards(props: FiCardsProps) {
       <div className="flex flex-col sm:flex-row gap-3" data-testid="whatif-fi-cards">
         <FiCard
           testId="whatif-fi-number"
-          title="Financial Independence number"
+          title={
+            <>
+              <TermTooltip term="FI">Financial Independence</TermTooltip> number
+            </>
+          }
           target={fiTarget}
           liquidNw={liquidNw}
-          explainer={`Portfolio at retirement (${withdrawalPct}% rule)`}
+          explainer={
+            <>
+              Portfolio at retirement (
+              <TermTooltip term="SWR">{withdrawalPct}% rule</TermTooltip>
+              )
+            </>
+          }
         />
         <FiCard
           testId="whatif-coastfi-number"
-          title="Coast FI target today"
+          title={
+            <>
+              <TermTooltip term="COAST FI">Coast FI</TermTooltip> target today
+            </>
+          }
           target={coastFiTarget}
           liquidNw={liquidNw}
           explainer={`${rateLabel} ${ratePct}% growth, ${yearsUntilRetirement}y to retirement`}

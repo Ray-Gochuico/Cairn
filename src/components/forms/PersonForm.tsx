@@ -12,6 +12,7 @@ import DatePicker from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { TermTooltip } from '@/components/ui/glossary-tooltip';
 
 // PersonFormValues mirrors Person but drops the DB-only id and the
 // roadmap rule-engine chart-answer columns (those are written by
@@ -260,7 +261,9 @@ export default function PersonForm({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <Label htmlFor="pretax401kPct">Pre-tax 401k contribution (e.g. 0.10 = 10%)</Label>
+              <Label htmlFor="pretax401kPct">
+                Pre-tax <TermTooltip term="401(K)">401k</TermTooltip> contribution (e.g. 0.10 = 10%)
+              </Label>
               <Input
                 id="pretax401kPct"
                 type="number"
@@ -281,7 +284,9 @@ export default function PersonForm({
               />
             </div>
             <div>
-              <Label htmlFor="dependentCareFsaMonthly">DCFSA /mo</Label>
+              <Label htmlFor="dependentCareFsaMonthly">
+                <TermTooltip term="DCFSA">DCFSA</TermTooltip> /mo
+              </Label>
               <Input
                 id="dependentCareFsaMonthly"
                 type="number"
@@ -290,7 +295,9 @@ export default function PersonForm({
               />
             </div>
             <div>
-              <Label htmlFor="hsaMonthlyContribution">HSA /mo</Label>
+              <Label htmlFor="hsaMonthlyContribution">
+                <TermTooltip term="HSA">HSA</TermTooltip> /mo
+              </Label>
               <Input
                 id="hsaMonthlyContribution"
                 type="number"
@@ -306,7 +313,8 @@ export default function PersonForm({
                 type="checkbox"
                 {...form.register('hsaEligible')}
               />
-              HSA eligible (on a HDHP plan)
+              <TermTooltip term="HSA">HSA</TermTooltip> eligible (on a{' '}
+              <TermTooltip term="HDHP">HDHP</TermTooltip> plan)
             </label>
           </div>
         </CardContent>
