@@ -41,7 +41,7 @@ function realStateWithSettingsInflation(settingsInflation: number): RealState {
     loanPayments: [],
     household,
     persons,
-    baselineMonthlyExpenses: 1000,
+    accountsByBucket: { taxAdvantaged: [], brokerage: [], cash: [] },
     initialCash: 0,
     initialInvestmentsByAccount: { 1: 1_000_000 }, // big bag to absorb the negative-savings drag
     cashAccountsWithBalances: [],
@@ -63,6 +63,10 @@ function zeroReturnPayloadWithInflation(
   const p = emptyLeverPayload();
   p.returns = { defaultRate: 0, overrides: {}, cashRate: null };
   p.inflation = { defaultRate, overrides };
+  // Replaces the pre-revamp `baselineMonthlyExpenses: 1000` factory field.
+  // One long-duration $1000/mo expense period gives the engine the same
+  // pre-inflation expense scalar to compound against.
+  p.expensePeriods = [{ start: '2026-01-01', monthlyDelta: 1000, durationMonths: 480 }];
   return p;
 }
 

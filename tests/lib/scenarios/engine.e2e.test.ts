@@ -57,7 +57,7 @@ const realState: RealState = {
   loanPayments: [],
   household,
   persons,
-  baselineMonthlyExpenses: 4500,
+  accountsByBucket: { taxAdvantaged: [], brokerage: [], cash: [] },
   initialCash: 0,
   initialInvestmentsByAccount: { 1: 200000 }, // 1000 shares VTI @ $200 costBasis
   cashAccountsWithBalances: [],
@@ -79,6 +79,12 @@ const realState: RealState = {
     standardDeduction: 14600,
   },
 };
+
+/** Builds a long-duration $amount/mo expense period to replace the legacy
+ * `realState.baselineMonthlyExpenses` field (2026-05-26 revamp). */
+function e2eExpensePeriods(monthlyAmount: number) {
+  return [{ start: '2026-05-01', monthlyDelta: monthlyAmount, durationMonths: 480 }];
+}
 
 describe('projectScenario (end-to-end)', () => {
   it('produces one MonthlyState per month for the requested horizon', () => {
@@ -137,10 +143,10 @@ describe('projectScenario — contributions lever combined with other levers', (
     // deficit (after contributions and the savings shortfall) hits investments.
     const hostileReal: RealState = {
       ...realState,
-      baselineMonthlyExpenses: 99999,
       household: { ...realState.household, monthlyExpenseBaseline: 99999 } as Household,
     };
     const payload = emptyLeverPayload();
+    payload.expensePeriods = e2eExpensePeriods(99999);
     payload.contributions = [{ startMonth: 0, endMonth: 11, monthlyAmount: 1500 }];
     const states = projectScenario(hostileReal, payload, { startISO: '2026-05', months: 13 });
     expect(states[11].cash).toBe(0);
@@ -177,16 +183,18 @@ describe('projectScenario — cash floor + investments deficit routing', () => {
     const real: RealState = {
       ...flatReal,
       household: { ...flatReal.household, monthlyExpenseBaseline: 3000 } as Household,
-      baselineMonthlyExpenses: 3000,
     };
     const sevenPct = emptyLeverPayload(); // defaultRate: 0.07
+    sevenPct.expensePeriods = e2eExpensePeriods(3000);
     const states = projectScenario(real, sevenPct, { startISO: '2026-05', months: 13 });
     expect(totalInvestments(states[12])).toBeGreaterThan(totalInvestments(states[0]));
     expect(states[12].cash).toBeGreaterThanOrEqual(0);
     // Compare with-return vs no-return trajectory. The 7% one must end
     // higher than the 0% one, confirming returns are applied AFTER the
     // savings routing.
-    const noReturnStates = projectScenario(real, zeroReturnPayload(), { startISO: '2026-05', months: 13 });
+    const zeroReturnSaving = zeroReturnPayload();
+    zeroReturnSaving.expensePeriods = e2eExpensePeriods(3000);
+    const noReturnStates = projectScenario(real, zeroReturnSaving, { startISO: '2026-05', months: 13 });
     expect(totalInvestments(states[12])).toBeGreaterThan(totalInvestments(noReturnStates[12]));
   });
 
@@ -214,10 +222,10 @@ describe('projectScenario — cash floor + investments deficit routing', () => {
     const real: RealState = {
       ...flatReal,
       household: { ...flatReal.household, monthlyExpenseBaseline: 9000 } as Household,
-      baselineMonthlyExpenses: 9000,
       loans: [], // already cleared in flatReal, kept explicit
     };
     const fivePct = emptyLeverPayload();
+    fivePct.expensePeriods = e2eExpensePeriods(9000);
     fivePct.returns = { defaultRate: 0.05, overrides: {}, cashRate: null };
     const states = projectScenario(real, fivePct, { startISO: '2026-05', months: 13 });
     // Cash never dips below zero.
@@ -228,7 +236,9 @@ describe('projectScenario — cash floor + investments deficit routing', () => {
     expect(totalInvestments(states[12])).toBeGreaterThan(0);
     expect(totalInvestments(states[12])).toBeLessThan(totalInvestments(states[0]));
     // Returns are still applied each month: 5%-return ends higher than 0%.
-    const noReturnStates = projectScenario(real, zeroReturnPayload(), { startISO: '2026-05', months: 13 });
+    const noReturnHostile = zeroReturnPayload();
+    noReturnHostile.expensePeriods = e2eExpensePeriods(9000);
+    const noReturnStates = projectScenario(real, noReturnHostile, { startISO: '2026-05', months: 13 });
     expect(totalInvestments(states[12])).toBeGreaterThan(totalInvestments(noReturnStates[12]));
   });
 
@@ -289,7 +299,6 @@ describe('projectScenario — contribution allocation routing', () => {
     ...realState,
     initialInvestmentsByAccount: { 10: 60_000, 11: 40_000 },
     initialCash: 50_000, // ample buffer; contribution remainders flow here
-    baselineMonthlyExpenses: 2000,
     defaults: {
       inflation: 0,
       returnRate: 0,
@@ -302,6 +311,8 @@ describe('projectScenario — contribution allocation routing', () => {
   function zeroReturnPayload() {
     const p = emptyLeverPayload();
     p.returns = { defaultRate: 0, overrides: {}, cashRate: null };
+    // Match the pre-revamp factory's $2000/mo expense baseline.
+    p.expensePeriods = e2eExpensePeriods(2000);
     return p;
   }
 
@@ -361,9 +372,10 @@ describe('projectScenario — contribution allocation routing', () => {
       ...twoAccountReal,
       persons: [],
       initialCash: 0,
-      baselineMonthlyExpenses: 5000,
     };
-    const states = projectScenario(shortfallReal, zeroReturnPayload(), { startISO: '2026-05', months: 2 });
+    const shortfallPayload = zeroReturnPayload();
+    shortfallPayload.expensePeriods = e2eExpensePeriods(5000);
+    const states = projectScenario(shortfallReal, shortfallPayload, { startISO: '2026-05', months: 2 });
     const drop10 = states[0].investmentsByAccount[10]! - states[1].investmentsByAccount[10]!;
     const drop11 = states[0].investmentsByAccount[11]! - states[1].investmentsByAccount[11]!;
     expect(drop10).toBeGreaterThan(drop11);
@@ -378,7 +390,6 @@ describe('projectScenario — cash APY growth', () => {
   const cashOnlyReal: RealState = {
     ...realState,
     persons: [],
-    baselineMonthlyExpenses: 0,
     loans: [],
     initialCash: 10_000,
     initialInvestmentsByAccount: {},

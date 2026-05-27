@@ -64,9 +64,11 @@ describe('useRealState', () => {
     expect(real.startISO).toMatch(/^\d{4}-\d{2}$/);
   });
 
-  it('preferring household.monthlyExpenseBaseline over transactions-derived expenses when set', () => {
+  it('no longer exposes baselineMonthlyExpenses on the returned state (2026-05-26 revamp)', () => {
     const { result } = renderHook(() => useRealState(), { wrapper });
-    expect(result.current!.baselineMonthlyExpenses).toBe(4500);
+    // Expenses are now sourced entirely from the lever's `expensePeriods`
+    // payload. The hook no longer rewrites `real.baselineMonthlyExpenses`.
+    expect((result.current as Record<string, unknown>).baselineMonthlyExpenses).toBeUndefined();
   });
 
   it('threads tax-rules-store items onto RealState.taxBrackets for the household jurisdiction', () => {

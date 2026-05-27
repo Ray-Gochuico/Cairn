@@ -39,7 +39,7 @@ function realStateWith(initialInvestment: number): RealState {
     loanPayments: [],
     household,
     persons,
-    baselineMonthlyExpenses: 0,
+    accountsByBucket: { taxAdvantaged: [], brokerage: [], cash: [] },
     initialCash: 0,
     initialInvestmentsByAccount: { 1: initialInvestment },
     cashAccountsWithBalances: [],
@@ -164,7 +164,7 @@ describe('engine — compounding frequency on the Returns lever', () => {
         loanPayments: [],
         household,
         persons,
-        baselineMonthlyExpenses: 0,
+        accountsByBucket: { taxAdvantaged: [], brokerage: [], cash: [] },
         initialCash: cashBalance,
         initialInvestmentsByAccount: {},
         cashAccountsWithBalances: [

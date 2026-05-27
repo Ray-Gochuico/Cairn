@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { captureRealState, type RealStateInputs } from '@/lib/scenarios/state-snapshot';
 import type { Account, Holding, Loan, Transaction, Household, TaxRule } from '@/types/schema';
+import { AccountType } from '@/types/enums';
 
 const household = {
   id: 1,
@@ -65,14 +66,41 @@ describe('captureRealState', () => {
     expect(s.defaults.inflation).toBe(0.025);
   });
 
-  it('computes baselineMonthlyExpenses as 12-month rolling avg from transactions', () => {
+  it('no longer exposes baselineMonthlyExpenses on the returned state', () => {
     const s = captureRealState({ ...inputs, transactions: [
       baseTx(1, '2026-04-15', 3000),
       baseTx(2, '2026-03-15', 3500),
       baseTx(3, '2026-02-15', 2800),
     ]});
-    // Avg of (3000 + 3500 + 2800) / 3 = 3100 — only 3 months of data, so divide by months observed
-    expect(s.baselineMonthlyExpenses).toBeCloseTo(3100, 0);
+    // Per the 2026-05-26 revamp the engine no longer reads a transaction-derived
+    // baseline. The field is removed from RealState.
+    expect((s as Record<string, unknown>).baselineMonthlyExpenses).toBeUndefined();
+  });
+});
+
+describe('captureRealState — accountsByBucket', () => {
+  it('groups accounts by tax bucket using taxBucketForAccount', () => {
+    const multiAccounts = [
+      { id: 1,  householdId: 1, name: 'Checking', type: AccountType.ACCOUNT_CASH,      excludedFromNetWorth: false },
+      { id: 2,  householdId: 1, name: 'Savings',  type: AccountType.ACCOUNT_SAVINGS,   excludedFromNetWorth: false },
+      { id: 10, householdId: 1, name: '401k',     type: AccountType.ACCOUNT_401K,     excludedFromNetWorth: false },
+      { id: 11, householdId: 1, name: 'Roth IRA', type: AccountType.ACCOUNT_ROTH_IRA, excludedFromNetWorth: false },
+      { id: 20, householdId: 1, name: 'Vanguard', type: AccountType.ACCOUNT_BROKERAGE, excludedFromNetWorth: false },
+    ] as unknown as Account[];
+    const s = captureRealState({ ...inputs, accounts: multiAccounts });
+    expect(s.accountsByBucket.taxAdvantaged.map((a) => a.id).sort()).toEqual([10, 11]);
+    expect(s.accountsByBucket.brokerage.map((a) => a.id)).toEqual([20]);
+    expect(s.accountsByBucket.cash.map((a) => a.id).sort()).toEqual([1, 2]);
+  });
+
+  it('excludes accounts marked excludedFromNetWorth', () => {
+    const multiAccounts = [
+      { id: 10, householdId: 1, name: '401k', type: AccountType.ACCOUNT_401K, excludedFromNetWorth: true },
+      { id: 20, householdId: 1, name: 'Brk',  type: AccountType.ACCOUNT_BROKERAGE, excludedFromNetWorth: false },
+    ] as unknown as Account[];
+    const s = captureRealState({ ...inputs, accounts: multiAccounts });
+    expect(s.accountsByBucket.taxAdvantaged).toEqual([]);
+    expect(s.accountsByBucket.brokerage.map((a) => a.id)).toEqual([20]);
   });
 });
 

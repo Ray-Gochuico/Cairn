@@ -29,7 +29,15 @@ const federal2026Single: Bracket[] = [
   { min: 609_350, max: null, rate: 0.37 },
 ];
 
-function realStateFactory(overrides: Partial<RealState> = {}): RealState {
+interface AutoInvestFactoryOverrides extends Partial<RealState> {
+  /** No-op shim — `baselineMonthlyExpenses` removed in 2026-05-26 revamp;
+   * tests now pass expenses via the lever's `expensePeriods` payload. */
+  baselineMonthlyExpenses?: number;
+}
+
+function realStateFactory(overrides: AutoInvestFactoryOverrides = {}): RealState {
+  const { baselineMonthlyExpenses: _legacy, ...rest } = overrides;
+  void _legacy;
   return {
     accounts: [],
     holdings,
@@ -37,7 +45,7 @@ function realStateFactory(overrides: Partial<RealState> = {}): RealState {
     loanPayments: [],
     household,
     persons,
-    baselineMonthlyExpenses: 4500,
+    accountsByBucket: { taxAdvantaged: [], brokerage: [], cash: [] },
     initialCash: 0,
     initialInvestmentsByAccount: { 1: 200_000 },
     cashAccountsWithBalances: [],
@@ -57,34 +65,43 @@ function realStateFactory(overrides: Partial<RealState> = {}): RealState {
       city: null,
       standardDeduction: 14_600,
     },
-    ...overrides,
+    ...rest,
   };
+}
+
+/** Apply the pre-revamp default $4500/mo expense baseline via payload. */
+function withDefaultExpenses(payload: ReturnType<typeof emptyLeverPayload>) {
+  payload.expensePeriods = [{ start: '2026-05-01', monthlyDelta: 4500, durationMonths: 480 }];
+  return payload;
 }
 
 describe('currentMonthlySalarySurplus', () => {
   it('returns a positive number for a salaried household with positive monthly surplus', () => {
     const real = realStateFactory();
-    const surplus = currentMonthlySalarySurplus(real, emptyLeverPayload());
+    const surplus = currentMonthlySalarySurplus(real, withDefaultExpenses(emptyLeverPayload()));
     // $135k/yr → ~$11.25k/mo gross → ~$8-9k/mo after tax → minus $4.5k expenses
     // → roughly $4-5k surplus. Exact figure depends on tax engine; we just
     // confirm the helper returns a sensible positive value.
-    expect(surplus).toBeGreaterThan(2_000);
-    expect(surplus).toBeLessThan(8_000);
+    const amount = typeof surplus === 'number' ? surplus : surplus.amount;
+    expect(amount).toBeGreaterThan(2_000);
+    expect(amount).toBeLessThan(8_000);
   });
 
   it('returns 0 when expenses exceed income (no positive surplus to auto-invest)', () => {
     const zeroSalary = [{ ...persons[0], annualSalaryPretax: 0 } as Person];
     const real = realStateFactory({
       persons: zeroSalary,
-      baselineMonthlyExpenses: 5_000,
     });
-    const surplus = currentMonthlySalarySurplus(real, emptyLeverPayload());
-    expect(surplus).toBe(0);
+    const payload = emptyLeverPayload();
+    payload.expensePeriods = [{ start: '2026-05-01', monthlyDelta: 5_000, durationMonths: 480 }];
+    const surplus = currentMonthlySalarySurplus(real, payload);
+    const amount = typeof surplus === 'number' ? surplus : surplus.amount;
+    expect(amount).toBe(0);
   });
 
   it('IGNORES configured contribution segments — always reports the unsegmented surplus', () => {
     const real = realStateFactory();
-    const payload = emptyLeverPayload();
+    const payload = withDefaultExpenses(emptyLeverPayload());
     // Add a huge contribution segment — it must NOT affect the preview, since
     // the popover surfaces the "what would auto-invest" amount independent of
     // current segments.
@@ -92,23 +109,28 @@ describe('currentMonthlySalarySurplus', () => {
       { startMonth: 0, endMonth: 59, monthlyAmount: 999_999, allocation: null },
     ];
     const surplus = currentMonthlySalarySurplus(real, payload);
-    expect(surplus).toBeGreaterThan(0);
+    const amount = typeof surplus === 'number' ? surplus : surplus.amount;
+    expect(amount).toBeGreaterThan(0);
     // Should match the no-segment baseline.
-    const baseline = currentMonthlySalarySurplus(real, emptyLeverPayload());
-    expect(surplus).toBeCloseTo(baseline, 2);
+    const baseline = currentMonthlySalarySurplus(real, withDefaultExpenses(emptyLeverPayload()));
+    const baselineAmount = typeof baseline === 'number' ? baseline : baseline.amount;
+    expect(amount).toBeCloseTo(baselineAmount, 2);
   });
 
   it('reflects expense-period overrides from the lever payload', () => {
     const real = realStateFactory();
-    const payload = emptyLeverPayload();
+    const payload = withDefaultExpenses(emptyLeverPayload());
     // A negative monthlyDelta = an expense reduction, so surplus should grow.
     payload.expensePeriods = [
-      { start: '2026-05', durationMonths: 60, monthlyDelta: -2_000, label: 'cut' },
+      ...payload.expensePeriods,
+      { start: '2026-05-01', durationMonths: 60, monthlyDelta: -2_000, label: 'cut' },
     ];
     const surplus = currentMonthlySalarySurplus(real, payload);
-    const baseline = currentMonthlySalarySurplus(real, emptyLeverPayload());
-    expect(surplus).toBeGreaterThan(baseline);
-    expect(surplus - baseline).toBeCloseTo(2_000, 0);
+    const baseline = currentMonthlySalarySurplus(real, withDefaultExpenses(emptyLeverPayload()));
+    const amount = typeof surplus === 'number' ? surplus : surplus.amount;
+    const baselineAmount = typeof baseline === 'number' ? baseline : baseline.amount;
+    expect(amount).toBeGreaterThan(baselineAmount);
+    expect(amount - baselineAmount).toBeCloseTo(2_000, 0);
   });
 
   it('reports the same magnitude regardless of autoInvestSalarySurplus setting', () => {
@@ -132,8 +154,10 @@ describe('currentMonthlySalarySurplus', () => {
         autoInvestSalarySurplus: true,
       },
     });
-    const offAmount = currentMonthlySalarySurplus(realOff, emptyLeverPayload());
-    const onAmount = currentMonthlySalarySurplus(realOn, emptyLeverPayload());
+    const offSurplus = currentMonthlySalarySurplus(realOff, withDefaultExpenses(emptyLeverPayload()));
+    const onSurplus = currentMonthlySalarySurplus(realOn, withDefaultExpenses(emptyLeverPayload()));
+    const offAmount = typeof offSurplus === 'number' ? offSurplus : offSurplus.amount;
+    const onAmount = typeof onSurplus === 'number' ? onSurplus : onSurplus.amount;
     expect(offAmount).toBeCloseTo(onAmount, 4);
     expect(offAmount).toBeGreaterThan(0);
   });

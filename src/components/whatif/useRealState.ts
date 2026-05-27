@@ -38,7 +38,7 @@ export function useRealState(): RealState | null {
   return useMemo<RealState | null>(() => {
     if (!household) return null;
     const startISO = todayMonthISO();
-    const real = captureRealState({
+    return captureRealState({
       accounts,
       accountSnapshots,
       holdings,
@@ -56,10 +56,9 @@ export function useRealState(): RealState | null {
       startISO,
       taxRules,
     });
-    const expensesOverride = (household as unknown as { monthlyExpenseBaseline?: number }).monthlyExpenseBaseline;
-    if (typeof expensesOverride === 'number' && expensesOverride > 0) {
-      return { ...real, baselineMonthlyExpenses: expensesOverride };
-    }
-    return real;
+    // NOTE: pre-revamp this hook also rewrote `real.baselineMonthlyExpenses`
+    // when the household had a custom monthlyExpenseBaseline. Dropped 2026-05-26:
+    // the engine no longer reads that field; expenses are sourced entirely from
+    // the lever's `expensePeriods` payload.
   }, [household, persons, loans, holdings, accounts, accountSnapshots, transactions, inflation, returnRate, defaultCashApy, autoInvestSalarySurplus, taxRules]);
 }

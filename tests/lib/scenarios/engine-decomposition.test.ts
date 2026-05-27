@@ -45,7 +45,19 @@ const federal2026Single: Bracket[] = [
   { min: 609350, max: null, rate: 0.37 },
 ];
 
-function realStateFactory(overrides: Partial<RealState> = {}): RealState {
+interface RealStateFactoryOverrides extends Partial<RealState> {
+  /** Convenience for tests that used to pass `baselineMonthlyExpenses` to the
+   * factory: dropped in 2026-05-26 revamp. Replaced by an `expensePeriods`
+   * payload on the lever (see `factoryExpensePayload`). Kept as a no-op key on
+   * the factory so unrelated overrides don't need to be touched here. */
+  baselineMonthlyExpenses?: number;
+}
+
+function realStateFactory(overrides: RealStateFactoryOverrides = {}): RealState {
+  // Strip out the legacy baseline key — it's now applied via an expensePeriods
+  // payload helper (`factoryExpensePayload`) in each test that wants expenses.
+  const { baselineMonthlyExpenses: _legacy, ...rest } = overrides;
+  void _legacy;
   return {
     accounts: [],
     holdings,
@@ -53,15 +65,13 @@ function realStateFactory(overrides: Partial<RealState> = {}): RealState {
     loanPayments: [],
     household,
     persons,
-    baselineMonthlyExpenses: 4500,
+    accountsByBucket: { taxAdvantaged: [], brokerage: [], cash: [] },
     initialCash: 0,
     initialInvestmentsByAccount: { 1: 200_000 },
     cashAccountsWithBalances: [],
-    // Pre-existing tests in this file pinned the OLD default (auto-invest ON).
-    // Now that migration 0029 flips it to OFF, the factory keeps prior behavior
-    // explicit so each pre-existing test continues to assert against its
-    // original intent. New OFF-default tests pass `autoInvestSalarySurplus: false`
-    // in their own overrides.
+    // The `autoInvestSalarySurplus` default lives here as a no-op until α4
+    // removes it. The engine no longer reads it (α3 rewires routing through
+    // `applyGapAllocation`).
     defaults: {
       inflation: 0,
       returnRate: 0,
@@ -75,8 +85,17 @@ function realStateFactory(overrides: Partial<RealState> = {}): RealState {
       city: null,
       standardDeduction: 14_600,
     },
-    ...overrides,
+    ...rest,
   };
+}
+
+/** Builds an `expensePeriods` array equivalent to the old factory's
+ * `baselineMonthlyExpenses` field: one long-duration period at $amount/month
+ * starting at the canonical `2026-05-01` fixture date. The plan's α1 helper
+ * sums active periods and the engine inflates the sum, so this preserves the
+ * pre-revamp expense semantics. */
+function factoryExpensePeriods(monthlyAmount: number) {
+  return [{ start: '2026-05-01', monthlyDelta: monthlyAmount, durationMonths: 480 }];
 }
 
 describe('engine decomposition — compoundReturnAdded', () => {
@@ -208,9 +227,10 @@ describe('engine decomposition — withdrawnFromInvestments', () => {
       persons: zeroSalaryPersons,
       initialInvestmentsByAccount: { 1: 500_000 },
       initialCash: 0,
-      baselineMonthlyExpenses: 5_000,
     });
-    const states = projectScenario(real, emptyLeverPayload(), { startISO: '2026-05', months: 6 });
+    const payload = emptyLeverPayload();
+    payload.expensePeriods = factoryExpensePeriods(5_000);
+    const states = projectScenario(real, payload, { startISO: '2026-05', months: 6 });
 
     // Every stepped month should withdraw ~$5k from investments (no growth
     // since defaultReturnRate is 0).
@@ -382,9 +402,10 @@ describe('stepMonth — autoInvestSalarySurplus OFF default', () => {
       persons: zeroSalaryPersons,
       initialInvestmentsByAccount: { 1: 500_000 },
       initialCash: 0,
-      baselineMonthlyExpenses: 5_000,
     });
-    const states = projectScenario(real, emptyLeverPayload(), {
+    const payload = emptyLeverPayload();
+    payload.expensePeriods = factoryExpensePeriods(5_000);
+    const states = projectScenario(real, payload, {
       startISO: '2026-05',
       months: 6,
     });

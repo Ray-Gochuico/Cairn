@@ -132,7 +132,7 @@ describe('WhatIf page', () => {
         accounts: [], holdings: [], loans: [], loanPayments: [],
         household: { id: 1, filingStatus: 'SINGLE', state: 'CA', city: null } as any,
         persons: [{ id: 1, annualSalaryPretax: 135000 } as any],
-        baselineMonthlyExpenses: 4500,
+        accountsByBucket: { taxAdvantaged: [], brokerage: [], cash: [] },
         defaults: { inflation: 0.025, returnRate: 0.07 },
         startISO: '2026-05',
         taxBrackets: { federal: [], state: [], city: null, standardDeduction: 0 },

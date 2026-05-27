@@ -1,7 +1,7 @@
 import type { Account, AccountSnapshot, Holding, Loan, LoanPayment, Transaction, Household, Person, TaxRule, JurisdictionType } from '@/types/schema';
 import type { Bracket } from '@/lib/tax';
 import { AccountType, type FilingStatus } from '@/types/enums';
-import { computeBaselineExpenses } from '@/lib/expense-baseline';
+import { taxBucketForAccount } from '@/lib/account-tax-classification';
 
 export interface AppSettingsSlice {
   defaultInflation: number;
@@ -44,7 +44,21 @@ export interface RealState {
   loanPayments: LoanPayment[];
   household: Household;
   persons: Person[];
-  baselineMonthlyExpenses: number;
+  /**
+   * Accounts grouped by their tax-bucket classification (via taxBucketForAccount).
+   * Used by applyGapAllocation to route surplus into the right bucket. Cash
+   * accounts (CHECKING + SAVINGS) live in the `cash` bucket; they're informational
+   * only — the engine routes leftover gap dollars into `s.cash` directly, not
+   * per-account.
+   *
+   * Excluded-from-NW accounts are filtered out (consistent with
+   * computeInitialBalances).
+   */
+  accountsByBucket: {
+    taxAdvantaged: Account[];
+    brokerage:     Account[];
+    cash:          Account[];
+  };
   /** Total cash bucket (CASH + SAVINGS) at projection start, from latest per-account snapshot. */
   initialCash: number;
   /** Per-account investment balances at projection start. Key = Account.id. */
@@ -186,7 +200,6 @@ function pickStandardDeduction(rules: TaxRule[], filingStatus: FilingStatus): nu
 }
 
 export function captureRealState(inputs: RealStateInputs): RealState {
-  const baselineMonthlyExpenses = computeBaselineExpenses(inputs.transactions, inputs.startISO);
   const filingStatus = inputs.household.filingStatus as FilingStatus;
   const state = (inputs.household as { state?: string | null }).state ?? null;
   const city = (inputs.household as { city?: string | null }).city ?? null;
@@ -209,6 +222,24 @@ export function captureRealState(inputs: RealStateInputs): RealState {
     inputs.startISO,
   );
 
+  // Group accounts by tax bucket. Cash accounts (CHECKING + SAVINGS) end up in
+  // the `cash` bucket and are informational only — applyGapAllocation routes
+  // leftover dollars into `s.cash` (a scalar), not per-cash-account.
+  const accountsByBucket = {
+    taxAdvantaged: [] as Account[],
+    brokerage:     [] as Account[],
+    cash:          [] as Account[],
+  };
+  for (const account of inputs.accounts) {
+    if (account.excludedFromNetWorth) continue;
+    const bucket = taxBucketForAccount(account);
+    if (bucket === 'taxAdvantaged') accountsByBucket.taxAdvantaged.push(account);
+    else if (bucket === 'taxable')   accountsByBucket.brokerage.push(account);
+    else if (isCashAccount(account)) accountsByBucket.cash.push(account);
+    // null + non-cash (rare — e.g., property accounts) are intentionally
+    // dropped; they're not part of the surplus-routing model.
+  }
+
   return {
     accounts: inputs.accounts,
     holdings: inputs.holdings,
@@ -216,7 +247,7 @@ export function captureRealState(inputs: RealStateInputs): RealState {
     loanPayments: inputs.loanPayments,
     household: inputs.household,
     persons: inputs.persons,
-    baselineMonthlyExpenses,
+    accountsByBucket,
     initialCash,
     initialInvestmentsByAccount,
     cashAccountsWithBalances,

@@ -43,7 +43,7 @@ const realState: RealState = {
   loanPayments: [],
   household,
   persons,
-  baselineMonthlyExpenses: 4500,
+  accountsByBucket: { taxAdvantaged: [], brokerage: [], cash: [] },
   initialCash: 0,
   initialInvestmentsByAccount: { 1: 200000 }, // 1000 shares VTI @ $200 costBasis
   cashAccountsWithBalances: [],
@@ -61,6 +61,20 @@ const realState: RealState = {
     standardDeduction: 14600,
   },
 };
+
+/** Builds a long-duration $amount/mo expense period to replace the legacy
+ * `baselineMonthlyExpenses` (2026-05-26 revamp). */
+function contribExpensePeriods(monthlyAmount: number) {
+  return [{ start: '2026-05-01', monthlyDelta: monthlyAmount, durationMonths: 480 }];
+}
+
+/** Apply the pre-revamp default $4500/mo expense baseline via payload. The
+ * factory used to set `baselineMonthlyExpenses: 4500`; tests in this file
+ * depend on the household being above-water by ~$4.5k. */
+function applyDefaultExpenses(payload: ReturnType<typeof emptyLeverPayload>) {
+  payload.expensePeriods = contribExpensePeriods(4500);
+  return payload;
+}
 
 describe('activeContributionAmount', () => {
   it('returns null when no segments are configured', () => {
@@ -97,8 +111,8 @@ describe('activeContributionAmount', () => {
 
 describe('projectScenario — contributions lever', () => {
   it('default behavior is unchanged when contributions is empty (parity)', () => {
-    const baseline = projectScenario(realState, emptyLeverPayload(), { startISO: '2026-05', months: 60 });
-    const empty = emptyLeverPayload();
+    const baseline = projectScenario(realState, applyDefaultExpenses(emptyLeverPayload()), { startISO: '2026-05', months: 60 });
+    const empty = applyDefaultExpenses(emptyLeverPayload());
     empty.contributions = [];
     const withEmpty = projectScenario(realState, empty, { startISO: '2026-05', months: 60 });
     for (let i = 0; i < baseline.length; i++) {
@@ -114,7 +128,7 @@ describe('projectScenario — contributions lever', () => {
     // should grow by exactly 1000 every month for 60 months. Month 0 is the
     // seed snapshot (no contribution applied yet); contributions accrue in
     // months 1..59 → 59 increments of $1000.
-    const payload = emptyLeverPayload();
+    const payload = applyDefaultExpenses(emptyLeverPayload());
     payload.returns = { defaultRate: 0, overrides: {} };
     payload.contributions = [{ startMonth: 0, endMonth: 59, monthlyAmount: 1000 }];
 
@@ -135,7 +149,7 @@ describe('projectScenario — contributions lever', () => {
     // change only via the contribution itself, cash must accumulate the
     // surplus (savings - 500) each month rather than the entire savings going
     // to investments.
-    const payload = emptyLeverPayload();
+    const payload = applyDefaultExpenses(emptyLeverPayload());
     payload.returns = { defaultRate: 0, overrides: {} };
     payload.contributions = [{ startMonth: 0, endMonth: 11, monthlyAmount: 500 }];
 
@@ -147,15 +161,15 @@ describe('projectScenario — contributions lever', () => {
   });
 
   it('shortfall floors cash at zero and draws remaining deficit from investments', () => {
-    // Force a shortfall by configuring an absurdly large baseline expense
+    // Force a shortfall by configuring an absurdly large monthly expense
     // so savings is negative for the segment months. Test adjusted for the
     // cash-floor change: cash bottoms at 0 and the deficit eats investments.
     const shortfallReal: RealState = {
       ...realState,
-      baselineMonthlyExpenses: 99999,
       household: { ...realState.household, monthlyExpenseBaseline: 99999 } as Household,
     };
     const payload = emptyLeverPayload();
+    payload.expensePeriods = contribExpensePeriods(99999);
     payload.returns = { defaultRate: 0, overrides: {} };
     payload.contributions = [{ startMonth: 0, endMonth: 11, monthlyAmount: 1000 }];
 
@@ -175,7 +189,7 @@ describe('projectScenario — contributions lever', () => {
     // delta in investments between months 12→13 should jump from $1000
     // (the segment amount) back to the full savings rate, which is much
     // larger here (income ~135K/yr after tax, $4500 expenses ≈ +$3500/mo).
-    const payload = emptyLeverPayload();
+    const payload = applyDefaultExpenses(emptyLeverPayload());
     payload.returns = { defaultRate: 0, overrides: {} };
     payload.contributions = [{ startMonth: 0, endMonth: 11, monthlyAmount: 1000 }];
 

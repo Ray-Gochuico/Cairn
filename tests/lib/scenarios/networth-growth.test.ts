@@ -40,7 +40,7 @@ const caSingle: Bracket[] = [
 
 const realState: RealState = {
   accounts: [], holdings, loans, loanPayments: [], household, persons,
-  baselineMonthlyExpenses: 3000,
+  accountsByBucket: { taxAdvantaged: [], brokerage: [], cash: [] },
   initialCash: 0,
   initialInvestmentsByAccount: { 1: 20000 }, // 100 shares VTI @ $200 costBasis
   defaults: { inflation: 0.025, returnRate: 0.07 },
@@ -48,9 +48,15 @@ const realState: RealState = {
   taxBrackets: { federal: federal2026Single, state: caSingle, city: null, standardDeduction: 14600 },
 };
 
+/** Equivalent of the pre-revamp `baselineMonthlyExpenses: 3000` factory field. */
+function withDefaultExpenses(p: ReturnType<typeof emptyLeverPayload>) {
+  p.expensePeriods = [{ start: '2026-05-01', monthlyDelta: 3000, durationMonths: 480 }];
+  return p;
+}
+
 describe('projectScenario — net worth growth for a saving household', () => {
   it('net worth rises year-over-year when income > expenses', () => {
-    const states = projectScenario(realState, emptyLeverPayload(), { startISO: '2026-05', months: 60 });
+    const states = projectScenario(realState, withDefaultExpenses(emptyLeverPayload()), { startISO: '2026-05', months: 60 });
     const year1 = states[12].netWorth;
     const year2 = states[24].netWorth;
     const year3 = states[36].netWorth;
@@ -62,7 +68,7 @@ describe('projectScenario — net worth growth for a saving household', () => {
 
   it('reads persons from RealState.persons, not household.persons', () => {
     // If engine still reads household.persons, this would produce 0 income.
-    const states = projectScenario(realState, emptyLeverPayload(), { startISO: '2026-05', months: 13 });
+    const states = projectScenario(realState, withDefaultExpenses(emptyLeverPayload()), { startISO: '2026-05', months: 13 });
     expect(states[6].incomeAfterTax).toBeGreaterThan(0);
   });
 
@@ -70,7 +76,7 @@ describe('projectScenario — net worth growth for a saving household', () => {
     // With no raises, monthly gross income should be ~identical year over year.
     // Bracket-real tax may shift slightly due to multi-bracket interactions, but
     // gross income (and thus pre-tax monthly income drag) should be the same.
-    const states = projectScenario(realState, emptyLeverPayload(), { startISO: '2026-05', months: 36 });
+    const states = projectScenario(realState, withDefaultExpenses(emptyLeverPayload()), { startISO: '2026-05', months: 36 });
     const monthA = states[6].incomeAfterTax;
     const monthB = states[18].incomeAfterTax;
     const monthC = states[30].incomeAfterTax;

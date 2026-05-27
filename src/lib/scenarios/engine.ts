@@ -409,9 +409,11 @@ function stepMonth(
     // out via stepsLeft == 0 before stepYear exceeds currentYear+1.
     if (stepYear > currentYear + 1) break;
   }
-  const baseExpenses = real.baselineMonthlyExpenses * inflationFactor;
+  // Expense math (revamp 2026-05-26): the engine no longer adds a transaction-
+  // derived baseline. Expenses are sourced entirely from active expense periods
+  // (in today's-dollars) then inflated to the current month's nominal value.
   const periodDelta = monthlyExpenseFromPeriods(payload.expensePeriods, monthISO);
-  s.expenses = baseExpenses + periodDelta;
+  s.expenses = periodDelta * inflationFactor;
 
   // 5. Debt servicing
   let regularLoanPayments = 0;

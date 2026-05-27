@@ -35,11 +35,14 @@ const holdings: Holding[] = [];
 const loans: Loan[] = [];
 
 function makeRealState(
-  overrides: Partial<Pick<RealState, 'persons' | 'initialCash' | 'initialInvestmentsByAccount' | 'baselineMonthlyExpenses'>> & {
+  overrides: Partial<Pick<RealState, 'persons' | 'initialCash' | 'initialInvestmentsByAccount'>> & {
     initialInvestments?: number; // backward-compat shorthand for legacy single-account tests
+    /** No-op shim: previously set on the RealState; now apply via expensePeriods on the payload. */
+    baselineMonthlyExpenses?: number;
   } = {},
 ): RealState {
-  const { initialInvestments, initialInvestmentsByAccount, ...rest } = overrides;
+  const { initialInvestments, initialInvestmentsByAccount, baselineMonthlyExpenses: _legacy, ...rest } = overrides;
+  void _legacy;
   const byAccount = initialInvestmentsByAccount
     ?? (initialInvestments !== undefined ? { 1: initialInvestments } : { 1: 500000 });
   return {
@@ -49,7 +52,7 @@ function makeRealState(
     loanPayments: [],
     household,
     persons: [person45],
-    baselineMonthlyExpenses: 4500,
+    accountsByBucket: { taxAdvantaged: [], brokerage: [], cash: [] },
     initialCash: 5000,
     initialInvestmentsByAccount: byAccount,
     // Pre-migration-0029 fixture: retirement tests pin the auto-invest path
@@ -72,6 +75,17 @@ function makeRealState(
   };
 }
 
+/** $amount/mo expense period equivalent to the legacy `baselineMonthlyExpenses`. */
+function retirementExpensePeriods(monthlyAmount: number) {
+  return [{ start: '2026-05-01', monthlyDelta: monthlyAmount, durationMonths: 480 }];
+}
+
+/** Apply the pre-revamp default $4500/mo expense baseline via payload. */
+function applyDefaultExpenses(payload: ReturnType<typeof emptyLeverPayload>) {
+  payload.expensePeriods = retirementExpensePeriods(4500);
+  return payload;
+}
+
 describe('ageAtMonth', () => {
   it('returns full years between dob and the first day of the given month', () => {
     expect(ageAtMonth('1981-05-15', '2026-05')).toBe(44);
@@ -91,7 +105,7 @@ describe('ageAtMonth', () => {
 describe('projectScenario — retirement age transition', () => {
   it('income drops to 0 once a person reaches their targetRetirementAge', () => {
     const real = makeRealState();
-    const states = projectScenario(real, emptyLeverPayload(), { startISO: '2026-05', months: 120 });
+    const states = projectScenario(real, applyDefaultExpenses(emptyLeverPayload()), { startISO: '2026-05', months: 120 });
 
     // Pre-retirement (5 years in, age 49-50): person still earning.
     expect(states[12].incomeAfterTax).toBeGreaterThan(0);
@@ -115,7 +129,7 @@ describe('projectScenario — retirement age transition', () => {
         autoInvestSalarySurplus: true,
       },
     };
-    const payload = emptyLeverPayload();
+    const payload = applyDefaultExpenses(emptyLeverPayload());
     payload.returns = { defaultRate: 0, overrides: {} };
     const states = projectScenario(realLowReturn, payload, { startISO: '2026-05', months: 120 });
 
@@ -133,7 +147,7 @@ describe('projectScenario — retirement age transition', () => {
 
   it('LeverPayload.retirementAgeOverride takes precedence over Person.targetRetirementAge', () => {
     const real = makeRealState();
-    const payload = emptyLeverPayload();
+    const payload = applyDefaultExpenses(emptyLeverPayload());
     payload.retirementAgeOverride = 65; // far higher than person's own targetRetirementAge=50
 
     const states = projectScenario(real, payload, { startISO: '2026-05', months: 240 });
@@ -157,7 +171,7 @@ describe('projectScenario — retirement age transition', () => {
     } as unknown as Person;
 
     const real = makeRealState({ persons: [person45, person30] });
-    const payload = emptyLeverPayload();
+    const payload = applyDefaultExpenses(emptyLeverPayload());
     payload.income.perPerson = [
       { annualRaiseRate: 0, events: [] },
       { annualRaiseRate: 0, events: [] },
@@ -177,7 +191,7 @@ describe('projectScenario — retirement age transition', () => {
   it('retirement age never reached within horizon: behaves identically to no-retirement', () => {
     // Set retirement age way above current age + horizon so it's never triggered.
     const real = makeRealState();
-    const payload = emptyLeverPayload();
+    const payload = applyDefaultExpenses(emptyLeverPayload());
     payload.retirementAgeOverride = 89;
     const states = projectScenario(real, payload, { startISO: '2026-05', months: 60 });
     for (let i = 1; i < states.length; i++) {
