@@ -1,4 +1,22 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+// Section 4 mounts TransactionsSectionImporter, which pulls in the PDF
+// extract + parse pipeline. Mock both so SetupWizard can render without
+// booting pdfjs in jsdom.
+vi.mock('@/pdf/extract', () => ({
+  extractTextItems: vi.fn().mockResolvedValue([]),
+}));
+vi.mock('@/pdf/parse-statement', () => ({
+  parseStatement: vi.fn().mockReturnValue({
+    issuer: 'GENERIC',
+    transactions: [],
+  }),
+}));
+vi.mock('@/lib/statements-archive', () => ({
+  archiveStatementPdf: vi.fn().mockResolvedValue(null),
+  resolveArchivePath: vi.fn(),
+}));
+
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { useDependentsStore } from '@/stores/dependents-store';
