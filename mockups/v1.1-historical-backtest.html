@@ -101,6 +101,49 @@
     .run-meta { font-size: 13px; color: #64748b; }
     .run-meta strong { color: #0f172a; font-weight: 600; }
 
+    /* ---- advanced guardrails (variable strategy only) ---- */
+    .advanced {
+      margin-top: 16px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      background: #f8fafc;
+      display: none;                /* shown by JS when "Variable" is selected */
+    }
+    .advanced[open] { background: #fff; }
+    .advanced summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 12px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #334155;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .advanced summary::-webkit-details-marker { display: none; }
+    .advanced .adv-chevron {
+      font-size: 11px; color: #94a3b8;
+      transition: transform 0.15s ease;
+    }
+    .advanced[open] .adv-chevron { transform: rotate(90deg); }
+    .advanced .adv-tag {
+      margin-left: auto;
+      font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
+      text-transform: uppercase; color: #475569;
+      background: #e2e8f0; border-radius: 4px; padding: 2px 7px;
+    }
+    .adv-body { padding: 4px 16px 18px; }
+    .adv-explainer {
+      margin: 0 0 14px; font-size: 13px; color: #475569; line-height: 1.55;
+    }
+    .adv-explainer strong { color: #334155; }
+    .adv-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+    }
+
     /* ---- segmented viz toggle ---- */
     .segmented {
       display: inline-flex;
@@ -225,6 +268,41 @@
       font-size: 11px; font-weight: 600; letter-spacing: 0.05em;
       text-transform: uppercase; color: #94a3b8; margin: 0 0 10px;
     }
+
+    /* ---- below-goal start-year list ---- */
+    .belowgoal {
+      margin-top: 18px;
+      border: 1px solid #fde68a;
+      background: #fffbeb;
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+    .belowgoal-title {
+      font-size: 13px; font-weight: 600; color: #78350f;
+      display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+    }
+    .belowgoal-title .count { font-weight: 600; }
+    .belowgoal-sub { font-size: 12px; color: #92400e; margin: 4px 0 12px; line-height: 1.5; }
+    .belowgoal-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+      gap: 8px;
+    }
+    .yr-chip {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 8px;
+      border-radius: 6px; padding: 6px 10px;
+      font-size: 12px; background: #fff;
+      border: 1px solid #fde68a;
+    }
+    .yr-chip.depleted { border-color: #fecaca; }
+    .yr-chip .yr { font-weight: 600; color: #334155; }
+    .yr-chip .bal { color: #b45309; font-variant-numeric: tabular-nums; }
+    .yr-chip.depleted .bal { color: #dc2626; }
+    .yr-chip .dot {
+      width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 5px;
+      vertical-align: middle;
+    }
   </style>
 </head>
 <body>
@@ -261,10 +339,16 @@
           <input id="p-length" type="text" value="30 years" />
         </div>
         <div class="field">
+          <label for="p-goal">Goal ending amount</label>
+          <input id="p-goal" type="text" value="$500,000" />
+          <span class="hint">$0 = just don't run out; higher = leave a legacy / safety margin</span>
+        </div>
+        <div class="field">
           <label for="p-strategy">Withdrawal strategy</label>
           <select id="p-strategy">
-            <option selected>4% rule (Bengen)</option>
-            <option>Constant dollar</option>
+            <option value="bengen" selected>4% rule (Bengen)</option>
+            <option value="constant">Constant dollar</option>
+            <option value="variable">Variable (% of portfolio)</option>
           </select>
         </div>
         <div class="field">
@@ -277,11 +361,48 @@
           <span class="hint">Annual rebalance</span>
         </div>
       </div>
+
+      <!-- Advanced guardrails — only shown when "Variable" strategy is picked -->
+      <details class="advanced" id="advancedBlock">
+        <summary>
+          <span class="adv-chevron" aria-hidden>▸</span>
+          Advanced: withdrawal guardrails
+          <span class="adv-tag">Advanced option</span>
+        </summary>
+        <div class="adv-body">
+          <p class="adv-explainer">
+            Spending flexes with your portfolio but stays within this band — a
+            <strong>floor</strong> protects your lifestyle in down years, a
+            <strong>ceiling</strong> prevents over-spending in boom years. Most people
+            use the simple fixed strategies above; this is for advanced planning.
+          </p>
+          <div class="adv-grid">
+            <div class="field">
+              <label for="g-rate">Withdrawal rate</label>
+              <div class="mix-row">
+                <input id="g-rate" type="text" value="4" /><span class="pct">% of current portfolio</span>
+              </div>
+            </div>
+            <div class="field">
+              <label for="g-min">Minimum withdrawal</label>
+              <input id="g-min" type="text" value="$48,000" />
+              <span class="hint">spending floor — never less, even in down years</span>
+            </div>
+            <div class="field">
+              <label for="g-max">Maximum withdrawal</label>
+              <input id="g-max" type="text" value="$90,000" />
+              <span class="hint">spending ceiling — never more, even in boom years</span>
+            </div>
+          </div>
+        </div>
+      </details>
+
       <div class="run-row">
         <button class="btn-primary">Run backtest</button>
         <span class="run-meta">
-          Last run against <strong>121 historical periods</strong> · S&amp;P 500 + 10-yr
-          Treasury, real (inflation-adjusted) dollars · data 1871–2025
+          Last run against <strong>121 historical periods</strong> · goal
+          <strong>$500,000</strong> · S&amp;P 500 + 10-yr Treasury, real
+          (inflation-adjusted) dollars · data 1871–2025
         </span>
       </div>
     </div>
@@ -319,8 +440,23 @@
       <div class="footer-note">
         Sample data: 121 simulated 30-year paths (one per start year 1871–1995),
         decimated to annual points (~31 pts/line) per the FireCalc performance note.
-        The 1966 cohort is highlighted as the historical worst start; the median
-        path is drawn in full-strength blue.
+        In <code style="background:#fff;padding:1px 5px;border-radius:3px;font-family:ui-monospace,monospace;">Lines</code>
+        mode, paths are tinted by outcome against your goal; the 1966 cohort is the
+        highlighted worst start and the median path is drawn in full-strength slate.
+      </div>
+
+      <div class="belowgoal" id="belowGoalBlock">
+        <div class="belowgoal-title">
+          Start years that ended below your
+          <span class="count">$500k</span> goal
+          <span style="font-weight:400;color:#92400e;">· <span id="belowGoalCount">16</span> of 121</span>
+        </div>
+        <div class="belowgoal-sub">
+          These are the historically worst times to have started this plan — the
+          stagflation 1965–74 cohort and the 1906–12 / 1929–37 panics. 8 fully
+          depleted (red); 8 survived but finished under your goal (amber).
+        </div>
+        <div class="belowgoal-list" id="belowGoalList"><!-- populated by JS --></div>
       </div>
     </div>
 
@@ -331,15 +467,21 @@
       <p class="section-label">Outcome</p>
       <div class="summary-grid">
         <div class="success-hero">
-          <div class="success-figure">94%</div>
+          <div class="success-figure">87%</div>
           <div class="success-sub">
-            <strong>113 of 121</strong> historical periods survived the full 30 years.
+            <strong>105 of 121</strong> historical periods ended at or above your
+            <strong>$500k</strong> goal.
           </div>
-          <div class="success-bar"><span style="width:93.4%"></span></div>
+          <div class="success-bar"><span style="width:86.8%"></span></div>
           <div class="success-note">
             This is a <strong>count of past outcomes</strong>, not a probability of
-            future success. 8 starting years would have run the portfolio to $0 before
-            year 30 — the worst clustered around 1965–1969.
+            future success. Of the 16 that fell short, 8 fully depleted to $0 and 8
+            survived but finished under your goal — the worst clustered around the
+            1929 and 1965–69 starts.
+            <span style="display:block;margin-top:6px;color:#64748b;">
+              By the looser "just don't run out" test (ended above $0):
+              <strong style="color:#475569;">113 of 121</strong> survived.
+            </span>
           </div>
           <div class="tiles">
             <div class="tile worst">
@@ -354,7 +496,7 @@
             </div>
             <div class="tile best">
               <div class="tlabel">Best ending</div>
-              <div class="tval">$9.2M</div>
+              <div class="tval">$9.9M</div>
               <div class="tmeta">started 1879</div>
             </div>
           </div>
@@ -362,7 +504,9 @@
 
         <div class="hist-wrap">
           <div class="hist-title">Distribution of ending balances</div>
-          <div class="hist-sub">Real dollars at year 30, across 121 starts</div>
+          <div class="hist-sub">
+            Real dollars at year 30, across 121 starts · dashed line marks your $500k goal
+          </div>
           <div class="hist-container">
             <canvas id="histCanvas"></canvas>
           </div>
@@ -379,8 +523,10 @@
         <strong>This is history, not a forecast.</strong> For every starting year from
         1871 onward, this replays <em>your</em> plan using <em>that year's</em> actual
         market returns and inflation. "Success rate" is the count of those past periods
-        whose portfolio survived the full horizon — it is <strong>not a probability</strong>
-        that your plan will succeed.
+        that met your goal — it is <strong>not a probability</strong> that your plan will
+        succeed. Raising the <em>goal ending amount</em> above $0 makes success stricter
+        (you're asking the plan to also leave a margin), but it's still a tally of what
+        <em>did</em> happen, never a forecast of what will.
       </p>
       <p>
         <strong>Past results do not predict future returns.</strong> The U.S. market has
@@ -433,17 +579,24 @@
     const SPAGHETTI_RGB = '76, 120, 168';      // = #4c78a8 (blue)
     const WORST_COLOR   = '#dc2626';           // destructive — the failure path
     const MEDIAN_COLOR  = '#1e293b';           // slate-800, full strength
+    // Three-tier outcome colors (tinted by result vs the user's goal).
+    const TIER_MET_RGB  = '76, 120, 168';      // blue — ended at/above goal
+    const TIER_BELOW    = '#f59e0b';           // amber — survived but below goal
+    const TIER_DEPLETED = '#dc2626';           // red — ran out before horizon
 
     // ============================================================
     // Sample backtest data
     // ============================================================
     // 121 historical 30-year paths, annual end-of-year balances ($, real).
-    // Seeded so each "start year" gets a distinct but believable trajectory:
-    // most grow, a tail of ~8 deplete to $0 (the 1965-69 cluster).
+    // Seeded so each "start year" gets a distinct but believable trajectory.
+    // Cohort is engineered to land on goal-aware headline figures (GOAL=$500k):
+    //   113 survived (>$0), 105 cleared the goal, 16 below goal —
+    //   of which 8 fully depleted and 8 survived-but-under-goal.
     const HORIZON = 30;                 // years
     const N_STARTS = 121;               // 1871..1995 windows (illustrative)
     const START_BASE = 1871;
     const PORTFOLIO0 = 1_500_000;
+    const GOAL = 500_000;               // user-defined "goal ending amount"
 
     // Deterministic PRNG so the mockup renders identically each load.
     function mulberry32(seed) {
@@ -456,8 +609,6 @@
     }
 
     // Build one path. `failBias` < 0 nudges toward depletion.
-    // Constants tuned so the cohort lands on the headline figures:
-    // 113/121 survive, median ending ~$2.4M, best ~$9M.
     function buildPath(seedRand, failBias) {
       const spend = 60_000;             // constant-dollar (real) withdrawal
       let bal = PORTFOLIO0;
@@ -472,35 +623,72 @@
       return out;
     }
 
-    // Generate the cohort. Mark ~8 as failures (deplete before yr 30).
-    const FAILED_STARTS = new Set();
+    // Build a path that SURVIVES but lands below goal — glides toward a pinned
+    // target with market-ish wobble, never touching $0. Used for the 8 "below
+    // goal but survived" cohorts so they read as distinct from full depletion.
+    function buildMarginalPath(seedRand, target) {
+      const out = [PORTFOLIO0];
+      let bal = PORTFOLIO0;
+      for (let y = 1; y <= HORIZON; y++) {
+        const frac = y / HORIZON;
+        const glide = PORTFOLIO0 * Math.pow(target / PORTFOLIO0, frac);
+        const wobble = 1 + (seedRand() - 0.5) * 0.16 * (1 - frac * 0.5);
+        bal = Math.max(45_000, glide * wobble);
+        out.push(Math.round(bal));
+      }
+      out[HORIZON] = target;            // pin the exact ending balance
+      return out;
+    }
+
+    // Offsets-from-1871 for the two below-goal cohorts. Chosen to map onto
+    // historically rough retirement start years (1906-12 panics, 1929-37
+    // Depression, 1965-74 stagflation).
+    const DEPLETED_OFFSETS = [35, 58, 66, 94, 95, 97, 98, 102]; // -> 1906,1929,1937,1965,1966,1968,1969,1973
+    const MARGINAL_OFFSETS = [36, 41, 59, 65, 96, 99, 101, 103]; // -> 1907,1912,1930,1936,1967,1970,1972,1974
+    // Pinned endings for the survived-but-below-goal cohorts ($1..$499k).
+    const MARGINAL_TARGETS = {
+      36: 310_000, 41: 210_000, 59: 95_000, 65: 420_000,
+      96: 60_000, 99: 240_000, 101: 155_000, 103: 380_000,
+    };
+    const DEPLETED_SET = new Set(DEPLETED_OFFSETS);
+    const MARGINAL_SET = new Set(MARGINAL_OFFSETS);
+
     function buildCohort() {
       const paths = [];
-      // 8 failing start years clustered 1965-69 (offsets 94..98) + a couple early.
-      const failOffsets = [58, 94, 95, 96, 97, 98, 108, 120];
-      failOffsets.forEach((o) => FAILED_STARTS.add(o));
       for (let i = 0; i < N_STARTS; i++) {
         const rand = mulberry32(1000 + i * 7);
-        const failing = FAILED_STARTS.has(i);
-        const bias = failing ? -0.075 : 0.004 + (i % 11) * 0.0028;
-        let path = buildPath(rand, bias);
-        // Force failures to actually hit 0 and stay there.
-        if (failing) {
+        if (DEPLETED_SET.has(i)) {
+          let path = buildPath(rand, -0.075);
+          // Force the failure to actually hit 0 and stay there.
           const dieYr = 22 + (i % 6);
           for (let y = dieYr; y <= HORIZON; y++) path[y] = 0;
           for (let y = Math.max(1, dieYr - 3); y < dieYr; y++) {
             path[y] = Math.round(path[y] * (1 - (y - (dieYr - 3)) * 0.28));
           }
+          paths.push(path);
+        } else if (MARGINAL_SET.has(i)) {
+          paths.push(buildMarginalPath(rand, MARGINAL_TARGETS[i]));
+        } else {
+          paths.push(buildPath(rand, 0.006 + (i % 11) * 0.0028));
         }
-        paths.push(path);
       }
       return paths;
     }
-    const COHORT = buildPath ? buildCohort() : [];
+    const COHORT = buildCohort();
     const YEAR_LABELS = Array.from({ length: HORIZON + 1 }, (_, y) => y);
 
     // The 1966 worst-start index (offset 95 from 1871).
     const WORST_INDEX = 95;
+
+    // Classify each start year's outcome against the goal.
+    // 'met' = ended >= GOAL; 'below' = survived (>0) but < GOAL; 'depleted' = $0.
+    function outcomeTier(finalValue) {
+      if (finalValue >= GOAL) return 'met';
+      if (finalValue > 0) return 'below';
+      return 'depleted';
+    }
+    const FINALS = COHORT.map((p) => p[HORIZON]);
+    const TIERS = FINALS.map(outcomeTier);
 
     // Percentiles across the cohort at each year-into-retirement.
     function percentileAt(yearIdx, p) {
@@ -522,23 +710,37 @@
     // ============================================================
     // Dataset builders
     // ============================================================
+    // Per-tier line styling. Goal-met lines recede (low-opacity blue); the
+    // below-goal + depleted lines are tinted so the user sees WHICH starts
+    // fell short, not just the count.
+    function tierStyle(tier) {
+      if (tier === 'depleted') {
+        return { color: `rgba(220, 38, 38, 0.55)`, width: 1.25, order: 2 };
+      }
+      if (tier === 'below') {
+        return { color: `rgba(245, 158, 11, 0.65)`, width: 1.25, order: 3 };
+      }
+      return { color: `rgba(${TIER_MET_RGB}, 0.14)`, width: 1, order: 5 };
+    }
+
     function buildLinesDatasets() {
       const ds = [];
-      // One thin, low-opacity line per starting year.
+      // One thin line per starting year, tinted by outcome vs goal.
       COHORT.forEach((path, i) => {
         if (i === WORST_INDEX) return; // drawn separately on top
+        const s = tierStyle(TIERS[i]);
         ds.push({
           label: `Start ${START_BASE + i}`,
           data: path,
-          borderColor: `rgba(${SPAGHETTI_RGB}, 0.16)`,
-          borderWidth: 1,
+          borderColor: s.color,
+          borderWidth: s.width,
           pointRadius: 0,
           fill: false,
           tension: 0.15,
-          order: 5,
+          order: s.order,
         });
       });
-      // Worst start (1966) — highlighted in destructive red.
+      // Worst start (1966) — highlighted in full-strength destructive red.
       ds.push({
         label: 'Worst start (1966)',
         data: COHORT[WORST_INDEX],
@@ -612,15 +814,17 @@
     let activeMode = 'lines';
 
     const MODE_CAPTIONS = {
-      lines: 'Each faint line is one historical starting year — what a retiree who began this exact plan in 1871, 1872, … 1995 would have experienced. The spread <em>is</em> the message: averages hide how differently the same plan plays out depending on when you start. <code>Lines</code> answers "how bad was the worst case?"',
-      bands: 'The shaded fan shows where outcomes clustered: the dark middle band is the 25th–75th percentile, the lighter bands reach the 10th and 90th. The line is the median path. <code>Bands</code> answers "what range should I expect?" — but reads more like a forecast cone, so it deliberately omits which specific years failed.',
+      lines: 'Each faint line is one historical starting year — what a retiree who began this exact plan in 1871, 1872, … 1995 would have experienced. Lines are tinted by how they ended against your <strong>$500k goal</strong>: <span style="color:#b45309;font-weight:600;">amber</span> survived but finished under goal, <span style="color:#dc2626;font-weight:600;">red</span> ran out entirely, faint blue cleared the goal. <code>Lines</code> answers "how bad was the worst case, and which years were they?"',
+      bands: 'The shaded fan shows where outcomes clustered: the dark middle band is the 25th–75th percentile, the lighter bands reach the 10th and 90th. The line is the median path. <code>Bands</code> answers "what range should I expect?" — but reads more like a forecast cone, so it deliberately omits which specific years failed (switch to <code>Lines</code> to see those).',
     };
 
     const LEGENDS = {
       lines: [
         { type: 'line', color: MEDIAN_COLOR, label: 'Median path' },
         { type: 'line', color: WORST_COLOR, label: 'Worst start (1966)' },
-        { type: 'line', color: `rgba(${SPAGHETTI_RGB}, 0.45)`, label: '120 other historical starts' },
+        { type: 'line', color: `rgba(${TIER_MET_RGB}, 0.45)`, label: 'Met $500k goal (105)' },
+        { type: 'line', color: TIER_BELOW, label: 'Below goal, survived (8)' },
+        { type: 'line', color: TIER_DEPLETED, label: 'Depleted (8)' },
       ],
       bands: [
         { type: 'line', color: MEDIAN_COLOR, label: 'Median (50th pct)' },
@@ -696,34 +900,79 @@
     // ============================================================
     // Histogram of ending balances
     // ============================================================
+    // Inline plugin: draw a dashed vertical "goal" line between the bucket
+    // that ends below GOAL and the first bucket at/above it. (The annotation
+    // plugin isn't on the CDN, so we stroke it onto the canvas directly.)
+    const goalLinePlugin = {
+      id: 'goalLine',
+      afterDatasetsDraw(chart, _args, opts) {
+        const { ctx, chartArea, scales } = chart;
+        const x = scales.x;
+        // Boundary sits just left of the first at/above-goal bucket.
+        const idx = opts.boundaryIndex;
+        if (idx == null || !x) return;
+        const left = x.getPixelForValue(idx);
+        const prev = x.getPixelForValue(idx - 1);
+        const px = (left + prev) / 2;
+        ctx.save();
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.moveTo(px, chartArea.top);
+        ctx.lineTo(px, chartArea.bottom);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#b45309';
+        ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('$500k goal', px + 4, chartArea.top + 10);
+        ctx.restore();
+      },
+    };
+
     function renderHistogram() {
-      const finals = COHORT.map((p) => p[HORIZON]);
-      // Buckets: $0 (failures), then $0.5M-wide bins up to $8M+.
-      const edges = [0, 1, 1_000_000, 2_000_000, 3_000_000, 4_000_000,
-                     5_000_000, 6_000_000, 7_000_000, 9_999_999_999];
-      const labels = ['$0', '<$1M', '$1–2M', '$2–3M', '$3–4M', '$4–5M', '$5–6M', '$6–7M', '$7M+'];
+      // Buckets: $0 (depleted), <$500k (survived-but-below-goal), then $0.5M..
+      // The "<$500k" bucket sits between $0 and the goal line.
+      const edges = [0, 1, 500_000, 1_000_000, 2_000_000, 3_000_000,
+                     4_000_000, 5_000_000, 7_000_000, 9_999_999_999];
+      const labels = ['$0', '<$500k', '$500k–1M', '$1–2M', '$2–3M', '$3–4M', '$4–5M', '$5–7M', '$7M+'];
       const counts = new Array(labels.length).fill(0);
-      finals.forEach((v) => {
+      FINALS.forEach((v) => {
         if (v === 0) { counts[0]++; return; }
         for (let b = 1; b < edges.length - 1; b++) {
           if (v >= edges[b] && v < edges[b + 1]) { counts[b]++; break; }
         }
       });
-      const colors = counts.map((_, i) => (i === 0 ? '#dc2626' : PALETTE.blue));
+      // First bucket at/above the goal — used to place the goal line + colors.
+      // edges[2] === GOAL, so bucket index 2 ('$500k–1M') is the first met-goal.
+      const GOAL_BUCKET = 2;
+      const colors = counts.map((_, i) => {
+        if (i === 0) return TIER_DEPLETED;          // $0 — red
+        if (i < GOAL_BUCKET) return TIER_BELOW;     // below goal — amber
+        return PALETTE.blue;                        // met goal — blue
+      });
 
       const ctx = document.getElementById('histCanvas').getContext('2d');
       new Chart(ctx, {
         type: 'bar',
         data: { labels, datasets: [{ data: counts, backgroundColor: colors, borderRadius: 3, maxBarThickness: 34 }] },
+        plugins: [goalLinePlugin],
         options: {
           responsive: true,
           maintainAspectRatio: false,
           animation: false,
           plugins: {
             legend: { display: false },
+            goalLine: { boundaryIndex: GOAL_BUCKET },
             tooltip: {
               callbacks: {
-                title: (items) => items[0].label === '$0' ? 'Failed (depleted)' : `Ending balance ${items[0].label}`,
+                title: (items) => {
+                  const l = items[0].label;
+                  if (l === '$0') return 'Depleted (ran out)';
+                  if (l === '<$500k') return 'Survived, below $500k goal';
+                  return `Ending balance ${l}`;
+                },
                 label: (c) => ` ${c.parsed.y} of ${N_STARTS} starts`,
               },
             },
@@ -741,6 +990,34 @@
     }
 
     // ============================================================
+    // Below-goal start-year list
+    // ============================================================
+    function fmtMoney(v) {
+      return '$' + Math.round(v).toLocaleString();
+    }
+    function renderBelowGoalList() {
+      // All starts that ended below goal (depleted + survived-below), by year.
+      const below = [];
+      FINALS.forEach((v, i) => {
+        if (v < GOAL) below.push({ year: START_BASE + i, value: v, tier: TIERS[i] });
+      });
+      below.sort((a, b) => a.year - b.year);
+
+      document.getElementById('belowGoalCount').textContent = String(below.length);
+      const listEl = document.getElementById('belowGoalList');
+      listEl.innerHTML = below.map((b) => {
+        const depleted = b.tier === 'depleted';
+        const dotColor = depleted ? TIER_DEPLETED : TIER_BELOW;
+        const balText = depleted ? '$0' : fmtMoney(b.value);
+        return `
+          <div class="yr-chip ${depleted ? 'depleted' : ''}" title="${depleted ? 'Depleted before year 30' : 'Survived but finished below goal'}">
+            <span class="yr"><span class="dot" style="background:${dotColor}"></span>${b.year}</span>
+            <span class="bal">${balText}</span>
+          </div>`;
+      }).join('');
+    }
+
+    // ============================================================
     // Wire up
     // ============================================================
     document.querySelectorAll('#vizToggle button').forEach((btn) => {
@@ -752,8 +1029,22 @@
       });
     });
 
+    // Strategy selector → reveal the Advanced guardrails block only for
+    // "Variable (% of portfolio)". Fixed strategies (Bengen / constant-dollar)
+    // have no floor/ceiling band, so the block stays hidden.
+    const strategySel = document.getElementById('p-strategy');
+    const advancedBlock = document.getElementById('advancedBlock');
+    function syncAdvancedVisibility() {
+      const isVariable = strategySel.value === 'variable';
+      advancedBlock.style.display = isVariable ? 'block' : 'none';
+      if (isVariable) advancedBlock.open = true;
+    }
+    strategySel.addEventListener('change', syncAdvancedVisibility);
+    syncAdvancedVisibility();
+
     renderBacktestChart();
     renderHistogram();
+    renderBelowGoalList();
   </script>
 </body>
 </html>
