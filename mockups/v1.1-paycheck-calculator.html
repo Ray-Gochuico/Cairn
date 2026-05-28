@@ -1,0 +1,664 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Paycheck calculator — v1.1 mockup</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f8fafc;
+      color: #0f172a;
+      -webkit-font-smoothing: antialiased;
+    }
+    .page { max-width: 1100px; margin: 0 auto; padding: 32px 24px 64px; }
+    h1 { margin: 0 0 4px; font-size: 22px; font-weight: 600; }
+    .subtitle { color: #64748b; font-size: 14px; margin-bottom: 8px; }
+    .tabular { font-variant-numeric: tabular-nums; }
+
+    /* ---- mockup banner (matches existing mockups) ---- */
+    .mockup-banner {
+      background: #fef3c7;
+      border-left: 3px solid #f59e0b;
+      padding: 12px 16px;
+      border-radius: 4px;
+      margin-bottom: 24px;
+      font-size: 13px;
+      color: #78350f;
+      line-height: 1.5;
+    }
+
+    /* ---- tax-year chip in header ---- */
+    .header-row {
+      display: flex; flex-wrap: wrap; gap: 12px;
+      align-items: baseline; justify-content: space-between;
+      margin-bottom: 24px;
+    }
+    .year-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; color: #0369a1;
+      background: #f0f9ff; border: 1px solid #bae6fd;
+      padding: 4px 10px; border-radius: 999px;
+      white-space: nowrap;
+    }
+    .year-chip .dot { width: 6px; height: 6px; border-radius: 999px; background: #0ea5e9; }
+
+    /* ---- card shell ---- */
+    .card {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+
+    /* ---- two-column layout ---- */
+    .calc-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+      gap: 20px;
+      align-items: start;
+    }
+    @media (max-width: 760px) {
+      .calc-grid { grid-template-columns: 1fr; }
+      .results-card { position: static !important; }
+    }
+
+    /* ---- input card ---- */
+    .input-card { padding: 4px 24px 24px; }
+    .section { padding: 20px 0; border-bottom: 1px solid #f1f5f9; }
+    .section:last-child { border-bottom: 0; padding-bottom: 4px; }
+    .section-title {
+      font-size: 12px; font-weight: 600; color: #475569;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      margin: 0 0 14px;
+    }
+    .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
+    .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+    .field.full { grid-column: 1 / -1; }
+    label.lbl { font-size: 13px; font-weight: 500; color: #334155; }
+    label.lbl .hint { font-weight: 400; color: #94a3b8; }
+
+    .control, select.control {
+      width: 100%;
+      font: inherit; font-size: 14px;
+      color: #0f172a;
+      background: #fff;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 8px 10px;
+      height: 38px;
+      transition: border-color .12s, box-shadow .12s;
+    }
+    select.control {
+      appearance: none;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: 32px;
+      cursor: pointer;
+    }
+    .control:focus, select.control:focus {
+      outline: none;
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
+    }
+    .control:disabled {
+      background: #f8fafc; color: #94a3b8; cursor: not-allowed;
+    }
+    .control.tabular { font-variant-numeric: tabular-nums; }
+
+    /* currency / percent affix */
+    .affix { position: relative; }
+    .affix .control { padding-left: 26px; }
+    .affix .sym {
+      position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+      font-size: 14px; color: #94a3b8; pointer-events: none;
+    }
+    .affix.pct .control { padding-left: 10px; padding-right: 28px; }
+    .affix.pct .sym { left: auto; right: 11px; }
+
+    /* segmented control for pay frequency */
+    .segmented {
+      display: inline-flex; flex-wrap: wrap; gap: 4px;
+      background: #f1f5f9; border: 1px solid #e2e8f0;
+      border-radius: 8px; padding: 4px;
+    }
+    .segmented button {
+      border: 0; background: transparent;
+      font: inherit; font-size: 13px; color: #475569;
+      padding: 6px 12px; border-radius: 6px; cursor: pointer;
+      transition: background .12s, color .12s, box-shadow .12s;
+    }
+    .segmented button:hover:not(.active) { color: #0f172a; }
+    .segmented button.active {
+      background: #fff; color: #0f172a; font-weight: 500;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+    }
+
+    .field-note {
+      grid-column: 1 / -1;
+      font-size: 12px; color: #94a3b8; line-height: 1.5;
+      display: flex; gap: 6px; align-items: flex-start;
+    }
+    .field-note svg { flex-shrink: 0; margin-top: 1px; }
+
+    /* deprecated allowances callout */
+    .deprecated-note {
+      grid-column: 1 / -1;
+      font-size: 12px; color: #64748b; line-height: 1.5;
+      background: #f8fafc; border: 1px dashed #cbd5e1;
+      border-radius: 6px; padding: 10px 12px;
+    }
+    .deprecated-note strong { color: #475569; }
+
+    /* ---- results card ---- */
+    .results-card { position: sticky; top: 24px; overflow: hidden; }
+    .results-head {
+      padding: 22px 24px 20px;
+      background: #f0fdf4;
+      border-bottom: 1px solid #dcfce7;
+    }
+    .results-head .eyebrow {
+      font-size: 12px; font-weight: 600; color: #15803d;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .results-head .takehome {
+      font-size: 38px; font-weight: 600; color: #14532d;
+      margin: 8px 0 2px; line-height: 1.05;
+    }
+    .results-head .takehome .per { font-size: 16px; color: #16a34a; font-weight: 500; }
+    .results-head .annual { font-size: 13px; color: #166534; }
+    .results-head .annual strong { font-weight: 600; }
+
+    .freq-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 12px 24px; border-bottom: 1px solid #f1f5f9;
+      font-size: 13px; color: #64748b; flex-wrap: wrap;
+    }
+
+    .chart-wrap { padding: 16px 24px 4px; }
+    .chart-container { position: relative; height: 168px; }
+
+    /* breakdown table */
+    .breakdown { padding: 8px 24px 20px; }
+    .bd-row {
+      display: grid;
+      grid-template-columns: 14px 1fr auto auto;
+      gap: 10px; align-items: center;
+      padding: 9px 0;
+      border-bottom: 1px solid #f1f5f9;
+      font-size: 13.5px;
+    }
+    .bd-row:last-child { border-bottom: 0; }
+    .bd-swatch { width: 10px; height: 10px; border-radius: 3px; }
+    .bd-label { color: #334155; min-width: 0; }
+    .bd-label .sub { color: #94a3b8; font-size: 11px; display: block; }
+    .bd-amt { text-align: right; font-variant-numeric: tabular-nums; color: #0f172a; font-weight: 500; min-width: 76px; }
+    .bd-pct { text-align: right; font-variant-numeric: tabular-nums; color: #94a3b8; font-size: 12px; min-width: 48px; }
+    .bd-amt.neg { color: #b91c1c; }
+
+    .bd-row.subtotal { border-top: 1px solid #e2e8f0; border-bottom: 0; }
+    .bd-row.subtotal .bd-label { color: #64748b; font-size: 12.5px; }
+
+    .bd-row.total {
+      margin-top: 4px; padding-top: 14px;
+      border-top: 2px solid #e2e8f0; border-bottom: 0;
+    }
+    .bd-row.total .bd-label { font-weight: 600; color: #0f172a; font-size: 14px; }
+    .bd-row.total .bd-amt { color: #16a34a; font-weight: 600; font-size: 15px; }
+    .bd-row.total .bd-pct { color: #64748b; }
+
+    .addl-tag {
+      display: inline-block; font-size: 10px; font-style: italic;
+      color: #b45309; background: #fffbeb; border: 1px solid #fde68a;
+      padding: 0 5px; border-radius: 4px; margin-left: 6px; vertical-align: middle;
+    }
+
+    .results-foot {
+      padding: 12px 24px 18px; font-size: 11.5px; color: #94a3b8;
+      line-height: 1.5; border-top: 1px solid #f1f5f9;
+    }
+
+    /* glossary-style dotted term */
+    .term {
+      border-bottom: 1px dotted #94a3b8; cursor: help;
+    }
+
+    /* ---- explainer ---- */
+    .explainer { margin-top: 20px; padding: 24px; }
+    .explainer h2 { font-size: 16px; font-weight: 600; margin: 0 0 4px; }
+    .explainer .lead { font-size: 13px; color: #64748b; margin: 0 0 18px; }
+    .explainer-grid {
+      display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px 28px;
+    }
+    @media (max-width: 760px) { .explainer-grid { grid-template-columns: 1fr; } }
+    .explainer-block h3 {
+      font-size: 13.5px; font-weight: 600; color: #0f172a;
+      margin: 0 0 6px; display: flex; align-items: center; gap: 8px;
+    }
+    .explainer-block h3 .step {
+      width: 20px; height: 20px; border-radius: 6px;
+      background: #f1f5f9; color: #475569;
+      font-size: 11px; font-weight: 600;
+      display: inline-flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .explainer-block p {
+      font-size: 13px; color: #475569; line-height: 1.6; margin: 0;
+    }
+
+    /* disclosure footnote */
+    .disclosure {
+      margin-top: 16px; padding: 14px 24px;
+      background: #f0f9ff; border: 1px solid #e0f2fe; border-radius: 8px;
+      font-size: 12.5px; color: #075985; line-height: 1.55;
+      display: flex; gap: 10px; align-items: flex-start;
+    }
+    .disclosure svg { flex-shrink: 0; margin-top: 1px; }
+    .disclosure a { color: #0369a1; }
+
+    details.not-modeled {
+      margin-top: 16px; padding: 14px 24px;
+      font-size: 12.5px; color: #64748b;
+    }
+    details.not-modeled summary {
+      cursor: pointer; font-weight: 500; color: #475569; list-style: none;
+      display: flex; align-items: center; gap: 6px;
+    }
+    details.not-modeled summary::-webkit-details-marker { display: none; }
+    details.not-modeled summary .chev { transition: transform .15s; }
+    details.not-modeled[open] summary .chev { transform: rotate(90deg); }
+    details.not-modeled ul { margin: 10px 0 0; padding-left: 20px; line-height: 1.6; }
+    details.not-modeled li { margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="mockup-banner">
+      <strong>Mockup only.</strong> Open this file in a browser to preview the v1.1
+      Paycheck Calculator (SmartAsset-shaped what-if form built on Cairn's existing
+      tax engine) before it's added to the app. Numbers are illustrative; the donut
+      uses Chart.js via CDN. No app code changed.
+    </div>
+
+    <div class="header-row">
+      <div>
+        <h1>Paycheck calculator</h1>
+        <div class="subtitle">Estimate your take-home pay after taxes and deductions.</div>
+      </div>
+      <span class="year-chip"><span class="dot"></span>Based on 2026 tax-year brackets</span>
+    </div>
+
+    <div class="calc-grid">
+      <!-- ============================== LEFT: INPUTS ============================== -->
+      <div class="card input-card">
+        <!-- Income -->
+        <div class="section">
+          <div class="section-title">Income</div>
+          <div class="field-grid">
+            <div class="field">
+              <label class="lbl" for="gross">Gross pay</label>
+              <div class="affix">
+                <span class="sym">$</span>
+                <input class="control tabular" id="gross" type="text" inputmode="numeric" value="95,000" />
+              </div>
+            </div>
+            <div class="field">
+              <label class="lbl" for="payFreq">Pay frequency</label>
+              <select class="control" id="payFreq">
+                <option value="ANNUAL" selected>Annual</option>
+                <option value="MONTHLY">Monthly</option>
+                <option value="SEMI_MONTHLY">Semi-monthly</option>
+                <option value="BI_WEEKLY">Bi-weekly</option>
+                <option value="WEEKLY">Weekly</option>
+                <option value="HOURLY">Hourly</option>
+              </select>
+            </div>
+            <div class="field-note">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              <span>Enter pay at the frequency you're paid — we annualize it for the tax math, then show results back at any frequency on the right.</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Where you live -->
+        <div class="section">
+          <div class="section-title">Where you live</div>
+          <div class="field-grid">
+            <div class="field">
+              <label class="lbl" for="filing">Filing status</label>
+              <select class="control" id="filing">
+                <option value="SINGLE" selected>Single</option>
+                <option value="MFJ">Married filing jointly</option>
+                <option value="MFS">Married filing separately</option>
+                <option value="HOH">Head of household</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="lbl" for="deps">Dependents</label>
+              <input class="control tabular" id="deps" type="number" min="0" step="1" value="1" />
+            </div>
+            <div class="field">
+              <label class="lbl" for="state">State</label>
+              <select class="control" id="state">
+                <option value="CA" selected>California</option>
+                <option value="NY">New York</option>
+                <option value="TX">Texas</option>
+                <option value="WA">Washington</option>
+                <option value="OH">Ohio</option>
+                <option value="MA">Massachusetts</option>
+              </select>
+            </div>
+            <div class="field">
+              <label class="lbl" for="city">City / locality <span class="hint">(if applicable)</span></label>
+              <select class="control" id="city" disabled>
+                <option selected>— None in California —</option>
+              </select>
+            </div>
+            <div class="field-note">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              <span>California has no local income tax, so the city field is disabled. It enables for states with local levies (NY → New York City / Yonkers, OH → RITA cities, etc.).</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pre-tax deductions -->
+        <div class="section">
+          <div class="section-title">Pre-tax deductions</div>
+          <div class="field-grid">
+            <div class="field">
+              <label class="lbl" for="d401k">401(k) contribution</label>
+              <div class="affix pct">
+                <span class="sym">%</span>
+                <input class="control tabular" id="d401k" type="text" inputmode="decimal" value="5" />
+              </div>
+            </div>
+            <div class="field">
+              <label class="lbl" for="health">Health premium <span class="hint">$/mo</span></label>
+              <div class="affix">
+                <span class="sym">$</span>
+                <input class="control tabular" id="health" type="text" inputmode="numeric" value="200" />
+              </div>
+            </div>
+            <div class="field">
+              <label class="lbl" for="hsa">HSA <span class="hint">$/mo</span></label>
+              <div class="affix">
+                <span class="sym">$</span>
+                <input class="control tabular" id="hsa" type="text" inputmode="numeric" value="100" />
+              </div>
+            </div>
+            <div class="field">
+              <label class="lbl" for="fsa">FSA <span class="hint">$/mo</span></label>
+              <div class="affix">
+                <span class="sym">$</span>
+                <input class="control tabular" id="fsa" type="text" inputmode="numeric" value="0" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Post-tax deductions -->
+        <div class="section">
+          <div class="section-title">Post-tax deductions</div>
+          <div class="field-grid">
+            <div class="field">
+              <label class="lbl" for="roth">Roth 401(k)</label>
+              <div class="affix pct">
+                <span class="sym">%</span>
+                <input class="control tabular" id="roth" type="text" inputmode="decimal" value="0" />
+              </div>
+            </div>
+            <div class="field">
+              <label class="lbl" for="espp">ESPP <span class="hint">$/mo</span></label>
+              <div class="affix">
+                <span class="sym">$</span>
+                <input class="control tabular" id="espp" type="text" inputmode="numeric" value="0" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Withholding adjustments -->
+        <div class="section">
+          <div class="section-title">Withholding adjustments</div>
+          <div class="field-grid">
+            <div class="field">
+              <label class="lbl" for="extra">Extra federal withholding <span class="hint">$/paycheck</span></label>
+              <div class="affix">
+                <span class="sym">$</span>
+                <input class="control tabular" id="extra" type="text" inputmode="numeric" value="0" />
+              </div>
+            </div>
+            <div class="field"></div>
+            <div class="deprecated-note">
+              <strong>No allowances field.</strong> The IRS removed withholding
+              allowances from the W-4 in 2020. Modern withholding uses filing
+              status, dependents, and the dollar adjustments above — so Cairn omits
+              the legacy allowances input entirely.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================== RIGHT: RESULTS ============================== -->
+      <div class="card results-card">
+        <div class="results-head">
+          <div class="eyebrow">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#15803d" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            Estimated take-home pay
+          </div>
+          <div class="takehome tabular">$5,389<span class="per"> / month</span></div>
+          <div class="annual tabular"><strong>$64,674</strong> per year &middot; that's <strong>68.1%</strong> of gross</div>
+        </div>
+
+        <div class="freq-row">
+          <span>Show as:</span>
+          <div class="segmented" id="freqSeg">
+            <button data-div="1">Annual</button>
+            <button data-div="12" class="active">Monthly</button>
+            <button data-div="24">Semi-monthly</button>
+            <button data-div="26">Bi-weekly</button>
+          </div>
+        </div>
+
+        <div class="chart-wrap">
+          <div class="chart-container"><canvas id="donut"></canvas></div>
+        </div>
+
+        <div class="breakdown" id="breakdown">
+          <!-- rows injected by JS -->
+        </div>
+
+        <div class="results-foot">
+          Estimates reflect 2026 federal and California brackets and a 401(k)
+          assumed pre-tax. They don't replace your actual pay stub — see notes below.
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================== EXPLAINER ============================== -->
+    <div class="card explainer">
+      <h2>How your paycheck is calculated</h2>
+      <p class="lead">Four things come out between gross and take-home. Here's the order Cairn applies them.</p>
+      <div class="explainer-grid">
+        <div class="explainer-block">
+          <h3><span class="step">1</span> Pre-tax deductions come off first</h3>
+          <p>
+            Your 401(k), <span class="term" title="Health Savings Account — pre-tax dollars set aside for medical costs">HSA</span>,
+            FSA, and health premiums are subtracted before any tax is figured, which
+            lowers the income your federal and state taxes are calculated on. That's
+            why contributing more here can raise take-home by less than you put in —
+            you're trading taxed cash for an untaxed balance.
+          </p>
+        </div>
+        <div class="explainer-block">
+          <h3><span class="step">2</span> Federal withholding</h3>
+          <p>
+            We estimate federal income tax from the 2026 brackets using your filing
+            status, dependents, and the standard deduction. Withholding is an estimate
+            of what you'll owe — your actual refund or bill is settled when you file.
+            There are no W-4 "allowances" anymore; dependents and any extra dollar
+            amount do that job now.
+          </p>
+        </div>
+        <div class="explainer-block">
+          <h3><span class="step">3</span> FICA — Social Security &amp; Medicare</h3>
+          <p>
+            <span class="term" title="Federal Insurance Contributions Act — payroll tax funding Social Security and Medicare">FICA</span>
+            is a flat payroll tax: 6.2% for Social Security (up to the annual wage
+            base) and 1.45% for Medicare. High earners pay an extra 0.9% Additional
+            Medicare on wages above $200,000 (single) / $250,000 (married filing
+            jointly) — we surface that line only when it applies.
+          </p>
+        </div>
+        <div class="explainer-block">
+          <h3><span class="step">4</span> State &amp; local income tax</h3>
+          <p>
+            State tax varies widely — some states (Texas, Washington, Florida) have
+            none, while others layer on city or county levies. We estimate from each
+            jurisdiction's own brackets and standard deduction. When a state has no
+            income tax, that row reads <em>"no state income tax"</em> rather than $0.
+          </p>
+        </div>
+      </div>
+
+      <div class="disclosure">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        <span>
+          These figures are <strong>estimates for planning</strong>, not tax advice.
+          Brackets reflect the <strong>2026 tax year</strong> and are bundled with the
+          app — verify against your pay stub or a tax professional before acting.
+          <a href="#" onclick="return false;">Read Cairn's full estimate disclosure →</a>
+        </span>
+      </div>
+
+      <details class="not-modeled">
+        <summary>
+          <svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          What this calculator does NOT model
+        </summary>
+        <ul>
+          <li>State Disability Insurance (CA SDI, NJ SDI, NY DBL) and state PFML deductions — withheld on top of state tax.</li>
+          <li>FICA wage-base nuance on cafeteria-plan deferrals (Cairn slightly over-collects FICA here, matching SmartAsset's simplification).</li>
+          <li><span class="term" title="Alternative Minimum Tax">AMT</span> on ISO exercises landing in the same period.</li>
+          <li>Mid-year HSA / FSA contribution changes — we apply your current monthly election across the full year.</li>
+          <li>Local rules for the ~250 city/county jurisdictions are estimates; unusual residency splits aren't handled.</li>
+        </ul>
+      </details>
+    </div>
+  </div>
+
+  <script>
+    // ============================================================
+    // Sample scenario (internally consistent with the header figure):
+    //   $95,000 gross · Single · CA · 1 dependent
+    //   401k 5% ($4,750) · HSA $100/mo ($1,200) · health $200/mo ($2,400)
+    // Annual amounts; per-period = annual / divisor.
+    // ============================================================
+    const GROSS = 95000;
+    const BREAKDOWN = [
+      // key, label, sublabel, annual $, color, sign(-1 reduces take-home), kind
+      { label: 'Gross pay',          sub: null,                       amt: 95000, color: '#cbd5e1', kind: 'gross' },
+      { label: 'Federal withholding', sub: null,                      amt: 10512, color: '#1e293b', kind: 'tax' },
+      { label: 'Social Security',     sub: '6.2% to wage base',        amt: 5890,  color: '#475569', kind: 'tax' },
+      { label: 'Medicare',            sub: '1.45%',                    amt: 1378,  color: '#64748b', kind: 'tax' },
+      { label: 'State income tax',    sub: 'California',               amt: 4196,  color: '#0ea5e9', kind: 'tax' },
+      { label: 'Local / city tax',    sub: 'none in California',       amt: 0,     color: '#7dd3fc', kind: 'tax' },
+      { label: 'Pre-tax deductions',  sub: '401(k) · HSA · health',    amt: 8350,  color: '#16a34a', kind: 'pretax' },
+      { label: 'Take-home pay',       sub: null,                       amt: 64674, color: '#16a34a', kind: 'takehome' },
+    ];
+
+    const fmt = (n) => '$' + Math.round(n).toLocaleString('en-US');
+    const pct = (n) => (n / GROSS * 100).toFixed(1) + '%';
+
+    // -------- breakdown table --------
+    function renderBreakdown(div) {
+      const el = document.getElementById('breakdown');
+      el.innerHTML = '';
+      for (const r of BREAKDOWN) {
+        const per = r.amt / div;
+        const row = document.createElement('div');
+        row.className = 'bd-row' + (r.kind === 'takehome' ? ' total' : '') + (r.kind === 'pretax' ? ' subtotal' : '');
+        const neg = (r.kind === 'tax' || r.kind === 'pretax') && r.amt > 0;
+        const sub = r.sub ? `<span class="sub">${r.sub}</span>` : '';
+        row.innerHTML = `
+          <span class="bd-swatch" style="background:${r.color}"></span>
+          <span class="bd-label">${r.label}${sub}</span>
+          <span class="bd-amt ${neg ? 'neg' : ''}">${neg ? '–' : ''}${fmt(per)}</span>
+          <span class="bd-pct">${r.kind === 'gross' ? '' : pct(r.amt)}</span>
+        `;
+        el.appendChild(row);
+      }
+    }
+
+    // -------- headline --------
+    const FREQ_LABEL = { 1: 'year', 12: 'month', 24: 'semi-monthly', 26: 'paycheck' };
+    function renderHeadline(div) {
+      const th = 64674 / div;
+      document.querySelector('.results-head .takehome').innerHTML =
+        `${fmt(th)}<span class="per"> / ${FREQ_LABEL[div]}</span>`;
+    }
+
+    // -------- donut: gross → taxes / deductions / take-home --------
+    const segments = [
+      { label: 'Take-home',           value: 64674, color: '#16a34a' },
+      { label: 'Federal',             value: 10512, color: '#1e293b' },
+      { label: 'Social Security',     value: 5890,  color: '#475569' },
+      { label: 'Medicare',            value: 1378,  color: '#64748b' },
+      { label: 'State tax',           value: 4196,  color: '#0ea5e9' },
+      { label: 'Pre-tax deductions',  value: 8350,  color: '#86efac' },
+    ];
+    const donut = new Chart(document.getElementById('donut').getContext('2d'), {
+      type: 'doughnut',
+      data: {
+        labels: segments.map((s) => s.label),
+        datasets: [{
+          data: segments.map((s) => s.value),
+          backgroundColor: segments.map((s) => s.color),
+          borderColor: '#ffffff',
+          borderWidth: 2,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: '64%',
+        plugins: {
+          legend: {
+            position: 'right',
+            labels: { boxWidth: 10, font: { size: 11 }, color: '#475569', padding: 8 },
+          },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => ` ${ctx.label}: ${fmt(ctx.parsed)} (${pct(ctx.parsed)})`,
+            },
+          },
+        },
+      },
+    });
+
+    // -------- wire the frequency segmented control --------
+    let activeDiv = 12;
+    function update(div) {
+      activeDiv = div;
+      renderHeadline(div);
+      renderBreakdown(div);
+    }
+    document.querySelectorAll('#freqSeg button').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#freqSeg button').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        update(Number(btn.dataset.div));
+      });
+    });
+
+    // Initial render (Monthly active)
+    update(12);
+  </script>
+</body>
+</html>

@@ -1,0 +1,759 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Historical Backtest — mockup</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f8fafc;
+      color: #0f172a;
+      font-variant-numeric: tabular-nums;
+    }
+    .page { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+    h1 { margin: 0 0 4px; font-size: 22px; font-weight: 600; }
+    .subtitle { color: #64748b; font-size: 14px; margin-bottom: 24px; }
+
+    .card {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .card-header {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 20px;
+    }
+    .card-title { font-size: 18px; font-weight: 600; }
+    .card-subtitle { font-size: 13px; color: #64748b; margin-top: 4px; }
+
+    .mockup-banner {
+      background: #fef3c7;
+      border-left: 3px solid #f59e0b;
+      padding: 12px 16px;
+      border-radius: 4px;
+      margin-bottom: 24px;
+      font-size: 13px;
+      color: #78350f;
+    }
+
+    /* ---- parameter controls ---- */
+    .params {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 16px;
+      align-items: end;
+    }
+    .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+    .field label {
+      font-size: 12px;
+      font-weight: 500;
+      color: #475569;
+    }
+    .field input, .field select {
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 7px 10px;
+      font-size: 14px;
+      color: #0f172a;
+      background: #fff;
+      font-variant-numeric: tabular-nums;
+      width: 100%;
+    }
+    .field input:focus, .field select:focus {
+      outline: none;
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
+    }
+    .field .hint { font-size: 11px; color: #94a3b8; }
+    .mix-row { display: flex; align-items: center; gap: 6px; }
+    .mix-row input { width: 52px; text-align: right; }
+    .mix-row .pct { font-size: 13px; color: #64748b; }
+    .mix-row .slash { color: #cbd5e1; }
+    .run-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 18px;
+      padding-top: 18px;
+      border-top: 1px solid #f1f5f9;
+    }
+    .btn-primary {
+      background: #1e293b;
+      color: #fff;
+      border: 0;
+      border-radius: 6px;
+      padding: 9px 18px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .btn-primary:hover { background: #0f172a; }
+    .run-meta { font-size: 13px; color: #64748b; }
+    .run-meta strong { color: #0f172a; font-weight: 600; }
+
+    /* ---- segmented viz toggle ---- */
+    .segmented {
+      display: inline-flex;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .segmented button {
+      border: 0;
+      background: #fff;
+      padding: 6px 16px;
+      font-size: 13px;
+      cursor: pointer;
+      color: #475569;
+      border-right: 1px solid #cbd5e1;
+    }
+    .segmented button:last-child { border-right: 0; }
+    .segmented button.active { background: #2563eb; color: #fff; }
+    .segmented button:hover:not(.active) { background: #f1f5f9; }
+
+    .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+    .toggle-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid #cbd5e1;
+      background: #fff;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 13px;
+      color: #475569;
+      cursor: pointer;
+    }
+    .toggle-pill:hover { background: #f1f5f9; }
+
+    .chart-container { position: relative; height: 380px; }
+    .mode-caption {
+      font-size: 13px;
+      color: #475569;
+      background: #f1f5f9;
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin-top: 14px;
+      line-height: 1.5;
+    }
+    .mode-caption code {
+      background: #fff; padding: 1px 6px; border-radius: 3px;
+      font-family: ui-monospace, SFMono-Regular, monospace; font-size: 12px;
+    }
+    .legend-row {
+      display: flex; flex-wrap: wrap; gap: 16px;
+      margin-top: 12px; font-size: 12px; color: #64748b;
+    }
+    .legend-row .item { display: flex; align-items: center; gap: 6px; }
+    .legend-row .line-swatch { width: 18px; height: 3px; border-radius: 2px; display: inline-block; }
+    .legend-row .band-swatch { width: 14px; height: 10px; border-radius: 2px; display: inline-block; }
+
+    /* ---- outcome summary ---- */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 1fr;
+      gap: 16px;
+      align-items: stretch;
+    }
+    @media (max-width: 760px) { .summary-grid { grid-template-columns: 1fr; } }
+
+    .success-hero { display: flex; flex-direction: column; gap: 6px; }
+    .success-figure {
+      font-size: 52px;
+      font-weight: 700;
+      line-height: 1;
+      color: #16a34a;
+      letter-spacing: -0.02em;
+    }
+    .success-sub { font-size: 14px; color: #475569; }
+    .success-note { font-size: 12px; color: #94a3b8; line-height: 1.5; }
+    .success-bar {
+      height: 8px; border-radius: 4px; background: #e2e8f0;
+      overflow: hidden; margin-top: 8px;
+    }
+    .success-bar > span { display: block; height: 100%; background: #16a34a; }
+
+    .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 18px; }
+    .tile {
+      border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;
+      background: #f8fafc;
+    }
+    .tile .tlabel { font-size: 11px; color: #64748b; margin-bottom: 4px; }
+    .tile .tval { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+    .tile.worst .tval { color: #dc2626; }
+    .tile.median .tval { color: #0f172a; }
+    .tile.best .tval { color: #16a34a; }
+    .tile .tmeta { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+
+    .hist-wrap { display: flex; flex-direction: column; }
+    .hist-title { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+    .hist-sub { font-size: 12px; color: #94a3b8; margin-bottom: 10px; }
+    .hist-container { position: relative; height: 200px; }
+
+    /* ---- disclosure ---- */
+    .disclosure {
+      background: #fffbeb;
+      border: 1px solid #f59e0b;
+      border-radius: 8px;
+      padding: 18px 20px;
+    }
+    .disclosure h3 {
+      margin: 0 0 8px; font-size: 14px; font-weight: 600; color: #78350f;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .disclosure .badge {
+      font-size: 10px; font-weight: 600; letter-spacing: 0.04em;
+      text-transform: uppercase; color: #92400e;
+      background: #fde68a; border-radius: 4px; padding: 2px 6px;
+    }
+    .disclosure p { margin: 0 0 8px; font-size: 13px; color: #713f12; line-height: 1.6; }
+    .disclosure p:last-child { margin-bottom: 0; }
+    .disclosure strong { color: #78350f; }
+
+    .footer-note { font-size: 12px; color: #94a3b8; margin-top: 12px; line-height: 1.6; }
+    .section-label {
+      font-size: 11px; font-weight: 600; letter-spacing: 0.05em;
+      text-transform: uppercase; color: #94a3b8; margin: 0 0 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="mockup-banner">
+      <strong>Mockup only.</strong> Open this file in a browser to preview the v1.1
+      <em>Historical Backtest</em> card before it's added to the app. Uses Chart.js via
+      CDN; no app code changed. Lives as a new wide card on <code>/calculators</code>.
+    </div>
+
+    <h1>Historical Backtest</h1>
+    <div class="subtitle">
+      Replays your plan against every U.S. market starting year from 1871 onward.
+      How would this plan have fared through the Depression, the 1970s, and 2000–2008?
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- PARAMETER CONTROLS                                           -->
+    <!-- ============================================================ -->
+    <div class="card">
+      <p class="section-label">Plan parameters</p>
+      <div class="params">
+        <div class="field">
+          <label for="p-portfolio">Starting portfolio</label>
+          <input id="p-portfolio" type="text" value="$1,500,000" />
+        </div>
+        <div class="field">
+          <label for="p-spending">Annual spending</label>
+          <input id="p-spending" type="text" value="$60,000" />
+          <span class="hint">4.0% of portfolio</span>
+        </div>
+        <div class="field">
+          <label for="p-length">Retirement length</label>
+          <input id="p-length" type="text" value="30 years" />
+        </div>
+        <div class="field">
+          <label for="p-strategy">Withdrawal strategy</label>
+          <select id="p-strategy">
+            <option selected>4% rule (Bengen)</option>
+            <option>Constant dollar</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Asset mix</label>
+          <div class="mix-row">
+            <input type="text" value="75" /><span class="pct">% stocks</span>
+            <span class="slash">/</span>
+            <input type="text" value="25" /><span class="pct">% bonds</span>
+          </div>
+          <span class="hint">Annual rebalance</span>
+        </div>
+      </div>
+      <div class="run-row">
+        <button class="btn-primary">Run backtest</button>
+        <span class="run-meta">
+          Last run against <strong>121 historical periods</strong> · S&amp;P 500 + 10-yr
+          Treasury, real (inflation-adjusted) dollars · data 1871–2025
+        </span>
+      </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- SIGNATURE CHART + VIZ TOGGLE                                 -->
+    <!-- ============================================================ -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Portfolio value over retirement</div>
+          <div class="card-subtitle" id="chartSubtitle">
+            One line per historical starting year · annual end-of-year balances
+          </div>
+        </div>
+        <div class="controls">
+          <div class="segmented" id="vizToggle">
+            <button data-mode="lines" class="active">Lines</button>
+            <button data-mode="bands">Bands</button>
+          </div>
+          <button class="toggle-pill" id="dollarToggle" title="Mockup: static">
+            Real $ ▾
+          </button>
+        </div>
+      </div>
+
+      <div class="chart-container">
+        <canvas id="backtestCanvas"></canvas>
+      </div>
+
+      <div class="legend-row" id="legendRow"><!-- populated by JS --></div>
+
+      <div class="mode-caption" id="modeCaption"><!-- populated by JS --></div>
+
+      <div class="footer-note">
+        Sample data: 121 simulated 30-year paths (one per start year 1871–1995),
+        decimated to annual points (~31 pts/line) per the FireCalc performance note.
+        The 1966 cohort is highlighted as the historical worst start; the median
+        path is drawn in full-strength blue.
+      </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- OUTCOME SUMMARY                                              -->
+    <!-- ============================================================ -->
+    <div class="card">
+      <p class="section-label">Outcome</p>
+      <div class="summary-grid">
+        <div class="success-hero">
+          <div class="success-figure">94%</div>
+          <div class="success-sub">
+            <strong>113 of 121</strong> historical periods survived the full 30 years.
+          </div>
+          <div class="success-bar"><span style="width:93.4%"></span></div>
+          <div class="success-note">
+            This is a <strong>count of past outcomes</strong>, not a probability of
+            future success. 8 starting years would have run the portfolio to $0 before
+            year 30 — the worst clustered around 1965–1969.
+          </div>
+          <div class="tiles">
+            <div class="tile worst">
+              <div class="tlabel">Worst ending</div>
+              <div class="tval">$0</div>
+              <div class="tmeta">started 1966 · depleted yr 27</div>
+            </div>
+            <div class="tile median">
+              <div class="tlabel">Median ending</div>
+              <div class="tval">$2.4M</div>
+              <div class="tmeta">across 121 starts</div>
+            </div>
+            <div class="tile best">
+              <div class="tlabel">Best ending</div>
+              <div class="tval">$9.2M</div>
+              <div class="tmeta">started 1879</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="hist-wrap">
+          <div class="hist-title">Distribution of ending balances</div>
+          <div class="hist-sub">Real dollars at year 30, across 121 starts</div>
+          <div class="hist-container">
+            <canvas id="histCanvas"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- DISCLOSURE                                                   -->
+    <!-- ============================================================ -->
+    <div class="disclosure">
+      <h3>About this backtest <span class="badge">Not a prediction</span></h3>
+      <p>
+        <strong>This is history, not a forecast.</strong> For every starting year from
+        1871 onward, this replays <em>your</em> plan using <em>that year's</em> actual
+        market returns and inflation. "Success rate" is the count of those past periods
+        whose portfolio survived the full horizon — it is <strong>not a probability</strong>
+        that your plan will succeed.
+      </p>
+      <p>
+        <strong>Past results do not predict future returns.</strong> The U.S. market has
+        had 121 distinct 30-year starting windows; the next 30 years will be a 122nd, and
+        it is not in this dataset. Backtests systematically miss tail risks that haven't
+        happened yet.
+      </p>
+      <p>
+        <strong>Known simplifications.</strong> Tax brackets are held at <strong>2026
+        levels</strong> across the entire 1871–2025 replay — historical brackets are not
+        reconstructed, so any income tax treatment is approximate. Returns are nominal
+        index returns before fees and fund-specific costs; your real portfolio diverges
+        based on expense ratios and asset location. See <em>Settings → Disclosures</em>
+        for the full assumption set.
+      </p>
+    </div>
+  </div>
+
+  <script>
+    // ============================================================
+    // Helpers
+    // ============================================================
+    function formatAxisDollar(v) {
+      const abs = Math.abs(v);
+      if (abs >= 1_000_000) {
+        const m = v / 1_000_000;
+        return '$' + (Number.isInteger(m) ? m.toFixed(0) : m.toFixed(1)) + 'M';
+      }
+      if (abs >= 1_000) {
+        const k = v / 1_000;
+        return '$' + (Number.isInteger(k) ? k.toFixed(0) : k.toFixed(1)) + 'k';
+      }
+      return '$' + Math.round(v);
+    }
+
+    // ============================================================
+    // Cairn palette (mirrors src/components/charts/palette.ts CHART_PALETTE)
+    // ============================================================
+    const PALETTE = {
+      blue:   '#4c78a8',
+      green:  '#54a24b',
+      yellow: '#eeca3b',
+      orange: '#f58518',
+      purple: '#b279a2',
+      pink:   '#ff9da6',
+      red:    '#e45756',
+    };
+    // Single muted color for the spaghetti lines + opacity ramp, per the
+    // FireCalc research recommendation (monochrome, not color-per-year).
+    const SPAGHETTI_RGB = '76, 120, 168';      // = #4c78a8 (blue)
+    const WORST_COLOR   = '#dc2626';           // destructive — the failure path
+    const MEDIAN_COLOR  = '#1e293b';           // slate-800, full strength
+
+    // ============================================================
+    // Sample backtest data
+    // ============================================================
+    // 121 historical 30-year paths, annual end-of-year balances ($, real).
+    // Seeded so each "start year" gets a distinct but believable trajectory:
+    // most grow, a tail of ~8 deplete to $0 (the 1965-69 cluster).
+    const HORIZON = 30;                 // years
+    const N_STARTS = 121;               // 1871..1995 windows (illustrative)
+    const START_BASE = 1871;
+    const PORTFOLIO0 = 1_500_000;
+
+    // Deterministic PRNG so the mockup renders identically each load.
+    function mulberry32(seed) {
+      return function () {
+        seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+        let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    // Build one path. `failBias` < 0 nudges toward depletion.
+    // Constants tuned so the cohort lands on the headline figures:
+    // 113/121 survive, median ending ~$2.4M, best ~$9M.
+    function buildPath(seedRand, failBias) {
+      const spend = 60_000;             // constant-dollar (real) withdrawal
+      let bal = PORTFOLIO0;
+      const out = [bal];
+      for (let y = 1; y <= HORIZON; y++) {
+        // real annual return ~ 3.8% + bias ± ~8.5% — believable post-spend drift
+        const r = (seedRand() - 0.5);
+        const ret = 0.038 + failBias + r * 0.17;
+        bal = Math.max(0, (bal - spend) * (1 + ret));
+        out.push(Math.round(bal));
+      }
+      return out;
+    }
+
+    // Generate the cohort. Mark ~8 as failures (deplete before yr 30).
+    const FAILED_STARTS = new Set();
+    function buildCohort() {
+      const paths = [];
+      // 8 failing start years clustered 1965-69 (offsets 94..98) + a couple early.
+      const failOffsets = [58, 94, 95, 96, 97, 98, 108, 120];
+      failOffsets.forEach((o) => FAILED_STARTS.add(o));
+      for (let i = 0; i < N_STARTS; i++) {
+        const rand = mulberry32(1000 + i * 7);
+        const failing = FAILED_STARTS.has(i);
+        const bias = failing ? -0.075 : 0.004 + (i % 11) * 0.0028;
+        let path = buildPath(rand, bias);
+        // Force failures to actually hit 0 and stay there.
+        if (failing) {
+          const dieYr = 22 + (i % 6);
+          for (let y = dieYr; y <= HORIZON; y++) path[y] = 0;
+          for (let y = Math.max(1, dieYr - 3); y < dieYr; y++) {
+            path[y] = Math.round(path[y] * (1 - (y - (dieYr - 3)) * 0.28));
+          }
+        }
+        paths.push(path);
+      }
+      return paths;
+    }
+    const COHORT = buildPath ? buildCohort() : [];
+    const YEAR_LABELS = Array.from({ length: HORIZON + 1 }, (_, y) => y);
+
+    // The 1966 worst-start index (offset 95 from 1871).
+    const WORST_INDEX = 95;
+
+    // Percentiles across the cohort at each year-into-retirement.
+    function percentileAt(yearIdx, p) {
+      const vals = COHORT.map((path) => path[yearIdx]).sort((a, b) => a - b);
+      const rank = (p / 100) * (vals.length - 1);
+      const lo = Math.floor(rank), hi = Math.ceil(rank);
+      if (lo === hi) return vals[lo];
+      return vals[lo] + (vals[hi] - vals[lo]) * (rank - lo);
+    }
+    function percentileSeries(p) {
+      return YEAR_LABELS.map((_, y) => Math.round(percentileAt(y, p)));
+    }
+    const P10 = percentileSeries(10);
+    const P25 = percentileSeries(25);
+    const P50 = percentileSeries(50);
+    const P75 = percentileSeries(75);
+    const P90 = percentileSeries(90);
+
+    // ============================================================
+    // Dataset builders
+    // ============================================================
+    function buildLinesDatasets() {
+      const ds = [];
+      // One thin, low-opacity line per starting year.
+      COHORT.forEach((path, i) => {
+        if (i === WORST_INDEX) return; // drawn separately on top
+        ds.push({
+          label: `Start ${START_BASE + i}`,
+          data: path,
+          borderColor: `rgba(${SPAGHETTI_RGB}, 0.16)`,
+          borderWidth: 1,
+          pointRadius: 0,
+          fill: false,
+          tension: 0.15,
+          order: 5,
+        });
+      });
+      // Worst start (1966) — highlighted in destructive red.
+      ds.push({
+        label: 'Worst start (1966)',
+        data: COHORT[WORST_INDEX],
+        borderColor: WORST_COLOR,
+        borderWidth: 2,
+        pointRadius: 0,
+        fill: false,
+        tension: 0.15,
+        order: 1,
+      });
+      // Median path — full-strength, prominent.
+      ds.push({
+        label: 'Median path',
+        data: P50,
+        borderColor: MEDIAN_COLOR,
+        borderWidth: 2.75,
+        pointRadius: 0,
+        fill: false,
+        tension: 0.15,
+        order: 0,
+      });
+      return ds;
+    }
+
+    function buildBandsDatasets() {
+      // Filled percentile fan: 10–90 (lightest), 25–75 (mid), median line.
+      // Implemented as stacked "floor + thickness" areas so the fill sits
+      // between percentile boundaries rather than down to the axis.
+      const floor10 = P10;
+      const band10to25 = P25.map((v, i) => v - P10[i]);
+      const band25to75 = P75.map((v, i) => v - P25[i]);
+      const band75to90 = P90.map((v, i) => v - P75[i]);
+
+      return [
+        // invisible floor up to P10
+        {
+          label: '_floor', data: floor10, borderWidth: 0, pointRadius: 0,
+          fill: false, backgroundColor: 'transparent', stack: 'fan',
+          tension: 0.2, _hidden: true,
+        },
+        // 10–25 band
+        {
+          label: '10th–25th', data: band10to25, borderWidth: 0, pointRadius: 0,
+          fill: true, backgroundColor: `rgba(${SPAGHETTI_RGB}, 0.12)`, stack: 'fan',
+          tension: 0.2,
+        },
+        // 25–75 band (interquartile — darkest)
+        {
+          label: '25th–75th', data: band25to75, borderWidth: 0, pointRadius: 0,
+          fill: true, backgroundColor: `rgba(${SPAGHETTI_RGB}, 0.28)`, stack: 'fan',
+          tension: 0.2,
+        },
+        // 75–90 band
+        {
+          label: '75th–90th', data: band75to90, borderWidth: 0, pointRadius: 0,
+          fill: true, backgroundColor: `rgba(${SPAGHETTI_RGB}, 0.12)`, stack: 'fan',
+          tension: 0.2,
+        },
+        // Median line (not stacked — its own value)
+        {
+          label: 'Median (50th)', data: P50, borderColor: MEDIAN_COLOR,
+          borderWidth: 2.75, pointRadius: 0, fill: false, tension: 0.2,
+        },
+      ];
+    }
+
+    // ============================================================
+    // Render the main chart
+    // ============================================================
+    let backtestChart = null;
+    let activeMode = 'lines';
+
+    const MODE_CAPTIONS = {
+      lines: 'Each faint line is one historical starting year — what a retiree who began this exact plan in 1871, 1872, … 1995 would have experienced. The spread <em>is</em> the message: averages hide how differently the same plan plays out depending on when you start. <code>Lines</code> answers "how bad was the worst case?"',
+      bands: 'The shaded fan shows where outcomes clustered: the dark middle band is the 25th–75th percentile, the lighter bands reach the 10th and 90th. The line is the median path. <code>Bands</code> answers "what range should I expect?" — but reads more like a forecast cone, so it deliberately omits which specific years failed.',
+    };
+
+    const LEGENDS = {
+      lines: [
+        { type: 'line', color: MEDIAN_COLOR, label: 'Median path' },
+        { type: 'line', color: WORST_COLOR, label: 'Worst start (1966)' },
+        { type: 'line', color: `rgba(${SPAGHETTI_RGB}, 0.45)`, label: '120 other historical starts' },
+      ],
+      bands: [
+        { type: 'line', color: MEDIAN_COLOR, label: 'Median (50th pct)' },
+        { type: 'band', color: `rgba(${SPAGHETTI_RGB}, 0.28)`, label: '25th–75th pct' },
+        { type: 'band', color: `rgba(${SPAGHETTI_RGB}, 0.12)`, label: '10th–90th pct' },
+      ],
+    };
+
+    function renderLegend() {
+      const row = document.getElementById('legendRow');
+      row.innerHTML = LEGENDS[activeMode].map((l) => {
+        const sw = l.type === 'line'
+          ? `<span class="line-swatch" style="background:${l.color}"></span>`
+          : `<span class="band-swatch" style="background:${l.color}"></span>`;
+        return `<span class="item">${sw}${l.label}</span>`;
+      }).join('');
+    }
+
+    function renderBacktestChart() {
+      const ctx = document.getElementById('backtestCanvas').getContext('2d');
+      const datasets = activeMode === 'lines' ? buildLinesDatasets() : buildBandsDatasets();
+      if (backtestChart) backtestChart.destroy();
+
+      backtestChart = new Chart(ctx, {
+        type: 'line',
+        data: { labels: YEAR_LABELS, datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,           // project convention: isAnimationActive=false
+          interaction: { mode: 'nearest', axis: 'x', intersect: false },
+          plugins: {
+            legend: { display: false },   // custom legend row below the chart
+            tooltip: {
+              filter: (item) => !item.dataset._hidden && item.dataset.label !== '_floor',
+              callbacks: {
+                title: (items) => `Year ${items[0].label} of retirement`,
+                label: (c) => {
+                  if (activeMode === 'bands') {
+                    // Show the boundary value, not the stacked thickness.
+                    const lbl = c.dataset.label;
+                    const v = c.parsed.y;
+                    if (lbl === 'Median (50th)') return ` Median: ${formatAxisDollar(v)}`;
+                    return ` ${lbl}`;
+                  }
+                  return ` ${c.dataset.label}: ${formatAxisDollar(c.parsed.y)}`;
+                },
+              },
+            },
+          },
+          scales: {
+            x: {
+              title: { display: true, text: 'Years into retirement', font: { size: 11 }, color: '#94a3b8' },
+              grid: { display: false },
+              ticks: { autoSkip: true, maxRotation: 0, font: { size: 11 }, color: '#64748b' },
+            },
+            y: {
+              stacked: activeMode === 'bands',
+              grid: { color: '#e2e8f0' },
+              ticks: { font: { size: 11 }, color: '#64748b', callback: (v) => formatAxisDollar(v) },
+            },
+          },
+        },
+      });
+
+      document.getElementById('modeCaption').innerHTML = MODE_CAPTIONS[activeMode];
+      document.getElementById('chartSubtitle').textContent = activeMode === 'lines'
+        ? 'One line per historical starting year · annual end-of-year balances'
+        : 'Percentile fan across 121 historical starts · annual end-of-year balances';
+      renderLegend();
+    }
+
+    // ============================================================
+    // Histogram of ending balances
+    // ============================================================
+    function renderHistogram() {
+      const finals = COHORT.map((p) => p[HORIZON]);
+      // Buckets: $0 (failures), then $0.5M-wide bins up to $8M+.
+      const edges = [0, 1, 1_000_000, 2_000_000, 3_000_000, 4_000_000,
+                     5_000_000, 6_000_000, 7_000_000, 9_999_999_999];
+      const labels = ['$0', '<$1M', '$1–2M', '$2–3M', '$3–4M', '$4–5M', '$5–6M', '$6–7M', '$7M+'];
+      const counts = new Array(labels.length).fill(0);
+      finals.forEach((v) => {
+        if (v === 0) { counts[0]++; return; }
+        for (let b = 1; b < edges.length - 1; b++) {
+          if (v >= edges[b] && v < edges[b + 1]) { counts[b]++; break; }
+        }
+      });
+      const colors = counts.map((_, i) => (i === 0 ? '#dc2626' : PALETTE.blue));
+
+      const ctx = document.getElementById('histCanvas').getContext('2d');
+      new Chart(ctx, {
+        type: 'bar',
+        data: { labels, datasets: [{ data: counts, backgroundColor: colors, borderRadius: 3, maxBarThickness: 34 }] },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                title: (items) => items[0].label === '$0' ? 'Failed (depleted)' : `Ending balance ${items[0].label}`,
+                label: (c) => ` ${c.parsed.y} of ${N_STARTS} starts`,
+              },
+            },
+          },
+          scales: {
+            x: { grid: { display: false }, ticks: { font: { size: 10 }, color: '#64748b', maxRotation: 0, autoSkip: false } },
+            y: {
+              grid: { color: '#e2e8f0' }, beginAtZero: true,
+              ticks: { font: { size: 10 }, color: '#64748b', precision: 0, stepSize: 5 },
+              title: { display: true, text: '# of start years', font: { size: 10 }, color: '#94a3b8' },
+            },
+          },
+        },
+      });
+    }
+
+    // ============================================================
+    // Wire up
+    // ============================================================
+    document.querySelectorAll('#vizToggle button').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#vizToggle button').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        activeMode = btn.dataset.mode;
+        renderBacktestChart();
+      });
+    });
+
+    renderBacktestChart();
+    renderHistogram();
+  </script>
+</body>
+</html>

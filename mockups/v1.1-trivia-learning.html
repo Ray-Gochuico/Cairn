@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>v1.1 — Daily Trivia / Learning — mockup</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f8fafc;
+      color: #0f172a;
+      line-height: 1.5;
+    }
+    .page { max-width: 1100px; margin: 0 auto; padding: 32px 24px 64px; }
+    h1 { margin: 0 0 4px; font-size: 22px; font-weight: 600; }
+    .subtitle { color: #64748b; font-size: 14px; margin-bottom: 24px; }
+
+    .mockup-banner {
+      background: #fffbeb;
+      border-left: 3px solid #f59e0b;
+      padding: 12px 16px;
+      border-radius: 4px;
+      margin-bottom: 28px;
+      font-size: 13px;
+      color: #78350f;
+    }
+
+    /* ── Surface labels (which app surface this block represents) ── */
+    .surface-label {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      margin: 36px 0 14px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .surface-label:first-of-type { margin-top: 8px; }
+    .surface-label .tag {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #fff;
+      background: #1e293b;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .surface-label .name { font-size: 16px; font-weight: 600; }
+    .surface-label .route {
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    /* ── Card primitive (matches shadcn New York card) ── */
+    .card {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 24px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .card.soft-info { background: #f0f9ff; border-color: rgba(14,165,233,0.3); }
+
+    /* ── /learn page header ── */
+    .learn-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+    .learn-header h2 { margin: 0; font-size: 20px; font-weight: 600; }
+    .learn-header .sub { font-size: 13px; color: #64748b; margin-top: 2px; }
+    .streak {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #64748b;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 999px;
+      padding: 5px 12px;
+      white-space: nowrap;
+    }
+    .streak .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #f59e0b;
+      display: inline-block;
+    }
+    .streak strong { color: #0f172a; font-weight: 600; }
+
+    /* ── Difficulty badge ── */
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 3px 9px;
+      border-radius: 999px;
+    }
+    .badge.beginner { background: #f0f9ff; color: #0369a1; border: 1px solid rgba(14,165,233,0.35); }
+    .badge.advanced { background: #f1f5f9; color: #334155; border: 1px solid #cbd5e1; }
+
+    /* ── Question card internals ── */
+    .q-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .q-meta .tags { font-size: 12px; color: #94a3b8; }
+    .q-prompt {
+      font-size: 17px;
+      font-weight: 600;
+      color: #0f172a;
+      margin: 0 0 18px;
+      line-height: 1.45;
+    }
+
+    .choices { display: flex; flex-direction: column; gap: 10px; }
+    .choice {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      width: 100%;
+      text-align: left;
+      border: 1px solid #e2e8f0;
+      background: #fff;
+      border-radius: 8px;
+      padding: 13px 14px;
+      font-size: 14px;
+      color: #0f172a;
+      cursor: pointer;
+      transition: background 0.12s, border-color 0.12s;
+    }
+    .choice:hover { background: #f8fafc; border-color: #cbd5e1; }
+    .choice .key {
+      flex-shrink: 0;
+      width: 22px; height: 22px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 600;
+      color: #64748b;
+    }
+    .choice .body { flex: 1; }
+    .choice .mark { flex-shrink: 0; font-size: 15px; line-height: 22px; }
+
+    /* answered states */
+    .choice.correct {
+      background: #f0fdf4;
+      border-color: #16a34a;
+    }
+    .choice.correct .key { border-color: #16a34a; background: #16a34a; color: #fff; }
+    .choice.correct .mark { color: #16a34a; }
+    .choice.wrong {
+      background: #fef2f2;
+      border-color: #dc2626;
+    }
+    .choice.wrong .key { border-color: #dc2626; background: #dc2626; color: #fff; }
+    .choice.wrong .mark { color: #dc2626; }
+    .choice.dim { opacity: 0.55; }
+    .choice[disabled] { cursor: default; }
+    .choice[disabled]:hover { background: #fff; border-color: #e2e8f0; }
+    .choice.correct[disabled]:hover { background: #f0fdf4; border-color: #16a34a; }
+    .choice.wrong[disabled]:hover { background: #fef2f2; border-color: #dc2626; }
+
+    /* ── Explanation panel (after answer) ── */
+    .explain {
+      margin-top: 18px;
+      border-radius: 8px;
+      padding: 16px;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    .explain.correct { background: #f0fdf4; border: 1px solid rgba(22,163,74,0.3); }
+    .explain.wrong { background: #fef2f2; border: 1px solid rgba(220,38,38,0.3); }
+    .explain .verdict {
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 8px;
+    }
+    .explain.correct .verdict { color: #15803d; }
+    .explain.wrong .verdict { color: #b91c1c; }
+    .explain p { margin: 0 0 8px; color: #334155; }
+    .explain .source {
+      font-size: 12px;
+      color: #94a3b8;
+      margin: 8px 0 0;
+    }
+    .readmore {
+      color: #2563eb;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .readmore:hover { text-decoration: underline; }
+
+    /* glossary-term inline affordance (mirrors TermTooltip dotted underline) */
+    .term {
+      border-bottom: 1px dashed #94a3b8;
+      cursor: help;
+    }
+
+    /* ── Toggle for showing answer states in the mockup ── */
+    .state-toggle {
+      display: inline-flex;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 14px;
+    }
+    .state-toggle button {
+      border: 0;
+      background: #fff;
+      padding: 6px 14px;
+      font-size: 13px;
+      cursor: pointer;
+      color: #475569;
+      border-right: 1px solid #cbd5e1;
+    }
+    .state-toggle button:last-child { border-right: 0; }
+    .state-toggle button.active { background: #1e293b; color: #fff; }
+    .state-toggle button:hover:not(.active) { background: #f1f5f9; }
+
+    .mock-note {
+      font-size: 12px;
+      color: #94a3b8;
+      margin: 6px 0 16px;
+      font-style: italic;
+    }
+
+    /* ── Difficulty preference control ── */
+    .pref {
+      margin-top: 22px;
+      padding-top: 18px;
+      border-top: 1px solid #f1f5f9;
+    }
+    .pref .label { font-size: 13px; font-weight: 600; color: #334155; margin-bottom: 4px; }
+    .pref .hint { font-size: 12px; color: #94a3b8; margin-bottom: 10px; }
+    .segmented {
+      display: inline-flex;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .segmented button {
+      border: 0;
+      background: #fff;
+      padding: 7px 16px;
+      font-size: 13px;
+      cursor: pointer;
+      color: #475569;
+      border-right: 1px solid #cbd5e1;
+    }
+    .segmented button:last-child { border-right: 0; }
+    .segmented button.active { background: #2563eb; color: #fff; }
+    .segmented button:hover:not(.active) { background: #f1f5f9; }
+
+    /* ── Done / come-back-tomorrow state ── */
+    .done-state {
+      text-align: center;
+      padding: 30px 24px;
+    }
+    .done-state .check {
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      background: #f0fdf4;
+      border: 1px solid rgba(22,163,74,0.3);
+      color: #16a34a;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      margin-bottom: 12px;
+    }
+    .done-state .title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+    .done-state .body { font-size: 13px; color: #64748b; max-width: 380px; margin: 0 auto; }
+
+    .disclosure-foot {
+      font-size: 12px;
+      color: #94a3b8;
+      margin-top: 18px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* ── Dashboard widget (NextMoveCard-sized) ── */
+    .widget-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 720px) { .widget-grid { grid-template-columns: 1fr; } }
+    .widget {
+      background: #f0f9ff;
+      border: 1px solid rgba(14,165,233,0.3);
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .widget.done { background: #f0fdf4; border-color: rgba(22,163,74,0.3); }
+    .widget .eyebrow {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .widget .eyebrow .lhs { color: #0369a1; }
+    .widget.done .eyebrow .lhs { color: #15803d; }
+    .widget .eyebrow a { font-size: 11px; color: #64748b; text-decoration: underline; }
+    .widget .w-badge {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 2px 7px;
+      border-radius: 999px;
+      margin-top: 8px;
+      background: #fff;
+      color: #0369a1;
+      border: 1px solid rgba(14,165,233,0.35);
+    }
+    .widget .w-prompt {
+      font-size: 14px;
+      font-weight: 600;
+      color: #0f172a;
+      margin: 8px 0 0;
+      line-height: 1.4;
+    }
+    .widget .w-cta {
+      display: inline-block;
+      margin-top: 12px;
+      font-size: 14px;
+      font-weight: 500;
+      color: #2563eb;
+      text-decoration: none;
+    }
+    .widget .w-cta:hover { text-decoration: underline; }
+    .widget .w-done-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 6px 0 0;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      color: #15803d;
+    }
+    .widget .w-done-body { font-size: 12px; color: #64748b; margin-top: 4px; }
+    .widget .w-streak { font-size: 11px; color: #64748b; margin-top: 10px; }
+
+    .col-caption {
+      font-size: 12px;
+      color: #64748b;
+      margin: 0 0 8px;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="mockup-banner">
+      <strong>Mockup only.</strong> Static HTML preview of the v1.1
+      <strong>Daily Trivia / Financial-Literacy Learning</strong> feature — one
+      <code>/learn</code> page + a Dashboard widget. No app code changed. Light
+      mode shown; dark-mode notes in the design doc. Answer-state toggles below
+      are mockup affordances, not real controls.
+    </div>
+
+    <h1>Daily Trivia / Learning</h1>
+    <div class="subtitle">
+      Two surfaces, one feature. Calm by design — a quiet daily question, not a
+      gamified streak machine.
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <!-- SURFACE 1 — /learn page                                           -->
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <div class="surface-label">
+      <span class="tag">Surface 1</span>
+      <span class="name">The Learn page</span>
+      <span class="route">/learn · Planning group in the sidebar</span>
+    </div>
+
+    <div class="card">
+      <div class="learn-header">
+        <div>
+          <h2>Learn</h2>
+          <div class="sub">One question a day to build financial vocabulary and intuition.</div>
+        </div>
+        <span class="streak" title="Days in a row you've answered. Resets quietly if you miss a few.">
+          <span class="dot"></span> <strong>7</strong>-day streak
+        </span>
+      </div>
+
+      <!-- Mockup-only: switch between the three live states of the card -->
+      <div class="state-toggle" id="learnStateToggle">
+        <button data-state="unanswered" class="active">Unanswered</button>
+        <button data-state="correct">Answered · correct</button>
+        <button data-state="wrong">Answered · incorrect</button>
+        <button data-state="done">Done for today</button>
+      </div>
+      <div class="mock-note">↑ Mockup control — flips the question card between its real states.</div>
+
+      <!-- ── State A: unanswered (Beginner example) ── -->
+      <div id="state-unanswered">
+        <div class="q-meta">
+          <span class="badge beginner">Beginner</span>
+          <span class="tags">Borrowing · rates</span>
+        </div>
+        <p class="q-prompt">What does APR stand for?</p>
+        <div class="choices">
+          <button class="choice"><span class="key">A</span><span class="body">Annual Percentage Rate</span></button>
+          <button class="choice"><span class="key">B</span><span class="body">Average Payment Ratio</span></button>
+          <button class="choice"><span class="key">C</span><span class="body">Adjusted Principal Reduction</span></button>
+          <button class="choice"><span class="key">D</span><span class="body">Annualized Portfolio Return</span></button>
+        </div>
+      </div>
+
+      <!-- ── State B: answered correctly (Beginner) ── -->
+      <div id="state-correct" style="display:none;">
+        <div class="q-meta">
+          <span class="badge beginner">Beginner</span>
+          <span class="tags">Borrowing · rates</span>
+        </div>
+        <p class="q-prompt">What does APR stand for?</p>
+        <div class="choices">
+          <button class="choice correct" disabled><span class="key">A</span><span class="body">Annual Percentage Rate</span><span class="mark">✓</span></button>
+          <button class="choice dim" disabled><span class="key">B</span><span class="body">Average Payment Ratio</span></button>
+          <button class="choice dim" disabled><span class="key">C</span><span class="body">Adjusted Principal Reduction</span></button>
+          <button class="choice dim" disabled><span class="key">D</span><span class="body">Annualized Portfolio Return</span></button>
+        </div>
+        <div class="explain correct">
+          <div class="verdict">✓ Correct</div>
+          <p>
+            <strong>APR (Annual Percentage Rate)</strong> is the yearly cost of
+            borrowing, including interest plus most fees, expressed as a single
+            rate. When you're <em>earning</em> rather than borrowing, compare
+            <span class="term" title="Annual Percentage Yield — the effective annual return after compounding.">APY</span>
+            instead, since it accounts for compounding.
+          </p>
+          <a class="readmore" href="#">Read more about APY →</a>
+          <p class="source">Source: Truth in Lending Act (Regulation Z)</p>
+        </div>
+      </div>
+
+      <!-- ── State C: answered incorrectly (Advanced example) ── -->
+      <div id="state-wrong" style="display:none;">
+        <div class="q-meta">
+          <span class="badge advanced">Advanced</span>
+          <span class="tags">Roth · conversions · tax</span>
+        </div>
+        <p class="q-prompt">
+          A backdoor Roth IRA is subject to which IRS rule that can create
+          unexpected taxes if you hold pre-tax IRA balances?
+        </p>
+        <div class="choices">
+          <button class="choice dim" disabled><span class="key">A</span><span class="body">The wash-sale rule</span></button>
+          <button class="choice wrong" disabled><span class="key">B</span><span class="body">The step-transaction doctrine</span><span class="mark">✕</span></button>
+          <button class="choice correct" disabled><span class="key">C</span><span class="body">The pro-rata rule</span><span class="mark">✓</span></button>
+          <button class="choice dim" disabled><span class="key">D</span><span class="body">The 5-year aging rule</span></button>
+        </div>
+        <div class="explain wrong">
+          <div class="verdict">✕ Not quite — the answer is C, the pro-rata rule</div>
+          <p>
+            The
+            <span class="term" title="IRS rule that taxes a Roth conversion in proportion to your pre-tax IRA balances — including Traditional, SEP, and SIMPLE IRAs.">pro-rata rule</span>
+            treats <em>all</em> your non-Roth IRAs (Traditional, SEP, SIMPLE) as
+            one pot. The taxable fraction of a conversion equals pre-tax balance ÷
+            total balance — so a large pre-tax balance makes a "backdoor" conversion
+            partly taxable. The usual fix is rolling pre-tax IRA dollars into a 401(k)
+            first, isolating only the after-tax basis.
+          </p>
+          <a class="readmore" href="#">Read more about the Pro-rata rule →</a>
+          <p class="source">Source: IRS Pub 590-A &amp; 590-B</p>
+        </div>
+      </div>
+
+      <!-- ── State D: done for today ── -->
+      <div id="state-done" style="display:none;">
+        <div class="done-state">
+          <div class="check">✓</div>
+          <div class="title">That's today's question</div>
+          <div class="body">
+            Nice work — you've answered today. Come back tomorrow for the next one.
+            No rush; your 7-day streak is safe.
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Difficulty preference (lives in Settings; shown here for the mockup) ── -->
+      <div class="pref">
+        <div class="label">Difficulty</div>
+        <div class="hint">
+          Lives in <strong>Settings → Advanced</strong>. Changing it takes effect
+          tomorrow — today's question stays put.
+        </div>
+        <div class="segmented" id="difficultyPref">
+          <button data-diff="beginner" class="active">Beginner</button>
+          <button data-diff="advanced">Advanced</button>
+          <button data-diff="mixed">Mixed</button>
+        </div>
+      </div>
+
+      <div class="disclosure-foot">
+        <span>ⓘ</span> Educational — general financial-literacy content, not personalized advice.
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <!-- SURFACE 2 — Dashboard widget                                      -->
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <div class="surface-label">
+      <span class="tag">Surface 2</span>
+      <span class="name">Dashboard widget</span>
+      <span class="route">reuses the NextMoveCard shape · sits in the Dashboard grid</span>
+    </div>
+
+    <div class="widget-grid">
+      <div>
+        <p class="col-caption">Before answering</p>
+        <div class="widget">
+          <div class="eyebrow">
+            <span class="lhs">Today's question</span>
+            <a href="#">View →</a>
+          </div>
+          <span class="w-badge">Beginner</span>
+          <p class="w-prompt">What does APR stand for?</p>
+          <a class="w-cta" href="#">Answer →</a>
+        </div>
+      </div>
+
+      <div>
+        <p class="col-caption">After answering (done state)</p>
+        <div class="widget done">
+          <div class="eyebrow">
+            <span class="lhs">Today's question</span>
+            <a href="#">View →</a>
+          </div>
+          <div class="w-done-title">✓ Answered today</div>
+          <div class="w-done-body">Come back tomorrow for the next one.</div>
+          <div class="w-streak">7-day streak</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // ── Mockup-only: toggle the /learn question card between its states ──
+    const STATES = ['unanswered', 'correct', 'wrong', 'done'];
+    const toggle = document.getElementById('learnStateToggle');
+    toggle.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-state]');
+      if (!btn) return;
+      const target = btn.dataset.state;
+      toggle.querySelectorAll('button').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      STATES.forEach((s) => {
+        document.getElementById('state-' + s).style.display = s === target ? '' : 'none';
+      });
+    });
+
+    // ── Difficulty preference segmented control (visual only) ──
+    const pref = document.getElementById('difficultyPref');
+    pref.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-diff]');
+      if (!btn) return;
+      pref.querySelectorAll('button').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  </script>
+</body>
+</html>

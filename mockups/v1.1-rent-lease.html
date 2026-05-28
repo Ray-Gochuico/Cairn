@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Rent & Lease tracking — ideal design mockup (v1.1)</title>
+  <style>
+    /* ===========================================================
+       Cairn design tokens (resolved light-mode hex from the brief)
+       =========================================================== */
+    :root {
+      --page-bg:   #f8fafc;
+      --card-bg:   #ffffff;
+      --border:    #e2e8f0;
+      --border-strong: #cbd5e1;
+      --radius:    8px;
+      --shadow:    0 1px 2px rgba(0,0,0,0.04);
+      --text:      #0f172a;
+      --muted:     #64748b;
+      --muted-2:   #94a3b8;
+      --primary:   #1e293b;   /* primary button bg */
+      --accent:    #2563eb;   /* links / accent */
+      --success:   #16a34a;
+      --warning:   #f59e0b;
+      --info:      #0ea5e9;
+      --destructive: #dc2626;
+      --surface-subtle: #f1f5f9;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--page-bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+    .num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+    .page { max-width: 1100px; margin: 0 auto; padding: 32px 24px 64px; }
+
+    h1 { margin: 0 0 4px; font-size: 22px; font-weight: 600; }
+    .subtitle { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+
+    /* Section header (page-level "Property", "Vehicles", "Spending") */
+    .surface { margin-bottom: 56px; }
+    .surface-head {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 16px; margin-bottom: 6px;
+    }
+    .surface-head h2 { margin: 0; font-size: 20px; font-weight: 600; }
+    .surface-sub { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
+
+    /* Cards */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 20px;
+    }
+    .card-pad-tight { padding: 16px 20px; }
+
+    /* 3-up grid matching grid-cols-1 md:grid-cols-3 gap-4 */
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+    @media (max-width: 860px) { .grid-3 { grid-template-columns: 1fr; } }
+
+    .row-stack { display: flex; flex-direction: column; gap: 12px; }
+
+    .card-head {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 8px; margin-bottom: 14px;
+    }
+    .card-title { font-size: 15px; font-weight: 600; line-height: 1.2; }
+    .card-desc { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    .label-eyebrow {
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+      color: var(--muted); font-weight: 500;
+    }
+    .figure-xl { font-size: 26px; font-weight: 600; line-height: 1.1; margin-top: 2px; }
+    .figure-xl .per { font-size: 14px; font-weight: 500; color: var(--muted); }
+
+    dl.kv { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 14px 0 0; }
+    dl.kv dt { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+    dl.kv dd { margin: 2px 0 0; font-size: 13px; }
+    dl.kv dd.mono { font-variant-numeric: tabular-nums; }
+
+    /* Buttons */
+    .btn {
+      font: inherit; font-size: 13px; font-weight: 500;
+      border-radius: 6px; padding: 6px 12px; cursor: pointer;
+      border: 1px solid transparent; line-height: 1.1; white-space: nowrap;
+    }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: #0f172a; }
+    .btn-outline { background: #fff; color: #334155; border-color: var(--border-strong); }
+    .btn-outline:hover { background: var(--surface-subtle); }
+    .btn-ghost-danger { background: transparent; color: var(--destructive); padding: 6px 8px; }
+    .btn-ghost-danger:hover { background: rgba(220,38,38,0.08); }
+    .btn-sm { font-size: 12px; padding: 5px 10px; }
+    .btn-row { display: flex; gap: 6px; }
+
+    /* Icon buttons (edit / remove on cards) */
+    .icon-btn {
+      width: 30px; height: 30px; display: inline-flex; align-items: center;
+      justify-content: center; border-radius: 6px; cursor: pointer;
+      border: 1px solid var(--border); background: #fff; color: var(--muted);
+    }
+    .icon-btn:hover { background: var(--surface-subtle); color: var(--text); }
+    .icon-btn.danger:hover { background: rgba(220,38,38,0.08); color: var(--destructive); border-color: rgba(220,38,38,0.3); }
+    .icon-btn svg { width: 15px; height: 15px; }
+
+    /* Person / status tags */
+    .tag {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 999px;
+      background: var(--surface-subtle); color: #475569; border: 1px solid var(--border);
+    }
+    .tag .dot { width: 7px; height: 7px; border-radius: 999px; background: var(--accent); }
+    .tag.joint .dot { background: var(--muted-2); }
+    .tag-status {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 999px;
+    }
+    .tag-active  { background: rgba(22,163,74,0.10);  color: #15803d; }
+    .tag-soon    { background: rgba(245,158,11,0.12); color: #b45309; }
+
+    /* Aggregate card — distinguished by a subtle slate fill + accent rule */
+    .agg-card {
+      background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--primary);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 18px 20px;
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    }
+    .agg-card .agg-total { font-size: 28px; font-weight: 600; line-height: 1; }
+    .agg-card .agg-total .per { font-size: 15px; font-weight: 500; color: var(--muted); }
+    .agg-meta { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+    /* "Add" affordance — dashed ghost card */
+    .add-card {
+      border: 1px dashed var(--border-strong);
+      border-radius: var(--radius);
+      background: transparent;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      min-height: 96px; color: var(--accent); font-size: 13px; font-weight: 500;
+      cursor: pointer; width: 100%;
+    }
+    .add-card:hover { background: rgba(37,99,235,0.04); border-color: var(--accent); }
+    .add-card svg { width: 16px; height: 16px; }
+
+    /* Spending tile */
+    .tile {
+      border: 1px solid var(--border); border-radius: var(--radius);
+      background: var(--card-bg); box-shadow: var(--shadow); padding: 18px 20px;
+    }
+    .tile-label { font-size: 13px; font-weight: 500; color: var(--muted); }
+    .tile-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .tile-total { font-size: 26px; font-weight: 600; margin-top: 8px; }
+    .tile-total .per { font-size: 14px; font-weight: 500; color: var(--muted); }
+    .tile-breakdown {
+      display: flex; gap: 24px; margin-top: 14px; padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
+    .tile-breakdown .bd-amt { font-size: 16px; font-weight: 600; }
+    .tile-breakdown .bd-lbl { font-size: 12px; color: var(--muted); }
+
+    /* Section divider between mockup surfaces */
+    .mock-divider {
+      display: flex; align-items: center; gap: 12px;
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--muted-2); margin: 0 0 20px;
+    }
+    .mock-divider::before, .mock-divider::after {
+      content: ""; height: 1px; background: var(--border); flex: 1;
+    }
+
+    /* Banner + notes */
+    .mockup-banner {
+      background: #fef3c7; border-left: 3px solid var(--warning);
+      padding: 12px 16px; border-radius: 4px; margin-bottom: 28px;
+      font-size: 13px; color: #78350f; line-height: 1.5;
+    }
+    .notes {
+      background: var(--surface-subtle); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 18px 22px; margin-top: 8px;
+    }
+    .notes h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; }
+    .notes ul { margin: 0; padding-left: 20px; }
+    .notes li { font-size: 13px; color: #475569; line-height: 1.7; }
+    .notes code {
+      background: #fff; padding: 1px 5px; border-radius: 3px;
+      font-family: ui-monospace, SFMono-Regular, monospace; font-size: 12px;
+    }
+    .legend-pill {
+      display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px;
+      border-radius: 4px; margin-right: 6px;
+    }
+    .legend-new { background: rgba(37,99,235,0.12); color: #1d4ed8; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="mockup-banner">
+      <strong>Mockup only — the ideal v1.1 bar.</strong> Static HTML, no app code.
+      This is the <em>intended</em> design for the shipped Rent/Lease feature, used to
+      compare against what landed in <code>Property.tsx</code> / <code>Vehicles.tsx</code> /
+      <code>Spending.tsx</code>. Deltas vs as-built are flagged with a
+      <span class="legend-pill legend-new">NEW</span> pill and listed in the design notes
+      under each surface. Built in light mode; dark-mode tokens noted at the bottom.
+    </div>
+
+    <h1>Rent &amp; Lease tracking</h1>
+    <div class="subtitle">
+      Recurring monthly obligations sitting harmoniously beside owned-asset cards on the
+      Property &amp; Vehicles pages, with a per-page total and a Spending summary tile.
+    </div>
+
+    <!-- ===================================================================
+         SURFACE 1 — PROPERTY PAGE (owned property + rentals)
+         =================================================================== -->
+    <section class="surface">
+      <div class="mock-divider">Surface 1 · Property page</div>
+
+      <div class="surface-head">
+        <div>
+          <h2>Property</h2>
+        </div>
+        <button class="btn btn-outline btn-sm">Export CSV</button>
+      </div>
+      <p class="surface-sub">Equity = current value − linked-loan balance.</p>
+
+      <!-- Owned property: existing 3-card row (Asset / Expenses / Utilities) for context -->
+      <div class="grid-3" style="margin-bottom: 32px;">
+        <!-- Asset card -->
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <div class="card-title">Maple Street house</div>
+              <div class="card-desc">Single-family home</div>
+            </div>
+            <button class="btn btn-outline btn-sm">Edit value</button>
+          </div>
+          <div class="card-desc" style="margin:-8px 0 12px;">128 Maple St, Portland OR</div>
+          <div class="label-eyebrow">Current value</div>
+          <div class="figure-xl num">$612,000</div>
+          <dl class="kv">
+            <div><dt>Mortgage balance</dt><dd class="mono num">$388,400</dd></div>
+            <div><dt>Purchase price</dt><dd class="mono num">$455,000</dd></div>
+            <div style="grid-column: span 2;">
+              <dt>Cost basis</dt>
+              <dd class="mono num">$472,000 <span style="color:var(--muted); font-variant-numeric:normal;">(purchase + improvements)</span></dd>
+            </div>
+          </dl>
+          <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:baseline;">
+            <span class="label-eyebrow" style="color:var(--text);">Equity</span>
+            <span class="num" style="font-size:18px; font-weight:600; color:var(--success);">$223,600</span>
+          </div>
+        </div>
+
+        <!-- Expenses card -->
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <div class="card-title">Expenses</div>
+              <div class="card-desc">Maple Street house</div>
+            </div>
+          </div>
+          <dl class="kv" style="margin-top:0;">
+            <div><dt>12-mo rolling</dt><dd class="mono num" style="font-size:17px;">$14,820</dd></div>
+            <div><dt>Annual average</dt><dd class="mono num" style="font-size:17px;">$13,540</dd><dd style="color:var(--muted);">over full history</dd></div>
+          </dl>
+          <div style="margin-top:16px;">
+            <span class="label-eyebrow" style="cursor:pointer;">▸ Linked transactions (24)</span>
+          </div>
+        </div>
+
+        <!-- Utilities card -->
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <div class="card-title">Utilities</div>
+              <div class="card-desc">Maple Street house</div>
+            </div>
+            <button class="btn btn-outline btn-sm">Edit</button>
+          </div>
+          <div class="label-eyebrow">Average monthly</div>
+          <div class="figure-xl num" style="font-size:24px;">$268</div>
+          <div class="card-desc" style="margin-top:6px;">Across 18 linked transactions</div>
+        </div>
+      </div>
+
+      <!-- RENTALS sub-section -->
+      <div class="surface-head" style="align-items:baseline; margin-bottom:14px;">
+        <h2 style="font-size:17px;">Rentals</h2>
+      </div>
+
+      <!-- Aggregate card first (or could sit at end; placed at top so the total leads) -->
+      <div class="agg-card" style="margin-bottom:16px;">
+        <div>
+          <div class="label-eyebrow">Total recurring housing</div>
+          <div class="agg-total num">$2,400<span class="per">/mo</span></div>
+          <div class="agg-meta">1 active rental · feeds Spending &amp; What-If projection</div>
+        </div>
+        <span class="tag-status tag-active">● Active this month</span>
+      </div>
+
+      <div class="grid-3">
+        <!-- Rental card — IDEAL: person tag + status + edit & remove -->
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <div class="card-title">Downtown apartment</div>
+              <div class="card-desc">Rent · ongoing</div>
+            </div>
+            <div class="btn-row">
+              <!-- NEW vs as-built: edit affordance on the card -->
+              <button class="icon-btn" title="Edit rental" aria-label="Edit rental">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+              </button>
+              <button class="icon-btn danger" title="Remove rental" aria-label="Remove rental">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="label-eyebrow">Monthly</div>
+          <div class="figure-xl num">$2,400<span class="per">/mo</span></div>
+          <dl class="kv">
+            <div><dt>From</dt><dd class="mono num">2025-09-01</dd></div>
+            <div><dt>Until</dt><dd class="mono">Ongoing</dd></div>
+          </dl>
+          <!-- NEW vs as-built: who-owes person tag -->
+          <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border);">
+            <span class="tag"><span class="dot"></span>Alex</span>
+          </div>
+        </div>
+
+        <!-- Second rental to show a person variant + end-dated / "ending soon" -->
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <div class="card-title">Storage unit</div>
+              <div class="card-desc">Rent · ends soon</div>
+            </div>
+            <div class="btn-row">
+              <button class="icon-btn" title="Edit rental" aria-label="Edit rental">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+              </button>
+              <button class="icon-btn danger" title="Remove rental" aria-label="Remove rental">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="label-eyebrow">Monthly</div>
+          <div class="figure-xl num">$95<span class="per">/mo</span></div>
+          <dl class="kv">
+            <div><dt>From</dt><dd class="mono num">2024-02-01</dd></div>
+            <div><dt>Until</dt><dd class="mono num">2026-06-30</dd></div>
+          </dl>
+          <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border); display:flex; gap:8px; align-items:center;">
+            <span class="tag joint"><span class="dot"></span>Joint</span>
+            <span class="tag-status tag-soon">Ends in 1 mo</span>
+          </div>
+        </div>
+
+        <!-- Add rental affordance -->
+        <button class="add-card">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+          Add rental
+        </button>
+      </div>
+
+      <div class="notes">
+        <h3>Design notes — Property surface</h3>
+        <ul>
+          <li><span class="legend-pill legend-new">NEW</span><strong>Who-owes person tag.</strong> The shipped <code>RentalCard</code> drops <code>ownerPersonId</code> entirely (<code>Property.tsx:290</code>), even though the data carries it and the input-tab row shows it (<code>HousingPaymentsTab.tsx:107</code>). The ideal surfaces a person/Joint pill so a two-person household can tell at a glance whose obligation it is.</li>
+          <li><span class="legend-pill legend-new">NEW</span><strong>Edit affordance on the card.</strong> Shipped card only has a destructive "Remove" (<code>Property.tsx:299</code>); editing requires going to Inputs. Owned-property cards already have "Edit value", so a card-level edit keeps the row consistent.</li>
+          <li><span class="legend-pill legend-new">NEW</span><strong>Dedicated aggregate card.</strong> Shipped total is an inline muted line in the section header (<code>Property.tsx:548-555</code>). Promoting it to a slate-accented card mirrors the weight of the owned-property "Equity" figure and reads as a first-class number.</li>
+          <li><span class="legend-pill legend-new">NEW</span><strong>"Add rental" on-page.</strong> Shipped page has no add button — the empty state and all creation route to Inputs. A dashed ghost card lets users add without leaving the page (the affordance can deep-link to the Inputs tab to reuse the existing form, so no new form is required).</li>
+          <li><strong>Status chip ("ongoing" / "ends in N mo").</strong> Derived from <code>endDate</code> via the existing <code>isActiveOn</code> helper; turns the bare date into a glanceable state.</li>
+          <li><strong>Kept as-is:</strong> the <code>grid-cols-1 md:grid-cols-3 gap-4</code> rhythm, 8px radius, <code>tabular-nums</code> figures, and "From / Until" date pair all match the shipped card and the 3-card convention.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ===================================================================
+         SURFACE 2 — VEHICLES PAGE (owned vehicle + leases)
+         =================================================================== -->
+    <section class="surface">
+      <div class="mock-divider">Surface 2 · Vehicles page</div>
+
+      <div class="surface-head">
+        <div><h2>Vehicles</h2></div>
+        <button class="btn btn-outline btn-sm">Export CSV</button>
+      </div>
+      <p class="surface-sub">Equity = current value − linked-loan balance.</p>
+
+      <!-- Owned vehicle for context (single card shown; full row would be Asset/Expenses/Gas) -->
+      <div class="grid-3" style="margin-bottom: 32px;">
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <div class="card-title">Family SUV</div>
+              <div class="card-desc">2021 Toyota Highlander</div>
+            </div>
+            <button class="btn btn-outline btn-sm">Edit value</button>
+          </div>
+          <div class="label-eyebrow">Current value</div>
+          <div class="figure-xl num">$31,200</div>
+          <dl class="kv">
+            <div><dt>Auto-loan balance</dt><dd class="mono num">$12,050</dd></div>
+            <div><dt>Purchase price</dt><dd class="mono num">$42,800</dd></div>
+          </dl>
+          <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:baseline;">
+            <span class="label-eyebrow" style="color:var(--text);">Equity</span>
+            <span class="num" style="font-size:18px; font-weight:600; color:var(--success);">$19,150</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><div><div class="card-title">Expenses</div><div class="card-desc">Family SUV</div></div></div>
+          <dl class="kv" style="margin-top:0;">
+            <div><dt>12-mo rolling</dt><dd class="mono num" style="font-size:17px;">$3,640</dd></div>
+            <div><dt>Annual average</dt><dd class="mono num" style="font-size:17px;">$3,210</dd><dd style="color:var(--muted);">over full history</dd></div>
+          </dl>
+          <div style="margin-top:16px;"><span class="label-eyebrow" style="cursor:pointer;">▸ Linked transactions (11)</span></div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <div><div class="card-title">Gas</div><div class="card-desc">Family SUV</div></div>
+            <button class="btn btn-outline btn-sm">Edit</button>
+          </div>
+          <div class="label-eyebrow">Average monthly</div>
+          <div class="figure-xl num" style="font-size:24px;">$182</div>
+          <div class="card-desc" style="margin-top:6px;">Across 9 linked transactions</div>
+        </div>
+      </div>
+
+      <!-- LEASES sub-section -->
+      <div class="surface-head" style="align-items:baseline; margin-bottom:14px;">
+        <h2 style="font-size:17px;">Leases</h2>
+      </div>
+
+      <div class="agg-card" style="margin-bottom:16px;">
+        <div>
+          <div class="label-eyebrow">Total recurring vehicle</div>
+          <div class="agg-total num">$450<span class="per">/mo</span></div>
+          <div class="agg-meta">1 active lease · feeds Spending &amp; What-If projection</div>
+        </div>
+        <span class="tag-status tag-active">● Active this month</span>
+      </div>
+
+      <div class="grid-3">
+        <!-- Lease card -->
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <div class="card-title">Commuter EV</div>
+              <div class="card-desc">Lease · 36-mo term</div>
+            </div>
+            <div class="btn-row">
+              <button class="icon-btn" title="Edit lease" aria-label="Edit lease">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+              </button>
+              <button class="icon-btn danger" title="Remove lease" aria-label="Remove lease">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="label-eyebrow">Monthly</div>
+          <div class="figure-xl num">$450<span class="per">/mo</span></div>
+          <dl class="kv">
+            <div><dt>From</dt><dd class="mono num">2025-03-01</dd></div>
+            <div><dt>Until</dt><dd class="mono num">2028-02-28</dd></div>
+          </dl>
+          <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border); display:flex; gap:8px; align-items:center;">
+            <span class="tag"><span class="dot"></span>Sam</span>
+            <span class="tag-status tag-active">21 mo left</span>
+          </div>
+        </div>
+
+        <!-- Add lease affordance -->
+        <button class="add-card">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+          Add lease
+        </button>
+        <!-- empty third cell keeps the grid balanced; intentionally left open -->
+        <div></div>
+      </div>
+
+      <div class="notes">
+        <h3>Design notes — Vehicles surface</h3>
+        <ul>
+          <li>Structurally identical to the Property surface — same deltas apply (<code>Vehicles.tsx:281</code> <code>LeaseCard</code> mirrors <code>RentalCard</code> and shares the same omissions). Fixing one component pattern fixes both.</li>
+          <li><strong>Term-remaining chip ("21 mo left").</strong> Leases are almost always fixed-term, so months-remaining is more useful here than the open-ended "ongoing" common to rent.</li>
+          <li>Aggregate copy reads <strong>"Total recurring vehicle"</strong> to parallel "Total recurring housing"; shipped label is the generic "Total monthly obligation" (<code>Vehicles.tsx:541</code>).</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ===================================================================
+         SURFACE 3 — SPENDING "RECURRING OBLIGATIONS" TILE
+         =================================================================== -->
+    <section class="surface">
+      <div class="mock-divider">Surface 3 · Spending page tile</div>
+
+      <div class="surface-head">
+        <div><h2>Spending</h2></div>
+      </div>
+      <p class="surface-sub">Where the combined rent + lease total lands on the Spending overview.</p>
+
+      <!-- Ideal tile: combined total + a thin breakdown so the two streams are legible -->
+      <div class="tile" style="max-width: 460px;">
+        <div class="tile-label">Recurring obligations</div>
+        <div class="tile-sub">Active rent + vehicle leases this month</div>
+        <div class="tile-total num">$2,850<span class="per">/mo</span></div>
+        <div class="tile-breakdown">
+          <div>
+            <div class="bd-amt num">$2,495</div>
+            <div class="bd-lbl">Rent · 2 rentals</div>
+          </div>
+          <div>
+            <div class="bd-amt num">$450</div>
+            <div class="bd-lbl">Leases · 1 lease</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <h3>Design notes — Spending tile</h3>
+        <ul>
+          <li><span class="legend-pill legend-new">NEW</span><strong>Rent vs lease split.</strong> Shipped tile shows only a combined figure plus a "<code>N rentals, M leases</code>" count line (<code>Spending.tsx:247-253</code>). Splitting the dollar amounts (using the already-exported <code>monthlyHousingObligation</code> / <code>monthlyLeaseObligation</code> helpers) makes the tile answer "which is driving this?" without a click.</li>
+          <li><strong>Card styling parity.</strong> The shipped tile uses a one-off <code>border rounded-lg p-4</code> wrapper instead of the shared <code>Card</code> primitive (<code>Spending.tsx:240</code>). The ideal uses the same <code>Card</code> token as every other tile so radius/shadow/border stay consistent if the design system shifts.</li>
+          <li><strong>Kept as-is:</strong> placement directly under cashflow, the <code>tabular-nums</code> mono total, and the muted eyebrow label all match the shipped tile and the rest of the Spending page.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ===================================================================
+         DARK MODE NOTES
+         =================================================================== -->
+    <section class="surface" style="margin-bottom:0;">
+      <div class="mock-divider">Dark mode</div>
+      <div class="notes" style="background:#0f172a; border-color:#1e293b;">
+        <h3 style="color:#f1f5f9;">Dark-mode token mapping</h3>
+        <ul style="color:#cbd5e1;">
+          <li>Page bg <code style="background:#1e293b;color:#e2e8f0;">#0f172a</code>; card bg <code style="background:#1e293b;color:#e2e8f0;">#1e293b</code>; border <code style="background:#1e293b;color:#e2e8f0;">#334155</code>. Cairn already drives these via the shadcn CSS variables, so the cards inherit automatically — no per-component overrides needed.</li>
+          <li>The aggregate card's <strong>left accent rule</strong> should flip from <code style="background:#1e293b;color:#e2e8f0;">#1e293b</code> (near-invisible on dark) to a lighter slate <code style="background:#1e293b;color:#e2e8f0;">#94a3b8</code> or the accent blue so it stays visible.</li>
+          <li>Person/status pill fills (the 10–12% color washes) read fine on dark, but the <strong>text</strong> in <code style="background:#1e293b;color:#e2e8f0;">tag-active</code> / <code style="background:#1e293b;color:#e2e8f0;">tag-soon</code> should lighten (e.g. <code style="background:#1e293b;color:#e2e8f0;">#4ade80</code> / <code style="background:#1e293b;color:#e2e8f0;">#fbbf24</code>) for contrast.</li>
+          <li>The dashed "Add" ghost card keeps the accent border + accent text; only the hover wash needs a touch more opacity on dark.</li>
+        </ul>
+      </div>
+    </section>
+
+  </div>
+</body>
+</html>
