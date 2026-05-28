@@ -34,7 +34,7 @@ export function RefreshSection() {
     void load();
   }, [load]);
 
-  const cadence = settings?.refreshCadence ?? RefreshCadence.EVERY_LAUNCH;
+  const cadence = settings?.refreshCadence ?? RefreshCadence.DAILY;
 
   // "Refresh now" stamps last_refresh_at at initiation and kicks off the
   // same background derivations init.ts runs. The derivations swallow their

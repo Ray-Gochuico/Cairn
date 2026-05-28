@@ -26,6 +26,11 @@ import { FreshnessBadge } from '@/components/ui/freshness-badge';
 import NetWorthTimeSeriesChart from '@/components/charts/NetWorthTimeSeriesChart';
 import AssetsDonut from '@/components/charts/AssetsDonut';
 import LiabilitiesDonut from '@/components/charts/LiabilitiesDonut';
+import GrowthCard from '@/components/charts/GrowthCard';
+import {
+  computeHorizonGrowth,
+  sumLatestOnOrBefore,
+} from '@/lib/growth-horizons';
 
 /**
  * NetWorth page — rewritten around the NetWorthTimeSeriesChart + two
@@ -249,6 +254,45 @@ export default function NetWorth() {
   const momDelta = current - priorValue;
   const yoyDelta = current - yearAgoValue;
 
+  // Day-granular net worth for the growth card. netWorthForMonth() is
+  // month-bucketed, so we can't reuse it for 1d/1w horizons — instead we sum
+  // the latest *daily* account snapshot on-or-before the date and add the same
+  // current-only property/vehicle/loan totals netWorthForMonth uses (those
+  // assets carry no history; the net-worth chart already approximates past
+  // points with current values, so we match that accepted approximation).
+  //
+  // visibleSnapshots is already view-filtered, so we don't pass an accountIds
+  // set; when no account snapshot reaches back to `iso`, sumLatestOnOrBefore
+  // returns null and the horizon shows "Not enough history yet" rather than a
+  // misleading assets-only figure.
+  const propertyTotal = useMemo(
+    () =>
+      visibleProperties
+        .filter((p) => !p.excludedFromNetWorth)
+        .reduce((a, b) => a + (b.currentEstimatedValue ?? 0), 0),
+    [visibleProperties],
+  );
+  const vehicleTotal = useMemo(
+    () =>
+      visibleVehicles
+        .filter((v) => !v.excludedFromNetWorth)
+        .reduce((a, b) => a + (b.currentEstimatedValue ?? 0), 0),
+    [visibleVehicles],
+  );
+  const loanTotal = useMemo(
+    () => visibleLoans.reduce((a, b) => a + b.currentBalance, 0),
+    [visibleLoans],
+  );
+
+  const netWorthGrowth = useMemo(() => {
+    const netWorthAsOf = (iso: string): number | null => {
+      const acct = sumLatestOnOrBefore(visibleSnapshots, iso);
+      if (acct === null) return null;
+      return acct + propertyTotal + vehicleTotal - loanTotal;
+    };
+    return computeHorizonGrowth(netWorthAsOf, new Date());
+  }, [visibleSnapshots, propertyTotal, vehicleTotal, loanTotal]);
+
   if (!hasAnyData) {
     return (
       <div className="p-8 max-w-6xl">
@@ -331,6 +375,15 @@ export default function NetWorth() {
           }
         />
       </div>
+
+      {/*
+       * Net worth growth card. The MoM/YoY tiles above show fixed
+       * month-granular deltas; this card adds click-to-cycle day-level
+       * horizons (1d…1y). The 1m/1y horizons overlap the MoM/YoY tiles
+       * conceptually — see the redundancy note in the PR for whether to
+       * trim the static tiles later.
+       */}
+      <GrowthCard title="Net worth growth" horizons={netWorthGrowth} />
 
       <NetWorthTimeSeriesChart />
 

@@ -23,7 +23,8 @@ describe('SettingsRepo', () => {
     expect(s.id).toBe(1);
     expect(s.notificationsEnabled).toBe(true);
     expect(s.notificationDay).toBe(1);
-    expect(s.refreshCadence).toBe('EVERY_LAUNCH');
+    // Migration 0039 flips the 0014-seeded EVERY_LAUNCH default to DAILY.
+    expect(s.refreshCadence).toBe('DAILY');
     expect(s.sidebarLayout).toBeNull();
     expect(s.lastRefreshAt).toBeNull();
     expect(s.statementsFolderPath).toBeNull();
@@ -60,7 +61,7 @@ describe('SettingsRepo', () => {
     await repo.update({ notificationDay: 20 });
     const s = await repo.get();
     expect(s.notificationDay).toBe(20);
-    expect(s.refreshCadence).toBe('EVERY_LAUNCH');
+    expect(s.refreshCadence).toBe('DAILY');
   });
 
   it('rejects an invalid patch', async () => {

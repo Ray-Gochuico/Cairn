@@ -85,9 +85,9 @@ const LIQUID_INVESTMENT_TYPES = new Set<AccountType>([
 
 /**
  * Account types whose values are entered manually as of "today", not
- * auto-derived for last month's close. Matches the set in
- * `snapshot-derivation.ts` so the pending-input nudge stays consistent with
- * what derivation actually produces.
+ * auto-derived from ticker prices. Matches `SKIPPED_ACCOUNT_TYPES` in
+ * `daily-snapshot.ts` so the pending-input nudge stays consistent with
+ * what today's snapshot derivation actually produces.
  */
 const MANUAL_BALANCE_TYPES = new Set<AccountType>([
   AccountType.ACCOUNT_CASH,

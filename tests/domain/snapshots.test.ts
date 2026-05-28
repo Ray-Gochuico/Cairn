@@ -112,6 +112,84 @@ describe('AccountSnapshotsRepo', () => {
     expect(all[0].source).toBe(SnapshotSource.USER_CONFIRMED);
   });
 
+  it('upsert AUTO_DERIVED does NOT overwrite an existing MANUAL snapshot, and still returns the existing id', async () => {
+    const accountId = await makeAccount(accountsRepo);
+    const manualId = await repo.upsert({
+      accountId,
+      snapshotDate: '2024-05-31',
+      totalValue: 100000,
+      source: SnapshotSource.MANUAL,
+    });
+
+    // An AUTO_DERIVED daily snapshot lands on the same (account, date).
+    // The WHERE clause must suppress the update so the hand-entered row wins.
+    const returnedId = await repo.upsert({
+      accountId,
+      snapshotDate: '2024-05-31',
+      totalValue: 999999,
+      source: SnapshotSource.AUTO_DERIVED,
+    });
+
+    // Suppressed-update path still resolves the unchanged row's id.
+    expect(returnedId).toBe(manualId);
+
+    const all = await repo.listForAccount(accountId);
+    expect(all).toHaveLength(1);
+    expect(all[0].id).toBe(manualId);
+    expect(all[0].totalValue).toBe(100000);
+    expect(all[0].source).toBe(SnapshotSource.MANUAL);
+  });
+
+  it('upsert AUTO_DERIVED DOES update an existing AUTO_DERIVED snapshot', async () => {
+    const accountId = await makeAccount(accountsRepo);
+    const insertedId = await repo.upsert({
+      accountId,
+      snapshotDate: '2024-05-31',
+      totalValue: 100000,
+      source: SnapshotSource.AUTO_DERIVED,
+    });
+
+    const updatedId = await repo.upsert({
+      accountId,
+      snapshotDate: '2024-05-31',
+      totalValue: 105000,
+      source: SnapshotSource.AUTO_DERIVED,
+    });
+
+    expect(updatedId).toBe(insertedId);
+
+    const all = await repo.listForAccount(accountId);
+    expect(all).toHaveLength(1);
+    expect(all[0].id).toBe(insertedId);
+    expect(all[0].totalValue).toBe(105000);
+    expect(all[0].source).toBe(SnapshotSource.AUTO_DERIVED);
+  });
+
+  it('upsert MANUAL DOES overwrite an existing AUTO_DERIVED snapshot', async () => {
+    const accountId = await makeAccount(accountsRepo);
+    const autoId = await repo.upsert({
+      accountId,
+      snapshotDate: '2024-05-31',
+      totalValue: 100000,
+      source: SnapshotSource.AUTO_DERIVED,
+    });
+
+    const updatedId = await repo.upsert({
+      accountId,
+      snapshotDate: '2024-05-31',
+      totalValue: 105000,
+      source: SnapshotSource.MANUAL,
+    });
+
+    expect(updatedId).toBe(autoId);
+
+    const all = await repo.listForAccount(accountId);
+    expect(all).toHaveLength(1);
+    expect(all[0].id).toBe(autoId);
+    expect(all[0].totalValue).toBe(105000);
+    expect(all[0].source).toBe(SnapshotSource.MANUAL);
+  });
+
   it('listLatestPerAccount returns most recent snapshot per account', async () => {
     const a1 = await makeAccount(accountsRepo, 'A1');
     const a2 = await makeAccount(accountsRepo, 'A2');

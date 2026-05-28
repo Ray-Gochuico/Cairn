@@ -267,7 +267,9 @@ it('0014 creates the app_settings singleton with one seeded row', async () => {
   expect(rows).toHaveLength(1);
   expect(rows[0].id).toBe(1);
   expect(rows[0].notifications_enabled).toBe(1);
-  expect(rows[0].refresh_cadence).toBe('EVERY_LAUNCH');
+  // 0014 seeds EVERY_LAUNCH, but the full chain runs 0039 which flips the
+  // app-wide default to DAILY. This test runs all migrations, so DAILY wins.
+  expect(rows[0].refresh_cadence).toBe('DAILY');
   await db.close();
 });
 

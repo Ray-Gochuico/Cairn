@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { runMigrations } from '@/db/migrations';
@@ -235,7 +235,15 @@ describe('NetWorth page', () => {
     await waitFor(() => {
       expect(screen.getByText(/Current Net Worth/i)).toBeInTheDocument();
     });
-    expect(await screen.findByText('$425,000')).toBeInTheDocument();
+    // Scope the assertion to the "Current Net Worth" MetricCard. The Net
+    // Worth growth card (added alongside the tiles) also surfaces $425,000
+    // as its current value, so a bare findByText now matches two nodes —
+    // walk up from the tile's label to its Card and assert the value within.
+    const currentNetWorthCard = screen
+      .getByText(/Current Net Worth/i)
+      .closest('div[class*="rounded-xl"]') as HTMLElement;
+    expect(currentNetWorthCard).not.toBeNull();
+    expect(within(currentNetWorthCard).getByText('$425,000')).toBeInTheDocument();
   });
 
   it('renders the new time-series chart and dual donuts', async () => {

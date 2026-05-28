@@ -22,6 +22,11 @@ import { CHART_PALETTE } from '@/components/charts/palette';
 import InvestmentTimeSeriesChart from '@/components/charts/InvestmentTimeSeriesChart';
 import PerTickerDonut from '@/components/charts/PerTickerDonut';
 import SectorDonut from '@/components/charts/SectorDonut';
+import GrowthCard from '@/components/charts/GrowthCard';
+import {
+  computeHorizonGrowth,
+  sumLatestOnOrBefore,
+} from '@/lib/growth-horizons';
 import { useConcentration } from '@/lib/use-concentration';
 import { valueHoldings, type HoldingValuation } from '@/lib/holdings-value';
 import type { Dependent, AccountSnapshot, Household, Holding } from '@/types/schema';
@@ -59,6 +64,22 @@ const currencyFormatter = new Intl.NumberFormat('en-US', {
 function formatCurrency(value: number): string {
   return currencyFormatter.format(value);
 }
+
+/**
+ * Account types that count toward "investments value" on the growth card —
+ * everything except plain cash/savings. Mirrors the investment-vs-cash split
+ * called out in the schema (ACCOUNT_CASH / ACCOUNT_SAVINGS are the only
+ * non-investment types).
+ */
+const INVESTMENT_ACCOUNT_TYPES = new Set<AccountType>([
+  AccountType.ACCOUNT_401K,
+  AccountType.ACCOUNT_ROTH_IRA,
+  AccountType.ACCOUNT_TRAD_IRA,
+  AccountType.ACCOUNT_BROKERAGE,
+  AccountType.ACCOUNT_HSA,
+  AccountType.ACCOUNT_CRYPTO,
+  AccountType.ACCOUNT_529,
+]);
 
 /**
  * Educational copy for each warning type, surfaced as a tooltip on the
@@ -246,6 +267,7 @@ export default function Investments() {
   const loadHousehold = useHouseholdStore((s) => s.load);
   // Tickers + fund holdings power the Concentration Health section below.
   // Loaded here so useConcentration() sees populated stores on first paint.
+  const tickers = useTickersStore((s) => s.tickers);
   const loadTickers = useTickersStore((s) => s.load);
   const loadFundHoldings = useFundHoldingsStore((s) => s.load);
   const loadFundSectors = useFundSectorsStore((s) => s.load);
@@ -289,6 +311,24 @@ export default function Investments() {
     [holdings, filter, visibleAccountIds],
   );
 
+  // Unclassified-tickers banner inputs. A ticker counts as unclassified when
+  // it has no row in the `tickers` store, or its row exists but the human
+  // name was never set (name === null) — both states mean auto-classification
+  // didn't land and the donut groupings can't trust the asset_class column.
+  // Building a Map once keeps the per-holding lookup O(1) across re-renders.
+  const tickerByName = useMemo(
+    () => new Map(tickers.map((t) => [t.ticker, t])),
+    [tickers],
+  );
+  const unclassifiedTickers = useMemo(() => {
+    const set = new Set<string>();
+    for (const h of visibleHoldings) {
+      const row = tickerByName.get(h.ticker);
+      if (!row || row.name === null) set.add(h.ticker);
+    }
+    return [...set].sort();
+  }, [visibleHoldings, tickerByName]);
+
   // CSV export. accountId resolves to the account name via accountById; a
   // null id, or one with no matching account, becomes ''. targetAllocationPct
   // is the stored 0..1 fraction and is exported raw (no ×100) — hence the
@@ -319,6 +359,34 @@ export default function Investments() {
   const visibleContributions = useMemo(
     () => (filter === 'household' ? contributions : contributions.filter((c) => visibleAccountIds.has(c.accountId))),
     [contributions, filter, visibleAccountIds],
+  );
+
+  // Investment-only account ids for the growth card — drop cash/savings so the
+  // card measures "investments value", not total liquid assets. Derived from
+  // visibleAccounts so the view filter (household / p1 / p2 / joint) flows
+  // through: an account excluded by the filter never enters this set.
+  const investmentAccountIds = useMemo(
+    () =>
+      new Set(
+        visibleAccounts
+          .filter((a) => INVESTMENT_ACCOUNT_TYPES.has(a.type))
+          .map((a) => a.id)
+          .filter((id): id is number => id != null),
+      ),
+    [visibleAccounts],
+  );
+
+  // Growth across the five horizons (1d…1y). sumLatestOnOrBefore reads the
+  // full snapshots array and scopes to investment accounts via the id set;
+  // forward-only history means most horizons resolve to null today and the
+  // card shows "Not enough history yet" for them — that's expected.
+  const investmentsGrowth = useMemo(
+    () =>
+      computeHorizonGrowth(
+        (iso) => sumLatestOnOrBefore(snapshots, iso, investmentAccountIds),
+        new Date(),
+      ),
+    [snapshots, investmentAccountIds],
   );
 
   // Concentration health is intentionally household-wide regardless of the
@@ -455,19 +523,28 @@ export default function Investments() {
       const rows: SectorRefreshRow[] = [];
       for (const ticker of fundTickers) {
         try {
-          // Clear before fetching so a fetch failure leaves the table empty
-          // (and the donut visibly grey) rather than masking the bug with
-          // stale rows from a prior run.
-          await db.execute('DELETE FROM fund_sectors WHERE fund_ticker = ?', [ticker]);
+          // Fetch first, mutate the table only on success. The old code
+          // DELETEd up front so a fetch failure left the row visibly empty,
+          // but Yahoo's 429s now wipe the user's data on every retry. Only
+          // a non-empty fetch earns the right to replace existing rows;
+          // an empty fetch leaves prior rows intact (see the empty branch).
           const { sectors, asOf } = await yahoo.fundSectorWeightings(ticker);
           if (sectors.length === 0) {
             rows.push({ ticker, status: 'empty', sectorCount: 0 });
           } else {
+            await db.execute('DELETE FROM fund_sectors WHERE fund_ticker = ?', [ticker]);
             await sectorsRepo.upsertSectors(ticker, sectors, asOf);
             rows.push({ ticker, status: 'ok', sectorCount: sectors.length });
           }
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
+          const rawMessage = err instanceof Error ? err.message : String(err);
+          // Yahoo's getcrumb auth endpoint serves a generic 429 with no
+          // Retry-After; surface a human-readable hint instead of a stack
+          // trace so the user understands why the donut stayed grey.
+          const message =
+            rawMessage.includes('429') || /too many requests/i.test(rawMessage)
+              ? 'Yahoo Finance rate-limited the auth endpoint — try again in ~10 minutes'
+              : rawMessage;
           rows.push({ ticker, status: 'error', error: message });
         }
         setSectorRefreshRows([...rows]);
@@ -727,6 +804,37 @@ export default function Investments() {
         holdings={visibleHoldings}
         snapshots={visibleSnapshots}
       />
+
+      {/*
+       * Investments growth card. Click (or use the chevrons / arrow keys) to
+       * cycle the horizon from "since yesterday" through "past year". Sits
+       * above the donut grid so the headline number reads first.
+       */}
+      <GrowthCard title="Investments growth" horizons={investmentsGrowth} />
+
+      {/*
+       * Unclassified-tickers banner. Surfaces when at least one held ticker
+       * is missing from the tickers store (or has name === null) so the user
+       * knows the donuts may bucket those positions as OTHER. Uses the same
+       * warning-soft palette as DisclosureBanner — the closest existing
+       * pattern in the codebase. We deliberately list every ticker rather
+       * than truncating: the typical missing-ticker case is one or two
+       * single stocks, and silently hiding the rest would obscure the fix.
+       */}
+      {unclassifiedTickers.length > 0 && (
+        <div
+          className="rounded-md border border-warning/40 bg-warning-soft px-3 py-2 text-sm text-warning-foreground"
+          role="note"
+          data-testid="unclassified-tickers-banner"
+        >
+          {unclassifiedTickers.length} holding{unclassifiedTickers.length === 1 ? '' : 's'} couldn't be auto-classified:{' '}
+          <span className="font-mono">{unclassifiedTickers.join(', ')}</span>. Set their asset class manually in{' '}
+          <Link to="/inputs/tickers" className="underline hover:no-underline">
+            Inputs → Tickers
+          </Link>
+          .
+        </div>
+      )}
 
       {/* Donuts row — asset class, per-ticker, sector. Stacks on narrow widths. */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

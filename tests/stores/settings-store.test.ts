@@ -22,7 +22,7 @@ describe('useSettingsStore', () => {
     await useSettingsStore.getState().load();
     const { settings } = useSettingsStore.getState();
     expect(settings).not.toBeNull();
-    expect(settings!.refreshCadence).toBe('EVERY_LAUNCH');
+    expect(settings!.refreshCadence).toBe('DAILY');
   });
 
   it('updates settings and refreshes state', async () => {

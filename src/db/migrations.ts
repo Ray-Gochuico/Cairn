@@ -149,6 +149,14 @@ export async function loadAllMigrations(): Promise<Migration[]> {
   const m0034 = (await import('./migrations/0034_add_query_indexes.sql?raw')).default;
   const m0035 = (await import('./migrations/0035_add_default_drawdown_tax_rate.sql?raw')).default;
   const m0036 = (await import('./migrations/0036_add_rent_lease_tracking.sql?raw')).default;
+  // NB: 0037 is intentionally skipped — it's reserved for the planned
+  // `0037_learning_state.sql` trivia migration (see docs/superpowers/specs/
+  // 2026-05-28-v1.1-plan.md). These three claim 0038-0040 to avoid colliding
+  // with it. The runner tracks each version independently, so the 0037 gap is
+  // harmless and the trivia migration will still apply cleanly once added.
+  const m0038 = (await import('./migrations/0038_seed_modern_etfs.sql?raw')).default;
+  const m0039 = (await import('./migrations/0039_default_daily_refresh.sql?raw')).default;
+  const m0040 = (await import('./migrations/0040_clear_synthetic_snapshots.sql?raw')).default;
   return [
     { version: '0001_initial', sql: m0001 },
     { version: '0002_seed_tax_rules', sql: m0002 },
@@ -186,5 +194,8 @@ export async function loadAllMigrations(): Promise<Migration[]> {
     { version: '0034_add_query_indexes', sql: m0034 },
     { version: '0035_add_default_drawdown_tax_rate', sql: m0035 },
     { version: '0036_add_rent_lease_tracking', sql: m0036 },
+    { version: '0038_seed_modern_etfs', sql: m0038 },
+    { version: '0039_default_daily_refresh', sql: m0039 },
+    { version: '0040_clear_synthetic_snapshots', sql: m0040 },
   ];
 }

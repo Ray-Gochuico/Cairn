@@ -215,7 +215,7 @@ describe('enrichTickerIfMissing', () => {
     );
   });
 
-  it('swallows Yahoo errors silently (best-effort)', async () => {
+  it('inserts a stub row when Yahoo fails for an unknown ticker (best-effort)', async () => {
     const yahoo = makeYahooMock({
       fundProfile: vi.fn().mockRejectedValue(new Error('Yahoo network failure')),
     });
@@ -223,6 +223,33 @@ describe('enrichTickerIfMissing', () => {
 
     // Should not throw
     await expect(enrichTickerIfMissing('BAD', { yahoo, tickers })).resolves.toBeUndefined();
+
+    // Contract: an unclassified holding is detected by row-missing OR
+    // name === null. The stub here lets the UI surface "needs attention"
+    // without depending on Yahoo coming back.
+    expect(tickers.upsert).toHaveBeenCalledTimes(1);
+    expect(tickers.upsert).toHaveBeenCalledWith({
+      ticker: 'BAD',
+      name: null,
+      assetClass: 'OTHER',
+      leverageFactor: 1.0,
+      direction: 'LONG',
+      userAdded: false,
+      accentColor: null,
+      sector: null,
+      industry: null,
+    });
+  });
+
+  it('does NOT stub when Yahoo fails for an EXISTING ticker (preserves real metadata)', async () => {
+    const yahoo = makeYahooMock({
+      assetProfile: vi.fn().mockRejectedValue(new Error('Yahoo network failure')),
+    });
+    const tickers = makeTickersMock({
+      lookup: vi.fn().mockResolvedValue(existingTicker),
+    });
+
+    await expect(enrichTickerIfMissing('VTI', { yahoo, tickers })).resolves.toBeUndefined();
 
     expect(tickers.upsert).not.toHaveBeenCalled();
   });

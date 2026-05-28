@@ -71,5 +71,25 @@ export async function enrichTickerIfMissing(
   } catch {
     // Best-effort: if Yahoo errors, leave fields null. The next refresh will
     // retry (since sector stays null). Concentration math falls back to OTHER.
+    // Contract: a ticker is "unclassified / needs user attention" if it has no
+    // row OR name IS NULL. The stub row below makes that detection possible
+    // from the UI (Tickers input tab + future Investments banner).
+    if (!existing) {
+      try {
+        await deps.tickers.upsert({
+          ticker,
+          name: null,
+          assetClass: 'OTHER',
+          leverageFactor: 1.0,
+          direction: 'LONG',
+          userAdded: false,
+          accentColor: null,
+          sector: null,
+          industry: null,
+        });
+      } catch {
+        // Swallow — function must remain best-effort.
+      }
+    }
   }
 }
