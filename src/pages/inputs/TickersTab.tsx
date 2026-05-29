@@ -197,7 +197,7 @@ function TickerForm({ values, onSubmit, onCancel, submitLabel = 'Save' }: Ticker
       )}
 
       {saveError && (
-        <div className="text-sm text-destructive">{saveError}</div>
+        <div className="text-sm text-destructive-soft-foreground">{saveError}</div>
       )}
 
       <div className="flex justify-end items-center gap-3">
@@ -332,11 +332,11 @@ export default function TickersTab() {
       )}
 
       {error && (
-        <div className="text-sm text-destructive mb-4">{error}</div>
+        <div className="text-sm text-destructive-soft-foreground mb-4">{error}</div>
       )}
 
       {deleteError && (
-        <div className="text-sm text-destructive mb-4">{deleteError}</div>
+        <div className="text-sm text-destructive-soft-foreground mb-4">{deleteError}</div>
       )}
 
       {!isLoading && sorted.length === 0 && (

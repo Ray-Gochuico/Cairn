@@ -185,13 +185,13 @@ export function TransactionEditDialog({
               onChange={(e) => setNotes(e.target.value)} />
           </div>
           {error && (
-            <div className="text-sm text-destructive" role="alert">{error}</div>
+            <div className="text-sm text-destructive-soft-foreground" role="alert">{error}</div>
           )}
         </div>
         <DialogFooter className="sm:justify-between">
           {confirmingDelete ? (
             <div className="flex items-center gap-2">
-              <span className="text-sm text-destructive">Delete this transaction?</span>
+              <span className="text-sm text-destructive-soft-foreground">Delete this transaction?</span>
               <Button variant="destructive" onClick={handleDelete} disabled={saving}>
                 Confirm
               </Button>

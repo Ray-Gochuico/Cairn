@@ -68,7 +68,7 @@ export function ValueEditor({ initialValue, onSave, onCancel }: ValueEditorProps
         disabled={saving}
       />
       {error ? (
-        <div className="text-xs text-destructive">{error}</div>
+        <div className="text-xs text-destructive-soft-foreground">{error}</div>
       ) : null}
       <div className="flex gap-2 justify-end">
         <Button

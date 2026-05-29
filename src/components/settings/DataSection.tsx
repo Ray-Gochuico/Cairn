@@ -264,7 +264,7 @@ export function DataSection() {
               aria-label="Backup file"
             />
             {restoreError && (
-              <p className="text-sm text-destructive" role="alert">
+              <p className="text-sm text-destructive-soft-foreground" role="alert">
                 {restoreError}
               </p>
             )}

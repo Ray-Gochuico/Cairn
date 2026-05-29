@@ -60,7 +60,7 @@ export function DecisionPrompt({ question }: Props) {
         ))}
       </div>
       {error && (
-        <div className="text-xs text-destructive" role="alert">
+        <div className="text-xs text-destructive-soft-foreground" role="alert">
           {error}
         </div>
       )}

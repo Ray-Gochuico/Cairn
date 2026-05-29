@@ -90,7 +90,7 @@ export function MarkReimbursedDialog({
             />
           </div>
           {error && (
-            <div className="text-sm text-destructive" role="alert">
+            <div className="text-sm text-destructive-soft-foreground" role="alert">
               {error}
             </div>
           )}

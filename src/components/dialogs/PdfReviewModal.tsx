@@ -457,7 +457,7 @@ export function PdfReviewModal({
           </div>
           <div className="flex items-center gap-3">
             {error && (
-              <span className="text-sm text-destructive" role="alert">
+              <span className="text-sm text-destructive-soft-foreground" role="alert">
                 {error}
               </span>
             )}

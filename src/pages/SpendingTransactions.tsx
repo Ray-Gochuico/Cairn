@@ -94,7 +94,7 @@ const TransactionRow = memo(function TransactionRow({
       <td className="py-2 text-right">
         {isConfirmingDelete ? (
           <div className="inline-flex items-center gap-1">
-            <span className="text-xs text-destructive mr-1">Delete?</span>
+            <span className="text-xs text-destructive-soft-foreground mr-1">Delete?</span>
             <button
               type="button"
               aria-label={`Confirm delete ${t.merchant}`}
@@ -451,7 +451,7 @@ export default function SpendingTransactions() {
                           </button>
                         </div>
                         {rowError && (
-                          <p className="text-xs text-destructive mt-1" role="alert">{rowError}</p>
+                          <p className="text-xs text-destructive-soft-foreground mt-1" role="alert">{rowError}</p>
                         )}
                       </td>
                     </tr>

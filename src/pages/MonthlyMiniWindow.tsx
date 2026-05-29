@@ -186,7 +186,7 @@ function DerivedValueCard({ account, snapshot }: DerivedValueCardProps) {
         )}
 
         {error && (
-          <div className="text-sm text-destructive">{error}</div>
+          <div className="text-sm text-destructive-soft-foreground">{error}</div>
         )}
       </CardContent>
     </Card>
@@ -274,7 +274,7 @@ function LoanPaymentCard({ loan, nextEntry }: LoanPaymentCardProps) {
         )}
 
         {error && (
-          <div className="text-sm text-destructive">{error}</div>
+          <div className="text-sm text-destructive-soft-foreground">{error}</div>
         )}
       </CardContent>
     </Card>
@@ -367,7 +367,7 @@ function CashBalanceCard({ account, latestBalance }: CashBalanceCardProps) {
         )}
 
         {error && (
-          <div className="text-sm text-destructive">{error}</div>
+          <div className="text-sm text-destructive-soft-foreground">{error}</div>
         )}
       </CardContent>
     </Card>
@@ -454,7 +454,7 @@ function AssetValueCard({ name, currentValue, kind, onSave }: AssetValueCardProp
         )}
 
         {error && (
-          <div className="text-sm text-destructive">{error}</div>
+          <div className="text-sm text-destructive-soft-foreground">{error}</div>
         )}
       </CardContent>
     </Card>

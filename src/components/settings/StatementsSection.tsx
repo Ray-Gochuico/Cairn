@@ -75,7 +75,7 @@ export function StatementsSection() {
           )}
         </div>
         {error && (
-          <p className="text-sm text-destructive" role="alert">{error}</p>
+          <p className="text-sm text-destructive-soft-foreground" role="alert">{error}</p>
         )}
       </CardContent>
     </Card>

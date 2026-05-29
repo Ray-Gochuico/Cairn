@@ -324,7 +324,7 @@ function AccountSnapshotInlineForm({
           onChange={(e) => setBalance(e.target.value)}
         />
       </div>
-      {error && <div className="text-sm text-destructive">{error}</div>}
+      {error && <div className="text-sm text-destructive-soft-foreground">{error}</div>}
       <div className="flex justify-end">
         <Button type="submit" disabled={!canSubmit}>
           Add snapshot
@@ -425,7 +425,7 @@ function ContributionInlineForm({
           onChange={(e) => setAmount(e.target.value)}
         />
       </div>
-      {error && <div className="text-sm text-destructive">{error}</div>}
+      {error && <div className="text-sm text-destructive-soft-foreground">{error}</div>}
       <div className="flex justify-end">
         <Button type="submit" disabled={!canSubmit}>
           Add contribution

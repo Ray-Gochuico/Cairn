@@ -66,7 +66,7 @@ export function ResetDisclaimersDialog({ open, onOpenChange }: Props) {
           fast-path cache is cleared.
         </p>
         {error && (
-          <div className="text-xs text-destructive" role="alert">
+          <div className="text-xs text-destructive-soft-foreground" role="alert">
             {error}
           </div>
         )}

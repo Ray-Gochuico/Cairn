@@ -316,7 +316,7 @@ export default function HouseholdForm({
       )}
 
       {error && (
-        <div className="text-sm text-destructive">{error}</div>
+        <div className="text-sm text-destructive-soft-foreground">{error}</div>
       )}
 
       <div className="flex justify-end items-center gap-3">
