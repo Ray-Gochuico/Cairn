@@ -74,24 +74,28 @@ export interface HorizonGrowth {
 }
 
 /**
- * Sum, per account, the latest snapshot whose snapshotDate <= dateIso, across
+ * For each account, the latest snapshot whose snapshotDate <= dateIso, across
  * the given accountIds (or all accounts present in `snapshots` when
- * accountIds is undefined).
+ * accountIds is undefined). Keyed by accountId; the value carries both the
+ * winning snapshot's date and its totalValue.
  *
- * Returns null when NO snapshot across the considered accounts falls
- * on-or-before dateIso — i.e. there is no history reaching that far back, so
- * the horizon should render "Not enough history yet" rather than a misleading
- * $0. (A real $0 baseline only arises when a snapshot exists with totalValue
- * 0, which sums to 0, not null.)
+ * An account contributes an entry only when it has at least one snapshot
+ * on-or-before dateIso — accounts with no qualifying history are simply
+ * absent from the map (rather than mapped to 0), so callers can distinguish
+ * "no history that far back" from "history that totals zero".
  *
  * Snapshot dates are ISO YYYY-MM-DD, so lexical string comparison is also
  * chronological — no Date parsing needed.
+ *
+ * Shared by sumLatestOnOrBefore (which sums these values for the growth card)
+ * and computeAccountBreakdown (which needs the per-account breakdown for the
+ * Portfolio-by-account card), so the two stay numerically consistent.
  */
-export function sumLatestOnOrBefore(
+export function latestPerAccountOnOrBefore(
   snapshots: ReadonlyArray<{ accountId: number; snapshotDate: string; totalValue: number }>,
   dateIso: string,
   accountIds?: ReadonlySet<number>,
-): number | null {
+): Map<number, { date: string; value: number }> {
   // Track the latest qualifying snapshot per account. We keep the date so a
   // later-but-still-eligible snapshot can replace an earlier one.
   const latestByAccount = new Map<number, { date: string; value: number }>();
@@ -103,6 +107,29 @@ export function sumLatestOnOrBefore(
       latestByAccount.set(s.accountId, { date: s.snapshotDate, value: s.totalValue });
     }
   }
+  return latestByAccount;
+}
+
+/**
+ * Sum, per account, the latest snapshot whose snapshotDate <= dateIso, across
+ * the given accountIds (or all accounts present in `snapshots` when
+ * accountIds is undefined).
+ *
+ * Returns null when NO snapshot across the considered accounts falls
+ * on-or-before dateIso — i.e. there is no history reaching that far back, so
+ * the horizon should render "Not enough history yet" rather than a misleading
+ * $0. (A real $0 baseline only arises when a snapshot exists with totalValue
+ * 0, which sums to 0, not null.)
+ *
+ * Thin wrapper over latestPerAccountOnOrBefore: sum its values, or null when
+ * the map is empty. Behavior is identical to the prior inlined implementation.
+ */
+export function sumLatestOnOrBefore(
+  snapshots: ReadonlyArray<{ accountId: number; snapshotDate: string; totalValue: number }>,
+  dateIso: string,
+  accountIds?: ReadonlySet<number>,
+): number | null {
+  const latestByAccount = latestPerAccountOnOrBefore(snapshots, dateIso, accountIds);
   if (latestByAccount.size === 0) return null;
   let sum = 0;
   for (const entry of latestByAccount.values()) sum += entry.value;

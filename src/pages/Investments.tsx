@@ -27,10 +27,13 @@ import InvestmentTimeSeriesChart from '@/components/charts/InvestmentTimeSeriesC
 import PerTickerDonut from '@/components/charts/PerTickerDonut';
 import SectorDonut from '@/components/charts/SectorDonut';
 import GrowthCard from '@/components/charts/GrowthCard';
+import AccountBreakdownCard from '@/components/charts/AccountBreakdownCard';
 import {
   computeHorizonGrowth,
   sumLatestOnOrBefore,
 } from '@/lib/growth-horizons';
+import { computeAccountBreakdown } from '@/lib/account-breakdown';
+import { colorForAccount } from '@/lib/chart-colors';
 import { useConcentration } from '@/lib/use-concentration';
 import { valueHoldings, type HoldingValuation } from '@/lib/holdings-value';
 import type { Dependent, AccountSnapshot, Household, Holding } from '@/types/schema';
@@ -436,6 +439,30 @@ export default function Investments() {
     () => new Map(),
   );
 
+  // "Investable only" toggle for the Portfolio-by-account card. When ON it
+  // drops cash-like accounts (CASH/SAVINGS) from the rows, the composition
+  // bar, AND the % denominator. Default OFF so % sums to 100% across
+  // everything held. Persisted in localStorage (a single boolean — simpler
+  // than the donut pickers' hidden-set shape) so the choice survives reloads;
+  // the lazy initializer reads it once and guards against unavailable storage.
+  const INVESTABLE_ONLY_KEY = 'investments.byAccount.investableOnly';
+  const [investableOnly, setInvestableOnly] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(INVESTABLE_ONLY_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const handleToggleInvestableOnly = (next: boolean) => {
+    setInvestableOnly(next);
+    try {
+      if (next) localStorage.setItem(INVESTABLE_ONLY_KEY, '1');
+      else localStorage.removeItem(INVESTABLE_ONLY_KEY);
+    } catch {
+      // Private-mode / disabled storage: keep the in-memory toggle working.
+    }
+  };
+
   // "Refresh fund data" button state. Lets the user force a fund-holdings
   // sync without waiting for the next app restart — important when the
   // Per-Company donut is showing fund tickers (VTI, FXAIX) instead of the
@@ -683,13 +710,6 @@ export default function Investments() {
     return { from: from.toISOString().slice(0, 7), to: currentMonth };
   }, [currentMonth]);
 
-  const accountSummary = useMemo(() => {
-    return visibleAccounts.map((a) => ({
-      account: a,
-      latestValue: a.id != null ? (latestPerAccount.get(a.id) ?? 0) : 0,
-    }));
-  }, [visibleAccounts, latestPerAccount]);
-
   // 529 section derivations. We keep these out of the JSX body so the
   // section can short-circuit when there are no 529 accounts without
   // wasting work on the typical case (most households have none). 529s
@@ -728,6 +748,42 @@ export default function Investments() {
   // today (drift / contributions / by-account always render with their own
   // empty-state messages when there's nothing to show), so they're always
   // applicable. Layout overlay is applied via applyCardLayout below.
+  // Portfolio-by-account breakdown — % of portfolio, current value, change
+  // vs last month per account. Built off the *visible* account + snapshot
+  // sets the rest of the page uses, so the view filter (household /
+  // p1 / p2 / joint) flows through; the helper applies the
+  // excludedFromNetWorth and investable-only rules itself. `new Date()` is the
+  // injected "now" — the helper is otherwise pure/deterministic.
+  const accountBreakdown = useMemo(
+    () =>
+      computeAccountBreakdown(visibleAccounts, visibleSnapshots, new Date(), {
+        investableOnly,
+      }),
+    [visibleAccounts, visibleSnapshots, investableOnly],
+  );
+
+  // Per-account swatch/segment colors for the breakdown card. Resolved here
+  // (not in the presentational card) so each account's accent_color override
+  // wins, falling back to the deterministic palette-by-id default.
+  const breakdownColors = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const a of visibleAccounts) {
+      if (a.id != null) map.set(a.id, colorForAccount(a.id, a.accentColor));
+    }
+    return map;
+  }, [visibleAccounts]);
+
+  // Latest snapshot date across the *visible* accounts — the "as of" line on
+  // the breakdown card. Snapshot dates are ISO YYYY-MM-DD so a lexical max is
+  // chronological. Null when there are no snapshots yet.
+  const breakdownAsOf = useMemo(() => {
+    let max: string | null = null;
+    for (const s of visibleSnapshots) {
+      if (max === null || s.snapshotDate > max) max = s.snapshotDate;
+    }
+    return max;
+  }, [visibleSnapshots]);
+
   const cardRegistry: InvestmentsCardEntry[] = useMemo(
     () => [
       {
@@ -973,45 +1029,22 @@ export default function Investments() {
         label: 'Portfolio by account',
         size: 'wide',
         applicable: true,
+        // Portfolio-by-account breakdown — replaces the old flat "Accounts"
+        // list. Shows each account's share of the portfolio (100%-stacked bar
+        // + per-row %), current value, and change vs last month, plus a
+        // header total. The "View holdings" link from the old card is
+        // preserved via viewHoldingsTo. All math comes from
+        // computeAccountBreakdown above; this is presentation only.
         render: () => (
-          <Card>
-            <CardHeader>
-              <CardTitle>Accounts</CardTitle>
-              <CardDescription>Latest snapshot value per account</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {accountSummary.length === 0 ? (
-                <div className="text-sm text-muted-foreground">No accounts yet.</div>
-              ) : (
-                <ul className="divide-y">
-                  {accountSummary.map(({ account, latestValue }) => (
-                    <li
-                      key={account.id}
-                      className="flex items-center justify-between py-3"
-                    >
-                      <div>
-                        <div className="font-medium">{account.name}</div>
-                        {account.institution ? (
-                          <div className="text-xs text-muted-foreground">
-                            {account.institution}
-                          </div>
-                        ) : null}
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <span className="font-mono">{formatCurrency(latestValue)}</span>
-                        <Link
-                          to="/inputs/holdings"
-                          className="text-sm underline text-muted-foreground hover:text-foreground"
-                        >
-                          View holdings
-                        </Link>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
+          <AccountBreakdownCard
+            rows={accountBreakdown.rows}
+            total={accountBreakdown.total}
+            colorByAccountId={breakdownColors}
+            investableOnly={investableOnly}
+            onToggleInvestableOnly={handleToggleInvestableOnly}
+            asOfDate={breakdownAsOf}
+            viewHoldingsTo="/inputs/holdings"
+          />
         ),
       },
       {
@@ -1120,8 +1153,12 @@ export default function Investments() {
       visibleContributions,
       contribRange.from,
       contribRange.to,
-      // by-account
-      accountSummary,
+      // by-account (AccountBreakdownCard wiring)
+      accountBreakdown,
+      breakdownColors,
+      breakdownAsOf,
+      investableOnly,
+      handleToggleInvestableOnly,
       // plans-529 (also drives `applicable`)
       plans529,
       dependentById,
