@@ -17,6 +17,8 @@ import { filterByOwnerPersonId } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import CardEditFrame from '@/components/investments/CardEditFrame';
+import type { CardLayoutEntry } from '@/types/schema';
 import ContributionsByBucketChart from '@/components/charts/ContributionsByBucketChart';
 import DonutChartCard from '@/components/charts/DonutChartCard';
 import { DonutEntityPicker, useDonutSelected, type DonutEntityPickerItem } from '@/components/charts/DonutEntityPicker';
@@ -279,6 +281,8 @@ function renderCardFlow(cards: InvestmentsCardEntry[]): ReactNode[] {
 export default function Investments() {
   const { filter, persons } = useViewFilter();
 
+  const [editMode, setEditMode] = useState(false);
+
   const accounts = useAccountsStore((s) => s.accounts);
   const loadAccounts = useAccountsStore((s) => s.load);
   const holdings = useHoldingsStore((s) => s.holdings);
@@ -295,6 +299,7 @@ export default function Investments() {
   // flags). null === default flow; see applyCardLayout() for semantics.
   const settings = useSettingsStore((s) => s.settings);
   const loadSettings = useSettingsStore((s) => s.load);
+  const updateSettings = useSettingsStore((s) => s.update);
   // Tickers + fund holdings power the Concentration Health section below.
   // Loaded here so useConcentration() sees populated stores on first paint.
   const tickers = useTickersStore((s) => s.tickers);
@@ -1132,6 +1137,60 @@ export default function Investments() {
     [cardRegistry, cardLayout],
   );
 
+  // Edit mode needs to render every applicable card (including hidden ones,
+  // so the user can re-show them) in stored order. applyCardLayout drops
+  // hidden cards, so we derive a parallel list here that keeps them in.
+  const applicableCards = useMemo(
+    () => cardRegistry.filter((c) => c.applicable),
+    [cardRegistry],
+  );
+
+  const orderedForEdit = useMemo(() => {
+    const layout = settings?.investmentsCardLayout ?? null;
+    if (!layout) return applicableCards;
+    const idx = new Map(layout.map((e, i) => [e.id, i]));
+    const known = applicableCards.filter((c) => idx.has(c.id));
+    const unknown = applicableCards.filter((c) => !idx.has(c.id));
+    known.sort((a, b) => (idx.get(a.id) ?? 0) - (idx.get(b.id) ?? 0));
+    return [...known, ...unknown];
+  }, [applicableCards, settings?.investmentsCardLayout]);
+
+  const hiddenSet = useMemo(
+    () =>
+      new Set(
+        (settings?.investmentsCardLayout ?? [])
+          .filter((e) => e.hidden)
+          .map((e) => e.id),
+      ),
+    [settings?.investmentsCardLayout],
+  );
+
+  // Single source of layout-mutation truth — mirrors SidebarSection.writeLayout.
+  // Build a fresh overlay from the current applicable order + hidden set, then
+  // hand a `mutate` callback a chance to flip `hidden` or swap entries.
+  const writeCardLayout = (mutate: (entries: CardLayoutEntry[]) => CardLayoutEntry[]) => {
+    const flat: CardLayoutEntry[] = orderedForEdit.map((c) => ({
+      id: c.id,
+      hidden: hiddenSet.has(c.id),
+    }));
+    void updateSettings({ investmentsCardLayout: mutate(flat) });
+  };
+
+  const toggleCardHidden = (id: string) =>
+    writeCardLayout((entries) =>
+      entries.map((e) => (e.id === id ? { ...e, hidden: !e.hidden } : e)),
+    );
+
+  const moveCard = (index: number, delta: -1 | 1) => {
+    const target = index + delta;
+    if (target < 0 || target >= orderedForEdit.length) return;
+    writeCardLayout((entries) => {
+      const next = [...entries];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
+
   const hasAnyHolding = visibleHoldings.length > 0;
   const hasAnySnapshot = visibleSnapshots.length > 0;
 
@@ -1244,7 +1303,16 @@ export default function Investments() {
             </div>
           )}
         </div>
-        <ExportCsvButton baseName="holdings" columns={csvColumns} rows={holdings} />
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setEditMode((v) => !v)}
+            className="rounded-md border px-3 py-1.5 text-sm hover:bg-muted"
+          >
+            {editMode ? 'Done' : 'Customize'}
+          </button>
+          <ExportCsvButton baseName="holdings" columns={csvColumns} rows={holdings} />
+        </div>
       </div>
 
       {/*
@@ -1274,7 +1342,24 @@ export default function Investments() {
         </div>
       )}
 
-      {visibleCards.length === 0 ? (
+      {editMode ? (
+        <div className="space-y-4">
+          {orderedForEdit.map((card, i) => (
+            <CardEditFrame
+              key={card.id}
+              label={card.label}
+              hidden={hiddenSet.has(card.id)}
+              canMoveUp={i > 0}
+              canMoveDown={i < orderedForEdit.length - 1}
+              onToggleHidden={() => toggleCardHidden(card.id)}
+              onMoveUp={() => moveCard(i, -1)}
+              onMoveDown={() => moveCard(i, 1)}
+            >
+              {card.render()}
+            </CardEditFrame>
+          ))}
+        </div>
+      ) : visibleCards.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center text-sm text-muted-foreground">
             All cards hidden — click Customize to bring some back.
