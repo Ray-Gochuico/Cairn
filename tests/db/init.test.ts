@@ -4,6 +4,18 @@ import { runMigrations, loadAllMigrations } from '@/db/migrations';
 import { SettingsRepo } from '@/domain/app-settings';
 import { maybeRunLaunchRefresh } from '@/db/init';
 
+// Insert one account_snapshots row so the table is non-empty. The bootstrap
+// branch in maybeRunLaunchRefresh only counts rows, so the account FK is
+// irrelevant to the gating logic under test — toggle foreign_keys off to skip
+// seeding the household -> account chain.
+async function seedOneSnapshot(db: SqliteAdapter): Promise<void> {
+  await db.execute('PRAGMA foreign_keys = OFF');
+  await db.execute(
+    "INSERT INTO account_snapshots (account_id, snapshot_date, total_value, source) VALUES (1, '2026-05-01', 1000, 'MANUAL')",
+  );
+  await db.execute('PRAGMA foreign_keys = ON');
+}
+
 describe('maybeRunLaunchRefresh', () => {
   let db: SqliteAdapter;
 
@@ -31,10 +43,35 @@ describe('maybeRunLaunchRefresh', () => {
     expect((await new SettingsRepo(db).get()).lastRefreshAt).toBeNull();
   });
 
-  it('does NOT re-stamp under DAILY when the last refresh was minutes ago', async () => {
+  it('does NOT re-stamp under DAILY when recently refreshed and snapshots exist', async () => {
+    await seedOneSnapshot(db);
     const recent = new Date(Date.now() - 60_000).toISOString();
     await new SettingsRepo(db).update({
       refreshCadence: 'DAILY',
+      lastRefreshAt: recent,
+    });
+    await maybeRunLaunchRefresh(db);
+    expect((await new SettingsRepo(db).get()).lastRefreshAt).toBe(recent);
+  });
+
+  it('bootstraps a refresh under DAILY when there are zero snapshots, even if recently refreshed', async () => {
+    // Forward-only self-heal: after the 0040 wipe a DB can be snapshot-empty
+    // with a recent last_refresh_at, which would otherwise leave every
+    // value-based view blank until the next calendar day. account_snapshots is
+    // empty in a fresh migrated DB (0040 ran against no rows), so no seed here.
+    const recent = new Date(Date.now() - 60_000).toISOString();
+    await new SettingsRepo(db).update({
+      refreshCadence: 'DAILY',
+      lastRefreshAt: recent,
+    });
+    await maybeRunLaunchRefresh(db);
+    expect((await new SettingsRepo(db).get()).lastRefreshAt).not.toBe(recent);
+  });
+
+  it('does NOT bootstrap under MANUAL even when there are zero snapshots', async () => {
+    const recent = new Date(Date.now() - 60_000).toISOString();
+    await new SettingsRepo(db).update({
+      refreshCadence: 'MANUAL',
       lastRefreshAt: recent,
     });
     await maybeRunLaunchRefresh(db);
