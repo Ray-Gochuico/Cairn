@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
@@ -6,9 +6,11 @@ import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useContributionsStore } from '@/stores/contributions-store';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useHouseholdStore } from '@/stores/household-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import { useTickersStore } from '@/stores/tickers-store';
 import { useFundHoldingsStore } from '@/stores/fund-holdings-store';
 import { useFundSectorsStore } from '@/stores/fund-sectors-store';
+import { applyCardLayout, type InvestmentsCardEntry } from '@/lib/investments-card-layout';
 import { getDatabase } from '@/db/db';
 import { AccountType, AssetClass } from '@/types/enums';
 import { filterByOwnerPersonId } from '@/lib/filter-by-view';
@@ -250,6 +252,30 @@ function pickModerateRate(household: Household | null): number {
   return household.growthScenarios[0]?.rate ?? FALLBACK;
 }
 
+function renderCardFlow(cards: InvestmentsCardEntry[]): ReactNode[] {
+  // Group consecutive `compact` cards into the existing 3-up donut grid; render
+  // `wide` cards full-width. Preserves today's layout when the three donuts
+  // are visible and adjacent — a wide card between them simply splits the grid.
+  const out: ReactNode[] = [];
+  let compactRun: InvestmentsCardEntry[] = [];
+  const flushCompact = () => {
+    if (compactRun.length === 0) return;
+    out.push(
+      <div key={`grid-${compactRun[0].id}`} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {compactRun.map((c) => <div key={c.id}>{c.render()}</div>)}
+      </div>,
+    );
+    compactRun = [];
+  };
+  for (const card of cards) {
+    if (card.size === 'compact') { compactRun.push(card); continue; }
+    flushCompact();
+    out.push(<div key={card.id}>{card.render()}</div>);
+  }
+  flushCompact();
+  return out;
+}
+
 export default function Investments() {
   const { filter, persons } = useViewFilter();
 
@@ -265,6 +291,10 @@ export default function Investments() {
   const loadDependents = useDependentsStore((s) => s.load);
   const household = useHouseholdStore((s) => s.household);
   const loadHousehold = useHouseholdStore((s) => s.load);
+  // Settings drives the Investments card-layout overlay (id order + hidden
+  // flags). null === default flow; see applyCardLayout() for semantics.
+  const settings = useSettingsStore((s) => s.settings);
+  const loadSettings = useSettingsStore((s) => s.load);
   // Tickers + fund holdings power the Concentration Health section below.
   // Loaded here so useConcentration() sees populated stores on first paint.
   const tickers = useTickersStore((s) => s.tickers);
@@ -279,6 +309,7 @@ export default function Investments() {
     loadContributions();
     loadDependents();
     loadHousehold();
+    loadSettings();
     loadTickers();
     loadFundHoldings();
     loadFundSectors();
@@ -289,6 +320,7 @@ export default function Investments() {
     loadContributions,
     loadDependents,
     loadHousehold,
+    loadSettings,
     loadTickers,
     loadFundHoldings,
     loadFundSectors,
@@ -684,6 +716,422 @@ export default function Investments() {
   const today529 = useMemo(() => new Date(), []);
   const moderateRate = useMemo(() => pickModerateRate(household), [household]);
 
+  // Top-level card registry. Each `render` returns the same JSX the page used
+  // to render inline — the registry is a 1:1 move so default behavior (layout
+  // null) is byte-identical to the prior inline order. The 529 card uses its
+  // existing has-529 guard as `applicable`; the rest render unconditionally
+  // today (drift / contributions / by-account always render with their own
+  // empty-state messages when there's nothing to show), so they're always
+  // applicable. Layout overlay is applied via applyCardLayout below.
+  const cardRegistry: InvestmentsCardEntry[] = useMemo(
+    () => [
+      {
+        id: 'time-series',
+        label: 'Investments Over Time',
+        size: 'wide',
+        applicable: true,
+        render: () => (
+          <InvestmentTimeSeriesChart
+            accounts={visibleAccounts}
+            holdings={visibleHoldings}
+            snapshots={visibleSnapshots}
+          />
+        ),
+      },
+      {
+        id: 'growth',
+        label: 'Investments growth',
+        size: 'wide',
+        applicable: true,
+        render: () => (
+          /*
+           * Investments growth card. Click (or use the chevrons / arrow keys)
+           * to cycle the horizon from "since yesterday" through "past year".
+           * Sits above the donut grid so the headline number reads first.
+           */
+          <GrowthCard title="Investments growth" horizons={investmentsGrowth} />
+        ),
+      },
+      {
+        id: 'allocation',
+        label: 'Asset allocation',
+        size: 'compact',
+        applicable: true,
+        render: () =>
+          allocation.length > 0 ? (
+            <div className="relative" data-testid="asset-allocation-card">
+              <div className="absolute top-4 right-4 z-10">
+                <DonutEntityPicker
+                  localStorageKey="donut.assetAllocation.hidden"
+                  items={allocationPickerItems}
+                />
+              </div>
+              {filteredAllocation.length > 0 ? (
+                <DonutChartCard
+                  title="Asset allocation"
+                  subtitle="Approximate, using latest snapshot per account"
+                  data={filteredAllocation}
+                  valueFormatter={formatCurrency}
+                />
+              ) : (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Asset allocation</CardTitle>
+                    <CardDescription>
+                      Approximate, using latest snapshot per account
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground py-8 text-center">
+                      All entities hidden. Open the picker above to show at least one.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          ) : (
+            <Card data-testid="asset-allocation-card">
+              <CardHeader>
+                <CardTitle>Asset allocation</CardTitle>
+                <CardDescription>
+                  Approximate, using latest snapshot per account
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="text-sm text-muted-foreground">
+                No holding values yet — confirm an account snapshot in the monthly window.
+              </CardContent>
+            </Card>
+          ),
+      },
+      {
+        id: 'per-company',
+        label: 'Per-company exposure',
+        size: 'compact',
+        applicable: true,
+        render: () => <PerTickerDonut />,
+      },
+      {
+        id: 'sector',
+        label: 'Sector exposure',
+        size: 'compact',
+        applicable: true,
+        render: () => <SectorDonut />,
+      },
+      {
+        id: 'drift',
+        label: 'Target vs Actual',
+        size: 'wide',
+        applicable: true,
+        render: () => (
+          /* Target / drift, full width below */
+          <Card>
+            <CardHeader>
+              <CardTitle>Target vs Actual</CardTitle>
+              <CardDescription>
+                Holdings with targets, sorted by absolute drift
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {driftWithTarget.length === 0 ? (
+                <div className="text-sm text-muted-foreground">
+                  No target allocations set. Add target % per holding in Holdings.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground border-b">
+                        <th className="py-2 pr-2">Ticker</th>
+                        <th className="py-2 px-2 text-right">Target</th>
+                        <th className="py-2 px-2 text-right">Actual</th>
+                        <th className="py-2 pl-2 text-right">Drift</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {driftWithTarget.map((row) => (
+                        <tr key={`${row.accountName}-${row.ticker}`} className="border-b last:border-b-0">
+                          <td className="py-2 pr-2 font-mono">{row.ticker}</td>
+                          <td className="py-2 px-2 text-right">
+                            {row.targetPct != null
+                              ? `${(row.targetPct * 100).toFixed(1)}%`
+                              : '—'}
+                          </td>
+                          <td className="py-2 px-2 text-right">
+                            {(row.actualPct * 100).toFixed(1)}%
+                          </td>
+                          <td className={`py-2 pl-2 text-right ${
+                            row.drift >= 0 ? 'text-success' : 'text-destructive'
+                          }`}>
+                            {row.drift >= 0 ? '+' : ''}
+                            {(row.drift * 100).toFixed(1)}%
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ),
+      },
+      {
+        id: 'concentration',
+        label: 'Concentration Health',
+        size: 'wide',
+        applicable: true,
+        render: () => (
+          <Card data-testid="concentration-section">
+            <CardHeader>
+              <CardTitle>
+                <TermTooltip term="CONCENTRATION">Concentration</TermTooltip> Health
+              </CardTitle>
+              <CardDescription>
+                Effective exposure after fund look-through and leverage. Warnings
+                fire when a single ticker exceeds 25%, an asset class exceeds 60%,
+                or total leverage exceeds 1.5x.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {concentration.warnings.length === 0 ? (
+                <div className="text-sm text-muted-foreground">
+                  No concentration issues detected.
+                </div>
+              ) : (
+                <ul className="space-y-3">
+                  {concentration.warnings.map((w, i) => (
+                    <li
+                      key={`${w.type}-${w.ticker ?? w.assetClass ?? i}`}
+                      className="flex items-start gap-3"
+                    >
+                      <AlertTriangleIcon
+                        className={`h-5 w-5 shrink-0 mt-0.5 ${severityColor(w.severity)}`}
+                        aria-label={`${w.severity} severity`}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm">{w.message}</div>
+                        <details className="mt-1">
+                          <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
+                            Why this matters
+                          </summary>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {CONCENTRATION_TOOLTIP[w.type]}
+                          </p>
+                        </details>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {(() => {
+                const top = topEffectiveExposures(concentration.perTicker, 3);
+                if (top.length === 0) return null;
+                return (
+                  <div className="mt-6 border-t pt-4">
+                    <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
+                      Top 3 effective exposures
+                    </div>
+                    <ul className="space-y-1 text-sm">
+                      {top.map((t) => (
+                        <li key={t.ticker} className="flex justify-between gap-2 tabular-nums">
+                          <span className="font-mono">{t.ticker}</span>
+                          <span className="text-muted-foreground">
+                            {(t.pctOfPortfolio * 100).toFixed(1)}%
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })()}
+            </CardContent>
+          </Card>
+        ),
+      },
+      {
+        id: 'contributions',
+        label: 'Contributions by bucket',
+        size: 'wide',
+        applicable: true,
+        render: () => (
+          <ContributionsByBucketChart
+            accounts={visibleAccounts}
+            contributions={visibleContributions}
+            fromYyyymm={contribRange.from}
+            toYyyymm={contribRange.to}
+          />
+        ),
+      },
+      {
+        id: 'by-account',
+        label: 'Portfolio by account',
+        size: 'wide',
+        applicable: true,
+        render: () => (
+          <Card>
+            <CardHeader>
+              <CardTitle>Accounts</CardTitle>
+              <CardDescription>Latest snapshot value per account</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {accountSummary.length === 0 ? (
+                <div className="text-sm text-muted-foreground">No accounts yet.</div>
+              ) : (
+                <ul className="divide-y">
+                  {accountSummary.map(({ account, latestValue }) => (
+                    <li
+                      key={account.id}
+                      className="flex items-center justify-between py-3"
+                    >
+                      <div>
+                        <div className="font-medium">{account.name}</div>
+                        {account.institution ? (
+                          <div className="text-xs text-muted-foreground">
+                            {account.institution}
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span className="font-mono">{formatCurrency(latestValue)}</span>
+                        <Link
+                          to="/inputs/holdings"
+                          className="text-sm underline text-muted-foreground hover:text-foreground"
+                        >
+                          View holdings
+                        </Link>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        ),
+      },
+      {
+        id: 'plans-529',
+        label: '529 Plans',
+        size: 'wide',
+        applicable: plans529.length > 0,
+        render: () => (
+          <Card data-testid="529-section">
+            <CardHeader>
+              <CardTitle>529 Plans</CardTitle>
+              <CardDescription>
+                College savings — current value, contributions YTD, and
+                projected value at the beneficiary's 18th birthday using the
+                Moderate growth scenario ({(moderateRate * 100).toFixed(1)}%).
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ul className="divide-y">
+                {plans529.map((plan) => {
+                  const dep =
+                    plan.beneficiaryDependentId != null
+                      ? dependentById.get(plan.beneficiaryDependentId)
+                      : null;
+                  const latestSnap =
+                    plan.id != null ? latestSnapByAccount.get(plan.id) : undefined;
+                  const currentValue = latestSnap?.totalValue ?? 0;
+                  // YTD = sum of contributions in the current calendar year.
+                  const yearPrefix = String(today529.getFullYear());
+                  const ytdContribs = visibleContributions
+                    .filter(
+                      (c) =>
+                        c.accountId === plan.id && c.date.startsWith(yearPrefix),
+                    )
+                    .reduce((sum, c) => sum + c.amount, 0);
+                  // Approximate the projection's monthly inflow with YTD ÷ months
+                  // elapsed this year. Coarse but matches what the user can see
+                  // in the contribution log; refines automatically as the year
+                  // progresses.
+                  const monthsThisYear = today529.getMonth() + 1;
+                  const monthlyAvg =
+                    monthsThisYear > 0 ? ytdContribs / monthsThisYear : 0;
+                  const projected =
+                    dep != null
+                      ? projectedAtAge18(
+                          currentValue,
+                          monthlyAvg,
+                          dep.dateOfBirth,
+                          moderateRate,
+                        )
+                      : currentValue;
+                  return (
+                    <li
+                      key={plan.id}
+                      className="flex items-center justify-between gap-4 py-3"
+                    >
+                      <div className="min-w-0">
+                        <div className="font-medium truncate">{plan.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {dep ? `for ${dep.name}` : 'no beneficiary set'}
+                          {plan.stateOfPlan ? ` · ${plan.stateOfPlan}` : ''}
+                          {plan.institution ? ` · ${plan.institution}` : ''}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0 text-sm space-y-0.5">
+                        <div className="font-mono tabular-nums">
+                          {formatCurrency(currentValue)}{' '}
+                          <span className="text-muted-foreground">now</span>
+                        </div>
+                        <div className="font-mono tabular-nums">
+                          {formatCurrency(ytdContribs)}{' '}
+                          <span className="text-muted-foreground">YTD</span>
+                        </div>
+                        {dep != null && (
+                          <div className="font-mono tabular-nums">
+                            {formatCurrency(projected)}{' '}
+                            <span className="text-muted-foreground">at 18</span>
+                          </div>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </CardContent>
+          </Card>
+        ),
+      },
+    ],
+    [
+      // time-series
+      visibleAccounts,
+      visibleHoldings,
+      visibleSnapshots,
+      // growth
+      investmentsGrowth,
+      // allocation
+      allocation,
+      allocationPickerItems,
+      filteredAllocation,
+      // drift
+      driftWithTarget,
+      // concentration
+      concentration,
+      // contributions
+      visibleContributions,
+      contribRange.from,
+      contribRange.to,
+      // by-account
+      accountSummary,
+      // plans-529 (also drives `applicable`)
+      plans529,
+      dependentById,
+      latestSnapByAccount,
+      today529,
+      moderateRate,
+    ],
+  );
+
+  const cardLayout = settings?.investmentsCardLayout ?? null;
+  const visibleCards = useMemo(
+    () => applyCardLayout(cardRegistry, cardLayout),
+    [cardRegistry, cardLayout],
+  );
+
   const hasAnyHolding = visibleHoldings.length > 0;
   const hasAnySnapshot = visibleSnapshots.length > 0;
 
@@ -799,19 +1247,6 @@ export default function Investments() {
         <ExportCsvButton baseName="holdings" columns={csvColumns} rows={holdings} />
       </div>
 
-      <InvestmentTimeSeriesChart
-        accounts={visibleAccounts}
-        holdings={visibleHoldings}
-        snapshots={visibleSnapshots}
-      />
-
-      {/*
-       * Investments growth card. Click (or use the chevrons / arrow keys) to
-       * cycle the horizon from "since yesterday" through "past year". Sits
-       * above the donut grid so the headline number reads first.
-       */}
-      <GrowthCard title="Investments growth" horizons={investmentsGrowth} />
-
       {/*
        * Unclassified-tickers banner. Surfaces when at least one held ticker
        * is missing from the tickers store (or has name === null) so the user
@@ -820,6 +1255,9 @@ export default function Investments() {
        * pattern in the codebase. We deliberately list every ticker rather
        * than truncating: the typical missing-ticker case is one or two
        * single stocks, and silently hiding the rest would obscure the fix.
+       * Pre-customization this banner sat between the growth card and the
+       * donut grid; it now sits above the customizable card flow so card
+       * reordering never strands it next to an unrelated card.
        */}
       {unclassifiedTickers.length > 0 && (
         <div
@@ -836,299 +1274,14 @@ export default function Investments() {
         </div>
       )}
 
-      {/* Donuts row — asset class, per-ticker, sector. Stacks on narrow widths. */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {allocation.length > 0 ? (
-          <div className="relative" data-testid="asset-allocation-card">
-            <div className="absolute top-4 right-4 z-10">
-              <DonutEntityPicker
-                localStorageKey="donut.assetAllocation.hidden"
-                items={allocationPickerItems}
-              />
-            </div>
-            {filteredAllocation.length > 0 ? (
-              <DonutChartCard
-                title="Asset allocation"
-                subtitle="Approximate, using latest snapshot per account"
-                data={filteredAllocation}
-                valueFormatter={formatCurrency}
-              />
-            ) : (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Asset allocation</CardTitle>
-                  <CardDescription>
-                    Approximate, using latest snapshot per account
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground py-8 text-center">
-                    All entities hidden. Open the picker above to show at least one.
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        ) : (
-          <Card data-testid="asset-allocation-card">
-            <CardHeader>
-              <CardTitle>Asset allocation</CardTitle>
-              <CardDescription>
-                Approximate, using latest snapshot per account
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="text-sm text-muted-foreground">
-              No holding values yet — confirm an account snapshot in the monthly window.
-            </CardContent>
-          </Card>
-        )}
-        <PerTickerDonut />
-        <SectorDonut />
-      </div>
-
-      {/* Target / drift, full width below */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Target vs Actual</CardTitle>
-          <CardDescription>
-            Holdings with targets, sorted by absolute drift
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {driftWithTarget.length === 0 ? (
-            <div className="text-sm text-muted-foreground">
-              No target allocations set. Add target % per holding in Holdings.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground border-b">
-                    <th className="py-2 pr-2">Ticker</th>
-                    <th className="py-2 px-2 text-right">Target</th>
-                    <th className="py-2 px-2 text-right">Actual</th>
-                    <th className="py-2 pl-2 text-right">Drift</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {driftWithTarget.map((row) => (
-                    <tr key={`${row.accountName}-${row.ticker}`} className="border-b last:border-b-0">
-                      <td className="py-2 pr-2 font-mono">{row.ticker}</td>
-                      <td className="py-2 px-2 text-right">
-                        {row.targetPct != null
-                          ? `${(row.targetPct * 100).toFixed(1)}%`
-                          : '—'}
-                      </td>
-                      <td className="py-2 px-2 text-right">
-                        {(row.actualPct * 100).toFixed(1)}%
-                      </td>
-                      <td className={`py-2 pl-2 text-right ${
-                        row.drift >= 0 ? 'text-success' : 'text-destructive'
-                      }`}>
-                        {row.drift >= 0 ? '+' : ''}
-                        {(row.drift * 100).toFixed(1)}%
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card data-testid="concentration-section">
-        <CardHeader>
-          <CardTitle>
-            <TermTooltip term="CONCENTRATION">Concentration</TermTooltip> Health
-          </CardTitle>
-          <CardDescription>
-            Effective exposure after fund look-through and leverage. Warnings
-            fire when a single ticker exceeds 25%, an asset class exceeds 60%,
-            or total leverage exceeds 1.5x.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {concentration.warnings.length === 0 ? (
-            <div className="text-sm text-muted-foreground">
-              No concentration issues detected.
-            </div>
-          ) : (
-            <ul className="space-y-3">
-              {concentration.warnings.map((w, i) => (
-                <li
-                  key={`${w.type}-${w.ticker ?? w.assetClass ?? i}`}
-                  className="flex items-start gap-3"
-                >
-                  <AlertTriangleIcon
-                    className={`h-5 w-5 shrink-0 mt-0.5 ${severityColor(w.severity)}`}
-                    aria-label={`${w.severity} severity`}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm">{w.message}</div>
-                    <details className="mt-1">
-                      <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
-                        Why this matters
-                      </summary>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {CONCENTRATION_TOOLTIP[w.type]}
-                      </p>
-                    </details>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          {(() => {
-            const top = topEffectiveExposures(concentration.perTicker, 3);
-            if (top.length === 0) return null;
-            return (
-              <div className="mt-6 border-t pt-4">
-                <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
-                  Top 3 effective exposures
-                </div>
-                <ul className="space-y-1 text-sm">
-                  {top.map((t) => (
-                    <li key={t.ticker} className="flex justify-between gap-2 tabular-nums">
-                      <span className="font-mono">{t.ticker}</span>
-                      <span className="text-muted-foreground">
-                        {(t.pctOfPortfolio * 100).toFixed(1)}%
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            );
-          })()}
-        </CardContent>
-      </Card>
-
-      <ContributionsByBucketChart
-        accounts={visibleAccounts}
-        contributions={visibleContributions}
-        fromYyyymm={contribRange.from}
-        toYyyymm={contribRange.to}
-      />
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Accounts</CardTitle>
-          <CardDescription>Latest snapshot value per account</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {accountSummary.length === 0 ? (
-            <div className="text-sm text-muted-foreground">No accounts yet.</div>
-          ) : (
-            <ul className="divide-y">
-              {accountSummary.map(({ account, latestValue }) => (
-                <li
-                  key={account.id}
-                  className="flex items-center justify-between py-3"
-                >
-                  <div>
-                    <div className="font-medium">{account.name}</div>
-                    {account.institution ? (
-                      <div className="text-xs text-muted-foreground">
-                        {account.institution}
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <span className="font-mono">{formatCurrency(latestValue)}</span>
-                    <Link
-                      to="/inputs/holdings"
-                      className="text-sm underline text-muted-foreground hover:text-foreground"
-                    >
-                      View holdings
-                    </Link>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
-
-      {plans529.length > 0 && (
-        <Card data-testid="529-section">
-          <CardHeader>
-            <CardTitle>529 Plans</CardTitle>
-            <CardDescription>
-              College savings — current value, contributions YTD, and
-              projected value at the beneficiary's 18th birthday using the
-              Moderate growth scenario ({(moderateRate * 100).toFixed(1)}%).
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ul className="divide-y">
-              {plans529.map((plan) => {
-                const dep =
-                  plan.beneficiaryDependentId != null
-                    ? dependentById.get(plan.beneficiaryDependentId)
-                    : null;
-                const latestSnap =
-                  plan.id != null ? latestSnapByAccount.get(plan.id) : undefined;
-                const currentValue = latestSnap?.totalValue ?? 0;
-                // YTD = sum of contributions in the current calendar year.
-                const yearPrefix = String(today529.getFullYear());
-                const ytdContribs = visibleContributions
-                  .filter(
-                    (c) =>
-                      c.accountId === plan.id && c.date.startsWith(yearPrefix),
-                  )
-                  .reduce((sum, c) => sum + c.amount, 0);
-                // Approximate the projection's monthly inflow with YTD ÷ months
-                // elapsed this year. Coarse but matches what the user can see
-                // in the contribution log; refines automatically as the year
-                // progresses.
-                const monthsThisYear = today529.getMonth() + 1;
-                const monthlyAvg =
-                  monthsThisYear > 0 ? ytdContribs / monthsThisYear : 0;
-                const projected =
-                  dep != null
-                    ? projectedAtAge18(
-                        currentValue,
-                        monthlyAvg,
-                        dep.dateOfBirth,
-                        moderateRate,
-                      )
-                    : currentValue;
-                return (
-                  <li
-                    key={plan.id}
-                    className="flex items-center justify-between gap-4 py-3"
-                  >
-                    <div className="min-w-0">
-                      <div className="font-medium truncate">{plan.name}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {dep ? `for ${dep.name}` : 'no beneficiary set'}
-                        {plan.stateOfPlan ? ` · ${plan.stateOfPlan}` : ''}
-                        {plan.institution ? ` · ${plan.institution}` : ''}
-                      </div>
-                    </div>
-                    <div className="text-right shrink-0 text-sm space-y-0.5">
-                      <div className="font-mono tabular-nums">
-                        {formatCurrency(currentValue)}{' '}
-                        <span className="text-muted-foreground">now</span>
-                      </div>
-                      <div className="font-mono tabular-nums">
-                        {formatCurrency(ytdContribs)}{' '}
-                        <span className="text-muted-foreground">YTD</span>
-                      </div>
-                      {dep != null && (
-                        <div className="font-mono tabular-nums">
-                          {formatCurrency(projected)}{' '}
-                          <span className="text-muted-foreground">at 18</span>
-                        </div>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
+      {visibleCards.length === 0 ? (
+        <Card>
+          <CardContent className="py-8 text-center text-sm text-muted-foreground">
+            All cards hidden — click Customize to bring some back.
           </CardContent>
         </Card>
+      ) : (
+        <div className="space-y-6">{renderCardFlow(visibleCards)}</div>
       )}
     </div>
   );
