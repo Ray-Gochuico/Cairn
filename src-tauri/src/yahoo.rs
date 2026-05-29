@@ -66,28 +66,28 @@ enum CrumbState {
     Cooldown { error: String, until: Instant },
 }
 
-/// Honest identifier carrying the cargo package name + version.
+/// Browser-style User-Agent. Yahoo's `getcrumb` endpoint gates on the UA:
+/// requests from a non-browser UA are refused (HTTP 429 even when the IP is
+/// not rate-limited), which silently breaks the `quoteSummary` path the fund
+/// composition feature depends on (topHoldings + sectorWeightings — Yahoo's
+/// Morningstar data). The chart endpoint (prices) is unauthenticated and does
+/// NOT gate on UA, which is why prices kept working while composition didn't.
 ///
-/// History: previously this masqueraded as `Mozilla/5.0 ... Chrome/120.0.0.0
-/// ... Safari/537.36` because Yahoo's getcrumb endpoint was observed gating
-/// on a non-default UA. Per Legal review (docs/reviews/2026-05-26-legal-review.md
-/// finding #1), the spoofed UA was the single most visible ToS-violation
-/// surface in the codebase — it reads as documented intent to bypass Yahoo's
-/// automated-access restriction (Yahoo ToS § 2(d)(ix)).
+/// History: an "honest" `Cairn (...)` UA was tried (commit 65034b5, per Legal
+/// review 2026-05-26 finding #1, which flagged a spoofed UA as the most
+/// visible ToS-violation optic — Yahoo ToS § 2(d)(ix)). That honest UA made
+/// getcrumb refuse the app entirely, so fund holdings/sectors never populated.
 ///
-/// The new UA identifies the app honestly. Yahoo may rate-limit non-browser
-/// UAs more aggressively or refuse service entirely; the existing market-
-/// refresh code (`src/market/run-market-data-refresh.ts`) swallows errors in
-/// every IIFE and falls back to whatever is already in `price_cache`, so the
-/// worst case is "no fresh prices today," not "the app crashes." Monitor
-/// refresh success after rollout and consider staging this behind a
-/// Settings → Advanced opt-in toggle (off by default) if Yahoo starts
-/// refusing requests.
-const USER_AGENT: &str = concat!(
-    "Cairn (https://github.com/raymondgochuico/cairn; finance-app/",
-    env!("CARGO_PKG_VERSION"),
-    ")"
-);
+/// TRADEOFF (deliberate): this reverts to a browser UA to restore composition
+/// data. That reintroduces the ToS optic the Legal review raised. For this
+/// personal/friends-only build it's an accepted call — the same review rated
+/// real-world exposure "very low" and listed "keep Yahoo" as an option. The
+/// proper mitigation, when there's time, is the Settings → Advanced opt-in
+/// toggle the review recommended (default off, with a one-time ToS modal), so
+/// each user owns the choice to make these requests rather than the app
+/// doing it unconditionally.
+const USER_AGENT: &str =
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
 
 /// Singleton state managed on the Tauri builder. Holds a `reqwest::Client`
 /// with cookie jar enabled and the cached crumb. `.manage(YahooState::new())`
