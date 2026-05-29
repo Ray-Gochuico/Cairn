@@ -360,6 +360,13 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
   },
 
   // ─── Settings: Advanced ───────────────────────────────────────────────
+  APR: {
+    term: 'APR',
+    shortDefinition:
+      'Annual Percentage Rate — the yearly cost of borrowing, including interest plus most fees, expressed as a single rate.',
+    fullDefinition:
+      "The figure lenders must disclose under the Truth in Lending Act so you can compare loan and credit-card offers on one number. When you're earning rather than borrowing, compare APY instead — unlike APR, APY accounts for compounding.",
+  },
   APY: {
     term: 'APY',
     shortDefinition:
