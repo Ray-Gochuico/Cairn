@@ -72,12 +72,19 @@ export function runMarketDataRefresh(db: Database): void {
       const yahoo = new YahooClient();
       const allHoldings = await holdings.listAll();
       const distinctTickers = [...new Set(allHoldings.map((h) => h.ticker))];
-      // Parallel — enrichTickerIfMissing itself swallows per-ticker errors
-      // and short-circuits when sector is already populated, so this stays
-      // O(network calls) only for the unenriched subset.
-      await Promise.all(
-        distinctTickers.map((ticker) => enrichTickerIfMissing(ticker, { yahoo, tickers })),
-      );
+      // Sequential — a concurrent assetProfile burst trips Yahoo's
+      // quoteSummary 429 limiter, and enrichTickerIfMissing silently swallows
+      // those failures (leaving sector NULL) for existing tickers with no
+      // retry until the next refresh, so the parallel version could
+      // permanently drop sector enrichment for individual stocks. A serial
+      // loop spreads the calls out so each ticker gets a real shot.
+      // enrichTickerIfMissing still short-circuits when sector is already
+      // populated and swallows its own per-ticker errors, so this stays
+      // O(network calls) only for the unenriched subset and one failure can't
+      // abort the rest.
+      for (const ticker of distinctTickers) {
+        await enrichTickerIfMissing(ticker, { yahoo, tickers });
+      }
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('[market] background ticker enrichment failed:', err);
