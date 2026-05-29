@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
@@ -91,6 +92,8 @@ function primeStores(opts?: {
 describe('CoastFiCard', () => {
   beforeEach(() => {
     resetStores();
+    // Clear any persisted calculator overrides from previous tests.
+    sessionStorage.clear();
     // Pin "today" to a stable date so currentAge is deterministic.
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-05-14'));
@@ -259,5 +262,188 @@ describe('CoastFiCard', () => {
     );
     expect(screen.getByText(/Target at retirement/i)).toBeInTheDocument();
     expect(screen.getByText(/\$1,500,000/)).toBeInTheDocument();
+  });
+
+  // ────────────────────────────────────────────────────────────────
+  // Editable-inputs tests (Task 4 – Wave 0)
+  // ────────────────────────────────────────────────────────────────
+
+  describe('editable inputs', () => {
+    // Person born 1986-01-01. Date pinned to 2026-05-14.
+    // currentAge('1986-01-01') = 40 (birthday Jan 1 already passed in May).
+    // targetRetirementAge = 60. yearsUntilRetirement = 60 - 40 = 20.
+    const editablePerson: Person = {
+      ...basePerson,
+      id: 1,
+      dateOfBirth: '1986-01-01',
+      targetRetirementAge: 60,
+    };
+
+    function primeEditableStores() {
+      primeStores({
+        monthlyExpenseBaseline: 5000,
+        withdrawalRate: 0.04,
+        scenarios: [{ label: 'Moderate', rate: 0.07 }],
+        persons: [editablePerson],
+        snapshotValues: [
+          { accountId: 1, snapshotDate: '2026-04-01', totalValue: 500_000 },
+        ],
+      });
+    }
+
+    it('"Years to retirement" input prefills to 20 (targetRetirementAge 60 − age 40)', () => {
+      primeEditableStores();
+      render(
+        <MemoryRouter>
+          <CoastFiCard />
+        </MemoryRouter>,
+      );
+
+      const input = screen.getByLabelText(/years to retirement/i) as HTMLInputElement;
+      expect(input.value).toBe('20');
+    });
+
+    it('editing "Years to retirement" to 10 changes the coastfi-headline', async () => {
+      const user = userEvent.setup();
+      primeEditableStores();
+      render(
+        <MemoryRouter>
+          <CoastFiCard />
+        </MemoryRouter>,
+      );
+
+      const headline = screen.getByTestId('coastfi-headline');
+      const originalPct = parseInt(headline.textContent!.replace(/[^\d]/g, ''), 10);
+
+      const input = screen.getByLabelText(/years to retirement/i) as HTMLInputElement;
+      await user.clear(input);
+      await user.type(input, '10');
+
+      // Fewer years → higher coast needed today → lower % of CoastFI
+      const newText = headline.textContent;
+      expect(newText).toMatch(/\d+(\.\d+)?%\s*of\s*CoastFI/i);
+      const newPct = parseInt(newText!.replace(/[^\d]/g, ''), 10);
+      expect(newPct).toBeLessThan(originalPct);
+    });
+
+    it('shows "Reset to my data" button after editing an input', async () => {
+      const user = userEvent.setup();
+      primeEditableStores();
+      render(
+        <MemoryRouter>
+          <CoastFiCard />
+        </MemoryRouter>,
+      );
+
+      // Reset button should NOT be visible initially
+      expect(screen.queryByRole('button', { name: /reset to my data/i })).toBeNull();
+
+      const input = screen.getByLabelText(/years to retirement/i) as HTMLInputElement;
+      await user.clear(input);
+      await user.type(input, '15');
+
+      // After edit, Reset button should appear
+      expect(screen.getByRole('button', { name: /reset to my data/i })).toBeInTheDocument();
+    });
+
+    it('shows "already at/after target retirement age" note when yearsUntilRetirement ≤ 0', async () => {
+      const user = userEvent.setup();
+      primeEditableStores();
+      render(
+        <MemoryRouter>
+          <CoastFiCard />
+        </MemoryRouter>,
+      );
+
+      const input = screen.getByLabelText(/years to retirement/i) as HTMLInputElement;
+      await user.clear(input);
+      await user.type(input, '0');
+
+      expect(
+        screen.getByText(/already at\/after your target retirement age/i),
+      ).toBeInTheDocument();
+    });
+
+    it('headline shows "—" (not a %) when yearsUntilRetirement ≤ 0', async () => {
+      const user = userEvent.setup();
+      primeEditableStores();
+      render(
+        <MemoryRouter>
+          <CoastFiCard />
+        </MemoryRouter>,
+      );
+
+      const input = screen.getByLabelText(/years to retirement/i) as HTMLInputElement;
+      await user.clear(input);
+      await user.type(input, '0');
+
+      const headline = screen.getByTestId('coastfi-headline');
+      expect(headline.textContent).toBe('—');
+      expect(headline.textContent).not.toMatch(/%/);
+    });
+
+    it('"Reset to my data" restores defaults and hides the reset button', async () => {
+      const user = userEvent.setup();
+      primeEditableStores();
+      render(
+        <MemoryRouter>
+          <CoastFiCard />
+        </MemoryRouter>,
+      );
+
+      const input = screen.getByLabelText(/years to retirement/i) as HTMLInputElement;
+      expect(input.value).toBe('20');
+
+      // Override the prefilled value.
+      await user.clear(input);
+      await user.type(input, '10');
+      expect(input.value).toBe('10');
+
+      // Click reset.
+      await user.click(screen.getByRole('button', { name: /reset to my data/i }));
+
+      // Years input is back to the real-data default, reset button is gone.
+      expect(
+        (screen.getByLabelText(/years to retirement/i) as HTMLInputElement).value,
+      ).toBe('20');
+      expect(screen.queryByRole('button', { name: /reset to my data/i })).toBeNull();
+    });
+
+    it('"Annual expenses" input is present and prefilled from monthlyExpenseBaseline * 12', () => {
+      primeEditableStores();
+      render(
+        <MemoryRouter>
+          <CoastFiCard />
+        </MemoryRouter>,
+      );
+
+      // 5000 * 12 = 60000
+      const input = screen.getByLabelText(/annual expenses/i) as HTMLInputElement;
+      expect(input.value).toBe('60000');
+    });
+
+    it('"Withdrawal rate" input is present and prefilled as percent (4% shown as 4)', () => {
+      primeEditableStores();
+      render(
+        <MemoryRouter>
+          <CoastFiCard />
+        </MemoryRouter>,
+      );
+
+      const input = screen.getByLabelText(/withdrawal rate/i) as HTMLInputElement;
+      expect(input.value).toBe('4');
+    });
+
+    it('"Current portfolio" input is present and prefilled from latest snapshot sum', () => {
+      primeEditableStores();
+      render(
+        <MemoryRouter>
+          <CoastFiCard />
+        </MemoryRouter>,
+      );
+
+      const input = screen.getByLabelText(/current portfolio/i) as HTMLInputElement;
+      expect(input.value).toBe('500000');
+    });
   });
 });
