@@ -762,7 +762,7 @@ export default function Investments() {
                   </span>
                 )}
                 {refreshResult.errors.length > 0 && (
-                  <span className="text-destructive">
+                  <span className="text-destructive-soft-foreground">
                     Errors: {refreshResult.errors.join('; ')}
                   </span>
                 )}
@@ -789,7 +789,7 @@ export default function Investments() {
                     </span>
                   )}
                   {row.status === 'error' && (
-                    <span className="text-destructive">error · {row.error}</span>
+                    <span className="text-destructive-soft-foreground">error · {row.error}</span>
                   )}
                 </div>
               ))}
