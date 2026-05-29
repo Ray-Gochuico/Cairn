@@ -237,7 +237,7 @@ export default function EmploymentSection({ onSaved }: Props) {
               {saveError && (
                 <div
                   role="alert"
-                  className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive"
+                  className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive-soft-foreground"
                 >
                   {saveError}
                 </div>

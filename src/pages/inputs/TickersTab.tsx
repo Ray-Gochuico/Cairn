@@ -184,7 +184,7 @@ function TickerForm({ values, onSubmit, onCancel, submitLabel = 'Save' }: Ticker
       </Card>
 
       {fieldErrors.length > 0 && (
-        <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+        <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive-soft-foreground">
           <div className="font-medium mb-1">Fix these before saving:</div>
           <ul className="list-disc pl-5">
             {fieldErrors.map((e) => (
@@ -358,7 +358,7 @@ export default function TickersTab() {
                     <span
                       className={`shrink-0 text-xs px-1.5 py-0.5 rounded font-medium ${
                         t.direction === Direction.SHORT
-                          ? 'bg-destructive/15 text-destructive'
+                          ? 'bg-destructive/15 text-destructive-soft-foreground'
                           : 'bg-success-soft text-success-foreground'
                       }`}
                     >

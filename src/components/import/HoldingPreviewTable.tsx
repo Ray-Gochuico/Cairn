@@ -10,7 +10,7 @@ const STATUS_BADGE: Record<PreviewStatus, string> = {
   new: 'bg-success-soft text-success-foreground',
   update: 'bg-warning-soft text-warning-foreground',
   duplicate: 'bg-muted text-muted-foreground',
-  error: 'bg-destructive/15 text-destructive',
+  error: 'bg-destructive/15 text-destructive-soft-foreground',
 };
 
 const ROW_BG: Record<PreviewStatus, string> = {

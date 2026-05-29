@@ -143,7 +143,7 @@ export function AnnualTotalDialog({ open, onOpenChange, accounts, persons }: Pro
               An annual total already exists for this account in {year} (${confirming.existing.amount.toLocaleString()}). Replace it with ${totalNumber.toLocaleString()}?
             </p>
             {error && (
-              <div className="text-xs text-destructive italic bg-destructive/10 border border-destructive/30 rounded p-2">
+              <div className="text-xs text-destructive-soft-foreground italic bg-destructive/10 border border-destructive/30 rounded p-2">
                 {error}
               </div>
             )}
@@ -209,7 +209,7 @@ export function AnnualTotalDialog({ open, onOpenChange, accounts, persons }: Pro
             </div>
 
             {error && (
-              <div className="text-xs text-destructive italic bg-destructive/10 border border-destructive/30 rounded p-2">
+              <div className="text-xs text-destructive-soft-foreground italic bg-destructive/10 border border-destructive/30 rounded p-2">
                 {error}
               </div>
             )}

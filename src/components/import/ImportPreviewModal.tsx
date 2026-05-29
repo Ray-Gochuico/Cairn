@@ -284,7 +284,7 @@ export function ImportPreviewModal({
         </DialogHeader>
 
         {parsed.errors.length > 0 && (
-          <div className="text-xs text-destructive italic bg-destructive/10 border border-destructive/30 rounded p-2">
+          <div className="text-xs text-destructive-soft-foreground italic bg-destructive/10 border border-destructive/30 rounded p-2">
             {parsed.errors.length} lines could not be parsed (line{' '}
             {parsed.errors.map((e) => e.line).join(', ')}). Fix and re-upload.
           </div>
@@ -297,7 +297,7 @@ export function ImportPreviewModal({
         <div className="max-h-[55vh] overflow-y-auto">{previewTable}</div>
 
         {commitError && (
-          <div className="text-xs text-destructive italic bg-destructive/10 border border-destructive/30 rounded p-2">
+          <div className="text-xs text-destructive-soft-foreground italic bg-destructive/10 border border-destructive/30 rounded p-2">
             Commit failed: {commitError}
           </div>
         )}
@@ -343,7 +343,7 @@ function SummaryBar({
           {state.summary.duplicate} duplicate
         </span>
       )}
-      <span className="bg-destructive/15 text-destructive px-2 py-0.5 rounded-full">
+      <span className="bg-destructive/15 text-destructive-soft-foreground px-2 py-0.5 rounded-full">
         {state.summary.error} error{state.summary.error === 1 ? '' : 's'}
       </span>
       <div className="ml-auto flex gap-2">

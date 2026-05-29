@@ -161,7 +161,7 @@ export function DisclosureModal({
         </div>
 
         {error && (
-          <div className="px-6 py-2 text-sm text-destructive bg-destructive/10 border-t border-destructive/30">
+          <div className="px-6 py-2 text-sm text-destructive-soft-foreground bg-destructive/10 border-t border-destructive/30">
             {error}
           </div>
         )}

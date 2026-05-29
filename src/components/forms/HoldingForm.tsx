@@ -166,7 +166,7 @@ export default function HoldingForm({
       {Object.keys(form.formState.errors).length > 0 && (
         <div
           role="alert"
-          className="col-span-12 mt-1 rounded-md border border-destructive/50 bg-destructive/10 p-2 text-xs text-destructive"
+          className="col-span-12 mt-1 rounded-md border border-destructive/50 bg-destructive/10 p-2 text-xs text-destructive-soft-foreground"
         >
           <ul className="list-disc pl-5">
             {Object.entries(form.formState.errors).map(([field, err]) => (
