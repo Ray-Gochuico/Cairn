@@ -426,9 +426,16 @@ export const SidebarLayoutEntrySchema = z.object({
 });
 export type SidebarLayoutEntry = z.infer<typeof SidebarLayoutEntrySchema>;
 
+export const CardLayoutEntrySchema = z.object({
+  id: z.string(),
+  hidden: z.boolean(),
+});
+export type CardLayoutEntry = z.infer<typeof CardLayoutEntrySchema>;
+
 export const AppSettingsSchema = z.object({
   id: z.literal(1),
   sidebarLayout: z.array(SidebarLayoutEntrySchema).nullable(),
+  investmentsCardLayout: z.array(CardLayoutEntrySchema).nullable().default(null),
   notificationsEnabled: z.boolean(),
   notificationDay: z.number().int().min(1).max(28),
   refreshCadence: z.nativeEnum(RefreshCadence),
