@@ -3,8 +3,8 @@
     "result": [{
       "topHoldings": {
         "holdings": [
-          { "symbol": "AAPL", "holdingPercent": { "raw": 0.0762 } },
-          { "symbol": "MSFT", "holdingPercent": { "raw": 0.0651 } }
+          { "symbol": "AAPL", "holdingName": "Apple Inc", "holdingPercent": { "raw": 0.0762 } },
+          { "symbol": "MSFT", "holdingName": "Microsoft Corp", "holdingPercent": { "raw": 0.0651 } }
         ],
         "sectorWeightings": [
           { "realestate": { "raw": 0.0291 } },

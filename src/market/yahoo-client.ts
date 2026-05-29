@@ -165,7 +165,7 @@ export class YahooClient {
    * an empty list). Callers in `PriceCache` and snapshot derivation do not use
    * holdings data, so the old method was safe to remove outright.
    */
-  async fundTopHoldings(ticker: string): Promise<{ holdings: { symbol: string; weight: number }[]; asOf: string }> {
+  async fundTopHoldings(ticker: string): Promise<{ holdings: { symbol: string; weight: number; name: string | null }[]; asOf: string }> {
     const data = await this.quoteSummary(ticker, ['topHoldings']);
     // Using `as any` here because the quoteSummary response is a heterogeneous
     // JSON blob whose shape depends on the requested modules. A full typed
@@ -178,6 +178,11 @@ export class YahooClient {
       holdings: result.holdings.map((h: any) => ({
         symbol: h.symbol,
         weight: h.holdingPercent?.raw ?? 0,
+        // Yahoo includes a human-readable holdingName alongside symbol/percent
+        // (e.g. "NVIDIA Corp"). Most look-through underlyings aren't in our
+        // local tickers table, so this is the only name source for them.
+        // Defensive: fall back to null when Yahoo omits it.
+        name: h.holdingName ?? null,
       })).filter((h: any) => h.symbol),
       asOf: new Date().toISOString().slice(0, 10),
     };

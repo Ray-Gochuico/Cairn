@@ -157,6 +157,7 @@ export async function loadAllMigrations(): Promise<Migration[]> {
   const m0038 = (await import('./migrations/0038_seed_modern_etfs.sql?raw')).default;
   const m0039 = (await import('./migrations/0039_default_daily_refresh.sql?raw')).default;
   const m0040 = (await import('./migrations/0040_clear_synthetic_snapshots.sql?raw')).default;
+  const m0041 = (await import('./migrations/0041_fund_holding_names.sql?raw')).default;
   const m0042 = (await import('./migrations/0042_investments_card_layout.sql?raw')).default;
   return [
     { version: '0001_initial', sql: m0001 },
@@ -198,6 +199,7 @@ export async function loadAllMigrations(): Promise<Migration[]> {
     { version: '0038_seed_modern_etfs', sql: m0038 },
     { version: '0039_default_daily_refresh', sql: m0039 },
     { version: '0040_clear_synthetic_snapshots', sql: m0040 },
+    { version: '0041_fund_holding_names', sql: m0041 },
     { version: '0042_investments_card_layout', sql: m0042 },
   ];
 }

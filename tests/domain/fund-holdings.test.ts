@@ -5,8 +5,8 @@ import { FundHoldingsRepo } from '@/domain/fund-holdings';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const loadInitialMigration = () =>
-  readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
+const loadMigration = (file: string) =>
+  readFileSync(resolve(__dirname, `../../src/db/migrations/${file}`), 'utf-8');
 
 describe('FundHoldingsRepo', () => {
   let db: SqliteAdapter;
@@ -15,7 +15,9 @@ describe('FundHoldingsRepo', () => {
   beforeEach(async () => {
     db = new SqliteAdapter(':memory:');
     await runMigrations(db, [
-      { version: '0001_initial', sql: loadInitialMigration() },
+      { version: '0001_initial', sql: loadMigration('0001_initial.sql') },
+      // 0041 adds fund_holdings.holding_name, which upsertHoldings now writes.
+      { version: '0041_fund_holding_names', sql: loadMigration('0041_fund_holding_names.sql') },
     ]);
     repo = new FundHoldingsRepo(db);
   });
@@ -44,6 +46,22 @@ describe('FundHoldingsRepo', () => {
     expect(tickers).toEqual(['AAPL', 'MSFT']);
     expect(holdings[0].fundTicker).toBe('VTI');
     expect(holdings[0].asOfDate).toBe('2025-01-15');
+  });
+
+  it('upsertHoldings persists holdingName and listForFund returns it', async () => {
+    await repo.upsertHoldings(
+      'VTI',
+      [
+        { symbol: 'AAPL', weight: 0.06, name: 'Apple Inc' },
+        // Omitted name defaults to null (Yahoo occasionally drops holdingName).
+        { symbol: 'MSFT', weight: 0.05 },
+      ],
+      '2025-01-15'
+    );
+    const holdings = await repo.listForFund('VTI');
+    const byTicker = Object.fromEntries(holdings.map((h) => [h.holdingTicker, h.holdingName]));
+    expect(byTicker.AAPL).toBe('Apple Inc');
+    expect(byTicker.MSFT).toBeNull();
   });
 
   it('upsertHoldings overwrites stale entries when called again (replace semantics)', async () => {

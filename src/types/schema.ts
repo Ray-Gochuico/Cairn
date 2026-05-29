@@ -358,6 +358,9 @@ export const FundHoldingSchema = z.object({
   holdingTicker: z.string().min(1).max(20),
   weight: z.number().min(0).max(1),
   asOfDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  // Human-readable name from Yahoo's holdingName (e.g. "NVIDIA Corp").
+  // Nullable: Yahoo may omit it, and pre-0041 rows backfill to null.
+  holdingName: z.string().nullable().default(null),
 });
 export type FundHolding = z.infer<typeof FundHoldingSchema>;
 

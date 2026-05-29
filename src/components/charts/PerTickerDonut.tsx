@@ -6,6 +6,7 @@ import { colorForTicker } from '@/lib/chart-colors';
 import { withMiscLast } from '@/lib/concentration';
 import { useConcentration } from '@/lib/use-concentration';
 import { useTickersStore } from '@/stores/tickers-store';
+import { useFundHoldingsStore } from '@/stores/fund-holdings-store';
 import { formatCurrency } from '@/lib/format';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { AssetClass } from '@/types/schema';
@@ -50,21 +51,51 @@ export function PerTickerDonut() {
     () => new Map(tickers.map((t) => [t.ticker, t.assetClass])),
     [tickers],
   );
-  const tickerNameMap = useMemo(
-    () => new Map(tickers.map((t) => [t.ticker, t.name])),
-    [tickers],
-  );
+  const fundHoldings = useFundHoldingsStore((s) => s.fundHoldings);
   const tickerColorMap = useMemo(
     () => new Map(tickers.map((t) => [t.ticker, t.accentColor])),
     [tickers],
   );
 
+  // Company name per ticker for the legend + tooltip. Most slices are
+  // fund look-through underlyings (NVDA, ASML.AS, ...) that aren't in the
+  // local tickers table, so their only name source is Yahoo's holdingName
+  // captured on fund_holdings. Directly-held tickers (in the tickers store)
+  // take precedence; otherwise we fall back to the underlying name. The map
+  // only holds entries where a non-empty name actually exists, so the
+  // formatters can treat "missing" as "render the bare ticker".
+  const nameByTicker = useMemo(() => {
+    const map = new Map<string, string>();
+    // Underlyings first (lower precedence) so a directly-held name overwrites.
+    for (const fh of fundHoldings) {
+      if (fh.holdingName && !map.has(fh.holdingTicker)) {
+        map.set(fh.holdingTicker, fh.holdingName);
+      }
+    }
+    for (const t of tickers) {
+      if (t.name) map.set(t.ticker, t.name);
+    }
+    return map;
+  }, [tickers, fundHoldings]);
+
+  // Tooltip keeps the existing "TICKER — Company" format but now sources
+  // names from the combined map, so look-through underlyings get names too.
   const tooltipNameFormatter = useCallback(
     (name: string) => {
-      const companyName = tickerNameMap.get(name);
+      const companyName = nameByTicker.get(name);
       return companyName ? `${name} — ${companyName}` : name;
     },
-    [tickerNameMap],
+    [nameByTicker],
+  );
+
+  // Legend shows "Company Name (TICKER)" when we have a name, else the bare
+  // ticker. The "Misc" rollup has no name → stays "Misc" (no parens).
+  const legendLabelFormatter = useCallback(
+    (name: string) => {
+      const companyName = nameByTicker.get(name);
+      return companyName ? `${companyName} (${name})` : name;
+    },
+    [nameByTicker],
   );
 
   // Memoise the slices and opaque-funds derivations on report.perTicker /
@@ -167,6 +198,7 @@ export function PerTickerDonut() {
         data={filteredSlices}
         valueFormatter={formatCurrency}
         tooltipNameFormatter={tooltipNameFormatter}
+        legendLabelFormatter={legendLabelFormatter}
       />
     </div>
   );

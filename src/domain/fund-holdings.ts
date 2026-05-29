@@ -6,6 +6,7 @@ interface FundHoldingRow {
   holding_ticker: string;
   weight: number;
   as_of_date: string;
+  holding_name: string | null;
 }
 
 function rowToFundHolding(row: FundHoldingRow): FundHolding {
@@ -14,6 +15,8 @@ function rowToFundHolding(row: FundHoldingRow): FundHolding {
     holdingTicker: row.holding_ticker,
     weight: row.weight,
     asOfDate: row.as_of_date,
+    // Pre-0041 rows (and Yahoo omissions) come back as null.
+    holdingName: row.holding_name ?? null,
   });
 }
 
@@ -37,21 +40,23 @@ export class FundHoldingsRepo {
 
   async upsertHoldings(
     fundTicker: string,
-    holdings: { symbol: string; weight: number }[],
+    holdings: { symbol: string; weight: number; name?: string | null }[],
     asOfDate: string
   ): Promise<void> {
     await this.db.execute('DELETE FROM fund_holdings WHERE fund_ticker = ?', [fundTicker]);
     for (const h of holdings) {
+      const holdingName = h.name ?? null;
       // Validate via schema before insert
       FundHoldingSchema.parse({
         fundTicker,
         holdingTicker: h.symbol,
         weight: h.weight,
         asOfDate,
+        holdingName,
       });
       await this.db.execute(
-        'INSERT INTO fund_holdings (fund_ticker, holding_ticker, weight, as_of_date) VALUES (?, ?, ?, ?)',
-        [fundTicker, h.symbol, h.weight, asOfDate]
+        'INSERT INTO fund_holdings (fund_ticker, holding_ticker, weight, as_of_date, holding_name) VALUES (?, ?, ?, ?, ?)',
+        [fundTicker, h.symbol, h.weight, asOfDate, holdingName]
       );
     }
   }

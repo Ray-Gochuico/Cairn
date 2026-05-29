@@ -83,16 +83,30 @@ describe('YahooClient', () => {
   });
 
   describe('fundTopHoldings', () => {
-    it('returns mapped holdings with symbol and weight from fixture', async () => {
+    it('returns mapped holdings with symbol, weight, and name from fixture', async () => {
       mockInvoke.mockResolvedValueOnce(JSON.stringify(topHoldingsFixture));
 
       const result = await client.fundTopHoldings('VTI');
 
       expect(result.holdings).toHaveLength(2);
-      expect(result.holdings[0]).toEqual({ symbol: 'AAPL', weight: 0.0762 });
-      expect(result.holdings[1]).toEqual({ symbol: 'MSFT', weight: 0.0651 });
+      expect(result.holdings[0]).toEqual({ symbol: 'AAPL', weight: 0.0762, name: 'Apple Inc' });
+      expect(result.holdings[1]).toEqual({ symbol: 'MSFT', weight: 0.0651, name: 'Microsoft Corp' });
       // asOf should be today's date in YYYY-MM-DD format
       expect(result.asOf).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+
+    it('falls back to name=null when holdingName is absent', async () => {
+      const noNameResponse = {
+        quoteSummary: {
+          result: [{ topHoldings: { holdings: [{ symbol: 'NVDA', holdingPercent: { raw: 0.05 } }] } }],
+          error: null,
+        },
+      };
+      mockInvoke.mockResolvedValueOnce(JSON.stringify(noNameResponse));
+
+      const result = await client.fundTopHoldings('VTI');
+
+      expect(result.holdings[0]).toEqual({ symbol: 'NVDA', weight: 0.05, name: null });
     });
 
     it('returns empty holdings when Yahoo returns no topHoldings block', async () => {

@@ -40,6 +40,14 @@ export interface DonutChartCardProps {
    */
   tooltipNameFormatter?: (name: string) => string;
   /**
+   * Optional. Formats the slice name shown in the legend only — the
+   * underlying slice `name` (used as the React key, color identity, and
+   * tooltip match key) stays untouched. Used by PerTickerDonut to render
+   * "Company Name (TICKER)" in the legend without changing slice identity.
+   * Omitted elsewhere, so the other donuts keep showing the raw name.
+   */
+  legendLabelFormatter?: (name: string) => string;
+  /**
    * Optional. Invoked with the clicked slice's `name` when a wedge is
    * clicked. Setting this also flips the donut to a pointer cursor so
    * the affordance is visible. Used by SectorDonut to drill into a
@@ -58,6 +66,7 @@ export default function DonutChartCard({
   labelFormatter,
   valueFormatter,
   tooltipNameFormatter,
+  legendLabelFormatter,
   onClickSlice,
 }: DonutChartCardProps) {
   const total = data.reduce((sum, slice) => sum + slice.value, 0);
@@ -149,7 +158,7 @@ export default function DonutChartCard({
                     className="inline-block h-2 w-2 rounded-sm"
                     style={{ backgroundColor: colorAt(slice, idx) }}
                   />
-                  {slice.name}
+                  {legendLabelFormatter ? legendLabelFormatter(slice.name) : slice.name}
                 </li>
               ))}
             </ul>
