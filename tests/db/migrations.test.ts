@@ -418,3 +418,16 @@ describe('0024_cash_apy migration', () => {
     await db.close();
   });
 });
+
+it('0042 adds investments_card_layout to app_settings (nullable, seeded null)', async () => {
+  const db = new SqliteAdapter(':memory:');
+  await runMigrations(db, await loadAllMigrations());
+  const cols = await db.select<{ name: string }>("PRAGMA table_info(app_settings)");
+  expect(cols.map((c) => c.name)).toContain('investments_card_layout');
+  const seed = await db.select<{ investments_card_layout: string | null }>(
+    'SELECT investments_card_layout FROM app_settings WHERE id = 1',
+  );
+  expect(seed).toHaveLength(1);
+  expect(seed[0].investments_card_layout).toBeNull();
+  await db.close();
+});
