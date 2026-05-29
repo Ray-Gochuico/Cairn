@@ -1,10 +1,11 @@
 import type { Database } from '@/db/db';
-import { AppSettingsSchema, type AppSettings, type SidebarLayoutEntry } from '@/types/schema';
+import { AppSettingsSchema, type AppSettings, type SidebarLayoutEntry, type CardLayoutEntry } from '@/types/schema';
 import { CompoundingFrequency } from '@/types/enums';
 
 interface AppSettingsRow {
   id: number;
   sidebar_layout: string | null;
+  investments_card_layout: string | null;
   notifications_enabled: number;
   notification_day: number;
   refresh_cadence: string;
@@ -59,9 +60,13 @@ function rowToAppSettings(row: AppSettingsRow): AppSettings {
   const sidebarLayout: SidebarLayoutEntry[] | null = row.sidebar_layout
     ? JSON.parse(row.sidebar_layout)
     : null;
+  const investmentsCardLayout: CardLayoutEntry[] | null = row.investments_card_layout
+    ? JSON.parse(row.investments_card_layout)
+    : null;
   return AppSettingsSchema.parse({
     id: 1,
     sidebarLayout,
+    investmentsCardLayout,
     notificationsEnabled: row.notifications_enabled === 1,
     notificationDay: row.notification_day,
     refreshCadence: row.refresh_cadence,
@@ -100,6 +105,7 @@ export class SettingsRepo {
     await this.db.execute(
       `UPDATE app_settings SET
         sidebar_layout = ?,
+        investments_card_layout = ?,
         notifications_enabled = ?,
         notification_day = ?,
         refresh_cadence = ?,
@@ -117,6 +123,7 @@ export class SettingsRepo {
        WHERE id = 1`,
       [
         merged.sidebarLayout === null ? null : JSON.stringify(merged.sidebarLayout),
+        merged.investmentsCardLayout === null ? null : JSON.stringify(merged.investmentsCardLayout),
         merged.notificationsEnabled ? 1 : 0,
         merged.notificationDay,
         merged.refreshCadence,

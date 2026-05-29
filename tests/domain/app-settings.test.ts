@@ -57,6 +57,19 @@ describe('SettingsRepo', () => {
     expect((await repo.get()).sidebarLayout).toBeNull();
   });
 
+  it('defaults investmentsCardLayout to null on the seeded row', async () => {
+    expect((await repo.get()).investmentsCardLayout).toBeNull();
+  });
+
+  it('round-trips investmentsCardLayout through update/get', async () => {
+    await repo.update({ investmentsCardLayout: [{ id: 'sector', hidden: true }] });
+    expect((await repo.get()).investmentsCardLayout).toEqual([
+      { id: 'sector', hidden: true },
+    ]);
+    await repo.update({ investmentsCardLayout: null });
+    expect((await repo.get()).investmentsCardLayout).toBeNull();
+  });
+
   it('a partial patch leaves other fields untouched', async () => {
     await repo.update({ notificationDay: 20 });
     const s = await repo.get();
