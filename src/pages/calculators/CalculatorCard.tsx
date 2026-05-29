@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ChevronDownIcon, ChevronUpIcon, SettingsIcon } from 'lucide-react';
+import { useAutoRowSpan } from '@/lib/use-auto-row-span';
 
 interface CalculatorCardProps {
   /**
@@ -44,6 +45,7 @@ export function CalculatorCard({
     titleText ?? (typeof title === 'string' ? title : undefined);
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [showOverride, setShowOverride] = useState(false);
+  const { ref, span } = useAutoRowSpan();
 
   const handleHide = () => {
     if (!cardId) return;
@@ -51,7 +53,7 @@ export function CalculatorCard({
   };
 
   return (
-    <Card className="min-w-0">
+    <Card ref={ref} className="min-w-0" style={{ gridRow: `span ${span}` }}>
       <CardHeader className="flex flex-row items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="text-sm text-muted-foreground">{title}</div>

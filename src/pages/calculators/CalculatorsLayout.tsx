@@ -160,7 +160,7 @@ export default function CalculatorsLayout() {
           </Button>
         </div>
       )}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 min-w-0">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 min-w-0 [grid-auto-rows:8px] [grid-auto-flow:row_dense]">
         {!hiddenSet.has(CARD_IDS.PAYCHECK) && (
           <PaycheckCard cardId={CARD_IDS.PAYCHECK} onHide={handleHide} />
         )}
