@@ -86,6 +86,18 @@ describe('bucketForContribution', () => {
       expect(bucketForContribution(c, acct)).toBeNull();
     }
   });
+
+  // Guards the stacked contributions chart: every AccountType must reach an
+  // explicit case, never the assertNever default. A future type added without
+  // handling throws here (and `tsc` reds at the switch) instead of its
+  // contributions being silently dropped from the chart.
+  it('classifies every AccountType without hitting the exhaustiveness guard', () => {
+    for (const type of Object.values(AccountType)) {
+      const acct = makeAccount(1, type);
+      const c = makeContribution(1, 1, '2026-01-01', 100);
+      expect(() => bucketForContribution(c, acct)).not.toThrow();
+    }
+  });
 });
 
 describe('aggregateContributionsByBucket', () => {

@@ -1,5 +1,6 @@
 import { AccountType, ContributionSource } from '@/types/enums';
 import { monthsBetween } from '@/lib/business-days';
+import { assertNever } from '@/lib/assert';
 import type { Account, Contribution } from '@/types/schema';
 
 /**
@@ -39,7 +40,16 @@ export function bucketForContribution(
     case AccountType.ACCOUNT_TRAD_IRA:  return 'Trad IRA';
     case AccountType.ACCOUNT_HSA:       return 'HSA';
     case AccountType.ACCOUNT_529:       return '529';
-    default:                            return null;
+    // Non-investment accounts are intentionally excluded from the chart.
+    case AccountType.ACCOUNT_CASH:
+    case AccountType.ACCOUNT_SAVINGS:
+    case AccountType.ACCOUNT_CRYPTO:
+      return null;
+    // ACCOUNT_401K is handled above, before the switch; every other AccountType
+    // has an explicit case. Adding a new member makes `account.type` non-`never`
+    // here, so `tsc` errors instead of its contributions silently vanishing.
+    default:
+      return assertNever(account.type);
   }
 }
 

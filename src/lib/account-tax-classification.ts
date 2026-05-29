@@ -1,5 +1,6 @@
 import type { Account } from '@/types/schema';
 import { AccountType } from '@/types/enums';
+import { assertNever } from '@/lib/assert';
 
 export type TaxBucket = 'taxAdvantaged' | 'taxable';
 
@@ -62,6 +63,9 @@ export function sequencingBucketForAccount(account: Account): SequencingBucket |
     case AccountType.ACCOUNT_529:
       return 'taxDeferred';
     default:
-      return null;
+      // Exhaustive: every AccountType is handled above. Adding a new member
+      // without a case makes `account.type` non-`never` here, so `tsc` errors
+      // instead of the account silently dropping out of the drawdown engine.
+      return assertNever(account.type);
   }
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { taxBucketForAccount } from '@/lib/account-tax-classification';
+import { sequencingBucketForAccount, taxBucketForAccount } from '@/lib/account-tax-classification';
 import type { Account } from '@/types/schema';
 import { AccountType } from '@/types/enums';
 
@@ -29,5 +29,44 @@ describe('taxBucketForAccount', () => {
     [AccountType.ACCOUNT_SAVINGS],
   ])('returns null for cash/savings account type %s', (type) => {
     expect(taxBucketForAccount(acct(type))).toBeNull();
+  });
+});
+
+describe('sequencingBucketForAccount', () => {
+  it.each([
+    [AccountType.ACCOUNT_BROKERAGE, 'taxable'],
+    [AccountType.ACCOUNT_CRYPTO, 'taxable'],
+  ])('maps %s to taxable', (type, expected) => {
+    expect(sequencingBucketForAccount(acct(type))).toBe(expected);
+  });
+
+  it('maps Roth IRA to roth', () => {
+    expect(sequencingBucketForAccount(acct(AccountType.ACCOUNT_ROTH_IRA))).toBe('roth');
+  });
+
+  it.each([
+    [AccountType.ACCOUNT_401K],
+    [AccountType.ACCOUNT_TRAD_IRA],
+    [AccountType.ACCOUNT_HSA],
+    [AccountType.ACCOUNT_529],
+  ])('maps %s to taxDeferred', (type) => {
+    expect(sequencingBucketForAccount(acct(type))).toBe('taxDeferred');
+  });
+
+  it.each([
+    [AccountType.ACCOUNT_CASH],
+    [AccountType.ACCOUNT_SAVINGS],
+  ])('returns null for non-investment account type %s', (type) => {
+    expect(sequencingBucketForAccount(acct(type))).toBeNull();
+  });
+
+  // Guards the drawdown engine: every AccountType must reach an explicit case,
+  // never the assertNever default. If a future type is added without handling,
+  // this throws here (and `tsc` reds at the switch) instead of the account being
+  // silently dropped from sequential withdrawals.
+  it('classifies every AccountType without hitting the exhaustiveness guard', () => {
+    for (const type of Object.values(AccountType)) {
+      expect(() => sequencingBucketForAccount(acct(type))).not.toThrow();
+    }
   });
 });
