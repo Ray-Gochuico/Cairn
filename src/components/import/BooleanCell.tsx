@@ -19,7 +19,7 @@ export function BooleanCell({ value, onChange, error }: Props) {
         onChange={(e) => onChange(e.target.checked)}
         className="h-4 w-4 cursor-pointer"
       />
-      {error && <span className="ml-2 text-xs text-destructive italic">{error.message}</span>}
+      {error && <span className="ml-2 text-xs text-destructive-soft-foreground italic">{error.message}</span>}
     </div>
   );
 }

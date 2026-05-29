@@ -24,7 +24,7 @@ export function ReimbursableCell({ value, error, onChange }: Props) {
         <option value="true">Yes</option>
         <option value="false">No</option>
       </select>
-      {error && <div className="text-xs text-destructive italic mt-0.5">{error.message}</div>}
+      {error && <div className="text-xs text-destructive-soft-foreground italic mt-0.5">{error.message}</div>}
     </div>
   );
 }

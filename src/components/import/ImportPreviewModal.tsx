@@ -276,7 +276,7 @@ export function ImportPreviewModal({
             ) : null}
             {parsed.rows.length} rows parsed
             {parsed.errors.length > 0 && (
-              <span className="text-destructive ml-2">
+              <span className="text-destructive-soft-foreground ml-2">
                 · {parsed.errors.length} lines could not be parsed
               </span>
             )}
@@ -304,7 +304,7 @@ export function ImportPreviewModal({
 
         <DialogFooter>
           {state.summary.error > 0 && (
-            <div className="text-xs text-destructive mr-auto self-center">
+            <div className="text-xs text-destructive-soft-foreground mr-auto self-center">
               Resolve {state.summary.error} error
               {state.summary.error === 1 ? '' : 's'} before committing
             </div>
@@ -371,7 +371,7 @@ function SummaryBar({
           <Button
             size="sm"
             variant="outline"
-            className="text-destructive"
+            className="text-destructive-soft-foreground"
             onClick={() => state.deleteAllErrors()}
           >
             Delete errors

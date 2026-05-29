@@ -62,7 +62,7 @@ export function AccountPreviewTable({ state }: Props) {
                 <td className="px-3 py-2">
                   {row.raw.name || '—'}
                   {err('name') && (
-                    <div className="text-xs text-destructive italic mt-0.5">{err('name')!.message}</div>
+                    <div className="text-xs text-destructive-soft-foreground italic mt-0.5">{err('name')!.message}</div>
                   )}
                 </td>
                 <td className="px-3 py-2">
@@ -78,7 +78,7 @@ export function AccountPreviewTable({ state }: Props) {
                     ? `$${Number(row.raw.current_balance).toLocaleString()}`
                     : '—'}
                   {err('current_balance') && (
-                    <div className="text-xs text-destructive italic mt-0.5">
+                    <div className="text-xs text-destructive-soft-foreground italic mt-0.5">
                       {err('current_balance')!.message}
                     </div>
                   )}
@@ -100,7 +100,7 @@ export function AccountPreviewTable({ state }: Props) {
                 <td className="px-3 py-2 text-xs">
                   {row.resolved.accentColor ?? row.raw.accent_color ?? '—'}
                   {err('accent_color') && (
-                    <div className="text-xs text-destructive italic mt-0.5">
+                    <div className="text-xs text-destructive-soft-foreground italic mt-0.5">
                       {err('accent_color')!.message}
                     </div>
                   )}
@@ -110,7 +110,7 @@ export function AccountPreviewTable({ state }: Props) {
                     ? `${(row.resolved.apyRate * 100).toFixed(2)}%`
                     : '—'}
                   {err('apy_rate') && (
-                    <div className="text-xs text-destructive italic mt-0.5">
+                    <div className="text-xs text-destructive-soft-foreground italic mt-0.5">
                       {err('apy_rate')!.message}
                     </div>
                   )}

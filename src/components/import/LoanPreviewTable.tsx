@@ -61,7 +61,7 @@ export function LoanPreviewTable({ state }: Props) {
                 <td className="px-3 py-2">
                   {row.raw.name || '—'}
                   {err('name') && (
-                    <div className="text-xs text-destructive italic mt-0.5">{err('name')!.message}</div>
+                    <div className="text-xs text-destructive-soft-foreground italic mt-0.5">{err('name')!.message}</div>
                   )}
                 </td>
                 <td className="px-3 py-2">
@@ -77,7 +77,7 @@ export function LoanPreviewTable({ state }: Props) {
                     ? `$${Number(row.raw.current_balance).toLocaleString()}`
                     : '—'}
                   {err('current_balance') && (
-                    <div className="text-xs text-destructive italic mt-0.5">
+                    <div className="text-xs text-destructive-soft-foreground italic mt-0.5">
                       {err('current_balance')!.message}
                     </div>
                   )}
@@ -87,7 +87,7 @@ export function LoanPreviewTable({ state }: Props) {
                     ? `${(Number(row.raw.interest_rate) * 100).toFixed(2)}%`
                     : '—'}
                   {err('interest_rate') && (
-                    <div className="text-xs text-destructive italic mt-0.5">
+                    <div className="text-xs text-destructive-soft-foreground italic mt-0.5">
                       {err('interest_rate')!.message}
                     </div>
                   )}
@@ -95,7 +95,7 @@ export function LoanPreviewTable({ state }: Props) {
                 <td className="px-3 py-2 tabular-nums text-right text-xs">
                   {row.raw.term_months || '—'}
                   {err('term_months') && (
-                    <div className="text-xs text-destructive italic mt-0.5">
+                    <div className="text-xs text-destructive-soft-foreground italic mt-0.5">
                       {err('term_months')!.message}
                     </div>
                   )}
@@ -103,7 +103,7 @@ export function LoanPreviewTable({ state }: Props) {
                 <td className="px-3 py-2 text-xs">
                   {row.raw.first_payment_date || '—'}
                   {err('first_payment_date') && (
-                    <div className="text-xs text-destructive italic mt-0.5">
+                    <div className="text-xs text-destructive-soft-foreground italic mt-0.5">
                       {err('first_payment_date')!.message}
                     </div>
                   )}

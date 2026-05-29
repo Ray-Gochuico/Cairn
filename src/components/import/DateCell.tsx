@@ -38,7 +38,7 @@ export function DateCell({ value, error, onChange }: Props) {
           }}
           className={`w-full px-2 py-1 text-sm border rounded ${error ? 'border-destructive bg-destructive/10' : 'border-input'}`}
         />
-        {error && <div className="text-xs text-destructive italic mt-0.5">{error.message}</div>}
+        {error && <div className="text-xs text-destructive-soft-foreground italic mt-0.5">{error.message}</div>}
       </div>
     );
   }

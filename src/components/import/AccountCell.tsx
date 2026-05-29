@@ -34,7 +34,7 @@ export function AccountCell({ value, error, accounts, onChange }: Props) {
             <option key={a.id} value={a.name}>{a.name}</option>
           ))}
         </select>
-        {error && <div className="text-xs text-destructive italic mt-0.5">{error.message}</div>}
+        {error && <div className="text-xs text-destructive-soft-foreground italic mt-0.5">{error.message}</div>}
       </div>
     );
   }

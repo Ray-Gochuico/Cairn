@@ -78,7 +78,7 @@ export function ContributionPreviewTable({ state }: Props) {
                 <td className="px-3 py-2 tabular-nums text-right">
                   {row.raw.amount ? `$${Number(row.raw.amount).toLocaleString()}` : '—'}
                   {err('amount') && (
-                    <div className="text-xs text-destructive italic mt-0.5">{err('amount')!.message}</div>
+                    <div className="text-xs text-destructive-soft-foreground italic mt-0.5">{err('amount')!.message}</div>
                   )}
                 </td>
                 <td className="px-3 py-2">

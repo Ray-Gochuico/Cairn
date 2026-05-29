@@ -29,7 +29,7 @@ export function OwnerPersonCell({ value, persons, onChange, error }: Props) {
           <option key={p.id} value={String(p.id)}>{p.name}</option>
         ))}
       </select>
-      {error && <div className="text-xs text-destructive italic mt-0.5">{error.message}</div>}
+      {error && <div className="text-xs text-destructive-soft-foreground italic mt-0.5">{error.message}</div>}
     </div>
   );
 }

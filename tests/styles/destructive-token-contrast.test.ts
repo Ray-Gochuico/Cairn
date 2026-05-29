@@ -86,9 +86,11 @@ const THEMES = [
   { name: 'dark', body: block('.dark') },
 ];
 
-// Opacities the error-pane / status-badge idiom actually uses on a
-// destructive tint (bg-destructive/10 for panes, /15 for import badges).
-const TINTS = [0.1, 0.15];
+// Opacities the destructive tint is composited at across the app:
+// /10 for error panes and table-row error backgrounds, /15 for import
+// status badges, /20 for the return-schedule override swatch. The token
+// must clear AA as text over the whole {10,15,20} range it can land on.
+const TINTS = [0.1, 0.15, 0.2];
 
 const AA_SMALL = 4.5;
 
@@ -159,6 +161,41 @@ describe('no low-contrast destructive-text-on-tint idiom remains in src/', () =>
     expect(
       violations,
       `Use text-destructive-soft-foreground on soft tints. Offenders:\n${violations.join('\n')}`,
+    ).toEqual([]);
+  });
+});
+
+// --- structural guard: import preview error rows ----------------------------
+
+/**
+ * The same-className guard above is line-based, so it cannot see the import
+ * preview idiom where the tint is on the *row* and the destructive text is a
+ * *descendant*: every preview table sets `error: 'bg-destructive/10'` on its
+ * `<tr>` (a ROW_BG map) and renders per-field error / error-state text inside
+ * that row. That text-on-tint is the same ~1.95:1 (dark) failure, just composed
+ * across parent + child. There are no solid `bg-destructive` fills under
+ * src/components/import/, so the invariant is simply: destructive *text* in the
+ * import preview always uses the soft-foreground token. State variants such as
+ * `hover:text-destructive` (the row's delete-✕ glyph) are intentionally excluded.
+ */
+const BARE_TEXT_DESTRUCTIVE = /(?<![\w:-])text-destructive(?![\w-])/;
+
+describe('import preview: no bare text-destructive on tinted error rows', () => {
+  it('uses text-destructive-soft-foreground for all destructive text under src/components/import/', () => {
+    const violations: string[] = [];
+    for (const file of walk(path.join(ROOT, 'src/components/import'))) {
+      readFileSync(file, 'utf8')
+        .split('\n')
+        .forEach((line, i) => {
+          if (BARE_TEXT_DESTRUCTIVE.test(line)) {
+            violations.push(`${path.relative(ROOT, file)}:${i + 1}  ${line.trim()}`);
+          }
+        });
+    }
+    expect(
+      violations,
+      'Import preview error rows are tinted bg-destructive/10; destructive text inside them must ' +
+        `use text-destructive-soft-foreground (hover/state variants excluded). Offenders:\n${violations.join('\n')}`,
     ).toEqual([]);
   });
 });

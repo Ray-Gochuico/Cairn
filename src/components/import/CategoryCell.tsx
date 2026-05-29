@@ -31,7 +31,7 @@ export function CategoryCell({ value, error, categories, onChange }: Props) {
             <option key={c.id} value={c.name}>{c.name}</option>
           ))}
         </select>
-        {error && <div className="text-xs text-destructive italic mt-0.5">{error.message}</div>}
+        {error && <div className="text-xs text-destructive-soft-foreground italic mt-0.5">{error.message}</div>}
       </div>
     );
   }

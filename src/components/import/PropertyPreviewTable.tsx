@@ -61,7 +61,7 @@ export function PropertyPreviewTable({ state }: Props) {
                 <td className="px-3 py-2">
                   {row.raw.name || '—'}
                   {err('name') && (
-                    <div className="text-xs text-destructive italic mt-0.5">{err('name')!.message}</div>
+                    <div className="text-xs text-destructive-soft-foreground italic mt-0.5">{err('name')!.message}</div>
                   )}
                 </td>
                 <td className="px-3 py-2">
@@ -77,7 +77,7 @@ export function PropertyPreviewTable({ state }: Props) {
                     ? `$${row.resolved.currentEstimatedValue.toLocaleString()}`
                     : '—'}
                   {err('current_estimated_value') && (
-                    <div className="text-xs text-destructive italic mt-0.5">
+                    <div className="text-xs text-destructive-soft-foreground italic mt-0.5">
                       {err('current_estimated_value')!.message}
                     </div>
                   )}
@@ -85,7 +85,7 @@ export function PropertyPreviewTable({ state }: Props) {
                 <td className="px-3 py-2 text-xs">
                   {row.raw.purchase_date || '—'}
                   {err('purchase_date') && (
-                    <div className="text-xs text-destructive italic mt-0.5">
+                    <div className="text-xs text-destructive-soft-foreground italic mt-0.5">
                       {err('purchase_date')!.message}
                     </div>
                   )}

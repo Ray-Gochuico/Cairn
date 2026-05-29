@@ -35,7 +35,7 @@ export function EnumCell({ value, options, onChange, error }: Props) {
           <option key={opt} value={opt}>{opt}</option>
         ))}
       </select>
-      {error && <div className="text-xs text-destructive italic mt-0.5">{error.message}</div>}
+      {error && <div className="text-xs text-destructive-soft-foreground italic mt-0.5">{error.message}</div>}
     </div>
   );
 }

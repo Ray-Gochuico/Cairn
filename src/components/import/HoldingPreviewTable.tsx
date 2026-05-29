@@ -63,13 +63,13 @@ export function HoldingPreviewTable({ state }: Props) {
                 <td className="px-3 py-2 font-mono">
                   {row.resolved.ticker || row.raw.ticker || '—'}
                   {err('ticker') && (
-                    <div className="text-xs text-destructive italic mt-0.5">{err('ticker')!.message}</div>
+                    <div className="text-xs text-destructive-soft-foreground italic mt-0.5">{err('ticker')!.message}</div>
                   )}
                 </td>
                 <td className="px-3 py-2 tabular-nums text-right">
                   {row.raw.share_count || '—'}
                   {err('share_count') && (
-                    <div className="text-xs text-destructive italic mt-0.5">
+                    <div className="text-xs text-destructive-soft-foreground italic mt-0.5">
                       {err('share_count')!.message}
                     </div>
                   )}
@@ -79,7 +79,7 @@ export function HoldingPreviewTable({ state }: Props) {
                     ? `$${row.resolved.costBasis.toLocaleString()}`
                     : '—'}
                   {err('cost_basis_per_share') && (
-                    <div className="text-xs text-destructive italic mt-0.5">
+                    <div className="text-xs text-destructive-soft-foreground italic mt-0.5">
                       {err('cost_basis_per_share')!.message}
                     </div>
                   )}
@@ -89,7 +89,7 @@ export function HoldingPreviewTable({ state }: Props) {
                     ? `${(row.resolved.targetAllocationPct * 100).toFixed(1)}%`
                     : '—'}
                   {err('target_allocation_pct') && (
-                    <div className="text-xs text-destructive italic mt-0.5">
+                    <div className="text-xs text-destructive-soft-foreground italic mt-0.5">
                       {err('target_allocation_pct')!.message}
                     </div>
                   )}

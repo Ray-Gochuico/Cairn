@@ -53,7 +53,7 @@ export function VestingScheduleCell({ value, onChange, error }: Props) {
             error ? 'border-destructive bg-destructive/10' : 'border-input'
           }`}
         />
-        {error && <div className="text-xs text-destructive italic">{error.message}</div>}
+        {error && <div className="text-xs text-destructive-soft-foreground italic">{error.message}</div>}
       </div>
     );
   }
@@ -65,7 +65,7 @@ export function VestingScheduleCell({ value, onChange, error }: Props) {
 
   return (
     <div className="flex items-center gap-2">
-      <span className={`text-xs ${error ? 'text-destructive' : 'text-foreground'}`}>
+      <span className={`text-xs ${error ? 'text-destructive-soft-foreground' : 'text-foreground'}`}>
         {summary}
       </span>
       <Button
@@ -77,7 +77,7 @@ export function VestingScheduleCell({ value, onChange, error }: Props) {
       >
         Edit
       </Button>
-      {error && <span className="text-xs text-destructive italic">{error.message}</span>}
+      {error && <span className="text-xs text-destructive-soft-foreground italic">{error.message}</span>}
     </div>
   );
 }
