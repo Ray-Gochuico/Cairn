@@ -13,6 +13,7 @@ import {
   Target,
   Compass,
   Calculator,
+  GraduationCap,
   GitBranch,
   PenSquare,
   Settings as SettingsIcon,
@@ -58,6 +59,7 @@ export const DEFAULT_SECTIONS: SidebarSectionShape[] = [
     items: [
       { to: '/goals', label: 'Goals', icon: Target },
       { to: '/roadmap', label: 'Roadmap', icon: Compass },
+      { to: '/learn', label: 'Learn', icon: GraduationCap },
       { to: '/calculators', label: 'Calculators', icon: Calculator },
       { to: '/what-if', label: 'What-If', icon: GitBranch },
     ],
