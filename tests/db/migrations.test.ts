@@ -431,3 +431,83 @@ it('0042 adds investments_card_layout to app_settings (nullable, seeded null)', 
   expect(seed[0].investments_card_layout).toBeNull();
   await db.close();
 });
+
+describe('0037_learning_state migration', () => {
+  it('creates the learning_state singleton with one seeded row', async () => {
+    const db = new SqliteAdapter(':memory:');
+    await runMigrations(db, await loadAllMigrations());
+    const cols = await db.select<{ name: string }>('PRAGMA table_info(learning_state)');
+    const names = cols.map((c) => c.name);
+    expect(names).toEqual(
+      expect.arrayContaining([
+        'id', 'difficulty_preference', 'last_shown_question_id',
+        'last_shown_iso_date', 'streak_count', 'last_answered_iso_date',
+      ]),
+    );
+    const rows = await db.select<{ id: number; difficulty_preference: string; streak_count: number }>(
+      'SELECT id, difficulty_preference, streak_count FROM learning_state',
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe(1);
+    expect(rows[0].difficulty_preference).toBe('Beginner');
+    expect(rows[0].streak_count).toBe(0);
+    await db.close();
+  });
+
+  it('rejects an invalid difficulty_preference via CHECK', async () => {
+    const db = new SqliteAdapter(':memory:');
+    await runMigrations(db, await loadAllMigrations());
+    await expect(
+      db.execute("UPDATE learning_state SET difficulty_preference = 'Expert' WHERE id = 1"),
+    ).rejects.toThrow(/CHECK constraint failed/i);
+    await db.close();
+  });
+
+  it('creates learning_answers with a version-aware UNIQUE(question_id, question_version)', async () => {
+    const db = new SqliteAdapter(':memory:');
+    await runMigrations(db, await loadAllMigrations());
+    // First answer of v1.
+    await db.execute(
+      `INSERT INTO learning_answers (question_id, answered_iso_date, chosen_index, was_correct, question_version)
+       VALUES ('beg-apr', '2026-05-28', 0, 1, 1)`,
+    );
+    // Re-answering the SAME version is one-shot — the composite UNIQUE rejects it.
+    await expect(
+      db.execute(
+        `INSERT INTO learning_answers (question_id, answered_iso_date, chosen_index, was_correct, question_version)
+         VALUES ('beg-apr', '2026-05-29', 1, 0, 1)`,
+      ),
+    ).rejects.toThrow(/UNIQUE/i);
+    // After a content correction bumps the version, the SAME question_id at the
+    // NEW version is answerable again — this is the v1.2 re-prompt the grain exists for.
+    await expect(
+      db.execute(
+        `INSERT INTO learning_answers (question_id, answered_iso_date, chosen_index, was_correct, question_version)
+         VALUES ('beg-apr', '2026-06-01', 2, 1, 2)`,
+      ),
+    ).resolves.not.toThrow();
+    const rows = await db.select<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM learning_answers WHERE question_id = 'beg-apr'",
+    );
+    expect(rows[0].n).toBe(2); // v1 + v2 = two rows for the one question id
+    await db.close();
+  });
+
+  it('adds NO disclosure columns to household (gate is normalized — MF-1)', async () => {
+    const db = new SqliteAdapter(':memory:');
+    await runMigrations(db, await loadAllMigrations());
+    const cols = await db.select<{ name: string }>('PRAGMA table_info(household)');
+    const names = cols.map((c) => c.name);
+    // The learning gate reads disclosure_acceptances, not a household column.
+    expect(names).not.toContain('learning_disclaimer_accepted_at');
+    expect(names).not.toContain('learning_disclaimer_version_accepted');
+    await db.close();
+  });
+
+  it('is idempotent — running loadAllMigrations twice does not error', async () => {
+    const db = new SqliteAdapter(':memory:');
+    await runMigrations(db, await loadAllMigrations());
+    await expect(runMigrations(db, await loadAllMigrations())).resolves.not.toThrow();
+    await db.close();
+  });
+});
