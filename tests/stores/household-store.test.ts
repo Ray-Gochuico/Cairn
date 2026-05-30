@@ -122,39 +122,41 @@ describe('useHouseholdStore — acceptDisclaimer (table-driven, single source of
     expect(useAcceptancesStore.getState().acceptedVersions.app_wide).toBe('1.1');
   });
 
-  it('post-COMMIT store refresh failure is non-fatal — acceptance still resolves and is durable', async () => {
-    // The store refresh after the audit commit (useAcceptancesStore.load())
-    // is best-effort: if the projection read throws (a transient SELECT-after-
-    // write race), acceptDisclaimer must still resolve, because the audit row
-    // — the only source of truth — has already committed. The next boot
-    // reconciles the in-memory projection.
+  it('flips the projection optimistically with no post-write re-read (resolves, durable, no re-prompt)', async () => {
+    // acceptDisclaimer sets the projection directly after the audit write and
+    // does NOT re-read: a slow/contended read would otherwise re-enter
+    // 'loading' and time out to 'error', re-prompting the user after a
+    // successful accept. Prove the accept path has no read dependency by making
+    // every projection read throw — the accept must still resolve and flip the
+    // gate to a stable 'ready'.
     const spy = vi
       .spyOn(DisclosureAcceptancesRepo.prototype, 'latestVersionsByDocument')
-      .mockRejectedValueOnce(new Error('synthetic post-commit projection race'));
+      .mockRejectedValue(new Error('projection read must not be on the accept path'));
 
-    // Should resolve, NOT throw, despite the refresh read failing.
     await expect(
       useHouseholdStore.getState().acceptDisclaimer('roadmap', '1.0'),
     ).resolves.toBeUndefined();
 
+    // Projection reflects the acceptance immediately (optimistic), and status
+    // is 'ready' — NOT 'loading'/'error' — so the gate does not re-prompt.
+    expect(useAcceptancesStore.getState().acceptedVersions.roadmap).toBe('1.0');
+    expect(useAcceptancesStore.getState().status).toBe('ready');
+
     spy.mockRestore();
 
-    // The audit row IS durable — it landed before the refresh threw.
+    // The audit row is durable.
     const auditRows = await db.select<{ version: string }>(
       `SELECT version FROM disclosure_acceptances WHERE document_id = 'roadmap'`,
     );
     expect(auditRows).toHaveLength(1);
     expect(auditRows[0].version).toBe('1.0');
-
-    // A fresh load reconciles the projection (the refresh that threw is gone).
-    await useAcceptancesStore.getState().load();
-    expect(useAcceptancesStore.getState().acceptedVersions.roadmap).toBe('1.0');
   });
 
-  it('rolls back the audit insert when the record write fails (atomic; projection unchanged)', async () => {
-    // The audit insert runs inside a BEGIN/COMMIT wrap (ROLLBACK on throw).
-    // If record() throws, no audit row lands and the gate projection is
-    // untouched — there is no household column left to roll back.
+  it('leaves the audit table empty when the record write fails (atomic single INSERT; projection unchanged)', async () => {
+    // The audit insert is a lone INSERT — atomic on its own, no manual
+    // BEGIN/COMMIT wrap (which would be fragile under tauri-plugin-sql's
+    // connection pool). If record() throws, no audit row lands and the gate
+    // projection is untouched — there is no household column left to roll back.
     const spy = vi
       .spyOn(DisclosureAcceptancesRepo.prototype, 'record')
       .mockRejectedValueOnce(new Error('synthetic audit-write failure'));

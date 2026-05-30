@@ -53,32 +53,32 @@ export const useHouseholdStore = create<HouseholdState>((set, get) => ({
   acceptDisclaimer: async (documentId, version) => {
     const householdId = get().household?.id ?? 1;
     const acceptedAt = new Date().toISOString();
-    const db = getDatabase();
-    const acceptancesRepo = new DisclosureAcceptancesRepo(db);
+    const acceptancesRepo = new DisclosureAcceptancesRepo(getDatabase());
 
-    // Single source of truth (MF-1/T5): the only write is the audit row
-    // in disclosure_acceptances — no household cache column to keep in
-    // sync (dropped in 0043). The insert is idempotent per (household,
-    // document, version), so a retry is a no-op. The BEGIN/COMMIT wrap
-    // is retained for consistency with the import/commit/*.ts pattern and
-    // so any future second write here stays atomic; rollback on any throw.
-    await db.execute('BEGIN');
-    try {
-      await acceptancesRepo.record({ householdId, documentId, version, acceptedAt });
-      await db.execute('COMMIT');
-    } catch (err) {
-      await db.execute('ROLLBACK');
-      throw err;
-    }
+    // Single source of truth (MF-1/T5): the only write is the audit row in
+    // disclosure_acceptances — no household cache column to keep in sync
+    // (dropped in 0043). A lone INSERT is atomic on its own (SQLite
+    // auto-commits a single statement), so we do NOT wrap it in a manual
+    // BEGIN/COMMIT: under tauri-plugin-sql's connection pool, a manual BEGIN
+    // and COMMIT can be dispatched to DIFFERENT pooled connections when launch
+    // work (the background market refresh) is running concurrently, which
+    // breaks the commit and makes acceptance fail. record() is idempotent on
+    // UNIQUE(household, document, version), so a re-accept is a no-op.
+    await acceptancesRepo.record({ householdId, documentId, version, acceptedAt });
 
-    // Single source of truth: the gate reads the acceptances store, which
-    // projects disclosure_acceptances. Refresh it after the audit row commits
-    // so the gate flips immediately. Swallow errors — the audit row is
-    // durable; the next boot reconciles.
-    try {
-      await useAcceptancesStore.getState().load();
-    } catch {
-      // ignore — gate will reconcile on next load
-    }
+    // Flip the gate immediately and OPTIMISTICALLY. The write just succeeded,
+    // so we KNOW this version is accepted — set it directly. This is the
+    // AUTHORITATIVE update, not a hint: we deliberately do NOT re-read here. A
+    // reconcile load() would re-enter `status: 'loading'` and, on a slow or
+    // contended projection read, time out to `status: 'error'` — re-prompting
+    // the user ~8s after a successful accept. The audit row is the durable
+    // source of truth; the next app boot's load() reconciles the projection.
+    const prev = useAcceptancesStore.getState().acceptedVersions;
+    useAcceptancesStore.setState({
+      acceptedVersions: { ...prev, [documentId]: version },
+      status: 'ready',
+      isLoading: false,
+      error: null,
+    });
   },
 }));
