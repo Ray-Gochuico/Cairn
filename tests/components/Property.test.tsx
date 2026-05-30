@@ -570,6 +570,31 @@ describe('Property page', () => {
     expect(screen.getAllByText(/\$2,400/).length).toBeGreaterThan(0);
   });
 
+  it('renders an on-page Add rental affordance linking to Inputs', async () => {
+    useHousingPaymentsStore.setState({
+      housingPayments: [
+        {
+          id: 1,
+          householdId: 1,
+          ownerPersonId: null,
+          name: 'Downtown apartment',
+          monthlyAmount: 2400,
+          startDate: '2025-09-01',
+          endDate: null,
+        },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+
+    renderPage();
+
+    await screen.findByText('Downtown apartment');
+    const addLink = screen.getByRole('link', { name: /add rental/i });
+    expect(addLink).toHaveAttribute('href', '/inputs/housing-payments');
+  });
+
   it('exports the full properties table to CSV with the owner name resolved', async () => {
     usePersonsStore.setState({
       persons: [

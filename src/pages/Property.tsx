@@ -595,6 +595,14 @@ export default function Property() {
                 }
               />
             ))}
+            <Link
+              to="/inputs/housing-payments"
+              aria-label="Add rental"
+              className="flex min-h-[96px] w-full items-center justify-center gap-2 rounded-lg border border-dashed text-sm font-medium text-primary transition-colors hover:bg-accent"
+            >
+              <span aria-hidden="true" className="text-lg leading-none">+</span>
+              Add rental
+            </Link>
           </div>
         </section>
       )}
