@@ -9,6 +9,7 @@ const acct = (type: string): Account =>
 describe('taxBucketForAccount', () => {
   it.each([
     [AccountType.ACCOUNT_401K, 'taxAdvantaged'],
+    [AccountType.ACCOUNT_ROTH_401K, 'taxAdvantaged'],
     [AccountType.ACCOUNT_ROTH_IRA, 'taxAdvantaged'],
     [AccountType.ACCOUNT_TRAD_IRA, 'taxAdvantaged'],
     [AccountType.ACCOUNT_HSA, 'taxAdvantaged'],
@@ -42,6 +43,14 @@ describe('sequencingBucketForAccount', () => {
 
   it('maps Roth IRA to roth', () => {
     expect(sequencingBucketForAccount(acct(AccountType.ACCOUNT_ROTH_IRA))).toBe('roth');
+  });
+
+  it('maps Roth 401k to roth (tax-free drawdown, same tier as Roth IRA)', () => {
+    expect(sequencingBucketForAccount(acct(AccountType.ACCOUNT_ROTH_401K))).toBe('roth');
+  });
+
+  it('keeps Traditional 401k on taxDeferred (Roth-401k addition must not move it)', () => {
+    expect(sequencingBucketForAccount(acct(AccountType.ACCOUNT_401K))).toBe('taxDeferred');
   });
 
   it.each([

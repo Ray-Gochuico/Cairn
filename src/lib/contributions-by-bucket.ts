@@ -29,7 +29,10 @@ export function bucketForContribution(
   contribution: Contribution,
   account: Account,
 ): ContributionBucket | null {
-  if (account.type === AccountType.ACCOUNT_401K) {
+  if (
+    account.type === AccountType.ACCOUNT_401K ||
+    account.type === AccountType.ACCOUNT_ROTH_401K
+  ) {
     return contribution.source === ContributionSource.EMPLOYER_MATCH
       ? '401k Match'
       : '401k';
