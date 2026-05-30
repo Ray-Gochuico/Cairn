@@ -286,3 +286,48 @@ describe('captureRealState — per-jurisdiction standard deductions', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Task 4 — Feature B: expenseBasis precompute at capture
+// ---------------------------------------------------------------------------
+
+import { latestCompleteMonthBaseline, rolling12mBaseline } from '@/lib/expense-baseline';
+import type { Category } from '@/types/schema';
+
+describe('captureRealState — Feature B expenseBasis precompute', () => {
+  it('computes latestMonth + rolling12m from transactions, real-spending-filtered', () => {
+    const categories = [
+      { id: 1, name: 'Groceries', parentCategoryId: null, color: null, icon: null, type: 'EXPENSE', isCapital: false, systemManaged: false, monthlyBudget: null },
+      { id: 2, name: 'Move', parentCategoryId: null, color: null, icon: null, type: 'TRANSFER', isCapital: false, systemManaged: false, monthlyBudget: null },
+    ] as never as Category[];
+    const transactions = [
+      { id: 1, householdId: 1, date: '2026-04-10', amount: 3000, merchant: 'M', merchantRaw: null, categoryId: 1, sourceAccountId: 1 },
+      { id: 2, householdId: 1, date: '2026-03-10', amount: 2000, merchant: 'M', merchantRaw: null, categoryId: 1, sourceAccountId: 1 },
+      { id: 3, householdId: 1, date: '2026-04-15', amount: 9999, merchant: 'X', merchantRaw: null, categoryId: 2, sourceAccountId: 1 }, // transfer → excluded
+    ] as never as Transaction[];
+
+    const real = captureRealState({
+      accounts: [], holdings: [], loans: [], loanPayments: [],
+      household: { filingStatus: 'SINGLE', state: 'TX', city: null, monthlyExpenseBaseline: 0, withdrawalRate: 0.04, inflationAssumption: 0.03, growthScenarios: [] } as never as Household,
+      persons: [], appSettings: { defaultInflation: 0.03, defaultReturnRate: 0.05, defaultCashApy: null, defaultDrawdownTaxRate: null },
+      startISO: '2026-05', taxRules: [],
+      transactions, categories,
+    });
+
+    expect(real.expenseBasis.latestMonth).toBe(latestCompleteMonthBaseline(transactions, categories, '2026-05'));
+    expect(real.expenseBasis.latestMonth).toBeCloseTo(3000, 0); // April, transfer excluded
+    expect(real.expenseBasis.rolling12m).toBe(rolling12mBaseline(transactions, categories, '2026-05'));
+    expect(real.expenseBasis.rolling12m).toBeCloseTo(2500, 0); // (3000 + 2000) / 2 months
+  });
+
+  it('defaults expenseBasis to {0,0} when there are no transactions', () => {
+    const real = captureRealState({
+      accounts: [], holdings: [], loans: [], loanPayments: [],
+      household: { filingStatus: 'SINGLE', state: 'TX', city: null, monthlyExpenseBaseline: 0, withdrawalRate: 0.04, inflationAssumption: 0.03, growthScenarios: [] } as never as Household,
+      persons: [], appSettings: { defaultInflation: 0.03, defaultReturnRate: 0.05, defaultCashApy: null, defaultDrawdownTaxRate: null },
+      startISO: '2026-05', taxRules: [],
+      transactions: [], categories: [],
+    });
+    expect(real.expenseBasis).toEqual({ latestMonth: 0, rolling12m: 0 });
+  });
+});
