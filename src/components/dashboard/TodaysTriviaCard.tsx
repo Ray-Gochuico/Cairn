@@ -37,7 +37,11 @@ export function TodaysTriviaCard() {
     void loadHousehold();
     void loadAcceptances();
     void loadLearning();
-    void loadTriviaBank().then(setBank);
+    // SEC-1: loadTriviaBank rejects on a malformed/duplicate-id bank. Swallow
+    // it so the widget degrades to its calm aria-busy placeholder (bank stays
+    // null → the !bank guard) instead of an unhandled rejection. The /learn
+    // page owns the explicit "couldn't load" error state.
+    void loadTriviaBank().then(setBank, () => {});
   }, [loadHousehold, loadAcceptances, loadLearning]);
 
   const difficulty = learningState?.difficultyPreference ?? LearningDifficulty.BEGINNER;
