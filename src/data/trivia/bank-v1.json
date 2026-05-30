@@ -884,7 +884,7 @@
     "glossaryTerm": "LTCG",
     "prompt": "At what approximate 2024 taxable income threshold does the 0% long-term capital gains rate end for a single filer?",
     "choices": [
-      "$44,625",
+      "$47,025",
       "$61,500",
       "$72,800",
       "$94,050"
@@ -903,7 +903,7 @@
     "choices": [
       "Roth IRA contributions must be held 5 years before they can be withdrawn penalty-free",
       "The 5-year clock for a Roth IRA starts on January 1 of the year of the first conversion, not the first contribution",
-      "Roth 401(k) balances rolled over into a Roth IRA start a new 5-year clock for earnings qualification",
+      "Each Roth conversion has its own separate 5-year clock for penalty-free withdrawal of converted amounts before age 59½",
       "Each Roth IRA account has its own independent 5-year clock for determining qualified distributions"
     ],
     "answerIndex": 2,
