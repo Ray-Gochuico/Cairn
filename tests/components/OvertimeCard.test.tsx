@@ -112,6 +112,7 @@ function primeStores(personOverrides: Partial<typeof baseHourlyPerson> = {}) {
 
 describe('OvertimeCard', () => {
   beforeEach(() => {
+    sessionStorage.clear();
     resetStores();
   });
 
@@ -295,5 +296,35 @@ describe('OvertimeCard', () => {
     // Per-row breakdown row 0 should show gross = $175.
     const breakdownRow = await screen.findByTestId('ot-row-result-0');
     expect(breakdownRow.textContent).toContain('175');
+  });
+
+  it('headline equals computeSupplementalWageTax wiring exactly (parity, single eligible person)', async () => {
+    const { aggregateHouseholdPretax, computeSupplementalWageTax } = await import(
+      '@/lib/calculators/supplemental-wage'
+    );
+    const { formatCurrency } = await import('@/lib/format');
+    primeStores(); // HOURLY @ $25/hr, $100k salary, all pretax 0; default row 8h @ 1.5x = $300 gross
+    render(<MemoryRouter><OvertimeCard /></MemoryRouter>);
+
+    const headline = await screen.findByTestId('ot-takehome');
+
+    // Mirror the card: aggregate the SINGLE eligible person (household-wide caps
+    // still count everyone — here personCount = 1, dependentCount = 0).
+    const agg = aggregateHouseholdPretax(
+      [{ ...baseHourlyPerson }],
+      { filingStatus: FilingStatus.SINGLE, personCount: 1, dependentCount: 0 },
+    );
+    const expected = computeSupplementalWageTax({
+      baseSalary: agg.totalSalary,           // 100000
+      supplementalWages: 300,                // 8 hrs × $25 × 1.5
+      pretax: agg.pretax,
+      filingStatus: FilingStatus.SINGLE,
+      federalBrackets: federalSingleBrackets,
+      stateBrackets: caSingleBrackets,
+      cityBrackets: null,
+      standardDeduction: { federal: 15000, state: 0, city: 0 },
+    });
+
+    expect(headline.textContent).toBe(formatCurrency(expected.bonusTakeHome));
   });
 });
