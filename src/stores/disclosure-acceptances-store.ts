@@ -24,6 +24,19 @@ interface AcceptancesState {
   load: () => Promise<void>;
 }
 
+/**
+ * Max time to wait for the projection read before failing closed. This BOUNDS
+ * the `AppDisclaimerGate` "Loading…" state so a hung or interrupted DB read can
+ * never freeze the whole app on boot. The motivating failure: a `tauri dev`
+ * hot-reload mid-boot orphans the in-flight SQL IPC callback, so the underlying
+ * `select` promise never settles — without a timeout the gate waits on it
+ * forever. On timeout we fail CLOSED (status 'error' → the gate re-presents the
+ * app-wide disclosure) rather than hang. Generous enough (8s) that a slow cold
+ * read on first launch never false-trips; the happy path resolves in <100ms so
+ * the timeout is invisible in normal operation.
+ */
+const LOAD_TIMEOUT_MS = 8000;
+
 export const useAcceptancesStore = create<AcceptancesState>((set) => ({
   acceptedVersions: {},
   status: 'loading',
@@ -31,14 +44,27 @@ export const useAcceptancesStore = create<AcceptancesState>((set) => ({
   error: null,
   load: async () => {
     set({ status: 'loading', isLoading: true, error: null });
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const repo = new DisclosureAcceptancesRepo(getDatabase());
-      const acceptedVersions = await repo.latestVersionsByDocument();
+      const acceptedVersions = await Promise.race([
+        repo.latestVersionsByDocument(),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error('acceptances projection load timed out')),
+            LOAD_TIMEOUT_MS,
+          );
+        }),
+      ]);
       set({ acceptedVersions, status: 'ready', isLoading: false });
     } catch (e) {
       // FAIL CLOSED: surface the error as `status: 'error'` so the app_wide
-      // gate re-presents the disclosure rather than assuming first-run.
+      // gate re-presents the disclosure rather than assuming first-run — and so
+      // a hung/orphaned read converts to a re-prompt instead of an eternal
+      // "Loading…" boot freeze.
       set({ status: 'error', isLoading: false, error: e instanceof Error ? e.message : 'Failed to load' });
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
     }
   },
 }));
