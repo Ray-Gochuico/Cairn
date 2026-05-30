@@ -130,7 +130,7 @@ export default function ExpensePeriodsPopover({ open, onOpenChange }: Props) {
         {source === 'custom' && (
           <NumberField
             id="custom-monthly-expense"
-            label="Custom monthly base"
+            label="Custom monthly expense"
             value={customMonthly}
             onChange={setCustomMonthly}
             suffix="$/mo"

@@ -48,7 +48,7 @@ describe('ExpensePeriodsPopover', () => {
     render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
     await user.click(screen.getByRole('button', { name: /add period/i }));
     fireEvent.change(screen.getByLabelText(/start \(YYYY-MM-DD\)/i), { target: { value: '2026-07-01' } });
-    fireEvent.change(screen.getByLabelText(/Monthly expense/i), { target: { value: '1500' } });
+    fireEvent.change(screen.getByLabelText('Monthly expense'), { target: { value: '1500' } });
     fireEvent.change(screen.getByLabelText(/duration/i), { target: { value: '6' } });
     expect(await screen.findByText(/\$9,000\s*total/i)).toBeInTheDocument();
   });
@@ -58,7 +58,7 @@ describe('ExpensePeriodsPopover', () => {
     render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
     await user.click(screen.getByRole('button', { name: /add period/i }));
     fireEvent.change(screen.getByLabelText(/start \(YYYY-MM-DD\)/i), { target: { value: '2026-07-01' } });
-    fireEvent.change(screen.getByLabelText(/Monthly expense/i), { target: { value: '1500' } });
+    fireEvent.change(screen.getByLabelText('Monthly expense'), { target: { value: '1500' } });
     fireEvent.change(screen.getByLabelText(/duration/i), { target: { value: '6' } });
     await user.click(screen.getByRole('button', { name: /apply/i }));
     const updateLever = (useScenariosStore.getState() as any).updateLever as ReturnType<typeof vi.fn>;
@@ -83,7 +83,7 @@ describe('ExpensePeriodsPopover — monthly + annual summary (revamp 2026-05-26)
       expensePeriods: [{ start: todayDate, monthlyDelta: 5000, durationMonths: 12 }],
     });
     render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
-    const input = screen.getByLabelText(/Monthly expense/i);
+    const input = screen.getByLabelText('Monthly expense');
     fireEvent.change(input, { target: { value: '6000' } });
     expect(screen.getByTestId('expense-summary-monthly')).toHaveTextContent(/\$6,000/);
     expect(screen.getByTestId('expense-summary-annual')).toHaveTextContent(/\$72,000/);
@@ -250,7 +250,7 @@ describe('ExpensePeriodsPopover — expense-source selector (Task 8)', () => {
   it('custom mode reveals a validated monthly input bound to customMonthly', () => {
     seedAllStores({ transactions: [], expenseSource: 'custom', customMonthly: 0 });
     render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
-    fireEvent.change(screen.getByLabelText(/custom monthly/i), { target: { value: '4200' } });
+    fireEvent.change(screen.getByLabelText('Custom monthly expense'), { target: { value: '4200' } });
     expect(screen.getByTestId('expense-base')).toHaveTextContent('4,200');
   });
 
@@ -282,7 +282,7 @@ describe('ExpensePeriodsPopover — expense-source selector (Task 8)', () => {
       customMonthly: 0,
     });
     render(<MemoryRouter><ExpensePeriodsPopover open onOpenChange={() => {}} /></MemoryRouter>);
-    fireEvent.change(screen.getByLabelText(/custom monthly/i), { target: { value: '4200' } });
+    fireEvent.change(screen.getByLabelText('Custom monthly expense'), { target: { value: '4200' } });
     fireEvent.click(screen.getByRole('button', { name: /^apply$/i }));
     const spy = (useScenariosStore.getState() as any).updateLever as ReturnType<typeof vi.fn>;
     await vi.waitFor(() => expect(spy).toHaveBeenCalled());
