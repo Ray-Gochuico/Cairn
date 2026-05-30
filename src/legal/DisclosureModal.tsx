@@ -64,7 +64,10 @@ export function DisclosureModal({
   const [checked, setChecked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const title = document.id === 'app_wide' ? 'Disclaimer' : 'About the Roadmap';
+  // Total over DisclosureId — every disclosure carries its own title, so a new
+  // id (e.g. backtest) needs zero edits here (W3). Fallback keeps tsc + render
+  // safe even if a title were ever omitted.
+  const title = document.title ?? 'Disclaimer';
 
   const [error, setError] = useState<string | null>(null);
   const handleAccept = async () => {

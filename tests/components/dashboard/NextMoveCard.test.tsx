@@ -10,6 +10,7 @@ import { useContributionsStore } from '@/stores/contributions-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { useRoadmapOverridesStore } from '@/stores/roadmap-overrides-store';
+import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import { FilingStatus } from '@/types/enums';
 import type { Household } from '@/types/schema';
 
@@ -26,10 +27,6 @@ function makeHousehold(patch: Partial<Household> = {}): Household {
     withdrawalRate: 0.04,
     inflationAssumption: 0.03,
     growthScenarios: [],
-    disclaimerAcceptedAt: '2026-05-01',
-    disclaimerVersionAccepted: '1.0',
-    roadmapDisclaimerAcceptedAt: '2026-05-01',
-    roadmapDisclaimerVersionAccepted: ACCEPTED,
     interestThresholdLowPct: null,
     interestThresholdHighPct: null,
     hasWrittenIps: null,
@@ -42,7 +39,12 @@ function makeHousehold(patch: Partial<Household> = {}): Household {
   };
 }
 
-function resetStores(household: Household | null) {
+// The roadmap gate reads the acceptances projection (single source of truth,
+// MF-1), not a household column. Default to an accepted roadmap so the
+// active-node cases below see a `ready` gate; pass `null` to model an
+// un-accepted gate. (Use `null`, not `undefined` — an explicit `undefined`
+// would trigger the default parameter value.)
+function resetStores(household: Household | null, roadmapAccepted: string | null = ACCEPTED) {
   useHouseholdStore.setState({
     household,
     isLoading: false,
@@ -50,6 +52,13 @@ function resetStores(household: Household | null) {
     load: async () => {},
     update: async () => {},
     acceptDisclaimer: async () => {},
+  } as any);
+  useAcceptancesStore.setState({
+    acceptedVersions: roadmapAccepted ? { roadmap: roadmapAccepted } : {},
+    status: 'ready',
+    isLoading: false,
+    error: null,
+    load: async () => {},
   } as any);
   usePersonsStore.setState({ persons: [], isLoading: false, error: null, load: async () => {} } as any);
   useAccountsStore.setState({ accounts: [], isLoading: false, error: null, load: async () => {} } as any);
@@ -88,7 +97,7 @@ describe('NextMoveCard', () => {
   });
 
   it('renders "Set up your roadmap" when the disclosure gate is not accepted', () => {
-    resetStores(makeHousehold({ roadmapDisclaimerVersionAccepted: null }));
+    resetStores(makeHousehold(), null);
     renderCard();
     expect(screen.getByText(/set up your roadmap/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /open roadmap/i })).toHaveAttribute('href', '/roadmap');

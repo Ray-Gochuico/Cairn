@@ -67,8 +67,20 @@ Tax thresholds shown reflect the **2026 tax year** and will become outdated. Alw
 
 **Consult a tax professional or fee-only fiduciary advisor before executing any of these strategies.**`;
 
+const LEARNING_TEXT_v1_0 = `**About the Learning feature**
+
+Daily trivia questions are written for general financial-literacy education. They are **not personalized advice** and do not account for your specific situation, jurisdiction, or filing year.
+
+Tax thresholds, contribution limits, and account rules referenced reflect the version shipped with this build. The IRS publishes new contribution limits annually and federal/state legislation can move limits, phase-outs, and credit thresholds in any year. **Verify any number you would act on against current IRS publications or a qualified professional.**
+
+Content is hand-curated; errors are possible. If a question looks wrong, treat the underlying rule as the authority. The "Source" line names the canonical reference (e.g., "IRS Pub 590-A") — read it before relying on the trivia.
+
+**Trivia is for vocabulary and intuition; decisions belong with a CFP, CPA, or attorney.**`;
+
 export interface DisclosureDocument {
   version: string;
+  /** Modal heading for this disclosure (e.g. "Disclaimer"). */
+  title: string;
   body: string;
   /** Optional summary of changes since the previous version, shown in re-prompts. */
   diffFromPrevious?: string;
@@ -78,6 +90,7 @@ export interface DisclosureDocument {
 export const DISCLOSURES = {
   app_wide: {
     version: '1.5',
+    title: 'Disclaimer',
     body: APP_WIDE_TEXT_v1_5,
     diffFromPrevious:
       "Version 1.5 adds two new bullets to 'What this app does NOT model': drawdown tax gross-up assumption (engine treats withdrawals as fully pre-tax) and frozen-bracket assumption (built-in tax tables don't auto-update for future years). No other content changes since v1.4. Please re-read and re-accept.",
@@ -86,9 +99,17 @@ export const DISCLOSURES = {
   } satisfies DisclosureDocument,
   roadmap: {
     version: '1.0',
+    title: 'About the Roadmap',
     body: ROADMAP_TEXT_v1_0,
     acceptanceCheckboxLabel:
       'I understand the Roadmap is algorithmic, not personalized advice, and I will consult a professional before acting on tax-sensitive strategies.',
+  } satisfies DisclosureDocument,
+  learning: {
+    version: '1.0',
+    title: 'About the Learning feature',
+    body: LEARNING_TEXT_v1_0,
+    acceptanceCheckboxLabel:
+      'I understand the trivia content is general financial-literacy education, not advice, and I will verify any specifics before acting.',
   } satisfies DisclosureDocument,
 } as const;
 

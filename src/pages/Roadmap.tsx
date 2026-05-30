@@ -96,8 +96,8 @@ export default function Roadmap() {
   );
 
   // If the household hasn't loaded yet, surface a setup prompt — the
-  // disclosure gate would otherwise fire on a null household (because
-  // the accepted-version selector returns null) and trap a first-run
+  // disclosure gate would otherwise fire on a fresh user (because the
+  // acceptances projection has no `roadmap` row yet) and trap a first-run
   // user behind a modal before the wizard ran. The wizard owns first
   // run, not the Roadmap.
   if (!household) {

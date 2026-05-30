@@ -10,6 +10,7 @@ import { useContributionsStore } from '@/stores/contributions-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { useRoadmapOverridesStore } from '@/stores/roadmap-overrides-store';
+import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import { FilingStatus } from '@/types/enums';
 import type { Household } from '@/types/schema';
 
@@ -31,10 +32,6 @@ function makeHousehold(patch: Partial<Household> = {}): Household {
     withdrawalRate: 0.04,
     inflationAssumption: 0.03,
     growthScenarios: [],
-    disclaimerAcceptedAt: '2026-05-01T00:00:00Z',
-    disclaimerVersionAccepted: '1.3',
-    roadmapDisclaimerAcceptedAt: null,
-    roadmapDisclaimerVersionAccepted: null,
     interestThresholdLowPct: null,
     interestThresholdHighPct: null,
     hasWrittenIps: null,
@@ -47,7 +44,11 @@ function makeHousehold(patch: Partial<Household> = {}): Household {
   };
 }
 
-function resetStores(household: Household | null) {
+// The roadmap gate reads the acceptances projection (single source of truth,
+// MF-1), not a household column. `roadmapAccepted` seeds that projection:
+// undefined → no `roadmap` row → gate fires; a version → gate ready when it
+// matches DISCLOSURES.roadmap.version.
+function resetStores(household: Household | null, roadmapAccepted?: string) {
   useHouseholdStore.setState({
     household,
     isLoading: false,
@@ -55,6 +56,13 @@ function resetStores(household: Household | null) {
     load: async () => {},
     update: async () => {},
     acceptDisclaimer: async () => {},
+  } as any);
+  useAcceptancesStore.setState({
+    acceptedVersions: roadmapAccepted ? { roadmap: roadmapAccepted } : {},
+    status: 'ready',
+    isLoading: false,
+    error: null,
+    load: async () => {},
   } as any);
   usePersonsStore.setState({ persons: [], isLoading: false, error: null, load: async () => {} } as any);
   useAccountsStore.setState({ accounts: [], isLoading: false, error: null, load: async () => {} } as any);
@@ -78,8 +86,8 @@ describe('Roadmap page', () => {
   });
 
   it('renders the roadmap disclosure modal when the gate is needs-acceptance', () => {
-    // Household has not accepted the roadmap disclosure → gate fires.
-    resetStores(makeHousehold({ roadmapDisclaimerVersionAccepted: null }));
+    // No roadmap acceptance in the projection → gate fires.
+    resetStores(makeHousehold());
     render(
       <MemoryRouter>
         <Roadmap />
@@ -92,9 +100,7 @@ describe('Roadmap page', () => {
   });
 
   it('renders the page content when the gate is ready', () => {
-    resetStores(
-      makeHousehold({ roadmapDisclaimerVersionAccepted: ACCEPTED_VERSION }),
-    );
+    resetStores(makeHousehold(), ACCEPTED_VERSION);
     render(
       <MemoryRouter>
         <Roadmap />
@@ -111,9 +117,7 @@ describe('Roadmap page', () => {
   });
 
   it('renders the status legend above the section cards (W7-UX MF-2)', () => {
-    resetStores(
-      makeHousehold({ roadmapDisclaimerVersionAccepted: ACCEPTED_VERSION }),
-    );
+    resetStores(makeHousehold(), ACCEPTED_VERSION);
     render(
       <MemoryRouter>
         <Roadmap />

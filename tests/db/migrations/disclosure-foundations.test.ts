@@ -9,15 +9,7 @@ interface PragmaColumn {
   dflt_value: string | null;
 }
 
-interface HouseholdRow {
-  id: number;
-  disclaimer_accepted_at: string | null;
-  disclaimer_version_accepted: string | null;
-  roadmap_disclaimer_accepted_at: string | null;
-  roadmap_disclaimer_version_accepted: string | null;
-}
-
-describe('disclosure-foundations migration (0017)', () => {
+describe('disclosure foundations (0017 created the table; 0043 retired the cache columns)', () => {
   let db: SqliteAdapter;
 
   beforeEach(async () => {
@@ -29,9 +21,13 @@ describe('disclosure-foundations migration (0017)', () => {
     await db.close();
   });
 
-  it('adds 4 nullable TEXT columns to household', async () => {
+  it('drops the four legacy disclosure cache columns from household (0043, single source of truth)', async () => {
+    // 0017 added these four TEXT columns; 0043 dropped them once the gate moved
+    // to disclosure_acceptances as the single source of truth (MF-1 + T5). The
+    // full migration chain (loadAllMigrations) includes 0043, so after the
+    // chain runs the columns must be GONE.
     const info = await db.select<PragmaColumn>("PRAGMA table_info('household')");
-    const byName = new Map(info.map((c) => [c.name, c]));
+    const names = info.map((c) => c.name);
 
     for (const col of [
       'disclaimer_accepted_at',
@@ -39,10 +35,7 @@ describe('disclosure-foundations migration (0017)', () => {
       'roadmap_disclaimer_accepted_at',
       'roadmap_disclaimer_version_accepted',
     ]) {
-      const c = byName.get(col);
-      expect(c, `${col} should exist`).toBeDefined();
-      expect(c!.type).toBe('TEXT');
-      expect(c!.notnull, `${col} should be nullable`).toBe(0);
+      expect(names, `${col} should be dropped`).not.toContain(col);
     }
   });
 
@@ -85,12 +78,18 @@ describe('disclosure-foundations migration (0017)', () => {
     expect(rows[0].count).toBe(2);
   });
 
-  it('leaves the seeded household row with NULL disclosure columns', async () => {
-    const rows = await db.select<HouseholdRow>(`SELECT * FROM household WHERE id = 1`);
-    expect(rows.length).toBe(1);
-    expect(rows[0].disclaimer_accepted_at).toBeNull();
-    expect(rows[0].disclaimer_version_accepted).toBeNull();
-    expect(rows[0].roadmap_disclaimer_accepted_at).toBeNull();
-    expect(rows[0].roadmap_disclaimer_version_accepted).toBeNull();
+  it('records an acceptance in disclosure_acceptances (the single source of truth)', async () => {
+    // The household row no longer carries acceptance state — acceptance is
+    // recorded exclusively in disclosure_acceptances. Seed one and read it back.
+    await db.execute(
+      `INSERT INTO disclosure_acceptances (household_id, document_id, version, accepted_at)
+       VALUES (1, 'app_wide', '1.5', '2026-05-28T00:00:00Z')`,
+    );
+    const rows = await db.select<{ document_id: string; version: string }>(
+      `SELECT document_id, version FROM disclosure_acceptances WHERE household_id = 1`,
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].document_id).toBe('app_wide');
+    expect(rows[0].version).toBe('1.5');
   });
 });

@@ -28,10 +28,15 @@ function rowToAcceptance(row: DisclosureAcceptanceRow): DisclosureAcceptance {
 }
 
 /**
- * Append-only audit trail of disclosure acceptances. Writes are
- * idempotent per (household, document, version) tuple — a second
- * accept of the same version is a no-op so the AppDisclaimerGate can
- * safely retry without duplicating rows.
+ * Acceptance trail for disclosures — the SINGLE source of truth for what the
+ * user has accepted (the legacy household cache columns were dropped in 0043;
+ * spec §9.6). Append-only in normal operation: writes are idempotent per
+ * (household, document, version) tuple, so re-accepting a version is a no-op
+ * (acceptDisclaimer can safely retry). The ONE sanctioned mutation is
+ * `clearForHousehold`, invoked by the Settings → Advanced "Reset disclaimers"
+ * action, which deletes this household's rows so every gate (app_wide,
+ * roadmap, learning, …) re-prompts. The disclosure gate reads this table via
+ * the boot-loaded acceptances store.
  */
 export class DisclosureAcceptancesRepo {
   constructor(private db: Database) {}
@@ -70,5 +75,42 @@ export class DisclosureAcceptancesRepo {
       [documentId],
     );
     return rows.map(rowToAcceptance);
+  }
+
+  /**
+   * Latest accepted version per document id — the projection the gate reads.
+   * Self-join (NOT a bare GROUP BY with a non-aggregated `version`, which is
+   * non-deterministic in SQLite and could return a STALE version, masking a
+   * needed re-prompt): pick the row whose accepted_at equals the per-document
+   * max. document_id is the leftmost column of the UNIQUE index (0017), so the
+   * inner aggregate is indexed. Returns { [documentId]: version }.
+   */
+  async latestVersionsByDocument(): Promise<Record<string, string>> {
+    const rows = await this.db.select<{ document_id: string; version: string }>(
+      `SELECT da.document_id, da.version
+         FROM disclosure_acceptances da
+         JOIN (
+           SELECT document_id, MAX(accepted_at) AS max_at
+           FROM disclosure_acceptances
+           GROUP BY document_id
+         ) latest
+           ON latest.document_id = da.document_id
+          AND latest.max_at = da.accepted_at`,
+    );
+    const out: Record<string, string> = {};
+    for (const r of rows) out[r.document_id] = r.version;
+    return out;
+  }
+
+  /**
+   * Clear this household's acceptance rows (Reset disclaimers — debug/QA).
+   * Scoped by household_id for repo-method fidelity. NOTE: this is the ONE
+   * sanctioned mutation of disclosure_acceptances — see the class JSDoc.
+   */
+  async clearForHousehold(householdId: number): Promise<void> {
+    await this.db.execute(
+      'DELETE FROM disclosure_acceptances WHERE household_id = ?',
+      [householdId],
+    );
   }
 }

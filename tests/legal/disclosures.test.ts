@@ -81,7 +81,19 @@ describe('DISCLOSURES', () => {
     expect(body).toMatch(/HSA/);
   });
 
-  it('exposes only the two expected document IDs', () => {
-    expect(Object.keys(DISCLOSURES).sort()).toEqual(['app_wide', 'roadmap']);
+  it('defines a learning disclosure with a version + body + checkbox label', () => {
+    expect(DISCLOSURES.learning.version).toBe('1.0');
+    expect(DISCLOSURES.learning.body.length).toBeGreaterThan(200);
+    expect(DISCLOSURES.learning.acceptanceCheckboxLabel).toMatch(/financial-literacy|not advice|verify/i);
+  });
+
+  it('every disclosure carries a non-empty title (DisclosureModal totality, TR-5)', () => {
+    for (const d of Object.values(DISCLOSURES)) {
+      expect(d.title).toBeTruthy();
+    }
+  });
+
+  it('exposes exactly the three expected document IDs', () => {
+    expect(Object.keys(DISCLOSURES).sort()).toEqual(['app_wide', 'learning', 'roadmap']);
   });
 });

@@ -511,3 +511,52 @@ describe('0037_learning_state migration', () => {
     await db.close();
   });
 });
+
+describe('0043 retires the legacy household disclosure columns', () => {
+  it('drops all four disclosure cache columns from household', async () => {
+    const db = new SqliteAdapter(':memory:');
+    await runMigrations(db, await loadAllMigrations());
+    const cols = await db.select<{ name: string }>('PRAGMA table_info(household)');
+    const names = cols.map((c) => c.name);
+    expect(names).not.toContain('disclaimer_accepted_at');
+    expect(names).not.toContain('disclaimer_version_accepted');
+    expect(names).not.toContain('roadmap_disclaimer_accepted_at');
+    expect(names).not.toContain('roadmap_disclaimer_version_accepted');
+    // disclosure_acceptances (the single source of truth) still exists.
+    const tables = await db.select<{ name: string }>(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='disclosure_acceptances'",
+    );
+    expect(tables).toHaveLength(1);
+    await db.close();
+  });
+
+  // T6: prove the REAL installed-user path — apply the historical chain
+  // (which created the columns in 0017), THEN append 0037 + 0043. This is
+  // distinct from the other 0037/0043 tests that use a single fresh
+  // loadAllMigrations() pass; it catches a drop that only works on a
+  // freshly-built schema but not on an upgraded one.
+  it('upgrade path: historical chain then 0037 + 0043 drops the columns cleanly', async () => {
+    const db = new SqliteAdapter(':memory:');
+    const all = await loadAllMigrations();
+    // The historical chain as an existing v1.0-era install would have it:
+    // every migration EXCEPT the two this feature adds.
+    const historical = all.filter(
+      (m) => m.version !== '0037_learning_state' && m.version !== '0043_drop_household_disclosure_columns',
+    );
+    await runMigrations(db, historical);
+    // Columns exist on the upgraded-from schema (added in 0017).
+    let cols = await db.select<{ name: string }>('PRAGMA table_info(household)');
+    expect(cols.map((c) => c.name)).toContain('disclaimer_version_accepted');
+    // Now apply the feature's new migrations on top, in order.
+    await runMigrations(db, [
+      all.find((m) => m.version === '0037_learning_state')!,
+      all.find((m) => m.version === '0043_drop_household_disclosure_columns')!,
+    ]);
+    cols = await db.select<{ name: string }>('PRAGMA table_info(household)');
+    const names = cols.map((c) => c.name);
+    expect(names).toContain('id'); // sanity: household table intact after the drops
+    expect(names).not.toContain('disclaimer_version_accepted');
+    expect(names).not.toContain('roadmap_disclaimer_version_accepted');
+    await db.close();
+  });
+});

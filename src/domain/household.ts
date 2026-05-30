@@ -1,5 +1,6 @@
 import type { Database } from '@/db/db';
 import { HouseholdSchema, type Household, type GrowthScenario } from '@/types/schema';
+import type { DisclosureId } from '@/legal/disclosures';
 
 interface HouseholdRow {
   id: number;
@@ -11,10 +12,6 @@ interface HouseholdRow {
   withdrawal_rate: number;
   inflation_assumption: number;
   growth_scenarios: string;
-  disclaimer_accepted_at: string | null;
-  disclaimer_version_accepted: string | null;
-  roadmap_disclaimer_accepted_at: string | null;
-  roadmap_disclaimer_version_accepted: string | null;
   interest_threshold_low_pct: number | null;
   interest_threshold_high_pct: number | null;
   has_written_ips: number | null;
@@ -51,10 +48,6 @@ function rowToHousehold(row: HouseholdRow): Household {
     withdrawalRate: row.withdrawal_rate,
     inflationAssumption: row.inflation_assumption,
     growthScenarios,
-    disclaimerAcceptedAt: row.disclaimer_accepted_at,
-    disclaimerVersionAccepted: row.disclaimer_version_accepted,
-    roadmapDisclaimerAcceptedAt: row.roadmap_disclaimer_accepted_at,
-    roadmapDisclaimerVersionAccepted: row.roadmap_disclaimer_version_accepted,
     interestThresholdLowPct: row.interest_threshold_low_pct,
     interestThresholdHighPct: row.interest_threshold_high_pct,
     hasWrittenIps: nullableBool(row.has_written_ips),
@@ -66,7 +59,12 @@ function rowToHousehold(row: HouseholdRow): Household {
   });
 }
 
-export type DisclosureDocumentId = 'app_wide' | 'roadmap';
+/**
+ * The id a disclosure-acceptance row carries. Derived from the disclosure
+ * registry so there is ONE source of truth — registering a new disclosure
+ * (its DISCLOSURES entry) is the only edit needed (W3, 2026-05-28 r2 review).
+ */
+export type DisclosureDocumentId = DisclosureId;
 
 export class HouseholdRepo {
   constructor(private db: Database) {}
@@ -125,26 +123,6 @@ export class HouseholdRepo {
         merged.upcomingPurchaseAmount,
         merged.upcomingPurchaseMonths,
       ]
-    );
-  }
-
-  /**
-   * Cache the latest accepted disclosure version on the household row.
-   * The audit trail in disclosure_acceptances is the source of truth —
-   * this is just the fast-path read so AppDisclaimerGate doesn't have to
-   * hit the audit table on every render.
-   */
-  async updateDisclosure(
-    documentId: DisclosureDocumentId,
-    version: string,
-    acceptedAt: string,
-  ): Promise<void> {
-    const cols = documentId === 'app_wide'
-      ? { atCol: 'disclaimer_accepted_at', verCol: 'disclaimer_version_accepted' }
-      : { atCol: 'roadmap_disclaimer_accepted_at', verCol: 'roadmap_disclaimer_version_accepted' };
-    await this.db.execute(
-      `UPDATE household SET ${cols.atCol} = ?, ${cols.verCol} = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1`,
-      [acceptedAt, version],
     );
   }
 }

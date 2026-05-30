@@ -6,6 +6,9 @@ import { AdvancedSection } from '@/components/settings/AdvancedSection';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useCategoriesStore } from '@/stores/categories-store';
+import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
+import { DisclosureAcceptancesRepo } from '@/domain/disclosure-acceptances';
+import { setDatabase } from '@/db/db';
 import {
   FilingStatus,
   RefreshCadence,
@@ -94,10 +97,6 @@ function makeHousehold(patch: Partial<Household> = {}): Household {
     withdrawalRate: 0.04,
     inflationAssumption: 0.03,
     growthScenarios: [],
-    disclaimerAcceptedAt: '2026-05-01',
-    disclaimerVersionAccepted: '1.0',
-    roadmapDisclaimerAcceptedAt: '2026-05-01',
-    roadmapDisclaimerVersionAccepted: '1.0',
     interestThresholdLowPct: null,
     interestThresholdHighPct: null,
     hasWrittenIps: null,
@@ -316,36 +315,65 @@ describe('AdvancedSection', () => {
   });
 });
 
-describe('ResetDisclaimersDialog', () => {
+describe('ResetDisclaimersDialog (table-driven — clears disclosure_acceptances, MF-1/T5)', () => {
   beforeEach(() => {
     resetStore(makeHousehold());
     resetSettingsStore(makeSettings());
+    // The dialog constructs a DisclosureAcceptancesRepo via getDatabase();
+    // a no-op stub keeps getDatabase() from throwing (the repo call itself is
+    // spied below).
+    setDatabase({
+      execute: vi.fn().mockResolvedValue({ rowsAffected: 0 }),
+      select: vi.fn().mockResolvedValue([]),
+      close: vi.fn().mockResolvedValue(undefined),
+    });
+    // The dialog refreshes the acceptances projection after clearing; stub it.
+    useAcceptancesStore.setState({
+      acceptedVersions: {},
+      status: 'ready',
+      isLoading: false,
+      error: null,
+      load: vi.fn().mockResolvedValue(undefined),
+    } as any);
   });
 
-  it('confirms and clears all four cache columns', async () => {
-    const update = vi.fn().mockResolvedValue(undefined);
-    resetStore(makeHousehold(), update);
+  it('confirms and clears this household\'s acceptances, then refreshes the gate cache', async () => {
+    const clearSpy = vi
+      .spyOn(DisclosureAcceptancesRepo.prototype, 'clearForHousehold')
+      .mockResolvedValue(undefined);
+    const loadAcceptances = vi.fn().mockResolvedValue(undefined);
+    resetStore(makeHousehold({ id: 1 }));
+    useAcceptancesStore.setState({
+      acceptedVersions: {},
+      status: 'ready',
+      isLoading: false,
+      error: null,
+      load: loadAcceptances,
+    } as any);
     render(<AdvancedSection />);
     fireEvent.click(screen.getByText('Advanced'));
     fireEvent.click(screen.getByRole('button', { name: /reset disclaimers/i }));
     fireEvent.click(screen.getByRole('button', { name: /^reset$/i }));
     await Promise.resolve();
-    expect(update).toHaveBeenCalledWith({
-      disclaimerAcceptedAt: null,
-      disclaimerVersionAccepted: null,
-      roadmapDisclaimerAcceptedAt: null,
-      roadmapDisclaimerVersionAccepted: null,
-    });
+    await Promise.resolve();
+    // Clears the audit rows for this household (the single source of truth).
+    expect(clearSpy).toHaveBeenCalledWith(1);
+    // Refreshes the in-memory projection so every gate re-prompts.
+    expect(loadAcceptances).toHaveBeenCalled();
+    clearSpy.mockRestore();
   });
 
-  it('cancels without writing', () => {
-    const update = vi.fn().mockResolvedValue(undefined);
-    resetStore(makeHousehold(), update);
+  it('cancels without clearing', () => {
+    const clearSpy = vi
+      .spyOn(DisclosureAcceptancesRepo.prototype, 'clearForHousehold')
+      .mockResolvedValue(undefined);
+    resetStore(makeHousehold());
     render(<AdvancedSection />);
     fireEvent.click(screen.getByText('Advanced'));
     fireEvent.click(screen.getByRole('button', { name: /reset disclaimers/i }));
     fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
-    expect(update).not.toHaveBeenCalled();
+    expect(clearSpy).not.toHaveBeenCalled();
+    clearSpy.mockRestore();
   });
 });
 

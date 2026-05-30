@@ -32,17 +32,14 @@ function prettifyCityCode(code: string): string {
     .join(' ');
 }
 
-// Disclosure cache columns + roadmap rule-engine chart-answer columns
-// are not managed by this form (set by disclosure modals / roadmap
-// decision nodes). Strip them so RHF + zodResolver see a stable,
-// narrower schema.
+// Roadmap rule-engine chart-answer columns are not managed by this form
+// (set by roadmap decision nodes). Strip them so RHF + zodResolver see a
+// stable, narrower schema. (Disclosure acceptance lives in
+// disclosure_acceptances — never on the household — so there is nothing
+// disclosure-related to strip here.)
 export type HouseholdFormValues = Omit<
   Household,
   | 'id'
-  | 'disclaimerAcceptedAt'
-  | 'disclaimerVersionAccepted'
-  | 'roadmapDisclaimerAcceptedAt'
-  | 'roadmapDisclaimerVersionAccepted'
   | 'interestThresholdLowPct'
   | 'interestThresholdHighPct'
   | 'hasWrittenIps'
@@ -111,10 +108,6 @@ export default function HouseholdForm({
     resolver: zodResolver(
       HouseholdSchema.omit({
         id: true,
-        disclaimerAcceptedAt: true,
-        disclaimerVersionAccepted: true,
-        roadmapDisclaimerAcceptedAt: true,
-        roadmapDisclaimerVersionAccepted: true,
         interestThresholdLowPct: true,
         interestThresholdHighPct: true,
         hasWrittenIps: true,

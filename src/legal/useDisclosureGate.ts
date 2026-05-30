@@ -1,4 +1,4 @@
-import { useHouseholdStore } from '@/stores/household-store';
+import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import { DISCLOSURES, type DisclosureId, type DisclosureDocument } from './disclosures';
 
 export type GateResult =
@@ -9,24 +9,21 @@ export type GateResult =
     };
 
 /**
- * Returns whether the household has accepted the *current* version of
- * the given disclosure. Components mount the matching modal when state
- * is `needs-acceptance`.
+ * Returns whether the user has accepted the *current* version of the
+ * given disclosure. Components mount the matching modal when state is
+ * `needs-acceptance`.
  *
- * The hook reads from `household-store` (the fast-path cache populated
- * by `acceptDisclaimer`); it does NOT touch the audit table. If the
- * household hasn't loaded yet, returns `needs-acceptance` — caller
- * must decide whether to gate UI on that or wait for the household to
- * resolve (AppDisclaimerGate, for example, short-circuits when the
- * household is null because the wizard will handle first-run).
+ * The hook reads the acceptances store (the boot-loaded projection of
+ * disclosure_acceptances — the single source of truth, MF-1); it does
+ * NOT read any household cache column (those were dropped in 0043). The
+ * read is id-keyed, so the hook is N-way with no per-id branch. If the
+ * projection has no row for this id (genuine first-run OR a not-yet-
+ * loaded store), returns `needs-acceptance` — caller decides whether to
+ * gate UI on that or wait (AppDisclaimerGate short-circuits when the
+ * household is null because the wizard owns first-run).
  */
 export function useDisclosureGate(id: DisclosureId): GateResult {
-  const acceptedVersion = useHouseholdStore((s) => {
-    if (!s.household) return null;
-    return id === 'app_wide'
-      ? s.household.disclaimerVersionAccepted
-      : s.household.roadmapDisclaimerVersionAccepted;
-  });
+  const acceptedVersion = useAcceptancesStore((s) => s.acceptedVersions[id] ?? null);
   const current = DISCLOSURES[id];
 
   if (acceptedVersion === current.version) {

@@ -3,6 +3,7 @@ import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { loadAllMigrations, runMigrations } from '@/db/migrations';
 import { setDatabase } from '@/db/db';
 import { useHouseholdStore } from '@/stores/household-store';
+import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import { DisclosureAcceptancesRepo } from '@/domain/disclosure-acceptances';
 import { FilingStatus } from '@/types/enums';
 
@@ -54,15 +55,17 @@ describe('useHouseholdStore', () => {
   });
 });
 
-describe('useHouseholdStore — acceptDisclaimer', () => {
+describe('useHouseholdStore — acceptDisclaimer (table-driven, single source of truth MF-1)', () => {
   let db: SqliteAdapter;
 
   beforeEach(async () => {
     db = new SqliteAdapter(':memory:');
-    // Need all migrations so disclosure columns + audit table exist.
+    // Need all migrations so the audit table exists (0017) and the legacy
+    // household disclosure columns are dropped (0043).
     await runMigrations(db, await loadAllMigrations());
     setDatabase(db);
     useHouseholdStore.setState({ household: null, isLoading: false, error: null });
+    useAcceptancesStore.setState({ acceptedVersions: {}, status: 'ready', isLoading: false, error: null });
     await useHouseholdStore.getState().load();
   });
 
@@ -70,11 +73,17 @@ describe('useHouseholdStore — acceptDisclaimer', () => {
     await db.close();
   });
 
-  it('writes the cache columns on household and refreshes the store', async () => {
+  it('writes the audit row and refreshes the acceptances store (no household column)', async () => {
     await useHouseholdStore.getState().acceptDisclaimer('app_wide', '1.0');
-    const { household } = useHouseholdStore.getState();
-    expect(household!.disclaimerVersionAccepted).toBe('1.0');
-    expect(household!.disclaimerAcceptedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    // Source of truth: the audit row.
+    const audit = await db.select<{ version: string; accepted_at: string }>(
+      `SELECT version, accepted_at FROM disclosure_acceptances WHERE document_id = 'app_wide'`,
+    );
+    expect(audit).toHaveLength(1);
+    expect(audit[0].version).toBe('1.0');
+    expect(audit[0].accepted_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    // The gate reads the store projection — it reflects the accept.
+    expect(useAcceptancesStore.getState().acceptedVersions.app_wide).toBe('1.0');
   });
 
   it('appends a row to disclosure_acceptances', async () => {
@@ -85,12 +94,12 @@ describe('useHouseholdStore — acceptDisclaimer', () => {
     expect(rows[0].count).toBe(1);
   });
 
-  it('keeps app_wide and roadmap cache columns independent', async () => {
+  it('keeps app_wide and roadmap acceptances independent in the projection', async () => {
     await useHouseholdStore.getState().acceptDisclaimer('app_wide', '1.0');
     await useHouseholdStore.getState().acceptDisclaimer('roadmap', '1.0');
-    const { household } = useHouseholdStore.getState();
-    expect(household!.disclaimerVersionAccepted).toBe('1.0');
-    expect(household!.roadmapDisclaimerVersionAccepted).toBe('1.0');
+    const accepted = useAcceptancesStore.getState().acceptedVersions;
+    expect(accepted.app_wide).toBe('1.0');
+    expect(accepted.roadmap).toBe('1.0');
   });
 
   it('is safe to call twice with the same version (idempotent audit insert)', async () => {
@@ -102,81 +111,55 @@ describe('useHouseholdStore — acceptDisclaimer', () => {
     expect(rows[0].count).toBe(1);
   });
 
-  it('records a fresh audit row when the user accepts a newer version', async () => {
+  it('records a fresh audit row when the user accepts a newer version; projection shows the latest', async () => {
     await useHouseholdStore.getState().acceptDisclaimer('app_wide', '1.0');
     await useHouseholdStore.getState().acceptDisclaimer('app_wide', '1.1');
     const rows = await db.select<{ count: number }>(
       `SELECT COUNT(*) as count FROM disclosure_acceptances WHERE document_id = 'app_wide'`,
     );
     expect(rows[0].count).toBe(2);
-    const { household } = useHouseholdStore.getState();
-    expect(household!.disclaimerVersionAccepted).toBe('1.1');
+    // The projection returns the LATEST accepted version (self-join on max).
+    expect(useAcceptancesStore.getState().acceptedVersions.app_wide).toBe('1.1');
   });
 
-  it('Smoke-2026-05-27: post-COMMIT cache refresh failure is non-fatal — acceptance still resolves', async () => {
-    // The live Tauri build was observed once where the post-COMMIT
-    // `householdRepo.get()` threw after a successful BEGIN/COMMIT
-    // (likely a transient tauri-plugin-sql SELECT-after-write race),
-    // bubbling up to DisclosureModal as "Failed to record acceptance"
-    // even though the acceptance had committed. Symptom-fix: update
-    // Zustand optimistically from the values we just committed, then
-    // attempt a best-effort refresh that swallows errors.
-
-    // Spy the post-COMMIT read to force it to throw on this call.
-    const HouseholdRepoModule = await import('@/domain/household');
+  it('post-COMMIT store refresh failure is non-fatal — acceptance still resolves and is durable', async () => {
+    // The store refresh after the audit commit (useAcceptancesStore.load())
+    // is best-effort: if the projection read throws (a transient SELECT-after-
+    // write race), acceptDisclaimer must still resolve, because the audit row
+    // — the only source of truth — has already committed. The next boot
+    // reconciles the in-memory projection.
     const spy = vi
-      .spyOn(HouseholdRepoModule.HouseholdRepo.prototype, 'get')
-      // First call is the existing store.load() in beforeEach (already
-      // happened) — we only need to fail subsequent calls. mockRejectedValue
-      // applies to ALL future calls so we use mockImplementationOnce to
-      // target only the post-COMMIT refresh.
-      .mockImplementationOnce(async () => {
-        throw new Error('synthetic post-commit SELECT race');
-      });
+      .spyOn(DisclosureAcceptancesRepo.prototype, 'latestVersionsByDocument')
+      .mockRejectedValueOnce(new Error('synthetic post-commit projection race'));
 
-    // Should resolve, NOT throw, despite the inner get() failure.
+    // Should resolve, NOT throw, despite the refresh read failing.
     await expect(
       useHouseholdStore.getState().acceptDisclaimer('roadmap', '1.0'),
     ).resolves.toBeUndefined();
 
     spy.mockRestore();
 
-    // Optimistic cache update: the gate's selector should now see the
-    // version we just accepted, even though the fresh read failed.
-    const { household } = useHouseholdStore.getState();
-    expect(household!.roadmapDisclaimerVersionAccepted).toBe('1.0');
-    expect(household!.roadmapDisclaimerAcceptedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-
-    // DB writes ARE durable — both the cache columns and the audit row
-    // landed before the read threw.
-    const dbRows = await db.select<{
-      roadmap_disclaimer_version_accepted: string | null;
-    }>(`SELECT roadmap_disclaimer_version_accepted FROM household WHERE id = 1`);
-    expect(dbRows[0].roadmap_disclaimer_version_accepted).toBe('1.0');
-    const auditRows = await db.select<{ count: number }>(
-      `SELECT COUNT(*) as count FROM disclosure_acceptances WHERE document_id = 'roadmap'`,
+    // The audit row IS durable — it landed before the refresh threw.
+    const auditRows = await db.select<{ version: string }>(
+      `SELECT version FROM disclosure_acceptances WHERE document_id = 'roadmap'`,
     );
-    expect(auditRows[0].count).toBe(1);
+    expect(auditRows).toHaveLength(1);
+    expect(auditRows[0].version).toBe('1.0');
+
+    // A fresh load reconciles the projection (the refresh that threw is gone).
+    await useAcceptancesStore.getState().load();
+    expect(useAcceptancesStore.getState().acceptedVersions.roadmap).toBe('1.0');
   });
 
-  it('W7-Data #1: rolls back cache columns when the audit insert fails (atomic)', async () => {
-    // Pre-fix the two writes ran sequentially without a transaction —
-    // if `acceptancesRepo.record` threw after the cache update landed,
-    // the household showed "accepted" but the audit trail was empty.
-    // The fix wraps the pair in BEGIN/COMMIT (ROLLBACK on throw).
-
-    // Spy + throw on the audit insert. We must spy on the prototype
-    // because the store constructs a fresh DisclosureAcceptancesRepo
-    // on each call.
+  it('rolls back the audit insert when the record write fails (atomic; projection unchanged)', async () => {
+    // The audit insert runs inside a BEGIN/COMMIT wrap (ROLLBACK on throw).
+    // If record() throws, no audit row lands and the gate projection is
+    // untouched — there is no household column left to roll back.
     const spy = vi
       .spyOn(DisclosureAcceptancesRepo.prototype, 'record')
       .mockRejectedValueOnce(new Error('synthetic audit-write failure'));
 
-    // Capture the cache-column state before the failing call so we can
-    // assert it didn't move.
-    const before = useHouseholdStore.getState().household;
-    expect(before!.disclaimerVersionAccepted).toBeNull();
-    expect(before!.disclaimerAcceptedAt).toBeNull();
+    expect(useAcceptancesStore.getState().acceptedVersions.app_wide).toBeUndefined();
 
     await expect(
       useHouseholdStore.getState().acceptDisclaimer('app_wide', '1.0'),
@@ -184,21 +167,12 @@ describe('useHouseholdStore — acceptDisclaimer', () => {
 
     spy.mockRestore();
 
-    // Cache columns must NOT show the version — the transaction rolled
-    // back the household UPDATE when the audit INSERT threw.
-    const rows = await db.select<{
-      disclaimer_version_accepted: string | null;
-      disclaimer_accepted_at: string | null;
-    }>(
-      `SELECT disclaimer_version_accepted, disclaimer_accepted_at FROM household WHERE id = 1`,
-    );
-    expect(rows[0].disclaimer_version_accepted).toBeNull();
-    expect(rows[0].disclaimer_accepted_at).toBeNull();
-
     // Audit table must remain empty.
     const auditRows = await db.select<{ count: number }>(
       `SELECT COUNT(*) as count FROM disclosure_acceptances WHERE document_id = 'app_wide'`,
     );
     expect(auditRows[0].count).toBe(0);
+    // The projection never recorded the version.
+    expect(useAcceptancesStore.getState().acceptedVersions.app_wide).toBeUndefined();
   });
 });

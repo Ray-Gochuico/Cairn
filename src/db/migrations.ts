@@ -159,6 +159,12 @@ export async function loadAllMigrations(): Promise<Migration[]> {
   const m0040 = (await import('./migrations/0040_clear_synthetic_snapshots.sql?raw')).default;
   const m0041 = (await import('./migrations/0041_fund_holding_names.sql?raw')).default;
   const m0042 = (await import('./migrations/0042_investments_card_layout.sql?raw')).default;
+  // 0043 retires the four legacy household disclosure cache columns added in
+  // 0017; the disclosure gate now reads disclosure_acceptances exclusively
+  // (single source of truth, MF-1/T5, v1.1 2026-05-28). DROP COLUMN — the only
+  // destructive migration in the v1.x set; lands atomically with the code that
+  // stops referencing those columns.
+  const m0043 = (await import('./migrations/0043_drop_household_disclosure_columns.sql?raw')).default;
   return [
     { version: '0001_initial', sql: m0001 },
     { version: '0002_seed_tax_rules', sql: m0002 },
@@ -202,5 +208,6 @@ export async function loadAllMigrations(): Promise<Migration[]> {
     { version: '0040_clear_synthetic_snapshots', sql: m0040 },
     { version: '0041_fund_holding_names', sql: m0041 },
     { version: '0042_investments_card_layout', sql: m0042 },
+    { version: '0043_drop_household_disclosure_columns', sql: m0043 },
   ];
 }

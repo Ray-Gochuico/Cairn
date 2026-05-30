@@ -9,14 +9,14 @@ interface Props {
 /**
  * Setup Wizard Step 0 — the app-wide disclaimer. Renders as a full-screen
  * modal that the user cannot dismiss without acknowledging. On accept,
- * writes the household cache + disclosure_acceptances audit row and
- * advances the wizard.
+ * appends the disclosure_acceptances audit row (the single source of
+ * truth, MF-1) and advances the wizard.
  *
- * This is the gate for first-run users (no household.disclaimer_*
- * columns set). Returning users with stale versions are caught earlier
- * by AppDisclaimerGate at app boot — by the time they reach the wizard,
- * the current version is already accepted, so Step 0 is a no-op if it
- * even renders.
+ * This is the gate for first-run users (no recorded app_wide acceptance).
+ * Returning users with stale versions are caught earlier by
+ * AppDisclaimerGate at app boot — by the time they reach the wizard, the
+ * current version is already accepted, so Step 0 is a no-op if it even
+ * renders.
  */
 export function Step0Disclaimer({ onComplete }: Props) {
   const acceptDisclaimer = useHouseholdStore((s) => s.acceptDisclaimer);
@@ -30,6 +30,7 @@ export function Step0Disclaimer({ onComplete }: Props) {
   const firstRunDoc = {
     id: 'app_wide' as const,
     version: DISCLOSURES.app_wide.version,
+    title: DISCLOSURES.app_wide.title,
     body: DISCLOSURES.app_wide.body,
     acceptanceCheckboxLabel: DISCLOSURES.app_wide.acceptanceCheckboxLabel,
   };
