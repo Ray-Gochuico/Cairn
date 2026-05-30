@@ -284,10 +284,11 @@ function PropertyUtilitiesCard({
 
 interface RentalCardProps {
   rental: HousingPayment;
+  ownerLabel: string;
   onRemove: () => void;
 }
 
-function RentalCard({ rental, onRemove }: RentalCardProps) {
+function RentalCard({ rental, ownerLabel, onRemove }: RentalCardProps) {
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -324,6 +325,12 @@ function RentalCard({ rental, onRemove }: RentalCardProps) {
             <dd className="font-mono">{rental.endDate ?? 'ongoing'}</dd>
           </div>
         </dl>
+        <div className="pt-3 border-t">
+          <span className="inline-flex items-center gap-1.5 rounded-full border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+            <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden="true" />
+            {ownerLabel}
+          </span>
+        </div>
       </CardContent>
     </Card>
   );
@@ -559,6 +566,11 @@ export default function Property() {
               <RentalCard
                 key={r.id}
                 rental={r}
+                ownerLabel={
+                  r.ownerPersonId == null
+                    ? 'Joint'
+                    : (personNameById.get(r.ownerPersonId) ?? 'Unknown')
+                }
                 onRemove={() =>
                   void useHousingPaymentsStore.getState().remove(r.id!)
                 }

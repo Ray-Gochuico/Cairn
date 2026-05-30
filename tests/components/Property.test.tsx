@@ -471,6 +471,50 @@ describe('Property page', () => {
     expect(screen.getByText(/\$2,550/)).toBeInTheDocument();
   });
 
+  it('renders the owner person tag on a rental card', async () => {
+    usePersonsStore.setState({
+      persons: [
+        { id: 1, name: 'Alex' },
+        { id: 2, name: 'Sam' },
+      ] as never,
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    });
+    useHousingPaymentsStore.setState({
+      housingPayments: [
+        {
+          id: 1,
+          householdId: 1,
+          ownerPersonId: 1,
+          name: 'Downtown apartment',
+          monthlyAmount: 2400,
+          startDate: '2025-09-01',
+          endDate: null,
+        },
+        {
+          id: 2,
+          householdId: 1,
+          ownerPersonId: null,
+          name: 'Storage unit',
+          monthlyAmount: 95,
+          startDate: '2024-02-01',
+          endDate: '2026-06-30',
+        },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+
+    renderPage();
+
+    // Owner-scoped rental shows the person's name; joint rental shows "Joint".
+    expect(await screen.findByText('Downtown apartment')).toBeInTheDocument();
+    expect(screen.getByText('Alex')).toBeInTheDocument();
+    expect(screen.getByText('Joint')).toBeInTheDocument();
+  });
+
   it('exports the full properties table to CSV with the owner name resolved', async () => {
     usePersonsStore.setState({
       persons: [
