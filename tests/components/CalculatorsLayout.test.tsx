@@ -580,4 +580,22 @@ describe('CalculatorsLayout', () => {
       expect(screen.queryByText(/card hidden/i)).not.toBeInTheDocument();
     });
   });
+
+  it('intro copy describes edit/reset (no "Override" / "what-if" affordance)', async () => {
+    primeBaseline();
+    usePersonsStore.setState({
+      persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
+      isLoading: false,
+      error: null,
+    });
+
+    render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+
+    await screen.findByRole('heading', { name: /Calculators/i });
+    expect(screen.getByText(/Reset to my data/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Use "Override"/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/try a what-if/i)).not.toBeInTheDocument();
+    // Cross-link to the dedicated What-If page.
+    expect(screen.getByRole('link', { name: /What-If/i })).toHaveAttribute('href', '/what-if');
+  });
 });
