@@ -101,7 +101,9 @@ export function evaluateEmploymentTypeQ(ctx: RoadmapContext): NodeResult {
 }
 
 export function evaluateMax401k(ctx: RoadmapContext): NodeResult {
-  const has401k = ctx.accounts.some((a) => a.type === AccountType.ACCOUNT_401K);
+  const has401k = ctx.accounts.some(
+    (a) => a.type === AccountType.ACCOUNT_401K || a.type === AccountType.ACCOUNT_ROTH_401K,
+  );
   if (!has401k) {
     return {
       status: 'info',

@@ -8,6 +8,7 @@ export type FilingStatus = typeof FilingStatus[keyof typeof FilingStatus];
 
 export const AccountType = {
   ACCOUNT_401K: 'ACCOUNT_401K',
+  ACCOUNT_ROTH_401K: 'ACCOUNT_ROTH_401K',
   ACCOUNT_ROTH_IRA: 'ACCOUNT_ROTH_IRA',
   ACCOUNT_TRAD_IRA: 'ACCOUNT_TRAD_IRA',
   ACCOUNT_BROKERAGE: 'ACCOUNT_BROKERAGE',

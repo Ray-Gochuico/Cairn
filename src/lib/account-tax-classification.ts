@@ -6,6 +6,7 @@ export type TaxBucket = 'taxAdvantaged' | 'taxable';
 
 const TAX_ADVANTAGED_TYPES: ReadonlySet<string> = new Set([
   AccountType.ACCOUNT_401K,
+  AccountType.ACCOUNT_ROTH_401K,
   AccountType.ACCOUNT_ROTH_IRA,
   AccountType.ACCOUNT_TRAD_IRA,
   AccountType.ACCOUNT_HSA,
@@ -37,9 +38,11 @@ export function taxBucketForAccount(account: Account): TaxBucket | null {
  *      but v1 doesn't track usage so we conservatively bucket it as deferred).
  *   3. `roth` — Roth IRA: tax-free withdrawals after 59.5.
  *
- * Note: ACCOUNT_401K is ambiguous (Roth 401k or Traditional). We classify
- * it as `taxDeferred` since the vast majority of 401k balances are Traditional;
- * a future migration can split the type or add a per-account flag.
+ * Note: ACCOUNT_401K is **Traditional** (taxDeferred). The separate
+ * ACCOUNT_ROTH_401K type is bucketed `roth` (tax-free drawdown, same tier
+ * as Roth IRA) — see A2 of the What-If Feature A plan. We ignore the 59½ /
+ * 5-year qualified-distribution rule, consistent with the Roth-IRA
+ * treatment; that simplification is disclosed in the What-If footnote.
  *
  * 529 plans are bucketed as `taxDeferred` (qualified education withdrawals
  * are tax-free, but treating as deferred is the safer default for general
@@ -56,6 +59,7 @@ export function sequencingBucketForAccount(account: Account): SequencingBucket |
     case AccountType.ACCOUNT_CRYPTO:
       return 'taxable';
     case AccountType.ACCOUNT_ROTH_IRA:
+    case AccountType.ACCOUNT_ROTH_401K:
       return 'roth';
     case AccountType.ACCOUNT_401K:
     case AccountType.ACCOUNT_TRAD_IRA:

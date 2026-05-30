@@ -15,3 +15,19 @@ describe('getGlossaryEntry — APR', () => {
     expect(getGlossaryEntry('apr')).not.toBeNull();
   });
 });
+
+describe('getGlossaryEntry — ROTH 401(K)', () => {
+  it('resolves and states the qualified-distribution condition', () => {
+    const entry = getGlossaryEntry('ROTH 401(K)');
+    expect(entry).not.toBeNull();
+    expect(`${entry!.shortDefinition} ${entry!.fullDefinition ?? ''}`).toMatch(/qualified/i);
+  });
+});
+
+describe('getGlossaryEntry — 401(k) Roth wording tightened', () => {
+  it('no longer claims unconditional tax-free out', () => {
+    const entry = getGlossaryEntry('401(K)');
+    expect(entry!.fullDefinition).toMatch(/tax-free out on qualified withdrawals/i);
+    expect(entry!.fullDefinition).not.toMatch(/post-tax in \/ tax-free out\b(?! on qualified)/i);
+  });
+});

@@ -319,4 +319,22 @@ describe('ContributionsPopover — allocation UI', () => {
       }),
     );
   });
+
+  it('groups the per-account override list into Roth and Traditional sections', async () => {
+    useAccountsStore.setState({
+      accounts: [
+        { id: 1, householdId: 1, name: 'My Trad 401k', type: 'ACCOUNT_401K', excludedFromNetWorth: false } as any,
+        { id: 2, householdId: 1, name: 'My Roth 401k', type: 'ACCOUNT_ROTH_401K', excludedFromNetWorth: false } as any,
+      ],
+      isLoading: false, error: null,
+    } as any);
+    resetStore({ contributions: [{ startMonth: 0, endMonth: 59, monthlyAmount: 1000, label: '', allocation: { 1: 0.5, 2: 0.5 } }] as any });
+    render(<MemoryRouter><ContributionsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button', { name: /Advanced: allocation/i }));
+    // Override is already on (allocation present) → both group headings show.
+    expect(screen.getByText(/^Roth$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^Traditional$/i)).toBeInTheDocument();
+    expect(screen.getByLabelText('My Roth 401k')).toBeInTheDocument();
+    expect(screen.getByLabelText('My Trad 401k')).toBeInTheDocument();
+  });
 });

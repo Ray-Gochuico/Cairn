@@ -115,15 +115,56 @@ describe('Retirement401kWithdrawalCard', () => {
     expect(Number(ageInput.value)).toBeGreaterThan(18);
   });
 
-  it('renders a Roth toggle but it is disabled', () => {
+  it('Roth radio is enabled (no longer "coming soon")', () => {
     primeStores();
-    render(
-      <MemoryRouter>
-        <Retirement401kWithdrawalCard />
-      </MemoryRouter>,
-    );
-    const rothToggle = screen.getByLabelText(/roth 401k/i) as HTMLInputElement;
-    expect(rothToggle).toBeDisabled();
+    useTaxRulesStore.setState((s) => ({ ...s, year: 2026 }));
+    render(<MemoryRouter><Retirement401kWithdrawalCard /></MemoryRouter>);
+    const roth = screen.getByRole('radio', { name: /^Roth 401k$/i }) as HTMLInputElement;
+    expect(roth).not.toBeDisabled();
+    expect(screen.queryByText(/coming soon/i)).not.toBeInTheDocument();
+  });
+
+  it('selecting Roth zeroes EVERY tax line + penalty + effective rate (all-sites $0 guard)', () => {
+    primeStores();
+    render(<MemoryRouter><Retirement401kWithdrawalCard /></MemoryRouter>);
+    fireEvent.change(screen.getByLabelText(/Withdrawal amount/i), { target: { value: '40000' } });
+    // Non-zero W-2 + cap gains + other-investment income so the Traditional
+    // path would produce non-zero federal/state/city/NIIT — proving Roth zeroes
+    // them rather than them happening to be 0. Young age so Traditional would
+    // also levy the 10% penalty (proving Roth waives it).
+    fireEvent.change(screen.getByLabelText(/Annual W-2 income/i), { target: { value: '200000' } });
+    fireEvent.change(screen.getByLabelText(/Capital gains for the year/i), { target: { value: '20000' } });
+    fireEvent.change(screen.getByLabelText(/Other investment income/i), { target: { value: '15000' } });
+    fireEvent.change(screen.getByLabelText(/Age at withdrawal/i), { target: { value: '50' } });
+    fireEvent.click(screen.getByRole('radio', { name: /^Roth 401k$/i }));
+
+    // Headline: net == full withdrawal (no tax taken).
+    expect(screen.getByTestId('401k-withdrawal-net').textContent).toBe('$40,000');
+
+    // EVERY jurisdiction/tax line the card renders reads $0 — a missed
+    // breakdown.→view. swap (M2) would leave one of these non-zero under the
+    // $0 headline and fail HERE. Assert each row's value cell.
+    const expectZeroRow = (labelRe: RegExp) => {
+      const row = screen.getByText(labelRe).closest('div')!;
+      expect(within(row).getByText('$0')).toBeInTheDocument();
+    };
+    expectZeroRow(/Federal tax on withdrawal/i);
+    expectZeroRow(/State tax on withdrawal/i);
+    expectZeroRow(/City tax on withdrawal/i);
+    // NIIT delta + penalty have stable test ids — prefer them over label-closest.
+    expect(within(screen.getByTestId('401k-withdrawal-niit-row')).getByText('$0')).toBeInTheDocument();
+    expect(within(screen.getByTestId('401k-penalty-row')).getByText('$0')).toBeInTheDocument();
+    // Summary tile: total taxes $0. The label + value are SIBLING divs inside
+    // the tile, so scope to the tile via its data-summary-row attribute (the
+    // label's own .closest('div') is just the label div — value not inside it).
+    const taxTile = document.querySelector('[data-summary-row="taxes-paid"]') as HTMLElement;
+    expect(within(taxTile).getByText('$0')).toBeInTheDocument();
+    // Effective rate 0% — label + value share one flex row, so .closest('div')
+    // of the label IS that row and contains the value.
+    expect(within(screen.getByText(/Effective rate on this withdrawal/i).closest('div')!).getByText(/^0(\.0)?%$/)).toBeInTheDocument();
+
+    // UX F-3: the penalty parenthetical is suppressed under Roth (no "10%"/"59½").
+    expect(within(screen.getByTestId('401k-penalty-row')).queryByText(/10%|59½/)).not.toBeInTheDocument();
   });
 
   it('computes the 10% early-withdrawal penalty when the user is under 59.5', async () => {

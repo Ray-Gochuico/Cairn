@@ -221,25 +221,41 @@ export function Retirement401kWithdrawalCard({
             />
             Traditional 401k
           </label>
-          <label
-            className="flex items-center gap-1 text-muted-foreground"
-            title="Roth distributions modeling coming in a future release"
-          >
+          <label className="flex items-center gap-1">
             <input
               type="radio"
               name="plan-type"
               value="ROTH"
-              disabled
-              aria-label="Roth 401k (coming soon)"
+              checked={planType === 'ROTH'}
+              onChange={() => setPlanType('ROTH')}
+              aria-label="Roth 401k"
             />
-            Roth 401k (coming soon)
+            Roth 401k
           </label>
         </div>
       </div>
     </div>
   );
 
-  const headline = breakdown ? formatCurrency(breakdown.netToUser) : '—';
+  // Roth 401(k) distributions are modeled as tax-free (assumes a qualified
+  // distribution: age 59½ + 5-year rule). The underlying engine has no Roth
+  // mode, so we present a zeroed breakdown for the Roth plan type. The
+  // tax-free caveat is disclosed in the What-If footnote + the ROTH 401(K)
+  // glossary entry.
+  const view = planType === 'ROTH' && breakdown
+    ? {
+        incrementalFederal: 0,
+        incrementalState: 0,
+        incrementalCity: 0,
+        incrementalNiit: 0,
+        earlyWithdrawalPenalty: 0,
+        totalTaxOnWithdrawal: 0,
+        netToUser: withdrawalAmount,
+        effectiveRate: 0,
+      }
+    : breakdown;
+
+  const headline = view ? formatCurrency(view.netToUser) : '—';
 
   return (
     <CalculatorCard
@@ -268,19 +284,19 @@ export function Retirement401kWithdrawalCard({
           <div className="flex justify-between">
             <span>Federal tax on withdrawal</span>
             <span className="tabular-nums">
-              {formatCurrency(breakdown.incrementalFederal)}
+              {formatCurrency(view!.incrementalFederal)}
             </span>
           </div>
           <div className="flex justify-between">
             <span>State tax on withdrawal</span>
             <span className="tabular-nums">
-              {formatCurrency(breakdown.incrementalState)}
+              {formatCurrency(view!.incrementalState)}
             </span>
           </div>
           <div className="flex justify-between">
             <span>City tax on withdrawal</span>
             <span className="tabular-nums">
-              {formatCurrency(breakdown.incrementalCity)}
+              {formatCurrency(view!.incrementalCity)}
             </span>
           </div>
           <div
@@ -291,7 +307,7 @@ export function Retirement401kWithdrawalCard({
               <TermTooltip term="NIIT">NIIT delta</TermTooltip>
             </span>
             <span className="tabular-nums">
-              {formatCurrency(breakdown.incrementalNiit)}
+              {formatCurrency(view!.incrementalNiit)}
             </span>
           </div>
           <div className="flex justify-between">
@@ -303,17 +319,18 @@ export function Retirement401kWithdrawalCard({
             </span>
           </div>
           <div
+            data-testid="401k-penalty-row"
             className={`flex justify-between ${
-              earlyPenaltyApplies ? 'text-destructive' : ''
+              earlyPenaltyApplies && planType !== 'ROTH' ? 'text-destructive' : ''
             }`}
           >
             <span>
               <TermTooltip term="Early-withdrawal penalty">
-                Early-withdrawal penalty (10% if &lt; 59½)
+                Early-withdrawal penalty{planType !== 'ROTH' && ' (10% if < 59½)'}
               </TermTooltip>
             </span>
             <span className="tabular-nums">
-              {formatCurrency(breakdown.earlyWithdrawalPenalty)}
+              {formatCurrency(view!.earlyWithdrawalPenalty)}
             </span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 border-t pt-2 mt-1">
@@ -325,7 +342,7 @@ export function Retirement401kWithdrawalCard({
                 Estimated total taxes
               </div>
               <div className="text-lg font-semibold tabular-nums">
-                {formatCurrency(breakdown.totalTaxOnWithdrawal)}
+                {formatCurrency(view!.totalTaxOnWithdrawal)}
               </div>
             </div>
             <div
@@ -336,14 +353,14 @@ export function Retirement401kWithdrawalCard({
                 Estimated net to you
               </div>
               <div className="text-lg font-semibold tabular-nums">
-                {formatCurrency(breakdown.netToUser)}
+                {formatCurrency(view!.netToUser)}
               </div>
             </div>
           </div>
           <div className="flex justify-between text-xs text-muted-foreground">
             <span>Effective rate on this withdrawal</span>
             <span className="tabular-nums">
-              {formatPercent(breakdown.effectiveRate)}
+              {formatPercent(view!.effectiveRate)}
             </span>
           </div>
           {/* Wave-3 Task 6 — calculator framing. The headline numbers are

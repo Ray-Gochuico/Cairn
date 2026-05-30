@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { useState } from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { GapAllocationEditor } from '@/components/whatif/levers/GapAllocationEditor';
 import type { GapAllocation } from '@/lib/scenarios';
@@ -166,6 +166,38 @@ describe('GapAllocationEditor', () => {
     />);
     expect(screen.getByRole('alert')).toHaveTextContent(/no tax-advantaged accounts/i);
     expect(screen.getByRole('alert')).toHaveTextContent(/redirected to cash/i);
+  });
+
+  it('within the tax-advantaged bucket, groups accounts by Roth vs Traditional and writes explicit per-account pct', () => {
+    const accountsByBucket = {
+      taxAdvantaged: [
+        { id: 1, name: 'Trad 401k', type: 'ACCOUNT_401K' },
+        { id: 2, name: 'Trad IRA', type: 'ACCOUNT_TRAD_IRA' },
+        { id: 3, name: 'Roth 401k', type: 'ACCOUNT_ROTH_401K' },
+        { id: 4, name: 'Roth IRA', type: 'ACCOUNT_ROTH_IRA' },
+      ],
+      brokerage: [],
+      cash: [],
+    } as any;
+    const onChange = vi.fn();
+    render(
+      <GapAllocationEditor
+        gap={4000}
+        gapAllocation={{ taxAdvantaged: { mode: 'percent', value: 1, accountSplits: null }, brokerage: null }}
+        accountsByBucket={accountsByBucket}
+        onChange={onChange}
+      />,
+    );
+    // Group headings present.
+    expect(screen.getByText(/^Roth$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^Traditional$/i)).toBeInTheDocument();
+    // Edit one account → onChange carries an explicit accountSplits array with
+    // a pct for EVERY account (not relying on the engine even-split fallback).
+    fireEvent.change(screen.getByLabelText('Roth 401k percent'), { target: { value: '40' } });
+    const next = onChange.mock.calls.at(-1)![0];
+    const splits = next.taxAdvantaged.accountSplits as Array<{ accountId: number; pct: number }>;
+    expect(splits.map((s: { accountId: number }) => s.accountId).sort()).toEqual([1, 2, 3, 4]);
+    expect(splits.find((s: { accountId: number; pct: number }) => s.accountId === 3)!.pct).toBeCloseTo(0.4, 5);
   });
 
   it('Reset to defaults clears both buckets to null', async () => {

@@ -84,7 +84,9 @@ export function evaluateSolo401k(_ctx: RoadmapContext): NodeResult {
 // s6_mega_backdoor / s6_after_tax_401k_q — account hint
 // ──────────────────────────────────────────────────────────────────
 export function evaluateAfterTax401kQ(ctx: RoadmapContext): NodeResult {
-  const accts = ctx.accounts.filter((a) => a.type === AccountType.ACCOUNT_401K);
+  const accts = ctx.accounts.filter(
+    (a) => a.type === AccountType.ACCOUNT_401K || a.type === AccountType.ACCOUNT_ROTH_401K,
+  );
   if (accts.length === 0) {
     return { status: 'info', evidence: 'No 401(k) on file — add one in Accounts to evaluate the mega backdoor.' };
   }
@@ -104,7 +106,9 @@ export function evaluateAfterTax401kQ(ctx: RoadmapContext): NodeResult {
 }
 
 export function evaluateMegaBackdoor(ctx: RoadmapContext): NodeResult {
-  const accts = ctx.accounts.filter((a) => a.type === AccountType.ACCOUNT_401K);
+  const accts = ctx.accounts.filter(
+    (a) => a.type === AccountType.ACCOUNT_401K || a.type === AccountType.ACCOUNT_ROTH_401K,
+  );
   if (accts.some((a) => a.allowsMegaBackdoorRollover === true)) {
     return {
       status: 'active',

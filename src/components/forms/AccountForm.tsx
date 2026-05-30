@@ -55,7 +55,8 @@ export const DEFAULT_ACCOUNT: AccountFormValues = {
 };
 
 export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
-  [AccountType.ACCOUNT_401K]: '401(k)',
+  [AccountType.ACCOUNT_ROTH_401K]: 'Roth 401(k)',
+  [AccountType.ACCOUNT_401K]: 'Traditional 401(k)',
   [AccountType.ACCOUNT_ROTH_IRA]: 'Roth IRA',
   [AccountType.ACCOUNT_TRAD_IRA]: 'Traditional IRA',
   [AccountType.ACCOUNT_BROKERAGE]: 'Brokerage',
