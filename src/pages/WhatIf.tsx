@@ -333,6 +333,12 @@ export default function WhatIf() {
             enforced; early withdrawals from converted balances may
             trigger penalties not reflected here.
           </li>
+          <li>
+            <span className="font-medium">Roth withdrawals modeled as tax-free</span>{' '}
+            — assumes qualified distributions (age 59½ + the 5-year rule).
+            Non-qualified Roth withdrawals can incur tax + penalty not
+            reflected here.
+          </li>
         </ul>
         <div className="pt-1">
           See Settings &rarr; Disclosures for full model assumptions.

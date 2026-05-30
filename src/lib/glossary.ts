@@ -118,7 +118,14 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     term: '401(k)',
     shortDefinition: 'A workplace retirement plan you contribute to from your paycheck.',
     fullDefinition:
-      'Pre-tax contributions reduce your taxable income now; growth is tax-deferred; you owe income tax on withdrawals in retirement. Many employers also match a percentage. The Roth variant is post-tax in / tax-free out.',
+      'Pre-tax contributions reduce your taxable income now; growth is tax-deferred; you owe income tax on withdrawals in retirement. Many employers also match a percentage. The Roth variant is post-tax in / tax-free out on qualified withdrawals.',
+  },
+  'ROTH 401(K)': {
+    term: 'Roth 401(k)',
+    shortDefinition:
+      'A workplace retirement plan funded with after-tax dollars — qualified withdrawals in retirement are tax-free.',
+    fullDefinition:
+      'Contributions are post-tax (no deduction now); growth and withdrawals are tax-free if the distribution is qualified — generally age 59½ and the account open 5+ years. Employer matching dollars go into a pre-tax sub-account and are taxed on withdrawal.',
   },
   'ROTH IRA': {
     term: 'Roth IRA',

@@ -328,4 +328,16 @@ describe('WhatIf — projection footnote (W7-Legal R-LWI-4)', () => {
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
+
+  it('projection footnote discloses the Roth tax-free modeling caveat', () => {
+    render(
+      <MemoryRouter>
+        <WhatIf />
+      </MemoryRouter>,
+    );
+    const footnote = screen.getByTestId('whatif-projection-footnote');
+    expect(footnote.textContent).toMatch(/Roth withdrawals/i);
+    expect(footnote.textContent).toMatch(/qualified distributions/i);
+    expect(footnote.textContent).toMatch(/59½|59\.5|5-year/i);
+  });
 });
