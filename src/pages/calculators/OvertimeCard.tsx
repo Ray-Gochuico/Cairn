@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
-import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { CalculatorCard } from './CalculatorCard';
 import { OvertimeRowEditor, type OvertimeRow } from './OvertimeRowEditor';
-import { computePretaxDeductions, computeBonusTax } from '@/lib/tax';
+import { aggregateHouseholdPretax, computeSupplementalWageTax } from '@/lib/calculators/supplemental-wage';
+import { useHouseholdTaxContext } from '@/lib/calculators/use-household-tax-context';
+import { useCalculatorState } from '@/lib/calculator-state';
+import { NumberField } from '@/components/calculators/NumberField';
+import { ResultRow } from '@/components/calculators/ResultRow';
 import { formatCurrency, formatPercent } from '@/lib/format';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
   evaluateOvertimeLineItems,
@@ -18,7 +20,6 @@ import {
   PAYCHECK_PERIODS,
   type PaycheckPeriod,
 } from '@/lib/paycheck-periods';
-import { getCurrentTaxYear } from '@/lib/current-tax-year';
 import type { Person } from '@/types/schema';
 
 const SELECT_CLASS =
@@ -56,42 +57,16 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
   const { household } = useHouseholdStore();
   const { persons } = usePersonsStore();
   const { dependents } = useDependentsStore();
-  const taxItems = useTaxRulesStore((s) => s.items);
-
-  // Smart-resolve the tax year from the seeded set: if the current calendar year
-  // has rules use it, otherwise fall back to the most-recent seeded year.
-  const seededYears = useMemo(
-    () => [...new Set(taxItems.map((r) => r.year))],
-    [taxItems],
-  );
-  const { year: resolvedYear } = getCurrentTaxYear(seededYears);
-
-  // Bootstrap: on mount, discover what years are seeded and load the most
-  // recent. This avoids the trap where loadYear(currentCalendarYear) returns
-  // empty and clobbers any pre-loaded fallback rules — the resolver above
-  // will then map seededYears → resolvedYear correctly.
-  useEffect(() => {
-    useTaxRulesStore.getState().loadAvailableYears();
-  }, []);
+  const tax = useHouseholdTaxContext();
 
   const eligiblePerson = useMemo(() => persons.find(isEligible), [persons]);
+  const derivedBase = eligiblePerson ? deriveBaseRate(eligiblePerson) : 0;
+  const { values, setValue, reset, isOverridden } = useCalculatorState(cardId ?? 'overtime', { baseRate: derivedBase });
+  const baseHourlyRate = values.baseRate ?? 0;
 
   // ---- ephemeral UI state ----
   const [rows, setRows] = useState<OvertimeRow[]>([STARTER_ROW]);
-  const [baseOverride, setBaseOverride] = useState<number | null>(null);
   const [period, setPeriod] = useState<PaycheckPeriod>('BI_WEEKLY');
-
-  const derivedBase = eligiblePerson ? deriveBaseRate(eligiblePerson) : 0;
-  const baseHourlyRate = baseOverride ?? derivedBase;
-
-  const lookup = (jt: 'FEDERAL' | 'STATE' | 'CITY', code: string, fs: string) =>
-    taxItems.find(
-      (r) =>
-        r.year === resolvedYear &&
-        r.jurisdictionType === jt &&
-        r.jurisdictionCode === code &&
-        r.filingStatus === fs,
-    ) ?? null;
 
   const overtime = useMemo(() => {
     if (!eligiblePerson || baseHourlyRate <= 0) return null;
@@ -111,40 +86,27 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
   const totalGross = overtime?.totalGross ?? 0;
 
   const taxResult = useMemo(() => {
-    if (!household || !eligiblePerson || taxItems.length === 0) return null;
-    const federal = lookup('FEDERAL', 'US', household.filingStatus);
-    const state = lookup('STATE', household.state, household.filingStatus);
-    const city = household.city ? lookup('CITY', household.city, household.filingStatus) : null;
-    if (!federal || !state) return null;
-
-    const pretax = computePretaxDeductions({
-      salary: eligiblePerson.annualSalaryPretax,
-      pretax401kPct: eligiblePerson.pretax401kPct,
-      healthInsuranceMonthlyPremium: eligiblePerson.healthInsuranceMonthlyPremium,
-      dcfsaMonthly: eligiblePerson.dependentCareFsaMonthly,
-      hsaMonthly: eligiblePerson.hsaMonthlyContribution,
-      hsaEligible: eligiblePerson.hsaEligible,
+    if (!tax.ready || !household || !eligiblePerson || !tax.federal || !tax.state) return null;
+    const agg = aggregateHouseholdPretax([eligiblePerson], {
       filingStatus: household.filingStatus,
-      personCount: persons.length,
+      personCount: persons.length,      // household-wide caps still count everyone
       dependentCount: dependents.length,
     });
-
-    return computeBonusTax({
-      personGross: eligiblePerson.annualSalaryPretax + totalGross,
-      bonus: totalGross,
-      pretax,
+    return computeSupplementalWageTax({
+      baseSalary: agg.totalSalary,
+      supplementalWages: totalGross,
+      pretax: agg.pretax,
       filingStatus: household.filingStatus,
-      federalBrackets: federal.brackets,
-      stateBrackets: state.brackets,
-      cityBrackets: city?.brackets ?? null,
-      // R3 wiring-sweep: per-jurisdiction SD (was scalar federal SD).
+      federalBrackets: tax.federal.brackets,
+      stateBrackets: tax.state.brackets,
+      cityBrackets: tax.city?.brackets ?? null,
       standardDeduction: {
-        federal: federal.standardDeduction,
-        state: state.standardDeduction,
-        city: city?.standardDeduction ?? 0,
+        federal: tax.federal.standardDeduction,
+        state: tax.state.standardDeduction,
+        city: tax.city?.standardDeduction ?? 0,
       },
     });
-  }, [household, eligiblePerson, persons, dependents, taxItems, resolvedYear, totalGross]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tax.ready, tax.federal, tax.state, tax.city, household, eligiblePerson, persons, dependents, totalGross]);
 
   // ---- early returns ----
 
@@ -172,25 +134,25 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
   const baseInput = (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
       <div className="space-y-1">
-        <label htmlFor="ot-base-rate" className="text-sm font-medium">
-          Base hourly rate
-        </label>
-        <Input
+        <NumberField
           id="ot-base-rate"
-          type="number"
-          min="0"
+          label="Base hourly rate"
+          value={values.baseRate}
+          onChange={(v) => setValue('baseRate', v ?? 0)}
+          suffix="$/hr"
           step="0.01"
-          value={baseHourlyRate === 0 ? '' : baseHourlyRate}
-          onChange={(e) => {
-            const v = parseFloat(e.target.value);
-            setBaseOverride(Number.isFinite(v) && v >= 0 ? v : null);
-          }}
+          min={0}
         />
         <p className="text-xs text-muted-foreground">
           Auto-derived from {eligiblePerson.name} (
           {eligiblePerson.employmentType === 'HOURLY' ? 'hourly rate' : 'implied from salary'}
           ). Edit to override.
         </p>
+        {isOverridden && (
+          <button type="button" onClick={reset} className="text-sm text-primary hover:underline text-left">
+            Reset to my data
+          </button>
+        )}
       </div>
       <div className="space-y-1">
         <label htmlFor="ot-period" className="text-sm font-medium">
@@ -298,22 +260,9 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
 
       {/* Summary */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-        <div>
-          <div className="text-muted-foreground">Total OT gross</div>
-          <div className="font-medium tabular-nums">{formatCurrency(totalGross)}</div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">Marginal rate on OT</div>
-          <div className="font-medium tabular-nums">
-            {formatPercent(taxResult.marginalRateOnBonus)}
-          </div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">Total OT take-home</div>
-          <div className="font-semibold tabular-nums">
-            {formatCurrency(overtimeTakeHome)}
-          </div>
-        </div>
+        <ResultRow label="Total OT gross" value={formatCurrency(totalGross)} />
+        <ResultRow label="Marginal rate on OT" value={formatPercent(taxResult.marginalRateOnBonus)} />
+        <ResultRow label="Total OT take-home" value={formatCurrency(overtimeTakeHome)} emphasis />
       </div>
 
       <p className="text-xs text-muted-foreground mt-3">

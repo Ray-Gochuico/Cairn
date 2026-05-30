@@ -255,6 +255,28 @@ export const LeverPayloadSchema = z.object({
    * being drained is `taxDeferred`. Taxable + Roth tiers ignore this.
    */
   effectiveDrawdownTaxRate: z.number().min(0).max(0.6).default(0),
+  /**
+   * Feature B — which figure seeds the scenario's recurring monthly expense
+   * BEFORE the additive `expensePeriods` overlays:
+   *
+   *   - `custom`     (schema default): use `customMonthly` verbatim. With the
+   *                  paired `customMonthly: 0` default this yields
+   *                  base(0) + periods = periods, so EXISTING scenarios — whose
+   *                  expensePeriods already encode their ENTIRE expense — are
+   *                  byte-for-byte unchanged. ⚠ Do NOT change this default to a
+   *                  data mode: doing so silently shifts every saved scenario.
+   *   - `latestMonth`/`rolling12m`: a transaction-derived figure pre-computed at
+   *                  capture on RealState.expenseBasis (real-spending-filtered).
+   *
+   * The new-scenario default is carried separately by emptyLeverPayload().
+   */
+  expenseSource: z.enum(['latestMonth', 'rolling12m', 'custom']).default('custom'),
+  /**
+   * Custom monthly base, used only when expenseSource === 'custom'. Validated
+   * nonnegative + a sane upper bound ($100M/mo) to reject typos/garbage. The
+   * back-compat default is 0 (see expenseSource).
+   */
+  customMonthly: z.number().nonnegative().max(100_000_000).default(0),
 });
 export type LeverPayload = z.infer<typeof LeverPayloadSchema>;
 
@@ -280,5 +302,7 @@ export function emptyLeverPayload(): LeverPayload {
     annualQualifiedDividends: 0,
     annualNonQualifiedDividends: 0,
     effectiveDrawdownTaxRate: 0,
+    expenseSource: 'custom',
+    customMonthly: 0,
   };
 }

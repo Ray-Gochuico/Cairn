@@ -284,10 +284,11 @@ function PropertyUtilitiesCard({
 
 interface RentalCardProps {
   rental: HousingPayment;
+  ownerLabel: string;
   onRemove: () => void;
 }
 
-function RentalCard({ rental, onRemove }: RentalCardProps) {
+function RentalCard({ rental, ownerLabel, onRemove }: RentalCardProps) {
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -296,9 +297,16 @@ function RentalCard({ rental, onRemove }: RentalCardProps) {
             <CardTitle className="text-base truncate">{rental.name}</CardTitle>
             <CardDescription className="text-xs">Rent</CardDescription>
           </div>
-          <Button size="sm" variant="destructive" onClick={onRemove}>
-            Remove
-          </Button>
+          <div className="flex shrink-0 gap-2">
+            <Button asChild size="sm" variant="outline">
+              <Link to="/inputs/housing-payments" aria-label="Edit rental">
+                Edit
+              </Link>
+            </Button>
+            <Button size="sm" variant="destructive" onClick={onRemove}>
+              Remove
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -324,6 +332,12 @@ function RentalCard({ rental, onRemove }: RentalCardProps) {
             <dd className="font-mono">{rental.endDate ?? 'ongoing'}</dd>
           </div>
         </dl>
+        <div className="pt-3 border-t">
+          <span className="inline-flex items-center gap-1.5 rounded-full border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+            <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden="true" />
+            {ownerLabel}
+          </span>
+        </div>
       </CardContent>
     </Card>
   );
@@ -545,25 +559,50 @@ export default function Property() {
 
       {visibleRentals.length > 0 && (
         <section aria-label="Rentals" className="space-y-3">
-          <div className="flex items-baseline justify-between gap-4">
-            <h2 className="text-xl font-semibold">Rentals</h2>
-            <div className="text-sm text-muted-foreground">
-              <span className="mr-2">Total monthly obligation</span>
-              <span className="font-mono text-base text-foreground">
-                {formatCurrency(totalMonthlyHousingObligation)}
-              </span>
-            </div>
-          </div>
+          <h2 className="text-xl font-semibold">Rentals</h2>
+          <Card>
+            <CardContent className="flex items-center justify-between gap-4 py-4">
+              <div>
+                <div className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Total recurring housing
+                </div>
+                <div className="text-2xl font-semibold tabular-nums">
+                  {formatCurrency(totalMonthlyHousingObligation)}
+                  <span className="ml-1 text-sm font-medium text-muted-foreground">
+                    /mo
+                  </span>
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {visibleRentals.length} active rental
+                  {visibleRentals.length === 1 ? '' : 's'} · feeds Spending &amp;
+                  What-If projection
+                </div>
+              </div>
+            </CardContent>
+          </Card>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {visibleRentals.map((r) => (
               <RentalCard
                 key={r.id}
                 rental={r}
+                ownerLabel={
+                  r.ownerPersonId == null
+                    ? 'Joint'
+                    : (personNameById.get(r.ownerPersonId) ?? 'Unknown')
+                }
                 onRemove={() =>
                   void useHousingPaymentsStore.getState().remove(r.id!)
                 }
               />
             ))}
+            <Link
+              to="/inputs/housing-payments"
+              aria-label="Add rental"
+              className="flex min-h-[96px] w-full items-center justify-center gap-2 rounded-lg border border-dashed text-sm font-medium text-primary transition-colors hover:bg-accent"
+            >
+              <span aria-hidden="true" className="text-lg leading-none">+</span>
+              Add rental
+            </Link>
           </div>
         </section>
       )}

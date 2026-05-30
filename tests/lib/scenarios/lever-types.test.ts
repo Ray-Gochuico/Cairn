@@ -36,6 +36,8 @@ describe('LeverPayloadSchema', () => {
       annualQualifiedDividends: 0,
       annualNonQualifiedDividends: 0,
       effectiveDrawdownTaxRate: 0,
+      expenseSource: 'custom' as const,
+      customMonthly: 0,
     };
     expect(LeverPayloadSchema.parse(payload)).toEqual(payload);
   });
@@ -319,5 +321,70 @@ describe('LeverPayloadSchema — gapAllocation default', () => {
       // gapAllocation intentionally omitted
     });
     expect(parsed.gapAllocation).toEqual({ taxAdvantaged: null, brokerage: null });
+  });
+});
+
+describe('emptyLeverPayload — Feature B new-scenario default', () => {
+  it('carries explicit expenseSource + customMonthly (new-scenario default)', () => {
+    const p = emptyLeverPayload();
+    expect(p.expenseSource).toBe('custom');
+    expect(p.customMonthly).toBe(0);
+  });
+
+  it('parses cleanly through the schema (no missing required fields)', () => {
+    expect(() => LeverPayloadSchema.parse(emptyLeverPayload())).not.toThrow();
+  });
+});
+
+describe('Feature B — expenseSource / customMonthly schema', () => {
+  // A minimal "old" payload as it sits on disk for a pre-Feature-B scenario:
+  // it has NO expenseSource / customMonthly keys at all.
+  const legacyPayload = {
+    extraLoanPayments: [],
+    lumpSums: [],
+    expensePeriods: [{ start: '2026-05-01', monthlyDelta: 4000, durationMonths: 12 }],
+    returns: { defaultRate: 0.07, overrides: {} },
+    income: { perPerson: [{ annualRaiseRate: 0, events: [] }] },
+  };
+
+  it('materializes the BACK-COMPAT default (custom / 0) for a legacy payload', () => {
+    const parsed = LeverPayloadSchema.parse(legacyPayload);
+    // The catastrophe guard at the schema level: old scenarios must default to
+    // custom/0 so base(0) + periods = periods (byte-identical projection).
+    expect(parsed.expenseSource).toBe('custom');
+    expect(parsed.customMonthly).toBe(0);
+  });
+
+  it('round-trips an explicit data mode', () => {
+    const parsed = LeverPayloadSchema.parse({
+      ...legacyPayload,
+      expenseSource: 'rolling12m',
+      customMonthly: 0,
+    });
+    expect(parsed.expenseSource).toBe('rolling12m');
+  });
+
+  it('rejects an unknown expenseSource', () => {
+    expect(() =>
+      LeverPayloadSchema.parse({ ...legacyPayload, expenseSource: 'weekly' }),
+    ).toThrow();
+  });
+
+  it('rejects a negative customMonthly', () => {
+    expect(() =>
+      LeverPayloadSchema.parse({ ...legacyPayload, customMonthly: -1 }),
+    ).toThrow();
+  });
+
+  it('rejects a NaN customMonthly', () => {
+    expect(() =>
+      LeverPayloadSchema.parse({ ...legacyPayload, customMonthly: Number.NaN }),
+    ).toThrow();
+  });
+
+  it('rejects an absurd customMonthly (above the sane max)', () => {
+    expect(() =>
+      LeverPayloadSchema.parse({ ...legacyPayload, customMonthly: 100_000_001 }),
+    ).toThrow();
   });
 });

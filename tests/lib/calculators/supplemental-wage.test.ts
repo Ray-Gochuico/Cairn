@@ -1,0 +1,128 @@
+import { describe, it, expect } from 'vitest';
+import {
+  aggregateHouseholdPretax,
+  computeSupplementalWageTax,
+} from '@/lib/calculators/supplemental-wage';
+import { computeBonusTax, computePretaxDeductions } from '@/lib/tax';
+import { FilingStatus } from '@/types/enums';
+import type { Person } from '@/types/schema';
+
+const federalSingleBrackets = [
+  { min: 0, max: 11925, rate: 0.1 },
+  { min: 11925, max: 48475, rate: 0.12 },
+  { min: 48475, max: 103350, rate: 0.22 },
+  { min: 103350, max: 197300, rate: 0.24 },
+  { min: 197300, max: 250525, rate: 0.32 },
+  { min: 250525, max: 626350, rate: 0.35 },
+  { min: 626350, max: null, rate: 0.37 },
+];
+const caSingleBrackets = [
+  { min: 0, max: 10412, rate: 0.01 },
+  { min: 10412, max: 24684, rate: 0.02 },
+  { min: 24684, max: 38959, rate: 0.04 },
+  { min: 38959, max: 54081, rate: 0.06 },
+  { min: 54081, max: 68350, rate: 0.08 },
+  { min: 68350, max: 349137, rate: 0.093 },
+  { min: 349137, max: 418961, rate: 0.103 },
+  { min: 418961, max: 698271, rate: 0.113 },
+  { min: 698271, max: null, rate: 0.123 },
+];
+
+function person(overrides: Partial<Person> = {}): Person {
+  return {
+    id: 1,
+    householdId: 1,
+    name: 'Alice',
+    dateOfBirth: '1990-01-01',
+    targetRetirementAge: 65,
+    annualSalaryPretax: 100000,
+    expectedBonus: 0,
+    expectedBonusFrequency: 'ANNUAL',
+    bonusIsConsistent: true,
+    expectedCommission: 0,
+    expectedCommissionFrequency: 'MONTHLY',
+    employmentType: 'SALARY_NO_OT',
+    hourlyRate: null,
+    regularHoursPerWeek: 40,
+    pretax401kPct: 0,
+    healthInsuranceMonthlyPremium: 0,
+    dependentCareFsaMonthly: 0,
+    hsaMonthlyContribution: 0,
+    hsaEligible: false,
+    ...overrides,
+  } as Person;
+}
+
+describe('aggregateHouseholdPretax', () => {
+  it('sums salary + pretax across the supplied persons and matches computePretaxDeductions', () => {
+    const persons = [person({ annualSalaryPretax: 100000 }), person({ id: 2, annualSalaryPretax: 60000 })];
+    const out = aggregateHouseholdPretax(persons, {
+      filingStatus: FilingStatus.MFJ,
+      personCount: 2,
+      dependentCount: 0,
+    });
+    expect(out.totalSalary).toBe(160000);
+    // pretax is the per-person computePretaxDeductions summed
+    const p0 = computePretaxDeductions({
+      salary: 100000, pretax401kPct: 0, healthInsuranceMonthlyPremium: 0,
+      dcfsaMonthly: 0, hsaMonthly: 0, hsaEligible: false,
+      filingStatus: FilingStatus.MFJ, personCount: 2, dependentCount: 0,
+    });
+    const p1 = computePretaxDeductions({
+      salary: 60000, pretax401kPct: 0, healthInsuranceMonthlyPremium: 0,
+      dcfsaMonthly: 0, hsaMonthly: 0, hsaEligible: false,
+      filingStatus: FilingStatus.MFJ, personCount: 2, dependentCount: 0,
+    });
+    expect(out.pretax.pretax401k).toBe(p0.pretax401k + p1.pretax401k);
+    expect(out.pretax.pretaxHealth).toBe(p0.pretaxHealth + p1.pretaxHealth);
+  });
+
+  it('supports a single-person subset (Overtime case)', () => {
+    const all = [person({ annualSalaryPretax: 100000 }), person({ id: 2, annualSalaryPretax: 60000 })];
+    const out = aggregateHouseholdPretax([all[0]], {
+      filingStatus: FilingStatus.SINGLE,
+      personCount: all.length, // household-wide caps still see both persons
+      dependentCount: 0,
+    });
+    expect(out.totalSalary).toBe(100000);
+  });
+});
+
+describe('computeSupplementalWageTax — golden parity with computeBonusTax', () => {
+  // GOLDEN GATE: computeSupplementalWageTax is a thin wrapper; it MUST produce
+  // byte-identical output to the proven computeBonusTax for the same scenario.
+  // Any drift fails here — this is the exact-value gate the migration relies on.
+  const pretax = { pretax401k: 0, pretaxHealth: 0, pretaxDcfsa: 0, pretaxHsa: 0 };
+  const scenarios = [
+    { name: 'bonus $10k on $100k SINGLE/CA', baseSalary: 100000, supplementalWages: 10000 },
+    { name: 'overtime $4k on $80k SINGLE/CA', baseSalary: 80000, supplementalWages: 4000 },
+    { name: 'commission $48k on $100k SINGLE/CA', baseSalary: 100000, supplementalWages: 48000 },
+  ];
+  for (const s of scenarios) {
+    it(`${s.name} equals computeBonusTax exactly`, () => {
+      const sd = { federal: 15000, state: 0, city: 0 };
+      const viaEngine = computeSupplementalWageTax({
+        baseSalary: s.baseSalary,
+        supplementalWages: s.supplementalWages,
+        pretax,
+        filingStatus: FilingStatus.SINGLE,
+        federalBrackets: federalSingleBrackets,
+        stateBrackets: caSingleBrackets,
+        cityBrackets: null,
+        standardDeduction: sd,
+      });
+      const viaBonus = computeBonusTax({
+        personGross: s.baseSalary + s.supplementalWages,
+        bonus: s.supplementalWages,
+        pretax,
+        filingStatus: FilingStatus.SINGLE,
+        federalBrackets: federalSingleBrackets,
+        stateBrackets: caSingleBrackets,
+        cityBrackets: null,
+        standardDeduction: sd,
+      });
+      expect(viaEngine).toEqual(viaBonus);
+      expect(viaEngine.bonusBreakdown.total).toBeGreaterThan(0);
+    });
+  }
+});

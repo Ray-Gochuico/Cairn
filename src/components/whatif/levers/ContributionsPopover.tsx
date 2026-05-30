@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { useScenariosStore } from '@/stores/scenarios-store';
 import { useAccountsStore } from '@/stores/accounts-store';
-import { taxBucketForAccount } from '@/lib/account-tax-classification';
+import { taxBucketForAccount, sequencingBucketForAccount } from '@/lib/account-tax-classification';
 import type { ContributionSegment } from '@/lib/scenarios';
 import type { Account } from '@/types/schema';
 import { useSurplusFlowPreview } from '@/components/whatif/useSurplusFlowPreview';
@@ -111,6 +111,12 @@ export default function ContributionsPopover({ open, onOpenChange }: Props) {
   const investmentAccountIds = investmentAccounts
     .map((a) => a.id)
     .filter((id): id is number => id != null);
+
+  // Render-time partition: Roth vs Traditional/other for grouping in the
+  // per-account override list. A "Roth" account is one whose sequencing
+  // bucket is 'roth' (Roth IRA + Roth 401k); everything else is Traditional.
+  const rothAccounts = investmentAccounts.filter((a) => sequencingBucketForAccount(a) === 'roth');
+  const tradAccounts = investmentAccounts.filter((a) => sequencingBucketForAccount(a) !== 'roth');
 
   // Task β2 — preview card branches on the surplus destination. The hook
   // sums both routing destinations and reads the household's auto-invest
@@ -317,32 +323,44 @@ export default function ContributionsPopover({ open, onOpenChange }: Props) {
                               No investment accounts found — add one in Accounts to enable per-account routing.
                             </p>
                           )}
-                          {investmentAccounts.map((acct) => {
-                            const pct = row.pcts[acct.id!] ?? 0;
-                            return (
-                              <div key={acct.id} className="flex items-center gap-2">
-                                <label htmlFor={`alloc-${i}-${acct.id}`} className="text-xs w-32 truncate">
-                                  {acct.name}
-                                </label>
-                                <Input
-                                  id={`alloc-${i}-${acct.id}`}
-                                  type="number"
-                                  min={0}
-                                  max={100}
-                                  step={0.1}
-                                  value={pct}
-                                  onChange={(e) =>
-                                    setRow(i, {
-                                      pcts: { ...row.pcts, [acct.id!]: Number(e.target.value) || 0 },
-                                    })
-                                  }
-                                  aria-label={acct.name}
-                                  className="w-20"
-                                />
-                                <span className="text-xs">%</span>
+                          {([
+                            ['Roth', rothAccounts],
+                            ['Traditional', tradAccounts],
+                          ] as const).map(([groupLabel, group]) =>
+                            group.length === 0 ? null : (
+                              <div key={groupLabel} className="space-y-1">
+                                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                                  {groupLabel}
+                                </div>
+                                {group.map((acct) => {
+                                  const pct = row.pcts[acct.id!] ?? 0;
+                                  return (
+                                    <div key={acct.id} className="flex items-center gap-2">
+                                      <label htmlFor={`alloc-${i}-${acct.id}`} className="text-xs w-32 truncate">
+                                        {acct.name}
+                                      </label>
+                                      <Input
+                                        id={`alloc-${i}-${acct.id}`}
+                                        type="number"
+                                        min={0}
+                                        max={100}
+                                        step={0.1}
+                                        value={pct}
+                                        onChange={(e) =>
+                                          setRow(i, {
+                                            pcts: { ...row.pcts, [acct.id!]: Number(e.target.value) || 0 },
+                                          })
+                                        }
+                                        aria-label={acct.name}
+                                        className="w-20"
+                                      />
+                                      <span className="text-xs">%</span>
+                                    </div>
+                                  );
+                                })}
                               </div>
-                            );
-                          })}
+                            ),
+                          )}
                           {!allocSumOk && investmentAccounts.length > 0 && (
                             <div role="alert" className="text-xs text-destructive-soft-foreground">
                               Allocations must sum to 100% (current: {allocTotal.toFixed(1)}%)

@@ -39,6 +39,7 @@ const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 function isRetirementAccount(type: string): boolean {
   return (
     type === AccountType.ACCOUNT_401K ||
+    type === AccountType.ACCOUNT_ROTH_401K ||
     type === AccountType.ACCOUNT_TRAD_IRA ||
     type === AccountType.ACCOUNT_ROTH_IRA
   );

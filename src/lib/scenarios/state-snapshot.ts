@@ -1,7 +1,8 @@
-import type { Account, AccountSnapshot, Holding, Loan, LoanPayment, Transaction, Household, Person, TaxRule, JurisdictionType, HousingPayment, VehicleLease } from '@/types/schema';
+import type { Account, AccountSnapshot, Holding, Loan, LoanPayment, Transaction, Household, Person, TaxRule, JurisdictionType, HousingPayment, VehicleLease, Category } from '@/types/schema';
 import type { Bracket } from '@/lib/tax';
 import { AccountType, type FilingStatus } from '@/types/enums';
 import { taxBucketForAccount } from '@/lib/account-tax-classification';
+import { latestCompleteMonthBaseline, rolling12mBaseline } from '@/lib/expense-baseline';
 
 export interface AppSettingsSlice {
   defaultInflation: number;
@@ -42,6 +43,13 @@ export interface RealStateInputs {
    * housingPayments.
    */
   vehicleLeases?: VehicleLease[];
+  /**
+   * All categories — used to compute the Feature B real-spending expense basis
+   * via isRealSpending (excludes TRANSFER/INCOME, nets reimbursements). Optional
+   * + defaults to [] so legacy engine fixtures that pre-date Feature B still
+   * construct (their expenseBasis resolves to {0,0}, the custom-mode no-op).
+   */
+  categories?: Category[];
 }
 
 export interface RealStateTaxBrackets {
@@ -131,6 +139,19 @@ export interface RealState {
   housingPayments: HousingPayment[];
   /** Recurring monthly vehicle leases — same treatment as housingPayments. */
   vehicleLeases: VehicleLease[];
+  /**
+   * Feature B — both data-driven monthly expense bases, pre-computed ONCE at
+   * capture and frozen at projection start. The engine reads the selected one at
+   * the expense seam; the popover shows it as the resolved base. Transient —
+   * never serialized; a saved scenario stores only `expenseSource` and re-derives
+   * this on the next capture.
+   */
+  expenseBasis: {
+    /** Total real spending in the latest COMPLETE month (in-progress month excluded). */
+    latestMonth: number;
+    /** Trailing-12-month average monthly real spending (distinct-months divisor). */
+    rolling12m: number;
+  };
 }
 
 const CASH_ACCOUNT_TYPES = new Set<string>([
@@ -311,6 +332,12 @@ export function captureRealState(inputs: RealStateInputs): RealState {
     // dropped; they're not part of the surplus-routing model.
   }
 
+  const categories = inputs.categories ?? [];
+  const expenseBasis = {
+    latestMonth: latestCompleteMonthBaseline(inputs.transactions, categories, inputs.startISO),
+    rolling12m: rolling12mBaseline(inputs.transactions, categories, inputs.startISO),
+  };
+
   return {
     accounts: inputs.accounts,
     holdings: inputs.holdings,
@@ -332,5 +359,6 @@ export function captureRealState(inputs: RealStateInputs): RealState {
     taxBrackets,
     housingPayments: inputs.housingPayments ?? [],
     vehicleLeases: inputs.vehicleLeases ?? [],
+    expenseBasis,
   };
 }

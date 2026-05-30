@@ -9,6 +9,7 @@ import type {
   PerAccountSplit,
 } from '@/lib/scenarios';
 import { formatCurrency } from '@/lib/format';
+import { sequencingBucketForAccount } from '@/lib/account-tax-classification';
 
 export interface GapAllocationEditorProps {
   /** The current monthly gap (income − expenses − loans). Always >= 0; the editor shows a zero state below 0. */
@@ -206,34 +207,51 @@ export function GapAllocationEditor(props: GapAllocationEditorProps) {
             )}
             {!isEmpty && cfg !== null && cfg.value > 0 && (
               <div className="ml-40 space-y-1 pt-1 border-l pl-3">
-                {accts.map((acct) => {
-                  const splits = cfg.accountSplits ??
-                    accts
-                      .map((a) => a.id)
-                      .filter((id): id is number => id != null)
-                      .map((id) => ({ accountId: id, pct: 1 / accts.length }));
-                  const sp = splits.find((s) => s.accountId === acct.id);
-                  const pct = sp ? Math.round(sp.pct * 1000) / 10 : 0;
-                  return (
-                    <div key={acct.id} className="flex items-center gap-2 text-xs">
-                      <span className="w-32 truncate">{acct.name}</span>
-                      <Input
-                        type="number"
-                        min={0}
-                        max={100}
-                        step={0.1}
-                        value={pct}
-                        onChange={(e) => setAccountSplit(bucket, acct.id!, e.target.value)}
-                        aria-label={`${acct.name} percent`}
-                        className="w-20"
-                      />
-                      <span className="text-muted-foreground">%</span>
-                      <span className="text-muted-foreground tabular-nums">
-                        → {formatCurrency(amount * (sp?.pct ?? 0))}
-                      </span>
+                {(bucket === 'taxAdvantaged'
+                  ? ([
+                      ['Roth', accts.filter((a) => sequencingBucketForAccount(a) === 'roth')],
+                      ['Traditional', accts.filter((a) => sequencingBucketForAccount(a) !== 'roth')],
+                    ] as const)
+                  : ([['', accts]] as const)
+                ).map(([groupLabel, group]) =>
+                  group.length === 0 ? null : (
+                    <div key={groupLabel || 'all'} className="space-y-1">
+                      {groupLabel && (
+                        <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                          {groupLabel}
+                        </div>
+                      )}
+                      {group.map((acct) => {
+                        const splits = cfg.accountSplits ??
+                          accts
+                            .map((a) => a.id)
+                            .filter((id): id is number => id != null)
+                            .map((id) => ({ accountId: id, pct: 1 / accts.length }));
+                        const sp = splits.find((s) => s.accountId === acct.id);
+                        const pct = sp ? Math.round(sp.pct * 1000) / 10 : 0;
+                        return (
+                          <div key={acct.id} className="flex items-center gap-2 text-xs">
+                            <span className="w-32 truncate">{acct.name}</span>
+                            <Input
+                              type="number"
+                              min={0}
+                              max={100}
+                              step={0.1}
+                              value={pct}
+                              onChange={(e) => setAccountSplit(bucket, acct.id!, e.target.value)}
+                              aria-label={`${acct.name} percent`}
+                              className="w-20"
+                            />
+                            <span className="text-muted-foreground">%</span>
+                            <span className="text-muted-foreground tabular-nums">
+                              → {formatCurrency(amount * (sp?.pct ?? 0))}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
+                  ),
+                )}
               </div>
             )}
           </div>

@@ -45,6 +45,7 @@ const BUCKET_COLORS: Record<ContributionBucket, string> = {
   Brokerage:    CHART_PALETTE[0],
   '401k':       CHART_PALETTE[1],
   '401k Match': CHART_PALETTE[2],
+  'Roth 401k':  CHART_PALETTE[7],
   'Roth IRA':   CHART_PALETTE[3],
   'Trad IRA':   CHART_PALETTE[4],
   HSA:          CHART_PALETTE[5],

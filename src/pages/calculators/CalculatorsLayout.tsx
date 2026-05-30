@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { PaycheckCard } from './PaycheckCard';
 import { BonusTaxCard } from './BonusTaxCard';
 import { CommissionTaxCard } from './CommissionTaxCard';
@@ -138,7 +139,10 @@ export default function CalculatorsLayout() {
     <div className="space-y-4 min-w-0">
       <h1 className="text-2xl font-semibold">Calculators</h1>
       <p className="text-sm text-muted-foreground">
-        All calculators run on your current Inputs data. Use "Override" on any card to try a what-if.
+        All calculators run on your current Inputs data. Edit any field on a card to explore a
+        scenario; use <span className="font-medium">Reset to my data</span> to restore it. For
+        side-by-side scenario comparisons, see the{' '}
+        <Link to="/what-if" className="text-primary hover:underline">What-If</Link> page.
       </p>
       {showBanner && !dismissed && (
         <div

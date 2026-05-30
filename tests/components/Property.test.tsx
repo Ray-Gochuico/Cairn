@@ -467,8 +467,132 @@ describe('Property page', () => {
     expect(await screen.findByText('Brooklyn apt')).toBeInTheDocument();
     expect(screen.getByText('Storage unit')).toBeInTheDocument();
     // 2400 + 150 = 2550
-    expect(screen.getByText(/Total monthly obligation/i)).toBeInTheDocument();
+    expect(screen.getByText(/Total recurring housing/i)).toBeInTheDocument();
     expect(screen.getByText(/\$2,550/)).toBeInTheDocument();
+  });
+
+  it('renders the owner person tag on a rental card', async () => {
+    usePersonsStore.setState({
+      persons: [
+        { id: 1, name: 'Alex' },
+        { id: 2, name: 'Sam' },
+      ] as never,
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    });
+    useHousingPaymentsStore.setState({
+      housingPayments: [
+        {
+          id: 1,
+          householdId: 1,
+          ownerPersonId: 1,
+          name: 'Downtown apartment',
+          monthlyAmount: 2400,
+          startDate: '2025-09-01',
+          endDate: null,
+        },
+        {
+          id: 2,
+          householdId: 1,
+          ownerPersonId: null,
+          name: 'Storage unit',
+          monthlyAmount: 95,
+          startDate: '2024-02-01',
+          endDate: '2026-06-30',
+        },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+
+    renderPage();
+
+    // Owner-scoped rental shows the person's name; joint rental shows "Joint".
+    expect(await screen.findByText('Downtown apartment')).toBeInTheDocument();
+    expect(screen.getByText('Alex')).toBeInTheDocument();
+    expect(screen.getByText('Joint')).toBeInTheDocument();
+  });
+
+  it('renders an Edit link to Inputs on a rental card', async () => {
+    useHousingPaymentsStore.setState({
+      housingPayments: [
+        {
+          id: 1,
+          householdId: 1,
+          ownerPersonId: null,
+          name: 'Downtown apartment',
+          monthlyAmount: 2400,
+          startDate: '2025-09-01',
+          endDate: null,
+        },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+
+    renderPage();
+
+    await screen.findByText('Downtown apartment');
+    const editLink = screen.getByRole('link', { name: /edit rental/i });
+    expect(editLink).toHaveAttribute('href', '/inputs/housing-payments');
+    // Remove still present.
+    expect(screen.getByRole('button', { name: /^Remove$/i })).toBeInTheDocument();
+  });
+
+  it('renders the rentals total as an aggregate card with a per-mo figure and meta', async () => {
+    useHousingPaymentsStore.setState({
+      housingPayments: [
+        {
+          id: 1,
+          householdId: 1,
+          ownerPersonId: null,
+          name: 'Downtown apartment',
+          monthlyAmount: 2400,
+          startDate: '2025-09-01',
+          endDate: null,
+        },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+
+    renderPage();
+
+    await screen.findByText('Downtown apartment');
+    // The aggregate's eyebrow label and meta line distinguish the card from
+    // the old inline header text.
+    expect(screen.getByText(/Total recurring housing/i)).toBeInTheDocument();
+    expect(screen.getByText(/feeds Spending/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/\$2,400/).length).toBeGreaterThan(0);
+  });
+
+  it('renders an on-page Add rental affordance linking to Inputs', async () => {
+    useHousingPaymentsStore.setState({
+      housingPayments: [
+        {
+          id: 1,
+          householdId: 1,
+          ownerPersonId: null,
+          name: 'Downtown apartment',
+          monthlyAmount: 2400,
+          startDate: '2025-09-01',
+          endDate: null,
+        },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+
+    renderPage();
+
+    await screen.findByText('Downtown apartment');
+    const addLink = screen.getByRole('link', { name: /add rental/i });
+    expect(addLink).toHaveAttribute('href', '/inputs/housing-payments');
   });
 
   it('exports the full properties table to CSV with the owner name resolved', async () => {

@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useHouseholdStore } from '@/stores/household-store';
+import { useMemo } from 'react';
 import { usePersonsStore } from '@/stores/persons-store';
-import { useDependentsStore } from '@/stores/dependents-store';
-import { useTaxRulesStore } from '@/stores/tax-rules-store';
+import { useHouseholdStore } from '@/stores/household-store';
 import { CalculatorCard } from './CalculatorCard';
-import { computePretaxDeductions, computeBonusTax } from '@/lib/tax';
+import { computeSupplementalWageTax } from '@/lib/calculators/supplemental-wage';
+import { useHouseholdTaxContext } from '@/lib/calculators/use-household-tax-context';
+import { useCalculatorState } from '@/lib/calculator-state';
+import { NumberField } from '@/components/calculators/NumberField';
+import { ResultRow } from '@/components/calculators/ResultRow';
 import { formatCurrency, formatPercent } from '@/lib/format';
-import { Input } from '@/components/ui/input';
-import { getCurrentTaxYear } from '@/lib/current-tax-year';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import type { BonusFrequency } from '@/types/schema';
 
@@ -19,130 +19,62 @@ interface BonusTaxCardProps {
 export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
   const { household } = useHouseholdStore();
   const { persons } = usePersonsStore();
-  const { dependents } = useDependentsStore();
-  const taxItems = useTaxRulesStore((s) => s.items);
+  const tax = useHouseholdTaxContext();
 
-  // Smart-resolve the tax year from the seeded set: if the current calendar year
-  // has rules use it, otherwise fall back to the most-recent seeded year.
-  const seededYears = useMemo(
-    () => [...new Set(taxItems.map((r) => r.year))],
-    [taxItems],
+  const seedPerson = persons.find((p) => (p.expectedBonus ?? 0) > 0) ?? persons[0] ?? null;
+
+  // Editable assumptions (prefill from the seed person; bonus default stays 0 —
+  // prefill-from-expectedBonus is a Wave-3 enhancement, out of scope here).
+  const defaults = useMemo(
+    () => ({
+      bonus: 0,
+      frequency: (seedPerson?.expectedBonusFrequency ?? 'ANNUAL') as BonusFrequency,
+      isConsistent: seedPerson?.bonusIsConsistent ?? true,
+    }),
+    [seedPerson],
   );
-  const { year: resolvedYear } = getCurrentTaxYear(seededYears);
+  const { values, setValue, reset, isOverridden } = useCalculatorState(cardId ?? 'bonus-tax', defaults);
 
-  // Seed frequency + consistency from the FIRST person who has a non-zero
-  // expectedBonus, falling back to the first person if none qualify. Households
-  // with mixed bonus structures across persons are out of scope for this card;
-  // the user can override either control inline without persisting.
-  const seedPerson =
-    persons.find((p) => (p.expectedBonus ?? 0) > 0) ?? persons[0] ?? null;
-
-  const defaultBonus = 0;
-  const [bonusOverride, setBonusOverride] = useState<number | null>(null);
-  const [frequencyOverride, setFrequencyOverride] = useState<BonusFrequency | null>(null);
-  const [consistencyOverride, setConsistencyOverride] = useState<boolean | null>(null);
-
-  const effectiveBonus = bonusOverride ?? defaultBonus;
-  const effectiveFrequency: BonusFrequency =
-    frequencyOverride ?? seedPerson?.expectedBonusFrequency ?? 'ANNUAL';
-  const isConsistent =
-    consistencyOverride ?? seedPerson?.bonusIsConsistent ?? true;
-  const bonusesPerYear = effectiveFrequency === 'QUARTERLY' ? 4 : 1;
-  // The bonus input represents one payment; multiply by frequency for the
-  // annual figure that drives marginal-rate math.
+  const effectiveBonus = values.bonus ?? 0;
+  const bonusesPerYear = values.frequency === 'QUARTERLY' ? 4 : 1;
   const annualBonus = effectiveBonus * bonusesPerYear;
 
-  // Bootstrap: on mount, discover what years are seeded and load the most
-  // recent. This avoids the trap where loadYear(currentCalendarYear) returns
-  // empty and clobbers any pre-loaded fallback rules — the resolver above
-  // will then map seededYears → resolvedYear correctly.
-  useEffect(() => {
-    useTaxRulesStore.getState().loadAvailableYears();
-  }, []);
-
-  const lookup = (jt: 'FEDERAL' | 'STATE' | 'CITY', code: string, fs: string) =>
-    taxItems.find(
-      (r) =>
-        r.year === resolvedYear &&
-        r.jurisdictionType === jt &&
-        r.jurisdictionCode === code &&
-        r.filingStatus === fs,
-    ) ?? null;
-
   const result = useMemo(() => {
-    if (!household || persons.length === 0 || taxItems.length === 0) return null;
-    const federal = lookup('FEDERAL', 'US', household.filingStatus);
-    const state = lookup('STATE', household.state, household.filingStatus);
-    const city = household.city ? lookup('CITY', household.city, household.filingStatus) : null;
-    if (!federal || !state) return null;
-
-    // Aggregate salary + pretax across all persons (same shape as before).
-    let totalSalary = 0;
-    let totalPretax = { pretax401k: 0, pretaxHealth: 0, pretaxDcfsa: 0, pretaxHsa: 0 };
-    for (const p of persons) {
-      totalSalary += p.annualSalaryPretax;
-      const pretax = computePretaxDeductions({
-        salary: p.annualSalaryPretax,
-        pretax401kPct: p.pretax401kPct,
-        healthInsuranceMonthlyPremium: p.healthInsuranceMonthlyPremium,
-        dcfsaMonthly: p.dependentCareFsaMonthly,
-        hsaMonthly: p.hsaMonthlyContribution,
-        hsaEligible: p.hsaEligible,
-        filingStatus: household.filingStatus,
-        personCount: persons.length,
-        dependentCount: dependents.length,
-      });
-      totalPretax.pretax401k += pretax.pretax401k;
-      totalPretax.pretaxHealth += pretax.pretaxHealth;
-      totalPretax.pretaxDcfsa += pretax.pretaxDcfsa;
-      totalPretax.pretaxHsa += pretax.pretaxHsa;
-    }
-
-    return computeBonusTax({
-      personGross: totalSalary + annualBonus,
-      bonus: annualBonus,
-      pretax: totalPretax,
+    if (!tax.ready || !household || !tax.federal || !tax.state) return null;
+    return computeSupplementalWageTax({
+      baseSalary: tax.totalSalary,
+      supplementalWages: annualBonus,
+      pretax: tax.aggregatedPretax,
       filingStatus: household.filingStatus,
-      federalBrackets: federal.brackets,
-      stateBrackets: state.brackets,
-      cityBrackets: city?.brackets ?? null,
-      // R3 wiring-sweep: per-jurisdiction SD (was scalar federal SD —
-      // MA-MFJ ~$1,610/yr state-tax under-collection).
+      federalBrackets: tax.federal.brackets,
+      stateBrackets: tax.state.brackets,
+      cityBrackets: tax.city?.brackets ?? null,
       standardDeduction: {
-        federal: federal.standardDeduction,
-        state: state.standardDeduction,
-        city: city?.standardDeduction ?? 0,
+        federal: tax.federal.standardDeduction,
+        state: tax.state.standardDeduction,
+        city: tax.city?.standardDeduction ?? 0,
       },
     });
-  }, [household, persons, dependents, taxItems, resolvedYear, annualBonus]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tax.ready, tax.federal, tax.state, tax.city, tax.totalSalary, tax.aggregatedPretax, household, annualBonus]);
 
   const controls = (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+      <NumberField
+        id="bonus-override"
+        label={`Bonus amount${values.frequency === 'QUARTERLY' ? ' (per quarter)' : ''}`}
+        value={values.bonus}
+        onChange={(v) => setValue('bonus', v ?? 0)}
+        suffix="$"
+        step="100"
+        min={0}
+      />
       <div className="space-y-1">
-        <label htmlFor="bonus-override" className="text-sm font-medium">
-          Bonus amount{effectiveFrequency === 'QUARTERLY' ? ' (per quarter)' : ''}
-        </label>
-        <Input
-          id="bonus-override"
-          type="number"
-          min="0"
-          step="100"
-          value={bonusOverride ?? defaultBonus}
-          onChange={(e) => {
-            const v = e.target.value === '' ? null : parseFloat(e.target.value);
-            setBonusOverride(Number.isFinite(v as number) ? v : null);
-          }}
-        />
-      </div>
-      <div className="space-y-1">
-        <label htmlFor="bonus-frequency" className="text-sm font-medium">
-          Bonus frequency
-        </label>
+        <label htmlFor="bonus-frequency" className="text-sm font-medium">Bonus frequency</label>
         <select
           id="bonus-frequency"
           className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          value={effectiveFrequency}
-          onChange={(e) => setFrequencyOverride(e.target.value as BonusFrequency)}
+          value={values.frequency}
+          onChange={(e) => setValue('frequency', e.target.value as BonusFrequency)}
         >
           <option value="ANNUAL">Annual</option>
           <option value="QUARTERLY">Quarterly</option>
@@ -150,14 +82,15 @@ export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
       </div>
       <div className="sm:col-span-2">
         <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={isConsistent}
-            onChange={(e) => setConsistencyOverride(e.target.checked)}
-          />
+          <input type="checkbox" checked={values.isConsistent} onChange={(e) => setValue('isConsistent', e.target.checked)} />
           Bonuses are consistent year over year
         </label>
       </div>
+      {isOverridden && (
+        <button type="button" onClick={reset} className="text-sm text-primary hover:underline sm:col-span-2 text-left">
+          Reset to my data
+        </button>
+      )}
     </div>
   );
 
@@ -203,53 +136,19 @@ export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
       {controls}
       <div className="text-sm text-muted-foreground mb-3">
         On a {formatCurrency(effectiveBonus)} bonus
-        {effectiveFrequency === 'QUARTERLY'
+        {values.frequency === 'QUARTERLY'
           ? ` (${formatCurrency(annualBonus)} annual)`
           : ''}, marginal-rate-diff math gives:
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-        <div>
-          <div className="text-muted-foreground">Estimated federal on bonus</div>
-          <div className="font-medium tabular-nums">
-            {formatCurrency(result.bonusBreakdown.federal / bonusesPerYear)}
-          </div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">
-            <TermTooltip term="FICA" /> on bonus
-          </div>
-          <div className="font-medium tabular-nums">
-            {formatCurrency(result.bonusBreakdown.fica / bonusesPerYear)}
-          </div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">Estimated state on bonus</div>
-          <div className="font-medium tabular-nums">
-            {formatCurrency(result.bonusBreakdown.state / bonusesPerYear)}
-          </div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">Estimated city on bonus</div>
-          <div className="font-medium tabular-nums">
-            {formatCurrency(result.bonusBreakdown.city / bonusesPerYear)}
-          </div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">Estimated total tax on bonus</div>
-          <div className="font-medium tabular-nums">
-            {formatCurrency(result.bonusBreakdown.total / bonusesPerYear)}
-          </div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">
-            <TermTooltip term="marginal rate" />
-          </div>
-          <div className="font-medium tabular-nums">
-            {formatPercent(result.marginalRateOnBonus)}
-          </div>
-        </div>
+        <ResultRow label="Estimated federal on bonus" value={formatCurrency(result.bonusBreakdown.federal / bonusesPerYear)} />
+        <ResultRow label={<><TermTooltip term="FICA" /> on bonus</>} value={formatCurrency(result.bonusBreakdown.fica / bonusesPerYear)} />
+        <ResultRow label="Estimated state on bonus" value={formatCurrency(result.bonusBreakdown.state / bonusesPerYear)} />
+        <ResultRow label="Estimated city on bonus" value={formatCurrency(result.bonusBreakdown.city / bonusesPerYear)} />
+        <ResultRow label="Estimated total tax on bonus" value={formatCurrency(result.bonusBreakdown.total / bonusesPerYear)} />
+        <ResultRow label={<TermTooltip term="marginal rate" />} value={formatPercent(result.marginalRateOnBonus)} />
       </div>
-      {isConsistent && (
+      {values.isConsistent && (
         <div className="mt-3 pt-3 border-t text-sm">
           <span className="text-muted-foreground">Estimated total take-home for the year:</span>{' '}
           <span className="font-medium tabular-nums">{formatCurrency(annualBonusTakeHome)}</span>
