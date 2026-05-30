@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
@@ -55,14 +55,35 @@ export function AppDisclaimerGate({ children }: Props) {
     void loadAcceptances();
   }, [loadAcceptances]);
 
+  // Latch the last RESOLVED status. The acceptances store is shared, and a
+  // child rendered BELOW this gate (TodaysTriviaCard, Learn, the Setup Wizard)
+  // calling load() on mount flips the shared status back to 'loading'. If we
+  // hid already-admitted children on that transient, the child would unmount,
+  // remount once the load resolves, re-trigger load(), and loop — saturating
+  // the main thread (and, under `tauri dev`, tripping Vite into reload cycles
+  // that orphan in-flight SQL IPC callbacks). So once we've resolved at least
+  // once, treat a transient 'loading' as the prior resolved status; the bare
+  // loading screen shows ONLY on the very first load. acceptedVersions is not
+  // cleared during a re-load, so the prior decision stays correct until the
+  // read genuinely re-resolves.
+  const lastResolved = useRef<'ready' | 'error' | null>(null);
+  if (acceptancesStatus === 'ready' || acceptancesStatus === 'error') {
+    lastResolved.current = acceptancesStatus;
+  }
+  const effectiveStatus =
+    acceptancesStatus === 'loading' && lastResolved.current !== null
+      ? lastResolved.current
+      : acceptancesStatus;
+
   // First-run users (no household yet) — let the Setup Wizard's Step 0
   // handle them. AppDisclaimerGate only re-prompts users who have a
   // recorded acceptance that's now stale.
   if (!household) return <>{children}</>;
 
-  // The projection is still loading — render a brief calm loading state,
-  // never the (possibly un-consented) children.
-  if (acceptancesStatus === 'loading') {
+  // The projection is still loading for the FIRST time — render a brief calm
+  // loading state, never the (possibly un-consented) children. (A re-load after
+  // the first resolution is latched above, so it does not re-enter this state.)
+  if (effectiveStatus === 'loading') {
     return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
   }
 
@@ -75,7 +96,7 @@ export function AppDisclaimerGate({ children }: Props) {
   // un-consented children on this errored boot. Handling error here closes
   // that structurally (the modal renders the generic re-accept copy since we
   // can't trust appWideAccepted on this path).
-  if (acceptancesStatus !== 'error' && appWideAccepted === null) {
+  if (effectiveStatus !== 'error' && appWideAccepted === null) {
     // Genuine first run (load succeeded, no app_wide row): let the Setup
     // Wizard own the initial acceptance.
     return <>{children}</>;
@@ -86,7 +107,7 @@ export function AppDisclaimerGate({ children }: Props) {
   // the error guard above means we only reach here on 'ready'/'error', and
   // an errored read must fall through to the modal regardless of the cached
   // gate.state.)
-  if (acceptancesStatus === 'ready' && gate.state === 'ready') return <>{children}</>;
+  if (effectiveStatus === 'ready' && gate.state === 'ready') return <>{children}</>;
 
   // Resolve the document to present. `gate.document` exists only on
   // `needs-acceptance`; on the fail-closed error path the gate may read

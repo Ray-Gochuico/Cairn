@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { useEffect } from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { AppDisclaimerGate } from '@/legal/AppDisclaimerGate';
@@ -85,6 +86,55 @@ describe('AppDisclaimerGate', () => {
   it('renders children when household has not loaded yet (first-runner pre-wizard)', () => {
     renderGate();
     expect(screen.getByTestId('app-child')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Disclaimer' })).toBeNull();
+  });
+
+  it('does not unmount/loop children when the shared acceptances status transiently flips to loading', async () => {
+    // Regression: a child rendered BELOW the gate (TodaysTriviaCard / Learn /
+    // SetupWizard) re-loads the shared acceptances store on mount, flipping its
+    // status to 'loading'. The gate USED to hide already-admitted children on
+    // that transient → unmount → remount → re-load → infinite loop (main-thread
+    // saturation; in `tauri dev`, reload cycles that orphan SQL IPC callbacks).
+    // The gate now LATCHES the resolved status: a transient 'loading' keeps the
+    // prior decision and admitted children stay mounted.
+    useHouseholdStore.setState({ household: makeHousehold(), isLoading: false, error: null } as any);
+    seedAcceptances({ app_wide: DISCLOSURES.app_wide.version }); // gate admits children
+
+    let mounts = 0;
+    function ReloadingChild() {
+      useEffect(() => {
+        mounts += 1;
+        // Simulate a child re-loading the shared store: flip to 'loading', then
+        // resolve back to 'ready' on a microtask (mirrors load()).
+        useAcceptancesStore.setState({ status: 'loading', isLoading: true });
+        void Promise.resolve().then(() =>
+          useAcceptancesStore.setState({
+            acceptedVersions: { app_wide: DISCLOSURES.app_wide.version },
+            status: 'ready',
+            isLoading: false,
+          }),
+        );
+      }, []);
+      return <div data-testid="reloading-child">child</div>;
+    }
+
+    render(
+      <MemoryRouter>
+        <AppDisclaimerGate>
+          <ReloadingChild />
+        </AppDisclaimerGate>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByTestId('reloading-child')).toBeInTheDocument();
+    // Let any loop churn.
+    await new Promise((r) => setTimeout(r, 100));
+
+    // Still mounted (no flicker to Loading/modal) and mounted a BOUNDED number
+    // of times — NOT an unbounded loop (pre-fix this climbed without bound).
+    expect(screen.getByTestId('reloading-child')).toBeInTheDocument();
+    expect(mounts).toBeLessThan(5);
+    expect(screen.queryByText('Loading…')).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Disclaimer' })).toBeNull();
   });
 

@@ -41,9 +41,10 @@ export default function Learn() {
   const loadLearning = useLearningStore((s) => s.load);
   const updateLearning = useLearningStore((s) => s.update);
   const recordAnswer = useLearningStore((s) => s.recordAnswer);
-  // MF-1: the gate reads the acceptances store; load it here too so a deep
-  // link straight to /learn has a hydrated gate (idempotent; cheap).
-  const loadAcceptances = useAcceptancesStore((s) => s.load);
+  // The acceptances store is boot-loaded by AppDisclaimerGate for the whole
+  // app; this page MUST NOT call load() itself. It renders below the gate, and
+  // re-loading the shared store flips it to 'loading', which makes the gate
+  // unmount/remount this page in a loop. We only READ the status below.
   // Backend #4: self-guard a cold deep-link against flashing content before the
   // acceptances projection resolves (defense-in-depth; the router-level
   // AppDisclaimerGate already gates, but /learn must not assume it ran first).
@@ -56,7 +57,6 @@ export default function Learn() {
 
   useEffect(() => {
     void loadHousehold();
-    void loadAcceptances();
     void loadLearning();
     // SEC-1: loadTriviaBank THROWS on a malformed/duplicate-id bank; catch it
     // so a corrupt bank surfaces as the calm "couldn't load" state below, never
@@ -66,7 +66,7 @@ export default function Learn() {
       (b) => setBank(b),
       () => setBankError(true),
     );
-  }, [loadHousehold, loadAcceptances, loadLearning]);
+  }, [loadHousehold, loadLearning]);
 
   const difficulty = learningState?.difficultyPreference ?? LearningDifficulty.BEGINNER;
 

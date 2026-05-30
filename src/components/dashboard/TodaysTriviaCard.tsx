@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useLearningStore } from '@/stores/learning-state-store';
-import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import { useDisclosureGate } from '@/legal/useDisclosureGate';
 import { loadTriviaBank } from '@/lib/trivia/load-bank';
 import { selectDailyQuestion, localTodayISO } from '@/lib/trivia/daily';
@@ -21,10 +20,11 @@ import type { TriviaQuestion } from '@/lib/trivia/bank-schema';
 export function TodaysTriviaCard() {
   const household = useHouseholdStore((s) => s.household);
   const loadHousehold = useHouseholdStore((s) => s.load);
+  // The gate reads the acceptances store, which AppDisclaimerGate boot-loads
+  // for the whole app. This widget MUST NOT call load() itself: it renders
+  // below the gate, and re-loading the shared store flips it to 'loading',
+  // which makes the gate unmount/remount this widget in a loop.
   const gate = useDisclosureGate('learning');
-  // MF-1: the gate reads the acceptances store; load it so a Dashboard-only
-  // render has a hydrated gate (idempotent; AppDisclaimerGate also boot-loads it).
-  const loadAcceptances = useAcceptancesStore((s) => s.load);
 
   const learningState = useLearningStore((s) => s.learningState);
   const answeredQuestionIds = useLearningStore((s) => s.answeredQuestionIds);
@@ -35,14 +35,13 @@ export function TodaysTriviaCard() {
 
   useEffect(() => {
     void loadHousehold();
-    void loadAcceptances();
     void loadLearning();
     // SEC-1: loadTriviaBank rejects on a malformed/duplicate-id bank. Swallow
     // it so the widget degrades to its calm aria-busy placeholder (bank stays
     // null → the !bank guard) instead of an unhandled rejection. The /learn
     // page owns the explicit "couldn't load" error state.
     void loadTriviaBank().then(setBank, () => {});
-  }, [loadHousehold, loadAcceptances, loadLearning]);
+  }, [loadHousehold, loadLearning]);
 
   const difficulty = learningState?.difficultyPreference ?? LearningDifficulty.BEGINNER;
   const question = useMemo(() => {
