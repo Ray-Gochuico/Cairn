@@ -375,8 +375,128 @@ describe('Vehicles page', () => {
     expect(await screen.findByText('Tesla Model 3')).toBeInTheDocument();
     expect(screen.getByText('BMW i4')).toBeInTheDocument();
     // 599 + 700 = 1299
-    expect(screen.getByText(/Total monthly obligation/i)).toBeInTheDocument();
+    expect(screen.getByText(/Total recurring vehicle/i)).toBeInTheDocument();
     expect(screen.getByText(/\$1,299/)).toBeInTheDocument();
+  });
+
+  it('renders the owner person tag on a lease card', async () => {
+    usePersonsStore.setState({
+      persons: [
+        { id: 1, name: 'Alex' },
+        { id: 2, name: 'Sam' },
+      ] as never,
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    });
+    useVehicleLeasesStore.setState({
+      vehicleLeases: [
+        {
+          id: 1,
+          householdId: 1,
+          ownerPersonId: 2,
+          name: 'Commuter EV',
+          monthlyAmount: 450,
+          startDate: '2025-03-01',
+          endDate: '2028-02-28',
+        },
+        {
+          id: 2,
+          householdId: 1,
+          ownerPersonId: null,
+          name: 'Work van',
+          monthlyAmount: 600,
+          startDate: '2025-01-01',
+          endDate: null,
+        },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+
+    renderPage();
+
+    expect(await screen.findByText('Commuter EV')).toBeInTheDocument();
+    expect(screen.getByText('Sam')).toBeInTheDocument();
+    expect(screen.getByText('Joint')).toBeInTheDocument();
+  });
+
+  it('renders an Edit link to Inputs on a lease card', async () => {
+    useVehicleLeasesStore.setState({
+      vehicleLeases: [
+        {
+          id: 1,
+          householdId: 1,
+          ownerPersonId: null,
+          name: 'Commuter EV',
+          monthlyAmount: 450,
+          startDate: '2025-03-01',
+          endDate: '2028-02-28',
+        },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+
+    renderPage();
+
+    await screen.findByText('Commuter EV');
+    const editLink = screen.getByRole('link', { name: /edit lease/i });
+    expect(editLink).toHaveAttribute('href', '/inputs/vehicle-leases');
+    expect(screen.getByRole('button', { name: /^Remove$/i })).toBeInTheDocument();
+  });
+
+  it('renders the leases total as an aggregate card with a per-mo figure and meta', async () => {
+    useVehicleLeasesStore.setState({
+      vehicleLeases: [
+        {
+          id: 1,
+          householdId: 1,
+          ownerPersonId: null,
+          name: 'Commuter EV',
+          monthlyAmount: 450,
+          startDate: '2025-03-01',
+          endDate: '2028-02-28',
+        },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+
+    renderPage();
+
+    await screen.findByText('Commuter EV');
+    expect(screen.getByText(/Total recurring vehicle/i)).toBeInTheDocument();
+    expect(screen.getByText(/feeds Spending/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/\$450/).length).toBeGreaterThan(0);
+  });
+
+  it('renders an on-page Add lease affordance linking to Inputs', async () => {
+    useVehicleLeasesStore.setState({
+      vehicleLeases: [
+        {
+          id: 1,
+          householdId: 1,
+          ownerPersonId: null,
+          name: 'Commuter EV',
+          monthlyAmount: 450,
+          startDate: '2025-03-01',
+          endDate: '2028-02-28',
+        },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+
+    renderPage();
+
+    await screen.findByText('Commuter EV');
+    const addLink = screen.getByRole('link', { name: /add lease/i });
+    expect(addLink).toHaveAttribute('href', '/inputs/vehicle-leases');
   });
 
   it('exports the full vehicles table to CSV with the owner name resolved', async () => {
