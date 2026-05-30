@@ -185,4 +185,34 @@ describe('AppDisclaimerGate', () => {
     expect(screen.queryByTestId('app-child')).not.toBeInTheDocument();
     vi.restoreAllMocks();
   });
+
+  it('fails CLOSED BY CONSTRUCTION: status error blocks even with a CURRENT cached accepted version', () => {
+    // The store's catch sets status 'error' WITHOUT clearing acceptedVersions,
+    // so a returning user whose prior successful load cached the CURRENT
+    // version would make gate.state === 'ready'. The gate must STILL re-prompt
+    // on error — proving fail-closed is structural, not an artifact of an empty
+    // acceptedVersions map. A no-op load keeps the seeded error state stable
+    // through render (this asserts the render decision for a fixed error state;
+    // the boot-load→error path is covered by the reject-mock test above).
+    useHouseholdStore.setState({
+      household: makeHousehold(),
+      isLoading: false,
+      error: null,
+      load: vi.fn().mockResolvedValue(undefined),
+    } as any);
+    useAcceptancesStore.setState({
+      acceptedVersions: { app_wide: DISCLOSURES.app_wide.version },
+      status: 'error',
+      isLoading: false,
+      error: 'x',
+      load: vi.fn().mockResolvedValue(undefined),
+    } as any);
+
+    renderGate();
+
+    // Despite acceptedVersions.app_wide === current (gate.state would be
+    // 'ready'), the error status forces the re-prompt modal and hides children.
+    expect(screen.getByRole('heading', { name: DISCLOSURES.app_wide.title })).toBeInTheDocument();
+    expect(screen.queryByTestId('app-child')).not.toBeInTheDocument();
+  });
 });

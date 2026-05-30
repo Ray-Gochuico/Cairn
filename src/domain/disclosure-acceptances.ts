@@ -82,8 +82,13 @@ export class DisclosureAcceptancesRepo {
    * Self-join (NOT a bare GROUP BY with a non-aggregated `version`, which is
    * non-deterministic in SQLite and could return a STALE version, masking a
    * needed re-prompt): pick the row whose accepted_at equals the per-document
-   * max. document_id is the leftmost column of the UNIQUE index (0017), so the
-   * inner aggregate is indexed. Returns { [documentId]: version }.
+   * max. The per-document aggregate full-scans the table (trivial at
+   * disclosure-row volumes — a handful of rows; the UNIQUE index is
+   * (household_id, document_id, version), so document_id is not separately
+   * indexed). On a same-accepted_at tie for one document_id (UI-unreachable —
+   * a single user accepts at most one version per timestamp), the JOIN yields
+   * both rows; `ORDER BY da.id` makes the `for…of` last-writer deterministic
+   * (the highest id, i.e. last-inserted, wins). Returns { [documentId]: version }.
    */
   async latestVersionsByDocument(): Promise<Record<string, string>> {
     const rows = await this.db.select<{ document_id: string; version: string }>(
@@ -95,7 +100,8 @@ export class DisclosureAcceptancesRepo {
            GROUP BY document_id
          ) latest
            ON latest.document_id = da.document_id
-          AND latest.max_at = da.accepted_at`,
+          AND latest.max_at = da.accepted_at
+        ORDER BY da.id`,
     );
     const out: Record<string, string> = {};
     for (const r of rows) out[r.document_id] = r.version;
