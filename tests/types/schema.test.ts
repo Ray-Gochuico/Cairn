@@ -1077,3 +1077,70 @@ describe('VehicleLeaseSchema', () => {
     expect(() => VehicleLeaseSchema.parse({ ...valid, id: 7 })).not.toThrow();
   });
 });
+
+import {
+  LearningStateSchema,
+  LearningAnswerSchema,
+} from '@/types/schema';
+import { LearningDifficulty } from '@/types/enums';
+
+describe('LearningStateSchema', () => {
+  it('applies defaults for an empty object', () => {
+    const parsed = LearningStateSchema.parse({});
+    expect(parsed.id).toBe(1);
+    expect(parsed.difficultyPreference).toBe(LearningDifficulty.BEGINNER);
+    expect(parsed.streakCount).toBe(0);
+    expect(parsed.lastShownQuestionId).toBeNull();
+    expect(parsed.lastShownIsoDate).toBeNull();
+    expect(parsed.lastAnsweredIsoDate).toBeNull();
+  });
+
+  it('accepts a fully populated state', () => {
+    expect(() =>
+      LearningStateSchema.parse({
+        id: 1,
+        difficultyPreference: 'Advanced',
+        lastShownQuestionId: 'adv-pro-rata',
+        lastShownIsoDate: '2026-05-28',
+        streakCount: 7,
+        lastAnsweredIsoDate: '2026-05-28',
+      }),
+    ).not.toThrow();
+  });
+
+  it('rejects an unknown difficulty', () => {
+    expect(() =>
+      LearningStateSchema.parse({ difficultyPreference: 'Expert' }),
+    ).toThrow();
+  });
+
+  it('rejects a negative streak', () => {
+    expect(() => LearningStateSchema.parse({ streakCount: -1 })).toThrow();
+  });
+});
+
+describe('LearningAnswerSchema', () => {
+  const valid = {
+    questionId: 'beg-apr',
+    answeredIsoDate: '2026-05-28',
+    chosenIndex: 0,
+    wasCorrect: true,
+    questionVersion: 1,
+  };
+
+  it('accepts a valid answer', () => {
+    expect(() => LearningAnswerSchema.omit({ id: true }).parse(valid)).not.toThrow();
+  });
+
+  it('rejects chosenIndex out of 0..3', () => {
+    expect(() =>
+      LearningAnswerSchema.omit({ id: true }).parse({ ...valid, chosenIndex: 4 }),
+    ).toThrow();
+  });
+
+  it('rejects a malformed date', () => {
+    expect(() =>
+      LearningAnswerSchema.omit({ id: true }).parse({ ...valid, answeredIsoDate: '2026/05/28' }),
+    ).toThrow();
+  });
+});

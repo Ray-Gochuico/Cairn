@@ -171,3 +171,10 @@ export const AssetSnapshotOwnerType = {
 } as const;
 export type AssetSnapshotOwnerType =
   typeof AssetSnapshotOwnerType[keyof typeof AssetSnapshotOwnerType];
+
+export const LearningDifficulty = {
+  BEGINNER: 'Beginner',
+  ADVANCED: 'Advanced',
+  MIXED: 'Mixed',
+} as const;
+export type LearningDifficulty = (typeof LearningDifficulty)[keyof typeof LearningDifficulty];
