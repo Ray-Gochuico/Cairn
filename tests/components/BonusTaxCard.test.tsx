@@ -107,6 +107,7 @@ function primeStores() {
 
 describe('BonusTaxCard', () => {
   beforeEach(() => {
+    sessionStorage.clear();
     resetStores();
   });
 
@@ -382,5 +383,39 @@ describe('BonusTaxCard', () => {
     fireEvent.click(consistencyCheckbox);
 
     expect(screen.queryByText(/total take-home/i)).not.toBeInTheDocument();
+  });
+
+  it('headline equals computeSupplementalWageTax wiring exactly (parity)', async () => {
+    const { computeSupplementalWageTax } = await import('@/lib/calculators/supplemental-wage');
+    const { formatCurrency } = await import('@/lib/format');
+    primeStores();
+    render(<MemoryRouter><BonusTaxCard /></MemoryRouter>);
+    const input = screen.getByLabelText(/Bonus amount/i);
+    fireEvent.change(input, { target: { value: '10000' } });
+    const headline = await screen.findByTestId('bonus-takehome');
+
+    const expected = computeSupplementalWageTax({
+      baseSalary: 100000,
+      supplementalWages: 10000,
+      pretax: { pretax401k: 0, pretaxHealth: 0, pretaxDcfsa: 0, pretaxHsa: 0 },
+      filingStatus: FilingStatus.SINGLE,
+      federalBrackets: federalSingleBrackets,
+      stateBrackets: caSingleBrackets,
+      cityBrackets: null,
+      standardDeduction: { federal: 15000, state: 0, city: 0 },
+    });
+    // ANNUAL frequency → bonusesPerYear = 1, so per-bonus take-home == annual.
+    expect(headline.textContent).toBe(formatCurrency(expected.bonusTakeHome));
+  });
+
+  it('Reset to my data clears an override', async () => {
+    primeStores();
+    render(<MemoryRouter><BonusTaxCard /></MemoryRouter>);
+    const input = screen.getByLabelText(/Bonus amount/i);
+    fireEvent.change(input, { target: { value: '10000' } });
+    await screen.findByTestId('bonus-takehome');
+    fireEvent.click(screen.getByRole('button', { name: /reset to my data/i }));
+    // Back to the $0 default → placeholder returns.
+    expect(screen.getByText(/Enter a bonus amount/i)).toBeInTheDocument();
   });
 });
