@@ -324,6 +324,18 @@ describe('LeverPayloadSchema — gapAllocation default', () => {
   });
 });
 
+describe('emptyLeverPayload — Feature B new-scenario default', () => {
+  it('carries explicit expenseSource + customMonthly (new-scenario default)', () => {
+    const p = emptyLeverPayload();
+    expect(p.expenseSource).toBe('custom');
+    expect(p.customMonthly).toBe(0);
+  });
+
+  it('parses cleanly through the schema (no missing required fields)', () => {
+    expect(() => LeverPayloadSchema.parse(emptyLeverPayload())).not.toThrow();
+  });
+});
+
 describe('Feature B — expenseSource / customMonthly schema', () => {
   // A minimal "old" payload as it sits on disk for a pre-Feature-B scenario:
   // it has NO expenseSource / customMonthly keys at all.
