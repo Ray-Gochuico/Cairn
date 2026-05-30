@@ -1,14 +1,14 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useHouseholdStore } from '@/stores/household-store';
+import { useMemo } from 'react';
 import { usePersonsStore } from '@/stores/persons-store';
-import { useDependentsStore } from '@/stores/dependents-store';
-import { useTaxRulesStore } from '@/stores/tax-rules-store';
+import { useHouseholdStore } from '@/stores/household-store';
 import { CalculatorCard } from './CalculatorCard';
-import { computePretaxDeductions, computeBonusTax } from '@/lib/tax';
+import { computeSupplementalWageTax } from '@/lib/calculators/supplemental-wage';
+import { useHouseholdTaxContext } from '@/lib/calculators/use-household-tax-context';
+import { useCalculatorState } from '@/lib/calculator-state';
+import { NumberField } from '@/components/calculators/NumberField';
+import { ResultRow } from '@/components/calculators/ResultRow';
 import { formatCurrency } from '@/lib/format';
-import { Input } from '@/components/ui/input';
 import { CONTRIBUTION_LIMITS_2026 } from '@/lib/contribution-limits';
-import { getCurrentTaxYear } from '@/lib/current-tax-year';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 
 type CommissionFrequency = 'MONTHLY' | 'QUARTERLY';
@@ -25,96 +25,43 @@ interface CommissionTaxCardProps {
 export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {}) {
   const { household } = useHouseholdStore();
   const { persons } = usePersonsStore();
-  const { dependents } = useDependentsStore();
-  const taxItems = useTaxRulesStore((s) => s.items);
+  const tax = useHouseholdTaxContext();
 
-  // Smart-resolve the tax year from the seeded set: if the current calendar year
-  // has rules use it, otherwise fall back to the most-recent seeded year.
-  const seededYears = useMemo(
-    () => [...new Set(taxItems.map((r) => r.year))],
-    [taxItems],
+  const seed = persons[0] ?? null;
+  const defaults = useMemo(
+    () => ({
+      annualCommission: seed?.expectedCommission ?? 0,
+      frequency: (seed?.expectedCommissionFrequency ?? 'MONTHLY') as CommissionFrequency,
+    }),
+    [seed],
   );
-  const { year: resolvedYear } = getCurrentTaxYear(seededYears);
+  const { values, setValue, reset, isOverridden } = useCalculatorState(cardId ?? 'commission-tax', defaults);
 
-  const [frequency, setFrequency] = useState<CommissionFrequency>(
-    () => (persons[0]?.expectedCommissionFrequency as CommissionFrequency) ?? 'MONTHLY'
-  );
-  const [commissionPerCheck, setCommissionPerCheck] = useState<number>(() => {
-    const initialPerson = persons[0];
-    const initialFrequency = (initialPerson?.expectedCommissionFrequency ?? 'MONTHLY') as CommissionFrequency;
-    const periodsForInitial = initialFrequency === 'MONTHLY' ? 12 : 4;
-    const initialAnnual = initialPerson?.expectedCommission ?? 0;
-    return initialAnnual / periodsForInitial;
-  });
-
-  // Bootstrap: on mount, discover what years are seeded and load the most
-  // recent. This avoids the trap where loadYear(currentCalendarYear) returns
-  // empty and clobbers any pre-loaded fallback rules — the resolver above
-  // will then map seededYears → resolvedYear correctly.
-  useEffect(() => {
-    useTaxRulesStore.getState().loadAvailableYears();
-  }, []);
-
-  const lookup = (jt: 'FEDERAL' | 'STATE' | 'CITY', code: string, fs: string) =>
-    taxItems.find(
-      (r) =>
-        r.year === resolvedYear &&
-        r.jurisdictionType === jt &&
-        r.jurisdictionCode === code &&
-        r.filingStatus === fs,
-    ) ?? null;
-
-  const periods = periodsPerYear(frequency);
-  const annualCommission = commissionPerCheck * periods;
+  const periods = periodsPerYear(values.frequency);
+  const annualCommission = values.annualCommission ?? 0;
+  const commissionPerCheck = periods > 0 ? annualCommission / periods : 0;
 
   const { result, commission401kPerCheck } = useMemo(() => {
-    if (!household || persons.length === 0 || taxItems.length === 0) {
+    if (!tax.ready || !household || !tax.federal || !tax.state) {
       return { result: null, commission401kPerCheck: 0 };
     }
-    const federal = lookup('FEDERAL', 'US', household.filingStatus);
-    const state = lookup('STATE', household.state, household.filingStatus);
-    const city = household.city ? lookup('CITY', household.city, household.filingStatus) : null;
-    if (!federal || !state) return { result: null, commission401kPerCheck: 0 };
-
-    // Aggregate salary + pretax across all persons (salary only — same as BonusTaxCard).
-    let totalSalary = 0;
-    const pretaxAggregate = { pretax401k: 0, pretaxHealth: 0, pretaxDcfsa: 0, pretaxHsa: 0 };
-    for (const p of persons) {
-      totalSalary += p.annualSalaryPretax;
-      const pretax = computePretaxDeductions({
-        salary: p.annualSalaryPretax,
-        pretax401kPct: p.pretax401kPct,
-        healthInsuranceMonthlyPremium: p.healthInsuranceMonthlyPremium,
-        dcfsaMonthly: p.dependentCareFsaMonthly,
-        hsaMonthly: p.hsaMonthlyContribution,
-        hsaEligible: p.hsaEligible,
-        filingStatus: household.filingStatus,
-        personCount: persons.length,
-        dependentCount: dependents.length,
-      });
-      pretaxAggregate.pretax401k += pretax.pretax401k;
-      pretaxAggregate.pretaxHealth += pretax.pretaxHealth;
-      pretaxAggregate.pretaxDcfsa += pretax.pretaxDcfsa;
-      pretaxAggregate.pretaxHsa += pretax.pretaxHsa;
-    }
-
-    const taxResult = computeBonusTax({
-      personGross: totalSalary + annualCommission,
-      bonus: annualCommission,
-      pretax: pretaxAggregate,
+    const taxResult = computeSupplementalWageTax({
+      baseSalary: tax.totalSalary,
+      supplementalWages: annualCommission,
+      pretax: tax.aggregatedPretax,
       filingStatus: household.filingStatus,
-      federalBrackets: federal.brackets,
-      stateBrackets: state.brackets,
-      cityBrackets: city?.brackets ?? null,
-      // R3 wiring-sweep: per-jurisdiction SD (was scalar federal SD).
+      federalBrackets: tax.federal.brackets,
+      stateBrackets: tax.state.brackets,
+      cityBrackets: tax.city?.brackets ?? null,
       standardDeduction: {
-        federal: federal.standardDeduction,
-        state: state.standardDeduction,
-        city: city?.standardDeduction ?? 0,
+        federal: tax.federal.standardDeduction,
+        state: tax.state.standardDeduction,
+        city: tax.city?.standardDeduction ?? 0,
       },
     });
 
-    // 401(k) from commission: weighted-average pct across persons by salary share.
+    // 401(k) from commission: weighted-average pct across persons by salary share
+    // (unchanged from the prior implementation).
     const totalSalaryAll = persons.reduce((a, p) => a + p.annualSalaryPretax, 0);
     const totalCommissionPct = persons.reduce(
       (a, p) =>
@@ -124,36 +71,25 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
           : 0),
       0,
     );
-
     const remainingAnnualCap = Math.max(
       0,
-      CONTRIBUTION_LIMITS_2026.EMPLOYEE_401K - pretaxAggregate.pretax401k,
+      CONTRIBUTION_LIMITS_2026.EMPLOYEE_401K - tax.aggregatedPretax.pretax401k,
     );
-    const uncappedAnnualCommission401k = annualCommission * totalCommissionPct;
-    const annualCommission401k = Math.min(uncappedAnnualCommission401k, remainingAnnualCap);
-    const commissionCheckContrib = annualCommission401k / periods;
-
-    return { result: taxResult, commission401kPerCheck: commissionCheckContrib };
-  }, [household, persons, dependents, taxItems, resolvedYear, annualCommission, periods]); // eslint-disable-line react-hooks/exhaustive-deps
+    const annualCommission401k = Math.min(annualCommission * totalCommissionPct, remainingAnnualCap);
+    return { result: taxResult, commission401kPerCheck: annualCommission401k / periods };
+  }, [tax.ready, tax.federal, tax.state, tax.city, tax.totalSalary, tax.aggregatedPretax, household, persons, annualCommission, periods]);
 
   const commissionInputs = (
     <div className="space-y-3 mb-4">
-      <div className="space-y-1">
-        <label htmlFor="commission-per-check" className="text-sm font-medium">
-          Commission per check
-        </label>
-        <Input
-          id="commission-per-check"
-          type="number"
-          min="0"
-          step="100"
-          value={commissionPerCheck === 0 ? '' : commissionPerCheck}
-          onChange={(e) => {
-            const v = parseFloat(e.target.value);
-            setCommissionPerCheck(Number.isFinite(v) && v >= 0 ? v : 0);
-          }}
-        />
-      </div>
+      <NumberField
+        id="annual-commission"
+        label="Annual commission"
+        value={values.annualCommission}
+        onChange={(v) => setValue('annualCommission', v ?? 0)}
+        suffix="$/yr"
+        step="1000"
+        min={0}
+      />
       <div className="space-y-1">
         <label htmlFor="commission-frequency" className="text-sm font-medium">
           Frequency
@@ -161,13 +97,21 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
         <select
           id="commission-frequency"
           className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          value={frequency}
-          onChange={(e) => setFrequency(e.target.value as CommissionFrequency)}
+          value={values.frequency}
+          onChange={(e) => setValue('frequency', e.target.value as CommissionFrequency)}
         >
           <option value="MONTHLY">Monthly (12/yr)</option>
           <option value="QUARTERLY">Quarterly (4/yr)</option>
         </select>
+        <p className="text-xs text-muted-foreground tabular-nums">
+          Per check: {formatCurrency(commissionPerCheck)}
+        </p>
       </div>
+      {isOverridden && (
+        <button type="button" onClick={reset} className="text-sm text-primary hover:underline text-left">
+          Reset to my data
+        </button>
+      )}
     </div>
   );
 
@@ -182,7 +126,7 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
     );
   }
 
-  if (commissionPerCheck === 0) {
+  if (annualCommission <= 0) {
     return (
       <CalculatorCard title="Estimated commission take-home" headline="—" cardId={cardId} onHide={onHide}>
         {commissionInputs}
@@ -211,72 +155,34 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
     >
       {commissionInputs}
       {/* Per-check breakdown */}
-      <div className="text-sm font-medium mb-2">Per check ({frequency === 'MONTHLY' ? 'monthly' : 'quarterly'})</div>
+      <div className="text-sm font-medium mb-2">Per check ({values.frequency === 'MONTHLY' ? 'monthly' : 'quarterly'})</div>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-sm mb-4">
-        <div>
-          <div className="text-muted-foreground">Commission gross</div>
-          <div className="font-medium tabular-nums">{formatCurrency(commissionPerCheck)}</div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">401(k) from this check</div>
-          <div className="font-medium tabular-nums">{formatCurrency(commission401kPerCheck)}</div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">Estimated federal tax</div>
-          <div className="font-medium tabular-nums">
-            {formatCurrency(result.bonusBreakdown.federal / periods)}
-          </div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">
-            <TermTooltip term="FICA" />
-          </div>
-          <div className="font-medium tabular-nums">
-            {formatCurrency(result.bonusBreakdown.fica / periods)}
-          </div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">Estimated state tax</div>
-          <div className="font-medium tabular-nums">
-            {formatCurrency(result.bonusBreakdown.state / periods)}
-          </div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">Estimated city tax</div>
-          <div className="font-medium tabular-nums">
-            {formatCurrency(result.bonusBreakdown.city / periods)}
-          </div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">Estimated net to bank</div>
-          <div className="font-semibold tabular-nums">{formatCurrency(netPerCheck)}</div>
-        </div>
+        <ResultRow label="Commission gross" value={formatCurrency(commissionPerCheck)} />
+        <ResultRow label="401(k) from this check" value={formatCurrency(commission401kPerCheck)} />
+        <ResultRow label="Estimated federal tax" value={formatCurrency(result.bonusBreakdown.federal / periods)} />
+        <ResultRow label={<TermTooltip term="FICA" />} value={formatCurrency(result.bonusBreakdown.fica / periods)} />
+        <ResultRow label="Estimated state tax" value={formatCurrency(result.bonusBreakdown.state / periods)} />
+        <ResultRow label="Estimated city tax" value={formatCurrency(result.bonusBreakdown.city / periods)} />
+        <ResultRow label="Estimated net to bank" value={formatCurrency(netPerCheck)} emphasis />
       </div>
 
       {/* Annual totals */}
       <div className="text-sm font-medium mb-2">Annual totals</div>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-sm mb-4">
-        <div>
-          <div className="text-muted-foreground">Annual commission</div>
-          <div className="font-medium tabular-nums">{formatCurrency(annualCommission)}</div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">Annual 401(k) from commission</div>
-          <div className="font-medium tabular-nums">
-            {formatCurrency(annualCommission401k)}
-            <span className="text-xs text-muted-foreground ml-1">
-              of {formatCurrency(CONTRIBUTION_LIMITS_2026.EMPLOYEE_401K)} cap
-            </span>
-          </div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">Estimated annual tax on commission</div>
-          <div className="font-medium tabular-nums">{formatCurrency(annualTaxOnCommission)}</div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">Estimated annual net</div>
-          <div className="font-semibold tabular-nums">{formatCurrency(annualNet)}</div>
-        </div>
+        <ResultRow label="Annual commission" value={formatCurrency(annualCommission)} />
+        <ResultRow
+          label="Annual 401(k) from commission"
+          value={
+            <>
+              {formatCurrency(annualCommission401k)}
+              <span className="text-xs text-muted-foreground ml-1">
+                of {formatCurrency(CONTRIBUTION_LIMITS_2026.EMPLOYEE_401K)} cap
+              </span>
+            </>
+          }
+        />
+        <ResultRow label="Estimated annual tax on commission" value={formatCurrency(annualTaxOnCommission)} />
+        <ResultRow label="Estimated annual net" value={formatCurrency(annualNet)} emphasis />
       </div>
 
       <p className="text-xs text-muted-foreground">

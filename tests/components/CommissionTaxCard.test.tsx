@@ -40,7 +40,8 @@ function resetStores() {
 }
 
 /**
- * Prime stores: CA SINGLE household, person with $100k salary and 5% 401k.
+ * Prime stores: CA SINGLE household, person with $100k salary, 5% 401k,
+ * and $48k annual commission (MONTHLY).
  */
 function primeStores() {
   useHouseholdStore.setState({
@@ -66,7 +67,7 @@ function primeStores() {
         dateOfBirth: '1990-01-01',
         targetRetirementAge: 65,
         annualSalaryPretax: 100000,
-        expectedCommission: 0,
+        expectedCommission: 48000,
         expectedCommissionFrequency: 'MONTHLY',
         pretax401kPct: 0.05,
         healthInsuranceMonthlyPremium: 0,
@@ -110,17 +111,18 @@ function primeStores() {
 
 describe('CommissionTaxCard', () => {
   beforeEach(() => {
+    sessionStorage.clear();
     resetStores();
   });
 
-  it('renders monthly commission take-home for $5k/month in CA SINGLE', async () => {
+  it('renders monthly commission take-home for $48k/yr ($4k/month) in CA SINGLE', async () => {
     // Setup: CA SINGLE household; person $100k salary, 5% 401k.
     // Default frequency: MONTHLY (12/yr)
-    // Commission $5k/month => annual commission $60k
+    // Annual commission $48k => per-check $4,000
     // Salary 401k = 5% of $100k = $5,000 (under $24,500 cap)
-    // 401k from commission per check = $250 (5% of $5k, remaining cap = $19,500 > $3,000)
-    // Tax on $60k commission (marginal at CA SINGLE ~$100k base): ~35-42% blended = ~$22k-$25k
-    // Per check (12/yr): commission $5k - 401k $250 - tax ~$1,900 = ~$2,850 net
+    // 401k from commission per check = $200 (5% of $4k, remaining cap = $19,500 > $2,400)
+    // Tax on $48k commission (marginal at CA SINGLE ~$100k base): blended ~35-42%
+    // Per check (12/yr): commission $4k - 401k $200 - tax ~$1,200 = ~$2,600 net
     primeStores();
 
     render(
@@ -129,22 +131,22 @@ describe('CommissionTaxCard', () => {
       </MemoryRouter>,
     );
 
-    const input = screen.getByLabelText(/Commission per check/i);
-    fireEvent.change(input, { target: { value: '5000' } });
+    const input = screen.getByLabelText(/Annual commission/i);
+    fireEvent.change(input, { target: { value: '48000' } });
 
     const headline = await screen.findByTestId('commission-takehome');
     const value = parseFloat(headline.textContent!.replace(/[$,]/g, ''));
-    expect(value).toBeGreaterThan(2400);
+    expect(value).toBeGreaterThan(2000);
     expect(value).toBeLessThan(3500);
   });
 
   it('switching to QUARTERLY changes per-check amount', async () => {
     // Setup: same CA SINGLE, $100k salary, 5% 401k.
-    // QUARTERLY (4/yr), $15,000 per quarter = $60k/yr (same annual as above)
-    // Salary 401k = $5,000; remaining cap = $19,500; commission 401k = 5% of $60k = $3,000
-    // 401k per check = $750 (3,000/4)
-    // Tax per check (annual ~$22k-25k) / 4 = ~$5,500-$6,250
-    // Net per check = $15,000 - $750 - ~$5,700 = ~$8,550
+    // QUARTERLY (4/yr), $48k/yr annual = $12,000 per quarter
+    // Salary 401k = $5,000; remaining cap = $19,500; commission 401k = 5% of $48k = $2,400
+    // 401k per check = $600 (2,400/4)
+    // Tax per check (annual ~$15k-19k) / 4 = ~$3,750-$4,750
+    // Net per check = $12,000 - $600 - ~$4,200 = ~$7,200
     primeStores();
 
     render(
@@ -153,8 +155,8 @@ describe('CommissionTaxCard', () => {
       </MemoryRouter>,
     );
 
-    const input = screen.getByLabelText(/Commission per check/i);
-    fireEvent.change(input, { target: { value: '15000' } });
+    const input = screen.getByLabelText(/Annual commission/i);
+    fireEvent.change(input, { target: { value: '48000' } });
 
     // Switch to QUARTERLY
     const select = screen.getByLabelText(/Frequency/i);
@@ -162,8 +164,8 @@ describe('CommissionTaxCard', () => {
 
     const headline = await screen.findByTestId('commission-takehome');
     const value = parseFloat(headline.textContent!.replace(/[$,]/g, ''));
-    // $15k quarterly = same annual as $5k monthly but 4 checks/yr so roughly 3x per check
-    expect(value).toBeGreaterThan(7200);
+    // $48k/yr QUARTERLY => per-check net
+    expect(value).toBeGreaterThan(6500);
     expect(value).toBeLessThan(10500);
   });
 
@@ -193,7 +195,7 @@ describe('CommissionTaxCard', () => {
           dateOfBirth: '1990-01-01',
           targetRetirementAge: 65,
           annualSalaryPretax: 100000,
-          expectedCommission: 0,
+          expectedCommission: 48000,
           expectedCommissionFrequency: 'MONTHLY',
           pretax401kPct: 0.05,
           healthInsuranceMonthlyPremium: 0,
@@ -232,18 +234,21 @@ describe('CommissionTaxCard', () => {
     });
 
     render(<MemoryRouter><CommissionTaxCard /></MemoryRouter>);
-    const input = screen.getByLabelText(/Commission per check/i);
-    fireEvent.change(input, { target: { value: '5000' } });
+    const input = screen.getByLabelText(/Annual commission/i);
+    fireEvent.change(input, { target: { value: '48000' } });
 
     // Card renders with the stale 2025 rules — no crash, no empty state.
     const headline = await screen.findByTestId('commission-takehome');
     const value = parseFloat(headline.textContent!.replace(/[$,]/g, ''));
-    expect(value).toBeGreaterThan(2400);
+    expect(value).toBeGreaterThan(2000);
     expect(value).toBeLessThan(3500);
   });
 
   it('shows placeholder when commission is 0', async () => {
     primeStores();
+    usePersonsStore.setState((s) => ({
+      persons: s.persons.map((p) => ({ ...p, expectedCommission: 0 })),
+    }));
 
     render(
       <MemoryRouter>
@@ -251,7 +256,23 @@ describe('CommissionTaxCard', () => {
       </MemoryRouter>,
     );
 
-    // Default commissionPerCheck = 0 → should show placeholder text
+    // Default annualCommission = 0 → should show placeholder text
     expect(screen.getByText(/Enter a commission amount/i)).toBeInTheDocument();
+  });
+
+  it('annual commission is the editable assumption; toggling frequency keeps it stable (rescale bug fixed)', async () => {
+    primeStores(); // seeds a person with expectedCommission = 48000, MONTHLY
+    render(<MemoryRouter><CommissionTaxCard /></MemoryRouter>);
+
+    const annual = await screen.findByLabelText(/Annual commission/i) as HTMLInputElement;
+    expect(Number(annual.value)).toBe(48000);
+
+    // Per-check derived for MONTHLY = 48000 / 12 = 4000.
+    expect(screen.getAllByText(/\$4,000/).length).toBeGreaterThan(0);
+
+    // Toggle to QUARTERLY: annual stays 48000, per-check re-derives to 12000.
+    fireEvent.change(screen.getByLabelText(/Frequency/i), { target: { value: 'QUARTERLY' } });
+    expect(Number((screen.getByLabelText(/Annual commission/i) as HTMLInputElement).value)).toBe(48000);
+    expect(screen.getAllByText(/\$12,000/).length).toBeGreaterThan(0);
   });
 });
