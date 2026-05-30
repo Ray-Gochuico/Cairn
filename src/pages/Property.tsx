@@ -297,9 +297,16 @@ function RentalCard({ rental, ownerLabel, onRemove }: RentalCardProps) {
             <CardTitle className="text-base truncate">{rental.name}</CardTitle>
             <CardDescription className="text-xs">Rent</CardDescription>
           </div>
-          <Button size="sm" variant="destructive" onClick={onRemove}>
-            Remove
-          </Button>
+          <div className="flex shrink-0 gap-2">
+            <Button asChild size="sm" variant="outline">
+              <Link to="/inputs/housing-payments" aria-label="Edit rental">
+                Edit
+              </Link>
+            </Button>
+            <Button size="sm" variant="destructive" onClick={onRemove}>
+              Remove
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">

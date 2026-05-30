@@ -515,6 +515,33 @@ describe('Property page', () => {
     expect(screen.getByText('Joint')).toBeInTheDocument();
   });
 
+  it('renders an Edit link to Inputs on a rental card', async () => {
+    useHousingPaymentsStore.setState({
+      housingPayments: [
+        {
+          id: 1,
+          householdId: 1,
+          ownerPersonId: null,
+          name: 'Downtown apartment',
+          monthlyAmount: 2400,
+          startDate: '2025-09-01',
+          endDate: null,
+        },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+
+    renderPage();
+
+    await screen.findByText('Downtown apartment');
+    const editLink = screen.getByRole('link', { name: /edit rental/i });
+    expect(editLink).toHaveAttribute('href', '/inputs/housing-payments');
+    // Remove still present.
+    expect(screen.getByRole('button', { name: /^Remove$/i })).toBeInTheDocument();
+  });
+
   it('exports the full properties table to CSV with the owner name resolved', async () => {
     usePersonsStore.setState({
       persons: [
