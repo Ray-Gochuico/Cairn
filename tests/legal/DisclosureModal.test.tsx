@@ -5,6 +5,7 @@ import { DisclosureModal } from '@/legal/DisclosureModal';
 const appWideDoc = {
   id: 'app_wide' as const,
   version: '1.0',
+  title: 'Disclaimer',
   body: 'This is the disclosure **body** text.\n\nSecond paragraph.',
   acceptanceCheckboxLabel: 'I have read and understand.',
 };
@@ -12,6 +13,7 @@ const appWideDoc = {
 const roadmapDoc = {
   id: 'roadmap' as const,
   version: '1.0',
+  title: 'About the Roadmap',
   body: 'Roadmap disclosure body.',
   acceptanceCheckboxLabel: 'I understand the Roadmap is algorithmic.',
 };

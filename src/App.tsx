@@ -23,6 +23,7 @@ const SpendingTransactions = lazy(() => import('./pages/SpendingTransactions'));
 const Budget = lazy(() => import('./pages/Budget'));
 const Goals = lazy(() => import('./pages/Goals'));
 const Roadmap = lazy(() => import('./pages/Roadmap'));
+const Learn = lazy(() => import('./pages/Learn'));
 const CalculatorsLayout = lazy(() => import('./pages/calculators/CalculatorsLayout'));
 const WhatIf = lazy(() => import('./pages/WhatIf'));
 const Settings = lazy(() => import('./pages/Settings'));
@@ -92,6 +93,7 @@ const router = createBrowserRouter([
       { path: 'budget', element: lazyRoute(Budget) },
       { path: 'goals', element: lazyRoute(Goals) },
       { path: 'roadmap', element: lazyRoute(Roadmap) },
+      { path: 'learn', element: lazyRoute(Learn) },
       { path: 'calculators', element: lazyRoute(CalculatorsLayout) },
       { path: 'what-if', element: lazyRoute(WhatIf) },
       { path: 'settings', element: lazyRoute(Settings) },

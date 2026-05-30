@@ -21,6 +21,7 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useHouseholdStore } from '@/stores/household-store';
+import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { FilingStatus } from '@/types/enums';
@@ -39,10 +40,6 @@ function makeHousehold(patch: Partial<Household> = {}): Household {
     withdrawalRate: 0.04,
     inflationAssumption: 0.024,
     growthScenarios: [],
-    disclaimerAcceptedAt: null,
-    disclaimerVersionAccepted: null,
-    roadmapDisclaimerAcceptedAt: null,
-    roadmapDisclaimerVersionAccepted: null,
     interestThresholdLowPct: null,
     interestThresholdHighPct: null,
     hasWrittenIps: null,
@@ -58,6 +55,9 @@ function makeHousehold(patch: Partial<Household> = {}): Household {
 function resetStores(opts: {
   household?: Household | null;
   persons?: Array<{ id: number; name: string }>;
+  // The wizard reads app_wide acceptance from the acceptances projection
+  // (single source of truth, MF-1), not a household column. Seed it here.
+  appWideAccepted?: string;
 } = {}) {
   useHouseholdStore.setState({
     household: opts.household ?? null,
@@ -66,6 +66,13 @@ function resetStores(opts: {
     load: async () => {},
     update: async () => {},
     acceptDisclaimer: async () => {},
+  } as any);
+  useAcceptancesStore.setState({
+    acceptedVersions: opts.appWideAccepted ? { app_wide: opts.appWideAccepted } : {},
+    status: 'ready',
+    isLoading: false,
+    error: null,
+    load: async () => {},
   } as any);
   usePersonsStore.setState({
     persons: opts.persons ?? [],
@@ -118,10 +125,8 @@ describe('SetupWizard route handler', () => {
 
   it('mounts SectionLayout at Section 1 when the disclaimer is already accepted', () => {
     resetStores({
-      household: makeHousehold({
-        disclaimerAcceptedAt: '2026-01-01',
-        disclaimerVersionAccepted: DISCLOSURES.app_wide.version,
-      }),
+      household: makeHousehold(),
+      appWideAccepted: DISCLOSURES.app_wide.version,
     });
     renderAt(['/setup']);
     expect(
@@ -131,10 +136,8 @@ describe('SetupWizard route handler', () => {
 
   it('?section=4 jumps to Section 4 when persons exist (existing household)', () => {
     resetStores({
-      household: makeHousehold({
-        disclaimerAcceptedAt: '2026-01-01',
-        disclaimerVersionAccepted: DISCLOSURES.app_wide.version,
-      }),
+      household: makeHousehold(),
+      appWideAccepted: DISCLOSURES.app_wide.version,
       persons: [{ id: 1, name: 'Alice' }],
     });
     renderAt(['/setup?section=4']);

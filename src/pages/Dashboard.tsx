@@ -43,6 +43,7 @@ import MetricCard from '@/components/cards/MetricCard';
 import { ConcentrationCard } from '@/components/cards/ConcentrationCard';
 import { FreshnessBadge } from '@/components/ui/freshness-badge';
 import { NextMoveCard } from '@/components/dashboard/NextMoveCard';
+import { TodaysTriviaCard } from '@/components/dashboard/TodaysTriviaCard';
 import { EditablePill } from '@/components/dashboard/EditablePill';
 import { EditableWidget } from '@/components/dashboard/EditableWidget';
 import { usePillLayout } from '@/components/dashboard/use-pill-layout';
@@ -835,7 +836,10 @@ export default function Dashboard() {
         </Button>
       </div>
 
-      <NextMoveCard />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <NextMoveCard />
+        <TodaysTriviaCard />
+      </div>
 
       {isInputPending && (
         <div className="rounded-md border border-warning/40 bg-warning-soft p-4 flex flex-wrap items-center justify-between gap-4">

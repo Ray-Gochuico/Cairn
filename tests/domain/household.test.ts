@@ -165,14 +165,4 @@ describe('HouseholdRepo — W7-R1 roadmap rule-engine columns round-trip', () =>
     expect(h!.interestThresholdLowPct).toBe(4.5);
     expect(h!.interestThresholdHighPct).toBe(8.0);
   });
-
-  it('does not overwrite disclosure columns on a regular update()', async () => {
-    // The 4 disclosure columns are owned by updateDisclosure(); a plain update()
-    // call must leave them alone.
-    await repo.updateDisclosure('app_wide', 'v1', '2026-05-27T00:00:00Z');
-    await repo.update({ hasHsaQualifiedHdhp: true });
-    const h = await repo.get();
-    expect(h!.disclaimerVersionAccepted).toBe('v1');
-    expect(h!.disclaimerAcceptedAt).toBe('2026-05-27T00:00:00Z');
-  });
 });

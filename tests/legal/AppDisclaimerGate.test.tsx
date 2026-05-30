@@ -1,35 +1,63 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { AppDisclaimerGate } from '@/legal/AppDisclaimerGate';
 import { useHouseholdStore } from '@/stores/household-store';
+import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
+import { DisclosureAcceptancesRepo } from '@/domain/disclosure-acceptances';
+import { DISCLOSURES } from '@/legal/disclosures';
+import { setDatabase } from '@/db/db';
 import { FilingStatus } from '@/types/enums';
 import type { Household } from '@/types/schema';
 
-const baseHousehold: Household = {
-  id: 1,
-  name: null,
-  filingStatus: FilingStatus.SINGLE,
-  state: 'CA',
-  city: null,
-  monthlyExpenseBaseline: 5000,
-  withdrawalRate: 0.04,
-  inflationAssumption: 0.03,
-  growthScenarios: [],
-  disclaimerAcceptedAt: null,
-  disclaimerVersionAccepted: null,
-  roadmapDisclaimerAcceptedAt: null,
-  roadmapDisclaimerVersionAccepted: null,
-};
+// Minimal non-null household — the gate's `if (!household) return children`
+// guard needs a household, but disclosure acceptance is read from the
+// acceptances store (single source of truth, MF-1), NOT a household column
+// (those were dropped in 0043).
+function makeHousehold(patch: Partial<Household> = {}): Household {
+  return {
+    id: 1,
+    name: null,
+    filingStatus: FilingStatus.SINGLE,
+    state: 'CA',
+    city: null,
+    monthlyExpenseBaseline: 5000,
+    withdrawalRate: 0.04,
+    inflationAssumption: 0.03,
+    growthScenarios: [],
+    interestThresholdLowPct: null,
+    interestThresholdHighPct: null,
+    hasWrittenIps: null,
+    hasHsaQualifiedHdhp: null,
+    makesCharitableGifts: null,
+    upcomingLargePurchase: null,
+    upcomingPurchaseAmount: null,
+    upcomingPurchaseMonths: null,
+    ...patch,
+  };
+}
 
-function setHousehold(patch: Partial<Household>) {
-  useHouseholdStore.setState({
-    household: { ...baseHousehold, ...patch },
-    isLoading: false,
-    error: null,
-  });
+// Seed the acceptances projection as a COMPLETED load (`status: 'ready'`).
+// Without `ready` the gate sits in its loading state and renders neither
+// children nor the modal.
+function seedAcceptances(acceptedVersions: Record<string, string>) {
+  useAcceptancesStore.setState({ acceptedVersions, status: 'ready', isLoading: false, error: null });
 }
 
 const CHILD = <div data-testid="app-child">App body</div>;
+
+// Capture the genuine store `load` before any beforeEach mock replaces it, so
+// the fail-closed test can run the REAL projection read (which the spy below
+// forces to reject) and prove the gate flips to `status: 'error'`.
+const realAcceptancesLoad = useAcceptancesStore.getState().load;
+
+function renderGate() {
+  return render(
+    <MemoryRouter>
+      <AppDisclaimerGate>{CHILD}</AppDisclaimerGate>
+    </MemoryRouter>,
+  );
+}
 
 describe('AppDisclaimerGate', () => {
   beforeEach(() => {
@@ -42,24 +70,36 @@ describe('AppDisclaimerGate', () => {
       // household above OR leave it null deliberately.
       load: vi.fn().mockResolvedValue(undefined),
     } as any);
+    // Default: a completed empty load (no acceptances). Replace load() with a
+    // no-op so the boot effect doesn't hit a real DB; individual cases seed the
+    // accepted versions they need.
+    useAcceptancesStore.setState({
+      acceptedVersions: {},
+      status: 'ready',
+      isLoading: false,
+      error: null,
+      load: vi.fn().mockResolvedValue(undefined),
+    } as any);
   });
 
   it('renders children when household has not loaded yet (first-runner pre-wizard)', () => {
-    render(<AppDisclaimerGate>{CHILD}</AppDisclaimerGate>);
+    renderGate();
     expect(screen.getByTestId('app-child')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Disclaimer' })).toBeNull();
   });
 
-  it('renders children when household has never accepted (first-runner mid-wizard)', () => {
-    setHousehold({ disclaimerVersionAccepted: null });
-    render(<AppDisclaimerGate>{CHILD}</AppDisclaimerGate>);
+  it('renders children when nothing is accepted yet (first-runner mid-wizard)', () => {
+    useHouseholdStore.setState({ household: makeHousehold(), isLoading: false, error: null } as any);
+    seedAcceptances({});
+    renderGate();
     expect(screen.getByTestId('app-child')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Disclaimer' })).toBeNull();
   });
 
   it('renders children when the accepted version matches the current version', () => {
-    setHousehold({ disclaimerVersionAccepted: '1.5' });
-    render(<AppDisclaimerGate>{CHILD}</AppDisclaimerGate>);
+    useHouseholdStore.setState({ household: makeHousehold(), isLoading: false, error: null } as any);
+    seedAcceptances({ app_wide: DISCLOSURES.app_wide.version });
+    renderGate();
     expect(screen.getByTestId('app-child')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Disclaimer' })).toBeNull();
   });
@@ -67,15 +107,17 @@ describe('AppDisclaimerGate', () => {
   it('renders the modal (and hides children) when the accepted version is stale (v1.1)', () => {
     // A user on v1.1 (which shipped with the literal [PLACEHOLDER] string
     // in the governing-law sentence) must be re-prompted on the v1.5 bump.
-    setHousehold({ disclaimerVersionAccepted: '1.1' });
-    render(<AppDisclaimerGate>{CHILD}</AppDisclaimerGate>);
+    useHouseholdStore.setState({ household: makeHousehold(), isLoading: false, error: null } as any);
+    seedAcceptances({ app_wide: '1.1' });
+    renderGate();
     expect(screen.getByRole('heading', { name: 'Disclaimer' })).toBeInTheDocument();
     expect(screen.queryByTestId('app-child')).toBeNull();
   });
 
   it('surfaces a "what changed" hint when the stale version is re-prompted', () => {
-    setHousehold({ disclaimerVersionAccepted: '1.4' });
-    render(<AppDisclaimerGate>{CHILD}</AppDisclaimerGate>);
+    useHouseholdStore.setState({ household: makeHousehold(), isLoading: false, error: null } as any);
+    seedAcceptances({ app_wide: '1.4' });
+    renderGate();
     const changes = screen.getByText(/what changed since you last accepted/i);
     expect(changes).toBeInTheDocument();
     // For v1.5 the disclosures.ts ships an explicit diffFromPrevious that
@@ -88,13 +130,89 @@ describe('AppDisclaimerGate', () => {
 
   it('calls acceptDisclaimer when the user accepts the new version', async () => {
     const acceptDisclaimer = vi.fn().mockResolvedValue(undefined);
-    setHousehold({ disclaimerVersionAccepted: '1.4' });
-    useHouseholdStore.setState({ acceptDisclaimer } as any);
-    render(<AppDisclaimerGate>{CHILD}</AppDisclaimerGate>);
+    useHouseholdStore.setState({
+      household: makeHousehold(),
+      isLoading: false,
+      error: null,
+      load: vi.fn().mockResolvedValue(undefined),
+      acceptDisclaimer,
+    } as any);
+    // A stale prior acceptance, so the re-prompt modal shows.
+    seedAcceptances({ app_wide: '1.4' });
+    renderGate();
     fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', { name: /accept and continue/i }));
     await waitFor(() => {
-      expect(acceptDisclaimer).toHaveBeenCalledWith('app_wide', '1.5');
+      expect(acceptDisclaimer).toHaveBeenCalledWith('app_wide', DISCLOSURES.app_wide.version);
     });
+  });
+
+  it('fails CLOSED: a transient acceptances-load failure re-presents the app_wide disclosure for a household with a prior acceptance', async () => {
+    // A returning user who genuinely accepted before — but the projection read
+    // throws this boot (the documented self-join race / a transient DB error).
+    // A stub DB keeps getDatabase() from throwing before the spied repo method
+    // runs; the spy then rejects, exercising the store's FAIL-CLOSED catch.
+    setDatabase({
+      execute: vi.fn().mockResolvedValue({ rowsAffected: 0 }),
+      select: vi.fn().mockResolvedValue([]),
+      close: vi.fn().mockResolvedValue(undefined),
+    });
+    vi.spyOn(DisclosureAcceptancesRepo.prototype, 'latestVersionsByDocument').mockRejectedValueOnce(
+      new Error('transient read failure'),
+    );
+    // Minimal non-null household (no dropped disclosure fields). Use the REAL
+    // acceptances-store load() so the boot effect actually runs it and the
+    // rejection flips status to 'error'.
+    useHouseholdStore.setState({
+      household: makeHousehold(),
+      isLoading: false,
+      error: null,
+      load: vi.fn().mockResolvedValue(undefined),
+    } as any);
+    useAcceptancesStore.setState({
+      acceptedVersions: {},
+      status: 'loading',
+      isLoading: false,
+      error: null,
+      load: realAcceptancesLoad,
+    } as any);
+
+    renderGate();
+
+    // The boot effect runs load(), which rejects → status 'error' → fail closed.
+    // The app_wide disclosure modal is shown; the protected children are NOT.
+    expect(await screen.findByRole('heading', { name: DISCLOSURES.app_wide.title })).toBeInTheDocument();
+    expect(screen.queryByTestId('app-child')).not.toBeInTheDocument();
+    vi.restoreAllMocks();
+  });
+
+  it('fails CLOSED BY CONSTRUCTION: status error blocks even with a CURRENT cached accepted version', () => {
+    // The store's catch sets status 'error' WITHOUT clearing acceptedVersions,
+    // so a returning user whose prior successful load cached the CURRENT
+    // version would make gate.state === 'ready'. The gate must STILL re-prompt
+    // on error — proving fail-closed is structural, not an artifact of an empty
+    // acceptedVersions map. A no-op load keeps the seeded error state stable
+    // through render (this asserts the render decision for a fixed error state;
+    // the boot-load→error path is covered by the reject-mock test above).
+    useHouseholdStore.setState({
+      household: makeHousehold(),
+      isLoading: false,
+      error: null,
+      load: vi.fn().mockResolvedValue(undefined),
+    } as any);
+    useAcceptancesStore.setState({
+      acceptedVersions: { app_wide: DISCLOSURES.app_wide.version },
+      status: 'error',
+      isLoading: false,
+      error: 'x',
+      load: vi.fn().mockResolvedValue(undefined),
+    } as any);
+
+    renderGate();
+
+    // Despite acceptedVersions.app_wide === current (gate.state would be
+    // 'ready'), the error status forces the re-prompt modal and hides children.
+    expect(screen.getByRole('heading', { name: DISCLOSURES.app_wide.title })).toBeInTheDocument();
+    expect(screen.queryByTestId('app-child')).not.toBeInTheDocument();
   });
 });

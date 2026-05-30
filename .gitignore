@@ -58,3 +58,8 @@ Desktop.ini
 FinFlowChartv43.pdf
 FinFlowChartv43.md
 
+# Trivia generator staging artifact — regenerated on demand via
+# GEN_TRIVIA=1 npx vitest run tests/scripts/gen-glossary-trivia.gen.test.ts;
+# not committed (human review copy, not the shipped bank).
+src/data/trivia/bank-v1.generated.json
+

@@ -14,6 +14,7 @@ import {
   ProjectionDetailLevel,
   CompoundingFrequency,
   AssetSnapshotOwnerType,
+  LearningDifficulty,
 } from './enums';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -43,14 +44,6 @@ export const HouseholdSchema = z.object({
   withdrawalRate: z.number().min(0).max(1),
   inflationAssumption: z.number().min(0).max(1),
   growthScenarios: z.array(GrowthScenarioSchema),
-  // Disclosure acceptance cache (latest accepted version per document).
-  // Null = never accepted; the AppDisclaimerGate / Setup Wizard Step 0
-  // intercept these users on next launch. The full audit trail lives in
-  // the disclosure_acceptances table.
-  disclaimerAcceptedAt: z.string().nullable().default(null),
-  disclaimerVersionAccepted: z.string().nullable().default(null),
-  roadmapDisclaimerAcceptedAt: z.string().nullable().default(null),
-  roadmapDisclaimerVersionAccepted: z.string().nullable().default(null),
   // Roadmap rule-engine chart answers + threshold overrides. All
   // nullable with no UI default; null means the user hasn't answered
   // the matching decision node yet (rule engine surfaces as 'unanswered').
@@ -535,3 +528,32 @@ export const VehicleLeaseSchema = VehicleLeaseBaseSchema.refine(
   recurringObligationRefineMsg,
 );
 export type VehicleLease = z.infer<typeof VehicleLeaseSchema>;
+
+// ---------------------------------------------------------------------------
+// Daily Trivia / Learning (v1.1, 2026-05-28).
+//
+// learning_state is a strict singleton (one row, id = 1) mirroring
+// AppSettingsSchema. learning_answers is an append-only history; the daily
+// selector reads it to exclude already-answered questions. See
+// docs/superpowers/specs/2026-05-28-trivia-learning-spec.md §4.
+// ---------------------------------------------------------------------------
+
+export const LearningStateSchema = z.object({
+  id: z.literal(1).default(1),
+  difficultyPreference: z.nativeEnum(LearningDifficulty).default(LearningDifficulty.BEGINNER),
+  lastShownQuestionId: z.string().nullable().default(null),
+  lastShownIsoDate: z.string().nullable().default(null),
+  streakCount: z.number().int().nonnegative().default(0),
+  lastAnsweredIsoDate: z.string().nullable().default(null),
+});
+export type LearningState = z.infer<typeof LearningStateSchema>;
+
+export const LearningAnswerSchema = z.object({
+  id: z.number().int().positive().optional(),
+  questionId: z.string().min(1),
+  answeredIsoDate: isoDateString,
+  chosenIndex: z.number().int().min(0).max(3),
+  wasCorrect: z.boolean(),
+  questionVersion: z.number().int().nonnegative(), // part of the one-shot grain — unread by the v1 UI, but the (question_id, question_version) UNIQUE is what enables the v1.2 re-prompt on a content correction (spec §4.1/§9.3)
+});
+export type LearningAnswer = z.infer<typeof LearningAnswerSchema>;
