@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { render, screen } from '@testing-library/react';
+import { render, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
@@ -68,6 +68,15 @@ describe('Learn page', () => {
   });
 
   afterEach(async () => {
+    // Unmount components before closing the DB so React's async effects
+    // (e.g., the "pin today's question" useEffect in Learn.tsx) cannot
+    // fire on a closed connection and produce unhandled rejections.
+    cleanup();
+    // Drain any microtasks queued by the unmounted component's in-flight
+    // async effects (e.g., updateLearning() for pinning the daily question)
+    // before we close the DB — avoids "connection is not open" unhandled
+    // rejections that would fail the pre-commit hook.
+    await new Promise((r) => setTimeout(r, 0));
     await db.close();
     vi.useRealTimers();
   });
@@ -201,5 +210,35 @@ describe('Learn page', () => {
       (el) => typeof el.className === 'string' && el.className.includes('bg-destructive'),
     );
     expect(hasDestructiveBg).toBe(false);
+  });
+
+  it('has no gamification UI (no points/confetti/badge bling copy)', async () => {
+    await seedLearningAccepted(db); // app_wide column + learning acceptance row (MF-1)
+
+    render(
+      <MemoryRouter>
+        <Learn />
+      </MemoryRouter>,
+    );
+    await screen.findByText(/learn/i);
+    expect(screen.queryByText(/points|confetti|congratulations|🎉|streak lost|don't lose/i)).toBeNull();
+    // The streak is a quiet number, present as "<n>-day streak".
+    expect(screen.getByText(/-day streak/i)).toBeInTheDocument();
+  });
+
+  it('renders the Advanced badge with dark-mode-legible classes', async () => {
+    await seedLearningAccepted(db);
+    // Force an Advanced question by setting the preference + a bank that has one.
+    await useLearningStore.getState().update({ difficultyPreference: 'Advanced' });
+
+    render(
+      <MemoryRouter>
+        <Learn />
+      </MemoryRouter>,
+    );
+    const badge = await screen.findByText('Advanced', { selector: 'span' });
+    // dark: variant gives lighter slate text on transparent fill (spec §10.3).
+    expect(badge.className).toMatch(/dark:text-slate-300/);
+    expect(badge.className).toMatch(/dark:bg-transparent/);
   });
 });
