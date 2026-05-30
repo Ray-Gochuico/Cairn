@@ -80,6 +80,7 @@ function formatCurrency(value: number): string {
  */
 const INVESTMENT_ACCOUNT_TYPES = new Set<AccountType>([
   AccountType.ACCOUNT_401K,
+  AccountType.ACCOUNT_ROTH_401K,
   AccountType.ACCOUNT_ROTH_IRA,
   AccountType.ACCOUNT_TRAD_IRA,
   AccountType.ACCOUNT_BROKERAGE,

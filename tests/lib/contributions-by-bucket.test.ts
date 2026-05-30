@@ -87,6 +87,22 @@ describe('bucketForContribution', () => {
     }
   });
 
+  it('maps a Roth 401k paycheck contribution to Roth 401k', () => {
+    const acct = makeAccount(1, AccountType.ACCOUNT_ROTH_401K);
+    const c = makeContribution(1, 1, '2026-01-01', 1000, ContributionSource.PAYCHECK);
+    expect(bucketForContribution(c, acct)).toBe('Roth 401k');
+  });
+
+  it("buckets a Roth-401k employer-match contribution as 'Roth 401k' (the match branch is gated on ACCOUNT_401K only, so a Roth-401k host falls through to the type switch)", () => {
+    const acct = makeAccount(1, AccountType.ACCOUNT_ROTH_401K);
+    const c = makeContribution(1, 1, '2026-01-01', 500, ContributionSource.EMPLOYER_MATCH);
+    expect(bucketForContribution(c, acct)).toBe('Roth 401k');
+  });
+
+  it("includes 'Roth 401k' in CONTRIBUTION_BUCKETS", () => {
+    expect(CONTRIBUTION_BUCKETS).toContain('Roth 401k');
+  });
+
   // Guards the stacked contributions chart: every AccountType must reach an
   // explicit case, never the assertNever default. A future type added without
   // handling throws here (and `tsc` reds at the switch) instead of its
@@ -126,6 +142,7 @@ describe('aggregateContributionsByBucket', () => {
       Brokerage: 750,
       '401k': 1000,
       '401k Match': 0,
+      'Roth 401k': 0,
       'Roth IRA': 0,
       'Trad IRA': 0,
       HSA: 0,
@@ -136,6 +153,7 @@ describe('aggregateContributionsByBucket', () => {
       Brokerage: 0,
       '401k': 0,
       '401k Match': 300,
+      'Roth 401k': 0,
       'Roth IRA': 0,
       'Trad IRA': 0,
       HSA: 0,

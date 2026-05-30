@@ -17,6 +17,7 @@ export const CONTRIBUTION_BUCKETS = [
   'Brokerage',
   '401k',
   '401k Match',
+  'Roth 401k',
   'Roth IRA',
   'Trad IRA',
   'HSA',
@@ -29,20 +30,18 @@ export function bucketForContribution(
   contribution: Contribution,
   account: Account,
 ): ContributionBucket | null {
-  if (
-    account.type === AccountType.ACCOUNT_401K ||
-    account.type === AccountType.ACCOUNT_ROTH_401K
-  ) {
+  if (account.type === AccountType.ACCOUNT_401K) {
     return contribution.source === ContributionSource.EMPLOYER_MATCH
       ? '401k Match'
       : '401k';
   }
   switch (account.type) {
-    case AccountType.ACCOUNT_BROKERAGE: return 'Brokerage';
-    case AccountType.ACCOUNT_ROTH_IRA:  return 'Roth IRA';
-    case AccountType.ACCOUNT_TRAD_IRA:  return 'Trad IRA';
-    case AccountType.ACCOUNT_HSA:       return 'HSA';
-    case AccountType.ACCOUNT_529:       return '529';
+    case AccountType.ACCOUNT_BROKERAGE:    return 'Brokerage';
+    case AccountType.ACCOUNT_ROTH_401K:    return 'Roth 401k';
+    case AccountType.ACCOUNT_ROTH_IRA:     return 'Roth IRA';
+    case AccountType.ACCOUNT_TRAD_IRA:     return 'Trad IRA';
+    case AccountType.ACCOUNT_HSA:          return 'HSA';
+    case AccountType.ACCOUNT_529:          return '529';
     // Non-investment accounts are intentionally excluded from the chart.
     case AccountType.ACCOUNT_CASH:
     case AccountType.ACCOUNT_SAVINGS:
@@ -61,6 +60,7 @@ export interface MonthlyContributionsByBucket {
   Brokerage: number;
   '401k': number;
   '401k Match': number;
+  'Roth 401k': number;
   'Roth IRA': number;
   'Trad IRA': number;
   HSA: number;
@@ -92,6 +92,7 @@ export function aggregateContributionsByBucket(
     Brokerage: 0,
     '401k': 0,
     '401k Match': 0,
+    'Roth 401k': 0,
     'Roth IRA': 0,
     'Trad IRA': 0,
     HSA: 0,
