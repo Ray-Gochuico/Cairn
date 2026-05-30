@@ -241,4 +241,48 @@ describe('Learn page', () => {
     expect(badge.className).toMatch(/dark:text-slate-300/);
     expect(badge.className).toMatch(/dark:bg-transparent/);
   });
+
+  it("swaps today's question to the new tier when difficulty changes before answering", async () => {
+    await seedLearningAccepted(db);
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <Learn />
+      </MemoryRouter>,
+    );
+
+    // Today's question starts at the Beginner tier (the pinned date selects one).
+    expect(await screen.findByText('Beginner', { selector: 'span' })).toBeInTheDocument();
+
+    // Flip to Advanced — unanswered, so today's question swaps to an Advanced one.
+    await user.click(screen.getByRole('button', { name: 'Advanced' }));
+    expect(await screen.findByText('Advanced', { selector: 'span' })).toBeInTheDocument();
+    expect(screen.queryByText('Beginner', { selector: 'span' })).toBeNull();
+  });
+
+  it("locks today's question once answered — flipping difficulty does not swap it", async () => {
+    await seedLearningAccepted(db);
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <Learn />
+      </MemoryRouter>,
+    );
+
+    // Answer today's (Beginner) question.
+    await screen.findByText('Beginner', { selector: 'span' });
+    const choices = screen.getAllByRole('button').filter((b) => {
+      const t = (b.textContent ?? '').trimStart();
+      return /^[ABCD]/.test(t) && t !== 'Beginner' && t !== 'Advanced';
+    });
+    await user.click(choices[0]);
+    await screen.findByText(/correct|not quite/i); // graded reveal == answered this session
+
+    // Flip to Advanced: the PREFERENCE updates, but today's question is LOCKED.
+    await user.click(screen.getByRole('button', { name: 'Advanced' }));
+    expect(screen.getByRole('button', { name: 'Advanced' })).toHaveAttribute('aria-pressed', 'true');
+    // The answered question's badge is still Beginner — it did NOT swap tiers.
+    expect(screen.getByText('Beginner', { selector: 'span' })).toBeInTheDocument();
+    expect(screen.queryByText('Advanced', { selector: 'span' })).toBeNull();
+  });
 });

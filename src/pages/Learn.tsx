@@ -235,11 +235,14 @@ export default function Learn() {
           </div>
         ) }
 
-        {/* Difficulty preference (also in Settings; mirrored here per the mockup). */}
+        {/* Difficulty (also in Settings; mirrored here per the mockup). Changing
+            it swaps today's question to the new level — unless today's has already
+            been answered, in which case it's locked and the change applies to
+            tomorrow's question. */}
         <div className="border-t pt-4">
           <div className="text-sm font-medium">Difficulty</div>
           <p className="text-xs text-muted-foreground mb-2">
-            Also in Settings. Changing it takes effect tomorrow — today's question stays put.
+            Also in Settings. Switches today's question to this level — until you've answered today's.
           </p>
           <div className="inline-flex overflow-hidden rounded-md border">
             {(Object.values(LearningDifficulty) as LearningDifficulty[]).map((d) => (
@@ -247,7 +250,18 @@ export default function Learn() {
                 key={d}
                 type="button"
                 aria-pressed={difficulty === d}
-                onClick={() => void updateLearning({ difficultyPreference: d })}
+                onClick={() =>
+                  void updateLearning({
+                    difficultyPreference: d,
+                    // Swap today's question to the new tier by clearing the pin
+                    // (the daily selector re-rolls; the effect above re-pins) —
+                    // unless it's already been answered (persisted today, or just
+                    // answered this session via chosenIndex), when it's locked.
+                    ...(answeredToday || chosenIndex !== null
+                      ? {}
+                      : { lastShownQuestionId: null }),
+                  })
+                }
                 className={`border-r px-4 py-1.5 text-sm last:border-r-0 ${
                   difficulty === d ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-accent'
                 }`}
