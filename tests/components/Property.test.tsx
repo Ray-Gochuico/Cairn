@@ -467,7 +467,7 @@ describe('Property page', () => {
     expect(await screen.findByText('Brooklyn apt')).toBeInTheDocument();
     expect(screen.getByText('Storage unit')).toBeInTheDocument();
     // 2400 + 150 = 2550
-    expect(screen.getByText(/Total monthly obligation/i)).toBeInTheDocument();
+    expect(screen.getByText(/Total recurring housing/i)).toBeInTheDocument();
     expect(screen.getByText(/\$2,550/)).toBeInTheDocument();
   });
 
@@ -540,6 +540,34 @@ describe('Property page', () => {
     expect(editLink).toHaveAttribute('href', '/inputs/housing-payments');
     // Remove still present.
     expect(screen.getByRole('button', { name: /^Remove$/i })).toBeInTheDocument();
+  });
+
+  it('renders the rentals total as an aggregate card with a per-mo figure and meta', async () => {
+    useHousingPaymentsStore.setState({
+      housingPayments: [
+        {
+          id: 1,
+          householdId: 1,
+          ownerPersonId: null,
+          name: 'Downtown apartment',
+          monthlyAmount: 2400,
+          startDate: '2025-09-01',
+          endDate: null,
+        },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+
+    renderPage();
+
+    await screen.findByText('Downtown apartment');
+    // The aggregate's eyebrow label and meta line distinguish the card from
+    // the old inline header text.
+    expect(screen.getByText(/Total recurring housing/i)).toBeInTheDocument();
+    expect(screen.getByText(/feeds Spending/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/\$2,400/).length).toBeGreaterThan(0);
   });
 
   it('exports the full properties table to CSV with the owner name resolved', async () => {

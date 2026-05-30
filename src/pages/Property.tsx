@@ -559,15 +559,27 @@ export default function Property() {
 
       {visibleRentals.length > 0 && (
         <section aria-label="Rentals" className="space-y-3">
-          <div className="flex items-baseline justify-between gap-4">
-            <h2 className="text-xl font-semibold">Rentals</h2>
-            <div className="text-sm text-muted-foreground">
-              <span className="mr-2">Total monthly obligation</span>
-              <span className="font-mono text-base text-foreground">
-                {formatCurrency(totalMonthlyHousingObligation)}
-              </span>
-            </div>
-          </div>
+          <h2 className="text-xl font-semibold">Rentals</h2>
+          <Card>
+            <CardContent className="flex items-center justify-between gap-4 py-4">
+              <div>
+                <div className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Total recurring housing
+                </div>
+                <div className="text-2xl font-semibold tabular-nums">
+                  {formatCurrency(totalMonthlyHousingObligation)}
+                  <span className="ml-1 text-sm font-medium text-muted-foreground">
+                    /mo
+                  </span>
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {visibleRentals.length} active rental
+                  {visibleRentals.length === 1 ? '' : 's'} · feeds Spending &amp;
+                  What-If projection
+                </div>
+              </div>
+            </CardContent>
+          </Card>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {visibleRentals.map((r) => (
               <RentalCard
