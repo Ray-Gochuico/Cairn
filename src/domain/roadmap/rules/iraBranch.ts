@@ -65,7 +65,8 @@ function isPretaxRetirementContribution(
 ): boolean {
   const account = accounts.find((a) => a.id === contribution.accountId);
   if (!account) return false;
-  // 401(k) and traditional IRA both reduce MAGI; Roth IRAs do not.
+  // 401(k) and traditional IRA both reduce MAGI; Roth IRAs do not. Roth 401(k)
+  // is post-tax too — deliberately excluded so it does NOT reduce MAGI.
   return account.type === AccountType.ACCOUNT_401K || account.type === AccountType.ACCOUNT_TRAD_IRA;
 }
 
