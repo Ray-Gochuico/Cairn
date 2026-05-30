@@ -275,10 +275,11 @@ function VehicleGasCard({
 
 interface LeaseCardProps {
   lease: VehicleLease;
+  ownerLabel: string;
   onRemove: () => void;
 }
 
-function LeaseCard({ lease, onRemove }: LeaseCardProps) {
+function LeaseCard({ lease, ownerLabel, onRemove }: LeaseCardProps) {
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -287,9 +288,16 @@ function LeaseCard({ lease, onRemove }: LeaseCardProps) {
             <CardTitle className="text-base truncate">{lease.name}</CardTitle>
             <CardDescription className="text-xs">Lease</CardDescription>
           </div>
-          <Button size="sm" variant="destructive" onClick={onRemove}>
-            Remove
-          </Button>
+          <div className="flex shrink-0 gap-2">
+            <Button asChild size="sm" variant="outline">
+              <Link to="/inputs/vehicle-leases" aria-label="Edit lease">
+                Edit
+              </Link>
+            </Button>
+            <Button size="sm" variant="destructive" onClick={onRemove}>
+              Remove
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -315,6 +323,12 @@ function LeaseCard({ lease, onRemove }: LeaseCardProps) {
             <dd className="font-mono">{lease.endDate ?? 'ongoing'}</dd>
           </div>
         </dl>
+        <div className="pt-3 border-t">
+          <span className="inline-flex items-center gap-1.5 rounded-full border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+            <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden="true" />
+            {ownerLabel}
+          </span>
+        </div>
       </CardContent>
     </Card>
   );
@@ -535,25 +549,50 @@ export default function Vehicles() {
 
       {visibleLeases.length > 0 && (
         <section aria-label="Leases" className="space-y-3">
-          <div className="flex items-baseline justify-between gap-4">
-            <h2 className="text-xl font-semibold">Leases</h2>
-            <div className="text-sm text-muted-foreground">
-              <span className="mr-2">Total monthly obligation</span>
-              <span className="font-mono text-base text-foreground">
-                {formatCurrency(totalMonthlyLeaseObligation)}
-              </span>
-            </div>
-          </div>
+          <h2 className="text-xl font-semibold">Leases</h2>
+          <Card>
+            <CardContent className="flex items-center justify-between gap-4 py-4">
+              <div>
+                <div className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Total recurring vehicle
+                </div>
+                <div className="text-2xl font-semibold tabular-nums">
+                  {formatCurrency(totalMonthlyLeaseObligation)}
+                  <span className="ml-1 text-sm font-medium text-muted-foreground">
+                    /mo
+                  </span>
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {visibleLeases.length} active lease
+                  {visibleLeases.length === 1 ? '' : 's'} · feeds Spending &amp;
+                  What-If projection
+                </div>
+              </div>
+            </CardContent>
+          </Card>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {visibleLeases.map((l) => (
               <LeaseCard
                 key={l.id}
                 lease={l}
+                ownerLabel={
+                  l.ownerPersonId == null
+                    ? 'Joint'
+                    : (personNameById.get(l.ownerPersonId) ?? 'Unknown')
+                }
                 onRemove={() =>
                   void useVehicleLeasesStore.getState().remove(l.id!)
                 }
               />
             ))}
+            <Link
+              to="/inputs/vehicle-leases"
+              aria-label="Add lease"
+              className="flex min-h-[96px] w-full items-center justify-center gap-2 rounded-lg border border-dashed text-sm font-medium text-primary transition-colors hover:bg-accent"
+            >
+              <span aria-hidden="true" className="text-lg leading-none">+</span>
+              Add lease
+            </Link>
           </div>
         </section>
       )}

@@ -18,7 +18,11 @@ import type { CsvColumn } from '@/lib/csv';
 import { summarizeSpending } from '@/lib/spending-analysis';
 import { detectRecurring } from '@/lib/recurring';
 import { cashflowWindow } from '@/lib/cashflow';
-import { monthlyRecurringObligation } from '@/lib/recurring-obligations';
+import {
+  monthlyRecurringObligation,
+  monthlyHousingObligation,
+  monthlyLeaseObligation,
+} from '@/lib/recurring-obligations';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { filterByPersonId } from '@/lib/filter-by-view';
 import type { Transaction } from '@/types/schema';
@@ -215,6 +219,14 @@ export default function Spending() {
     () => monthlyRecurringObligation(housingPayments, vehicleLeases, todayISO),
     [housingPayments, vehicleLeases, todayISO],
   );
+  const housingObligation = useMemo(
+    () => monthlyHousingObligation(housingPayments, todayISO),
+    [housingPayments, todayISO],
+  );
+  const leaseObligation = useMemo(
+    () => monthlyLeaseObligation(vehicleLeases, todayISO),
+    [vehicleLeases, todayISO],
+  );
 
   return (
     <div className="p-8 space-y-8">
@@ -247,9 +259,25 @@ export default function Spending() {
             <div className="text-2xl font-semibold font-mono">
               {obligationCurrencyFormatter.format(recurringObligation)}/mo
             </div>
-            <div className="text-xs text-muted-foreground">
-              {housingPayments.length} rental{housingPayments.length === 1 ? '' : 's'},{' '}
-              {vehicleLeases.length} lease{vehicleLeases.length === 1 ? '' : 's'}
+            <div className="mt-3 flex gap-6 border-t pt-3">
+              <div>
+                <div className="text-base font-semibold tabular-nums">
+                  {obligationCurrencyFormatter.format(housingObligation)}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Rent · {housingPayments.length} rental
+                  {housingPayments.length === 1 ? '' : 's'}
+                </div>
+              </div>
+              <div>
+                <div className="text-base font-semibold tabular-nums">
+                  {obligationCurrencyFormatter.format(leaseObligation)}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Leases · {vehicleLeases.length} lease
+                  {vehicleLeases.length === 1 ? '' : 's'}
+                </div>
+              </div>
             </div>
           </div>
         </section>

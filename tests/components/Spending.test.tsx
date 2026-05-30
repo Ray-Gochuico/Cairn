@@ -613,6 +613,47 @@ describe('Spending page', () => {
     expect(screen.getByText(/\$2,999/)).toBeInTheDocument();
   });
 
+  it('(recurring-obligations-split) shows rent vs lease dollar breakdown', async () => {
+    await useCategoriesStore.getState().load();
+
+    await new HousingPaymentsRepo(db).create({
+      householdId: 1,
+      ownerPersonId: null,
+      name: 'Apt',
+      monthlyAmount: 2400,
+      startDate: '2025-01-01',
+      endDate: null,
+    });
+    await new HousingPaymentsRepo(db).create({
+      householdId: 1,
+      ownerPersonId: null,
+      name: 'Storage',
+      monthlyAmount: 95,
+      startDate: '2025-01-01',
+      endDate: null,
+    });
+    await new VehicleLeasesRepo(db).create({
+      householdId: 1,
+      ownerPersonId: null,
+      name: 'Tesla',
+      monthlyAmount: 450,
+      startDate: '2025-01-01',
+      endDate: null,
+    });
+
+    renderPage();
+
+    await screen.findByText(/Recurring obligations/i);
+    // Combined total still present.
+    expect(screen.getByText(/\$2,945/)).toBeInTheDocument();
+    // Rent line: 2400 + 95 = 2495 across 2 rentals.
+    expect(screen.getByText(/\$2,495/)).toBeInTheDocument();
+    expect(screen.getByText(/Rent · 2 rentals/i)).toBeInTheDocument();
+    // Lease line: 450 across 1 lease.
+    expect(screen.getByText(/\$450/)).toBeInTheDocument();
+    expect(screen.getByText(/Leases · 1 lease/i)).toBeInTheDocument();
+  });
+
   it('(unified-errors) surfaces a per-file error pane when a CSV file read fails', async () => {
     await useCategoriesStore.getState().load();
     useHouseholdStore.setState({
