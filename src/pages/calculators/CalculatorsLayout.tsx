@@ -164,7 +164,13 @@ export default function CalculatorsLayout() {
           </Button>
         </div>
       )}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 min-w-0 [grid-auto-rows:8px] [grid-auto-flow:row_dense]">
+      {/* `items-start` is LOAD-BEARING. This is a masonry grid: each card sets
+          its own grid-row span via useAutoRowSpan, which measures the card's
+          content height. Without items-start the grid's align-items defaults to
+          stretch, so each card is stretched to its tiny 8px grid area → the hook
+          measures 8px → span stays 1 → every card collapses to 8px and the cards
+          overlap. align-items:start lets each card size to its own content. */}
+      <div className="grid items-start grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 min-w-0 [grid-auto-rows:8px] [grid-auto-flow:row_dense]">
         {!hiddenSet.has(CARD_IDS.PAYCHECK) && (
           <PaycheckCard cardId={CARD_IDS.PAYCHECK} onHide={handleHide} />
         )}
