@@ -124,6 +124,10 @@ export default function DonutChartCard({
                   <Cell
                     key={`${slice.name}-${idx}`}
                     fill={colorAt(slice, idx)}
+                    // App-wide (W4): follow the card background so wedge borders
+                    // don't show Recharts' default white hairline on dark cards
+                    // and adjacent wedges stay visually separated in both themes.
+                    stroke="hsl(var(--card))"
                   />
                 ))}
               </Pie>
