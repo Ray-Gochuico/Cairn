@@ -3,12 +3,13 @@ import { Link } from 'react-router-dom';
 import { useEquityGrantsStore } from '@/stores/equity-grants-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { CalculatorCard } from './CalculatorCard';
-import { computeEquityValue } from '@/lib/equity-value';
+import { computeEquityValue, vestingChartData } from '@/lib/equity-value';
 import { formatCurrency } from '@/lib/format';
 import { FreshnessBadge } from '@/components/ui/freshness-badge';
 import { ResultRow } from '@/components/calculators/ResultRow';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import type { GrantType } from '@/types/enums';
+import LineChartCard from '@/components/charts/LineChartCard';
 
 interface EquityValueCardProps {
   cardId?: string;
@@ -87,6 +88,8 @@ export function EquityValueCard({ cardId, onHide }: EquityValueCardProps = {}) {
     () => perPerson.reduce((sum, p) => sum + p.vested, 0),
     [perPerson],
   );
+
+  const chartData = useMemo(() => vestingChartData(equityGrants), [equityGrants]);
 
   if (equityGrants.length === 0) {
     return (
@@ -188,6 +191,15 @@ export function EquityValueCard({ cardId, onHide }: EquityValueCardProps = {}) {
           View all →
         </Link>
       </div>
+      {chartData.length > 1 && (
+        <LineChartCard
+          title="Cumulative vesting"
+          data={chartData}
+          xKey="date"
+          series={[{ dataKey: 'vestedValue', label: 'Vested value' }]}
+          yFormatter={formatCurrency}
+        />
+      )}
     </CalculatorCard>
   );
 }

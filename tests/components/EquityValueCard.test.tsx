@@ -329,4 +329,54 @@ describe('EquityValueCard', () => {
     // No upcoming vests → block should not render
     expect(screen.queryByTestId('equity-upcoming-vests')).not.toBeInTheDocument();
   });
+
+  it('renders the cumulative-vesting chart when a grant has multiple vest dates', () => {
+    // The default primeStores vesting schedule has 4 distinct dates → chartData.length > 1
+    primeStores({
+      grants: [
+        {
+          name: 'Multi-vest Grant',
+          grantType: 'RSU',
+          totalShares: 1000,
+          currentFmv: 50,
+          vestingSchedule: [
+            { date: '2025-01-15', cumulativePct: 0.25 },
+            { date: '2026-01-15', cumulativePct: 0.5 },
+            { date: '2027-01-15', cumulativePct: 0.75 },
+            { date: '2028-01-15', cumulativePct: 1.0 },
+          ],
+        },
+      ],
+    });
+    render(
+      <MemoryRouter>
+        <EquityValueCard />
+      </MemoryRouter>,
+    );
+    // The LineChartCard title renders even though recharts draws 0×0 in jsdom
+    expect(screen.getByText('Cumulative vesting')).toBeInTheDocument();
+  });
+
+  it('does not render the cumulative-vesting chart for a single-vest grant', () => {
+    primeStores({
+      grants: [
+        {
+          name: 'Single Vest',
+          grantType: 'RSU',
+          totalShares: 500,
+          currentFmv: 20,
+          vestingSchedule: [
+            { date: '2025-06-01', cumulativePct: 1.0 },
+          ],
+        },
+      ],
+    });
+    render(
+      <MemoryRouter>
+        <EquityValueCard />
+      </MemoryRouter>,
+    );
+    // Only one chart point → chart should NOT render
+    expect(screen.queryByText('Cumulative vesting')).not.toBeInTheDocument();
+  });
 });

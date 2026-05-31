@@ -55,6 +55,27 @@ export function computeEquityValue(grant: GrantInput, today: Date): EquityValueR
   };
 }
 
+export type VestingChartPoint = { date: string; vestedValue: number };
+
+export function vestingChartData(
+  grants: ReadonlyArray<GrantInput>,
+): VestingChartPoint[] {
+  const dates = [
+    ...new Set(grants.flatMap((g) => g.vestingSchedule.map((v) => v.date))),
+  ].sort();
+  return dates.map((date) => ({
+    date,
+    vestedValue: grants.reduce((sum, g) => {
+      // last cumulativePct whose vest date <= this date (0 before the first vest)
+      const pct = g.vestingSchedule.reduce(
+        (acc, v) => (v.date <= date ? v.cumulativePct : acc),
+        0,
+      );
+      return sum + pct * g.totalShares * g.currentFmv;
+    }, 0),
+  }));
+}
+
 /**
  * Rough per-share FMV from a private-company snapshot.
  *

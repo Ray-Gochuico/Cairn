@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeEquityValue, computeFmvFromCompanyValuation } from '@/lib/equity-value';
+import { computeEquityValue, computeFmvFromCompanyValuation, vestingChartData } from '@/lib/equity-value';
 
 const grant = {
   grantDate: '2024-01-15',
@@ -143,5 +143,71 @@ describe('computeFmvFromCompanyValuation', () => {
       value: 0,
       warning: null,
     });
+  });
+});
+
+describe('vestingChartData', () => {
+  it('builds a monotonic cumulative-vested-$ timeline across grants', () => {
+    // Grant A: 1000 shares @ $10 FMV, vests 50% on 2025-01-01, 100% on 2026-01-01
+    // Grant B: 500 shares @ $20 FMV, vests 100% on 2025-01-01
+    //
+    // Union dates: ['2025-01-01', '2026-01-01']
+    // At 2025-01-01: (0.5 × 1000 × 10) + (1.0 × 500 × 20) = 5000 + 10000 = 15000
+    // At 2026-01-01: (1.0 × 1000 × 10) + (1.0 × 500 × 20) = 10000 + 10000 = 20000
+    // Σ shares×fmv = 1000×10 + 500×20 = 20000
+    const grantA = {
+      grantDate: '2024-01-01',
+      strikePrice: 0,
+      totalShares: 1000,
+      currentFmv: 10,
+      vestingSchedule: [
+        { date: '2025-01-01', cumulativePct: 0.5 },
+        { date: '2026-01-01', cumulativePct: 1.0 },
+      ],
+    };
+    const grantB = {
+      grantDate: '2024-01-01',
+      strikePrice: 0,
+      totalShares: 500,
+      currentFmv: 20,
+      vestingSchedule: [
+        { date: '2025-01-01', cumulativePct: 1.0 },
+      ],
+    };
+
+    const pts = vestingChartData([grantA, grantB]);
+
+    // One point per distinct vest date (sorted union)
+    expect(pts.map((p) => p.date)).toEqual(['2025-01-01', '2026-01-01']);
+
+    // Cumulative, non-decreasing
+    for (let i = 1; i < pts.length; i++) {
+      expect(pts[i].vestedValue).toBeGreaterThanOrEqual(pts[i - 1].vestedValue);
+    }
+
+    // Spot-check values
+    expect(pts[0].vestedValue).toBeCloseTo(15000);
+    expect(pts[1].vestedValue).toBeCloseTo(20000);
+
+    // Final point ≈ Σ shares×fmv (fully vested)
+    expect(pts.at(-1)!.vestedValue).toBeCloseTo(20000);
+  });
+
+  it('returns empty array for empty grants list', () => {
+    expect(vestingChartData([])).toEqual([]);
+  });
+
+  it('returns single point for a single-entry vesting schedule', () => {
+    const singleVest = {
+      grantDate: '2024-01-01',
+      strikePrice: 0,
+      totalShares: 100,
+      currentFmv: 5,
+      vestingSchedule: [{ date: '2025-06-01', cumulativePct: 1.0 }],
+    };
+    const pts = vestingChartData([singleVest]);
+    expect(pts).toHaveLength(1);
+    expect(pts[0].date).toBe('2025-06-01');
+    expect(pts[0].vestedValue).toBeCloseTo(500);
   });
 });
