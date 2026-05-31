@@ -192,6 +192,13 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     fullDefinition:
       'Vested RSUs are taxed as ordinary income at the fair market value on the vest date. Any gain after vesting is capital-gains.',
   },
+  NSO: {
+    term: 'NSO',
+    shortDefinition:
+      'Non-qualified Stock Option — an employee stock option taxed as ordinary income on the spread at exercise.',
+    fullDefinition:
+      'Unlike an ISO, the bargain element (FMV − strike) at exercise is ordinary income (and payroll-tax wages), not an AMT preference. Any gain after exercise is capital gains based on the post-exercise holding period.',
+  },
   ESPP: {
     term: 'ESPP',
     shortDefinition:

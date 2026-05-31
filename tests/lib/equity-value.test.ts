@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { computeEquityValue, computeFmvFromCompanyValuation, vestingChartData } from '@/lib/equity-value';
+import { computeEquityValue, computeFmvFromCompanyValuation, vestingChartData, grantOrdinaryIncomeOnVest, isIsoAmtPreference } from '@/lib/equity-value';
+import { GrantType } from '@/types/enums';
 
 const grant = {
   grantDate: '2024-01-15',
@@ -209,5 +210,84 @@ describe('vestingChartData', () => {
     expect(pts).toHaveLength(1);
     expect(pts[0].date).toBe('2025-06-01');
     expect(pts[0].vestedValue).toBeCloseTo(500);
+  });
+});
+
+// Base grant for grantOrdinaryIncomeOnVest tests:
+// - 1000 shares @ FMV $50, 25% vested on 2020-01-15 (past), 100% on 2099-01-15 (far future)
+// - At "today" (2026-05-31, between the two), unvestedShares = 750
+const baseOrdinaryGrant = {
+  grantDate: '2019-01-15',
+  strikePrice: 0,
+  totalShares: 1000,
+  currentFmv: 50,
+  vestingSchedule: [
+    { date: '2020-01-15', cumulativePct: 0.25 },
+    { date: '2099-01-15', cumulativePct: 1.0 },
+  ],
+};
+const today2026 = new Date('2026-05-31');
+
+describe('grantOrdinaryIncomeOnVest', () => {
+  it('RSU: unvestedShares × currentFmv (strike is 0)', () => {
+    // unvestedShares = 750, fmv = 50 → 750 × 50 = 37500
+    const result = grantOrdinaryIncomeOnVest(
+      { ...baseOrdinaryGrant, grantType: GrantType.RSU },
+      today2026,
+    );
+    expect(result).toBeCloseTo(37500);
+  });
+
+  it('NSO: unvestedShares × (currentFmv − strikePrice), spread positive', () => {
+    // strike = 10, fmv = 50, spread = 40 → 750 × 40 = 30000
+    const result = grantOrdinaryIncomeOnVest(
+      { ...baseOrdinaryGrant, grantType: GrantType.NSO, strikePrice: 10 },
+      today2026,
+    );
+    expect(result).toBeCloseTo(30000);
+  });
+
+  it('NSO: floored at 0 when strike > fmv (underwater option)', () => {
+    // strike = 60, fmv = 50, spread = -10 → max(0,-10) = 0 → 0
+    const result = grantOrdinaryIncomeOnVest(
+      { ...baseOrdinaryGrant, grantType: GrantType.NSO, strikePrice: 60 },
+      today2026,
+    );
+    expect(result).toBe(0);
+  });
+
+  it('ISO: always 0 (bargain element is an AMT preference, not ordinary income)', () => {
+    const result = grantOrdinaryIncomeOnVest(
+      { ...baseOrdinaryGrant, grantType: GrantType.ISO, strikePrice: 10 },
+      today2026,
+    );
+    expect(result).toBe(0);
+  });
+
+  it('returns 0 when fully vested (no unvested shares)', () => {
+    // all vests in the past
+    const fullyVested = {
+      ...baseOrdinaryGrant,
+      grantType: GrantType.RSU,
+      vestingSchedule: [
+        { date: '2019-01-15', cumulativePct: 0.5 },
+        { date: '2020-01-15', cumulativePct: 1.0 },
+      ],
+    };
+    expect(grantOrdinaryIncomeOnVest(fullyVested, today2026)).toBe(0);
+  });
+});
+
+describe('isIsoAmtPreference', () => {
+  it('returns true for ISO', () => {
+    expect(isIsoAmtPreference(GrantType.ISO)).toBe(true);
+  });
+
+  it('returns false for RSU', () => {
+    expect(isIsoAmtPreference(GrantType.RSU)).toBe(false);
+  });
+
+  it('returns false for NSO', () => {
+    expect(isIsoAmtPreference(GrantType.NSO)).toBe(false);
   });
 });

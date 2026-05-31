@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useEquityGrantsStore } from '@/stores/equity-grants-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { CalculatorCard } from './CalculatorCard';
-import { computeEquityValue, vestingChartData } from '@/lib/equity-value';
+import { computeEquityValue, vestingChartData, grantOrdinaryIncomeOnVest, isIsoAmtPreference } from '@/lib/equity-value';
 import { formatCurrency } from '@/lib/format';
 import { FreshnessBadge } from '@/components/ui/freshness-badge';
 import { ResultRow } from '@/components/calculators/ResultRow';
@@ -91,6 +91,16 @@ export function EquityValueCard({ cardId, onHide }: EquityValueCardProps = {}) {
 
   const chartData = useMemo(() => vestingChartData(equityGrants), [equityGrants]);
 
+  const totalOrdinaryIncome = useMemo(
+    () => equityGrants.reduce((sum, g) => sum + grantOrdinaryIncomeOnVest(g, today), 0),
+    [equityGrants, today],
+  );
+
+  const hasIso = useMemo(
+    () => equityGrants.some((g) => isIsoAmtPreference(g.grantType)),
+    [equityGrants],
+  );
+
   if (equityGrants.length === 0) {
     return (
       <CalculatorCard
@@ -142,6 +152,21 @@ export function EquityValueCard({ cardId, onHide }: EquityValueCardProps = {}) {
         >
           Next vests: {upcomingVests.join(', ')}
         </div>
+      )}
+      <ResultRow
+        label="Est. ordinary income if unvested vests today"
+        testId="equity-ordinary-income"
+        value={formatCurrency(totalOrdinaryIncome)}
+      />
+      <p className="text-xs text-muted-foreground mt-1">
+        Estimated ordinary income at vest — not withheld tax.
+      </p>
+      {hasIso && (
+        <p className="text-xs text-muted-foreground mt-1">
+          ISO grants may trigger{' '}
+          <TermTooltip term="AMT">AMT</TermTooltip>
+          {' '}on exercise — not modeled here.
+        </p>
       )}
       <table className="w-full text-sm">
         <thead>

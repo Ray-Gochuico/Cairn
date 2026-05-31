@@ -379,4 +379,107 @@ describe('EquityValueCard', () => {
     // Only one chart point → chart should NOT render
     expect(screen.queryByText('Cumulative vesting')).not.toBeInTheDocument();
   });
+
+  it('shows est. ordinary income row for an NSO grant with unvested shares', () => {
+    // NSO: strike=10, fmv=50, 25% vested in past, 75% unvested
+    // ordinary income = 750 shares × (50−10) = $30,000
+    primeStores({
+      grants: [
+        {
+          name: 'NSO Grant',
+          grantType: 'NSO',
+          totalShares: 1000,
+          currentFmv: 50,
+          strikePrice: 10,
+          vestingSchedule: [
+            { date: '2020-01-15', cumulativePct: 0.25 },
+            { date: '2099-01-15', cumulativePct: 1.0 },
+          ],
+        },
+      ],
+    });
+    render(
+      <MemoryRouter>
+        <EquityValueCard />
+      </MemoryRouter>,
+    );
+    // The ordinary-income ResultRow must be present and show a $-value
+    expect(screen.getByTestId('equity-ordinary-income').textContent).toMatch(/\$[\d,]+/);
+  });
+
+  it('shows est. ordinary income row for an RSU grant with unvested shares', () => {
+    // RSU: strike=0, fmv=50, 25% vested in past, 75% unvested
+    // ordinary income = 750 × 50 = $37,500
+    primeStores({
+      grants: [
+        {
+          name: 'RSU Grant',
+          grantType: 'RSU',
+          totalShares: 1000,
+          currentFmv: 50,
+          strikePrice: 0,
+          vestingSchedule: [
+            { date: '2020-01-15', cumulativePct: 0.25 },
+            { date: '2099-01-15', cumulativePct: 1.0 },
+          ],
+        },
+      ],
+    });
+    render(
+      <MemoryRouter>
+        <EquityValueCard />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('equity-ordinary-income').textContent).toMatch(/\$[\d,]+/);
+  });
+
+  it('shows AMT note when an ISO grant is present', () => {
+    primeStores({
+      grants: [
+        {
+          name: 'ISO Grant',
+          grantType: 'ISO',
+          totalShares: 1000,
+          currentFmv: 50,
+          strikePrice: 10,
+          vestingSchedule: [
+            { date: '2020-01-15', cumulativePct: 0.25 },
+            { date: '2099-01-15', cumulativePct: 1.0 },
+          ],
+        },
+      ],
+    });
+    render(
+      <MemoryRouter>
+        <EquityValueCard />
+      </MemoryRouter>,
+    );
+    // The AMT note must be in the document
+    expect(screen.getByText(/AMT/)).toBeInTheDocument();
+  });
+
+  it('does NOT show AMT note when only RSU grants are present', () => {
+    primeStores({
+      grants: [
+        {
+          name: 'RSU Only',
+          grantType: 'RSU',
+          totalShares: 500,
+          currentFmv: 100,
+          strikePrice: 0,
+          vestingSchedule: [
+            { date: '2020-01-15', cumulativePct: 0.25 },
+            { date: '2099-01-15', cumulativePct: 1.0 },
+          ],
+        },
+      ],
+    });
+    render(
+      <MemoryRouter>
+        <EquityValueCard />
+      </MemoryRouter>,
+    );
+    // The AMT preference note must NOT be present (the RSU badge is plain text, no AMT note)
+    expect(screen.queryByText(/ISO grants may trigger/i)).not.toBeInTheDocument();
+  });
 });
