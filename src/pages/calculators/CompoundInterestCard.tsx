@@ -1,6 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { CalculatorCard } from './CalculatorCard';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import LineChartCard from '@/components/charts/LineChartCard';
 import {
@@ -9,6 +8,8 @@ import {
 } from '@/lib/compound-interest';
 import { formatCurrency } from '@/lib/format';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
+import { useCalculatorState } from '@/lib/calculator-state';
+import { NumberField } from '@/components/calculators/NumberField';
 
 interface CompoundInterestCardProps {
   cardId?: string;
@@ -52,26 +53,34 @@ function apyToApr(apy: number, ppy: number): number {
 }
 
 export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardProps = {}) {
-  // Inputs are local component state — this card is interactive what-if, not persisted.
-  const [pv, setPv] = useState<string>('1000');
-  const [monthlyContribution, setMonthlyContribution] = useState<string>('100');
-  const [years, setYears] = useState<string>('10');
-  const [ratePercent, setRatePercent] = useState<string>('7');
-  const [variancePercent, setVariancePercent] = useState<string>('');
-  const [frequency, setFrequency] = useState<CompoundFrequency>('MONTHLY');
+  // Kit-managed input state: persists in sessionStorage under calc-state:compound-interest.
+  // Defaults stay the original literal values (real-portfolio prefill is Wave 2).
+  const defaults = useMemo(() => ({
+    pv: 1000,
+    monthlyContribution: 100,
+    years: 10,
+    ratePercent: 7,
+    variancePercent: null as number | null,
+    frequency: 'MONTHLY' as CompoundFrequency,
+  }), []);
+
+  const { values, setValue, reset, isOverridden } = useCalculatorState(
+    cardId ?? 'compound-interest',
+    defaults,
+  );
 
   const series = useMemo(() => {
-    const pvNum = Number(pv) || 0;
-    const pmtNum = Number(monthlyContribution) || 0;
-    const yearsNum = Math.max(0, Math.floor(Number(years) || 0));
-    const apyNum = (Number(ratePercent) || 0) / 100;
-    const apyVarianceNum = variancePercent === '' ? undefined : (Number(variancePercent) || 0) / 100;
+    const pvNum = values.pv ?? 0;
+    const pmtNum = values.monthlyContribution ?? 0;
+    const yearsNum = Math.max(0, Math.floor(values.years ?? 0));
+    const apyNum = (values.ratePercent ?? 0) / 100;
+    const apyVarianceNum = values.variancePercent == null ? undefined : (values.variancePercent ?? 0) / 100;
     if (yearsNum === 0) return null;
     // The user-facing input is APY (effective annual yield), but
     // compoundInterestSeries() interprets its rate input as APR. Convert
     // at the boundary so the engine math stays APR-consistent across the app
     // while the input matches what users see on a savings/CD comparison.
-    const ppy = PERIODS_PER_YEAR[frequency];
+    const ppy = PERIODS_PER_YEAR[values.frequency];
     const aprRate = apyToApr(apyNum, ppy);
     // Variance preserves symmetry around APY → APR by converting low/high
     // bands first then differencing back to a single APR-variance number.
@@ -88,9 +97,9 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
       annualRate: aprRate,
       varianceRate: aprVariance,
       years: yearsNum,
-      frequency,
+      frequency: values.frequency,
     });
-  }, [pv, monthlyContribution, years, ratePercent, variancePercent, frequency]);
+  }, [values]);
 
   const headline = series ? formatCurrency(series.finalMid) : '—';
 
@@ -104,7 +113,7 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
     }));
   }, [series]);
 
-  const hasVariance = variancePercent !== '' && Number(variancePercent) > 0;
+  const hasVariance = values.variancePercent != null && (values.variancePercent ?? 0) > 0;
   // Red = pessimistic (rate - variance), blue = expected (mid),
   // green = optimistic (rate + variance). Single-line view uses blue.
   const chartSeries = hasVariance
@@ -123,34 +132,65 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
       headline={<span data-testid="compound-headline">{headline}</span>}
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-        <div>
-          <Label htmlFor="ci-pv">Initial amount</Label>
-          <Input id="ci-pv" type="number" step="any" value={pv} onChange={(e) => setPv(e.target.value)} />
-        </div>
-        <div>
-          <Label htmlFor="ci-pmt">Monthly contribution</Label>
-          <Input id="ci-pmt" type="number" step="any" value={monthlyContribution} onChange={(e) => setMonthlyContribution(e.target.value)} />
-        </div>
-        <div>
-          <Label htmlFor="ci-years">Length (years)</Label>
-          <Input id="ci-years" type="number" step="1" min="1" value={years} onChange={(e) => setYears(e.target.value)} />
-        </div>
-        <div>
+        <NumberField
+          id="ci-pv"
+          label="Initial amount"
+          value={values.pv}
+          onChange={(v) => setValue('pv', v ?? 0)}
+          step="any"
+          min={0}
+        />
+        <NumberField
+          id="ci-pmt"
+          label="Monthly contribution"
+          value={values.monthlyContribution}
+          onChange={(v) => setValue('monthlyContribution', v ?? 0)}
+          step="any"
+          min={0}
+        />
+        <NumberField
+          id="ci-years"
+          label="Length (years)"
+          value={values.years}
+          onChange={(v) => setValue('years', v ?? 0)}
+          step="1"
+          min={0}
+        />
+        <div className="space-y-1">
           <Label htmlFor="ci-rate">
             <TermTooltip term="APY">APY</TermTooltip> (%)
           </Label>
-          <Input id="ci-rate" type="number" step="0.1" value={ratePercent} onChange={(e) => setRatePercent(e.target.value)} aria-label="Annual percentage yield" />
+          <div className="flex items-center gap-1">
+            <input
+              id="ci-rate"
+              type="number"
+              step="0.1"
+              aria-label="Annual percentage yield"
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              value={values.ratePercent === null ? '' : String(values.ratePercent)}
+              onChange={(e) => {
+                const raw = e.target.value;
+                if (raw === '') { setValue('ratePercent', 0); return; }
+                const n = Number(raw);
+                setValue('ratePercent', Number.isFinite(n) ? n : 0);
+              }}
+            />
+          </div>
         </div>
-        <div>
-          <Label htmlFor="ci-variance">Variance ± (%)</Label>
-          <Input id="ci-variance" type="number" step="0.1" value={variancePercent} onChange={(e) => setVariancePercent(e.target.value)} placeholder="optional" />
-        </div>
-        <div>
+        <NumberField
+          id="ci-variance"
+          label="Variance ± (%)"
+          value={values.variancePercent}
+          onChange={(v) => setValue('variancePercent', v)}
+          step="0.1"
+          min={0}
+        />
+        <div className="space-y-1">
           <Label htmlFor="ci-frequency">Compound frequency</Label>
           <select
             id="ci-frequency"
-            value={frequency}
-            onChange={(e) => setFrequency(e.target.value as CompoundFrequency)}
+            value={values.frequency}
+            onChange={(e) => setValue('frequency', e.target.value as CompoundFrequency)}
             className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             {FREQUENCY_OPTIONS.map((opt) => (
@@ -159,6 +199,16 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
           </select>
         </div>
       </div>
+
+      {isOverridden && (
+        <button
+          type="button"
+          onClick={reset}
+          className="text-sm text-primary hover:underline mb-3"
+        >
+          Reset to my data
+        </button>
+      )}
 
       {series ? (
         <>
