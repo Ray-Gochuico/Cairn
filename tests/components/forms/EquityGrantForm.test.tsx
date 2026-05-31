@@ -194,3 +194,38 @@ describe('EquityGrantForm — DEFAULT_EQUITY_GRANT', () => {
     expect(DEFAULT_EQUITY_GRANT.companyTotalDebt).toBeNull();
   });
 });
+
+describe('EquityGrantForm — grant type select', () => {
+  it('renders a grant-type control defaulting to RSU', () => {
+    setupForm();
+    const select = screen.getByLabelText(/grant type/i) as HTMLSelectElement;
+    expect(select).toBeInTheDocument();
+    expect(select.value).toBe('RSU');
+  });
+
+  it('submits with grantType ISO when user selects ISO', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    setupForm({ onSubmit });
+
+    // Fill all required fields
+    await user.type(screen.getByLabelText(/^name$/i), '2024 ISO grant');
+    await user.type(screen.getByLabelText(/^company$/i), 'Acme Corp');
+    await user.click(screen.getByRole('radio', { name: /^alice$/i }));
+    await selectDate(user, 'grant-date', '2024-01-15');
+    const sharesInput = screen.getByLabelText(/total shares/i);
+    await user.clear(sharesInput);
+    await user.type(sharesInput, '1000');
+    const fmvInput = screen.getByLabelText(/current fmv/i);
+    await user.clear(fmvInput);
+    await user.type(fmvInput, '50');
+    await selectDate(user, 'vesting-row-0-date', '2027-01-15');
+
+    // Change grant type to ISO
+    await user.selectOptions(screen.getByLabelText(/grant type/i), 'ISO');
+
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+    await vi.waitFor(() => expect(onSubmit).toHaveBeenCalled(), { timeout: 10_000 });
+    expect(onSubmit.mock.calls[0][0].grantType).toBe('ISO');
+  }, 15000);
+});

@@ -270,6 +270,19 @@ export default function EquityGrantForm({
             </div>
           </div>
 
+          <div>
+            <Label htmlFor="grant-type">Grant type</Label>
+            <select
+              id="grant-type"
+              {...form.register('grantType')}
+              className="text-sm border rounded px-2 py-1 bg-background"
+            >
+              <option value="RSU">RSU — Restricted Stock Units</option>
+              <option value="ISO">ISO — Incentive Stock Options</option>
+              <option value="NSO">NSO — Non-qualified Stock Options</option>
+            </select>
+          </div>
+
           <details open={calculatorOpenByDefault} className="border rounded-md p-3 bg-muted/30">
             <summary className="cursor-pointer text-sm font-medium select-none">
               Don't know the FMV? Estimate it from company valuation

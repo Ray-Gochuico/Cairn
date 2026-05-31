@@ -173,6 +173,20 @@ export function validateEquityGrantRow(
     }
   }
 
+  // grant_type (optional; default RSU; validate against GrantType enum)
+  let grantType: GrantType = GrantType.RSU;
+  const grantTypeRaw = (raw.grant_type ?? '').trim().toUpperCase();
+  if (grantTypeRaw.length > 0) {
+    if ((Object.values(GrantType) as string[]).includes(grantTypeRaw)) {
+      grantType = grantTypeRaw as GrantType;
+    } else {
+      errors.push({
+        field: 'grant_type',
+        message: `Invalid grant type "${grantTypeRaw}". Must be one of: ${Object.values(GrantType).join(', ')}.`,
+      });
+    }
+  }
+
   const resolved: EquityGrantResolved = {
     householdId: 1, // stamped at commit time
     ownerPersonId,
@@ -183,10 +197,7 @@ export function validateEquityGrantRow(
     totalShares,
     vestingSchedule: vestingRows,
     currentFmv,
-    // Wave 1 Task 1 (foundation): default to RSU so importer round-trips stay
-    // valid. Parsing the grant_type CSV cell (enum validation + invalid-flag) +
-    // the CSV header/template are added in Task 2.
-    grantType: GrantType.RSU,
+    grantType,
     companyValuation,
     companyOutstandingShares,
     companyTotalDebt,
@@ -213,7 +224,7 @@ export function equityGrantTemplateCsv(): string {
     { date: '2029-01-01', cumulativePct: 1.0 },
   ]);
   return [
-    'name,company_name,owner_person_name,grant_date,strike_price,total_shares,current_fmv,vesting_schedule_json,company_valuation,company_outstanding_shares,company_total_debt',
-    `Series B RSUs,Startup Inc,Alice,2025-01-01,0,1000,10,"${vesting.replace(/"/g, '""')}",,,`,
+    'name,company_name,owner_person_name,grant_date,strike_price,total_shares,current_fmv,grant_type,vesting_schedule_json,company_valuation,company_outstanding_shares,company_total_debt',
+    `Series B RSUs,Startup Inc,Alice,2025-01-01,0,1000,10,RSU,"${vesting.replace(/"/g, '""')}",,,`,
   ].join('\n');
 }
