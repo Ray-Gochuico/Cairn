@@ -51,6 +51,7 @@ const Goals = lazyWithRetry(() => import('./pages/Goals'));
 const Roadmap = lazyWithRetry(() => import('./pages/Roadmap'));
 const Learn = lazyWithRetry(() => import('./pages/Learn'));
 const CalculatorsLayout = lazyWithRetry(() => import('./pages/calculators/CalculatorsLayout'));
+const PaycheckCalculator = lazyWithRetry(() => import('./pages/calculators/PaycheckCalculator'));
 const WhatIf = lazyWithRetry(() => import('./pages/WhatIf'));
 const Settings = lazyWithRetry(() => import('./pages/Settings'));
 const MonthlyMiniWindow = lazyWithRetry(() => import('./pages/MonthlyMiniWindow'));
@@ -121,6 +122,7 @@ const router = createBrowserRouter([
       { path: 'roadmap', element: lazyRoute(Roadmap) },
       { path: 'learn', element: lazyRoute(Learn) },
       { path: 'calculators', element: lazyRoute(CalculatorsLayout) },
+      { path: 'calculators/paycheck', element: lazyRoute(PaycheckCalculator) },
       { path: 'what-if', element: lazyRoute(WhatIf) },
       { path: 'settings', element: lazyRoute(Settings) },
       { path: 'monthly', element: lazyRoute(MonthlyMiniWindow) },
