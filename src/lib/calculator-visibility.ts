@@ -34,19 +34,3 @@ export function persistHiddenCards(ids: readonly string[]): void {
   }
 }
 
-export function hideCard(id: string): void {
-  const current = getHiddenCards();
-  if (!current.includes(id)) {
-    persistHiddenCards([...current, id]);
-  }
-}
-
-export function showCard(id: string): void {
-  const current = getHiddenCards();
-  persistHiddenCards(current.filter((x) => x !== id));
-}
-
-export function isHidden(id: string, autoVisibilityResult: boolean): boolean {
-  if (!autoVisibilityResult) return true;
-  return getHiddenCards().includes(id);
-}

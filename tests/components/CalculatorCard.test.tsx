@@ -20,20 +20,3 @@ it('renders title and headline, toggles body via expand button', async () => {
   expect(screen.queryByText('Body content')).not.toBeInTheDocument();
 });
 
-it('renders an Override panel when overridePanel prop is provided and toggle is clicked', async () => {
-  const user = userEvent.setup();
-  render(
-    <MemoryRouter>
-      <CalculatorCard
-        title="Test"
-        headline="$0"
-        overridePanel={<div>Override fields</div>}
-      >
-        Body
-      </CalculatorCard>
-    </MemoryRouter>,
-  );
-  expect(screen.queryByText('Override fields')).not.toBeInTheDocument();
-  await user.click(screen.getByRole('button', { name: /override/i }));
-  expect(screen.getByText('Override fields')).toBeInTheDocument();
-});
