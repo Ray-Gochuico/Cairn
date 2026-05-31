@@ -415,7 +415,7 @@ export default function PaycheckCalculator() {
                 size="sm"
                 className="h-7 text-xs text-muted-foreground"
                 disabled={!values || !form.formState.isDirty}
-                onClick={() => values && form.reset(values)}
+                onClick={() => values && form.reset(values, { keepDirtyValues: false })}
               >
                 Reset to my data
               </Button>
@@ -789,8 +789,8 @@ export default function PaycheckCalculator() {
               <h3 className="text-sm font-semibold">4 · State &amp; local income tax</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 State tax varies widely — some states have none, others layer on city or county
-                levies. When a state has no income tax, that row reads "no state income tax"
-                rather than $0.
+                levies. Zero-tax states display an italic note in the state row instead of a
+                $0 amount.
               </p>
             </div>
           </div>
@@ -859,16 +859,21 @@ function DonutChartCardSlices({
     extraWithholdingTotal: number; takeHome: number;
   };
 }) {
+  // NOTE: donut slice names are SHORT labels (legend only) — they intentionally
+  // differ from the breakdown-row text labels ("Social Security" in the row vs.
+  // "SS" in the legend) so that Testing Library `findByText` queries in the
+  // results panel remain unambiguous. Keep these short names distinct from
+  // the breakdown row labels in PaycheckCalculator.tsx.
   const slices: DonutSlice[] = [
     { name: 'Take-home', value: result.takeHome, color: COLORS.takehome },
     { name: 'Federal', value: result.federal, color: COLORS.federal },
-    { name: 'Social Security', value: result.ss, color: COLORS.ss },
-    { name: 'Medicare', value: result.medicare + result.additionalMedicare, color: COLORS.medicare },
+    { name: 'SS', value: result.ss, color: COLORS.ss },
+    { name: 'Med.', value: result.medicare + result.additionalMedicare, color: COLORS.medicare },
     { name: 'State tax', value: result.stateTax, color: COLORS.state },
     { name: 'City tax', value: result.cityTax, color: COLORS.city },
     { name: 'Pre-tax', value: result.pretaxTotal, color: COLORS.pretax },
     { name: 'Post-tax', value: result.postTaxTotal, color: COLORS.posttax },
-    { name: 'Extra withholding', value: result.extraWithholdingTotal, color: COLORS.extra },
+    { name: 'Extra w/h', value: result.extraWithholdingTotal, color: COLORS.extra },
   ].filter((s) => s.value > 0);
 
   return (
