@@ -7,6 +7,8 @@ import { CalculatorCard } from './CalculatorCard';
 import { financialIndependenceSeries } from '@/lib/financial-independence';
 import { formatCurrency } from '@/lib/format';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
+import { useCalculatorState } from '@/lib/calculator-state';
+import { NumberField } from '@/components/calculators/NumberField';
 import { sumLatestOnOrBefore } from '@/lib/growth-horizons';
 import { effectiveSwr } from '@/lib/scenarios/effective-swr';
 
@@ -24,19 +26,13 @@ export function FinancialIndependenceCard({
   const { snapshots } = useSnapshotsStore();
   const { contributions } = useContributionsStore();
 
-  const series = useMemo(() => {
-    if (!household || persons.length === 0) return null;
-    if (!household.growthScenarios || household.growthScenarios.length === 0) return null;
-    // Guard on positive expenses — FI needs a target to compute; effectiveSwr
-    // is always positive so guarding on the rate is obsolete (a withdrawalRate=0
-    // household now uses the 0.04 canonical default via effectiveSwr).
-    if ((household.monthlyExpenseBaseline ?? 0) <= 0) return null;
-
+  // ── Real-data defaults (memoized from the stores) ──────────────────────────
+  const defaults = useMemo(() => {
     // Latest snapshot per account on or before today — the canonical helper
     // (shared with What-If/Backtest). It applies the snapshotDate <= today
     // cutoff the old hand-rolled loop omitted.
     const todayIso = new Date().toISOString().slice(0, 10);
-    const pv = sumLatestOnOrBefore(snapshots, todayIso) ?? 0;
+    const currentPortfolio = sumLatestOnOrBefore(snapshots, todayIso) ?? 0;
 
     // Rolling 12-month contribution total — used as the annual PMT figure for
     // the FV solver. We compare ISO date strings; chronological order matches
@@ -50,16 +46,107 @@ export function FinancialIndependenceCard({
 
     // No active scenario on the dashboard card → pass null; effectiveSwr derives
     // from household.withdrawalRate (when > 0) else the 0.04 canonical default.
-    const withdrawalRate = effectiveSwr(null, household);
-    const targetFv = (household.monthlyExpenseBaseline * 12) / withdrawalRate;
+    // Stored as a 0–100 percent and divided by 100 in the computation.
+    const withdrawalRatePct = effectiveSwr(null, household) * 100;
+
+    return {
+      currentPortfolio,
+      annualContribution,
+      monthlyExpenses: household?.monthlyExpenseBaseline ?? 0,
+      withdrawalRatePct,
+    };
+  }, [household, snapshots, contributions]);
+
+  const { values, setValue, reset, isOverridden } = useCalculatorState(
+    cardId ?? 'financial-independence',
+    defaults,
+  );
+
+  // ── Derived calculations (off the EDITED assumptions) ──────────────────────
+  const targetFv = useMemo(() => {
+    const swr = (values.withdrawalRatePct ?? 0) / 100;
+    if (swr <= 0) return 0;
+    return ((values.monthlyExpenses ?? 0) * 12) / swr;
+  }, [values.monthlyExpenses, values.withdrawalRatePct]);
+
+  const series = useMemo(() => {
+    if (!household || persons.length === 0) return null;
+    if (!household.growthScenarios || household.growthScenarios.length === 0)
+      return null;
+    // FI needs a positive target to compute (positive expenses + a positive
+    // withdrawal rate). The SWR is editable, so a non-positive rate keeps the
+    // card mounted (no rows) rather than empty-stating it.
+    if ((values.monthlyExpenses ?? 0) <= 0) return null;
+    if (targetFv <= 0) return null;
 
     return financialIndependenceSeries({
-      pv,
-      annualContribution,
+      pv: values.currentPortfolio,
+      annualContribution: values.annualContribution,
       targetFv,
       scenarios: household.growthScenarios,
     });
-  }, [household, persons, snapshots, contributions]);
+  }, [
+    household,
+    persons,
+    targetFv,
+    values.currentPortfolio,
+    values.annualContribution,
+    values.monthlyExpenses,
+  ]);
+
+  // ── Editable inputs (shared with the empty-state render below) ─────────────
+  const controls = (
+    <>
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <NumberField
+          id="fi-portfolio"
+          label="Current portfolio"
+          value={values.currentPortfolio}
+          onChange={(v) => setValue('currentPortfolio', v ?? 0)}
+          suffix="$"
+          step="1000"
+          min={0}
+        />
+        <NumberField
+          id="fi-contrib"
+          label="Annual contribution"
+          value={values.annualContribution}
+          onChange={(v) => setValue('annualContribution', v ?? 0)}
+          suffix="$/yr"
+          step="500"
+          min={0}
+        />
+        <NumberField
+          id="fi-expenses"
+          label="Monthly expenses"
+          value={values.monthlyExpenses}
+          onChange={(v) => setValue('monthlyExpenses', v ?? 0)}
+          suffix="$/mo"
+          step="100"
+          min={0}
+        />
+        <NumberField
+          id="fi-swr"
+          label="Withdrawal rate"
+          value={values.withdrawalRatePct}
+          onChange={(v) => setValue('withdrawalRatePct', v ?? 0)}
+          suffix="%"
+          step="0.1"
+          min={0}
+        />
+      </div>
+
+      {isOverridden && (
+        <button
+          type="button"
+          onClick={reset}
+          className="text-sm text-primary hover:underline mb-3"
+        >
+          Reset to my data
+        </button>
+      )}
+    </>
+  );
 
   if (!series || !household) {
     return (
@@ -68,8 +155,9 @@ export function FinancialIndependenceCard({
         onHide={onHide}
         title={<>Years to <TermTooltip term="FI">FI</TermTooltip></>}
         titleText="Years to FI"
-        headline="—"
+        headline={<span data-testid="fi-headline">—</span>}
       >
+        {household ? controls : null}
         <p className="text-sm text-muted-foreground">Add your inputs to see Years to FI.</p>
       </CalculatorCard>
     );
@@ -86,8 +174,6 @@ export function FinancialIndependenceCard({
     moderate && Number.isFinite(moderate.years)
       ? `${moderate.years.toFixed(1)} years`
       : '∞';
-  const withdrawalRate = effectiveSwr(null, household);
-  const targetFv = (household.monthlyExpenseBaseline * 12) / withdrawalRate;
 
   return (
     <CalculatorCard
@@ -97,12 +183,13 @@ export function FinancialIndependenceCard({
       titleText="Years to FI"
       headline={<span data-testid="fi-headline">{yearsLabel}</span>}
     >
+      {controls}
       <p className="text-sm text-muted-foreground mb-3">
         Target portfolio:{' '}
         <span className="tabular-nums">{formatCurrency(targetFv)}</span>{' '}
-        (= 12 × ${household.monthlyExpenseBaseline.toLocaleString()} /{' '}
+        (= 12 × ${(values.monthlyExpenses ?? 0).toLocaleString()} /{' '}
         <TermTooltip term="SWR">
-          {(household.withdrawalRate * 100).toFixed(1)}%
+          {(values.withdrawalRatePct ?? 0).toFixed(1)}%
         </TermTooltip>
         )
       </p>
