@@ -11,43 +11,69 @@ import PageLoadingSpinner from './components/layout/PageLoadingSpinner';
 // PageShell itself is eagerly imported because it owns the persistent layout
 // — lazy-loading the shell would defeat the point (the user would see a
 // blank screen on first paint instead of the sidebar).
-const Dashboard = lazy(() => import('./pages/Dashboard'));
-const NetWorth = lazy(() => import('./pages/NetWorth'));
-const Investments = lazy(() => import('./pages/Investments'));
-const Loans = lazy(() => import('./pages/Loans'));
-const Property = lazy(() => import('./pages/Property'));
-const Vehicles = lazy(() => import('./pages/Vehicles'));
-const EquityGrants = lazy(() => import('./pages/EquityGrants'));
-const Spending = lazy(() => import('./pages/Spending'));
-const SpendingTransactions = lazy(() => import('./pages/SpendingTransactions'));
-const Budget = lazy(() => import('./pages/Budget'));
-const Goals = lazy(() => import('./pages/Goals'));
-const Roadmap = lazy(() => import('./pages/Roadmap'));
-const Learn = lazy(() => import('./pages/Learn'));
-const CalculatorsLayout = lazy(() => import('./pages/calculators/CalculatorsLayout'));
-const WhatIf = lazy(() => import('./pages/WhatIf'));
-const Settings = lazy(() => import('./pages/Settings'));
-const MonthlyMiniWindow = lazy(() => import('./pages/MonthlyMiniWindow'));
-const InputsLayout = lazy(() => import('./pages/inputs/InputsLayout'));
-const HouseholdTab = lazy(() => import('./pages/inputs/HouseholdTab'));
-const PersonsTab = lazy(() => import('./pages/inputs/PersonsTab'));
-const DependentsTab = lazy(() => import('./pages/inputs/DependentsTab'));
-const AccountsTab = lazy(() => import('./pages/inputs/AccountsTab'));
-const HoldingsTab = lazy(() => import('./pages/inputs/HoldingsTab'));
-const ContributionsTab = lazy(() => import('./pages/inputs/ContributionsTab'));
-const LoansTab = lazy(() => import('./pages/inputs/LoansTab'));
-const PropertiesTab = lazy(() => import('./pages/inputs/PropertiesTab'));
-const HousingPaymentsTab = lazy(() => import('./pages/inputs/HousingPaymentsTab'));
-const VehiclesTab = lazy(() => import('./pages/inputs/VehiclesTab'));
-const VehicleLeasesTab = lazy(() => import('./pages/inputs/VehicleLeasesTab'));
-const GoalsTab = lazy(() => import('./pages/inputs/GoalsTab'));
-const EquityGrantsTab = lazy(() => import('./pages/inputs/EquityGrantsTab'));
-const Plan529Tab = lazy(() => import('./pages/inputs/Plan529Tab'));
-const TickersTab = lazy(() => import('./pages/inputs/TickersTab'));
-const ComingSoonTab = lazy(() => import('./pages/inputs/tabs-coming-soon'));
-const CategoriesTab = lazy(() => import('./pages/inputs/CategoriesTab'));
-const SetupWizard = lazy(() => import('./pages/setup/SetupWizard'));
-const NotFound = lazy(() => import('./pages/NotFound'));
+// Each lazy() is wrapped in lazyWithRetry: a failed dynamic import is almost
+// always a STALE CHUNK — a new build / dev-server HMR re-hashed the chunk URLs,
+// so a not-yet-loaded route's old URL now 404s ("Importing a module script
+// failed"). Reload once to fetch the current manifest; a sessionStorage guard
+// prevents a reload loop if a chunk is genuinely missing.
+function lazyWithRetry<T extends React.ComponentType<any>>(
+  importer: () => Promise<{ default: T }>,
+) {
+  return lazy(async () => {
+    const RELOAD_KEY = 'lazy-chunk-reloaded';
+    try {
+      const mod = await importer();
+      sessionStorage.removeItem(RELOAD_KEY); // success — reset for a future stale chunk
+      return mod;
+    } catch (err) {
+      if (typeof window !== 'undefined' && !sessionStorage.getItem(RELOAD_KEY)) {
+        sessionStorage.setItem(RELOAD_KEY, '1');
+        window.location.reload();
+        // Hold the Suspense fallback up while the reload happens.
+        return new Promise<{ default: T }>(() => {});
+      }
+      throw err; // already reloaded once — surface the real error
+    }
+  });
+}
+
+const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'));
+const NetWorth = lazyWithRetry(() => import('./pages/NetWorth'));
+const Investments = lazyWithRetry(() => import('./pages/Investments'));
+const Loans = lazyWithRetry(() => import('./pages/Loans'));
+const Property = lazyWithRetry(() => import('./pages/Property'));
+const Vehicles = lazyWithRetry(() => import('./pages/Vehicles'));
+const EquityGrants = lazyWithRetry(() => import('./pages/EquityGrants'));
+const Spending = lazyWithRetry(() => import('./pages/Spending'));
+const SpendingTransactions = lazyWithRetry(() => import('./pages/SpendingTransactions'));
+const Budget = lazyWithRetry(() => import('./pages/Budget'));
+const Goals = lazyWithRetry(() => import('./pages/Goals'));
+const Roadmap = lazyWithRetry(() => import('./pages/Roadmap'));
+const Learn = lazyWithRetry(() => import('./pages/Learn'));
+const CalculatorsLayout = lazyWithRetry(() => import('./pages/calculators/CalculatorsLayout'));
+const WhatIf = lazyWithRetry(() => import('./pages/WhatIf'));
+const Settings = lazyWithRetry(() => import('./pages/Settings'));
+const MonthlyMiniWindow = lazyWithRetry(() => import('./pages/MonthlyMiniWindow'));
+const InputsLayout = lazyWithRetry(() => import('./pages/inputs/InputsLayout'));
+const HouseholdTab = lazyWithRetry(() => import('./pages/inputs/HouseholdTab'));
+const PersonsTab = lazyWithRetry(() => import('./pages/inputs/PersonsTab'));
+const DependentsTab = lazyWithRetry(() => import('./pages/inputs/DependentsTab'));
+const AccountsTab = lazyWithRetry(() => import('./pages/inputs/AccountsTab'));
+const HoldingsTab = lazyWithRetry(() => import('./pages/inputs/HoldingsTab'));
+const ContributionsTab = lazyWithRetry(() => import('./pages/inputs/ContributionsTab'));
+const LoansTab = lazyWithRetry(() => import('./pages/inputs/LoansTab'));
+const PropertiesTab = lazyWithRetry(() => import('./pages/inputs/PropertiesTab'));
+const HousingPaymentsTab = lazyWithRetry(() => import('./pages/inputs/HousingPaymentsTab'));
+const VehiclesTab = lazyWithRetry(() => import('./pages/inputs/VehiclesTab'));
+const VehicleLeasesTab = lazyWithRetry(() => import('./pages/inputs/VehicleLeasesTab'));
+const GoalsTab = lazyWithRetry(() => import('./pages/inputs/GoalsTab'));
+const EquityGrantsTab = lazyWithRetry(() => import('./pages/inputs/EquityGrantsTab'));
+const Plan529Tab = lazyWithRetry(() => import('./pages/inputs/Plan529Tab'));
+const TickersTab = lazyWithRetry(() => import('./pages/inputs/TickersTab'));
+const ComingSoonTab = lazyWithRetry(() => import('./pages/inputs/tabs-coming-soon'));
+const CategoriesTab = lazyWithRetry(() => import('./pages/inputs/CategoriesTab'));
+const SetupWizard = lazyWithRetry(() => import('./pages/setup/SetupWizard'));
+const NotFound = lazyWithRetry(() => import('./pages/NotFound'));
 
 // Tiny helper: each route element renders inside a Suspense boundary so a
 // download-in-progress shows the skeleton, not a blank tree. Putting the
