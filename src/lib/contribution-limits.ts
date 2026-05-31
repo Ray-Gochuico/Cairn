@@ -8,6 +8,9 @@
 //   - SS wage base ("contribution and benefit base"): SSA Oct 2025
 //     announcement — $184,500 (up from $176,100 in 2025). Mirrored at
 //     https://tax.thomsonreuters.com/news/ssa-announces-social-security-taxable-wage-base-for-2026/
+//   - Health FSA (§125 cafeteria-plan salary-reduction limit): IRS
+//     Rev. Proc. 2025-32 (Oct 9 2025) — $3,400 (up $100 from 2025's
+//     $3,300; carryover cap $680).
 export const CONTRIBUTION_LIMITS_2026 = {
   EMPLOYEE_401K: 24500,
   HSA_SELF_ONLY: 4400,
@@ -15,6 +18,7 @@ export const CONTRIBUTION_LIMITS_2026 = {
   DCFSA_MFJ_SINGLE_HOH: 7500,
   DCFSA_MFS: 3750,
   SOCIAL_SECURITY_WAGE_BASE: 184500,
+  HEALTH_FSA: 3400,
 } as const;
 
 export function hsaLimitForHousehold(opts: { personCount: number; dependentCount: number }): number {
