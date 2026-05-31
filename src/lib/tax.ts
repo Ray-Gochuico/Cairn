@@ -27,14 +27,49 @@ const ADDITIONAL_MEDICARE_THRESHOLD = {
   MFJ: 250000,
 } as const;
 
-export function computeFica(gross: number, filingStatus: keyof typeof ADDITIONAL_MEDICARE_THRESHOLD): number {
+export interface FicaBreakdown {
+  /** 6.2% Social Security, levied up to the annual wage base. */
+  socialSecurity: number;
+  /** 1.45% Medicare, uncapped. */
+  medicare: number;
+  /** 0.9% Additional Medicare on wages above the filing-status threshold; 0 otherwise. */
+  additionalMedicare: number;
+  /** socialSecurity + medicare + additionalMedicare. Equals the legacy computeFica scalar. */
+  total: number;
+}
+
+/**
+ * FICA split into its components. Added 2026-05-28 (v1.1) so the Paycheck
+ * Calculator can show separate Social Security / Medicare rows and surface
+ * the Additional Medicare surtax only when it triggers.
+ *
+ * `computeFica` below delegates to this and returns `.total`, so every
+ * existing caller (computeTotalTax → TotalTaxOutput.fica, computeBonusTax,
+ * PaycheckCard/BonusTaxCard/CommissionTaxCard) is unaffected.
+ */
+export function computeFicaBreakdown(
+  gross: number,
+  filingStatus: keyof typeof ADDITIONAL_MEDICARE_THRESHOLD,
+): FicaBreakdown {
   if (gross < 0) throw new Error('gross must be non-negative');
   const ssBase = Math.min(gross, CONTRIBUTION_LIMITS_2026.SOCIAL_SECURITY_WAGE_BASE);
-  const ss = ssBase * 0.062;
-  const medicareBase = gross * 0.0145;
+  const socialSecurity = ssBase * 0.062;
+  const medicare = gross * 0.0145;
   const threshold = ADDITIONAL_MEDICARE_THRESHOLD[filingStatus];
   const additionalMedicare = gross > threshold ? (gross - threshold) * 0.009 : 0;
-  return ss + medicareBase + additionalMedicare;
+  return {
+    socialSecurity,
+    medicare,
+    additionalMedicare,
+    total: socialSecurity + medicare + additionalMedicare,
+  };
+}
+
+export function computeFica(
+  gross: number,
+  filingStatus: keyof typeof ADDITIONAL_MEDICARE_THRESHOLD,
+): number {
+  return computeFicaBreakdown(gross, filingStatus).total;
 }
 
 export interface PretaxDeductionsInput {

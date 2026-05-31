@@ -227,4 +227,11 @@ describe('PaycheckCard', () => {
     );
     expect(await screen.findByText(/Set up your household profile/i)).toBeInTheDocument();
   });
+
+  it('links to the full calculator page', async () => {
+    primeStores();
+    render(<MemoryRouter><PaycheckCard /></MemoryRouter>);
+    const link = await screen.findByRole('link', { name: /open full calculator/i });
+    expect(link).toHaveAttribute('href', '/calculators/paycheck');
+  });
 });
