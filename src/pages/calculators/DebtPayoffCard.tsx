@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useLoansStore } from '@/stores/loans-store';
 import { amortize, type Amortization } from '@/lib/amortization';
 import { CalculatorCard } from './CalculatorCard';
 import { formatCurrency } from '@/lib/format';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useCalculatorState } from '@/lib/calculator-state';
 import type { Loan } from '@/types/schema';
 
 type Strategy = 'none' | 'snowball' | 'avalanche';
@@ -71,12 +72,16 @@ function projectionsFor(
 
 export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
   const { loans } = useLoansStore();
-  const [strategy, setStrategy] = useState<Strategy>('none');
-  const [extraTotal, setExtraTotal] = useState<number>(0);
+
+  const defaults = useMemo(() => ({ strategy: 'none' as Strategy, extraTotal: 0 }), []);
+  const { values, setValue, reset, isOverridden } = useCalculatorState(
+    cardId ?? 'debt-payoff',
+    defaults,
+  );
 
   const projections = useMemo(
-    () => projectionsFor(loans, strategy, extraTotal),
-    [loans, strategy, extraTotal],
+    () => projectionsFor(loans, values.strategy, values.extraTotal),
+    [loans, values.strategy, values.extraTotal],
   );
 
   // Baseline: every loan with extraPayment=0. Used to estimate "savings" from
@@ -182,8 +187,8 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
           <select
             id="debt-strategy"
             className="flex h-9 w-full items-center rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-            value={strategy}
-            onChange={(e) => setStrategy(e.target.value as Strategy)}
+            value={values.strategy}
+            onChange={(e) => setValue('strategy', e.target.value as Strategy)}
           >
             <option value="none">None</option>
             <option value="snowball">Snowball (smallest balance)</option>
@@ -197,22 +202,33 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
             type="number"
             min={0}
             step={50}
-            value={extraTotal}
+            value={values.extraTotal}
             onChange={(e) => {
               const v = Number(e.target.value);
-              setExtraTotal(Number.isFinite(v) && v >= 0 ? v : 0);
+              setValue('extraTotal', Number.isFinite(v) && v >= 0 ? v : 0);
             }}
-            disabled={strategy === 'none'}
+            disabled={values.strategy === 'none'}
           />
           <p className="text-xs text-muted-foreground">
-            {strategy === 'none'
+            {values.strategy === 'none'
               ? 'Pick a strategy to apply additional monthly payments.'
-              : strategy === 'snowball'
+              : values.strategy === 'snowball'
                 ? 'Applied to the smallest-balance loan each month.'
                 : 'Applied to the highest-rate loan each month.'}
           </p>
         </div>
       </div>
+
+      {/* Gated reset button — only appears when the user has overridden a value */}
+      {isOverridden && (
+        <button
+          type="button"
+          onClick={reset}
+          className="text-sm text-primary hover:underline"
+        >
+          Reset to my data
+        </button>
+      )}
 
       {/* Per-loan rows */}
       <table className="w-full text-sm">

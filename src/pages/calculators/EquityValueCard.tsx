@@ -6,6 +6,7 @@ import { CalculatorCard } from './CalculatorCard';
 import { computeEquityValue } from '@/lib/equity-value';
 import { formatCurrency } from '@/lib/format';
 import { FreshnessBadge } from '@/components/ui/freshness-badge';
+import { ResultRow } from '@/components/calculators/ResultRow';
 
 interface EquityValueCardProps {
   cardId?: string;
@@ -95,6 +96,12 @@ export function EquityValueCard({ cardId, onHide }: EquityValueCardProps = {}) {
         </p>
         <FreshnessBadge size="sm" />
       </div>
+      <ResultRow
+        label="Total vested"
+        emphasis
+        testId="equity-total-vested"
+        value={formatCurrency(totalVested)}
+      />
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-muted-foreground">

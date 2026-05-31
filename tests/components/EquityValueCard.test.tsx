@@ -216,4 +216,26 @@ describe('EquityValueCard', () => {
       screen.getByRole('button', { name: /hide equity value card/i }),
     ).toBeInTheDocument();
   });
+
+  it('renders the total vested value through ResultRow with a stable testId', () => {
+    primeStores({
+      grants: [
+        {
+          name: 'Grant A',
+          totalShares: 1000,
+          currentFmv: 50,
+          vestingSchedule: [
+            { date: '2020-01-15', cumulativePct: 0.25 },
+            { date: '2099-01-15', cumulativePct: 1.0 },
+          ],
+        },
+      ],
+    });
+    render(
+      <MemoryRouter>
+        <EquityValueCard />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('equity-total-vested').textContent).toMatch(/\$[\d,]+/);
+  });
 });

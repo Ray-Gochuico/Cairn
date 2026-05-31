@@ -446,4 +446,21 @@ describe('CoastFiCard', () => {
       expect(input.value).toBe('500000');
     });
   });
+
+  it('seeds current portfolio from the latest snapshot on-or-before today (excludes future)', () => {
+    primeStores();
+    const future = new Date();
+    future.setFullYear(future.getFullYear() + 5);
+    const futureIso = future.toISOString().slice(0, 10);
+    useSnapshotsStore.setState({
+      snapshots: [
+        { id: 1, accountId: 1, snapshotDate: '2024-01-01', totalValue: 250000, source: SnapshotSource.MANUAL },
+        { id: 2, accountId: 1, snapshotDate: futureIso, totalValue: 9_000_000, source: SnapshotSource.MANUAL },
+      ],
+      isLoading: false, error: null,
+    });
+    render(<MemoryRouter><CoastFiCard /></MemoryRouter>);
+    const field = screen.getByLabelText(/current portfolio/i) as HTMLInputElement;
+    expect(field.value).toBe('250000'); // not 9,000,000
+  });
 });

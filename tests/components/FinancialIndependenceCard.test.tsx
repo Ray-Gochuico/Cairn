@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
@@ -117,6 +118,8 @@ function primeStores(opts?: {
 describe('FinancialIndependenceCard', () => {
   beforeEach(() => {
     resetStores();
+    // Clear any persisted calculator overrides from previous tests.
+    sessionStorage.clear();
   });
 
   it('renders empty state when household is not set', () => {
@@ -255,5 +258,70 @@ describe('FinancialIndependenceCard', () => {
     expect(
       screen.getByRole('button', { name: /hide years to fi card/i }),
     ).toBeInTheDocument();
+  });
+
+  it('excludes future-dated snapshots from the current portfolio (latest on-or-before today)', () => {
+    primeStores();
+    // A snapshot dated far in the future must NOT inflate the portfolio — the
+    // retrofit uses sumLatestOnOrBefore(snapshots, today), not a raw max-per-account.
+    const future = new Date();
+    future.setFullYear(future.getFullYear() + 5);
+    const futureIso = future.toISOString().slice(0, 10);
+    useSnapshotsStore.setState({
+      snapshots: [
+        { id: 1, accountId: 1, snapshotDate: '2024-01-01', totalValue: 100000, source: SnapshotSource.MANUAL },
+        { id: 2, accountId: 1, snapshotDate: futureIso, totalValue: 9_000_000, source: SnapshotSource.MANUAL },
+      ],
+      isLoading: false, error: null,
+    });
+    render(<MemoryRouter><FinancialIndependenceCard /></MemoryRouter>);
+    // With the $9M future snapshot excluded, the current portfolio is $100k, so
+    // years-to-FI stays a realistic 2-digit-ish number, NOT ~0. Assert the
+    // headline stays > 0 years instead.
+    const headline = screen.getByTestId('fi-headline');
+    expect(headline.textContent).toMatch(/\d/);
+    expect(headline.textContent).not.toMatch(/^0(\.0)?\s*years/i);
+  });
+
+  it('recomputes years-to-FI when the current-portfolio assumption is edited, and Reset restores it', async () => {
+    const user = userEvent.setup();
+    primeStores(); // seeds a positive portfolio + expenses + scenarios
+    render(
+      <MemoryRouter>
+        <FinancialIndependenceCard />
+      </MemoryRouter>,
+    );
+    const before = screen.getByTestId('fi-headline').textContent;
+
+    // Bumping current portfolio way up shortens years-to-FI.
+    const pv = screen.getByLabelText(/current portfolio/i) as HTMLInputElement;
+    await user.clear(pv);
+    await user.type(pv, '5000000');
+    const after = screen.getByTestId('fi-headline').textContent;
+    expect(after).not.toBe(before);
+
+    // Reset to my data restores the seeded prefill (button appears once dirty).
+    await user.click(screen.getByRole('button', { name: /reset to my data/i }));
+    expect(
+      (screen.getByLabelText(/current portfolio/i) as HTMLInputElement).value,
+    ).not.toBe('5000000');
+    expect(screen.getByTestId('fi-headline').textContent).toBe(before);
+  });
+
+  it('persists an edit under the calc-state:financial-independence key', async () => {
+    const user = userEvent.setup();
+    primeStores();
+    render(
+      <MemoryRouter>
+        <FinancialIndependenceCard />
+      </MemoryRouter>,
+    );
+    await user.clear(screen.getByLabelText(/annual contribution/i));
+    await user.type(screen.getByLabelText(/annual contribution/i), '60000');
+    expect(
+      JSON.parse(sessionStorage.getItem('calc-state:financial-independence')!),
+    ).toMatchObject({
+      annualContribution: 60000,
+    });
   });
 });

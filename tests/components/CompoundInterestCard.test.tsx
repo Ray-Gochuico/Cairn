@@ -1,9 +1,24 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CompoundInterestCard } from '@/pages/calculators/CompoundInterestCard';
 
 describe('CompoundInterestCard', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+  });
+
+  it('persists the what-if inputs via the kit', async () => {
+    const user = userEvent.setup();
+    render(<CompoundInterestCard />); // reads no stores/router
+    const pvInput = screen.getByLabelText(/initial amount/i) as HTMLInputElement;
+    await user.clear(pvInput);
+    await user.type(pvInput, '25000');
+    expect(JSON.parse(sessionStorage.getItem('calc-state:compound-interest')!)).toMatchObject({
+      pv: 25000,
+    });
+  });
+
   it('renders defaults with a non-zero headline (PV=1000, PMT=100, 7%, 10y, monthly)', () => {
     render(<CompoundInterestCard />);
     const headline = screen.getByTestId('compound-headline');

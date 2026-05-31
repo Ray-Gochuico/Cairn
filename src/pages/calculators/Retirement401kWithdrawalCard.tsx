@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
-import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { CalculatorCard } from './CalculatorCard';
 import { calculate401kWithdrawalTax } from '@/lib/tax';
-import { getCurrentTaxYear } from '@/lib/current-tax-year';
+import { useHouseholdTaxContext } from '@/lib/calculators/use-household-tax-context';
+import { useCalculatorState } from '@/lib/calculator-state';
+import { NumberField } from '@/components/calculators/NumberField';
 import { formatCurrency, formatPercent } from '@/lib/format';
-import { Input } from '@/components/ui/input';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 
 interface Retirement401kWithdrawalCardProps {
@@ -29,62 +29,56 @@ export function Retirement401kWithdrawalCard({
 }: Retirement401kWithdrawalCardProps = {}) {
   const { household } = useHouseholdStore();
   const { persons } = usePersonsStore();
-  const taxItems = useTaxRulesStore((s) => s.items);
+  // Shared W-2 tax scaffolding (resolved year + jurisdiction lookups + the
+  // one-time loadAvailableYears bootstrap). Replaces the card's former
+  // hand-rolled seededYears/getCurrentTaxYear/loadAvailableYears effect + local
+  // lookup — same resolution logic, single source of truth.
+  const { lookup, resolvedYear, federal, state, city } = useHouseholdTaxContext();
 
-  const seededYears = useMemo(
-    () => [...new Set(taxItems.map((r) => r.year))],
-    [taxItems],
+  // ── Real-data defaults (memoized from the stores) ──────────────────────────
+  // Prefill exactly as before: W-2 = Σ persons.annualSalaryPretax, age from
+  // persons[0].dateOfBirth (else 67); the remaining inputs start at 0. The kit
+  // merges the user's session overrides on top (overrides win) and persists
+  // every edit under calc-state:retirement-401k-withdrawal.
+  const defaults = useMemo(() => {
+    const todayISO = new Date().toISOString().slice(0, 10);
+    const defaultW2 = persons.reduce(
+      (acc, p) => acc + (p.annualSalaryPretax ?? 0),
+      0,
+    );
+    const defaultAge = persons[0]?.dateOfBirth
+      ? yearsBetween(persons[0].dateOfBirth, todayISO)
+      : 67;
+    return {
+      withdrawalAmount: 0,
+      annualW2Income: defaultW2,
+      capGains: 0,
+      // Wave-5 NEW-W5-2: existing investment income (interest + non-qualified
+      // dividends + passive rental) feeds the NIIT delta computation. The
+      // 401k withdrawal itself isn't NII (IRC §1411(c)(5)) but the resulting
+      // MAGI bump can newly trigger NIIT on this OTHER investment income.
+      otherInvestmentIncome: 0,
+      ageAtWithdrawal: defaultAge,
+      planType: 'TRADITIONAL' as 'TRADITIONAL' | 'ROTH',
+    };
+  }, [persons]);
+
+  const { values, setValue, reset, isOverridden } = useCalculatorState(
+    cardId ?? 'retirement-401k-withdrawal',
+    defaults,
   );
-  const { year: resolvedYear } = getCurrentTaxYear(seededYears);
 
-  useEffect(() => {
-    useTaxRulesStore.getState().loadAvailableYears();
-  }, []);
-
-  const todayISO = new Date().toISOString().slice(0, 10);
-  const defaultW2 = persons.reduce(
-    (acc, p) => acc + (p.annualSalaryPretax ?? 0),
-    0,
-  );
-  const defaultAge = persons[0]?.dateOfBirth
-    ? yearsBetween(persons[0].dateOfBirth, todayISO)
-    : 67;
-
-  const [withdrawalAmount, setWithdrawalAmount] = useState<number>(0);
-  const [w2Override, setW2Override] = useState<number | null>(null);
-  const [capGains, setCapGains] = useState<number>(0);
-  // Wave-5 NEW-W5-2: existing investment income (interest + non-qualified
-  // dividends + passive rental) feeds the NIIT delta computation. The
-  // 401k withdrawal itself isn't NII (IRC §1411(c)(5)) but the resulting
-  // MAGI bump can newly trigger NIIT on this OTHER investment income.
-  const [otherInvestmentIncome, setOtherInvestmentIncome] = useState<number>(0);
-  const [ageOverride, setAgeOverride] = useState<number | null>(null);
-  const [planType, setPlanType] = useState<'TRADITIONAL' | 'ROTH'>('TRADITIONAL');
-
-  const annualW2Income = w2Override ?? defaultW2;
-  const ageAtWithdrawal = ageOverride ?? defaultAge;
-
-  const lookup = (
-    jt: 'FEDERAL' | 'FEDERAL_LTCG' | 'STATE' | 'CITY',
-    code: string,
-    fs: string,
-  ) =>
-    taxItems.find(
-      (r) =>
-        r.year === resolvedYear &&
-        r.jurisdictionType === jt &&
-        r.jurisdictionCode === code &&
-        r.filingStatus === fs,
-    ) ?? null;
+  const {
+    withdrawalAmount,
+    annualW2Income,
+    capGains,
+    otherInvestmentIncome,
+    ageAtWithdrawal,
+    planType,
+  } = values;
 
   const breakdown = useMemo(() => {
-    if (!household || taxItems.length === 0) return null;
-    const federal = lookup('FEDERAL', 'US', household.filingStatus);
-    const state = lookup('STATE', household.state, household.filingStatus);
-    const city = household.city
-      ? lookup('CITY', household.city, household.filingStatus)
-      : null;
-    if (!federal || !state) return null;
+    if (!household || !federal || !state) return null;
     // LTCG schedule lookup (post-0032). When seeded, capGains are taxed
     // at the LTCG schedule instead of ordinary brackets. Falls through to
     // legacy behavior (ordinary brackets) for older tax years.
@@ -114,7 +108,9 @@ export function Retirement401kWithdrawalCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     household,
-    taxItems,
+    federal,
+    state,
+    city,
     resolvedYear,
     withdrawalAmount,
     annualW2Income,
@@ -126,115 +122,91 @@ export function Retirement401kWithdrawalCard({
   const earlyPenaltyApplies = ageAtWithdrawal < 59.5;
 
   const controls = (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-      <div className="space-y-1">
-        <label htmlFor="withdrawal-amount" className="text-sm font-medium">
-          Withdrawal amount
-        </label>
-        <Input
+    <>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+        <NumberField
           id="withdrawal-amount"
-          type="number"
-          min="0"
-          step="500"
+          label="Withdrawal amount"
           value={withdrawalAmount}
-          onChange={(e) =>
-            setWithdrawalAmount(Math.max(0, Number(e.target.value)))
-          }
-          aria-label="Withdrawal amount"
+          onChange={(v) => setValue('withdrawalAmount', v ?? 0)}
+          step="500"
+          min={0}
         />
-      </div>
-      <div className="space-y-1">
-        <label htmlFor="w2-income" className="text-sm font-medium">
-          Annual W-2 income
-        </label>
-        <Input
+        <NumberField
           id="w2-income"
-          type="number"
-          min="0"
-          step="1000"
+          label="Annual W-2 income"
           value={annualW2Income}
-          onChange={(e) =>
-            setW2Override(Math.max(0, Number(e.target.value)))
-          }
-          aria-label="Annual W-2 income"
+          onChange={(v) => setValue('annualW2Income', v ?? 0)}
+          step="1000"
+          min={0}
         />
-      </div>
-      <div className="space-y-1">
-        <label htmlFor="cap-gains" className="text-sm font-medium">
-          Capital gains for the year
-        </label>
-        <Input
+        <NumberField
           id="cap-gains"
-          type="number"
-          min="0"
-          step="500"
+          label="Capital gains for the year"
           value={capGains}
-          onChange={(e) => setCapGains(Math.max(0, Number(e.target.value)))}
-          aria-label="Capital gains for the year"
-        />
-      </div>
-      <div className="space-y-1">
-        <label htmlFor="other-investment-income" className="text-sm font-medium">
-          Other investment income
-        </label>
-        <Input
-          id="other-investment-income"
-          type="number"
-          min="0"
+          onChange={(v) => setValue('capGains', v ?? 0)}
           step="500"
-          value={otherInvestmentIncome}
-          onChange={(e) =>
-            setOtherInvestmentIncome(Math.max(0, Number(e.target.value)))
-          }
-          aria-label="Other investment income"
+          min={0}
         />
-        <p className="text-xs text-muted-foreground">
-          Interest, non-qualified dividends, passive rental — for{' '}
-          <TermTooltip term="NIIT" /> delta.
-        </p>
-      </div>
-      <div className="space-y-1">
-        <label htmlFor="age-at-withdrawal" className="text-sm font-medium">
-          Age at withdrawal
-        </label>
-        <Input
+        <div className="space-y-1">
+          <NumberField
+            id="other-investment-income"
+            label="Other investment income"
+            value={otherInvestmentIncome}
+            onChange={(v) => setValue('otherInvestmentIncome', v ?? 0)}
+            step="500"
+            min={0}
+          />
+          <p className="text-xs text-muted-foreground">
+            Interest, non-qualified dividends, passive rental — for{' '}
+            <TermTooltip term="NIIT" /> delta.
+          </p>
+        </div>
+        <NumberField
           id="age-at-withdrawal"
-          type="number"
-          min="18"
-          max="120"
-          step="1"
+          label="Age at withdrawal"
           value={ageAtWithdrawal}
-          onChange={(e) => setAgeOverride(Number(e.target.value))}
-          aria-label="Age at withdrawal"
+          onChange={(v) => setValue('ageAtWithdrawal', v ?? 0)}
+          step="1"
+          min={18}
         />
-      </div>
-      <div className="space-y-1 sm:col-span-2">
-        <span className="text-sm font-medium">Plan type</span>
-        <div className="flex gap-3 items-center text-sm">
-          <label className="flex items-center gap-1">
-            <input
-              type="radio"
-              name="plan-type"
-              value="TRADITIONAL"
-              checked={planType === 'TRADITIONAL'}
-              onChange={() => setPlanType('TRADITIONAL')}
-            />
-            Traditional 401k
-          </label>
-          <label className="flex items-center gap-1">
-            <input
-              type="radio"
-              name="plan-type"
-              value="ROTH"
-              checked={planType === 'ROTH'}
-              onChange={() => setPlanType('ROTH')}
-              aria-label="Roth 401k"
-            />
-            Roth 401k
-          </label>
+        <div className="space-y-1 sm:col-span-2">
+          <span className="text-sm font-medium">Plan type</span>
+          <div className="flex gap-3 items-center text-sm">
+            <label className="flex items-center gap-1">
+              <input
+                type="radio"
+                name="plan-type"
+                value="TRADITIONAL"
+                checked={planType === 'TRADITIONAL'}
+                onChange={() => setValue('planType', 'TRADITIONAL')}
+              />
+              Traditional 401k
+            </label>
+            <label className="flex items-center gap-1">
+              <input
+                type="radio"
+                name="plan-type"
+                value="ROTH"
+                checked={planType === 'ROTH'}
+                onChange={() => setValue('planType', 'ROTH')}
+                aria-label="Roth 401k"
+              />
+              Roth 401k
+            </label>
+          </div>
         </div>
       </div>
-    </div>
+      {isOverridden && (
+        <button
+          type="button"
+          onClick={reset}
+          className="text-sm text-primary hover:underline mb-3"
+        >
+          Reset to my data
+        </button>
+      )}
+    </>
   );
 
   // Roth 401(k) distributions are modeled as tax-free (assumes a qualified
