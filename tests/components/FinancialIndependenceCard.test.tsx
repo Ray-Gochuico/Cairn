@@ -256,4 +256,27 @@ describe('FinancialIndependenceCard', () => {
       screen.getByRole('button', { name: /hide years to fi card/i }),
     ).toBeInTheDocument();
   });
+
+  it('excludes future-dated snapshots from the current portfolio (latest on-or-before today)', () => {
+    primeStores();
+    // A snapshot dated far in the future must NOT inflate the portfolio — the
+    // retrofit uses sumLatestOnOrBefore(snapshots, today), not a raw max-per-account.
+    const future = new Date();
+    future.setFullYear(future.getFullYear() + 5);
+    const futureIso = future.toISOString().slice(0, 10);
+    useSnapshotsStore.setState({
+      snapshots: [
+        { id: 1, accountId: 1, snapshotDate: '2024-01-01', totalValue: 100000, source: SnapshotSource.MANUAL },
+        { id: 2, accountId: 1, snapshotDate: futureIso, totalValue: 9_000_000, source: SnapshotSource.MANUAL },
+      ],
+      isLoading: false, error: null,
+    });
+    render(<MemoryRouter><FinancialIndependenceCard /></MemoryRouter>);
+    // With the $9M future snapshot excluded, the current portfolio is $100k, so
+    // years-to-FI stays a realistic 2-digit-ish number, NOT ~0. Assert the
+    // headline stays > 0 years instead.
+    const headline = screen.getByTestId('fi-headline');
+    expect(headline.textContent).toMatch(/\d/);
+    expect(headline.textContent).not.toMatch(/^0(\.0)?\s*years/i);
+  });
 });

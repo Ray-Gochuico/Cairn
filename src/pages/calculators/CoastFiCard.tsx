@@ -9,6 +9,8 @@ import { formatCurrency } from '@/lib/format';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import { useCalculatorState } from '@/lib/calculator-state';
 import { NumberField } from '@/components/calculators/NumberField';
+import { sumLatestOnOrBefore } from '@/lib/growth-horizons';
+import { effectiveSwr } from '@/lib/scenarios/effective-swr';
 
 interface CoastFiCardProps {
   cardId?: string;
@@ -28,19 +30,11 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
 
   // ── Real-data defaults (memoized from the stores) ──────────────────────────
   const defaults = useMemo(() => {
-    // Latest snapshot per account: ISO date strings sort lexicographically
-    // the same as chronologically, so a string compare is sufficient.
-    const latestPerAccount = new Map<number, { date: string; value: number }>();
-    for (const s of snapshots) {
-      const prev = latestPerAccount.get(s.accountId);
-      if (!prev || s.snapshotDate > prev.date) {
-        latestPerAccount.set(s.accountId, { date: s.snapshotDate, value: s.totalValue });
-      }
-    }
-    const currentPortfolio = [...latestPerAccount.values()].reduce(
-      (sum, x) => sum + x.value,
-      0,
-    );
+    // Latest snapshot per account on or before today — the canonical helper
+    // (shared with What-If/Backtest). It applies the snapshotDate <= today
+    // cutoff the old hand-rolled loop omitted.
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const currentPortfolio = sumLatestOnOrBefore(snapshots, todayIso) ?? 0;
 
     // Shortest years-until-retirement across persons (fallback 20).
     let yearsUntilRetirement = 20;
@@ -52,7 +46,9 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
     }
 
     const annualExpenses = (household?.monthlyExpenseBaseline ?? 0) * 12;
-    const withdrawalRate = household?.withdrawalRate ?? 0.04;
+    // No active scenario on the dashboard card → pass null; effectiveSwr derives
+    // from household.withdrawalRate (when > 0) else the 0.04 canonical default.
+    const withdrawalRate = effectiveSwr(null, household);
 
     return { currentPortfolio, yearsUntilRetirement, annualExpenses, withdrawalRate };
   }, [household, persons, snapshots]);

@@ -7,6 +7,8 @@ import { CalculatorCard } from './CalculatorCard';
 import { financialIndependenceSeries } from '@/lib/financial-independence';
 import { formatCurrency } from '@/lib/format';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
+import { sumLatestOnOrBefore } from '@/lib/growth-horizons';
+import { effectiveSwr } from '@/lib/scenarios/effective-swr';
 
 interface FinancialIndependenceCardProps {
   cardId?: string;
@@ -25,19 +27,16 @@ export function FinancialIndependenceCard({
   const series = useMemo(() => {
     if (!household || persons.length === 0) return null;
     if (!household.growthScenarios || household.growthScenarios.length === 0) return null;
-    if (household.withdrawalRate <= 0) return null;
+    // Guard on positive expenses — FI needs a target to compute; effectiveSwr
+    // is always positive so guarding on the rate is obsolete (a withdrawalRate=0
+    // household now uses the 0.04 canonical default via effectiveSwr).
+    if ((household.monthlyExpenseBaseline ?? 0) <= 0) return null;
 
-    // Latest snapshot per account: walk snapshots once and keep max-by-date
-    // per accountId. ISO date strings sort lexicographically the same as
-    // chronologically, so a string compare is sufficient.
-    const latestPerAccount = new Map<number, { date: string; value: number }>();
-    for (const s of snapshots) {
-      const prev = latestPerAccount.get(s.accountId);
-      if (!prev || s.snapshotDate > prev.date) {
-        latestPerAccount.set(s.accountId, { date: s.snapshotDate, value: s.totalValue });
-      }
-    }
-    const pv = [...latestPerAccount.values()].reduce((sum, x) => sum + x.value, 0);
+    // Latest snapshot per account on or before today — the canonical helper
+    // (shared with What-If/Backtest). It applies the snapshotDate <= today
+    // cutoff the old hand-rolled loop omitted.
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const pv = sumLatestOnOrBefore(snapshots, todayIso) ?? 0;
 
     // Rolling 12-month contribution total — used as the annual PMT figure for
     // the FV solver. We compare ISO date strings; chronological order matches
@@ -49,7 +48,10 @@ export function FinancialIndependenceCard({
       .filter((c) => c.date >= isoYearAgo)
       .reduce((sum, c) => sum + c.amount, 0);
 
-    const targetFv = (household.monthlyExpenseBaseline * 12) / household.withdrawalRate;
+    // No active scenario on the dashboard card → pass null; effectiveSwr derives
+    // from household.withdrawalRate (when > 0) else the 0.04 canonical default.
+    const withdrawalRate = effectiveSwr(null, household);
+    const targetFv = (household.monthlyExpenseBaseline * 12) / withdrawalRate;
 
     return financialIndependenceSeries({
       pv,
@@ -84,7 +86,8 @@ export function FinancialIndependenceCard({
     moderate && Number.isFinite(moderate.years)
       ? `${moderate.years.toFixed(1)} years`
       : '∞';
-  const targetFv = (household.monthlyExpenseBaseline * 12) / household.withdrawalRate;
+  const withdrawalRate = effectiveSwr(null, household);
+  const targetFv = (household.monthlyExpenseBaseline * 12) / withdrawalRate;
 
   return (
     <CalculatorCard
