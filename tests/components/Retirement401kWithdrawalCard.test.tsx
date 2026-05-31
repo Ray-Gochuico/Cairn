@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
@@ -90,6 +91,7 @@ function primeStores() {
 
 describe('Retirement401kWithdrawalCard', () => {
   beforeEach(() => {
+    sessionStorage.clear();
     resetStores();
   });
 
@@ -343,5 +345,46 @@ describe('Retirement401kWithdrawalCard', () => {
     // Headline value matches the Net-to-you line value so the meaning is
     // unambiguous: the big number is "what you keep", not "what tax you owe".
     expect(within(netRow).getByText(headline.textContent ?? '_MISMATCH_')).toBeInTheDocument();
+  });
+
+  // ── Wave 0c Task 5: golden net-to-user regression anchor ───────────────────
+  // The card is being refactored to (a) adopt useHouseholdTaxContext (drop its
+  // hand-rolled lookup/year-resolution) and (b) move its inputs onto the kit.
+  // Both changes MUST be byte-identical for the tax math. This pins the exact
+  // net-to-user the CURRENT card produces for a fully-specified seeded scenario
+  // (withdrawal + W-2 + cap gains + other-inv-income at a sub-59½ age, so the
+  // federal/state/city brackets, the per-jurisdiction standard deductions, the
+  // NIIT delta, AND the early-withdrawal penalty all participate). A regression
+  // in any of those paths flips this red.
+  it('produces the same net-to-user after adopting the shared tax context (golden)', () => {
+    primeStores();
+    render(
+      <MemoryRouter>
+        <Retirement401kWithdrawalCard />
+      </MemoryRouter>,
+    );
+    fireEvent.change(screen.getByLabelText(/withdrawal amount/i), { target: { value: '50000' } });
+    fireEvent.change(screen.getByLabelText(/annual w-2 income/i), { target: { value: '120000' } });
+    fireEvent.change(screen.getByLabelText(/capital gains for the year/i), { target: { value: '10000' } });
+    fireEvent.change(screen.getByLabelText(/other investment income/i), { target: { value: '5000' } });
+    fireEvent.change(screen.getByLabelText(/age at withdrawal/i), { target: { value: '50' } });
+    expect(screen.getByTestId('401k-withdrawal-net').textContent).toBe('$30,500');
+  });
+
+  it('persists withdrawal + income overrides via the kit', async () => {
+    const user = userEvent.setup();
+    primeStores();
+    render(
+      <MemoryRouter>
+        <Retirement401kWithdrawalCard />
+      </MemoryRouter>,
+    );
+    await user.clear(screen.getByLabelText(/withdrawal amount/i));
+    await user.type(screen.getByLabelText(/withdrawal amount/i), '40000');
+    expect(
+      JSON.parse(sessionStorage.getItem('calc-state:retirement-401k-withdrawal')!),
+    ).toMatchObject({
+      withdrawalAmount: 40000,
+    });
   });
 });
