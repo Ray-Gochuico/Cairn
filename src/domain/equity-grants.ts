@@ -1,5 +1,6 @@
 import type { Database } from '@/db/db';
 import { EquityGrantSchema, type EquityGrant } from '@/types/schema';
+import type { GrantType } from '@/types/enums';
 
 // Note on schema/SQL asymmetry: company_name is TEXT (nullable) at the SQL
 // level but z.string().min(1) (required, non-empty) in the Zod schema. Since
@@ -20,6 +21,9 @@ interface EquityGrantRow {
   total_shares: number;
   vesting_schedule: string; // JSON-encoded VestingEntry[]
   current_fmv: number;
+  // Grant-type discriminator (migration 0044). NOT NULL DEFAULT 'RSU' at the
+  // SQL level; the CHECK guarantees one of RSU/ISO/NSO.
+  grant_type: string;
   // Calculator inputs (migration 0027). All nullable — populated only when
   // the user used the in-form company-valuation helper.
   company_valuation: number | null;
@@ -51,6 +55,7 @@ function rowToEquityGrant(row: EquityGrantRow): EquityGrant {
     totalShares: row.total_shares,
     vestingSchedule: schedule,
     currentFmv: row.current_fmv,
+    grantType: row.grant_type as GrantType,
     companyValuation: row.company_valuation,
     companyOutstandingShares: row.company_outstanding_shares,
     companyTotalDebt: row.company_total_debt,
@@ -98,8 +103,9 @@ export class EquityGrantsRepo {
       `INSERT INTO equity_grants (
         household_id, owner_person_id, name, company_name,
         grant_date, strike_price, total_shares, vesting_schedule, current_fmv,
+        grant_type,
         company_valuation, company_outstanding_shares, company_total_debt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         parsed.householdId,
         parsed.ownerPersonId,
@@ -110,6 +116,7 @@ export class EquityGrantsRepo {
         parsed.totalShares,
         JSON.stringify(parsed.vestingSchedule),
         parsed.currentFmv,
+        parsed.grantType,
         parsed.companyValuation,
         parsed.companyOutstandingShares,
         parsed.companyTotalDebt,
@@ -140,6 +147,7 @@ export class EquityGrantsRepo {
         total_shares = ?,
         vesting_schedule = ?,
         current_fmv = ?,
+        grant_type = ?,
         company_valuation = ?,
         company_outstanding_shares = ?,
         company_total_debt = ?,
@@ -154,6 +162,7 @@ export class EquityGrantsRepo {
         merged.totalShares,
         JSON.stringify(merged.vestingSchedule),
         merged.currentFmv,
+        merged.grantType,
         merged.companyValuation,
         merged.companyOutstandingShares,
         merged.companyTotalDebt,

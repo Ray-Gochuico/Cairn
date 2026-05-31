@@ -1,6 +1,7 @@
 // src/lib/import/validators/equity-grant.ts
 import { z } from 'zod';
 import type { EquityGrant } from '@/types/schema';
+import { GrantType } from '@/types/enums';
 import type {
   CellError,
   PreviewRow,
@@ -182,6 +183,10 @@ export function validateEquityGrantRow(
     totalShares,
     vestingSchedule: vestingRows,
     currentFmv,
+    // Wave 1 Task 1 (foundation): default to RSU so importer round-trips stay
+    // valid. Parsing the grant_type CSV cell (enum validation + invalid-flag) +
+    // the CSV header/template are added in Task 2.
+    grantType: GrantType.RSU,
     companyValuation,
     companyOutstandingShares,
     companyTotalDebt,

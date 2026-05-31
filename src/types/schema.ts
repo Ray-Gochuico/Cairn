@@ -15,6 +15,7 @@ import {
   CompoundingFrequency,
   AssetSnapshotOwnerType,
   LearningDifficulty,
+  GrantType,
 } from './enums';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -298,6 +299,10 @@ export const EquityGrantSchema = z.object({
     'last vesting entry must reach cumulativePct = 1.0',
   ),
   currentFmv: z.number().nonnegative(),
+  // Grant-type discriminator (RSU / ISO / NSO). Defaults to 'RSU' so existing
+  // payloads (and rows back-filled by migration 0044) parse unchanged. Kept in
+  // lock-step with the equity_grants.grant_type CHECK + the GrantType enum.
+  grantType: z.nativeEnum(GrantType).default('RSU'),
   // Optional inputs for the in-form FMV calculator. The engine never reads
   // these — they're metadata so the user can revisit and edit the breakdown
   // that produced their per-share FMV. See computeFmvFromCompanyValuation

@@ -165,6 +165,11 @@ export async function loadAllMigrations(): Promise<Migration[]> {
   // destructive migration in the v1.x set; lands atomically with the code that
   // stops referencing those columns.
   const m0043 = (await import('./migrations/0043_drop_household_disclosure_columns.sql?raw')).default;
+  // 0044 adds the equity grant-type discriminator (RSU/ISO/NSO) to
+  // equity_grants. Additive ADD COLUMN NOT NULL DEFAULT 'RSU' + CHECK; existing
+  // rows back-fill to 'RSU'. The CHECK ⇔ GrantType enum ⇔ Zod nativeEnum stay
+  // in lock-step (Calculators Wave 1 — EquityValue rebuild).
+  const m0044 = (await import('./migrations/0044_equity_grant_type.sql?raw')).default;
   return [
     { version: '0001_initial', sql: m0001 },
     { version: '0002_seed_tax_rules', sql: m0002 },
@@ -209,5 +214,6 @@ export async function loadAllMigrations(): Promise<Migration[]> {
     { version: '0041_fund_holding_names', sql: m0041 },
     { version: '0042_investments_card_layout', sql: m0042 },
     { version: '0043_drop_household_disclosure_columns', sql: m0043 },
+    { version: '0044_equity_grant_type', sql: m0044 },
   ];
 }

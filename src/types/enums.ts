@@ -179,3 +179,13 @@ export const LearningDifficulty = {
   MIXED: 'Mixed',
 } as const;
 export type LearningDifficulty = (typeof LearningDifficulty)[keyof typeof LearningDifficulty];
+
+// Equity grant-type discriminator (RSU / ISO / NSO). Kept in lock-step with the
+// CHECK on equity_grants.grant_type (migration 0044) + the Zod nativeEnum on
+// EquityGrantSchema. Any new value (e.g. ESPP) must be added to all three.
+export const GrantType = {
+  RSU: 'RSU',
+  ISO: 'ISO',
+  NSO: 'NSO',
+} as const;
+export type GrantType = typeof GrantType[keyof typeof GrantType];
