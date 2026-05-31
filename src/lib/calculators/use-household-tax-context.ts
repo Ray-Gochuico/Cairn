@@ -34,9 +34,16 @@ export function useHouseholdTaxContext(): HouseholdTaxContext {
   const seededYears = useMemo(() => [...new Set(taxItems.map((r) => r.year))], [taxItems]);
   const { year: resolvedYear } = getCurrentTaxYear(seededYears);
 
-  // Bootstrap: discover seeded years + load the most recent (idempotent).
+  // Bootstrap: discover seeded years + load the most recent (idempotent), and
+  // hydrate the persons/dependents this context aggregates. On a cold boot — or
+  // a deep-link straight to a calculator route — no prior page has loaded them
+  // (the Dashboard landing page loads 13 stores but NOT persons/dependents), so
+  // without this the cards render their "add a person" empty-state despite real
+  // data in the DB. (household loads globally via AppDisclaimerGate.)
   useEffect(() => {
     useTaxRulesStore.getState().loadAvailableYears();
+    void usePersonsStore.getState().load();
+    void useDependentsStore.getState().load();
   }, []);
 
   const lookup = (jt: JurisdictionType, code: string, fs: string): TaxRule | null =>

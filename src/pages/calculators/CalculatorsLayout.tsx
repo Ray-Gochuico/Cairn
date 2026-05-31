@@ -11,6 +11,7 @@ import { EquityValueCard } from './EquityValueCard';
 import { CompoundInterestCard } from './CompoundInterestCard';
 import { Retirement401kWithdrawalCard } from './Retirement401kWithdrawalCard';
 import { usePersonsStore } from '@/stores/persons-store';
+import { useDependentsStore } from '@/stores/dependents-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { getCurrentTaxYear } from '@/lib/current-tax-year';
 import { Button } from '@/components/ui/button';
@@ -63,6 +64,17 @@ export default function CalculatorsLayout() {
   const showOvertime = persons.some(
     (p) => p.employmentType === 'HOURLY' || p.employmentType === 'SALARY_WITH_OT',
   );
+
+  // Cold-boot hydration: the calculator cards READ persons/dependents from their
+  // stores, but none of them — nor the Dashboard landing page — LOAD them. So a
+  // returning user who lands here first (boot → Dashboard → Calculators, or a
+  // deep-link) would see empty "add a person" cards despite real data in the DB.
+  // Load them once for the whole grid. (household loads globally via the
+  // AppDisclaimerGate; the W-2 cards' useHouseholdTaxContext loads tax rules.)
+  useEffect(() => {
+    void usePersonsStore.getState().load();
+    void useDependentsStore.getState().load();
+  }, []);
 
   // Resolve the active tax year from the seeded set so we can warn when the
   // app's bundled rules predate the current calendar year.

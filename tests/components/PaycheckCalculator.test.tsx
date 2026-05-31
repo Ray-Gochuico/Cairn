@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -359,5 +359,20 @@ describe('PaycheckCalculator', () => {
     const withDcfsa = await readTakeHome();
 
     expect(withDcfsa).toBeLessThan(withoutDcfsa);
+  });
+
+  // Cold-boot / deep-link hydration: the cards READ persons/dependents but the
+  // Dashboard landing page never loads them, so a returning user who lands here
+  // first would see the empty "add a person" state despite real DB data. The
+  // shared useHouseholdTaxContext must trigger the store loads on mount. Goes
+  // RED if the hook's bootstrap effect drops the persons/dependents loads.
+  it('hydrates persons + dependents on mount (cold-boot / deep-link safety)', () => {
+    const personsLoad = vi.spyOn(usePersonsStore.getState(), 'load').mockResolvedValue(undefined);
+    const dependentsLoad = vi.spyOn(useDependentsStore.getState(), 'load').mockResolvedValue(undefined);
+    render(<MemoryRouter><PaycheckCalculator /></MemoryRouter>);
+    expect(personsLoad).toHaveBeenCalled();
+    expect(dependentsLoad).toHaveBeenCalled();
+    personsLoad.mockRestore();
+    dependentsLoad.mockRestore();
   });
 });
