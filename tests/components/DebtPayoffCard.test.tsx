@@ -34,6 +34,8 @@ function resetStore() {
 describe('DebtPayoffCard', () => {
   beforeEach(() => {
     resetStore();
+    // Kit persists to sessionStorage — isolate each test.
+    sessionStorage.clear();
   });
 
   it('renders empty state when no loans exist', () => {
@@ -237,5 +239,37 @@ describe('DebtPayoffCard', () => {
     expect(
       screen.getByRole('button', { name: /hide debt payoff card/i }),
     ).toBeInTheDocument();
+  });
+
+  it('persists strategy + extraTotal via the kit (native select)', async () => {
+    // Prime >= 2 loans so a strategy has an effect.
+    useLoansStore.setState({
+      loans: [
+        makeLoan({ id: 1, name: 'Big loan', currentBalance: 50000, interestRate: 0.05, termMonths: 120 }),
+        makeLoan({ id: 2, name: 'Small loan', currentBalance: 5000, interestRate: 0.08, termMonths: 60 }),
+      ],
+      isLoading: false,
+      error: null,
+    });
+
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <DebtPayoffCard />
+      </MemoryRouter>,
+    );
+
+    // Drive the native strategy select to "avalanche" using native select idiom.
+    const strategySelect = screen.getByLabelText(/strategy/i);
+    await user.selectOptions(strategySelect, 'avalanche');
+
+    // Set the extra monthly payment to 300.
+    const extraInput = screen.getByLabelText(/extra monthly payment/i);
+    await user.clear(extraInput);
+    await user.type(extraInput, '300');
+
+    // Assert that sessionStorage persists both values under the kit key.
+    const persisted = JSON.parse(sessionStorage.getItem('calc-state:debt-payoff')!);
+    expect(persisted).toMatchObject({ strategy: 'avalanche', extraTotal: 300 });
   });
 });
