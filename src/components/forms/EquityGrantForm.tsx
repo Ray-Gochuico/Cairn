@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { EquityGrantSchema, type EquityGrant } from '@/types/schema';
+import { GrantType } from '@/types/enums';
 import {
   applyVestingTemplate,
   VESTING_TEMPLATES,
@@ -24,6 +25,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 // runtime defaults still come from DEFAULT_EQUITY_GRANT below) keeps input
 // and output types aligned. Mirrors the pattern in AccountForm.tsx.
 const EquityGrantFormSchema = EquityGrantSchema.omit({ id: true }).extend({
+  // grantType carries a .default('RSU') on EquityGrantSchema, which Zod treats
+  // as optional-on-input — that won't unify with the strict
+  // EquityGrantFormValues RHF expects. Drop the default here (the runtime value
+  // comes from DEFAULT_EQUITY_GRANT / the edit-mode spread). Same fix as the
+  // company-valuation fields below.
+  grantType: z.nativeEnum(GrantType),
   companyValuation: z.number().nonnegative().nullable(),
   companyOutstandingShares: z.number().positive().nullable(),
   companyTotalDebt: z.number().nonnegative().nullable(),
@@ -45,6 +52,7 @@ export const DEFAULT_EQUITY_GRANT: EquityGrantFormValues = {
   strikePrice: 0,
   totalShares: 0,
   currentFmv: 0,
+  grantType: GrantType.RSU,
   vestingSchedule: [{ date: '', cumulativePct: 1.0 }],
   // Optional company-valuation calculator inputs. Default to null so the
   // calculator section starts collapsed in create mode (it auto-expands in
@@ -260,6 +268,19 @@ export default function EquityGrantForm({
                 {...form.register('currentFmv', { valueAsNumber: true })}
               />
             </div>
+          </div>
+
+          <div>
+            <Label htmlFor="grant-type">Grant type</Label>
+            <select
+              id="grant-type"
+              {...form.register('grantType')}
+              className="text-sm border rounded px-2 py-1 bg-background"
+            >
+              <option value="RSU">RSU — Restricted Stock Units</option>
+              <option value="ISO">ISO — Incentive Stock Options</option>
+              <option value="NSO">NSO — Non-qualified Stock Options</option>
+            </select>
           </div>
 
           <details open={calculatorOpenByDefault} className="border rounded-md p-3 bg-muted/30">

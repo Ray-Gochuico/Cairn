@@ -21,6 +21,8 @@ const loadEmploymentBonusMigration = () =>
   readFileSync(resolve(__dirname, '../../../src/db/migrations/0005_add_employment_and_bonus_columns.sql'), 'utf-8');
 const loadEquityGrantCompanyValuationMigration = () =>
   readFileSync(resolve(__dirname, '../../../src/db/migrations/0027_equity_grant_company_valuation.sql'), 'utf-8');
+const loadEquityGrantTypeMigration = () =>
+  readFileSync(resolve(__dirname, '../../../src/db/migrations/0044_equity_grant_type.sql'), 'utf-8');
 
 async function selectDate(user: UserEvent, pickerId: string, isoDate: string) {
   const [yyyy, mm, dd] = isoDate.split('-');
@@ -58,6 +60,7 @@ describe('AddEquityGrantDialog', () => {
       { version: '0003_add_commission_columns', sql: loadCommissionMigration() },
       { version: '0005_add_employment_and_bonus_columns', sql: loadEmploymentBonusMigration() },
       { version: '0027_equity_grant_company_valuation', sql: loadEquityGrantCompanyValuationMigration() },
+      { version: '0044_equity_grant_type', sql: loadEquityGrantTypeMigration() },
     ]);
     setDatabase(db);
     useEquityGrantsStore.setState({ equityGrants: [], isLoading: false, error: null });

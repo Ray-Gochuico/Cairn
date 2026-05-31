@@ -14,6 +14,8 @@ const loadEmploymentBonusMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0005_add_employment_and_bonus_columns.sql'), 'utf-8');
 const loadEquityGrantCompanyValuationMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0027_equity_grant_company_valuation.sql'), 'utf-8');
+const loadEquityGrantTypeMigration = () =>
+  readFileSync(resolve(__dirname, '../../src/db/migrations/0044_equity_grant_type.sql'), 'utf-8');
 
 const seedPerson = async (
   personsRepo: PersonsRepo,
@@ -64,6 +66,7 @@ const makeGrant = async (
     totalShares: 1200,
     vestingSchedule: standardVestingSchedule,
     currentFmv: 145.50,
+    grantType: 'RSU',
     ...overrides,
   });
 };
@@ -81,6 +84,7 @@ describe('EquityGrantsRepo', () => {
       { version: '0003_add_commission_columns', sql: loadCommissionMigration() },
       { version: '0005_add_employment_and_bonus_columns', sql: loadEmploymentBonusMigration() },
       { version: '0027_equity_grant_company_valuation', sql: loadEquityGrantCompanyValuationMigration() },
+      { version: '0044_equity_grant_type', sql: loadEquityGrantTypeMigration() },
     ]);
     repo = new EquityGrantsRepo(db);
     personsRepo = new PersonsRepo(db);

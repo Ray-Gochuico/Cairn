@@ -1,3 +1,5 @@
+import { GrantType } from '@/types/enums';
+
 export interface GrantInput {
   grantDate: string;
   strikePrice: number;
@@ -54,6 +56,61 @@ export function computeEquityValue(grant: GrantInput, today: Date): EquityValueR
     upcomingVestDates,
   };
 }
+
+export type VestingChartPoint = { date: string; vestedValue: number };
+
+export function vestingChartData(
+  grants: ReadonlyArray<GrantInput>,
+): VestingChartPoint[] {
+  const dates = [
+    ...new Set(grants.flatMap((g) => g.vestingSchedule.map((v) => v.date))),
+  ].sort();
+  return dates.map((date) => ({
+    date,
+    vestedValue: grants.reduce((sum, g) => {
+      // last cumulativePct whose vest date <= this date (0 before the first vest)
+      const pct = g.vestingSchedule.reduce(
+        (acc, v) => (v.date <= date ? v.cumulativePct : acc),
+        0,
+      );
+      return sum + pct * g.totalShares * g.currentFmv;
+    }, 0),
+  }));
+}
+
+/**
+ * Estimated ordinary income if the unvested portion of a grant vested today at
+ * the current FMV.
+ *
+ * - RSU: unvestedShares × currentFmv  (strike price is 0; full FMV is income)
+ * - NSO: unvestedShares × max(0, currentFmv − strikePrice)  (spread above strike)
+ * - ISO: 0  (bargain element is an AMT preference item, not ordinary income)
+ *
+ * Framed as an estimate — does NOT compute withheld tax or payroll/FICA impact.
+ *
+ * The param type is `GrantInput & { grantType: GrantType }` so the object is
+ * directly assignable to `computeEquityValue`'s `GrantInput` parameter — no cast.
+ * EquityGrant objects (which carry all GrantInput fields + grantType) satisfy this.
+ */
+export function grantOrdinaryIncomeOnVest(
+  grant: GrantInput & { grantType: GrantType },
+  today: Date,
+): number {
+  const { unvestedShares } = computeEquityValue(grant, today);
+  if (grant.grantType === GrantType.ISO) return 0; // AMT preference, not ordinary income
+  const perShare =
+    grant.grantType === GrantType.NSO
+      ? Math.max(0, grant.currentFmv - grant.strikePrice) // NSO: spread above strike
+      : grant.currentFmv; // RSU: full FMV (strike is 0)
+  return unvestedShares * perShare;
+}
+
+/**
+ * Returns true when the grant type triggers ISO AMT preference treatment.
+ * ISO exercises create a bargain-element AMT preference item — not ordinary income.
+ * RSU and NSO both return false (their income is ordinary).
+ */
+export const isIsoAmtPreference = (t: GrantType): boolean => t === GrantType.ISO;
 
 /**
  * Rough per-share FMV from a private-company snapshot.

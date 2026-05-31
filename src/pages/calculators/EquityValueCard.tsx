@@ -3,10 +3,13 @@ import { Link } from 'react-router-dom';
 import { useEquityGrantsStore } from '@/stores/equity-grants-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { CalculatorCard } from './CalculatorCard';
-import { computeEquityValue } from '@/lib/equity-value';
+import { computeEquityValue, vestingChartData, grantOrdinaryIncomeOnVest, isIsoAmtPreference } from '@/lib/equity-value';
 import { formatCurrency } from '@/lib/format';
 import { FreshnessBadge } from '@/components/ui/freshness-badge';
 import { ResultRow } from '@/components/calculators/ResultRow';
+import { TermTooltip } from '@/components/ui/glossary-tooltip';
+import type { GrantType } from '@/types/enums';
+import LineChartCard from '@/components/charts/LineChartCard';
 
 interface EquityValueCardProps {
   cardId?: string;
@@ -18,6 +21,7 @@ interface PersonTotal {
   name: string;
   vested: number;
   grantCount: number;
+  grantTypes: GrantType[];
 }
 
 export function EquityValueCard({ cardId, onHide }: EquityValueCardProps = {}) {
@@ -34,33 +38,67 @@ export function EquityValueCard({ cardId, onHide }: EquityValueCardProps = {}) {
     [persons],
   );
 
-  // Group grants by ownerPersonId, summing vestedValue per person. Stable
-  // ordering: insertion order (which is grant load order) — keeps the table
-  // readable without sorting churn.
-  const perPerson = useMemo<PersonTotal[]>(() => {
+  // Group grants by ownerPersonId, summing vestedValue per person. Also
+  // accumulate totalUnvested and upcoming vest dates across all grants.
+  // Stable ordering: insertion order (which is grant load order) — keeps the
+  // table readable without sorting churn.
+  const { perPerson, totalUnvested, upcomingVests } = useMemo(() => {
     const map = new Map<number, PersonTotal>();
+    let totalUnvestedAcc = 0;
+    const allUpcomingDates: string[] = [];
+
     for (const g of equityGrants) {
       const result = computeEquityValue(g, today);
+      totalUnvestedAcc += result.unvestedValue;
+      for (const d of result.upcomingVestDates) {
+        allUpcomingDates.push(d);
+      }
+
       const personName = personById.get(g.ownerPersonId) ?? 'Unknown';
       const prev = map.get(g.ownerPersonId);
+      const grantType = g.grantType;
       if (prev) {
         prev.vested += result.vestedValue;
         prev.grantCount += 1;
+        if (!prev.grantTypes.includes(grantType)) {
+          prev.grantTypes.push(grantType);
+        }
       } else {
         map.set(g.ownerPersonId, {
           ownerPersonId: g.ownerPersonId,
           name: personName,
           vested: result.vestedValue,
           grantCount: 1,
+          grantTypes: [grantType],
         });
       }
     }
-    return [...map.values()];
+
+    // Dedupe, sort ascending (ISO date strings sort lexically), take first 3.
+    const deduped = [...new Set(allUpcomingDates)].sort().slice(0, 3);
+
+    return {
+      perPerson: [...map.values()],
+      totalUnvested: totalUnvestedAcc,
+      upcomingVests: deduped,
+    };
   }, [equityGrants, personById, today]);
 
   const totalVested = useMemo(
     () => perPerson.reduce((sum, p) => sum + p.vested, 0),
     [perPerson],
+  );
+
+  const chartData = useMemo(() => vestingChartData(equityGrants), [equityGrants]);
+
+  const totalOrdinaryIncome = useMemo(
+    () => equityGrants.reduce((sum, g) => sum + grantOrdinaryIncomeOnVest(g, today), 0),
+    [equityGrants, today],
+  );
+
+  const hasIso = useMemo(
+    () => equityGrants.some((g) => isIsoAmtPreference(g.grantType)),
+    [equityGrants],
   );
 
   if (equityGrants.length === 0) {
@@ -102,6 +140,34 @@ export function EquityValueCard({ cardId, onHide }: EquityValueCardProps = {}) {
         testId="equity-total-vested"
         value={formatCurrency(totalVested)}
       />
+      <ResultRow
+        label="Total unvested"
+        testId="equity-total-unvested"
+        value={formatCurrency(totalUnvested)}
+      />
+      {upcomingVests.length > 0 && (
+        <div
+          data-testid="equity-upcoming-vests"
+          className="text-xs text-muted-foreground mt-1"
+        >
+          Next vests: {upcomingVests.join(', ')}
+        </div>
+      )}
+      <ResultRow
+        label="Est. ordinary income if unvested vests today"
+        testId="equity-ordinary-income"
+        value={formatCurrency(totalOrdinaryIncome)}
+      />
+      <p className="text-xs text-muted-foreground mt-1">
+        Estimated ordinary income at vest — not withheld tax.
+      </p>
+      {hasIso && (
+        <p className="text-xs text-muted-foreground mt-1">
+          ISO grants may trigger{' '}
+          <TermTooltip term="AMT">AMT</TermTooltip>
+          {' '}on exercise — not modeled here.
+        </p>
+      )}
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-muted-foreground">
@@ -117,7 +183,25 @@ export function EquityValueCard({ cardId, onHide }: EquityValueCardProps = {}) {
               className="border-t"
               data-testid={`equity-person-row-${p.ownerPersonId}`}
             >
-              <td className="py-2">{p.name}</td>
+              <td className="py-2">
+                {p.name}
+                {p.grantTypes.map((type) =>
+                  type === 'ISO' || type === 'NSO' ? (
+                    <TermTooltip key={type} term={type}>
+                      <span className="ml-1 inline-block rounded bg-muted px-1.5 py-0.5 text-xs">
+                        {type}
+                      </span>
+                    </TermTooltip>
+                  ) : (
+                    <span
+                      key={type}
+                      className="ml-1 inline-block rounded bg-muted px-1.5 py-0.5 text-xs"
+                    >
+                      {type}
+                    </span>
+                  ),
+                )}
+              </td>
               <td className="py-2 tabular-nums">{p.grantCount}</td>
               <td className="py-2 tabular-nums">{formatCurrency(p.vested)}</td>
             </tr>
@@ -132,6 +216,15 @@ export function EquityValueCard({ cardId, onHide }: EquityValueCardProps = {}) {
           View all →
         </Link>
       </div>
+      {chartData.length > 1 && (
+        <LineChartCard
+          title="Cumulative vesting"
+          data={chartData}
+          xKey="date"
+          series={[{ dataKey: 'vestedValue', label: 'Vested value' }]}
+          yFormatter={formatCurrency}
+        />
+      )}
     </CalculatorCard>
   );
 }

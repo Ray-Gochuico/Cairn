@@ -71,6 +71,7 @@ export default function EquityGrantsTab() {
             strikePrice: target.strikePrice,
             totalShares: target.totalShares,
             currentFmv: target.currentFmv,
+            grantType: target.grantType,
             vestingSchedule: target.vestingSchedule,
             companyValuation: target.companyValuation,
             companyOutstandingShares: target.companyOutstandingShares,

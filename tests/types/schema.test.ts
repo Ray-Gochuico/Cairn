@@ -797,6 +797,22 @@ describe('EquityGrantSchema', () => {
       ).toThrow();
     });
   });
+
+  describe('grant type', () => {
+    it('defaults grantType to RSU when omitted', () => {
+      expect(EquityGrantSchema.parse(valid).grantType).toBe('RSU');
+    });
+
+    it('accepts each of RSU / ISO / NSO', () => {
+      for (const gt of ['RSU', 'ISO', 'NSO'] as const) {
+        expect(EquityGrantSchema.parse({ ...valid, grantType: gt }).grantType).toBe(gt);
+      }
+    });
+
+    it('rejects an unknown grantType', () => {
+      expect(() => EquityGrantSchema.parse({ ...valid, grantType: 'FOO' })).toThrow();
+    });
+  });
 });
 
 describe('TickerSchema', () => {

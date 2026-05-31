@@ -31,3 +31,21 @@ describe('getGlossaryEntry — 401(k) Roth wording tightened', () => {
     expect(entry!.fullDefinition).not.toMatch(/post-tax in \/ tax-free out\b(?! on qualified)/i);
   });
 });
+
+describe('getGlossaryEntry — NSO', () => {
+  it('resolves NSO to a well-formed glossary entry', () => {
+    const entry = getGlossaryEntry('NSO');
+    expect(entry).not.toBeNull();
+    expect(entry!.term).toBe('NSO');
+    expect(entry!.shortDefinition).toMatch(/Non-qualified Stock Option/i);
+  });
+
+  it('NSO fullDefinition mentions ordinary income', () => {
+    const entry = getGlossaryEntry('NSO');
+    expect(entry!.fullDefinition).toMatch(/ordinary income/i);
+  });
+
+  it('resolves NSO case-insensitively', () => {
+    expect(getGlossaryEntry('nso')).not.toBeNull();
+  });
+});

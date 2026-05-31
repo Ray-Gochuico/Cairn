@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { computeEquityValue, computeFmvFromCompanyValuation } from '@/lib/equity-value';
+import { computeEquityValue, computeFmvFromCompanyValuation, vestingChartData, grantOrdinaryIncomeOnVest, isIsoAmtPreference } from '@/lib/equity-value';
+import { GrantType } from '@/types/enums';
 
 const grant = {
   grantDate: '2024-01-15',
@@ -143,5 +144,150 @@ describe('computeFmvFromCompanyValuation', () => {
       value: 0,
       warning: null,
     });
+  });
+});
+
+describe('vestingChartData', () => {
+  it('builds a monotonic cumulative-vested-$ timeline across grants', () => {
+    // Grant A: 1000 shares @ $10 FMV, vests 50% on 2025-01-01, 100% on 2026-01-01
+    // Grant B: 500 shares @ $20 FMV, vests 100% on 2025-01-01
+    //
+    // Union dates: ['2025-01-01', '2026-01-01']
+    // At 2025-01-01: (0.5 × 1000 × 10) + (1.0 × 500 × 20) = 5000 + 10000 = 15000
+    // At 2026-01-01: (1.0 × 1000 × 10) + (1.0 × 500 × 20) = 10000 + 10000 = 20000
+    // Σ shares×fmv = 1000×10 + 500×20 = 20000
+    const grantA = {
+      grantDate: '2024-01-01',
+      strikePrice: 0,
+      totalShares: 1000,
+      currentFmv: 10,
+      vestingSchedule: [
+        { date: '2025-01-01', cumulativePct: 0.5 },
+        { date: '2026-01-01', cumulativePct: 1.0 },
+      ],
+    };
+    const grantB = {
+      grantDate: '2024-01-01',
+      strikePrice: 0,
+      totalShares: 500,
+      currentFmv: 20,
+      vestingSchedule: [
+        { date: '2025-01-01', cumulativePct: 1.0 },
+      ],
+    };
+
+    const pts = vestingChartData([grantA, grantB]);
+
+    // One point per distinct vest date (sorted union)
+    expect(pts.map((p) => p.date)).toEqual(['2025-01-01', '2026-01-01']);
+
+    // Cumulative, non-decreasing
+    for (let i = 1; i < pts.length; i++) {
+      expect(pts[i].vestedValue).toBeGreaterThanOrEqual(pts[i - 1].vestedValue);
+    }
+
+    // Spot-check values
+    expect(pts[0].vestedValue).toBeCloseTo(15000);
+    expect(pts[1].vestedValue).toBeCloseTo(20000);
+
+    // Final point ≈ Σ shares×fmv (fully vested)
+    expect(pts.at(-1)!.vestedValue).toBeCloseTo(20000);
+  });
+
+  it('returns empty array for empty grants list', () => {
+    expect(vestingChartData([])).toEqual([]);
+  });
+
+  it('returns single point for a single-entry vesting schedule', () => {
+    const singleVest = {
+      grantDate: '2024-01-01',
+      strikePrice: 0,
+      totalShares: 100,
+      currentFmv: 5,
+      vestingSchedule: [{ date: '2025-06-01', cumulativePct: 1.0 }],
+    };
+    const pts = vestingChartData([singleVest]);
+    expect(pts).toHaveLength(1);
+    expect(pts[0].date).toBe('2025-06-01');
+    expect(pts[0].vestedValue).toBeCloseTo(500);
+  });
+});
+
+// Base grant for grantOrdinaryIncomeOnVest tests:
+// - 1000 shares @ FMV $50, 25% vested on 2020-01-15 (past), 100% on 2099-01-15 (far future)
+// - At "today" (2026-05-31, between the two), unvestedShares = 750
+const baseOrdinaryGrant = {
+  grantDate: '2019-01-15',
+  strikePrice: 0,
+  totalShares: 1000,
+  currentFmv: 50,
+  vestingSchedule: [
+    { date: '2020-01-15', cumulativePct: 0.25 },
+    { date: '2099-01-15', cumulativePct: 1.0 },
+  ],
+};
+const today2026 = new Date('2026-05-31');
+
+describe('grantOrdinaryIncomeOnVest', () => {
+  it('RSU: unvestedShares × currentFmv (strike is 0)', () => {
+    // unvestedShares = 750, fmv = 50 → 750 × 50 = 37500
+    const result = grantOrdinaryIncomeOnVest(
+      { ...baseOrdinaryGrant, grantType: GrantType.RSU },
+      today2026,
+    );
+    expect(result).toBeCloseTo(37500);
+  });
+
+  it('NSO: unvestedShares × (currentFmv − strikePrice), spread positive', () => {
+    // strike = 10, fmv = 50, spread = 40 → 750 × 40 = 30000
+    const result = grantOrdinaryIncomeOnVest(
+      { ...baseOrdinaryGrant, grantType: GrantType.NSO, strikePrice: 10 },
+      today2026,
+    );
+    expect(result).toBeCloseTo(30000);
+  });
+
+  it('NSO: floored at 0 when strike > fmv (underwater option)', () => {
+    // strike = 60, fmv = 50, spread = -10 → max(0,-10) = 0 → 0
+    const result = grantOrdinaryIncomeOnVest(
+      { ...baseOrdinaryGrant, grantType: GrantType.NSO, strikePrice: 60 },
+      today2026,
+    );
+    expect(result).toBe(0);
+  });
+
+  it('ISO: always 0 (bargain element is an AMT preference, not ordinary income)', () => {
+    const result = grantOrdinaryIncomeOnVest(
+      { ...baseOrdinaryGrant, grantType: GrantType.ISO, strikePrice: 10 },
+      today2026,
+    );
+    expect(result).toBe(0);
+  });
+
+  it('returns 0 when fully vested (no unvested shares)', () => {
+    // all vests in the past
+    const fullyVested = {
+      ...baseOrdinaryGrant,
+      grantType: GrantType.RSU,
+      vestingSchedule: [
+        { date: '2019-01-15', cumulativePct: 0.5 },
+        { date: '2020-01-15', cumulativePct: 1.0 },
+      ],
+    };
+    expect(grantOrdinaryIncomeOnVest(fullyVested, today2026)).toBe(0);
+  });
+});
+
+describe('isIsoAmtPreference', () => {
+  it('returns true for ISO', () => {
+    expect(isIsoAmtPreference(GrantType.ISO)).toBe(true);
+  });
+
+  it('returns false for RSU', () => {
+    expect(isIsoAmtPreference(GrantType.RSU)).toBe(false);
+  });
+
+  it('returns false for NSO', () => {
+    expect(isIsoAmtPreference(GrantType.NSO)).toBe(false);
   });
 });

@@ -160,10 +160,67 @@ describe('validateEquityGrantRow', () => {
   });
 });
 
+describe('validateEquityGrantRow — grant_type', () => {
+  it('resolves grant_type NSO when provided', () => {
+    const row = validateEquityGrantRow({ ...validRaw(), grant_type: 'NSO' }, 0, ctx());
+    expect(row.errors).toHaveLength(0);
+    expect(row.resolved.grantType).toBe('NSO');
+  });
+
+  it('defaults to RSU when grant_type is omitted', () => {
+    const raw = validRaw();
+    // Ensure grant_type is absent
+    delete (raw as Record<string, string>).grant_type;
+    const row = validateEquityGrantRow(raw, 0, ctx());
+    expect(row.errors).toHaveLength(0);
+    expect(row.resolved.grantType).toBe('RSU');
+  });
+
+  it('defaults to RSU when grant_type is blank', () => {
+    const row = validateEquityGrantRow({ ...validRaw(), grant_type: '  ' }, 0, ctx());
+    expect(row.errors).toHaveLength(0);
+    expect(row.resolved.grantType).toBe('RSU');
+  });
+
+  it('flags an invalid grant_type as error', () => {
+    const row = validateEquityGrantRow({ ...validRaw(), grant_type: 'BOGUS' }, 0, ctx());
+    expect(row.status).toBe('error');
+    expect(row.errors.some((e) => e.field === 'grant_type')).toBe(true);
+  });
+
+  it('is case-insensitive (lowercased rsu resolves to RSU)', () => {
+    const row = validateEquityGrantRow({ ...validRaw(), grant_type: 'rsu' }, 0, ctx());
+    expect(row.errors).toHaveLength(0);
+    expect(row.resolved.grantType).toBe('RSU');
+  });
+});
+
 describe('equityGrantTemplateCsv', () => {
   it('emits a CSV header with vesting_schedule_json', () => {
     const csv = equityGrantTemplateCsv();
     expect(csv).toContain('vesting_schedule_json');
     expect(csv).toContain('company_name');
+  });
+
+  it('emits a CSV header with grant_type', () => {
+    const csv = equityGrantTemplateCsv();
+    expect(csv).toContain('grant_type');
+  });
+
+  it('has the same number of columns in header and data row', () => {
+    const csv = equityGrantTemplateCsv();
+    const lines = csv.split('\n');
+    expect(lines).toHaveLength(2);
+    // Count top-level commas only (not those inside quoted vesting JSON)
+    function countTopLevelCols(line: string): number {
+      let cols = 1;
+      let inQuote = false;
+      for (const ch of line) {
+        if (ch === '"') inQuote = !inQuote;
+        else if (ch === ',' && !inQuote) cols++;
+      }
+      return cols;
+    }
+    expect(countTopLevelCols(lines[0])).toBe(countTopLevelCols(lines[1]));
   });
 });
