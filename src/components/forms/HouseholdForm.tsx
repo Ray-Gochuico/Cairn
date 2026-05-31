@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { HouseholdSchema, type Household } from '@/types/schema';
 import { FilingStatus } from '@/types/enums';
+import { prettifyCityCode, US_STATES } from '@/lib/jurisdiction-format';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,20 +18,6 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 const CITY_TAX_YEAR = 2026;
-
-/** Convert a jurisdiction code like NY_NYC → "NYC", MI_DETROIT → "Detroit". Keeps short
- * all-caps abbreviations (length ≤ 3 letters, all uppercase) as-is to avoid mangling NYC, DC, etc. */
-function prettifyCityCode(code: string): string {
-  const parts = code.split('_');
-  // First part is the state prefix; drop it.
-  const rest = parts.slice(1);
-  return rest
-    .map((p) => {
-      if (p.length <= 3 && /^[A-Z]+$/.test(p)) return p;
-      return p.charAt(0) + p.slice(1).toLowerCase();
-    })
-    .join(' ');
-}
 
 // Roadmap rule-engine chart-answer columns are not managed by this form
 // (set by roadmap decision nodes). Strip them so RHF + zodResolver see a
@@ -49,13 +36,6 @@ export type HouseholdFormValues = Omit<
   | 'upcomingPurchaseAmount'
   | 'upcomingPurchaseMonths'
 >;
-
-const US_STATES = [
-  'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA',
-  'KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ',
-  'NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT',
-  'VA','WA','WV','WI','WY','DC',
-];
 
 export const HOUSEHOLD_DEFAULT_VALUES: HouseholdFormValues = {
   name: null,
