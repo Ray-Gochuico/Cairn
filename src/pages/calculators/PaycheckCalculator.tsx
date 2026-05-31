@@ -179,26 +179,45 @@ export default function PaycheckCalculator() {
   // seed equals what's persisted and the user isn't mid-typing during a lazy
   // multi-store hydration. This what-if page is the one place the missing
   // option is exposed.)
+  // Household-combined defaults (spec §4 "Defaults seeding" + §10 item 1): a
+  // SINGLE input set summed across ALL persons — sum of salaries, summed health/
+  // HSA/DCFSA, and a salary-BLENDED 401(k) % — mirroring PaycheckCard's
+  // `for (const p of persons)` accumulation. Seeding from `persons[0]` alone
+  // would under-count a 2-earner household's pre-tax and diverge from the
+  // dashboard card. For a single earner this collapses to that person's values
+  // exactly (sum/blend of one), so the common case is unchanged. The blended
+  // 401(k) fraction is `Σ(pctᵢ·salaryᵢ) / Σ salaryᵢ`, so `pct·totalSalary`
+  // equals the exact dollar-sum of per-person 401(k) contributions.
+  const combined = useMemo(() => {
+    const salary = persons.reduce((s, p) => s + p.annualSalaryPretax, 0);
+    const k401Dollars = persons.reduce((s, p) => s + p.pretax401kPct * p.annualSalaryPretax, 0);
+    return {
+      salary,
+      pretax401kFraction: salary > 0 ? k401Dollars / salary : (persons[0]?.pretax401kPct ?? 0),
+      healthMonthly: persons.reduce((s, p) => s + p.healthInsuranceMonthlyPremium, 0),
+      hsaMonthly: persons.reduce((s, p) => s + p.hsaMonthlyContribution, 0),
+      dcfsaMonthly: persons.reduce((s, p) => s + p.dependentCareFsaMonthly, 0),
+    };
+  }, [persons]);
+
   const values = useMemo<FormValues | undefined>(() => {
     if (!household) return undefined;
-    const combinedSalary = persons.reduce((s, p) => s + p.annualSalaryPretax, 0);
-    const p0 = persons[0];
     return {
-      grossAnnual: combinedSalary || 0,
+      grossAnnual: combined.salary || 0,
       payFrequency: 'ANNUAL',
       filingStatus: household.filingStatus,
       dependents: dependents.length,
       state: household.state ?? 'CA',
       city: household.city ?? null,
-      pretax401kPct: p0 ? Math.round(p0.pretax401kPct * 100) : 0,
-      healthMonthly: p0?.healthInsuranceMonthlyPremium ?? 0,
-      hsaMonthly: p0?.hsaMonthlyContribution ?? 0,
+      pretax401kPct: Math.round(combined.pretax401kFraction * 100),
+      healthMonthly: combined.healthMonthly,
+      hsaMonthly: combined.hsaMonthly,
       fsaMonthly: 0,
       roth401kPct: 0,
       otherPostTaxMonthly: 0,
       extraFederalPerPaycheck: 0,
     };
-  }, [household, persons, dependents]);
+  }, [household, combined, dependents]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(PaycheckFormSchema),
@@ -275,7 +294,11 @@ export default function PaycheckCalculator() {
       salary: gross,
       pretax401kPct: f.pretax401kPct / 100,
       healthInsuranceMonthlyPremium: f.healthMonthly,
-      dcfsaMonthly: 0,
+      // Dependent-care FSA is carried from the profile (spec §4 default source)
+      // — there is no DCFSA input on this page, but dropping it would diverge
+      // from the dashboard card, which includes it. Capped inside
+      // computePretaxDeductions via dcfsaLimit(filingStatus).
+      dcfsaMonthly: combined.dcfsaMonthly,
       hsaMonthly: f.hsaMonthly,
       hsaEligible: f.hsaMonthly > 0,
       filingStatus: f.filingStatus,
@@ -335,7 +358,12 @@ export default function PaycheckCalculator() {
       additionalMedicare: fica.additionalMedicare,
       stateTax: tax.state,
       cityTax: tax.city,
-      hasStateTax: state.brackets.length > 0,
+      // No-state-tax detection: 0002_seed_tax_rules.sql stores no-income-tax
+      // states (TX/FL/NV/SD/TN/WY/AK/WA) as a single ZERO-RATE bracket, not an
+      // empty list (schema requires >=1 bracket). So detect "no state tax" by
+      // the absence of any positive rate — NOT by `brackets.length` (which is
+      // always >=1 and would wrongly show a literal "$0" for every no-tax state).
+      hasStateTax: state.brackets.some((b) => b.rate > 0),
       hasCity: !!city,
       pretaxTotal,
       postTaxTotal,
@@ -349,7 +377,7 @@ export default function PaycheckCalculator() {
     f.grossAnnual, f.payFrequency, f.filingStatus, f.dependents, f.state, f.city,
     f.pretax401kPct, f.healthMonthly, f.hsaMonthly, f.fsaMonthly,
     f.roth401kPct, f.otherPostTaxMonthly, f.extraFederalPerPaycheck,
-    taxItems, resolvedYear, persons.length,
+    taxItems, resolvedYear, persons.length, combined.dcfsaMonthly,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Results "Show as" display period (independent of the Income pay frequency).
@@ -370,12 +398,13 @@ export default function PaycheckCalculator() {
 
   return (
     <div className="space-y-4 min-w-0">
-      {/* W2 / BT-6 — shared card→detail back-nav. ONE canonical markup for every
-          calculator detail route spun out of the /calculators grid; the backtest
-          detail route (/calculators/backtest) uses the IDENTICAL element. The
-          backtest plan defines the shared form (a lucide `ArrowLeft h-4 w-4` +
-          `text-sm text-muted-foreground`, above the <h1>) — match it byte-for-byte
-          here so the two detail pages don't drift. */}
+      {/* W2 / BT-6 — shared card→detail back-nav: the house-style affordance for
+          every calculator detail route spun out of the /calculators grid (a
+          lucide `ArrowLeft h-4 w-4` + `text-sm text-muted-foreground`, above the
+          <h1>). The historical-backtest detail route (/calculators/backtest),
+          specified in docs/superpowers/plans/2026-05-28-historical-backtest-plan.md
+          and built next in the sequence, will reuse this IDENTICAL element so the
+          two detail pages don't drift. (Today this is the only such page.) */}
       <Link
         to="/calculators"
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"

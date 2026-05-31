@@ -64,9 +64,13 @@ function primeStores(opts?: { state?: string; salary?: number }) {
       // CA SINGLE — present so a CA scenario computes; absent state codes (TX) test the no-tax guard.
       { id: 2, year: 2026, jurisdictionType: 'STATE', jurisdictionCode: 'CA',
         filingStatus: FilingStatus.SINGLE, brackets: caSingleBrackets, standardDeduction: 0 },
-      // TX SINGLE — empty brackets to drive the "(no state income tax)" row.
+      // TX SINGLE — seeded the way 0002_seed_tax_rules.sql ACTUALLY stores a
+      // no-income-tax state: a single ZERO-RATE bracket, NOT empty brackets
+      // (the schema's TaxRuleSchema.brackets even requires .min(1), so an
+      // empty-brackets row can never persist). The page must detect "no state
+      // tax" from the zero rate, not from list length.
       { id: 3, year: 2026, jurisdictionType: 'STATE', jurisdictionCode: 'TX',
-        filingStatus: FilingStatus.SINGLE, brackets: [], standardDeduction: 0 },
+        filingStatus: FilingStatus.SINGLE, brackets: [{ min: 0, max: null, rate: 0 }], standardDeduction: 0 },
     ],
     isLoading: false, error: null,
   });
@@ -261,5 +265,99 @@ describe('PaycheckCalculator', () => {
     // Snaps back to the seeded salary (and the form is pristine again).
     expect((screen.getByLabelText(/Gross pay/i) as HTMLInputElement).value).toBe('100000');
     expect(screen.getByRole('button', { name: /reset to my data/i })).toBeDisabled();
+  });
+
+  // Multi-earner seed (spec §4 "Defaults seeding" + §10 item 1): the form opens
+  // with the SUM of all persons' salaries and SUMMED pre-tax (401(k) % blended by
+  // salary), NOT persons[0] alone — so a two-earner household's seed matches the
+  // dashboard card instead of under-counting the second earner. Regression guard:
+  // it goes RED if the seed reverts to a `persons[0]`-only default.
+  it('seeds from the SUM of all persons (combined salary + salary-blended 401k%), not persons[0]', async () => {
+    useHouseholdStore.setState({
+      household: {
+        filingStatus: FilingStatus.SINGLE, state: 'CA', city: null,
+        monthlyExpenseBaseline: 5000, withdrawalRate: 0.04, inflationAssumption: 0.03,
+        growthScenarios: [],
+      },
+      isLoading: false, error: null,
+    });
+    usePersonsStore.setState({
+      persons: [
+        { id: 1, householdId: 1, name: 'Alice', dateOfBirth: '1990-01-01', targetRetirementAge: 65,
+          annualSalaryPretax: 100000, expectedCommission: 0, expectedCommissionFrequency: 'MONTHLY',
+          pretax401kPct: 0.10, healthInsuranceMonthlyPremium: 400, dependentCareFsaMonthly: 0,
+          hsaMonthlyContribution: 300, hsaEligible: true },
+        { id: 2, householdId: 1, name: 'Bob', dateOfBirth: '1988-01-01', targetRetirementAge: 65,
+          annualSalaryPretax: 50000, expectedCommission: 0, expectedCommissionFrequency: 'MONTHLY',
+          pretax401kPct: 0.04, healthInsuranceMonthlyPremium: 200, dependentCareFsaMonthly: 0,
+          hsaMonthlyContribution: 0, hsaEligible: false },
+      ],
+      isLoading: false, error: null,
+    });
+    useDependentsStore.setState({ dependents: [], isLoading: false, error: null });
+    useTaxRulesStore.setState({
+      year: 2026,
+      items: [
+        { id: 1, year: 2026, jurisdictionType: 'FEDERAL', jurisdictionCode: 'US',
+          filingStatus: FilingStatus.SINGLE, brackets: federalSingleBrackets, standardDeduction: 15000 },
+        { id: 2, year: 2026, jurisdictionType: 'STATE', jurisdictionCode: 'CA',
+          filingStatus: FilingStatus.SINGLE, brackets: caSingleBrackets, standardDeduction: 0 },
+      ],
+      isLoading: false, error: null,
+    });
+    render(<MemoryRouter><PaycheckCalculator /></MemoryRouter>);
+
+    // Gross = 100,000 + 50,000 (SUM) — NOT 100,000 from persons[0].
+    expect((await screen.findByLabelText(/Gross pay/i) as HTMLInputElement).value).toBe('150000');
+    // 401(k) %: salary-blended (0.10·100k + 0.04·50k) / 150k = 8% — NOT Alice's 10%.
+    expect((screen.getByLabelText(/Pre-tax 401\(k\) contribution/i) as HTMLInputElement).value).toBe('8');
+    // Health premium: 400 + 200 = 600/mo (summed across both earners).
+    expect((screen.getByLabelText(/Health premium/i) as HTMLInputElement).value).toBe('600');
+  });
+
+  // DCFSA carry-through (spec §4 default source): the page has no dependent-care
+  // FSA input, but a profile DCFSA election is pre-tax and must lower take-home
+  // — proving it's no longer hardcoded to 0. Same $120k SINGLE profile rendered
+  // with and without a $400/mo DCFSA; the FSA election reduces net pay.
+  it('carries dependent-care FSA from the profile into take-home (no longer dropped)', async () => {
+    const household = {
+      filingStatus: FilingStatus.SINGLE, state: 'CA', city: null,
+      monthlyExpenseBaseline: 5000, withdrawalRate: 0.04, inflationAssumption: 0.03,
+      growthScenarios: [],
+    };
+    const taxRules = {
+      year: 2026,
+      items: [
+        { id: 1, year: 2026, jurisdictionType: 'FEDERAL', jurisdictionCode: 'US',
+          filingStatus: FilingStatus.SINGLE, brackets: federalSingleBrackets, standardDeduction: 15000 },
+        { id: 2, year: 2026, jurisdictionType: 'STATE', jurisdictionCode: 'CA',
+          filingStatus: FilingStatus.SINGLE, brackets: caSingleBrackets, standardDeduction: 0 },
+      ],
+      isLoading: false, error: null,
+    };
+    const personWith = (dcfsaMonthly: number) => ({
+      id: 1, householdId: 1, name: 'Alice', dateOfBirth: '1990-01-01', targetRetirementAge: 65,
+      annualSalaryPretax: 120000, expectedCommission: 0, expectedCommissionFrequency: 'MONTHLY',
+      pretax401kPct: 0, healthInsuranceMonthlyPremium: 0, dependentCareFsaMonthly: dcfsaMonthly,
+      hsaMonthlyContribution: 0, hsaEligible: false,
+    });
+    const readTakeHome = async () =>
+      parseFloat((await screen.findByTestId('paycheck-calc-takehome')).textContent!.replace(/[$,]/g, ''));
+
+    // No DCFSA.
+    useHouseholdStore.setState({ household, isLoading: false, error: null });
+    usePersonsStore.setState({ persons: [personWith(0)], isLoading: false, error: null });
+    useDependentsStore.setState({ dependents: [], isLoading: false, error: null });
+    useTaxRulesStore.setState(taxRules);
+    const { unmount } = render(<MemoryRouter><PaycheckCalculator /></MemoryRouter>);
+    const withoutDcfsa = await readTakeHome();
+    unmount();
+
+    // With a $400/mo ($4,800/yr) dependent-care FSA.
+    usePersonsStore.setState({ persons: [personWith(400)], isLoading: false, error: null });
+    render(<MemoryRouter><PaycheckCalculator /></MemoryRouter>);
+    const withDcfsa = await readTakeHome();
+
+    expect(withDcfsa).toBeLessThan(withoutDcfsa);
   });
 });
