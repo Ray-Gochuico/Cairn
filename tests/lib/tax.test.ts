@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluateBrackets, type Bracket, computeFica, computePretaxDeductions, computeBonusTax, computeTotalTax, type TotalTaxInput } from '@/lib/tax';
+import { evaluateBrackets, type Bracket, computeFica, computeFicaBreakdown, computePretaxDeductions, computeBonusTax, computeTotalTax, type TotalTaxInput } from '@/lib/tax';
 
 const federal2026Single: Bracket[] = [
   { min: 0, max: 11600, rate: 0.10 },
@@ -52,6 +52,46 @@ describe('computeFica', () => {
     // 300000 MFJ: SS capped = 11439; Medicare: 300000 × 0.0145 + (300000-250000) × 0.009 = 4350 + 450 = 4800
     // total: 11439 + 4800 = 16239
     expect(computeFica(300000, 'MFJ')).toBeCloseTo(16239, 1);
+  });
+});
+
+describe('computeFicaBreakdown', () => {
+  it('splits SS + Medicare below the SS wage base and the surtax threshold', () => {
+    // 100000: SS 6200, Medicare 1450, Additional 0
+    const b = computeFicaBreakdown(100000, 'SINGLE');
+    expect(b.socialSecurity).toBeCloseTo(6200, 2);
+    expect(b.medicare).toBeCloseTo(1450, 2);
+    expect(b.additionalMedicare).toBe(0);
+    expect(b.total).toBeCloseTo(7650, 2);
+  });
+
+  it('caps the Social Security component at the 2026 wage base', () => {
+    // 200000 SINGLE: SS capped, Medicare 2900, Additional 0.9%×(200000-200000)=0
+    const b = computeFicaBreakdown(200000, 'SINGLE');
+    expect(b.medicare).toBeCloseTo(2900, 2);
+    expect(b.additionalMedicare).toBe(0);
+    // SS component is the capped figure; total still equals computeFica.
+    expect(b.total).toBeCloseTo(computeFica(200000, 'SINGLE'), 5);
+  });
+
+  it('surfaces the Additional Medicare component above the SINGLE threshold', () => {
+    // 250000 SINGLE: Additional = (250000-200000)×0.009 = 450
+    const b = computeFicaBreakdown(250000, 'SINGLE');
+    expect(b.additionalMedicare).toBeCloseTo(450, 2);
+    expect(b.medicare).toBeCloseTo(250000 * 0.0145, 2);
+    expect(b.total).toBeCloseTo(computeFica(250000, 'SINGLE'), 5);
+  });
+
+  it('uses the $250k MFJ threshold for Additional Medicare', () => {
+    // 300000 MFJ: Additional = (300000-250000)×0.009 = 450
+    const b = computeFicaBreakdown(300000, 'MFJ');
+    expect(b.additionalMedicare).toBeCloseTo(450, 2);
+  });
+
+  it('the three components always sum to total (and to computeFica)', () => {
+    const b = computeFicaBreakdown(123456, 'HOH');
+    expect(b.socialSecurity + b.medicare + b.additionalMedicare).toBeCloseTo(b.total, 6);
+    expect(b.total).toBeCloseTo(computeFica(123456, 'HOH'), 6);
   });
 });
 
