@@ -59,6 +59,7 @@ function primeStores(opts: PrimeOpts = {}) {
       strikePrice: g.strikePrice ?? 5,
       totalShares: g.totalShares ?? 1000,
       currentFmv: g.currentFmv ?? 50,
+      grantType: g.grantType ?? 'RSU',
       vestingSchedule: g.vestingSchedule ?? [
         { date: '2025-01-15', cumulativePct: 0.25 },
         { date: '2026-01-15', cumulativePct: 0.5 },
@@ -237,5 +238,95 @@ describe('EquityValueCard', () => {
       </MemoryRouter>,
     );
     expect(screen.getByTestId('equity-total-vested').textContent).toMatch(/\$[\d,]+/);
+  });
+
+  it('renders unvested value, upcoming vest dates, and grant-type badge (ISO)', () => {
+    // Grant: 1000 shares at $50 FMV.
+    // Past vest (2020-01-15 @ 25%) → vestedValue = 250 × 50 = $12,500
+    // Future vests (2099-01-15 @ 100%) → unvestedValue = 750 × 50 = $37,500
+    primeStores({
+      grants: [
+        {
+          name: 'ISO Grant',
+          grantType: 'ISO',
+          totalShares: 1000,
+          currentFmv: 50,
+          strikePrice: 10,
+          vestingSchedule: [
+            { date: '2020-01-15', cumulativePct: 0.25 },
+            { date: '2099-01-15', cumulativePct: 1.0 },
+          ],
+        },
+      ],
+    });
+    render(
+      <MemoryRouter>
+        <EquityValueCard />
+      </MemoryRouter>,
+    );
+
+    // unvested ResultRow must show a $-value
+    expect(screen.getByTestId('equity-total-unvested').textContent).toMatch(/\$[\d,]+/);
+
+    // upcoming vests block must be present and contain a future date
+    const upcomingBlock = screen.getByTestId('equity-upcoming-vests');
+    expect(upcomingBlock).toBeInTheDocument();
+    expect(upcomingBlock.textContent).toMatch(/2099/);
+
+    // grant-type badge must show 'ISO'
+    expect(screen.getByText('ISO')).toBeInTheDocument();
+  });
+
+  it('shows RSU grant-type badge (plain, no tooltip) for RSU grants', () => {
+    primeStores({
+      grants: [
+        {
+          name: 'RSU Grant',
+          grantType: 'RSU',
+          totalShares: 500,
+          currentFmv: 100,
+          vestingSchedule: [
+            { date: '2020-01-15', cumulativePct: 0.5 },
+            { date: '2099-01-15', cumulativePct: 1.0 },
+          ],
+        },
+      ],
+    });
+    render(
+      <MemoryRouter>
+        <EquityValueCard />
+      </MemoryRouter>,
+    );
+
+    // Badge text 'RSU' in the person row
+    const personRow = screen.getByTestId('equity-person-row-1');
+    expect(within(personRow).getByText('RSU')).toBeInTheDocument();
+
+    // unvested row is present
+    expect(screen.getByTestId('equity-total-unvested').textContent).toMatch(/\$[\d,]+/);
+  });
+
+  it('does not render equity-upcoming-vests block when all vests are in the past', () => {
+    primeStores({
+      grants: [
+        {
+          name: 'Fully Vested',
+          grantType: 'RSU',
+          totalShares: 200,
+          currentFmv: 25,
+          vestingSchedule: [
+            { date: '2019-01-15', cumulativePct: 0.5 },
+            { date: '2020-01-15', cumulativePct: 1.0 },
+          ],
+        },
+      ],
+    });
+    render(
+      <MemoryRouter>
+        <EquityValueCard />
+      </MemoryRouter>,
+    );
+    // No upcoming vests → block should not render
+    expect(screen.queryByTestId('equity-upcoming-vests')).not.toBeInTheDocument();
   });
 });
