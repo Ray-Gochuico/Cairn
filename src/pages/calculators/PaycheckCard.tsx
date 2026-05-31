@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
@@ -170,6 +171,14 @@ export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
             </option>
           ))}
         </select>
+      </div>
+      <div className="mb-3">
+        <Link
+          to="/calculators/paycheck"
+          className="text-sm text-primary underline underline-offset-4 hover:text-primary/80"
+        >
+          Open full calculator →
+        </Link>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-sm">
         <div>
