@@ -418,4 +418,23 @@ describe('BonusTaxCard', () => {
     // Back to the $0 default → placeholder returns.
     expect(screen.getByText(/Enter a bonus amount/i)).toBeInTheDocument();
   });
+
+  it('Flat 22% mode shows federal = flat withholding and persists the method', async () => {
+    primeStores();
+    render(<MemoryRouter><BonusTaxCard /></MemoryRouter>);
+    fireEvent.change(screen.getByLabelText(/Bonus amount/i), { target: { value: '10000' } });
+    await screen.findByTestId('bonus-takehome');
+    fireEvent.click(screen.getByRole('button', { name: /flat/i }));
+    // flat 22% on $10k = $2,200 federal
+    expect(screen.getByText(/\$2,200/)).toBeInTheDocument();
+    expect(sessionStorage.getItem('calc-suppl-method:bonus-tax')).toBe('FLAT');
+  });
+
+  it('defaults to Aggregate (toggle pressed) so existing math is unchanged', async () => {
+    primeStores();
+    render(<MemoryRouter><BonusTaxCard /></MemoryRouter>);
+    fireEvent.change(screen.getByLabelText(/Bonus amount/i), { target: { value: '10000' } });
+    await screen.findByTestId('bonus-takehome');
+    expect(screen.getByRole('button', { name: /aggregate/i })).toHaveAttribute('aria-pressed', 'true');
+  });
 });
