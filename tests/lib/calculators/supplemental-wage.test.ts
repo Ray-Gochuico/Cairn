@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   aggregateHouseholdPretax,
   computeSupplementalWageTax,
+  flatSupplementalWithholding,
 } from '@/lib/calculators/supplemental-wage';
 import { computeBonusTax, computePretaxDeductions } from '@/lib/tax';
 import { FilingStatus } from '@/types/enums';
@@ -125,4 +126,19 @@ describe('computeSupplementalWageTax — golden parity with computeBonusTax', ()
       expect(viaEngine.bonusBreakdown.total).toBeGreaterThan(0);
     });
   }
+});
+
+describe('flatSupplementalWithholding', () => {
+  it('applies 22% below the $1M threshold', () => {
+    expect(flatSupplementalWithholding(10_000)).toBeCloseTo(2_200, 6);
+    expect(flatSupplementalWithholding(1_000_000)).toBeCloseTo(220_000, 6);
+  });
+  it('applies 37% to the portion over $1M', () => {
+    // 220_000 + 500_000 * 0.37 = 405_000
+    expect(flatSupplementalWithholding(1_500_000)).toBeCloseTo(405_000, 6);
+  });
+  it('is 0 for non-positive wages', () => {
+    expect(flatSupplementalWithholding(0)).toBe(0);
+    expect(flatSupplementalWithholding(-5)).toBe(0);
+  });
 });
