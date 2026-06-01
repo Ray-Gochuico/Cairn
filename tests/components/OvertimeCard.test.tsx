@@ -324,6 +324,23 @@ describe('OvertimeCard', () => {
     expect(newValue).toBeGreaterThan(initialValue);
   });
 
+  it('renders OBBBA deduction row and caveat when eligible person has OT hours', async () => {
+    // Default primeStores: HOURLY @ $25/hr, starter row 8 hrs @ 1.5x.
+    // totalPremium = 8 × 25 × (1.5 - 1) = 100. obbbaDeduction = 100 (<$12,500).
+    primeStores();
+    render(<MemoryRouter><OvertimeCard /></MemoryRouter>);
+
+    // Wait for the card to reach the populated path (headline present).
+    await screen.findByTestId('ot-takehome');
+
+    // OBBBA est. federal tax saved row must render.
+    const obbbaRow = await screen.findByTestId('ot-obbba-deduction');
+    expect(obbbaRow).toBeInTheDocument();
+
+    // The caveat paragraph must mention phase-out, sunsets, or FICA.
+    expect(screen.getByText(/phase-out|sunsets|FICA/i)).toBeInTheDocument();
+  });
+
   it('headline equals computeSupplementalWageTax wiring exactly (parity, single eligible person)', async () => {
     const { aggregateHouseholdPretax, computeSupplementalWageTax } = await import(
       '@/lib/calculators/supplemental-wage'

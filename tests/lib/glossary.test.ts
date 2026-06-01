@@ -32,6 +32,15 @@ describe('getGlossaryEntry — 401(k) Roth wording tightened', () => {
   });
 });
 
+describe('getGlossaryEntry — OBBBA', () => {
+  it('resolves OBBBA to a well-formed glossary entry', () => {
+    const entry = getGlossaryEntry('OBBBA');
+    expect(entry).not.toBeNull();
+    expect(entry!.term).toBe('OBBBA');
+    expect(`${entry!.shortDefinition} ${entry!.fullDefinition ?? ''}`).toMatch(/overtime/i);
+  });
+});
+
 describe('getGlossaryEntry — NSO', () => {
   it('resolves NSO to a well-formed glossary entry', () => {
     const entry = getGlossaryEntry('NSO');

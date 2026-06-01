@@ -1,3 +1,5 @@
+import { FilingStatus } from '@/types/enums';
+
 /**
  * Pure overtime math. No I/O, no React. Used by OvertimeCard (Slice 1.6).
  *
@@ -32,6 +34,7 @@ export interface OvertimeLineItemResult {
 export interface OvertimeResult {
   lineItems: OvertimeLineItemResult[];
   totalGross: number;
+  totalPremium: number;
 }
 
 /** Evaluate a list of OT line items against a base hourly rate. */
@@ -53,7 +56,19 @@ export function evaluateOvertimeLineItems(
     return { hours: item.hours, effectiveMultiplier, effectiveBaseRate, gross };
   });
   const totalGross = lineItems.reduce((sum, r) => sum + r.gross, 0);
-  return { lineItems, totalGross };
+  const totalPremium = lineItems.reduce(
+    (sum, r) => sum + r.hours * r.effectiveBaseRate * (r.effectiveMultiplier - 1),
+    0,
+  );
+  return { lineItems, totalGross, totalPremium };
+}
+
+/** OBBBA (2025-2028) federal deduction for the overtime PREMIUM (pay above the
+ *  regular rate), capped at $12,500 (single/HOH/MFS) / $25,000 (MFJ). Estimate:
+ *  does NOT model the $150k/$300k MAGI phase-out. */
+export function obbbaOvertimeDeduction(premium: number, filingStatus: FilingStatus): number {
+  const cap = filingStatus === FilingStatus.MFJ ? 25_000 : 12_500;
+  return Math.min(Math.max(0, premium), cap);
 }
 
 /**
