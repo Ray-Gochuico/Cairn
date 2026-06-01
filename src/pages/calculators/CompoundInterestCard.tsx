@@ -11,6 +11,13 @@ import { formatCurrency } from '@/lib/format';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import { useCalculatorState } from '@/lib/calculator-state';
 import { NumberField } from '@/components/calculators/NumberField';
+import { useSnapshotsStore } from '@/stores/snapshots-store';
+import { sumLatestOnOrBefore } from '@/lib/growth-horizons';
+import { useSettingsStore } from '@/stores/settings-store';
+import { CHART_PALETTE } from '@/components/charts/palette';
+import { RealNominalToggle } from '@/components/calculators/RealNominalToggle';
+import { useChartDisplayMode } from '@/lib/calculators/use-chart-display-mode';
+import { toRealSeries } from '@/lib/calculators/real-mode';
 
 interface CompoundInterestCardProps {
   cardId?: string;
@@ -34,16 +41,21 @@ const PERIODS_PER_YEAR: Record<CompoundFrequency, number> = {
 };
 
 export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardProps = {}) {
+  const { snapshots } = useSnapshotsStore();
   // Kit-managed input state: persists in sessionStorage under calc-state:compound-interest.
-  // Defaults stay the original literal values (real-portfolio prefill is Wave 2).
-  const defaults = useMemo(() => ({
-    pv: 1000,
-    monthlyContribution: 100,
-    years: 10,
-    ratePercent: 7,
-    variancePercent: null as number | null,
-    frequency: 'MONTHLY' as CompoundFrequency,
-  }), []);
+  // pv is prefilled from the latest portfolio snapshot; falls back to 1000 demo default.
+  const defaults = useMemo(() => {
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const currentPortfolio = sumLatestOnOrBefore(snapshots, todayIso) ?? 0;
+    return {
+      pv: currentPortfolio > 0 ? currentPortfolio : 1000,   // portfolio prefill; 1000 demo fallback
+      monthlyContribution: 100,
+      years: 10,
+      ratePercent: 7,
+      variancePercent: null as number | null,
+      frequency: 'MONTHLY' as CompoundFrequency,
+    };
+  }, [snapshots]);
 
   const { values, setValue, reset, isOverridden } = useCalculatorState(
     cardId ?? 'compound-interest',
@@ -88,6 +100,7 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
     if (!series) return [];
     return series.yearly.map((y) => ({
       year: `Year ${y.year}`,
+      yearNum: y.year,
       mid: y.mid,
       low: y.low,
       high: y.high,
@@ -99,11 +112,19 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
   // green = optimistic (rate + variance). Single-line view uses blue.
   const chartSeries = hasVariance
     ? [
-        { dataKey: 'low', label: 'Low', color: '#dc2626' },
-        { dataKey: 'mid', label: 'Mid', color: '#2563eb' },
-        { dataKey: 'high', label: 'High', color: '#16a34a' },
+        { dataKey: 'low', label: 'Low', color: CHART_PALETTE[2] },   // red
+        { dataKey: 'mid', label: 'Mid', color: CHART_PALETTE[0] },   // blue
+        { dataKey: 'high', label: 'High', color: CHART_PALETTE[4] }, // green
       ]
-    : [{ dataKey: 'mid', label: 'Balance', color: '#2563eb' }];
+    : [{ dataKey: 'mid', label: 'Balance', color: CHART_PALETTE[0] }];
+
+  const [displayMode, setDisplayMode] = useChartDisplayMode(cardId ?? 'compound-interest');
+  const inflation = useSettingsStore((s) => s.settings?.defaultInflation) ?? 0.025;
+  const displayData = useMemo(() => {
+    if (displayMode === 'NOMINAL') return chartData;
+    const keys = hasVariance ? ['low', 'mid', 'high'] : ['mid'];
+    return toRealSeries(chartData, inflation, { valueKeys: keys, yearKey: 'yearNum' });
+  }, [chartData, displayMode, hasVariance, inflation]);
 
   return (
     <CalculatorCard
@@ -213,9 +234,12 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
               </div>
             </div>
           </div>
+          <div className="flex justify-end mb-2">
+            <RealNominalToggle mode={displayMode} onChange={setDisplayMode} />
+          </div>
           <LineChartCard
             title="Balance over time"
-            data={chartData}
+            data={displayData}
             xKey="year"
             series={chartSeries}
             yFormatter={(v) => formatCurrency(v)}
