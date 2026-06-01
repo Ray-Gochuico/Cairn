@@ -23,6 +23,7 @@ import { sumLatestOnOrBefore } from '@/lib/growth-horizons';
 import { useSettingsStore } from '@/stores/settings-store';
 import { CHART_PALETTE } from '@/components/charts/palette';
 import { RealNominalToggle } from '@/components/calculators/RealNominalToggle';
+import { StatTile } from '@/components/calculators/StatTile';
 import { useChartDisplayMode } from '@/lib/calculators/use-chart-display-mode';
 import { toRealSeries } from '@/lib/calculators/real-mode';
 
@@ -213,24 +214,20 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
       {series ? (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4 text-sm">
-            <div className="rounded-md border bg-muted/40 p-3">
-              <div className="text-xs text-muted-foreground">Total contributed</div>
-              <div className="text-base font-semibold tabular-nums" data-testid="compound-total-contributed">
-                {formatCurrency(series.totalContributed)}
-              </div>
-            </div>
-            <div className="rounded-md border bg-muted/40 p-3">
-              <div className="text-xs text-muted-foreground">Total interest (mid)</div>
-              <div className="text-base font-semibold tabular-nums" data-testid="compound-total-interest">
-                {formatCurrency(series.totalInterestMid)}
-              </div>
-            </div>
-            <div className="rounded-md border bg-muted/40 p-3">
-              <div className="text-xs text-muted-foreground">Final balance (mid)</div>
-              <div className="text-base font-semibold tabular-nums">
-                {formatCurrency(series.finalMid)}
-              </div>
-            </div>
+            <StatTile
+              label="Total contributed"
+              value={formatCurrency(series.totalContributed)}
+              testId="compound-total-contributed"
+            />
+            <StatTile
+              label="Total interest (mid)"
+              value={formatCurrency(series.totalInterestMid)}
+              testId="compound-total-interest"
+            />
+            <StatTile
+              label="Final balance (mid)"
+              value={formatCurrency(series.finalMid)}
+            />
           </div>
           <div className="flex justify-end mb-2">
             <RealNominalToggle mode={displayMode} onChange={setDisplayMode} />

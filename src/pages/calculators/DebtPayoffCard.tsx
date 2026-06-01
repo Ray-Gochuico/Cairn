@@ -13,6 +13,7 @@ import {
   SelectItem,
 } from '@/components/ui/select';
 import { useCalculatorState } from '@/lib/calculator-state';
+import { StatTile } from '@/components/calculators/StatTile';
 import type { Loan } from '@/types/schema';
 
 export type Strategy = 'none' | 'snowball' | 'avalanche';
@@ -157,37 +158,21 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
     >
       {/* Aggregate metric strip */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-        <div className="rounded-md border bg-muted/40 p-3">
-          <div className="text-xs text-muted-foreground">Total interest</div>
-          <div
-            className="text-base font-semibold tabular-nums"
-            data-testid="debt-total-interest"
-          >
-            {formatCurrency(totalInterest)}
-          </div>
-        </div>
-        <div className="rounded-md border bg-muted/40 p-3">
-          <div className="text-xs text-muted-foreground">
-            Estimated payoff
-          </div>
-          <div
-            className="text-base font-semibold tabular-nums"
-            data-testid="debt-aggregate-payoff"
-          >
-            {aggregatePayoffDate ?? '—'}
-          </div>
-        </div>
-        <div className="rounded-md border bg-muted/40 p-3">
-          <div className="text-xs text-muted-foreground">
-            Savings vs no-extra
-          </div>
-          <div
-            className="text-base font-semibold tabular-nums"
-            data-testid="debt-savings"
-          >
-            {formatCurrency(interestSavings)}
-          </div>
-        </div>
+        <StatTile
+          label="Total interest"
+          value={formatCurrency(totalInterest)}
+          testId="debt-total-interest"
+        />
+        <StatTile
+          label="Estimated payoff"
+          value={aggregatePayoffDate ?? '—'}
+          testId="debt-aggregate-payoff"
+        />
+        <StatTile
+          label="Savings vs no-extra"
+          value={formatCurrency(interestSavings)}
+          testId="debt-savings"
+        />
       </div>
 
       {/* Strategy + extra-payment controls */}
