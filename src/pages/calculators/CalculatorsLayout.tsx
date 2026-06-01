@@ -13,6 +13,10 @@ import { Retirement401kWithdrawalCard } from './Retirement401kWithdrawalCard';
 import { BacktestCard } from './BacktestCard';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
+import { useSnapshotsStore } from '@/stores/snapshots-store';
+import { useContributionsStore } from '@/stores/contributions-store';
+import { useLoansStore } from '@/stores/loans-store';
+import { useEquityGrantsStore } from '@/stores/equity-grants-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { getCurrentTaxYear } from '@/lib/current-tax-year';
 import { Button } from '@/components/ui/button';
@@ -77,6 +81,10 @@ export default function CalculatorsLayout() {
   useEffect(() => {
     void usePersonsStore.getState().load();
     void useDependentsStore.getState().load();
+    void useSnapshotsStore.getState().load();
+    void useContributionsStore.getState().load();
+    void useLoansStore.getState().load();
+    void useEquityGrantsStore.getState().load();
   }, []);
 
   // Resolve the active tax year from the seeded set so we can warn when the
