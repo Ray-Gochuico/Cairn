@@ -76,3 +76,21 @@ export function computeSupplementalWageTax(input: SupplementalWageTaxInput): Bon
     standardDeduction: input.standardDeduction,
   });
 }
+
+const FLAT_SUPPLEMENTAL_RATE = 0.22;
+const FLAT_SUPPLEMENTAL_RATE_OVER_1M = 0.37;
+const SUPPLEMENTAL_1M_THRESHOLD = 1_000_000;
+
+/**
+ * Federal supplemental-wage flat-withholding method: 22% up to $1M of
+ * supplemental wages, 37% on the portion above $1M. This is WITHHOLDING
+ * (what payroll commonly takes out), not final tax — it reconciles at filing.
+ */
+export function flatSupplementalWithholding(wages: number): number {
+  if (wages <= 0) return 0;
+  if (wages <= SUPPLEMENTAL_1M_THRESHOLD) return wages * FLAT_SUPPLEMENTAL_RATE;
+  return (
+    SUPPLEMENTAL_1M_THRESHOLD * FLAT_SUPPLEMENTAL_RATE +
+    (wages - SUPPLEMENTAL_1M_THRESHOLD) * FLAT_SUPPLEMENTAL_RATE_OVER_1M
+  );
+}

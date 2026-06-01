@@ -298,6 +298,49 @@ describe('OvertimeCard', () => {
     expect(breakdownRow.textContent).toContain('175');
   });
 
+  it('entering a shift differential on row 0 increases OT gross', async () => {
+    // HOURLY @ $25/hr, default row: 8 hrs @ 1.5x.
+    // No shift diff: gross = 8 × 25 × 1.5 = $300.
+    // Shift diff = $3/hr: gross = 8 × 28 × 1.5 = $336 → take-home increases.
+    primeStores();
+    render(<MemoryRouter><OvertimeCard /></MemoryRouter>);
+
+    // Wait for the initial take-home to render.
+    const initialHeadline = await screen.findByTestId('ot-takehome');
+    const initialValue = parseFloat(initialHeadline.textContent!.replace(/[$,]/g, ''));
+
+    // Enter a shift differential of $3/hr on row 0.
+    const shiftDiffInput = screen.getByLabelText(/Shift diff/i);
+    fireEvent.change(shiftDiffInput, { target: { value: '3' } });
+
+    // The per-row breakdown for row 0 should now reflect the higher effective rate.
+    const breakdownRow = await screen.findByTestId('ot-row-result-0');
+    // Effective base rate = $28.00 → breakdown shows "$28.00" (or "28" in the text).
+    expect(breakdownRow.textContent).toContain('28');
+
+    // Take-home should increase relative to the no-diff baseline.
+    const newHeadline = await screen.findByTestId('ot-takehome');
+    const newValue = parseFloat(newHeadline.textContent!.replace(/[$,]/g, ''));
+    expect(newValue).toBeGreaterThan(initialValue);
+  });
+
+  it('renders OBBBA deduction row and caveat when eligible person has OT hours', async () => {
+    // Default primeStores: HOURLY @ $25/hr, starter row 8 hrs @ 1.5x.
+    // totalPremium = 8 × 25 × (1.5 - 1) = 100. obbbaDeduction = 100 (<$12,500).
+    primeStores();
+    render(<MemoryRouter><OvertimeCard /></MemoryRouter>);
+
+    // Wait for the card to reach the populated path (headline present).
+    await screen.findByTestId('ot-takehome');
+
+    // OBBBA est. federal tax saved row must render.
+    const obbbaRow = await screen.findByTestId('ot-obbba-deduction');
+    expect(obbbaRow).toBeInTheDocument();
+
+    // The caveat paragraph must mention phase-out, sunsets, or FICA.
+    expect(screen.getByText(/phase-out|sunsets|FICA/i)).toBeInTheDocument();
+  });
+
   it('headline equals computeSupplementalWageTax wiring exactly (parity, single eligible person)', async () => {
     const { aggregateHouseholdPretax, computeSupplementalWageTax } = await import(
       '@/lib/calculators/supplemental-wage'

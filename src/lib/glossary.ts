@@ -409,6 +409,15 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
       'The "taxable brokerage" tier — money already taxed as wages; sales realize capital gains.',
   },
 
+  // ─── Legislation & policy ─────────────────────────────────────────────
+  OBBBA: {
+    term: 'OBBBA',
+    shortDefinition:
+      'One Big Beautiful Bill Act (2025) — includes a temporary federal deduction for qualified overtime premium pay.',
+    fullDefinition:
+      'For 2025–2028, the premium portion of FLSA overtime (the pay above your regular rate) is federally deductible, capped at $12,500 (single) / $25,000 (MFJ) and phased out above $150k/$300k MAGI. FICA and most state income taxes still apply.',
+  },
+
   // ─── Sidebar nav terms (proper-noun, do not rename) ───────────────────
   TICKERS: {
     term: 'Tickers',

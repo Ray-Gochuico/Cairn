@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest';
 import {
   evaluateOvertimeLineItems,
   impliedHourlyRate,
+  obbbaOvertimeDeduction,
   type OvertimeLineItem,
 } from '@/lib/overtime';
+import { FilingStatus } from '@/types/enums';
 
 describe('evaluateOvertimeLineItems', () => {
   const BASE_RATE = 25; // $/hr
@@ -66,6 +68,52 @@ describe('evaluateOvertimeLineItems', () => {
         0,
       ),
     ).toThrow();
+  });
+
+  it('adds the per-row shift differential to the base rate before the multiplier', () => {
+    const items: OvertimeLineItem[] = [
+      { hours: 8, baseMultiplier: 1.5, holidayMultiplier: null, stackMultipliers: false, shiftDifferential: 3 },
+    ];
+    const result = evaluateOvertimeLineItems(items, 25);
+    // (25 + 3) × 1.5 × 8 = 28 × 12 = 336
+    expect(result.lineItems[0].effectiveBaseRate).toBeCloseTo(28, 6);
+    expect(result.lineItems[0].gross).toBeCloseTo(336, 2);
+  });
+
+  it('treats a missing shift differential as 0 (back-compat)', () => {
+    const result = evaluateOvertimeLineItems(
+      [{ hours: 8, baseMultiplier: 1.5, holidayMultiplier: null, stackMultipliers: false }],
+      25,
+    );
+    expect(result.lineItems[0].effectiveBaseRate).toBeCloseTo(25, 6);
+    expect(result.lineItems[0].gross).toBeCloseTo(300, 2);
+  });
+});
+
+it('totalPremium is the pay above straight-time', () => {
+  // 8 hrs @ $25 × 1.5 → gross 300; straight-time 8×25=200; premium 100
+  const r = evaluateOvertimeLineItems(
+    [{ hours: 8, baseMultiplier: 1.5, holidayMultiplier: null, stackMultipliers: false }],
+    25,
+  );
+  expect(r.totalPremium).toBeCloseTo(100, 2);
+});
+it('totalPremium includes the shift differential in the regular rate', () => {
+  // (25+5)=30; 8×30×1.5=360; straight 8×30=240; premium 120
+  const r = evaluateOvertimeLineItems(
+    [{ hours: 8, baseMultiplier: 1.5, holidayMultiplier: null, stackMultipliers: false, shiftDifferential: 5 }],
+    25,
+  );
+  expect(r.totalPremium).toBeCloseTo(120, 2);
+});
+describe('obbbaOvertimeDeduction', () => {
+  it('caps the premium at $12,500 (single) / $25,000 (MFJ)', () => {
+    expect(obbbaOvertimeDeduction(5_000, FilingStatus.SINGLE)).toBe(5_000);
+    expect(obbbaOvertimeDeduction(20_000, FilingStatus.SINGLE)).toBe(12_500);
+    expect(obbbaOvertimeDeduction(40_000, FilingStatus.MFJ)).toBe(25_000);
+  });
+  it('floors at 0', () => {
+    expect(obbbaOvertimeDeduction(-100, FilingStatus.SINGLE)).toBe(0);
   });
 });
 

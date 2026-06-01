@@ -1,3 +1,5 @@
+import { FilingStatus } from '@/types/enums';
+
 /**
  * Pure overtime math. No I/O, no React. Used by OvertimeCard (Slice 1.6).
  *
@@ -18,17 +20,21 @@ export interface OvertimeLineItem {
   holidayMultiplier: number | null;
   /** When true, holiday multiplies on top of base; otherwise the larger of the two wins. */
   stackMultipliers: boolean;
+  /** $/hr added to base rate before the multiplier (FLSA: part of the regular rate). */
+  shiftDifferential?: number;
 }
 
 export interface OvertimeLineItemResult {
   hours: number;
   effectiveMultiplier: number;
+  effectiveBaseRate: number;
   gross: number;
 }
 
 export interface OvertimeResult {
   lineItems: OvertimeLineItemResult[];
   totalGross: number;
+  totalPremium: number;
 }
 
 /** Evaluate a list of OT line items against a base hourly rate. */
@@ -39,17 +45,30 @@ export function evaluateOvertimeLineItems(
   if (baseHourlyRate <= 0) throw new Error('baseHourlyRate must be positive');
   const lineItems: OvertimeLineItemResult[] = items.map((item) => {
     if (item.hours < 0) throw new Error('hours cannot be negative');
+    const effectiveBaseRate = baseHourlyRate + (item.shiftDifferential ?? 0);
     let effectiveMultiplier = item.baseMultiplier;
     if (item.holidayMultiplier !== null) {
       effectiveMultiplier = item.stackMultipliers
         ? item.baseMultiplier * item.holidayMultiplier
         : Math.max(item.baseMultiplier, item.holidayMultiplier);
     }
-    const gross = item.hours * baseHourlyRate * effectiveMultiplier;
-    return { hours: item.hours, effectiveMultiplier, gross };
+    const gross = item.hours * effectiveBaseRate * effectiveMultiplier;
+    return { hours: item.hours, effectiveMultiplier, effectiveBaseRate, gross };
   });
   const totalGross = lineItems.reduce((sum, r) => sum + r.gross, 0);
-  return { lineItems, totalGross };
+  const totalPremium = lineItems.reduce(
+    (sum, r) => sum + r.hours * r.effectiveBaseRate * (r.effectiveMultiplier - 1),
+    0,
+  );
+  return { lineItems, totalGross, totalPremium };
+}
+
+/** OBBBA (2025-2028) federal deduction for the overtime PREMIUM (pay above the
+ *  regular rate), capped at $12,500 (single/HOH/MFS) / $25,000 (MFJ). Estimate:
+ *  does NOT model the $150k/$300k MAGI phase-out. */
+export function obbbaOvertimeDeduction(premium: number, filingStatus: FilingStatus): number {
+  const cap = filingStatus === FilingStatus.MFJ ? 25_000 : 12_500;
+  return Math.min(Math.max(0, premium), cap);
 }
 
 /**

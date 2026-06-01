@@ -2,7 +2,9 @@ import { useMemo } from 'react';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { CalculatorCard } from './CalculatorCard';
-import { computeSupplementalWageTax } from '@/lib/calculators/supplemental-wage';
+import { computeSupplementalWageTax, flatSupplementalWithholding } from '@/lib/calculators/supplemental-wage';
+import { useSupplementalMethod } from '@/lib/calculators/use-supplemental-method';
+import { SupplementalMethodToggle } from '@/components/calculators/SupplementalMethodToggle';
 import { useHouseholdTaxContext } from '@/lib/calculators/use-household-tax-context';
 import { useCalculatorState } from '@/lib/calculator-state';
 import { NumberField } from '@/components/calculators/NumberField';
@@ -36,6 +38,7 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
     [seed],
   );
   const { values, setValue, reset, isOverridden } = useCalculatorState(cardId ?? 'commission-tax', defaults);
+  const [method, setMethod] = useSupplementalMethod(cardId ?? 'commission-tax');
 
   const periods = periodsPerYear(values.frequency);
   const annualCommission = values.annualCommission ?? 0;
@@ -137,11 +140,16 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
     );
   }
 
-  const taxPerCheck = result.bonusBreakdown.total / periods;
+  const flatFederal = flatSupplementalWithholding(annualCommission);
+  const federalOnCommission = method === 'FLAT' ? flatFederal : result.bonusBreakdown.federal;
+  const annualTaxOnCommission =
+    method === 'FLAT'
+      ? flatFederal + result.bonusBreakdown.fica + result.bonusBreakdown.state + result.bonusBreakdown.city
+      : result.bonusBreakdown.total;
+  const taxPerCheck = annualTaxOnCommission / periods;
   const netPerCheck = commissionPerCheck - commission401kPerCheck - taxPerCheck;
 
   const annualCommission401k = commission401kPerCheck * periods;
-  const annualTaxOnCommission = result.bonusBreakdown.total;
   const annualNet = annualCommission - annualCommission401k - annualTaxOnCommission;
 
   return (
@@ -154,12 +162,16 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
       }
     >
       {commissionInputs}
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm font-medium">Withholding method</span>
+        <SupplementalMethodToggle method={method} onChange={setMethod} />
+      </div>
       {/* Per-check breakdown */}
       <div className="text-sm font-medium mb-2">Per check ({values.frequency === 'MONTHLY' ? 'monthly' : 'quarterly'})</div>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-sm mb-4">
         <ResultRow label="Commission gross" value={formatCurrency(commissionPerCheck)} />
         <ResultRow label="401(k) from this check" value={formatCurrency(commission401kPerCheck)} />
-        <ResultRow label="Estimated federal tax" value={formatCurrency(result.bonusBreakdown.federal / periods)} />
+        <ResultRow label="Estimated federal tax" value={formatCurrency(federalOnCommission / periods)} />
         <ResultRow label={<TermTooltip term="FICA" />} value={formatCurrency(result.bonusBreakdown.fica / periods)} />
         <ResultRow label="Estimated state tax" value={formatCurrency(result.bonusBreakdown.state / periods)} />
         <ResultRow label="Estimated city tax" value={formatCurrency(result.bonusBreakdown.city / periods)} />
@@ -200,8 +212,10 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
           <li>
             <strong>Aggregate vs. flat-rate withholding.</strong> Like bonuses,
             commission is a "supplemental wage" — the IRS allows either the 22%
-            flat rate or the aggregate method. The engine uses the aggregate
-            method; your payroll may use the flat rate.
+            flat rate or the aggregate method. Use the Aggregate / Flat 22%
+            toggle above to compare both; the flat figure is federal withholding
+            (reconciles at filing). State supplemental flat rates are still not
+            modeled.
           </li>
           <li>
             <strong>State-specific supplemental-wage flat rates.</strong> CA, GA,

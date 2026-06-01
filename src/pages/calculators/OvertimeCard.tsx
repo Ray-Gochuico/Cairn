@@ -14,8 +14,10 @@ import { Button } from '@/components/ui/button';
 import {
   evaluateOvertimeLineItems,
   impliedHourlyRate,
+  obbbaOvertimeDeduction,
   type OvertimeLineItem,
 } from '@/lib/overtime';
+import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import {
   PAYCHECK_PERIODS,
   type PaycheckPeriod,
@@ -31,6 +33,7 @@ const STARTER_ROW: OvertimeRow = {
   preset: '1.5',
   holidayMultiplier: null,
   stackMultipliers: false,
+  shiftDifferential: 0,
 };
 
 function deriveBaseRate(person: Person): number {
@@ -75,6 +78,7 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
       baseMultiplier: r.baseMultiplier,
       holidayMultiplier: r.holidayMultiplier,
       stackMultipliers: r.stackMultipliers,
+      shiftDifferential: Math.max(0, r.shiftDifferential ?? 0),
     }));
     try {
       return evaluateOvertimeLineItems(items, baseHourlyRate);
@@ -212,7 +216,7 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
     );
   }
 
-  if (totalGross <= 0 || !taxResult) {
+  if (totalGross <= 0 || !taxResult || !household) {
     return (
       <CalculatorCard title="Overtime" headline="—" cardId={cardId} onHide={onHide}>
         {baseInput}
@@ -227,6 +231,9 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
   }
 
   const overtimeTakeHome = taxResult.bonusTakeHome;
+  const obbbaDeduction = obbbaOvertimeDeduction(overtime?.totalPremium ?? 0, household.filingStatus);
+  const federalMarginalOnOt = totalGross > 0 ? taxResult.bonusBreakdown.federal / totalGross : 0;
+  const obbbaFederalSaving = obbbaDeduction * federalMarginalOnOt;
 
   return (
     <CalculatorCard
@@ -250,7 +257,7 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
             className="flex justify-between gap-3 tabular-nums"
           >
             <span className="text-muted-foreground">
-              {li.hours} hrs × {formatCurrency(baseHourlyRate)} ×{' '}
+              {li.hours} hrs × {formatCurrency(li.effectiveBaseRate)} ×{' '}
               {li.effectiveMultiplier.toFixed(2)}
             </span>
             <span className="font-medium">{formatCurrency(li.gross)}</span>
@@ -264,6 +271,20 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
         <ResultRow label="Marginal rate on OT" value={formatPercent(taxResult.marginalRateOnBonus)} />
         <ResultRow label="Total OT take-home" value={formatCurrency(overtimeTakeHome)} emphasis />
       </div>
+
+      {obbbaDeduction > 0 && (
+        <div className="mt-3 border-t pt-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+            <ResultRow label={<><TermTooltip term="OBBBA">OBBBA</TermTooltip> OT deduction (est.)</>} value={formatCurrency(obbbaDeduction)} />
+            <ResultRow label="Est. federal tax saved" value={formatCurrency(obbbaFederalSaving)} testId="ot-obbba-deduction" />
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            Estimate. Deducts the overtime premium (pay above your regular rate), capped at $12,500 ($25,000 MFJ).
+            Does not model the $150k/$300k MAGI phase-out; the deduction sunsets after 2028; FICA and most state
+            income taxes still apply; it applies the per-period premium against the annual cap without annualizing.
+          </p>
+        </div>
+      )}
 
       <p className="text-xs text-muted-foreground mt-3">
         Hours above represent one {PAYCHECK_PERIODS.find((p) => p.id === period)?.label.toLowerCase() ?? 'period'}.

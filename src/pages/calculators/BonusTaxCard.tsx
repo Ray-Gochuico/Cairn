@@ -2,7 +2,9 @@ import { useMemo } from 'react';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { CalculatorCard } from './CalculatorCard';
-import { computeSupplementalWageTax } from '@/lib/calculators/supplemental-wage';
+import { computeSupplementalWageTax, flatSupplementalWithholding } from '@/lib/calculators/supplemental-wage';
+import { useSupplementalMethod } from '@/lib/calculators/use-supplemental-method';
+import { SupplementalMethodToggle } from '@/components/calculators/SupplementalMethodToggle';
 import { useHouseholdTaxContext } from '@/lib/calculators/use-household-tax-context';
 import { useCalculatorState } from '@/lib/calculator-state';
 import { NumberField } from '@/components/calculators/NumberField';
@@ -34,6 +36,7 @@ export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
     [seedPerson],
   );
   const { values, setValue, reset, isOverridden } = useCalculatorState(cardId ?? 'bonus-tax', defaults);
+  const [method, setMethod] = useSupplementalMethod(cardId ?? 'bonus-tax');
 
   const effectiveBonus = values.bonus ?? 0;
   const bonusesPerYear = values.frequency === 'QUARTERLY' ? 4 : 1;
@@ -119,7 +122,13 @@ export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
   // Per-bonus take-home is the headline (matches user intuition: "what does
   // THIS bonus pay"). Annual rollup appears as a secondary line when
   // bonusIsConsistent so users can see the projected full-year impact.
-  const annualBonusTakeHome = annualBonus - result.bonusBreakdown.total;
+  const flatFederal = flatSupplementalWithholding(annualBonus);
+  const federalOnBonus = method === 'FLAT' ? flatFederal : result.bonusBreakdown.federal;
+  const totalTaxOnBonus =
+    method === 'FLAT'
+      ? flatFederal + result.bonusBreakdown.fica + result.bonusBreakdown.state + result.bonusBreakdown.city
+      : result.bonusBreakdown.total;
+  const annualBonusTakeHome = annualBonus - totalTaxOnBonus;
   const perBonusTakeHome = annualBonusTakeHome / bonusesPerYear;
 
   return (
@@ -140,13 +149,17 @@ export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
           ? ` (${formatCurrency(annualBonus)} annual)`
           : ''}, marginal-rate-diff math gives:
       </div>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm font-medium">Withholding method</span>
+        <SupplementalMethodToggle method={method} onChange={setMethod} />
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-        <ResultRow label="Estimated federal on bonus" value={formatCurrency(result.bonusBreakdown.federal / bonusesPerYear)} />
+        <ResultRow label="Estimated federal on bonus" value={formatCurrency(federalOnBonus / bonusesPerYear)} />
         <ResultRow label={<><TermTooltip term="FICA" /> on bonus</>} value={formatCurrency(result.bonusBreakdown.fica / bonusesPerYear)} />
         <ResultRow label="Estimated state on bonus" value={formatCurrency(result.bonusBreakdown.state / bonusesPerYear)} />
         <ResultRow label="Estimated city on bonus" value={formatCurrency(result.bonusBreakdown.city / bonusesPerYear)} />
-        <ResultRow label="Estimated total tax on bonus" value={formatCurrency(result.bonusBreakdown.total / bonusesPerYear)} />
-        <ResultRow label={<TermTooltip term="marginal rate" />} value={formatPercent(result.marginalRateOnBonus)} />
+        <ResultRow label="Estimated total tax on bonus" value={formatCurrency(totalTaxOnBonus / bonusesPerYear)} />
+        <ResultRow label={<TermTooltip term="marginal rate" />} value={formatPercent(method === 'FLAT' ? (annualBonus > 0 ? totalTaxOnBonus / annualBonus : 0) : result.marginalRateOnBonus)} />
       </div>
       {values.isConsistent && (
         <div className="mt-3 pt-3 border-t text-sm">
@@ -174,9 +187,10 @@ export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
           <li>
             <strong>Aggregate vs. 22% flat method.</strong> The IRS lets your
             employer pick between the 22% supplemental-wage flat rate (37% over
-            $1M) and the aggregate method (annualized W-4 brackets). This card
-            uses the aggregate method; your actual withholding may differ if
-            your payroll uses the flat rate.
+            $1M) and the aggregate method (annualized W-4 brackets). Use the
+            Aggregate / Flat 22% toggle above to compare both; the flat figure
+            is federal withholding (reconciles at filing). State supplemental
+            flat rates are still not modeled.
           </li>
           <li>
             <strong>State-specific supplemental-wage flat rates.</strong> CA, GA,
