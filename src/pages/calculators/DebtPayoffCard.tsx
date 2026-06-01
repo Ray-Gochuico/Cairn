@@ -5,6 +5,13 @@ import { CalculatorCard } from './CalculatorCard';
 import { formatCurrency } from '@/lib/format';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select';
 import { useCalculatorState } from '@/lib/calculator-state';
 import type { Loan } from '@/types/schema';
 
@@ -184,16 +191,19 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
         <div className="space-y-1">
           <Label htmlFor="debt-strategy">Strategy</Label>
-          <select
-            id="debt-strategy"
-            className="flex h-9 w-full items-center rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          <Select
             value={values.strategy}
-            onChange={(e) => setValue('strategy', e.target.value as Strategy)}
+            onValueChange={(v) => setValue('strategy', v as Strategy)}
           >
-            <option value="none">None</option>
-            <option value="snowball">Snowball (smallest balance)</option>
-            <option value="avalanche">Avalanche (highest rate)</option>
-          </select>
+            <SelectTrigger id="debt-strategy" aria-label="Strategy">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">None</SelectItem>
+              <SelectItem value="snowball">Snowball (smallest balance)</SelectItem>
+              <SelectItem value="avalanche">Avalanche (highest rate)</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div className="space-y-1">
           <Label htmlFor="debt-extra">Extra monthly payment</Label>

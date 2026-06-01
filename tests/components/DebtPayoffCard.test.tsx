@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useLoansStore } from '@/stores/loans-store';
@@ -98,22 +98,24 @@ describe('DebtPayoffCard', () => {
     expect(screen.getAllByTestId(/^debt-loan-row-/)).toHaveLength(3);
   });
 
-  it('strategy picker has 3 options (None / Snowball / Avalanche)', () => {
+  it('strategy picker has 3 options (None / Snowball / Avalanche)', async () => {
     useLoansStore.setState({
       loans: [makeLoan({ id: 1, name: 'Card', currentBalance: 5000 })],
       isLoading: false,
       error: null,
     });
 
+    const user = userEvent.setup();
     render(
       <MemoryRouter>
         <DebtPayoffCard />
       </MemoryRouter>,
     );
 
-    const select = screen.getByLabelText(/strategy/i) as HTMLSelectElement;
-    expect(select).toBeInTheDocument();
-    const options = within(select).getAllByRole('option');
+    // Open the Radix combobox by clicking the trigger (accessible name from Label)
+    await user.click(screen.getByRole('combobox', { name: /strategy/i }));
+
+    const options = await screen.findAllByRole('option');
     expect(options).toHaveLength(3);
     expect(options.map((o) => o.textContent)).toEqual(
       expect.arrayContaining([
@@ -147,8 +149,8 @@ describe('DebtPayoffCard', () => {
     );
 
     // Switch to a strategy that distributes the global extra payment.
-    const strategySelect = screen.getByLabelText(/strategy/i);
-    await user.selectOptions(strategySelect, 'snowball');
+    await user.click(screen.getByRole('combobox', { name: /strategy/i }));
+    await user.click(await screen.findByRole('option', { name: /snowball/i }));
 
     const totalInterestBefore = parseFloat(
       screen
@@ -204,7 +206,8 @@ describe('DebtPayoffCard', () => {
     );
 
     // Default strategy: none. Switch to snowball.
-    await user.selectOptions(screen.getByLabelText(/strategy/i), 'snowball');
+    await user.click(screen.getByRole('combobox', { name: /strategy/i }));
+    await user.click(await screen.findByRole('option', { name: /snowball/i }));
 
     // Apply a $400/mo extra payment to the snowball target.
     const extraInput = screen.getByLabelText(/extra monthly payment/i);
@@ -241,7 +244,7 @@ describe('DebtPayoffCard', () => {
     ).toBeInTheDocument();
   });
 
-  it('persists strategy + extraTotal via the kit (native select)', async () => {
+  it('persists strategy + extraTotal via the kit', async () => {
     // Prime >= 2 loans so a strategy has an effect.
     useLoansStore.setState({
       loans: [
@@ -259,9 +262,9 @@ describe('DebtPayoffCard', () => {
       </MemoryRouter>,
     );
 
-    // Drive the native strategy select to "avalanche" using native select idiom.
-    const strategySelect = screen.getByLabelText(/strategy/i);
-    await user.selectOptions(strategySelect, 'avalanche');
+    // Drive the strategy select to "avalanche" using the role-based idiom.
+    await user.click(screen.getByRole('combobox', { name: /strategy/i }));
+    await user.click(await screen.findByRole('option', { name: /avalanche/i }));
 
     // Set the extra monthly payment to 300.
     const extraInput = screen.getByLabelText(/extra monthly payment/i);

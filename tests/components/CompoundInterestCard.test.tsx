@@ -43,8 +43,8 @@ describe('CompoundInterestCard', () => {
   it('switches frequency to ANNUALLY and updates outputs', async () => {
     const user = userEvent.setup();
     render(<CompoundInterestCard />);
-    const freq = screen.getByLabelText(/compound frequency/i);
-    await user.selectOptions(freq, 'ANNUALLY');
+    await user.click(screen.getByRole('combobox', { name: /compound frequency/i }));
+    await user.click(await screen.findByRole('option', { name: /annually/i }));
     const headline = screen.getByTestId('compound-headline');
     // Annual compounding is slightly less than monthly at the same rate.
     expect(headline.textContent).toMatch(/\$/);
@@ -75,7 +75,8 @@ describe('CompoundInterestCard', () => {
     await user.type(screen.getByLabelText(/initial amount/i), '1000');
     await user.clear(screen.getByLabelText(/monthly contribution/i));
     await user.type(screen.getByLabelText(/monthly contribution/i), '0');
-    await user.selectOptions(screen.getByLabelText(/compound frequency/i), 'ANNUALLY');
+    await user.click(screen.getByRole('combobox', { name: /compound frequency/i }));
+    await user.click(await screen.findByRole('option', { name: /annually/i }));
     const headline = screen.getByTestId('compound-headline');
     // Match $1,9XX (any value between 1900 and 1999).
     expect(headline.textContent).toMatch(/\$1,9\d{2}/);

@@ -11,6 +11,13 @@ import { NumberField } from '@/components/calculators/NumberField';
 import { ResultRow } from '@/components/calculators/ResultRow';
 import { formatCurrency, formatPercent } from '@/lib/format';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select';
 import type { BonusFrequency } from '@/types/schema';
 
 interface BonusTaxCardProps {
@@ -73,15 +80,18 @@ export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
       />
       <div className="space-y-1">
         <label htmlFor="bonus-frequency" className="text-sm font-medium">Bonus frequency</label>
-        <select
-          id="bonus-frequency"
-          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        <Select
           value={values.frequency}
-          onChange={(e) => setValue('frequency', e.target.value as BonusFrequency)}
+          onValueChange={(v) => setValue('frequency', v as BonusFrequency)}
         >
-          <option value="ANNUAL">Annual</option>
-          <option value="QUARTERLY">Quarterly</option>
-        </select>
+          <SelectTrigger id="bonus-frequency" aria-label="Bonus frequency">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ANNUAL">Annual</SelectItem>
+            <SelectItem value="QUARTERLY">Quarterly</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
       <div className="sm:col-span-2">
         <label className="flex items-center gap-2 text-sm">
