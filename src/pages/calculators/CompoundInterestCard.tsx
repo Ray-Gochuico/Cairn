@@ -4,6 +4,7 @@ import { Label } from '@/components/ui/label';
 import LineChartCard from '@/components/charts/LineChartCard';
 import {
   compoundInterestSeries,
+  apyToApr,
   type CompoundFrequency,
 } from '@/lib/compound-interest';
 import { formatCurrency } from '@/lib/format';
@@ -31,26 +32,6 @@ const PERIODS_PER_YEAR: Record<CompoundFrequency, number> = {
   QUARTERLY: 4,
   ANNUALLY: 1,
 };
-
-/**
- * Convert an APY (the effective annual yield after compounding) into the
- * nominal APR that, when compounded `ppy` times per year, reproduces that
- * yield exactly. APY = (1 + APR/ppy)^ppy − 1, so APR = ppy * ((1 + APY)^(1/ppy) − 1).
- *
- * Wave-3 Task 5 fix: the underlying compoundInterestSeries() compounds
- * `annualRate / ppy` per period — i.e. it interprets its input as APR. Pre-
- * fix the input was labelled an ambiguous "Estimated rate (%)" which most
- * users would read as APY. A user entering 5% expecting APY (the apples-to-
- * apples savings-comparison number) was actually getting APR — which
- * compounds to a HIGHER yield, over-stating the projection. The conversion
- * runs at the card boundary so the underlying engine math is unchanged
- * (and stays consistent with everything else in the app that expects APR).
- */
-function apyToApr(apy: number, ppy: number): number {
-  if (apy === 0) return 0;
-  if (ppy === 1) return apy;                                  // annual = APR
-  return ppy * (Math.pow(1 + apy, 1 / ppy) - 1);
-}
 
 export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardProps = {}) {
   // Kit-managed input state: persists in sessionStorage under calc-state:compound-interest.

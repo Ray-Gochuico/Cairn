@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { compoundInterestSeries, type CompoundFrequency } from '@/lib/compound-interest';
+import { apyToApr, compoundInterestSeries, type CompoundFrequency } from '@/lib/compound-interest';
 
 describe('compoundInterestSeries', () => {
   it('zero rate yields linear PV + PMT × months', () => {
@@ -62,5 +62,19 @@ describe('compoundInterestSeries', () => {
     });
     expect(r.finalLow).toBeCloseTo(r.finalMid, 6);
     expect(r.finalMid).toBeCloseTo(r.finalHigh, 6);
+  });
+});
+
+describe('apyToApr', () => {
+  it('annual (ppy=1) returns the APY unchanged', () => {
+    expect(apyToApr(0.07, 1)).toBe(0.07);
+  });
+  it('0% APY → 0 APR', () => {
+    expect(apyToApr(0, 12)).toBe(0);
+  });
+  it('the derived APR compounded ppy times reproduces the APY', () => {
+    const apr = apyToApr(0.07, 12);
+    expect((1 + apr / 12) ** 12 - 1).toBeCloseTo(0.07, 10);
+    expect(apr).toBeLessThan(0.07); // monthly APR < its APY
   });
 });
