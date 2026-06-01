@@ -316,7 +316,13 @@ export default function WhatIf() {
             <span className="font-medium">Sequence-of-returns risk</span> —
             the engine compounds returns deterministically. Real-world
             retirement outcomes can differ significantly under poor
-            early-retirement market years.
+            early-retirement market years.{' '}
+            <Link
+              to="/calculators/backtest"
+              className="text-primary underline underline-offset-2 hover:text-primary/80"
+            >
+              Explore with Historical Backtest →
+            </Link>
           </li>
           <li>
             <span className="font-medium">

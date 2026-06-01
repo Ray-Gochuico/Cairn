@@ -10,6 +10,7 @@ import { DebtPayoffCard } from './DebtPayoffCard';
 import { EquityValueCard } from './EquityValueCard';
 import { CompoundInterestCard } from './CompoundInterestCard';
 import { Retirement401kWithdrawalCard } from './Retirement401kWithdrawalCard';
+import { BacktestCard } from './BacktestCard';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
@@ -31,6 +32,7 @@ const CARD_IDS = {
   DEBT_PAYOFF: 'debt-payoff',
   EQUITY: 'equity',
   RETIREMENT_401K: 'retirement-401k-withdrawal',
+  BACKTEST: 'backtest',
 } as const;
 
 // Human-friendly labels surfaced in the "manage" popover.
@@ -45,6 +47,7 @@ const CARD_LABELS: Record<string, string> = {
   [CARD_IDS.DEBT_PAYOFF]: 'Debt Payoff',
   [CARD_IDS.EQUITY]: 'Equity Value',
   [CARD_IDS.RETIREMENT_401K]: '401k withdrawal tax',
+  [CARD_IDS.BACKTEST]: 'Historical Backtest',
 };
 
 function labelFor(id: string): string {
@@ -218,6 +221,9 @@ export default function CalculatorsLayout() {
         )}
         {!hiddenSet.has(CARD_IDS.EQUITY) && (
           <EquityValueCard cardId={CARD_IDS.EQUITY} onHide={handleHide} />
+        )}
+        {!hiddenSet.has(CARD_IDS.BACKTEST) && (
+          <BacktestCard cardId={CARD_IDS.BACKTEST} onHide={handleHide} />
         )}
       </div>
       {hiddenCount > 0 && (

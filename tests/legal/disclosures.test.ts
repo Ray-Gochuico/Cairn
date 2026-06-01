@@ -93,7 +93,24 @@ describe('DISCLOSURES', () => {
     }
   });
 
-  it('exposes exactly the three expected document IDs', () => {
-    expect(Object.keys(DISCLOSURES).sort()).toEqual(['app_wide', 'learning', 'roadmap']);
+  it('exposes exactly the four expected document IDs', () => {
+    expect(Object.keys(DISCLOSURES).sort()).toEqual(['app_wide', 'backtest', 'learning', 'roadmap']);
+  });
+});
+
+describe('backtest disclosure', () => {
+  it('is registered at v1.0 with a non-empty body + acceptance label', () => {
+    const d = DISCLOSURES.backtest;
+    expect(d).toBeDefined();
+    expect(d.version).toBe('1.0');
+    expect(d.body.length).toBeGreaterThan(200);
+    expect(d.acceptanceCheckboxLabel).toMatch(/not a prediction|historical outcomes/i);
+  });
+
+  it('leads with the count-not-probability + past-not-future framing', () => {
+    const body = DISCLOSURES.backtest.body;
+    expect(body).toMatch(/not a prediction|do not predict/i);
+    expect(body).toMatch(/count of past outcomes|not a probability/i);
+    expect(body).toMatch(/2026 levels|brackets are held/i);
   });
 });
