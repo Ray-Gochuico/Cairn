@@ -6,6 +6,8 @@ import { calculate401kWithdrawalTax } from '@/lib/tax';
 import { useHouseholdTaxContext } from '@/lib/calculators/use-household-tax-context';
 import { useCalculatorState } from '@/lib/calculator-state';
 import { NumberField } from '@/components/calculators/NumberField';
+import { ResultRow } from '@/components/calculators/ResultRow';
+import { StatTile } from '@/components/calculators/StatTile';
 import { formatCurrency, formatPercent } from '@/lib/format';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 
@@ -171,29 +173,30 @@ export function Retirement401kWithdrawalCard({
           min={18}
         />
         <div className="space-y-1 sm:col-span-2">
-          <span className="text-sm font-medium">Plan type</span>
-          <div className="flex gap-3 items-center text-sm">
-            <label className="flex items-center gap-1">
-              <input
-                type="radio"
-                name="plan-type"
-                value="TRADITIONAL"
-                checked={planType === 'TRADITIONAL'}
-                onChange={() => setValue('planType', 'TRADITIONAL')}
-              />
-              Traditional 401k
-            </label>
-            <label className="flex items-center gap-1">
-              <input
-                type="radio"
-                name="plan-type"
-                value="ROTH"
-                checked={planType === 'ROTH'}
-                onChange={() => setValue('planType', 'ROTH')}
-                aria-label="Roth 401k"
-              />
-              Roth 401k
-            </label>
+          <div role="radiogroup" aria-label="Plan type" className="flex flex-col gap-1">
+            <div className="flex gap-3 items-center text-sm">
+              <label className="flex items-center gap-1">
+                <input
+                  type="radio"
+                  name="plan-type"
+                  value="TRADITIONAL"
+                  checked={planType === 'TRADITIONAL'}
+                  onChange={() => setValue('planType', 'TRADITIONAL')}
+                />
+                Traditional 401k
+              </label>
+              <label className="flex items-center gap-1">
+                <input
+                  type="radio"
+                  name="plan-type"
+                  value="ROTH"
+                  checked={planType === 'ROTH'}
+                  onChange={() => setValue('planType', 'ROTH')}
+                  aria-label="Roth 401k"
+                />
+                Roth 401k
+              </label>
+            </div>
           </div>
         </div>
       </div>
@@ -247,87 +250,67 @@ export function Retirement401kWithdrawalCard({
       )}
       {breakdown && (
         <div className="space-y-1 text-sm">
-          <div className="flex justify-between">
-            <span>Withdrawal amount</span>
-            <span className="tabular-nums">
-              {formatCurrency(withdrawalAmount)}
-            </span>
+          <ResultRow
+            orientation="inline"
+            label="Withdrawal amount"
+            value={formatCurrency(withdrawalAmount)}
+          />
+          <ResultRow
+            orientation="inline"
+            label="Federal tax on withdrawal"
+            value={formatCurrency(view!.incrementalFederal)}
+          />
+          <ResultRow
+            orientation="inline"
+            label="State tax on withdrawal"
+            value={formatCurrency(view!.incrementalState)}
+          />
+          <ResultRow
+            orientation="inline"
+            label="City tax on withdrawal"
+            value={formatCurrency(view!.incrementalCity)}
+          />
+          <div data-testid="401k-withdrawal-niit-row">
+            <ResultRow
+              orientation="inline"
+              label={<TermTooltip term="NIIT">NIIT delta</TermTooltip>}
+              value={formatCurrency(view!.incrementalNiit)}
+            />
           </div>
-          <div className="flex justify-between">
-            <span>Federal tax on withdrawal</span>
-            <span className="tabular-nums">
-              {formatCurrency(view!.incrementalFederal)}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span>State tax on withdrawal</span>
-            <span className="tabular-nums">
-              {formatCurrency(view!.incrementalState)}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span>City tax on withdrawal</span>
-            <span className="tabular-nums">
-              {formatCurrency(view!.incrementalCity)}
-            </span>
-          </div>
-          <div
-            className="flex justify-between"
-            data-testid="401k-withdrawal-niit-row"
-          >
-            <span>
-              <TermTooltip term="NIIT">NIIT delta</TermTooltip>
-            </span>
-            <span className="tabular-nums">
-              {formatCurrency(view!.incrementalNiit)}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span>
-              <TermTooltip term="FICA" />
-            </span>
-            <span className="tabular-nums text-muted-foreground">
-              N/A on 401k withdrawals
-            </span>
-          </div>
+          <ResultRow
+            orientation="inline"
+            label={<TermTooltip term="FICA" />}
+            value={
+              <span className="text-muted-foreground">
+                N/A on 401k withdrawals
+              </span>
+            }
+          />
           <div
             data-testid="401k-penalty-row"
-            className={`flex justify-between ${
-              earlyPenaltyApplies && planType !== 'ROTH' ? 'text-destructive' : ''
-            }`}
+            className={earlyPenaltyApplies && planType !== 'ROTH' ? 'text-destructive' : undefined}
           >
-            <span>
-              <TermTooltip term="Early-withdrawal penalty">
-                Early-withdrawal penalty{planType !== 'ROTH' && ' (10% if < 59½)'}
-              </TermTooltip>
-            </span>
-            <span className="tabular-nums">
-              {formatCurrency(view!.earlyWithdrawalPenalty)}
-            </span>
+            <ResultRow
+              orientation="inline"
+              label={
+                <TermTooltip term="Early-withdrawal penalty">
+                  Early-withdrawal penalty{planType !== 'ROTH' && ' (10% if < 59½)'}
+                </TermTooltip>
+              }
+              value={formatCurrency(view!.earlyWithdrawalPenalty)}
+            />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 border-t pt-2 mt-1">
-            <div
-              data-summary-row="taxes-paid"
-              className="rounded-md border bg-muted/30 px-3 py-2"
-            >
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                Estimated total taxes
-              </div>
-              <div className="text-lg font-semibold tabular-nums">
-                {formatCurrency(view!.totalTaxOnWithdrawal)}
-              </div>
-            </div>
-            <div
-              data-summary-row="net-to-you"
-              className="rounded-md border bg-muted/30 px-3 py-2"
-            >
-              <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                Estimated net to you
-              </div>
-              <div className="text-lg font-semibold tabular-nums">
-                {formatCurrency(view!.netToUser)}
-              </div>
-            </div>
+            <StatTile
+              testId="summary-taxes-paid"
+              label="Estimated total taxes"
+              value={formatCurrency(view!.totalTaxOnWithdrawal)}
+            />
+            <StatTile
+              testId="summary-net-to-you"
+              label="Estimated net to you"
+              value={formatCurrency(view!.netToUser)}
+            />
           </div>
           <div className="flex justify-between text-xs text-muted-foreground">
             <span>Effective rate on this withdrawal</span>

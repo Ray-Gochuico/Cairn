@@ -109,6 +109,13 @@ export default function Backtest() {
         <h1 className="text-2xl font-semibold">Historical Backtest</h1>
         <p className="text-sm text-muted-foreground">
           Replays your plan against every U.S. market starting year from 1871 onward.
+          For side-by-side scenario comparison, see{' '}
+          <Link
+            to="/what-if"
+            className="text-primary underline underline-offset-2 hover:text-primary/80"
+          >
+            What-If →
+          </Link>
         </p>
       </div>
 

@@ -28,7 +28,7 @@ const STALE_BANNER_STORAGE_KEY = 'stale-tax-year-banner-dismissed';
 const CARD_IDS = {
   PAYCHECK: 'paycheck',
   BONUS: 'bonus-tax',
-  COMMISSION: 'commission',
+  COMMISSION: 'commission-tax',
   OVERTIME: 'overtime',
   FINANCIAL_INDEPENDENCE: 'financial-independence',
   COAST_FI: 'coast-fi',
@@ -41,7 +41,7 @@ const CARD_IDS = {
 
 // Human-friendly labels surfaced in the "manage" popover.
 const CARD_LABELS: Record<string, string> = {
-  [CARD_IDS.PAYCHECK]: 'Take-home paycheck',
+  [CARD_IDS.PAYCHECK]: 'Paycheck',
   [CARD_IDS.BONUS]: 'Bonus tax',
   [CARD_IDS.COMMISSION]: 'Commission tax',
   [CARD_IDS.OVERTIME]: 'Overtime',
@@ -67,7 +67,7 @@ export default function CalculatorsLayout() {
   // on whether the relevant inputs exist. Adding a person filter at the
   // layout level would shadow those behaviours, so it stays out-of-scope for
   // Phase 3.
-  const { persons } = usePersonsStore();
+  const persons = usePersonsStore((s) => s.persons);
   const showOvertime = persons.some(
     (p) => p.employmentType === 'HOURLY' || p.employmentType === 'SALARY_WITH_OT',
   );

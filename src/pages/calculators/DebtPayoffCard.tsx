@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useLoansStore } from '@/stores/loans-store';
-import { amortize, type Amortization } from '@/lib/amortization';
+import { amortize } from '@/lib/amortization';
 import { CalculatorCard } from './CalculatorCard';
 import { formatCurrency } from '@/lib/format';
 import { Input } from '@/components/ui/input';
@@ -13,75 +13,38 @@ import {
   SelectItem,
 } from '@/components/ui/select';
 import { useCalculatorState } from '@/lib/calculator-state';
-import type { Loan } from '@/types/schema';
+import { StatTile } from '@/components/calculators/StatTile';
+import {
+  pickStrategyTargetIndex,
+  projectionsFor,
+  type Strategy,
+  type LoanProjection,
+} from '@/lib/debt-payoff';
 
-export type Strategy = 'none' | 'snowball' | 'avalanche';
+/**
+ * Format an ISO YYYY-MM-DD payoff date as a friendly "Mon YYYY" string
+ * (amortization is monthly so day precision is irrelevant).
+ * Returns '—' for null/empty input.
+ */
+function formatPayoffDate(isoDate: string | null | undefined): string {
+  if (!isoDate) return '—';
+  // Parse as UTC midnight to avoid local-timezone day shifts.
+  const d = new Date(`${isoDate}T00:00:00Z`);
+  return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+
+// Re-export the lib types/functions so existing tests importing from this
+// module continue to compile.
+export type { Strategy, LoanProjection };
+export { pickStrategyTargetIndex, projectionsFor };
 
 interface DebtPayoffCardProps {
   cardId?: string;
   onHide?: (cardId: string) => void;
 }
 
-interface LoanProjection {
-  loan: Loan;
-  amortization: Amortization;
-  /** Computed extra-payment that was applied for this loan (default + strategy share). */
-  extraApplied: number;
-}
-
-/**
- * Pick the index of the loan that should receive the global "extra" payment
- * for a given strategy. Snowball: smallest balance first. Avalanche: highest
- * rate first. Returns -1 when there's nothing to target.
- *
- * v1 limitation: a SINGLE loan receives the entire extra each month. We do
- * NOT model the "snowball cascade" where, after the targeted loan is paid
- * off, the freed-up payment rolls onto the next loan in priority order.
- * Adding a true cascade requires a coupled month-by-month simulation across
- * all loans (the per-loan amortize() runs are independent today). Future
- * iteration.
- *
- * Exported for unit testing.
- */
-export function pickStrategyTargetIndex(loans: Loan[], strategy: Strategy): number {
-  if (loans.length === 0) return -1;
-  if (strategy === 'none') return -1;
-  let bestIdx = 0;
-  for (let i = 1; i < loans.length; i++) {
-    if (strategy === 'snowball') {
-      if (loans[i].currentBalance < loans[bestIdx].currentBalance) bestIdx = i;
-    } else {
-      // avalanche
-      if (loans[i].interestRate > loans[bestIdx].interestRate) bestIdx = i;
-    }
-  }
-  return bestIdx;
-}
-
-/** Exported for unit testing. */
-export function projectionsFor(
-  loans: Loan[],
-  strategy: Strategy,
-  extraTotal: number,
-): LoanProjection[] {
-  const targetIdx = pickStrategyTargetIndex(loans, strategy);
-  return loans.map((loan, i) => {
-    const strategyExtra =
-      strategy !== 'none' && i === targetIdx ? Math.max(0, extraTotal) : 0;
-    const extraApplied = loan.extraPaymentDefault + strategyExtra;
-    const amortization = amortize({
-      principal: loan.currentBalance,
-      annualRatePct: loan.interestRate,
-      termMonths: loan.termMonths,
-      firstPaymentDate: loan.firstPaymentDate,
-      extraPayment: extraApplied,
-    });
-    return { loan, amortization, extraApplied };
-  });
-}
-
 export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
-  const { loans } = useLoansStore();
+  const loans = useLoansStore((s) => s.loans);
 
   const defaults = useMemo(() => ({ strategy: 'none' as Strategy, extraTotal: 0 }), []);
   const { values, setValue, reset, isOverridden } = useCalculatorState(
@@ -157,37 +120,21 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
     >
       {/* Aggregate metric strip */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-        <div className="rounded-md border bg-muted/40 p-3">
-          <div className="text-xs text-muted-foreground">Total interest</div>
-          <div
-            className="text-base font-semibold tabular-nums"
-            data-testid="debt-total-interest"
-          >
-            {formatCurrency(totalInterest)}
-          </div>
-        </div>
-        <div className="rounded-md border bg-muted/40 p-3">
-          <div className="text-xs text-muted-foreground">
-            Estimated payoff
-          </div>
-          <div
-            className="text-base font-semibold tabular-nums"
-            data-testid="debt-aggregate-payoff"
-          >
-            {aggregatePayoffDate ?? '—'}
-          </div>
-        </div>
-        <div className="rounded-md border bg-muted/40 p-3">
-          <div className="text-xs text-muted-foreground">
-            Savings vs no-extra
-          </div>
-          <div
-            className="text-base font-semibold tabular-nums"
-            data-testid="debt-savings"
-          >
-            {formatCurrency(interestSavings)}
-          </div>
-        </div>
+        <StatTile
+          label="Total interest"
+          value={formatCurrency(totalInterest)}
+          testId="debt-total-interest"
+        />
+        <StatTile
+          label="Estimated payoff"
+          value={formatPayoffDate(aggregatePayoffDate)}
+          testId="debt-aggregate-payoff"
+        />
+        <StatTile
+          label="Savings vs no-extra"
+          value={formatCurrency(interestSavings)}
+          testId="debt-savings"
+        />
       </div>
 
       {/* Strategy + extra-payment controls */}
@@ -268,13 +215,14 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
                   {formatCurrency(p.loan.currentBalance)}
                 </td>
                 <td className="py-2 tabular-nums">
+                  {/* Intentionally 2 dp for loan APRs (e.g. 5.25%) — standard precision for lending disclosures. */}
                   {(p.loan.interestRate * 100).toFixed(2)}%
                 </td>
                 <td
                   className="py-2 tabular-nums"
                   data-testid={`debt-loan-payoff-${p.loan.id ?? p.loan.name}`}
                 >
-                  {last?.paymentDate ?? '—'}
+                  {formatPayoffDate(last?.paymentDate)}
                 </td>
                 <td className="py-2 tabular-nums">
                   {formatCurrency(p.amortization.totalInterest)}

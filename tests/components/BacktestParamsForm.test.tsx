@@ -42,6 +42,20 @@ describe('BacktestParamsForm', () => {
     expect(btn).toHaveTextContent(/running/i);
   });
 
+  it('dollar fields clamp at 0 — negative values cannot be entered (min-clamp gap closed)', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<BacktestParamsForm initial={initial} onChange={onChange} onRun={vi.fn()} />);
+    // Starting portfolio field uses NumberField with min=0 — entering -1 clamps to 0.
+    const portfolioInput = screen.getByLabelText(/starting portfolio/i) as HTMLInputElement;
+    await user.clear(portfolioInput);
+    await user.type(portfolioInput, '-1');
+    expect(Number(portfolioInput.value)).toBeGreaterThanOrEqual(0);
+    // onChange must have been called with a non-negative initialPortfolio.
+    const lastCall = onChange.mock.calls[onChange.mock.calls.length - 1][0] as typeof initial;
+    expect(lastCall.initialPortfolio).toBeGreaterThanOrEqual(0);
+  });
+
   // BT-4 — the exported schema is what the page validates against before
   // running; min>max (variable) and a NaN/≤0 portfolio must be rejected, valid
   // accepted. This is the contract that keeps run() off the route errorElement.

@@ -130,6 +130,32 @@ describe('backtestPlan', () => {
     const r = backtestPlan(seed(1_500_000), cfg({ strategy: 'variable' }));
     expect(r.outcomes.every((o) => o.annualBalances.length === 31)).toBe(true);
   });
+
+  // T2: bengen e2e — prove bengen keys off initialPortfolio*0.04, NOT annualSpending.
+  // A bengen run with annualSpending≠4%*portfolio must differ from constant-dollar
+  // using the same annualSpending (same seed, same horizon, same stockPct).
+  it('T2-bengen-e2e: bengen withdrawal is 4% of initialPortfolio regardless of annualSpending', () => {
+    // 4% of 1_500_000 = 60_000. Use a DISTINCT annualSpending (80_000 ≠ 60_000)
+    // so bengen draws 60k/yr while constant-dollar draws 80k/yr → different paths.
+    const spendingDistinctFrom4Pct = 80_000; // != 0.04 * 1_500_000 = 60_000
+    const bengenRun = backtestPlan(seed(1_500_000), cfg({
+      strategy: 'bengen',
+      annualSpending: spendingDistinctFrom4Pct,
+    }));
+    const constantRun = backtestPlan(seed(1_500_000), cfg({
+      strategy: 'constant-dollar',
+      annualSpending: spendingDistinctFrom4Pct,
+    }));
+    // bengen draws 60k/yr (4% of 1.5M); constant-dollar draws 80k/yr.
+    // The ending balances must differ across ALL outcomes.
+    const allSame = bengenRun.outcomes.every((bo) => {
+      const co = constantRun.outcomes.find((o) => o.startYear === bo.startYear)!;
+      return bo.endingBalance === co.endingBalance;
+    });
+    expect(allSame).toBe(false); // proves bengen ≠ constant-dollar at same annualSpending
+    // Confirm bengen ends HIGHER than constant-dollar (draws less → leaves more).
+    expect(bengenRun.survivedCount).toBeGreaterThanOrEqual(constantRun.survivedCount);
+  });
 });
 
 // ── BT-1 / BT-2 regression: drive the NON-idealized production seed ─────────

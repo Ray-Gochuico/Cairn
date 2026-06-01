@@ -9,6 +9,7 @@ import { computePretaxDeductions, computeBonusTax } from '@/lib/tax';
 import { formatCurrency } from '@/lib/format';
 import { PAYCHECK_PERIODS, periodsPerYear, type PaycheckPeriod } from '@/lib/paycheck-periods';
 import { getCurrentTaxYear } from '@/lib/current-tax-year';
+import { ResultRow } from '@/components/calculators/ResultRow';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 
 interface PaycheckCardProps {
@@ -18,8 +19,8 @@ interface PaycheckCardProps {
 
 export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
   const { household } = useHouseholdStore();
-  const { persons } = usePersonsStore();
-  const { dependents } = useDependentsStore();
+  const persons = usePersonsStore((s) => s.persons);
+  const dependents = useDependentsStore((s) => s.dependents);
   const taxItems = useTaxRulesStore((s) => s.items);
   const [period, setPeriod] = useState<PaycheckPeriod>('MONTHLY');
 
@@ -181,50 +182,36 @@ export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
         </Link>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-        <div>
-          <div className="text-muted-foreground">Gross</div>
-          <div className="font-medium tabular-nums">{formatCurrency(perPeriod.gross)}</div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">
-            <TermTooltip term="Pretax 401(k)" />
-          </div>
-          <div className="font-medium tabular-nums">{formatCurrency(perPeriod.pretax401k)}</div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">Pretax health</div>
-          <div className="font-medium tabular-nums">{formatCurrency(perPeriod.pretaxHealth)}</div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">
-            <TermTooltip term="Pretax DCFSA" />
-          </div>
-          <div className="font-medium tabular-nums">{formatCurrency(perPeriod.pretaxDcfsa)}</div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">
-            <TermTooltip term="Pretax HSA" />
-          </div>
-          <div className="font-medium tabular-nums">{formatCurrency(perPeriod.pretaxHsa)}</div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">Estimated federal tax</div>
-          <div className="font-medium tabular-nums">{formatCurrency(perPeriod.federalTax)}</div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">
-            <TermTooltip term="FICA" />
-          </div>
-          <div className="font-medium tabular-nums">{formatCurrency(perPeriod.fica)}</div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">Estimated state tax</div>
-          <div className="font-medium tabular-nums">{formatCurrency(perPeriod.stateTax)}</div>
-        </div>
-        <div>
-          <div className="text-muted-foreground">Estimated city tax</div>
-          <div className="font-medium tabular-nums">{formatCurrency(perPeriod.cityTax)}</div>
-        </div>
+        <ResultRow label="Gross" value={formatCurrency(perPeriod.gross)} />
+        <ResultRow
+          label={<TermTooltip term="Pretax 401(k)" />}
+          value={formatCurrency(perPeriod.pretax401k)}
+        />
+        <ResultRow label="Pretax health" value={formatCurrency(perPeriod.pretaxHealth)} />
+        <ResultRow
+          label={<TermTooltip term="Pretax DCFSA" />}
+          value={formatCurrency(perPeriod.pretaxDcfsa)}
+        />
+        <ResultRow
+          label={<TermTooltip term="Pretax HSA" />}
+          value={formatCurrency(perPeriod.pretaxHsa)}
+        />
+        <ResultRow
+          label="Estimated federal tax"
+          value={formatCurrency(perPeriod.federalTax)}
+        />
+        <ResultRow
+          label={<TermTooltip term="FICA" />}
+          value={formatCurrency(perPeriod.fica)}
+        />
+        <ResultRow
+          label="Estimated state tax"
+          value={formatCurrency(perPeriod.stateTax)}
+        />
+        <ResultRow
+          label="Estimated city tax"
+          value={formatCurrency(perPeriod.cityTax)}
+        />
       </div>
       {/* Wave-5 W5-5 — calculator framing parity with the 401k card.
           The take-home headline is an estimate because this engine omits

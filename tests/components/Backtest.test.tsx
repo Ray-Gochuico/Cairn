@@ -73,9 +73,8 @@ import Backtest from '@/pages/calculators/Backtest';
 const renderPage = () => render(<MemoryRouter><Backtest /></MemoryRouter>);
 
 describe('Backtest page', () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
+  // No shared beforeEach needed: tests that need real timers call vi.useRealTimers()
+  // inline; tests that don't run any timers at all can use the default (real) timers.
 
   it('shows a pre-run empty-state prompt before the first run (SF-3)', () => {
     renderPage();

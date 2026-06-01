@@ -67,7 +67,7 @@ Tax thresholds shown reflect the **2026 tax year** and will become outdated. Alw
 
 **Consult a tax professional or fee-only fiduciary advisor before executing any of these strategies.**`;
 
-const BACKTEST_TEXT_v1_0 = `**About the Historical Backtest**
+const BACKTEST_TEXT_v1_1 = `**About the Historical Backtest**
 
 This view replays your plan against U.S. market data from 1871 to today. Each line is one historical starting year — what would have happened to someone who began this exact plan in 1929, 1966, 2000, and so on.
 
@@ -75,7 +75,7 @@ This view replays your plan against U.S. market data from 1871 to today. Each li
 
 The **success rate is a count of past outcomes, not a probability** of future success. Raising the *goal ending amount* above $0 makes "success" stricter — you are asking the plan to also leave a margin — but it stays a tally of what *did* happen, never a forecast of what will.
 
-Inputs are inflation-adjusted using historical CPI; results are shown in real dollars. **Tax brackets are held at 2026 levels** across the entire 1871-to-present replay — historical brackets are not reconstructed, so any income-tax treatment is approximate. Returns are nominal index returns before fees and fund-specific costs; your real portfolio diverges based on expense ratios and asset location. See *Settings → Disclosures* for the full assumption set.`;
+Everything in this replay is computed in **real (CPI-adjusted) dollars** — both your inputs and the results are stated in today's purchasing power. The returns applied each year are **real (CPI-adjusted) total returns for a stock/bond blend**: the stock leg is Shiller's CPI-deflated S&P total return and the bond leg is a 10-year U.S. Treasury total return deflated to real, weighted by the stock percentage you chose and rebalanced annually. Those returns are applied **gross of fees** — your own real portfolio will diverge based on fund expense ratios, asset location, and how your actual allocation differs from the chosen stock percentage. **Tax brackets are held at 2026 levels** across the entire 1871-to-present replay — historical brackets are not reconstructed, so any income-tax treatment is approximate. See *Settings → Disclosures* for the full assumption set.`;
 
 const LEARNING_TEXT_v1_0 = `**About the Learning feature**
 
@@ -122,9 +122,11 @@ export const DISCLOSURES = {
       'I understand the trivia content is general financial-literacy education, not advice, and I will verify any specifics before acting.',
   } satisfies DisclosureDocument,
   backtest: {
-    version: '1.0',
+    version: '1.1',
     title: 'About the Historical Backtest',
-    body: BACKTEST_TEXT_v1_0,
+    body: BACKTEST_TEXT_v1_1,
+    diffFromPrevious:
+      'Version 1.1 corrects the returns-basis description. v1.0 stated returns were "nominal index returns," but the engine runs strictly in real (CPI-adjusted) dollars and blends a real stock leg (Shiller\'s CPI-deflated S&P total return) with a real bond leg (a 10-year Treasury return deflated to real). The copy now describes them as real total returns for a stock/bond blend, applied gross of fees. No change to the count-not-probability, overlapping-windows, or held-at-2026-brackets framing. Please re-read and re-accept.',
     acceptanceCheckboxLabel:
       'I understand the backtest reports historical outcomes only and is not a prediction of future performance.',
   } satisfies DisclosureDocument,

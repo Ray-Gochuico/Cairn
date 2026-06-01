@@ -99,10 +99,10 @@ describe('DISCLOSURES', () => {
 });
 
 describe('backtest disclosure', () => {
-  it('is registered at v1.0 with a non-empty body + acceptance label', () => {
+  it('is registered at v1.1 with a non-empty body + acceptance label', () => {
     const d = DISCLOSURES.backtest;
     expect(d).toBeDefined();
-    expect(d.version).toBe('1.0');
+    expect(d.version).toBe('1.1');
     expect(d.body.length).toBeGreaterThan(200);
     expect(d.acceptanceCheckboxLabel).toMatch(/not a prediction|historical outcomes/i);
   });
@@ -112,5 +112,24 @@ describe('backtest disclosure', () => {
     expect(body).toMatch(/not a prediction|do not predict/i);
     expect(body).toMatch(/count of past outcomes|not a probability/i);
     expect(body).toMatch(/2026 levels|brackets are held/i);
+  });
+
+  it('v1.1 describes returns as REAL total returns for a stock/bond blend (B1 fix: no longer "nominal index")', () => {
+    const body = DISCLOSURES.backtest.body;
+    // Engine drives blended REAL returns (Shiller real S&P + 10yr Treasury
+    // deflated to real) across stocks + bonds — see src/lib/backtest/data.ts.
+    expect(body).toMatch(/real \(CPI-adjusted\) total returns/i);
+    expect(body).toMatch(/stock/i);
+    expect(body).toMatch(/bond/i);
+    // The pre-fix copy claimed "nominal index returns" — factually wrong.
+    expect(body).not.toMatch(/nominal/i);
+  });
+
+  it('v1.1 ships a diffFromPrevious that explains the nominal→real returns-basis correction', () => {
+    const diff = DISCLOSURES.backtest.diffFromPrevious;
+    expect(diff).toBeTruthy();
+    expect(diff!.length).toBeGreaterThan(40);
+    expect(diff).toMatch(/real/i);
+    expect(diff).toMatch(/nominal/i);
   });
 });

@@ -70,4 +70,24 @@ describe('aggregate', () => {
     expect(r.percentilesByYear.p50).toHaveLength(2);
     expect(r.percentilesByYear.p10[0]).toBe(1_500_000); // all start equal
   });
+
+  // T2: percentile interpolation — non-aligned column exercises the linear-interp path.
+  // sorted endings: [0, 100_000, 300_000, 900_000]  (4 values)
+  // rank for p10 = 0.10 * (4-1) = 0.30 → lo=0 (0), hi=1 (100000) → 0 + 100000*0.30 = 30000
+  // rank for p75 = 0.75 * (4-1) = 2.25 → lo=2 (300000), hi=3 (900000) → 300000 + 600000*0.25 = 450000
+  it('T2-percentile-interp: linear-interpolated p10/p75 match computed values for non-aligned column', () => {
+    const nonAlignedGoal = 500_000;
+    const nonAlignedOutcomes = [
+      mkOutcome(1871, 0,       nonAlignedGoal),
+      mkOutcome(1872, 100_000, nonAlignedGoal),
+      mkOutcome(1929, 300_000, nonAlignedGoal),
+      mkOutcome(1966, 900_000, nonAlignedGoal),
+    ];
+    const r = aggregate(nonAlignedOutcomes, nonAlignedGoal);
+    // Year-1 column sorted: [0, 100000, 300000, 900000]
+    // p10: rank=0.30 → interp between 0 and 100000 → 30000
+    expect(r.percentilesByYear.p10[1]).toBe(30_000);
+    // p75: rank=2.25 → interp between 300000 and 900000 → 450000
+    expect(r.percentilesByYear.p75[1]).toBe(450_000);
+  });
 });

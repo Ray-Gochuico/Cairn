@@ -185,7 +185,7 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
         <ResultRow label={<TermTooltip term="FICA" />} value={formatCurrency(result.bonusBreakdown.fica / periods)} />
         <ResultRow label="Estimated state tax" value={formatCurrency(result.bonusBreakdown.state / periods)} />
         <ResultRow label="Estimated city tax" value={formatCurrency(result.bonusBreakdown.city / periods)} />
-        <ResultRow label="Estimated net to bank" value={formatCurrency(netPerCheck)} emphasis />
+        <ResultRow label="Estimated take-home" value={formatCurrency(netPerCheck)} emphasis />
       </div>
 
       {/* Annual totals */}
@@ -204,7 +204,7 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
           }
         />
         <ResultRow label="Estimated annual tax on commission" value={formatCurrency(annualTaxOnCommission)} />
-        <ResultRow label="Estimated annual net" value={formatCurrency(annualNet)} emphasis />
+        <ResultRow label="Estimated annual take-home" value={formatCurrency(annualNet)} emphasis />
       </div>
 
       <p className="text-xs text-muted-foreground">

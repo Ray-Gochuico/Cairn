@@ -218,11 +218,11 @@ describe('FinancialIndependenceCard', () => {
     expect(screen.getByText('Optimistic')).toBeInTheDocument();
     expect(screen.getByText('Bull')).toBeInTheDocument();
 
-    // And so do their formatted rates
-    expect(screen.getByText('5.0%')).toBeInTheDocument();
-    expect(screen.getByText('6.0%')).toBeInTheDocument();
-    expect(screen.getByText('7.0%')).toBeInTheDocument();
-    expect(screen.getByText('8.0%')).toBeInTheDocument();
+    // And so do their formatted rates (formatPercent strips trailing zeros → "5%" not "5.0%").
+    expect(screen.getByText('5%')).toBeInTheDocument();
+    expect(screen.getByText('6%')).toBeInTheDocument();
+    expect(screen.getByText('7%')).toBeInTheDocument();
+    expect(screen.getByText('8%')).toBeInTheDocument();
   });
 
   it('shows the target portfolio derived from monthlyExpenseBaseline / withdrawalRate', () => {

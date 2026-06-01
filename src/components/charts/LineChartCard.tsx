@@ -32,6 +32,13 @@ export interface LineChartSeries {
   dataKey: string;
   label: string;
   color?: string;
+  /**
+   * Optional SVG stroke-dasharray pattern (e.g. "5 5" for dashed, "2 2" for
+   * dotted). Default: undefined → solid line. Opt-in only — existing consumers
+   * that do not set this field render identically (solid) to their prior
+   * behaviour (WCAG 1.4.1 additive fix; Charts Fence: additive/opt-in).
+   */
+  strokeDasharray?: string;
 }
 
 export interface LineChartCardProps {
@@ -89,6 +96,7 @@ export default function LineChartCard({
                 name={s.label}
                 stroke={s.color ?? CHART_PALETTE[idx % CHART_PALETTE.length]}
                 strokeWidth={2}
+                strokeDasharray={s.strokeDasharray}
                 dot={false}
                 activeDot={{ r: 4 }}
                 isAnimationActive={false}

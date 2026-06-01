@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import { NumberField } from '@/components/calculators/NumberField';
 import type { BacktestConfig, WithdrawalStrategyId } from '@/lib/backtest';
 
 // BT-4 — the page validates config against this BEFORE calling backtestPlan, so
@@ -62,22 +63,20 @@ export function BacktestParamsForm({ initial, onChange, onRun, isRunning = false
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+        <NumberField
+          id="bt-portfolio"
+          label="Starting portfolio ($)"
+          value={cfg.initialPortfolio}
+          onChange={(v) => set({ initialPortfolio: v ?? 0 })}
+          min={0}
+        />
         <div>
-          <Label htmlFor="bt-portfolio">Starting portfolio ($)</Label>
-          <Input
-            id="bt-portfolio"
-            type="number"
-            value={cfg.initialPortfolio}
-            onChange={(e) => set({ initialPortfolio: num(e.target.value) })}
-          />
-        </div>
-        <div>
-          <Label htmlFor="bt-spending">Annual spending ($)</Label>
-          <Input
+          <NumberField
             id="bt-spending"
-            type="number"
+            label="Annual spending ($)"
             value={cfg.annualSpending}
-            onChange={(e) => set({ annualSpending: num(e.target.value) })}
+            onChange={(v) => set({ annualSpending: v ?? 0 })}
+            min={0}
           />
           <span className="text-xs text-muted-foreground">
             {((cfg.annualSpending / cfg.initialPortfolio) * 100 || 0).toFixed(1)}% of portfolio
@@ -93,12 +92,12 @@ export function BacktestParamsForm({ initial, onChange, onRun, isRunning = false
           />
         </div>
         <div>
-          <Label htmlFor="bt-goal">Goal ending amount ($)</Label>
-          <Input
+          <NumberField
             id="bt-goal"
-            type="number"
+            label="Goal ending amount ($)"
             value={cfg.goalAmount}
-            onChange={(e) => set({ goalAmount: num(e.target.value) })}
+            onChange={(v) => set({ goalAmount: v ?? 0 })}
+            min={0}
           />
           <span className="text-xs text-muted-foreground">
             $0 = just don&rsquo;t run out; higher = leave a legacy / safety margin
@@ -150,24 +149,20 @@ export function BacktestParamsForm({ initial, onChange, onRun, isRunning = false
                 onChange={(e) => set({ variableRate: num(e.target.value) / 100 })}
               />
             </div>
-            <div>
-              <Label htmlFor="bt-min">Minimum withdrawal ($)</Label>
-              <Input
-                id="bt-min"
-                type="number"
-                value={cfg.minWithdrawal}
-                onChange={(e) => set({ minWithdrawal: num(e.target.value) })}
-              />
-            </div>
-            <div>
-              <Label htmlFor="bt-max">Maximum withdrawal ($)</Label>
-              <Input
-                id="bt-max"
-                type="number"
-                value={cfg.maxWithdrawal}
-                onChange={(e) => set({ maxWithdrawal: num(e.target.value) })}
-              />
-            </div>
+            <NumberField
+              id="bt-min"
+              label="Minimum withdrawal ($)"
+              value={cfg.minWithdrawal}
+              onChange={(v) => set({ minWithdrawal: v ?? 0 })}
+              min={0}
+            />
+            <NumberField
+              id="bt-max"
+              label="Maximum withdrawal ($)"
+              value={cfg.maxWithdrawal}
+              onChange={(v) => set({ maxWithdrawal: v ?? 0 })}
+              min={0}
+            />
           </div>
         </details>
       )}

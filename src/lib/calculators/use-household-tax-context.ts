@@ -27,8 +27,8 @@ export interface HouseholdTaxContext {
  */
 export function useHouseholdTaxContext(): HouseholdTaxContext {
   const { household } = useHouseholdStore();
-  const { persons } = usePersonsStore();
-  const { dependents } = useDependentsStore();
+  const persons = usePersonsStore((s) => s.persons);
+  const dependents = useDependentsStore((s) => s.dependents);
   const taxItems = useTaxRulesStore((s) => s.items);
 
   const seededYears = useMemo(() => [...new Set(taxItems.map((r) => r.year))], [taxItems]);

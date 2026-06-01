@@ -225,9 +225,10 @@ describe('DebtPayoffCard', () => {
       .getByTestId('debt-loan-payoff-1')
       .textContent!.trim();
 
-    // ISO-ish dates compare lexicographically the same as chronologically.
+    // Friendly dates ("Jan 2031") do NOT sort lexicographically. Parse them.
+    const parseDate = (s: string) => new Date(s).getTime();
     // Snowball + $400 extra -> small loan pays off well before the big loan.
-    expect(smallPayoff < bigPayoff).toBe(true);
+    expect(parseDate(smallPayoff)).toBeLessThan(parseDate(bigPayoff));
   });
 
   it('forwards cardId + onHide so the Hide button appears on the card', () => {
@@ -246,6 +247,38 @@ describe('DebtPayoffCard', () => {
     expect(
       screen.getByRole('button', { name: /hide debt payoff card/i }),
     ).toBeInTheDocument();
+  });
+
+  it('T6 Fix-2: renders payoff dates as friendly month/year (e.g. "Jan 2031"), not ISO (e.g. "2031-01-01")', () => {
+    useLoansStore.setState({
+      loans: [
+        makeLoan({
+          id: 1,
+          name: 'Car',
+          currentBalance: 10000,
+          interestRate: 0.06,
+          termMonths: 60,
+          firstPaymentDate: '2026-01-01',
+        }),
+      ],
+      isLoading: false,
+      error: null,
+    });
+
+    render(
+      <MemoryRouter>
+        <DebtPayoffCard />
+      </MemoryRouter>,
+    );
+
+    // ISO format must NOT appear anywhere in the rendered output.
+    // (Dates like "2026-01-01" or "2031-01-01" must be absent.)
+    const isoPattern = /\b\d{4}-\d{2}-\d{2}\b/;
+    expect(document.body.textContent).not.toMatch(isoPattern);
+
+    // A friendly "Mon YYYY" date like "Jan 2031" MUST appear.
+    const friendlyPattern = /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}\b/;
+    expect(document.body.textContent).toMatch(friendlyPattern);
   });
 
   it('persists strategy + extraTotal via the kit', async () => {
@@ -328,9 +361,10 @@ describe('DebtPayoffCard', () => {
       .getByTestId('debt-loan-payoff-1')
       .textContent!.trim();
 
+    // Friendly dates ("Jan 2031") do NOT sort lexicographically. Parse them.
+    const parseDate = (s: string) => new Date(s).getTime();
     // Avalanche + $500 extra → high-rate (18%) loan pays off BEFORE the low-rate (5%) one.
-    // ISO dates compare lexicographically the same as chronologically.
-    expect(highRatePayoff < lowRatePayoff).toBe(true);
+    expect(parseDate(highRatePayoff)).toBeLessThan(parseDate(lowRatePayoff));
   });
 });
 

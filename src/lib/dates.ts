@@ -3,13 +3,19 @@
  *
  * Subtracts the calendar-year delta and adjusts down by one when the birthday
  * hasn't yet occurred this year (compares month, then day-of-month).
+ *
+ * Parses the DOB as UTC midnight (`T00:00:00Z`) and uses UTC accessors to
+ * match `ageAtMonth`'s behaviour and avoid an off-by-one when the process
+ * runs in a UTC-negative timezone (e.g., EST): a Jan-1 DOB would otherwise
+ * shift into Dec-31 of the prior year under local-time parsing, producing an
+ * age one year too high for the remainder of the day.
  */
 export function currentAge(dob: string): number {
-  const birth = new Date(dob);
+  const birth = new Date(`${dob}T00:00:00Z`);
   const now = new Date();
-  let age = now.getFullYear() - birth.getFullYear();
-  const m = now.getMonth() - birth.getMonth();
-  if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--;
+  let age = now.getUTCFullYear() - birth.getUTCFullYear();
+  const m = now.getUTCMonth() - birth.getUTCMonth();
+  if (m < 0 || (m === 0 && now.getUTCDate() < birth.getUTCDate())) age--;
   return age;
 }
 

@@ -5,7 +5,7 @@ import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { CalculatorCard } from './CalculatorCard';
 import { coastFi } from '@/lib/coast-fi';
 import { currentAge } from '@/lib/dates';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, formatPercent } from '@/lib/format';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import { useCalculatorState } from '@/lib/calculator-state';
 import { NumberField } from '@/components/calculators/NumberField';
@@ -32,8 +32,8 @@ interface ScenarioRow {
 
 export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
   const { household } = useHouseholdStore();
-  const { persons } = usePersonsStore();
-  const { snapshots } = useSnapshotsStore();
+  const persons = usePersonsStore((s) => s.persons);
+  const snapshots = useSnapshotsStore((s) => s.snapshots);
 
   // ── Real-data defaults (memoized from the stores) ──────────────────────────
   const defaults = useMemo(() => {
@@ -102,22 +102,62 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
     }),
   }));
 
-  // ── Chart data (plain consts — small N, no memo needed) ───────────────────
-  const horizon = Math.max(0, Math.round(values.yearsUntilRetirement));
-  const scenarios = household?.growthScenarios ?? [];
-  const nominalChart = horizon < 1 ? [] : Array.from({ length: horizon + 1 }, (_, t) => {
-    const point: Record<string, number> = { year: t, target: targetFv };
-    for (const s of scenarios) point[s.label] = balanceTrajectory(values.currentPortfolio, 0, s.rate, horizon)[t].balance;
-    return point;
-  });
-  const chartData =
-    displayMode === 'REAL'
-      ? toRealSeries(nominalChart, inflation, { valueKeys: scenarios.map((s) => s.label), yearKey: 'year' })
-      : nominalChart;
-  const chartSeries = [
-    ...scenarios.map((s, i) => ({ dataKey: s.label, label: s.label, color: CHART_PALETTE[i % CHART_PALETTE.length] })),
-    { dataKey: 'target', label: 'Required at retirement', color: CHART_NEUTRAL },
-  ];
+  // ── Chart data — O(n) per scenario: compute each trajectory ONCE, then index ─
+  // Mirror FinancialIndependenceCard: pre-compute all scenario trajectories outside
+  // the per-year loop so balanceTrajectory() is called once per scenario, not
+  // once per (scenario × year).
+  const { chartData, chartSeries } = useMemo(() => {
+    const horizon = Math.max(0, Math.round(values.yearsUntilRetirement));
+    const scenarios = household?.growthScenarios ?? [];
+    // Dash patterns for WCAG 1.4.1 (opt-in, additive).
+    const DASH_PATTERNS = [undefined, '5 5', '2 2', '8 4'] as const;
+    if (horizon < 1 || scenarios.length === 0) {
+      return {
+        chartData: [] as Record<string, number>[],
+        chartSeries: [
+          ...scenarios.map((s, i) => ({
+            dataKey: s.label,
+            label: s.label,
+            color: CHART_PALETTE[i % CHART_PALETTE.length],
+            strokeDasharray: DASH_PATTERNS[i % DASH_PATTERNS.length],
+          })),
+          { dataKey: 'target', label: 'Required at retirement', color: CHART_NEUTRAL, strokeDasharray: '2 2' as const },
+        ],
+      };
+    }
+    // Compute each scenario's full trajectory ONCE (O(horizon) per scenario).
+    const trajectories = scenarios.map((s) => ({
+      label: s.label,
+      pts: balanceTrajectory(values.currentPortfolio, 0, s.rate, horizon),
+    }));
+    // Build the per-year chart-point array by indexing the pre-computed arrays.
+    const nominal = Array.from({ length: horizon + 1 }, (_, t) => {
+      const point: Record<string, number> = { year: t, target: targetFv };
+      for (const tr of trajectories) point[tr.label] = tr.pts[t].balance;
+      return point;
+    });
+    const data =
+      displayMode === 'REAL'
+        ? toRealSeries(nominal, inflation, { valueKeys: scenarios.map((s) => s.label), yearKey: 'year' })
+        : nominal;
+    const seriesDefs = [
+      ...scenarios.map((s, i) => ({
+        dataKey: s.label,
+        label: s.label,
+        color: CHART_PALETTE[i % CHART_PALETTE.length],
+        strokeDasharray: DASH_PATTERNS[i % DASH_PATTERNS.length],
+      })),
+      { dataKey: 'target', label: 'Required at retirement', color: CHART_NEUTRAL, strokeDasharray: '2 2' as const },
+    ];
+    return { chartData: data, chartSeries: seriesDefs };
+  }, [
+    values.yearsUntilRetirement,
+    values.currentPortfolio,
+    targetFv,
+    household,
+    displayMode,
+    inflation,
+  ]);
 
   // ── Headline ───────────────────────────────────────────────────────────────
   const moderate =
@@ -235,7 +275,7 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
                 return (
                   <tr key={r.label} className="border-t">
                     <td className="py-2">{r.label}</td>
-                    <td className="py-2 tabular-nums">{(r.rate * 100).toFixed(1)}%</td>
+                    <td className="py-2 tabular-nums">{formatPercent(r.rate)}</td>
                     <td className="py-2 tabular-nums">{values.yearsUntilRetirement}</td>
                     <td className="py-2 tabular-nums">
                       {formatCurrency(r.coastNeededToday)}

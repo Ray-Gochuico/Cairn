@@ -157,9 +157,9 @@ describe('Retirement401kWithdrawalCard', () => {
     expect(within(screen.getByTestId('401k-withdrawal-niit-row')).getByText('$0')).toBeInTheDocument();
     expect(within(screen.getByTestId('401k-penalty-row')).getByText('$0')).toBeInTheDocument();
     // Summary tile: total taxes $0. The label + value are SIBLING divs inside
-    // the tile, so scope to the tile via its data-summary-row attribute (the
+    // the tile, so scope to the tile via its data-testid attribute (the
     // label's own .closest('div') is just the label div — value not inside it).
-    const taxTile = document.querySelector('[data-summary-row="taxes-paid"]') as HTMLElement;
+    const taxTile = screen.getByTestId('summary-taxes-paid');
     expect(within(taxTile).getByText('$0')).toBeInTheDocument();
     // Effective rate 0% — label + value share one flex row, so .closest('div')
     // of the label IS that row and contains the value.
@@ -286,10 +286,9 @@ describe('Retirement401kWithdrawalCard', () => {
       target: { value: '50000' },
     });
 
-    const taxLabel = await screen.findByText(/^estimated total taxes$/i);
-    const netLabel = screen.getByText(/^estimated net to you$/i);
-    const taxRow = taxLabel.closest('[data-summary-row]') as HTMLElement;
-    const netRow = netLabel.closest('[data-summary-row]') as HTMLElement;
+    await screen.findByText(/^estimated total taxes$/i);
+    const taxRow = screen.getByTestId('summary-taxes-paid');
+    const netRow = screen.getByTestId('summary-net-to-you');
     expect(taxRow).not.toBeNull();
     expect(netRow).not.toBeNull();
     // Equal visual weight: same className signature on both summary rows so
@@ -341,7 +340,7 @@ describe('Retirement401kWithdrawalCard', () => {
     });
 
     const headline = await screen.findByTestId('401k-withdrawal-net');
-    const netRow = screen.getByText(/^estimated net to you$/i).closest('[data-summary-row]') as HTMLElement;
+    const netRow = screen.getByTestId('summary-net-to-you');
     // Headline value matches the Net-to-you line value so the meaning is
     // unambiguous: the big number is "what you keep", not "what tax you owe".
     expect(within(netRow).getByText(headline.textContent ?? '_MISMATCH_')).toBeInTheDocument();
@@ -386,5 +385,22 @@ describe('Retirement401kWithdrawalCard', () => {
     ).toMatchObject({
       withdrawalAmount: 40000,
     });
+  });
+
+  // a11y T7 finding 3: the "Plan type" radio group must have role="radiogroup"
+  // with aria-label="Plan type" — a bare <span> cannot label a group, and radio
+  // inputs without a group role are announced individually without context.
+  it('Plan type radios are wrapped in role="radiogroup" with aria-label="Plan type"', () => {
+    primeStores();
+    render(
+      <MemoryRouter>
+        <Retirement401kWithdrawalCard />
+      </MemoryRouter>,
+    );
+    const group = screen.getByRole('radiogroup', { name: 'Plan type' });
+    expect(group).toBeInTheDocument();
+    // Both radio inputs must be inside the group
+    const radios = Array.from(group.querySelectorAll('input[type="radio"]'));
+    expect(radios.length).toBe(2);
   });
 });

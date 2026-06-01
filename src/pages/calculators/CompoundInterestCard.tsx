@@ -23,6 +23,7 @@ import { sumLatestOnOrBefore } from '@/lib/growth-horizons';
 import { useSettingsStore } from '@/stores/settings-store';
 import { CHART_PALETTE } from '@/components/charts/palette';
 import { RealNominalToggle } from '@/components/calculators/RealNominalToggle';
+import { StatTile } from '@/components/calculators/StatTile';
 import { useChartDisplayMode } from '@/lib/calculators/use-chart-display-mode';
 import { toRealSeries } from '@/lib/calculators/real-mode';
 
@@ -117,11 +118,12 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
   const hasVariance = values.variancePercent != null && (values.variancePercent ?? 0) > 0;
   // Red = pessimistic (rate - variance), blue = expected (mid),
   // green = optimistic (rate + variance). Single-line view uses blue.
+  // WCAG 1.4.1 opt-in: multi-series uses dash patterns in addition to colour.
   const chartSeries = hasVariance
     ? [
-        { dataKey: 'low', label: 'Low', color: CHART_PALETTE[2] },   // red
-        { dataKey: 'mid', label: 'Mid', color: CHART_PALETTE[0] },   // blue
-        { dataKey: 'high', label: 'High', color: CHART_PALETTE[4] }, // green
+        { dataKey: 'low',  label: 'Low',  color: CHART_PALETTE[2], strokeDasharray: '5 5' }, // red  / dashed
+        { dataKey: 'mid',  label: 'Mid',  color: CHART_PALETTE[0] },                          // blue / solid
+        { dataKey: 'high', label: 'High', color: CHART_PALETTE[4], strokeDasharray: '2 2' }, // green / dotted
       ]
     : [{ dataKey: 'mid', label: 'Balance', color: CHART_PALETTE[0] }];
 
@@ -165,27 +167,15 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
           step="1"
           min={0}
         />
-        <div className="space-y-1">
-          <Label htmlFor="ci-rate">
-            <TermTooltip term="APY">APY</TermTooltip> (%)
-          </Label>
-          <div className="flex items-center gap-1">
-            <input
-              id="ci-rate"
-              type="number"
-              step="0.1"
-              aria-label="Annual percentage yield"
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              value={values.ratePercent === null ? '' : String(values.ratePercent)}
-              onChange={(e) => {
-                const raw = e.target.value;
-                if (raw === '') { setValue('ratePercent', 0); return; }
-                const n = Number(raw);
-                setValue('ratePercent', Number.isFinite(n) ? n : 0);
-              }}
-            />
-          </div>
-        </div>
+        <NumberField
+          id="ci-rate"
+          label={<TermTooltip term="APY">APY (%)</TermTooltip>}
+          ariaLabel="Annual percentage yield"
+          value={values.ratePercent}
+          onChange={(v) => setValue('ratePercent', v ?? 0)}
+          step="0.1"
+          min={0}
+        />
         <NumberField
           id="ci-variance"
           label="Variance ± (%)"
@@ -225,24 +215,20 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
       {series ? (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4 text-sm">
-            <div className="rounded-md border bg-muted/40 p-3">
-              <div className="text-xs text-muted-foreground">Total contributed</div>
-              <div className="text-base font-semibold tabular-nums" data-testid="compound-total-contributed">
-                {formatCurrency(series.totalContributed)}
-              </div>
-            </div>
-            <div className="rounded-md border bg-muted/40 p-3">
-              <div className="text-xs text-muted-foreground">Total interest (mid)</div>
-              <div className="text-base font-semibold tabular-nums" data-testid="compound-total-interest">
-                {formatCurrency(series.totalInterestMid)}
-              </div>
-            </div>
-            <div className="rounded-md border bg-muted/40 p-3">
-              <div className="text-xs text-muted-foreground">Final balance (mid)</div>
-              <div className="text-base font-semibold tabular-nums">
-                {formatCurrency(series.finalMid)}
-              </div>
-            </div>
+            <StatTile
+              label="Total contributed"
+              value={formatCurrency(series.totalContributed)}
+              testId="compound-total-contributed"
+            />
+            <StatTile
+              label="Total interest (mid)"
+              value={formatCurrency(series.totalInterestMid)}
+              testId="compound-total-interest"
+            />
+            <StatTile
+              label="Final balance (mid)"
+              value={formatCurrency(series.finalMid)}
+            />
           </div>
           <div className="flex justify-end mb-2">
             <RealNominalToggle mode={displayMode} onChange={setDisplayMode} />
