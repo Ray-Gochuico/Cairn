@@ -84,6 +84,21 @@ function createMemoryStorage(): Storage {
   };
 }
 
+// Radix UI uses pointer-capture and scrollIntoView APIs that jsdom does not
+// implement. These no-op shims are the missing piece that caused the Wave 0c
+// Radix select migration to be deferred. They are purely additive and cannot
+// affect existing tests — all three are guarded so they never overwrite a
+// real implementation should jsdom eventually ship them.
+if (!Element.prototype.hasPointerCapture) {
+  Element.prototype.hasPointerCapture = (): boolean => false;
+}
+if (!Element.prototype.releasePointerCapture) {
+  Element.prototype.releasePointerCapture = (): void => {};
+}
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = (): void => {};
+}
+
 beforeEach(() => {
   const fresh = createMemoryStorage();
   Object.defineProperty(globalThis, 'localStorage', {

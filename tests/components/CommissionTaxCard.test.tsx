@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
@@ -149,6 +150,7 @@ describe('CommissionTaxCard', () => {
     // Net per check = $12,000 - $600 - ~$4,200 = ~$7,200
     primeStores();
 
+    const user = userEvent.setup();
     render(
       <MemoryRouter>
         <CommissionTaxCard />
@@ -158,9 +160,9 @@ describe('CommissionTaxCard', () => {
     const input = screen.getByLabelText(/Annual commission/i);
     fireEvent.change(input, { target: { value: '48000' } });
 
-    // Switch to QUARTERLY
-    const select = screen.getByLabelText(/Frequency/i);
-    fireEvent.change(select, { target: { value: 'QUARTERLY' } });
+    // Switch to QUARTERLY via the Radix combobox
+    await user.click(screen.getByRole('combobox', { name: /frequency/i }));
+    await user.click(await screen.findByRole('option', { name: /quarterly/i }));
 
     const headline = await screen.findByTestId('commission-takehome');
     const value = parseFloat(headline.textContent!.replace(/[$,]/g, ''));
@@ -310,6 +312,7 @@ describe('CommissionTaxCard', () => {
 
   it('annual commission is the editable assumption; toggling frequency keeps it stable (rescale bug fixed)', async () => {
     primeStores(); // seeds a person with expectedCommission = 48000, MONTHLY
+    const user = userEvent.setup();
     render(<MemoryRouter><CommissionTaxCard /></MemoryRouter>);
 
     const annual = await screen.findByLabelText(/Annual commission/i) as HTMLInputElement;
@@ -318,8 +321,9 @@ describe('CommissionTaxCard', () => {
     // Per-check derived for MONTHLY = 48000 / 12 = 4000.
     expect(screen.getAllByText(/\$4,000/).length).toBeGreaterThan(0);
 
-    // Toggle to QUARTERLY: annual stays 48000, per-check re-derives to 12000.
-    fireEvent.change(screen.getByLabelText(/Frequency/i), { target: { value: 'QUARTERLY' } });
+    // Toggle to QUARTERLY via the Radix combobox: annual stays 48000, per-check re-derives to 12000.
+    await user.click(screen.getByRole('combobox', { name: /frequency/i }));
+    await user.click(await screen.findByRole('option', { name: /quarterly/i }));
     expect(Number((screen.getByLabelText(/Annual commission/i) as HTMLInputElement).value)).toBe(48000);
     expect(screen.getAllByText(/\$12,000/).length).toBeGreaterThan(0);
   });

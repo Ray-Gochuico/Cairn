@@ -12,6 +12,13 @@ import { ResultRow } from '@/components/calculators/ResultRow';
 import { formatCurrency } from '@/lib/format';
 import { CONTRIBUTION_LIMITS_2026 } from '@/lib/contribution-limits';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select';
 
 type CommissionFrequency = 'MONTHLY' | 'QUARTERLY';
 
@@ -97,15 +104,18 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
         <label htmlFor="commission-frequency" className="text-sm font-medium">
           Frequency
         </label>
-        <select
-          id="commission-frequency"
-          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        <Select
           value={values.frequency}
-          onChange={(e) => setValue('frequency', e.target.value as CommissionFrequency)}
+          onValueChange={(v) => setValue('frequency', v as CommissionFrequency)}
         >
-          <option value="MONTHLY">Monthly (12/yr)</option>
-          <option value="QUARTERLY">Quarterly (4/yr)</option>
-        </select>
+          <SelectTrigger id="commission-frequency" aria-label="Frequency">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="MONTHLY">Monthly (12/yr)</SelectItem>
+            <SelectItem value="QUARTERLY">Quarterly (4/yr)</SelectItem>
+          </SelectContent>
+        </Select>
         <p className="text-xs text-muted-foreground tabular-nums">
           Per check: {formatCurrency(commissionPerCheck)}
         </p>

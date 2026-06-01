@@ -1,9 +1,13 @@
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select';
 import type { OvertimeLineItem } from '@/lib/overtime';
-
-const SELECT_CLASS =
-  'flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
 
 // Preset is carried alongside OvertimeLineItem fields in the row state so the
 // editor and parent share a single update channel via Partial<…>. (Cleaner
@@ -75,24 +79,25 @@ export function OvertimeRowEditor({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
-          <label htmlFor={presetId} className="text-xs font-medium">
-            Multiplier
-          </label>
-          <select
-            id={presetId}
-            className={SELECT_CLASS}
+          <div className="text-xs font-medium">Multiplier</div>
+          <Select
             value={row.preset}
-            onChange={(e) => {
-              const next = e.target.value as OvertimePreset;
+            onValueChange={(v) => {
+              const next = v as OvertimePreset;
               if (next === '1.5') onChange({ preset: '1.5', baseMultiplier: 1.5 });
               else if (next === '2') onChange({ preset: '2', baseMultiplier: 2 });
               else onChange({ preset: 'custom' });
             }}
           >
-            <option value="1.5">1.5x (time-and-a-half)</option>
-            <option value="2">2x (double-time)</option>
-            <option value="custom">Custom</option>
-          </select>
+            <SelectTrigger id={presetId} aria-label="Multiplier">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1.5">1.5x (time-and-a-half)</SelectItem>
+              <SelectItem value="2">2x (double-time)</SelectItem>
+              <SelectItem value="custom">Custom</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 

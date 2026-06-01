@@ -1,10 +1,18 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { useEquityGrantsStore } from '@/stores/equity-grants-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import type { EquityGrant, Person } from '@/types/schema';
 import { EquityValueCard } from '@/pages/calculators/EquityValueCard';
+
+// Pin "today" to a stable date so vest-date comparisons in computeEquityValue
+// are fully deterministic. Mirrors the pattern used in CoastFiCard.test.tsx.
+// With this anchor:
+//   - Dates <= 2026-05-14 are in the past → vested
+//   - Dates > 2026-05-14 (e.g. 2027-01-15) are upcoming → unvested
+// Tests can use realistic near-term vest dates instead of far-future 2099 dates.
+const PINNED_DATE = new Date('2026-05-14T12:00:00Z');
 
 const basePerson: Person = {
   id: 1,
@@ -85,6 +93,14 @@ function primeStores(opts: PrimeOpts = {}) {
 describe('EquityValueCard', () => {
   beforeEach(() => {
     resetStores();
+    // Pin "today" to a stable date so vest-date logic in computeEquityValue is
+    // deterministic across runs. Mirrors the CoastFiCard.test.tsx pattern.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(PINNED_DATE);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('renders empty state when no grants exist', () => {
@@ -102,6 +118,8 @@ describe('EquityValueCard', () => {
   });
 
   it('headline shows total vested value across all grants', () => {
+    // Pinned to 2026-05-14. Past vest on 2020-01-15 (25%) → vested; future vest
+    // on 2027-01-15 (100%) → not yet counted. So only 25% of each grant is vested.
     // Grant A: 1000 × 50 × 0.25 = 12,500
     // Grant B: 2000 × 100 × 0.25 = 50,000
     // Total vested = 62,500
@@ -113,7 +131,7 @@ describe('EquityValueCard', () => {
           currentFmv: 50,
           vestingSchedule: [
             { date: '2020-01-15', cumulativePct: 0.25 },
-            { date: '2099-01-15', cumulativePct: 1.0 },
+            { date: '2027-01-15', cumulativePct: 1.0 },
           ],
         },
         {
@@ -122,7 +140,7 @@ describe('EquityValueCard', () => {
           currentFmv: 100,
           vestingSchedule: [
             { date: '2020-01-15', cumulativePct: 0.25 },
-            { date: '2099-01-15', cumulativePct: 1.0 },
+            { date: '2027-01-15', cumulativePct: 1.0 },
           ],
         },
       ],
@@ -225,9 +243,10 @@ describe('EquityValueCard', () => {
           name: 'Grant A',
           totalShares: 1000,
           currentFmv: 50,
+          // Pinned to 2026-05-14: past vest (25% at 2020-01-15), upcoming (100% at 2027-01-15)
           vestingSchedule: [
             { date: '2020-01-15', cumulativePct: 0.25 },
-            { date: '2099-01-15', cumulativePct: 1.0 },
+            { date: '2027-01-15', cumulativePct: 1.0 },
           ],
         },
       ],
@@ -241,9 +260,10 @@ describe('EquityValueCard', () => {
   });
 
   it('renders unvested value, upcoming vest dates, and grant-type badge (ISO)', () => {
+    // Pinned to 2026-05-14.
     // Grant: 1000 shares at $50 FMV.
     // Past vest (2020-01-15 @ 25%) → vestedValue = 250 × 50 = $12,500
-    // Future vests (2099-01-15 @ 100%) → unvestedValue = 750 × 50 = $37,500
+    // Upcoming vest (2027-01-15 @ 100%) → unvestedValue = 750 × 50 = $37,500
     primeStores({
       grants: [
         {
@@ -254,7 +274,7 @@ describe('EquityValueCard', () => {
           strikePrice: 10,
           vestingSchedule: [
             { date: '2020-01-15', cumulativePct: 0.25 },
-            { date: '2099-01-15', cumulativePct: 1.0 },
+            { date: '2027-01-15', cumulativePct: 1.0 },
           ],
         },
       ],
@@ -268,10 +288,10 @@ describe('EquityValueCard', () => {
     // unvested ResultRow must show a $-value
     expect(screen.getByTestId('equity-total-unvested').textContent).toMatch(/\$[\d,]+/);
 
-    // upcoming vests block must be present and contain a future date
+    // upcoming vests block must be present and contain the realistic near-term date
     const upcomingBlock = screen.getByTestId('equity-upcoming-vests');
     expect(upcomingBlock).toBeInTheDocument();
-    expect(upcomingBlock.textContent).toMatch(/2099/);
+    expect(upcomingBlock.textContent).toMatch(/2027/);
 
     // grant-type badge must show 'ISO'
     expect(screen.getByText('ISO')).toBeInTheDocument();
@@ -285,9 +305,10 @@ describe('EquityValueCard', () => {
           grantType: 'RSU',
           totalShares: 500,
           currentFmv: 100,
+          // Pinned to 2026-05-14: past vest (50% at 2020-01-15), upcoming (100% at 2027-01-15)
           vestingSchedule: [
             { date: '2020-01-15', cumulativePct: 0.5 },
-            { date: '2099-01-15', cumulativePct: 1.0 },
+            { date: '2027-01-15', cumulativePct: 1.0 },
           ],
         },
       ],
@@ -381,7 +402,7 @@ describe('EquityValueCard', () => {
   });
 
   it('shows est. ordinary income row for an NSO grant with unvested shares', () => {
-    // NSO: strike=10, fmv=50, 25% vested in past, 75% unvested
+    // Pinned to 2026-05-14. NSO: strike=10, fmv=50, 25% vested in past, 75% unvested.
     // ordinary income = 750 shares × (50−10) = $30,000
     primeStores({
       grants: [
@@ -393,7 +414,7 @@ describe('EquityValueCard', () => {
           strikePrice: 10,
           vestingSchedule: [
             { date: '2020-01-15', cumulativePct: 0.25 },
-            { date: '2099-01-15', cumulativePct: 1.0 },
+            { date: '2027-01-15', cumulativePct: 1.0 },
           ],
         },
       ],
@@ -408,7 +429,7 @@ describe('EquityValueCard', () => {
   });
 
   it('shows est. ordinary income row for an RSU grant with unvested shares', () => {
-    // RSU: strike=0, fmv=50, 25% vested in past, 75% unvested
+    // Pinned to 2026-05-14. RSU: strike=0, fmv=50, 25% vested in past, 75% unvested.
     // ordinary income = 750 × 50 = $37,500
     primeStores({
       grants: [
@@ -420,7 +441,7 @@ describe('EquityValueCard', () => {
           strikePrice: 0,
           vestingSchedule: [
             { date: '2020-01-15', cumulativePct: 0.25 },
-            { date: '2099-01-15', cumulativePct: 1.0 },
+            { date: '2027-01-15', cumulativePct: 1.0 },
           ],
         },
       ],
@@ -444,7 +465,7 @@ describe('EquityValueCard', () => {
           strikePrice: 10,
           vestingSchedule: [
             { date: '2020-01-15', cumulativePct: 0.25 },
-            { date: '2099-01-15', cumulativePct: 1.0 },
+            { date: '2027-01-15', cumulativePct: 1.0 },
           ],
         },
       ],
@@ -469,7 +490,7 @@ describe('EquityValueCard', () => {
           strikePrice: 0,
           vestingSchedule: [
             { date: '2020-01-15', cumulativePct: 0.25 },
-            { date: '2099-01-15', cumulativePct: 1.0 },
+            { date: '2027-01-15', cumulativePct: 1.0 },
           ],
         },
       ],

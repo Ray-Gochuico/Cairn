@@ -4,6 +4,10 @@ import { MemoryRouter } from 'react-router-dom';
 import CalculatorsLayout from '@/pages/calculators/CalculatorsLayout';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
+import { useSnapshotsStore } from '@/stores/snapshots-store';
+import { useContributionsStore } from '@/stores/contributions-store';
+import { useLoansStore } from '@/stores/loans-store';
+import { useEquityGrantsStore } from '@/stores/equity-grants-store';
 
 describe('CalculatorsLayout', () => {
   beforeEach(() => {
@@ -33,5 +37,40 @@ describe('CalculatorsLayout', () => {
 
     personsLoad.mockRestore();
     dependentsLoad.mockRestore();
+  });
+
+  // Cold-boot hydration for FI/CoastFI/Debt/Equity portfolio stores: a user
+  // deep-linking directly to /calculators would see $0 in FI, Debt Payoff, and
+  // Equity Value cards unless these stores are also loaded here. Goes RED if
+  // the bootstrap is missing or incomplete.
+  it('hydrates snapshots, contributions, loans, and equity-grants on mount', () => {
+    const snapshotsLoad = vi
+      .spyOn(useSnapshotsStore.getState(), 'load')
+      .mockResolvedValue(undefined);
+    const contributionsLoad = vi
+      .spyOn(useContributionsStore.getState(), 'load')
+      .mockResolvedValue(undefined);
+    const loansLoad = vi
+      .spyOn(useLoansStore.getState(), 'load')
+      .mockResolvedValue(undefined);
+    const equityGrantsLoad = vi
+      .spyOn(useEquityGrantsStore.getState(), 'load')
+      .mockResolvedValue(undefined);
+
+    render(
+      <MemoryRouter>
+        <CalculatorsLayout />
+      </MemoryRouter>,
+    );
+
+    expect(snapshotsLoad).toHaveBeenCalledOnce();
+    expect(contributionsLoad).toHaveBeenCalledOnce();
+    expect(loansLoad).toHaveBeenCalledOnce();
+    expect(equityGrantsLoad).toHaveBeenCalledOnce();
+
+    snapshotsLoad.mockRestore();
+    contributionsLoad.mockRestore();
+    loansLoad.mockRestore();
+    equityGrantsLoad.mockRestore();
   });
 });

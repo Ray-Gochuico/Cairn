@@ -235,9 +235,9 @@ describe('BonusTaxCard', () => {
 
     render(<MemoryRouter><BonusTaxCard /></MemoryRouter>);
 
-    // Frequency select should reflect QUARTERLY seeded from the person
-    const freqSelect = await screen.findByLabelText(/Bonus frequency/i) as HTMLSelectElement;
-    expect(freqSelect.value).toBe('QUARTERLY');
+    // Frequency combobox trigger should show QUARTERLY seeded from the person
+    const freqTrigger = await screen.findByRole('combobox', { name: /bonus frequency/i });
+    expect(freqTrigger.textContent).toMatch(/quarterly/i);
 
     // Enter $5000 per quarter
     const input = screen.getByLabelText(/Bonus amount/i);

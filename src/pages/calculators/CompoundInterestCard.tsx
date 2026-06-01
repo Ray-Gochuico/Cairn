@@ -1,6 +1,13 @@
 import { useMemo } from 'react';
 import { CalculatorCard } from './CalculatorCard';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select';
 import LineChartCard from '@/components/charts/LineChartCard';
 import {
   compoundInterestSeries,
@@ -189,16 +196,19 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
         />
         <div className="space-y-1">
           <Label htmlFor="ci-frequency">Compound frequency</Label>
-          <select
-            id="ci-frequency"
+          <Select
             value={values.frequency}
-            onChange={(e) => setValue('frequency', e.target.value as CompoundFrequency)}
-            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            onValueChange={(v) => setValue('frequency', v as CompoundFrequency)}
           >
-            {FREQUENCY_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
+            <SelectTrigger id="ci-frequency" aria-label="Compound frequency">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {FREQUENCY_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 

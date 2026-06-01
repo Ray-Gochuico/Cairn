@@ -24,5 +24,26 @@ describe('getHiddenCards', () => {
     localStorage.setItem('calculator-hidden-cards', '[1, "valid", null]');
     expect(getHiddenCards()).toEqual(['valid']);
   });
+
+  // LEGACY_ID_MIGRATIONS: fire → financial-independence
+  it('migrates legacy "fire" id to "financial-independence"', () => {
+    localStorage.setItem('calculator-hidden-cards', '["fire"]');
+    expect(getHiddenCards()).toEqual(['financial-independence']);
+  });
+
+  it('passes through already-current "financial-independence" id unchanged', () => {
+    localStorage.setItem('calculator-hidden-cards', '["financial-independence"]');
+    expect(getHiddenCards()).toEqual(['financial-independence']);
+  });
+
+  it('leaves unrelated ids untouched', () => {
+    localStorage.setItem('calculator-hidden-cards', '["net-worth","commission"]');
+    expect(getHiddenCards()).toEqual(['net-worth', 'commission']);
+  });
+
+  it('de-dupes when both legacy and current id are present', () => {
+    localStorage.setItem('calculator-hidden-cards', '["fire","financial-independence"]');
+    expect(getHiddenCards()).toEqual(['financial-independence']);
+  });
 });
 
