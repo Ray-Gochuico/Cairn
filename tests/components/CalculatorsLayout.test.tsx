@@ -555,9 +555,10 @@ describe('CalculatorsLayout', () => {
     });
 
     it('"Show all" restores every hidden card and closes the popover', async () => {
+      // T6: 'commission' renamed to 'commission-tax' to match card fallback id.
       localStorage.setItem(
         'calculator-hidden-cards',
-        JSON.stringify(['bonus-tax', 'commission']),
+        JSON.stringify(['bonus-tax', 'commission-tax']),
       );
 
       primeBaseline();
@@ -579,6 +580,31 @@ describe('CalculatorsLayout', () => {
       expect(screen.getByText(/Commission take-home/i)).toBeInTheDocument();
       expect(screen.queryByText(/card hidden/i)).not.toBeInTheDocument();
     });
+  });
+
+  it('Commission card id in layout matches card fallback (commission-tax)', async () => {
+    // T6 Fix-1: the layout CARD_IDS.COMMISSION must be 'commission-tax' so that
+    // useCalculatorState and useSupplementalMethod share the same storage key
+    // as the card's own fallback (cardId ?? 'commission-tax').
+    primeBaseline();
+    usePersonsStore.setState({
+      persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
+      isLoading: false,
+      error: null,
+    });
+
+    // Pre-seed a calc-state under 'commission-tax' (the canonical key).
+    sessionStorage.setItem('calc-state:commission-tax', JSON.stringify({ annualCommission: 99999 }));
+
+    render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+
+    // Wait for the grid to settle.
+    await screen.findByText(/Commission take-home/i);
+
+    // The calc-state key 'commission-tax' must still be present (layout did not
+    // write a duplicate 'commission' key).
+    expect(sessionStorage.getItem('calc-state:commission-tax')).not.toBeNull();
+    expect(sessionStorage.getItem('calc-state:commission')).toBeNull();
   });
 
   it('intro copy describes edit/reset (no "Override" / "what-if" affordance)', async () => {

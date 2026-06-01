@@ -28,7 +28,7 @@ const STALE_BANNER_STORAGE_KEY = 'stale-tax-year-banner-dismissed';
 const CARD_IDS = {
   PAYCHECK: 'paycheck',
   BONUS: 'bonus-tax',
-  COMMISSION: 'commission',
+  COMMISSION: 'commission-tax',
   OVERTIME: 'overtime',
   FINANCIAL_INDEPENDENCE: 'financial-independence',
   COAST_FI: 'coast-fi',

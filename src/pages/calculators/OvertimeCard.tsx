@@ -27,6 +27,7 @@ import {
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import {
   PAYCHECK_PERIODS,
+  periodsPerYear as paycheckPeriodsPerYear,
   type PaycheckPeriod,
 } from '@/lib/paycheck-periods';
 import type { Person } from '@/types/schema';
@@ -233,8 +234,13 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
   }
 
   const overtimeTakeHome = taxResult.bonusTakeHome;
-  const obbbaDeduction = obbbaOvertimeDeduction(overtime?.totalPremium ?? 0, household.filingStatus);
+  // Annualize the premium before applying the annual cap so the deduction and
+  // tax-saved figures reflect a full-year estimate, not just one pay period.
+  const ppy = paycheckPeriodsPerYear(period);
+  const annualPremium = (overtime?.totalPremium ?? 0) * ppy;
+  const obbbaDeduction = obbbaOvertimeDeduction(annualPremium, household.filingStatus);
   const federalMarginalOnOt = totalGross > 0 ? taxResult.bonusBreakdown.federal / totalGross : 0;
+  // federalMarginalOnOt is a rate (fraction); multiply by annual premium for the annual saving.
   const obbbaFederalSaving = obbbaDeduction * federalMarginalOnOt;
 
   return (
@@ -277,13 +283,14 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
       {obbbaDeduction > 0 && (
         <div className="mt-3 border-t pt-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-            <ResultRow label={<><TermTooltip term="OBBBA">OBBBA</TermTooltip> OT deduction (est.)</>} value={formatCurrency(obbbaDeduction)} />
-            <ResultRow label="Est. federal tax saved" value={formatCurrency(obbbaFederalSaving)} testId="ot-obbba-deduction" />
+            <ResultRow label={<><TermTooltip term="OBBBA">OBBBA</TermTooltip> OT deduction est. (annual)</>} value={formatCurrency(obbbaDeduction)} />
+            <ResultRow label="Est. annual federal tax saved" value={formatCurrency(obbbaFederalSaving)} testId="ot-obbba-deduction" />
           </div>
           <p className="text-xs text-muted-foreground mt-2">
-            Estimate. Deducts the overtime premium (pay above your regular rate), capped at $12,500 ($25,000 MFJ).
+            Annual estimate. Annualizes the overtime premium (pay above your regular rate) across{' '}
+            {ppy} pay periods, then caps at $12,500 ($25,000 MFJ).
             Does not model the $150k/$300k MAGI phase-out; the deduction sunsets after 2028; FICA and most state
-            income taxes still apply; it applies the per-period premium against the annual cap without annualizing.
+            income taxes still apply.
           </p>
         </div>
       )}

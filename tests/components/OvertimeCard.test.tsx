@@ -346,6 +346,29 @@ describe('OvertimeCard', () => {
     expect(screen.getByText(/phase-out|sunsets|FICA/i)).toBeInTheDocument();
   });
 
+  it('T6 Fix-6: OBBBA deduction/tax-saved are labeled as annual', async () => {
+    // Default primeStores: HOURLY @ $25/hr, starter row 8 hrs @ 1.5x, BI_WEEKLY period.
+    // totalPremium (per-period) = 8 × 25 × (1.5 - 1) = $100.
+    // annualPremium = 100 × 26 = $2,600. deduction = $2,600 (< $12,500 cap).
+    // Est. annual federal tax saved ≈ $2,600 × ~22% = ~$572.
+    // Per-period tax saved would have been $100 × ~22% = ~$22.
+    // The displayed "Est. annual federal tax saved" (testId=ot-obbba-deduction)
+    // must reflect the annual figure, not the per-period figure.
+    primeStores();
+    render(<MemoryRouter><OvertimeCard /></MemoryRouter>);
+
+    await screen.findByTestId('ot-takehome');
+
+    // The OBBBA tax-saved row uses testId=ot-obbba-deduction.
+    const obbbaRow = await screen.findByTestId('ot-obbba-deduction');
+    const rawValue = parseFloat(obbbaRow.textContent!.replace(/[$,]/g, ''));
+    // Annual (~$572) >> per-period (~$22). Any value >= 100 confirms annualization.
+    expect(rawValue).toBeGreaterThanOrEqual(100);
+
+    // The label must say "annual" (not be unlabeled as per-period).
+    expect(screen.getByText(/est\. annual federal tax saved/i)).toBeInTheDocument();
+  });
+
   it('headline equals computeSupplementalWageTax wiring exactly (parity, single eligible person)', async () => {
     const { aggregateHouseholdPretax, computeSupplementalWageTax } = await import(
       '@/lib/calculators/supplemental-wage'
