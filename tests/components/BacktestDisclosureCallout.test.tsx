@@ -31,10 +31,26 @@ describe('BacktestDisclosureCallout', () => {
     expect(screen.getByText(/tax brackets are held at 2026 levels/i)).toBeInTheDocument();
   });
 
-  it('has the expected DISCLOSURES.backtest title in the disclosure registry', () => {
-    // Verify the disclosure registry has the backtest entry this callout is
-    // based on — so if disclosures.ts changes, this test flags the drift.
+  it('states returns are real (CPI-adjusted) and gross of fees (B1/M6: consistent with registry)', () => {
+    render(<BacktestDisclosureCallout />);
+    // The registry body was corrected from "nominal index returns" to real
+    // stock/bond returns; the always-visible callout must say the same thing.
+    expect(screen.getByText(/real \(inflation-adjusted\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/before(?:.|\n)*fees/i)).toBeInTheDocument();
+  });
+
+  it('drift-guard: callout stays consistent with the DISCLOSURES.backtest registry entry', () => {
+    // The callout is a hand-written paraphrase of DISCLOSURES.backtest. This
+    // guard pins it to the registry: a future body edit bumps the registry
+    // version, which trips this assertion and forces a conscious callout review.
     expect(DISCLOSURES.backtest.title).toBe('About the Historical Backtest');
-    expect(DISCLOSURES.backtest.version).toBe('1.0');
+    expect(DISCLOSURES.backtest.version).toBe('1.1');
+
+    render(<BacktestDisclosureCallout />);
+    // The callout must carry the registry's load-bearing claims.
+    expect(screen.getByText(/not a prediction/i)).toBeInTheDocument();
+    expect(screen.getByText(/not a probability/i)).toBeInTheDocument();
+    expect(screen.getByText(/2026 levels/i)).toBeInTheDocument();
+    expect(screen.getByText(/real \(inflation-adjusted\)/i)).toBeInTheDocument();
   });
 });

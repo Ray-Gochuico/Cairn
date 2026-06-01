@@ -16,6 +16,13 @@ export function BacktestDisclosureCallout() {
         that haven&rsquo;t happened yet.
       </p>
       <p>
+        <strong>Returns are real (inflation-adjusted), gross of fees.</strong> Each year
+        applies a CPI-adjusted total return for a stock/bond blend (a real S&amp;P return
+        plus a 10-year Treasury return deflated to real, at your chosen stock %) before any
+        fund fees. Your own portfolio diverges based on expense ratios, asset location, and
+        how your real allocation differs from that mix.
+      </p>
+      <p>
         <strong>Tax brackets are held at 2026 levels</strong> across the entire
         1871-to-present replay — historical brackets are not reconstructed, so any income
         tax treatment is approximate. See Settings &rarr; Disclosures for the full set.
