@@ -69,6 +69,10 @@ describe('OutcomeSummary', () => {
     expect(meta).toBeInTheDocument();
     expect(meta).toHaveTextContent('3 historical periods');
     expect(meta).toHaveTextContent('real dollars');
+    // BT-7: the data span must end at the last Shiller data year (2022), NOT
+    // the retrieval date (SHILLER_DATA_AS_OF = 2026-06-01).
+    expect(meta.textContent).toMatch(/1871.?2022/);
+    expect(meta.textContent).not.toContain('2026');
   });
 
   it('shows worst ending start year', () => {

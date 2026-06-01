@@ -1,12 +1,17 @@
 import type { BacktestResult } from '@/lib/backtest';
 import { formatCompactCurrency } from '@/lib/format';
-import { SHILLER_DATA_AS_OF } from '@/data/shiller';
+import { loadShillerAnnual } from '@/data/shiller-schema';
 
 interface Props { result: BacktestResult; goalAmount: number; }
 
 export function OutcomeSummary({ result, goalAmount }: Props) {
   const total = result.startYears.count;
   const pct = total > 0 ? (result.goalMetCount / total) * 100 : 0;
+  // BT-7: the data span ends at the LAST Shiller data year (2022), NOT
+  // SHILLER_DATA_AS_OF (the 2026 retrieval date) — using the as-of date both
+  // rendered a malformed "1871–2026-06-01" range and overstated coverage.
+  const rows = loadShillerAnnual();
+  const lastDataYear = rows[rows.length - 1].year;
   return (
     <div data-testid="backtest-summary" className="space-y-3">
       {/* Success hero: text-success-foreground (NOT text-success, ~2.30:1 on
@@ -17,7 +22,7 @@ export function OutcomeSummary({ result, goalAmount }: Props) {
       {/* UX F3 (BT-8) — run-meta caption directly under the headline hero: what
           this run covered (period count · goal · real dollars · data span). */}
       <div data-testid="backtest-run-meta" className="text-xs text-muted-foreground">
-        {total} historical periods · goal {formatCompactCurrency(goalAmount)} · real dollars · 1871–{SHILLER_DATA_AS_OF}
+        {total} historical periods · goal {formatCompactCurrency(goalAmount)} · real dollars · 1871–{lastDataYear}
       </div>
       <div className="text-sm">
         <strong>{result.goalMetCount} of {total}</strong> historical periods ended at or
