@@ -463,4 +463,28 @@ describe('CoastFiCard', () => {
     const field = screen.getByLabelText(/current portfolio/i) as HTMLInputElement;
     expect(field.value).toBe('250000'); // not 9,000,000
   });
+
+  it('renders the coast-trajectory chart when seeded', () => {
+    primeStores();
+    render(<MemoryRouter><CoastFiCard /></MemoryRouter>);
+    expect(screen.getByText('Coasting to retirement')).toBeInTheDocument();
+  });
+
+  it('renders a Nominal/Real toggle that persists Real under calc-display-mode:coast-fi', async () => {
+    const user = userEvent.setup();
+    primeStores();
+    render(<MemoryRouter><CoastFiCard /></MemoryRouter>);
+    await user.click(screen.getByRole('button', { name: /^real$/i }));
+    expect(sessionStorage.getItem('calc-display-mode:coast-fi')).toBe('REAL');
+  });
+
+  it('hides the chart at/after target retirement age', async () => {
+    const user = userEvent.setup();
+    primeStores();
+    render(<MemoryRouter><CoastFiCard /></MemoryRouter>);
+    const input = screen.getByLabelText(/years to retirement/i) as HTMLInputElement;
+    await user.clear(input);
+    await user.type(input, '0');
+    expect(screen.queryByText('Coasting to retirement')).not.toBeInTheDocument();
+  });
 });

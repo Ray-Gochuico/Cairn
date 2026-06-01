@@ -324,4 +324,18 @@ describe('FinancialIndependenceCard', () => {
       annualContribution: 60000,
     });
   });
+
+  it('renders the trajectory chart when seeded', () => {
+    primeStores();
+    render(<MemoryRouter><FinancialIndependenceCard /></MemoryRouter>);
+    expect(screen.getByText('Path to FI')).toBeInTheDocument();
+  });
+
+  it('renders a Nominal/Real toggle that persists Real under calc-display-mode:financial-independence', async () => {
+    const user = userEvent.setup();
+    primeStores();
+    render(<MemoryRouter><FinancialIndependenceCard /></MemoryRouter>);
+    await user.click(screen.getByRole('button', { name: /^real$/i }));
+    expect(sessionStorage.getItem('calc-display-mode:financial-independence')).toBe('REAL');
+  });
 });

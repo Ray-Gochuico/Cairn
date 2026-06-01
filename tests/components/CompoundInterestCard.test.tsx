@@ -2,10 +2,13 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CompoundInterestCard } from '@/pages/calculators/CompoundInterestCard';
+import { useSnapshotsStore } from '@/stores/snapshots-store';
+import { SnapshotSource } from '@/types/enums';
 
 describe('CompoundInterestCard', () => {
   beforeEach(() => {
     sessionStorage.clear();
+    useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null });
   });
 
   it('persists the what-if inputs via the kit', async () => {
@@ -93,5 +96,28 @@ describe('CompoundInterestCard', () => {
     // (≈ 1.07^10 * 10k since APY semantics make per-period rate compound
     // exactly to 7% annual).
     expect(headlineAfter).toMatch(/\$19,[5-7]\d{2}/);
+  });
+
+  it('prefills the initial amount from the latest portfolio snapshot', () => {
+    useSnapshotsStore.setState({
+      snapshots: [
+        { id: 1, accountId: 1, snapshotDate: '2026-04-01', totalValue: 250000, source: SnapshotSource.MANUAL },
+      ],
+      isLoading: false, error: null,
+    });
+    render(<CompoundInterestCard />);
+    expect((screen.getByLabelText(/initial amount/i) as HTMLInputElement).value).toBe('250000');
+  });
+
+  it('falls back to the 1000 demo default when there is no portfolio', () => {
+    render(<CompoundInterestCard />); // snapshots empty (beforeEach) → currentPortfolio 0 → pv 1000
+    expect((screen.getByLabelText(/initial amount/i) as HTMLInputElement).value).toBe('1000');
+  });
+
+  it('renders a Nominal/Real toggle and persists Real under calc-display-mode:compound-interest', async () => {
+    const user = userEvent.setup();
+    render(<CompoundInterestCard />);
+    await user.click(screen.getByRole('button', { name: /^real$/i }));
+    expect(sessionStorage.getItem('calc-display-mode:compound-interest')).toBe('REAL');
   });
 });

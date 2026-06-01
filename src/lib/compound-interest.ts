@@ -1,5 +1,17 @@
 export type CompoundFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'ANNUALLY';
 
+/**
+ * Convert an APY (effective annual yield after compounding) into the nominal
+ * APR that, compounded `ppy` times/year, reproduces it:
+ *   APY = (1 + APR/ppy)^ppy − 1  ⇒  APR = ppy · ((1 + APY)^(1/ppy) − 1).
+ * Moved out of CompoundInterestCard (Wave 2) so the conversion is shared + tested.
+ */
+export function apyToApr(apy: number, ppy: number): number {
+  if (apy === 0) return 0;
+  if (ppy === 1) return apy; // annual: APY == APR
+  return ppy * (Math.pow(1 + apy, 1 / ppy) - 1);
+}
+
 const PERIODS_PER_YEAR: Record<CompoundFrequency, number> = {
   DAILY: 365,
   WEEKLY: 52,

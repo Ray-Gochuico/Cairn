@@ -11,6 +11,13 @@ import { useCalculatorState } from '@/lib/calculator-state';
 import { NumberField } from '@/components/calculators/NumberField';
 import { sumLatestOnOrBefore } from '@/lib/growth-horizons';
 import { effectiveSwr } from '@/lib/scenarios/effective-swr';
+import LineChartCard from '@/components/charts/LineChartCard';
+import { balanceTrajectory } from '@/lib/projection-trajectory';
+import { toRealSeries } from '@/lib/calculators/real-mode';
+import { RealNominalToggle } from '@/components/calculators/RealNominalToggle';
+import { useChartDisplayMode } from '@/lib/calculators/use-chart-display-mode';
+import { useSettingsStore } from '@/stores/settings-store';
+import { CHART_PALETTE, CHART_NEUTRAL } from '@/components/charts/palette';
 
 interface FinancialIndependenceCardProps {
   cardId?: string;
@@ -93,6 +100,36 @@ export function FinancialIndependenceCard({
     values.annualContribution,
     values.monthlyExpenses,
   ]);
+
+  // ── Chart display mode (Nominal/Real toggle) ───────────────────────────────
+  const [displayMode, setDisplayMode] = useChartDisplayMode(cardId ?? 'financial-independence');
+  const inflation = useSettingsStore((s) => s.settings?.defaultInflation) ?? 0.025;
+
+  const { chartData, chartSeries } = useMemo(() => {
+    if (!series) return { chartData: [] as Record<string, number>[], chartSeries: [] as { dataKey: string; label: string; color: string }[] };
+    const finite = series.map((s) => s.years).filter((y) => Number.isFinite(y));
+    const horizon = finite.length
+      ? Math.min(50, Math.max(10, Math.ceil(Math.max(...finite))))
+      : 30;
+    const trajectories = series.map((s) => ({
+      label: s.label,
+      pts: balanceTrajectory(values.currentPortfolio, values.annualContribution, s.rate, horizon),
+    }));
+    const nominal = Array.from({ length: horizon + 1 }, (_, t) => {
+      const point: Record<string, number> = { year: t, target: targetFv };
+      for (const tr of trajectories) point[tr.label] = tr.pts[t].balance;
+      return point;
+    });
+    const data =
+      displayMode === 'REAL'
+        ? toRealSeries(nominal, inflation, { valueKeys: series.map((s) => s.label), yearKey: 'year' })
+        : nominal;
+    const seriesDefs = [
+      ...series.map((s, i) => ({ dataKey: s.label, label: s.label, color: CHART_PALETTE[i % CHART_PALETTE.length] })),
+      { dataKey: 'target', label: 'Target', color: CHART_NEUTRAL },
+    ];
+    return { chartData: data, chartSeries: seriesDefs };
+  }, [series, values.currentPortfolio, values.annualContribution, targetFv, displayMode, inflation]);
 
   // ── Editable inputs (shared with the empty-state render below) ─────────────
   const controls = (
@@ -213,6 +250,20 @@ export function FinancialIndependenceCard({
           ))}
         </tbody>
       </table>
+      {chartData.length > 1 && (
+        <div className="mt-4">
+          <div className="flex justify-end mb-2">
+            <RealNominalToggle mode={displayMode} onChange={setDisplayMode} />
+          </div>
+          <LineChartCard
+            title="Path to FI"
+            data={chartData}
+            xKey="year"
+            series={chartSeries}
+            yFormatter={formatCurrency}
+          />
+        </div>
+      )}
     </CalculatorCard>
   );
 }
