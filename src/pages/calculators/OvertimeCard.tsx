@@ -12,6 +12,13 @@ import { ResultRow } from '@/components/calculators/ResultRow';
 import { formatCurrency, formatPercent } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select';
+import {
   evaluateOvertimeLineItems,
   impliedHourlyRate,
   obbbaOvertimeDeduction,
@@ -23,9 +30,6 @@ import {
   type PaycheckPeriod,
 } from '@/lib/paycheck-periods';
 import type { Person } from '@/types/schema';
-
-const SELECT_CLASS =
-  'flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
 
 const STARTER_ROW: OvertimeRow = {
   hours: 8,
@@ -159,21 +163,19 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
         )}
       </div>
       <div className="space-y-1">
-        <label htmlFor="ot-period" className="text-sm font-medium">
-          Pay period
-        </label>
-        <select
-          id="ot-period"
-          className={SELECT_CLASS}
-          value={period}
-          onChange={(e) => setPeriod(e.target.value as PaycheckPeriod)}
-        >
-          {PAYCHECK_PERIODS.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.label}
-            </option>
-          ))}
-        </select>
+        <div className="text-sm font-medium">Pay period</div>
+        <Select value={period} onValueChange={(v) => setPeriod(v as PaycheckPeriod)}>
+          <SelectTrigger id="ot-period" aria-label="Pay period">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {PAYCHECK_PERIODS.map((p) => (
+              <SelectItem key={p.id} value={p.id}>
+                {p.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <p className="text-xs text-muted-foreground">
           Display only — hours are entered per row.
         </p>

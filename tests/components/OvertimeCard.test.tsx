@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
@@ -154,6 +155,7 @@ describe('OvertimeCard', () => {
   });
 
   it('switching multiplier preset to 2x increases OT gross', async () => {
+    const user = userEvent.setup();
     primeStores();
     render(<MemoryRouter><OvertimeCard /></MemoryRouter>);
 
@@ -161,9 +163,10 @@ describe('OvertimeCard', () => {
     const initialHeadline = await screen.findByTestId('ot-takehome');
     const initialValue = parseFloat(initialHeadline.textContent!.replace(/[$,]/g, ''));
 
-    // Switch the multiplier preset on row 0 from 1.5x to 2x.
-    const select = screen.getAllByLabelText(/Multiplier/i)[0];
-    fireEvent.change(select, { target: { value: '2' } });
+    // Switch the multiplier preset on row 0 from 1.5x to 2x via Radix combobox.
+    const row0 = screen.getByTestId('ot-row-0');
+    await user.click(within(row0).getByRole('combobox', { name: /multiplier/i }));
+    await user.click(await screen.findByRole('option', { name: /2x/i }));
 
     const newHeadline = await screen.findByTestId('ot-takehome');
     const newValue = parseFloat(newHeadline.textContent!.replace(/[$,]/g, ''));
@@ -285,9 +288,11 @@ describe('OvertimeCard', () => {
     const hoursInput = screen.getAllByLabelText(/Hours/i)[0];
     fireEvent.change(hoursInput, { target: { value: '4' } });
 
-    // Switch the preset to "Custom".
-    const presetSelect = screen.getAllByLabelText(/Multiplier/i)[0];
-    fireEvent.change(presetSelect, { target: { value: 'custom' } });
+    // Switch the preset to "Custom" via Radix combobox.
+    const row0 = screen.getByTestId('ot-row-0');
+    const user = userEvent.setup();
+    await user.click(within(row0).getByRole('combobox', { name: /multiplier/i }));
+    await user.click(await screen.findByRole('option', { name: /custom/i }));
 
     // The "Custom multiplier" input should now appear.
     const customInput = await screen.findByLabelText(/Custom multiplier/i);
