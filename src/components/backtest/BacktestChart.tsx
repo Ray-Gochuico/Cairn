@@ -1,4 +1,4 @@
-import { memo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import {
   LineChart,
   Line,
@@ -95,7 +95,10 @@ const BacktestLine = memo(
 BacktestLine.displayName = 'BacktestLine';
 
 // ── Main component ────────────────────────────────────────────────────────────
-export default function BacktestChart({
+// T2 perf fix: wrap in memo() so param-form keystrokes that don't change `result`
+// (e.g. user edits the goal field while reviewing a completed run) don't re-render
+// the chart. The memoized lineRows/bandRows inside also skip recomputation.
+function BacktestChartInner({
   result,
   goalAmount: _goalAmount,
   worstStartYear,
@@ -103,33 +106,40 @@ export default function BacktestChart({
   const [mode, setMode] = useState<'lines' | 'bands'>('lines');
 
   // ── Shared row dataset ────────────────────────────────────────────────────
-  const years = result.outcomes[0]?.annualBalances.map((_, i) => i) ?? [];
+  // T2 perf fix: memoize lineRows/bandRows on [result] so the mode toggle and
+  // every form keystroke after a run don't rebuild the 120-series dataset.
+  const { lineRows, bandRows } = useMemo(() => {
+    const years = result.outcomes[0]?.annualBalances.map((_, i) => i) ?? [];
 
-  const lineRows: Record<string, number>[] = years.map((y) => {
-    const row: Record<string, number> = {
+    const lRows: Record<string, number>[] = years.map((y) => {
+      const row: Record<string, number> = {
+        year: y,
+        p50: result.percentilesByYear.p50[y] ?? 0,
+      };
+      for (const o of result.outcomes) {
+        row[`y${o.startYear}`] = o.annualBalances[y] ?? 0;
+      }
+      return row;
+    });
+
+    const bRows = years.map((y) => ({
       year: y,
+      p10: result.percentilesByYear.p10[y] ?? 0,
+      band1025:
+        (result.percentilesByYear.p25[y] ?? 0) -
+        (result.percentilesByYear.p10[y] ?? 0),
+      band2575:
+        (result.percentilesByYear.p75[y] ?? 0) -
+        (result.percentilesByYear.p25[y] ?? 0),
+      band7590:
+        (result.percentilesByYear.p90[y] ?? 0) -
+        (result.percentilesByYear.p75[y] ?? 0),
       p50: result.percentilesByYear.p50[y] ?? 0,
-    };
-    for (const o of result.outcomes) {
-      row[`y${o.startYear}`] = o.annualBalances[y] ?? 0;
-    }
-    return row;
-  });
+    }));
 
-  const bandRows = years.map((y) => ({
-    year: y,
-    p10: result.percentilesByYear.p10[y] ?? 0,
-    band1025:
-      (result.percentilesByYear.p25[y] ?? 0) -
-      (result.percentilesByYear.p10[y] ?? 0),
-    band2575:
-      (result.percentilesByYear.p75[y] ?? 0) -
-      (result.percentilesByYear.p25[y] ?? 0),
-    band7590:
-      (result.percentilesByYear.p90[y] ?? 0) -
-      (result.percentilesByYear.p75[y] ?? 0),
-    p50: result.percentilesByYear.p50[y] ?? 0,
-  }));
+    return { lineRows: lRows, bandRows: bRows };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result]);
 
   // ── Shared axis / tooltip props ───────────────────────────────────────────
   const gridEl = (
@@ -413,3 +423,7 @@ export default function BacktestChart({
     </div>
   );
 }
+
+const BacktestChart = memo(BacktestChartInner);
+BacktestChart.displayName = 'BacktestChart';
+export default BacktestChart;
