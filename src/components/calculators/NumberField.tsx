@@ -31,7 +31,8 @@ export function NumberField({ id, label, value, onChange, suffix, step = 'any', 
             const raw = e.target.value;
             if (raw === '') return onChange(null);
             const n = Number(raw);
-            onChange(Number.isFinite(n) ? n : null);
+            if (!Number.isFinite(n)) return onChange(null);
+            onChange(min != null ? Math.max(min, n) : n);
           }}
         />
         {suffix && <span className="text-sm text-muted-foreground">{suffix}</span>}
