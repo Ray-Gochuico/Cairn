@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectTrigger,
@@ -63,7 +64,7 @@ export function OvertimeRowEditor({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
-          <div className="text-xs font-medium">Multiplier</div>
+          <Label htmlFor={presetId} className="text-xs font-medium">Multiplier</Label>
           <Select
             value={row.preset}
             onValueChange={(v) => {

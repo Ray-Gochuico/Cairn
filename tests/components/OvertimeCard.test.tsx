@@ -398,4 +398,30 @@ describe('OvertimeCard', () => {
 
     expect(headline.textContent).toBe(formatCurrency(expected.bonusTakeHome));
   });
+
+  // a11y T7 finding 3: the "Pay period" select caption must be a <Label> with
+  // htmlFor pointing at the SelectTrigger id="ot-period", so clicking the label
+  // focuses the trigger (and screen readers announce "Pay period" as its label).
+  it('Pay period caption is a <label> with htmlFor="ot-period"', async () => {
+    primeStores();
+    render(<MemoryRouter><OvertimeCard /></MemoryRouter>);
+    // Wait for the full card to render
+    await screen.findByTestId('ot-takehome');
+    // There's a <label> element whose htmlFor is "ot-period"
+    const label = document.querySelector('label[for="ot-period"]');
+    expect(label).not.toBeNull();
+    expect(label!.textContent).toMatch(/Pay period/i);
+  });
+
+  // a11y T7 finding 3: the OvertimeRowEditor's "Multiplier" caption must be
+  // a <label> with htmlFor pointing at the SelectTrigger (id="ot-row-0-preset").
+  it('Multiplier caption in OvertimeRowEditor is a <label> with htmlFor for the select trigger', async () => {
+    primeStores();
+    render(<MemoryRouter><OvertimeCard /></MemoryRouter>);
+    await screen.findByTestId('ot-takehome');
+    // The first row's multiplier select trigger has id="ot-row-0-preset"
+    const label = document.querySelector('label[for="ot-row-0-preset"]');
+    expect(label).not.toBeNull();
+    expect(label!.textContent).toMatch(/Multiplier/i);
+  });
 });

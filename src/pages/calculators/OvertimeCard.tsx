@@ -11,6 +11,7 @@ import { NumberField } from '@/components/calculators/NumberField';
 import { ResultRow } from '@/components/calculators/ResultRow';
 import { formatCurrency, formatPercent } from '@/lib/format';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectTrigger,
@@ -164,7 +165,7 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
         )}
       </div>
       <div className="space-y-1">
-        <div className="text-sm font-medium">Pay period</div>
+        <Label htmlFor="ot-period">Pay period</Label>
         <Select value={period} onValueChange={(v) => setPeriod(v as PaycheckPeriod)}>
           <SelectTrigger id="ot-period" aria-label="Pay period">
             <SelectValue />

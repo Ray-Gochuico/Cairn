@@ -60,3 +60,37 @@ it('uses titleText as aria-label fallback when title is a ReactNode', () => {
   ).toBeInTheDocument();
 });
 
+it('renders the title as an h2 heading', () => {
+  render(
+    <MemoryRouter>
+      <CalculatorCard title="My Calculator" headline="$0">
+        <div>Body</div>
+      </CalculatorCard>
+    </MemoryRouter>,
+  );
+  // Title must be accessible as a heading (role=heading level 2)
+  expect(screen.getByRole('heading', { level: 2, name: 'My Calculator' })).toBeInTheDocument();
+});
+
+it('h2 heading still present when title is a ReactNode; Hide aria-label still uses titleText', () => {
+  render(
+    <MemoryRouter>
+      <CalculatorCard
+        title={<span>Coast<strong>FI</strong></span>}
+        titleText="CoastFI"
+        headline="80%"
+        cardId="coast-fi"
+        onHide={() => {}}
+      >
+        <div>Body</div>
+      </CalculatorCard>
+    </MemoryRouter>,
+  );
+  // The h2 wrapping the ReactNode title should be present
+  expect(screen.getByRole('heading', { level: 2 })).toBeInTheDocument();
+  // The Hide button aria-label must still use titleText
+  expect(
+    screen.getByRole('button', { name: 'Hide CoastFI card' }),
+  ).toBeInTheDocument();
+});
+

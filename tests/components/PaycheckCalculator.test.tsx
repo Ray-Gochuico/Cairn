@@ -375,4 +375,19 @@ describe('PaycheckCalculator', () => {
     personsLoad.mockRestore();
     dependentsLoad.mockRestore();
   });
+
+  // a11y T7: The "Show as:" period switcher must have role="group" + aria-label
+  // so the four aria-pressed buttons are announced as a named group to screen
+  // readers (mirrors RealNominalToggle and SupplementalMethodToggle patterns).
+  it('period-switcher buttons are wrapped in role=group with label "Display period"', async () => {
+    primeStores();
+    render(<MemoryRouter><PaycheckCalculator /></MemoryRouter>);
+    // Wait for the results panel (period switcher only renders when there's a result)
+    await screen.findByTestId('paycheck-calc-takehome');
+    const group = screen.getByRole('group', { name: 'Display period' });
+    expect(group).toBeInTheDocument();
+    // All four period buttons must be inside the group
+    const buttons = Array.from(group.querySelectorAll('[aria-pressed]'));
+    expect(buttons.length).toBe(4);
+  });
 });

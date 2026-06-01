@@ -118,11 +118,12 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
   const hasVariance = values.variancePercent != null && (values.variancePercent ?? 0) > 0;
   // Red = pessimistic (rate - variance), blue = expected (mid),
   // green = optimistic (rate + variance). Single-line view uses blue.
+  // WCAG 1.4.1 opt-in: multi-series uses dash patterns in addition to colour.
   const chartSeries = hasVariance
     ? [
-        { dataKey: 'low', label: 'Low', color: CHART_PALETTE[2] },   // red
-        { dataKey: 'mid', label: 'Mid', color: CHART_PALETTE[0] },   // blue
-        { dataKey: 'high', label: 'High', color: CHART_PALETTE[4] }, // green
+        { dataKey: 'low',  label: 'Low',  color: CHART_PALETTE[2], strokeDasharray: '5 5' }, // red  / dashed
+        { dataKey: 'mid',  label: 'Mid',  color: CHART_PALETTE[0] },                          // blue / solid
+        { dataKey: 'high', label: 'High', color: CHART_PALETTE[4], strokeDasharray: '2 2' }, // green / dotted
       ]
     : [{ dataKey: 'mid', label: 'Balance', color: CHART_PALETTE[0] }];
 

@@ -109,12 +109,19 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
   const { chartData, chartSeries } = useMemo(() => {
     const horizon = Math.max(0, Math.round(values.yearsUntilRetirement));
     const scenarios = household?.growthScenarios ?? [];
+    // Dash patterns for WCAG 1.4.1 (opt-in, additive).
+    const DASH_PATTERNS = [undefined, '5 5', '2 2', '8 4'] as const;
     if (horizon < 1 || scenarios.length === 0) {
       return {
         chartData: [] as Record<string, number>[],
         chartSeries: [
-          ...scenarios.map((s, i) => ({ dataKey: s.label, label: s.label, color: CHART_PALETTE[i % CHART_PALETTE.length] })),
-          { dataKey: 'target', label: 'Required at retirement', color: CHART_NEUTRAL },
+          ...scenarios.map((s, i) => ({
+            dataKey: s.label,
+            label: s.label,
+            color: CHART_PALETTE[i % CHART_PALETTE.length],
+            strokeDasharray: DASH_PATTERNS[i % DASH_PATTERNS.length],
+          })),
+          { dataKey: 'target', label: 'Required at retirement', color: CHART_NEUTRAL, strokeDasharray: '2 2' as const },
         ],
       };
     }
@@ -134,8 +141,13 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
         ? toRealSeries(nominal, inflation, { valueKeys: scenarios.map((s) => s.label), yearKey: 'year' })
         : nominal;
     const seriesDefs = [
-      ...scenarios.map((s, i) => ({ dataKey: s.label, label: s.label, color: CHART_PALETTE[i % CHART_PALETTE.length] })),
-      { dataKey: 'target', label: 'Required at retirement', color: CHART_NEUTRAL },
+      ...scenarios.map((s, i) => ({
+        dataKey: s.label,
+        label: s.label,
+        color: CHART_PALETTE[i % CHART_PALETTE.length],
+        strokeDasharray: DASH_PATTERNS[i % DASH_PATTERNS.length],
+      })),
+      { dataKey: 'target', label: 'Required at retirement', color: CHART_NEUTRAL, strokeDasharray: '2 2' as const },
     ];
     return { chartData: data, chartSeries: seriesDefs };
   }, [

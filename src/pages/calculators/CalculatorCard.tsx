@@ -53,7 +53,7 @@ export function CalculatorCard({
     <Card ref={ref} className="min-w-0" style={{ gridRow: `span ${span}` }}>
       <CardHeader className="flex flex-row items-center justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-sm text-muted-foreground">{title}</div>
+          <h2 className="text-sm font-normal text-muted-foreground">{title}</h2>
           <div className="text-xl sm:text-2xl font-semibold tabular-nums break-words min-w-0">{headline}</div>
         </div>
         <div className="flex items-center gap-2 shrink-0">

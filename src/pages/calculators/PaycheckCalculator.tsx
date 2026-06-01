@@ -693,7 +693,7 @@ export default function PaycheckCalculator() {
 
               <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3 text-sm text-muted-foreground">
                 <span>Show as:</span>
-                <div className="inline-flex flex-wrap gap-1 rounded-lg border bg-muted p-1">
+                <div role="group" aria-label="Display period" className="inline-flex flex-wrap gap-1 rounded-lg border bg-muted p-1">
                   {(['ANNUAL', 'MONTHLY', 'SEMI_MONTHLY', 'BI_WEEKLY'] as PaycheckPeriod[]).map((pid) => {
                     const d = PAYCHECK_PERIODS.find((p) => p.id === pid)!;
                     const active = displayPeriod === pid;

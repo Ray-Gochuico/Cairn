@@ -386,4 +386,21 @@ describe('Retirement401kWithdrawalCard', () => {
       withdrawalAmount: 40000,
     });
   });
+
+  // a11y T7 finding 3: the "Plan type" radio group must have role="radiogroup"
+  // with aria-label="Plan type" — a bare <span> cannot label a group, and radio
+  // inputs without a group role are announced individually without context.
+  it('Plan type radios are wrapped in role="radiogroup" with aria-label="Plan type"', () => {
+    primeStores();
+    render(
+      <MemoryRouter>
+        <Retirement401kWithdrawalCard />
+      </MemoryRouter>,
+    );
+    const group = screen.getByRole('radiogroup', { name: 'Plan type' });
+    expect(group).toBeInTheDocument();
+    // Both radio inputs must be inside the group
+    const radios = Array.from(group.querySelectorAll('input[type="radio"]'));
+    expect(radios.length).toBe(2);
+  });
 });
