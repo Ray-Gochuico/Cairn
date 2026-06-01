@@ -15,7 +15,7 @@ import {
 import { useCalculatorState } from '@/lib/calculator-state';
 import type { Loan } from '@/types/schema';
 
-type Strategy = 'none' | 'snowball' | 'avalanche';
+export type Strategy = 'none' | 'snowball' | 'avalanche';
 
 interface DebtPayoffCardProps {
   cardId?: string;
@@ -40,8 +40,10 @@ interface LoanProjection {
  * Adding a true cascade requires a coupled month-by-month simulation across
  * all loans (the per-loan amortize() runs are independent today). Future
  * iteration.
+ *
+ * Exported for unit testing.
  */
-function pickStrategyTargetIndex(loans: Loan[], strategy: Strategy): number {
+export function pickStrategyTargetIndex(loans: Loan[], strategy: Strategy): number {
   if (loans.length === 0) return -1;
   if (strategy === 'none') return -1;
   let bestIdx = 0;
@@ -56,7 +58,8 @@ function pickStrategyTargetIndex(loans: Loan[], strategy: Strategy): number {
   return bestIdx;
 }
 
-function projectionsFor(
+/** Exported for unit testing. */
+export function projectionsFor(
   loans: Loan[],
   strategy: Strategy,
   extraTotal: number,

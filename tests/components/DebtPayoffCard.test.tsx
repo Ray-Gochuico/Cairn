@@ -4,7 +4,11 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useLoansStore } from '@/stores/loans-store';
 import { LoanType } from '@/types/enums';
-import { DebtPayoffCard } from '@/pages/calculators/DebtPayoffCard';
+import {
+  DebtPayoffCard,
+  pickStrategyTargetIndex,
+  projectionsFor,
+} from '@/pages/calculators/DebtPayoffCard';
 import type { Loan } from '@/types/schema';
 
 function makeLoan(overrides: Partial<Loan> = {}): Loan {
@@ -274,5 +278,134 @@ describe('DebtPayoffCard', () => {
     // Assert that sessionStorage persists both values under the kit key.
     const persisted = JSON.parse(sessionStorage.getItem('calc-state:debt-payoff')!);
     expect(persisted).toMatchObject({ strategy: 'avalanche', extraTotal: 300 });
+  });
+
+  it('avalanche targets the highest-APR loan first (distinct from snowball)', async () => {
+    // Two loans: identical balance but different rates.
+    // Snowball targets the smallest balance (both equal → first). Avalanche targets
+    // the HIGHEST rate, so loan 2 (18%) should get the extra and pay off before loan 1 (5%).
+    useLoansStore.setState({
+      loans: [
+        makeLoan({
+          id: 1,
+          name: 'Low rate',
+          currentBalance: 10000,
+          interestRate: 0.05,
+          termMonths: 60,
+        }),
+        makeLoan({
+          id: 2,
+          name: 'High rate',
+          currentBalance: 10000,
+          interestRate: 0.18,
+          termMonths: 60,
+        }),
+      ],
+      isLoading: false,
+      error: null,
+    });
+
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <DebtPayoffCard />
+      </MemoryRouter>,
+    );
+
+    // Switch to avalanche strategy.
+    await user.click(screen.getByRole('combobox', { name: /strategy/i }));
+    await user.click(await screen.findByRole('option', { name: /avalanche/i }));
+
+    // Apply a substantial extra payment.
+    const extraInput = screen.getByLabelText(/extra monthly payment/i);
+    await user.clear(extraInput);
+    await user.type(extraInput, '500');
+
+    const highRatePayoff = screen
+      .getByTestId('debt-loan-payoff-2')
+      .textContent!.trim();
+    const lowRatePayoff = screen
+      .getByTestId('debt-loan-payoff-1')
+      .textContent!.trim();
+
+    // Avalanche + $500 extra → high-rate (18%) loan pays off BEFORE the low-rate (5%) one.
+    // ISO dates compare lexicographically the same as chronologically.
+    expect(highRatePayoff < lowRatePayoff).toBe(true);
+  });
+});
+
+// ── Unit tests for the exported helper functions ────────────────────────────
+
+describe('pickStrategyTargetIndex', () => {
+  const loans: Loan[] = [
+    makeLoan({ id: 1, currentBalance: 5000, interestRate: 0.05 }),
+    makeLoan({ id: 2, currentBalance: 20000, interestRate: 0.18 }),
+    makeLoan({ id: 3, currentBalance: 1000, interestRate: 0.10 }),
+  ];
+
+  it('returns -1 for strategy "none"', () => {
+    expect(pickStrategyTargetIndex(loans, 'none')).toBe(-1);
+  });
+
+  it('returns -1 for an empty loan list', () => {
+    expect(pickStrategyTargetIndex([], 'snowball')).toBe(-1);
+    expect(pickStrategyTargetIndex([], 'avalanche')).toBe(-1);
+  });
+
+  it('snowball returns the index of the smallest-balance loan', () => {
+    // Loan 3 has the smallest balance (1000).
+    expect(pickStrategyTargetIndex(loans, 'snowball')).toBe(2);
+  });
+
+  it('avalanche returns the index of the highest-interest-rate loan', () => {
+    // Loan 2 has the highest rate (18%).
+    expect(pickStrategyTargetIndex(loans, 'avalanche')).toBe(1);
+  });
+
+  it('avalanche and snowball can return different indices (distinct strategies)', () => {
+    // With these loans: snowball → idx 2 (balance 1000), avalanche → idx 1 (rate 18%)
+    const snowballIdx = pickStrategyTargetIndex(loans, 'snowball');
+    const avalancheIdx = pickStrategyTargetIndex(loans, 'avalanche');
+    expect(snowballIdx).not.toBe(avalancheIdx);
+  });
+});
+
+describe('projectionsFor', () => {
+  const loans: Loan[] = [
+    makeLoan({ id: 1, name: 'Low rate', currentBalance: 10000, interestRate: 0.05, termMonths: 60 }),
+    makeLoan({ id: 2, name: 'High rate', currentBalance: 10000, interestRate: 0.18, termMonths: 60 }),
+  ];
+
+  it('returns one projection per loan', () => {
+    const result = projectionsFor(loans, 'none', 0);
+    expect(result).toHaveLength(2);
+  });
+
+  it('applies zero extra to all loans when strategy is "none"', () => {
+    const result = projectionsFor(loans, 'none', 500);
+    expect(result[0].extraApplied).toBe(0);
+    expect(result[1].extraApplied).toBe(0);
+  });
+
+  it('applies the extra payment only to the avalanche target (highest-rate loan)', () => {
+    // Loan 2 is index 1 (18% rate) → should receive extraApplied = 500
+    const result = projectionsFor(loans, 'avalanche', 500);
+    expect(result[0].extraApplied).toBe(0);   // 5% loan gets nothing extra
+    expect(result[1].extraApplied).toBe(500); // 18% loan gets the full extra
+  });
+
+  it('applies the extra payment only to the snowball target (smallest-balance loan)', () => {
+    // Both loans have equal balance; snowball picks index 0 (first in tie).
+    const result = projectionsFor(loans, 'snowball', 300);
+    expect(result[0].extraApplied).toBe(300); // first/tied-smallest gets the extra
+    expect(result[1].extraApplied).toBe(0);
+  });
+
+  it('each projection carries an amortization schedule with payment dates', () => {
+    const result = projectionsFor(loans, 'none', 0);
+    for (const p of result) {
+      expect(p.amortization.schedule.length).toBeGreaterThan(0);
+      expect(p.amortization.totalInterest).toBeGreaterThan(0);
+    }
   });
 });

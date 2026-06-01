@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -9,6 +9,14 @@ import { useContributionsStore } from '@/stores/contributions-store';
 import { FilingStatus, ContributionSource, SnapshotSource } from '@/types/enums';
 import { FinancialIndependenceCard } from '@/pages/calculators/FinancialIndependenceCard';
 import type { GrowthScenario } from '@/types/schema';
+
+// The "today" that all test logic is pinned to — must be a stable ISO string
+// so that:
+//  1. `sumLatestOnOrBefore(snapshots, todayIso)` in the card picks up
+//     the seeded 2026-04-01 snapshot (which is on-or-before 2026-05-14).
+//  2. The rolling-12-month contribution filter is deterministic: contributions
+//     generated as "month i before pinned today" are always inside the window.
+const PINNED_DATE = new Date('2026-05-14T12:00:00Z');
 
 const fourScenarios: GrowthScenario[] = [
   { label: 'Conservative', rate: 0.05 },
@@ -92,12 +100,12 @@ function primeStores(opts?: {
   });
 
   // Default: 12 monthly contributions of $2k for $24k/yr — placed within the
-  // last 12 months relative to today.
-  const today = new Date();
+  // last 12 months relative to PINNED_DATE (not the real clock) so the
+  // rolling-12-month filter in the card is fully deterministic.
   const defaultContribs =
     opts?.contributionAmounts ??
     Array.from({ length: 12 }, (_, i) => {
-      const d = new Date(today);
+      const d = new Date(PINNED_DATE);
       d.setMonth(d.getMonth() - i);
       return { amount: 2000, date: d.toISOString().slice(0, 10) };
     });
@@ -120,6 +128,15 @@ describe('FinancialIndependenceCard', () => {
     resetStores();
     // Clear any persisted calculator overrides from previous tests.
     sessionStorage.clear();
+    // Pin "today" to a stable date so the rolling-12-month contribution window
+    // and the on-or-before-today snapshot cutoff are fully deterministic.
+    // Mirrors the pattern used in CoastFiCard.test.tsx.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(PINNED_DATE);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('renders empty state when household is not set', () => {
@@ -264,7 +281,8 @@ describe('FinancialIndependenceCard', () => {
     primeStores();
     // A snapshot dated far in the future must NOT inflate the portfolio — the
     // retrofit uses sumLatestOnOrBefore(snapshots, today), not a raw max-per-account.
-    const future = new Date();
+    // Use PINNED_DATE + 5 years so the test stays deterministic under the fake clock.
+    const future = new Date(PINNED_DATE);
     future.setFullYear(future.getFullYear() + 5);
     const futureIso = future.toISOString().slice(0, 10);
     useSnapshotsStore.setState({
