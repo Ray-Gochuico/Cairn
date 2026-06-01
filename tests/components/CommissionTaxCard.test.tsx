@@ -260,6 +260,54 @@ describe('CommissionTaxCard', () => {
     expect(screen.getByText(/Enter a commission amount/i)).toBeInTheDocument();
   });
 
+  it('Flat 22% mode persists the method and changes the federal figure', async () => {
+    // Use a commission that straddles bracket boundaries so aggregate ≠ flat.
+    // Override the person's commission expectation to 0 so we drive it via the input.
+    primeStores();
+    usePersonsStore.setState((s) => ({
+      persons: s.persons.map((p) => ({ ...p, expectedCommission: 0 })),
+    }));
+
+    render(
+      <MemoryRouter>
+        <CommissionTaxCard />
+      </MemoryRouter>,
+    );
+
+    const input = screen.getByLabelText(/Annual commission/i);
+    // $200,000 commission: pushes into the 24% bracket while flat stays 22%
+    fireEvent.change(input, { target: { value: '200000' } });
+
+    // Wait until the card renders the populated (take-home) path
+    await screen.findByTestId('commission-takehome');
+
+    // Aggregate is the default — its button should be aria-pressed=true
+    const aggregateBtn = screen.getByRole('button', { name: /aggregate/i });
+    expect(aggregateBtn).toHaveAttribute('aria-pressed', 'true');
+
+    // Record the aggregate per-check federal value before switching
+    // Each ResultRow renders a label div followed by a value div in the same parent
+    const aggregateFederalLabel = screen.getByText('Estimated federal tax');
+    const aggregateFederalValue = aggregateFederalLabel.parentElement!.querySelector('.tabular-nums')!.textContent ?? '';
+
+    // Click Flat 22%
+    const flatBtn = screen.getByRole('button', { name: /flat/i });
+    fireEvent.click(flatBtn);
+
+    // sessionStorage must be persisted immediately
+    expect(sessionStorage.getItem('calc-suppl-method:commission-tax')).toBe('FLAT');
+
+    // The flat button should now be aria-pressed=true
+    expect(flatBtn).toHaveAttribute('aria-pressed', 'true');
+    // Aggregate button should now be aria-pressed=false
+    expect(aggregateBtn).toHaveAttribute('aria-pressed', 'false');
+
+    // Per-check federal in FLAT mode = 200000*0.22/12 = ~$3,666.67
+    // Aggregate at $100k base pushes into 24% → federal will be higher → they differ
+    const flatFederalValue = aggregateFederalLabel.parentElement!.querySelector('.tabular-nums')!.textContent ?? '';
+    expect(flatFederalValue).not.toBe(aggregateFederalValue);
+  });
+
   it('annual commission is the editable assumption; toggling frequency keeps it stable (rescale bug fixed)', async () => {
     primeStores(); // seeds a person with expectedCommission = 48000, MONTHLY
     render(<MemoryRouter><CommissionTaxCard /></MemoryRouter>);
