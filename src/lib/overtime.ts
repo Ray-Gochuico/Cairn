@@ -18,11 +18,14 @@ export interface OvertimeLineItem {
   holidayMultiplier: number | null;
   /** When true, holiday multiplies on top of base; otherwise the larger of the two wins. */
   stackMultipliers: boolean;
+  /** $/hr added to base rate before the multiplier (FLSA: part of the regular rate). */
+  shiftDifferential?: number;
 }
 
 export interface OvertimeLineItemResult {
   hours: number;
   effectiveMultiplier: number;
+  effectiveBaseRate: number;
   gross: number;
 }
 
@@ -39,14 +42,15 @@ export function evaluateOvertimeLineItems(
   if (baseHourlyRate <= 0) throw new Error('baseHourlyRate must be positive');
   const lineItems: OvertimeLineItemResult[] = items.map((item) => {
     if (item.hours < 0) throw new Error('hours cannot be negative');
+    const effectiveBaseRate = baseHourlyRate + (item.shiftDifferential ?? 0);
     let effectiveMultiplier = item.baseMultiplier;
     if (item.holidayMultiplier !== null) {
       effectiveMultiplier = item.stackMultipliers
         ? item.baseMultiplier * item.holidayMultiplier
         : Math.max(item.baseMultiplier, item.holidayMultiplier);
     }
-    const gross = item.hours * baseHourlyRate * effectiveMultiplier;
-    return { hours: item.hours, effectiveMultiplier, gross };
+    const gross = item.hours * effectiveBaseRate * effectiveMultiplier;
+    return { hours: item.hours, effectiveMultiplier, effectiveBaseRate, gross };
   });
   const totalGross = lineItems.reduce((sum, r) => sum + r.gross, 0);
   return { lineItems, totalGross };

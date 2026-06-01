@@ -31,6 +31,7 @@ export function OvertimeRowEditor({
   const customId = `ot-row-${index}-custom`;
   const holidayId = `ot-row-${index}-holiday`;
   const stackId = `ot-row-${index}-stack`;
+  const shiftDiffId = `ot-row-${index}-shiftdiff`;
 
   return (
     <div
@@ -54,6 +55,25 @@ export function OvertimeRowEditor({
             }}
           />
         </div>
+        <div className="space-y-1">
+          <label htmlFor={shiftDiffId} className="text-xs font-medium">
+            Shift diff ($/hr)
+          </label>
+          <Input
+            id={shiftDiffId}
+            type="number"
+            min="0"
+            step="0.25"
+            value={row.shiftDifferential === 0 || row.shiftDifferential === undefined ? '' : row.shiftDifferential}
+            onChange={(e) => {
+              const v = parseFloat(e.target.value);
+              onChange({ shiftDifferential: Number.isFinite(v) && v >= 0 ? v : 0 });
+            }}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <label htmlFor={presetId} className="text-xs font-medium">
             Multiplier

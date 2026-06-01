@@ -67,6 +67,25 @@ describe('evaluateOvertimeLineItems', () => {
       ),
     ).toThrow();
   });
+
+  it('adds the per-row shift differential to the base rate before the multiplier', () => {
+    const items: OvertimeLineItem[] = [
+      { hours: 8, baseMultiplier: 1.5, holidayMultiplier: null, stackMultipliers: false, shiftDifferential: 3 },
+    ];
+    const result = evaluateOvertimeLineItems(items, 25);
+    // (25 + 3) × 1.5 × 8 = 28 × 12 = 336
+    expect(result.lineItems[0].effectiveBaseRate).toBeCloseTo(28, 6);
+    expect(result.lineItems[0].gross).toBeCloseTo(336, 2);
+  });
+
+  it('treats a missing shift differential as 0 (back-compat)', () => {
+    const result = evaluateOvertimeLineItems(
+      [{ hours: 8, baseMultiplier: 1.5, holidayMultiplier: null, stackMultipliers: false }],
+      25,
+    );
+    expect(result.lineItems[0].effectiveBaseRate).toBeCloseTo(25, 6);
+    expect(result.lineItems[0].gross).toBeCloseTo(300, 2);
+  });
 });
 
 describe('impliedHourlyRate', () => {

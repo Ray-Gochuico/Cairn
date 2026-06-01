@@ -31,6 +31,7 @@ const STARTER_ROW: OvertimeRow = {
   preset: '1.5',
   holidayMultiplier: null,
   stackMultipliers: false,
+  shiftDifferential: 0,
 };
 
 function deriveBaseRate(person: Person): number {
@@ -75,6 +76,7 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
       baseMultiplier: r.baseMultiplier,
       holidayMultiplier: r.holidayMultiplier,
       stackMultipliers: r.stackMultipliers,
+      shiftDifferential: Math.max(0, r.shiftDifferential ?? 0),
     }));
     try {
       return evaluateOvertimeLineItems(items, baseHourlyRate);
@@ -250,7 +252,7 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
             className="flex justify-between gap-3 tabular-nums"
           >
             <span className="text-muted-foreground">
-              {li.hours} hrs × {formatCurrency(baseHourlyRate)} ×{' '}
+              {li.hours} hrs × {formatCurrency(li.effectiveBaseRate)} ×{' '}
               {li.effectiveMultiplier.toFixed(2)}
             </span>
             <span className="font-medium">{formatCurrency(li.gross)}</span>
