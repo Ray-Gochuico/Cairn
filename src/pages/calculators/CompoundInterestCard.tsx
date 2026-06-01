@@ -165,27 +165,15 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
           step="1"
           min={0}
         />
-        <div className="space-y-1">
-          <Label htmlFor="ci-rate">
-            <TermTooltip term="APY">APY</TermTooltip> (%)
-          </Label>
-          <div className="flex items-center gap-1">
-            <input
-              id="ci-rate"
-              type="number"
-              step="0.1"
-              aria-label="Annual percentage yield"
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              value={values.ratePercent === null ? '' : String(values.ratePercent)}
-              onChange={(e) => {
-                const raw = e.target.value;
-                if (raw === '') { setValue('ratePercent', 0); return; }
-                const n = Number(raw);
-                setValue('ratePercent', Number.isFinite(n) ? n : 0);
-              }}
-            />
-          </div>
-        </div>
+        <NumberField
+          id="ci-rate"
+          label={<TermTooltip term="APY">APY (%)</TermTooltip>}
+          ariaLabel="Annual percentage yield"
+          value={values.ratePercent}
+          onChange={(v) => setValue('ratePercent', v ?? 0)}
+          step="0.1"
+          min={0}
+        />
         <NumberField
           id="ci-variance"
           label="Variance ± (%)"

@@ -1,4 +1,3 @@
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -8,6 +7,7 @@ import {
   SelectItem,
 } from '@/components/ui/select';
 import type { OvertimeLineItem } from '@/lib/overtime';
+import { NumberField } from '@/components/calculators/NumberField';
 
 // Preset is carried alongside OvertimeLineItem fields in the row state so the
 // editor and parent share a single update channel via Partial<…>. (Cleaner
@@ -43,38 +43,22 @@ export function OvertimeRowEditor({
       data-testid={`ot-row-${index}`}
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <label htmlFor={hoursId} className="text-xs font-medium">
-            Hours
-          </label>
-          <Input
-            id={hoursId}
-            type="number"
-            min="0"
-            step="0.25"
-            value={row.hours === 0 ? '' : row.hours}
-            onChange={(e) => {
-              const v = parseFloat(e.target.value);
-              onChange({ hours: Number.isFinite(v) && v >= 0 ? v : 0 });
-            }}
-          />
-        </div>
-        <div className="space-y-1">
-          <label htmlFor={shiftDiffId} className="text-xs font-medium">
-            Shift diff ($/hr)
-          </label>
-          <Input
-            id={shiftDiffId}
-            type="number"
-            min="0"
-            step="0.25"
-            value={row.shiftDifferential === 0 || row.shiftDifferential === undefined ? '' : row.shiftDifferential}
-            onChange={(e) => {
-              const v = parseFloat(e.target.value);
-              onChange({ shiftDifferential: Number.isFinite(v) && v >= 0 ? v : 0 });
-            }}
-          />
-        </div>
+        <NumberField
+          id={hoursId}
+          label="Hours"
+          value={row.hours === 0 ? null : row.hours}
+          onChange={(v) => onChange({ hours: v ?? 0 })}
+          min={0}
+          step="0.25"
+        />
+        <NumberField
+          id={shiftDiffId}
+          label="Shift diff ($/hr)"
+          value={(row.shiftDifferential ?? 0) === 0 ? null : (row.shiftDifferential ?? 0)}
+          onChange={(v) => onChange({ shiftDifferential: v ?? 0 })}
+          min={0}
+          step="0.25"
+        />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -102,46 +86,25 @@ export function OvertimeRowEditor({
       </div>
 
       {row.preset === 'custom' && (
-        <div className="space-y-1">
-          <label htmlFor={customId} className="text-xs font-medium">
-            Custom multiplier
-          </label>
-          <Input
-            id={customId}
-            type="number"
-            min="0"
-            step="0.05"
-            value={row.baseMultiplier}
-            onChange={(e) => {
-              const v = parseFloat(e.target.value);
-              onChange({ baseMultiplier: Number.isFinite(v) ? v : 0 });
-            }}
-          />
-        </div>
+        <NumberField
+          id={customId}
+          label="Custom multiplier"
+          value={row.baseMultiplier}
+          onChange={(v) => onChange({ baseMultiplier: v ?? 0 })}
+          min={0}
+          step="0.05"
+        />
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <label htmlFor={holidayId} className="text-xs font-medium">
-            Holiday multiplier (optional)
-          </label>
-          <Input
-            id={holidayId}
-            type="number"
-            min="0"
-            step="0.05"
-            value={row.holidayMultiplier ?? ''}
-            onChange={(e) => {
-              const raw = e.target.value;
-              if (raw === '') {
-                onChange({ holidayMultiplier: null });
-                return;
-              }
-              const v = parseFloat(raw);
-              onChange({ holidayMultiplier: Number.isFinite(v) ? v : null });
-            }}
-          />
-        </div>
+        <NumberField
+          id={holidayId}
+          label="Holiday multiplier (optional)"
+          value={row.holidayMultiplier}
+          onChange={(v) => onChange({ holidayMultiplier: v })}
+          min={0}
+          step="0.05"
+        />
         <div className="flex items-end">
           <label
             htmlFor={stackId}

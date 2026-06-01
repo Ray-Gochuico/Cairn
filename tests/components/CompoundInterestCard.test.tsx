@@ -60,8 +60,20 @@ describe('CompoundInterestCard', () => {
 
   it('labels the rate input as APY (Wave-3 Task 5)', () => {
     render(<CompoundInterestCard />);
-    // The label uses a TermTooltip "APY" — visible text contains "APY".
+    // The label uses a TermTooltip "APY" — NumberField carries ariaLabel="Annual percentage yield"
+    // so the spinbutton has a flat string accessible name (the TermTooltip button is non-string).
     expect(screen.getByLabelText(/annual percentage yield/i)).toBeInTheDocument();
+  });
+
+  it('APY field clamps at 0 — negative rate cannot be entered (min-clamp gap closed)', async () => {
+    const user = userEvent.setup();
+    render(<CompoundInterestCard />);
+    const apyInput = screen.getByLabelText(/annual percentage yield/i) as HTMLInputElement;
+    await user.clear(apyInput);
+    await user.type(apyInput, '-5');
+    // NumberField's min=0 clamp: on blur/change the value is Math.max(0, -5) = 0.
+    // The input should not hold a value below 0 after the change fires.
+    expect(Number(apyInput.value)).toBeGreaterThanOrEqual(0);
   });
 
   it('annual compounding @ 7% input yields ~1.07^N * PV (APY semantics, no compounding amplification)', async () => {
