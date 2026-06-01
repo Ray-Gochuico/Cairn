@@ -5,7 +5,7 @@ import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { CalculatorCard } from './CalculatorCard';
 import { coastFi } from '@/lib/coast-fi';
 import { currentAge } from '@/lib/dates';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, formatPercent } from '@/lib/format';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import { useCalculatorState } from '@/lib/calculator-state';
 import { NumberField } from '@/components/calculators/NumberField';
@@ -275,7 +275,7 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
                 return (
                   <tr key={r.label} className="border-t">
                     <td className="py-2">{r.label}</td>
-                    <td className="py-2 tabular-nums">{(r.rate * 100).toFixed(1)}%</td>
+                    <td className="py-2 tabular-nums">{formatPercent(r.rate)}</td>
                     <td className="py-2 tabular-nums">{values.yearsUntilRetirement}</td>
                     <td className="py-2 tabular-nums">
                       {formatCurrency(r.coastNeededToday)}

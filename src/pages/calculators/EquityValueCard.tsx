@@ -208,10 +208,10 @@ export function EquityValueCard({ cardId, onHide }: EquityValueCardProps = {}) {
           ))}
         </tbody>
       </table>
-      <div className="pt-3 text-sm">
+      <div className="pt-3">
         <Link
           to="/equity-grants"
-          className="text-primary underline-offset-4 hover:underline"
+          className="text-sm text-primary underline underline-offset-4 hover:text-primary/80"
         >
           View all →
         </Link>

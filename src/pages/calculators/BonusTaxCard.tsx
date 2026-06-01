@@ -157,7 +157,7 @@ export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
         On a {formatCurrency(effectiveBonus)} bonus
         {values.frequency === 'QUARTERLY'
           ? ` (${formatCurrency(annualBonus)} annual)`
-          : ''}, marginal-rate-diff math gives:
+          : ''}, here's the estimated tax and take-home:
       </div>
       <div className="flex items-center justify-between mb-2">
         <span className="text-sm font-medium">Withholding method</span>

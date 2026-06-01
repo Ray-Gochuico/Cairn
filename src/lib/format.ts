@@ -11,7 +11,7 @@ export const formatPercent = (n: number): string =>
  *   |v| >= $1M          -> "$1.2M" / "$5M"  (1 decimal only if non-whole)
  *
  * For tooltip and detail-row dollar values prefer `formatCurrency` from
- * the same module, which renders the full "$80,000.00" form.
+ * the same module, which renders the full "$80,000" form (no cents).
  */
 export function formatCompactCurrency(v: number): string {
   const abs = Math.abs(v);

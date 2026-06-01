@@ -5,7 +5,7 @@ import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useContributionsStore } from '@/stores/contributions-store';
 import { CalculatorCard } from './CalculatorCard';
 import { financialIndependenceSeries } from '@/lib/financial-independence';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, formatPercent } from '@/lib/format';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import { useCalculatorState } from '@/lib/calculator-state';
 import { NumberField } from '@/components/calculators/NumberField';
@@ -233,9 +233,9 @@ export function FinancialIndependenceCard({
       <p className="text-sm text-muted-foreground mb-3">
         Target portfolio:{' '}
         <span className="tabular-nums">{formatCurrency(targetFv)}</span>{' '}
-        (= 12 × ${(values.monthlyExpenses ?? 0).toLocaleString()} /{' '}
+        (= 12 × {formatCurrency(values.monthlyExpenses ?? 0)} /{' '}
         <TermTooltip term="SWR">
-          {(values.withdrawalRatePct ?? 0).toFixed(1)}%
+          {formatPercent((values.withdrawalRatePct ?? 0) / 100)}
         </TermTooltip>
         )
       </p>
@@ -251,7 +251,7 @@ export function FinancialIndependenceCard({
           {series.map((s) => (
             <tr key={s.label} className="border-t">
               <td className="py-2">{s.label}</td>
-              <td className="py-2 tabular-nums">{(s.rate * 100).toFixed(1)}%</td>
+              <td className="py-2 tabular-nums">{formatPercent(s.rate)}</td>
               <td className="py-2 tabular-nums">
                 {Number.isFinite(s.years) ? s.years.toFixed(1) : '∞'}
               </td>

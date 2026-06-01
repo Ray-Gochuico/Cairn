@@ -41,7 +41,7 @@ const CARD_IDS = {
 
 // Human-friendly labels surfaced in the "manage" popover.
 const CARD_LABELS: Record<string, string> = {
-  [CARD_IDS.PAYCHECK]: 'Take-home paycheck',
+  [CARD_IDS.PAYCHECK]: 'Paycheck',
   [CARD_IDS.BONUS]: 'Bonus tax',
   [CARD_IDS.COMMISSION]: 'Commission tax',
   [CARD_IDS.OVERTIME]: 'Overtime',

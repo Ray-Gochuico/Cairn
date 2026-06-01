@@ -210,10 +210,11 @@ describe('CoastFiCard', () => {
     expect(screen.getByText('Optimistic')).toBeInTheDocument();
     expect(screen.getByText('Bull')).toBeInTheDocument();
 
-    expect(screen.getByText('5.0%')).toBeInTheDocument();
-    expect(screen.getByText('6.0%')).toBeInTheDocument();
-    expect(screen.getByText('7.0%')).toBeInTheDocument();
-    expect(screen.getByText('8.0%')).toBeInTheDocument();
+    // formatPercent strips trailing zeros (maximumFractionDigits:1) → "5%" not "5.0%".
+    expect(screen.getByText('5%')).toBeInTheDocument();
+    expect(screen.getByText('6%')).toBeInTheDocument();
+    expect(screen.getByText('7%')).toBeInTheDocument();
+    expect(screen.getByText('8%')).toBeInTheDocument();
   });
 
   it('uses the latest snapshot per account when multiple are seeded', () => {
@@ -449,9 +450,9 @@ describe('CoastFiCard', () => {
 
   it('seeds current portfolio from the latest snapshot on-or-before today (excludes future)', () => {
     primeStores();
-    const future = new Date();
-    future.setFullYear(future.getFullYear() + 5);
-    const futureIso = future.toISOString().slice(0, 10);
+    // Use a pinned future date relative to the fake-timer anchor (2026-05-14) so
+    // this test doesn't silently break if system time advances past the snapshot.
+    const futureIso = '2031-05-14';
     useSnapshotsStore.setState({
       snapshots: [
         { id: 1, accountId: 1, snapshotDate: '2024-01-01', totalValue: 250000, source: SnapshotSource.MANUAL },

@@ -215,6 +215,7 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
                   {formatCurrency(p.loan.currentBalance)}
                 </td>
                 <td className="py-2 tabular-nums">
+                  {/* Intentionally 2 dp for loan APRs (e.g. 5.25%) — standard precision for lending disclosures. */}
                   {(p.loan.interestRate * 100).toFixed(2)}%
                 </td>
                 <td
