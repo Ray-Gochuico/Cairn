@@ -67,6 +67,16 @@ Tax thresholds shown reflect the **2026 tax year** and will become outdated. Alw
 
 **Consult a tax professional or fee-only fiduciary advisor before executing any of these strategies.**`;
 
+const BACKTEST_TEXT_v1_0 = `**About the Historical Backtest**
+
+This view replays your plan against U.S. market data from 1871 to today. Each line is one historical starting year — what would have happened to someone who began this exact plan in 1929, 1966, 2000, and so on.
+
+**Past results do not predict future returns.** This is the most important sentence on this page. The U.S. market has only ~120 *overlapping* 30-year windows since 1871 — they share most of their years, so they are **not independent samples**, and a "94 of 120" success count is **not a 94/120 probability**. The next 30 years will be a new window not in this dataset. Backtests systematically miss tail risks that have not happened yet (a U.S. default, a multi-decade stagnation, a regime change in tax law).
+
+The **success rate is a count of past outcomes, not a probability** of future success. Raising the *goal ending amount* above $0 makes "success" stricter — you are asking the plan to also leave a margin — but it stays a tally of what *did* happen, never a forecast of what will.
+
+Inputs are inflation-adjusted using historical CPI; results are shown in real dollars. **Tax brackets are held at 2026 levels** across the entire 1871-to-present replay — historical brackets are not reconstructed, so any income-tax treatment is approximate. Returns are nominal index returns before fees and fund-specific costs; your real portfolio diverges based on expense ratios and asset location. See *Settings → Disclosures* for the full assumption set.`;
+
 const LEARNING_TEXT_v1_0 = `**About the Learning feature**
 
 Daily trivia questions are written for general financial-literacy education. They are **not personalized advice** and do not account for your specific situation, jurisdiction, or filing year.
@@ -110,6 +120,13 @@ export const DISCLOSURES = {
     body: LEARNING_TEXT_v1_0,
     acceptanceCheckboxLabel:
       'I understand the trivia content is general financial-literacy education, not advice, and I will verify any specifics before acting.',
+  } satisfies DisclosureDocument,
+  backtest: {
+    version: '1.0',
+    title: 'About the Historical Backtest',
+    body: BACKTEST_TEXT_v1_0,
+    acceptanceCheckboxLabel:
+      'I understand the backtest reports historical outcomes only and is not a prediction of future performance.',
   } satisfies DisclosureDocument,
 } as const;
 
