@@ -3,6 +3,13 @@ import { ContributionsRepo } from '@/domain/contributions';
 import { getDatabase } from '@/db/db';
 import type { Contribution } from '@/types/schema';
 
+/**
+ * In-flight de-dupe: if a load() is already in progress, return its promise
+ * instead of starting a second DB round-trip. Cleared after settle so later
+ * load() calls (after a CRUD mutation) still re-fetch.
+ */
+let contributionsInflight: Promise<void> | null = null;
+
 interface ContributionsState {
   contributions: Contribution[];
   isLoading: boolean;
@@ -19,14 +26,20 @@ export const useContributionsStore = create<ContributionsState>((set, get) => ({
   error: null,
 
   load: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const repo = new ContributionsRepo(getDatabase());
-      const contributions = await repo.listAll();
-      set({ contributions, isLoading: false });
-    } catch (e) {
-      set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load' });
-    }
+    if (contributionsInflight) return contributionsInflight;
+    contributionsInflight = (async () => {
+      set({ isLoading: true, error: null });
+      try {
+        const repo = new ContributionsRepo(getDatabase());
+        const contributions = await repo.listAll();
+        set({ contributions, isLoading: false });
+      } catch (e) {
+        set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load' });
+      } finally {
+        contributionsInflight = null;
+      }
+    })();
+    return contributionsInflight;
   },
 
   create: async (contribution) => {

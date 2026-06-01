@@ -27,7 +27,7 @@ interface BonusTaxCardProps {
 
 export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
   const { household } = useHouseholdStore();
-  const { persons } = usePersonsStore();
+  const persons = usePersonsStore((s) => s.persons);
   const tax = useHouseholdTaxContext();
 
   const seedPerson = persons.find((p) => (p.expectedBonus ?? 0) > 0) ?? persons[0] ?? null;

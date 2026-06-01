@@ -29,9 +29,9 @@ export function FinancialIndependenceCard({
   onHide,
 }: FinancialIndependenceCardProps = {}) {
   const { household } = useHouseholdStore();
-  const { persons } = usePersonsStore();
-  const { snapshots } = useSnapshotsStore();
-  const { contributions } = useContributionsStore();
+  const persons = usePersonsStore((s) => s.persons);
+  const snapshots = useSnapshotsStore((s) => s.snapshots);
+  const contributions = useContributionsStore((s) => s.contributions);
 
   // ── Real-data defaults (memoized from the stores) ──────────────────────────
   const defaults = useMemo(() => {

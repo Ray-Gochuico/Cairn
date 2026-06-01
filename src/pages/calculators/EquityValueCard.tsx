@@ -25,8 +25,8 @@ interface PersonTotal {
 }
 
 export function EquityValueCard({ cardId, onHide }: EquityValueCardProps = {}) {
-  const { equityGrants } = useEquityGrantsStore();
-  const { persons } = usePersonsStore();
+  const equityGrants = useEquityGrantsStore((s) => s.equityGrants);
+  const persons = usePersonsStore((s) => s.persons);
 
   // Stable "today" so computeEquityValue isn't fed a fresh Date on every
   // memo recompute when the inputs change.

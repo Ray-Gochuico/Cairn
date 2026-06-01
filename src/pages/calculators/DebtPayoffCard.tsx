@@ -81,7 +81,7 @@ export function projectionsFor(
 }
 
 export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
-  const { loans } = useLoansStore();
+  const loans = useLoansStore((s) => s.loans);
 
   const defaults = useMemo(() => ({ strategy: 'none' as Strategy, extraTotal: 0 }), []);
   const { values, setValue, reset, isOverridden } = useCalculatorState(

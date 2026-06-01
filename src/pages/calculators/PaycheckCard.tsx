@@ -18,8 +18,8 @@ interface PaycheckCardProps {
 
 export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
   const { household } = useHouseholdStore();
-  const { persons } = usePersonsStore();
-  const { dependents } = useDependentsStore();
+  const persons = usePersonsStore((s) => s.persons);
+  const dependents = useDependentsStore((s) => s.dependents);
   const taxItems = useTaxRulesStore((s) => s.items);
   const [period, setPeriod] = useState<PaycheckPeriod>('MONTHLY');
 

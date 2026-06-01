@@ -32,8 +32,8 @@ interface ScenarioRow {
 
 export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
   const { household } = useHouseholdStore();
-  const { persons } = usePersonsStore();
-  const { snapshots } = useSnapshotsStore();
+  const persons = usePersonsStore((s) => s.persons);
+  const snapshots = useSnapshotsStore((s) => s.snapshots);
 
   // ── Real-data defaults (memoized from the stores) ──────────────────────────
   const defaults = useMemo(() => {

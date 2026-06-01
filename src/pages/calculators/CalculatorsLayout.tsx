@@ -67,7 +67,7 @@ export default function CalculatorsLayout() {
   // on whether the relevant inputs exist. Adding a person filter at the
   // layout level would shadow those behaviours, so it stays out-of-scope for
   // Phase 3.
-  const { persons } = usePersonsStore();
+  const persons = usePersonsStore((s) => s.persons);
   const showOvertime = persons.some(
     (p) => p.employmentType === 'HOURLY' || p.employmentType === 'SALARY_WITH_OT',
   );

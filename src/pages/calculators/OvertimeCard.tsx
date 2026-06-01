@@ -62,8 +62,8 @@ interface OvertimeCardProps {
 
 export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
   const { household } = useHouseholdStore();
-  const { persons } = usePersonsStore();
-  const { dependents } = useDependentsStore();
+  const persons = usePersonsStore((s) => s.persons);
+  const dependents = useDependentsStore((s) => s.dependents);
   const tax = useHouseholdTaxContext();
 
   const eligiblePerson = useMemo(() => persons.find(isEligible), [persons]);
