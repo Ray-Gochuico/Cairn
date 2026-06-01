@@ -11,6 +11,13 @@ import { useCalculatorState } from '@/lib/calculator-state';
 import { NumberField } from '@/components/calculators/NumberField';
 import { sumLatestOnOrBefore } from '@/lib/growth-horizons';
 import { effectiveSwr } from '@/lib/scenarios/effective-swr';
+import LineChartCard from '@/components/charts/LineChartCard';
+import { balanceTrajectory } from '@/lib/projection-trajectory';
+import { toRealSeries } from '@/lib/calculators/real-mode';
+import { RealNominalToggle } from '@/components/calculators/RealNominalToggle';
+import { useChartDisplayMode } from '@/lib/calculators/use-chart-display-mode';
+import { useSettingsStore } from '@/stores/settings-store';
+import { CHART_PALETTE, CHART_NEUTRAL } from '@/components/charts/palette';
 
 interface CoastFiCardProps {
   cardId?: string;
@@ -55,6 +62,10 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
 
   const { values, setValue, reset, isOverridden } = useCalculatorState(cardId ?? 'coast-fi', defaults);
 
+  // ── Chart display mode (hooks MUST be before the early return) ─────────────
+  const [displayMode, setDisplayMode] = useChartDisplayMode(cardId ?? 'coast-fi');
+  const inflation = useSettingsStore((s) => s.settings?.defaultInflation) ?? 0.025;
+
   // ── Empty-state guard ──────────────────────────────────────────────────────
   // withdrawalRate<=0 stays editable (targetFv guard → 0 rows) rather than
   // routing to empty-state, so the user can correct it inline.
@@ -90,6 +101,23 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
       yearsUntilRetirement: values.yearsUntilRetirement,
     }),
   }));
+
+  // ── Chart data (plain consts — small N, no memo needed) ───────────────────
+  const horizon = Math.max(0, Math.round(values.yearsUntilRetirement));
+  const scenarios = household?.growthScenarios ?? [];
+  const nominalChart = horizon < 1 ? [] : Array.from({ length: horizon + 1 }, (_, t) => {
+    const point: Record<string, number> = { year: t, target: targetFv };
+    for (const s of scenarios) point[s.label] = balanceTrajectory(values.currentPortfolio, 0, s.rate, horizon)[t].balance;
+    return point;
+  });
+  const chartData =
+    displayMode === 'REAL'
+      ? toRealSeries(nominalChart, inflation, { valueKeys: scenarios.map((s) => s.label), yearKey: 'year' })
+      : nominalChart;
+  const chartSeries = [
+    ...scenarios.map((s, i) => ({ dataKey: s.label, label: s.label, color: CHART_PALETTE[i % CHART_PALETTE.length] })),
+    { dataKey: 'target', label: 'Required at retirement', color: CHART_NEUTRAL },
+  ];
 
   // ── Headline ───────────────────────────────────────────────────────────────
   const moderate =
@@ -218,6 +246,20 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
               })}
             </tbody>
           </table>
+          {chartData.length > 1 && (
+            <div className="mt-4">
+              <div className="flex justify-end mb-2">
+                <RealNominalToggle mode={displayMode} onChange={setDisplayMode} />
+              </div>
+              <LineChartCard
+                title="Coasting to retirement"
+                data={chartData}
+                xKey="year"
+                series={chartSeries}
+                yFormatter={formatCurrency}
+              />
+            </div>
+          )}
         </>
       )}
     </CalculatorCard>
