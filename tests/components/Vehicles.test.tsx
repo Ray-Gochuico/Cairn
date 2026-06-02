@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useVehiclesStore } from '@/stores/vehicles-store';
@@ -446,6 +446,41 @@ describe('Vehicles page', () => {
     const editLink = screen.getByRole('link', { name: /edit lease/i });
     expect(editLink).toHaveAttribute('href', '/inputs/vehicle-leases');
     expect(screen.getByRole('button', { name: /^Remove$/i })).toBeInTheDocument();
+  });
+
+  it('deleting a lease is gated behind a confirm dialog', async () => {
+    const removeSpy = vi.fn(async () => {});
+    useVehicleLeasesStore.setState({
+      vehicleLeases: [
+        {
+          id: 1,
+          householdId: 1,
+          ownerPersonId: null,
+          name: 'Commuter EV',
+          monthlyAmount: 450,
+          startDate: '2025-03-01',
+          endDate: '2028-02-28',
+        },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+      remove: removeSpy,
+    } as never);
+
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByText('Commuter EV');
+    // Clicking Remove opens a confirm — store.remove is NOT called yet.
+    await user.click(screen.getByRole('button', { name: /^Remove$/i }));
+    expect(removeSpy).not.toHaveBeenCalled();
+    expect(await screen.findByText(/delete commuter ev\?/i)).toBeInTheDocument();
+
+    // Confirm fires the store remove.
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /^delete$/i }));
+    await waitFor(() => expect(removeSpy).toHaveBeenCalledWith(1));
   });
 
   it('renders the leases total as an aggregate card with a per-mo figure and meta', async () => {

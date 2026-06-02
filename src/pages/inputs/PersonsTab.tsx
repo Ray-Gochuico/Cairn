@@ -111,7 +111,7 @@ export default function PersonsTab() {
                       const ok = await confirm({
                         title: `Delete ${p.name}?`,
                         description:
-                          'This permanently deletes their equity grants, and unlinks them from any accounts, loans, properties, vehicles, and goals they own. This can’t be undone.',
+                          'This permanently deletes their equity grants, and unlinks them from any accounts, loans, properties, vehicles, goals, rent/housing payments, leases, and transactions they’re tied to. This can’t be undone.',
                       });
                       if (ok) await remove(p.id!);
                     }}

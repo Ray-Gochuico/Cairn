@@ -32,6 +32,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { ValueEditor, EquityRow } from '@/components/AssetCardParts';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import ValueHistorySection from '@/components/inputs/ValueHistorySection';
@@ -276,7 +277,7 @@ function VehicleGasCard({
 interface LeaseCardProps {
   lease: VehicleLease;
   ownerLabel: string;
-  onRemove: () => void;
+  onRemove: () => void | Promise<void>;
 }
 
 function LeaseCard({ lease, ownerLabel, onRemove }: LeaseCardProps) {
@@ -358,6 +359,7 @@ export default function Vehicles() {
 
   const vehicleLeases = useVehicleLeasesStore((s) => s.vehicleLeases);
   const loadVehicleLeases = useVehicleLeasesStore((s) => s.load);
+  const { confirm, dialog } = useConfirm();
 
   const [editing, setEditing] = useState<EditTarget>(null);
 
@@ -580,9 +582,13 @@ export default function Vehicles() {
                     ? 'Joint'
                     : (personNameById.get(l.ownerPersonId) ?? 'Unknown')
                 }
-                onRemove={() =>
-                  void useVehicleLeasesStore.getState().remove(l.id!)
-                }
+                onRemove={async () => {
+                  const ok = await confirm({
+                    title: `Delete ${l.name}?`,
+                    description: 'This permanently removes this lease. This can’t be undone.',
+                  });
+                  if (ok) await useVehicleLeasesStore.getState().remove(l.id!);
+                }}
               />
             ))}
             <Link
@@ -596,6 +602,7 @@ export default function Vehicles() {
           </div>
         </section>
       )}
+      {dialog}
     </div>
   );
 }

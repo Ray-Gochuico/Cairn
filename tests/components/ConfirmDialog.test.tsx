@@ -86,6 +86,47 @@ describe('ConfirmDialog (controlled component)', () => {
     // The shared Button's destructive variant maps to the bg-destructive class.
     expect(confirmBtn.className).toMatch(/destructive/);
   });
+
+  it('Escape routes through onCancel (not onConfirm)', async () => {
+    const onConfirm = vi.fn();
+    const onCancel = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ConfirmDialog
+        open
+        title="Delete this account?"
+        description="desc"
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />,
+    );
+    await user.keyboard('{Escape}');
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it('clicking the overlay routes through onCancel (not onConfirm)', async () => {
+    const onConfirm = vi.fn();
+    const onCancel = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ConfirmDialog
+        open
+        title="Delete this account?"
+        description="desc"
+        onConfirm={onConfirm}
+        onCancel={onCancel}
+      />,
+    );
+    // Radix renders a modal overlay as a sibling of the content. A
+    // pointer-down on it dismisses the dialog → onOpenChange(false) →
+    // onCancel. Query it by its data-state attribute (it has no role).
+    const overlay = document.querySelector('[data-state="open"].fixed.inset-0');
+    expect(overlay).not.toBeNull();
+    await user.click(overlay as Element);
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
 });
 
 describe('useConfirm hook', () => {

@@ -89,7 +89,10 @@ function validRoutePaths(): Set<string> {
     : src;
   for (const m of srcWithoutInputsChildren.matchAll(/path:\s*'([^']*)'/g)) {
     const p = m[1];
-    if (p === '' || p === '*' || p === 'inputs' || p === '/setup') continue;
+    if (p === '' || p === '*' || p === 'inputs') continue;
+    // Already-absolute literals (the root '/' and '/setup') are added
+    // explicitly above; prefixing them again would emit a bogus '//'.
+    if (p.startsWith('/')) continue;
     paths.add(`/${p}`);
   }
 

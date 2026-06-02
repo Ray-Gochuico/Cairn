@@ -3,6 +3,7 @@ import { useAccountsStore } from '@/stores/accounts-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
 import { useTickersStore } from '@/stores/tickers-store';
 import { Card, CardContent } from '@/components/ui/card';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import HoldingForm, { type HoldingFormValues } from '@/components/forms/HoldingForm';
 import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 import { enrichTickerIfMissing } from '@/market/ticker-enrichment';
@@ -24,6 +25,7 @@ export default function HoldingsTab() {
   const { accounts, load: loadAccounts } = useAccountsStore();
   const { holdings, load: loadHoldings, create, update, remove } = useHoldingsStore();
   const loadTickers = useTickersStore((s) => s.load);
+  const { confirm, dialog } = useConfirm();
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -175,7 +177,12 @@ export default function HoldingsTab() {
                       });
                     }}
                     onDelete={async () => {
-                      await remove(h.id!);
+                      const ok = await confirm({
+                        title: `Delete ${h.ticker}?`,
+                        description:
+                          'This removes the position — its share count, cost basis, and target allocation. This can’t be undone.',
+                      });
+                      if (ok) await remove(h.id!);
                     }}
                     onValidateSubmit={buildValidator(h.id!)}
                     allowMarginHint={selectedAccount?.allowMargin ?? false}
@@ -213,6 +220,7 @@ export default function HoldingsTab() {
           </div>
         </CardContent>
       </Card>
+      {dialog}
     </div>
   );
 }

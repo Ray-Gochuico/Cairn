@@ -34,6 +34,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { ValueEditor, EquityRow } from '@/components/AssetCardParts';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import ValueHistorySection from '@/components/inputs/ValueHistorySection';
@@ -285,7 +286,7 @@ function PropertyUtilitiesCard({
 interface RentalCardProps {
   rental: HousingPayment;
   ownerLabel: string;
-  onRemove: () => void;
+  onRemove: () => void | Promise<void>;
 }
 
 function RentalCard({ rental, ownerLabel, onRemove }: RentalCardProps) {
@@ -367,6 +368,7 @@ export default function Property() {
 
   const housingPayments = useHousingPaymentsStore((s) => s.housingPayments);
   const loadHousingPayments = useHousingPaymentsStore((s) => s.load);
+  const { confirm, dialog } = useConfirm();
 
   const [editing, setEditing] = useState<EditTarget>(null);
 
@@ -590,9 +592,13 @@ export default function Property() {
                     ? 'Joint'
                     : (personNameById.get(r.ownerPersonId) ?? 'Unknown')
                 }
-                onRemove={() =>
-                  void useHousingPaymentsStore.getState().remove(r.id!)
-                }
+                onRemove={async () => {
+                  const ok = await confirm({
+                    title: `Delete ${r.name}?`,
+                    description: 'This permanently removes this rent/housing payment. This can’t be undone.',
+                  });
+                  if (ok) await useHousingPaymentsStore.getState().remove(r.id!);
+                }}
               />
             ))}
             <Link
@@ -606,6 +612,7 @@ export default function Property() {
           </div>
         </section>
       )}
+      {dialog}
     </div>
   );
 }
