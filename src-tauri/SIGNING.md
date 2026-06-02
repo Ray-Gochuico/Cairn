@@ -30,10 +30,15 @@ format the Tauri macOS updater requires; see RELEASING.md for the why).
    in the same folder.
 3. Drag `Cairn.app` into the `Applications` folder.
 4. First-launch only: **right-click `Cairn.app` → Open → "Open" again** in the
-   Gatekeeper dialog. macOS remembers the approval; subsequent launches are
-   double-click.
-5. Alternative: `xattr -d com.apple.quarantine /Applications/Cairn.app`
-   from Terminal removes the quarantine flag entirely (no right-click needed).
+   Gatekeeper dialog. This is the recommended way in — it clears Gatekeeper
+   while keeping macOS's quarantine/tamper check intact and records the user's
+   consent. macOS remembers the approval; subsequent launches are double-click.
+
+> **Advanced — only if you trust the source.** `xattr -d com.apple.quarantine
+> /Applications/Cairn.app` clears Gatekeeper from Terminal, but it strips the
+> quarantine flag outright, which **removes macOS's tamper check** on this
+> unsigned download. Don't recommend it as the default path; the right-click →
+> Open flow above is safer and just as permanent.
 
 ## Cross-target builds
 

@@ -66,28 +66,87 @@ enum CrumbState {
     Cooldown { error: String, until: Instant },
 }
 
-/// Browser-style User-Agent. Yahoo's `getcrumb` endpoint gates on the UA:
-/// requests from a non-browser UA are refused (HTTP 429 even when the IP is
-/// not rate-limited), which silently breaks the `quoteSummary` path the fund
-/// composition feature depends on (topHoldings + sectorWeightings — Yahoo's
-/// Morningstar data). The chart endpoint (prices) is unauthenticated and does
-/// NOT gate on UA, which is why prices kept working while composition didn't.
+/// User-Agent posture: **confined spoof**.
 ///
-/// History: an "honest" `Cairn (...)` UA was tried (commit 65034b5, per Legal
-/// review 2026-05-26 finding #1, which flagged a spoofed UA as the most
-/// visible ToS-violation optic — Yahoo ToS § 2(d)(ix)). That honest UA made
-/// getcrumb refuse the app entirely, so fund holdings/sectors never populated.
+/// Two requests classes hit Yahoo with different UA needs, so we split the UA
+/// by request kind (see `RequestKind` / `user_agent_for`) instead of sending
+/// one UA on everything:
 ///
-/// TRADEOFF (deliberate): this reverts to a browser UA to restore composition
-/// data. That reintroduces the ToS optic the Legal review raised. For this
-/// personal/friends-only build it's an accepted call — the same review rated
-/// real-world exposure "very low" and listed "keep Yahoo" as an option. The
-/// proper mitigation, when there's time, is the Settings → Advanced opt-in
-/// toggle the review recommended (default off, with a one-time ToS modal), so
-/// each user owns the choice to make these requests rather than the app
-/// doing it unconditionally.
-const USER_AGENT: &str =
+///   * **Price/chart path** (`RequestKind::Price`) — Yahoo's `v8/finance/chart`
+///     endpoint is unauthenticated and does NOT gate on the UA, so it works
+///     with an honest UA. We send `PRICE_USER_AGENT` here. (In this build the
+///     price/chart fetch is actually issued JS-side via `plugin-http`, not
+///     through this reqwest client — see `src/market/yahoo-client.ts`. The
+///     honest UA is wired through `user_agent_for` regardless so that this is
+///     the default for the reqwest `Client` and so any price-class request
+///     routed through Rust stays honest.)
+///
+///   * **quoteSummary / fund-composition path** (`RequestKind::Composition`) —
+///     the `getcrumb` + cookie pre-flight and the `v10/finance/quoteSummary`
+///     fetch DO gate on the UA: a non-browser UA is refused (HTTP 429 even when
+///     the IP is not rate-limited), which silently breaks fund composition
+///     (topHoldings + sectorWeightings — Yahoo's Morningstar data that feeds
+///     the Investments page's sector/per-ticker concentration donuts). This
+///     path keeps the spoofed Chrome UA (`COMPOSITION_USER_AGENT`); it is
+///     load-bearing.
+///
+/// History: an "honest" `Cairn (...)` UA was once sent on EVERY request
+/// (commit 65034b5, per Legal review 2026-05-26 finding #1, which flagged a
+/// spoofed UA as the most visible ToS-violation optic — Yahoo ToS § 2(d)(ix)).
+/// That honest UA made getcrumb refuse the app, so fund holdings/sectors never
+/// populated; it was reverted to a blanket Chrome UA to restore composition.
+///
+/// This is the middle ground: the spoof is now **confined** to the composition
+/// path that actually requires it, and the price path — the bulk of traffic —
+/// is honest again.
+///
+/// RESIDUAL ACCEPTED RISK (deliberate): the composition path still sends a
+/// spoofed Chrome UA, so the ToS optic the Legal review raised is not fully
+/// removed — only narrowed to the requests that won't function without it. For
+/// this personal/friends-only build it's an accepted call: the same review
+/// rated real-world exposure "very low" and listed "keep Yahoo" as an option.
+/// The fuller mitigation, deferred as a UX/product decision for the maintainer,
+/// is a Settings → Advanced opt-in toggle (default off, one-time ToS modal) so
+/// each user owns the choice to make these composition requests, rather than
+/// the app doing it unconditionally. That toggle is intentionally NOT built
+/// here.
+
+/// Honest UA sent on the price/chart path. Identifies the app + its repo so
+/// Yahoo (or any operator inspecting logs) can attribute the traffic.
+const PRICE_USER_AGENT: &str = concat!(
+    "Cairn/",
+    env!("CARGO_PKG_VERSION"),
+    " (+https://github.com/raymondgochuico/cairn)"
+);
+
+/// Spoofed Chrome UA confined to the quoteSummary / fund-composition path
+/// (getcrumb + cookie seed + quoteSummary). Load-bearing: getcrumb refuses a
+/// non-browser UA, which breaks fund composition (and the concentration
+/// donuts). Do NOT widen this to other request kinds.
+const COMPOSITION_USER_AGENT: &str =
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
+
+/// Which Yahoo endpoint class a request targets. Drives UA selection so the
+/// spoofed UA stays confined to the composition path and never leaks onto the
+/// (honest) price path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RequestKind {
+    /// `v8/finance/chart` — unauthenticated prices. Honest UA.
+    Price,
+    /// `getcrumb` + cookie seed + `v10/finance/quoteSummary` — fund
+    /// composition. Spoofed Chrome UA (load-bearing).
+    Composition,
+}
+
+/// Maps a request kind to the User-Agent string it must send. The single
+/// source of truth for the confined-spoof posture: the price path is honest,
+/// the composition path is the only thing that spoofs.
+fn user_agent_for(kind: RequestKind) -> &'static str {
+    match kind {
+        RequestKind::Price => PRICE_USER_AGENT,
+        RequestKind::Composition => COMPOSITION_USER_AGENT,
+    }
+}
 
 /// Singleton state managed on the Tauri builder. Holds a `reqwest::Client`
 /// with cookie jar enabled and the cached crumb. `.manage(YahooState::new())`
@@ -106,9 +165,14 @@ pub struct YahooState {
 
 impl YahooState {
     pub fn new() -> Self {
+        // The client's DEFAULT UA is the honest price-path UA. The spoofed
+        // composition UA is attached per-request (see `ensure_crumb` /
+        // `send_quote_summary`) so the spoof can't leak onto any request that
+        // doesn't explicitly opt into it. This is the confined-spoof posture
+        // documented above `PRICE_USER_AGENT`.
         let client = Client::builder()
             .cookie_store(true)
-            .user_agent(USER_AGENT)
+            .user_agent(user_agent_for(RequestKind::Price))
             .build()
             .expect("reqwest client should build");
         Self {
@@ -154,14 +218,28 @@ impl YahooState {
         // response sets the session cookies in the jar. We deliberately
         // ignore the status and any network error here — if cookies didn't
         // make it through, getcrumb will fail in step 2 with a clearer
-        // message.
-        let _ = self.client.get(COOKIE_URL).send().await;
+        // message. This is part of the composition path's getcrumb
+        // prerequisite, so it sends the spoofed Composition UA (the honest
+        // client default would get the getcrumb sequence refused).
+        let _ = self
+            .client
+            .get(COOKIE_URL)
+            .header(reqwest::header::USER_AGENT, user_agent_for(RequestKind::Composition))
+            .send()
+            .await;
 
         // Step 2: fetch the crumb tied to those cookies. Any failure here
         // (network error, non-success status, empty body) trips the
         // cooldown via `enter_cooldown` so the next caller short-circuits
         // instead of dogpiling Yahoo while we're already being rate-limited.
-        let res = match self.client.get(CRUMB_URL).send().await {
+        // getcrumb GATES on the UA, so this sends the spoofed Composition UA.
+        let res = match self
+            .client
+            .get(CRUMB_URL)
+            .header(reqwest::header::USER_AGENT, user_agent_for(RequestKind::Composition))
+            .send()
+            .await
+        {
             Ok(res) => res,
             Err(e) => {
                 let msg = format!("yahoo getcrumb network error: {}", e);
@@ -232,8 +310,12 @@ impl YahooState {
             urlencoding::encode(modules_csv),
             urlencoding::encode(crumb)
         );
+        // quoteSummary is the composition path proper — send the spoofed
+        // Composition UA (the crumb is only honoured for a browser-class UA,
+        // and this is the fetch that feeds fund composition / the donuts).
         self.client
             .get(&url)
+            .header(reqwest::header::USER_AGENT, user_agent_for(RequestKind::Composition))
             .send()
             .await
             .map_err(|e| format!("yahoo quoteSummary network error: {}", e))
@@ -301,4 +383,69 @@ pub async fn yahoo_quote_summary(
     modules: Vec<String>,
 ) -> Result<String, String> {
     state.fetch_quote_summary(&ticker, &modules).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The price/chart path must use the HONEST Cairn UA — Yahoo's chart
+    /// endpoint doesn't gate on UA, so there's no reason to spoof, and a
+    /// spoof there is the ToS optic the Legal review flagged.
+    #[test]
+    fn price_path_uses_honest_user_agent() {
+        let ua = user_agent_for(RequestKind::Price);
+        assert_eq!(ua, PRICE_USER_AGENT);
+        // Honest = identifies the app + repo, NOT a browser.
+        assert!(
+            ua.starts_with("Cairn/"),
+            "price UA should identify as Cairn, got: {ua}"
+        );
+        assert!(
+            ua.contains("github.com/raymondgochuico/cairn"),
+            "price UA should carry the repo URL, got: {ua}"
+        );
+        assert!(
+            !ua.contains("Mozilla") && !ua.contains("Chrome"),
+            "price UA must NOT masquerade as a browser, got: {ua}"
+        );
+        // Tracks the crate version so the UA never goes stale on a bump.
+        assert!(
+            ua.contains(env!("CARGO_PKG_VERSION")),
+            "price UA should embed the crate version, got: {ua}"
+        );
+    }
+
+    /// The quoteSummary / fund-composition path must keep the SPOOFED Chrome
+    /// UA. This is load-bearing: getcrumb refuses a non-browser UA, which
+    /// silently breaks fund composition and the concentration donuts. This
+    /// test is a tripwire against anyone "honestifying" this path too.
+    #[test]
+    fn composition_path_uses_spoofed_browser_user_agent() {
+        let ua = user_agent_for(RequestKind::Composition);
+        assert_eq!(ua, COMPOSITION_USER_AGENT);
+        assert!(
+            ua.contains("Mozilla") && ua.contains("Chrome"),
+            "composition UA must masquerade as a browser so getcrumb accepts \
+             it (load-bearing for fund composition / donuts), got: {ua}"
+        );
+        assert!(
+            !ua.starts_with("Cairn/"),
+            "composition UA must NOT be the honest Cairn UA — getcrumb refuses \
+             it, breaking fund composition, got: {ua}"
+        );
+    }
+
+    /// The two paths must send DIFFERENT UAs. Guards against a refactor that
+    /// accidentally collapses both arms onto one constant (which would either
+    /// re-spoof the price path or de-spoof the composition path).
+    #[test]
+    fn price_and_composition_user_agents_differ() {
+        assert_ne!(
+            user_agent_for(RequestKind::Price),
+            user_agent_for(RequestKind::Composition),
+            "the confined-spoof posture requires the price path (honest) and \
+             composition path (spoofed) to use distinct UAs"
+        );
+    }
 }
