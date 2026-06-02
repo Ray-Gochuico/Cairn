@@ -1,318 +1,202 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { DataSection } from '@/components/settings/DataSection';
-import { useHouseholdStore } from '@/stores/household-store';
-import { usePersonsStore } from '@/stores/persons-store';
-import { useDependentsStore } from '@/stores/dependents-store';
-import { useAccountsStore } from '@/stores/accounts-store';
-import { useHoldingsStore } from '@/stores/holdings-store';
-import { useContributionsStore } from '@/stores/contributions-store';
-import { useSnapshotsStore } from '@/stores/snapshots-store';
-import { useLoansStore } from '@/stores/loans-store';
-import { useLoanPaymentsStore } from '@/stores/loan-payments-store';
-import { usePropertiesStore } from '@/stores/properties-store';
-import { useVehiclesStore } from '@/stores/vehicles-store';
-import { useEquityGrantsStore } from '@/stores/equity-grants-store';
-import { useGoalsStore } from '@/stores/goals-store';
-import { useTransactionsStore } from '@/stores/transactions-store';
-import { useCategoriesStore } from '@/stores/categories-store';
 
-function resetAllStores() {
-  useHouseholdStore.setState({ household: null, isLoading: false, error: null });
-  usePersonsStore.setState({ persons: [], isLoading: false, error: null });
-  useDependentsStore.setState({ dependents: [], isLoading: false, error: null });
-  useAccountsStore.setState({ accounts: [], isLoading: false, error: null });
-  useHoldingsStore.setState({ holdings: [], isLoading: false, error: null });
-  useContributionsStore.setState({ contributions: [], isLoading: false, error: null });
-  useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null });
-  useLoansStore.setState({ loans: [], isLoading: false, error: null });
-  useLoanPaymentsStore.setState({ payments: [], isLoading: false, error: null });
-  usePropertiesStore.setState({ properties: [], isLoading: false, error: null });
-  useVehiclesStore.setState({ vehicles: [], isLoading: false, error: null });
-  useEquityGrantsStore.setState({ equityGrants: [], isLoading: false, error: null });
-  useGoalsStore.setState({ goals: [], isLoading: false, error: null });
-  useTransactionsStore.setState({ transactions: [], isLoading: false, error: null });
-  useCategoriesStore.setState({ categories: [], isLoading: false, error: null });
+// The Data section now drives the REAL whole-db backup/restore via the
+// `@/lib/backup-restore` helpers (which invoke Rust commands). Mock that module
+// and the file-picker; the helpers themselves are unit-tested in
+// tests/lib/db-backup.test.ts and the Rust commands in src-tauri.
+vi.mock('@/lib/backup-restore', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/backup-restore')>(
+    '@/lib/backup-restore',
+  );
+  return {
+    ...actual,
+    isTauriRuntime: vi.fn(() => true),
+    runBackup: vi.fn(),
+    saveBackupCopy: vi.fn(),
+    revealBackupsDir: vi.fn(),
+    validateBackupFile: vi.fn(),
+    restoreFromBackup: vi.fn(),
+  };
+});
+vi.mock('@tauri-apps/plugin-dialog', () => ({ open: vi.fn() }));
+
+import {
+  isTauriRuntime,
+  runBackup,
+  saveBackupCopy,
+  revealBackupsDir,
+  validateBackupFile,
+  restoreFromBackup,
+  RESTORE_FAILURE_NOTICE_KEY,
+} from '@/lib/backup-restore';
+import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import { DataSection } from '@/components/settings/DataSection';
+
+const mIsTauri = isTauriRuntime as unknown as ReturnType<typeof vi.fn>;
+const mRunBackup = runBackup as unknown as ReturnType<typeof vi.fn>;
+const mSaveCopy = saveBackupCopy as unknown as ReturnType<typeof vi.fn>;
+const mReveal = revealBackupsDir as unknown as ReturnType<typeof vi.fn>;
+const mValidate = validateBackupFile as unknown as ReturnType<typeof vi.fn>;
+const mRestore = restoreFromBackup as unknown as ReturnType<typeof vi.fn>;
+const mOpen = openDialog as unknown as ReturnType<typeof vi.fn>;
+
+function renderSection() {
+  return render(
+    <MemoryRouter>
+      <DataSection />
+    </MemoryRouter>,
+  );
 }
 
-describe('DataSection', () => {
-  beforeEach(() => {
-    resetAllStores();
+beforeEach(() => {
+  vi.clearAllMocks();
+  window.sessionStorage.clear();
+  mIsTauri.mockReturnValue(true);
+  mRunBackup.mockResolvedValue('/Users/me/.../backups/cairn-20260602-100000.db');
+  mSaveCopy.mockResolvedValue('/Users/me/Desktop/copy.db');
+  mReveal.mockResolvedValue(undefined);
+  mValidate.mockResolvedValue({ ok: true, user_version: 46, max_supported_version: 46, reason: null });
+  mRestore.mockResolvedValue(undefined);
+  mOpen.mockResolvedValue('/Users/me/Downloads/backup.db');
+});
+
+describe('DataSection — desktop (Tauri) path', () => {
+  it('renders Back up + Restore controls', () => {
+    renderSection();
+    expect(screen.getByRole('button', { name: /back up now/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /save a copy/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /reveal backups/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /restore from backup/i })).toBeEnabled();
+    expect(screen.queryByTestId('desktop-only-note')).not.toBeInTheDocument();
   });
 
-  it('renders Export and Restore buttons', () => {
-    render(
-      <MemoryRouter>
-        <DataSection />
-      </MemoryRouter>,
+  it('Back up now invokes runBackup and shows the destination path', async () => {
+    renderSection();
+    await userEvent.click(screen.getByRole('button', { name: /back up now/i }));
+    expect(mRunBackup).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText(/backed up to/i)).toHaveTextContent(
+      /cairn-20260602-100000\.db/,
     );
-    expect(
-      screen.getByRole('button', { name: /export to json/i }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /restore from json/i }),
-    ).toBeInTheDocument();
   });
 
-  it('Restore button is disabled with a "not yet implemented" hint (R5)', () => {
-    render(
-      <MemoryRouter>
-        <DataSection />
-      </MemoryRouter>,
-    );
-    const restoreBtn = screen.getByRole('button', { name: /restore from json/i });
-    expect(restoreBtn).toBeDisabled();
-    expect(restoreBtn.getAttribute('aria-disabled')).toBe('true');
-    expect(
-      screen.getByTestId('restore-not-implemented-hint'),
-    ).toHaveTextContent(/not yet implemented/i);
+  it('Back up now surfaces a failure message', async () => {
+    mRunBackup.mockRejectedValue(new Error('disk full'));
+    renderSection();
+    await userEvent.click(screen.getByRole('button', { name: /back up now/i }));
+    expect(await screen.findByText(/backup failed/i)).toHaveTextContent(/disk full/);
   });
 
-  it('renders a hidden file input for restore', () => {
-    const { container } = render(
-      <MemoryRouter>
-        <DataSection />
-      </MemoryRouter>,
-    );
-    const input = container.querySelector('input[type="file"]');
-    expect(input).not.toBeNull();
-    expect(input?.getAttribute('accept')).toContain('json');
+  it('Save a copy invokes saveBackupCopy and reports the path', async () => {
+    renderSection();
+    await userEvent.click(screen.getByRole('button', { name: /save a copy/i }));
+    expect(mSaveCopy).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText(/saved a copy to/i)).toBeInTheDocument();
   });
 
-  it('clicking Export does not crash and shows a success message', async () => {
-    const createObjectURLSpy = vi
-      .spyOn(URL, 'createObjectURL')
-      .mockReturnValue('blob:mock-url');
-    const revokeObjectURLSpy = vi
-      .spyOn(URL, 'revokeObjectURL')
-      .mockImplementation(() => {});
-
-    render(
-      <MemoryRouter>
-        <DataSection />
-      </MemoryRouter>,
-    );
-
-    const exportBtn = screen.getByRole('button', { name: /export to json/i });
-    await userEvent.click(exportBtn);
-
-    expect(createObjectURLSpy).toHaveBeenCalled();
-    expect(revokeObjectURLSpy).toHaveBeenCalled();
-    expect(await screen.findByText(/exported/i)).toBeInTheDocument();
-
-    createObjectURLSpy.mockRestore();
-    revokeObjectURLSpy.mockRestore();
+  it('Save a copy shows nothing extra when the user cancels (null)', async () => {
+    mSaveCopy.mockResolvedValue(null);
+    renderSection();
+    await userEvent.click(screen.getByRole('button', { name: /save a copy/i }));
+    await waitFor(() => expect(mSaveCopy).toHaveBeenCalled());
+    expect(screen.queryByText(/saved a copy/i)).not.toBeInTheDocument();
   });
 
-  it('Export captures equity_grants and goals from their stores', async () => {
-    useEquityGrantsStore.setState({
-      equityGrants: [
-        {
-          id: 1,
-          householdId: 1,
-          ownerPersonId: 1,
-          name: 'ISO 2024',
-          companyName: 'Acme',
-          grantDate: '2024-01-15',
-          strikePrice: 5,
-          totalShares: 1000,
-          currentFmv: 50,
-          vestingSchedule: [{ date: '2025-01-15', cumulativePct: 1 }],
-        },
-      ],
-      isLoading: false,
-      error: null,
-    });
-    useGoalsStore.setState({
-      goals: [
-        {
-          id: 7,
-          householdId: 1,
-          forPersonId: null,
-          name: 'Emergency fund',
-          type: 'EMERGENCY_FUND',
-          targetAmount: 25000,
-          targetDate: '2027-01-01',
-          linkedAccountIds: [],
-        },
-      ],
-      isLoading: false,
-      error: null,
-    });
-
-    let capturedJson = '';
-    const createObjectURLSpy = vi
-      .spyOn(URL, 'createObjectURL')
-      .mockImplementation((blob) => {
-        (blob as Blob).text().then((t) => { capturedJson = t; });
-        return 'blob:mock-url';
-      });
-    const revokeObjectURLSpy = vi
-      .spyOn(URL, 'revokeObjectURL')
-      .mockImplementation(() => {});
-
-    render(
-      <MemoryRouter>
-        <DataSection />
-      </MemoryRouter>,
-    );
-
-    await userEvent.click(screen.getByRole('button', { name: /export to json/i }));
-    await Promise.resolve();
-    await Promise.resolve();
-
-    const parsed = JSON.parse(capturedJson);
-    expect(parsed.equity_grants).toHaveLength(1);
-    expect(parsed.equity_grants[0].name).toBe('ISO 2024');
-    expect(parsed.goals).toHaveLength(1);
-    expect(parsed.goals[0].name).toBe('Emergency fund');
-
-    createObjectURLSpy.mockRestore();
-    revokeObjectURLSpy.mockRestore();
+  it('Reveal backups calls revealBackupsDir', async () => {
+    renderSection();
+    await userEvent.click(screen.getByRole('button', { name: /reveal backups/i }));
+    expect(mReveal).toHaveBeenCalledTimes(1);
   });
 
-  it('shows confirmation modal after a valid backup file is loaded', async () => {
-    render(
-      <MemoryRouter>
-        <DataSection />
-      </MemoryRouter>,
+  it('Restore: validates → confirms → restores (file picker returns a path)', async () => {
+    renderSection();
+    await userEvent.click(screen.getByRole('button', { name: /restore from backup/i }));
+
+    // The validate pre-flight runs against the picked file.
+    await waitFor(() => expect(mValidate).toHaveBeenCalledWith('/Users/me/Downloads/backup.db'));
+    // Destructive confirm dialog appears.
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent(/replace all current data/i);
+    // Restore has NOT been invoked yet (awaiting confirmation).
+    expect(mRestore).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: /replace and restore/i }));
+    await waitFor(() =>
+      expect(mRestore).toHaveBeenCalledWith('/Users/me/Downloads/backup.db'),
     );
-
-    const validBackup = {
-      version: 1,
-      exportedAt: '2026-05-14T00:00:00Z',
-      household: null,
-      persons: [],
-      dependents: [],
-      accounts: [],
-      holdings: [],
-      contributions: [],
-      account_snapshots: [],
-      loans: [],
-      loan_payments: [],
-      properties: [],
-      vehicles: [],
-      equity_grants: [],
-      goals: [],
-    };
-    const file = new File([JSON.stringify(validBackup)], 'backup.json', {
-      type: 'application/json',
-    });
-
-    const input = document.querySelector(
-      'input[type="file"]',
-    ) as HTMLInputElement;
-    await userEvent.upload(input, file);
-
-    expect(await screen.findByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByText(/replace all your current data/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^cancel$/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^restore$/i })).toBeInTheDocument();
   });
 
-  it('Cancel button closes the confirmation modal', async () => {
-    render(
-      <MemoryRouter>
-        <DataSection />
-      </MemoryRouter>,
-    );
-
-    const validBackup = {
-      version: 1,
-      exportedAt: '2026-05-14T00:00:00Z',
-      household: null,
-      persons: [],
-      dependents: [],
-      accounts: [],
-      holdings: [],
-      contributions: [],
-      account_snapshots: [],
-      loans: [],
-      loan_payments: [],
-      properties: [],
-      vehicles: [],
-      equity_grants: [],
-      goals: [],
-    };
-    const file = new File([JSON.stringify(validBackup)], 'backup.json', {
-      type: 'application/json',
-    });
-
-    const input = document.querySelector(
-      'input[type="file"]',
-    ) as HTMLInputElement;
-    await userEvent.upload(input, file);
-
+  it('Restore: cancelling the confirm does NOT restore', async () => {
+    renderSection();
+    await userEvent.click(screen.getByRole('button', { name: /restore from backup/i }));
     await screen.findByRole('dialog');
     await userEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
-
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(mRestore).not.toHaveBeenCalled();
   });
 
-  it('shows an error message when an invalid file is selected', async () => {
-    render(
-      <MemoryRouter>
-        <DataSection />
-      </MemoryRouter>,
-    );
-
-    const file = new File(['this is not valid json {{{'], 'bad.json', {
-      type: 'application/json',
+  it('Restore: an invalid backup is rejected before any confirm', async () => {
+    mValidate.mockResolvedValue({
+      ok: false,
+      user_version: 99,
+      max_supported_version: 46,
+      reason: 'This backup was created by a newer version of Cairn.',
     });
-
-    const input = document.querySelector(
-      'input[type="file"]',
-    ) as HTMLInputElement;
-    await userEvent.upload(input, file);
-
-    expect(await screen.findByText(/invalid backup file/i)).toBeInTheDocument();
+    renderSection();
+    await userEvent.click(screen.getByRole('button', { name: /restore from backup/i }));
+    expect(await screen.findByText(/newer version of cairn/i)).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(mRestore).not.toHaveBeenCalled();
   });
 
-  it('Restore confirm button calls the apply stub (logs warning, no destructive action)', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  it('Restore: cancelling the file picker (null) is a no-op', async () => {
+    mOpen.mockResolvedValue(null);
+    renderSection();
+    await userEvent.click(screen.getByRole('button', { name: /restore from backup/i }));
+    await waitFor(() => expect(mOpen).toHaveBeenCalled());
+    expect(mValidate).not.toHaveBeenCalled();
+    expect(mRestore).not.toHaveBeenCalled();
+  });
 
-    render(
-      <MemoryRouter>
-        <DataSection />
-      </MemoryRouter>,
-    );
-
-    const validBackup = {
-      version: 1,
-      exportedAt: '2026-05-14T00:00:00Z',
-      household: null,
-      persons: [],
-      dependents: [],
-      accounts: [],
-      holdings: [],
-      contributions: [],
-      account_snapshots: [],
-      loans: [],
-      loan_payments: [],
-      properties: [],
-      vehicles: [],
-      equity_grants: [],
-      goals: [],
-    };
-    const file = new File([JSON.stringify(validBackup)], 'backup.json', {
-      type: 'application/json',
-    });
-
-    const input = document.querySelector(
-      'input[type="file"]',
-    ) as HTMLInputElement;
-    await userEvent.upload(input, file);
-
+  it('Restore: surfaces a restore failure without crashing', async () => {
+    mRestore.mockRejectedValue(new Error('copy failed'));
+    renderSection();
+    await userEvent.click(screen.getByRole('button', { name: /restore from backup/i }));
     await screen.findByRole('dialog');
-    await userEvent.click(screen.getByRole('button', { name: /^restore$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /replace and restore/i }));
+    expect(await screen.findByText(/restore failed/i)).toHaveTextContent(/copy failed/);
+  });
 
-    expect(warnSpy).toHaveBeenCalled();
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(await screen.findByText(/restore.*completed|restored/i)).toBeInTheDocument();
+  it('surfaces a post-reload restore-failure notice from sessionStorage (M-4)', async () => {
+    // Simulate the prior session's forced reload having stashed a reason.
+    window.sessionStorage.setItem(RESTORE_FAILURE_NOTICE_KEY, 'disk full during restore');
+    renderSection();
+    expect(await screen.findByText(/restore did not complete/i)).toHaveTextContent(
+      /disk full during restore.*data was not changed/i,
+    );
+    // Read-once: the notice is cleared so a later remount won't re-show it.
+    expect(window.sessionStorage.getItem(RESTORE_FAILURE_NOTICE_KEY)).toBeNull();
+  });
+});
 
-    warnSpy.mockRestore();
+describe('DataSection — browser mode (no Tauri runtime)', () => {
+  beforeEach(() => {
+    mIsTauri.mockReturnValue(false);
+  });
+
+  it('renders without crashing and shows the desktop-only note', () => {
+    renderSection();
+    expect(screen.getByTestId('desktop-only-note')).toHaveTextContent(
+      /available in the cairn desktop app/i,
+    );
+  });
+
+  it('disables every backup/restore action in browser mode', () => {
+    renderSection();
+    expect(screen.getByRole('button', { name: /back up now/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /save a copy/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /reveal backups/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /restore from backup/i })).toBeDisabled();
   });
 });
