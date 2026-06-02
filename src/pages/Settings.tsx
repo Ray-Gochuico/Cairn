@@ -3,7 +3,6 @@ import { PrivacySection } from '@/components/settings/PrivacySection';
 import { SidebarSection } from '@/components/settings/SidebarSection';
 import { NotificationsSection } from '@/components/settings/NotificationsSection';
 import { RefreshSection } from '@/components/settings/RefreshSection';
-import { LearningSection } from '@/components/settings/LearningSection';
 import { DataSection } from '@/components/settings/DataSection';
 import { ChartColorsSection } from '@/components/settings/ChartColorsSection';
 import { StatementsSection } from '@/components/settings/StatementsSection';
@@ -22,7 +21,6 @@ export default function Settings() {
       <SidebarSection />
       <NotificationsSection />
       <RefreshSection />
-      <LearningSection />
       <DataSection />
       <ChartColorsSection />
       <StatementsSection />

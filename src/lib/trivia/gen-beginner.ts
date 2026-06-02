@@ -1,5 +1,6 @@
 import type { GlossaryEntry } from '@/lib/glossary';
 import type { TriviaQuestion } from '@/lib/trivia/bank-schema';
+import { QuestionFormat, Topic } from '@/types/enums';
 
 /**
  * Deterministic, pure generator: maps glossary entries → candidate Beginner
@@ -12,6 +13,13 @@ import type { TriviaQuestion } from '@/lib/trivia/bank-schema';
  * deterministically from OTHER entries. An entry that can't field 3 distinct
  * distractors (tiny glossary) is skipped rather than emitting an invalid
  * (<4-choice) question.
+ *
+ * Learning v2 (L3.4): this legacy glossary generator is SUPERSEDED by the L2
+ * LLM-drafting loop; it is kept compiling/green only. Glossary entries carry no
+ * topic, so emitted candidates get a safe DEFAULT `topic: Foundations` +
+ * `reviewed: false` — they are candidates for review, not shipped content, and
+ * the reviewer assigns the real topic during curation before flipping
+ * `reviewed:true`. (Plan L3.4 recommendation (b).)
  */
 
 function slug(term: string): string {
@@ -63,7 +71,8 @@ export function generateBeginnerQuestions(
       id: 'beg-' + slug(entry.term),
       version: 1,
       difficulty: 'Beginner',
-      tags: [],
+      format: QuestionFormat.DEFINITION,
+      topic: Topic.FOUNDATIONS, // safe default — reviewer retopics on curation
       glossaryTerm: entry.term,
       prompt: `Which of these best describes ${entry.term}?`,
       choices,
@@ -72,6 +81,7 @@ export function generateBeginnerQuestions(
         ? `${entry.shortDefinition} ${entry.fullDefinition}`
         : entry.shortDefinition,
       source: 'Cairn glossary',
+      reviewed: false, // candidates for review — never auto-servable
     });
   }
 

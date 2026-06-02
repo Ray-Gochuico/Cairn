@@ -8,9 +8,8 @@ import { useHouseholdStore } from '@/stores/household-store';
 import { useLearningStore } from '@/stores/learning-state-store';
 import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import { loadTriviaBank } from '@/lib/trivia/load-bank';
-import { selectDailyQuestion, nextStreak, localTodayISO } from '@/lib/trivia/daily';
+import { selectDailySet, nextStreak, localTodayISO } from '@/lib/trivia/daily';
 import { answeredKey } from '@/lib/trivia/answered-key';
-import { LearningDifficulty } from '@/types/enums';
 import type { TriviaQuestion } from '@/lib/trivia/bank-schema';
 
 const LETTERS = ['A', 'B', 'C', 'D'];
@@ -37,7 +36,7 @@ export default function Learn() {
   const loadHousehold = useHouseholdStore((s) => s.load);
 
   const learningState = useLearningStore((s) => s.learningState);
-  const answeredQuestionIds = useLearningStore((s) => s.answeredQuestionIds);
+  const answeredKeysByDay = useLearningStore((s) => s.answeredKeysByDay);
   const loadLearning = useLearningStore((s) => s.load);
   const updateLearning = useLearningStore((s) => s.update);
   const recordAnswer = useLearningStore((s) => s.recordAnswer);
@@ -45,57 +44,47 @@ export default function Learn() {
   // app; this page MUST NOT call load() itself. It renders below the gate, and
   // re-loading the shared store flips it to 'loading', which makes the gate
   // unmount/remount this page in a loop. We only READ the status below.
-  // Backend #4: self-guard a cold deep-link against flashing content before the
-  // acceptances projection resolves (defense-in-depth; the router-level
-  // AppDisclaimerGate already gates, but /learn must not assume it ran first).
   const acceptancesStatus = useAcceptancesStore((s) => s.status);
 
   const [bank, setBank] = useState<TriviaQuestion[] | null>(null);
   const [bankError, setBankError] = useState(false);
-  const [chosenIndex, setChosenIndex] = useState<number | null>(null);
+  // Per-question chosen index for the in-session graded reveal. Ephemeral React
+  // state, NEVER rehydrated from the DB — so a later same-day visit shows the
+  // calm done-state per card, never a mis-graded null pick.
+  const [chosenById, setChosenById] = useState<Record<string, number>>({});
   const todayISO = useMemo(() => localTodayISO(), []);
 
   useEffect(() => {
     void loadHousehold();
     void loadLearning();
     // SEC-1: loadTriviaBank THROWS on a malformed/duplicate-id bank; catch it
-    // so a corrupt bank surfaces as the calm "couldn't load" state below, never
-    // an unhandled rejection that leaves bank=null and mis-renders as "you've
-    // completed every question".
+    // so a corrupt bank surfaces as the calm "couldn't load" state below.
     loadTriviaBank().then(
       (b) => setBank(b),
       () => setBankError(true),
     );
   }, [loadHousehold, loadLearning]);
 
-  const difficulty = learningState?.difficultyPreference ?? LearningDifficulty.BEGINNER;
-
-  const question = useMemo(() => {
-    if (!bank || !learningState) return null;
-    return selectDailyQuestion({
+  // The day's 4-set (2 Beginner + 2 Advanced), derived purely from the reviewed
+  // pool + the date-partitioned answered set (§3.0). Prior-day answers are
+  // excluded; today's stay in the set (shown graded). No per-question pin column.
+  const questions = useMemo(() => {
+    if (!bank || !learningState) return [];
+    return selectDailySet({
       bank,
-      answeredIds: answeredQuestionIds,
-      difficulty,
+      answeredIds: answeredKeysByDay.priorDays,
+      answeredTodayIds: answeredKeysByDay.today,
       todayISO,
-      state: {
-        lastShownIsoDate: learningState.lastShownIsoDate,
-        lastShownQuestionId: learningState.lastShownQuestionId,
-      },
     });
-  }, [bank, learningState, answeredQuestionIds, difficulty, todayISO]);
+  }, [bank, learningState, answeredKeysByDay, todayISO]);
 
-  // Persist the day's pinned question so it stays stable until tomorrow.
+  // Mark "seen today" once (a single lastShownIsoDate write; lastShownQuestionId
+  // is deprecated under the derive anchor — set to null, no per-question pin).
   useEffect(() => {
-    if (!question || !learningState) return;
-    if (learningState.lastShownIsoDate === todayISO && learningState.lastShownQuestionId === question.id) {
-      return;
-    }
-    void updateLearning({ lastShownQuestionId: question.id, lastShownIsoDate: todayISO });
-  }, [question, learningState, todayISO, updateLearning]);
-
-  // Version-aware: "answered today" means THIS (id, version) is in the set, so
-  // a corrected/bumped question is treated as unanswered and re-prompts (TR-3).
-  const answeredToday = question ? answeredQuestionIds.includes(answeredKey(question.id, question.version)) : false;
+    if (questions.length === 0 || !learningState) return;
+    if (learningState.lastShownIsoDate === todayISO) return;
+    void updateLearning({ lastShownIsoDate: todayISO, lastShownQuestionId: null });
+  }, [questions, learningState, todayISO, updateLearning]);
 
   if (!household) {
     return (
@@ -106,10 +95,8 @@ export default function Learn() {
   }
 
   // Backend #4: while the acceptances projection is still loading, render a calm
-  // placeholder — NOT the question — so a cold deep-link to /learn can't flash
-  // gated content for the frame before the gate resolves. (The router-level
-  // AppDisclaimerGate covers the app_wide case; this is the learning-gate's own
-  // defense-in-depth.)
+  // placeholder — NOT the questions — so a cold deep-link can't flash gated
+  // content for the frame before the gate resolves.
   if (acceptancesStatus === 'loading') {
     return (
       <div className="p-6 max-w-3xl mx-auto">
@@ -129,16 +116,14 @@ export default function Learn() {
     );
   }
 
-  // SEC-1: the bank failed to load/validate. Show a calm, honest error state
-  // rather than the empty "you've completed every question" message (which
-  // bank=null would otherwise trigger downstream).
+  // SEC-1: the bank failed to load/validate. Calm, honest error state.
   if (bankError) {
     return (
       <div className="p-6 max-w-3xl mx-auto">
         <Card className="p-6 space-y-2">
           <h1 className="text-2xl font-semibold">Learn</h1>
           <p className="text-sm text-muted-foreground">
-            We couldn't load today's question. Please refresh, or try again later.
+            We couldn't load today's questions. Please refresh, or try again later.
           </p>
         </Card>
       </div>
@@ -146,18 +131,25 @@ export default function Learn() {
   }
 
   const streak = learningState?.streakCount ?? 0;
+  const todaySet = new Set(answeredKeysByDay.today);
+  const isAnsweredToday = (q: TriviaQuestion) => todaySet.has(answeredKey(q.id, q.version));
+  const answeredCount = questions.filter(isAnsweredToday).length;
+  const allAnswered = questions.length > 0 && answeredCount === questions.length;
 
-  const handleAnswer = async (idx: number) => {
-    if (!question || answeredToday) return;
-    setChosenIndex(idx);
-    const wasCorrect = idx === question.answerIndex;
+  const handleAnswer = async (q: TriviaQuestion, idx: number) => {
+    if (isAnsweredToday(q) || chosenById[q.id] !== undefined) return;
+    setChosenById((prev) => ({ ...prev, [q.id]: idx }));
+    const wasCorrect = idx === q.answerIndex;
+    // recordAnswer reloads the store → answeredKeysByDay.today gains this key.
     await recordAnswer({
-      questionId: question.id,
+      questionId: q.id,
       answeredIsoDate: todayISO,
       chosenIndex: idx,
       wasCorrect,
-      questionVersion: question.version,
+      questionVersion: q.version,
     });
+    // ≥1-of-4: only the FIRST answer of the day moves the streak; the idempotent
+    // same-day branch in nextStreak makes the 2nd/3rd/4th a no-op.
     await updateLearning({
       streakCount: nextStreak({
         current: streak,
@@ -168,16 +160,53 @@ export default function Learn() {
     });
   };
 
+  const beginnerQs = questions.filter((q) => q.difficulty === 'Beginner');
+  const advancedQs = questions.filter((q) => q.difficulty === 'Advanced');
+
+  const renderCard = (q: TriviaQuestion) => {
+    const chosen = chosenById[q.id];
+    const answeredInSession = chosen !== undefined;
+    const answeredPrior = isAnsweredToday(q) && !answeredInSession;
+    return (
+      <div key={q.id} data-question-card className="rounded-md border p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <DifficultyBadge difficulty={q.difficulty} />
+        </div>
+        <p className="text-base font-semibold">{q.prompt}</p>
+        {answeredInSession ? (
+          <GradedReveal question={q} chosenIndex={chosen} />
+        ) : answeredPrior ? (
+          <div className="rounded-md border border-success/30 bg-success-soft px-3.5 py-3 text-sm text-success-foreground">
+            ✓ Answered today
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2.5">
+            {q.choices.map((choice, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => void handleAnswer(q, i)}
+                className="flex w-full items-start gap-3 rounded-md border bg-background px-3.5 py-3 text-left text-sm hover:bg-accent"
+              >
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded border text-xs font-semibold text-muted-foreground">
+                  {LETTERS[i]}
+                </span>
+                <span>{choice}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-4">
-      {/* UX S1: page-level title OUTSIDE the Card (text-2xl), matching every
-          other page (Roadmap/What-If + the new paycheck/backtest detail
-          headers). The streak chip rides the header row, right-aligned. */}
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Learn</h1>
           <p className="text-sm text-muted-foreground">
-            One question a day to build financial vocabulary and intuition.
+            A few questions a day to build financial vocabulary and intuition.
           </p>
         </div>
         <span
@@ -188,89 +217,36 @@ export default function Learn() {
         </span>
       </div>
 
-      <Card className="p-6 space-y-5">
-        {!question ? (
+      <Card className="p-6 space-y-6">
+        {questions.length === 0 ? (
           <div className="rounded-md border p-6 text-center text-sm text-muted-foreground">
-            You've completed every question in this tier — new ones ship with each update. Try
-            switching difficulty in Settings.
+            You've answered every question available — new ones ship with each update. Come back
+            tomorrow.
           </div>
-        ) : chosenIndex !== null ? (
-          // In-session graded reveal — shown only while chosenIndex is set
-          // (i.e. the user just answered this session). chosenIndex is
-          // ephemeral React state and is NEVER rehydrated from the DB, so on a
-          // later same-day visit it is null and we fall through to the calm
-          // done-state below — never this graded view, which would mis-grade a
-          // null pick as wrong (null === answerIndex → "Not quite").
-          <AnsweredView question={question} chosenIndex={chosenIndex} streak={streak} />
-        ) : answeredToday ? (
-          // Revisit after answering in a prior session (refresh / re-nav /
-          // restart): calm done-state, matching TodaysTriviaCard + mockup
-          // state D. No chosenIndex/wasCorrect dependence, so a correct answer
-          // can never be shown as "Not quite".
-          <AnsweredDoneView streak={streak} />
         ) : (
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <DifficultyBadge difficulty={question.difficulty} />
-              {question.tags.length > 0 && (
-                <span className="text-xs text-muted-foreground">{question.tags.join(' · ')}</span>
-              )}
-            </div>
-            <p className="text-lg font-semibold">{question.prompt}</p>
-            <div className="flex flex-col gap-2.5">
-              {question.choices.map((choice, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => void handleAnswer(i)}
-                  className="flex w-full items-start gap-3 rounded-md border bg-background px-3.5 py-3 text-left text-sm hover:bg-accent"
-                >
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded border text-xs font-semibold text-muted-foreground">
-                    {LETTERS[i]}
-                  </span>
-                  <span>{choice}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        ) }
-
-        {/* Difficulty (also in Settings; mirrored here per the mockup). Changing
-            it swaps today's question to the new level — unless today's has already
-            been answered, in which case it's locked and the change applies to
-            tomorrow's question. */}
-        <div className="border-t pt-4">
-          <div className="text-sm font-medium">Difficulty</div>
-          <p className="text-xs text-muted-foreground mb-2">
-            Also in Settings. Switches today's question to this level — until you've answered today's.
-          </p>
-          <div className="inline-flex overflow-hidden rounded-md border">
-            {(Object.values(LearningDifficulty) as LearningDifficulty[]).map((d) => (
-              <button
-                key={d}
-                type="button"
-                aria-pressed={difficulty === d}
-                onClick={() =>
-                  void updateLearning({
-                    difficultyPreference: d,
-                    // Swap today's question to the new tier by clearing the pin
-                    // (the daily selector re-rolls; the effect above re-pins) —
-                    // unless it's already been answered (persisted today, or just
-                    // answered this session via chosenIndex), when it's locked.
-                    ...(answeredToday || chosenIndex !== null
-                      ? {}
-                      : { lastShownQuestionId: null }),
-                  })
-                }
-                className={`border-r px-4 py-1.5 text-sm last:border-r-0 ${
-                  difficulty === d ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-accent'
-                }`}
-              >
-                {d}
-              </button>
-            ))}
-          </div>
-        </div>
+          <>
+            {beginnerQs.length > 0 && (
+              <section className="space-y-3">
+                <div className="text-xs uppercase tracking-wider text-muted-foreground">Basics</div>
+                {beginnerQs.map(renderCard)}
+              </section>
+            )}
+            {advancedQs.length > 0 && (
+              <section className="space-y-3">
+                <div className="text-xs uppercase tracking-wider text-muted-foreground">
+                  Going deeper
+                </div>
+                {advancedQs.map(renderCard)}
+              </section>
+            )}
+            {allAnswered && (
+              <div className="rounded-md border border-success/30 bg-success-soft p-4 text-center text-sm text-success-foreground">
+                ✓ That's today's set — nice work. Come back tomorrow; your {streak}-day streak is
+                safe.
+              </div>
+            )}
+          </>
+        )}
 
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <span aria-hidden>ⓘ</span> Educational — general financial-literacy content, not personalized advice.
@@ -280,25 +256,11 @@ export default function Learn() {
   );
 }
 
-function AnsweredView({
-  question,
-  chosenIndex,
-  streak,
-}: {
-  question: TriviaQuestion;
-  chosenIndex: number | null;
-  streak: number;
-}) {
+// Per-question in-session graded reveal (the choices + verdict + explanation).
+function GradedReveal({ question, chosenIndex }: { question: TriviaQuestion; chosenIndex: number }) {
   const wasCorrect = chosenIndex === question.answerIndex;
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <DifficultyBadge difficulty={question.difficulty} />
-        {question.tags.length > 0 && (
-          <span className="text-xs text-muted-foreground">{question.tags.join(' · ')}</span>
-        )}
-      </div>
-      <p className="text-lg font-semibold">{question.prompt}</p>
+    <div className="space-y-3">
       <div className="flex flex-col gap-2.5">
         {question.choices.map((choice, i) => {
           const isAnswer = i === question.answerIndex;
@@ -335,34 +297,11 @@ function AnsweredView({
           </p>
         )}
         {/* T4 (Legal G2): show the question version alongside the source so a
-            user can cite exactly which version they saw if they spot an error
-            (the recorded question_version backs the v1.2 correction re-prompt). */}
+            user can cite exactly which version they saw if they spot an error. */}
         <p className="mt-2 text-xs text-muted-foreground">
           Source: {question.source} · question v{question.version}
         </p>
       </div>
-      <div className="text-xs text-muted-foreground">
-        That's today's question. Come back tomorrow — no rush; your {streak}-day streak is safe.
-      </div>
-    </div>
-  );
-}
-
-// Calm done-state for a same-day revisit (mockup state D + TodaysTriviaCard).
-// Deliberately has NO chosenIndex/wasCorrect dependence: the graded reveal is
-// an in-session reward only, so a later visit simply confirms today is done and
-// can never mis-render a correct answer as "Not quite".
-function AnsweredDoneView({ streak }: { streak: number }) {
-  return (
-    <div className="rounded-md border border-success/30 bg-success-soft p-6 text-center">
-      <div className="text-2xl text-success-foreground" aria-hidden>
-        ✓
-      </div>
-      <div className="mt-1 font-semibold text-success-foreground">That's today's question</div>
-      <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
-        Nice work — you've answered today. Come back tomorrow for the next one. No rush; your{' '}
-        {streak}-day streak is safe.
-      </p>
     </div>
   );
 }

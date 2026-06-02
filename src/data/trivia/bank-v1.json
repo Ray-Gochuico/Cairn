@@ -3,7 +3,8 @@
     "id": "beg-apr",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["Borrowing", "rates"],
+    "format": "definition",
+    "topic": "Credit & Debt",
     "glossaryTerm": "APR",
     "prompt": "Which of these best describes APR?",
     "choices": [
@@ -14,13 +15,17 @@
     ],
     "answerIndex": 0,
     "explanation": "Annual Percentage Rate — the yearly cost of borrowing, including interest plus most fees, expressed as a single rate. The figure lenders must disclose under the Truth in Lending Act so you can compare loan and credit-card offers on one number. When you're earning rather than borrowing, compare APY instead — unlike APR, APY accounts for compounding.",
-    "source": "Truth in Lending Act (Regulation Z)"
+    "source": "Truth in Lending Act (Regulation Z)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-apy",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["Saving", "rates"],
+    "format": "definition",
+    "topic": "Savings",
     "glossaryTerm": "APY",
     "prompt": "Which of these best describes APY?",
     "choices": [
@@ -31,13 +36,18 @@
     ],
     "answerIndex": 3,
     "explanation": "Annual Percentage Yield — the effective annual return after compounding is applied. Use APY (not APR) when comparing savings or CD rates — APY already bakes in compounding so higher-frequency compounding shows up as a higher APY.",
-    "source": "Truth in Savings Act (Regulation DD)"
+    "source": "Truth in Savings Act (Regulation DD)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-hsa",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["Health", "accounts", "tax-advantaged"],
+    "format": "accounts",
+    "topic": "Insurance",
+    "subtopic": "Health",
     "glossaryTerm": "HSA",
     "prompt": "Which of these best describes an HSA?",
     "choices": [
@@ -48,13 +58,18 @@
     ],
     "answerIndex": 1,
     "explanation": "Health Savings Account — triple-tax-advantaged account for medical expenses, only if you have an HDHP. Contributions reduce taxable income, growth is tax-free, and qualified withdrawals are tax-free. Unlike an FSA, the balance rolls over forever and you keep it if you switch jobs.",
-    "source": "IRS Pub 969"
+    "source": "IRS Pub 969",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-fsa",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["Health", "accounts"],
+    "format": "accounts",
+    "topic": "Insurance",
+    "subtopic": "Health",
     "glossaryTerm": "FSA",
     "prompt": "Which of these best describes an FSA?",
     "choices": [
@@ -65,13 +80,17 @@
     ],
     "answerIndex": 3,
     "explanation": "Flexible Spending Account — pre-tax money for medical expenses. A workplace account where you set aside pre-tax money to spend on medical costs. Use-it-or-lose-it within the year (with a small carry-over allowance).",
-    "source": "IRS Pub 969"
+    "source": "IRS Pub 969",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-ira",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["Retirement", "accounts"],
+    "format": "accounts",
+    "topic": "Retirement",
     "glossaryTerm": "IRA",
     "prompt": "Which of these best describes an IRA?",
     "choices": [
@@ -82,13 +101,17 @@
     ],
     "answerIndex": 0,
     "explanation": "Individual Retirement Account — a tax-advantaged account for retirement savings. Traditional IRAs give a potential tax deduction now; Roth IRAs give tax-free withdrawals later. Both have annual contribution limits (indexed for inflation), plus catch-up provisions over age 50.",
-    "source": "IRS Pub 590-A"
+    "source": "IRS Pub 590-A",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-401-k",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["Retirement", "accounts", "workplace"],
+    "format": "accounts",
+    "topic": "Retirement",
     "glossaryTerm": "401(k)",
     "prompt": "Which of these best describes a 401(k)?",
     "choices": [
@@ -99,13 +122,17 @@
     ],
     "answerIndex": 1,
     "explanation": "A workplace retirement plan you contribute to from your paycheck. Traditional 401(k) contributions reduce your taxable income now; Roth 401(k) contributions are after-tax but grow tax-free. Many employers add matching contributions — free money worth capturing.",
-    "source": "IRS Pub 560"
+    "source": "IRS Pub 560",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-roth-ira",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["Retirement", "accounts", "Roth"],
+    "format": "accounts",
+    "topic": "Retirement",
     "glossaryTerm": "ROTH IRA",
     "prompt": "Which of these best describes a Roth IRA?",
     "choices": [
@@ -116,13 +143,17 @@
     ],
     "answerIndex": 1,
     "explanation": "A Roth IRA is funded with after-tax dollars so qualified withdrawals in retirement — including all growth — are completely tax-free. Contributions (not earnings) can be withdrawn anytime without penalty. Income limits apply to direct contributions, but the backdoor Roth is a workaround for high earners.",
-    "source": "IRS Pub 590-A"
+    "source": "IRS Pub 590-A",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-traditional-ira",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["Retirement", "accounts", "pre-tax"],
+    "format": "accounts",
+    "topic": "Retirement",
     "glossaryTerm": "TRADITIONAL IRA",
     "prompt": "Which of these best describes a Traditional IRA?",
     "choices": [
@@ -133,13 +164,17 @@
     ],
     "answerIndex": 2,
     "explanation": "A Traditional IRA holds pre-tax money (if you're eligible to deduct). Contributions may reduce taxable income today; withdrawals in retirement are taxed as ordinary income. Required Minimum Distributions begin at age 73 under SECURE 2.0.",
-    "source": "IRS Pub 590-A"
+    "source": "IRS Pub 590-A",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-rmd",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["Retirement", "RMD", "withdrawals"],
+    "format": "definition",
+    "topic": "Retirement",
     "glossaryTerm": "RMD",
     "prompt": "Which of these best describes an RMD?",
     "choices": [
@@ -150,13 +185,17 @@
     ],
     "answerIndex": 1,
     "explanation": "Required Minimum Distribution — the IRS-mandated minimum you must withdraw each year from pre-tax retirement accounts (Traditional IRA, 401(k), etc.) after age 73 under SECURE 2.0. Roth IRAs are exempt. Missing an RMD triggers a 25% penalty on the shortfall.",
-    "source": "IRS Pub 590-B"
+    "source": "IRS Pub 590-B",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-amt",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["tax", "AMT"],
+    "format": "definition",
+    "topic": "Taxes",
     "glossaryTerm": "AMT",
     "prompt": "Which of these best describes the AMT?",
     "choices": [
@@ -167,13 +206,17 @@
     ],
     "answerIndex": 1,
     "explanation": "Alternative Minimum Tax — a parallel tax calculation that ensures high-income filers pay at least a minimum amount. You pay the higher of regular tax or AMT. Common triggers include exercising Incentive Stock Options (ISOs) and large miscellaneous deductions.",
-    "source": "IRS Form 6251 Instructions"
+    "source": "IRS Form 6251 Instructions",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-agi",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["tax", "income"],
+    "format": "definition",
+    "topic": "Taxes",
     "glossaryTerm": "AGI",
     "prompt": "Which of these best describes AGI?",
     "choices": [
@@ -184,13 +227,17 @@
     ],
     "answerIndex": 0,
     "explanation": "Adjusted Gross Income — gross income minus above-the-line deductions like IRA contributions, student loan interest, and HSA contributions. AGI is the starting point for many phase-outs, tax-credit calculations, and the Roth IRA income limits.",
-    "source": "IRS Pub 17"
+    "source": "IRS Pub 17",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-magi",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["tax", "income"],
+    "format": "definition",
+    "topic": "Taxes",
     "glossaryTerm": "MAGI",
     "prompt": "Which of these best describes MAGI?",
     "choices": [
@@ -201,13 +248,17 @@
     ],
     "answerIndex": 1,
     "explanation": "Modified Adjusted Gross Income — AGI with certain deductions added back (e.g., IRA deduction, student-loan interest). MAGI is used to determine Roth IRA contribution limits, whether you can deduct a Traditional IRA, and IRMAA Medicare surcharges.",
-    "source": "IRS Pub 590-A"
+    "source": "IRS Pub 590-A",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-ltcg",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["tax", "capital gains", "investing"],
+    "format": "definition",
+    "topic": "Taxes",
     "glossaryTerm": "LTCG",
     "prompt": "Which of these best describes long-term capital gains (LTCG)?",
     "choices": [
@@ -218,13 +269,17 @@
     ],
     "answerIndex": 2,
     "explanation": "Gains on assets held longer than one year are taxed at preferential long-term capital gains rates: 0%, 15%, or 20% depending on your taxable income. Most middle-income investors pay 15%. Holding an investment just past the one-year mark can significantly reduce the tax owed on the gain.",
-    "source": "IRS Pub 550"
+    "source": "IRS Pub 550",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-marginal-rate",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["tax", "rates"],
+    "format": "definition",
+    "topic": "Taxes",
     "glossaryTerm": "MARGINAL RATE",
     "prompt": "Which of these best describes your marginal tax rate?",
     "choices": [
@@ -235,13 +290,17 @@
     ],
     "answerIndex": 1,
     "explanation": "Your marginal tax rate is the rate applied to the last dollar of your taxable income — the tax bracket you're currently in. It determines the value of deductions and the cost of additional income. Many people confuse it with their effective rate (lower, because lower brackets apply to lower slices of income).",
-    "source": "IRS Pub 17"
+    "source": "IRS Pub 17",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-effective-rate",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["tax", "rates"],
+    "format": "definition",
+    "topic": "Taxes",
     "glossaryTerm": "EFFECTIVE RATE",
     "prompt": "Which of these best describes your effective tax rate?",
     "choices": [
@@ -252,13 +311,17 @@
     ],
     "answerIndex": 1,
     "explanation": "Your effective tax rate is total federal income tax divided by taxable income — the actual average percentage you paid. It's always lower than your marginal rate because lower tax brackets apply to lower slices of your income. Effective rate is the right number for comparing tax burdens across people.",
-    "source": "IRS Pub 17"
+    "source": "IRS Pub 17",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-swr",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["FIRE", "retirement", "withdrawals"],
+    "format": "definition",
+    "topic": "Foundations",
     "glossaryTerm": "SWR",
     "prompt": "Which of these best describes the Safe Withdrawal Rate (SWR)?",
     "choices": [
@@ -269,13 +332,17 @@
     ],
     "answerIndex": 1,
     "explanation": "Safe Withdrawal Rate — the percentage of your portfolio you can withdraw each year and (probably) not run out. The famous '4% rule' (Bengen / Trinity Study) says ~4% of your starting nest egg, inflation-adjusted thereafter, has historically lasted a 30-year retirement. Lower rates are more conservative.",
-    "source": "Bengen (1994); Trinity Study (1998)"
+    "source": "Bengen (1994); Trinity Study (1998)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-coast-fi",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["FIRE", "FI", "milestones"],
+    "format": "definition",
+    "topic": "Foundations",
     "glossaryTerm": "COAST FI",
     "prompt": "Which of these best describes Coast FI?",
     "choices": [
@@ -286,13 +353,17 @@
     ],
     "answerIndex": 3,
     "explanation": "Coast FI is the point where your existing investments will grow into a full retirement nest egg on their own — even if you stop contributing. You still need to cover current expenses, but you no longer need to save for retirement. A common milestone on the way to full Financial Independence.",
-    "source": "Cairn glossary"
+    "source": "Cairn glossary",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-fire",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["FIRE", "FI", "lifestyle"],
+    "format": "definition",
+    "topic": "Foundations",
     "glossaryTerm": "FIRE",
     "prompt": "What does FIRE stand for in personal finance?",
     "choices": [
@@ -303,13 +374,17 @@
     ],
     "answerIndex": 3,
     "explanation": "FIRE stands for Financial Independence, Retire Early — a movement built around aggressive saving and investing to reach financial independence well before the traditional retirement age of 65. Variants include LeanFIRE (minimal lifestyle) and FatFIRE (higher spending).",
-    "source": "Cairn glossary"
+    "source": "Cairn glossary",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-fi",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["FIRE", "FI", "milestones"],
+    "format": "definition",
+    "topic": "Foundations",
     "glossaryTerm": "FI",
     "prompt": "Which of these best describes Financial Independence (FI)?",
     "choices": [
@@ -320,13 +395,17 @@
     ],
     "answerIndex": 0,
     "explanation": "Financial Independence means your investments generate enough income (or you have enough wealth at your safe withdrawal rate) to cover your expenses — making paid work optional rather than required. The FI number is typically 25× annual expenses (the inverse of a 4% SWR).",
-    "source": "Cairn glossary"
+    "source": "Cairn glossary",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-compounding-frequency",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["Saving", "rates", "compounding"],
+    "format": "definition",
+    "topic": "Foundations",
     "glossaryTerm": "COMPOUNDING FREQUENCY",
     "prompt": "Which of these best describes compounding frequency?",
     "choices": [
@@ -337,13 +416,18 @@
     ],
     "answerIndex": 1,
     "explanation": "Compounding frequency is how often interest is calculated and added to your balance. The more frequently it compounds, the higher the effective yield (APY). Daily compounding is common for savings accounts; annual compounding is used in simple bond math.",
-    "source": "Cairn glossary"
+    "source": "Cairn glossary",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-hdhp",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["Health", "insurance"],
+    "format": "definition",
+    "topic": "Insurance",
+    "subtopic": "Health",
     "glossaryTerm": "HDHP",
     "prompt": "Which of these best describes an HDHP?",
     "choices": [
@@ -354,13 +438,17 @@
     ],
     "answerIndex": 1,
     "explanation": "High-Deductible Health Plan — a health insurance plan with a higher deductible (you pay more out of pocket before insurance kicks in) but typically lower premiums. Being enrolled in an HDHP is the eligibility requirement to open and fund an HSA.",
-    "source": "IRS Pub 969"
+    "source": "IRS Pub 969",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-fica",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["tax", "payroll", "Social Security"],
+    "format": "definition",
+    "topic": "Taxes",
     "glossaryTerm": "FICA",
     "prompt": "Which of these best describes FICA?",
     "choices": [
@@ -371,13 +459,17 @@
     ],
     "answerIndex": 0,
     "explanation": "FICA (Federal Insurance Contributions Act) is the payroll tax that funds Social Security and Medicare. Roughly 7.65% of wages: 6.2% Social Security (capped at the annual wage base) + 1.45% Medicare (uncapped). Your employer pays a matching amount; self-employed workers pay both halves (15.3%) via self-employment tax.",
-    "source": "IRS Pub 15 (Circular E)"
+    "source": "IRS Pub 15 (Circular E)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-niit",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["tax", "investment income"],
+    "format": "definition",
+    "topic": "Taxes",
     "glossaryTerm": "NIIT",
     "prompt": "Which of these best describes the NIIT?",
     "choices": [
@@ -388,13 +480,17 @@
     ],
     "answerIndex": 1,
     "explanation": "Net Investment Income Tax — an extra 3.8% tax on investment income (interest, dividends, capital gains, rental income) once your MAGI exceeds $200k (single) or $250k (married filing jointly). It applies in addition to regular income tax.",
-    "source": "IRS Form 8960 Instructions"
+    "source": "IRS Form 8960 Instructions",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-iso",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["equity", "stock options", "tax"],
+    "format": "definition",
+    "topic": "Job",
     "glossaryTerm": "ISO",
     "prompt": "Which of these best describes an ISO?",
     "choices": [
@@ -405,13 +501,17 @@
     ],
     "answerIndex": 1,
     "explanation": "An Incentive Stock Option (ISO) lets you buy company stock at a fixed strike price. The spread at exercise is NOT regular income but IS an AMT preference item — a common AMT trigger. If you hold shares at least two years from grant and one year from exercise, the eventual gain qualifies for long-term capital gains rates.",
-    "source": "IRS Pub 525"
+    "source": "IRS Pub 525",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-rsu",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["equity", "compensation"],
+    "format": "definition",
+    "topic": "Job",
     "glossaryTerm": "RSU",
     "prompt": "Which of these best describes an RSU?",
     "choices": [
@@ -422,13 +522,17 @@
     ],
     "answerIndex": 1,
     "explanation": "A Restricted Stock Unit (RSU) is a promise of company stock that vests over time (typically 4 years with a 1-year cliff). Unlike options, RSUs have value even if the stock price stays flat. The fair market value at vesting is ordinary income; any subsequent appreciation is a capital gain.",
-    "source": "IRS Pub 525"
+    "source": "IRS Pub 525",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-espp",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["equity", "employee benefits"],
+    "format": "definition",
+    "topic": "Job",
     "glossaryTerm": "ESPP",
     "prompt": "Which of these best describes an ESPP?",
     "choices": [
@@ -439,13 +543,17 @@
     ],
     "answerIndex": 0,
     "explanation": "Employee Stock Purchase Plan — a benefit that lets employees buy company stock (often at a 15% discount) through payroll deductions. A qualifying disposition (holding two years from offering + one year from purchase) taxes the discount as ordinary income but treats additional gains at long-term capital gains rates.",
-    "source": "IRS Pub 525"
+    "source": "IRS Pub 525",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-vesting",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["equity", "compensation"],
+    "format": "definition",
+    "topic": "Job",
     "glossaryTerm": "VESTING",
     "prompt": "Which of these best describes vesting?",
     "choices": [
@@ -456,13 +564,17 @@
     ],
     "answerIndex": 1,
     "explanation": "Vesting is the process of earning equity over time. A common schedule: 1-year cliff (nothing until you complete year one, then 25% unlocks), then monthly/quarterly over the next 3 years until 100% is yours. Leaving before full vest means forfeiting unvested shares.",
-    "source": "Cairn glossary"
+    "source": "Cairn glossary",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-cost-basis",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["investing", "tax", "capital gains"],
+    "format": "definition",
+    "topic": "Investments",
     "glossaryTerm": "COST BASIS",
     "prompt": "Which of these best describes cost basis?",
     "choices": [
@@ -473,13 +585,17 @@
     ],
     "answerIndex": 0,
     "explanation": "Cost basis is the original value of an asset for tax purposes — typically what you paid plus commissions. Your capital gain (or loss) is the sale price minus cost basis. Tracking it correctly matters especially for shares acquired at different times (FIFO, specific identification, or average cost methods).",
-    "source": "IRS Pub 550"
+    "source": "IRS Pub 550",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-qualified-dividend",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["investing", "tax", "dividends"],
+    "format": "definition",
+    "topic": "Investments",
     "glossaryTerm": "QUALIFIED DIVIDEND",
     "prompt": "Which of these best describes a qualified dividend?",
     "choices": [
@@ -490,13 +606,17 @@
     ],
     "answerIndex": 1,
     "explanation": "A qualified dividend is taxed at the preferential long-term capital gains rates (0%, 15%, or 20%) rather than as ordinary income. To qualify, the dividend must be paid by a U.S. or eligible foreign corporation, and you must hold the stock for more than 60 days around the ex-dividend date.",
-    "source": "IRS Pub 550"
+    "source": "IRS Pub 550",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-nominal",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["economics", "inflation"],
+    "format": "definition",
+    "topic": "Foundations",
     "glossaryTerm": "NOMINAL",
     "prompt": "Which of these best describes nominal dollars?",
     "choices": [
@@ -507,13 +627,17 @@
     ],
     "answerIndex": 1,
     "explanation": "Nominal dollars are sticker-price figures — the amount stated without adjusting for inflation. A salary of $100k today and $100k in 20 years are the same in nominal terms but very different in real (inflation-adjusted) purchasing power. Financial projections often show both.",
-    "source": "Cairn glossary"
+    "source": "Cairn glossary",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-real",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["economics", "inflation"],
+    "format": "definition",
+    "topic": "Foundations",
     "glossaryTerm": "REAL",
     "prompt": "Which of these best describes 'real' dollars (as in 'real return')?",
     "choices": [
@@ -524,13 +648,17 @@
     ],
     "answerIndex": 1,
     "explanation": "Real dollars (or real return) are adjusted for inflation. If your portfolio grew 7% but inflation was 3%, your real return was about 4%. Using real returns helps you think about actual increases in purchasing power, not just nominal gains.",
-    "source": "Cairn glossary"
+    "source": "Cairn glossary",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-529-plan",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["education", "accounts", "tax-advantaged"],
+    "format": "accounts",
+    "topic": "Life Events",
     "glossaryTerm": "529 PLAN",
     "prompt": "Which of these best describes a 529 plan?",
     "choices": [
@@ -541,13 +669,17 @@
     ],
     "answerIndex": 1,
     "explanation": "A 529 plan is a state-sponsored tax-advantaged account for education expenses. Contributions grow tax-free; qualified withdrawals (tuition, room & board, books) are tax-free. SECURE 2.0 allows unused 529 balances to be rolled into a Roth IRA (with limits), reducing the 'trapped money' risk.",
-    "source": "IRS Pub 970"
+    "source": "IRS Pub 970",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-early-withdrawal-penalty",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["Retirement", "tax", "withdrawals"],
+    "format": "definition",
+    "topic": "Retirement",
     "glossaryTerm": "EARLY-WITHDRAWAL PENALTY",
     "prompt": "Which of these best describes the early-withdrawal penalty on retirement accounts?",
     "choices": [
@@ -558,13 +690,17 @@
     ],
     "answerIndex": 1,
     "explanation": "Taking money out of a Traditional IRA or 401(k) before age 59½ generally triggers a 10% additional federal tax on top of the regular income tax. Notable exceptions: substantially equal periodic payments (72(t)), first-time home purchase (IRA only), higher education, disability, and others. Roth IRA contributions (not earnings) can be withdrawn anytime penalty-free.",
-    "source": "IRS Pub 590-B"
+    "source": "IRS Pub 590-B",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-mfj",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["tax", "filing status"],
+    "format": "definition",
+    "topic": "Taxes",
     "glossaryTerm": "MFJ",
     "prompt": "Which of these best describes Married Filing Jointly (MFJ)?",
     "choices": [
@@ -575,13 +711,17 @@
     ],
     "answerIndex": 2,
     "explanation": "Married Filing Jointly means both spouses combine income and deductions on one return. It generally results in lower taxes than Married Filing Separately and gives access to higher phase-out thresholds for credits and deductions. Most married couples benefit from MFJ unless one spouse has significant debts or liabilities.",
-    "source": "IRS Pub 501"
+    "source": "IRS Pub 501",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-standard-deduction",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["tax", "deductions"],
+    "format": "definition",
+    "topic": "Taxes",
     "glossaryTerm": "STANDARD DEDUCTION",
     "prompt": "Which of these best describes the standard deduction?",
     "choices": [
@@ -591,14 +731,18 @@
       "A deduction for mortgage interest available only to homeowners."
     ],
     "answerIndex": 1,
-    "explanation": "The standard deduction is a fixed dollar amount that reduces taxable income without requiring you to list (itemize) every deduction. For 2024 it's $14,600 (single) and $29,200 (MFJ), indexed annually. About 90% of filers take the standard deduction because it exceeds what they could itemize.",
-    "source": "IRS Pub 501"
+    "explanation": "The standard deduction is a fixed dollar amount that reduces taxable income without requiring you to list (itemize) every deduction. It is indexed annually for inflation, so the exact figure rises most years. About 90% of filers take the standard deduction because it exceeds what they could itemize.",
+    "source": "IRS Pub 501",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-backdoor-roth",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["Roth", "IRA", "strategy"],
+    "format": "definition",
+    "topic": "Retirement",
     "glossaryTerm": "BACKDOOR",
     "prompt": "Which of these best describes the backdoor Roth strategy?",
     "choices": [
@@ -609,13 +753,17 @@
     ],
     "answerIndex": 1,
     "explanation": "The backdoor Roth is a two-step workaround: contribute to a Traditional IRA on a non-deductible basis, then convert the balance to a Roth IRA. High earners above the Roth IRA income limits use this to get money into a Roth. Watch out for the pro-rata rule if you have other pre-tax IRA balances.",
-    "source": "IRS Pub 590-A, Notice 2014-54"
+    "source": "IRS Pub 590-A, Notice 2014-54",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-pro-rata-rule",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["Roth", "IRA", "tax"],
+    "format": "definition",
+    "topic": "Taxes",
     "glossaryTerm": "PRO-RATA",
     "prompt": "Which of these best describes the IRS pro-rata rule for IRA conversions?",
     "choices": [
@@ -626,13 +774,17 @@
     ],
     "answerIndex": 1,
     "explanation": "The pro-rata rule treats all your non-Roth IRAs as one pot when you convert. The taxable fraction equals pre-tax balance divided by total IRA balance. For example, if you have $90k pre-tax and $10k non-deductible, 90% of any conversion is taxable. Rolling pre-tax IRA money into a 401(k) first can sidestep the rule.",
-    "source": "IRS Pub 590-A"
+    "source": "IRS Pub 590-A",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-sep-ira",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["Retirement", "self-employed", "accounts"],
+    "format": "accounts",
+    "topic": "Retirement",
     "glossaryTerm": "SEP",
     "prompt": "Which of these best describes a SEP-IRA?",
     "choices": [
@@ -642,14 +794,18 @@
       "A government retirement plan for public-sector workers."
     ],
     "answerIndex": 0,
-    "explanation": "A SEP-IRA (Simplified Employee Pension) is a retirement plan for self-employed people and small businesses. Contributions can be up to ~25% of net self-employment earnings (max ~$69k for 2024) and are fully tax-deductible. SEPs are simple to open and have no fixed annual contribution requirement.",
-    "source": "IRS Pub 560"
+    "explanation": "A SEP-IRA (Simplified Employee Pension) is a retirement plan for self-employed people and small businesses. Contributions can be up to ~25% of net self-employment earnings (subject to an annual cap that the IRS indexes) and are fully tax-deductible. SEPs are simple to open and have no fixed annual contribution requirement.",
+    "source": "IRS Pub 560",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-simple-ira",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["Retirement", "workplace", "accounts"],
+    "format": "accounts",
+    "topic": "Retirement",
     "glossaryTerm": "SIMPLE",
     "prompt": "Which of these best describes a SIMPLE IRA?",
     "choices": [
@@ -659,14 +815,18 @@
       "An IRA that can only hold government-backed securities."
     ],
     "answerIndex": 1,
-    "explanation": "A SIMPLE IRA (Savings Incentive Match Plan for Employees) is a retirement plan for small businesses with 100 or fewer employees. Employees can contribute up to $16k (2024); employers must either match up to 3% of compensation or contribute a flat 2%. Early withdrawals within the first two years face a 25% penalty.",
-    "source": "IRS Pub 560"
+    "explanation": "A SIMPLE IRA (Savings Incentive Match Plan for Employees) is a retirement plan for small businesses with 100 or fewer employees. Employees can contribute up to an annual limit the IRS indexes; employers must either match up to 3% of compensation or contribute a flat 2%. Early withdrawals within the first two years face a 25% penalty.",
+    "source": "IRS Pub 560",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "beg-dcfsa",
     "version": 1,
     "difficulty": "Beginner",
-    "tags": ["Health", "accounts", "childcare"],
+    "format": "accounts",
+    "topic": "Life Events",
     "glossaryTerm": "DCFSA",
     "prompt": "Which of these best describes a DCFSA?",
     "choices": [
@@ -676,14 +836,18 @@
       "A projection chart detail mode that draws one line per investment account."
     ],
     "answerIndex": 2,
-    "explanation": "Dependent Care FSA — a workplace account that lets you contribute pre-tax dollars (up to ~$5,000/year) for qualified childcare or eldercare expenses, lowering your taxable income. Funds are use-it-or-lose-it within the plan year. The dependent must generally be under age 13.",
-    "source": "IRS Pub 503"
+    "explanation": "Dependent Care FSA — a workplace account that lets you contribute pre-tax dollars (subject to an annual cap) for qualified childcare or eldercare expenses, lowering your taxable income. Funds are use-it-or-lose-it within the plan year. The dependent must generally be under age 13.",
+    "source": "IRS Pub 503",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "adv-pro-rata",
     "version": 1,
     "difficulty": "Advanced",
-    "tags": ["Roth", "conversions", "tax"],
+    "format": "definition",
+    "topic": "Taxes",
     "glossaryTerm": "PRO-RATA",
     "prompt": "A backdoor Roth IRA is subject to which IRS rule that can create unexpected taxes if you hold pre-tax IRA balances?",
     "choices": [
@@ -694,25 +858,33 @@
     ],
     "answerIndex": 2,
     "explanation": "The pro-rata rule treats all your non-Roth IRAs (Traditional, SEP, SIMPLE) as one pot. The taxable fraction of a conversion equals pre-tax balance divided by total balance, so a large pre-tax balance makes a backdoor conversion partly taxable. The usual fix is rolling pre-tax IRA dollars into a 401(k) first.",
-    "source": "IRS Pub 590-A & 590-B"
+    "source": "IRS Pub 590-A & 590-B",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "adv-rmd-age",
     "version": 1,
     "difficulty": "Advanced",
-    "tags": ["Retirement", "RMD", "tax"],
+    "format": "definition",
+    "topic": "Retirement",
     "glossaryTerm": "RMD",
     "prompt": "At what age do Required Minimum Distributions generally begin for Traditional 401(k) and IRA balances under SECURE 2.0?",
     "choices": ["59½", "65", "70½", "73"],
     "answerIndex": 3,
     "explanation": "Under SECURE 2.0 (enacted 2022), Required Minimum Distributions from pre-tax retirement accounts generally begin at age 73 (rising to 75 in 2033). They do not apply to Roth IRAs (though Roth 401(k)s were subject to them until SECURE 2.0 eliminated that requirement). The first RMD may be delayed to April 1 of the following year.",
-    "source": "IRS Pub 590-B; SECURE 2.0 Act of 2022"
+    "source": "IRS Pub 590-B; SECURE 2.0 Act of 2022",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "adv-niit-threshold",
     "version": 1,
     "difficulty": "Advanced",
-    "tags": ["tax", "investment income", "NIIT"],
+    "format": "definition",
+    "topic": "Taxes",
     "glossaryTerm": "NIIT",
     "prompt": "Which types of income are subject to the Net Investment Income Tax (NIIT)?",
     "choices": [
@@ -723,13 +895,17 @@
     ],
     "answerIndex": 2,
     "explanation": "The 3.8% NIIT applies to the lesser of net investment income or the excess of MAGI over $200k (single) / $250k (MFJ). Net investment income includes interest, dividends, capital gains, rental income, royalties, and passive activity income. Wages, self-employment income, and distributions from IRAs and qualified plans are explicitly excluded.",
-    "source": "IRS Form 8960; IRC §1411"
+    "source": "IRS Form 8960; IRC §1411",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "adv-amt-iso",
     "version": 1,
     "difficulty": "Advanced",
-    "tags": ["tax", "AMT", "equity", "ISO"],
+    "format": "definition",
+    "topic": "Taxes",
     "glossaryTerm": "AMT",
     "prompt": "When you exercise Incentive Stock Options (ISOs), which AMT adjustment triggers?",
     "choices": [
@@ -740,13 +916,17 @@
     ],
     "answerIndex": 1,
     "explanation": "When you exercise ISOs, the spread (FMV minus strike price) is NOT regular taxable income but IS an Alternative Minimum Tax adjustment item. It gets added to AMTI. In a high-spread year (large grants exercised near IPO) this can create a large AMT bill even though you received no cash. The standard response is careful exercise timing or selling enough shares to cover the AMT.",
-    "source": "IRS Pub 525; Form 6251 Instructions"
+    "source": "IRS Pub 525; Form 6251 Instructions",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "adv-roth-conversion-ladder",
     "version": 1,
     "difficulty": "Advanced",
-    "tags": ["Roth", "FIRE", "conversions", "strategy"],
+    "format": "definition",
+    "topic": "Retirement",
     "glossaryTerm": "BACKDOOR",
     "prompt": "The Roth conversion ladder is primarily used to avoid which penalty for early retirees before age 59½?",
     "choices": [
@@ -757,13 +937,17 @@
     ],
     "answerIndex": 2,
     "explanation": "Early retirees convert Traditional 401(k)/IRA balances to Roth each year, then wait five years for each converted tranche to become penalty-free. Because Roth IRA contributions (and seasoned conversions) can be withdrawn without the 10% penalty, this creates a bridge to age 59½. Execution requires five years of living expenses in non-retirement accounts as a runway.",
-    "source": "IRS Pub 590-B; IRC §72(t)"
+    "source": "IRS Pub 590-B; IRC §72(t)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "adv-espp-qualifying",
     "version": 1,
     "difficulty": "Advanced",
-    "tags": ["equity", "ESPP", "tax"],
+    "format": "definition",
+    "topic": "Job",
     "glossaryTerm": "ESPP",
     "prompt": "For an ESPP qualifying disposition, what are the required holding periods?",
     "choices": [
@@ -774,13 +958,17 @@
     ],
     "answerIndex": 1,
     "explanation": "For a Section 423 ESPP qualifying disposition, you must hold the shares at least two years from the offering (grant) date AND one year from the purchase date. In a qualifying disposition, the discount is taxed as ordinary income (capped at the actual discount if gains are smaller), and additional appreciation is a long-term capital gain. A disqualifying disposition taxes more of the gain as ordinary income.",
-    "source": "IRS Pub 525; IRC §423"
+    "source": "IRS Pub 525; IRC §423",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "adv-roth-phase-out",
     "version": 1,
     "difficulty": "Advanced",
-    "tags": ["Roth", "IRA", "income limits"],
+    "format": "definition",
+    "topic": "Retirement",
     "glossaryTerm": "ROTH IRA",
     "prompt": "What happens to your direct Roth IRA contribution limit as your MAGI increases above the phase-out range?",
     "choices": [
@@ -790,14 +978,18 @@
       "You become eligible for a higher contribution limit through a catch-up provision"
     ],
     "answerIndex": 1,
-    "explanation": "Direct Roth IRA contributions phase out over a MAGI range ($146k–$161k single; $230k–$240k MFJ in 2024). Within the range your allowed contribution decreases proportionally. Above the top of the range, direct contributions are $0. High earners above the limit use the backdoor Roth (non-deductible Traditional IRA → conversion) as a legal workaround.",
-    "source": "IRS Pub 590-A"
+    "explanation": "Direct Roth IRA contributions phase out over a MAGI range (the IRS indexes the band each year). Within the range your allowed contribution decreases proportionally. Above the top of the range, direct contributions are $0. High earners above the limit use the backdoor Roth (non-deductible Traditional IRA → conversion) as a legal workaround.",
+    "source": "IRS Pub 590-A",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "adv-secure2-529-roth",
     "version": 1,
     "difficulty": "Advanced",
-    "tags": ["529 plan", "Roth", "SECURE 2.0"],
+    "format": "definition",
+    "topic": "Retirement",
     "glossaryTerm": "529 PLAN",
     "prompt": "Under SECURE 2.0, unused 529 funds can be rolled into a Roth IRA. What is the lifetime rollover limit per beneficiary?",
     "choices": [
@@ -808,13 +1000,17 @@
     ],
     "answerIndex": 1,
     "explanation": "SECURE 2.0 allows rolling unused 529 funds into the beneficiary's Roth IRA, subject to a $35,000 lifetime limit per beneficiary. The 529 account must be at least 15 years old, and annual rollovers are capped at the Roth IRA annual contribution limit (minus other Roth contributions). The beneficiary must have earned income at least equal to the amount rolled over.",
-    "source": "SECURE 2.0 Act of 2022, §126; IRS Notice 2024-2"
+    "source": "SECURE 2.0 Act of 2022, §126; IRS Notice 2024-2",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "adv-wash-sale",
     "version": 1,
     "difficulty": "Advanced",
-    "tags": ["investing", "tax-loss harvesting", "tax"],
+    "format": "definition",
+    "topic": "Investments",
     "prompt": "What is the wash-sale rule and what does it disallow?",
     "choices": [
       "A rule requiring wash trades to be reported separately on Schedule B",
@@ -824,13 +1020,17 @@
     ],
     "answerIndex": 1,
     "explanation": "The wash-sale rule (IRC §1091) disallows a capital loss if you purchase a 'substantially identical' security within 30 days before or after the loss sale. The disallowed loss is added to the basis of the new shares, effectively deferring rather than eliminating it. Common mistake: selling VTI at a loss and buying VOO (different but substantially identical broad-market ETFs) can still trigger the rule.",
-    "source": "IRS Pub 550; IRC §1091"
+    "source": "IRS Pub 550; IRC §1091",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "adv-72t-sepp",
     "version": 1,
     "difficulty": "Advanced",
-    "tags": ["Retirement", "FIRE", "early withdrawal"],
+    "format": "definition",
+    "topic": "Retirement",
     "prompt": "What is a 72(t) SEPP and what penalty does it avoid?",
     "choices": [
       "A rule allowing penalty-free IRA withdrawals after age 72",
@@ -840,13 +1040,17 @@
     ],
     "answerIndex": 1,
     "explanation": "IRC §72(t) allows penalty-free early IRA withdrawals if you take Substantially Equal Periodic Payments (SEPP). The payments must continue for at least five years OR until you turn 59½, whichever is later. Three IRS-approved calculation methods (RMD, amortization, annuitization) determine the payment amount. Modifying or stopping the payments before the required period ends triggers the 10% penalty — retroactively on all prior distributions.",
-    "source": "IRS Pub 590-B; IRC §72(t); Rev. Rul. 2002-62"
+    "source": "IRS Pub 590-B; IRC §72(t); Rev. Rul. 2002-62",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "adv-magi-irmaa",
     "version": 1,
     "difficulty": "Advanced",
-    "tags": ["Medicare", "IRMAA", "tax"],
+    "format": "definition",
+    "topic": "Taxes",
     "glossaryTerm": "MAGI",
     "prompt": "What is IRMAA and how does MAGI affect Medicare Part B and D premiums?",
     "choices": [
@@ -856,14 +1060,18 @@
       "IRMAA affects only Medicare Part A hospital coverage costs"
     ],
     "answerIndex": 1,
-    "explanation": "IRMAA (Income-Related Monthly Adjustment Amount) adds a surcharge to Medicare Part B and Part D premiums when MAGI exceeds threshold tiers ($103k single / $206k MFJ in 2024, with multiple higher brackets). The surcharge uses income from two years prior (2024 premiums use 2022 MAGI). A large Roth conversion or capital gain can unexpectedly push you into a higher IRMAA tier, significantly raising Medicare costs.",
-    "source": "IRS Pub 590-B; CMS IRMAA guidelines"
+    "explanation": "IRMAA (Income-Related Monthly Adjustment Amount) adds a surcharge to Medicare Part B and Part D premiums when MAGI exceeds threshold tiers (the IRS/CMS index the brackets each year). The surcharge uses income from two years prior (e.g. this year's premiums use MAGI from two years ago). A large Roth conversion or capital gain can unexpectedly push you into a higher IRMAA tier, significantly raising Medicare costs.",
+    "source": "IRS Pub 590-B; CMS IRMAA guidelines",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "adv-inherited-ira-10yr",
     "version": 1,
     "difficulty": "Advanced",
-    "tags": ["Retirement", "inherited IRA", "RMD"],
+    "format": "definition",
+    "topic": "Death",
     "glossaryTerm": "IRA",
     "prompt": "Under the SECURE Act, most non-spouse beneficiaries who inherit an IRA must follow which rule?",
     "choices": [
@@ -874,30 +1082,38 @@
     ],
     "answerIndex": 2,
     "explanation": "The SECURE Act (2019) eliminated the stretch IRA for most non-spouse beneficiaries, replacing it with a 10-year rule: the entire inherited IRA balance must be distributed by the end of the 10th year following the owner's death. If the original owner had begun RMDs, the beneficiary must also take annual distributions during the 10 years (per IRS proposed regulations). Exceptions exist for eligible designated beneficiaries (spouses, minor children, disabled individuals, etc.).",
-    "source": "SECURE Act of 2019; IRS Proposed Regs (Feb 2022)"
+    "source": "SECURE Act of 2019; IRS Proposed Regs (Feb 2022)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "adv-ltcg-brackets",
-    "version": 1,
+    "version": 2,
     "difficulty": "Advanced",
-    "tags": ["tax", "capital gains", "investing"],
+    "format": "definition",
+    "topic": "Taxes",
     "glossaryTerm": "LTCG",
-    "prompt": "At what approximate 2024 taxable income threshold does the 0% long-term capital gains rate end for a single filer?",
+    "prompt": "How is the taxable-income threshold for the 0% long-term capital gains rate set from year to year?",
     "choices": [
-      "$47,025",
-      "$61,500",
-      "$72,800",
-      "$94,050"
+      "It is a fixed dollar figure written into the statute that does not change",
+      "The IRS adjusts it for inflation each year, so the dollar cutoff rises most years",
+      "It equals the standard deduction for that filing status",
+      "It is set each year by the taxpayer's marginal tax bracket"
     ],
-    "answerIndex": 0,
-    "explanation": "For single filers in 2024, the 0% LTCG rate applies to taxable income up to $47,025 (after standard deduction). Above that threshold to $518,900, the rate is 15%; above $518,900 it's 20%. This means someone in a lower income year (e.g., early retirement before Social Security) may be able to harvest significant capital gains completely tax-free — a strategy called zero-rate harvesting.",
-    "source": "IRS Rev. Proc. 2023-34 (2024 inflation adjustments)"
+    "answerIndex": 1,
+    "explanation": "The 0% long-term capital gains bracket applies up to a taxable-income threshold that the IRS adjusts for inflation each year — so the exact dollar cutoff rises most years and should be looked up for the current year rather than memorized (for a single filer it was roughly $47,000 in recent years; above the cutoff the rate steps to 15%, then 20% at much higher income). The practical takeaway is timeless: in a low-income year (e.g., early retirement before Social Security) you may be able to harvest capital gains completely tax-free — a strategy called zero-rate harvesting.",
+    "source": "IRS Rev. Proc. 2023-34 (2024 inflation adjustments)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "adv-irs-pub-590b-5yr",
     "version": 1,
     "difficulty": "Advanced",
-    "tags": ["Roth", "IRA", "5-year rule"],
+    "format": "definition",
+    "topic": "Retirement",
     "glossaryTerm": "ROTH IRA",
     "prompt": "The Roth IRA 5-year rule has TWO separate applications. Which statement correctly describes one of them?",
     "choices": [
@@ -908,30 +1124,38 @@
     ],
     "answerIndex": 2,
     "explanation": "There are two Roth 5-year clocks: (1) The earnings qualification clock — starts January 1 of the first year you contributed to ANY Roth IRA, which is universal across all your Roth IRAs. (2) The conversion clock — each conversion has its own 5-year holding period for penalty-free withdrawal of the converted amount before 59½. When you roll a Roth 401(k) into a Roth IRA, the rollover inherits the IRA's existing clock for earnings purposes, but conversions made during the rollover can start a new conversion clock.",
-    "source": "IRS Pub 590-B"
+    "source": "IRS Pub 590-B",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "adv-solo-401k-limit",
     "version": 1,
     "difficulty": "Advanced",
-    "tags": ["Retirement", "self-employed", "Solo 401k"],
+    "format": "definition",
+    "topic": "Retirement",
     "glossaryTerm": "SOLO-401(K)",
     "prompt": "For a self-employed person with a Solo 401(k), which of these best describes the combined contribution limit?",
     "choices": [
-      "Employee deferral only, capped at the standard 401(k) limit (~$23k in 2024)",
+      "Employee deferral only, capped at the standard 401(k) limit",
       "Employer profit-sharing contribution only, up to 25% of W-2 wages",
-      "Employee deferral (up to ~$23k) PLUS employer profit-sharing (up to 25% of net self-employment income), total capped at ~$69k",
+      "Employee deferral PLUS employer profit-sharing (up to 25% of net self-employment income), combined within the overall §415(c) annual additions limit",
       "A fixed 20% of net self-employment income with no deferral component"
     ],
     "answerIndex": 2,
-    "explanation": "A Solo 401(k) allows two types of contributions: (1) Employee deferral up to $23k ($30.5k if 50+) for 2024, and (2) employer profit-sharing up to 25% of net self-employment income (after the SE tax deduction). The combined total cannot exceed $69k ($76.5k if 50+). This can result in much higher contributions than a SEP-IRA for high-earning sole proprietors.",
-    "source": "IRS Pub 560; IRC §415(c)"
+    "explanation": "A Solo 401(k) allows two types of contributions: (1) employee elective deferral up to the standard 401(k) deferral limit, and (2) employer profit-sharing up to 25% of net self-employment income (after the SE tax deduction). The combined total is capped by the IRC §415(c) annual additions limit, which the IRS indexes each year. This can result in much higher contributions than a SEP-IRA for high-earning sole proprietors.",
+    "source": "IRS Pub 560; IRC §415(c)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "adv-529-k12",
     "version": 1,
     "difficulty": "Advanced",
-    "tags": ["529 plan", "education", "tax"],
+    "format": "definition",
+    "topic": "Life Events",
     "glossaryTerm": "529 PLAN",
     "prompt": "After the Tax Cuts and Jobs Act, 529 plan funds can be used tax-free for which K-12 expenses?",
     "choices": [
@@ -942,13 +1166,18 @@
     ],
     "answerIndex": 2,
     "explanation": "The Tax Cuts and Jobs Act (2017) expanded 529 plans to cover K-12 tuition (public, private, or religious schools) up to $10,000/year per student. This applies at the federal level; some states don't conform and may treat K-12 529 withdrawals as non-qualified (subject to state income tax and penalty). Room & board and other expenses remain higher-education only.",
-    "source": "IRS Pub 970; Tax Cuts and Jobs Act §11032"
+    "source": "IRS Pub 970; Tax Cuts and Jobs Act §11032",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "adv-hsa-triple-tax",
     "version": 1,
     "difficulty": "Advanced",
-    "tags": ["Health", "HSA", "tax strategy"],
+    "format": "definition",
+    "topic": "Insurance",
+    "subtopic": "Health",
     "glossaryTerm": "HSA",
     "prompt": "An HSA is often described as 'triple-tax-advantaged.' Which combination correctly identifies all three tax benefits?",
     "choices": [
@@ -959,13 +1188,17 @@
     ],
     "answerIndex": 0,
     "explanation": "An HSA's triple tax benefit: (1) Contributions are tax-deductible (or pre-tax via payroll), reducing taxable income; (2) investments inside the HSA grow tax-free; (3) withdrawals for qualified medical expenses are completely tax-free. After age 65 you can withdraw for any reason (taxed as ordinary income, like a Traditional IRA) — making an HSA an excellent long-term investment vehicle if you can pay medical costs out-of-pocket now.",
-    "source": "IRS Pub 969"
+    "source": "IRS Pub 969",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "adv-nua-strategy",
     "version": 1,
     "difficulty": "Advanced",
-    "tags": ["Retirement", "equity", "tax strategy"],
+    "format": "definition",
+    "topic": "Retirement",
     "prompt": "What is Net Unrealized Appreciation (NUA) and how does it help with employer stock in a 401(k)?",
     "choices": [
       "NUA is the increase in an ETF's price above its NAV, taxed at ordinary income rates",
@@ -975,39 +1208,50 @@
     ],
     "answerIndex": 1,
     "explanation": "Net Unrealized Appreciation (NUA) is a tax strategy for employer stock inside a 401(k). Instead of rolling to an IRA (where all withdrawals are ordinary income), you take a lump-sum distribution: pay ordinary income tax on the cost basis only, then hold the shares in a taxable account. The appreciation (NUA) above the cost basis is taxed at long-term capital gains rates when sold — potentially saving significant taxes if the stock appreciated a lot.",
-    "source": "IRS Pub 575; IRC §402(e)(4)"
+    "source": "IRS Pub 575; IRC §402(e)(4)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "adv-mega-backdoor-roth",
     "version": 1,
     "difficulty": "Advanced",
-    "tags": ["Roth", "401k", "tax strategy"],
+    "format": "definition",
+    "topic": "Retirement",
     "glossaryTerm": "BACKDOOR",
     "prompt": "What is the 'mega backdoor Roth' and which plan feature enables it?",
     "choices": [
       "Converting a Traditional IRA to a Roth using a large one-time conversion in a low-income year",
       "Making after-tax (non-Roth) 401(k) contributions beyond the standard deferral limit, then converting or rolling them to a Roth — enabled by an in-plan Roth conversion or in-service distribution feature",
       "A strategy to avoid the pro-rata rule by first rolling all IRA balances into a 401(k)",
-      "Maximizing a backdoor Roth IRA by making two separate $7,000 contributions in the same year"
+      "Maximizing a backdoor Roth IRA by making two separate contributions in the same year"
     ],
     "answerIndex": 1,
-    "explanation": "The mega backdoor Roth lets you contribute after-tax dollars to a 401(k) beyond the regular employee deferral limit — up to the total IRS limit (e.g., $69k in 2024 minus employer contributions and your deferrals). The key requirement: your plan must allow after-tax contributions AND either in-plan Roth conversions or in-service withdrawals. Not all plans offer this. The IRS confirmed it's permissible in IRS Notice 2014-54.",
-    "source": "IRS Notice 2014-54; IRC §402(g); IRC §415"
+    "explanation": "The mega backdoor Roth lets you contribute after-tax dollars to a 401(k) beyond the regular employee deferral limit — up to the total IRC §415(c) annual additions limit (minus employer contributions and your deferrals). The key requirement: your plan must allow after-tax contributions AND either in-plan Roth conversions or in-service withdrawals. Not all plans offer this. The IRS confirmed it's permissible in IRS Notice 2014-54.",
+    "source": "IRS Notice 2014-54; IRC §402(g); IRC §415",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   },
   {
     "id": "adv-gift-tax-annual-exclusion",
     "version": 1,
     "difficulty": "Advanced",
-    "tags": ["estate planning", "gifts", "tax"],
+    "format": "definition",
+    "topic": "Death",
     "prompt": "What is the annual gift tax exclusion and what does exceeding it trigger?",
     "choices": [
-      "A $10,000 per-recipient yearly limit; exceeding it requires immediate payment of gift tax",
-      "An $18,000 per-recipient yearly limit (2024); exceeding it requires filing Form 709 and reduces your lifetime exclusion",
-      "A $35,000 per-recipient yearly limit applicable only to direct family members",
-      "A per-calendar-year total of $50,000 across all recipients combined before gift tax applies"
+      "A per-recipient yearly limit; exceeding it requires immediate payment of gift tax",
+      "A per-recipient yearly limit (indexed for inflation); exceeding it requires filing Form 709 and reduces your lifetime exclusion",
+      "A per-recipient yearly limit applicable only to direct family members",
+      "A per-calendar-year total across all recipients combined before gift tax applies"
     ],
     "answerIndex": 1,
-    "explanation": "In 2024, you can give up to $18,000 per recipient ($36,000 for a married couple splitting gifts) without gift tax consequences. Gifts above this amount require filing IRS Form 709 and reduce your lifetime estate and gift tax exemption (over $13.6 million in 2024). The annual exclusion is indexed for inflation. Common planning uses: front-loading a 529 with 5-year election (5 × $18k = $90k per donor per beneficiary, treated as spread over 5 years).",
-    "source": "IRS Form 709 Instructions; IRC §2503(b)"
+    "explanation": "The annual gift tax exclusion lets you give up to a per-recipient amount (indexed for inflation; a married couple can split gifts to double it) without gift tax consequences. Gifts above this amount require filing IRS Form 709 and reduce your lifetime estate and gift tax exemption rather than triggering an immediate tax for most people. Common planning use: front-loading a 529 with the 5-year election spreads five years of exclusions into one year per donor per beneficiary.",
+    "source": "IRS Form 709 Instructions; IRC §2503(b)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
   }
 ]

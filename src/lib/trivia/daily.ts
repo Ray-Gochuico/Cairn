@@ -87,6 +87,83 @@ export function selectDailyQuestion(args: SelectArgs): TriviaQuestion | null {
   return pool[idx];
 }
 
+interface SelectSetArgs {
+  /** Already reviewed-only (the load-filter runs upstream in load-bank.ts). */
+  bank: TriviaQuestion[];
+  /**
+   * PRIOR-DAY answered keys to EXCLUDE (from getAnsweredKeysByDay().priorDays).
+   * Version-aware (`id@vN`).
+   */
+  answeredIds: string[];
+  /**
+   * TODAY's answered keys to KEEP in the set (shown answered/greyed), from
+   * getAnsweredKeysByDay().today. Including these keeps the day's 4 STABLE under
+   * mid-day answering — the derive anchor's key invariant (§3.0). The set is
+   * computed from a day-seeded deterministic walk that does NOT depend on which
+   * of the 4 are answered, so answering one never re-rolls the others.
+   */
+  answeredTodayIds?: string[];
+  todayISO: string;
+  // No per-question difficulty PREFERENCE — the 4-set is fixed at 2 Beginner +
+  // 2 Advanced by design (D5), independent of the retired LearningDifficulty.
+}
+
+/**
+ * Today's set of up to 4 (2 Beginner + 2 Advanced), topic-aware, pure +
+ * clock-injected. Deterministic per day (varies by day), drawn from the unseen
+ * reviewed pool. Prior-day-answered questions are excluded; today-answered ones
+ * stay in the set (shown graded) so answering during the day doesn't shrink or
+ * re-roll the 4. Degrades gracefully to <4 on a thin pool (returns what exists,
+ * never throws, never pads with dupes) — which IS the 1→4 rollout continuum
+ * (L1.5).
+ */
+export function selectDailySet(args: SelectSetArgs): TriviaQuestion[] {
+  const { bank, answeredIds, answeredTodayIds = [], todayISO } = args;
+
+  // Eligible pool = reviewed bank minus PRIOR-DAY answers. Today's answers stay
+  // eligible (kept in the set) — that's what holds the set stable mid-day.
+  const priorAnswered = new Set(answeredIds.filter((k) => !answeredTodayIds.includes(k)));
+  const eligible = bank.filter((qq) => !priorAnswered.has(answeredKey(qq.id, qq.version)));
+
+  // Per-tier deterministic order: stable per day, varies by day.
+  const order = (q: TriviaQuestion) => hash(`${todayISO}:${q.id}`);
+  const byOrder = (a: TriviaQuestion, b: TriviaQuestion) => order(a) - order(b);
+  const beginner = eligible.filter((q) => q.difficulty === 'Beginner').sort(byOrder);
+  const advanced = eligible.filter((q) => q.difficulty === 'Advanced').sort(byOrder);
+
+  const chosen: TriviaQuestion[] = [];
+  const usedTopics = new Set<string>();
+
+  // Greedy pick of `n` from `tier`, preferring a NOT-yet-used topic across the
+  // whole 4; relax to a same-topic pick (rather than return <4 unnecessarily)
+  // only once distinct-topic options are exhausted.
+  const pickFrom = (tier: TriviaQuestion[], n: number) => {
+    let picked = 0;
+    // First pass: distinct topics.
+    for (const q of tier) {
+      if (picked >= n) break;
+      if (chosen.includes(q)) continue;
+      if (usedTopics.has(q.topic)) continue;
+      chosen.push(q);
+      usedTopics.add(q.topic);
+      picked++;
+    }
+    // Relaxation pass: allow same-topic to fill the count if the pool can.
+    for (const q of tier) {
+      if (picked >= n) break;
+      if (chosen.includes(q)) continue;
+      chosen.push(q);
+      usedTopics.add(q.topic);
+      picked++;
+    }
+  };
+
+  pickFrom(beginner, 2);
+  pickFrom(advanced, 2);
+
+  return chosen;
+}
+
 interface StreakArgs {
   current: number;
   lastAnsweredISO: string | null;

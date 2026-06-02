@@ -103,4 +103,33 @@ export class LearningStateRepo {
     );
     return rows[0]?.n ?? 0;
   }
+
+  /**
+   * DATE-AWARE answered keys for the derive anchor (L1.0 / §3.0). Partitions the
+   * version-aware answered keys by `answered_iso_date` relative to `todayISO`:
+   * `priorDays` are EXCLUDED from the day's 4-set (already done on an earlier
+   * day) while `today` are KEPT in the set (just-answered, shown greyed) — which
+   * is exactly the partition the derive model needs to stay stable under mid-day
+   * answering. Reads `learning_answers.answered_iso_date` (a column present since
+   * 0037), so it needs NO migration.
+   *
+   * `listAnsweredQuestionIds()` is kept for back-compat / other call sites; this
+   * method is additive (a later cleanup may express the old one as priorDays ∪
+   * today, but do not churn it here).
+   */
+  async getAnsweredKeysByDay(
+    todayISO: string,
+  ): Promise<{ priorDays: string[]; today: string[] }> {
+    const rows = await this.db.select<{
+      question_id: string;
+      question_version: number;
+      answered_iso_date: string;
+    }>('SELECT question_id, question_version, answered_iso_date FROM learning_answers');
+    const key = (r: { question_id: string; question_version: number }) =>
+      answeredKey(r.question_id, r.question_version);
+    return {
+      priorDays: rows.filter((r) => r.answered_iso_date !== todayISO).map(key),
+      today: rows.filter((r) => r.answered_iso_date === todayISO).map(key),
+    };
+  }
 }

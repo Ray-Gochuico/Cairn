@@ -5,6 +5,7 @@ import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { runMigrations } from '@/db/migrations';
 import { setDatabase } from '@/db/db';
 import { useLearningStore } from '@/stores/learning-state-store';
+import { localTodayISO } from '@/lib/trivia/daily';
 
 const loadInitial = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
@@ -24,6 +25,7 @@ describe('useLearningStore', () => {
     useLearningStore.setState({
       learningState: null,
       answeredQuestionIds: [],
+      answeredKeysByDay: { priorDays: [], today: [] },
       isLoading: false,
       error: null,
     });
@@ -57,5 +59,28 @@ describe('useLearningStore', () => {
     // The store mirrors the repo's version-aware keys (`id@vN`), which the daily
     // selector matches against the current bank's (id, version).
     expect(useLearningStore.getState().answeredQuestionIds).toEqual(['beg-apr@v1']);
+  });
+
+  it('exposes date-partitioned answeredKeysByDay (prior-day vs today)', async () => {
+    const today = localTodayISO(new Date());
+    await useLearningStore.getState().load();
+    // A prior-day answer and a today answer.
+    await useLearningStore.getState().recordAnswer({
+      questionId: 'beg-apr',
+      answeredIsoDate: '2020-01-01',
+      chosenIndex: 0,
+      wasCorrect: true,
+      questionVersion: 1,
+    });
+    await useLearningStore.getState().recordAnswer({
+      questionId: 'beg-apy',
+      answeredIsoDate: today,
+      chosenIndex: 1,
+      wasCorrect: true,
+      questionVersion: 1,
+    });
+    const { answeredKeysByDay } = useLearningStore.getState();
+    expect(answeredKeysByDay.priorDays).toEqual(['beg-apr@v1']);
+    expect(answeredKeysByDay.today).toEqual(['beg-apy@v1']);
   });
 });
