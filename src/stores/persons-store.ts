@@ -7,6 +7,17 @@ import type { Person } from '@/types/schema';
  * In-flight de-dupe: if a load() is already in progress, return its promise
  * instead of starting a second DB round-trip. Cleared after settle so later
  * load() calls (after a CRUD mutation) still re-fetch.
+ *
+ * Known, accepted TOCTOU (do NOT "fix" without re-reading this): a CRUD
+ * mutation's `await get().load()` that fires while an *initial* load() is still
+ * in flight piggybacks the pre-mutation in-flight promise and could briefly
+ * show stale data. This is unreproducible on the synchronous better-sqlite3
+ * test adapter (the piggybacked SELECT runs after the write commits), so it has
+ * no honest regression test; the only window is the sub-second, pre-interactive
+ * initial-mount race on the async Tauri adapter. Accepted as negligible by the
+ * Track-3 final review (2026-06-01). A bypass (clear *Inflight before the
+ * post-write load, or add a private forceReload()) was scoped and declined:
+ * 6 stores of churn in hot code for a defect with no testable failure.
  */
 let personsInflight: Promise<void> | null = null;
 
