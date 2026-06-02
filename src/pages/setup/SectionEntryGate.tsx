@@ -30,7 +30,7 @@ export default function SectionEntryGate({
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">{body}</p>
         {wasSkipped && (
-          <p className="text-xs text-warning-foreground">
+          <p className="rounded border border-warning/40 bg-warning-soft p-2 text-xs text-warning-foreground">
             You skipped this section earlier — opening it now?
           </p>
         )}

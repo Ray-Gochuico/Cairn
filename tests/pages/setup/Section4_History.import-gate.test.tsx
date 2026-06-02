@@ -83,11 +83,12 @@ describe('Section4_History import gating (W7)', () => {
     expect(
       screen.queryByText(/imports match rows to existing accounts by name/i),
     ).toBeNull();
-    // The stubbed ImportCsvButton renders an enabled "Import CSV" button.
+    // The account-gated cards (snapshots + contributions) now render the live,
+    // ENABLED ImportCsvButton stub. The asset-values / goals cards keep a plain
+    // disabled "Import CSV" placeholder (no importer planned), so scope the
+    // assertion to the enabled triggers rather than every "Import CSV" button.
     const importButtons = screen.getAllByRole('button', { name: /^import csv$/i });
-    expect(importButtons.length).toBeGreaterThanOrEqual(2);
-    for (const btn of importButtons) {
-      expect(btn).not.toBeDisabled();
-    }
+    const enabled = importButtons.filter((b) => !(b as HTMLButtonElement).disabled);
+    expect(enabled.length).toBeGreaterThanOrEqual(2);
   });
 });

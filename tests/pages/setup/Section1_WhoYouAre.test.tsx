@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { Person } from '@/types/schema';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
@@ -97,6 +98,32 @@ describe('Section1_WhoYouAre', () => {
     );
     expect(
       screen.getByText(/you skipped this section earlier/i),
+    ).toBeInTheDocument();
+  });
+
+  it('counts an HOURLY person (hourlyRate > 0, no salary) as employed (M1)', () => {
+    const hourly = {
+      id: 1,
+      name: 'Hank',
+      annualSalaryPretax: 0,
+      hourlyRate: 30,
+    } as unknown as Person;
+    usePersonsStore.setState({
+      persons: [hourly],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+      create: async () => 1,
+      update: async () => {},
+      remove: async () => {},
+    } as never);
+    render(<Section1_WhoYouAre status="in_progress" onSetStatus={() => {}} />);
+    const employmentHeading = screen.getByText(/^Employment$/);
+    const employmentCard = employmentHeading.closest('div[class*="rounded"]');
+    expect(employmentCard).not.toBeNull();
+    // The card must read "1 added", not "0 added".
+    expect(
+      within(employmentCard as HTMLElement).getByText(/1 added/i),
     ).toBeInTheDocument();
   });
 

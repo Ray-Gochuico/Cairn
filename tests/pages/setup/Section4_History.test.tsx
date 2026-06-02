@@ -178,19 +178,18 @@ describe('Section4_History', () => {
     it('Property / vehicle values card keeps the disabled placeholder (uses ValueHistorySection)', () => {
       renderWithRouter();
       const card = findCard(/Property \/ vehicle values/);
-      const btn = within(card).getByRole('button', {
-        name: /import csv \(coming soon\)/i,
-      });
+      const btn = within(card).getByRole('button', { name: /^import csv$/i });
       expect(btn).toBeDisabled();
+      // Softened from "(coming soon)" — no importer is planned for this entity.
+      expect(within(card).queryByText(/coming soon/i)).toBeNull();
     });
 
     it('Goals card keeps the disabled placeholder', () => {
       renderWithRouter();
       const card = findCard(/^Goals$/);
-      const btn = within(card).getByRole('button', {
-        name: /import csv \(coming soon\)/i,
-      });
+      const btn = within(card).getByRole('button', { name: /^import csv$/i });
       expect(btn).toBeDisabled();
+      expect(within(card).queryByText(/coming soon/i)).toBeNull();
     });
   });
 });

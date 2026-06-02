@@ -337,3 +337,78 @@ describe('ImportPreviewModal — N2 entity routing', () => {
     expect(screen.getByText('Owner type')).toBeInTheDocument();
   });
 });
+
+describe('ImportPreviewModal — parse-error line list (L3 truncation)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('truncates the inline line list to 10 + "and N more" on a heavily malformed CSV', () => {
+    const manyErrors: ParseResultLite = {
+      headers: ['account', 'snapshot_date', 'total_value'],
+      rows: [],
+      errors: Array.from({ length: 15 }, (_, i) => ({
+        line: i + 2,
+        message: 'wrong column count',
+      })),
+    };
+    render(
+      <ImportPreviewModal
+        entity="snapshot"
+        parsed={manyErrors}
+        ctx={{ accounts }}
+        open
+        onOpenChange={vi.fn()}
+      />,
+    );
+    // First ten line numbers listed, then a "and 5 more" summary.
+    expect(screen.getByText(/and 5 more/i)).toBeInTheDocument();
+    // The 15th line number must NOT be dumped inline.
+    expect(screen.queryByText(/\b16\b/)).toBeNull();
+  });
+});
+
+describe('ImportPreviewModal — batch dismiss controls (M4)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('splits Cancel into "Skip this file" + "Cancel all" when queueLength > 1', () => {
+    const onCancelAll = vi.fn();
+    const onOpenChange = vi.fn();
+    render(
+      <ImportPreviewModal
+        entity="snapshot"
+        parsed={cleanParsed}
+        ctx={{ accounts }}
+        open
+        onOpenChange={onOpenChange}
+        queueLength={3}
+        onCancelAll={onCancelAll}
+        onSaved={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /skip this file/i }));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(onCancelAll).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /cancel all 3 files/i }));
+    expect(onCancelAll).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a single Cancel when queueLength is 1 (no batch split)', () => {
+    render(
+      <ImportPreviewModal
+        entity="snapshot"
+        parsed={cleanParsed}
+        ctx={{ accounts }}
+        open
+        onOpenChange={vi.fn()}
+        queueLength={1}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: /skip this file/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /cancel all/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /^cancel$/i })).toBeInTheDocument();
+  });
+});

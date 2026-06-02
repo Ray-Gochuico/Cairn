@@ -110,7 +110,6 @@ export const SECTIONS: SectionMeta[] = [
     introTitle: 'Your debts',
     introBody:
       'This section covers loans — mortgages, auto loans, student loans, personal loans, credit cards. Skip if you have no debt.',
-    // TODO(copy-confirm): W6 — calm intent-language; coordinator/user to confirm wording.
     intro:
       'Listing what you owe is just for an accurate picture — there is no judgment here. Add each balance you carry, or skip this section entirely if you have no debt.',
     cards: [

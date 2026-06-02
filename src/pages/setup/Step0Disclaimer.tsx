@@ -18,7 +18,7 @@ interface Props {
  * current version is already accepted, so Step 0 is a no-op if it even
  * renders.
  */
-export function Step0Disclaimer({ onComplete }: Props) {
+function Step0Disclaimer({ onComplete }: Props) {
   const acceptDisclaimer = useHouseholdStore((s) => s.acceptDisclaimer);
 
   // First-run path — the user has nothing to "diff from." Build a

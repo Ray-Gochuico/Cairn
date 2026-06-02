@@ -73,7 +73,12 @@ export default function Section1_WhoYouAre({ status, onSetStatus }: Props) {
       <EntityCard
         title="Employment"
         description="Salary, bonus, commission for each person."
-        count={persons.filter((p) => p.annualSalaryPretax > 0).length}
+        count={
+          persons.filter(
+            (p) =>
+              p.annualSalaryPretax > 0 || (p.hourlyRate ?? 0) > 0,
+          ).length
+        }
         onAddManual={() => setDialog('employment')}
       />
       <EntityCard

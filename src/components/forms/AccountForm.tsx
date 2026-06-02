@@ -111,23 +111,6 @@ export default function AccountForm({
     }
   }, [onlyOnePerson, persons, form]);
 
-  if (noPersons) {
-    return (
-      <div className="space-y-4">
-        <Card>
-          <CardContent className="py-6 text-center text-muted-foreground">
-            Add a person first.
-          </CardContent>
-        </Card>
-        <div className="flex justify-end">
-          <Button type="button" variant="ghost" onClick={onCancel}>
-            Back
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
       <Card>
@@ -160,7 +143,13 @@ export default function AccountForm({
             </select>
           </div>
 
-          {!onlyOnePerson && (
+          {noPersons && (
+            <p className="text-sm text-muted-foreground">
+              No owner set — you can assign one later in Section 1.
+            </p>
+          )}
+
+          {!onlyOnePerson && persons.length > 0 && (
             <fieldset>
               <legend className="text-sm font-medium mb-2">Owner</legend>
               <div className="flex flex-wrap gap-4">

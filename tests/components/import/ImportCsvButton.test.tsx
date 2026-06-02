@@ -158,7 +158,7 @@ describe('ImportCsvButton multi-file', () => {
     await waitFor(() => expect(screen.queryByText(/bad\.csv/)).toBeNull());
   });
 
-  it('closing the modal via Cancel drops the remaining queue', async () => {
+  it('skipping file 1 of N does NOT silently drop the remaining files (M4)', async () => {
     render(<ImportCsvButton entity="snapshot" />);
     const input = screen.getByTestId('import-csv-file-input') as HTMLInputElement;
     Object.defineProperty(input, 'files', {
@@ -172,11 +172,50 @@ describe('ImportCsvButton multi-file', () => {
     fireEvent.change(input);
     await waitFor(() => expect(screen.getByText(/File 1 of 3/)).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+    // The per-file dismiss is "Skip this file" (not a bulk Cancel) when a
+    // batch is queued — and it advances to the next file instead of dropping.
+    fireEvent.click(screen.getByRole('button', { name: /skip this file/i }));
+    await waitFor(() => expect(screen.getByText(/File 2 of 3/)).toBeInTheDocument());
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('offers an explicit "Cancel all" that drops the whole remaining batch (M4)', async () => {
+    render(<ImportCsvButton entity="snapshot" />);
+    const input = screen.getByTestId('import-csv-file-input') as HTMLInputElement;
+    Object.defineProperty(input, 'files', {
+      value: [
+        csvFile('a.csv', VALID_SNAPSHOT_CSV),
+        csvFile('b.csv', VALID_SNAPSHOT_CSV),
+        csvFile('c.csv', VALID_SNAPSHOT_CSV),
+      ],
+      configurable: true,
+    });
+    fireEvent.change(input);
+    await waitFor(() => expect(screen.getByText(/File 1 of 3/)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: /cancel all/i }));
     await waitFor(() => {
       expect(screen.queryByText(/File \d+ of \d+/)).toBeNull();
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
+  });
+
+  it('single-file Cancel closes the modal (no batch, plain Cancel)', async () => {
+    render(<ImportCsvButton entity="snapshot" />);
+    const input = screen.getByTestId('import-csv-file-input') as HTMLInputElement;
+    Object.defineProperty(input, 'files', {
+      value: [csvFile('a.csv', VALID_SNAPSHOT_CSV)],
+      configurable: true,
+    });
+    fireEvent.change(input);
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    // No batch → a single "Cancel" (no "Skip this file"/"Cancel all" split).
+    expect(screen.queryByRole('button', { name: /skip this file/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /cancel all/i })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    );
   });
 });
 

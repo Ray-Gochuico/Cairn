@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import {
@@ -10,6 +10,22 @@ import Section1_WhoYouAre from './Section1_WhoYouAre';
 import Section2_WhatYouOwn from './Section2_WhatYouOwn';
 import Section3_WhatYouOwe from './Section3_WhatYouOwe';
 import Section4_History from './Section4_History';
+import { markSetupDismissed } from '@/lib/setup-dismissal';
+import { usePersonsStore } from '@/stores/persons-store';
+import { useDependentsStore } from '@/stores/dependents-store';
+import { useAccountsStore } from '@/stores/accounts-store';
+import { useHoldingsStore } from '@/stores/holdings-store';
+import { usePropertiesStore } from '@/stores/properties-store';
+import { useVehiclesStore } from '@/stores/vehicles-store';
+import { useHousingPaymentsStore } from '@/stores/housing-payments-store';
+import { useVehicleLeasesStore } from '@/stores/vehicle-leases-store';
+import { useEquityGrantsStore } from '@/stores/equity-grants-store';
+import { useLoansStore } from '@/stores/loans-store';
+import { useSnapshotsStore } from '@/stores/snapshots-store';
+import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
+import { useContributionsStore } from '@/stores/contributions-store';
+import { useTransactionsStore } from '@/stores/transactions-store';
+import { useGoalsStore } from '@/stores/goals-store';
 
 const STORAGE_KEY = 'setupWizard.progress.v1';
 
@@ -58,9 +74,18 @@ export default function SectionLayout({ initialSection }: Props) {
     return p;
   });
 
+  const headingRef = useRef<HTMLHeadingElement>(null);
+
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
   }, [progress]);
+
+  // M2 (a11y): on section change, move focus to the section heading so
+  // screen-reader and keyboard users get a landmark instead of stranding focus
+  // on a just-unmounted "Next/Previous section" button.
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, [progress.currentSection]);
 
   const setStatus = useCallback(
     (idx: SectionIndex, status: SectionStatus) => {
@@ -104,12 +129,65 @@ export default function SectionLayout({ initialSection }: Props) {
   }, [progress.currentSection]);
 
   const handleFinish = useCallback(() => {
+    // Persist an explicit "setup finished" marker so the first-launch redirect
+    // (main.tsx) does NOT loop a zero-persons user back to /setup (H1). This
+    // is independent of clearing the wizard progress below.
+    markSetupDismissed();
     localStorage.removeItem(STORAGE_KEY);
     navigate('/');
   }, [navigate]);
 
   const currentSection = progress.currentSection;
   const currentMeta = SECTIONS[currentSection - 1];
+
+  // H3: green "✓ done" should imply data exists. Derive, per section, whether
+  // the user actually wrote at least one entity (from the same stores each
+  // section loads). A section marked `completed` but with no data gets a
+  // neutral "visited" badge instead — the persisted `skipped` state keeps its
+  // own "↩ skipped" badge. Household has a default singleton row, so Section 1
+  // keys off the user-entered persons/dependents, not household.
+  const personsCount = usePersonsStore((s) => s.persons.length);
+  const dependentsCount = useDependentsStore((s) => s.dependents.length);
+  const accountsCount = useAccountsStore((s) => s.accounts.length);
+  const holdingsCount = useHoldingsStore((s) => s.holdings.length);
+  const propertiesCount = usePropertiesStore((s) => s.properties.length);
+  const vehiclesCount = useVehiclesStore((s) => s.vehicles.length);
+  const housingPaymentsCount = useHousingPaymentsStore(
+    (s) => s.housingPayments.length,
+  );
+  const vehicleLeasesCount = useVehicleLeasesStore(
+    (s) => s.vehicleLeases.length,
+  );
+  const equityGrantsCount = useEquityGrantsStore((s) => s.equityGrants.length);
+  const loansCount = useLoansStore((s) => s.loans.length);
+  const snapshotsCount = useSnapshotsStore((s) => s.snapshots.length);
+  const assetValueSnapshotsCount = useAssetValueSnapshotsStore(
+    (s) => s.assetValueSnapshots.length,
+  );
+  const contributionsCount = useContributionsStore(
+    (s) => s.contributions.length,
+  );
+  const transactionsCount = useTransactionsStore((s) => s.transactions.length);
+  const goalsCount = useGoalsStore((s) => s.goals.length);
+
+  const sectionHasData: Record<SectionIndex, boolean> = {
+    1: personsCount > 0 || dependentsCount > 0,
+    2:
+      accountsCount > 0 ||
+      holdingsCount > 0 ||
+      propertiesCount > 0 ||
+      vehiclesCount > 0 ||
+      housingPaymentsCount > 0 ||
+      vehicleLeasesCount > 0 ||
+      equityGrantsCount > 0,
+    3: loansCount > 0,
+    4:
+      snapshotsCount > 0 ||
+      assetValueSnapshotsCount > 0 ||
+      contributionsCount > 0 ||
+      transactionsCount > 0 ||
+      goalsCount > 0,
+  };
 
   const sectionContent = useMemo(() => {
     const props = {
@@ -141,6 +219,10 @@ export default function SectionLayout({ initialSection }: Props) {
             status === 'completed' ||
             status === 'skipped' ||
             isCurrent;
+          // "✓ done" (green) only when the section is completed AND has data;
+          // a completed-but-empty section reads as neutral "visited" (H3).
+          const doneWithData = status === 'completed' && sectionHasData[s.index];
+          const visitedEmpty = status === 'completed' && !sectionHasData[s.index];
           return (
             <button
               key={s.index}
@@ -150,17 +232,20 @@ export default function SectionLayout({ initialSection }: Props) {
               className={`flex-1 text-xs py-2 px-2 rounded border text-left ${
                 isCurrent
                   ? 'border-primary bg-primary/5 font-medium'
-                  : status === 'completed'
+                  : doneWithData
                     ? 'border-success/40 text-success'
-                    : status === 'skipped'
+                    : status === 'completed' || status === 'skipped'
                       ? 'border-muted-foreground/30 text-muted-foreground'
                       : 'border-muted-foreground/20 text-muted-foreground'
               }`}
             >
-              <div className="font-medium">Section {s.index} of 4</div>
+              <div className="font-medium">Section {s.index}</div>
               <div>{s.label}</div>
-              {status === 'completed' && (
+              {doneWithData && (
                 <div className="text-[10px] mt-0.5">✓ done</div>
+              )}
+              {visitedEmpty && (
+                <div className="text-[10px] mt-0.5">visited</div>
               )}
               {status === 'skipped' && (
                 <div className="text-[10px] mt-0.5">↩ skipped</div>
@@ -170,7 +255,11 @@ export default function SectionLayout({ initialSection }: Props) {
         })}
       </nav>
 
-      <h1 className="text-2xl font-semibold">
+      <h1
+        ref={headingRef}
+        tabIndex={-1}
+        className="text-2xl font-semibold outline-none"
+      >
         Section {currentSection} of 4 — {currentMeta.label}
       </h1>
 

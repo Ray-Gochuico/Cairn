@@ -83,18 +83,35 @@ export default function EmploymentSection({ onSaved }: Props) {
   const handleSave = async (id: number) => {
     const draft = drafts[id];
     if (!draft) return;
-    if (
-      draft.annualSalaryPretax.trim() === '' ||
-      draft.regularHoursPerWeek.trim() === ''
-    ) {
+    // Branch validation on employmentType, mirroring the canonical PersonForm
+    // (M1): SALARY_* needs an annual salary; HOURLY / SALARY_WITH_OT need an
+    // hourly rate + regular hours. An HOURLY worker has no salary, so the old
+    // unconditional salary guard wrongly blocked the save (or forced a bogus 0).
+    const isHourly = draft.employmentType === 'HOURLY';
+    const isSalary = draft.employmentType !== 'HOURLY'; // SALARY_NO_OT | SALARY_WITH_OT
+    const needsHourlyFields = draft.employmentType !== 'SALARY_NO_OT'; // HOURLY | SALARY_WITH_OT
+    const salaryMissing = isSalary && draft.annualSalaryPretax.trim() === '';
+    const hourlyMissing =
+      needsHourlyFields &&
+      (draft.hourlyRate == null || draft.regularHoursPerWeek.trim() === '');
+    if (salaryMissing || hourlyMissing) {
       setErrorById((prev) => ({
         ...prev,
         [id]: "Couldn't save — please check the values.",
       }));
       return;
     }
-    const annualSalaryPretax = Number(draft.annualSalaryPretax);
-    const regularHoursPerWeek = Number(draft.regularHoursPerWeek);
+    // HOURLY persists 0 salary (no misleading non-zero value); SALARY uses the
+    // entered amount.
+    const annualSalaryPretax = isHourly ? 0 : Number(draft.annualSalaryPretax);
+    // For SALARY_NO_OT the hours field is hidden; preserve the person's stored
+    // (schema-positive) value when the draft is empty rather than writing a 0
+    // that would fail `regularHoursPerWeek: z.number().positive()`.
+    const storedHours = persons.find((p) => p.id === id)?.regularHoursPerWeek;
+    const regularHoursPerWeek =
+      draft.regularHoursPerWeek.trim() === ''
+        ? storedHours ?? 40
+        : Number(draft.regularHoursPerWeek);
     setSavingId(id);
     setErrorById((prev) => ({ ...prev, [id]: null }));
     try {
