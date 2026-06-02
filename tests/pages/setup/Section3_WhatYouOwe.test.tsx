@@ -119,4 +119,25 @@ describe('Section3_WhatYouOwe', () => {
       }),
     ).toBeNull();
   });
+
+  it('shows the calm intro banner once the section is in progress', () => {
+    render(
+      <MemoryRouter>
+        <Section3_WhatYouOwe status="in_progress" onSetStatus={() => {}} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('section3-intro')).toBeInTheDocument();
+    // SINGLE stable word (must-fix W6): one durable anchor ("skip"), not a
+    // multi-word set — kept identical to sections.test.ts so a copy tweak
+    // does not break both tests. If final copy drops "skip", update both.
+    expect(screen.getByTestId('section3-intro').textContent).toMatch(/skip/i);
+  });
+
+  it('does not show the in-progress banner on the pre-start gate', () => {
+    render(
+      <Section3_WhatYouOwe status="pending" onSetStatus={() => {}} />,
+    );
+    // The SectionEntryGate is shown instead; the in-progress banner is absent.
+    expect(screen.queryByTestId('section3-intro')).toBeNull();
+  });
 });

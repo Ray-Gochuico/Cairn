@@ -44,6 +44,14 @@ export default function Section3_WhatYouOwe({ status, onSetStatus }: Props) {
 
   return (
     <div className="space-y-4">
+      {meta.intro && (
+        <p
+          data-testid="section3-intro"
+          className="text-sm text-muted-foreground"
+        >
+          {meta.intro}
+        </p>
+      )}
       <EntityCard
         title="Loans"
         description="Mortgages, auto, student, personal, credit cards, etc."
