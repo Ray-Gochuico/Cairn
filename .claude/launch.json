@@ -12,6 +12,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev:browser"],
       "port": 1421
+    },
+    {
+      "name": "vite-browser-seed",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:browser:seed"],
+      "port": 1422
     }
   ]
 }
