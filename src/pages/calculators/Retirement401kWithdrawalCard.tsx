@@ -10,6 +10,7 @@ import { ResultRow } from '@/components/calculators/ResultRow';
 import { StatTile } from '@/components/calculators/StatTile';
 import { formatCurrency, formatPercent } from '@/lib/format';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 interface Retirement401kWithdrawalCardProps {
   cardId?: string;
@@ -173,31 +174,21 @@ export function Retirement401kWithdrawalCard({
           min={18}
         />
         <div className="space-y-1 sm:col-span-2">
-          <div role="radiogroup" aria-label="Plan type" className="flex flex-col gap-1">
-            <div className="flex gap-3 items-center text-sm">
-              <label className="flex items-center gap-1">
-                <input
-                  type="radio"
-                  name="plan-type"
-                  value="TRADITIONAL"
-                  checked={planType === 'TRADITIONAL'}
-                  onChange={() => setValue('planType', 'TRADITIONAL')}
-                />
-                Traditional 401k
-              </label>
-              <label className="flex items-center gap-1">
-                <input
-                  type="radio"
-                  name="plan-type"
-                  value="ROTH"
-                  checked={planType === 'ROTH'}
-                  onChange={() => setValue('planType', 'ROTH')}
-                  aria-label="Roth 401k"
-                />
-                Roth 401k
-              </label>
-            </div>
-          </div>
+          <RadioGroup
+            aria-label="Plan type"
+            value={planType}
+            onValueChange={(v) => setValue('planType', v as 'TRADITIONAL' | 'ROTH')}
+            className="flex flex-row gap-3 items-center text-sm"
+          >
+            <label className="flex items-center gap-1">
+              <RadioGroupItem value="TRADITIONAL" aria-label="Traditional 401k" />
+              Traditional 401k
+            </label>
+            <label className="flex items-center gap-1">
+              <RadioGroupItem value="ROTH" aria-label="Roth 401k" />
+              Roth 401k
+            </label>
+          </RadioGroup>
         </div>
       </div>
       {isOverridden && (

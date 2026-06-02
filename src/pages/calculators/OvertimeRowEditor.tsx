@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -111,12 +112,11 @@ export function OvertimeRowEditor({
             htmlFor={stackId}
             className="text-xs font-medium flex items-center gap-2"
           >
-            <input
+            <Checkbox
               id={stackId}
-              type="checkbox"
               checked={row.stackMultipliers}
               disabled={row.holidayMultiplier === null}
-              onChange={(e) => onChange({ stackMultipliers: e.target.checked })}
+              onCheckedChange={(checked) => onChange({ stackMultipliers: checked === true })}
             />
             Stack with base
           </label>

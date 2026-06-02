@@ -11,6 +11,7 @@ import { NumberField } from '@/components/calculators/NumberField';
 import { ResultRow } from '@/components/calculators/ResultRow';
 import { formatCurrency, formatPercent } from '@/lib/format';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectTrigger,
@@ -94,8 +95,12 @@ export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
         </Select>
       </div>
       <div className="sm:col-span-2">
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={values.isConsistent} onChange={(e) => setValue('isConsistent', e.target.checked)} />
+        <label htmlFor="bonus-consistent" className="flex items-center gap-2 text-sm">
+          <Checkbox
+            id="bonus-consistent"
+            checked={values.isConsistent}
+            onCheckedChange={(checked) => setValue('isConsistent', checked === true)}
+          />
           Bonuses are consistent year over year
         </label>
       </div>

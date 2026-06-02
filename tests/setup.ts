@@ -99,6 +99,21 @@ if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = (): void => {};
 }
 
+// Radix Checkbox/RadioGroup indicators reach @radix-ui/react-use-size, which
+// constructs a ResizeObserver. jsdom does not implement it. This guarded no-op
+// is purely additive and never overwrites a real implementation, mirroring the
+// hasPointerCapture/releasePointerCapture/scrollIntoView shims added for the
+// Radix Select migration above.
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  class ResizeObserverStub {
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+  }
+  // @ts-expect-error – assigning a minimal stub to the global for jsdom tests
+  globalThis.ResizeObserver = ResizeObserverStub;
+}
+
 beforeEach(() => {
   const fresh = createMemoryStorage();
   Object.defineProperty(globalThis, 'localStorage', {

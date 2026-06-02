@@ -285,8 +285,8 @@ describe('BonusTaxCard', () => {
     expect(screen.queryByText(/total take-home/i)).not.toBeInTheDocument();
 
     // The consistency checkbox should be unchecked, reflecting the seed.
-    const consistencyCheckbox = screen.getByLabelText(/consistent/i) as HTMLInputElement;
-    expect(consistencyCheckbox.checked).toBe(false);
+    const consistencyCheckbox = screen.getByRole('checkbox', { name: /consistent/i });
+    expect(consistencyCheckbox).not.toBeChecked();
   });
 
   it('still renders with stale (non-current) tax-rule year via getCurrentTaxYear fallback', async () => {
@@ -379,7 +379,7 @@ describe('BonusTaxCard', () => {
     expect(screen.getByText(/total take-home/i)).toBeInTheDocument();
 
     // Toggle off
-    const consistencyCheckbox = screen.getByLabelText(/consistent/i);
+    const consistencyCheckbox = screen.getByRole('checkbox', { name: /consistent/i });
     fireEvent.click(consistencyCheckbox);
 
     expect(screen.queryByText(/total take-home/i)).not.toBeInTheDocument();
