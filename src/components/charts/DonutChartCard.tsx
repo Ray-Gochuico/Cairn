@@ -7,7 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { CHART_PALETTE } from './palette';
+import { paletteColorAt } from './palette';
 import { CHART_TOOLTIP_PROPS } from './ChartTooltip';
 
 export interface DonutSlice {
@@ -78,8 +78,12 @@ export default function DonutChartCard({
   // because the container height is fixed and the donut's pie geometry
   // doesn't shrink to make room. Pulling the legend out into a sibling
   // <ul> lets it flow naturally underneath without eating into the chart.
+  // Slices that carry their own resolved color (the entity-keyed donuts) win;
+  // any colorless caller falls back to the principled WEDGE_PALETTE so a wedge
+  // can never dissolve into the card (I9). Both the Cell fill and the legend
+  // swatch below call this, so one source keeps wedge == legend.
   const colorAt = (slice: DonutSlice, idx: number) =>
-    slice.color ?? CHART_PALETTE[idx % CHART_PALETTE.length];
+    slice.color ?? paletteColorAt(idx);
   return (
     <Card>
       <CardHeader>

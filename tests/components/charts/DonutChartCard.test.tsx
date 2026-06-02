@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import DonutChartCard from '@/components/charts/DonutChartCard';
+import { WEDGE_PALETTE } from '@/components/charts/palette';
+import { relativeLuminance } from '@/lib/color';
 
 // Recharts' real SVG output doesn't render meaningfully in jsdom (the
 // ResponsiveContainer measures its 0×0 parent), so we mock the Pie /
@@ -97,5 +99,29 @@ describe('DonutChartCard', () => {
     // expecting the wired one to fire.
     fireEvent.click(screen.getByTestId('slice-Stocks'));
     expect(handler).not.toHaveBeenCalled();
+  });
+
+  // I9 fix: a colorless slice past index 9 must fall back to WEDGE_PALETTE
+  // (never a near-white CHART_PALETTE tail entry). The real <Cell fill> is
+  // mocked, but the legend swatch is plain DOM rendered off the same
+  // colorAt(slice, idx), so it's the assertable surface for the fallback.
+  it('falls back to WEDGE_PALETTE (never near-white) for colorless slices past index 9', () => {
+    const many = Array.from({ length: 14 }, (_, i) => ({ name: `S${i}`, value: 1 }));
+    render(<DonutChartCard title="X" data={many} />);
+    const legend = screen.getByLabelText('Chart legend');
+    const li = within(legend).getByText('S11').closest('li')!;
+    const css = (li.querySelector('span[aria-hidden]') as HTMLElement).style.backgroundColor;
+    // jsdom serializes the inline color as rgb(...); normalize WEDGE_PALETTE
+    // to the same form and assert membership + non-near-white.
+    const toRgb = (hex: string) => {
+      const [r, g, b] = [1, 3, 5].map((k) => parseInt(hex.slice(k, k + 2), 16));
+      return `rgb(${r}, ${g}, ${b})`;
+    };
+    expect(WEDGE_PALETTE.map(toRgb)).toContain(css);
+    // S11 -> colorAt index 11 -> paletteColorAt(11) -> WEDGE_PALETTE[1].
+    expect(css).toBe(toRgb(WEDGE_PALETTE[1]));
+    // And it is not near-white (luminance well under the 0.92 band ceiling).
+    const hex = WEDGE_PALETTE[1];
+    expect(relativeLuminance(hex)).toBeLessThan(0.92);
   });
 });
