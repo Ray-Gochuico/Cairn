@@ -66,6 +66,19 @@ interface Props {
   /** Shown as "File {current} of {total}" subtitle when total > 1. Omit for single-file callers. */
   queuePosition?: { current: number; total: number };
   /**
+   * Number of files still in the queue (including the one being previewed).
+   * When > 1 the footer splits the dismiss control into "Skip this file"
+   * (advances via onOpenChange(false)) and "Cancel all N files" (onCancelAll),
+   * so cancelling file 1 never silently drops files 2..N (M4).
+   */
+  queueLength?: number;
+  /**
+   * Drops the entire remaining batch. Only surfaced (as "Cancel all") when
+   * queueLength > 1. Distinct from onOpenChange(false), which now means
+   * "skip just this file" in a batch.
+   */
+  onCancelAll?: () => void;
+  /**
    * Called after a successful import. Receives the row count just inserted.
    * When provided, the modal does NOT auto-close — the caller is in charge
    * of advancing or closing (used by the multi-file queue to advance to the
@@ -95,6 +108,8 @@ export function ImportPreviewModal({
   open,
   onOpenChange,
   queuePosition,
+  queueLength,
+  onCancelAll,
   onSaved,
 }: Props) {
   const storeRef = useMemo(
@@ -286,7 +301,13 @@ export function ImportPreviewModal({
         {parsed.errors.length > 0 && (
           <div className="text-xs text-destructive-soft-foreground italic bg-destructive/10 border border-destructive/30 rounded p-2">
             {parsed.errors.length} lines could not be parsed (line{' '}
-            {parsed.errors.map((e) => e.line).join(', ')}). Fix and re-upload.
+            {/* Cap the inline line list (L3): a badly malformed large CSV could
+                otherwise dump thousands of line numbers into the header. */}
+            {parsed.errors.slice(0, 10).map((e) => e.line).join(', ')}
+            {parsed.errors.length > 10
+              ? `, and ${parsed.errors.length - 10} more`
+              : ''}
+            ). Fix and re-upload.
           </div>
         )}
 
@@ -309,9 +330,24 @@ export function ImportPreviewModal({
               {state.summary.error === 1 ? '' : 's'} before committing
             </div>
           )}
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
+          {queueLength && queueLength > 1 ? (
+            <>
+              <Button variant="ghost" onClick={() => onOpenChange(false)}>
+                Skip this file
+              </Button>
+              <Button
+                variant="ghost"
+                className="text-destructive-soft-foreground"
+                onClick={() => onCancelAll?.()}
+              >
+                Cancel all {queueLength} files
+              </Button>
+            </>
+          ) : (
+            <Button variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+          )}
           <Button disabled={commitDisabled} onClick={onCommit}>
             {committing ? 'Committing…' : `Commit (${committableCount} rows)`}
           </Button>

@@ -57,6 +57,75 @@ describe('EmploymentSection', () => {
     ).toBeInTheDocument();
   });
 
+  it('saves an HOURLY person with hourly fields but no annual salary (M1)', async () => {
+    const update = vi.fn().mockResolvedValue(undefined);
+    const onSaved = vi.fn();
+    usePersonsStore.setState({
+      persons: [
+        makePerson(1, 'Hank', {
+          employmentType: 'HOURLY',
+          annualSalaryPretax: 0,
+          hourlyRate: 30,
+          regularHoursPerWeek: 40,
+        }),
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+      create: async () => 1,
+      update,
+      remove: async () => {},
+    } as never);
+    const user = userEvent.setup();
+    render(<EmploymentSection onSaved={onSaved} />);
+
+    // Reproduce an empty annual-salary draft for an HOURLY worker: flip to a
+    // salaried type to reveal the field, clear it, then flip back to HOURLY.
+    const typeSelect = screen.getByLabelText(/employment type/i);
+    await user.selectOptions(typeSelect, 'SALARY_NO_OT');
+    await user.clear(screen.getByLabelText(/annual salary \(pre-tax\)/i));
+    await user.selectOptions(typeSelect, 'HOURLY');
+
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+    // Save must NOT be blocked on the (irrelevant) empty annual salary.
+    expect(update).toHaveBeenCalled();
+    expect(onSaved).toHaveBeenCalled();
+    const patch = update.mock.calls[0][1];
+    expect(patch.employmentType).toBe('HOURLY');
+    expect(patch.hourlyRate).toBe(30);
+    // No misleading non-zero salary persisted.
+    expect(patch.annualSalaryPretax).toBe(0);
+    // And no validation error surfaced.
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('blocks an HOURLY save that is missing hourly rate (M1)', async () => {
+    const update = vi.fn().mockResolvedValue(undefined);
+    usePersonsStore.setState({
+      persons: [
+        makePerson(1, 'Hank', {
+          employmentType: 'HOURLY',
+          annualSalaryPretax: 0,
+          hourlyRate: 30,
+          regularHoursPerWeek: 40,
+        }),
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+      create: async () => 1,
+      update,
+      remove: async () => {},
+    } as never);
+    const user = userEvent.setup();
+    render(<EmploymentSection />);
+    await user.clear(screen.getByLabelText(/hourly rate/i));
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+    expect(update).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+  });
+
   it('fires onSaved after a successful per-person update', async () => {
     const update = vi.fn().mockResolvedValue(undefined);
     const onSaved = vi.fn();

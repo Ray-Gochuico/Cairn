@@ -102,3 +102,58 @@ describe('AccountForm — APY field', () => {
     expect(submitted.apyRate).toBeNull();
   });
 });
+
+describe('AccountForm — zero persons (B1: no dead-end)', () => {
+  it('renders the account fields (not a dead-end) when persons is empty', () => {
+    render(
+      <AccountForm
+        initial={DEFAULT_ACCOUNT}
+        persons={[]}
+        dependents={[]}
+        onSubmit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    // The form is usable: name + type fields render.
+    expect(screen.getByLabelText(/^name$/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^type$/i)).toBeInTheDocument();
+    // The old dead-end copy must be gone.
+    expect(screen.queryByText(/add a person first/i)).toBeNull();
+  });
+
+  it('suppresses the Owner fieldset when persons is empty', () => {
+    render(
+      <AccountForm
+        initial={DEFAULT_ACCOUNT}
+        persons={[]}
+        dependents={[]}
+        onSubmit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    // No owner radios / legend when there's nobody to own it.
+    expect(screen.queryByText(/^owner$/i)).toBeNull();
+    expect(screen.queryByRole('radio')).toBeNull();
+  });
+
+  it('saves an account with ownerPersonId: null when persons is empty', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <AccountForm
+        initial={DEFAULT_ACCOUNT}
+        persons={[]}
+        dependents={[]}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />,
+    );
+    // Dirty the form so the (isDirty-gated) submit button enables.
+    await user.type(screen.getByLabelText(/^name$/i), 'Joint Checking');
+    await user.click(screen.getByRole('button', { name: /save/i }));
+    await vi.waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    const submitted = onSubmit.mock.calls[0][0];
+    expect(submitted.ownerPersonId).toBeNull();
+    expect(submitted.name).toBe('Joint Checking');
+  });
+});

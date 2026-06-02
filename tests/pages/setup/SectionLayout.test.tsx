@@ -17,14 +17,22 @@ vi.mock('@/lib/statements-archive', () => ({
   resolveArchivePath: vi.fn(),
 }));
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import SectionLayout from '@/pages/setup/SectionLayout';
+import {
+  isSetupDismissed,
+  shouldRedirectToSetup,
+} from '@/lib/setup-dismissal';
+import { useAccountsStore } from '@/stores/accounts-store';
 
 describe('SectionLayout', () => {
   beforeEach(() => {
     localStorage.clear();
+    // Reset the data stores SectionLayout reads to derive the done-vs-visited
+    // badge (H3) so seeded entities don't leak across tests.
+    useAccountsStore.setState({ accounts: [] } as never);
   });
 
   it('renders a top progress bar with all 4 sections', () => {
@@ -116,6 +124,36 @@ describe('SectionLayout', () => {
     expect(localStorage.getItem('setupWizard.progress.v1')).toBeNull();
   });
 
+  it('sets the setup-dismissed marker on Finish so a zero-persons boot does NOT re-redirect (H1)', async () => {
+    const user = userEvent.setup();
+    localStorage.setItem(
+      'setupWizard.progress.v1',
+      JSON.stringify({
+        currentSection: 4,
+        sectionStatus: {
+          1: 'skipped',
+          2: 'completed',
+          3: 'skipped',
+          4: 'in_progress',
+        },
+        startedAt: '2026-05-26T12:00:00Z',
+      }),
+    );
+    render(
+      <MemoryRouter>
+        <SectionLayout />
+      </MemoryRouter>,
+    );
+    expect(isSetupDismissed()).toBe(false);
+    await user.click(screen.getByRole('button', { name: /finish setup/i }));
+    // Marker persisted…
+    expect(isSetupDismissed()).toBe(true);
+    // …so the first-launch predicate no longer redirects despite zero persons.
+    expect(
+      shouldRedirectToSetup({ personCount: 0, dismissed: isSetupDismissed(), path: '/' }),
+    ).toBe(false);
+  });
+
   it('falls back to fresh state when localStorage JSON is malformed', () => {
     localStorage.setItem('setupWizard.progress.v1', '{not json}');
     render(
@@ -165,6 +203,73 @@ describe('SectionLayout', () => {
     );
     expect(stored.currentSection).toBe(2);
     expect(stored.sectionStatus[1]).toBe('skipped');
+  });
+
+  it('shows "visited" (not "✓ done") for a completed section that wrote no entities (H3)', () => {
+    // Section 2 (What you own) completed but empty: no accounts/holdings/etc.
+    useAccountsStore.setState({ accounts: [] } as never);
+    localStorage.setItem(
+      'setupWizard.progress.v1',
+      JSON.stringify({
+        currentSection: 3,
+        sectionStatus: {
+          1: 'completed',
+          2: 'completed',
+          3: 'in_progress',
+          4: 'pending',
+        },
+        startedAt: '2026-05-26T12:00:00Z',
+      }),
+    );
+    render(
+      <MemoryRouter>
+        <SectionLayout />
+      </MemoryRouter>,
+    );
+    const section2Chip = screen.getByRole('button', { name: /What you own/i });
+    expect(within(section2Chip).queryByText(/✓ done/i)).toBeNull();
+    expect(within(section2Chip).getByText(/visited/i)).toBeInTheDocument();
+  });
+
+  it('shows "✓ done" for a completed section that wrote at least one entity (H3)', () => {
+    // Section 2 completed WITH an account → green "✓ done" implies data exists.
+    useAccountsStore.setState({
+      accounts: [{ id: 1, name: 'Checking' }],
+    } as never);
+    localStorage.setItem(
+      'setupWizard.progress.v1',
+      JSON.stringify({
+        currentSection: 3,
+        sectionStatus: {
+          1: 'completed',
+          2: 'completed',
+          3: 'in_progress',
+          4: 'pending',
+        },
+        startedAt: '2026-05-26T12:00:00Z',
+      }),
+    );
+    render(
+      <MemoryRouter>
+        <SectionLayout />
+      </MemoryRouter>,
+    );
+    const section2Chip = screen.getByRole('button', { name: /What you own/i });
+    expect(within(section2Chip).getByText(/✓ done/i)).toBeInTheDocument();
+    expect(within(section2Chip).queryByText(/visited/i)).toBeNull();
+  });
+
+  it('moves focus to the section heading when the section changes (M2 a11y)', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <SectionLayout />
+      </MemoryRouter>,
+    );
+    await user.click(screen.getByRole('button', { name: /next section/i }));
+    const heading = screen.getByRole('heading', { name: /Section 2 of 4/i });
+    expect(heading).toHaveAttribute('tabindex', '-1');
+    expect(heading).toHaveFocus();
   });
 
   it('renders "Finish setup" instead of "Next section" on Section 4', () => {

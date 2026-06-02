@@ -282,9 +282,17 @@ export function ImportCsvButton({ entity }: Props) {
           ctx={ctx}
           open={true}
           onOpenChange={(o) => {
-            if (!o) dropAll();
+            // Closing the modal (Cancel / Skip this file / Escape / overlay)
+            // advances past just the CURRENT file rather than dropping the
+            // whole batch — so cancelling file 1 of N keeps files 2..N (M4).
+            // A single-file queue advances to empty, which closes the modal
+            // (equivalent to the old behavior). Bulk drop is the explicit
+            // "Cancel all" → onCancelAll below.
+            if (!o) advance();
           }}
           queuePosition={position}
+          queueLength={queue.length}
+          onCancelAll={dropAll}
           onSaved={() => advance()}
         />
       )}

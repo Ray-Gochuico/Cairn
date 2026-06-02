@@ -7,19 +7,29 @@ import { PersonsRepo } from './domain/persons';
 import { SettingsRepo } from './domain/app-settings';
 import { shouldNotify } from './lib/notification-due';
 import { maybeRedirectToMonthly } from './lib/monthly-prompt';
+import { isSetupDismissed, shouldRedirectToSetup } from './lib/setup-dismissal';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 
 async function bootstrap() {
   try {
     await initDatabase();
 
-    // First-launch detection: if no persons exist yet AND the user is
-    // landing on the root route, redirect to the setup wizard before
-    // React mounts so we don't flash the dashboard.
+    // First-launch detection: if no persons exist yet AND the user has not
+    // already finished/dismissed the wizard AND is landing on the root route,
+    // redirect to the setup wizard before React mounts so we don't flash the
+    // dashboard. The dismissed marker (set by handleFinish) prevents the H1
+    // re-entry trap where a skip-heavy setup with zero persons would loop the
+    // user back to /setup on every launch.
     try {
       const persons = await new PersonsRepo(getDatabase()).list();
       const path = window.location.pathname;
-      if (persons.length === 0 && (path === '/' || path === '')) {
+      if (
+        shouldRedirectToSetup({
+          personCount: persons.length,
+          dismissed: isSetupDismissed(),
+          path,
+        })
+      ) {
         window.history.replaceState({}, '', '/setup');
       }
     } catch (e) {

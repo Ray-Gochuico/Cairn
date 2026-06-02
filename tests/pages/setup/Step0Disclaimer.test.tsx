@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { Step0Disclaimer } from '@/pages/setup/Step0Disclaimer';
+import Step0Disclaimer from '@/pages/setup/Step0Disclaimer';
 import { useHouseholdStore } from '@/stores/household-store';
 
 describe('Step0Disclaimer', () => {

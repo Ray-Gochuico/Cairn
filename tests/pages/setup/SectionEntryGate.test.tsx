@@ -65,4 +65,22 @@ describe('SectionEntryGate', () => {
       screen.getByText(/you skipped this section earlier/i),
     ).toBeInTheDocument();
   });
+
+  it('wraps the wasSkipped hint in the standard warning chip (M3: not bare text)', () => {
+    render(
+      <SectionEntryGate
+        title="t"
+        body="b"
+        onStart={() => {}}
+        onSkip={() => {}}
+        wasSkipped
+      />,
+    );
+    const hint = screen.getByText(/you skipped this section earlier/i);
+    // The hint sits inside a warning-soft chip (paired background, not bare
+    // amber text on the card surface).
+    const chip = hint.closest('[class*="bg-warning-soft"]');
+    expect(chip).not.toBeNull();
+    expect(chip?.className).toMatch(/border-warning/);
+  });
 });

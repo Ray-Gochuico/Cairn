@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -42,24 +42,10 @@ export default function EntityCard({
   importTrigger,
   importDisabledReason,
 }: Props) {
-  const [skipped, setSkipped] = useState(false);
-
-  if (skipped) {
-    return (
-      <div className="flex items-center justify-between px-3 py-2 rounded border bg-muted/30 text-sm text-muted-foreground">
-        <span>{title} (skipped)</span>
-        <Button
-          type="button"
-          variant="link"
-          size="sm"
-          onClick={() => setSkipped(false)}
-        >
-          Un-skip
-        </Button>
-      </div>
-    );
-  }
-
+  // Stable id so the disabled Import CSV button can point at its reason note
+  // via aria-describedby (L1) — a keyboard user tabbing onto the dead button
+  // gets the "why" instead of an unexplained disabled control.
+  const reasonId = `entity-import-reason-${title.replace(/\s+/g, '-').toLowerCase()}`;
   return (
     <Card>
       <CardHeader>
@@ -77,28 +63,27 @@ export default function EntityCard({
             Add manually
           </Button>
           {importDisabledReason ? (
-            <Button type="button" variant="outline" disabled>
+            <Button
+              type="button"
+              variant="outline"
+              disabled
+              aria-describedby={reasonId}
+            >
               Import CSV
             </Button>
           ) : importEnabled && importTrigger ? (
             <span>{importTrigger}</span>
           ) : (
+            // No CSV importer for this entity (e.g. housing / lease / asset
+            // values / goals). Plain disabled state — not "coming soon", which
+            // overpromised an importer that isn't planned for these.
             <Button type="button" variant="outline" disabled>
-              Import CSV (coming soon)
-            </Button>
-          )}
-          {count === 0 && (
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setSkipped(true)}
-            >
-              Skip — I don&apos;t have any
+              Import CSV
             </Button>
           )}
         </div>
         {importDisabledReason && (
-          <p className="text-xs text-muted-foreground" role="note">
+          <p id={reasonId} className="text-xs text-muted-foreground" role="note">
             {importDisabledReason}
           </p>
         )}
