@@ -60,6 +60,22 @@ export async function initDatabase(): Promise<void> {
   const migrations = await loadAllMigrations();
   await runMigrations(adapter, migrations);
 
+  // DEV-ONLY: populate demo data for browser smoke of the Investments donuts.
+  // Triple-guarded so the entire branch dead-code-eliminates from the Tauri
+  // prod bundle (which sets none of these Vite env vars). Runs BEFORE the
+  // first-launch persons check in main.tsx so a smoke lands on /investments
+  // without the /setup redirect, and seeds an app_wide disclosure acceptance
+  // so AppDisclaimerGate doesn't block. See src/dev/seed-demo-data.ts and
+  // docs/runbooks/populated-donut-smoke.md.
+  if (
+    import.meta.env.DEV &&
+    import.meta.env.VITE_BROWSER_SHIM === '1' &&
+    import.meta.env.VITE_SEED_DEMO === '1'
+  ) {
+    const { seedDemoData } = await import('@/dev/seed-demo-data');
+    await seedDemoData(adapter);
+  }
+
   // Run the background market-data derivations only when the configured
   // refresh cadence says a launch refresh is due.
   await maybeRunLaunchRefresh(adapter);
