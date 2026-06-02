@@ -2,6 +2,7 @@ import { TauriAdapter } from './tauri-adapter';
 import { setDatabase } from './db';
 import type { Database } from './db';
 import { runMigrations, loadAllMigrations } from './migrations';
+import { assertDatabaseIntegrity } from './integrity';
 import { runMarketDataRefresh } from '@/market/run-market-data-refresh';
 import { SettingsRepo } from '@/domain/app-settings';
 import { isRefreshDue } from '@/lib/refresh-cadence';
@@ -57,6 +58,14 @@ export async function maybeRunLaunchRefresh(db: Database): Promise<void> {
 export async function initDatabase(): Promise<void> {
   const adapter = await TauriAdapter.load('sqlite:finance.db');
   setDatabase(adapter);
+
+  // CORRUPTION CHECK (M1): before running migrations or reading any data, run a
+  // fast structural integrity scan. A damaged file would otherwise surface as a
+  // confusing mid-migration SQL error or wrong results; instead we throw a typed
+  // DatabaseCorruptError that main.tsx renders as a recovery screen pointing the
+  // user at their backups. Cheap enough for every boot (see assertDatabaseIntegrity).
+  await assertDatabaseIntegrity(adapter);
+
   const migrations = await loadAllMigrations();
   await runMigrations(adapter, migrations);
 

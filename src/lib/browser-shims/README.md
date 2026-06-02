@@ -13,7 +13,7 @@ sets no env var and is untouched.
 |---|---|---|
 | `@tauri-apps/plugin-sql` | `plugin-sql.ts` | sql.js (SQLite-WASM) in-memory; persists to IndexedDB across reloads. |
 | `@tauri-apps/api/core` | `api-core.ts` | `invoke()` returns rejected promise for unknown commands; logs to console. |
-| `@tauri-apps/plugin-fs` | `plugin-fs.ts` | `writeFile`/`readDir`/`exists` are no-ops that warn once. |
+| `@tauri-apps/plugin-fs` | `plugin-fs.ts` | `writeFile`/`readDir`/`exists`/`mkdir`/`remove` are no-ops that warn once (`readDir` returns `[]`). Backup rotation needs `mkdir`/`remove`, but those paths are gated behind `isTauriRuntime()` and never run in the browser. |
 | `@tauri-apps/plugin-dialog` | `plugin-dialog.ts` | `open()` returns a fake path string for directory picks; `save` returns a synthetic path. |
 | `@tauri-apps/plugin-notification` | `plugin-notification.ts` | Web Notifications API. |
 | `@tauri-apps/plugin-http` | `plugin-http.ts` | Pass-through to native `fetch` (subject to CORS — Yahoo calls will fail). |

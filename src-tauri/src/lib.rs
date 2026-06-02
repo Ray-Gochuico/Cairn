@@ -1,7 +1,9 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+mod db_backup;
 mod db_batch;
 mod yahoo;
 
+use db_backup::{db_backup, db_restore, db_validate_backup};
 use db_batch::db_execute_batch;
 use yahoo::{yahoo_quote_summary, YahooState};
 
@@ -20,7 +22,10 @@ pub fn run() {
         .manage(YahooState::new())
         .invoke_handler(tauri::generate_handler![
             yahoo_quote_summary,
-            db_execute_batch
+            db_execute_batch,
+            db_backup,
+            db_validate_backup,
+            db_restore
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

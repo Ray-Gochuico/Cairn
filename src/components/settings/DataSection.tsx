@@ -1,197 +1,135 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import {
-  serializeBackup,
-  deserializeBackup,
-  type Backup,
-  type BackupData,
+  isTauriRuntime,
+  runBackup,
+  saveBackupCopy,
+  revealBackupsDir,
+  validateBackupFile,
+  restoreFromBackup,
 } from '@/lib/backup-restore';
-import { useHouseholdStore } from '@/stores/household-store';
-import { usePersonsStore } from '@/stores/persons-store';
-import { useDependentsStore } from '@/stores/dependents-store';
-import { useAccountsStore } from '@/stores/accounts-store';
-import { useHoldingsStore } from '@/stores/holdings-store';
-import { useContributionsStore } from '@/stores/contributions-store';
-import { useSnapshotsStore } from '@/stores/snapshots-store';
-import { useLoansStore } from '@/stores/loans-store';
-import { useLoanPaymentsStore } from '@/stores/loan-payments-store';
-import { usePropertiesStore } from '@/stores/properties-store';
-import { useVehiclesStore } from '@/stores/vehicles-store';
-import { useEquityGrantsStore } from '@/stores/equity-grants-store';
-import { useGoalsStore } from '@/stores/goals-store';
+import { open as openDialog } from '@tauri-apps/plugin-dialog';
 
 /**
- * Settings → Data section. Absorbs the former standalone /backup-restore page.
+ * Settings → Data section. The REAL backup/restore surface for the app's
+ * 100%-local, irreplaceable data.
  *
- * Export reads each store's current in-memory state, wraps it in a versioned
- * envelope, and triggers a browser download via Blob + anchor click. We use
- * native browser APIs (not tauri-plugin-dialog/fs) because those plugins
- * aren't installed; adding them would require Cargo + Rust capability changes.
- * Browser APIs work in both the Tauri webview and a plain browser.
+ * "Back up now" takes a consistent whole-file copy of the entire database
+ * (every table) into a rotating `backups/` folder beside the live data via the
+ * Rust `db_backup` command (VACUUM INTO). "Save a copy…" writes a fresh backup
+ * to any location via a native save dialog. "Reveal backups in Finder" opens
+ * the rotating folder. "Restore from backup…" validates a chosen `.db`, asks
+ * for destructive confirmation, swaps the live file, and reloads.
  *
- * Restore reads a user-selected file with FileReader, validates it with
- * BackupSchema, and gates destructive replacement behind a confirmation
- * modal. The actual delete-and-reinsert is stubbed (see applyBackup): a
- * proper implementation needs `deleteAll()` on every domain repo, which
- * is a separate refactor task.
+ * Browser mode (`dev:browser`, no Rust): the `invoke`/path/dialog/opener calls
+ * have no runtime, so the actions are gated behind `isTauriRuntime()` and a
+ * short "available in the desktop app" note is shown instead. The component
+ * still renders (the smoke runs in the browser); only the live desktop build
+ * exercises the real backup/restore.
  */
-
-/**
- * Snapshot the current contents of all stores into a BackupData payload.
- * Reads `getState()` directly so this can be called from event handlers
- * without subscribing the component to every store.
- */
-function snapshotStores(): BackupData {
-  return {
-    household: useHouseholdStore.getState().household,
-    persons: usePersonsStore.getState().persons,
-    dependents: useDependentsStore.getState().dependents,
-    accounts: useAccountsStore.getState().accounts,
-    holdings: useHoldingsStore.getState().holdings,
-    contributions: useContributionsStore.getState().contributions,
-    account_snapshots: useSnapshotsStore.getState().snapshots,
-    loans: useLoansStore.getState().loans,
-    loan_payments: useLoanPaymentsStore.getState().payments,
-    properties: usePropertiesStore.getState().properties,
-    vehicles: useVehiclesStore.getState().vehicles,
-    equity_grants: useEquityGrantsStore.getState().equityGrants,
-    goals: useGoalsStore.getState().goals,
-  };
-}
-
-/**
- * Trigger a browser download for the given JSON string.
- * Uses a Blob + temporary anchor; the URL is revoked immediately after
- * the synthetic click to free memory.
- */
-function downloadJson(filename: string, json: string): void {
-  const blob = new Blob([json], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  try {
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-}
-
-/**
- * Stub: the destructive half of restore.
- *
- * TODO(phase-3-followup): wire this up properly. To do so we need
- * `deleteAll()` (or the equivalent transactional truncate) on every domain
- * repo:
- *   - HouseholdRepo, PersonsRepo, DependentsRepo, AccountsRepo,
- *     HoldingsRepo, ContributionsRepo, AccountSnapshotsRepo, LoansRepo,
- *     LoanPaymentsRepo, PropertiesRepo, VehiclesRepo
- *
- * The applyBackup flow then becomes:
- *   1. BEGIN TRANSACTION
- *   2. await Promise.all(repos.map(r => r.deleteAll()))
- *   3. for each table in dependency order, repo.create(row) per backup row
- *   4. COMMIT (rollback on any failure)
- *   5. await Promise.all(stores.map(s => s.load()))
- *
- * Until that scaffolding lands we deliberately do nothing: a half-completed
- * restore would corrupt the user's data far worse than no restore at all.
- * The export side is fully functional in the meantime, which is the side
- * users need most.
- */
-async function applyBackup(_backup: Backup): Promise<void> {
-  console.warn(
-    'DataSection: applyBackup is stubbed pending deleteAll() additions ' +
-      'to every domain repo. The backup file was validated successfully but ' +
-      'no data was modified. See applyBackup() in DataSection.tsx.',
-  );
-}
-
 export function DataSection() {
-  const [exportMessage, setExportMessage] = useState<string | null>(null);
-  const [restoreError, setRestoreError] = useState<string | null>(null);
-  const [restoreSuccess, setRestoreSuccess] = useState<string | null>(null);
-  const [pendingRestore, setPendingRestore] = useState<Backup | null>(null);
-  const [confirmingRestore, setConfirmingRestore] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const tauri = isTauriRuntime();
+  const { confirm, dialog } = useConfirm();
 
-  // Auto-clear the inline status messages after a few seconds so the section
-  // doesn't accumulate stale notices across multiple actions.
-  useEffect(() => {
-    if (!exportMessage) return;
-    const t = setTimeout(() => setExportMessage(null), 4000);
-    return () => clearTimeout(t);
-  }, [exportMessage]);
-  useEffect(() => {
-    if (!restoreSuccess) return;
-    const t = setTimeout(() => setRestoreSuccess(null), 4000);
-    return () => clearTimeout(t);
-  }, [restoreSuccess]);
+  const [busy, setBusy] = useState<null | 'backup' | 'save' | 'restore'>(null);
+  const [status, setStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  function handleExport() {
+  // Auto-clear the transient success notice so the section doesn't accumulate
+  // stale messages across actions. Errors persist until the next action.
+  useEffect(() => {
+    if (!status) return;
+    const t = setTimeout(() => setStatus(null), 6000);
+    return () => clearTimeout(t);
+  }, [status]);
+
+  async function handleBackupNow() {
+    setError(null);
+    setStatus(null);
+    setBusy('backup');
     try {
-      const data = snapshotStores();
-      const json = serializeBackup(data);
-      const filename = `cairn-backup-${new Date().toISOString().slice(0, 10)}.json`;
-      downloadJson(filename, json);
-      setExportMessage('Exported backup successfully.');
+      const dest = await runBackup();
+      setStatus(`Backed up to ${dest}`);
     } catch (e) {
-      setExportMessage(
-        `Export failed: ${e instanceof Error ? e.message : String(e)}`,
-      );
+      setError(`Backup failed: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(null);
     }
   }
 
-  // handleRestoreClick removed (R5) — the Restore button is disabled in v1
-  // pending a real applyBackup implementation. The file-input + handlers
-  // below remain so re-enabling later is a one-line button change.
-
-  async function handleFileChange(
-    event: React.ChangeEvent<HTMLInputElement>,
-  ): Promise<void> {
-    const file = event.target.files?.[0];
-    // Reset the input so the same file can be chosen again later.
-    event.target.value = '';
-    if (!file) return;
-
+  async function handleSaveCopy() {
+    setError(null);
+    setStatus(null);
+    setBusy('save');
     try {
-      const text = await file.text();
-      const backup = deserializeBackup(text);
-      setPendingRestore(backup);
-      setConfirmingRestore(true);
+      const dest = await saveBackupCopy();
+      if (dest) setStatus(`Saved a copy to ${dest}`);
     } catch (e) {
-      setPendingRestore(null);
-      setConfirmingRestore(false);
-      setRestoreError(
-        `Invalid backup file: ${e instanceof Error ? e.message : String(e)}`,
-      );
+      setError(`Save failed: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(null);
     }
   }
 
-  async function handleConfirmRestore() {
-    if (!pendingRestore) {
-      setConfirmingRestore(false);
+  async function handleReveal() {
+    setError(null);
+    try {
+      await revealBackupsDir();
+    } catch (e) {
+      setError(`Could not open the backups folder: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  async function handleRestore() {
+    setError(null);
+    setStatus(null);
+    let source: string | null = null;
+    try {
+      const picked = await openDialog({
+        multiple: false,
+        directory: false,
+        filters: [{ name: 'Cairn backup', extensions: ['db'] }],
+      });
+      source = typeof picked === 'string' ? picked : null;
+    } catch (e) {
+      setError(`Could not open the file picker: ${e instanceof Error ? e.message : String(e)}`);
       return;
     }
-    try {
-      await applyBackup(pendingRestore);
-      setRestoreSuccess('Restore completed (stubbed — see commit message).');
-    } catch (e) {
-      setRestoreError(
-        `Restore failed: ${e instanceof Error ? e.message : String(e)}`,
-      );
-    } finally {
-      setConfirmingRestore(false);
-      setPendingRestore(null);
-    }
-  }
+    if (!source) return; // user cancelled
 
-  function handleCancelRestore() {
-    setConfirmingRestore(false);
-    setPendingRestore(null);
+    // Read-only pre-flight before we even show the destructive confirm.
+    let validation;
+    try {
+      validation = await validateBackupFile(source);
+    } catch (e) {
+      setError(`Could not read that file: ${e instanceof Error ? e.message : String(e)}`);
+      return;
+    }
+    if (!validation.ok) {
+      setError(validation.reason ?? 'That file is not a valid Cairn backup.');
+      return;
+    }
+
+    const ok = await confirm({
+      title: 'Replace all current data?',
+      description:
+        'This permanently replaces every account, transaction, setting, and all ' +
+        'other data in Cairn with the contents of the selected backup. This cannot ' +
+        'be undone. Cairn will reload when the restore finishes.',
+      confirmLabel: 'Replace and restore',
+    });
+    if (!ok) return;
+
+    setBusy('restore');
+    try {
+      // On success this reloads the webview, so code after it won't run.
+      await restoreFromBackup(source);
+    } catch (e) {
+      setError(`Restore failed: ${e instanceof Error ? e.message : String(e)}`);
+      setBusy(null);
+    }
   }
 
   return (
@@ -201,115 +139,77 @@ export function DataSection() {
       </CardHeader>
       <CardContent className="space-y-6">
         <p className="text-sm text-muted-foreground">
-          Export your entire dataset to a JSON file you can store anywhere, or
-          restore from a previous backup. Backups are saved to your downloads
-          folder by your browser.
+          Your data lives only on this Mac. Back it up regularly so you can
+          recover everything — every account, transaction, and setting — if this
+          Mac is lost or the database is damaged. Backups are full, exact copies
+          of your database.
         </p>
+
+        {!tauri && (
+          <p
+            className="text-sm text-muted-foreground"
+            data-testid="desktop-only-note"
+          >
+            Backup and restore are available in the Cairn desktop app.
+          </p>
+        )}
 
         <div className="grid gap-6 md:grid-cols-2">
           <div className="space-y-3">
-            <h3 className="text-sm font-medium">Export</h3>
+            <h3 className="text-sm font-medium">Back up</h3>
             <p className="text-sm text-muted-foreground">
-              Download a JSON file containing every household, person,
-              account, holding, snapshot, loan, property, and vehicle in
-              your local database.
+              Save a complete copy of your database. Cairn keeps your most recent
+              backups in a folder next to your data.
             </p>
-            <Button onClick={handleExport}>Export to JSON</Button>
-            {exportMessage && (
-              <p
-                className="text-sm text-muted-foreground"
-                role="status"
-                aria-live="polite"
+            <div className="flex flex-wrap items-center gap-2">
+              <Button onClick={handleBackupNow} disabled={!tauri || busy !== null}>
+                {busy === 'backup' ? 'Backing up…' : 'Back up now'}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleSaveCopy}
+                disabled={!tauri || busy !== null}
               >
-                {exportMessage}
-              </p>
-            )}
+                {busy === 'save' ? 'Saving…' : 'Save a copy…'}
+              </Button>
+              <Button variant="ghost" onClick={handleReveal} disabled={!tauri}>
+                Reveal backups in Finder
+              </Button>
+            </div>
           </div>
 
           <div className="space-y-3">
             <h3 className="text-sm font-medium">Restore</h3>
             <p className="text-sm text-muted-foreground">
-              Restore from a previous backup file. Currently disabled —
-              only Export works in v1.
+              Replace all current data with a backup file. Choose a{' '}
+              <code>.db</code> backup; Cairn checks it, then reloads.
             </p>
             <Button
               variant="outline"
-              disabled
-              aria-disabled="true"
-              data-testid="restore-button-disabled"
-              title="Restore is not yet implemented — only Export works in v1"
+              onClick={handleRestore}
+              disabled={!tauri || busy !== null}
             >
-              Restore from JSON
+              {busy === 'restore' ? 'Restoring…' : 'Restore from backup…'}
             </Button>
-            <p
-              className="text-xs text-muted-foreground"
-              data-testid="restore-not-implemented-hint"
-            >
-              Restore is not yet implemented — only Export works in v1.
-              Export your data periodically; importing back to the app will
-              ship in a later release.
-            </p>
-            {/*
-              The hidden file input + restoreError/restoreSuccess state are
-              left in place so the future "real Restore" can re-enable the
-              button without re-wiring the plumbing. The handlers below are
-              dormant while the button is disabled.
-            */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="application/json,.json"
-              className="hidden"
-              onChange={handleFileChange}
-              aria-label="Backup file"
-            />
-            {restoreError && (
-              <p className="text-sm text-destructive-soft-foreground" role="alert">
-                {restoreError}
-              </p>
-            )}
-            {restoreSuccess && (
-              <p
-                className="text-sm text-muted-foreground"
-                role="status"
-                aria-live="polite"
-              >
-                {restoreSuccess}
-              </p>
-            )}
           </div>
         </div>
-      </CardContent>
 
-      {confirmingRestore && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="restore-confirm-title"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-        >
-          <div className="bg-background rounded-md border shadow-lg p-6 max-w-md w-full mx-4">
-            <h2
-              id="restore-confirm-title"
-              className="text-lg font-semibold mb-2"
-            >
-              Replace all data?
-            </h2>
-            <p className="text-sm text-muted-foreground mb-4">
-              This will replace all your current data with the backup. This
-              cannot be undone.
-            </p>
-            <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={handleCancelRestore}>
-                Cancel
-              </Button>
-              <Button variant="destructive" onClick={handleConfirmRestore}>
-                Restore
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+        {status && (
+          <p
+            className="text-sm text-muted-foreground break-all"
+            role="status"
+            aria-live="polite"
+          >
+            {status}
+          </p>
+        )}
+        {error && (
+          <p className="text-sm text-destructive-soft-foreground break-all" role="alert">
+            {error}
+          </p>
+        )}
+      </CardContent>
+      {dialog}
     </Card>
   );
 }

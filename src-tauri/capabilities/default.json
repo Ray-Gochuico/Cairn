@@ -23,7 +23,18 @@
     },
     "dialog:default",
     "dialog:allow-open",
+    "dialog:allow-save",
     "fs:default",
+    {
+      "identifier": "fs:allow-read-dir",
+      "__comment__": "Lets the backup rotation list the app-data backups/ folder (readDir) to find the oldest cairn-*.db files to prune. Scoped to $HOME, which covers ~/Library/Application Support/<bundle id>/backups on macOS. See src/lib/backup-restore.ts rotateBackups().",
+      "allow": [{ "path": "$HOME/**/*" }]
+    },
+    {
+      "identifier": "fs:allow-remove",
+      "__comment__": "Lets the backup rotation delete the oldest cairn-*.db backups beyond MAX_BACKUPS. Scoped to $HOME. See src/lib/backup-restore.ts rotateBackups().",
+      "allow": [{ "path": "$HOME/**/*" }]
+    },
     {
       "identifier": "fs:allow-write-file",
       "__comment__": "Static $HOME-scoped write access. Why this exists alongside dialog: tauri-plugin-dialog 2.7.1 auto-grants fs scope after dialog.open() (its commands.rs calls scope.allow_file/allow_directory unconditionally), but that grant is session-only and disappears on app restart. This static scope persists across restarts so files chosen in a prior session remain writable. Caveat: paths outside $HOME (external drives at /Volumes/*, network mounts, etc.) are NOT covered — those still rely on the dialog's session-only grant. Pattern note: '$HOME/**/*' requires at least one path segment under $HOME and does not match $HOME itself, unlike Tauri's canonical '$HOME/**'. Left as-is because we only ever touch files inside subdirectories of $HOME.",

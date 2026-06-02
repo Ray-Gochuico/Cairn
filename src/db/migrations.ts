@@ -5,6 +5,63 @@ export interface Migration {
   sql: string;
 }
 
+/**
+ * The highest schema version this build understands.
+ *
+ * DERIVATION: the COUNT of registered migrations (see `loadAllMigrations`).
+ * Every migration adds exactly one forward step, so the count is a monotonic
+ * schema-version number that bumps automatically when a migration is appended.
+ * After the runner applies migrations it stamps this into `PRAGMA user_version`
+ * (a SQLite integer that lives in the db file header), giving us a cheap,
+ * file-local "what schema is this?" marker that survives a file copy/restore.
+ *
+ * PARITY: `src-tauri/src/db_backup.rs::MAX_SCHEMA_VERSION` MUST equal this — the
+ * Rust restore guard refuses a backup whose stamped `user_version` exceeds it.
+ * `tests/db/schema-version-guard.test.ts` asserts this equals the migration
+ * count AND pins the literal so a one-sided bump fails a test.
+ */
+export const MAX_SCHEMA_VERSION = 46;
+
+/**
+ * Thrown by `runMigrations` when the database's stamped `user_version` is
+ * GREATER than `MAX_SCHEMA_VERSION` — i.e. the file was created/upgraded by a
+ * newer build of Cairn than the one now running. We refuse to run (older)
+ * migrations against it because doing so could misinterpret newer columns or
+ * silently corrupt data. `src/main.tsx` renders this as a friendly
+ * "please update Cairn" screen rather than a raw stack trace.
+ */
+export class SchemaTooNewError extends Error {
+  readonly foundVersion: number;
+  readonly maxSupportedVersion: number;
+  constructor(foundVersion: number, maxSupportedVersion: number) {
+    super(
+      `This database was created by a newer version of Cairn (schema ${foundVersion}; ` +
+        `this app supports up to ${maxSupportedVersion}). Please update Cairn to the ` +
+        `latest version, then reopen the app.`,
+    );
+    this.name = 'SchemaTooNewError';
+    this.foundVersion = foundVersion;
+    this.maxSupportedVersion = maxSupportedVersion;
+    // Restore prototype chain across the TS-to-ES5 target boundary so
+    // `instanceof SchemaTooNewError` holds.
+    Object.setPrototypeOf(this, SchemaTooNewError.prototype);
+  }
+}
+
+/**
+ * Read the SQLite `user_version` (a header-stored integer, default 0). Returns
+ * 0 for a brand-new database (no migrations run yet). Tolerates the handful of
+ * column-name shapes adapters return for `PRAGMA user_version`.
+ */
+export async function readUserVersion(db: Database): Promise<number> {
+  const rows = await db.select<Record<string, unknown>>('PRAGMA user_version');
+  const row = rows[0];
+  if (!row) return 0;
+  const raw = row.user_version ?? Object.values(row)[0];
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : 0;
+}
+
 // Detects whether a migration self-manages its transaction state via its
 // own `BEGIN [TRANSACTION|IMMEDIATE|DEFERRED|EXCLUSIVE]`. These migrations
 // (e.g. 0033, which toggles `PRAGMA foreign_keys` outside a tx) must run
@@ -30,6 +87,18 @@ function hasSelfManagedTransaction(sql: string): boolean {
 }
 
 export async function runMigrations(db: Database, migrations: Migration[]): Promise<void> {
+  // DOWNGRADE GUARD (H3): before doing anything, refuse a database written by a
+  // NEWER build. `user_version` is 0 on a fresh DB and on every pre-guard
+  // install (we never stamped it before this release), so existing users are
+  // unaffected — only a file that a future, higher-version build stamped can
+  // exceed MAX_SCHEMA_VERSION. Running old migrations against a newer schema
+  // could half-apply or misread columns, so we throw a typed error main.tsx
+  // surfaces as a friendly "update Cairn" screen instead of proceeding blind.
+  const currentVersion = await readUserVersion(db);
+  if (currentVersion > MAX_SCHEMA_VERSION) {
+    throw new SchemaTooNewError(currentVersion, MAX_SCHEMA_VERSION);
+  }
+
   await db.execute(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       version TEXT PRIMARY KEY,
@@ -92,6 +161,14 @@ export async function runMigrations(db: Database, migrations: Migration[]): Prom
 
     await db.executeBatch([...statements, auditStmt], { transaction: !selfManaged });
   }
+
+  // STAMP the schema version into the db-file header so future boots (and a
+  // restore's pre-flight) can tell what schema this file is. `PRAGMA
+  // user_version = N` does not accept a bind parameter and N is a build-time
+  // constant (never user input), so interpolation is safe here. Runs outside
+  // executeBatch: it's a single idempotent header write, and on the self-managed
+  // (0033) path the batch's own COMMIT has already fired.
+  await db.execute(`PRAGMA user_version = ${MAX_SCHEMA_VERSION}`);
 }
 
 export async function loadAllMigrations(): Promise<Migration[]> {
