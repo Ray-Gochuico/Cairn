@@ -121,7 +121,7 @@ describe('Retirement401kWithdrawalCard', () => {
     primeStores();
     useTaxRulesStore.setState((s) => ({ ...s, year: 2026 }));
     render(<MemoryRouter><Retirement401kWithdrawalCard /></MemoryRouter>);
-    const roth = screen.getByRole('radio', { name: /^Roth 401k$/i }) as HTMLInputElement;
+    const roth = screen.getByRole('radio', { name: /^Roth 401k$/i });
     expect(roth).not.toBeDisabled();
     expect(screen.queryByText(/coming soon/i)).not.toBeInTheDocument();
   });
@@ -399,8 +399,8 @@ describe('Retirement401kWithdrawalCard', () => {
     );
     const group = screen.getByRole('radiogroup', { name: 'Plan type' });
     expect(group).toBeInTheDocument();
-    // Both radio inputs must be inside the group
-    const radios = Array.from(group.querySelectorAll('input[type="radio"]'));
-    expect(radios.length).toBe(2);
+    // Both radios must be exposed with role="radio" (Radix renders buttons).
+    const radios = screen.getAllByRole('radio');
+    expect(radios).toHaveLength(2);
   });
 });
