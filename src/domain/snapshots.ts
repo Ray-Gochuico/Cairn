@@ -1,4 +1,4 @@
-import type { Database } from '@/db/db';
+import type { BatchStatement, Database } from '@/db/db';
 import { AccountSnapshotSchema, type AccountSnapshot } from '@/types/schema';
 import { SnapshotSource } from '@/types/enums';
 
@@ -82,26 +82,38 @@ export class AccountSnapshotsRepo {
    * deletes-then-inserts and cycles the rowid (breaking dependent FKs and
    * shifting the autoincrement counter).
    */
-  async upsert(snapshot: Omit<AccountSnapshot, 'id'>): Promise<number> {
+  /**
+   * Validate (Zod) and build the upsert (INSERT … ON CONFLICT) statement
+   * WITHOUT executing. `upsert` executes it then resolves the row id;
+   * import-commit collects builders from many rows into one atomic
+   * `executeBatch` (it only needs the writes, not the resolved ids).
+   *
+   * Source-aware conflict resolution. The app records daily AUTO_DERIVED
+   * snapshots, but users also hand-enter historical net worth
+   * (MANUAL / USER_CONFIRMED / CSV_IMPORT). Precedence: user-entered data
+   * always wins. The DO UPDATE only fires when the existing row is
+   * AUTO_DERIVED (auto may refresh auto) OR the incoming write is itself
+   * user-entered (the user may overwrite anything). This means a daily
+   * AUTO_DERIVED write can never clobber hand-entered history sharing the
+   * same (account_id, snapshot_date) — when the WHERE is false the row is
+   * left untouched, NOT deleted, so the id-lookup in `upsert` still resolves.
+   */
+  buildUpsertStatement(snapshot: Omit<AccountSnapshot, 'id'>): BatchStatement {
     AccountSnapshotSchema.omit({ id: true }).parse(snapshot);
-    // Source-aware conflict resolution. The app records daily AUTO_DERIVED
-    // snapshots, but users also hand-enter historical net worth
-    // (MANUAL / USER_CONFIRMED / CSV_IMPORT). Precedence: user-entered data
-    // always wins. The DO UPDATE only fires when the existing row is
-    // AUTO_DERIVED (auto may refresh auto) OR the incoming write is itself
-    // user-entered (the user may overwrite anything). This means a daily
-    // AUTO_DERIVED write can never clobber hand-entered history sharing the
-    // same (account_id, snapshot_date) — when the WHERE is false the row is
-    // left untouched, NOT deleted, so the id-lookup below still resolves.
-    await this.db.execute(
-      `INSERT INTO account_snapshots (account_id, snapshot_date, total_value, source)
+    return {
+      sql: `INSERT INTO account_snapshots (account_id, snapshot_date, total_value, source)
        VALUES (?, ?, ?, ?)
        ON CONFLICT(account_id, snapshot_date) DO UPDATE SET
          total_value = excluded.total_value,
          source = excluded.source
        WHERE account_snapshots.source = 'AUTO_DERIVED' OR excluded.source != 'AUTO_DERIVED'`,
-      [snapshot.accountId, snapshot.snapshotDate, snapshot.totalValue, snapshot.source]
-    );
+      params: [snapshot.accountId, snapshot.snapshotDate, snapshot.totalValue, snapshot.source],
+    };
+  }
+
+  async upsert(snapshot: Omit<AccountSnapshot, 'id'>): Promise<number> {
+    const { sql, params } = this.buildUpsertStatement(snapshot);
+    await this.db.execute(sql, params);
     // On both insert and update paths, look up the row by the unique key
     // — better-sqlite3's lastInsertRowid is unreliable for ON CONFLICT
     // updates across SQLite versions, so we resolve the id explicitly.

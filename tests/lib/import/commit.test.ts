@@ -84,6 +84,25 @@ describe('commitSnapshotImport', () => {
     expect(all).toHaveLength(0);
   });
 
+  it('rolls back a VALID earlier row when a later row fails at SQL time (executeBatch atomicity)', async () => {
+    // The missing-field case above aborts during statement collection (before
+    // any write). This case proves the atomic primitive itself: a later row
+    // that passes the presence check but references a non-existent account_id
+    // fails the FK constraint WHEN THE BATCH RUNS. Because every write runs on
+    // one connection inside a real transaction, the FK error must roll back the
+    // valid first row too — the import's all-or-nothing contract under prod's
+    // connection pool, which the old multi-call BEGIN/COMMIT could not provide.
+    const ok = makeRow(1, 'new', {
+      accountId, snapshotDate: '2023-06-30', totalValue: 60000, source: 'CSV_IMPORT',
+    });
+    const badFk = makeRow(2, 'new', {
+      accountId: 999999, snapshotDate: '2023-07-31', totalValue: 70000, source: 'CSV_IMPORT',
+    });
+    await expect(commitSnapshotImport([ok, badFk], { db, snapshots: snapshotsRepo })).rejects.toThrow();
+    const all = await snapshotsRepo.listForAccount(accountId);
+    expect(all, 'the valid first row must not survive the failed batch').toHaveLength(0);
+  });
+
   it('handles an empty batch as a no-op', async () => {
     const result = await commitSnapshotImport([], { db, snapshots: snapshotsRepo });
     expect(result).toEqual({ inserted: 0, updated: 0, skipped: 0 });

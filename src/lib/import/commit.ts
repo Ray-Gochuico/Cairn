@@ -1,5 +1,5 @@
 // src/lib/import/commit.ts
-import type { Database } from '@/db/db';
+import type { BatchStatement, Database } from '@/db/db';
 import type { AccountSnapshotsRepo } from '@/domain/snapshots';
 import type { TransactionsRepo } from '@/domain/transactions';
 import type { CommitResult, PreviewRow } from '@/lib/import/types';
@@ -25,28 +25,36 @@ export async function commitSnapshotImport(
     return { inserted: 0, updated: 0, skipped: 0 };
   }
 
-  await deps.db.execute('BEGIN');
-  try {
-    for (const row of rows) {
-      const { accountId, snapshotDate, totalValue, source } = row.resolved;
-      if (accountId === undefined || snapshotDate === undefined || totalValue === undefined) {
-        throw new Error(`Row ${row.rowId}: missing resolved fields (validator should have caught this)`);
-      }
-      if (row.status === 'update') {
-        await deps.snapshots.upsert({ accountId, snapshotDate, totalValue, source: source as SnapshotSource });
-        updated += 1;
-      } else if (row.status === 'new') {
-        await deps.snapshots.upsert({ accountId, snapshotDate, totalValue, source: source as SnapshotSource });
-        inserted += 1;
-      } else {
-        continue;
-      }
+  // Collect every write as a {sql, params} statement (Zod-validated by the
+  // repo's builder), THEN run them as ONE atomic batch on a single
+  // connection. The previous BEGIN/body/COMMIT expressed as separate
+  // `db.execute` calls wrapped NOTHING in prod (the plugin-sql connection
+  // POOL scatters each call across connections), so a mid-batch failure left
+  // partial rows committed. A builder throwing here (bad row) happens before
+  // any write, so nothing is committed and the error surfaces — same
+  // "fails on row N ⇒ 0 rows committed" contract, now genuinely atomic.
+  const statements: BatchStatement[] = [];
+  for (const row of rows) {
+    const { accountId, snapshotDate, totalValue, source } = row.resolved;
+    if (accountId === undefined || snapshotDate === undefined || totalValue === undefined) {
+      throw new Error(`Row ${row.rowId}: missing resolved fields (validator should have caught this)`);
     }
-    await deps.db.execute('COMMIT');
-  } catch (err) {
-    await deps.db.execute('ROLLBACK');
-    throw err;
+    if (row.status === 'update') {
+      statements.push(
+        deps.snapshots.buildUpsertStatement({ accountId, snapshotDate, totalValue, source: source as SnapshotSource }),
+      );
+      updated += 1;
+    } else if (row.status === 'new') {
+      statements.push(
+        deps.snapshots.buildUpsertStatement({ accountId, snapshotDate, totalValue, source: source as SnapshotSource }),
+      );
+      inserted += 1;
+    } else {
+      continue;
+    }
   }
+
+  await deps.db.executeBatch(statements, { transaction: true });
 
   return { inserted, updated, skipped: 0 };
 }
@@ -69,20 +77,25 @@ export async function commitTransactionImport(
     return { inserted: 0, updated: 0, skipped: 0 };
   }
 
-  await deps.db.execute('BEGIN');
-  try {
-    for (const row of rows) {
-      if (row.status === 'error') continue;
-      const { accountId, date, amount, merchant, categoryId, reimbursable, personId } = row.resolved;
-      if (
-        accountId === undefined
-        || date === undefined
-        || amount === undefined
-        || merchant === undefined
-      ) {
-        throw new Error(`Row ${row.rowId}: missing resolved fields (validator should have caught this)`);
-      }
-      await deps.transactions.create({
+  // Collect every INSERT as a Zod-validated {sql, params} statement, then run
+  // them as ONE atomic batch on a single connection (the old BEGIN/body/COMMIT
+  // as separate `db.execute` calls wrapped nothing under prod's connection
+  // pool). A bad row throws during collection, before any write — preserving
+  // the "fails on row N ⇒ 0 rows committed, error surfaced" contract.
+  const statements: BatchStatement[] = [];
+  for (const row of rows) {
+    if (row.status === 'error') continue;
+    const { accountId, date, amount, merchant, categoryId, reimbursable, personId } = row.resolved;
+    if (
+      accountId === undefined
+      || date === undefined
+      || amount === undefined
+      || merchant === undefined
+    ) {
+      throw new Error(`Row ${row.rowId}: missing resolved fields (validator should have caught this)`);
+    }
+    statements.push(
+      deps.transactions.buildCreateStatement({
         householdId: deps.householdId,
         date,
         merchant,
@@ -99,14 +112,12 @@ export async function commitTransactionImport(
         reimbursedAmount: null,
         isRecurring: false,
         notes: null,
-      });
-      inserted += 1;
-    }
-    await deps.db.execute('COMMIT');
-  } catch (err) {
-    await deps.db.execute('ROLLBACK');
-    throw err;
+      }),
+    );
+    inserted += 1;
   }
+
+  await deps.db.executeBatch(statements, { transaction: true });
 
   return { inserted, updated: 0, skipped: 0 };
 }

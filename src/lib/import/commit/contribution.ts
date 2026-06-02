@@ -1,5 +1,5 @@
 // src/lib/import/commit/contribution.ts
-import type { Database } from '@/db/db';
+import type { BatchStatement, Database } from '@/db/db';
 import type { ContributionsRepo } from '@/domain/contributions';
 import type { CommitResult, PreviewRow } from '@/lib/import/types';
 import type { ContributionResolved } from '@/lib/import/validators/contribution';
@@ -26,23 +26,24 @@ export async function commitContributionImport(
     return { inserted: 0, updated: 0, skipped: 0 };
   }
 
-  await deps.db.execute('BEGIN');
-  try {
-    for (const row of rows) {
-      if (row.status === 'error') {
-        skipped += 1;
-        continue;
-      }
-      // Both 'new' and 'duplicate' rows that survived the modal's commit
-      // filter end up here as inserts.
-      await deps.contributions.create(row.resolved);
-      inserted += 1;
+  // Collect every INSERT as a Zod-validated {sql, params} statement, then run
+  // them as ONE atomic batch on a single connection. The old BEGIN/body/COMMIT
+  // expressed as separate `db.execute` calls wrapped NOTHING under prod's
+  // plugin-sql connection POOL. A failing row throws during collection, before
+  // any write — preserving "fails on row N ⇒ 0 rows committed, error surfaced".
+  const statements: BatchStatement[] = [];
+  for (const row of rows) {
+    if (row.status === 'error') {
+      skipped += 1;
+      continue;
     }
-    await deps.db.execute('COMMIT');
-  } catch (err) {
-    await deps.db.execute('ROLLBACK');
-    throw err;
+    // Both 'new' and 'duplicate' rows that survived the modal's commit
+    // filter end up here as inserts.
+    statements.push(deps.contributions.buildCreateStatement(row.resolved));
+    inserted += 1;
   }
+
+  await deps.db.executeBatch(statements, { transaction: true });
 
   return { inserted, updated: 0, skipped };
 }

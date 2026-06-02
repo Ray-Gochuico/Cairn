@@ -1,4 +1,4 @@
-import type { Database } from '@/db/db';
+import type { BatchStatement, Database } from '@/db/db';
 import { AccountSchema, type Account } from '@/types/schema';
 import { AccountType } from '@/types/enums';
 
@@ -81,16 +81,21 @@ export class AccountsRepo {
     return rowToAccount(rows[0]);
   }
 
-  async create(account: Omit<Account, 'id'>): Promise<number> {
+  /**
+   * Validate (Zod) and build the INSERT statement for one account WITHOUT
+   * executing. `create` executes it and returns the new id; import-commit
+   * collects builders from many rows into one atomic `executeBatch`.
+   */
+  buildCreateStatement(account: Omit<Account, 'id'>): BatchStatement {
     AccountSchema.omit({ id: true }).parse(account);
-    const result = await this.db.execute(
-      `INSERT INTO accounts (
+    return {
+      sql: `INSERT INTO accounts (
         household_id, owner_person_id, beneficiary_dependent_id,
         name, institution, type, crypto_wallet_address,
         auto_fetch_enabled, excluded_from_net_worth, allow_margin, state_of_plan,
         accent_color, apy_rate
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
+      params: [
         account.householdId,
         account.ownerPersonId ?? null,
         account.beneficiaryDependentId ?? null,
@@ -104,25 +109,36 @@ export class AccountsRepo {
         account.stateOfPlan ?? null,
         account.accentColor ?? null,
         account.apyRate ?? null,
-      ]
-    );
+      ],
+    };
+  }
+
+  async create(account: Omit<Account, 'id'>): Promise<number> {
+    const { sql, params } = this.buildCreateStatement(account);
+    const result = await this.db.execute(sql, params);
     if (!result.lastInsertId) {
       throw new Error('Failed to create account: no lastInsertId returned');
     }
     return result.lastInsertId;
   }
 
-  async update(
+  /**
+   * Read the existing row, merge the patch, Zod-validate, and build the
+   * UPDATE statement WITHOUT executing. The READ stays here (callers that
+   * batch keep it outside the atomic write set); only the returned write
+   * statement goes into a batch. Throws if the id does not exist.
+   */
+  async buildUpdateStatement(
     id: number,
     patch: Partial<Omit<Account, 'id' | 'householdId'>>
-  ): Promise<void> {
+  ): Promise<BatchStatement> {
     const existing = await this.findById(id);
     if (!existing) throw new Error(`Account ${id} not found`);
     const merged = { ...existing, ...patch };
     AccountSchema.parse(merged);
 
-    await this.db.execute(
-      `UPDATE accounts SET
+    return {
+      sql: `UPDATE accounts SET
         owner_person_id = ?,
         beneficiary_dependent_id = ?,
         name = ?,
@@ -142,7 +158,7 @@ export class AccountsRepo {
         has_high_fees = ?,
         updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
-      [
+      params: [
         merged.ownerPersonId ?? null,
         merged.beneficiaryDependentId ?? null,
         merged.name,
@@ -161,8 +177,16 @@ export class AccountsRepo {
         boolToInt(merged.allowsMegaBackdoorRollover),
         boolToInt(merged.hasHighFees),
         id,
-      ]
-    );
+      ],
+    };
+  }
+
+  async update(
+    id: number,
+    patch: Partial<Omit<Account, 'id' | 'householdId'>>
+  ): Promise<void> {
+    const { sql, params } = await this.buildUpdateStatement(id, patch);
+    await this.db.execute(sql, params);
   }
 
   async delete(id: number): Promise<void> {

@@ -102,4 +102,28 @@ describe('commitHoldingImport', () => {
     const all = await holdingsRepo.listAll();
     expect(all).toHaveLength(0);
   });
+
+  it('rolls back a VALID earlier UPDATE when a later row fails at SQL time (executeBatch atomicity)', async () => {
+    // The empty-ticker case above aborts during statement collection (Zod,
+    // before any write). This proves the atomic primitive itself across a
+    // MIXED update+insert batch: row 0 updates an existing holding (a write
+    // inside the batch), row 1 inserts with a non-existent account_id which
+    // passes Zod but fails the FK constraint WHEN THE BATCH RUNS. Because both
+    // statements run on one connection inside a real transaction, the FK error
+    // rolls back row 0's update too — the holding must keep its original value.
+    const id = await holdingsRepo.create({ accountId, ticker: 'AAPL', shareCount: 5, costBasis: null, targetAllocationPct: null });
+    await expect(
+      commitHoldingImport(
+        [
+          makeRow(0, 'update', { accountId, ticker: 'AAPL', shareCount: 99, costBasis: 160, targetAllocationPct: null }, id),
+          makeRow(1, 'new', { accountId: 999999, ticker: 'VTI', shareCount: 1, costBasis: null, targetAllocationPct: null }),
+        ],
+        { db, holdings: holdingsRepo },
+      ),
+    ).rejects.toThrow();
+    const found = await holdingsRepo.findById(id);
+    expect(found?.shareCount, 'the earlier UPDATE must be rolled back by the failed batch').toBe(5);
+    const all = await holdingsRepo.listAll();
+    expect(all, 'no new holding should survive the failed batch').toHaveLength(1);
+  });
 });

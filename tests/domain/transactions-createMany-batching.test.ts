@@ -3,16 +3,20 @@
 // surrounding transaction, so each row pays the full SQLite WAL fsync /
 // implicit-commit cost.
 //
-// The strong guard is the structural test (`groups all inserts into a
-// single SQL transaction`) which spies on `db.execute` and asserts that
-// exactly one BEGIN + one COMMIT bracket all the row INSERTs. This will
-// catch a regression that removes the transaction wrap regardless of
-// hardware/disk speed.
+// PARITY-FIX UPDATE (w3d): `createMany` now batches the N inserts through the
+// `db.executeBatch(..., {transaction:true})` single-connection primitive
+// instead of a hand-rolled BEGIN/body/COMMIT expressed as three separate
+// `db.execute` calls. Under prod's `@tauri-apps/plugin-sql` connection POOL
+// those three calls scattered across connections and the "transaction"
+// wrapped nothing; `executeBatch` pins the whole batch to one connection so
+// it is genuinely atomic. The structural test below therefore asserts the
+// NEW contract: exactly one `executeBatch` call carrying all N INSERTs with
+// transaction:true, and NO per-row `db.execute` INSERTs.
 //
 // The perf test is a visibility-only sanity check: it logs the wallclock
 // speedup but doesn't gate CI, because wallclock ratios on WAL+APFS are
 // inherently noisy under parallel vitest workers. The structural test is
-// what guarantees the wrap is present.
+// what guarantees the batch wrap is present.
 //
 // We use a tempfile DB (not `:memory:`) because the bug this guards is
 // about WAL fsync per-statement on real user databases. In-memory SQLite
@@ -20,8 +24,8 @@
 // catch a regression.
 //
 // Implementation guard: the public API must also remain ergonomic — a
-// thrown error from any inner INSERT must ROLLBACK and re-throw so
-// partial writes are not visible after the failure.
+// thrown error from any inner INSERT must roll the whole batch back and
+// re-throw so partial writes are not visible after the failure.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { performance } from 'node:perf_hooks';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -88,28 +92,41 @@ describe('TransactionsRepo.createMany batching (P2-A4)', () => {
     expect(all).toHaveLength(50);
   });
 
-  it('groups all inserts into a single SQL transaction (no per-row commits)', async () => {
-    // The most direct guard: the BEGIN/COMMIT wrap must actually be issued.
-    // We spy on `db.execute` and assert that exactly one BEGIN + one COMMIT
-    // bracket the N INSERT statements (or BEGIN + ROLLBACK on failure).
-    // This catches a regression that pure timing might miss on a fast machine.
-    const calls: string[] = [];
+  it('batches all inserts through one executeBatch({transaction:true}) — no per-row execute INSERTs', async () => {
+    // The most direct guard for the parity fix: the N inserts must flow
+    // through the single-connection `executeBatch` primitive, NOT a
+    // hand-rolled BEGIN/body/COMMIT (which prod's connection pool scatters
+    // across connections, wrapping nothing). We spy on BOTH `executeBatch`
+    // and `execute` and assert exactly one batch carries all N INSERTs with
+    // transaction:true, while NO INSERT leaks through a per-row `execute`.
+    const batchCalls: Array<{ statements: { sql: string }[]; transaction: boolean | undefined }> = [];
+    const origBatch = db.executeBatch.bind(db);
+    db.executeBatch = (statements, options) => {
+      batchCalls.push({
+        statements: statements.map((s) => ({ sql: s.sql.trim().slice(0, 12).toUpperCase() })),
+        transaction: options?.transaction,
+      });
+      return origBatch(statements, options);
+    };
+
+    const executeInserts: string[] = [];
     const origExecute = db.execute.bind(db);
     db.execute = (sql: string, params?: unknown[]) => {
-      calls.push(sql.trim().slice(0, 12).toUpperCase());
+      const head = sql.trim().slice(0, 12).toUpperCase();
+      if (head.startsWith('INSERT')) executeInserts.push(head);
       return origExecute(sql, params);
     };
 
     const rows = makeRows(20);
     await repo.createMany(rows);
 
-    // First call must be BEGIN, last must be COMMIT, all INSERTs in between.
-    expect(calls[0]).toBe('BEGIN');
-    expect(calls[calls.length - 1]).toBe('COMMIT');
-    expect(calls.filter((c) => c === 'BEGIN')).toHaveLength(1);
-    expect(calls.filter((c) => c === 'COMMIT')).toHaveLength(1);
-    const inserts = calls.filter((c) => c.startsWith('INSERT'));
-    expect(inserts).toHaveLength(20);
+    // Exactly one atomic batch, carrying all 20 INSERTs, transaction:true.
+    expect(batchCalls).toHaveLength(1);
+    expect(batchCalls[0].transaction).toBe(true);
+    const batchedInserts = batchCalls[0].statements.filter((s) => s.sql.startsWith('INSERT'));
+    expect(batchedInserts).toHaveLength(20);
+    // And no INSERT went through the per-row execute path (the old bug).
+    expect(executeInserts).toHaveLength(0);
   });
 
   it('benchmarks batched vs unbatched inserts (logged, no hard assertion)', async () => {
@@ -167,10 +184,12 @@ describe('TransactionsRepo.createMany batching (P2-A4)', () => {
     }
   });
 
-  it('ROLLBACKs on a mid-batch failure so no partial rows are visible', async () => {
-    // Tampering with row 7 by giving it an invalid householdId trips Zod
-    // validation (TransactionSchema is parsed in `create`). The batched
-    // transaction should ROLLBACK; the table should still be empty.
+  it('a Zod-invalid row aborts BEFORE the batch runs so no rows are written', async () => {
+    // Poisoning row 7's householdId trips Zod validation inside the statement
+    // builder. Because `createMany` now validates+builds every statement
+    // BEFORE issuing the batch, the throw happens pre-write: nothing is ever
+    // inserted, the error surfaces, and the table is empty. (Same observable
+    // contract as the old per-row BEGIN/ROLLBACK, reached one step earlier.)
     const rows = makeRows(20);
     // Cast to any so we can poison the row past TS' type guard.
     (rows[7] as unknown as { householdId: unknown }).householdId = 'not-a-number';
@@ -178,6 +197,25 @@ describe('TransactionsRepo.createMany batching (P2-A4)', () => {
     await expect(repo.createMany(rows)).rejects.toThrow();
 
     const count = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM transactions');
-    expect(count[0].n, 'partial writes must not leak after rollback').toBe(0);
+    expect(count[0].n, 'partial writes must not leak after a pre-batch validation failure').toBe(0);
+  });
+
+  it('rolls the whole batch back on a mid-batch SQL failure (executeBatch atomicity)', async () => {
+    // This exercises the atomic primitive itself, not pre-batch validation: a
+    // row whose source_account_id points at a non-existent account passes Zod
+    // (any number is valid) but fails the FK constraint when the batch runs
+    // (SqliteAdapter sets foreign_keys = ON). Because all N inserts run on ONE
+    // connection inside a real transaction, the FK error rolls back EVERY row
+    // — including the valid ones written earlier in the same batch.
+    const rows = makeRows(5);
+    // Row 3 references an account id that does not exist → FK violation at
+    // INSERT time, deep inside the batch (after rows 0–2 have been written
+    // within the same uncommitted transaction).
+    rows[3].sourceAccountId = 999999;
+
+    await expect(repo.createMany(rows)).rejects.toThrow();
+
+    const count = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM transactions');
+    expect(count[0].n, 'a mid-batch SQL failure must roll back the entire batch').toBe(0);
   });
 });
