@@ -234,6 +234,18 @@ export function NodeDetailDrawer({ node, result, open, onOpenChange }: Props) {
             </SheetDescription>
           </SheetHeader>
           <div className="px-6 py-4 space-y-5">
+            {node.description && (
+              <section>
+                <h4 className="text-xs uppercase text-muted-foreground tracking-wider mb-1">
+                  What this is
+                </h4>
+                <div className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
+                  {glossarize(node.description).map((part, i) => (
+                    <Fragment key={i}>{part}</Fragment>
+                  ))}
+                </div>
+              </section>
+            )}
             <section>
               <h4 className="text-xs uppercase text-muted-foreground tracking-wider mb-1">
                 From the developer&rsquo;s paraphrase
