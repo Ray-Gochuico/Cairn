@@ -25,6 +25,7 @@ vi.mock('recharts', () => ({
           key={d.name}
           data-testid={`slice-${d.name}`}
           data-value={d.value}
+          data-color={d.color ?? ''}
         >
           {d.name}:{d.value}
         </span>
@@ -175,6 +176,31 @@ describe('LiabilitiesDonut', () => {
       expect(
         screen.getByRole('button', { name: /entities \(3\/3\)/i }),
       ).toBeInTheDocument();
+    });
+
+    it('each slice carries a resolved color (not empty)', () => {
+      seedThreeLoans();
+      render(<LiabilitiesDonut />);
+      for (const name of ['Home mortgage', 'Car loan', 'Student debt']) {
+        expect(
+          screen.getByTestId(`slice-${name}`).getAttribute('data-color'),
+          name,
+        ).toMatch(/^#[0-9a-f]{6}$/i);
+      }
+    });
+
+    it('a kept slice keeps its color after another loan is hidden (no legend desync)', async () => {
+      seedThreeLoans();
+      render(<LiabilitiesDonut />);
+      // Student debt is last in insertion order; hiding the FIRST loan (Home
+      // mortgage) would reindex it under the old positional fallback.
+      const before = screen.getByTestId('slice-Student debt').getAttribute('data-color');
+      expect(before).toMatch(/^#[0-9a-f]{6}$/i);
+      const user = userEvent.setup();
+      await user.click(screen.getByRole('button', { name: /entities/i }));
+      await user.click(screen.getByLabelText(/Home mortgage/));
+      expect(screen.queryByTestId('slice-Home mortgage')).not.toBeInTheDocument();
+      expect(screen.getByTestId('slice-Student debt').getAttribute('data-color')).toBe(before);
     });
 
     it('hiding a loan removes its slice from the donut', async () => {

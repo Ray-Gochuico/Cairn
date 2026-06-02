@@ -338,6 +338,52 @@ describe('AssetsDonut', () => {
       ).toBeInTheDocument();
     });
 
+    it('each slice carries a resolved color (not empty)', () => {
+      seedThreeAssets();
+      render(<AssetsDonut />);
+      for (const name of ['Brokerage', 'Roth IRA', 'Home']) {
+        expect(
+          screen.getByTestId(`slice-${name}`).getAttribute('data-color'),
+          name,
+        ).toMatch(/^#[0-9a-f]{6}$/i);
+      }
+    });
+
+    it('a kept slice keeps its color after another entity is hidden (no legend desync)', async () => {
+      seedThreeAssets();
+      render(<AssetsDonut />);
+      // Home is the LAST entity in insertion order; hiding the FIRST entity
+      // (Brokerage) would reindex Home under the old positional fallback.
+      const before = screen.getByTestId('slice-Home').getAttribute('data-color');
+      expect(before).toMatch(/^#[0-9a-f]{6}$/i);
+      const user = userEvent.setup();
+      await user.click(screen.getByRole('button', { name: /entities/i }));
+      await user.click(screen.getByLabelText(/Brokerage/));
+      expect(screen.queryByTestId('slice-Brokerage')).not.toBeInTheDocument();
+      expect(screen.getByTestId('slice-Home').getAttribute('data-color')).toBe(before);
+    });
+
+    it('honors a per-account accent override on the wedge color', () => {
+      useAccountsStore.setState({
+        accounts: [
+          mkAccount(1, 'Brokerage', { accentColor: '#123456' }),
+          mkAccount(2, 'Roth IRA'),
+        ],
+        isLoading: false,
+        error: null,
+      });
+      useSnapshotsStore.setState({
+        snapshots: [
+          mkSnapshot(1, 1, '2026-04-01', 6000),
+          mkSnapshot(2, 2, '2026-04-01', 3400),
+        ],
+        isLoading: false,
+        error: null,
+      });
+      render(<AssetsDonut />);
+      expect(screen.getByTestId('slice-Brokerage').getAttribute('data-color')).toBe('#123456');
+    });
+
     it('hiding an entity removes its slice from the donut', async () => {
       seedThreeAssets();
       render(<AssetsDonut />);

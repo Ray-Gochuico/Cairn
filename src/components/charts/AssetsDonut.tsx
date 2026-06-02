@@ -12,7 +12,7 @@ import {
 } from '@/lib/latest-value';
 import { formatCurrency } from '@/lib/format';
 import { entityKey } from '@/lib/entity-key';
-import { CHART_PALETTE } from './palette';
+import { colorForAccount, colorForEntityKey } from '@/lib/chart-colors';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 const EMPTY_SLICES: DonutSlice[] = [];
@@ -75,21 +75,32 @@ export default function AssetsDonut() {
     const sl: DonutSlice[] = [];
     const pi: DonutEntityPickerItem[] = [];
     const kbn = new Map<string, string>();
-    let idx = 0;
 
-    function push(name: string, value: number, key: string) {
-      const color = CHART_PALETTE[idx % CHART_PALETTE.length];
-      sl.push({ name, value });
+    // Attach a deterministic, ENTITY-keyed color to BOTH the slice and the
+    // picker item from one source. Keying on the entity (account id /
+    // entityKey) rather than the running insertion index means a kept wedge's
+    // color never shifts when another entity is hidden and the list reindexes
+    // — so wedge == legend == picker swatch by construction (the I9 desync
+    // fix). Accounts also honor the user's per-account accent override here,
+    // which the old positional path silently dropped on the donut.
+    function push(name: string, value: number, key: string, color: string) {
+      sl.push({ name, value, color });
       pi.push({ key, label: name, color });
       kbn.set(name, key);
-      idx += 1;
     }
 
     for (const acc of accounts) {
       if (acc.id == null) continue;
       if (acc.excludedFromNetWorth) continue;
       const value = latestSnapshotForAccount(acc.id, snapshots, today);
-      if (value > 0) push(acc.name, value, entityKey('account', acc.id));
+      if (value > 0) {
+        push(
+          acc.name,
+          value,
+          entityKey('account', acc.id),
+          colorForAccount(acc.id, acc.accentColor),
+        );
+      }
     }
     for (const p of properties) {
       if (p.id == null) continue;
@@ -101,7 +112,10 @@ export default function AssetsDonut() {
         today,
         p.currentEstimatedValue,
       );
-      if (value > 0) push(p.name, value, entityKey('property', p.id));
+      if (value > 0) {
+        const key = entityKey('property', p.id);
+        push(p.name, value, key, colorForEntityKey(key));
+      }
     }
     for (const v of vehicles) {
       if (v.id == null) continue;
@@ -113,7 +127,10 @@ export default function AssetsDonut() {
         today,
         v.currentEstimatedValue,
       );
-      if (value > 0) push(v.name, value, entityKey('vehicle', v.id));
+      if (value > 0) {
+        const key = entityKey('vehicle', v.id);
+        push(v.name, value, key, colorForEntityKey(key));
+      }
     }
     return { slices: sl, pickerItems: pi, keyByName: kbn };
   }, [accounts, snapshots, properties, vehicles, assetValueSnapshots]);

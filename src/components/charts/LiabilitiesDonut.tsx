@@ -4,7 +4,7 @@ import { DonutEntityPicker, useDonutSelected, type DonutEntityPickerItem } from 
 import { useLoansStore } from '@/stores/loans-store';
 import { loanTypeLabel } from '@/lib/loan-labels';
 import { formatCurrency } from '@/lib/format';
-import { CHART_PALETTE } from './palette';
+import { colorForLoan } from '@/lib/chart-colors';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 const STORAGE_KEY = 'donut.liabilities.hidden';
@@ -40,18 +40,20 @@ export default function LiabilitiesDonut() {
     const sl: DonutSlice[] = [];
     const pi: DonutEntityPickerItem[] = [];
     const kbn = new Map<string, string>();
-    let idx = 0;
     for (const l of loans) {
       if (l.id == null) continue;
       if (l.currentBalance <= 0) continue;
       const trimmed = l.name.trim();
       const label = trimmed.length > 0 ? trimmed : loanTypeLabel(l.type);
-      const color = CHART_PALETTE[idx % CHART_PALETTE.length];
+      // Color keyed on the loan ID (not the running insertion index) and
+      // attached to BOTH the slice and the picker item from one source, so a
+      // kept wedge never re-colors when another loan is hidden — wedge ==
+      // legend == picker swatch by construction (the I9 desync fix).
+      const color = colorForLoan(l.id);
       const key = l.id.toString();
-      sl.push({ name: label, value: l.currentBalance });
+      sl.push({ name: label, value: l.currentBalance, color });
       pi.push({ key, label, color });
       kbn.set(label, key);
-      idx += 1;
     }
     return { slices: sl, pickerItems: pi, keyByName: kbn };
   }, [loans]);
