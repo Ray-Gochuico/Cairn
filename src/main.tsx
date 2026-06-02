@@ -6,6 +6,7 @@ import { getDatabase } from './db/db';
 import { PersonsRepo } from './domain/persons';
 import { SettingsRepo } from './domain/app-settings';
 import { shouldNotify } from './lib/notification-due';
+import { maybeRedirectToMonthly } from './lib/monthly-prompt';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 
 async function bootstrap() {
@@ -26,6 +27,20 @@ async function bootstrap() {
       // normal app render and surface errors via the in-app error pane.
       // eslint-disable-next-line no-console
       console.warn('[bootstrap] first-launch detection failed:', e);
+    }
+
+    // On the first app open of a new calendar month (and early in the month),
+    // auto-route to /monthly?from=new-month so the user sees the monthly
+    // ritual without having to find the Dashboard banner. Runs AFTER the
+    // first-launch /setup check above: if the path is still '/', the user is
+    // not a first-launch user and the monthly route is appropriate. Stamp
+    // fires at decide-time (even when grace suppresses the route) so the
+    // prompt is consumed exactly once per calendar month. Fail-quiet.
+    try {
+      await maybeRedirectToMonthly(getDatabase(), new Date()); // win defaults to window
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[bootstrap] monthly-prompt trigger failed:', e);
     }
 
     // Fire an optional native notification on the user's chosen day of the
