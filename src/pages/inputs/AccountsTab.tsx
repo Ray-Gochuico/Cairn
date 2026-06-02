@@ -4,6 +4,7 @@ import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import AccountForm, {
   ACCOUNT_TYPE_LABELS,
   DEFAULT_ACCOUNT,
@@ -14,6 +15,7 @@ export default function AccountsTab() {
   const { accounts, load, create, update, remove } = useAccountsStore();
   const { persons, load: loadPersons } = usePersonsStore();
   const { dependents, load: loadDependents } = useDependentsStore();
+  const { confirm, dialog } = useConfirm();
   const [mode, setMode] = useState<'list' | 'create' | { type: 'edit'; id: number }>('list');
 
   useEffect(() => {
@@ -126,7 +128,20 @@ export default function AccountsTab() {
                 </div>
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" onClick={() => setMode({ type: 'edit', id: a.id! })}>Edit</Button>
-                  <Button size="sm" variant="destructive" onClick={() => remove(a.id!)}>Delete</Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={async () => {
+                      const ok = await confirm({
+                        title: `Delete ${a.name}?`,
+                        description:
+                          'This also permanently deletes its monthly balance snapshots, holdings, and contribution history. This can’t be undone.',
+                      });
+                      if (ok) await remove(a.id!);
+                    }}
+                  >
+                    Delete
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -137,6 +152,7 @@ export default function AccountsTab() {
       <div className="mt-4">
         <Button onClick={() => setMode('create')}>Add Account</Button>
       </div>
+      {dialog}
     </div>
   );
 }

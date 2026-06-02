@@ -5,6 +5,7 @@ import { useLoansStore } from '@/stores/loans-store';
 import { LoanType } from '@/types/enums';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import VehicleForm, { DEFAULT_VEHICLE } from '@/components/forms/VehicleForm';
 import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 
@@ -12,6 +13,7 @@ export default function VehiclesTab() {
   const { vehicles, load, create, update, remove } = useVehiclesStore();
   const { persons, load: loadPersons } = usePersonsStore();
   const { loans, load: loadLoans } = useLoansStore();
+  const { confirm, dialog } = useConfirm();
   const [mode, setMode] = useState<'list' | 'create' | { type: 'edit'; id: number }>('list');
 
   useEffect(() => {
@@ -119,7 +121,19 @@ export default function VehiclesTab() {
                 </div>
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" onClick={() => setMode({ type: 'edit', id: v.id! })}>Edit</Button>
-                  <Button size="sm" variant="destructive" onClick={() => remove(v.id!)}>Delete</Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={async () => {
+                      const ok = await confirm({
+                        title: `Delete ${v.name}?`,
+                        description: 'This permanently removes this vehicle. This can’t be undone.',
+                      });
+                      if (ok) await remove(v.id!);
+                    }}
+                  >
+                    Delete
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -130,6 +144,7 @@ export default function VehiclesTab() {
       <div className="mt-4">
         <Button onClick={() => setMode('create')}>Add Vehicle</Button>
       </div>
+      {dialog}
     </div>
   );
 }

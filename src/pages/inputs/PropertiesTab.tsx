@@ -5,6 +5,7 @@ import { useLoansStore } from '@/stores/loans-store';
 import { LoanType } from '@/types/enums';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import PropertyForm, {
   DEFAULT_PROPERTY,
   PROPERTY_TYPE_LABELS,
@@ -15,6 +16,7 @@ export default function PropertiesTab() {
   const { properties, load, create, update, remove } = usePropertiesStore();
   const { persons, load: loadPersons } = usePersonsStore();
   const { loans, load: loadLoans } = useLoansStore();
+  const { confirm, dialog } = useConfirm();
   const [mode, setMode] = useState<'list' | 'create' | { type: 'edit'; id: number }>('list');
 
   useEffect(() => {
@@ -121,7 +123,19 @@ export default function PropertiesTab() {
                 </div>
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" onClick={() => setMode({ type: 'edit', id: p.id! })}>Edit</Button>
-                  <Button size="sm" variant="destructive" onClick={() => remove(p.id!)}>Delete</Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={async () => {
+                      const ok = await confirm({
+                        title: `Delete ${p.name}?`,
+                        description: 'This permanently removes this property. This can’t be undone.',
+                      });
+                      if (ok) await remove(p.id!);
+                    }}
+                  >
+                    Delete
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -132,6 +146,7 @@ export default function PropertiesTab() {
       <div className="mt-4">
         <Button onClick={() => setMode('create')}>Add Property</Button>
       </div>
+      {dialog}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -107,21 +107,25 @@ describe('ValueHistorySection', () => {
     renderSection({ ownerType: 'VEHICLE', ownerId: 5, fallbackValue: 25000 });
 
     expect(await screen.findByText(/\$22,000/)).toBeInTheDocument();
-    // Confirm dialog auto-accept
-    const confirmSpy = vi
-      .spyOn(window, 'confirm')
-      .mockImplementation(() => true);
 
     const row = screen.getByTestId('value-history-row-5-2026-02-01');
     await user.click(within(row).getByRole('button', { name: /delete/i }));
+
+    // The action is now gated behind the shared ConfirmDialog — the entry
+    // is not removed until the user confirms in the dialog.
+    expect(
+      await screen.findByText(/delete this dated value entry\?/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/\$22,000/)).toBeInTheDocument();
+
+    const confirmDialog = await screen.findByRole('dialog');
+    await user.click(within(confirmDialog).getByRole('button', { name: /^delete$/i }));
 
     // Empty state returns
     expect(
       await screen.findByText(/Using current estimated value/i),
     ).toBeInTheDocument();
     expect(screen.queryByText(/\$22,000/)).not.toBeInTheDocument();
-
-    confirmSpy.mockRestore();
   });
 
   it('lets the user edit an entry value', async () => {

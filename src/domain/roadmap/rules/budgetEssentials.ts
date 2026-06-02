@@ -33,7 +33,7 @@ export function evaluateCreateBudget(ctx: RoadmapContext): NodeResult {
   return {
     status: 'active',
     evidence: 'Set your monthly expense baseline in Household to anchor the rest of the Roadmap',
-    cta: { label: 'Open Household →', href: '/household' },
+    cta: { label: 'Open Household →', href: '/inputs/household' },
   };
 }
 

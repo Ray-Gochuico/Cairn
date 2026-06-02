@@ -11,6 +11,7 @@ import DatePicker from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { AddAnnualTotalButton } from '@/components/contributions/AddAnnualTotalButton';
 import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 
@@ -155,6 +156,7 @@ export default function ContributionsTab() {
   const { contributions, load, create, update, remove } = useContributionsStore();
   const { accounts, load: loadAccounts } = useAccountsStore();
   const { persons, load: loadPersons } = usePersonsStore();
+  const { confirm, dialog } = useConfirm();
   const [mode, setMode] = useState<'list' | 'create' | { type: 'edit'; id: number }>('list');
 
   useEffect(() => {
@@ -275,7 +277,19 @@ export default function ContributionsTab() {
                 </div>
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" onClick={() => setMode({ type: 'edit', id: c.id! })}>Edit</Button>
-                  <Button size="sm" variant="destructive" onClick={() => remove(c.id!)}>Delete</Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={async () => {
+                      const ok = await confirm({
+                        title: 'Delete this contribution?',
+                        description: 'This permanently removes the contribution record. This can’t be undone.',
+                      });
+                      if (ok) await remove(c.id!);
+                    }}
+                  >
+                    Delete
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -287,6 +301,7 @@ export default function ContributionsTab() {
         <Button onClick={() => setMode('create')}>Add Contribution</Button>
         <AddAnnualTotalButton />
       </div>
+      {dialog}
     </div>
   );
 }

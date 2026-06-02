@@ -28,7 +28,7 @@ describe('NextMoveHero', () => {
         {
           status: 'active',
           evidence: 'pretend IRA evidence',
-          cta: { label: 'Open Accounts →', href: '/accounts' },
+          cta: { label: 'Open Accounts →', href: '/inputs/accounts' },
         },
       ],
       [
@@ -36,7 +36,7 @@ describe('NextMoveHero', () => {
         {
           status: 'active',
           evidence: '$0 / $5,000 (0%)',
-          cta: { label: 'Open Accounts →', href: '/accounts' },
+          cta: { label: 'Open Accounts →', href: '/inputs/accounts' },
         },
       ],
     ]);
@@ -47,7 +47,7 @@ describe('NextMoveHero', () => {
     expect(screen.getByText(/\$0 \/ \$5,000/)).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: /open accounts/i }),
-    ).toHaveAttribute('href', '/accounts');
+    ).toHaveAttribute('href', '/inputs/accounts');
   });
 
   it('omits the CTA link when the active node has no cta', () => {

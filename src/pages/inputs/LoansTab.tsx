@@ -5,6 +5,7 @@ import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import LoanForm, { DEFAULT_LOAN, LOAN_TYPE_LABELS } from '@/components/forms/LoanForm';
 import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 
@@ -13,6 +14,7 @@ export default function LoansTab() {
   const { persons, load: loadPersons } = usePersonsStore();
   const { properties, load: loadProperties } = usePropertiesStore();
   const { vehicles, load: loadVehicles } = useVehiclesStore();
+  const { confirm, dialog } = useConfirm();
   const [mode, setMode] = useState<'list' | 'create' | { type: 'edit'; id: number }>('list');
 
   useEffect(() => {
@@ -124,7 +126,20 @@ export default function LoansTab() {
                 </div>
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" onClick={() => setMode({ type: 'edit', id: l.id! })}>Edit</Button>
-                  <Button size="sm" variant="destructive" onClick={() => remove(l.id!)}>Delete</Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={async () => {
+                      const ok = await confirm({
+                        title: `Delete ${l.name}?`,
+                        description:
+                          'This also deletes its recorded payment history. This can’t be undone.',
+                      });
+                      if (ok) await remove(l.id!);
+                    }}
+                  >
+                    Delete
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -135,6 +150,7 @@ export default function LoansTab() {
       <div className="mt-4">
         <Button onClick={() => setMode('create')}>Add Loan</Button>
       </div>
+      {dialog}
     </div>
   );
 }

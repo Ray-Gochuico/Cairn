@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
@@ -10,8 +10,26 @@ import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { PersonsRepo } from '@/domain/persons';
 import { DependentsRepo } from '@/domain/dependents';
+import { AccountsRepo } from '@/domain/accounts';
 import { AccountType, DependentType } from '@/types/enums';
 import AccountsTab from '@/pages/inputs/AccountsTab';
+
+async function seedAccount(db: SqliteAdapter, name: string): Promise<number> {
+  const repo = new AccountsRepo(db);
+  return repo.create({
+    householdId: 1,
+    ownerPersonId: null,
+    beneficiaryDependentId: null,
+    name,
+    institution: null,
+    type: AccountType.ACCOUNT_BROKERAGE,
+    cryptoWalletAddress: null,
+    autoFetchEnabled: false,
+    excludedFromNetWorth: false,
+    stateOfPlan: null,
+    accentColor: null,
+  });
+}
 
 async function seedPerson(db: SqliteAdapter, name: string): Promise<number> {
   const repo = new PersonsRepo(db);
@@ -163,5 +181,62 @@ describe('AccountsTab', () => {
     expect(
       await screen.findByTestId('import-csv-file-input'),
     ).toBeInTheDocument();
+  });
+
+  describe('delete confirmation (high-cascade)', () => {
+    it('clicking Delete does NOT immediately remove — it opens a confirm dialog naming the collateral', async () => {
+      await seedAccount(db, 'Schwab Brokerage');
+      const user = userEvent.setup();
+      render(<MemoryRouter><AccountsTab /></MemoryRouter>);
+
+      await screen.findByText('Schwab Brokerage');
+      await user.click(screen.getByRole('button', { name: /^delete$/i }));
+
+      // The store still has the account — no synchronous cascade delete.
+      expect(useAccountsStore.getState().accounts).toHaveLength(1);
+
+      // A confirm dialog is shown and names the cascade collateral.
+      expect(
+        await screen.findByText(/delete schwab brokerage\?/i),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(/snapshots, holdings, and contribution history/i),
+      ).toBeInTheDocument();
+    });
+
+    it('Cancel keeps the account', async () => {
+      await seedAccount(db, 'Schwab Brokerage');
+      const user = userEvent.setup();
+      render(<MemoryRouter><AccountsTab /></MemoryRouter>);
+
+      await screen.findByText('Schwab Brokerage');
+      await user.click(screen.getByRole('button', { name: /^delete$/i }));
+      await screen.findByText(/delete schwab brokerage\?/i);
+      await user.click(screen.getByRole('button', { name: /cancel/i }));
+
+      // Dialog closes, account remains.
+      await waitFor(() =>
+        expect(screen.queryByText(/delete schwab brokerage\?/i)).not.toBeInTheDocument(),
+      );
+      expect(useAccountsStore.getState().accounts).toHaveLength(1);
+    });
+
+    it('Confirm removes the account', async () => {
+      await seedAccount(db, 'Schwab Brokerage');
+      const user = userEvent.setup();
+      render(<MemoryRouter><AccountsTab /></MemoryRouter>);
+
+      await screen.findByText('Schwab Brokerage');
+      await user.click(screen.getByRole('button', { name: /^delete$/i }));
+      await screen.findByText(/delete schwab brokerage\?/i);
+      // The dialog's destructive button is also labelled "Delete"; scope to it.
+      const dialog = await screen.findByRole('dialog');
+      await user.click(within(dialog).getByRole('button', { name: /^delete$/i }));
+
+      await waitFor(() =>
+        expect(useAccountsStore.getState().accounts).toHaveLength(0),
+      );
+      expect(screen.getByText(/no accounts added yet/i)).toBeInTheDocument();
+    });
   });
 });

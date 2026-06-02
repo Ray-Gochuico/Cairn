@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
@@ -8,6 +8,7 @@ import { setDatabase, getDatabase } from '@/db/db';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useMerchantOverridesStore } from '@/stores/merchant-overrides-store';
 import { CategoriesRepo } from '@/domain/categories';
+import { MerchantOverridesRepo } from '@/domain/merchant-overrides';
 import CategoriesTab from '@/pages/inputs/CategoriesTab';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -144,5 +145,56 @@ describe('CategoriesTab', () => {
     // Assert monthlyBudget is still 500, not null
     const after = await repo.findById(33);
     expect(after?.monthlyBudget).toBe(500);
+  });
+
+  describe('delete confirmation', () => {
+    it('deleting a category is gated by a confirm dialog that names the collateral', async () => {
+      const user = userEvent.setup();
+      renderTab();
+      await waitFor(() => expect(screen.getByText('Groceries')).toBeInTheDocument());
+
+      const groceriesCard =
+        (screen.getByText('Groceries').closest('[class*="card"], .rounded-lg, .rounded-md') as HTMLElement | null) ??
+        screen.getByText('Groceries').parentElement!.parentElement!.parentElement!;
+      const deleteBtn = within(groceriesCard).getByRole('button', { name: /^delete$/i });
+
+      await user.click(deleteBtn);
+      // Not removed synchronously; dialog appears with collateral copy.
+      expect(await screen.findByText(/delete groceries\?/i)).toBeInTheDocument();
+      expect(screen.getByText(/learned merchant corrections/i)).toBeInTheDocument();
+      expect(screen.getByText('Groceries')).toBeInTheDocument();
+
+      // Confirm via the dialog's destructive button.
+      const dialog = await screen.findByRole('dialog');
+      await user.click(within(dialog).getByRole('button', { name: /^delete$/i }));
+      await waitFor(() =>
+        expect(screen.queryByText('Groceries')).not.toBeInTheDocument(),
+      );
+    });
+
+    it('deleting a merchant override is gated by a confirm dialog', async () => {
+      // Seed a learned override so the overrides list renders a Delete button.
+      const ovRepo = new MerchantOverridesRepo(getDatabase());
+      await ovRepo.create({ householdId: 1, merchantPattern: 'STARBUCKS', categoryId: 33 });
+
+      const user = userEvent.setup();
+      renderTab();
+      await waitFor(() => expect(screen.getByText('STARBUCKS')).toBeInTheDocument());
+
+      const ovCard =
+        (screen.getByText('STARBUCKS').closest('[class*="card"], .rounded-lg, .rounded-md') as HTMLElement | null) ??
+        screen.getByText('STARBUCKS').parentElement!.parentElement!;
+      await user.click(within(ovCard).getByRole('button', { name: /^delete$/i }));
+
+      // Not removed synchronously.
+      expect(useMerchantOverridesStore.getState().overrides).toHaveLength(1);
+      expect(await screen.findByText(/delete this merchant override\?/i)).toBeInTheDocument();
+
+      const dialog = await screen.findByRole('dialog');
+      await user.click(within(dialog).getByRole('button', { name: /^delete$/i }));
+      await waitFor(() =>
+        expect(useMerchantOverridesStore.getState().overrides).toHaveLength(0),
+      );
+    });
   });
 });

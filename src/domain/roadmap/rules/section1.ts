@@ -117,7 +117,7 @@ export function evaluateEmployerMatchQ(ctx: RoadmapContext): NodeResult {
     return {
       status: 'info',
       evidence: 'No retirement accounts on file — add a 401(k)/IRA in Accounts to evaluate the match.',
-      cta: { label: 'Open Accounts →', href: '/accounts' },
+      cta: { label: 'Open Accounts →', href: '/inputs/accounts' },
     };
   }
   const anyMatch = retirementAccounts.some((a) => a.hasEmployerMatch === true);
@@ -132,7 +132,7 @@ export function evaluateEmployerMatchQ(ctx: RoadmapContext): NodeResult {
     return {
       status: 'unanswered',
       evidence: 'Mark which retirement accounts (if any) come with an employer match.',
-      cta: { label: 'Open Accounts →', href: '/accounts' },
+      cta: { label: 'Open Accounts →', href: '/inputs/accounts' },
     };
   }
   return {
@@ -152,7 +152,7 @@ export function evaluateEmployerMatch(ctx: RoadmapContext): NodeResult {
       return {
         status: 'unanswered',
         evidence: 'Confirm whether each retirement account has an employer match in Accounts.',
-        cta: { label: 'Open Accounts →', href: '/accounts' },
+        cta: { label: 'Open Accounts →', href: '/inputs/accounts' },
       };
     }
     return {
@@ -176,7 +176,7 @@ export function evaluateEmployerMatch(ctx: RoadmapContext): NodeResult {
       return {
         status: 'unanswered',
         evidence: `Set the salary and match-limit-pct for ${acct.name} before evaluating.`,
-        cta: { label: 'Open Accounts →', href: '/accounts' },
+        cta: { label: 'Open Accounts →', href: '/inputs/accounts' },
       };
     }
     const target = salary * limitPct;
@@ -199,7 +199,7 @@ export function evaluateEmployerMatch(ctx: RoadmapContext): NodeResult {
   return {
     status: 'active',
     evidence: `${formatUSD(totalYtd)} / ${formatUSD(totalTarget)} contributed YTD — ${breakdown.join('; ')}`,
-    cta: { label: 'Open Contributions →', href: '/contributions' },
+    cta: { label: 'Open Contributions →', href: '/inputs/contributions' },
   };
 }
 
@@ -211,7 +211,7 @@ export function evaluateJobStability(ctx: RoadmapContext): NodeResult {
     return {
       status: 'info',
       evidence: 'Add a Person to record job-stability for emergency-fund sizing.',
-      cta: { label: 'Open Household →', href: '/household' },
+      cta: { label: 'Open Household →', href: '/inputs/household' },
     };
   }
   const unanswered = ctx.persons.find((p) => p.jobStability == null);

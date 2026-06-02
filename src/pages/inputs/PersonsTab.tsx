@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { usePersonsStore } from '@/stores/persons-store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import PersonForm, { DEFAULT_PERSON } from '@/components/forms/PersonForm';
 
 export default function PersonsTab() {
   const { persons, load, create, update, remove } = usePersonsStore();
+  const { confirm, dialog } = useConfirm();
   const [mode, setMode] = useState<'list' | 'create' | { type: 'edit'; id: number }>('list');
 
   useEffect(() => {
@@ -102,7 +104,20 @@ export default function PersonsTab() {
                 </div>
                 <div className="flex gap-2 shrink-0">
                   <Button size="sm" variant="outline" onClick={() => setMode({ type: 'edit', id: p.id! })}>Edit</Button>
-                  <Button size="sm" variant="destructive" onClick={() => remove(p.id!)}>Delete</Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={async () => {
+                      const ok = await confirm({
+                        title: `Delete ${p.name}?`,
+                        description:
+                          'This permanently deletes their equity grants, and unlinks them from any accounts, loans, properties, vehicles, and goals they own. This can’t be undone.',
+                      });
+                      if (ok) await remove(p.id!);
+                    }}
+                  >
+                    Delete
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -115,6 +130,7 @@ export default function PersonsTab() {
           {persons.length >= 2 ? 'Maximum of 2 persons reached' : 'Add Person'}
         </Button>
       </div>
+      {dialog}
     </div>
   );
 }
