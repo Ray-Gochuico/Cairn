@@ -63,4 +63,10 @@ describe('Sidebar', () => {
       screen.queryByRole('link', { name: /backup.*restore/i }),
     ).toBeNull();
   });
+
+  it('has a Backtest link in Planning pointing at /calculators/backtest', () => {
+    render(<MemoryRouter><Sidebar /></MemoryRouter>);
+    const link = screen.getByRole('link', { name: /^backtest$/i });
+    expect(link).toHaveAttribute('href', '/calculators/backtest');
+  });
 });

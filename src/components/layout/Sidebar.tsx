@@ -15,6 +15,7 @@ import {
   Calculator,
   GraduationCap,
   GitBranch,
+  History,
   PenSquare,
   Settings as SettingsIcon,
   type LucideIcon,
@@ -62,6 +63,7 @@ export const DEFAULT_SECTIONS: SidebarSectionShape[] = [
       { to: '/learn', label: 'Learn', icon: GraduationCap },
       { to: '/calculators', label: 'Calculators', icon: Calculator },
       { to: '/what-if', label: 'What-If', icon: GitBranch },
+      { to: '/calculators/backtest', label: 'Backtest', icon: History },
     ],
   },
   {
