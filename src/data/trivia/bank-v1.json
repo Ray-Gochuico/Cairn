@@ -8,13 +8,13 @@
     "glossaryTerm": "APR",
     "prompt": "Which of these best describes APR?",
     "choices": [
-      "Annual Percentage Rate — the yearly cost of borrowing, including interest plus most fees, expressed as a single rate.",
-      "Employee Stock Purchase Plan — buy your employer's shares at a discount through payroll deductions.",
-      "The 2022 federal law that updated retirement-account rules — Roth-401(k) RMD relief, 529-to-Roth rollovers, higher catch-up contributions, and more.",
+      "Annual Percentage Rate \u2014 the yearly cost of borrowing, including interest plus most fees, expressed as a single rate.",
+      "Employee Stock Purchase Plan \u2014 buy your employer's shares at a discount through payroll deductions.",
+      "The 2022 federal law that updated retirement-account rules \u2014 Roth-401(k) RMD relief, 529-to-Roth rollovers, higher catch-up contributions, and more.",
       "A grouping of accounts by tax treatment: pre-tax (401k, traditional IRA), Roth (Roth IRA / Roth 401k), and taxable (brokerage)."
     ],
     "answerIndex": 0,
-    "explanation": "Annual Percentage Rate — the yearly cost of borrowing, including interest plus most fees, expressed as a single rate. The figure lenders must disclose under the Truth in Lending Act so you can compare loan and credit-card offers on one number. When you're earning rather than borrowing, compare APY instead — unlike APR, APY accounts for compounding.",
+    "explanation": "Annual Percentage Rate \u2014 the yearly cost of borrowing, including interest plus most fees, expressed as a single rate. The figure lenders must disclose under the Truth in Lending Act so you can compare loan and credit-card offers on one number. When you're earning rather than borrowing, compare APY instead \u2014 unlike APR, APY accounts for compounding.",
     "source": "Truth in Lending Act (Regulation Z)",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
@@ -29,13 +29,13 @@
     "glossaryTerm": "APY",
     "prompt": "Which of these best describes APY?",
     "choices": [
-      "Employee Stock Purchase Plan — buy your employer's shares at a discount through payroll deductions.",
-      "The 2022 federal law that updated retirement-account rules — Roth-401(k) RMD relief, 529-to-Roth rollovers, higher catch-up contributions, and more.",
+      "Employee Stock Purchase Plan \u2014 buy your employer's shares at a discount through payroll deductions.",
+      "The 2022 federal law that updated retirement-account rules \u2014 Roth-401(k) RMD relief, 529-to-Roth rollovers, higher catch-up contributions, and more.",
       "A grouping of accounts by tax treatment: pre-tax (401k, traditional IRA), Roth (Roth IRA / Roth 401k), and taxable (brokerage).",
-      "Annual Percentage Yield — the effective annual return after compounding is applied. Use this (not APR) when comparing savings/CD rates."
+      "Annual Percentage Yield \u2014 the effective annual return after compounding is applied. Use this (not APR) when comparing savings/CD rates."
     ],
     "answerIndex": 3,
-    "explanation": "Annual Percentage Yield — the effective annual return after compounding is applied. Use APY (not APR) when comparing savings or CD rates — APY already bakes in compounding so higher-frequency compounding shows up as a higher APY.",
+    "explanation": "Annual Percentage Yield \u2014 the effective annual return after compounding is applied. Use APY (not APR) when comparing savings or CD rates \u2014 APY already bakes in compounding so higher-frequency compounding shows up as a higher APY.",
     "source": "Truth in Savings Act (Regulation DD)",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
@@ -51,13 +51,13 @@
     "glossaryTerm": "HSA",
     "prompt": "Which of these best describes an HSA?",
     "choices": [
-      "How much of your wealth is in a single holding — high concentration = high single-stock risk.",
-      "Health Savings Account — triple-tax-advantaged account for medical expenses, only if you have an HDHP.",
-      "Restricted Stock Unit — company shares that vest to you over time.",
-      "Your typical monthly spending — anchors the FI / Coast FI calculations."
+      "How much of your wealth is in a single holding \u2014 high concentration = high single-stock risk.",
+      "Health Savings Account \u2014 triple-tax-advantaged account for medical expenses, only if you have an HDHP.",
+      "Restricted Stock Unit \u2014 company shares that vest to you over time.",
+      "Your typical monthly spending \u2014 anchors the FI / Coast FI calculations."
     ],
     "answerIndex": 1,
-    "explanation": "Health Savings Account — triple-tax-advantaged account for medical expenses, only if you have an HDHP. Contributions reduce taxable income, growth is tax-free, and qualified withdrawals are tax-free. Unlike an FSA, the balance rolls over forever and you keep it if you switch jobs.",
+    "explanation": "Health Savings Account \u2014 triple-tax-advantaged account for medical expenses, only if you have an HDHP. Contributions reduce taxable income, growth is tax-free, and qualified withdrawals are tax-free. Unlike an FSA, the balance rolls over forever and you keep it if you switch jobs.",
     "source": "IRS Pub 969",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
@@ -73,13 +73,13 @@
     "glossaryTerm": "FSA",
     "prompt": "Which of these best describes an FSA?",
     "choices": [
-      "The process of earning equity over time — typically 4-year vests with a 1-year cliff.",
+      "The process of earning equity over time \u2014 typically 4-year vests with a 1-year cliff.",
       "A dividend taxed at the lower long-term capital gains rate instead of as ordinary income.",
       "An extra 0.9% Medicare tax on wages above $200k (single) / $250k (MFJ).",
-      "Flexible Spending Account — pre-tax money for medical expenses."
+      "Flexible Spending Account \u2014 pre-tax money for medical expenses."
     ],
     "answerIndex": 3,
-    "explanation": "Flexible Spending Account — pre-tax money for medical expenses. A workplace account where you set aside pre-tax money to spend on medical costs. Use-it-or-lose-it within the year (with a small carry-over allowance).",
+    "explanation": "Flexible Spending Account \u2014 pre-tax money for medical expenses. A workplace account where you set aside pre-tax money to spend on medical costs. Use-it-or-lose-it within the year (with a small carry-over allowance).",
     "source": "IRS Pub 969",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
@@ -94,13 +94,13 @@
     "glossaryTerm": "IRA",
     "prompt": "Which of these best describes an IRA?",
     "choices": [
-      "A tax-advantaged account for retirement savings — Traditional (pre-tax) or Roth (after-tax) — with annual contribution limits.",
+      "A tax-advantaged account for retirement savings \u2014 Traditional (pre-tax) or Roth (after-tax) \u2014 with annual contribution limits.",
       "A health insurance plan with a higher deductible but lower premiums.",
       "A type of company equity award that delivers shares after a vesting schedule.",
       "The annual Social Security wage cap above which FICA no longer applies."
     ],
     "answerIndex": 0,
-    "explanation": "Individual Retirement Account — a tax-advantaged account for retirement savings. Traditional IRAs give a potential tax deduction now; Roth IRAs give tax-free withdrawals later. Both have annual contribution limits (indexed for inflation), plus catch-up provisions over age 50.",
+    "explanation": "Individual Retirement Account \u2014 a tax-advantaged account for retirement savings. Traditional IRAs give a potential tax deduction now; Roth IRAs give tax-free withdrawals later. Both have annual contribution limits (indexed for inflation), plus catch-up provisions over age 50.",
     "source": "IRS Pub 590-A",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
@@ -115,13 +115,13 @@
     "glossaryTerm": "401(k)",
     "prompt": "Which of these best describes a 401(k)?",
     "choices": [
-      "Safe Withdrawal Rate — the percentage of a portfolio that can be withdrawn annually without depleting it.",
+      "Safe Withdrawal Rate \u2014 the percentage of a portfolio that can be withdrawn annually without depleting it.",
       "A workplace retirement plan you contribute to from your paycheck.",
       "The IRS rule that sets minimum withdrawals from pre-tax retirement accounts after a certain age.",
       "An account funded with after-tax dollars whose withdrawals in retirement are tax-free."
     ],
     "answerIndex": 1,
-    "explanation": "A workplace retirement plan you contribute to from your paycheck. Traditional 401(k) contributions reduce your taxable income now; Roth 401(k) contributions are after-tax but grow tax-free. Many employers add matching contributions — free money worth capturing.",
+    "explanation": "A workplace retirement plan you contribute to from your paycheck. Traditional 401(k) contributions reduce your taxable income now; Roth 401(k) contributions are after-tax but grow tax-free. Many employers add matching contributions \u2014 free money worth capturing.",
     "source": "IRS Pub 560",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
@@ -137,12 +137,12 @@
     "prompt": "Which of these best describes a Roth IRA?",
     "choices": [
       "A tax-deductible retirement account where contributions lower your taxable income today.",
-      "An Individual Retirement Account funded with after-tax dollars — withdrawals in retirement are tax-free.",
+      "An Individual Retirement Account funded with after-tax dollars \u2014 withdrawals in retirement are tax-free.",
       "A retirement plan for self-employed individuals with higher contribution limits.",
       "A use-it-or-lose-it account for healthcare expenses tied to a high-deductible health plan."
     ],
     "answerIndex": 1,
-    "explanation": "A Roth IRA is funded with after-tax dollars so qualified withdrawals in retirement — including all growth — are completely tax-free. Contributions (not earnings) can be withdrawn anytime without penalty. Income limits apply to direct contributions, but the backdoor Roth is a workaround for high earners.",
+    "explanation": "A Roth IRA is funded with after-tax dollars so qualified withdrawals in retirement \u2014 including all growth \u2014 are completely tax-free. Contributions (not earnings) can be withdrawn anytime without penalty. Income limits apply to direct contributions, but the backdoor Roth is a workaround for high earners.",
     "source": "IRS Pub 590-A",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
@@ -159,8 +159,8 @@
     "choices": [
       "A retirement account where contributions are after-tax and withdrawals are tax-free.",
       "A plan that lets self-employed people save and deduct up to ~25% of net earnings.",
-      "A pre-tax retirement account — contributions may be deductible, and withdrawals in retirement are taxed as ordinary income.",
-      "A retirement account that requires minimum distributions starting at age 59½."
+      "A pre-tax retirement account \u2014 contributions may be deductible, and withdrawals in retirement are taxed as ordinary income.",
+      "A retirement account that requires minimum distributions starting at age 59\u00bd."
     ],
     "answerIndex": 2,
     "explanation": "A Traditional IRA holds pre-tax money (if you're eligible to deduct). Contributions may reduce taxable income today; withdrawals in retirement are taxed as ordinary income. Required Minimum Distributions begin at age 73 under SECURE 2.0.",
@@ -178,13 +178,13 @@
     "glossaryTerm": "RMD",
     "prompt": "Which of these best describes an RMD?",
     "choices": [
-      "A penalty for withdrawing from a retirement account before age 59½.",
-      "Required Minimum Distribution — the IRS-mandated minimum you must withdraw each year from pre-tax retirement accounts after a certain age.",
+      "A penalty for withdrawing from a retirement account before age 59\u00bd.",
+      "Required Minimum Distribution \u2014 the IRS-mandated minimum you must withdraw each year from pre-tax retirement accounts after a certain age.",
       "A contribution limit that applies only to employer-sponsored plans.",
       "A tax credit for low-income savers who contribute to retirement accounts."
     ],
     "answerIndex": 1,
-    "explanation": "Required Minimum Distribution — the IRS-mandated minimum you must withdraw each year from pre-tax retirement accounts (Traditional IRA, 401(k), etc.) after age 73 under SECURE 2.0. Roth IRAs are exempt. Missing an RMD triggers a 25% penalty on the shortfall.",
+    "explanation": "Required Minimum Distribution \u2014 the IRS-mandated minimum you must withdraw each year from pre-tax retirement accounts (Traditional IRA, 401(k), etc.) after age 73 under SECURE 2.0. Roth IRAs are exempt. Missing an RMD triggers a 25% penalty on the shortfall.",
     "source": "IRS Pub 590-B",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
@@ -200,12 +200,12 @@
     "prompt": "Which of these best describes the AMT?",
     "choices": [
       "A 3.8% surtax on investment income for high-income filers.",
-      "Alternative Minimum Tax — a parallel tax calculation that ensures high-income filers pay at least a minimum amount.",
+      "Alternative Minimum Tax \u2014 a parallel tax calculation that ensures high-income filers pay at least a minimum amount.",
       "A penalty for failing to take Required Minimum Distributions on time.",
       "The maximum percentage a worker pays in payroll taxes."
     ],
     "answerIndex": 1,
-    "explanation": "Alternative Minimum Tax — a parallel tax calculation that ensures high-income filers pay at least a minimum amount. You pay the higher of regular tax or AMT. Common triggers include exercising Incentive Stock Options (ISOs) and large miscellaneous deductions.",
+    "explanation": "Alternative Minimum Tax \u2014 a parallel tax calculation that ensures high-income filers pay at least a minimum amount. You pay the higher of regular tax or AMT. Common triggers include exercising Incentive Stock Options (ISOs) and large miscellaneous deductions.",
     "source": "IRS Form 6251 Instructions",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
@@ -220,13 +220,13 @@
     "glossaryTerm": "AGI",
     "prompt": "Which of these best describes AGI?",
     "choices": [
-      "Adjusted Gross Income — gross income minus above-the-line deductions like IRA contributions, student loan interest, and HSA contributions.",
+      "Adjusted Gross Income \u2014 gross income minus above-the-line deductions like IRA contributions, student loan interest, and HSA contributions.",
       "A penalty for early retirement account withdrawals.",
       "The total amount an employee contributes to a 401(k) before employer match.",
       "A tax on wages that funds Social Security and Medicare."
     ],
     "answerIndex": 0,
-    "explanation": "Adjusted Gross Income — gross income minus above-the-line deductions like IRA contributions, student loan interest, and HSA contributions. AGI is the starting point for many phase-outs, tax-credit calculations, and the Roth IRA income limits.",
+    "explanation": "Adjusted Gross Income \u2014 gross income minus above-the-line deductions like IRA contributions, student loan interest, and HSA contributions. AGI is the starting point for many phase-outs, tax-credit calculations, and the Roth IRA income limits.",
     "source": "IRS Pub 17",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
@@ -242,12 +242,12 @@
     "prompt": "Which of these best describes MAGI?",
     "choices": [
       "The tax owed on a retirement distribution before any credits.",
-      "Modified Adjusted Gross Income — AGI with certain deductions added back; used to determine Roth IRA eligibility and other phase-outs.",
+      "Modified Adjusted Gross Income \u2014 AGI with certain deductions added back; used to determine Roth IRA eligibility and other phase-outs.",
       "A type of employer contribution that vests immediately.",
       "The portion of a paycheck subject to FICA taxes."
     ],
     "answerIndex": 1,
-    "explanation": "Modified Adjusted Gross Income — AGI with certain deductions added back (e.g., IRA deduction, student-loan interest). MAGI is used to determine Roth IRA contribution limits, whether you can deduct a Traditional IRA, and IRMAA Medicare surcharges.",
+    "explanation": "Modified Adjusted Gross Income \u2014 AGI with certain deductions added back (e.g., IRA deduction, student-loan interest). MAGI is used to determine Roth IRA contribution limits, whether you can deduct a Traditional IRA, and IRMAA Medicare surcharges.",
     "source": "IRS Pub 590-A",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
@@ -284,12 +284,12 @@
     "prompt": "Which of these best describes your marginal tax rate?",
     "choices": [
       "The average percentage of your total income paid in federal income tax.",
-      "The tax rate applied to the last dollar of your taxable income — the rate at which your next dollar of income will be taxed.",
+      "The tax rate applied to the last dollar of your taxable income \u2014 the rate at which your next dollar of income will be taxed.",
       "The flat rate that applies to all self-employment income.",
       "The percentage of gross income withheld for FICA taxes."
     ],
     "answerIndex": 1,
-    "explanation": "Your marginal tax rate is the rate applied to the last dollar of your taxable income — the tax bracket you're currently in. It determines the value of deductions and the cost of additional income. Many people confuse it with their effective rate (lower, because lower brackets apply to lower slices of income).",
+    "explanation": "Your marginal tax rate is the rate applied to the last dollar of your taxable income \u2014 the tax bracket you're currently in. It determines the value of deductions and the cost of additional income. Many people confuse it with their effective rate (lower, because lower brackets apply to lower slices of income).",
     "source": "IRS Pub 17",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
@@ -305,12 +305,12 @@
     "prompt": "Which of these best describes your effective tax rate?",
     "choices": [
       "The tax bracket percentage that applies to your highest dollar of income.",
-      "The total federal income tax you paid divided by your total taxable income — your actual average tax rate.",
+      "The total federal income tax you paid divided by your total taxable income \u2014 your actual average tax rate.",
       "The FICA rate applied to wages up to the Social Security wage base.",
       "The rate at which interest income is taxed for AMT purposes."
     ],
     "answerIndex": 1,
-    "explanation": "Your effective tax rate is total federal income tax divided by taxable income — the actual average percentage you paid. It's always lower than your marginal rate because lower tax brackets apply to lower slices of your income. Effective rate is the right number for comparing tax burdens across people.",
+    "explanation": "Your effective tax rate is total federal income tax divided by taxable income \u2014 the actual average percentage you paid. It's always lower than your marginal rate because lower tax brackets apply to lower slices of your income. Effective rate is the right number for comparing tax burdens across people.",
     "source": "IRS Pub 17",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
@@ -325,13 +325,13 @@
     "glossaryTerm": "SWR",
     "prompt": "Which of these best describes the Safe Withdrawal Rate (SWR)?",
     "choices": [
-      "Flexible Spending Account — pre-tax money for medical expenses.",
-      "Safe Withdrawal Rate — the percentage of your portfolio you can withdraw each year and (probably) not run out.",
-      "Employee Stock Purchase Plan — buy your employer's shares at a discount through payroll deductions.",
-      "The 2022 federal law that updated retirement-account rules — RMD relief, 529-to-Roth rollovers, higher catch-up contributions."
+      "Flexible Spending Account \u2014 pre-tax money for medical expenses.",
+      "Safe Withdrawal Rate \u2014 the percentage of your portfolio you can withdraw each year and (probably) not run out.",
+      "Employee Stock Purchase Plan \u2014 buy your employer's shares at a discount through payroll deductions.",
+      "The 2022 federal law that updated retirement-account rules \u2014 RMD relief, 529-to-Roth rollovers, higher catch-up contributions."
     ],
     "answerIndex": 1,
-    "explanation": "Safe Withdrawal Rate — the percentage of your portfolio you can withdraw each year and (probably) not run out. The famous '4% rule' (Bengen / Trinity Study) says ~4% of your starting nest egg, inflation-adjusted thereafter, has historically lasted a 30-year retirement. Lower rates are more conservative.",
+    "explanation": "Safe Withdrawal Rate \u2014 the percentage of your portfolio you can withdraw each year and (probably) not run out. The famous '4% rule' (Bengen / Trinity Study) says ~4% of your starting nest egg, inflation-adjusted thereafter, has historically lasted a 30-year retirement. Lower rates are more conservative.",
     "source": "Bengen (1994); Trinity Study (1998)",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
@@ -349,10 +349,10 @@
       "The short symbols used to identify stocks, ETFs, and mutual funds on an exchange.",
       "A 401(k) for self-employed people with no employees other than a spouse.",
       "How far your portfolio's actual mix has wandered from your target allocation as markets move.",
-      "The point where your existing investments will grow into a full retirement nest egg on their own — even if you stop contributing."
+      "The point where your existing investments will grow into a full retirement nest egg on their own \u2014 even if you stop contributing."
     ],
     "answerIndex": 3,
-    "explanation": "Coast FI is the point where your existing investments will grow into a full retirement nest egg on their own — even if you stop contributing. You still need to cover current expenses, but you no longer need to save for retirement. A common milestone on the way to full Financial Independence.",
+    "explanation": "Coast FI is the point where your existing investments will grow into a full retirement nest egg on their own \u2014 even if you stop contributing. You still need to cover current expenses, but you no longer need to save for retirement. A common milestone on the way to full Financial Independence.",
     "source": "Cairn glossary",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
@@ -368,12 +368,12 @@
     "prompt": "What does FIRE stand for in personal finance?",
     "choices": [
       "A projection chart detail mode that draws one line for total investments.",
-      "Married Filing Separately — each spouse files their own return.",
+      "Married Filing Separately \u2014 each spouse files their own return.",
       "The portion of your paycheck routed into a Dependent Care FSA before tax is withheld.",
-      "Financial Independence, Retire Early — a movement around saving aggressively to reach FI well before traditional retirement age."
+      "Financial Independence, Retire Early \u2014 a movement around saving aggressively to reach FI well before traditional retirement age."
     ],
     "answerIndex": 3,
-    "explanation": "FIRE stands for Financial Independence, Retire Early — a movement built around aggressive saving and investing to reach financial independence well before the traditional retirement age of 65. Variants include LeanFIRE (minimal lifestyle) and FatFIRE (higher spending).",
+    "explanation": "FIRE stands for Financial Independence, Retire Early \u2014 a movement built around aggressive saving and investing to reach financial independence well before the traditional retirement age of 65. Variants include LeanFIRE (minimal lifestyle) and FatFIRE (higher spending).",
     "source": "Cairn glossary",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
@@ -388,13 +388,13 @@
     "glossaryTerm": "FI",
     "prompt": "Which of these best describes Financial Independence (FI)?",
     "choices": [
-      "Financial Independence — your investments throw off enough income to cover your expenses, so work becomes optional.",
+      "Financial Independence \u2014 your investments throw off enough income to cover your expenses, so work becomes optional.",
       "A projection chart detail mode that draws one line for total investments.",
       "IRS rule that taxes a Roth conversion in proportion to your pre-tax IRA balances.",
-      "Health Savings Account — triple-tax-advantaged account for medical expenses."
+      "Health Savings Account \u2014 triple-tax-advantaged account for medical expenses."
     ],
     "answerIndex": 0,
-    "explanation": "Financial Independence means your investments generate enough income (or you have enough wealth at your safe withdrawal rate) to cover your expenses — making paid work optional rather than required. The FI number is typically 25× annual expenses (the inverse of a 4% SWR).",
+    "explanation": "Financial Independence means your investments generate enough income (or you have enough wealth at your safe withdrawal rate) to cover your expenses \u2014 making paid work optional rather than required. The FI number is typically 25\u00d7 annual expenses (the inverse of a 4% SWR).",
     "source": "Cairn glossary",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
@@ -410,7 +410,7 @@
     "prompt": "Which of these best describes compounding frequency?",
     "choices": [
       "The effective annual return on a savings account, including all compounding.",
-      "How often interest is calculated and added to your balance — daily, monthly, quarterly, or annually.",
+      "How often interest is calculated and added to your balance \u2014 daily, monthly, quarterly, or annually.",
       "The minimum balance required to avoid a monthly fee.",
       "The penalty rate charged for early CD withdrawal."
     ],
@@ -431,13 +431,13 @@
     "glossaryTerm": "HDHP",
     "prompt": "Which of these best describes an HDHP?",
     "choices": [
-      "Annual Percentage Yield — the effective annual return after compounding is applied.",
-      "High-Deductible Health Plan — required to contribute to an HSA.",
+      "Annual Percentage Yield \u2014 the effective annual return after compounding is applied.",
+      "High-Deductible Health Plan \u2014 required to contribute to an HSA.",
       "How the projection chart slices your investments: a single line, three lines by tax bucket, or one line per account.",
-      "The process of earning equity over time — typically 4-year vests with a 1-year cliff."
+      "The process of earning equity over time \u2014 typically 4-year vests with a 1-year cliff."
     ],
     "answerIndex": 1,
-    "explanation": "High-Deductible Health Plan — a health insurance plan with a higher deductible (you pay more out of pocket before insurance kicks in) but typically lower premiums. Being enrolled in an HDHP is the eligibility requirement to open and fund an HSA.",
+    "explanation": "High-Deductible Health Plan \u2014 a health insurance plan with a higher deductible (you pay more out of pocket before insurance kicks in) but typically lower premiums. Being enrolled in an HDHP is the eligibility requirement to open and fund an HSA.",
     "source": "IRS Pub 969",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
@@ -452,8 +452,8 @@
     "glossaryTerm": "FICA",
     "prompt": "Which of these best describes FICA?",
     "choices": [
-      "Federal Insurance Contributions Act — the payroll tax that funds Social Security and Medicare.",
-      "Sticker-price dollars — what a number says without adjusting for inflation.",
+      "Federal Insurance Contributions Act \u2014 the payroll tax that funds Social Security and Medicare.",
+      "Sticker-price dollars \u2014 what a number says without adjusting for inflation.",
       "A dividend taxed at the lower long-term capital gains rate instead of as ordinary income.",
       "An Individual Retirement Account funded with after-tax dollars."
     ],
@@ -474,12 +474,12 @@
     "prompt": "Which of these best describes the NIIT?",
     "choices": [
       "A workplace retirement plan you contribute to from your paycheck.",
-      "Net Investment Income Tax — an extra 3.8% tax on investment income above ~$200k (single) / $250k (MFJ).",
-      "Alternative Minimum Tax — a parallel tax calculation that ensures high-income filers pay at least a minimum amount.",
+      "Net Investment Income Tax \u2014 an extra 3.8% tax on investment income above ~$200k (single) / $250k (MFJ).",
+      "Alternative Minimum Tax \u2014 a parallel tax calculation that ensures high-income filers pay at least a minimum amount.",
       "The Inputs page where you tune assumptions about long-term growth rates."
     ],
     "answerIndex": 1,
-    "explanation": "Net Investment Income Tax — an extra 3.8% tax on investment income (interest, dividends, capital gains, rental income) once your MAGI exceeds $200k (single) or $250k (married filing jointly). It applies in addition to regular income tax.",
+    "explanation": "Net Investment Income Tax \u2014 an extra 3.8% tax on investment income (interest, dividends, capital gains, rental income) once your MAGI exceeds $200k (single) or $250k (married filing jointly). It applies in addition to regular income tax.",
     "source": "IRS Form 8960 Instructions",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
@@ -495,12 +495,12 @@
     "prompt": "Which of these best describes an ISO?",
     "choices": [
       "A company share that vests to you over time without requiring a purchase.",
-      "Incentive Stock Option — an employer-granted right to buy company stock at a set price, with potential AMT and capital-gains tax advantages.",
+      "Incentive Stock Option \u2014 an employer-granted right to buy company stock at a set price, with potential AMT and capital-gains tax advantages.",
       "A retirement plan contribution that reduces your current taxable income.",
       "A dividend from a foreign corporation taxed at the ordinary income rate."
     ],
     "answerIndex": 1,
-    "explanation": "An Incentive Stock Option (ISO) lets you buy company stock at a fixed strike price. The spread at exercise is NOT regular income but IS an AMT preference item — a common AMT trigger. If you hold shares at least two years from grant and one year from exercise, the eventual gain qualifies for long-term capital gains rates.",
+    "explanation": "An Incentive Stock Option (ISO) lets you buy company stock at a fixed strike price. The spread at exercise is NOT regular income but IS an AMT preference item \u2014 a common AMT trigger. If you hold shares at least two years from grant and one year from exercise, the eventual gain qualifies for long-term capital gains rates.",
     "source": "IRS Pub 525",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
@@ -516,7 +516,7 @@
     "prompt": "Which of these best describes an RSU?",
     "choices": [
       "An employer-granted right to buy company stock at a fixed price below market value.",
-      "A restricted stock unit — company shares that vest to you over time, taxed as ordinary income at vesting.",
+      "A restricted stock unit \u2014 company shares that vest to you over time, taxed as ordinary income at vesting.",
       "A plan that lets employees buy company stock at a discount through payroll deductions.",
       "An individual retirement account funded with after-tax dollars."
     ],
@@ -542,7 +542,7 @@
       "A tax-advantaged account for purchasing employer-offered health plans."
     ],
     "answerIndex": 0,
-    "explanation": "Employee Stock Purchase Plan — a benefit that lets employees buy company stock (often at a 15% discount) through payroll deductions. A qualifying disposition (holding two years from offering + one year from purchase) taxes the discount as ordinary income but treats additional gains at long-term capital gains rates.",
+    "explanation": "Employee Stock Purchase Plan \u2014 a benefit that lets employees buy company stock (often at a 15% discount) through payroll deductions. A qualifying disposition (holding two years from offering + one year from purchase) taxes the discount as ordinary income but treats additional gains at long-term capital gains rates.",
     "source": "IRS Pub 525",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
@@ -558,7 +558,7 @@
     "prompt": "Which of these best describes vesting?",
     "choices": [
       "The IRS rule that determines the tax treatment of employer stock options.",
-      "The process of earning equity over time — typically a 4-year schedule with a 1-year cliff.",
+      "The process of earning equity over time \u2014 typically a 4-year schedule with a 1-year cliff.",
       "The taxable value of benefits provided by an employer in addition to salary.",
       "The transfer of unvested equity to a new employer after leaving a company."
     ],
@@ -578,13 +578,13 @@
     "glossaryTerm": "COST BASIS",
     "prompt": "Which of these best describes cost basis?",
     "choices": [
-      "The original value of an asset for tax purposes — what you paid, which sets your eventual capital gain or loss.",
+      "The original value of an asset for tax purposes \u2014 what you paid, which sets your eventual capital gain or loss.",
       "The current market value of all your investments combined.",
       "The fee charged by a brokerage to execute a trade.",
       "The price at which a stock option can be exercised."
     ],
     "answerIndex": 0,
-    "explanation": "Cost basis is the original value of an asset for tax purposes — typically what you paid plus commissions. Your capital gain (or loss) is the sale price minus cost basis. Tracking it correctly matters especially for shares acquired at different times (FIFO, specific identification, or average cost methods).",
+    "explanation": "Cost basis is the original value of an asset for tax purposes \u2014 typically what you paid plus commissions. Your capital gain (or loss) is the sale price minus cost basis. Tracking it correctly matters especially for shares acquired at different times (FIFO, specific identification, or average cost methods).",
     "source": "IRS Pub 550",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
@@ -621,12 +621,12 @@
     "prompt": "Which of these best describes nominal dollars?",
     "choices": [
       "Dollars adjusted for inflation to reflect today's purchasing power.",
-      "Sticker-price dollars — the face value of a number without adjusting for inflation.",
+      "Sticker-price dollars \u2014 the face value of a number without adjusting for inflation.",
       "The after-tax value of a dollar in a pre-tax retirement account.",
       "A unit of currency that accounts for exchange-rate fluctuations."
     ],
     "answerIndex": 1,
-    "explanation": "Nominal dollars are sticker-price figures — the amount stated without adjusting for inflation. A salary of $100k today and $100k in 20 years are the same in nominal terms but very different in real (inflation-adjusted) purchasing power. Financial projections often show both.",
+    "explanation": "Nominal dollars are sticker-price figures \u2014 the amount stated without adjusting for inflation. A salary of $100k today and $100k in 20 years are the same in nominal terms but very different in real (inflation-adjusted) purchasing power. Financial projections often show both.",
     "source": "Cairn glossary",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
@@ -663,7 +663,7 @@
     "prompt": "Which of these best describes a 529 plan?",
     "choices": [
       "A tax-advantaged account for K-12 and college expenses with a $2,000/year contribution limit.",
-      "A tax-advantaged savings plan for education expenses — contributions grow tax-free and withdrawals for qualified education expenses are tax-free.",
+      "A tax-advantaged savings plan for education expenses \u2014 contributions grow tax-free and withdrawals for qualified education expenses are tax-free.",
       "A retirement savings account available only to public school employees.",
       "An employer-matched savings account for apprenticeship and vocational training."
     ],
@@ -684,12 +684,12 @@
     "prompt": "Which of these best describes the early-withdrawal penalty on retirement accounts?",
     "choices": [
       "A 50% excise tax on Required Minimum Distributions not taken on time.",
-      "A 10% additional tax on distributions taken before age 59½ from most retirement accounts.",
+      "A 10% additional tax on distributions taken before age 59\u00bd from most retirement accounts.",
       "A fee charged by a brokerage for closing a retirement account.",
       "A penalty that applies when you exceed the annual IRA contribution limit."
     ],
     "answerIndex": 1,
-    "explanation": "Taking money out of a Traditional IRA or 401(k) before age 59½ generally triggers a 10% additional federal tax on top of the regular income tax. Notable exceptions: substantially equal periodic payments (72(t)), first-time home purchase (IRA only), higher education, disability, and others. Roth IRA contributions (not earnings) can be withdrawn anytime penalty-free.",
+    "explanation": "Taking money out of a Traditional IRA or 401(k) before age 59\u00bd generally triggers a 10% additional federal tax on top of the regular income tax. Notable exceptions: substantially equal periodic payments (72(t)), first-time home purchase (IRA only), higher education, disability, and others. Roth IRA contributions (not earnings) can be withdrawn anytime penalty-free.",
     "source": "IRS Pub 590-B",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
@@ -726,7 +726,7 @@
     "prompt": "Which of these best describes the standard deduction?",
     "choices": [
       "A deduction equal to the amount you donated to qualified charities.",
-      "A fixed dollar amount that reduces taxable income without needing to itemize — most taxpayers use this.",
+      "A fixed dollar amount that reduces taxable income without needing to itemize \u2014 most taxpayers use this.",
       "The maximum amount deductible for business expenses from a sole proprietorship.",
       "A deduction for mortgage interest available only to homeowners."
     ],
@@ -768,7 +768,7 @@
     "prompt": "Which of these best describes the IRS pro-rata rule for IRA conversions?",
     "choices": [
       "A rule that limits Roth IRA contributions based on earned income.",
-      "IRS rule that taxes a Roth conversion in proportion to your pre-tax IRA balances — including Traditional, SEP, and SIMPLE IRAs.",
+      "IRS rule that taxes a Roth conversion in proportion to your pre-tax IRA balances \u2014 including Traditional, SEP, and SIMPLE IRAs.",
       "A rule requiring equal annual distributions from inherited IRAs.",
       "A rule limiting the deductibility of losses from passive investments."
     ],
@@ -788,7 +788,7 @@
     "glossaryTerm": "SEP",
     "prompt": "Which of these best describes a SEP-IRA?",
     "choices": [
-      "A Simplified Employee Pension — a retirement plan for self-employed people and small businesses that allows large tax-deductible contributions.",
+      "A Simplified Employee Pension \u2014 a retirement plan for self-employed people and small businesses that allows large tax-deductible contributions.",
       "A tax-advantaged account for medical expenses paired with a high-deductible health plan.",
       "A type of taxable brokerage account with no contribution limits.",
       "A government retirement plan for public-sector workers."
@@ -810,7 +810,7 @@
     "prompt": "Which of these best describes a SIMPLE IRA?",
     "choices": [
       "A savings account with a simple, fixed interest rate and no contribution limits.",
-      "A Savings Incentive Match Plan for Employees — a retirement plan for small businesses (≤100 employees) with required employer matching.",
+      "A Savings Incentive Match Plan for Employees \u2014 a retirement plan for small businesses (\u2264100 employees) with required employer matching.",
       "A type of IRA that requires no beneficiary designation.",
       "An IRA that can only hold government-backed securities."
     ],
@@ -832,11 +832,11 @@
     "choices": [
       "A grouping of accounts by tax treatment: pre-tax, Roth, and taxable.",
       "Your projected year-over-year salary path including raises and promotions.",
-      "Dependent Care FSA — pre-tax money set aside for childcare or eldercare.",
+      "Dependent Care FSA \u2014 pre-tax money set aside for childcare or eldercare.",
       "A projection chart detail mode that draws one line per investment account."
     ],
     "answerIndex": 2,
-    "explanation": "Dependent Care FSA — a workplace account that lets you contribute pre-tax dollars (subject to an annual cap) for qualified childcare or eldercare expenses, lowering your taxable income. Funds are use-it-or-lose-it within the plan year. The dependent must generally be under age 13.",
+    "explanation": "Dependent Care FSA \u2014 a workplace account that lets you contribute pre-tax dollars (subject to an annual cap) for qualified childcare or eldercare expenses, lowering your taxable income. Funds are use-it-or-lose-it within the plan year. The dependent must generally be under age 13.",
     "source": "IRS Pub 503",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
@@ -871,7 +871,12 @@
     "topic": "Retirement",
     "glossaryTerm": "RMD",
     "prompt": "At what age do Required Minimum Distributions generally begin for Traditional 401(k) and IRA balances under SECURE 2.0?",
-    "choices": ["59½", "65", "70½", "73"],
+    "choices": [
+      "59\u00bd",
+      "65",
+      "70\u00bd",
+      "73"
+    ],
     "answerIndex": 3,
     "explanation": "Under SECURE 2.0 (enacted 2022), Required Minimum Distributions from pre-tax retirement accounts generally begin at age 73 (rising to 75 in 2033). They do not apply to Roth IRAs (though Roth 401(k)s were subject to them until SECURE 2.0 eliminated that requirement). The first RMD may be delayed to April 1 of the following year.",
     "source": "IRS Pub 590-B; SECURE 2.0 Act of 2022",
@@ -895,7 +900,7 @@
     ],
     "answerIndex": 2,
     "explanation": "The 3.8% NIIT applies to the lesser of net investment income or the excess of MAGI over $200k (single) / $250k (MFJ). Net investment income includes interest, dividends, capital gains, rental income, royalties, and passive activity income. Wages, self-employment income, and distributions from IRAs and qualified plans are explicitly excluded.",
-    "source": "IRS Form 8960; IRC §1411",
+    "source": "IRS Form 8960; IRC \u00a71411",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
     "reviewedAt": "2026-06-01"
@@ -910,7 +915,7 @@
     "prompt": "When you exercise Incentive Stock Options (ISOs), which AMT adjustment triggers?",
     "choices": [
       "The exercise spread is ordinary income for regular tax, creating no AMT difference",
-      "The exercise spread (fair market value minus strike price) is an AMT preference item — not regular income, but added back for AMT purposes",
+      "The exercise spread (fair market value minus strike price) is an AMT preference item \u2014 not regular income, but added back for AMT purposes",
       "The entire sale proceeds are subject to AMT in the year of exercise",
       "ISO exercises are always exempt from AMT for non-employees"
     ],
@@ -928,7 +933,7 @@
     "format": "definition",
     "topic": "Retirement",
     "glossaryTerm": "BACKDOOR",
-    "prompt": "The Roth conversion ladder is primarily used to avoid which penalty for early retirees before age 59½?",
+    "prompt": "The Roth conversion ladder is primarily used to avoid which penalty for early retirees before age 59\u00bd?",
     "choices": [
       "The net investment income tax (NIIT)",
       "The 25% SIMPLE IRA early-withdrawal penalty",
@@ -936,8 +941,8 @@
       "The excess contribution penalty"
     ],
     "answerIndex": 2,
-    "explanation": "Early retirees convert Traditional 401(k)/IRA balances to Roth each year, then wait five years for each converted tranche to become penalty-free. Because Roth IRA contributions (and seasoned conversions) can be withdrawn without the 10% penalty, this creates a bridge to age 59½. Execution requires five years of living expenses in non-retirement accounts as a runway.",
-    "source": "IRS Pub 590-B; IRC §72(t)",
+    "explanation": "Early retirees convert Traditional 401(k)/IRA balances to Roth each year, then wait five years for each converted tranche to become penalty-free. Because Roth IRA contributions (and seasoned conversions) can be withdrawn without the 10% penalty, this creates a bridge to age 59\u00bd. Execution requires five years of living expenses in non-retirement accounts as a runway.",
+    "source": "IRS Pub 590-B; IRC \u00a772(t)",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
     "reviewedAt": "2026-06-01"
@@ -954,11 +959,11 @@
       "One year from purchase date only",
       "Two years from the offering date AND one year from the purchase date",
       "Six months from both the offering date and purchase date",
-      "No holding period — all ESPP sales are always qualifying dispositions"
+      "No holding period \u2014 all ESPP sales are always qualifying dispositions"
     ],
     "answerIndex": 1,
     "explanation": "For a Section 423 ESPP qualifying disposition, you must hold the shares at least two years from the offering (grant) date AND one year from the purchase date. In a qualifying disposition, the discount is taxed as ordinary income (capped at the actual discount if gains are smaller), and additional appreciation is a long-term capital gain. A disqualifying disposition taxes more of the gain as ordinary income.",
-    "source": "IRS Pub 525; IRC §423",
+    "source": "IRS Pub 525; IRC \u00a7423",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
     "reviewedAt": "2026-06-01"
@@ -978,7 +983,7 @@
       "You become eligible for a higher contribution limit through a catch-up provision"
     ],
     "answerIndex": 1,
-    "explanation": "Direct Roth IRA contributions phase out over a MAGI range (the IRS indexes the band each year). Within the range your allowed contribution decreases proportionally. Above the top of the range, direct contributions are $0. High earners above the limit use the backdoor Roth (non-deductible Traditional IRA → conversion) as a legal workaround.",
+    "explanation": "Direct Roth IRA contributions phase out over a MAGI range (the IRS indexes the band each year). Within the range your allowed contribution decreases proportionally. Above the top of the range, direct contributions are $0. High earners above the limit use the backdoor Roth (non-deductible Traditional IRA \u2192 conversion) as a legal workaround.",
     "source": "IRS Pub 590-A",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
@@ -996,11 +1001,11 @@
       "$10,000",
       "$35,000",
       "$100,000",
-      "No limit — the full 529 balance can be rolled over"
+      "No limit \u2014 the full 529 balance can be rolled over"
     ],
     "answerIndex": 1,
     "explanation": "SECURE 2.0 allows rolling unused 529 funds into the beneficiary's Roth IRA, subject to a $35,000 lifetime limit per beneficiary. The 529 account must be at least 15 years old, and annual rollovers are capped at the Roth IRA annual contribution limit (minus other Roth contributions). The beneficiary must have earned income at least equal to the amount rolled over.",
-    "source": "SECURE 2.0 Act of 2022, §126; IRS Notice 2024-2",
+    "source": "SECURE 2.0 Act of 2022, \u00a7126; IRS Notice 2024-2",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
     "reviewedAt": "2026-06-01"
@@ -1019,8 +1024,8 @@
       "A rule that disallows capital losses that exceed capital gains in a single year"
     ],
     "answerIndex": 1,
-    "explanation": "The wash-sale rule (IRC §1091) disallows a capital loss if you purchase a 'substantially identical' security within 30 days before or after the loss sale. The disallowed loss is added to the basis of the new shares, effectively deferring rather than eliminating it. Common mistake: selling VTI at a loss and buying VOO (different but substantially identical broad-market ETFs) can still trigger the rule.",
-    "source": "IRS Pub 550; IRC §1091",
+    "explanation": "The wash-sale rule (IRC \u00a71091) disallows a capital loss if you purchase a 'substantially identical' security within 30 days before or after the loss sale. The disallowed loss is added to the basis of the new shares, effectively deferring rather than eliminating it. Common mistake: selling VTI at a loss and buying VOO (different but substantially identical broad-market ETFs) can still trigger the rule.",
+    "source": "IRS Pub 550; IRC \u00a71091",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
     "reviewedAt": "2026-06-01"
@@ -1034,13 +1039,13 @@
     "prompt": "What is a 72(t) SEPP and what penalty does it avoid?",
     "choices": [
       "A rule allowing penalty-free IRA withdrawals after age 72",
-      "Substantially Equal Periodic Payments — a series of IRA withdrawals that avoids the 10% early-withdrawal penalty if maintained for at least 5 years or until age 59½",
+      "Substantially Equal Periodic Payments \u2014 a series of IRA withdrawals that avoids the 10% early-withdrawal penalty if maintained for at least 5 years or until age 59\u00bd",
       "A provision that lets retirees reduce RMDs by electing SEPP distributions",
       "A tax credit for substantially equal pension payments received during early retirement"
     ],
     "answerIndex": 1,
-    "explanation": "IRC §72(t) allows penalty-free early IRA withdrawals if you take Substantially Equal Periodic Payments (SEPP). The payments must continue for at least five years OR until you turn 59½, whichever is later. Three IRS-approved calculation methods (RMD, amortization, annuitization) determine the payment amount. Modifying or stopping the payments before the required period ends triggers the 10% penalty — retroactively on all prior distributions.",
-    "source": "IRS Pub 590-B; IRC §72(t); Rev. Rul. 2002-62",
+    "explanation": "IRC \u00a772(t) allows penalty-free early IRA withdrawals if you take Substantially Equal Periodic Payments (SEPP). The payments must continue for at least five years OR until you turn 59\u00bd, whichever is later. Three IRS-approved calculation methods (RMD, amortization, annuitization) determine the payment amount. Modifying or stopping the payments before the required period ends triggers the 10% penalty \u2014 retroactively on all prior distributions.",
+    "source": "IRS Pub 590-B; IRC \u00a772(t); Rev. Rul. 2002-62",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
     "reviewedAt": "2026-06-01"
@@ -1055,7 +1060,7 @@
     "prompt": "What is IRMAA and how does MAGI affect Medicare Part B and D premiums?",
     "choices": [
       "IRMAA reduces Medicare premiums for low-income beneficiaries based on MAGI",
-      "IRMAA adds a surcharge to Medicare Part B and D premiums when MAGI exceeds certain thresholds — using two-year-old income data",
+      "IRMAA adds a surcharge to Medicare Part B and D premiums when MAGI exceeds certain thresholds \u2014 using two-year-old income data",
       "IRMAA is a flat fee all Medicare beneficiaries pay regardless of income",
       "IRMAA affects only Medicare Part A hospital coverage costs"
     ],
@@ -1102,7 +1107,7 @@
       "It is set each year by the taxpayer's marginal tax bracket"
     ],
     "answerIndex": 1,
-    "explanation": "The 0% long-term capital gains bracket applies up to a taxable-income threshold that the IRS adjusts for inflation each year — so the exact dollar cutoff rises most years and should be looked up for the current year rather than memorized (for a single filer it was roughly $47,000 in recent years; above the cutoff the rate steps to 15%, then 20% at much higher income). The practical takeaway is timeless: in a low-income year (e.g., early retirement before Social Security) you may be able to harvest capital gains completely tax-free — a strategy called zero-rate harvesting.",
+    "explanation": "The 0% long-term capital gains bracket applies up to a taxable-income threshold that the IRS adjusts for inflation each year \u2014 so the exact dollar cutoff rises most years and should be looked up for the current year rather than memorized (for a single filer it was roughly $47,000 in recent years; above the cutoff the rate steps to 15%, then 20% at much higher income). The practical takeaway is timeless: in a low-income year (e.g., early retirement before Social Security) you may be able to harvest capital gains completely tax-free \u2014 a strategy called zero-rate harvesting.",
     "source": "IRS Rev. Proc. 2023-34 (2024 inflation adjustments)",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
@@ -1119,11 +1124,11 @@
     "choices": [
       "Roth IRA contributions must be held 5 years before they can be withdrawn penalty-free",
       "The 5-year clock for a Roth IRA starts on January 1 of the year of the first conversion, not the first contribution",
-      "Each Roth conversion has its own separate 5-year clock for penalty-free withdrawal of converted amounts before age 59½",
+      "Each Roth conversion has its own separate 5-year clock for penalty-free withdrawal of converted amounts before age 59\u00bd",
       "Each Roth IRA account has its own independent 5-year clock for determining qualified distributions"
     ],
     "answerIndex": 2,
-    "explanation": "There are two Roth 5-year clocks: (1) The earnings qualification clock — starts January 1 of the first year you contributed to ANY Roth IRA, which is universal across all your Roth IRAs. (2) The conversion clock — each conversion has its own 5-year holding period for penalty-free withdrawal of the converted amount before 59½. When you roll a Roth 401(k) into a Roth IRA, the rollover inherits the IRA's existing clock for earnings purposes, but conversions made during the rollover can start a new conversion clock.",
+    "explanation": "There are two Roth 5-year clocks: (1) The earnings qualification clock \u2014 starts January 1 of the first year you contributed to ANY Roth IRA, which is universal across all your Roth IRAs. (2) The conversion clock \u2014 each conversion has its own 5-year holding period for penalty-free withdrawal of the converted amount before 59\u00bd. When you roll a Roth 401(k) into a Roth IRA, the rollover inherits the IRA's existing clock for earnings purposes, but conversions made during the rollover can start a new conversion clock.",
     "source": "IRS Pub 590-B",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
@@ -1140,12 +1145,12 @@
     "choices": [
       "Employee deferral only, capped at the standard 401(k) limit",
       "Employer profit-sharing contribution only, up to 25% of W-2 wages",
-      "Employee deferral PLUS employer profit-sharing (up to 25% of net self-employment income), combined within the overall §415(c) annual additions limit",
+      "Employee deferral PLUS employer profit-sharing (up to 25% of net self-employment income), combined within the overall \u00a7415(c) annual additions limit",
       "A fixed 20% of net self-employment income with no deferral component"
     ],
     "answerIndex": 2,
-    "explanation": "A Solo 401(k) allows two types of contributions: (1) employee elective deferral up to the standard 401(k) deferral limit, and (2) employer profit-sharing up to 25% of net self-employment income (after the SE tax deduction). The combined total is capped by the IRC §415(c) annual additions limit, which the IRS indexes each year. This can result in much higher contributions than a SEP-IRA for high-earning sole proprietors.",
-    "source": "IRS Pub 560; IRC §415(c)",
+    "explanation": "A Solo 401(k) allows two types of contributions: (1) employee elective deferral up to the standard 401(k) deferral limit, and (2) employer profit-sharing up to 25% of net self-employment income (after the SE tax deduction). The combined total is capped by the IRC \u00a7415(c) annual additions limit, which the IRS indexes each year. This can result in much higher contributions than a SEP-IRA for high-earning sole proprietors.",
+    "source": "IRS Pub 560; IRC \u00a7415(c)",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
     "reviewedAt": "2026-06-01"
@@ -1162,11 +1167,11 @@
       "Any K-12 expense including extracurricular activities and transportation, up to $10,000/year",
       "Only K-12 public school tuition, up to $10,000/year per student",
       "K-12 tuition at public, private, or religious schools, up to $10,000/year per student",
-      "K-12 expenses are not covered by 529 plans — only higher education qualifies"
+      "K-12 expenses are not covered by 529 plans \u2014 only higher education qualifies"
     ],
     "answerIndex": 2,
     "explanation": "The Tax Cuts and Jobs Act (2017) expanded 529 plans to cover K-12 tuition (public, private, or religious schools) up to $10,000/year per student. This applies at the federal level; some states don't conform and may treat K-12 529 withdrawals as non-qualified (subject to state income tax and penalty). Room & board and other expenses remain higher-education only.",
-    "source": "IRS Pub 970; Tax Cuts and Jobs Act §11032",
+    "source": "IRS Pub 970; Tax Cuts and Jobs Act \u00a711032",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
     "reviewedAt": "2026-06-01"
@@ -1187,7 +1192,7 @@
       "Employer-only contributions, tax-free growth, tax-free qualified withdrawals"
     ],
     "answerIndex": 0,
-    "explanation": "An HSA's triple tax benefit: (1) Contributions are tax-deductible (or pre-tax via payroll), reducing taxable income; (2) investments inside the HSA grow tax-free; (3) withdrawals for qualified medical expenses are completely tax-free. After age 65 you can withdraw for any reason (taxed as ordinary income, like a Traditional IRA) — making an HSA an excellent long-term investment vehicle if you can pay medical costs out-of-pocket now.",
+    "explanation": "An HSA's triple tax benefit: (1) Contributions are tax-deductible (or pre-tax via payroll), reducing taxable income; (2) investments inside the HSA grow tax-free; (3) withdrawals for qualified medical expenses are completely tax-free. After age 65 you can withdraw for any reason (taxed as ordinary income, like a Traditional IRA) \u2014 making an HSA an excellent long-term investment vehicle if you can pay medical costs out-of-pocket now.",
     "source": "IRS Pub 969",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
@@ -1202,13 +1207,13 @@
     "prompt": "What is Net Unrealized Appreciation (NUA) and how does it help with employer stock in a 401(k)?",
     "choices": [
       "NUA is the increase in an ETF's price above its NAV, taxed at ordinary income rates",
-      "NUA allows you to roll employer stock from a 401(k) to a brokerage, paying ordinary income tax only on the original cost basis — with the gain taxed at long-term capital gains rates",
+      "NUA allows you to roll employer stock from a 401(k) to a brokerage, paying ordinary income tax only on the original cost basis \u2014 with the gain taxed at long-term capital gains rates",
       "NUA is a deduction for appreciated stock donated to charity from a 401(k)",
       "NUA is the market premium paid for a mutual fund above its book value"
     ],
     "answerIndex": 1,
-    "explanation": "Net Unrealized Appreciation (NUA) is a tax strategy for employer stock inside a 401(k). Instead of rolling to an IRA (where all withdrawals are ordinary income), you take a lump-sum distribution: pay ordinary income tax on the cost basis only, then hold the shares in a taxable account. The appreciation (NUA) above the cost basis is taxed at long-term capital gains rates when sold — potentially saving significant taxes if the stock appreciated a lot.",
-    "source": "IRS Pub 575; IRC §402(e)(4)",
+    "explanation": "Net Unrealized Appreciation (NUA) is a tax strategy for employer stock inside a 401(k). Instead of rolling to an IRA (where all withdrawals are ordinary income), you take a lump-sum distribution: pay ordinary income tax on the cost basis only, then hold the shares in a taxable account. The appreciation (NUA) above the cost basis is taxed at long-term capital gains rates when sold \u2014 potentially saving significant taxes if the stock appreciated a lot.",
+    "source": "IRS Pub 575; IRC \u00a7402(e)(4)",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
     "reviewedAt": "2026-06-01"
@@ -1223,13 +1228,13 @@
     "prompt": "What is the 'mega backdoor Roth' and which plan feature enables it?",
     "choices": [
       "Converting a Traditional IRA to a Roth using a large one-time conversion in a low-income year",
-      "Making after-tax (non-Roth) 401(k) contributions beyond the standard deferral limit, then converting or rolling them to a Roth — enabled by an in-plan Roth conversion or in-service distribution feature",
+      "Making after-tax (non-Roth) 401(k) contributions beyond the standard deferral limit, then converting or rolling them to a Roth \u2014 enabled by an in-plan Roth conversion or in-service distribution feature",
       "A strategy to avoid the pro-rata rule by first rolling all IRA balances into a 401(k)",
       "Maximizing a backdoor Roth IRA by making two separate contributions in the same year"
     ],
     "answerIndex": 1,
-    "explanation": "The mega backdoor Roth lets you contribute after-tax dollars to a 401(k) beyond the regular employee deferral limit — up to the total IRC §415(c) annual additions limit (minus employer contributions and your deferrals). The key requirement: your plan must allow after-tax contributions AND either in-plan Roth conversions or in-service withdrawals. Not all plans offer this. The IRS confirmed it's permissible in IRS Notice 2014-54.",
-    "source": "IRS Notice 2014-54; IRC §402(g); IRC §415",
+    "explanation": "The mega backdoor Roth lets you contribute after-tax dollars to a 401(k) beyond the regular employee deferral limit \u2014 up to the total IRC \u00a7415(c) annual additions limit (minus employer contributions and your deferrals). The key requirement: your plan must allow after-tax contributions AND either in-plan Roth conversions or in-service withdrawals. Not all plans offer this. The IRS confirmed it's permissible in IRS Notice 2014-54.",
+    "source": "IRS Notice 2014-54; IRC \u00a7402(g); IRC \u00a7415",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
     "reviewedAt": "2026-06-01"
@@ -1249,7 +1254,522 @@
     ],
     "answerIndex": 1,
     "explanation": "The annual gift tax exclusion lets you give up to a per-recipient amount (indexed for inflation; a married couple can split gifts to double it) without gift tax consequences. Gifts above this amount require filing IRS Form 709 and reduce your lifetime estate and gift tax exemption rather than triggering an immediate tax for most people. Common planning use: front-loading a 529 with the 5-year election spreads five years of exclusions into one year per donor per beneficiary.",
-    "source": "IRS Form 709 Instructions; IRC §2503(b)",
+    "source": "IRS Form 709 Instructions; IRC \u00a72503(b)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
+  },
+  {
+    "id": "seed-taxes-beg-progressive",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Taxes",
+    "prompt": "What does it mean that the U.S. federal income tax is 'progressive'?",
+    "choices": [
+      "A single flat rate applies to every dollar of taxable income",
+      "Higher slices of taxable income are taxed at progressively higher rates, so only the income within each bracket is taxed at that bracket's rate",
+      "Tax rates fall as your income rises to reward earning more",
+      "Everyone pays the same total dollar amount of tax regardless of income"
+    ],
+    "answerIndex": 1,
+    "explanation": "A progressive tax taxes higher slices of income at higher rates. Your income is split across brackets and only the dollars within each bracket are taxed at that bracket's rate \u2014 which is why your marginal rate (the rate on your last dollar) is higher than your effective rate (the average across all your income).",
+    "source": "IRC \u00a71; IRS Pub 17",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
+  },
+  {
+    "id": "seed-taxes-beg-deduction-vs-credit",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Taxes",
+    "prompt": "What is the key difference between a tax deduction and a tax credit?",
+    "choices": [
+      "A deduction reduces your taxable income; a credit reduces your tax owed dollar-for-dollar",
+      "A deduction reduces your tax owed dollar-for-dollar; a credit reduces your taxable income",
+      "They are two names for the same thing",
+      "A deduction only applies to businesses; a credit only applies to individuals"
+    ],
+    "answerIndex": 0,
+    "explanation": "A deduction lowers the income you're taxed on, so its value depends on your marginal rate. A credit lowers the tax itself, dollar-for-dollar, so a $1 credit is worth more than a $1 deduction to most filers. Some credits are refundable (can produce a refund beyond tax owed); others are non-refundable.",
+    "source": "IRS Pub 17",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
+  },
+  {
+    "id": "seed-taxes-beg-withholding",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Taxes",
+    "prompt": "What is the purpose of federal income tax withholding from a paycheck?",
+    "choices": [
+      "It is an extra tax on top of your income tax",
+      "It pre-pays your estimated income tax over the year so you don't owe it all at filing \u2014 reconciled on your return as a refund or balance due",
+      "It is a mandatory retirement contribution",
+      "It funds your employer's payroll costs"
+    ],
+    "answerIndex": 1,
+    "explanation": "Withholding is a pay-as-you-go pre-payment of your income tax. Your W-4 tells the employer how much to withhold; at filing you reconcile what was withheld against what you actually owe. Over-withholding yields a refund (an interest-free loan to the government); under-withholding can mean a balance due and possibly an underpayment penalty.",
+    "source": "IRS Pub 15 (Circular E); Form W-4",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
+  },
+  {
+    "id": "seed-taxes-beg-refund-meaning",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Taxes",
+    "prompt": "What does receiving a large tax refund usually indicate?",
+    "choices": [
+      "You earned bonus income from the IRS",
+      "You over-paid your taxes during the year through withholding or estimates, and the excess is being returned to you",
+      "You qualified for a special government grant",
+      "Your tax rate was lower than everyone else's"
+    ],
+    "answerIndex": 1,
+    "explanation": "A refund means you paid more during the year (via withholding or estimated payments) than your actual tax liability, so the IRS returns the difference. It isn't free money \u2014 it's your own over-payment, returned without interest. Adjusting your W-4 can right-size withholding so more of your money stays in your paycheck.",
+    "source": "IRS Pub 17; Form W-4",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
+  },
+  {
+    "id": "seed-taxes-beg-filing-deadline",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Taxes",
+    "prompt": "What does filing IRS Form 4868 give an individual taxpayer?",
+    "choices": [
+      "An automatic extension of time to PAY any tax owed",
+      "An automatic extension of time to FILE the return \u2014 but not to pay; tax owed is still due by the original deadline",
+      "A waiver of all penalties and interest",
+      "Permission to skip filing for the year"
+    ],
+    "answerIndex": 1,
+    "explanation": "Form 4868 grants an automatic extension to file (commonly to mid-October), but it is NOT an extension to pay. Any tax owed is still due by the original spring deadline; paying late accrues interest and possibly a failure-to-pay penalty even with a valid filing extension.",
+    "source": "IRS Form 4868 Instructions",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
+  },
+  {
+    "id": "seed-taxes-beg-1099-vs-w2",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Taxes",
+    "prompt": "A key tax difference between W-2 employment and 1099 independent-contractor work is:",
+    "choices": [
+      "1099 workers pay no taxes",
+      "W-2 employers withhold taxes and pay half of FICA; 1099 contractors get no withholding and owe self-employment tax to cover both halves of FICA",
+      "W-2 workers must pay self-employment tax; 1099 workers do not",
+      "There is no difference for tax purposes"
+    ],
+    "answerIndex": 1,
+    "explanation": "For W-2 employees, the employer withholds income tax and pays half of Social Security + Medicare (FICA). A 1099 contractor has nothing withheld, must make estimated payments, and owes self-employment tax covering BOTH halves of FICA \u2014 though they can deduct the employer-equivalent half and business expenses.",
+    "source": "IRS Pub 15 (Circular E); Schedule SE",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
+  },
+  {
+    "id": "seed-taxes-beg-tax-advantaged",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Taxes",
+    "prompt": "What does 'tax-advantaged account' mean?",
+    "choices": [
+      "An account that is exempt from all taxes forever, no matter what",
+      "An account given favorable tax treatment \u2014 contributions, growth, or withdrawals receive a tax break versus an ordinary taxable account",
+      "An account only available to high-income earners",
+      "An account that pays a guaranteed higher interest rate"
+    ],
+    "answerIndex": 1,
+    "explanation": "A tax-advantaged account (401(k), IRA, HSA, 529, etc.) gets favorable tax treatment somewhere in its lifecycle: a deduction on contributions, tax-free or tax-deferred growth, and/or tax-free qualified withdrawals. The exact benefit varies by account type and usually comes with contribution limits and rules.",
+    "source": "IRS Pub 590-A; IRS Pub 969",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
+  },
+  {
+    "id": "seed-taxes-beg-capital-gain-basics",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Taxes",
+    "prompt": "When do you generally owe capital gains tax on an investment?",
+    "choices": [
+      "Every year the investment rises in value, whether or not you sell",
+      "Only when you SELL (realize) the investment for more than your cost basis \u2014 unrealized gains are not taxed",
+      "Only when you first buy the investment",
+      "Never, if the investment is a stock"
+    ],
+    "answerIndex": 1,
+    "explanation": "Capital gains tax applies on REALIZED gains \u2014 when you sell an asset for more than your cost basis. Paper (unrealized) gains aren't taxed while you hold. Holding longer than a year qualifies the gain for preferential long-term rates; a year or less is taxed as a short-term gain at ordinary rates.",
+    "source": "IRS Pub 550",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
+  },
+  {
+    "id": "seed-taxes-beg-tax-loss-harvesting",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Taxes",
+    "prompt": "What is tax-loss harvesting?",
+    "choices": [
+      "Delaying all sales until retirement to avoid tax",
+      "Selling an investment at a loss to offset capital gains (and a limited amount of ordinary income), lowering your tax bill",
+      "Harvesting dividends from agricultural stocks",
+      "A penalty the IRS charges on losing investments"
+    ],
+    "answerIndex": 1,
+    "explanation": "Tax-loss harvesting realizes a loss to offset realized capital gains; net losses can also offset a limited amount of ordinary income per year, with the remainder carried forward. Beware the wash-sale rule, which disallows the loss if you rebuy a substantially identical security within 30 days before or after the sale (a 61-day window).",
+    "source": "IRS Pub 550; IRC \u00a71091",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
+  },
+  {
+    "id": "seed-taxes-beg-estimated-taxes",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Taxes",
+    "prompt": "Why might a self-employed person need to make quarterly estimated tax payments?",
+    "choices": [
+      "Because self-employment income is tax-free below a quarterly cap",
+      "Because no employer withholds tax for them, so they pre-pay income and self-employment tax through the year to avoid an underpayment penalty",
+      "Because the IRS requires all taxpayers to pay weekly",
+      "Because estimated payments replace filing an annual return"
+    ],
+    "answerIndex": 1,
+    "explanation": "Without an employer withholding on their behalf, the self-employed (and those with large untaxed income) make quarterly estimated payments toward their income and self-employment tax. Paying enough through the year via the safe-harbor rules avoids the IRS underpayment penalty at filing.",
+    "source": "IRS Form 1040-ES Instructions",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
+  },
+  {
+    "id": "seed-taxes-beg-pretax-vs-roth",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "accounts",
+    "topic": "Taxes",
+    "prompt": "What is the core tax trade-off between a pre-tax (Traditional) and a Roth retirement contribution?",
+    "choices": [
+      "Pre-tax is always better than Roth for everyone",
+      "Pre-tax gives a deduction now and is taxed on withdrawal; Roth is after-tax now but qualified withdrawals are tax-free \u2014 you choose based on whether your rate is higher now or in retirement",
+      "Roth contributions are tax-deductible; pre-tax contributions are not",
+      "Both are taxed identically, so the choice doesn't matter"
+    ],
+    "answerIndex": 1,
+    "explanation": "Pre-tax contributions lower your taxable income today and are taxed as ordinary income when withdrawn. Roth contributions give no deduction now, but qualified withdrawals (including growth) are tax-free. The decision hinges on whether you expect a higher marginal rate now or in retirement \u2014 many savers split to hedge.",
+    "source": "IRS Pub 590-A",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
+  },
+  {
+    "id": "seed-taxes-beg-marginal-misconception",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Taxes",
+    "prompt": "If a raise pushes you into a higher tax bracket, what happens to your take-home pay?",
+    "choices": [
+      "Your entire income is now taxed at the higher rate, so you could take home less overall",
+      "Only the portion of income within the new bracket is taxed at the higher rate, so your take-home pay still rises",
+      "All raises are taxed at 100% once you change brackets",
+      "Your tax rate drops because of the raise"
+    ],
+    "answerIndex": 1,
+    "explanation": "A common myth is that a raise can leave you worse off. Because the system is progressive, only the dollars that fall into the new, higher bracket are taxed at that higher rate \u2014 the income below it keeps its lower rates. Your take-home pay always increases when your gross pay does (federal income tax alone never reverses a raise).",
+    "source": "IRC \u00a71; IRS Pub 17",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
+  },
+  {
+    "id": "seed-inv-adv-simple-interest",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Investments",
+    "prompt": "A $10,000 balance earns 6% simple annual interest. How much interest does it earn in one year?",
+    "choices": [
+      "$60",
+      "$600",
+      "$6,000",
+      "$1,600"
+    ],
+    "answerIndex": 1,
+    "explanation": "Simple interest = principal \u00d7 rate \u00d7 time = 10,000 \u00d7 0.06 \u00d7 1 = $600. The $60 distractor misplaces the decimal (0.6%); $6,000 applies 60%; $1,600 confuses interest with a different base. Simple interest does not compound within the year.",
+    "source": "Standard finance arithmetic (simple interest)",
+    "check": {
+      "expr": "10000 * 0.06 * 1",
+      "expected": 600,
+      "tolerance": 0.01
+    },
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
+  },
+  {
+    "id": "seed-inv-adv-rule-of-72",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Investments",
+    "prompt": "Using the Rule of 72, roughly how many years does it take money to double at an 8% annual return?",
+    "choices": [
+      "6 years",
+      "9 years",
+      "12 years",
+      "16 years"
+    ],
+    "answerIndex": 1,
+    "explanation": "The Rule of 72 estimates the doubling time as 72 \u00f7 rate(%) = 72 \u00f7 8 = 9 years. The 6-year answer divides by 12; 12 years uses 6%; 16 years doubles the correct figure. The rule is an approximation that works best for rates between about 6% and 10%.",
+    "source": "Rule of 72 (compound-growth approximation)",
+    "check": {
+      "expr": "72 / 8",
+      "expected": 9,
+      "tolerance": 0.5
+    },
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
+  },
+  {
+    "id": "seed-inv-adv-compound-one-year",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Investments",
+    "prompt": "A $1,000 investment grows at 10% compounded annually for 2 years. What is the ending balance?",
+    "choices": [
+      "$1,200",
+      "$1,210",
+      "$1,100",
+      "$2,000"
+    ],
+    "answerIndex": 1,
+    "explanation": "Compound growth: 1,000 \u00d7 1.10\u00b2 = 1,000 \u00d7 1.21 = $1,210. The $1,200 distractor uses simple interest (ignores compounding on year-one interest); $1,100 is one year only; $2,000 doubles the principal. The extra $10 over simple interest is the interest-on-interest.",
+    "source": "Standard finance arithmetic (compound interest)",
+    "check": {
+      "expr": "1000 * 1.10 ** 2",
+      "expected": 1210,
+      "tolerance": 0.01
+    },
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
+  },
+  {
+    "id": "seed-inv-adv-expense-ratio-drag",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Investments",
+    "prompt": "On a $200,000 portfolio, what is the annual dollar cost of a fund with a 0.75% expense ratio?",
+    "choices": [
+      "$150",
+      "$1,500",
+      "$750",
+      "$15,000"
+    ],
+    "answerIndex": 1,
+    "explanation": "Annual fee = balance \u00d7 expense ratio = 200,000 \u00d7 0.0075 = $1,500. The $150 distractor uses 0.075%; $750 uses 0.375% (or halves the rate); $15,000 uses 7.5%. Expense ratios compound as a drag over time, so small percentage differences are large dollar amounts on big balances.",
+    "source": "Expense-ratio definition (fund cost arithmetic)",
+    "check": {
+      "expr": "200000 * 0.0075",
+      "expected": 1500,
+      "tolerance": 0.01
+    },
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
+  },
+  {
+    "id": "seed-inv-adv-4pct-rule-number",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Investments",
+    "prompt": "Using the 4% safe-withdrawal heuristic, what portfolio supports $40,000 of annual spending?",
+    "choices": [
+      "$160,000",
+      "$1,000,000",
+      "$400,000",
+      "$1,600,000"
+    ],
+    "answerIndex": 1,
+    "explanation": "The 4% heuristic implies a portfolio of spending \u00f7 0.04 = 25 \u00d7 spending = 40,000 \u00d7 25 = $1,000,000. The $160,000 answer multiplies by 4 instead of dividing by 0.04; $400,000 multiplies by 10; $1,600,000 multiplies by 40. The 25\u00d7 rule is the inverse of a 4% withdrawal rate.",
+    "source": "Bengen (1994); Trinity Study (1998)",
+    "check": {
+      "expr": "40000 / 0.04",
+      "expected": 1000000,
+      "tolerance": 0.01
+    },
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
+  },
+  {
+    "id": "seed-inv-adv-dividend-yield",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Investments",
+    "prompt": "A stock trades at $50 and pays a $2.00 annual dividend. What is its dividend yield?",
+    "choices": [
+      "2%",
+      "4%",
+      "0.4%",
+      "25%"
+    ],
+    "answerIndex": 1,
+    "explanation": "Dividend yield = annual dividend \u00f7 price = 2.00 \u00f7 50 = 0.04 = 4%. The 2% distractor divides by 100; 0.4% misplaces a decimal; 25% inverts the ratio (price \u00f7 dividend). Yield moves inversely to price for a fixed dividend.",
+    "source": "Dividend-yield definition",
+    "check": {
+      "expr": "2.00 / 50 * 100",
+      "expected": 4,
+      "tolerance": 0.01
+    },
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
+  },
+  {
+    "id": "seed-inv-adv-portfolio-weight",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Investments",
+    "prompt": "A portfolio holds $30,000 in stocks and $10,000 in bonds. What is the stock allocation percentage?",
+    "choices": [
+      "30%",
+      "75%",
+      "25%",
+      "70%"
+    ],
+    "answerIndex": 1,
+    "explanation": "Stock weight = stocks \u00f7 total = 30,000 \u00f7 40,000 = 0.75 = 75%. The 30% distractor reads the dollar figure as a percent; 25% gives the bond weight; 70% is an arbitrary near-miss. Allocation drift away from a target is what rebalancing corrects.",
+    "source": "Portfolio-weight definition",
+    "check": {
+      "expr": "30000 / (30000 + 10000) * 100",
+      "expected": 75,
+      "tolerance": 0.01
+    },
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
+  },
+  {
+    "id": "seed-inv-adv-real-return",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Investments",
+    "prompt": "If a portfolio returns 7% nominal in a year with 3% inflation, what is the approximate real return?",
+    "choices": [
+      "10%",
+      "4%",
+      "21%",
+      "2.1%"
+    ],
+    "answerIndex": 1,
+    "explanation": "Real return \u2248 nominal \u2212 inflation = 7% \u2212 3% = 4% (the exact Fisher figure is 1.07/1.03 \u2212 1 \u2248 3.88%, so 4% is the standard approximation). The 10% distractor adds the two; 21% multiplies them; 2.1% misplaces a decimal. Real return measures growth in purchasing power.",
+    "source": "Fisher relation (real vs nominal return)",
+    "check": {
+      "expr": "7 - 3",
+      "expected": 4,
+      "tolerance": 0.2
+    },
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
+  },
+  {
+    "id": "seed-inv-adv-shares-from-amount",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Investments",
+    "prompt": "How many whole shares can you buy with $1,000 if the share price is $80?",
+    "choices": [
+      "8 shares",
+      "12 shares",
+      "16 shares",
+      "125 shares"
+    ],
+    "answerIndex": 1,
+    "explanation": "Whole shares = floor(amount \u00f7 price) = floor(1,000 \u00f7 80) = floor(12.5) = 12 shares (with $40 left over). The 8-share distractor divides by 125; 16 divides by 62.50; 125 swaps the operands (1,000 \u00f7 8). Fractional-share brokers would let you buy 12.5.",
+    "source": "Share-quantity arithmetic",
+    "check": {
+      "expr": "Math.floor(1000 / 80)",
+      "expected": 12,
+      "tolerance": 0.01
+    },
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
+  },
+  {
+    "id": "seed-inv-adv-cagr-two-year",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Investments",
+    "prompt": "An investment grows from $100 to $144 over 2 years. What is its compound annual growth rate (CAGR)?",
+    "choices": [
+      "22%",
+      "20%",
+      "44%",
+      "24%"
+    ],
+    "answerIndex": 1,
+    "explanation": "CAGR = (end/start)^(1/years) \u2212 1 = (144/100)^(1/2) \u2212 1 = 1.2 \u2212 1 = 0.20 = 20%. The 22% distractor halves the 44% total return (simple averaging, not annualizing); 44% reports the cumulative return; 24% mis-steps as 1.44 \u2212 1.20 = 0.24. CAGR is the constant yearly rate that links start to end.",
+    "source": "CAGR definition (compound annual growth rate)",
+    "check": {
+      "expr": "((144 / 100) ** (1 / 2) - 1) * 100",
+      "expected": 20,
+      "tolerance": 0.01
+    },
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-01"
+  },
+  {
+    "id": "seed-inv-adv-bond-coupon",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Investments",
+    "prompt": "A bond with a $1,000 face value pays a 5% annual coupon. What is the annual coupon payment in dollars?",
+    "choices": [
+      "$5",
+      "$50",
+      "$500",
+      "$1,050"
+    ],
+    "answerIndex": 1,
+    "explanation": "Coupon payment = face value \u00d7 coupon rate = 1,000 \u00d7 0.05 = $50. The $5 distractor uses 0.5%; $500 uses 50%; $1,050 adds the face value (that's the maturity cash flow, not the coupon). The coupon is fixed off the face value regardless of the bond's market price.",
+    "source": "Bond-coupon definition",
+    "check": {
+      "expr": "1000 * 0.05",
+      "expected": 50,
+      "tolerance": 0.01
+    },
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
     "reviewedAt": "2026-06-01"

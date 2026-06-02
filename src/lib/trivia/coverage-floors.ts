@@ -17,7 +17,10 @@ import { Topic } from '@/types/enums';
  * done, NOT here. This table reflects what is approved *so far*.
  *
  * Current values = exact reviewed counts in bank-v1.json after the L3.3a
- * backfill (verified 2026-06-01): 40 Beginner / 20 Advanced across 10 topics.
+ * backfill (60 rows) plus the first two approved seed batches (23 rows):
+ *   Taxes/Beginner: 11 → 23  (seed batch 1, user sign-off 2026-06-01)
+ *   Investments/Advanced: 1 → 12  (seed batch 2, user sign-off 2026-06-01)
+ * Total: 83 reviewed questions (52 Beginner / 31 Advanced).
  */
 export const COVERAGE_FLOORS: Record<Topic, { Beginner: number; Advanced: number }> = {
   [Topic.FOUNDATIONS]: { Beginner: 7, Advanced: 0 },
@@ -25,10 +28,10 @@ export const COVERAGE_FLOORS: Record<Topic, { Beginner: number; Advanced: number
   [Topic.SAVINGS]: { Beginner: 1, Advanced: 0 },
   [Topic.SPENDING]: { Beginner: 0, Advanced: 0 },
   [Topic.CREDIT_DEBT]: { Beginner: 1, Advanced: 0 },
-  [Topic.INVESTMENTS]: { Beginner: 2, Advanced: 1 },
+  [Topic.INVESTMENTS]: { Beginner: 2, Advanced: 12 },
   [Topic.RETIREMENT]: { Beginner: 9, Advanced: 9 },
   [Topic.INSURANCE]: { Beginner: 3, Advanced: 1 },
-  [Topic.TAXES]: { Beginner: 11, Advanced: 5 },
+  [Topic.TAXES]: { Beginner: 23, Advanced: 5 },
   [Topic.JOB]: { Beginner: 4, Advanced: 1 },
   [Topic.HOME]: { Beginner: 0, Advanced: 0 },
   [Topic.LIFE_EVENTS]: { Beginner: 2, Advanced: 1 },

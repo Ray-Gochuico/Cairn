@@ -16,21 +16,23 @@ import staging from '@/data/trivia/bank-v1.staging.json';
 import bank from '@/data/trivia/bank-v1.json';
 
 /**
- * The two SEED BATCHES (L2.7c) live in bank-v1.staging.json as reviewed:false
- * DEMONSTRATION content that proves the authoring loop end-to-end. They are NOT
- * served (the load-filter keeps reviewed:false out of the runtime pool) and they
- * enter bank-v1.json only on the user's finance sign-off.
+ * Staging integrity harness for bank-v1.staging.json.
  *
- * This suite runs the integrity harness rules against staging so the seed batches
- * are CI-checked as STRUCTURALLY sound. Structural soundness is NOT validation —
- * the user sign-off (review-log) remains the sole accuracy gate.
+ * During the authoring loop (L2.7b), draft batches live here as reviewed:false
+ * until the user signs off. On approval, rows are moved to bank-v1.json and
+ * staging becomes empty. BOTH states are valid:
+ *   - non-empty: the harness checks structural soundness of pending drafts.
+ *   - empty: all drafts have been approved and promoted; the suite skips.
+ *
+ * Structural soundness is NOT validation — the user sign-off (review-log) is
+ * the sole accuracy gate.
  */
 const stagingRows: TriviaQuestion[] = TriviaBankSchema.parse(staging);
 const shippedRows: TriviaQuestion[] = TriviaBankSchema.parse(bank);
 
 describe('trivia staging seed batches — structural integrity', () => {
   it('every staging row is schema-valid and reviewed:false (never auto-servable)', () => {
-    expect(stagingRows.length).toBeGreaterThan(0);
+    // An empty staging file is valid (all batches approved and promoted).
     expect(stagingRows.every((q) => q.reviewed === false)).toBe(true);
   });
 
@@ -43,6 +45,8 @@ describe('trivia staging seed batches — structural integrity', () => {
   });
 
   it('proves the loop on two batches: a high-liability topic and a math batch', () => {
+    // Skip when staging is empty (all seed batches have been approved and promoted).
+    if (stagingRows.length === 0) return;
     expect(stagingRows.some((q) => isHighLiability(q.topic))).toBe(true);
     expect(stagingRows.some((q) => q.format === QuestionFormat.MATH)).toBe(true);
   });
@@ -70,7 +74,8 @@ describe('trivia staging seed batches — structural integrity', () => {
 
   it('every math staging row self-verifies against an independent check (within tolerance)', () => {
     const mathQs = stagingRows.filter((q) => q.format === QuestionFormat.MATH);
-    expect(mathQs.length).toBeGreaterThan(0);
+    // Skip when staging is empty (all math batches promoted to bank-v1.json).
+    if (mathQs.length === 0) return;
     const offenders: string[] = [];
     for (const q of mathQs) {
       const answer = parseNumericAnswer(answerOf(q));
@@ -122,6 +127,10 @@ describe('trivia staging seed batches — structural integrity', () => {
   });
 
   it('the two seed batches cover Taxes/Beginner and Investments/Advanced', () => {
+    // Skip when staging is empty (both seed batches have been approved and are
+    // now in bank-v1.json). The bank-side harness (trivia-bank.test.ts coverage
+    // floors) verifies the promoted counts going forward.
+    if (stagingRows.length === 0) return;
     const taxesBeg = stagingRows.filter(
       (q) => q.topic === Topic.TAXES && q.difficulty === 'Beginner',
     );
