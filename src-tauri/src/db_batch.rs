@@ -57,6 +57,11 @@ pub struct BatchStatement {
 /// plugin's per-call path. In particular numbers bind as `f64` — matching the
 /// plugin — which keeps integer/real affinity behaviour consistent across the
 /// two code paths.
+///
+/// This logic is INTENTIONALLY MIRRORED from `tauri-plugin-sql` 2.4.0
+/// (`src/wrapper.rs`, `DbPool::execute`/`select`). Keep it in sync if the
+/// pinned plugin version changes its binding rules — divergence here would
+/// reintroduce a parity gap between the batch path and every other query.
 fn bind_params<'q>(
     mut query: sqlx::query::Query<'q, Sqlite, sqlx::sqlite::SqliteArguments<'q>>,
     values: &'q [JsonValue],
@@ -84,6 +89,13 @@ fn bind_params<'q>(
 /// `transaction = false`: acquire a single connection and run each statement
 /// on it with no wrapping transaction — for batches that manage their own
 /// transaction/PRAGMA state.
+///
+/// Each array entry is run via sqlx's prepared-statement path (`sqlx::query`
+/// → `execute`), which executes exactly ONE statement per call — it does not
+/// run a multi-statement SQL string. This is why the JS-side migration runner
+/// must split a `.sql` file into one statement per `BatchStatement` before
+/// handing it here (see `src/db/migrations.ts`); a fragment containing two
+/// semicolon-separated statements would fail to prepare.
 ///
 /// This is the testable core; the Tauri command is a thin wrapper that looks
 /// the pool up from plugin state and forwards here.
@@ -137,17 +149,36 @@ pub async fn db_execute_batch(
     statements: Vec<BatchStatement>,
     transaction: bool,
 ) -> Result<(), String> {
-    let instances = app.state::<DbInstances>();
-    let instances = instances.0.read().await;
-    let pool = instances
-        .get(&db)
-        .ok_or_else(|| format!("db_execute_batch: database '{db}' not loaded"))?;
+    // Clone the pool handle out and DROP the DbInstances read-guard before
+    // awaiting the batch. `Pool<Sqlite>` is `Arc`-backed, so the clone is cheap
+    // and shares the same underlying connection pool. Holding the read-guard
+    // across `run_batch().await` would block every concurrent `db.execute()` /
+    // `db.select()` (they all take the same lock) for the entire batch — and a
+    // batch here can be the 46-migration boot replay or 0033's table rebuild.
+    let pool = {
+        let instances = app.state::<DbInstances>();
+        let instances = instances.0.read().await;
+        match instances
+            .get(&db)
+            .ok_or_else(|| format!("db_execute_batch: database '{db}' not loaded"))?
+        {
+            DbPool::Sqlite(pool) => pool.clone(),
+            #[allow(unreachable_patterns)]
+            _ => return Err("db_execute_batch: non-sqlite pool is not supported".to_string()),
+        }
+    }; // read-guard dropped here, before the (potentially long) batch await
 
-    match pool {
-        DbPool::Sqlite(pool) => run_batch(pool, &statements, transaction).await,
-        #[allow(unreachable_patterns)]
-        _ => Err("db_execute_batch: non-sqlite pool is not supported".to_string()),
-    }
+    // NOTE on PRAGMA scope: the connection this batch runs on does NOT inherit
+    // the TauriAdapter's post-load PRAGMAs — `foreign_keys` and `busy_timeout`
+    // are connection-scoped, and those PRAGMAs were issued on whatever pooled
+    // connection the adapter's load-time `execute()` calls happened to land on.
+    // That's fine: sqlx's SqliteConnectOptions default to `foreign_keys = ON`
+    // and a `busy_timeout` per connection, so every pooled connection (incl.
+    // this one) already has both. A future migration author must NOT assume a
+    // specific `foreign_keys` STATE mid-batch, though: 0033 self-toggles it
+    // (and runs with transaction:false so the toggle isn't swallowed by a tx);
+    // normal migrations do DDL that doesn't depend on FK enforcement.
+    run_batch(&pool, &statements, transaction).await
 }
 
 #[cfg(test)]
