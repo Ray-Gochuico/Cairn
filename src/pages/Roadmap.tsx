@@ -13,6 +13,7 @@ import { useRoadmapOverridesStore } from '@/stores/roadmap-overrides-store';
 import { useRoadmap } from '@/domain/roadmap/context';
 import { evaluate } from '@/domain/roadmap/evaluate';
 import { NODES } from '@/domain/roadmap/nodes';
+import { PageContainer } from '@/components/layout/PageContainer';
 import { DisclosureBanner } from '@/components/roadmap/DisclosureBanner';
 import { NextMoveHero } from '@/components/roadmap/NextMoveHero';
 import { SectionCard } from '@/components/roadmap/SectionCard';
@@ -102,11 +103,11 @@ export default function Roadmap() {
   // run, not the Roadmap.
   if (!household) {
     return (
-      <div className="p-6 max-w-5xl mx-auto">
+      <PageContainer>
         <div className="text-sm text-muted-foreground">
           Set up your household to see your Roadmap.
         </div>
-      </div>
+      </PageContainer>
     );
   }
 
@@ -123,16 +124,16 @@ export default function Roadmap() {
 
   if (!ctx) {
     return (
-      <div className="p-6 max-w-5xl mx-auto">
+      <PageContainer>
         <div className="text-sm text-muted-foreground">
           Set up your household to see your Roadmap.
         </div>
-      </div>
+      </PageContainer>
     );
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-4">
+    <PageContainer className="space-y-4">
       <DisclosureBanner />
       <NextMoveHero results={results} />
       {/* Status legend explains the six possible node-status icons. Lives
@@ -150,6 +151,6 @@ export default function Roadmap() {
           ctx={ctx}
         />
       ))}
-    </div>
+    </PageContainer>
   );
 }

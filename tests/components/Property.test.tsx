@@ -184,8 +184,13 @@ describe('Property page', () => {
 
   it('shows empty-state when there are no properties', () => {
     renderPage();
-    expect(screen.getByText(/Property/i)).toBeInTheDocument();
-    expect(screen.getByText(/Add properties or rentals from/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /^Property$/i })).toBeInTheDocument();
+    // Normalized EmptyState primitive (Design M-1): title + CTA.
+    expect(screen.getByText(/No properties yet/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /add a property/i })).toHaveAttribute(
+      'href',
+      '/inputs/properties',
+    );
   });
 
   it('renders a property card with name and current value', () => {

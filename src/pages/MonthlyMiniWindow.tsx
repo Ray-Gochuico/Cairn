@@ -13,6 +13,7 @@ import { LoansRepo } from '@/domain/loans';
 import { getDatabase } from '@/db/db';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { PageContainer } from '@/components/layout/PageContainer';
 import { Input } from '@/components/ui/input';
 import type {
   Account,
@@ -619,7 +620,7 @@ export default function MonthlyMiniWindow() {
     assetCards.length === 0;
 
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-6">
+    <PageContainer width="prose" className="space-y-6">
       <div>
         {fromNewMonth && (
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -734,7 +735,7 @@ export default function MonthlyMiniWindow() {
           </div>
         </>
       )}
-    </div>
+    </PageContainer>
   );
 }
 

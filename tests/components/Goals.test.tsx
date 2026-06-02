@@ -155,6 +155,9 @@ function primeStores(opts: PrimeOpts = {}) {
     },
     isLoading: false,
     error: null,
+    // Stub load() so the page's reload effect doesn't hit a real DB (which
+    // would throw and set `error`, now surfaced by the StoreErrorBanner).
+    load: async () => {},
   });
 
   useHoldingsStore.setState({

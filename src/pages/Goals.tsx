@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   CreditCard,
@@ -40,6 +40,9 @@ import { formatCurrency, formatPercent } from '@/lib/format';
 import { UpdateAccountBalanceDialog } from '@/components/dialogs/UpdateAccountBalanceDialog';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import type { CsvColumn } from '@/lib/csv';
+import { PageContainer } from '@/components/layout/PageContainer';
+import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
+import { EmptyState } from '@/components/layout/EmptyState';
 
 /**
  * Goals page — Phase 3 visualization surface.
@@ -295,16 +298,22 @@ export default function Goals() {
   const { filter, persons } = useViewFilter();
   const goals = useGoalsStore((s) => s.goals);
   const loadGoals = useGoalsStore((s) => s.load);
+  const goalsError = useGoalsStore((s) => s.error);
   const accounts = useAccountsStore((s) => s.accounts);
   const loadAccounts = useAccountsStore((s) => s.load);
+  const accountsError = useAccountsStore((s) => s.error);
   const snapshots = useSnapshotsStore((s) => s.snapshots);
   const loadSnapshots = useSnapshotsStore((s) => s.load);
+  const snapshotsError = useSnapshotsStore((s) => s.error);
   const contributions = useContributionsStore((s) => s.contributions);
   const loadContributions = useContributionsStore((s) => s.load);
+  const contributionsError = useContributionsStore((s) => s.error);
   const household = useHouseholdStore((s) => s.household);
   const loadHousehold = useHouseholdStore((s) => s.load);
+  const householdError = useHouseholdStore((s) => s.error);
   const holdings = useHoldingsStore((s) => s.holdings);
   const loadHoldings = useHoldingsStore((s) => s.load);
+  const holdingsError = useHoldingsStore((s) => s.error);
 
   // Tracks which account the UpdateAccountBalanceDialog is currently editing;
   // null means the dialog is closed. We keep both the id and the name in
@@ -326,7 +335,8 @@ export default function Goals() {
   // Goals page also reads accounts so the side-effect loads keep accounts
   // warm for downstream linking, but the projection itself doesn't need
   // anything beyond ID lookups already handled via snapshots/contributions.
-  useEffect(() => {
+  // `reload` is also the Retry handler for the store-error banner.
+  const reload = useCallback(() => {
     loadGoals();
     loadAccounts();
     loadSnapshots();
@@ -341,6 +351,22 @@ export default function Goals() {
     loadHousehold,
     loadHoldings,
   ]);
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
+  // Any consumed store that failed to load. Surfaced as a banner above the
+  // page body so a load failure reads as a recoverable hiccup, not vanished
+  // data — and the empty-state copy below is suppressed when this is set.
+  const storeErrors = [
+    goalsError,
+    accountsError,
+    snapshotsError,
+    contributionsError,
+    householdError,
+    holdingsError,
+  ];
+  const hasStoreError = storeErrors.some((e) => e != null);
 
   // Stable "today" per render cycle — passed into computeGoalProgress so the
   // helper isn't recomputed twice from new Date() drift inside a single
@@ -427,25 +453,35 @@ export default function Goals() {
 
   if (goals.length === 0) {
     return (
-      <div className="p-8 max-w-6xl">
-        <h1 className="text-2xl font-semibold mb-1">Goals</h1>
-        <p className="text-sm text-muted-foreground mb-6">
-          Track financial milestones and see whether you're on track to hit them.
-        </p>
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground space-y-3">
-            <div>No goals yet — set one up in Inputs.</div>
+      <PageContainer className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold mb-1">Goals</h1>
+          <p className="text-sm text-muted-foreground">
+            Track financial milestones and see whether you're on track to hit them.
+          </p>
+        </div>
+        {/*
+         * Distinguish "empty because new" from "empty because the load failed":
+         * if a consumed store errored, show the recoverable banner instead of
+         * the friendly empty-state CTA (which would wrongly imply the user has
+         * no goals when their data merely failed to load).
+         */}
+        {hasStoreError ? (
+          <StoreErrorBanner errors={storeErrors} onRetry={reload} />
+        ) : (
+          <EmptyState icon={Target} title="No goals yet" description="Add one in Inputs to start tracking your financial milestones.">
             <Button asChild>
               <Link to="/inputs/goals">Add your first goal</Link>
             </Button>
-          </CardContent>
-        </Card>
-      </div>
+          </EmptyState>
+        )}
+      </PageContainer>
     );
   }
 
   return (
-    <div className="p-8 max-w-6xl space-y-6">
+    <PageContainer className="space-y-6">
+      <StoreErrorBanner errors={storeErrors} onRetry={reload} />
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold mb-1">Goals</h1>
@@ -485,6 +521,6 @@ export default function Goals() {
           accountName={dialogTarget.accountName}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }

@@ -20,6 +20,8 @@ import BudgetOverlayRow from '@/components/budget/BudgetOverlayRow';
 import BudgetCategoryPicker from '@/components/budget/BudgetCategoryPicker';
 import type { AddCategoryPayload } from '@/components/budget/AddCategoryDialog';
 import { Card, CardContent } from '@/components/ui/card';
+import { PageContainer } from '@/components/layout/PageContainer';
+import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 
 const currency = (n: number) =>
   `$${Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
@@ -27,15 +29,23 @@ const currency = (n: number) =>
 export default function Budget() {
   const categories = useCategoriesStore((s) => s.categories);
   const loadCategories = useCategoriesStore((s) => s.load);
+  const categoriesError = useCategoriesStore((s) => s.error);
   const updateCategory = useCategoriesStore((s) => s.update);
   const createCategory = useCategoriesStore((s) => s.create);
   const transactions = useTransactionsStore((s) => s.transactions);
   const loadTransactions = useTransactionsStore((s) => s.load);
+  const transactionsError = useTransactionsStore((s) => s.error);
 
+  const reload = () => {
+    loadCategories();
+    loadTransactions();
+  };
   useEffect(() => {
     loadCategories();
     loadTransactions();
   }, [loadCategories, loadTransactions]);
+
+  const storeErrors = [categoriesError, transactionsError];
 
   const months = useMemo(() => {
     const set = new Set(transactions.map((t) => t.date.slice(0, 7)));
@@ -158,7 +168,8 @@ export default function Budget() {
   };
 
   return (
-    <div className="p-8 max-w-4xl space-y-6">
+    <PageContainer className="space-y-6">
+      <StoreErrorBanner errors={storeErrors} onRetry={reload} />
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold mb-1">Budget</h1>
@@ -255,6 +266,6 @@ export default function Budget() {
           </div>
         )}
       </div>
-    </div>
+    </PageContainer>
   );
 }

@@ -185,7 +185,12 @@ describe('Vehicles page', () => {
   it('shows empty-state when there are no vehicles', () => {
     renderPage();
     expect(screen.getAllByText(/Vehicles/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/Add vehicles or leases from/i)).toBeInTheDocument();
+    // Normalized EmptyState primitive (Design M-1): title + CTA.
+    expect(screen.getByText(/No vehicles yet/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /add a vehicle/i })).toHaveAttribute(
+      'href',
+      '/inputs/vehicles',
+    );
   });
 
   it('renders a vehicle card with name and current value', () => {

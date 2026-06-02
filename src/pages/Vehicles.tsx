@@ -32,6 +32,10 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Car } from 'lucide-react';
+import { PageContainer } from '@/components/layout/PageContainer';
+import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
+import { EmptyState } from '@/components/layout/EmptyState';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { ValueEditor, EquityRow } from '@/components/AssetCardParts';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
@@ -342,27 +346,41 @@ export default function Vehicles() {
 
   const vehicles = useVehiclesStore((s) => s.vehicles);
   const loadVehicles = useVehiclesStore((s) => s.load);
+  const vehiclesError = useVehiclesStore((s) => s.error);
   const updateVehicle = useVehiclesStore((s) => s.update);
 
   const loans = useLoansStore((s) => s.loans);
   const loadLoans = useLoansStore((s) => s.load);
+  const loansError = useLoansStore((s) => s.error);
 
   const transactions = useTransactionsStore((s) => s.transactions);
   const loadTransactions = useTransactionsStore((s) => s.load);
+  const transactionsError = useTransactionsStore((s) => s.error);
 
   const categories = useCategoriesStore((s) => s.categories);
   const loadCategories = useCategoriesStore((s) => s.load);
+  const categoriesError = useCategoriesStore((s) => s.error);
 
   const settings = useSettingsStore((s) => s.settings);
   const loadSettings = useSettingsStore((s) => s.load);
+  const settingsError = useSettingsStore((s) => s.error);
   const updateSettings = useSettingsStore((s) => s.update);
 
   const vehicleLeases = useVehicleLeasesStore((s) => s.vehicleLeases);
   const loadVehicleLeases = useVehicleLeasesStore((s) => s.load);
+  const vehicleLeasesError = useVehicleLeasesStore((s) => s.error);
   const { confirm, dialog } = useConfirm();
 
   const [editing, setEditing] = useState<EditTarget>(null);
 
+  const reload = () => {
+    loadVehicles();
+    loadLoans();
+    loadTransactions();
+    loadCategories();
+    loadSettings();
+    loadVehicleLeases();
+  };
   useEffect(() => {
     loadVehicles();
     loadLoans();
@@ -378,6 +396,16 @@ export default function Vehicles() {
     loadSettings,
     loadVehicleLeases,
   ]);
+
+  const storeErrors = [
+    vehiclesError,
+    loansError,
+    transactionsError,
+    categoriesError,
+    settingsError,
+    vehicleLeasesError,
+  ];
+  const hasStoreError = storeErrors.some((e) => e != null);
 
   const visibleVehicles = useMemo(
     () => filterByOwnerPersonId(vehicles, filter, persons),
@@ -457,21 +485,27 @@ export default function Vehicles() {
 
   if (vehicles.length === 0 && vehicleLeases.length === 0) {
     return (
-      <div className="p-8 max-w-6xl">
-        <h1 className="text-2xl font-semibold mb-1">Vehicles</h1>
-        <p className="text-sm text-muted-foreground mb-6">
-          Equity at a glance for each vehicle.
-        </p>
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            Add vehicles or leases from{' '}
-            <Link to="/inputs/vehicles" className="underline text-foreground">
-              Inputs
-            </Link>
-            .
-          </CardContent>
-        </Card>
-      </div>
+      <PageContainer className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold mb-1">Vehicles</h1>
+          <p className="text-sm text-muted-foreground">
+            Equity at a glance for each vehicle.
+          </p>
+        </div>
+        {hasStoreError ? (
+          <StoreErrorBanner errors={storeErrors} onRetry={reload} />
+        ) : (
+          <EmptyState
+            icon={Car}
+            title="No vehicles yet"
+            description="Add a vehicle or lease in Inputs to see equity at a glance."
+          >
+            <Button asChild>
+              <Link to="/inputs/vehicles">Add a vehicle</Link>
+            </Button>
+          </EmptyState>
+        )}
+      </PageContainer>
     );
   }
 
@@ -481,7 +515,8 @@ export default function Vehicles() {
   }
 
   return (
-    <div className="p-8 max-w-6xl space-y-6">
+    <PageContainer className="space-y-6">
+      <StoreErrorBanner errors={storeErrors} onRetry={reload} />
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold mb-1">Vehicles</h1>
@@ -603,6 +638,6 @@ export default function Vehicles() {
         </section>
       )}
       {dialog}
-    </div>
+    </PageContainer>
   );
 }

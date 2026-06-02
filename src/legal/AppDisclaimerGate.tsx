@@ -5,6 +5,7 @@ import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import { DisclosureModal } from './DisclosureModal';
 import { useDisclosureGate } from './useDisclosureGate';
 import { DISCLOSURES } from './disclosures';
+import { Button } from '@/components/ui/button';
 
 interface Props {
   children: ReactNode;
@@ -19,8 +20,15 @@ interface Props {
  * truth, MF-1), not a household cache column (dropped in 0043).
  *
  * Precedence (each branch short-circuits):
- * - No household loaded yet → render children (first-run flow goes
- *   through Setup Wizard's Step 0 instead; we don't want to fight it).
+ * - No household AND no household-load error → genuine first run: render
+ *   children (the first-run flow goes through Setup Wizard's Step 0 instead;
+ *   we don't want to fight it).
+ * - No household BUT the household store reported an error → FAIL CLOSED
+ *   (Frontend M1). A household-LOAD FAILURE also lands on `household === null`,
+ *   and we must NOT treat that as first-run: we cannot prove the user is a
+ *   genuine first-runner (vs. a returning user whose settings failed to load),
+ *   so re-present the disclosure rather than bypass it — mirroring the
+ *   acceptances-store fail-closed path below.
  * - Acceptances projection still loading → render a brief calm loading
  *   state, never the (possibly un-consented) children.
  * - Load error → FAIL CLOSED: re-present the app_wide disclosure
@@ -37,6 +45,7 @@ interface Props {
  */
 export function AppDisclaimerGate({ children }: Props) {
   const household = useHouseholdStore((s) => s.household);
+  const householdError = useHouseholdStore((s) => s.error);
   const load = useHouseholdStore((s) => s.load);
   const acceptDisclaimer = useHouseholdStore((s) => s.acceptDisclaimer);
   const loadAcceptances = useAcceptancesStore((s) => s.load);
@@ -75,10 +84,40 @@ export function AppDisclaimerGate({ children }: Props) {
       ? lastResolved.current
       : acceptancesStatus;
 
-  // First-run users (no household yet) — let the Setup Wizard's Step 0
-  // handle them. AppDisclaimerGate only re-prompts users who have a
-  // recorded acceptance that's now stale.
-  if (!household) return <>{children}</>;
+  // GENUINE first-run (no household AND no household-load error) — let the
+  // Setup Wizard's Step 0 handle the initial acceptance. AppDisclaimerGate
+  // only re-prompts users who have a recorded acceptance that's now stale.
+  if (!household && !householdError) return <>{children}</>;
+
+  // FAIL CLOSED on a household-LOAD failure (Frontend M1). A failed
+  // household.load() also yields `household === null`, which the branch above
+  // would otherwise misread as first-run and let un-consented children through.
+  // We cannot tell a returning user (whose settings simply failed to load) from
+  // a genuine first-runner, so we must not bypass the disclaimer. We block with
+  // a calm, reassuring state rather than the ACCEPT modal: accepting wouldn't
+  // clear the household error, so the modal would re-present in a loop. The
+  // correct recovery is to re-run the household load().
+  //
+  // Guard on `!household` specifically: an `update()` failure also sets the
+  // store's `error` but KEEPS the loaded household, and we must NOT block the
+  // whole app on a settings-SAVE hiccup (that's surfaced inline at the form).
+  // Only a LOAD failure (error set AND no household) trips this fail-closed.
+  if (!household && householdError) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-6">
+        <div className="max-w-md space-y-3 text-center">
+          <h1 className="text-lg font-semibold">We couldn’t verify your settings</h1>
+          <p className="text-sm text-muted-foreground">
+            Your data is safe — we just couldn’t load your household profile, so we
+            can’t confirm which disclosures you’ve accepted. Reload to try again.
+          </p>
+          <Button type="button" onClick={() => void load()}>
+            Reload
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   // The projection is still loading for the FIRST time — render a brief calm
   // loading state, never the (possibly un-consented) children. (A re-load after

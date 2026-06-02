@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   CheckIcon,
@@ -39,6 +39,9 @@ import { useViewFilter } from '@/lib/use-view-filter';
 import { formatPercent } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { PageContainer } from '@/components/layout/PageContainer';
+import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
+import { EmptyState } from '@/components/layout/EmptyState';
 import MetricCard from '@/components/cards/MetricCard';
 import { ConcentrationCard } from '@/components/cards/ConcentrationCard';
 import { FreshnessBadge } from '@/components/ui/freshness-badge';
@@ -298,42 +301,56 @@ export default function Dashboard() {
 
   const household = useHouseholdStore((s) => s.household);
   const loadHousehold = useHouseholdStore((s) => s.load);
+  const householdError = useHouseholdStore((s) => s.error);
 
   const accounts = useAccountsStore((s) => s.accounts);
   const loadAccounts = useAccountsStore((s) => s.load);
+  const accountsError = useAccountsStore((s) => s.error);
 
   const loans = useLoansStore((s) => s.loans);
   const loadLoans = useLoansStore((s) => s.load);
+  const loansError = useLoansStore((s) => s.error);
 
   const snapshots = useSnapshotsStore((s) => s.snapshots);
   const loadSnapshots = useSnapshotsStore((s) => s.load);
+  const snapshotsError = useSnapshotsStore((s) => s.error);
 
   const properties = usePropertiesStore((s) => s.properties);
   const loadProperties = usePropertiesStore((s) => s.load);
+  const propertiesError = usePropertiesStore((s) => s.error);
 
   const vehicles = useVehiclesStore((s) => s.vehicles);
   const loadVehicles = useVehiclesStore((s) => s.load);
+  const vehiclesError = useVehiclesStore((s) => s.error);
 
   const goals = useGoalsStore((s) => s.goals);
   const loadGoals = useGoalsStore((s) => s.load);
+  const goalsError = useGoalsStore((s) => s.error);
 
   const contributions = useContributionsStore((s) => s.contributions);
   const loadContributions = useContributionsStore((s) => s.load);
+  const contributionsError = useContributionsStore((s) => s.error);
 
   // Holdings + tickers + fund-holdings feed the ConcentrationCard via
   // useConcentration(). Loaded here so the card renders against populated
   // data on first paint instead of an empty "0 warnings" flash.
   const loadHoldings = useHoldingsStore((s) => s.load);
+  const holdingsError = useHoldingsStore((s) => s.error);
   const loadTickers = useTickersStore((s) => s.load);
+  const tickersError = useTickersStore((s) => s.error);
   const loadFundHoldings = useFundHoldingsStore((s) => s.load);
+  const fundHoldingsError = useFundHoldingsStore((s) => s.error);
 
   const transactions = useTransactionsStore((s) => s.transactions);
   const loadTransactions = useTransactionsStore((s) => s.load);
+  const transactionsError = useTransactionsStore((s) => s.error);
 
   const categories = useCategoriesStore((s) => s.categories);
   const loadCategories = useCategoriesStore((s) => s.load);
+  const categoriesError = useCategoriesStore((s) => s.error);
 
-  useEffect(() => {
+  // `reload` doubles as the Retry handler for the store-error banner.
+  const reload = useCallback(() => {
     loadHousehold();
     loadAccounts();
     loadLoans();
@@ -362,6 +379,30 @@ export default function Dashboard() {
     loadTransactions,
     loadCategories,
   ]);
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
+  // Errors from the core data stores the dashboard reads. Surfaced as a banner
+  // above the widgets so a load failure reads as a recoverable hiccup, not as
+  // vanished data. (Holdings/tickers/fund-holdings feed the ConcentrationCard;
+  // their `error` is included so a concentration-data load failure is legible
+  // too — we only read the error string here, never the concentration logic.)
+  const storeErrors = [
+    householdError,
+    accountsError,
+    loansError,
+    snapshotsError,
+    propertiesError,
+    vehiclesError,
+    goalsError,
+    contributionsError,
+    holdingsError,
+    tickersError,
+    fundHoldingsError,
+    transactionsError,
+    categoriesError,
+  ];
 
   const today = useMemo(() => new Date(), []);
   const currentMonth = useMemo(() => currentYyyymm(), []);
@@ -776,12 +817,11 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             {visibleGoals.length === 0 ? (
-              <div className="text-center text-muted-foreground py-6 space-y-3">
-                <div>No goals yet.</div>
+              <EmptyState bare icon={Target} title="No goals yet">
                 <Button asChild size="sm" variant="outline">
                   <Link to="/inputs/goals">Add your first goal</Link>
                 </Button>
-              </div>
+              </EmptyState>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {goalProjections.slice(0, 3).map((p) => (
@@ -802,7 +842,8 @@ export default function Dashboard() {
   const hiddenWidgets = orderedWidgets.filter((w) => w.entry.hidden);
 
   return (
-    <div className="p-6 max-w-6xl space-y-6">
+    <PageContainer className="space-y-6">
+      <StoreErrorBanner errors={storeErrors} onRetry={reload} />
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-3xl font-semibold">
@@ -893,6 +934,6 @@ export default function Dashboard() {
           </div>
         </div>
       ) : null}
-    </div>
+    </PageContainer>
   );
 }

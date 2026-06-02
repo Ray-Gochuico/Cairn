@@ -17,6 +17,9 @@ import { ExportCsvButton } from '@/components/ExportCsvButton';
 import AddEquityGrantDialog from '@/components/equity-grants/AddEquityGrantDialog';
 import type { CsvColumn } from '@/lib/csv';
 import { formatCurrency } from '@/lib/format';
+import { PageContainer } from '@/components/layout/PageContainer';
+import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
+import { EmptyState } from '@/components/layout/EmptyState';
 
 /**
  * EquityGrants page — Phase 3 visualization surface.
@@ -165,16 +168,25 @@ export default function EquityGrants() {
   const { filter, persons } = useViewFilter();
   const equityGrants = useEquityGrantsStore((s) => s.equityGrants);
   const loadGrants = useEquityGrantsStore((s) => s.load);
+  const grantsError = useEquityGrantsStore((s) => s.error);
   const loadPersons = usePersonsStore((s) => s.load);
+  const personsError = usePersonsStore((s) => s.error);
 
   // Controls the in-page Add Equity Grant dialog. Sits on the page (not in
   // the header div) so opening from the empty-state CTA stays trivial later.
   const [addOpen, setAddOpen] = useState(false);
 
+  const reload = () => {
+    loadGrants();
+    loadPersons();
+  };
   useEffect(() => {
     loadGrants();
     loadPersons();
   }, [loadGrants, loadPersons]);
+
+  const storeErrors = [grantsError, personsError];
+  const hasStoreError = storeErrors.some((e) => e != null);
 
   // Apply the view filter — grants are individual (ownerPersonId is
   // non-nullable), so 'joint' produces an empty list.
@@ -234,26 +246,34 @@ export default function EquityGrants() {
 
   if (equityGrants.length === 0) {
     return (
-      <div className="p-8 max-w-6xl">
-        <h1 className="text-2xl font-semibold mb-1">Equity Grants</h1>
-        <p className="text-sm text-muted-foreground mb-6">
-          Track equity grants with vesting schedules and see vested/unvested
-          value over time.
-        </p>
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground space-y-3">
-            <div>No equity grants yet — add one in Inputs.</div>
+      <PageContainer className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold mb-1">Equity Grants</h1>
+          <p className="text-sm text-muted-foreground">
+            Track equity grants with vesting schedules and see vested/unvested
+            value over time.
+          </p>
+        </div>
+        {hasStoreError ? (
+          <StoreErrorBanner errors={storeErrors} onRetry={reload} />
+        ) : (
+          <EmptyState
+            icon={Gift}
+            title="No equity grants yet"
+            description="Add one in Inputs to track vesting progress and value over time."
+          >
             <Button asChild>
               <Link to="/inputs/equity-grants">Add your first grant</Link>
             </Button>
-          </CardContent>
-        </Card>
-      </div>
+          </EmptyState>
+        )}
+      </PageContainer>
     );
   }
 
   return (
-    <div className="p-8 max-w-6xl space-y-6">
+    <PageContainer className="space-y-6">
+      <StoreErrorBanner errors={storeErrors} onRetry={reload} />
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold mb-1">Equity Grants</h1>
@@ -314,6 +334,6 @@ export default function EquityGrants() {
       </div>
 
       <AddEquityGrantDialog open={addOpen} onOpenChange={setAddOpen} />
-    </div>
+    </PageContainer>
   );
 }

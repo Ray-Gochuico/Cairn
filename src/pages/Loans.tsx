@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Landmark } from 'lucide-react';
 import { useLoansStore } from '@/stores/loans-store';
 import { amortize, type Amortization, type ScheduleEntry } from '@/lib/amortization';
 import { filterByObligorPersonId } from '@/lib/filter-by-view';
@@ -14,8 +15,12 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import BarChartCard, { type BarChartSeries } from '@/components/charts/BarChartCard';
+import { Button } from '@/components/ui/button';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import type { CsvColumn } from '@/lib/csv';
+import { PageContainer } from '@/components/layout/PageContainer';
+import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
+import { EmptyState } from '@/components/layout/EmptyState';
 
 /**
  * Loans page — Phase 2 visualization surface.
@@ -344,6 +349,9 @@ export default function Loans() {
   const { filter, persons } = useViewFilter();
   const loans = useLoansStore((s) => s.loans);
   const load = useLoansStore((s) => s.load);
+  const loansError = useLoansStore((s) => s.error);
+  const storeErrors = [loansError];
+  const hasStoreError = loansError != null;
 
   const [expandedLoanIds, setExpandedLoanIds] = useState<Set<number>>(new Set());
 
@@ -453,26 +461,33 @@ export default function Loans() {
 
   if (loans.length === 0) {
     return (
-      <div className="p-8 max-w-6xl">
-        <h1 className="text-2xl font-semibold mb-1">Loans</h1>
-        <p className="text-sm text-muted-foreground mb-6">
-          Track each debt's payoff curve and total interest at a glance.
-        </p>
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            No loans yet — add one from{' '}
-            <Link to="/inputs/loans" className="underline text-foreground">
-              Inputs → Loans
-            </Link>
-            .
-          </CardContent>
-        </Card>
-      </div>
+      <PageContainer className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold mb-1">Loans</h1>
+          <p className="text-sm text-muted-foreground">
+            Track each debt's payoff curve and total interest at a glance.
+          </p>
+        </div>
+        {hasStoreError ? (
+          <StoreErrorBanner errors={storeErrors} onRetry={load} />
+        ) : (
+          <EmptyState
+            icon={Landmark}
+            title="No loans yet"
+            description="Add one in Inputs to see its payoff curve and total interest."
+          >
+            <Button asChild>
+              <Link to="/inputs/loans">Add a loan</Link>
+            </Button>
+          </EmptyState>
+        )}
+      </PageContainer>
     );
   }
 
   return (
-    <div className="p-8 max-w-6xl space-y-6">
+    <PageContainer className="space-y-6">
+      <StoreErrorBanner errors={storeErrors} onRetry={load} />
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold mb-1">Loans</h1>
@@ -551,6 +566,6 @@ export default function Loans() {
           yFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
         />
       ) : null}
-    </div>
+    </PageContainer>
   );
 }

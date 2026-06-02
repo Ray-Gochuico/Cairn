@@ -1,9 +1,23 @@
+import { useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { ViewFilter } from './ViewFilter';
+import { usePersonsStore } from '@/stores/persons-store';
 
 export default function PageShell() {
+  // Load persons ONCE at the shell level so the per-person view filter is
+  // reliably available app-wide (Frontend M3). PageShell wraps every routed
+  // page via <Outlet>, so this covers deep-links into pages that don't load
+  // persons in their own effect — previously those pages left `useViewFilter`
+  // reading an empty list, which silently hid the household/p1/p2/joint filter
+  // in the header. The store's load() is in-flight de-duped and a no-op once
+  // resolved, so this is a single DB round-trip regardless of navigation.
+  const loadPersons = usePersonsStore((s) => s.load);
+  useEffect(() => {
+    void loadPersons();
+  }, [loadPersons]);
+
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground">
       {/*

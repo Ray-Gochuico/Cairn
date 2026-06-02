@@ -9,10 +9,11 @@ import { StatementsSection } from '@/components/settings/StatementsSection';
 import { UpdaterSection } from '@/components/settings/UpdaterSection';
 import { AdvancedSection } from '@/components/settings/AdvancedSection';
 import { DisclosuresSection } from '@/components/settings/DisclosuresSection';
+import { PageContainer } from '@/components/layout/PageContainer';
 
 export default function Settings() {
   return (
-    <div className="p-8 max-w-3xl space-y-6">
+    <PageContainer width="prose" className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Settings</h1>
         <p className="mt-1 text-muted-foreground">Manage your app preferences.</p>
@@ -28,6 +29,6 @@ export default function Settings() {
       <UpdaterSection />
       <AdvancedSection />
       <DisclosuresSection />
-    </div>
+    </PageContainer>
   );
 }
