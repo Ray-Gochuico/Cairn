@@ -145,6 +145,13 @@ describe('ContributionAllocatorCard', () => {
     expect(screen.getByTestId('allocator-cash-left')).toBeInTheDocument();
     // Dollars only: there is no "Shares" column header.
     expect(screen.queryByRole('columnheader', { name: /^shares$/i })).toBeNull();
+    // Before/after tracking-error stat pair (Finance M3, ½·Σ|drift|). Before is
+    // ½(|0.7−0.5|+|0.3−0.5|) = 20.0%; buying toward 50/50 must not increase it.
+    expect(screen.getByTestId('allocator-drift-before')).toHaveTextContent('20.0%');
+    const after = Number(
+      screen.getByTestId('allocator-drift-after').textContent!.replace(/[^\d.]/g, ''),
+    );
+    expect(after).toBeLessThanOrEqual(20.0);
   });
 
   it('names the overweight class(es) in the unreachable callout (UX M3)', async () => {

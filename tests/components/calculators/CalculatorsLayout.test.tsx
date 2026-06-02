@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import CalculatorsLayout from '@/pages/calculators/CalculatorsLayout';
 import { usePersonsStore } from '@/stores/persons-store';
@@ -8,6 +8,10 @@ import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useContributionsStore } from '@/stores/contributions-store';
 import { useLoansStore } from '@/stores/loans-store';
 import { useEquityGrantsStore } from '@/stores/equity-grants-store';
+
+vi.mock('@/db/db', () => ({
+  getDatabase: () => ({ select: async () => [], execute: async () => ({ rowsAffected: 0 }) }),
+}));
 
 describe('CalculatorsLayout', () => {
   beforeEach(() => {
@@ -72,5 +76,16 @@ describe('CalculatorsLayout', () => {
     contributionsLoad.mockRestore();
     loansLoad.mockRestore();
     equityGrantsLoad.mockRestore();
+  });
+
+  it('renders the contribution allocator card', async () => {
+    render(
+      <MemoryRouter>
+        <CalculatorsLayout />
+      </MemoryRouter>,
+    );
+    // The card title renders even with empty stores (it shows the empty-state
+    // body). Its presence proves the card is registered in the grid.
+    expect(await screen.findByText(/Contribution allocator/i)).toBeInTheDocument();
   });
 });

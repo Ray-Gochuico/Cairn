@@ -11,6 +11,7 @@ import { EquityValueCard } from './EquityValueCard';
 import { CompoundInterestCard } from './CompoundInterestCard';
 import { Retirement401kWithdrawalCard } from './Retirement401kWithdrawalCard';
 import { BacktestCard } from './BacktestCard';
+import { ContributionAllocatorCard } from './ContributionAllocatorCard';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
@@ -37,6 +38,7 @@ const CARD_IDS = {
   EQUITY: 'equity',
   RETIREMENT_401K: 'retirement-401k-withdrawal',
   BACKTEST: 'backtest',
+  CONTRIBUTION_ALLOCATOR: 'contribution-allocator',
 } as const;
 
 // Human-friendly labels surfaced in the "manage" popover.
@@ -52,6 +54,7 @@ const CARD_LABELS: Record<string, string> = {
   [CARD_IDS.EQUITY]: 'Equity Value',
   [CARD_IDS.RETIREMENT_401K]: '401k withdrawal tax',
   [CARD_IDS.BACKTEST]: 'Historical Backtest',
+  [CARD_IDS.CONTRIBUTION_ALLOCATOR]: 'Contribution allocator',
 };
 
 function labelFor(id: string): string {
@@ -232,6 +235,9 @@ export default function CalculatorsLayout() {
         )}
         {!hiddenSet.has(CARD_IDS.BACKTEST) && (
           <BacktestCard cardId={CARD_IDS.BACKTEST} onHide={handleHide} />
+        )}
+        {!hiddenSet.has(CARD_IDS.CONTRIBUTION_ALLOCATOR) && (
+          <ContributionAllocatorCard cardId={CARD_IDS.CONTRIBUTION_ALLOCATOR} onHide={handleHide} />
         )}
       </div>
       {hiddenCount > 0 && (

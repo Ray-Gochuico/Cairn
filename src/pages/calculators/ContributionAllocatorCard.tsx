@@ -11,6 +11,7 @@ import { useTickersStore } from '@/stores/tickers-store';
 import { AssetClass } from '@/types/enums';
 import { valueHoldings } from '@/lib/holdings-value';
 import { allocateContribution } from '@/lib/contribution-allocator';
+import { classTargetVsActual } from '@/lib/allocation-hierarchy';
 import { formatCurrency } from '@/lib/format';
 
 interface Props {
@@ -44,9 +45,14 @@ export function ContributionAllocatorCard({ cardId, onHide }: Props = {}) {
   const settings = useSettingsStore((s) => s.settings);
 
   useEffect(() => {
+    // Load the portfolio stores this card needs that CalculatorsLayout does NOT
+    // already hydrate (the layout loads snapshots/contributions/loans/equity +
+    // persons/dependents). accounts/holdings/tickers/settings are this card's
+    // own concern — load them here so a deep-link to /calculators populates the
+    // allocator. Snapshots are intentionally NOT re-loaded (the layout owns
+    // that single hydration — see CalculatorsLayout's cold-boot sentinel test).
     void useAccountsStore.getState().load();
     void useHoldingsStore.getState().load();
-    void useSnapshotsStore.getState().load();
     void useTickersStore.getState().load();
     void useSettingsStore.getState().load();
   }, []);
@@ -81,6 +87,30 @@ export function ContributionAllocatorCard({ cardId, onHide }: Props = {}) {
     () => allocateContribution({ valuations, classTargets, householdTotal, cash: contribution ?? 0 }),
     [valuations, classTargets, householdTotal, contribution],
   );
+
+  // Finance M3: one-sided tracking error = ½·Σ|drift| (the fraction of the
+  // portfolio that would have to move to hit every target; bounded [0,1]). A
+  // raw Σ|drift| double-counts (over in one class == under in another).
+  const trackingError = (rows: { driftPct: number }[]) =>
+    rows.reduce((a, r) => a + Math.abs(r.driftPct), 0) / 2;
+
+  const driftBefore = useMemo(
+    () => trackingError(classTargetVsActual(valuations, classTargets)),
+    [valuations, classTargets],
+  );
+
+  const driftAfter = useMemo(() => {
+    // Aggregate this contribution's buys by CLASS, then re-measure with the
+    // class aggregates bumped (households move at the class level here — the
+    // per-account split is meaningless to classTargetVsActual which buckets by
+    // class). extraByClass also bumps the household total, so post-buy actual
+    // %s are measured against the post-buy portfolio.
+    const extraByClass = new Map<AssetClass, number>();
+    for (const r of result.rows) {
+      extraByClass.set(r.assetClass, (extraByClass.get(r.assetClass) ?? 0) + r.buyDollars);
+    }
+    return trackingError(classTargetVsActual(valuations, classTargets, extraByClass));
+  }, [valuations, classTargets, result]);
 
   const hasTargets = (classTargets?.length ?? 0) > 0;
 
@@ -135,6 +165,20 @@ export function ContributionAllocatorCard({ cardId, onHide }: Props = {}) {
           <div className="grid grid-cols-2 gap-3">
             <StatTile testId="allocator-total" label="Total allocated" value={formatCurrency(result.totalAllocated)} />
             <StatTile testId="allocator-cash-left" label="Cash left over" value={formatCurrency(result.cashLeftOver)} />
+          </div>
+
+          {/* Compact before/after tracking error — one-sided (½·Σ|drift|), NOT two donuts. */}
+          <div className="grid grid-cols-2 gap-3">
+            <StatTile
+              testId="allocator-drift-before"
+              label="Off-target now"
+              value={`${(driftBefore * 100).toFixed(1)}%`}
+            />
+            <StatTile
+              testId="allocator-drift-after"
+              label="After this contribution"
+              value={`${(driftAfter * 100).toFixed(1)}%`}
+            />
           </div>
 
           {/* DOLLARS ONLY (H1): Buy $ is the allocation — no Shares column. */}
