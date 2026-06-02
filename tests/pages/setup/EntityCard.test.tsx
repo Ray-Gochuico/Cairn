@@ -135,4 +135,46 @@ describe('EntityCard', () => {
     const btn = screen.getByRole('button', { name: /^import csv$/i });
     expect(btn).not.toBeDisabled();
   });
+
+  it('disables the import button and shows the reason when importDisabledReason is set', () => {
+    const importTrigger = <button type="button">Import CSV (live)</button>;
+    render(
+      <EntityCard
+        title="Holdings"
+        description="d"
+        count={0}
+        onAddManual={() => {}}
+        importEnabled
+        importTrigger={importTrigger}
+        importDisabledReason="Add an account first — imports match rows to existing accounts by name."
+      />,
+    );
+    // The live import trigger is NOT rendered…
+    expect(screen.queryByRole('button', { name: /^import csv \(live\)$/i })).toBeNull();
+    // …a disabled placeholder is shown instead…
+    const disabled = screen.getByRole('button', { name: /import csv/i });
+    expect(disabled).toBeDisabled();
+    // …and the inline reason is visible.
+    expect(
+      screen.getByText(/imports match rows to existing accounts by name/i),
+    ).toBeInTheDocument();
+  });
+
+  it('renders the live import trigger when importDisabledReason is absent', () => {
+    const importTrigger = <button type="button">Import CSV</button>;
+    render(
+      <EntityCard
+        title="Holdings"
+        description="d"
+        count={0}
+        onAddManual={() => {}}
+        importEnabled
+        importTrigger={importTrigger}
+      />,
+    );
+    expect(screen.getByRole('button', { name: /^import csv$/i })).not.toBeDisabled();
+    expect(
+      screen.queryByText(/imports match rows to existing accounts by name/i),
+    ).toBeNull();
+  });
 });

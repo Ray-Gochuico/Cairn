@@ -24,6 +24,13 @@ interface Props {
    * visual container; the trigger is yours.
    */
   importTrigger?: ReactNode;
+  /**
+   * When set, the import affordance is rendered DISABLED with this reason
+   * shown inline beneath the buttons — used when a prerequisite entity is
+   * empty (e.g. no accounts yet, so name-matching imports cannot resolve).
+   * Takes precedence over importEnabled/importTrigger.
+   */
+  importDisabledReason?: string;
 }
 
 export default function EntityCard({
@@ -33,6 +40,7 @@ export default function EntityCard({
   onAddManual,
   importEnabled,
   importTrigger,
+  importDisabledReason,
 }: Props) {
   const [skipped, setSkipped] = useState(false);
 
@@ -68,7 +76,11 @@ export default function EntityCard({
           <Button type="button" onClick={onAddManual}>
             Add manually
           </Button>
-          {importEnabled && importTrigger ? (
+          {importDisabledReason ? (
+            <Button type="button" variant="outline" disabled>
+              Import CSV
+            </Button>
+          ) : importEnabled && importTrigger ? (
             <span>{importTrigger}</span>
           ) : (
             <Button type="button" variant="outline" disabled>
@@ -85,6 +97,11 @@ export default function EntityCard({
             </Button>
           )}
         </div>
+        {importDisabledReason && (
+          <p className="text-xs text-muted-foreground" role="note">
+            {importDisabledReason}
+          </p>
+        )}
       </CardContent>
     </Card>
   );
