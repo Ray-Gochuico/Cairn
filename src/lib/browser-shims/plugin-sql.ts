@@ -70,6 +70,15 @@ export interface QueryResult {
   rowsAffected: number;
 }
 
+export interface BatchStatement {
+  sql: string;
+  params?: unknown[];
+}
+
+export interface BatchOptions {
+  transaction?: boolean;
+}
+
 export default class Database {
   private constructor(
     private readonly db: SqlJsDatabase,
@@ -115,6 +124,52 @@ export default class Database {
       stmt.free();
     }
     return rows;
+  }
+
+  // Mirrors the real `Database` interface's batch primitive. sql.js is a
+  // single in-memory connection, so — like the test SqliteAdapter — it's
+  // immune to the pool bug. The TauriAdapter delegates here in dev:browser
+  // mode (it detects this method and calls it instead of invoking the Rust
+  // command, which has no runtime in the browser). See tauri-adapter.ts.
+  async executeBatch(statements: BatchStatement[], options: BatchOptions = {}): Promise<void> {
+    const transaction = options.transaction ?? true;
+
+    const runStatement = (sql: string, params: unknown[] = []): void => {
+      const stmt = this.db.prepare(sql);
+      try {
+        stmt.bind(params as never[]);
+        stmt.step();
+      } finally {
+        stmt.free();
+      }
+    };
+
+    if (transaction) {
+      // Bracket with explicit BEGIN/COMMIT on the single connection. On any
+      // error, ROLLBACK so the batch is atomic. (transaction:false batches
+      // carry their own BEGIN/COMMIT/PRAGMA and run unwrapped below.)
+      runStatement('BEGIN');
+      try {
+        for (const { sql, params } of statements) {
+          runStatement(sql, params);
+        }
+        runStatement('COMMIT');
+      } catch (e) {
+        try {
+          runStatement('ROLLBACK');
+        } catch {
+          // Inner error may have already aborted the transaction; ignore the
+          // "no transaction is active" noise so the original error surfaces.
+        }
+        throw e;
+      }
+    } else {
+      for (const { sql, params } of statements) {
+        runStatement(sql, params);
+      }
+    }
+
+    schedulePersist(this.key, this.db);
   }
 
   async close(): Promise<void> {
