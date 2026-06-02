@@ -1,0 +1,45 @@
+# Changelog
+
+All notable changes to Cairn are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.0.0] - 2026-06-02
+
+First public release. Cairn is a local-only personal finance tracker for
+households — a standalone macOS (Apple Silicon) desktop app with all data
+stored in a single local SQLite file. No account, no sync, no telemetry.
+
+### Added
+
+- Local-first finance tracking: accounts, transactions, net worth, and a
+  market-data-backed portfolio with per-value "Updated *X* ago" freshness pills.
+- Planning tools: What-If projections, Coast-FI / sequential-drawdown
+  modeling, paycheck and effective-tax-rate calculators (U.S. federal +
+  state brackets, LTCG/NIIT), and equity-grant FMV.
+- Light + dark themes following the system appearance.
+- A learning section with a 600-question finance trivia bank.
+- In-app legal disclosure and a Privacy & data panel mirroring the README's
+  "100% local" guarantee.
+
+### Distribution
+
+- Ships as an **unsigned `Cairn.app`** (Apple Silicon) via GitHub Releases —
+  no App Store, no installer, no Apple Developer enrollment. First launch
+  uses the standard macOS right-click → Open Gatekeeper approval.
+- **Manual-only auto-updater** (Settings → Updates): the app never polls in
+  the background and makes no network calls unless you ask. Updates are
+  delivered as a minisign-signed `.app.tar.gz` archive and verified against
+  the public key embedded in the app before installation.
+- Release pipeline (`.github/workflows/release.yml`) builds, signs, and
+  publishes on a `v*` tag, gated behind the full JS + Rust test suite so a
+  red build can never ship to auto-updating users.
+
+### Privacy
+
+- All financial data lives only on your device. The two outbound network
+  calls (Yahoo Finance quote refresh and the updater check) are both
+  user-controlled and contain no PII.
+
+[1.0.0]: https://github.com/raymondgochuico/cairn/releases/tag/v1.0.0
