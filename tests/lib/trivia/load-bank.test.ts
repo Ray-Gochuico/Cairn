@@ -23,7 +23,8 @@ describe('loadTriviaBank', () => {
   // the loader must catch them (a dup id makes the daily selector ambiguous).
   it('throws when two rows share an id', () => {
     const q = {
-      id: 'beg-dup', version: 1, difficulty: 'Beginner', tags: ['x'],
+      id: 'beg-dup', version: 1, difficulty: 'Beginner',
+      format: 'definition', topic: 'Foundations',
       prompt: 'p?', choices: ['a', 'b', 'c', 'd'], answerIndex: 0,
       explanation: 'e', source: 's',
     };

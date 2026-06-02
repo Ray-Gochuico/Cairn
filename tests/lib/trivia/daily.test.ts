@@ -6,18 +6,21 @@ import {
   nextStreak,
 } from '@/lib/trivia/daily';
 import { answeredKey } from '@/lib/trivia/answered-key';
+import { QuestionFormat, Topic } from '@/types/enums';
 import type { TriviaQuestion } from '@/lib/trivia/bank-schema';
 
 const q = (id: string, difficulty: 'Beginner' | 'Advanced'): TriviaQuestion => ({
   id,
   version: 1,
   difficulty,
-  tags: [],
+  format: QuestionFormat.DEFINITION,
+  topic: Topic.FOUNDATIONS,
   prompt: `prompt ${id}`,
   choices: ['a', 'b', 'c', 'd'],
   answerIndex: 0,
   explanation: 'x',
   source: 'src',
+  reviewed: true,
 });
 
 const bank: TriviaQuestion[] = [

@@ -212,9 +212,6 @@ export default function Learn() {
           <div className="space-y-4">
             <div className="flex items-center gap-2">
               <DifficultyBadge difficulty={question.difficulty} />
-              {question.tags.length > 0 && (
-                <span className="text-xs text-muted-foreground">{question.tags.join(' · ')}</span>
-              )}
             </div>
             <p className="text-lg font-semibold">{question.prompt}</p>
             <div className="flex flex-col gap-2.5">
@@ -294,9 +291,6 @@ function AnsweredView({
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <DifficultyBadge difficulty={question.difficulty} />
-        {question.tags.length > 0 && (
-          <span className="text-xs text-muted-foreground">{question.tags.join(' · ')}</span>
-        )}
       </div>
       <p className="text-lg font-semibold">{question.prompt}</p>
       <div className="flex flex-col gap-2.5">
