@@ -93,4 +93,47 @@ describe('LearningStateRepo', () => {
     expect(await repo.countAnswered()).toBe(2);
     expect((await repo.listAnsweredQuestionIds()).sort()).toEqual(['beg-apr@v1', 'beg-apr@v2']);
   });
+
+  // L1.0 — date-aware producer for the derive anchor (§3.0). Partitions the
+  // answered set into prior-day (EXCLUDE from the day's 4-set) vs today (KEEP in
+  // the set, shown greyed). Derives off learning_answers.answered_iso_date — no
+  // migration.
+  describe('getAnsweredKeysByDay', () => {
+    it('returns {priorDays:[], today:[]} for an empty table', async () => {
+      expect(await repo.getAnsweredKeysByDay('2026-06-01')).toEqual({ priorDays: [], today: [] });
+    });
+
+    it('partitions prior-day vs today keys (version-aware)', async () => {
+      await repo.recordAnswer({
+        questionId: 'beg-apr',
+        answeredIsoDate: '2026-05-31',
+        chosenIndex: 0,
+        wasCorrect: true,
+        questionVersion: 1,
+      });
+      await repo.recordAnswer({
+        questionId: 'beg-apy',
+        answeredIsoDate: '2026-06-01',
+        chosenIndex: 1,
+        wasCorrect: true,
+        questionVersion: 1,
+      });
+      const out = await repo.getAnsweredKeysByDay('2026-06-01');
+      expect(out.priorDays).toEqual(['beg-apr@v1']);
+      expect(out.today).toEqual(['beg-apy@v1']);
+    });
+
+    it('keys a bumped-version same-day answer as id@v2', async () => {
+      await repo.recordAnswer({
+        questionId: 'beg-apr',
+        answeredIsoDate: '2026-06-01',
+        chosenIndex: 0,
+        wasCorrect: true,
+        questionVersion: 2,
+      });
+      const out = await repo.getAnsweredKeysByDay('2026-06-01');
+      expect(out.today).toEqual(['beg-apr@v2']);
+      expect(out.priorDays).toEqual([]);
+    });
+  });
 });
