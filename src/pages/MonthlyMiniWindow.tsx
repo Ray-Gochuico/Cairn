@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useLoansStore } from '@/stores/loans-store';
@@ -467,6 +467,8 @@ function AssetValueCard({ name, currentValue, kind, onSave }: AssetValueCardProp
 
 export default function MonthlyMiniWindow() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const fromNewMonth = searchParams.get('from') === 'new-month';
 
   const accounts = useAccountsStore((s) => s.accounts);
   const loadAccounts = useAccountsStore((s) => s.load);
@@ -619,6 +621,11 @@ export default function MonthlyMiniWindow() {
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-6">
       <div>
+        {fromNewMonth && (
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            It's a new month — here's this month's check-in
+          </p>
+        )}
         <h1 className="text-2xl font-semibold">Monthly check-in</h1>
         <p className="text-sm text-muted-foreground mt-1">
           {monthLabel(lastMonth)} close · {today.toLocaleDateString('en-US', {

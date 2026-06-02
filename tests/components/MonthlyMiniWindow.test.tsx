@@ -241,4 +241,23 @@ describe('MonthlyMiniWindow', () => {
     });
     expect(screen.getByText(/next scheduled payment/i)).toBeInTheDocument();
   });
+
+  it('shows the "new month" eyebrow only when navigated with ?from=new-month', async () => {
+    render(
+      <MemoryRouter initialEntries={['/monthly?from=new-month']}>
+        <MonthlyMiniWindow />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText(/it.s a new month/i)).toBeInTheDocument();
+  });
+
+  it('does NOT show the eyebrow on a plain /monthly visit (banner-driven)', async () => {
+    render(
+      <MemoryRouter initialEntries={['/monthly']}>
+        <MonthlyMiniWindow />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText(/monthly check-in/i)).toBeInTheDocument();
+    expect(screen.queryByText(/it.s a new month/i)).not.toBeInTheDocument();
+  });
 });
