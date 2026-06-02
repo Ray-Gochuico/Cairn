@@ -1,6 +1,16 @@
 import type { AccountSnapshot } from '@/types/schema';
 import { SnapshotSource } from '@/types/enums';
 
+/**
+ * Last day-of-month (inclusive) of the post-month-end grace window. Days
+ * 2..GRACE are suppressed for `isMonthlyInputPending` (AUTO_DERIVED snapshots
+ * usually land right after month-end). The Wave-3 auto-route reuses this as its
+ * "early in the month" boundary: a NEW-month first open routes only when
+ * today.getDate() <= MONTHLY_INPUT_GRACE_DAY; later first opens defer to the
+ * Dashboard banner. Single source of truth — do not re-hard-code 7.
+ */
+export const MONTHLY_INPUT_GRACE_DAY = 7;
+
 export interface InputPendingInput {
   /**
    * Account IDs that should have a monthly snapshot. Pass the non-cash,
@@ -35,7 +45,7 @@ export function isMonthlyInputPending(
 ): boolean {
   const day = today.getDate();
   if (day === 1) return true;
-  if (day <= 7) return false;
+  if (day <= MONTHLY_INPUT_GRACE_DAY) return false;
   // day > 7: any account without a USER_CONFIRMED/MANUAL snapshot for last
   // month means input is still pending. Empty accountIds → nothing to
   // confirm → not pending.
@@ -61,4 +71,29 @@ export function lastMonthYyyymm(today: Date): string {
   const y = prev.getFullYear().toString().padStart(4, '0');
   const m = (prev.getMonth() + 1).toString().padStart(2, '0');
   return `${y}-${m}`;
+}
+
+/** YYYY-MM string for `today` (the current month). Mirrors lastMonthYyyymm. */
+export function currentMonthYyyymm(today: Date): string {
+  const y = today.getFullYear().toString().padStart(4, '0');
+  const m = (today.getMonth() + 1).toString().padStart(2, '0');
+  return `${y}-${m}`;
+}
+
+/**
+ * Decide whether to surface the new-month monthly-input prompt on app open.
+ * Pure: inject `today` and the persisted `lastSeenMonth` (YYYY-MM | null).
+ *   - lastSeenMonth === null  → true  (first-ever open; never prompted)
+ *   - lastSeenMonth !== currentMonth(today) → true  (a new calendar month)
+ *   - lastSeenMonth === currentMonth(today) → false (already prompted this month)
+ * Caller stamps last_seen_month = currentMonthYyyymm(today) AFTER deciding to
+ * show, so the prompt fires exactly once per calendar month (idempotent on
+ * same-day re-open). Dec→Jan rollover is implicit: '2025-12' !== '2026-01'.
+ */
+export function shouldShowMonthlyPrompt(args: {
+  today: Date;
+  lastSeenMonth: string | null;
+}): boolean {
+  if (args.lastSeenMonth === null) return true;
+  return args.lastSeenMonth !== currentMonthYyyymm(args.today);
 }

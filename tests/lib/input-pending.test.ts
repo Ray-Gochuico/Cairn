@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { isMonthlyInputPending, lastMonthYyyymm } from '@/lib/input-pending';
+import {
+  isMonthlyInputPending,
+  lastMonthYyyymm,
+  currentMonthYyyymm,
+  shouldShowMonthlyPrompt,
+  MONTHLY_INPUT_GRACE_DAY,
+} from '@/lib/input-pending';
 import { SnapshotSource } from '@/types/enums';
 import type { AccountSnapshot } from '@/types/schema';
 
@@ -124,6 +130,47 @@ describe('isMonthlyInputPending', () => {
     expect(
       isMonthlyInputPending(today, { accountIds: [], snapshotsLastMonth: [] }),
     ).toBe(false);
+  });
+});
+
+describe('MONTHLY_INPUT_GRACE_DAY', () => {
+  it('equals 7 (shared grace boundary — single source of truth)', () => {
+    expect(MONTHLY_INPUT_GRACE_DAY).toBe(7);
+  });
+});
+
+describe('currentMonthYyyymm', () => {
+  it('formats the current month, zero-padded', () => {
+    expect(currentMonthYyyymm(new Date(2026, 0, 15))).toBe('2026-01'); // Jan
+    expect(currentMonthYyyymm(new Date(2026, 11, 1))).toBe('2026-12'); // Dec
+  });
+
+  it('handles mid-year dates', () => {
+    expect(currentMonthYyyymm(new Date(2026, 4, 15))).toBe('2026-05'); // May
+    expect(currentMonthYyyymm(new Date(2026, 5, 20))).toBe('2026-06'); // June
+  });
+});
+
+describe('shouldShowMonthlyPrompt', () => {
+  it('first-ever open (null lastSeenMonth) → true', () => {
+    expect(shouldShowMonthlyPrompt({ today: new Date(2026, 0, 1), lastSeenMonth: null })).toBe(true);
+  });
+
+  it('Dec→Jan rollover → true', () => {
+    expect(shouldShowMonthlyPrompt({ today: new Date(2026, 0, 1), lastSeenMonth: '2025-12' })).toBe(true);
+  });
+
+  it('new month mid-month → true', () => {
+    expect(shouldShowMonthlyPrompt({ today: new Date(2026, 5, 20), lastSeenMonth: '2026-05' })).toBe(true);
+  });
+
+  it('same-month re-open → false (no re-show)', () => {
+    expect(shouldShowMonthlyPrompt({ today: new Date(2026, 5, 20), lastSeenMonth: '2026-06' })).toBe(false);
+  });
+
+  it('idempotent same-day re-open after stamp → false', () => {
+    // After a stamp, lastSeenMonth === currentMonth → stays false all month.
+    expect(shouldShowMonthlyPrompt({ today: new Date(2026, 5, 1), lastSeenMonth: '2026-06' })).toBe(false);
   });
 });
 
