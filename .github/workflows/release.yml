@@ -190,7 +190,20 @@ jobs:
           # a one-liner if the section isn't present. `jq -Rs` slurps the
           # raw text and JSON-encodes it (escapes quotes/newlines) so the
           # manifest stays valid JSON.
-          NOTES=$(awk '/^## \[/{if(p)exit} /^## \['"${{ steps.ver.outputs.version }}"'\]/{p=1} p' CHANGELOG.md)
+          #
+          # awk: start printing at this version's `## [x.y.z]` header;
+          # stop at the next `## [` header OR at the first link-reference
+          # footer line (`[x.y.z]: https://...`). The footer guard matters
+          # for the BOTTOM-most entry, which has no following `## [` and
+          # would otherwise slurp the trailing link refs to EOF. The END
+          # block trims trailing blank lines so the notes end cleanly.
+          NOTES=$(awk -v ver="${{ steps.ver.outputs.version }}" '
+            $0 ~ "^## \\[" ver "\\]" {p=1}
+            p && /^## \[/ && $0 !~ "^## \\[" ver "\\]" {exit}
+            p && /^\[[^]]+\]:[[:space:]]/ {exit}
+            p {buf[n++]=$0}
+            END {while (n>0 && buf[n-1]=="") n--; for (i=0;i<n;i++) print buf[i]}
+          ' CHANGELOG.md)
           if [ -z "$NOTES" ]; then
             NOTES="Release ${{ github.ref_name }}. See the GitHub Release page for the changelog."
           fi
