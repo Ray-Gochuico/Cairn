@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { TriviaBankSchema, type TriviaQuestion } from '@/lib/trivia/bank-schema';
-import { QuestionFormat, Topic } from '@/types/enums';
+import { QuestionFormat } from '@/types/enums';
 import {
   isHighLiability,
   isBareRotFigureAnswer,
@@ -126,18 +126,27 @@ describe('trivia staging seed batches — structural integrity', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('the two seed batches cover Taxes/Beginner and Investments/Advanced', () => {
-    // Skip when staging is empty (both seed batches have been approved and are
-    // now in bank-v1.json). The bank-side harness (trivia-bank.test.ts coverage
-    // floors) verifies the promoted counts going forward.
+  it('no staging prompt near-duplicates an already-shipped bank prompt (token-Jaccard, topic-bucketed)', () => {
+    // Replaces the original seed-batch coverage demo (those two seed batches are
+    // now promoted into bank-v1.json). The live invariant for ANY authoring batch:
+    // a staged prompt must not collide with a prompt already shipped in the same
+    // topic — otherwise promotion would create a near-duplicate the in-bank dedup
+    // can no longer prevent. Bucketed by topic to stay fast, mirroring the in-bank
+    // dedup. Skips when staging is empty (all batches promoted).
     if (stagingRows.length === 0) return;
-    const taxesBeg = stagingRows.filter(
-      (q) => q.topic === Topic.TAXES && q.difficulty === 'Beginner',
-    );
-    const invAdv = stagingRows.filter(
-      (q) => q.topic === Topic.INVESTMENTS && q.difficulty === 'Advanced',
-    );
-    expect(taxesBeg.length).toBeGreaterThanOrEqual(10);
-    expect(invAdv.length).toBeGreaterThanOrEqual(10);
+    const bankByTopic = new Map<string, TriviaQuestion[]>();
+    for (const q of shippedRows) {
+      const arr = bankByTopic.get(q.topic) ?? [];
+      arr.push(q);
+      bankByTopic.set(q.topic, arr);
+    }
+    const offenders: string[] = [];
+    for (const s of stagingRows) {
+      for (const b of bankByTopic.get(s.topic) ?? []) {
+        const sim = promptJaccard(s.prompt, b.prompt);
+        if (sim > JACCARD_THRESHOLD) offenders.push(`${s.id} ~ ${b.id} (${sim.toFixed(2)})`);
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 });
