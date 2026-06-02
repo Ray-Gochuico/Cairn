@@ -10811,5 +10811,2050 @@
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
     "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-budgeting-ynab-four-rules",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Budgeting",
+    "prompt": "YNAB's first rule, 'Give every dollar a job,' tells you to do what with the money you currently have?",
+    "choices": [
+      "Leave a large unassigned cushion in checking so you never feel constrained",
+      "Spend it down to zero each month so nothing carries over",
+      "Invest all of it immediately rather than holding any in cash",
+      "Assign every available dollar to a specific category or purpose until none is left unassigned"
+    ],
+    "answerIndex": 3,
+    "explanation": "Rule One of the YNAB (You Need A Budget) method is to give every dollar you actually have a job, assigning all available cash to categories until nothing is left unassigned. It budgets only money in hand rather than expected future income, which is what separates it from forecasting. Assigning a dollar is not the same as spending it — money assigned to savings or a sinking fund simply waits there for its job.",
+    "source": "Cairn glossary (YNAB four rules)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-budgeting-no-spend-challenge",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Budgeting",
+    "prompt": "What is a 'no-spend challenge'?",
+    "choices": [
+      "A set period during which you pause all discretionary purchases, still paying essentials, to reset spending habits and save",
+      "A rule that you may never buy anything you want for an entire year",
+      "A plan to stop paying recurring bills such as rent and utilities for a month",
+      "A strategy of putting every purchase on a credit card to earn rewards"
+    ],
+    "answerIndex": 0,
+    "explanation": "A no-spend challenge is a short, defined stretch — a weekend, a week, or a month — where you buy only essentials and pause discretionary spending to break impulse habits and bank the difference. Fixed obligations like rent, utilities, and groceries still get paid; the freeze targets wants, not needs. It works best as a periodic reset rather than a permanent way of living.",
+    "source": "Cairn glossary (no-spend challenge)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-budgeting-one-percent-fun-rule",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Budgeting",
+    "prompt": "A common '1% rule' for discretionary spending suggests you do what before making a large fun purchase?",
+    "choices": [
+      "Cap all fun spending at exactly 1% of your income every month no matter what",
+      "Pause and think it over if the item costs more than 1% of your annual income, rather than buying on impulse",
+      "Negotiate every purchase down by at least 1%",
+      "Put 1% of every paycheck toward debt before spending on anything fun"
+    ],
+    "answerIndex": 1,
+    "explanation": "This version of the 1% rule is an impulse-control guardrail: if a non-essential purchase costs more than 1% of your annual income, you give it a waiting period before buying instead of deciding in the moment. The pause lets the urge fade and separates genuine wants from fleeting ones. It targets the decision process for big discretionary buys, not a hard monthly spending cap.",
+    "source": "Cairn glossary (1% fun-money rule)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-budgeting-cash-stuffing-trend",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Budgeting",
+    "prompt": "The social-media 'cash stuffing' trend is essentially a modern revival of which budgeting method?",
+    "choices": [
+      "Zero-based budgeting done entirely in a spreadsheet",
+      "Paying yourself first and ignoring categories",
+      "Rolling forward last quarter's averages as next month's budget",
+      "The physical envelope method, dividing cash into labeled envelopes or binder slots per category"
+    ],
+    "answerIndex": 3,
+    "explanation": "Cash stuffing is the viral, binder-and-envelope version of the classic envelope method: you withdraw cash and physically 'stuff' it into labeled categories, then spend only what each holds. Handling physical bills makes spending feel concrete, which can curb overspending. The trade-offs are real too — cash earns no interest, can be lost or stolen, and is awkward for online bills.",
+    "source": "Cairn glossary (cash stuffing)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-budgeting-annualize-irregular-expense",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "math",
+    "topic": "Budgeting",
+    "prompt": "You expect to spend about $600 on holiday gifts, $300 on a yearly software renewal, and $180 on car registration this year. Budgeting monthly, how much should you set aside each month for these irregular costs combined?",
+    "choices": [
+      "$90 per month",
+      "$1,080 per month",
+      "$108 per month",
+      "$540 per month"
+    ],
+    "answerIndex": 0,
+    "explanation": "Annualizing means totaling the irregular yearly costs and dividing by 12 to get a smooth monthly set-aside: (600 + 300 + 180) ÷ 12 = 1,080 ÷ 12 = $90 per month. Saving this amount monthly means the cash is ready when each bill lands instead of blowing up a single month's budget. The $1,080 distractor is the annual total, not the monthly slice.",
+    "source": "Cairn glossary (annualizing irregular expenses)",
+    "check": {
+      "expr": "(600 + 300 + 180) / 12",
+      "expected": 90,
+      "tolerance": 0.01
+    },
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-budgeting-average-variable-income",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "math",
+    "topic": "Budgeting",
+    "prompt": "Your freelance take-home over the last four months was $3,200, $4,800, $2,600, and $3,400. If you budget from the simple average of these months, what monthly income figure would you plan around?",
+    "choices": [
+      "$2,600",
+      "$3,400",
+      "$3,500",
+      "$4,800"
+    ],
+    "answerIndex": 2,
+    "explanation": "Averaging variable income means summing the months and dividing by the count: (3,200 + 4,800 + 2,600 + 3,400) ÷ 4 = 14,000 ÷ 4 = $3,500. The average smooths lumpy earnings into one planning figure, though many freelancers deliberately budget below it for a safety margin. The $4,800 and $2,600 distractors just pick the single best and worst months.",
+    "source": "Cairn glossary (averaging variable income)",
+    "check": {
+      "expr": "(3200 + 4800 + 2600 + 3400) / 4",
+      "expected": 3500,
+      "tolerance": 0.01
+    },
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-budgeting-pay-period-budgeting",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "definition",
+    "topic": "Budgeting",
+    "prompt": "What characterizes paycheck-based (pay-period) budgeting compared with a single monthly budget?",
+    "choices": [
+      "You ignore when income arrives and simply total everything once at month-end",
+      "You budget only once a year and divide by 12",
+      "You always assume you are paid on the first of the month regardless of your real schedule",
+      "You plan income and bills around each paycheck's date, assigning specific expenses to the paycheck that arrives before they are due"
+    ],
+    "answerIndex": 3,
+    "explanation": "Pay-period budgeting maps each bill to the paycheck that lands before it is due, so you manage cash flow check by check rather than as one monthly lump. This prevents the common problem of all bills clustering right after a single paycheck while the next one sits weeks away. It is especially helpful for biweekly or irregular pay schedules where timing, not just totals, drives whether you can cover expenses.",
+    "source": "Cairn glossary (pay-period budgeting)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-budgeting-category-creep",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "definition",
+    "topic": "Budgeting",
+    "prompt": "In a category-based budget, what is 'category creep'?",
+    "choices": [
+      "The gradual upward drift of a category's spending over time until the higher amount quietly becomes the new normal",
+      "Renaming categories so often that old data becomes hard to compare",
+      "Splitting one category into several smaller ones for finer tracking",
+      "Moving leftover money from one category to cover an overspend in another"
+    ],
+    "answerIndex": 0,
+    "explanation": "Category creep is the slow, often unnoticed rise in a single category's spending — say dining or subscriptions — where each month edges a little higher until the inflated level feels routine. Because the increase is incremental, it rarely triggers alarm the way a one-time splurge would. Comparing budgeted versus actual amounts over several months is the usual way to catch it before it erodes savings.",
+    "source": "Cairn glossary (category creep)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-budgeting-software-vs-spreadsheet",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "definition",
+    "topic": "Budgeting",
+    "prompt": "What is a key trade-off of using dedicated budgeting software instead of a do-it-yourself spreadsheet?",
+    "choices": [
+      "Software guarantees you will spend less money each month",
+      "Software typically automates transaction import and categorization for convenience, while a spreadsheet offers full control and customization with more manual effort",
+      "Spreadsheets cannot perform any calculations, so software is always required",
+      "Software removes the need to review your spending at all"
+    ],
+    "answerIndex": 1,
+    "explanation": "Dedicated apps usually sync to your accounts and auto-categorize transactions, saving time but giving up some flexibility and often charging a subscription. A spreadsheet is free and infinitely customizable but relies on you to enter and sort data by hand. Neither tool changes your habits on its own — the right pick depends on whether you value automation or hands-on control.",
+    "source": "Cairn glossary (budgeting software vs spreadsheet)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-budgeting-automating-bills",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "definition",
+    "topic": "Budgeting",
+    "prompt": "What is the main benefit — and a key caution — of automating your recurring bill payments?",
+    "choices": [
+      "It earns interest on every bill you pay",
+      "It guarantees you can never be charged a late fee under any circumstances",
+      "It prevents missed due dates and late fees, but you must keep enough in the account and still review charges so autopay does not cause overdrafts or hide price creep",
+      "It eliminates the bills themselves so you owe nothing"
+    ],
+    "answerIndex": 2,
+    "explanation": "Autopay's payoff is reliability: bills get paid on time, protecting your credit and avoiding late fees without depending on memory. The caution is that money leaves automatically, so an underfunded account can trigger overdrafts, and unwatched autopayments let subscription price hikes or unwanted renewals slip by. Pairing autopay with periodic statement reviews keeps the convenience without losing oversight.",
+    "source": "Cairn glossary (automating bills)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-budgeting-multi-goal-sinking-funds",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Budgeting",
+    "prompt": "You are saving for three goals at once: $1,200 for a vacation in 12 months, $900 for holiday gifts in 6 months, and $2,000 for new tires in 10 months. What total monthly contribution funds all three sinking funds on schedule?",
+    "choices": [
+      "$350 per month",
+      "$410 per month",
+      "$500 per month",
+      "$450 per month"
+    ],
+    "answerIndex": 3,
+    "explanation": "Compute each goal's monthly slice and add them: 1,200÷12 = 100, 900÷6 = 150, and 2,000÷10 = 200, so 100 + 150 + 200 = $450 per month. Running multiple sinking funds means summing the per-goal contributions, since each goal has its own amount and deadline. Funding them together keeps every target on track without a last-minute scramble for any one of them.",
+    "source": "Cairn glossary (sinking funds for multiple goals)",
+    "check": {
+      "expr": "1200/12 + 900/6 + 2000/10",
+      "expected": 450,
+      "tolerance": 0.01
+    },
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-budgeting-variance-percentage",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Budgeting",
+    "prompt": "You budgeted $800 for groceries and actually spent $920. Expressed as a percentage of the budgeted amount, what is the spending variance?",
+    "choices": [
+      "12% over budget",
+      "15% over budget",
+      "13% over budget",
+      "20% over budget"
+    ],
+    "answerIndex": 1,
+    "explanation": "Percentage variance = (actual − budgeted) ÷ budgeted × 100 = (920 − 800) ÷ 800 × 100 = 120 ÷ 800 × 100 = 15% over budget. Stating variance as a percentage shows the relative size of the miss, which makes overruns comparable across categories of very different dollar amounts. The 13% distractor wrongly divides the $120 gap by the $920 actual instead of the $800 budgeted figure.",
+    "source": "Cairn glossary (budget variance percentage)",
+    "check": {
+      "expr": "(920 - 800) / 800 * 100",
+      "expected": 15,
+      "tolerance": 0.01
+    },
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-budgeting-reverse-budget-fit",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "definition",
+    "topic": "Budgeting",
+    "prompt": "Reverse budgeting funds savings off the top and leaves the rest unallocated to spend freely. For whom is it the weakest fit?",
+    "choices": [
+      "Someone who already saves enough and just wants a low-maintenance system",
+      "Someone whose savings goals are automated and on track",
+      "Someone actively trying to rein in overspending in specific categories, who needs the per-category limits reverse budgeting deliberately omits",
+      "Someone with a stable income who dislikes detailed tracking"
+    ],
+    "answerIndex": 2,
+    "explanation": "Reverse budgeting's appeal is simplicity — it secures savings first, then ignores line-item categories — which suits people whose saving is handled and who want minimal upkeep. Its blind spot is the lack of category caps, so anyone fighting to curb runaway spending in particular areas gets no guardrails to push against. Those users are better served by a method like zero-based or envelope budgeting that enforces per-category limits.",
+    "source": "Cairn glossary (reverse budgeting suitability)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-foundations-loss-aversion",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Foundations",
+    "prompt": "In behavioral finance, what does 'loss aversion' describe?",
+    "choices": [
+      "A rule requiring investors to sell any position that drops more than 10%",
+      "The tendency to prefer guaranteed gains over uncertain ones of equal value",
+      "A tax strategy for offsetting gains with realized losses",
+      "The tendency for the pain of a loss to feel stronger than the pleasure of an equivalent gain"
+    ],
+    "answerIndex": 3,
+    "explanation": "Loss aversion is the well-documented finding that people feel the sting of losing money roughly twice as intensely as the joy of gaining the same amount. This bias can push investors to sell winners too early or hold losers too long to avoid 'locking in' a loss. It is a feeling, not a rule or a tax tactic.",
+    "source": "Kahneman & Tversky, 'Prospect Theory: An Analysis of Decision under Risk' (1979)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-foundations-mental-accounting",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Foundations",
+    "prompt": "What is 'mental accounting' as a behavioral bias?",
+    "choices": [
+      "Doing your bookkeeping in your head instead of a spreadsheet",
+      "The practice of rounding all expenses to the nearest dollar",
+      "Treating money differently depending on where it came from or what you mentally label it for, even though all dollars are interchangeable",
+      "A method for estimating taxes without a calculator"
+    ],
+    "answerIndex": 2,
+    "explanation": "Mental accounting is the tendency to put money into separate mental 'buckets' (a tax refund, a bonus, 'fun money') and treat each differently, even though a dollar is a dollar. It can lead to splurging a windfall while carrying high-interest debt. Recognizing that money is fungible helps you make decisions across your whole financial picture.",
+    "source": "Richard Thaler, 'Mental Accounting Matters', Journal of Behavioral Decision Making (1999)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-foundations-rich-vs-wealthy",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Foundations",
+    "prompt": "In personal finance, what best distinguishes being 'wealthy' from merely 'looking rich'?",
+    "choices": [
+      "Looking rich means owning real estate; being wealthy means renting",
+      "Looking rich is about visible spending on a lifestyle, while being wealthy is about owning assets that can sustain you without working",
+      "They mean exactly the same thing",
+      "Being wealthy requires a seven-figure salary"
+    ],
+    "answerIndex": 1,
+    "explanation": "A high income spent on cars, travel, and a big house can make someone look rich while building little lasting wealth. Wealth is the stock of assets you have accumulated that can generate income or be spent down, independent of your paycheck. It is entirely possible to earn a lot yet be one missed paycheck from trouble.",
+    "source": "Morgan Housel, 'The Psychology of Money' (2020), ch. on Wealth Is What You Don't See",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-foundations-rule-of-114",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "math",
+    "topic": "Foundations",
+    "prompt": "Using the Rule of 114, approximately how many years will it take an investment to TRIPLE at a steady 6% annual return?",
+    "choices": [
+      "12 years",
+      "9.5 years",
+      "24 years",
+      "19 years"
+    ],
+    "answerIndex": 3,
+    "explanation": "The Rule of 114 estimates tripling time by dividing 114 by the percentage rate: 114 / 6 = 19 years. It is a sibling of the Rule of 72 (which estimates doubling time). The true mathematical answer here is about 18.85 years, so 19 is an excellent approximation.",
+    "source": "Standard finance rules-of-thumb derived from ln(3)/ln(1+r); see Investopedia, 'Rule of 72'",
+    "reviewed": true,
+    "check": {
+      "expr": "114 / 6",
+      "expected": 19,
+      "tolerance": 0.01
+    },
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-foundations-25x-rule-restated",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "math",
+    "topic": "Foundations",
+    "prompt": "Using the 25× rule of thumb, what portfolio size corresponds to annual spending of $60,000?",
+    "choices": [
+      "$600,000",
+      "$2,400,000",
+      "$1,200,000",
+      "$1,500,000"
+    ],
+    "answerIndex": 3,
+    "explanation": "The 25× rule says a portfolio of about 25 times your annual spending can support that spending, which mirrors a 4% withdrawal rate (since 1 / 0.04 = 25). So 25 × $60,000 = $1,500,000. The multiple comes straight from the inverse of the 4% guideline.",
+    "source": "Bengen (1994) 4% rule; 25× restatement, Trinity Study tradition",
+    "reviewed": true,
+    "check": {
+      "expr": "25 * 60000",
+      "expected": 1500000,
+      "tolerance": 0.01
+    },
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-foundations-tax-deferred-vs-taxable-growth",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Foundations",
+    "prompt": "A $10,000 contribution grows at 7% per year for 30 years inside a tax-deferred account where no tax is owed until withdrawal. Ignoring any withdrawal tax, what is the pre-tax balance after 30 years?",
+    "choices": [
+      "$70,000",
+      "$76,123",
+      "$52,743",
+      "$100,000"
+    ],
+    "answerIndex": 1,
+    "explanation": "With no annual tax drag, the full balance compounds: $10,000 × 1.07^30 ≈ $76,123. The power of tax deferral is that gains compound on the entire balance each year, rather than being reduced by taxes along the way. A taxable account paying tax on distributions every year would end with meaningfully less.",
+    "source": "Future-value formula FV = PV(1+r)^n; tax-deferral concept, IRS Pub 590-A",
+    "reviewed": true,
+    "check": {
+      "expr": "10000 * (1.07 ** 30)",
+      "expected": 76122.55,
+      "tolerance": 1
+    },
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-foundations-withdrawal-strategy-guardrails",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "definition",
+    "topic": "Foundations",
+    "prompt": "How does a 'guardrails' withdrawal strategy in retirement differ from a fixed 4%-with-inflation approach?",
+    "choices": [
+      "It withdraws a constant dollar amount that never changes",
+      "It requires annuitizing the entire portfolio at retirement",
+      "It bans any withdrawals during years the market falls",
+      "It adjusts spending up or down when the withdrawal rate drifts past preset upper and lower bounds"
+    ],
+    "answerIndex": 3,
+    "explanation": "Guardrails strategies (such as Guyton-Klinger) set trigger points: if a market drop pushes your withdrawal rate above the upper guardrail you trim spending, and if strong returns push it below the lower one you can spend more. This dynamic feedback lets retirees start with a higher initial rate than a rigid inflation-adjusted plan while reducing the risk of depletion. It does not forbid withdrawals or require annuitization.",
+    "source": "Guyton & Klinger, 'Decision Rules and Maximum Initial Withdrawal Rates', Journal of Financial Planning (2006)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-foundations-savings-rate-years-to-fi",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Foundations",
+    "prompt": "Assume your investments exactly keep pace with inflation (0% real return) and you target 25× your annual spending. If you save 50% of your take-home pay, how many years of saving does it take to reach your FI number?",
+    "choices": [
+      "12.5 years",
+      "50 years",
+      "25 years",
+      "17 years"
+    ],
+    "answerIndex": 2,
+    "explanation": "Normalize income to 1 per year: you save 0.5 and spend 0.5, so your FI target is 25 × 0.5 = 12.5. With a 0% real return your savings simply accumulate, so years = 12.5 / 0.5 = 25 years. This stylized result shows that with no real growth, savings RATE alone sets the timeline; any positive real return would shorten it.",
+    "source": "Mr. Money Mustache, 'The Shockingly Simple Math Behind Early Retirement' (2012)",
+    "reviewed": true,
+    "check": {
+      "expr": "12.5 / 0.5",
+      "expected": 25,
+      "tolerance": 0.01
+    },
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-foundations-dollar-vs-time-weighted-return",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "definition",
+    "topic": "Foundations",
+    "prompt": "What does a time-weighted return measure that a dollar-weighted (money-weighted) return does not?",
+    "choices": [
+      "The return after subtracting all taxes and fees",
+      "The total dollars of profit earned over the period",
+      "The return the typical retail investor earns after advisor fees",
+      "The performance of the investment itself, stripped of the effect of when the investor added or withdrew cash"
+    ],
+    "answerIndex": 3,
+    "explanation": "Time-weighted return isolates the manager's or fund's performance by neutralizing the timing and size of cash flows, which is why it is the standard for comparing funds. Dollar-weighted (internal rate of return) instead reflects the investor's actual experience, rewarding or penalizing the timing of contributions and withdrawals. The two diverge when large deposits land right before strong or weak stretches.",
+    "source": "CFA Institute, GIPS standards; performance measurement (time- vs money-weighted returns)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-foundations-present-value-of-goal",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Foundations",
+    "prompt": "You want to have $50,000 saved for a goal 10 years from now. Assuming a 6% annual return compounded annually, what single lump sum invested today gets you there?",
+    "choices": [
+      "$27,920",
+      "$31,000",
+      "$50,000",
+      "$44,500"
+    ],
+    "answerIndex": 0,
+    "explanation": "Present value discounts the future target back to today: PV = $50,000 / 1.06^10 ≈ $27,920. Because returns compound over the decade, you need far less than the $50,000 face amount up front. This is the same time-value-of-money logic used to price bonds and value future cash flows.",
+    "source": "Present-value formula PV = FV / (1+r)^n; standard time-value-of-money",
+    "reviewed": true,
+    "check": {
+      "expr": "50000 / (1.06 ** 10)",
+      "expected": 27919.74,
+      "tolerance": 1
+    },
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-foundations-cost-of-waiting-decade",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Foundations",
+    "prompt": "Two savers each invest $5,000 at the END of every year and earn 7% annually. One invests for 30 years; the other waits a decade and invests for only 20 years. Approximately how much MORE does the 30-year saver have at the end?",
+    "choices": [
+      "$50,000",
+      "$100,000",
+      "$150,000",
+      "$267,000"
+    ],
+    "answerIndex": 3,
+    "explanation": "Using the ordinary-annuity future value FV = PMT × ((1+r)^n − 1) / r: 30 years gives ≈ $472,304 and 20 years gives ≈ $204,977, a gap of about $267,326. The extra decade of contributions is small in dollars contributed but huge in compounding, illustrating the steep cost of delaying. Time in the market is the dominant lever.",
+    "source": "Ordinary-annuity future-value formula; compounding/time-cost-of-delay illustration",
+    "reviewed": true,
+    "check": {
+      "expr": "5000 * (((1.07 ** 30) - 1) / 0.07) - 5000 * (((1.07 ** 20) - 1) / 0.07)",
+      "expected": 267326.47,
+      "tolerance": 500
+    },
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-foundations-fi-number-spend-sensitivity",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Foundations",
+    "prompt": "Holding a 4% withdrawal rate fixed, how much LARGER must your FI portfolio be if your planned annual spending rises from $50,000 to $55,000?",
+    "choices": [
+      "$5,000",
+      "$50,000",
+      "$125,000",
+      "$1,375,000"
+    ],
+    "answerIndex": 2,
+    "explanation": "At a 4% rate the required portfolio is spending / 0.04, i.e. 25× spending. So $55,000 / 0.04 − $50,000 / 0.04 = $1,375,000 − $1,250,000 = $125,000. Every extra $1 of annual spending adds $25 to the FI target, which is why trimming recurring expenses is so powerful for reaching FI.",
+    "source": "4% rule / 25× restatement; FI number = annual spending ÷ withdrawal rate",
+    "reviewed": true,
+    "check": {
+      "expr": "55000 / 0.04 - 50000 / 0.04",
+      "expected": 125000,
+      "tolerance": 0.01
+    },
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-foundations-monte-carlo-success-rate",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "definition",
+    "topic": "Foundations",
+    "prompt": "In retirement planning, what does a Monte Carlo 'success rate' of 90% mean?",
+    "choices": [
+      "Your portfolio is guaranteed to grow in 90% of future years",
+      "You will spend down exactly 90% of your portfolio before death",
+      "Your annual return will be at least 9% in most years",
+      "Across many simulated return sequences, your plan avoided running out of money in 90% of them"
+    ],
+    "answerIndex": 3,
+    "explanation": "A Monte Carlo analysis runs thousands of randomized return-and-inflation paths and reports the share in which the portfolio lasts the full horizon. A 90% success rate means the plan survived in 90% of those simulated scenarios, not that returns or growth are guaranteed. It is a probability of not depleting the portfolio, useful for stress-testing a withdrawal plan against sequence risk.",
+    "source": "Monte Carlo retirement modeling; e.g., Pfau, 'How Much Can I Spend in Retirement?' (2017)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-home-title-insurance",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Home",
+    "prompt": "What does title insurance protect a homebuyer or lender against?",
+    "choices": [
+      "Damage to the home from fire, storms, or theft after move-in",
+      "The cost of repairs for appliances that break during the first year",
+      "A drop in the home's market value after purchase",
+      "Hidden defects in the property's ownership history, such as past liens, errors, or competing claims to the title"
+    ],
+    "answerIndex": 3,
+    "explanation": "Title insurance covers losses from problems in the chain of ownership that existed before you bought, like unpaid liens, forged deeds, or recording errors. It is usually a one-time premium paid at closing, with a lender's policy protecting the bank and an optional owner's policy protecting you. Unlike homeowners insurance, it looks backward at the title rather than forward at physical damage.",
+    "source": "Consumer Financial Protection Bureau, 'What is title insurance?'",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-home-closing-disclosure-vs-le",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Home",
+    "prompt": "How does the Closing Disclosure differ from the Loan Estimate you received earlier in the mortgage process?",
+    "choices": [
+      "The Closing Disclosure shows the final, actual loan terms and costs, while the Loan Estimate was an earlier good-faith estimate of those terms",
+      "The Closing Disclosure is optional, while the Loan Estimate is legally required",
+      "The Closing Disclosure covers homeowners insurance, while the Loan Estimate covers the loan",
+      "They are the same document with two different names"
+    ],
+    "answerIndex": 0,
+    "explanation": "The Loan Estimate is provided shortly after you apply and gives a good-faith projection of your rate, payments, and closing costs. The Closing Disclosure arrives at least three business days before closing and lists the final, confirmed numbers so you can compare them against that estimate. Reviewing the two side by side helps you catch fees that changed more than the rules allow.",
+    "source": "Consumer Financial Protection Bureau, 'Closing Disclosure Explainer'",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-home-home-warranty",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Home",
+    "prompt": "What does a home warranty (home service contract) typically provide?",
+    "choices": [
+      "Coverage for the structure itself against fire and storm damage",
+      "A guarantee that the home will not lose resale value",
+      "Protection against defects in the property's legal title",
+      "A service contract that helps pay to repair or replace covered appliances and home systems when they break from normal wear"
+    ],
+    "answerIndex": 3,
+    "explanation": "A home warranty is an annual service contract that covers repair or replacement of items like the furnace, water heater, or kitchen appliances when they fail from ordinary use. It is separate from homeowners insurance, which covers sudden damage from perils like fire or theft. Buyers weigh the yearly premium and per-visit service fee against the odds and cost of the breakdowns it would cover.",
+    "source": "Federal Trade Commission, consumer guidance on home warranties and service contracts",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-home-one-pct-maintenance",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "math",
+    "topic": "Home",
+    "prompt": "A common rule of thumb says to budget about 1% of a home's value each year for maintenance. For a $400,000 home, roughly how much per month does that imply?",
+    "choices": [
+      "$40 per month",
+      "$120 per month",
+      "$333 per month",
+      "$1,000 per month"
+    ],
+    "answerIndex": 2,
+    "explanation": "The 1% rule estimates annual upkeep as 1% of the home's value, here 0.01 x $400,000 = $4,000 per year. Dividing by 12 gives about $333 per month set aside for repairs and replacements. It is only a planning guide; older homes or deferred maintenance can push the real figure higher.",
+    "source": "Common personal-finance maintenance-budgeting rule of thumb (1% of home value annually)",
+    "check": {
+      "expr": "(0.01 * 400000) / 12",
+      "expected": 333.33,
+      "tolerance": 1
+    },
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-home-seller-concessions",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "math",
+    "topic": "Home",
+    "prompt": "In a sale, the seller agrees to a concession of 3% of the $350,000 purchase price toward the buyer's closing costs. How much is that concession in dollars?",
+    "choices": [
+      "$3,500",
+      "$7,000",
+      "$10,500",
+      "$17,500"
+    ],
+    "answerIndex": 2,
+    "explanation": "A seller concession is money the seller credits toward the buyer's closing costs, expressed here as a percentage of price: 0.03 x $350,000 = $10,500. This reduces the cash the buyer needs at closing without lowering the loan amount. Loan programs cap how large concessions can be relative to the price.",
+    "source": "Standard percentage calculation of a seller concession on purchase price",
+    "check": {
+      "expr": "0.03 * 350000",
+      "expected": 10500,
+      "tolerance": 0.01
+    },
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-home-fha-vs-conventional",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Home",
+    "prompt": "What is a key difference between an FHA loan and a conventional loan?",
+    "choices": [
+      "FHA loans are government-insured and often allow lower down payments and credit scores, while conventional loans are not government-insured and typically have stricter qualifying standards",
+      "FHA loans can only be used for second homes, while conventional loans are only for primary residences",
+      "FHA loans never charge mortgage insurance, while conventional loans always do",
+      "FHA loans always carry a higher interest rate than any conventional loan"
+    ],
+    "answerIndex": 0,
+    "explanation": "FHA loans are insured by the Federal Housing Administration, which lets lenders accept smaller down payments and lower credit scores, making them popular with first-time buyers. Conventional loans are not government-insured and generally require stronger credit and larger down payments to avoid extra costs. FHA loans carry their own mortgage insurance premiums, which can be harder to remove than conventional PMI.",
+    "source": "U.S. Department of Housing and Urban Development overview of FHA-insured mortgages",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-home-homestead-exemption",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "definition",
+    "topic": "Home",
+    "prompt": "In many U.S. states, what does a property-tax homestead exemption do for an owner-occupied primary residence?",
+    "choices": [
+      "It exempts the homeowner from paying any property tax for the first year of ownership",
+      "It shields a portion of the home's assessed value from taxation, lowering the taxable base used to calculate property tax",
+      "It freezes the home's market value so it can never be reassessed",
+      "It transfers the property-tax bill from the owner to the mortgage lender"
+    ],
+    "answerIndex": 1,
+    "explanation": "A homestead exemption reduces the assessed value subject to property tax on a qualifying primary residence, so the tax is calculated on a smaller base. The exact dollar or percentage reduction and eligibility rules vary widely by state and locality. Some states layer on additional protections, such as caps on annual assessment increases or creditor protection, but the core property-tax effect is a lower taxable value.",
+    "source": "State and local property-tax homestead exemption statutes (general U.S. overview)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-home-va-loan-basics",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "definition",
+    "topic": "Home",
+    "prompt": "Which statement best describes a VA loan for eligible veterans and service members?",
+    "choices": [
+      "It is a grant that does not have to be repaid",
+      "It is a short-term bridge loan that must be refinanced within one year",
+      "It is funded directly by the Department of Veterans Affairs rather than by private lenders",
+      "It is a mortgage guaranteed in part by the Department of Veterans Affairs that often requires no down payment and charges no monthly mortgage insurance"
+    ],
+    "answerIndex": 3,
+    "explanation": "VA loans are made by private lenders but partly guaranteed by the Department of Veterans Affairs, which reduces lender risk and lets many borrowers buy with no down payment. They do not charge ongoing monthly mortgage insurance, though most borrowers pay a one-time VA funding fee that can be financed. Eligibility depends on military service requirements and obtaining a Certificate of Eligibility.",
+    "source": "U.S. Department of Veterans Affairs, VA-guaranteed home loan program overview",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-home-hoa-special-assessment",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "definition",
+    "topic": "Home",
+    "prompt": "How does an HOA special assessment differ from regular HOA dues?",
+    "choices": [
+      "It is a one-time or temporary charge levied to fund a specific large expense, separate from the recurring regular dues",
+      "It is a discount the HOA gives owners when reserves are full",
+      "It is the portion of regular dues set aside for the management company's salary",
+      "It is a penalty paid only by owners who rent out their units"
+    ],
+    "answerIndex": 0,
+    "explanation": "Regular dues are predictable, recurring payments that fund the association's ongoing operating budget. A special assessment is an extra charge imposed when reserves fall short of a major cost, such as a new roof, elevator, or unexpected repair. Because special assessments can be large and arrive with little notice, buyers often review an HOA's reserve funding and assessment history before purchasing.",
+    "source": "General homeowners-association governance and reserve-funding practices",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-home-rent-vs-buy-5pct",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Home",
+    "prompt": "The 5% rule estimates the annual unrecoverable cost of owning as 5% of a home's value (property tax, maintenance, and cost of capital combined). For a $500,000 home, what monthly rent would roughly break even under this rule?",
+    "choices": [
+      "$1,250 per month",
+      "$2,083 per month",
+      "$2,500 per month",
+      "$4,167 per month"
+    ],
+    "answerIndex": 1,
+    "explanation": "The 5% rule multiplies the home's value by 5% to approximate yearly unrecoverable ownership costs: 0.05 x $500,000 = $25,000 per year. Dividing by 12 gives about $2,083 per month, the rent below which renting is often cheaper than buying that home. It is a rough screen and ignores appreciation, leverage, and local specifics.",
+    "source": "Ben Felix's 5% rule for the rent-versus-buy decision (unrecoverable cost of ownership)",
+    "check": {
+      "expr": "(0.05 * 500000) / 12",
+      "expected": 2083.33,
+      "tolerance": 1
+    },
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-home-appraisal-gap",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Home",
+    "prompt": "You agree to buy a home for $420,000, but the lender's appraisal comes in at $400,000. Since the loan is based on the lower value, how large is the appraisal gap you would need to cover in cash to keep the deal together?",
+    "choices": [
+      "$5,000",
+      "$10,000",
+      "$20,000",
+      "$40,000"
+    ],
+    "answerIndex": 2,
+    "explanation": "An appraisal gap is the shortfall when the appraised value is below the contract price: $420,000 - $400,000 = $20,000. Lenders size the mortgage off the lower appraised value, so the buyer must either bring the extra cash, renegotiate the price, or walk away if the contract allows. An appraisal-gap clause is a buyer's promise to cover some or all of this difference.",
+    "source": "Standard appraisal-gap calculation (contract price minus appraised value)",
+    "check": {
+      "expr": "420000 - 400000",
+      "expected": 20000,
+      "tolerance": 0.01
+    },
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-home-reassessment-on-purchase",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Home",
+    "prompt": "In a jurisdiction that reassesses a home to its sale price at purchase, you buy for $500,000 in an area with a 1.2% effective property-tax rate. If the prior owner was taxed on an assessed value of $350,000, how much does the annual property-tax bill increase after your purchase?",
+    "choices": [
+      "$1,200",
+      "$1,800",
+      "$4,200",
+      "$6,000"
+    ],
+    "answerIndex": 1,
+    "explanation": "Reassessment resets the taxable value to your purchase price, so your tax becomes 0.012 x $500,000 = $6,000, versus the prior 0.012 x $350,000 = $4,200. The increase is $6,000 - $4,200 = $1,800 per year. Buyers in such areas should budget from the reassessed value rather than the seller's old tax bill, which can understate the true cost.",
+    "source": "Standard purchase-price reassessment property-tax calculation",
+    "check": {
+      "expr": "(0.012 * 500000) - (0.012 * 350000)",
+      "expected": 1800,
+      "tolerance": 0.01
+    },
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-investments-drip",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Investments",
+    "prompt": "What does a dividend reinvestment plan (DRIP) do?",
+    "choices": [
+      "It lets you cash out a fund's dividends early, before the official payment date, for a small fee.",
+      "It guarantees a fixed dividend rate that cannot be cut even if the company's profits fall.",
+      "It automatically uses the cash dividends a holding pays to buy more shares of that same investment.",
+      "It converts your dividends into bonds issued by the same company to reduce your stock risk."
+    ],
+    "answerIndex": 2,
+    "explanation": "A DRIP automatically takes the cash dividends an investment pays and uses them to buy more shares of that same holding, often including fractional shares. This compounds your position over time without you having to act, and many brokers offer it for free. Note the dividends are still taxable in a taxable account even though you never see the cash.",
+    "source": "U.S. SEC Investor.gov — Dividend Reinvestment Plans",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-investments-prospectus",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Investments",
+    "prompt": "What is a fund's prospectus?",
+    "choices": [
+      "A marketing brochure that lists only a fund's best historical years to attract new investors.",
+      "The official disclosure document describing a fund's objectives, strategy, risks, fees, and past performance.",
+      "A monthly account statement showing the current value of the shares you personally own.",
+      "A contract that locks your money in the fund for a fixed number of years before you can sell."
+    ],
+    "answerIndex": 1,
+    "explanation": "A prospectus is the formal disclosure document a fund must publish, laying out its investment objective, strategy, risks, fees and expenses, and historical performance. Reading it (or at least the short 'summary prospectus') is the standard way to understand what you're buying before you invest. It is filed with the SEC, not a sales brochure.",
+    "source": "U.S. SEC Investor.gov — Mutual Fund Prospectus",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-investments-robo-advisor",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Investments",
+    "prompt": "What is a robo-advisor?",
+    "choices": [
+      "A chatbot that gives you specific buy and sell tips on individual stocks in real time.",
+      "A high-frequency trading bot that tries to profit from tiny price moves within seconds.",
+      "A service that lets you copy the exact trades of a famous professional investor automatically.",
+      "A digital service that builds and automatically manages a diversified portfolio for you based on your goals and risk tolerance."
+    ],
+    "answerIndex": 3,
+    "explanation": "A robo-advisor is an automated online service that picks a diversified portfolio (usually low-cost index funds) for you based on answers about your goals, time horizon, and risk tolerance, then handles rebalancing and sometimes tax-loss harvesting. It typically charges a small annual advisory fee on top of the underlying funds' costs. It is built around long-term allocation, not stock-picking tips.",
+    "source": "U.S. SEC Investor.gov — Robo-Advisers",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-investments-fractional-shares",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Investments",
+    "prompt": "What are fractional shares?",
+    "choices": [
+      "Shares that pay only a fraction of the dividend a normal share pays.",
+      "The ability to buy less than one whole share, so you can invest a set dollar amount even in a pricey stock.",
+      "Shares that you are only allowed to sell in fractions over several years.",
+      "Discounted shares a company sells to employees at a fraction of the market price."
+    ],
+    "answerIndex": 1,
+    "explanation": "Fractional shares let you buy a portion of a single share, so you can invest a specific dollar amount even when one share costs hundreds of dollars. This makes it easy to put your whole intended contribution to work and to diversify with a small balance. Your fraction still earns its proportional share of any dividends and price change.",
+    "source": "U.S. SEC Investor.gov — Fractional Share Investing",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-investments-market-vs-limit-order",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Investments",
+    "prompt": "What is the difference between a market order and a limit order?",
+    "choices": [
+      "A market order can only be placed while the market is open; a limit order can only be placed after hours.",
+      "A market order buys index funds; a limit order buys individual stocks.",
+      "A market order is for selling and a limit order is for buying — they cannot be swapped.",
+      "A market order executes immediately at the best available price; a limit order executes only at your specified price or better."
+    ],
+    "answerIndex": 3,
+    "explanation": "A market order tells your broker to trade right away at whatever the current best price is, prioritizing speed of execution. A limit order sets a price you are willing to accept and only fills at that price or better, prioritizing price control but with no guarantee it executes. Both can be used to buy or sell.",
+    "source": "U.S. SEC Investor.gov — Types of Orders",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-investments-what-is-a-reit",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Investments",
+    "prompt": "What is a REIT (real estate investment trust)?",
+    "choices": [
+      "A company that owns or finances income-producing real estate, letting you invest in property by buying its shares.",
+      "A government program that helps first-time buyers afford a down payment on a home.",
+      "A type of mortgage that lets you borrow against the equity in your house.",
+      "A savings account specifically earmarked for buying a rental property someday."
+    ],
+    "answerIndex": 0,
+    "explanation": "A REIT is a company that owns, operates, or finances income-producing real estate such as apartments, offices, or warehouses, and you invest by buying its shares like a stock. REITs must pay out most of their taxable income as dividends, so they tend to have high yields. They let you get real-estate exposure without buying or managing property yourself.",
+    "source": "U.S. SEC Investor.gov — Real Estate Investment Trusts (REITs)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-investments-bond-ladder",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Investments",
+    "prompt": "What is a bond ladder?",
+    "choices": [
+      "A strategy of selling a bond every time interest rates tick up to lock in a quick gain.",
+      "A single long-term bond that pays a higher coupon the longer you hold it.",
+      "Buying bonds that all mature on the same date so you get one big payout.",
+      "Holding several bonds with staggered maturity dates so a portion comes due at regular intervals."
+    ],
+    "answerIndex": 3,
+    "explanation": "A bond ladder holds multiple bonds whose maturity dates are spread out (for example, maturing in 1, 2, 3, 4, and 5 years) so a portion of the money becomes available at regular intervals. As each rung matures you can reinvest at current rates, which smooths out interest-rate risk and provides predictable cash flow. It avoids betting everything on one maturity or one moment in the rate cycle.",
+    "source": "U.S. SEC Investor.gov — Bond Ladders",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-investments-growth-vs-value",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "definition",
+    "topic": "Investments",
+    "prompt": "How do 'growth' stocks and 'value' stocks generally differ as investment styles?",
+    "choices": [
+      "Growth stocks pay high dividends while value stocks never pay any dividends at all.",
+      "Growth stocks are expected to expand earnings rapidly and trade at high valuations, while value stocks trade cheaply relative to fundamentals like earnings or book value.",
+      "Growth stocks are always large companies and value stocks are always small companies.",
+      "Growth stocks are guaranteed by the issuing company while value stocks carry no such guarantee."
+    ],
+    "answerIndex": 1,
+    "explanation": "Growth stocks are companies the market expects to grow earnings quickly, so investors pay a premium and they carry high price-to-earnings or price-to-book ratios. Value stocks trade at low prices relative to fundamentals like earnings, book value, or cash flow, often because they are out of favor. The two styles tend to lead at different points in the market cycle, which is why some investors hold both.",
+    "source": "U.S. SEC Investor.gov — Investment Styles",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-investments-rebalancing-bands",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Investments",
+    "prompt": "An investor targets 60% stocks and rebalances only when the stock weight drifts more than 5 percentage points from target. On a $100,000 portfolio, at what stock dollar value does the upper rebalancing band trigger?",
+    "choices": [
+      "$60,000",
+      "$63,000",
+      "$70,000",
+      "$65,000"
+    ],
+    "answerIndex": 3,
+    "explanation": "$65,000. With a 60% target and a 5-percentage-point tolerance band, the upper trigger is 60% + 5% = 65% of the portfolio. On $100,000 that is 0.65 × $100,000 = $65,000, so once stocks grow past $65,000 the investor rebalances. Tolerance bands cut down on needless trading by only acting when the drift is meaningful.",
+    "source": "Bogleheads Wiki — Rebalancing (percentage bands)",
+    "reviewed": true,
+    "check": {
+      "expr": "(0.60 + 0.05) * 100000",
+      "expected": 65000,
+      "tolerance": 0.01
+    },
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-investments-beta-expected-move",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Investments",
+    "prompt": "A stock has a beta of 1.5 relative to the market. Based on beta alone, if the overall market rises 8% in a period, what is the stock's expected move?",
+    "choices": [
+      "12%",
+      "8%",
+      "9.5%",
+      "5.3%"
+    ],
+    "answerIndex": 0,
+    "explanation": "12%. Beta measures how much a stock tends to move relative to the market: an expected move of beta × market return. Here 1.5 × 8% = 12%, so a beta of 1.5 implies the stock is roughly 50% more volatile than the market. Beta describes systematic (market) risk only and is an average tendency, not a guarantee for any single period.",
+    "source": "U.S. SEC Investor.gov — Beta",
+    "reviewed": true,
+    "check": {
+      "expr": "1.5 * 8",
+      "expected": 12,
+      "tolerance": 0.01
+    },
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-investments-sortino-vs-sharpe",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "definition",
+    "topic": "Investments",
+    "prompt": "How does the Sortino ratio differ from the Sharpe ratio?",
+    "choices": [
+      "The Sortino ratio ignores the risk-free rate entirely, while the Sharpe ratio subtracts it.",
+      "The Sortino ratio measures return per unit of fees, while the Sharpe ratio measures return per unit of risk.",
+      "The Sortino ratio penalizes only downside (harmful) volatility, while the Sharpe ratio penalizes total volatility including upside swings.",
+      "The Sortino ratio applies only to bonds, while the Sharpe ratio applies only to stocks."
+    ],
+    "answerIndex": 2,
+    "explanation": "Both ratios divide excess return (return above the risk-free rate) by a measure of risk, but they define risk differently. The Sharpe ratio uses total volatility, counting big upside moves as 'risk' too, while the Sortino ratio uses only downside deviation — the volatility of returns that fall below a target. Because investors usually don't mind upside surprises, the Sortino ratio is often seen as a more focused gauge of harmful risk.",
+    "source": "CFA Institute — Risk-Adjusted Performance Measures",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-job-1099-vs-w2",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Job",
+    "prompt": "What is a key difference between working as a 1099 independent contractor and a W-2 employee?",
+    "choices": [
+      "A 1099 contractor is always paid more per hour than any W-2 employee",
+      "A W-2 employee can never receive any workplace benefits",
+      "A 1099 contractor is legally required to incorporate a business first",
+      "A W-2 employee has income and payroll taxes withheld by the employer, while a 1099 contractor receives gross pay and is responsible for their own taxes"
+    ],
+    "answerIndex": 3,
+    "explanation": "A W-2 employee has federal/state income tax and the employee share of FICA withheld from each paycheck, and the employer pays the matching half of FICA. A 1099 independent contractor is paid the full amount with nothing withheld and must handle income tax plus self-employment tax (both halves of Social Security and Medicare) themselves. Contractors also typically lack employer benefits and protections like overtime.",
+    "source": "IRS: Independent Contractor (Self-Employed) vs. Employee",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-job-estimated-taxes",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Job",
+    "prompt": "Why do many self-employed people and independent contractors pay quarterly estimated taxes?",
+    "choices": [
+      "Because no income tax is withheld from their pay, so the IRS expects tax to be paid in installments throughout the year",
+      "Because the IRS forbids self-employed people from filing an annual return",
+      "Because quarterly payments are a way to permanently lower their total tax rate",
+      "Because estimated taxes replace the need to ever file a Form 1040"
+    ],
+    "answerIndex": 0,
+    "explanation": "The U.S. tax system is pay-as-you-go. Employees meet this through paycheck withholding, but the self-employed have nothing withheld, so they send estimated payments roughly four times a year to cover income tax and self-employment tax. Skipping or underpaying these can trigger an underpayment penalty even if you pay in full at filing time.",
+    "source": "IRS: Estimated Taxes (Form 1040-ES)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-job-commuter-benefit",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Job",
+    "prompt": "What is a commuter (transit) benefit offered by some employers?",
+    "choices": [
+      "A program that lets you set aside pre-tax pay to cover qualified transit or parking commuting costs",
+      "A cash bonus paid only to employees who drive to work",
+      "Free company housing located next to the office",
+      "A tax credit that eliminates your entire commute cost at filing time"
+    ],
+    "answerIndex": 0,
+    "explanation": "A commuter benefit lets you fund qualified transit passes, vanpooling, or workplace parking with pre-tax dollars up to a monthly IRS limit, lowering your taxable income. Because the money is deducted before taxes, it reduces what you pay in income and payroll taxes on those commuting costs. It is a use-it-or-lose-it style benefit tied to actual commuting expenses, not a cash payment.",
+    "source": "IRS Publication 15-B: Qualified Transportation Benefits",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-job-tuition-reimbursement",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Job",
+    "prompt": "What is employer tuition reimbursement (educational assistance) as a workplace benefit?",
+    "choices": [
+      "A loan from your employer that you must repay with interest after graduation",
+      "An employer program that pays for or refunds part of your eligible education costs, often up to an annual limit",
+      "A government grant paid directly to students that bypasses the employer",
+      "A requirement that employers cover 100% of any degree an employee chooses"
+    ],
+    "answerIndex": 1,
+    "explanation": "Tuition reimbursement (educational assistance) is a benefit where an employer pays for or refunds eligible course or degree costs, frequently capped at an annual dollar amount and sometimes conditioned on grades or staying with the company. Under current IRS rules a certain amount of employer educational assistance per year can be received tax-free. It is a benefit, not a loan, though some plans require you to repay it if you leave soon after.",
+    "source": "IRS Publication 970: Employer-Provided Educational Assistance (Section 127)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-job-relo-grossup",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Job",
+    "prompt": "Your employer wants you to keep $10,000 net from a relocation bonus after a flat 30% supplemental tax withholding is applied. To 'gross up' the payment so you net $10,000, what gross bonus must the employer pay? (Round to the nearest dollar.)",
+    "choices": [
+      "$14,286 gross, because gross = net / (1 - tax rate) = $10,000 / 0.70",
+      "$13,000 gross, by adding 30% of the net amount on top",
+      "$10,000 gross, since the bonus is already the target amount",
+      "$12,000 gross, by adding 20% of the net amount on top"
+    ],
+    "answerIndex": 0,
+    "explanation": "Grossing up means solving net = gross x (1 - rate) for the gross. With a 30% withholding rate, gross = $10,000 / (1 - 0.30) = $10,000 / 0.70 = $14,285.71, about $14,286. Simply adding 30% of the net ($13,000) is too low, because that 30% is itself partly taxed. The extra dollars cover the tax on the bonus so your take-home lands at the intended $10,000.",
+    "source": "Payroll gross-up calculation (employer relocation benefit)",
+    "check": {
+      "expr": "10000 / (1 - 0.30)",
+      "expected": 14285.71,
+      "tolerance": 0.5
+    },
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-job-match-as-raise",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Job",
+    "prompt": "Your employer matches 50% of your 401(k) contributions on the first 6% of your $80,000 salary, and you contribute enough to capture the full match. In dollars, how much is that annual match worth (which equals an effective 3% raise on your salary)?",
+    "choices": [
+      "$4,800, equal to the full 6% of salary you contribute",
+      "$1,200, counting only half of half the match",
+      "$7,200, adding your 6% and the match together",
+      "$2,400, because the match equals 50% x 6% x $80,000, or 3% of salary"
+    ],
+    "answerIndex": 3,
+    "explanation": "The employer adds 50 cents per dollar on the first 6% of pay, so the match is 0.50 x 0.06 x $80,000 = $2,400. As a share of salary that is $2,400 / $80,000 = 3%, effectively a 3% raise you only receive if you contribute at least 6%. Failing to contribute up to the match leaves this guaranteed return on the table.",
+    "source": "401(k) employer match expressed as effective compensation",
+    "check": {
+      "expr": "0.50 * 0.06 * 80000",
+      "expected": 2400,
+      "tolerance": 0.01
+    },
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-job-rsu-sell-to-cover",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Job",
+    "prompt": "300 RSUs vest when the share price is $40, and your employer uses 'sell-to-cover' at the 22% statutory supplemental withholding rate to pay the taxes. Rounding up to whole shares, how many shares are sold to cover the tax withholding?",
+    "choices": [
+      "66 shares, because tax = 22% x (300 x $40) = $2,640, and $2,640 / $40 = 66 shares",
+      "22 shares, applying the 22% rate directly to the share count",
+      "300 shares, since the entire grant is sold at vest",
+      "30 shares, withholding a flat 10% of the shares"
+    ],
+    "answerIndex": 0,
+    "explanation": "At vesting the RSUs are taxed as ordinary income on their fair market value: 300 x $40 = $12,000. The withholding is 22% x $12,000 = $2,640, and sell-to-cover liquidates just enough shares to raise that cash: $2,640 / $40 = 66 shares. You keep the remaining 234 shares, and the $2,640 is remitted as tax withholding on your behalf.",
+    "source": "RSU vesting and sell-to-cover withholding mechanics",
+    "check": {
+      "expr": "(300 * 40 * 0.22) / 40",
+      "expected": 66,
+      "tolerance": 0.01
+    },
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-job-nonexempt-salaried-ot",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Job",
+    "prompt": "A non-exempt employee is paid a fixed salary of $1,000 for a 40-hour workweek but works 45 hours one week. Using the regular rate derived from the salary, what is that week's total gross pay with time-and-a-half owed on hours over 40?",
+    "choices": [
+      "$1,187.50, because the regular rate is $1,000 / 40 = $25/hr and 5 OT hours x $25 x 1.5 = $187.50 on top of the $1,000",
+      "$1,000.00, since a salaried employee is never owed overtime",
+      "$1,150.00, paying the 5 extra hours at the straight $25 rate plus a small bonus",
+      "$1,500.00, paying all 45 hours at time-and-a-half"
+    ],
+    "answerIndex": 0,
+    "explanation": "Being salaried does not make a worker exempt; non-exempt employees must receive overtime regardless of how they are paid. The regular rate here is $1,000 / 40 = $25/hour, so the 5 hours over 40 are paid at 1.5 x $25 = $37.50 each, adding $187.50. Total gross is $1,000 + $187.50 = $1,187.50.",
+    "source": "U.S. DOL FLSA overtime rules for non-exempt salaried employees",
+    "check": {
+      "expr": "1000 + (45 - 40) * (1000 / 40) * 1.5",
+      "expected": 1187.5,
+      "tolerance": 0.01
+    },
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-job-garden-leave-noncompete",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "definition",
+    "topic": "Job",
+    "prompt": "What is the basic difference between 'garden leave' and a non-compete clause?",
+    "choices": [
+      "Garden leave and a non-compete are two names for the exact same agreement",
+      "During garden leave you stay employed and paid but are kept away from work during a notice period, whereas a non-compete restricts where you may work after employment ends",
+      "Garden leave pays you to work for a competitor, while a non-compete pays you to stay home",
+      "Both apply only to hourly workers and are illegal for salaried employees"
+    ],
+    "answerIndex": 1,
+    "explanation": "Under garden leave you remain an employee on payroll during a notice period but are told not to come to work or contact clients, which keeps you idle and out of a competitor's hands while still bound by duties to your current employer. A non-compete is a post-employment restriction that limits working for competitors for a defined time and area after you leave, and is typically unpaid. Enforceability of non-competes varies widely by state and has faced regulatory challenges.",
+    "source": "Employment law overview: garden leave vs. non-compete clauses",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-lifeevents-name-change-logistics",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Life Events",
+    "prompt": "A spouse who is legally changing their last name after marriage wants to update their financial accounts smoothly. Which sequence usually causes the fewest problems?",
+    "choices": [
+      "Update your credit cards first, since merchants check those most often",
+      "Change the name on your bank accounts before doing anything with the government",
+      "Tell your employer's payroll team first so your paychecks keep clearing",
+      "Update Social Security first, then your driver's license and passport, then banks, cards, and payroll"
+    ],
+    "answerIndex": 3,
+    "explanation": "The name on file with the Social Security Administration is the anchor that other institutions and the IRS reconcile against, so updating it first prevents mismatches that can freeze tax refunds or new accounts. After the SSA card, you update government photo IDs (driver's license, passport), then financial accounts like banks, credit cards, and payroll. Doing banks or cards before the SSA record risks a name that doesn't match the IRS or your ID.",
+    "source": "Social Security Administration, 'Changing Your Name' (ssa.gov); USA.gov name-change checklist",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-lifeevents-bundling-discount",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Life Events",
+    "prompt": "A couple who just bought a home is shopping for insurance and hears they can get a 'bundling' or 'multi-policy' discount. What does that mean?",
+    "choices": [
+      "Buying auto and homeowners insurance from the same company, which often lowers the price on both",
+      "Combining several months of premiums into one annual payment to skip monthly fees",
+      "Adding extra coverage riders so a single policy covers more types of loss",
+      "Switching from monthly to paperless billing to qualify for an online-only rate"
+    ],
+    "answerIndex": 0,
+    "explanation": "A multi-policy or 'bundling' discount is what insurers offer when you carry more than one policy with them, most commonly auto plus homeowners (or renters), and it typically reduces the premium on each. Insurers reward bundling because multi-policy customers tend to stay longer and are cheaper to service. It is different from paying annually or adding riders, which change how or how much you pay but not the multi-policy discount itself.",
+    "source": "NAIC consumer guidance on shopping for home and auto insurance (naic.org)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-lifeevents-wedding-vs-downpayment-math",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "math",
+    "topic": "Life Events",
+    "prompt": "A couple has saved $30,000 and is debating whether to spend it on a wedding or put it toward a house. If a lender requires a 10% down payment, what is the most expensive home price their $30,000 could cover as the down payment instead?",
+    "choices": [
+      "$33,000, because a wedding usually costs about 10% more than expected",
+      "$150,000, because lenders cap the loan at five times the down payment",
+      "$270,000, the home price minus their full down payment",
+      "$300,000, since a 10% down payment is one-tenth of the purchase price"
+    ],
+    "answerIndex": 3,
+    "explanation": "A 10% down payment equals one-tenth of the purchase price, so the largest price the down payment can cover is the down payment divided by 0.10: $30,000 / 0.10 = $300,000. This framing shows the opportunity cost of a large wedding — the same cash could anchor a sizable home purchase. (A real budget would also need closing costs and reserves, which this simplified comparison sets aside.)",
+    "source": "Standard loan-to-value arithmetic; CFPB homebuyer resources (consumerfinance.gov)",
+    "reviewed": true,
+    "check": {
+      "expr": "30000 / 0.10",
+      "expected": 300000,
+      "tolerance": 0.01
+    },
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-lifeevents-newbaby-firstyear-math",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "math",
+    "topic": "Life Events",
+    "prompt": "New parents estimate the baby will add three recurring monthly costs to their budget: $1,100 for daycare, $250 for diapers, formula, and supplies, and $150 for the larger family health-insurance premium. How much will these add to their spending over the baby's first 12 months?",
+    "choices": [
+      "$1,500, since that is the new total they pay each month",
+      "$16,200, counting only daycare and diapers for the year",
+      "$18,000, the combined monthly increase multiplied by 12 months",
+      "$22,200, the monthly costs plus a one-time $4,200 of baby gear"
+    ],
+    "answerIndex": 2,
+    "explanation": "The monthly budget delta is $1,100 + $250 + $150 = $1,500, and over a full year that is $1,500 x 12 = $18,000. The $1,500 choice is the monthly figure, not the annual one, and the others add or omit costs not given. Seeing the first-year delta as a single number helps parents size their emergency fund and cash-flow plan before the baby arrives.",
+    "source": "Illustrative budgeting arithmetic; USDA expenditures-on-children framework",
+    "reviewed": true,
+    "check": {
+      "expr": "(1100 + 250 + 150) * 12",
+      "expected": 18000,
+      "tolerance": 0.01
+    },
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-lifeevents-adoption-credit-concept",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "definition",
+    "topic": "Life Events",
+    "prompt": "A family that adopted a child is told they may claim the federal adoption tax credit. Which statement best describes how this credit generally works?",
+    "choices": [
+      "It is a refundable credit, so any amount beyond your tax bill is paid out to you as a refund",
+      "It is a deduction that reduces your taxable income by the amount of your adoption expenses",
+      "It only applies to international adoptions and never to adopting a U.S. child from foster care",
+      "It is a nonrefundable credit for qualified adoption expenses, capped per child, that phases out at higher incomes and can be carried forward if it exceeds your tax for the year"
+    ],
+    "answerIndex": 3,
+    "explanation": "The adoption tax credit offsets qualified adoption expenses up to a per-child maximum, but it is nonrefundable — it can reduce your tax to zero, and any unused portion carries forward for up to five years rather than being paid out. It phases out for higher-income taxpayers and applies to domestic (including special-needs/foster) and international adoptions, not just foreign ones. (The exact dollar cap and phase-out range are indexed and change yearly, so plan on the structure, not a fixed figure.)",
+    "source": "IRS Topic No. 607, Adoption Credit and Adoption Assistance Programs (irs.gov)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-lifeevents-eldercare-cost-planning",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "definition",
+    "topic": "Life Events",
+    "prompt": "An adult child is starting to plan for an aging parent's potential long-term care. Which assumption most often derails these financial plans?",
+    "choices": [
+      "Assuming Medicare will pay for extended custodial long-term care, when it generally covers only limited skilled care, not ongoing help with daily living",
+      "Assuming home modifications are tax-deductible, when they reduce the parent's property tax instead",
+      "Assuming a reverse mortgage must be repaid monthly, when it is always interest-free",
+      "Assuming Social Security automatically increases to cover a parent's care costs"
+    ],
+    "answerIndex": 0,
+    "explanation": "A common and costly misconception is that Medicare covers long-term custodial care; in fact Medicare pays only for limited, medically necessary skilled care (such as short rehab stays), not ongoing help with bathing, dressing, or eating. Extended custodial care is typically paid out of pocket, through long-term-care insurance, or via Medicaid once assets are largely spent down. Planning early for these costs — and for the caregiver's own lost wages and time — avoids a crisis when care is suddenly needed.",
+    "source": "Medicare.gov, 'What's long-term care?'; HHS LongTermCare.gov",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-lifeevents-death-financial-checklist",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "definition",
+    "topic": "Life Events",
+    "prompt": "In the weeks after a spouse or parent dies, which action is widely recommended as an early financial step — before rushing to close accounts or pay every bill?",
+    "choices": [
+      "Immediately cancel the deceased's Social Security number with the IRS so no taxes are owed",
+      "Pay off all of the deceased's debts from your own personal funds right away to avoid collections",
+      "Move every asset out of the deceased's name within 30 days or it is forfeited to the state",
+      "Obtain multiple certified copies of the death certificate, since banks, insurers, and government agencies each require one to act"
+    ],
+    "answerIndex": 3,
+    "explanation": "Certified death certificates are the gateway document — banks, life insurers, brokerage firms, Social Security, and the DMV each typically require an original certified copy, so ordering 10 or more up front prevents weeks of delay. Survivors generally should NOT pay the deceased's debts from personal funds; those debts are paid by the estate, and heirs are usually not personally liable. There is no rule that assets are forfeited in 30 days, and the SSA (not the survivor) handles benefit and record updates.",
+    "source": "Consumer Financial Protection Bureau, guidance for managing a deceased person's accounts (consumerfinance.gov); SSA survivors information",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-lifeevents-529-superfunding",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "definition",
+    "topic": "Life Events",
+    "prompt": "Grandparents want to make a large one-time contribution to a grandchild's 529 plan without using any of their lifetime gift-tax exemption. What does the special 529 '5-year election' (sometimes called superfunding) let them do?",
+    "choices": [
+      "Treat a lump sum of up to five years' worth of the annual gift exclusion as if it were spread evenly over five years for gift-tax purposes",
+      "Withdraw the contribution tax-free after five years regardless of how the money is spent",
+      "Lock in this year's investment returns for five years so the account cannot lose value",
+      "Deduct the entire contribution on their federal income tax return over the next five years"
+    ],
+    "answerIndex": 0,
+    "explanation": "A unique 529 provision lets a donor elect to treat a single large gift as if made evenly over five years, so a front-loaded lump sum up to five times the annual exclusion can avoid gift tax and preserve the lifetime exemption — powerful for jump-starting compounding. It is a gift-tax timing election (reported on Form 709), not a federal income-tax deduction, and it does not change the withdrawal rules or guarantee returns. Dying within the five years pulls a prorated portion back into the estate.",
+    "source": "IRS Publication 970 and Form 709 instructions; Internal Revenue Code section 529(c)(2)(B)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-lifeevents-sabbatical-savings-target-math",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Life Events",
+    "prompt": "Someone planning a 6-month unpaid career break has essential living expenses of $4,000 per month and wants to also set aside a $5,000 cushion for surprises. Ignoring any income during the break, what total should they save before starting it?",
+    "choices": [
+      "$24,000, which covers the six months of expenses only",
+      "$29,000, the six months of essential expenses plus the cushion",
+      "$9,000, one month of expenses plus the cushion",
+      "$48,000, a full year of expenses to be safe"
+    ],
+    "answerIndex": 1,
+    "explanation": "The target is the monthly burn rate times the number of months, plus the buffer: $4,000 x 6 + $5,000 = $29,000. The $24,000 option omits the cushion, and the $48,000 option funds twelve months rather than the six-month break described. Funding the break in cash beforehand keeps the person from raiding retirement accounts or taking on debt while their income is paused.",
+    "source": "Illustrative cash-runway arithmetic; standard emergency-fund/sabbatical planning guidance",
+    "reviewed": true,
+    "check": {
+      "expr": "4000 * 6 + 5000",
+      "expected": 29000,
+      "tolerance": 0.01
+    },
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-savings-ncua",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Savings",
+    "prompt": "You keep your savings at a credit union instead of a bank. Which agency insures your deposits there?",
+    "choices": [
+      "The SEC, the same agency that oversees stocks and brokerage accounts",
+      "No one — only banks can insure deposits, so credit-union money is uninsured",
+      "The FDIC, the exact same fund that backs bank deposits",
+      "The NCUA, which insures credit-union shares up to $250,000 — the same limit the FDIC gives banks"
+    ],
+    "answerIndex": 3,
+    "explanation": "Federally insured credit unions are backed by the National Credit Union Administration (NCUA) through the National Credit Union Share Insurance Fund, not the FDIC. Coverage mirrors bank protection at $250,000 per depositor, per institution, per ownership category. The two funds are separate but offer equivalent, full-faith-and-credit U.S. government backing.",
+    "source": "NCUA Share Insurance Fund overview",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-savings-treasurydirect",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Savings",
+    "prompt": "What is TreasuryDirect?",
+    "choices": [
+      "A high-yield savings account offered by large commercial banks",
+      "The U.S. government's official website for buying savings bonds and Treasury securities directly, with no broker or fee",
+      "A federal program that automatically deposits your tax refund into a CD",
+      "A private app that rounds up purchases and invests the change in index funds"
+    ],
+    "answerIndex": 1,
+    "explanation": "TreasuryDirect is the U.S. Treasury's online platform where individuals can buy and hold savings bonds (I-bonds and EE-bonds) and marketable Treasuries like bills, notes, and bonds straight from the government. Because there is no middleman, there are no purchase fees or commissions. Holdings are registered electronically rather than as paper certificates.",
+    "source": "TreasuryDirect.gov — U.S. Department of the Treasury",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-savings-cash-management",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "accounts",
+    "topic": "Savings",
+    "prompt": "Your brokerage offers a 'cash management account' (CMA) alongside your investments. What is it?",
+    "choices": [
+      "A retirement account with special tax breaks for cash savings",
+      "A margin loan that lets you borrow against your stocks at a low rate",
+      "An account that automatically buys index funds with any idle cash",
+      "A cash account at a brokerage that blends checking-like features — debit card, bill pay — with interest, often sweeping balances to partner banks for FDIC coverage"
+    ],
+    "answerIndex": 3,
+    "explanation": "A cash management account is offered by a brokerage or fintech, not a traditional bank, and bundles everyday spending features (debit card, bill pay, ATM access) with interest on your balance. Many CMAs obtain FDIC insurance by sweeping deposits to one or more partner banks behind the scenes. They let you keep spending cash close to your investments without a separate bank.",
+    "source": "Consumer Financial Protection Bureau — deposit and cash account basics",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-savings-ee-bond-double",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Savings",
+    "prompt": "What is the special guarantee that comes with a U.S. Series EE savings bond?",
+    "choices": [
+      "It pays a rate that rises with the stock market each year",
+      "The Treasury guarantees it will at least double in value if you hold it for 20 years",
+      "It can be cashed any day in the first year with no penalty",
+      "It is exempt from federal income tax when redeemed"
+    ],
+    "answerIndex": 1,
+    "explanation": "The Treasury guarantees that a Series EE bond will be worth at least double its purchase price after 20 years; if the bond's regular interest hasn't gotten it there, the Treasury makes a one-time adjustment to double it. That makes the 20-year hold the key to the guarantee. Cashing out before 5 years forfeits the last 3 months of interest, and EE interest is federally taxable but exempt from state and local tax.",
+    "source": "TreasuryDirect — Series EE savings bond features",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-savings-mmf-7day-yield",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Savings",
+    "prompt": "When comparing money-market mutual funds, the headline number you'll usually see quoted is the '7-day yield.' What does it tell you?",
+    "choices": [
+      "The total return the fund earned over the past seven years",
+      "A guaranteed rate the fund promises to pay for the next seven days",
+      "The fund's most recent week of income, annualized — a standardized snapshot of its current yield",
+      "How many days it takes to withdraw your money from the fund"
+    ],
+    "answerIndex": 2,
+    "explanation": "The 7-day yield takes the income a money-market fund distributed over the past seven days, nets out fees, and annualizes it into a comparable yearly rate. Because these funds reset constantly, it is the standard, near-current measure regulators require for apples-to-apples comparison. It is not a guarantee — the rate floats as short-term interest rates move.",
+    "source": "SEC — money market fund yield disclosure rules",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-savings-tiered-ef",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Savings",
+    "prompt": "Many planners suggest building an emergency fund in tiers — for example a small starter amount first, then one month of expenses, then three to six months. Why build it in stages?",
+    "choices": [
+      "Reaching an early, achievable milestone protects you from small shocks and builds momentum before you finish the full fund",
+      "Saving in stages lets you skip paying taxes on the interest",
+      "Each tier must be held at a different bank to stay FDIC-insured",
+      "Tiers are required by law before you can open a savings account"
+    ],
+    "answerIndex": 0,
+    "explanation": "A tiered or 'laddered' emergency fund sets reachable checkpoints — such as a $1,000 starter cushion, then one month of expenses, then the full three-to-six-month target — so you're protected against minor surprises long before the whole fund is done. Hitting early milestones provides motivation and keeps you from raiding the fund. The stages are a behavioral strategy, not a tax or insurance rule.",
+    "source": "Consumer Financial Protection Bureau — emergency savings guidance",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-savings-ncua-vs-fdic-coverage",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "definition",
+    "topic": "Savings",
+    "prompt": "A saver wants to know how NCUA share insurance at a credit union compares with FDIC insurance at a bank. Which statement is accurate?",
+    "choices": [
+      "NCUA covers only $100,000, half of the FDIC limit",
+      "NCUA insurance is privately funded and lacks U.S. government backing",
+      "FDIC and NCUA coverage can be stacked at the same institution for double protection",
+      "Both insure $250,000 per owner, per institution, per ownership category, and both carry full faith and credit of the U.S. government"
+    ],
+    "answerIndex": 3,
+    "explanation": "The NCUA's Share Insurance Fund and the FDIC both protect $250,000 per depositor, per institution, per ownership category, and both are backed by the full faith and credit of the United States. The practical difference is the charter: FDIC covers banks, NCUA covers federally insured credit unions. You cannot stack both at one institution, but spreading deposits across a bank and a credit union gives you separate $250,000 limits at each.",
+    "source": "NCUA and FDIC deposit insurance comparison",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-savings-ibond-composite-rate-math",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Savings",
+    "prompt": "A Series I savings bond has a fixed rate of 1.30% and a semiannual inflation rate of 1.97%. Using the Treasury composite-rate formula, fixed + (2 × semiannual inflation) + (fixed × semiannual inflation), what is the composite (annual) rate?",
+    "choices": [
+      "3.27%, found by simply adding the fixed rate to the semiannual inflation rate",
+      "1.97%, because only the inflation component matters",
+      "5.27%, combining the fixed rate with twice the semiannual inflation plus the small cross-term",
+      "3.94%, which is just twice the semiannual inflation rate"
+    ],
+    "answerIndex": 2,
+    "explanation": "The Treasury composite rate is fixed + 2×(semiannual inflation) + (fixed × semiannual inflation) = 0.0130 + 2(0.0197) + (0.0130)(0.0197) ≈ 0.0527, or about 5.27%. The semiannual inflation rate is doubled to approximate an annual rate, and the small cross-term accounts for the fixed rate compounding on top of inflation. The fixed portion stays for the life of the bond while the inflation portion resets every six months.",
+    "source": "TreasuryDirect — I-bond composite rate formula",
+    "check": {
+      "expr": "(0.0130 + 2*0.0197 + 0.0130*0.0197)*100",
+      "expected": 5.2656,
+      "tolerance": 0.01
+    },
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-savings-ee-bond-doubling-yield-math",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Savings",
+    "prompt": "A Series EE bond is guaranteed to double in value if held for 20 years. What effective annualized return does that doubling guarantee imply?",
+    "choices": [
+      "5.00% per year, since doubling means 100% total divided by 20 years",
+      "3.53% per year, the rate at which money doubles in exactly 20 years",
+      "7.20% per year, from the Rule of 72 applied to 10 years",
+      "2.00% per year, one-tenth of the total gain"
+    ],
+    "answerIndex": 1,
+    "explanation": "Doubling over 20 years means (1 + r)^20 = 2, so r = 2^(1/20) − 1 ≈ 0.0353, or about 3.53% compounded annually. Dividing 100% by 20 ignores compounding and overstates the rate. This guaranteed floor is why EE bonds are most attractive when held the full 20 years.",
+    "source": "Compound growth: r = 2^(1/20) − 1",
+    "check": {
+      "expr": "(2**(1/20) - 1)*100",
+      "expected": 3.5265,
+      "tolerance": 0.01
+    },
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-savings-cd-ladder-rung-sizing-math",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Savings",
+    "prompt": "You have $25,000 to build a 5-year CD ladder with one CD (rung) maturing each year. If you size the rungs equally, how much goes into each CD?",
+    "choices": [
+      "$12,500, splitting the money between just the first and last rungs",
+      "$2,500, putting 10% into each rung",
+      "$25,000 in the 5-year CD, since longer terms pay the most",
+      "$5,000 per rung, dividing the total evenly across the five maturities"
+    ],
+    "answerIndex": 3,
+    "explanation": "An equally weighted ladder divides the total by the number of rungs: $25,000 ÷ 5 = $5,000 in each CD. As each rung matures, you reinvest it into a new long-term CD at the top of the ladder, keeping one CD coming due every year. Equal sizing gives steady, predictable access to a portion of your cash on a regular schedule.",
+    "source": "CD ladder construction: total ÷ number of rungs",
+    "check": {
+      "expr": "25000/5",
+      "expected": 5000,
+      "tolerance": 0.01
+    },
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-savings-mmf-7day-vs-30day-yield",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "definition",
+    "topic": "Savings",
+    "prompt": "A money-market fund lists both a '7-day SEC yield' and a '30-day SEC yield.' What is the practical difference between them?",
+    "choices": [
+      "The 7-day yield is after taxes while the 30-day yield is before taxes",
+      "The 7-day yield reflects the most recent week annualized, while the 30-day yield averages a longer window and reacts more slowly to rate changes",
+      "The 30-day yield is guaranteed for the next month while the 7-day yield is not",
+      "They are identical figures presented in two formats"
+    ],
+    "answerIndex": 1,
+    "explanation": "Both are standardized, fee-adjusted yields annualized from recent income, but they use different lookback windows. The 7-day yield captures the latest week, so it moves quickly when short-term rates shift; the 30-day yield smooths over a month and lags. In a rising-rate environment the 7-day yield typically reads higher than the 30-day, and the reverse when rates are falling. Neither is a guarantee of future yield.",
+    "source": "SEC — standardized money market fund yield definitions",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-savings-cma-sweep-fdic",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "accounts",
+    "topic": "Savings",
+    "prompt": "A cash management account advertises 'up to $2 million in FDIC insurance' even though the standard limit is $250,000 per bank. How is that possible?",
+    "choices": [
+      "The brokerage privately guarantees the extra coverage out of its own capital",
+      "FDIC limits do not apply to brokerage accounts, so any amount is covered",
+      "It sweeps your cash across multiple partner banks, so each bank holds an FDIC-insured slice under the $250,000 limit",
+      "The SEC, not the FDIC, insures the balance up to $2 million"
+    ],
+    "answerIndex": 2,
+    "explanation": "The cash is not held by the brokerage itself — it is swept into deposit accounts at a network of partner banks. Because FDIC coverage is per depositor, per bank, spreading the balance across many banks lets each $250,000 slice be separately insured, multiplying total protection. The expanded coverage depends on the program's bank list, and holding funds directly at one of those same banks could reduce your available limit there.",
+    "source": "FDIC insurance and brokerage cash-sweep program disclosures",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-savings-tiered-ef-allocation-math",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Savings",
+    "prompt": "Your essential expenses are $3,500 a month and you want a 4-month emergency fund. You'll keep one month of it in checking for instant access and put the remaining months in a high-yield savings account. How much goes into the HYSA?",
+    "choices": [
+      "$14,000, the full four months, with nothing kept in checking",
+      "$7,000, exactly half of the fund",
+      "$3,500, only the single month meant for checking",
+      "$10,500, the three months that sit beyond the one-month checking buffer"
+    ],
+    "answerIndex": 3,
+    "explanation": "The full 4-month fund is 4 × $3,500 = $14,000. Keeping one month ($3,500) in checking leaves $14,000 − $3,500 = $10,500 for the HYSA. Splitting the fund this way keeps a small buffer instantly available for spending while the larger share earns a higher yield, balancing liquidity against return.",
+    "source": "Tiered emergency-fund allocation: (months × expenses) − checking buffer",
+    "check": {
+      "expr": "4*3500 - 3500",
+      "expected": 10500,
+      "tolerance": 0.01
+    },
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-spending-bnpl-traps",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Spending",
+    "prompt": "What is a common trap of \"buy now, pay later\" (BNPL) services that split a purchase into interest-free installments?",
+    "choices": [
+      "They report every on-time payment to credit bureaus, which lowers your score",
+      "They make spending feel painless, so people stack multiple plans and rack up late fees they can't track",
+      "They are illegal in most U.S. states and can void your purchase",
+      "They always charge a higher price than paying in cash up front"
+    ],
+    "answerIndex": 1,
+    "explanation": "Splitting a cost into four small \"interest-free\" payments makes a purchase feel cheaper and easier to justify, which encourages buying more and juggling several overlapping plans at once. The danger is losing track of the staggered due dates: a missed payment triggers late fees, and some plans flip into steep deferred interest. The installments themselves may be free, but the behavioral nudge to overspend and the penalties for slipping up are the real cost.",
+    "source": "Consumer Financial Protection Bureau — Buy Now, Pay Later market report (2022)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-spending-subscription-audit-savings",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "math",
+    "topic": "Spending",
+    "prompt": "Auditing your recurring charges, you cancel three subscriptions you no longer use: $15.99, $9.99, and $12.49 per month. How much do you save over a full year?",
+    "choices": [
+      "$38.47, the one-month total",
+      "$230.82, counting only half the year",
+      "$461.64 per year",
+      "$153.88, multiplying by four"
+    ],
+    "answerIndex": 2,
+    "explanation": "Recurring charges repeat every month, so annual savings = monthly total × 12. The three subscriptions add to 15.99 + 9.99 + 12.49 = $38.47 per month, and $38.47 × 12 = $461.64 per year. A single ten-minute audit of forgotten subscriptions can free up real money because the saving recurs every month and into future years.",
+    "source": "Cairn — Spending module worked example",
+    "reviewed": true,
+    "check": {
+      "expr": "(15.99 + 9.99 + 12.49) * 12",
+      "expected": 461.64,
+      "tolerance": 0.01
+    },
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-spending-price-per-serving",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "math",
+    "topic": "Spending",
+    "prompt": "A family-size box of pasta costs $7.20 and makes 8 servings. What is its price per serving?",
+    "choices": [
+      "$0.90 per serving",
+      "$1.20 per serving",
+      "$7.20 per serving",
+      "$0.72 per serving"
+    ],
+    "answerIndex": 0,
+    "explanation": "Price per serving is the total price divided by the number of servings: 7.20 ÷ 8 = $0.90 per serving. Comparing price per serving — rather than the price on the front of the package — lets you judge value fairly across different package sizes and recipes. The $0.72 distractor wrongly divides by 10 servings, and $1.20 divides by 6.",
+    "source": "Cairn — Spending module worked example",
+    "reviewed": true,
+    "check": {
+      "expr": "7.20 / 8",
+      "expected": 0.9,
+      "tolerance": 0.01
+    },
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-spending-daily-habit-annual",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "math",
+    "topic": "Spending",
+    "prompt": "You buy a $4.50 energy drink every single day. Ignoring any investing, what does this daily habit cost you over one year (365 days)?",
+    "choices": [
+      "$162.00, counting only weekdays",
+      "$1,642.50 per year",
+      "$54.00, just one month",
+      "$135.00, just one month of daily buys"
+    ],
+    "answerIndex": 1,
+    "explanation": "A daily habit's yearly cost is the per-day price times the number of days: 4.50 × 365 = $1,642.50 a year. Putting a recurring small purchase on an annual basis often reveals a number far larger than the trivial daily price suggests, which is the whole point of tracking these little leaks. This is the simple annualized cost; investing the money instead would make the forgone amount even larger.",
+    "source": "Cairn — Spending module worked example",
+    "reviewed": true,
+    "check": {
+      "expr": "4.50 * 365",
+      "expected": 1642.5,
+      "tolerance": 0.01
+    },
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-spending-one-percent-rule",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Spending",
+    "prompt": "What is the \"1% rule\" sometimes suggested for discretionary purchases?",
+    "choices": [
+      "Never spend more than 1% of your net worth on any single item",
+      "Tip at least 1% on every purchase to support workers",
+      "Save exactly 1% of each paycheck before spending anything",
+      "If a non-essential item costs more than 1% of your monthly income, wait at least a day before buying it"
+    ],
+    "answerIndex": 3,
+    "explanation": "The 1% rule is a simple impulse-control habit: if a discretionary item costs more than 1% of your gross monthly income, you pause — often a full day — before deciding, while cheaper items can be bought without the wait. Scaling the threshold to your income means the same rule fits very different budgets. Like other cooling-off habits, it converts a snap decision into a deliberate one without banning the purchase.",
+    "source": "Ramit Sethi — I Will Teach You to Be Rich (popularized money rule)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "beg-spending-shrinkflation",
+    "version": 1,
+    "difficulty": "Beginner",
+    "format": "definition",
+    "topic": "Spending",
+    "prompt": "What is \"shrinkflation\"?",
+    "choices": [
+      "When a product's package gets smaller while the price stays the same, so you get less for your money",
+      "When prices fall because a product has shrunk in popularity",
+      "When a store shrinks its floor space to cut costs",
+      "When inflation slows down and prices stop rising"
+    ],
+    "answerIndex": 0,
+    "explanation": "Shrinkflation is when a manufacturer quietly reduces the size or quantity of a product while keeping the price unchanged, so the cost per unit rises even though the sticker looks the same. Because the headline price doesn't move, the increase is easy to miss unless you compare the unit price or net weight. Checking the price per ounce or per item — not just the package price — is the way to catch it.",
+    "source": "U.S. Bureau of Labor Statistics — explainer on package downsizing and CPI",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-spending-endowment-effect",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "definition",
+    "topic": "Spending",
+    "prompt": "How does the \"endowment effect\" influence spending and decluttering decisions?",
+    "choices": [
+      "It makes people value things they already own more highly than identical things they don't, so they overpay to keep them and resist letting go",
+      "It causes people to undervalue gifts they receive relative to items they buy",
+      "It makes shoppers prefer cheaper store brands over name brands",
+      "It describes spending a windfall faster than earned income"
+    ],
+    "answerIndex": 0,
+    "explanation": "The endowment effect is the bias by which merely owning something raises its perceived value, so people demand more to give up an item than they'd have paid to acquire it. In spending, it underlies free-trial-then-keep tactics, reluctance to return or resell purchases, and clinging to subscriptions or clutter you'd never buy again today. The corrective question is whether you would buy the item now at its current price — not how it feels to part with it.",
+    "source": "Kahneman, Knetsch & Thaler — Journal of Economic Perspectives (1991)",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-spending-surge-pricing",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Spending",
+    "prompt": "A rideshare that normally costs $18 is showing a 1.8x surge (dynamic-pricing) multiplier. How much extra are you paying versus the normal fare?",
+    "choices": [
+      "$1.80 extra",
+      "$32.40 extra",
+      "$14.40 extra",
+      "$18.00 extra"
+    ],
+    "answerIndex": 2,
+    "explanation": "A surge multiplier scales the whole fare, so the total is 18 × 1.8 = $32.40, and the extra over the normal price is 32.40 − 18 = $14.40. Dynamic pricing raises the price when demand spikes, so the premium — here 80% on top of the base — is what you'd avoid by waiting for surge to fade or choosing another option. The $32.40 distractor reports the total fare, not the extra.",
+    "source": "Cairn — Spending module worked example",
+    "reviewed": true,
+    "check": {
+      "expr": "18 * 1.8 - 18",
+      "expected": 14.4,
+      "tolerance": 0.01
+    },
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-spending-shrinkflation-unit-price",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Spending",
+    "prompt": "A cereal box was 18 oz for $4.50. After shrinkflation, it's 14 oz for the same $4.50. By what percent did the price per ounce effectively rise?",
+    "choices": [
+      "About 4.0% higher per ounce",
+      "About 22.2% higher per ounce",
+      "0% — the price didn't change",
+      "About 28.6% higher per ounce"
+    ],
+    "answerIndex": 3,
+    "explanation": "Compare price per ounce: before, 4.50 ÷ 18 = $0.250/oz; after, 4.50 ÷ 14 ≈ $0.3214/oz. The percent increase is (0.3214 − 0.250) ÷ 0.250 ≈ 0.286, or about 28.6%. Holding the shelf price constant while cutting the quantity is a hidden price hike that only the unit price reveals — the '0%' answer is exactly the illusion shrinkflation relies on. The 22.2% distractor is just the size reduction (4 of 18 oz), not the per-ounce price change.",
+    "source": "Cairn — Spending module worked example",
+    "reviewed": true,
+    "check": {
+      "expr": "((4.50 / 14) - (4.50 / 18)) / (4.50 / 18) * 100",
+      "expected": 28.6,
+      "tolerance": 0.1
+    },
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-spending-extended-warranty-ev",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Spending",
+    "prompt": "An extended warranty costs $120. The only covered repair would cost $300, and you estimate a 25% chance you'll actually need it. What is the warranty's expected payout, and how does it compare with the price?",
+    "choices": [
+      "$300 expected payout, far above the price",
+      "$120 expected payout, exactly breaking even",
+      "$225 expected payout, well above the price",
+      "$75 expected payout, which is $45 below the $120 price"
+    ],
+    "answerIndex": 3,
+    "explanation": "Expected payout = probability of a claim × repair cost = 0.25 × 300 = $75. You pay $120 for an expected $75 of coverage, so the warranty costs about $45 more than it's statistically worth — that gap is the seller's margin and is why most extended warranties favor the seller. Expected value won't capture a catastrophic risk you truly can't absorb, but for a modest, affordable repair like this, self-insuring is usually the better bet.",
+    "source": "Consumer Reports — guidance on extended warranties",
+    "reviewed": true,
+    "check": {
+      "expr": "0.25 * 300",
+      "expected": 75,
+      "tolerance": 0.01
+    },
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-spending-buy-once-breakeven",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Spending",
+    "prompt": "Durable boots cost $250 and last 10 years; a cheap pair costs $45 but lasts only 1.5 years. On a cost-per-year basis, which is cheaper?",
+    "choices": [
+      "The cheap boots, at $45/yr",
+      "$25/yr for the durable boots, beating $30/yr for the cheap pair",
+      "They tie at about $27.50/yr",
+      "The durable boots, at $250/yr"
+    ],
+    "answerIndex": 1,
+    "explanation": "Cost per year = price ÷ years of service: durable is 250 ÷ 10 = $25/yr, while cheap is 45 ÷ 1.5 = $30/yr. Spreading each price across its lifespan shows the pricier 'buy once' pair is actually cheaper per year, but only because its longer life more than offsets the higher sticker. If the cheap pair lasted nearly as long, the premium wouldn't pay off, so the discipline is to estimate service life and compute cost per year before paying up.",
+    "source": "Cairn — Spending module worked example",
+    "reviewed": true,
+    "check": {
+      "expr": "250 / 10",
+      "expected": 25,
+      "tolerance": 0.01
+    },
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-spending-cashback-category-optimization",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "math",
+    "topic": "Spending",
+    "prompt": "You spend $400/month on dining. A card paying 4% cashback on dining versus a flat 1% card earns how much extra cashback per year — assuming you'd spend the same either way and pay in full?",
+    "choices": [
+      "$48 extra per year",
+      "$192 extra per year",
+      "$16 extra per year",
+      "$144 extra per year"
+    ],
+    "answerIndex": 3,
+    "explanation": "Cashback = spend × rate. At 4%: 400 × 0.04 × 12 = $192/yr; at 1% flat: 400 × 0.01 × 12 = $48/yr; the extra is 192 − 48 = $144/yr. Matching a high-rate category card to where you actually spend is the core of cashback optimization — but it only pays if you'd have spent the money anyway and clear the balance, since one cycle of ~20% interest would erase the gain. The $192 distractor is the gross 4% cashback, not the extra over the flat card.",
+    "source": "Cairn — Spending module worked example",
+    "reviewed": true,
+    "check": {
+      "expr": "400 * 0.04 * 12 - 400 * 0.01 * 12",
+      "expected": 144,
+      "tolerance": 0.01
+    },
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
+  },
+  {
+    "id": "adv-spending-gift-card-breakage",
+    "version": 1,
+    "difficulty": "Advanced",
+    "format": "definition",
+    "topic": "Spending",
+    "prompt": "In retail, what does \"gift-card breakage\" refer to, and why does it matter to a careful spender?",
+    "choices": [
+      "The fee a retailer charges to issue a physical gift card",
+      "The portion of gift-card value that is never redeemed, which is pure profit for the seller and lost money for the buyer",
+      "The penalty for reselling a gift card below face value",
+      "The physical damage that voids a gift card's balance"
+    ],
+    "answerIndex": 1,
+    "explanation": "Breakage is the value loaded onto gift cards that customers never spend — forgotten balances, lost cards, and stranded small remainders — which the issuer ultimately keeps as profit. For the buyer it's money paid but never used, effectively a gift to the retailer, and it's why prepaid balances are worth tracking and spending down promptly. Treating gift cards (and store credit) like cash you've already spent helps you avoid quietly donating the leftovers.",
+    "source": "Mercator Advisory Group — gift-card breakage industry estimates",
+    "reviewed": true,
+    "reviewedBy": "gochuico.raymond@gmail.com",
+    "reviewedAt": "2026-06-02"
   }
 ]

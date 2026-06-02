@@ -44,11 +44,17 @@ describe('trivia staging seed batches — structural integrity', () => {
     expect(collisions).toEqual([]);
   });
 
-  it('proves the loop on two batches: a high-liability topic and a math batch', () => {
-    // Skip when staging is empty (all seed batches have been approved and promoted).
+  it('staging batch is well-formed: all rows unreviewed, every math row carries a check{}', () => {
+    // (Generalized from the original seed-demo, which required a high-liability + math
+    // batch in one go — no longer true once the loop runs single-tier batches, e.g. a
+    // breadth-only top-up with no high-liability rows. The wave-agnostic invariant:
+    // nothing is auto-servable and every math row has an independent recompute target.)
     if (stagingRows.length === 0) return;
-    expect(stagingRows.some((q) => isHighLiability(q.topic))).toBe(true);
-    expect(stagingRows.some((q) => q.format === QuestionFormat.MATH)).toBe(true);
+    expect(stagingRows.every((q) => q.reviewed === false)).toBe(true);
+    const mathNoCheck = stagingRows
+      .filter((q) => q.format === QuestionFormat.MATH && !q.check)
+      .map((q) => q.id);
+    expect(mathNoCheck).toEqual([]);
   });
 
   it('every high-liability staging row cites a real primary source', () => {
