@@ -32,9 +32,16 @@ export class PriceCache implements PriceCacheAPI {
     if (hit.length > 0) return hit[0].price;
 
     const price = await this.yahoo.historical(ticker, date);
+    // ON CONFLICT … DO UPDATE (not INSERT OR REPLACE) so a re-write of an
+    // existing (ticker, date) updates the row in place. INSERT OR REPLACE
+    // deletes-then-inserts and cycles the implicit rowid — the same idiom
+    // rule snapshots.ts follows. (ticker, date) is the table PK.
     await this.db.execute(
-      `INSERT OR REPLACE INTO price_cache (ticker, date, price, fetched_at)
-       VALUES (?, ?, ?, CURRENT_TIMESTAMP)`,
+      `INSERT INTO price_cache (ticker, date, price, fetched_at)
+       VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+       ON CONFLICT(ticker, date) DO UPDATE SET
+         price = excluded.price,
+         fetched_at = excluded.fetched_at`,
       [ticker, date, price]
     );
     return price;
@@ -53,9 +60,16 @@ export class PriceCache implements PriceCacheAPI {
     if (hit.length > 0) return hit[0].price;
 
     const quote = await this.yahoo.quote(ticker);
+    // ON CONFLICT … DO UPDATE (not INSERT OR REPLACE): a same-day re-fetch
+    // after the 6h TTL updates the existing (ticker, date) row in place
+    // rather than delete-then-insert (which cycles the implicit rowid).
+    // Mirrors snapshots.ts; (ticker, date) is the table PK.
     await this.db.execute(
-      `INSERT OR REPLACE INTO price_cache (ticker, date, price, fetched_at)
-       VALUES (?, ?, ?, CURRENT_TIMESTAMP)`,
+      `INSERT INTO price_cache (ticker, date, price, fetched_at)
+       VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+       ON CONFLICT(ticker, date) DO UPDATE SET
+         price = excluded.price,
+         fetched_at = excluded.fetched_at`,
       [ticker, today, quote.price]
     );
     return quote.price;

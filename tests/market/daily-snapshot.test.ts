@@ -153,7 +153,7 @@ describe('deriveTodaysSnapshot', () => {
     expect(currentFn).toHaveBeenCalledTimes(2);
   });
 
-  it('skips holdings whose price lookup fails (logged but not fatal)', async () => {
+  it('does NOT write a snapshot for an account when any holding fails to price', async () => {
     const acctId = await makeAccount('Brokerage', AccountType.ACCOUNT_BROKERAGE);
     await holdings.create({
       accountId: acctId,
@@ -186,13 +186,75 @@ describe('deriveTodaysSnapshot', () => {
     });
 
     // Function returns successfully despite the per-ticker error.
-    expect(result.upserted).toContain(acctId);
     expect(result.errors.length).toBeGreaterThan(0);
     expect(result.errors[0]).toContain('BAD');
 
+    // The partial-fail account must NOT be upserted — writing a snapshot that
+    // omits BAD's contribution would record a confidently-wrong (too-low)
+    // net-worth datapoint as the latest authoritative value.
+    expect(result.upserted).not.toContain(acctId);
+    // It is surfaced in the dedicated `partial` bucket instead.
+    expect(result.partial).toContain(acctId);
+    // And not silently dropped into `skipped` (which means "no holdings").
+    expect(result.skipped).not.toContain(acctId);
+
+    // No row was written at all — the prior (clean) value, if any, stands.
     const snaps = await snapshots.listForAccount(acctId);
-    expect(snaps).toHaveLength(1);
-    // Only GOOD contributed — 3 × 50 = 150. BAD was swallowed.
-    expect(snaps[0].totalValue).toBe(3 * 50);
+    expect(snaps).toEqual([]);
+  });
+
+  it('still upserts accounts whose holdings all price, even when a DIFFERENT account partially fails', async () => {
+    const cleanAcct = await makeAccount('Clean', AccountType.ACCOUNT_BROKERAGE);
+    const dirtyAcct = await makeAccount('Dirty', AccountType.ACCOUNT_ROTH_IRA);
+
+    await holdings.create({
+      accountId: cleanAcct,
+      ticker: 'GOOD',
+      shareCount: 2,
+      targetAllocationPct: null,
+      costBasis: null,
+    });
+    await holdings.create({
+      accountId: dirtyAcct,
+      ticker: 'GOOD',
+      shareCount: 4,
+      targetAllocationPct: null,
+      costBasis: null,
+    });
+    await holdings.create({
+      accountId: dirtyAcct,
+      ticker: 'BAD',
+      shareCount: 1,
+      targetAllocationPct: null,
+      costBasis: null,
+    });
+
+    const flakyPrices: PriceCacheAPI = {
+      historicalPrice: vi.fn(),
+      currentPrice: vi.fn(async (ticker: string) => {
+        if (ticker === 'BAD') throw new Error('Yahoo lookup failed');
+        return 50;
+      }),
+    };
+
+    const result = await deriveTodaysSnapshot({
+      accounts,
+      holdings,
+      snapshots,
+      prices: flakyPrices,
+    });
+
+    // Fully-priced account gets its snapshot.
+    expect(result.upserted).toContain(cleanAcct);
+    expect(result.partial).not.toContain(cleanAcct);
+    const cleanSnaps = await snapshots.listForAccount(cleanAcct);
+    expect(cleanSnaps).toHaveLength(1);
+    expect(cleanSnaps[0].totalValue).toBe(2 * 50);
+
+    // Partial-fail account is held back.
+    expect(result.upserted).not.toContain(dirtyAcct);
+    expect(result.partial).toContain(dirtyAcct);
+    const dirtySnaps = await snapshots.listForAccount(dirtyAcct);
+    expect(dirtySnaps).toEqual([]);
   });
 });
