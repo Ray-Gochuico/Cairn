@@ -53,14 +53,25 @@ Grab the file named `Cairn_<version>_aarch64.app.tar.gz`.
    produces `Cairn.app` in the same folder.
 2. Drag `Cairn.app` into the `Applications` folder.
 3. **First time only — right-click `Cairn.app` in `Applications`, choose
-   "Open", then click "Open" again in the dialog that appears.** macOS
+   "Open", then click "Open" again in the dialog that appears.** This is the
+   recommended way in: it clears Gatekeeper while leaving macOS's
+   quarantine/tamper check intact (the OS still verifies the bundle hasn't
+   been altered since download, and your click records consent). macOS
    remembers the approval, so every launch after the first one is a normal
    double-click.
-4. *Alternative* (Terminal one-liner that skips step 3 entirely):
 
-   ```bash
-   xattr -d com.apple.quarantine /Applications/Cairn.app
-   ```
+> **Advanced — only if you trust the source.** You *can* clear Gatekeeper
+> from Terminal instead:
+>
+> ```bash
+> xattr -d com.apple.quarantine /Applications/Cairn.app
+> ```
+>
+> Don't reach for this by default. It strips the quarantine flag outright,
+> which **removes macOS's tamper check** on this unsigned download — the OS
+> will no longer verify the bundle is the one you fetched. Only run it if you
+> downloaded the release yourself from the official link above and trust it.
+> The right-click → Open flow in step 3 is safer and just as permanent.
 
 ### Why the security warning?
 
