@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import BarChartCard from '@/components/charts/BarChartCard';
-import { CHART_PALETTE, CHART_NEUTRAL } from '@/components/charts/palette';
+import { paletteColorAt, CHART_NEUTRAL } from '@/components/charts/palette';
 import { CHART_TOOLTIP_PROPS } from '@/components/charts/ChartTooltip';
 import { rangeBounds, summarizeSpendingForRange, type SpendingRange } from '@/lib/spending-widget';
 import type { Account, Category, Transaction } from '@/types/schema';
@@ -77,7 +77,7 @@ function colorForCategory(
 ): string {
   if (override) return override;
   if (isUncategorized) return CHART_NEUTRAL;
-  return CHART_PALETTE[index % CHART_PALETTE.length];
+  return paletteColorAt(index);
 }
 
 export function SpendingWidget({

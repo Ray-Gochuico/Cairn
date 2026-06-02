@@ -24,8 +24,7 @@ import {
   type Granularity,
   type TimeWindow,
 } from '@/lib/snapshot-bucketing';
-import { CHART_PALETTE } from '@/components/charts/palette';
-import { colorForAccount } from '@/lib/chart-colors';
+import { colorForAccount, colorForEntityKey } from '@/lib/chart-colors';
 import { formatCompactCurrency, formatCurrency } from '@/lib/format';
 import {
   getGranularity,
@@ -175,12 +174,11 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
  */
 function colorForEntity(kind: SelectedEntity['kind'], id: number): string {
   if (kind === 'account') return colorForAccount(id);
-  const key = `${kind}:${id}`;
-  let h = 0;
-  for (let i = 0; i < key.length; i++) {
-    h = (Math.imul(h, 31) + key.charCodeAt(i)) | 0;
-  }
-  return CHART_PALETTE[Math.abs(h) % CHART_PALETTE.length];
+  // Non-account segments (property / vehicle / loan) hash their composite
+  // entityKey onto WEDGE_PALETTE via colorForEntityKey — same deterministic,
+  // kind-disambiguated assignment, now over the principled palette so a
+  // segment can never land a near-white color (I9).
+  return colorForEntityKey(`${kind}:${id}`);
 }
 
 /**
