@@ -242,6 +242,18 @@ describe('MonthlyMiniWindow', () => {
     expect(screen.getByText(/next scheduled payment/i)).toBeInTheDocument();
   });
 
+  it('MonthlyMiniWindow.tsx reads no app_settings (keeps the hand-rolled migration array valid)', () => {
+    const src = readFileSync(
+      resolve(__dirname, '../../src/pages/MonthlyMiniWindow.tsx'),
+      'utf-8',
+    );
+    // If this ever fails, the page started touching app_settings — either revert,
+    // or add 0046 + the intervening app_settings migrations to the array at :48-54
+    // (see plan D3). Fail here LOUDLY rather than as "no such column" mid-render.
+    expect(src).not.toMatch(/last_seen_month/);
+    expect(src).not.toMatch(/SettingsRepo/);
+  });
+
   it('shows the "new month" eyebrow only when navigated with ?from=new-month', async () => {
     render(
       <MemoryRouter initialEntries={['/monthly?from=new-month']}>
