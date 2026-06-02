@@ -37,6 +37,7 @@ import { computeAccountBreakdown } from '@/lib/account-breakdown';
 import { colorForAccount } from '@/lib/chart-colors';
 import { useConcentration } from '@/lib/use-concentration';
 import { valueHoldings, type HoldingValuation } from '@/lib/holdings-value';
+import { classTargetVsActual, holdingTargetVsActual } from '@/lib/allocation-hierarchy';
 import type { Dependent, AccountSnapshot, Household, Holding } from '@/types/schema';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
@@ -190,50 +191,6 @@ function aggregateByAssetClass(
     .filter((b) => b.value > 0)
     .sort((a, b) => b.value - a.value)
     .map((b, idx) => ({ ...b, color: paletteColorAt(idx) }));
-}
-
-interface DriftRow {
-  ticker: string;
-  accountName: string;
-  targetPct: number | null;
-  actualPct: number;
-  drift: number;
-  value: number;
-}
-
-function computeDrift(valuations: HoldingValuation[]): DriftRow[] {
-  // Ticker drift is pinned to the WITHIN-ACCOUNT basis: the stored
-  // target_allocation_pct was authored per account (validated ≤100% per
-  // account in holdings-validation.ts), so the apples-to-apples actual is the
-  // holding's share of ITS account's total holding value — not the whole
-  // household (which made multi-account drift meaningless). Class-level drift
-  // (household basis) is computed separately in allocation-hierarchy.ts.
-  //
-  // Backend L1: key account totals on holding.accountId (a stable numeric id
-  // carried on every HoldingValuation via `holding`), NOT the display
-  // accountName — two same-named accounts must not be conflated. accountName is
-  // retained only for the display row.
-  const accountTotals = new Map<number, number>();
-  for (const v of valuations) {
-    accountTotals.set(v.holding.accountId, (accountTotals.get(v.holding.accountId) ?? 0) + v.value);
-  }
-  return valuations
-    .map<DriftRow>((v) => {
-      const accountTotal = accountTotals.get(v.holding.accountId) ?? 0;
-      const actualPct = accountTotal === 0 ? 0 : v.value / accountTotal;
-      const drift = v.holding.targetAllocationPct != null
-        ? actualPct - v.holding.targetAllocationPct
-        : 0;
-      return {
-        ticker: v.holding.ticker,
-        accountName: v.accountName,
-        targetPct: v.holding.targetAllocationPct,
-        actualPct,
-        drift,
-        value: v.value,
-      };
-    })
-    .sort((a, b) => Math.abs(b.drift) - Math.abs(a.drift));
 }
 
 /**
@@ -728,10 +685,16 @@ export default function Investments() {
     [allocation, allocationSelected],
   );
 
-  const drift = useMemo(() => computeDrift(valuations), [valuations]);
-  const driftWithTarget = useMemo(
-    () => drift.filter((d) => d.targetPct != null),
-    [drift],
+  // Two sibling target-vs-actual views (I10): class drift is household-level,
+  // holding drift is within-class aggregated per ticker across accounts. Both
+  // consume the same household class targets from settings.
+  const classRows = useMemo(
+    () => classTargetVsActual(valuations, settings?.assetClassTargetAllocations ?? null),
+    [valuations, settings?.assetClassTargetAllocations],
+  );
+  const holdingRows = useMemo(
+    () => holdingTargetVsActual(valuations, settings?.assetClassTargetAllocations ?? null),
+    [valuations, settings?.assetClassTargetAllocations],
   );
 
   const currentMonth = new Date().toISOString().slice(0, 7);
@@ -934,54 +897,105 @@ export default function Investments() {
         size: 'wide',
         applicable: true,
         render: () => (
-          /* Target / drift, full width below */
           <Card>
             <CardHeader>
               <CardTitle>Target vs Actual</CardTitle>
               <CardDescription>
-                Holdings with targets, sorted by absolute drift
+                Approximate, using latest snapshot per account, over held positions
+                only. Asset classes are household-level; holdings refine within
+                their class.
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              {driftWithTarget.length === 0 ? (
-                <div className="text-sm text-muted-foreground">
-                  No target allocations set. Add target % per holding in Holdings.
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground border-b">
-                        <th className="py-2 pr-2">Ticker</th>
-                        <th className="py-2 px-2 text-right">Target</th>
-                        <th className="py-2 px-2 text-right">Actual</th>
-                        <th className="py-2 pl-2 text-right">Drift</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {driftWithTarget.map((row) => (
-                        <tr key={`${row.accountName}-${row.ticker}`} className="border-b last:border-b-0">
-                          <td className="py-2 pr-2 font-mono">{row.ticker}</td>
-                          <td className="py-2 px-2 text-right">
-                            {row.targetPct != null
-                              ? `${(row.targetPct * 100).toFixed(1)}%`
-                              : '—'}
-                          </td>
-                          <td className="py-2 px-2 text-right">
-                            {(row.actualPct * 100).toFixed(1)}%
-                          </td>
-                          <td className={`py-2 pl-2 text-right ${
-                            row.drift >= 0 ? 'text-success' : 'text-destructive'
-                          }`}>
-                            {row.drift >= 0 ? '+' : ''}
-                            {(row.drift * 100).toFixed(1)}%
-                          </td>
+            <CardContent className="space-y-6">
+              {/* ── By asset class (household) ── */}
+              <div>
+                <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">By asset class</div>
+                {classRows.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">
+                    No holdings yet. Set asset-class targets above to track drift.
+                  </div>
+                ) : (
+                  // Column priority (narrow → wide): Asset class + Drift always
+                  // visible (pinned ends); Target, then Actual, then Invested are
+                  // the first to scroll under overflow-x-auto. Drift is the point.
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm" aria-label="By asset class">
+                      <thead>
+                        <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground border-b">
+                          <th className="py-2 pr-2">Asset class</th>
+                          <th className="py-2 px-2 text-right">Invested</th>
+                          <th className="py-2 px-2 text-right">Actual</th>
+                          <th className="py-2 px-2 text-right">Target</th>
+                          <th className="py-2 pl-2 text-right">Drift</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                      </thead>
+                      <tbody>
+                        {classRows.map((r) => (
+                          <tr key={r.assetClass} data-testid={`class-row-${r.assetClass}`} className="border-b last:border-b-0">
+                            <td className="py-2 pr-2">{ASSET_CLASS_LABEL[r.assetClass]}</td>
+                            <td className="py-2 px-2 text-right tabular-nums text-muted-foreground">{formatCurrency(r.actualValue)}</td>
+                            <td className="py-2 px-2 text-right tabular-nums">{(r.actualPct * 100).toFixed(1)}%</td>
+                            <td className="py-2 px-2 text-right tabular-nums">{r.targetPct != null ? `${(r.targetPct * 100).toFixed(1)}%` : '—'}</td>
+                            <td className={`py-2 pl-2 text-right tabular-nums ${r.targetPct == null ? 'text-muted-foreground' : r.driftPct >= 0 ? 'text-success-foreground' : 'text-destructive'}`}>
+                              {r.targetPct == null ? '—' : `${r.driftPct >= 0 ? '+' : ''}${(r.driftPct * 100).toFixed(1)}%`}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* ── By holding (within-class, aggregated per ticker across accounts) ── */}
+              <div>
+                <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">By holding</div>
+                {/* UX H2/H3 + Finance M2 CAPTION — the dual-basis reconciliation note.
+                    Without it a user who typed VTI 30% sees the within-class basis
+                    render as 75% and thinks the app is wrong. The Target column below
+                    is rendered on the HOUSEHOLD basis (= targetValue / household), so
+                    Actual − Target = Drift reconciles cleanly in this table. */}
+                <p className="text-xs text-muted-foreground mb-2">
+                  Targets shown as each holding’s share of its asset-class target,
+                  expressed as a % of your whole portfolio — so Actual − Target = Drift.
+                </p>
+                {holdingRows.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">No holdings with values yet.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm" aria-label="By holding">
+                      <thead>
+                        <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground border-b">
+                          <th className="py-2 pr-2">Ticker</th>
+                          <th className="py-2 px-2 text-right">Invested</th>
+                          <th className="py-2 px-2 text-right">Actual</th>
+                          <th className="py-2 px-2 text-right">Target</th>
+                          <th className="py-2 pl-2 text-right">Drift</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {holdingRows.map((r) => {
+                          // Reconciling identity: targetPct(household) = actualPct − driftPct
+                          // (since driftPct = (actualValue − targetValue)/household and
+                          // actualPct = actualValue/household). No extra state needed.
+                          const targetPctHousehold = r.targetValue == null ? null : r.actualPct - r.driftPct;
+                          return (
+                            <tr key={r.ticker} data-testid={`holding-row-${r.ticker}`} className="border-b last:border-b-0">
+                              <td className="py-2 pr-2 font-mono">{r.ticker}</td>
+                              <td className="py-2 px-2 text-right tabular-nums text-muted-foreground">{formatCurrency(r.actualValue)}</td>
+                              <td className="py-2 px-2 text-right tabular-nums">{(r.actualPct * 100).toFixed(1)}%</td>
+                              <td className="py-2 px-2 text-right tabular-nums">{targetPctHousehold != null ? `${(targetPctHousehold * 100).toFixed(1)}%` : '—'}</td>
+                              <td className={`py-2 pl-2 text-right tabular-nums ${r.targetValue == null ? 'text-muted-foreground' : r.driftPct >= 0 ? 'text-success-foreground' : 'text-destructive'}`}>
+                                {r.targetValue == null ? '—' : `${r.driftPct >= 0 ? '+' : ''}${(r.driftPct * 100).toFixed(1)}%`}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
         ),
@@ -1199,8 +1213,9 @@ export default function Investments() {
       heldClasses,
       settings?.assetClassTargetAllocations,
       updateSettings,
-      // drift
-      driftWithTarget,
+      // drift (two tables: class household-level + holding within-class)
+      classRows,
+      holdingRows,
       // concentration
       concentration,
       // contributions

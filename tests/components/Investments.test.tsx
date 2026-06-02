@@ -795,12 +795,13 @@ describe('Investments page — 529 section', () => {
     expect(screen.queryByText("Bob's Brokerage")).not.toBeInTheDocument();
   });
 
-  it('computes ticker drift on the within-account basis (multi-account)', async () => {
-    // Two accounts, each holding a single ticker that is 100% of that
-    // account's value, each with target_allocation_pct = 1.0. Under the
-    // within-account basis the actual is 100% ⇒ 0 drift. Under the OLD
-    // household basis each holding would read ~50% (its account value over the
-    // household total) ⇒ a large negative drift.
+  it('By-holding table aggregates the same household across multiple accounts', async () => {
+    // Two accounts, one ticker each. valueHoldings splits each account's
+    // snapshot by share count: VTI = 40k, BND = 60k; household total 100k. The
+    // By-holding table (I10) lists every position with its Invested $ and a
+    // household-basis Actual %. With no household class targets seeded, Target
+    // and Drift render "—" (untargeted), but the positions still surface so the
+    // user sees the whole portfolio.
     primeStores({
       accounts: [
         { id: 1, name: 'Acct One', type: AccountType.ACCOUNT_BROKERAGE },
@@ -822,9 +823,14 @@ describe('Investments page — 529 section', () => {
       </MemoryRouter>,
     );
 
-    // Each holding is 100% of its own account ⇒ within-account actual 100% ⇒
-    // 0 drift. At least two drift cells read "0.0%"/"+0.0%".
-    const driftCells = await screen.findAllByText(/^\+?0\.0%$/);
-    expect(driftCells.length).toBeGreaterThanOrEqual(2);
+    // The By-holding table renders both tickers with their household actual %.
+    const byHolding = await screen.findByRole('table', { name: /by holding/i });
+    const vtiRow = within(byHolding).getByTestId('holding-row-VTI');
+    expect(vtiRow).toHaveTextContent('VTI');
+    expect(vtiRow).toHaveTextContent('$40,000'); // Invested $ (40k of 100k)
+    expect(vtiRow).toHaveTextContent('40.0%'); // household actual
+    const bndRow = within(byHolding).getByTestId('holding-row-BND');
+    expect(bndRow).toHaveTextContent('$60,000');
+    expect(bndRow).toHaveTextContent('60.0%');
   });
 });

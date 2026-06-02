@@ -49,9 +49,16 @@ describe('investments card registry contract', () => {
 // (the page only cares that the next render sees the updated layout).
 // -----------------------------------------------------------------------------
 
+// Mutable controller so individual tests can pin asset_class lookups for the
+// per-ticker `tickers` SELECT. Defaults to "[]" (every ticker falls back to
+// AssetClass.OTHER) — fine for the edit-mode tests that don't assert on the
+// allocation/target tables.
+const dbSelectImpl: { current: (sql: string, params?: unknown[]) => Promise<unknown[]> } = {
+  current: async () => [],
+};
 vi.mock('@/db/db', () => ({
   getDatabase: () => ({
-    select: async () => [],
+    select: (sql: string, params?: unknown[]) => dbSelectImpl.current(sql, params),
   }),
 }));
 
@@ -80,6 +87,7 @@ const baseSettings: AppSettings = {
   defaultDrawdownTaxRate: null,
   propertyUtilitiesCategoryIds: null,
   vehicleGasCategoryIds: null,
+  assetClassTargetAllocations: null,
 };
 
 function primeBaseStores(initialLayout: CardLayoutEntry[] | null = null) {
@@ -179,6 +187,7 @@ function primeBaseStores(initialLayout: CardLayoutEntry[] | null = null) {
 
 describe('Investments cards edit mode', () => {
   beforeEach(() => {
+    dbSelectImpl.current = async () => [];
     primeBaseStores();
   });
 
@@ -277,5 +286,76 @@ describe('Investments cards edit mode', () => {
     );
     expect(labelInStrip).toBeDefined();
     expect(labelInStrip!.className).toMatch(/line-through/);
+  });
+});
+
+describe('Investments Target vs Actual — two sibling tables', () => {
+  beforeEach(() => {
+    // Pin asset_class so VTI/BND land in distinct classes (not "Other").
+    dbSelectImpl.current = async () => [
+      { ticker: 'VTI', asset_class: 'US_TOTAL_MARKET' },
+      { ticker: 'BND', asset_class: 'US_BONDS' },
+    ];
+  });
+
+  // VTI shareCount 6 + BND shareCount 4, snapshot 1000 ⇒ valueHoldings splits
+  // by share count: VTI 600, BND 400; household total 1000. VTI carries a
+  // per-ticker target (1.0 → within-class share 1.0 since it's the only
+  // US_TOTAL_MARKET holding). Class targets 50/50.
+  function primeTargetStores() {
+    primeBaseStores();
+    useHoldingsStore.setState({
+      holdings: [
+        { id: 1, accountId: 1, ticker: 'VTI', shareCount: 6, targetAllocationPct: 1.0, costBasis: null },
+        { id: 2, accountId: 1, ticker: 'BND', shareCount: 4, targetAllocationPct: null, costBasis: null },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    });
+    useSettingsStore.setState({
+      settings: {
+        ...baseSettings,
+        assetClassTargetAllocations: [
+          { assetClass: 'US_TOTAL_MARKET', targetPct: 0.5 },
+          { assetClass: 'US_BONDS', targetPct: 0.5 },
+        ],
+      },
+      isLoading: false,
+      error: null,
+      load: async () => {},
+      update: async () => {},
+    });
+  }
+
+  it('renders a By-asset-class and a By-holding table with Invested and the dual-basis caption', async () => {
+    primeTargetStores();
+    render(
+      <MemoryRouter>
+        <Investments />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByRole('table', { name: /by asset class/i })).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: /by holding/i })).toBeInTheDocument();
+    // Invested column renders a currency value (DriftRow.value surfaced). The
+    // By-class table DROPPED "Target $" (Design H3) — do NOT assert it.
+    expect(screen.getByTestId('class-row-US_BONDS')).toHaveTextContent('$');
+    // Dual-basis caption present (UX H2/H3, Finance M2).
+    expect(screen.getByText(/share of its asset-class target/i)).toBeInTheDocument();
+  });
+
+  it('renders the By-holding Target on the household basis so Actual − Target = Drift', async () => {
+    primeTargetStores();
+    render(
+      <MemoryRouter>
+        <Investments />
+      </MemoryRouter>,
+    );
+    // VTI: actual 60% (600/1000), within-class target$ = 1.0 × 0.5 × 1000 = 500
+    // ⇒ household target 50%, drift +10%. 60 − 50 = 10 reconciles.
+    const vtiRow = await screen.findByTestId('holding-row-VTI');
+    expect(vtiRow).toHaveTextContent('60.0%'); // actual (household)
+    expect(vtiRow).toHaveTextContent('50.0%'); // target (household, = actual − drift)
+    expect(vtiRow).toHaveTextContent('+10.0%'); // drift
   });
 });
