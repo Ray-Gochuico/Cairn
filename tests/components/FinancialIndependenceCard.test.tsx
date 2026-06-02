@@ -167,8 +167,10 @@ describe('FinancialIndependenceCard', () => {
   });
 
   it('headline parses to a finite years value within a sensible range for the seeded fixture', () => {
-    // $200k pv, $24k/yr pmt, target $1.5M (5000*12/0.04), Moderate=6%
-    // -> roughly 18-25 years (should be finite and well within (5, 50))
+    // $200k pv, $24k/yr pmt, target $1.5M (5000*12/0.04), Moderate=6%.
+    // H1: years are solved on the REAL rate (6% nominal → (1.06/1.025)−1 =
+    // 3.4146% real, settings.defaultInflation falls back to 2.5% with no
+    // settings primed) → ~26.6 years. Still finite and well within (5, 50).
     primeStores();
     render(
       <MemoryRouter>
@@ -341,6 +343,31 @@ describe('FinancialIndependenceCard', () => {
     ).toMatchObject({
       annualContribution: 60000,
     });
+  });
+
+  it('H1: solves on REAL rates — Moderate 6% headline is ~26.6y (not the ~19.8y nominal solve)', () => {
+    // pv=$200k, pmt=$24k/yr, target=$1.5M, Moderate=6% nominal.
+    // Nominal solve = 19.78y; REAL solve (6%→3.4146% at 2.5% inflation) = 26.56y.
+    // The headline must reflect the larger, real-rate figure (the bug fix).
+    primeStores({ scenarios: [{ label: 'Moderate', rate: 0.06 }] });
+    render(<MemoryRouter><FinancialIndependenceCard /></MemoryRouter>);
+    const value = parseFloat(
+      screen.getByTestId('fi-headline').textContent!.replace(/[^\d.]/g, ''),
+    );
+    expect(value).toBeCloseTo(26.56, 1);
+    // Guard against a regression back to the nominal solve.
+    expect(value).toBeGreaterThan(22);
+  });
+
+  it("H1: renders a 'real (inflation-adjusted) returns — today's dollars' note", () => {
+    primeStores();
+    render(<MemoryRouter><FinancialIndependenceCard /></MemoryRouter>);
+    // "real" is wrapped in <strong>, so match the surrounding text nodes that
+    // are not split by the emphasis tag.
+    expect(
+      screen.getByText(/inflation-adjusted\) returns/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/today's dollars/i)).toBeInTheDocument();
   });
 
   it('renders the trajectory chart when seeded', () => {

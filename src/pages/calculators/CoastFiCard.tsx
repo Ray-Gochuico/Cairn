@@ -4,6 +4,7 @@ import { usePersonsStore } from '@/stores/persons-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { CalculatorCard } from './CalculatorCard';
 import { coastFi } from '@/lib/coast-fi';
+import { realRateOf } from '@/lib/calculators/real-rate';
 import { currentAge } from '@/lib/dates';
 import { formatCurrency, formatPercent } from '@/lib/format';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
@@ -92,12 +93,18 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
   const targetFv =
     values.withdrawalRate > 0 ? values.annualExpenses / values.withdrawalRate : 0;
 
+  // H1: targetFv (= annualExpenses_today / SWR) is in today's dollars (real),
+  // but growthScenarios rates are NOMINAL. Discounting a real target by a
+  // nominal rate UNDER-states the coast amount needed today. Convert each rate
+  // to REAL (Fisher) before the PV solve, using the SAME inflation source the
+  // chart's Real toggle uses (settings.defaultInflation). The displayed `rate`
+  // stays nominal (what the user configured) and the chart keeps using s.rate.
   const rows: ScenarioRow[] = (household?.growthScenarios ?? []).map((s) => ({
     label: s.label,
     rate: s.rate,
     coastNeededToday: coastFi({
       requiredAtRetirement: targetFv,
-      annualRate: s.rate,
+      annualRate: realRateOf(s.rate, inflation),
       yearsUntilRetirement: values.yearsUntilRetirement,
     }),
   }));
@@ -255,6 +262,11 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
             <span className="tabular-nums">{formatCurrency(targetFv)}</span> in{' '}
             <span className="tabular-nums">{values.yearsUntilRetirement}</span>{' '}
             {values.yearsUntilRetirement === 1 ? 'year' : 'years'}
+          </p>
+          <p className="text-xs text-muted-foreground mb-3">
+            Coast amounts assume <strong>real</strong> (inflation-adjusted)
+            returns — the target is in today's dollars, so each scenario's rate
+            is discounted by inflation before solving.
           </p>
           <table className="w-full text-sm">
             <thead>

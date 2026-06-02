@@ -234,7 +234,9 @@ describe('CoastFiCard', () => {
     );
 
     // If older snapshots leaked in, pv would be ~1.3M and percent would skyrocket.
-    // Correct pv=300k against a coast of (1.5M / 1.06^29) ~ $277k -> ~108%.
+    // H1: coast is discounted by the REAL Moderate rate (6% → (1.06/1.025)−1 =
+    // 3.4146%, settings.defaultInflation falls back to 2.5%): 1.5M / 1.034146^29
+    // ≈ $566.5k. Correct pv=300k → ~53%.
     const headline = screen.getByTestId('coastfi-headline');
     const value = parseFloat(headline.textContent!.replace(/[^\d.]/g, ''));
     expect(value).toBeGreaterThan(50);
@@ -263,6 +265,31 @@ describe('CoastFiCard', () => {
     );
     expect(screen.getByText(/Target at retirement/i)).toBeInTheDocument();
     expect(screen.getByText(/\$1,500,000/)).toBeInTheDocument();
+  });
+
+  it('H1: discounts the coast target by the REAL rate — Moderate "Coast today" ≈ $566,517 (not the ~$276,835 nominal)', () => {
+    // Single Moderate 6% scenario; target $1.5M; person born 1990-01-01, retire
+    // 65, pinned 2026-05-14 → age 36 → 29 years to retirement.
+    // Nominal discount = 1.5M / 1.06^29 = $276,835 (the OLD, optimistic figure).
+    // REAL discount (6% → (1.06/1.025)−1 = 3.4146% at 2.5% default inflation)
+    //   = 1.5M / 1.034146^29 = $566,517 (the corrected, higher coast-needed).
+    primeStores({ scenarios: [{ label: 'Moderate', rate: 0.06 }] });
+    render(<MemoryRouter><CoastFiCard /></MemoryRouter>);
+    // formatCurrency rounds to whole dollars → "$566,517".
+    expect(screen.getByText('$566,517')).toBeInTheDocument();
+    // And the old nominal figure must NOT appear.
+    expect(screen.queryByText('$276,835')).toBeNull();
+  });
+
+  it("H1: renders a 'real (inflation-adjusted) returns — today's dollars' note", () => {
+    primeStores();
+    render(<MemoryRouter><CoastFiCard /></MemoryRouter>);
+    // "real" is wrapped in <strong>, so match the surrounding text nodes that
+    // are not split by the emphasis tag.
+    expect(
+      screen.getByText(/inflation-adjusted\) returns/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/today's dollars/i)).toBeInTheDocument();
   });
 
   // ────────────────────────────────────────────────────────────────

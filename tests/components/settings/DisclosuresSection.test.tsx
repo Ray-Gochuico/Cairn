@@ -49,10 +49,10 @@ describe('Settings → Disclosures section (Legal M1/M2)', () => {
 
   it('shows each document version', () => {
     renderSection();
-    // app_wide=1.5, roadmap=1.0, learning=1.0, backtest=1.1 — versions are
+    // app_wide=1.5, roadmap=1.0, learning=1.0, backtest=1.2 — versions are
     // surfaced so a user can see which revision they are reading.
     expect(screen.getByText(/Version 1\.5/)).toBeInTheDocument();
-    expect(screen.getByText(/Version 1\.1/)).toBeInTheDocument();
+    expect(screen.getByText(/Version 1\.2/)).toBeInTheDocument();
     expect(screen.getAllByText(/Version 1\.0/).length).toBeGreaterThanOrEqual(2);
   });
 

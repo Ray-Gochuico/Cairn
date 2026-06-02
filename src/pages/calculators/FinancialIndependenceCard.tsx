@@ -69,6 +69,12 @@ export function FinancialIndependenceCard({
     defaults,
   );
 
+  // ── Chart display mode (Nominal/Real toggle) + inflation ───────────────────
+  const [displayMode, setDisplayMode] = useChartDisplayMode(cardId ?? 'financial-independence');
+  // SAME inflation source the chart's Real toggle uses (settings.defaultInflation),
+  // so the table/headline and the deflated chart agree.
+  const inflation = useSettingsStore((s) => s.settings?.defaultInflation) ?? 0.025;
+
   // ── Derived calculations (off the EDITED assumptions) ──────────────────────
   const targetFv = useMemo(() => {
     const swr = (values.withdrawalRatePct ?? 0) / 100;
@@ -86,11 +92,16 @@ export function FinancialIndependenceCard({
     if ((values.monthlyExpenses ?? 0) <= 0) return null;
     if (targetFv <= 0) return null;
 
+    // H1: targetFv is in today's dollars (real), but growthScenarios rates are
+    // NOMINAL. Pass `inflation` so the years-to-FI solve converts each rate to
+    // REAL first — otherwise a nominal balance reaches a real target too early
+    // (optimistic). The result still carries the nominal rate for display/chart.
     return financialIndependenceSeries({
       pv: values.currentPortfolio,
       annualContribution: values.annualContribution,
       targetFv,
       scenarios: household.growthScenarios,
+      inflation,
     });
   }, [
     household,
@@ -99,11 +110,8 @@ export function FinancialIndependenceCard({
     values.currentPortfolio,
     values.annualContribution,
     values.monthlyExpenses,
+    inflation,
   ]);
-
-  // ── Chart display mode (Nominal/Real toggle) ───────────────────────────────
-  const [displayMode, setDisplayMode] = useChartDisplayMode(cardId ?? 'financial-independence');
-  const inflation = useSettingsStore((s) => s.settings?.defaultInflation) ?? 0.025;
 
   const { chartData, chartSeries } = useMemo(() => {
     if (!series) return { chartData: [] as Record<string, number>[], chartSeries: [] as { dataKey: string; label: string; color: string }[] };
@@ -238,6 +246,11 @@ export function FinancialIndependenceCard({
           {formatPercent((values.withdrawalRatePct ?? 0) / 100)}
         </TermTooltip>
         )
+      </p>
+      <p className="text-xs text-muted-foreground mb-3">
+        Years assume <strong>real</strong> (inflation-adjusted) returns — the
+        target is in today's dollars, so each scenario's rate is discounted by
+        inflation before solving.
       </p>
       <table className="w-full text-sm">
         <thead>
