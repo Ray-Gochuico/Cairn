@@ -117,6 +117,13 @@ describe('Backtest page', () => {
     expect(screen.getByTestId('backtest-disclosure-callout')).toBeInTheDocument();
   });
 
+  it('notes that survival is counted before withdrawal tax (Task 4 copy)', () => {
+    // The subhead must inform users the backtest models pre-tax survival so
+    // they don't read a "success rate" as a tax-inclusive guarantee.
+    renderPage();
+    expect(screen.getByText(/before withdrawal tax/i)).toBeInTheDocument();
+  });
+
   it('toggles the chart between Lines and Bands', async () => {
     vi.useRealTimers();
     const user = userEvent.setup();

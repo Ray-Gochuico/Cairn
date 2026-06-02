@@ -308,6 +308,10 @@ describe('WhatIf — projection footnote (W7-Legal R-LWI-4)', () => {
     expect(
       within(footnote).getByText(/full model assumptions/i),
     ).toBeInTheDocument();
+    // The backtest cross-link notes it runs before withdrawal tax (Task 4).
+    expect(
+      within(footnote).getByText(/before withdrawal tax/i),
+    ).toBeInTheDocument();
   });
 
   it('renders the footnote after the milestone strip in DOM order', () => {

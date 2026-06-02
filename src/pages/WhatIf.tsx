@@ -323,6 +323,7 @@ export default function WhatIf() {
             >
               Explore with Historical Backtest →
             </Link>
+            {' '}(the backtest runs before withdrawal tax)
           </li>
           <li>
             <span className="font-medium">

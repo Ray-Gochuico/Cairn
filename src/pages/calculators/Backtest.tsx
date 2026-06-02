@@ -109,6 +109,7 @@ export default function Backtest() {
         <h1 className="text-2xl font-semibold">Historical Backtest</h1>
         <p className="text-sm text-muted-foreground">
           Replays your plan against every U.S. market starting year from 1871 onward.
+          Survival counts are before withdrawal tax — not a tax-inclusive guarantee.
           For side-by-side scenario comparison, see{' '}
           <Link
             to="/what-if"
