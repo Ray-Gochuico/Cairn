@@ -56,3 +56,95 @@ export function withinClassShares(
   }
   return shares;
 }
+
+export interface ClassTargetRow {
+  assetClass: AssetClass;
+  actualValue: number;
+  actualPct: number; // household basis
+  targetPct: number | null; // null = no target for this held class
+  targetValue: number | null; // targetPct × householdTotal
+  driftPct: number; // actualPct − targetPct (0 when no target)
+}
+
+export interface HoldingTargetRow {
+  ticker: string;
+  assetClass: AssetClass;
+  actualValue: number; // aggregated across accounts
+  actualPct: number; // household basis
+  targetValue: number | null; // withinClassShare × classTarget$ (null if class untargeted)
+  driftPct: number; // (actualValue − targetValue)/householdTotal (0 when untargeted)
+}
+
+function householdTotalOf(valuations: HoldingValuation[]): number {
+  return valuations.reduce((a, v) => a + v.value, 0);
+}
+
+function classTargetMap(targets: AssetClassTarget[] | null): Map<AssetClass, number> {
+  const m = new Map<AssetClass, number>();
+  for (const t of targets ?? []) m.set(t.assetClass, t.targetPct);
+  return m;
+}
+
+/**
+ * Household-level target-vs-actual per asset class (the "By asset class" table).
+ *
+ * `extraByClass` (optional, Finance M3) adds simulated dollars to a class's
+ * actualValue AND to the household total — used by the allocator's "after this
+ * contribution" tracking-error stat so post-buy actual %s are measured against
+ * the post-buy portfolio (the same (total + cash) basis the allocator targets).
+ * Omitted ⇒ identical to the pre-extra behavior.
+ */
+export function classTargetVsActual(
+  valuations: HoldingValuation[],
+  targets: AssetClassTarget[] | null,
+  extraByClass?: Map<AssetClass, number>,
+): ClassTargetRow[] {
+  const extra = extraByClass ?? new Map<AssetClass, number>();
+  const extraTotal = [...extra.values()].reduce((a, b) => a + b, 0);
+  const total = householdTotalOf(valuations) + extraTotal;
+  const tmap = classTargetMap(targets);
+  const byClass = new Map<AssetClass, number>();
+  for (const v of valuations) byClass.set(v.assetClass, (byClass.get(v.assetClass) ?? 0) + v.value);
+  // Union of held, targeted, and bumped classes so an over/under-target class
+  // with zero current holdings still surfaces.
+  const classes = new Set<AssetClass>([...byClass.keys(), ...tmap.keys(), ...extra.keys()]);
+  const rows: ClassTargetRow[] = [];
+  for (const cls of classes) {
+    const actualValue = (byClass.get(cls) ?? 0) + (extra.get(cls) ?? 0);
+    const actualPct = total === 0 ? 0 : actualValue / total;
+    const targetPct = tmap.has(cls) ? tmap.get(cls)! : null;
+    const targetValue = targetPct == null ? null : targetPct * total;
+    const driftPct = targetPct == null ? 0 : actualPct - targetPct;
+    rows.push({ assetClass: cls, actualValue, actualPct, targetPct, targetValue, driftPct });
+  }
+  return rows.sort((a, b) => Math.abs(b.driftPct) - Math.abs(a.driftPct));
+}
+
+/** Within-class target-vs-actual per ticker, aggregated across accounts (the "By holding" table). */
+export function holdingTargetVsActual(
+  valuations: HoldingValuation[],
+  targets: AssetClassTarget[] | null,
+): HoldingTargetRow[] {
+  const total = householdTotalOf(valuations);
+  const tmap = classTargetMap(targets);
+  const shares = withinClassShares(valuations);
+  // Aggregate value + class per ticker.
+  const tickerValue = new Map<string, number>();
+  const tickerClass = new Map<string, AssetClass>();
+  for (const v of valuations) {
+    tickerValue.set(v.holding.ticker, (tickerValue.get(v.holding.ticker) ?? 0) + v.value);
+    tickerClass.set(v.holding.ticker, v.assetClass);
+  }
+  const rows: HoldingTargetRow[] = [];
+  for (const [ticker, actualValue] of tickerValue.entries()) {
+    const cls = tickerClass.get(ticker)!;
+    const classTargetPct = tmap.get(cls);
+    const share = shares.get(ticker);
+    const targetValue =
+      classTargetPct != null && share != null ? share * classTargetPct * total : null;
+    const actualPct = total === 0 ? 0 : actualValue / total;
+    const driftPct = targetValue == null || total === 0 ? 0 : (actualValue - targetValue) / total;
+    rows.push({ ticker, assetClass: cls, actualValue, actualPct, targetValue, driftPct });
+  }
+  return rows.sort((a, b) => Math.abs(b.driftPct) - Math.abs(a.driftPct));
+}
