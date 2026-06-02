@@ -159,6 +159,46 @@ describe('SECTOR_COLORS', () => {
   });
 });
 
+describe('SECTOR_COLORS contrast', () => {
+  it('every sector color sits in the luminance band and clears >=1.45:1 on both --card backgrounds', () => {
+    for (const [name, hex] of Object.entries(SECTOR_COLORS)) {
+      const L = relativeLuminance(hex);
+      expect(L, `${name} ${hex} lum ${L.toFixed(3)}`).toBeGreaterThanOrEqual(0.08);
+      expect(L, `${name} ${hex} lum ${L.toFixed(3)}`).toBeLessThanOrEqual(0.92);
+      expect(contrastRatio(hex, CARD_LIGHT), `${name} vs light`).toBeGreaterThanOrEqual(1.45);
+      expect(contrastRatio(hex, CARD_DARK), `${name} vs dark`).toBeGreaterThanOrEqual(1.45);
+    }
+  });
+  it('no sector color is near-white (>1.6:1 vs #fff) — guards the Commodities regression', () => {
+    for (const [name, hex] of Object.entries(SECTOR_COLORS)) {
+      expect(contrastRatio(hex, '#ffffff'), `${name} ${hex}`).toBeGreaterThan(1.6);
+    }
+  });
+});
+
+describe('SECTOR_COLORS CVD distinguishability (Commodities-anchored)', () => {
+  // SCOPED ON PURPOSE to Commodities. A blanket all-pairs >=40 assertion would
+  // FAIL on a PRE-EXISTING, out-of-scope pair: Technology #3b82f6 vs Real Estate
+  // #a855f7 are min-CVD ~4 (blue/purple collapse under protan+deutan) — a known
+  // limitation of the hand-tuned sector ramp that this palette plan does NOT
+  // re-derive (see OD4). The regression THIS plan must prevent is the
+  // Commodities/Energy near-collision, so we anchor the guard on Commodities:
+  // it must stay clearly separable from EVERY other named sector under all three
+  // dichromacies. (#a16207 worst case = 71 vs Energy; was 26 with the rejected
+  // #ca8a04.) Unclassified/Misc are intentionally neutral gray and excluded.
+  it('Commodities is CVD-distinguishable (min Machado-sev1 distance >= 40) from every other named sector', () => {
+    const commodities = SECTOR_COLORS['Commodities'];
+    for (const [name, hex] of Object.entries(SECTOR_COLORS)) {
+      if (name === 'Commodities' || name === 'Unclassified' || name === 'Misc') continue;
+      const d = cvdDistance(commodities, hex);
+      expect(
+        d,
+        `Commodities ${commodities} vs ${name} ${hex}: min-CVD ${d.toFixed(0)}`,
+      ).toBeGreaterThanOrEqual(40);
+    }
+  });
+});
+
 describe('colorForSector', () => {
   it('returns the mapped hex for a known sector', () => {
     expect(colorForSector('Technology')).toBe(SECTOR_COLORS.Technology);

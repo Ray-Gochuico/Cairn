@@ -143,7 +143,7 @@ export const SECTOR_COLORS: Record<string, string> = {
   'Real Estate':             '#a855f7',
   // Pseudo-sectors derived from asset class in sector-classification.ts.
   'Fixed Income':            '#0ea5e9',
-  'Commodities':             '#facc15',
+  'Commodities':             '#a16207',
   'Crypto':                  '#f43f5e',
   // Catch-all wedges should visually recede rather than compete with named
   // sectors. Both 'Unclassified' (the pseudo-sector fallback) and 'Misc'
