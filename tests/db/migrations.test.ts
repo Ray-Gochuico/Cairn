@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { runMigrations, loadAllMigrations } from '@/db/migrations';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 describe('runMigrations', () => {
@@ -558,5 +558,56 @@ describe('0043 retires the legacy household disclosure columns', () => {
     expect(names).not.toContain('disclaimer_version_accepted');
     expect(names).not.toContain('roadmap_disclaimer_version_accepted');
     await db.close();
+  });
+});
+
+describe('migration registry completeness (guardrail)', () => {
+  // The directory of raw .sql migration files, relative to this test.
+  const MIGRATIONS_DIR = resolve(__dirname, '../../src/db/migrations');
+  // A migration filename is NNNN_snake_name.sql; the registered "version"
+  // is that name WITHOUT the .sql extension (see loadAllMigrations()).
+  const SQL_FILE_RE = /^(\d{4}_.+)\.sql$/;
+
+  function versionsOnDisk(): string[] {
+    return readdirSync(MIGRATIONS_DIR)
+      .map((f) => SQL_FILE_RE.exec(f)?.[1])
+      .filter((v): v is string => v != null)
+      .sort();
+  }
+
+  it('every .sql file on disk matches the NNNN_name.sql convention', () => {
+    // Catches a stray file (e.g. a 3-digit prefix, or a .sql.bak) that the
+    // version-extraction regex would silently drop and thus hide from the
+    // 1:1 check below.
+    const stray = readdirSync(MIGRATIONS_DIR).filter(
+      (f) => f.endsWith('.sql') && !SQL_FILE_RE.test(f),
+    );
+    expect(stray, `non-conforming .sql filenames: ${stray.join(', ')}`).toEqual([]);
+  });
+
+  it('loadAllMigrations() registers exactly the .sql files on disk (no orphans, no phantoms)', async () => {
+    const disk = versionsOnDisk();
+    const registered = (await loadAllMigrations()).map((m) => m.version).sort();
+
+    // Orphan files: a .sql on disk that the loader forgot to register —
+    // the silent-skip bug this guardrail exists to catch.
+    const orphans = disk.filter((v) => !registered.includes(v));
+    // Phantom entries: a version in the loader with no backing .sql file
+    // (e.g. a renamed/deleted file the import list still references).
+    const phantoms = registered.filter((v) => !disk.includes(v));
+
+    expect(orphans, `unregistered migration files: ${orphans.join(', ')}`).toEqual([]);
+    expect(phantoms, `registered versions with no .sql file: ${phantoms.join(', ')}`).toEqual([]);
+    // Exact-set equality as the single load-bearing assertion.
+    expect(registered).toEqual(disk);
+  });
+
+  it('registered versions are unique (no duplicate array entries)', async () => {
+    const registered = (await loadAllMigrations()).map((m) => m.version);
+    const unique = [...new Set(registered)];
+    expect(registered).toEqual(
+      expect.arrayContaining(unique),
+    );
+    expect(registered).toHaveLength(unique.length);
   });
 });
