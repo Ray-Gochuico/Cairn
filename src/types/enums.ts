@@ -189,3 +189,49 @@ export const GrantType = {
   NSO: 'NSO',
 } as const;
 export type GrantType = typeof GrantType[keyof typeof GrantType];
+
+// Learning v2 taxonomy (frozen — these strings persist in the trivia bank JSON
+// and may surface as UI labels, so the values are the user-facing form). The
+// per-question `format`/`topic` are required (+ optional `subtopic`) on
+// TriviaQuestionSchema. Changing any value after content drafting begins is a
+// re-tagging cost across the whole bank — freeze them here.
+
+// `format` — lowercase persisted values (mirrors the FiPillsPosition /
+// ProjectionDetailLevel lowercase-value precedent; read by the UI from JSON).
+export const QuestionFormat = {
+  DEFINITION: 'definition',
+  MATH: 'math',
+  ACCOUNTS: 'accounts',
+} as const;
+export type QuestionFormat = typeof QuestionFormat[keyof typeof QuestionFormat];
+
+// `topic` — the 13 frozen topics (display values; Life Events folds in
+// Education + Family, Death folds in estate/end-of-life).
+export const Topic = {
+  FOUNDATIONS: 'Foundations',
+  BUDGETING: 'Budgeting',
+  SAVINGS: 'Savings',
+  SPENDING: 'Spending',
+  CREDIT_DEBT: 'Credit & Debt',
+  INVESTMENTS: 'Investments',
+  RETIREMENT: 'Retirement',
+  INSURANCE: 'Insurance',
+  TAXES: 'Taxes',
+  JOB: 'Job',
+  HOME: 'Home',
+  LIFE_EVENTS: 'Life Events',
+  DEATH: 'Death',
+} as const;
+export type Topic = typeof Topic[keyof typeof Topic];
+
+// `subtopic` — optional, mainly for Insurance lines of coverage.
+export const Subtopic = {
+  HOME: 'Home',
+  HEALTH: 'Health',
+  LIFE: 'Life',
+  AUTO: 'Auto',
+  UMBRELLA: 'Umbrella',
+  DISABILITY: 'Disability',
+  LONG_TERM_CARE: 'Long-term care',
+} as const;
+export type Subtopic = typeof Subtopic[keyof typeof Subtopic];
