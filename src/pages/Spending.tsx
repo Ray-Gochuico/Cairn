@@ -1,5 +1,7 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { PageContainer } from '@/components/layout/PageContainer';
+import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import { MarkReimbursedDialog } from '@/components/dialogs/MarkReimbursedDialog';
 import { TransactionEditDialog } from '@/components/dialogs/TransactionEditDialog';
 import BarChartCard from '@/components/charts/BarChartCard';
@@ -40,23 +42,32 @@ export default function Spending() {
 
   const transactions = useTransactionsStore((s) => s.transactions);
   const loadTransactions = useTransactionsStore((s) => s.load);
+  const transactionsError = useTransactionsStore((s) => s.error);
   const syncRecurring = useTransactionsStore((s) => s.syncRecurring);
   const categories = useCategoriesStore((s) => s.categories);
   const loadCategories = useCategoriesStore((s) => s.load);
+  const categoriesError = useCategoriesStore((s) => s.error);
   const household = useHouseholdStore((s) => s.household);
   const loadHousehold = useHouseholdStore((s) => s.load);
+  const householdError = useHouseholdStore((s) => s.error);
   const persons = usePersonsStore((s) => s.persons);
   const loadPersons = usePersonsStore((s) => s.load);
+  const personsError = usePersonsStore((s) => s.error);
   const properties = usePropertiesStore((s) => s.properties);
   const loadProperties = usePropertiesStore((s) => s.load);
+  const propertiesError = usePropertiesStore((s) => s.error);
   const vehicles = useVehiclesStore((s) => s.vehicles);
   const loadVehicles = useVehiclesStore((s) => s.load);
+  const vehiclesError = useVehiclesStore((s) => s.error);
   const accounts = useAccountsStore((s) => s.accounts);
   const loadAccounts = useAccountsStore((s) => s.load);
+  const accountsError = useAccountsStore((s) => s.error);
   const housingPayments = useHousingPaymentsStore((s) => s.housingPayments);
   const loadHousingPayments = useHousingPaymentsStore((s) => s.load);
+  const housingPaymentsError = useHousingPaymentsStore((s) => s.error);
   const vehicleLeases = useVehicleLeasesStore((s) => s.vehicleLeases);
   const loadVehicleLeases = useVehicleLeasesStore((s) => s.load);
+  const vehicleLeasesError = useVehicleLeasesStore((s) => s.error);
 
   const { filter } = useViewFilter();
 
@@ -67,7 +78,7 @@ export default function Spending() {
   // tripped React's max-update-depth guard via a recharts internal dispatch
   // loop. Sidebar (always mounted) calls settings.load() on app start, so
   // settings is populated by the time the user reaches Spending.
-  useEffect(() => {
+  const reload = useCallback(() => {
     void Promise.all([
       loadTransactions(),
       loadCategories(),
@@ -91,6 +102,21 @@ export default function Spending() {
     loadVehicleLeases,
     syncRecurring,
   ]);
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
+  const storeErrors = [
+    transactionsError,
+    categoriesError,
+    householdError,
+    personsError,
+    propertiesError,
+    vehiclesError,
+    accountsError,
+    housingPaymentsError,
+    vehicleLeasesError,
+  ];
 
   // Filtered slice — honours the ?view=p1|p2|joint|household query param
   const visibleTransactions = useMemo(
@@ -229,7 +255,8 @@ export default function Spending() {
   );
 
   return (
-    <div className="p-8 space-y-8">
+    <PageContainer width="full" className="space-y-8">
+      <StoreErrorBanner errors={storeErrors} onRetry={reload} />
       <div className="flex items-start justify-between gap-4">
         <h1 className="text-2xl font-semibold">Spending</h1>
         <div className="flex items-center gap-2">
@@ -575,6 +602,6 @@ export default function Spending() {
           }}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }

@@ -34,6 +34,10 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Home } from 'lucide-react';
+import { PageContainer } from '@/components/layout/PageContainer';
+import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
+import { EmptyState } from '@/components/layout/EmptyState';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { ValueEditor, EquityRow } from '@/components/AssetCardParts';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
@@ -351,27 +355,41 @@ export default function Property() {
 
   const properties = usePropertiesStore((s) => s.properties);
   const loadProperties = usePropertiesStore((s) => s.load);
+  const propertiesError = usePropertiesStore((s) => s.error);
   const updateProperty = usePropertiesStore((s) => s.update);
 
   const loans = useLoansStore((s) => s.loans);
   const loadLoans = useLoansStore((s) => s.load);
+  const loansError = useLoansStore((s) => s.error);
 
   const transactions = useTransactionsStore((s) => s.transactions);
   const loadTransactions = useTransactionsStore((s) => s.load);
+  const transactionsError = useTransactionsStore((s) => s.error);
 
   const categories = useCategoriesStore((s) => s.categories);
   const loadCategories = useCategoriesStore((s) => s.load);
+  const categoriesError = useCategoriesStore((s) => s.error);
 
   const settings = useSettingsStore((s) => s.settings);
   const loadSettings = useSettingsStore((s) => s.load);
+  const settingsError = useSettingsStore((s) => s.error);
   const updateSettings = useSettingsStore((s) => s.update);
 
   const housingPayments = useHousingPaymentsStore((s) => s.housingPayments);
   const loadHousingPayments = useHousingPaymentsStore((s) => s.load);
+  const housingPaymentsError = useHousingPaymentsStore((s) => s.error);
   const { confirm, dialog } = useConfirm();
 
   const [editing, setEditing] = useState<EditTarget>(null);
 
+  const reload = () => {
+    loadProperties();
+    loadLoans();
+    loadTransactions();
+    loadCategories();
+    loadSettings();
+    loadHousingPayments();
+  };
   useEffect(() => {
     loadProperties();
     loadLoans();
@@ -387,6 +405,16 @@ export default function Property() {
     loadSettings,
     loadHousingPayments,
   ]);
+
+  const storeErrors = [
+    propertiesError,
+    loansError,
+    transactionsError,
+    categoriesError,
+    settingsError,
+    housingPaymentsError,
+  ];
+  const hasStoreError = storeErrors.some((e) => e != null);
 
   const visibleProperties = useMemo(
     () => filterByOwnerPersonId(properties, filter, persons),
@@ -465,21 +493,27 @@ export default function Property() {
 
   if (properties.length === 0 && housingPayments.length === 0) {
     return (
-      <div className="p-8 max-w-6xl">
-        <h1 className="text-2xl font-semibold mb-1">Property</h1>
-        <p className="text-sm text-muted-foreground mb-6">
-          Equity at a glance for each home.
-        </p>
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            Add properties or rentals from{' '}
-            <Link to="/inputs/properties" className="underline text-foreground">
-              Inputs
-            </Link>
-            .
-          </CardContent>
-        </Card>
-      </div>
+      <PageContainer className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold mb-1">Property</h1>
+          <p className="text-sm text-muted-foreground">
+            Equity at a glance for each home.
+          </p>
+        </div>
+        {hasStoreError ? (
+          <StoreErrorBanner errors={storeErrors} onRetry={reload} />
+        ) : (
+          <EmptyState
+            icon={Home}
+            title="No properties yet"
+            description="Add a property or rental in Inputs to see equity at a glance."
+          >
+            <Button asChild>
+              <Link to="/inputs/properties">Add a property</Link>
+            </Button>
+          </EmptyState>
+        )}
+      </PageContainer>
     );
   }
 
@@ -489,7 +523,8 @@ export default function Property() {
   }
 
   return (
-    <div className="p-8 max-w-6xl space-y-6">
+    <PageContainer className="space-y-6">
+      <StoreErrorBanner errors={storeErrors} onRetry={reload} />
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold mb-1">Property</h1>
@@ -613,6 +648,6 @@ export default function Property() {
         </section>
       )}
       {dialog}
-    </div>
+    </PageContainer>
   );
 }

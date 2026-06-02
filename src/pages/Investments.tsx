@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
@@ -44,7 +44,10 @@ import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import { FreshnessBadge } from '@/components/ui/freshness-badge';
 import type { CsvColumn } from '@/lib/csv';
 import { topEffectiveExposures, type ConcentrationWarning } from '@/lib/concentration';
-import { AlertTriangleIcon } from 'lucide-react';
+import { AlertTriangleIcon, PieChart } from 'lucide-react';
+import { PageContainer } from '@/components/layout/PageContainer';
+import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
+import { EmptyState } from '@/components/layout/EmptyState';
 import { YahooClient } from '@/market/yahoo-client';
 import { TickersRepo } from '@/domain/tickers';
 import { FundHoldingsRepo } from '@/domain/fund-holdings';
@@ -269,20 +272,27 @@ export default function Investments() {
 
   const accounts = useAccountsStore((s) => s.accounts);
   const loadAccounts = useAccountsStore((s) => s.load);
+  const accountsError = useAccountsStore((s) => s.error);
   const holdings = useHoldingsStore((s) => s.holdings);
   const loadHoldings = useHoldingsStore((s) => s.load);
+  const holdingsError = useHoldingsStore((s) => s.error);
   const snapshots = useSnapshotsStore((s) => s.snapshots);
   const loadSnapshots = useSnapshotsStore((s) => s.load);
+  const snapshotsError = useSnapshotsStore((s) => s.error);
   const contributions = useContributionsStore((s) => s.contributions);
   const loadContributions = useContributionsStore((s) => s.load);
+  const contributionsError = useContributionsStore((s) => s.error);
   const dependents = useDependentsStore((s) => s.dependents);
   const loadDependents = useDependentsStore((s) => s.load);
+  const dependentsError = useDependentsStore((s) => s.error);
   const household = useHouseholdStore((s) => s.household);
   const loadHousehold = useHouseholdStore((s) => s.load);
+  const householdError = useHouseholdStore((s) => s.error);
   // Settings drives the Investments card-layout overlay (id order + hidden
   // flags). null === default flow; see applyCardLayout() for semantics.
   const settings = useSettingsStore((s) => s.settings);
   const loadSettings = useSettingsStore((s) => s.load);
+  const settingsError = useSettingsStore((s) => s.error);
   const updateSettings = useSettingsStore((s) => s.update);
   // Tickers + fund holdings power the Concentration Health section below.
   // Loaded here so useConcentration() sees populated stores on first paint.
@@ -291,7 +301,7 @@ export default function Investments() {
   const loadFundHoldings = useFundHoldingsStore((s) => s.load);
   const loadFundSectors = useFundSectorsStore((s) => s.load);
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     loadAccounts();
     loadHoldings();
     loadSnapshots();
@@ -314,6 +324,24 @@ export default function Investments() {
     loadFundHoldings,
     loadFundSectors,
   ]);
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
+  // Errors from the core investment data stores (page-level only — does NOT
+  // touch the concentration/donut data flow). Surfaced as a banner so a load
+  // failure reads as recoverable, and the empty-state copy below is suppressed
+  // when set.
+  const storeErrors = [
+    accountsError,
+    holdingsError,
+    snapshotsError,
+    contributionsError,
+    dependentsError,
+    householdError,
+    settingsError,
+  ];
+  const hasStoreError = storeErrors.some((e) => e != null);
 
   // Filter accounts by the household / p1 / p2 / joint dropdown. Holdings,
   // snapshots, and contributions all scope to "visible accounts" — they
@@ -1305,35 +1333,40 @@ export default function Investments() {
   // are also no 529 plans to surface.
   if (!hasAnyHolding && !hasAnySnapshot && plans529.length === 0) {
     return (
-      <div className="p-8 max-w-6xl">
-        <h1 className="text-2xl font-semibold mb-1">Investments</h1>
-        <p className="text-sm text-muted-foreground mb-6">
-          Asset allocation, <TermTooltip term="DRIFT">drift</TermTooltip> from your targets, and contribution trends.
-        </p>
+      <PageContainer className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-semibold mb-1">Investments</h1>
+          <p className="text-sm text-muted-foreground">
+            Asset allocation, <TermTooltip term="DRIFT">drift</TermTooltip> from your targets, and contribution trends.
+          </p>
+        </div>
         {/*
-         * Empty-state pattern mirrors Goals (src/pages/Goals.tsx:435-442) so
-         * the three "you haven't entered data yet" pages — Goals, Net Worth,
-         * Investments — surface the same Card + friendly copy + primary-button
-         * CTA. Prior layout was a single inline link to Inputs which dropped
-         * the user into the sidebar with no obvious next step. Routing the
-         * CTA at /inputs/accounts is the right entry: Investments combines
-         * account-level holdings and snapshots — and accounts is the parent
-         * of both. (529 plans also live under /inputs/accounts.)
+         * Distinguish "empty because new" from "empty because the load failed":
+         * a consumed-store error shows the recoverable banner; otherwise the
+         * normalized EmptyState. The CTA routes to /inputs/accounts — Investments
+         * combines account-level holdings and snapshots, and accounts is the
+         * parent of both. (529 plans also live under /inputs/accounts.)
          */}
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground space-y-3">
-            <div>No investment holdings yet — set up accounts and holdings in Inputs.</div>
+        {hasStoreError ? (
+          <StoreErrorBanner errors={storeErrors} onRetry={reload} />
+        ) : (
+          <EmptyState
+            icon={PieChart}
+            title="No investment holdings yet"
+            description="Set up accounts and holdings in Inputs to see your asset allocation and drift."
+          >
             <Button asChild>
               <Link to="/inputs/accounts">Add an account</Link>
             </Button>
-          </CardContent>
-        </Card>
-      </div>
+          </EmptyState>
+        )}
+      </PageContainer>
     );
   }
 
   return (
-    <div className="p-8 max-w-6xl space-y-6">
+    <PageContainer className="space-y-6">
+      <StoreErrorBanner errors={storeErrors} onRetry={reload} />
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1 flex-wrap">
@@ -1474,6 +1507,6 @@ export default function Investments() {
       ) : (
         <div className="space-y-6">{renderCardFlow(visibleCards)}</div>
       )}
-    </div>
+    </PageContainer>
   );
 }

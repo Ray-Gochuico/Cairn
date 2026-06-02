@@ -16,6 +16,16 @@ export type ViewFilter = 'household' | 'p1' | 'p2' | 'joint';
  * Dashboard alone calls this hook + several `filterByView` helpers each
  * render. Narrowing to `s.persons` restricts the subscription to the only
  * field this hook actually reads.
+ *
+ * Availability (Frontend M3): this hook derives `isAvailable` from
+ * `persons.length === 2` but does NOT load persons itself — it is called on
+ * hot render paths (Dashboard calls it plus several `filterByView` helpers
+ * each render), so triggering a side-effecting load from here is the wrong
+ * altitude. Persons are loaded ONCE in `PageShell`, which wraps every routed
+ * page via <Outlet>, so the list is reliably populated for any navigation —
+ * including a deep-link to a page that doesn't load persons in its own effect.
+ * Previously no app-wide loader owned persons, so such deep-links left the
+ * per-person filter silently hidden.
  */
 export function useViewFilter() {
   const [params, setParams] = useSearchParams();

@@ -66,8 +66,12 @@ function makeLoan(overrides: Partial<Loan> = {}): Loan {
 }
 
 function resetStores() {
-  useLoansStore.setState({ loans: [], isLoading: false, error: null });
-  usePersonsStore.setState({ persons: [], isLoading: false, error: null });
+  // Stub load() so the page's reload effect (and the new StoreErrorBanner's
+  // retry) don't hit a real DB — an unstubbed load() throws via getDatabase()
+  // and sets `error`, which the banner would then surface in place of the
+  // empty state.
+  useLoansStore.setState({ loans: [], isLoading: false, error: null, load: async () => {} });
+  usePersonsStore.setState({ persons: [], isLoading: false, error: null, load: async () => {} });
 }
 
 function renderLoans() {

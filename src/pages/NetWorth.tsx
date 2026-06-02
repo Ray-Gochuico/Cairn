@@ -1,5 +1,6 @@
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { Wallet } from 'lucide-react';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
@@ -21,6 +22,9 @@ import {
   CardHeader,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { PageContainer } from '@/components/layout/PageContainer';
+import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
+import { EmptyState } from '@/components/layout/EmptyState';
 import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 import { FreshnessBadge } from '@/components/ui/freshness-badge';
 import NetWorthTimeSeriesChart from '@/components/charts/NetWorthTimeSeriesChart';
@@ -171,25 +175,42 @@ export default function NetWorth() {
 
   const snapshots = useSnapshotsStore((s) => s.snapshots);
   const loadSnapshots = useSnapshotsStore((s) => s.load);
+  const snapshotsError = useSnapshotsStore((s) => s.error);
   const properties = usePropertiesStore((s) => s.properties);
   const loadProperties = usePropertiesStore((s) => s.load);
+  const propertiesError = usePropertiesStore((s) => s.error);
   const vehicles = useVehiclesStore((s) => s.vehicles);
   const loadVehicles = useVehiclesStore((s) => s.load);
+  const vehiclesError = useVehiclesStore((s) => s.error);
   const loans = useLoansStore((s) => s.loans);
   const loadLoans = useLoansStore((s) => s.load);
+  const loansError = useLoansStore((s) => s.error);
   // Accounts are loaded so the view filter can scope snapshots to accounts
   // owned by the selected person (snapshots themselves carry no owner field;
   // they inherit ownership from their parent account).
   const accounts = useAccountsStore((s) => s.accounts);
   const loadAccounts = useAccountsStore((s) => s.load);
+  const accountsError = useAccountsStore((s) => s.error);
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     loadSnapshots();
     loadProperties();
     loadVehicles();
     loadLoans();
     loadAccounts();
   }, [loadSnapshots, loadProperties, loadVehicles, loadLoans, loadAccounts]);
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
+  const storeErrors = [
+    snapshotsError,
+    propertiesError,
+    vehiclesError,
+    loansError,
+    accountsError,
+  ];
+  const hasStoreError = storeErrors.some((e) => e != null);
 
   // Apply the view filter as the data-prep step — every derivation below
   // reads from these filtered slices and stays oblivious to the dropdown.
@@ -295,8 +316,8 @@ export default function NetWorth() {
 
   if (!hasAnyData) {
     return (
-      <div className="p-8 max-w-6xl">
-        <div className="flex items-start justify-between gap-4 mb-6">
+      <PageContainer className="space-y-6">
+        <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold mb-1">Net Worth</h1>
             <p className="text-sm text-muted-foreground">
@@ -307,29 +328,32 @@ export default function NetWorth() {
           <ImportCsvButton entity="snapshot" />
         </div>
         {/*
-         * Empty-state pattern mirrors Goals (src/pages/Goals.tsx:435-442) so
-         * the three "you haven't entered data yet" pages — Goals, Net Worth,
-         * Investments — surface the same Card + friendly copy + primary-button
-         * CTA. Prior layout was a single inline `<a>` to Inputs which dropped
-         * the user into the sidebar with no obvious next step. Routing the
-         * CTA at /inputs/accounts is the right entry: Net Worth combines
-         * account snapshots, properties, vehicles, and loan balances — and
-         * accounts is where most users start.
+         * Distinguish "empty because new" from "empty because the load failed":
+         * a consumed-store error shows the recoverable banner; otherwise the
+         * normalized EmptyState. The CTA routes to /inputs/accounts — Net Worth
+         * combines account snapshots, properties, vehicles, and loan balances,
+         * and accounts is where most users start.
          */}
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground space-y-3">
-            <div>No net worth snapshots yet — set up your accounts in Inputs.</div>
+        {hasStoreError ? (
+          <StoreErrorBanner errors={storeErrors} onRetry={reload} />
+        ) : (
+          <EmptyState
+            icon={Wallet}
+            title="No net worth snapshots yet"
+            description="Set up your accounts in Inputs to start tracking your wealth over time."
+          >
             <Button asChild>
               <Link to="/inputs/accounts">Add an account</Link>
             </Button>
-          </CardContent>
-        </Card>
-      </div>
+          </EmptyState>
+        )}
+      </PageContainer>
     );
   }
 
   return (
-    <div className="p-8 max-w-6xl space-y-6">
+    <PageContainer className="space-y-6">
+      <StoreErrorBanner errors={storeErrors} onRetry={reload} />
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1 flex-wrap">
@@ -391,6 +415,6 @@ export default function NetWorth() {
         <AssetsDonut />
         <LiabilitiesDonut />
       </div>
-    </div>
+    </PageContainer>
   );
 }

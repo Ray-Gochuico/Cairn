@@ -236,6 +236,52 @@ describe('AppDisclaimerGate', () => {
     vi.restoreAllMocks();
   });
 
+  it('renders children for a GENUINE first-runner (household null, no household error)', () => {
+    // The household store resolved with no row (brand-new install) and reported
+    // no error. This is the real first-run path — defer to the Setup Wizard's
+    // Step 0, do NOT block with the app_wide modal.
+    useHouseholdStore.setState({
+      household: null,
+      isLoading: false,
+      error: null,
+      load: vi.fn().mockResolvedValue(undefined),
+    } as any);
+    seedAcceptances({});
+    renderGate();
+    expect(screen.getByTestId('app-child')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: DISCLOSURES.app_wide.title })).toBeNull();
+  });
+
+  it('fails CLOSED when the household LOAD failed (household null BUT household error set)', () => {
+    // Frontend M1: a household-store load FAILURE also lands on `household ===
+    // null`. The old gate treated that as first-run and rendered un-consented
+    // children. It must instead fail closed — we cannot prove the user is a
+    // genuine first-runner (vs. a returning user whose settings simply failed
+    // to load), so block with a calm "couldn't verify your settings" state
+    // rather than bypass the disclaimer. We deliberately do NOT re-present the
+    // ACCEPT modal here: accepting wouldn't clear the household error, so the
+    // user would be stuck re-accepting in a loop. A Reload that re-runs the
+    // household load() is the correct recovery.
+    const householdLoad = vi.fn().mockResolvedValue(undefined);
+    useHouseholdStore.setState({
+      household: null,
+      isLoading: false,
+      error: 'household projection read failed',
+      load: householdLoad,
+    } as any);
+    // Acceptances loaded fine; the failure is specifically the household read.
+    seedAcceptances({ app_wide: DISCLOSURES.app_wide.version });
+    renderGate();
+    // The protected children are NOT rendered.
+    expect(screen.queryByTestId('app-child')).not.toBeInTheDocument();
+    // A calm, reassuring block state is shown (not the empty/first-run path).
+    expect(screen.getByText(/couldn’t (verify|load) your settings/i)).toBeInTheDocument();
+    // The Reload affordance re-runs the household load().
+    householdLoad.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: /reload|retry/i }));
+    expect(householdLoad).toHaveBeenCalled();
+  });
+
   it('fails CLOSED BY CONSTRUCTION: status error blocks even with a CURRENT cached accepted version', () => {
     // The store's catch sets status 'error' WITHOUT clearing acceptedVersions,
     // so a returning user whose prior successful load cached the CURRENT

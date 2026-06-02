@@ -4,6 +4,8 @@ import { useVirtualizer, observeElementRect, observeElementOffset } from '@tanst
 import { ChevronLeftIcon, PencilIcon, XIcon, CheckIcon } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import DatePicker from '@/components/ui/DatePicker';
+import { PageContainer } from '@/components/layout/PageContainer';
+import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useAccountsStore } from '@/stores/accounts-store';
@@ -142,14 +144,18 @@ const TransactionRow = memo(function TransactionRow({
 export default function SpendingTransactions() {
   const transactions = useTransactionsStore((s) => s.transactions);
   const loadTransactions = useTransactionsStore((s) => s.load);
+  const transactionsError = useTransactionsStore((s) => s.error);
   const update = useTransactionsStore((s) => s.update);
   const remove = useTransactionsStore((s) => s.remove);
   const categories = useCategoriesStore((s) => s.categories);
   const loadCategories = useCategoriesStore((s) => s.load);
+  const categoriesError = useCategoriesStore((s) => s.error);
   const accounts = useAccountsStore((s) => s.accounts);
   const loadAccounts = useAccountsStore((s) => s.load);
+  const accountsError = useAccountsStore((s) => s.error);
   const persons = usePersonsStore((s) => s.persons);
   const loadPersons = usePersonsStore((s) => s.load);
+  const personsError = usePersonsStore((s) => s.error);
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draft, setDraft] = useState<RowEditState | null>(null);
@@ -159,9 +165,15 @@ export default function SpendingTransactions() {
 
   const { filter } = useViewFilter();
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     void Promise.all([loadTransactions(), loadCategories(), loadAccounts(), loadPersons()]);
   }, [loadTransactions, loadCategories, loadAccounts, loadPersons]);
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
+  const storeErrors = [transactionsError, categoriesError, accountsError, personsError];
+  const hasStoreError = storeErrors.some((e) => e != null);
 
   const visibleTransactions = useMemo(
     () => filterByPersonId(transactions, filter, persons),
@@ -302,7 +314,7 @@ export default function SpendingTransactions() {
       : 0;
 
   return (
-    <div className="p-8 space-y-6 h-full flex flex-col">
+    <PageContainer width="full" className="space-y-6 h-full flex flex-col">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <Link
@@ -319,7 +331,16 @@ export default function SpendingTransactions() {
         </p>
       </div>
 
-      {transactions.length === 0 ? (
+      <StoreErrorBanner errors={storeErrors} onRetry={reload} />
+
+      {/*
+       * Suppress the "No transactions yet" empty copy when a load failed
+       * (Frontend H1): an errored load also leaves `transactions` empty, and
+       * showing the friendly "import a statement" prompt would wrongly imply
+       * the user simply has no data. The banner above explains the failure;
+       * here we just render nothing extra until the retry succeeds.
+       */}
+      {hasStoreError ? null : transactions.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           No transactions yet. Import a statement from{' '}
           <Link to="/spending" className="underline text-foreground">Spending</Link> to get started.
@@ -483,6 +504,6 @@ export default function SpendingTransactions() {
           </table>
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 }

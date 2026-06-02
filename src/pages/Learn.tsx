@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
+import { PageContainer } from '@/components/layout/PageContainer';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import { useDisclosureGate } from '@/legal/useDisclosureGate';
 import { DisclosureModal } from '@/legal/DisclosureModal';
@@ -88,9 +89,9 @@ export default function Learn() {
 
   if (!household) {
     return (
-      <div className="p-6 max-w-3xl mx-auto">
+      <PageContainer width="prose">
         <div className="text-sm text-muted-foreground">Set up your household to start learning.</div>
-      </div>
+      </PageContainer>
     );
   }
 
@@ -99,9 +100,9 @@ export default function Learn() {
   // content for the frame before the gate resolves.
   if (acceptancesStatus === 'loading') {
     return (
-      <div className="p-6 max-w-3xl mx-auto">
+      <PageContainer width="prose">
         <div className="text-sm text-muted-foreground">Loading…</div>
-      </div>
+      </PageContainer>
     );
   }
 
@@ -119,14 +120,14 @@ export default function Learn() {
   // SEC-1: the bank failed to load/validate. Calm, honest error state.
   if (bankError) {
     return (
-      <div className="p-6 max-w-3xl mx-auto">
+      <PageContainer width="prose">
         <Card className="p-6 space-y-2">
           <h1 className="text-2xl font-semibold">Learn</h1>
           <p className="text-sm text-muted-foreground">
             We couldn't load today's questions. Please refresh, or try again later.
           </p>
         </Card>
-      </div>
+      </PageContainer>
     );
   }
 
@@ -201,7 +202,7 @@ export default function Learn() {
   };
 
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-4">
+    <PageContainer width="prose" className="space-y-4">
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Learn</h1>
@@ -252,7 +253,7 @@ export default function Learn() {
           <span aria-hidden>ⓘ</span> Educational — general financial-literacy content, not personalized advice.
         </div>
       </Card>
-    </div>
+    </PageContainer>
   );
 }
 

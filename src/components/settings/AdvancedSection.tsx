@@ -214,7 +214,7 @@ export function AdvancedSection() {
           <span>Advanced</span>
           <button
             type="button"
-            className="text-slate-500 hover:text-slate-900"
+            className="text-muted-foreground hover:text-foreground"
             aria-label={open ? 'Collapse Advanced' : 'Expand Advanced'}
             aria-expanded={open}
             onClick={(e) => {
@@ -230,7 +230,7 @@ export function AdvancedSection() {
         <CardContent className="space-y-6">
           <section>
             <h4 className="text-sm font-medium mb-1">Interest-rate thresholds</h4>
-            <p className="text-xs text-slate-500 mb-3">
+            <p className="text-xs text-muted-foreground mb-3">
               Default cutoffs are 5% (low) and 8% (high). Leave blank to use the defaults.
             </p>
             <div className="flex flex-wrap items-end gap-3">
@@ -270,7 +270,7 @@ export function AdvancedSection() {
 
           <section className="space-y-2">
             <h4 className="text-sm font-medium mb-1">What-If projection defaults</h4>
-            <p className="text-xs text-slate-500 mb-2">
+            <p className="text-xs text-muted-foreground mb-2">
               Defaults to 2.5% inflation and 7.0% return when blank. Used by the What-If chart&apos;s
               nominal/real toggle and the Returns lever fallback.
             </p>
@@ -363,7 +363,7 @@ export function AdvancedSection() {
                 aria-invalid={cashApyInvalid}
                 className="w-32"
               />
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 Used when an account&apos;s APY is blank. Falls through to 0% if also blank.
               </p>
             </div>
@@ -394,7 +394,7 @@ export function AdvancedSection() {
                 <option value={CompoundingFrequency.QUARTERLY}>Quarterly</option>
                 <option value={CompoundingFrequency.ANNUALLY}>Annually</option>
               </select>
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 Applies to investment returns and cash APY in new scenarios.
               </p>
             </div>
@@ -419,7 +419,7 @@ export function AdvancedSection() {
                 aria-invalid={drawdownTaxRateInvalid}
                 className="w-32"
               />
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 Applied when What-If scenarios use the &quot;sequential&quot;
                 withdrawal strategy. Default 22% (covers federal + average
                 state for a $60k/yr drawdown). Leave blank to model
@@ -454,7 +454,7 @@ export function AdvancedSection() {
                   <Label className="text-sm font-normal">
                     Property utilities categories
                   </Label>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-muted-foreground">
                     Used by the Utilities card on every Property page. Falls back to
                     &quot;Home &rsaquo; Utilities&quot; when nothing is selected.
                   </p>
@@ -473,7 +473,7 @@ export function AdvancedSection() {
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <Label className="text-sm font-normal">Vehicle gas categories</Label>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-xs text-muted-foreground">
                     Used by the Gas card on every Vehicle page. Falls back to
                     &quot;Vehicles &rsaquo; Gas/Fuel&quot; when nothing is selected.
                   </p>
@@ -494,7 +494,7 @@ export function AdvancedSection() {
 
           <section className="space-y-2">
             <h4 className="text-sm font-medium mb-1">Bulk data import</h4>
-            <p className="text-xs text-slate-500 mb-2">
+            <p className="text-xs text-muted-foreground mb-2">
               Re-open the setup wizard&apos;s history section to bulk-import
               account snapshots, asset value snapshots, contributions, or
               transactions.
@@ -508,7 +508,7 @@ export function AdvancedSection() {
             <h4 className="text-sm font-medium mb-1">
               Reset disclaimer acceptances
             </h4>
-            <p className="text-xs text-slate-500 mb-2">
+            <p className="text-xs text-muted-foreground mb-2">
               Clear the accepted-version flags so the app re-prompts at next
               launch and next Roadmap open. Useful for testing.
             </p>
