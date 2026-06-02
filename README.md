@@ -26,25 +26,31 @@ frequently.
 
 ## Install
 
-The app is distributed as an unsigned zipped `.app` bundle (Apple Silicon
-Macs). No App Store, no installer — just download, unzip, drag, and open.
+The app is distributed as an unsigned, gzip-tarred `.app` bundle (Apple
+Silicon Macs). No App Store, no installer — just download, unarchive,
+drag, and open.
 
-> **Why `.app.zip` and not `.dmg`?** `bundle_dmg.sh` (Tauri's DMG bundler)
-> fails on macOS 26 because its AppleScript-driven Finder window positioning
-> step needs Automation permissions that don't exist in a headless build
-> context. The zipped `.app` flow ships the same binary without the broken
-> intermediate step. We can revisit `.dmg` once Tauri or macOS resolves the
-> `bundle_dmg.sh` issue.
+> **Why `.app.tar.gz` (and not `.dmg` or `.app.zip`)?** Two reasons.
+> First, `bundle_dmg.sh` (Tauri's DMG bundler) fails on macOS 26 — its
+> AppleScript-driven Finder window positioning step needs Automation
+> permissions that don't exist in a headless build context, so there's
+> no `.dmg`. Second, the in-app updater requires gzip+tar: the Tauri 2
+> macOS updater unpacks the archive with `GzDecoder` + `tar` and has no
+> `.zip` support (that's Windows-only), so a `.zip` would pass the
+> signature check and then fail to install. Shipping the same
+> `.app.tar.gz` for both manual download and the updater keeps one
+> artifact. macOS Archive Utility unarchives `.tar.gz` on double-click,
+> same as a `.zip`.
 
 **Download the latest build:**
 <https://github.com/raymondgochuico/cairn/releases/latest>
 
-Grab the file named `Cairn_<version>_aarch64.app.zip`.
+Grab the file named `Cairn_<version>_aarch64.app.tar.gz`.
 
 **Then:**
 
-1. Double-click the downloaded `.app.zip` to unzip it. macOS produces
-   `Cairn.app` in the same folder.
+1. Double-click the downloaded `.app.tar.gz` to unarchive it. macOS
+   produces `Cairn.app` in the same folder.
 2. Drag `Cairn.app` into the `Applications` folder.
 3. **First time only — right-click `Cairn.app` in `Applications`, choose
    "Open", then click "Open" again in the dialog that appears.** macOS
@@ -66,8 +72,11 @@ open any unsigned app from outside the App Store. After approving once, the
 dialog never appears again. The app itself is the same code you can read in
 this repo; nothing is hidden by the signing absence.
 
-If/when Cairn ever scales beyond friends, the build process is set up to
-add code signing in one line — see `src-tauri/SIGNING.md`.
+If/when Cairn ever scales beyond friends, code signing is a multi-step
+project, not a one-liner: enroll in the Apple Developer Program ($99/yr),
+issue a Developer ID Application certificate, set `signingIdentity` in
+`tauri.conf.json`, then notarize and staple the build. The steps are
+listed in `src-tauri/SIGNING.md`.
 
 ## Privacy
 

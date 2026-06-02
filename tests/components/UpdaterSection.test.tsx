@@ -19,7 +19,7 @@ import { resolve } from 'node:path';
 import { glob } from 'node:fs/promises';
 
 vi.mock('@tauri-apps/api/app', () => ({
-  getVersion: vi.fn(async () => '0.1.0'),
+  getVersion: vi.fn(async () => '1.0.0'),
 }));
 
 vi.mock('@tauri-apps/plugin-updater', () => ({

@@ -10,22 +10,34 @@ name: Release
 #   TAURI_UPDATER_PRIVATE_KEY_PASSWORD  — only if the key has a password
 #                                         (the current key has none — leave unset)
 #
-# If TAURI_UPDATER_PRIVATE_KEY is not set, the "Sign .app.zip" step fails
-# and no release is published. That's intentional — an unsigned update
-# wouldn't verify against the public key shipped in the app, and the
-# updater plugin would refuse to install it.
+# If TAURI_UPDATER_PRIVATE_KEY is not set, the "Sign .app.tar.gz" step
+# fails and no release is published. That's intentional — an unsigned
+# update wouldn't verify against the public key shipped in the app, and
+# the updater plugin would refuse to install it.
+#
+# WHY .app.tar.gz (gzip+tar), NOT .app.zip:
+#   - The Tauri 2 macOS updater can ONLY extract gzip+tar. Verified
+#     against the crate source tauri-plugin-updater 2.10.1,
+#     src/updater.rs `Update::install_inner` (macOS, ~L1217-1233): it
+#     unconditionally does `GzDecoder::new(cursor)` then
+#     `tar::Archive::new(decoder)` with NO archive-type detection. A
+#     `.app.zip` (PK magic bytes) handed to GzDecoder fails at
+#     `archive.entries()` — AFTER the signature verifies (minisign signs
+#     the raw bytes, so a signed .zip passes the signature check, then
+#     throws at extraction). Contrast the Windows path (~L882-888) which
+#     DOES branch on `infer::archive::is_zip`; that zip support is
+#     Windows-only.
+#   - The updater strips the first path component of each tar entry
+#     (`entry.path()?.iter().skip(1)`, ~L1238), so the archive's
+#     top-level entry must be `Cairn.app/` — i.e. tar from inside the
+#     bundle dir (done below), exactly as the old `zip -r` did.
 #
 # WHY EXPLICIT STEPS (NOT tauri-apps/tauri-action):
-#   - tauri-action with bundle.targets = ["app"] (our config) emits
-#     `.app.tar.gz` for the updater path, but the manual maintainer flow
-#     in docs/RELEASING.md uses `.app.zip` (a plain `zip -r`). Mixing
-#     `.tar.gz` from CI with `.zip` from manual releases would mean the
-#     latest.json URL conventions diverge — and the in-app updater
-#     hard-codes the URL pattern.
-#   - Keeping CI on `.app.zip` means a CI-built release and a manually
-#     built release are byte-for-byte interchangeable as far as the
-#     updater plugin is concerned. Future-you can ship a hotfix from
-#     a laptop and the updater URL stays correct.
+#   - tauri-action would also emit `.app.tar.gz`, but the manual
+#     maintainer flow in docs/RELEASING.md needs to produce a
+#     byte-compatible artifact from a laptop hotfix. Spelling out the
+#     `tar czf` + sign + latest.json steps keeps CI and the documented
+#     manual flow in lockstep on the SAME format and URL convention.
 #
 # WHY MACOS-14 RUNNER:
 #   - macos-14 is GitHub's Apple Silicon (M1) runner. Building Tauri on
@@ -39,7 +51,47 @@ on:
       - 'v*'
 
 jobs:
+  # Test GATE — nothing builds or publishes unless the full suite passes.
+  # A tag pushed from a red branch would otherwise ship straight to
+  # auto-updating users. Runs on macos-14 (same runner family as the
+  # build job) so this is also the project's only macOS test signal —
+  # test.yml runs the JS suite on Linux and only `cargo check`s Rust.
+  test-gate:
+    name: Test gate (full suite + tsc + cargo test)
+    runs-on: macos-14
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Install npm deps
+        run: npm ci
+
+      - name: Run unit suite
+        # --run = single non-watch pass. No --bail so one flake doesn't
+        # mask other regressions before a release.
+        run: npm test -- --run
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: cargo test (src-tauri)
+        working-directory: src-tauri
+        # Passes even with zero Rust tests; wiring it now is safe and
+        # gates the first Rust tests as they land.
+        run: cargo test
+
   build-macos-arm64:
+    needs: test-gate  # do not build/sign/publish unless the gate is green
     runs-on: macos-14  # Apple Silicon — native aarch64 build
     permissions:
       contents: write  # create release + upload assets
@@ -47,8 +99,8 @@ jobs:
     env:
       # Both env vars are read by `npx tauri signer sign` directly.
       # The Tauri build step does NOT auto-sign because bundle.targets
-      # is ["app"] (no .app.tar.gz updater artifact emitted) — we sign
-      # the manual .app.zip in a later step.
+      # is ["app"] (no updater artifact emitted automatically) — we tar
+      # the .app into .app.tar.gz and sign it in a later step.
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_UPDATER_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_UPDATER_PRIVATE_KEY_PASSWORD }}
 
@@ -106,20 +158,22 @@ jobs:
         # Wall time on the macos-14 runner: ~5 min cold (no cargo cache).
         run: npm run tauri build
 
-      - name: Zip the .app bundle
-        # Mirrors `docs/RELEASING.md` step 3 exactly. Working directly in
-        # the bundle dir so the zip's top-level entry is `Cairn.app/` (not
-        # `release/bundle/macos/Cairn.app/`) — required by the updater.
+      - name: Tar+gzip the .app bundle (updater artifact)
+        # The macOS updater requires gzip+tar (see WHY header). Working
+        # directly in the bundle dir so the tar's top-level entry is
+        # `Cairn.app/` (not `release/bundle/macos/Cairn.app/`) — the
+        # updater strips the first path component, so the entry name must
+        # start with `Cairn.app/`. Mirrors `docs/RELEASING.md` step 3.
         run: |
           cd src-tauri/target/release/bundle/macos
-          zip -r "Cairn_${{ steps.ver.outputs.version }}_aarch64.app.zip" Cairn.app
+          tar czf "Cairn_${{ steps.ver.outputs.version }}_aarch64.app.tar.gz" Cairn.app
 
-      - name: Sign .app.zip with the updater private key
+      - name: Sign .app.tar.gz with the updater private key
         # Reads TAURI_SIGNING_PRIVATE_KEY from the job env (set above).
-        # Produces `<file>.sig` next to the .app.zip.
+        # Produces `<file>.sig` next to the .app.tar.gz.
         run: |
           npx tauri signer sign \
-            "src-tauri/target/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_aarch64.app.zip"
+            "src-tauri/target/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_aarch64.app.tar.gz"
 
       - name: Write latest.json (Tauri 2 updater manifest)
         # Schema: https://v2.tauri.app/plugin/updater/#static-json-file
@@ -129,17 +183,40 @@ jobs:
         # unless we also publish a darwin-x86_64 entry. v1 is arm64-only
         # by maintainer policy; x86_64 support is a v1.x milestone.
         run: |
-          APP_ZIP="src-tauri/target/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_aarch64.app.zip"
-          SIG=$(cat "${APP_ZIP}.sig")
+          APP_TARBALL="src-tauri/target/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_aarch64.app.tar.gz"
+          SIG=$(cat "${APP_TARBALL}.sig")
+          # Use the CHANGELOG section for this version as the updater
+          # release notes (shown in Settings → Updates), falling back to
+          # a one-liner if the section isn't present. `jq -Rs` slurps the
+          # raw text and JSON-encodes it (escapes quotes/newlines) so the
+          # manifest stays valid JSON.
+          #
+          # awk: start printing at this version's `## [x.y.z]` header;
+          # stop at the next `## [` header OR at the first link-reference
+          # footer line (`[x.y.z]: https://...`). The footer guard matters
+          # for the BOTTOM-most entry, which has no following `## [` and
+          # would otherwise slurp the trailing link refs to EOF. The END
+          # block trims trailing blank lines so the notes end cleanly.
+          NOTES=$(awk -v ver="${{ steps.ver.outputs.version }}" '
+            $0 ~ "^## \\[" ver "\\]" {p=1}
+            p && /^## \[/ && $0 !~ "^## \\[" ver "\\]" {exit}
+            p && /^\[[^]]+\]:[[:space:]]/ {exit}
+            p {buf[n++]=$0}
+            END {while (n>0 && buf[n-1]=="") n--; for (i=0;i<n;i++) print buf[i]}
+          ' CHANGELOG.md)
+          if [ -z "$NOTES" ]; then
+            NOTES="Release ${{ github.ref_name }}. See the GitHub Release page for the changelog."
+          fi
+          NOTES_JSON=$(printf '%s' "$NOTES" | jq -Rs .)
           cat > latest.json <<EOF
           {
             "version": "${{ steps.ver.outputs.version }}",
-            "notes": "Release ${{ github.ref_name }}. See the GitHub Release page for changelog.",
+            "notes": ${NOTES_JSON},
             "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
             "platforms": {
               "darwin-aarch64": {
                 "signature": "${SIG}",
-                "url": "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Cairn_${{ steps.ver.outputs.version }}_aarch64.app.zip"
+                "url": "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Cairn_${{ steps.ver.outputs.version }}_aarch64.app.tar.gz"
               }
             }
           }
@@ -153,9 +230,14 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: Cairn ${{ steps.ver.outputs.version }}
+          # Release body = the full CHANGELOG so the Releases page shows
+          # real content (not a placeholder). The updater's own notes
+          # (Settings → Updates) come from latest.json above, which uses
+          # just this version's CHANGELOG section.
+          body_path: CHANGELOG.md
           # Drafts default to off so the moment this step succeeds, the
           # in-app updater's poll URL starts returning the new version.
           files: |
-            src-tauri/target/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_aarch64.app.zip
-            src-tauri/target/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_aarch64.app.zip.sig
+            src-tauri/target/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_aarch64.app.tar.gz
+            src-tauri/target/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_aarch64.app.tar.gz.sig
             latest.json

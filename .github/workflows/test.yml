@@ -92,3 +92,12 @@ jobs:
       - name: cargo check
         working-directory: src-tauri
         run: cargo check --all-targets
+
+      - name: cargo test
+        working-directory: src-tauri
+        # Runs the Rust unit/integration tests in src-tauri. Passes with
+        # zero tests (`cargo test` with no tests exits 0), so this is safe
+        # to wire ahead of the first Rust tests landing. Linux runner is
+        # fine for logic tests; macOS-specific signal is in release.yml's
+        # test-gate.
+        run: cargo test
