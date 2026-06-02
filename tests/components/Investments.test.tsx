@@ -510,6 +510,72 @@ describe('Investments page — 529 section', () => {
         within(allocCard).getByRole('button', { name: /entities \(2\/3\)/i }),
       ).toBeInTheDocument();
     });
+
+    it('allocation legend swatch matches its picker swatch and is stable after hiding the largest class', async () => {
+      primeStores({
+        accounts: [{ id: 1, name: 'Brokerage', type: AccountType.ACCOUNT_BROKERAGE }],
+        holdings: [
+          { id: 1, accountId: 1, ticker: 'VTI', shareCount: 100 }, // US Total Market — largest
+          { id: 2, accountId: 1, ticker: 'BND', shareCount: 5 }, //   US Bonds
+          { id: 3, accountId: 1, ticker: 'BTC', shareCount: 1 }, //   Crypto
+        ],
+        snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 30_000 }],
+      });
+      render(
+        <MemoryRouter>
+          <Investments />
+        </MemoryRouter>,
+      );
+
+      const allocCard = await waitFor(() => {
+        const title = screen.getByText('Asset allocation');
+        const wrap = title.closest('[data-testid="asset-allocation-card"]');
+        if (!wrap) throw new Error('Asset allocation card not found');
+        const legend = within(wrap as HTMLElement).queryByLabelText('Chart legend');
+        if (!legend) throw new Error('legend not yet rendered');
+        if (within(legend as HTMLElement).queryAllByRole('listitem').length < 3) {
+          throw new Error('not all slices loaded yet');
+        }
+        return wrap as HTMLElement;
+      });
+
+      // jsdom serializes inline colors as rgb(...); the picker uses `background`
+      // and the legend `background-color`. Normalize both to rgb for comparison.
+      const toRgb = (s: string) => {
+        const hexM = s.match(/^#([0-9a-f]{6})$/i);
+        if (hexM) {
+          const [r, g, b] = [0, 2, 4].map((k) => parseInt(hexM[1].slice(k, k + 2), 16));
+          return `rgb(${r}, ${g}, ${b})`;
+        }
+        return s.trim();
+      };
+      const legendSwatch = (label: string) => {
+        const li = within(within(allocCard).getByLabelText('Chart legend'))
+          .getByText(label)
+          .closest('li')!;
+        return (li.querySelector('span[aria-hidden]') as HTMLElement).style.backgroundColor;
+      };
+
+      const user = userEvent.setup();
+      await user.click(
+        within(allocCard).getByRole('button', { name: /entities \(3\/3\)/i }),
+      );
+      const pickerSwatch = (label: string) => {
+        const row = within(allocCard).getByLabelText(new RegExp(label)).closest('li')!;
+        return (row.querySelector('span[aria-hidden]') as HTMLElement).style.background;
+      };
+
+      // (1) For a kept class (Crypto), legend swatch == picker swatch (one source).
+      const cryptoLegendBefore = legendSwatch('Crypto');
+      expect(cryptoLegendBefore).toBeTruthy();
+      expect(toRgb(pickerSwatch('Crypto'))).toBe(toRgb(cryptoLegendBefore));
+
+      // (2) Hide the LARGEST class (US Total Market) -> reindex. Crypto's legend
+      // swatch must NOT move (it was keyed on the sorted-index source, not the
+      // post-filter position).
+      await user.click(within(allocCard).getByLabelText(/US Total Market/));
+      expect(legendSwatch('Crypto')).toBe(cryptoLegendBefore);
+    });
   });
 
   it('renders the three-up donut grid with asset, per-ticker, and sector cards', () => {

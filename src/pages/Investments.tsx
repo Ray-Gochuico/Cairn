@@ -22,7 +22,7 @@ import type { CardLayoutEntry } from '@/types/schema';
 import ContributionsByBucketChart from '@/components/charts/ContributionsByBucketChart';
 import DonutChartCard from '@/components/charts/DonutChartCard';
 import { DonutEntityPicker, useDonutSelected, type DonutEntityPickerItem } from '@/components/charts/DonutEntityPicker';
-import { CHART_PALETTE } from '@/components/charts/palette';
+import { paletteColorAt } from '@/components/charts/palette';
 import InvestmentTimeSeriesChart from '@/components/charts/InvestmentTimeSeriesChart';
 import PerTickerDonut from '@/components/charts/PerTickerDonut';
 import SectorDonut from '@/components/charts/SectorDonut';
@@ -173,15 +173,22 @@ function latestSnapshotPerAccount(
 
 function aggregateByAssetClass(
   valuations: HoldingValuation[],
-): { name: string; value: number }[] {
+): { name: string; value: number; color: string }[] {
   const buckets = new Map<AssetClass, number>();
   for (const v of valuations) {
     buckets.set(v.assetClass, (buckets.get(v.assetClass) ?? 0) + v.value);
   }
+  // Sort desc by value FIRST, then attach a color by sorted index so the
+  // largest class gets the most-separated hue (idx 0). The color is the single
+  // source for BOTH the donut slice and the picker item, so the wedge, legend,
+  // and picker swatch can't diverge when a class is hidden and the list
+  // reindexes (the I9 desync fix). Assigning over WEDGE_PALETTE also keeps any
+  // class off the near-white band.
   return [...buckets.entries()]
     .map(([cls, value]) => ({ name: ASSET_CLASS_LABEL[cls], value }))
     .filter((b) => b.value > 0)
-    .sort((a, b) => b.value - a.value);
+    .sort((a, b) => b.value - a.value)
+    .map((b, idx) => ({ ...b, color: paletteColorAt(idx) }));
 }
 
 interface DriftRow {
@@ -674,10 +681,12 @@ export default function Investments() {
   // Assets / Liabilities donuts.
   const allocationPickerItems = useMemo<DonutEntityPickerItem[]>(
     () =>
-      allocation.map((s, idx) => ({
+      allocation.map((s) => ({
         key: s.name,
         label: s.name,
-        color: CHART_PALETTE[idx % CHART_PALETTE.length],
+        // Same resolved color the slice carries (aggregateByAssetClass) so the
+        // picker swatch == wedge == legend swatch through any hide/reindex.
+        color: s.color,
       })),
     [allocation],
   );
