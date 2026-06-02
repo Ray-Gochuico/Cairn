@@ -17,6 +17,31 @@ export function shadeHexColor(hex: string, index: number): string {
   return hslToHex(h, s, newL);
 }
 
+/**
+ * WCAG relative luminance of a #rrggbb hex color (0 = black … 1 = white).
+ * Ported from the proven token-contrast implementation in
+ * tests/styles/destructive-token-contrast.test.ts (hex-input variant) so
+ * behavior matches that suite's math exactly.
+ */
+export function relativeLuminance(hex: string): number {
+  const ch = (i: number) => parseInt(hex.slice(i, i + 2), 16) / 255;
+  const lin = (c: number) =>
+    c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  return 0.2126 * lin(ch(1)) + 0.7152 * lin(ch(3)) + 0.0722 * lin(ch(5));
+}
+
+/**
+ * WCAG contrast ratio between two #rrggbb hex colors (1 … 21). Symmetric in
+ * its arguments. Used to keep auto-assigned chart colors off the near-white
+ * band that dissolves into the card background.
+ */
+export function contrastRatio(a: string, b: string): number {
+  const la = relativeLuminance(a);
+  const lb = relativeLuminance(b);
+  const [hi, lo] = la >= lb ? [la, lb] : [lb, la];
+  return (hi + 0.05) / (lo + 0.05);
+}
+
 function hexToHsl(hex: string): { h: number; s: number; l: number } {
   const r = parseInt(hex.slice(1, 3), 16) / 255;
   const g = parseInt(hex.slice(3, 5), 16) / 255;

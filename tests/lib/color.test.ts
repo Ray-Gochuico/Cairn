@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { shadeHexColor } from '@/lib/color';
+import { shadeHexColor, relativeLuminance, contrastRatio } from '@/lib/color';
 
 function hexLightness(hex: string): number {
   const r = parseInt(hex.slice(1, 3), 16) / 255;
@@ -48,5 +48,30 @@ describe('shadeHexColor', () => {
   it('returns the same hex shape for grayscale inputs', () => {
     expect(shadeHexColor('#94a3b8', 1)).toMatch(/^#[0-9a-f]{6}$/);
     expect(shadeHexColor('#94a3b8', 2)).toMatch(/^#[0-9a-f]{6}$/);
+  });
+});
+
+describe('relativeLuminance', () => {
+  it('is 1 for white and 0 for black', () => {
+    expect(relativeLuminance('#ffffff')).toBeCloseTo(1, 5);
+    expect(relativeLuminance('#000000')).toBeCloseTo(0, 5);
+  });
+  it('matches the known sRGB luminance of mid blue #0072b2 (~0.152)', () => {
+    expect(relativeLuminance('#0072b2')).toBeCloseTo(0.152, 2);
+  });
+});
+
+describe('contrastRatio', () => {
+  it('is 21:1 for black vs white', () => {
+    expect(contrastRatio('#000000', '#ffffff')).toBeCloseTo(21, 1);
+  });
+  it('is symmetric', () => {
+    expect(contrastRatio('#0072b2', '#ffffff')).toBeCloseTo(
+      contrastRatio('#ffffff', '#0072b2'),
+      6,
+    );
+  });
+  it('reports the near-white-vs-white failure for #d3d3d3 (< 1.6)', () => {
+    expect(contrastRatio('#d3d3d3', '#ffffff')).toBeLessThan(1.6);
   });
 });
