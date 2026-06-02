@@ -1,4 +1,4 @@
-import type { Database } from '@/db/db';
+import type { BatchStatement, Database } from '@/db/db';
 import { FundSectorSchema, type FundSector } from '@/types/schema';
 
 interface FundSectorRow {
@@ -55,7 +55,17 @@ export class FundSectorsRepo {
     sectors: { sector: string; weight: number }[],
     asOfDate: string
   ): Promise<void> {
-    await this.db.execute('DELETE FROM fund_sectors WHERE fund_ticker = ?', [fundTicker]);
+    // Atomicity (force-quit safety): the DELETE + per-row INSERTs are wrapped in
+    // a single executeBatch transaction so a crash mid-loop can never leave a
+    // fund's sector breakdown deleted/partially-written (which would skew the
+    // sector donut for up to 90 days until the next sync). Behaviour-preserving:
+    // same DELETE, same per-row INSERTs, same params, same order, same
+    // validation — just committed all-or-nothing on one connection. Validation
+    // runs while BUILDING the statements (before the batch) so a bad row rejects
+    // before any write, exactly as the pre-transaction loop did.
+    const statements: BatchStatement[] = [
+      { sql: 'DELETE FROM fund_sectors WHERE fund_ticker = ?', params: [fundTicker] },
+    ];
     for (const s of sectors) {
       FundSectorSchema.parse({
         fundTicker,
@@ -63,10 +73,11 @@ export class FundSectorsRepo {
         weight: s.weight,
         asOfDate,
       });
-      await this.db.execute(
-        'INSERT INTO fund_sectors (fund_ticker, sector, weight, as_of_date) VALUES (?, ?, ?, ?)',
-        [fundTicker, s.sector, s.weight, asOfDate]
-      );
+      statements.push({
+        sql: 'INSERT INTO fund_sectors (fund_ticker, sector, weight, as_of_date) VALUES (?, ?, ?, ?)',
+        params: [fundTicker, s.sector, s.weight, asOfDate],
+      });
     }
+    await this.db.executeBatch(statements, { transaction: true });
   }
 }
