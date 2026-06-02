@@ -1,6 +1,8 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+mod db_batch;
 mod yahoo;
 
+use db_batch::db_execute_batch;
 use yahoo::{yahoo_quote_summary, YahooState};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -16,7 +18,10 @@ pub fn run() {
         // YahooState is a singleton (single reqwest cookie jar + shared crumb
         // cache) used by `yahoo_quote_summary`. See `src/yahoo.rs`.
         .manage(YahooState::new())
-        .invoke_handler(tauri::generate_handler![yahoo_quote_summary])
+        .invoke_handler(tauri::generate_handler![
+            yahoo_quote_summary,
+            db_execute_batch
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -37,4 +37,18 @@ serde_json = "1"
 reqwest = { version = "0.12", default-features = false, features = ["json", "cookies", "rustls-tls"] }
 tokio = { version = "1", features = ["sync"] }
 urlencoding = "2"
+# `db_execute_batch` runs a list of statements on ONE pooled connection so the
+# migration runner's transactions are real in prod (see src/db_batch.rs and
+# src/db/tauri-adapter.ts). It reuses the EXACT same sqlx Pool<Sqlite> that
+# `tauri-plugin-sql` manages in Tauri state, so versions/features must match
+# the plugin's: sqlx 0.8 with the sqlite driver on the tokio runtime
+# (tauri-plugin-sql's "sqlite" feature = sqlx/sqlite + sqlx/runtime-tokio).
+sqlx = { version = "0.8", default-features = false, features = ["sqlite", "runtime-tokio"] }
+
+[dev-dependencies]
+# `#[tokio::test]` for the db_batch unit tests needs the macro + a runtime
+# (the non-test build gets its runtime from Tauri). `tempfile` backs the
+# shared-file SqlitePool the tests run against — see src/db_batch.rs::tests.
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tempfile = "3"
 

@@ -1,5 +1,10 @@
 import BetterSqlite3 from 'better-sqlite3';
-import type { Database as DatabaseInterface, QueryResult } from './db';
+import type {
+  BatchOptions,
+  BatchStatement,
+  Database as DatabaseInterface,
+  QueryResult,
+} from './db';
 
 export class SqliteAdapter implements DatabaseInterface {
   private db: BetterSqlite3.Database;
@@ -29,6 +34,35 @@ export class SqliteAdapter implements DatabaseInterface {
   async select<T = unknown>(sql: string, params: unknown[] = []): Promise<T[]> {
     const stmt = this.db.prepare<unknown[], T>(sql);
     return stmt.all(...params);
+  }
+
+  async executeBatch(statements: BatchStatement[], options: BatchOptions = {}): Promise<void> {
+    const transaction = options.transaction ?? true;
+
+    // better-sqlite3 is a single synchronous connection, so this adapter is
+    // already immune to the pool bug. It serves as the test/prod-parity
+    // reference: whatever atomicity behaviour it exhibits is the contract the
+    // Rust prod path must match.
+    if (transaction) {
+      // Native better-sqlite3 transaction: BEGIN/COMMIT on the one connection,
+      // automatic ROLLBACK if the function throws. Truly atomic. The wrapped
+      // function MUST NOT contain explicit BEGIN/COMMIT/PRAGMA foreign_keys —
+      // those belong on the transaction:false path (self-managed migrations).
+      const run = this.db.transaction((stmts: BatchStatement[]) => {
+        for (const { sql, params = [] } of stmts) {
+          this.db.prepare(sql).run(...params);
+        }
+      });
+      run(statements);
+      return;
+    }
+
+    // transaction:false — run each statement in order on the one connection
+    // with NO outer wrap, so a batch carrying its own BEGIN/COMMIT/PRAGMA
+    // (e.g. migration 0033) behaves exactly as written.
+    for (const { sql, params = [] } of statements) {
+      this.db.prepare(sql).run(...params);
+    }
   }
 
   async close(): Promise<void> {

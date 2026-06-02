@@ -1,4 +1,4 @@
-import type { Database } from './db';
+import type { BatchStatement, Database } from './db';
 
 export interface Migration {
   version: string;
@@ -8,7 +8,8 @@ export interface Migration {
 // Detects whether a migration self-manages its transaction state via its
 // own `BEGIN [TRANSACTION|IMMEDIATE|DEFERRED|EXCLUSIVE]`. These migrations
 // (e.g. 0033, which toggles `PRAGMA foreign_keys` outside a tx) must run
-// outside the runner-level BEGIN/COMMIT wrap, because:
+// with `executeBatch({ transaction: false })` — i.e. on one connection but
+// WITHOUT a runner-added BEGIN/COMMIT wrap — because:
 //   1. SQLite silently ignores `PRAGMA foreign_keys` inside an open
 //      transaction — wrapping 0033 in an outer BEGIN would no-op its
 //      FK-disable step and the rebuild's DROP would fail.
@@ -51,64 +52,45 @@ export async function runMigrations(db: Database, migrations: Migration[]): Prom
       .map((line) => line.replace(/--.*$/, ''))
       .join('\n');
 
-    const statements = stripped
+    const statements: BatchStatement[] = stripped
       .split(/;\s*$/m)
       .map((s) => s.trim())
-      .filter((s) => s.length > 0);
+      .filter((s) => s.length > 0)
+      .map((sql) => ({ sql }));
 
-    // Atomicity wrap: each migration runs in a BEGIN/COMMIT envelope so a
-    // mid-migration failure rolls back the partial work rather than leaving
-    // the DB in a half-applied state with no schema_migrations row (which
-    // the next boot would re-attempt and fail on the now-existing CREATE
-    // TABLE). Wave-3 backend review (2026-05-27) flagged the absence as a
-    // foot-gun first demonstrated by migration 0033's table rebuild.
+    // The audit row records that this migration ran. OR IGNORE so 0001-style
+    // self-recording migrations don't conflict.
+    const auditStmt: BatchStatement = {
+      sql: 'INSERT OR IGNORE INTO schema_migrations (version) VALUES (?)',
+      params: [m.version],
+    };
+
+    // Atomicity, the right way: each migration runs through `executeBatch`,
+    // which routes every statement to ONE physical connection.
     //
-    // Migrations that contain their own BEGIN/COMMIT — currently 0033, which
-    // needs to toggle PRAGMA foreign_keys outside any transaction — are
-    // detected and left to self-manage. SQLite forbids nested BEGINs and
-    // silently ignores `PRAGMA foreign_keys` inside an active transaction,
-    // so wrapping them would break both paths.
+    // WHY THIS MATTERS (the pool bug): prod runs `@tauri-apps/plugin-sql` → a
+    // sqlx connection POOL that hands out a DIFFERENT connection per
+    // `execute()` call. The previous implementation expressed the atomicity
+    // wrap as three separate execute() calls (`BEGIN`, body, `COMMIT`), which
+    // the pool scattered across three connections — so in prod the wrap
+    // protected NOTHING. A killed app-update mid-migration could half-apply
+    // schema with no schema_migrations row, then re-run next boot and fail on
+    // the now-existing CREATE TABLE. A single-connection test adapter was
+    // structurally blind to this. `executeBatch` closes the gap: the whole
+    // batch (body + audit row) commits or rolls back together on one
+    // connection, in both prod and test.
+    //
+    // SELF-MANAGED migrations (currently 0033, which toggles PRAGMA
+    // foreign_keys outside any tx and carries its own BEGIN/COMMIT) run with
+    // `transaction: false`: one connection, but no runner-added wrap, so the
+    // migration's own transaction/PRAGMA statements run exactly as written.
+    // SQLite forbids nested BEGINs and ignores PRAGMA foreign_keys inside a
+    // transaction, so wrapping them would break both. The audit row is
+    // appended to the batch; 0033's COMMIT has fired by the time it runs, so
+    // it lands outside any transaction, which is correct.
     const selfManaged = hasSelfManagedTransaction(m.sql);
 
-    if (selfManaged) {
-      for (const stmt of statements) {
-        await db.execute(stmt);
-      }
-      // Record outside any transaction since the migration's COMMIT already
-      // fired by the time we get here. OR IGNORE so 0001-style self-recording
-      // migrations don't conflict.
-      await db.execute(
-        'INSERT OR IGNORE INTO schema_migrations (version) VALUES (?)',
-        [m.version],
-      );
-    } else {
-      await db.execute('BEGIN');
-      try {
-        for (const stmt of statements) {
-          await db.execute(stmt);
-        }
-        // Audit row goes INSIDE the wrap so it rolls back if the body fails —
-        // that's the invariant that prevents the "half-applied with no
-        // schema_migrations row, retried next boot, fails on existing CREATE
-        // TABLE" foot-gun. OR IGNORE so 0001-style self-recording migrations
-        // don't conflict.
-        await db.execute(
-          'INSERT OR IGNORE INTO schema_migrations (version) VALUES (?)',
-          [m.version],
-        );
-        await db.execute('COMMIT');
-      } catch (e) {
-        // ROLLBACK can itself fail if the inner error already aborted the tx
-        // (SQLite "cannot rollback - no transaction is active"). Swallow that
-        // specific noise so the caller sees the real, original error.
-        try {
-          await db.execute('ROLLBACK');
-        } catch {
-          // ignore: rollback may have happened automatically on the inner error
-        }
-        throw e;
-      }
-    }
+    await db.executeBatch([...statements, auditStmt], { transaction: !selfManaged });
   }
 }
 
