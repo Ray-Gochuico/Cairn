@@ -19,7 +19,7 @@ describe('BacktestCard', () => {
         <BacktestCard />
       </MemoryRouter>,
     );
-    const link = screen.getByRole('link', { name: /open backtest/i });
+    const link = screen.getByRole('link', { name: /open the historical backtest tool/i });
     expect(link).toHaveAttribute('href', '/calculators/backtest');
   });
 

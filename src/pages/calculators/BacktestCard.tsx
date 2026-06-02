@@ -22,10 +22,10 @@ export function BacktestCard({ cardId, onHide }: BacktestCardProps = {}) {
       <div className="mt-2">
         <Link
           to="/calculators/backtest"
-          aria-label="Open Backtest calculator"
+          aria-label="Open the Historical Backtest tool"
           className="text-sm text-primary underline underline-offset-4 hover:text-primary/80"
         >
-          Open backtest →
+          Open the Backtest tool →
         </Link>
       </div>
     </CalculatorCard>
