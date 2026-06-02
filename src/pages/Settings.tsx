@@ -8,6 +8,7 @@ import { ChartColorsSection } from '@/components/settings/ChartColorsSection';
 import { StatementsSection } from '@/components/settings/StatementsSection';
 import { UpdaterSection } from '@/components/settings/UpdaterSection';
 import { AdvancedSection } from '@/components/settings/AdvancedSection';
+import { DisclosuresSection } from '@/components/settings/DisclosuresSection';
 
 export default function Settings() {
   return (
@@ -26,6 +27,7 @@ export default function Settings() {
       <StatementsSection />
       <UpdaterSection />
       <AdvancedSection />
+      <DisclosuresSection />
     </div>
   );
 }

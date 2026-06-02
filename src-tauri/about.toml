@@ -1,0 +1,48 @@
+# cargo-about configuration for generating THIRD-PARTY-LICENSES.md
+#
+# Cairn statically links a tree of Rust crates into the shipped macOS binary.
+# Several are Apache-2.0 (tauri, reqwest, tokio, serde, hyper, h2, …), whose
+# §4(d) requires us to reproduce their attribution/NOTICE. This config drives
+# `cargo about generate` to aggregate every dependency's license text into a
+# single attribution document bundled with the app.
+#
+# Regenerate after changing Rust dependencies:
+#   cd src-tauri && cargo about generate about.hbs -o ../THIRD-PARTY-LICENSES.md
+#
+# `accepted` is the allow-list of SPDX licenses we have reviewed as compatible
+# with redistributing a binary. If `cargo about generate` errors on an
+# unlisted license, review that crate before adding its license here.
+
+# Only the targets we actually ship matter. Cairn ships a macOS binary, so the
+# attribution set should reflect the macOS dependency graph rather than every
+# platform's cfg-gated crates (e.g. windows-sys, which we never link).
+targets = [
+    "x86_64-apple-darwin",
+    "aarch64-apple-darwin",
+]
+
+# Pull in features the way the real build does so the resolved crate set
+# matches the shipped binary (no dev-only crates leaking into attribution).
+ignore-build-dependencies = true
+ignore-dev-dependencies = true
+
+accepted = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "MPL-2.0",
+    "CC0-1.0",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "BSL-1.0",
+    "OpenSSL",
+    "Unlicense",
+    # webpki-roots ships Mozilla's CA root bundle under the Community Data
+    # License Agreement – Permissive 2.0. It's a permissive license that
+    # allows redistribution of the data; safe to bundle.
+    "CDLA-Permissive-2.0",
+]
