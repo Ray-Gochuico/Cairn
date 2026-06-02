@@ -63,3 +63,6 @@ FinFlowChartv43.md
 # not committed (human review copy, not the shipped bank).
 src/data/trivia/bank-v1.generated.json
 
+
+# parallel-build git worktrees
+.claude/worktrees/
