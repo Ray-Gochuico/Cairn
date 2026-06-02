@@ -1089,20 +1089,20 @@
   },
   {
     "id": "adv-ltcg-brackets",
-    "version": 1,
+    "version": 2,
     "difficulty": "Advanced",
     "format": "definition",
     "topic": "Taxes",
     "glossaryTerm": "LTCG",
-    "prompt": "At what approximate 2024 taxable income threshold does the 0% long-term capital gains rate end for a single filer?",
+    "prompt": "How is the taxable-income threshold for the 0% long-term capital gains rate set from year to year?",
     "choices": [
-      "$47,025",
-      "$61,500",
-      "$72,800",
-      "$94,050"
+      "It is a fixed dollar figure written into the statute that does not change",
+      "The IRS adjusts it for inflation each year, so the dollar cutoff rises most years",
+      "It equals the standard deduction for that filing status",
+      "It is set each year by the taxpayer's marginal tax bracket"
     ],
-    "answerIndex": 0,
-    "explanation": "For single filers in 2024, the 0% LTCG rate applies to taxable income up to $47,025 (after standard deduction). Above that threshold to $518,900, the rate is 15%; above $518,900 it's 20%. This means someone in a lower income year (e.g., early retirement before Social Security) may be able to harvest significant capital gains completely tax-free — a strategy called zero-rate harvesting.",
+    "answerIndex": 1,
+    "explanation": "The 0% long-term capital gains bracket applies up to a taxable-income threshold that the IRS adjusts for inflation each year — so the exact dollar cutoff rises most years and should be looked up for the current year rather than memorized (for a single filer it was roughly $47,000 in recent years; above the cutoff the rate steps to 15%, then 20% at much higher income). The practical takeaway is timeless: in a low-income year (e.g., early retirement before Social Security) you may be able to harvest capital gains completely tax-free — a strategy called zero-rate harvesting.",
     "source": "IRS Rev. Proc. 2023-34 (2024 inflation adjustments)",
     "reviewed": true,
     "reviewedBy": "gochuico.raymond@gmail.com",
