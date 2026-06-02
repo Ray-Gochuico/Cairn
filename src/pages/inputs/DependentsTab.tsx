@@ -3,10 +3,12 @@ import { useDependentsStore } from '@/stores/dependents-store';
 import { DependentType } from '@/types/enums';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import DependentForm, { DEFAULT_DEPENDENT } from '@/components/forms/DependentForm';
 
 export default function DependentsTab() {
   const { dependents, load, create, update, remove } = useDependentsStore();
+  const { confirm, dialog } = useConfirm();
   const [mode, setMode] = useState<'list' | 'create' | { type: 'edit'; id: number }>('list');
 
   useEffect(() => {
@@ -81,7 +83,20 @@ export default function DependentsTab() {
                 </div>
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" onClick={() => setMode({ type: 'edit', id: d.id! })}>Edit</Button>
-                  <Button size="sm" variant="destructive" onClick={() => remove(d.id!)}>Delete</Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={async () => {
+                      const ok = await confirm({
+                        title: `Delete ${d.name}?`,
+                        description:
+                          'This removes the dependent and unlinks them from any account they’re a beneficiary of. This can’t be undone.',
+                      });
+                      if (ok) await remove(d.id!);
+                    }}
+                  >
+                    Delete
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -92,6 +107,7 @@ export default function DependentsTab() {
       <div className="mt-4">
         <Button onClick={() => setMode('create')}>Add Dependent</Button>
       </div>
+      {dialog}
     </div>
   );
 }

@@ -56,7 +56,7 @@ describe('evaluateCreateBudget', () => {
   it('returns active with CTA when baseline is zero', () => {
     const r = evaluateCreateBudget(makeContext({ monthlyExpenseBaseline: 0 }));
     expect(r.status).toBe('active');
-    expect(r.cta?.href).toBe('/household');
+    expect(r.cta?.href).toBe('/inputs/household');
   });
 });
 

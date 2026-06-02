@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { usePropertiesStore } from '@/stores/properties-store';
@@ -540,6 +540,39 @@ describe('Property page', () => {
     expect(editLink).toHaveAttribute('href', '/inputs/housing-payments');
     // Remove still present.
     expect(screen.getByRole('button', { name: /^Remove$/i })).toBeInTheDocument();
+  });
+
+  it('deleting a rent/housing payment is gated behind a confirm dialog', async () => {
+    const removeSpy = vi.fn(async () => {});
+    useHousingPaymentsStore.setState({
+      housingPayments: [
+        {
+          id: 1,
+          householdId: 1,
+          ownerPersonId: null,
+          name: 'Downtown apartment',
+          monthlyAmount: 2400,
+          startDate: '2025-09-01',
+          endDate: null,
+        },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+      remove: removeSpy,
+    } as never);
+
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByText('Downtown apartment');
+    await user.click(screen.getByRole('button', { name: /^Remove$/i }));
+    expect(removeSpy).not.toHaveBeenCalled();
+    expect(await screen.findByText(/delete downtown apartment\?/i)).toBeInTheDocument();
+
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /^delete$/i }));
+    await waitFor(() => expect(removeSpy).toHaveBeenCalledWith(1));
   });
 
   it('renders the rentals total as an aggregate card with a per-mo figure and meta', async () => {

@@ -3,6 +3,7 @@ import { useHousingPaymentsStore } from '@/stores/housing-payments-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import HousingPaymentForm, {
   DEFAULT_HOUSING_PAYMENT,
 } from '@/components/forms/HousingPaymentForm';
@@ -16,6 +17,7 @@ const currencyFormatter = new Intl.NumberFormat('en-US', {
 export default function HousingPaymentsTab() {
   const { housingPayments, load, create, update, remove } = useHousingPaymentsStore();
   const { persons, load: loadPersons } = usePersonsStore();
+  const { confirm, dialog } = useConfirm();
   const [mode, setMode] = useState<'list' | 'create' | { type: 'edit'; id: number }>('list');
 
   useEffect(() => {
@@ -120,7 +122,13 @@ export default function HousingPaymentsTab() {
                   <Button
                     size="sm"
                     variant="destructive"
-                    onClick={() => remove(p.id!)}
+                    onClick={async () => {
+                      const ok = await confirm({
+                        title: 'Delete this rent/housing payment?',
+                        description: 'This permanently removes the payment record. This can’t be undone.',
+                      });
+                      if (ok) await remove(p.id!);
+                    }}
                   >
                     Delete
                   </Button>
@@ -134,6 +142,7 @@ export default function HousingPaymentsTab() {
       <div className="mt-4">
         <Button onClick={() => setMode('create')}>Add Rent/Housing Payment</Button>
       </div>
+      {dialog}
     </div>
   );
 }

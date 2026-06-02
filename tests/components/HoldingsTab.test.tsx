@@ -264,7 +264,7 @@ describe('HoldingsTab', () => {
     expect(saveButtonsAfter[0]).not.toBeDisabled();
   });
 
-  it('deletes a holding', async () => {
+  it('deletes a holding only after confirming in the dialog', async () => {
     const a = await seedAccount(db, 'Account A');
     await seedHolding(db, a, 'VTI', 100);
 
@@ -276,15 +276,42 @@ describe('HoldingsTab', () => {
       expect(tickers[0].value).toBe('VTI');
     });
 
-    await user.click(screen.getByRole('button', { name: /delete/i }));
+    // Clicking the row's Delete opens a confirm — it does NOT remove yet.
+    await user.click(screen.getByRole('button', { name: /^delete$/i }));
+    expect(useHoldingsStore.getState().holdings).toHaveLength(1);
+    expect(await screen.findByText(/delete vti\?/i)).toBeInTheDocument();
+
+    // Confirm via the dialog's destructive button.
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /^delete$/i }));
 
     await waitFor(() => {
       const { holdings } = useHoldingsStore.getState();
       expect(holdings).toHaveLength(0);
     });
     expect(screen.getByText(/no holdings in this account yet/i)).toBeInTheDocument();
-    // Silence within unused-import lint by referencing it (kept for explanatory value if extended)
-    void within;
+  });
+
+  it('canceling the delete dialog keeps the holding', async () => {
+    const a = await seedAccount(db, 'Account A');
+    await seedHolding(db, a, 'VTI', 100);
+
+    const user = userEvent.setup();
+    render(<MemoryRouter><HoldingsTab /></MemoryRouter>);
+
+    await waitFor(() => {
+      const tickers = screen.getAllByLabelText(/ticker/i) as HTMLInputElement[];
+      expect(tickers[0].value).toBe('VTI');
+    });
+
+    await user.click(screen.getByRole('button', { name: /^delete$/i }));
+    await screen.findByText(/delete vti\?/i);
+    await user.click(screen.getByRole('button', { name: /cancel/i }));
+
+    await waitFor(() =>
+      expect(screen.queryByText(/delete vti\?/i)).not.toBeInTheDocument(),
+    );
+    expect(useHoldingsStore.getState().holdings).toHaveLength(1);
   });
 
   it('renders an Import CSV button in the page header', async () => {

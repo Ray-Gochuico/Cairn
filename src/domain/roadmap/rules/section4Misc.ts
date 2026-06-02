@@ -16,7 +16,7 @@ export function evaluateEarnedIncomeQ(ctx: RoadmapContext): NodeResult {
     return {
       status: 'info',
       evidence: 'Add a Person to declare earned income before the IRA chain applies.',
-      cta: { label: 'Open Household →', href: '/household' },
+      cta: { label: 'Open Household →', href: '/inputs/household' },
     };
   }
   const anyEarned = ctx.persons.some((p) => (p.annualSalaryPretax ?? 0) > 0);
@@ -99,7 +99,7 @@ export function evaluateAfterTax401kQ(ctx: RoadmapContext): NodeResult {
     return {
       status: 'unanswered',
       evidence: 'Check your 401(k) plan documents and mark whether after-tax + in-plan Roth rollover is allowed.',
-      cta: { label: 'Open Accounts →', href: '/accounts' },
+      cta: { label: 'Open Accounts →', href: '/inputs/accounts' },
     };
   }
   return { status: 'info', evidence: 'No 401(k) allows the mega backdoor — that path is closed for you.' };
@@ -113,7 +113,7 @@ export function evaluateMegaBackdoor(ctx: RoadmapContext): NodeResult {
     return {
       status: 'active',
       evidence: 'Mega backdoor is available — max after-tax contributions and roll into Roth up to the $66k combined limit.',
-      cta: { label: 'Open Contributions →', href: '/contributions' },
+      cta: { label: 'Open Contributions →', href: '/inputs/contributions' },
     };
   }
   return { status: 'skipped', evidence: 'Mega backdoor is not available based on your accounts.' };

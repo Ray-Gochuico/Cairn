@@ -3,6 +3,7 @@ import { useEquityGrantsStore } from '@/stores/equity-grants-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import EquityGrantForm, { DEFAULT_EQUITY_GRANT } from '@/components/forms/EquityGrantForm';
 import { formatCurrency } from '@/lib/format';
 import { ImportCsvButton } from '@/components/import/ImportCsvButton';
@@ -10,6 +11,7 @@ import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 export default function EquityGrantsTab() {
   const { equityGrants, load, create, update, remove } = useEquityGrantsStore();
   const { persons, load: loadPersons } = usePersonsStore();
+  const { confirm, dialog } = useConfirm();
   const [mode, setMode] = useState<'list' | 'create' | { type: 'edit'; id: number }>('list');
 
   useEffect(() => {
@@ -135,7 +137,14 @@ export default function EquityGrantsTab() {
                     <Button
                       size="sm"
                       variant="destructive"
-                      onClick={() => remove(g.id!)}
+                      onClick={async () => {
+                        const ok = await confirm({
+                          title: `Delete ${g.name}?`,
+                          description:
+                            'This permanently removes this equity grant and its vesting schedule. This can’t be undone.',
+                        });
+                        if (ok) await remove(g.id!);
+                      }}
                     >
                       Delete
                     </Button>
@@ -149,6 +158,7 @@ export default function EquityGrantsTab() {
           </div>
         </>
       )}
+      {dialog}
     </div>
   );
 }

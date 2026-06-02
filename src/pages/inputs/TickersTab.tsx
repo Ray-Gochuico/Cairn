@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
@@ -223,6 +224,7 @@ function TickerForm({ values, onSubmit, onCancel, submitLabel = 'Save' }: Ticker
 
 export default function TickersTab() {
   const { tickers, isLoading, error, load, upsert, remove } = useTickersStore();
+  const { confirm, dialog } = useConfirm();
   const [mode, setMode] = useState<Mode>('list');
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -247,6 +249,12 @@ export default function TickersTab() {
 
   const handleDelete = async (ticker: string) => {
     setDeleteError(null);
+    const ok = await confirm({
+      title: `Delete ${ticker}?`,
+      description:
+        'This removes the ticker and its asset-class / leverage metadata. Any holding that uses this symbol will be left without ticker details. This can’t be undone.',
+    });
+    if (!ok) return;
     try {
       await remove(ticker);
     } catch (e) {
@@ -406,6 +414,7 @@ export default function TickersTab() {
           ))}
         </div>
       )}
+      {dialog}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { usePersonsStore } from '@/stores/persons-store';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import GoalForm, { DEFAULT_GOAL, GOAL_TYPE_LABELS } from '@/components/forms/GoalForm';
 import { formatCurrency } from '@/lib/format';
 
@@ -11,6 +12,7 @@ export default function GoalsTab() {
   const { goals, load, create, update, remove } = useGoalsStore();
   const { persons, load: loadPersons } = usePersonsStore();
   const { accounts, load: loadAccounts } = useAccountsStore();
+  const { confirm, dialog } = useConfirm();
   const [mode, setMode] = useState<'list' | 'create' | { type: 'edit'; id: number }>('list');
 
   useEffect(() => {
@@ -133,7 +135,13 @@ export default function GoalsTab() {
                     <Button
                       size="sm"
                       variant="destructive"
-                      onClick={() => remove(g.id!)}
+                      onClick={async () => {
+                        const ok = await confirm({
+                          title: `Delete ${g.name}?`,
+                          description: 'This permanently removes this goal. This can’t be undone.',
+                        });
+                        if (ok) await remove(g.id!);
+                      }}
                     >
                       Delete
                     </Button>
@@ -147,6 +155,7 @@ export default function GoalsTab() {
           </div>
         </>
       )}
+      {dialog}
     </div>
   );
 }

@@ -74,7 +74,7 @@ export function evaluateContributeHsa(ctx: RoadmapContext): NodeResult {
     return {
       status: 'not-started',
       evidence: 'No HSA on file. Add one in Accounts before contributing.',
-      cta: { label: 'Open Accounts →', href: '/accounts' },
+      cta: { label: 'Open Accounts →', href: '/inputs/accounts' },
     };
   }
   const year = ctx.today.getFullYear();
@@ -89,7 +89,7 @@ export function evaluateContributeHsa(ctx: RoadmapContext): NodeResult {
   return {
     status: 'active',
     evidence: `${hsa.name} exists but $0 contributed this year — start funding it.`,
-    cta: { label: 'Open Contributions →', href: '/contributions' },
+    cta: { label: 'Open Contributions →', href: '/inputs/contributions' },
   };
 }
 
@@ -147,7 +147,7 @@ export function evaluateRolloverHsa(ctx: RoadmapContext): NodeResult {
     return {
       status: 'active',
       evidence: `${hsa.name} is high-fee — trustee-to-trustee transfer to a low-fee HSA brokerage.`,
-      cta: { label: 'Open Accounts →', href: '/accounts' },
+      cta: { label: 'Open Accounts →', href: '/inputs/accounts' },
     };
   }
   return { status: 'skipped', evidence: 'No high-fee HSA flagged — no rollover needed.' };

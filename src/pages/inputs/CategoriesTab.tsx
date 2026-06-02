@@ -9,6 +9,7 @@ import { CategorySchema } from '@/types/schema';
 import type { Category } from '@/types/schema';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
@@ -166,6 +167,7 @@ function CategoryForm({ initial, parents, onSubmit, onCancel }: CategoryFormProp
 export default function CategoriesTab() {
   const { categories, load, create, update, remove } = useCategoriesStore();
   const { overrides, load: loadOverrides, remove: removeOverride } = useMerchantOverridesStore();
+  const { confirm, dialog } = useConfirm();
   const [mode, setMode] = useState<'list' | 'create' | { type: 'edit'; id: number }>('list');
 
   useEffect(() => {
@@ -299,7 +301,14 @@ export default function CategoriesTab() {
                         <Button
                           size="sm"
                           variant="destructive"
-                          onClick={() => remove(cat.id!)}
+                          onClick={async () => {
+                            const ok = await confirm({
+                              title: `Delete ${cat.name}?`,
+                              description:
+                                'This also deletes any learned merchant corrections that map to it, and leaves transactions in this category uncategorized. This can’t be undone.',
+                            });
+                            if (ok) await remove(cat.id!);
+                          }}
                         >
                           Delete
                         </Button>
@@ -340,7 +349,14 @@ export default function CategoriesTab() {
                     <Button
                       size="sm"
                       variant="destructive"
-                      onClick={() => removeOverride(ov.id!)}
+                      onClick={async () => {
+                        const ok = await confirm({
+                          title: 'Delete this merchant override?',
+                          description:
+                            'This removes the learned correction. Future imports of this merchant won’t be auto-categorized by it. This can’t be undone.',
+                        });
+                        if (ok) await removeOverride(ov.id!);
+                      }}
                       className="shrink-0"
                     >
                       Delete
@@ -352,6 +368,7 @@ export default function CategoriesTab() {
           </div>
         )}
       </div>
+      {dialog}
     </div>
   );
 }

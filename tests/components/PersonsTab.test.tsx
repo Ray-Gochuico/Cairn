@@ -7,9 +7,28 @@ import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { runMigrations } from '@/db/migrations';
 import { setDatabase } from '@/db/db';
 import { usePersonsStore } from '@/stores/persons-store';
+import { PersonsRepo } from '@/domain/persons';
 import PersonsTab from '@/pages/inputs/PersonsTab';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+
+async function seedPerson(db: SqliteAdapter, name: string): Promise<number> {
+  const repo = new PersonsRepo(db);
+  return repo.create({
+    householdId: 1,
+    name,
+    dateOfBirth: '1990-01-01',
+    targetRetirementAge: 65,
+    annualSalaryPretax: 100000,
+    expectedCommission: 0,
+    expectedCommissionFrequency: 'MONTHLY',
+    pretax401kPct: 0,
+    healthInsuranceMonthlyPremium: 0,
+    dependentCareFsaMonthly: 0,
+    hsaMonthlyContribution: 0,
+    hsaEligible: false,
+  });
+}
 
 const loadInitialMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
@@ -79,6 +98,45 @@ describe('PersonsTab', () => {
       const { persons } = usePersonsStore.getState();
       expect(persons).toHaveLength(1);
       expect(persons[0].name).toBe('Alex');
+    });
+  });
+
+  describe('delete confirmation (high-cascade)', () => {
+    it('clicking Delete opens a confirm dialog naming the collateral and does NOT remove yet', async () => {
+      await seedPerson(db, 'Alex');
+      const user = userEvent.setup();
+      render(<MemoryRouter><PersonsTab /></MemoryRouter>);
+
+      await screen.findByText('Alex');
+      await user.click(screen.getByRole('button', { name: /^delete$/i }));
+
+      expect(usePersonsStore.getState().persons).toHaveLength(1);
+      expect(await screen.findByText(/delete alex\?/i)).toBeInTheDocument();
+      expect(screen.getByText(/equity grants/i)).toBeInTheDocument();
+    });
+
+    it('Cancel keeps the person; Confirm removes them', async () => {
+      await seedPerson(db, 'Alex');
+      const user = userEvent.setup();
+      render(<MemoryRouter><PersonsTab /></MemoryRouter>);
+
+      await screen.findByText('Alex');
+      // Cancel path
+      await user.click(screen.getByRole('button', { name: /^delete$/i }));
+      await screen.findByText(/delete alex\?/i);
+      await user.click(screen.getByRole('button', { name: /cancel/i }));
+      await waitFor(() =>
+        expect(screen.queryByText(/delete alex\?/i)).not.toBeInTheDocument(),
+      );
+      expect(usePersonsStore.getState().persons).toHaveLength(1);
+
+      // Confirm path
+      await user.click(screen.getByRole('button', { name: /^delete$/i }));
+      const dialog = await screen.findByRole('dialog');
+      await user.click(within(dialog).getByRole('button', { name: /^delete$/i }));
+      await waitFor(() =>
+        expect(usePersonsStore.getState().persons).toHaveLength(0),
+      );
     });
   });
 });

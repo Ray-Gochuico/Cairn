@@ -5,6 +5,7 @@ import { useDependentsStore } from '@/stores/dependents-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import AccountForm, {
   ACCOUNT_TYPE_LABELS,
   DEFAULT_ACCOUNT,
@@ -33,6 +34,7 @@ const DEFAULT_529: AccountFormValues = {
  */
 export default function Plan529Tab() {
   const { accounts, load, create, update, remove } = useAccountsStore();
+  const { confirm, dialog } = useConfirm();
   const { persons, load: loadPersons } = usePersonsStore();
   const { dependents, load: loadDependents } = useDependentsStore();
   const { household, load: loadHousehold } = useHouseholdStore();
@@ -181,7 +183,14 @@ export default function Plan529Tab() {
                     <Button
                       size="sm"
                       variant="destructive"
-                      onClick={() => remove(p.id!)}
+                      onClick={async () => {
+                        const ok = await confirm({
+                          title: `Delete ${p.name}?`,
+                          description:
+                            'This also permanently deletes its monthly balance snapshots, holdings, and contribution history. This can’t be undone.',
+                        });
+                        if (ok) await remove(p.id!);
+                      }}
                     >
                       Delete
                     </Button>
@@ -192,6 +201,7 @@ export default function Plan529Tab() {
           </div>
         </>
       )}
+      {dialog}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { useVehicleLeasesStore } from '@/stores/vehicle-leases-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import VehicleLeaseForm, {
   DEFAULT_VEHICLE_LEASE,
 } from '@/components/forms/VehicleLeaseForm';
@@ -16,6 +17,7 @@ const currencyFormatter = new Intl.NumberFormat('en-US', {
 export default function VehicleLeasesTab() {
   const { vehicleLeases, load, create, update, remove } = useVehicleLeasesStore();
   const { persons, load: loadPersons } = usePersonsStore();
+  const { confirm, dialog } = useConfirm();
   const [mode, setMode] = useState<'list' | 'create' | { type: 'edit'; id: number }>('list');
 
   useEffect(() => {
@@ -120,7 +122,13 @@ export default function VehicleLeasesTab() {
                   <Button
                     size="sm"
                     variant="destructive"
-                    onClick={() => remove(l.id!)}
+                    onClick={async () => {
+                      const ok = await confirm({
+                        title: `Delete ${l.name}?`,
+                        description: 'This permanently removes this lease. This can’t be undone.',
+                      });
+                      if (ok) await remove(l.id!);
+                    }}
                   >
                     Delete
                   </Button>
@@ -134,6 +142,7 @@ export default function VehicleLeasesTab() {
       <div className="mt-4">
         <Button onClick={() => setMode('create')}>Add Lease</Button>
       </div>
+      {dialog}
     </div>
   );
 }

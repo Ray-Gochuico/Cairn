@@ -87,7 +87,7 @@ export function evaluateSmallEmergencyFund(ctx: RoadmapContext): NodeResult {
     return {
       status: 'unanswered',
       evidence: 'Set your monthly expense baseline in Household first',
-      cta: { label: 'Open Household →', href: '/household' },
+      cta: { label: 'Open Household →', href: '/inputs/household' },
     };
   }
   const target = Math.max(1000, baseline);
@@ -101,7 +101,7 @@ export function evaluateSmallEmergencyFund(ctx: RoadmapContext): NodeResult {
   return {
     status: 'active',
     evidence: `${formatUSD(cash)} / ${formatUSD(target)} (${Math.round((cash / target) * 100)}%${suffix})`,
-    cta: { label: 'Open Accounts →', href: '/accounts' },
+    cta: { label: 'Open Accounts →', href: '/inputs/accounts' },
   };
 }
 
@@ -139,7 +139,7 @@ export function evaluateEmergencyFund3Months(ctx: RoadmapContext): NodeResult {
   return {
     status: 'active',
     evidence: `${formatUSD(cash)} / ${formatUSD(target)} (3-mo target, ${Math.round((cash / target) * 100)}%${suffix})`,
-    cta: { label: 'Open Accounts →', href: '/accounts' },
+    cta: { label: 'Open Accounts →', href: '/inputs/accounts' },
   };
 }
 
@@ -172,6 +172,6 @@ export function evaluateEmergencyFund6To12Months(ctx: RoadmapContext): NodeResul
   return {
     status: 'active',
     evidence: `${formatUSD(cash)} / ${formatUSD(target)} (6-mo floor, ${Math.round((cash / target) * 100)}%${suffix})`,
-    cta: { label: 'Open Accounts →', href: '/accounts' },
+    cta: { label: 'Open Accounts →', href: '/inputs/accounts' },
   };
 }

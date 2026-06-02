@@ -4,6 +4,7 @@ import type { AssetSnapshotOwnerType } from '@/types/enums';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 
 const currencyFormatter = new Intl.NumberFormat('en-US', {
@@ -48,6 +49,7 @@ export default function ValueHistorySection({
   const createSnapshot = useAssetValueSnapshotsStore((s) => s.create);
   const updateSnapshot = useAssetValueSnapshotsStore((s) => s.update);
   const removeSnapshot = useAssetValueSnapshotsStore((s) => s.remove);
+  const { confirm, dialog } = useConfirm();
 
   useEffect(() => {
     load();
@@ -108,9 +110,11 @@ export default function ValueHistorySection({
   }
 
   async function handleDelete(id: number) {
-    if (!window.confirm('Delete this dated value entry? This cannot be undone.')) {
-      return;
-    }
+    const ok = await confirm({
+      title: 'Delete this dated value entry?',
+      description: 'This removes the snapshot from the value history. This can’t be undone.',
+    });
+    if (!ok) return;
     try {
       await removeSnapshot(id);
     } catch (err) {
@@ -298,6 +302,7 @@ export default function ValueHistorySection({
           <ImportCsvButton entity="asset_value_snapshot" />
         </div>
       </div>
+      {dialog}
     </details>
   );
 }
