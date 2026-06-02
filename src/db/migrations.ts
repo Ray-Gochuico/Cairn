@@ -174,6 +174,11 @@ export async function loadAllMigrations(): Promise<Migration[]> {
   // hierarchy envelope) as a nullable JSON column on app_settings. Additive
   // ADD COLUMN; Σ targetPct ≤ 1 validated in SettingsRepo, not SQL.
   const m0045 = (await import('./migrations/0045_asset_class_target_allocations.sql?raw')).default;
+  // 0046 adds last_seen_month to app_settings: tracks the YYYY-MM of the most
+  // recent month for which the app surfaced the monthly-input ritual prompt.
+  // Drives the once-per-month auto-route to /monthly (Wave 3). Peer to
+  // last_refresh_at — app/UI state, not household financial data.
+  const m0046 = (await import('./migrations/0046_app_settings_last_seen_month.sql?raw')).default;
   return [
     { version: '0001_initial', sql: m0001 },
     { version: '0002_seed_tax_rules', sql: m0002 },
@@ -220,5 +225,6 @@ export async function loadAllMigrations(): Promise<Migration[]> {
     { version: '0043_drop_household_disclosure_columns', sql: m0043 },
     { version: '0044_equity_grant_type', sql: m0044 },
     { version: '0045_asset_class_target_allocations', sql: m0045 },
+    { version: '0046_app_settings_last_seen_month', sql: m0046 },
   ];
 }
