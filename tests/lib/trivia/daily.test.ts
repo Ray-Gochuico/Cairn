@@ -3,6 +3,7 @@ import {
   localTodayISO,
   yesterday,
   selectDailyQuestion,
+  selectDailySet,
   nextStreak,
 } from '@/lib/trivia/daily';
 import { answeredKey } from '@/lib/trivia/answered-key';
@@ -21,6 +22,12 @@ const q = (id: string, difficulty: 'Beginner' | 'Advanced'): TriviaQuestion => (
   explanation: 'x',
   source: 'src',
   reviewed: true,
+});
+
+// Topic-aware factory for selectDailySet tests.
+const qt = (id: string, difficulty: 'Beginner' | 'Advanced', topic: Topic): TriviaQuestion => ({
+  ...q(id, difficulty),
+  topic,
 });
 
 const bank: TriviaQuestion[] = [
@@ -150,6 +157,125 @@ describe('selectDailyQuestion', () => {
     }
     expect(seen.has('Beginner')).toBe(true);
     expect(seen.has('Advanced')).toBe(true);
+  });
+});
+
+describe('selectDailySet', () => {
+  // A rich reviewed pool: ≥2 Beginner + ≥2 Advanced across ≥4 topics.
+  const richBank: TriviaQuestion[] = [
+    qt('beg-found', 'Beginner', Topic.FOUNDATIONS),
+    qt('beg-budget', 'Beginner', Topic.BUDGETING),
+    qt('beg-savings', 'Beginner', Topic.SAVINGS),
+    qt('beg-spend', 'Beginner', Topic.SPENDING),
+    qt('adv-invest', 'Advanced', Topic.INVESTMENTS),
+    qt('adv-tax', 'Advanced', Topic.TAXES),
+    qt('adv-retire', 'Advanced', Topic.RETIREMENT),
+    qt('adv-insure', 'Advanced', Topic.INSURANCE),
+  ];
+
+  it('returns exactly 4 from a rich pool', () => {
+    const set = selectDailySet({ bank: richBank, answeredIds: [], todayISO: '2026-06-01' });
+    expect(set).toHaveLength(4);
+  });
+
+  it('returns 2 Beginner + 2 Advanced', () => {
+    const set = selectDailySet({ bank: richBank, answeredIds: [], todayISO: '2026-06-01' });
+    expect(set.filter((x) => x.difficulty === 'Beginner')).toHaveLength(2);
+    expect(set.filter((x) => x.difficulty === 'Advanced')).toHaveLength(2);
+  });
+
+  it('does not repeat a topic within the 4 (topic-aware)', () => {
+    const set = selectDailySet({ bank: richBank, answeredIds: [], todayISO: '2026-06-01' });
+    const topics = set.map((x) => x.topic);
+    expect(new Set(topics).size).toBe(topics.length);
+  });
+
+  it('is deterministic per day — same args twice yields the same 4 ids in order', () => {
+    const a = selectDailySet({ bank: richBank, answeredIds: [], todayISO: '2026-06-01' });
+    const b = selectDailySet({ bank: richBank, answeredIds: [], todayISO: '2026-06-01' });
+    expect(a.map((x) => x.id)).toEqual(b.map((x) => x.id));
+  });
+
+  it('varies across days — not the same 4 every day', () => {
+    const seen = new Set<string>();
+    for (let d = 1; d <= 28; d++) {
+      const iso = `2026-06-${String(d).padStart(2, '0')}`;
+      const set = selectDailySet({ bank: richBank, answeredIds: [], todayISO: iso });
+      seen.add(set.map((x) => x.id).join(','));
+    }
+    expect(seen.size).toBeGreaterThan(1);
+  });
+
+  it('excludes prior-day-answered questions (version-aware keys)', () => {
+    const set = selectDailySet({
+      bank: richBank,
+      answeredIds: [answeredKey('beg-found', 1), answeredKey('adv-invest', 1)],
+      todayISO: '2026-06-01',
+    });
+    const ids = set.map((x) => x.id);
+    expect(ids).not.toContain('beg-found');
+    expect(ids).not.toContain('adv-invest');
+  });
+
+  it('keeps today-answered questions IN the set (mid-day stability)', () => {
+    const base = selectDailySet({ bank: richBank, answeredIds: [], todayISO: '2026-06-01' });
+    const firstId = base[0].id;
+    const firstVersion = base[0].version;
+    // Answering one of the 4 today must NOT re-roll the set — same 4 ids.
+    const after = selectDailySet({
+      bank: richBank,
+      answeredIds: [],
+      answeredTodayIds: [answeredKey(firstId, firstVersion)],
+      todayISO: '2026-06-01',
+    });
+    expect(after.map((x) => x.id)).toEqual(base.map((x) => x.id));
+  });
+
+  it('degrades to 3 when only 3 are eligible (no throw, no dupe-padding)', () => {
+    const thin = [
+      qt('beg-1', 'Beginner', Topic.FOUNDATIONS),
+      qt('beg-2', 'Beginner', Topic.BUDGETING),
+      qt('adv-1', 'Advanced', Topic.TAXES),
+    ];
+    const set = selectDailySet({ bank: thin, answeredIds: [], todayISO: '2026-06-01' });
+    expect(set).toHaveLength(3);
+    expect(new Set(set.map((x) => x.id)).size).toBe(3);
+  });
+
+  it('returns [] when the pool is empty', () => {
+    expect(selectDailySet({ bank: [], answeredIds: [], todayISO: '2026-06-01' })).toEqual([]);
+  });
+
+  it('returns just the 2 Beginner when there are 0 Advanced', () => {
+    const noAdv = [
+      qt('beg-1', 'Beginner', Topic.FOUNDATIONS),
+      qt('beg-2', 'Beginner', Topic.BUDGETING),
+    ];
+    const set = selectDailySet({ bank: noAdv, answeredIds: [], todayISO: '2026-06-01' });
+    expect(set).toHaveLength(2);
+    expect(set.every((x) => x.difficulty === 'Beginner')).toBe(true);
+  });
+
+  // L1.5 — the 1→4 rollout continuum is just the set size as the pool grows.
+  it('rollout continuum: pool of 1 → 1; 1B+1A → 2; rich → 4', () => {
+    const one = [qt('beg-1', 'Beginner', Topic.FOUNDATIONS)];
+    expect(selectDailySet({ bank: one, answeredIds: [], todayISO: '2026-06-01' })).toHaveLength(1);
+    const two = [
+      qt('beg-1', 'Beginner', Topic.FOUNDATIONS),
+      qt('adv-1', 'Advanced', Topic.TAXES),
+    ];
+    expect(selectDailySet({ bank: two, answeredIds: [], todayISO: '2026-06-01' })).toHaveLength(2);
+    expect(
+      selectDailySet({ bank: richBank, answeredIds: [], todayISO: '2026-06-01' }),
+    ).toHaveLength(4);
+  });
+
+  it('only draws from the pool it is given (caller passes reviewed-only)', () => {
+    // selectDailySet does not itself filter by reviewed — that is load-bank's job.
+    // Given a pool, every returned question is from that pool.
+    const set = selectDailySet({ bank: richBank, answeredIds: [], todayISO: '2026-06-01' });
+    const ids = new Set(richBank.map((x) => x.id));
+    expect(set.every((x) => ids.has(x.id))).toBe(true);
   });
 });
 
