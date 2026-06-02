@@ -89,6 +89,13 @@ export default function Section2_WhatYouOwn({ status, onSetStatus }: Props) {
 
   const meta = SECTIONS[1];
 
+  // Holdings import resolves CSV rows to existing accounts by name; with no
+  // accounts there is nothing to match, so gate the import (W7).
+  const noAccountsReason =
+    accounts.length === 0
+      ? 'Add an account first — imports match rows to existing accounts by name.'
+      : undefined;
+
   if (status === 'pending' || status === 'skipped') {
     return (
       <SectionEntryGate
@@ -118,6 +125,7 @@ export default function Section2_WhatYouOwn({ status, onSetStatus }: Props) {
         onAddManual={() => setDialog('holdings')}
         importEnabled
         importTrigger={<ImportCsvButton entity="holding" />}
+        importDisabledReason={noAccountsReason}
       />
       <EntityCard
         title="Properties"

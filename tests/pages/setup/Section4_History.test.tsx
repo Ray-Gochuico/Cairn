@@ -155,6 +155,12 @@ describe('Section4_History', () => {
   });
 
   describe('Section4_History — non-transactions cards', () => {
+    beforeEach(() => {
+      // Account snapshots + contributions imports are gated until at least
+      // one account exists (W7). Seed one account so they render enabled.
+      useAccountsStore.setState((s: any) => ({ ...s, accounts: [{ id: 1, name: 'Test Account' }] }));
+    });
+
     it('Account snapshots card has a functional Import CSV button', () => {
       renderWithRouter();
       const card = findCard(/Account snapshots/);

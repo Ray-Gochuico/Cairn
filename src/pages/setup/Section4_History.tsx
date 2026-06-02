@@ -99,6 +99,13 @@ export default function Section4_History({ status, onSetStatus }: Props) {
 
   const meta = SECTIONS[3];
 
+  // Account snapshots and contributions both resolve to existing accounts by
+  // name on import; gate them when there are no accounts yet (W7).
+  const noAccountsReason =
+    accounts.length === 0
+      ? 'Add an account first — imports match rows to existing accounts by name.'
+      : undefined;
+
   if (status === 'pending' || status === 'skipped') {
     return (
       <SectionEntryGate
@@ -120,6 +127,7 @@ export default function Section4_History({ status, onSetStatus }: Props) {
         onAddManual={() => setDialog('snapshots')}
         importEnabled
         importTrigger={<ImportCsvButton entity="snapshot" />}
+        importDisabledReason={noAccountsReason}
       />
       <EntityCard
         title="Property / vehicle values"
@@ -134,6 +142,7 @@ export default function Section4_History({ status, onSetStatus }: Props) {
         onAddManual={() => setDialog('contributions')}
         importEnabled
         importTrigger={<ImportCsvButton entity="contribution" />}
+        importDisabledReason={noAccountsReason}
       />
       <Card>
         <CardHeader>

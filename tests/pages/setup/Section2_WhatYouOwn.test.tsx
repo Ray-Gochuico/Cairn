@@ -116,6 +116,12 @@ describe('Section2_WhatYouOwn', () => {
   });
 
   describe('Section2_WhatYouOwn — import buttons enabled', () => {
+    beforeEach(() => {
+      // Holdings import is gated until at least one account exists (W7).
+      // Seed one account so the import buttons render enabled in this group.
+      useAccountsStore.setState((s: any) => ({ ...s, accounts: [{ id: 1, name: 'Test Account' }] }));
+    });
+
     function renderSection() {
       render(
         <MemoryRouter>
