@@ -170,6 +170,10 @@ export async function loadAllMigrations(): Promise<Migration[]> {
   // rows back-fill to 'RSU'. The CHECK ⇔ GrantType enum ⇔ Zod nativeEnum stay
   // in lock-step (Calculators Wave 1 — EquityValue rebuild).
   const m0044 = (await import('./migrations/0044_equity_grant_type.sql?raw')).default;
+  // 0045 adds household-level asset-class target allocations (class-led
+  // hierarchy envelope) as a nullable JSON column on app_settings. Additive
+  // ADD COLUMN; Σ targetPct ≤ 1 validated in SettingsRepo, not SQL.
+  const m0045 = (await import('./migrations/0045_asset_class_target_allocations.sql?raw')).default;
   return [
     { version: '0001_initial', sql: m0001 },
     { version: '0002_seed_tax_rules', sql: m0002 },
@@ -215,5 +219,6 @@ export async function loadAllMigrations(): Promise<Migration[]> {
     { version: '0042_investments_card_layout', sql: m0042 },
     { version: '0043_drop_household_disclosure_columns', sql: m0043 },
     { version: '0044_equity_grant_type', sql: m0044 },
+    { version: '0045_asset_class_target_allocations', sql: m0045 },
   ];
 }
