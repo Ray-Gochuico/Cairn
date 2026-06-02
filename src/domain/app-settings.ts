@@ -1,6 +1,14 @@
 import type { Database } from '@/db/db';
-import { AppSettingsSchema, type AppSettings, type SidebarLayoutEntry, type CardLayoutEntry } from '@/types/schema';
+import {
+  AppSettingsSchema,
+  AssetClassTargetsArraySchema,
+  type AppSettings,
+  type SidebarLayoutEntry,
+  type CardLayoutEntry,
+  type AssetClassTarget,
+} from '@/types/schema';
 import { CompoundingFrequency } from '@/types/enums';
+import { validateClassTargets } from '@/lib/allocation-hierarchy';
 
 interface AppSettingsRow {
   id: number;
@@ -20,6 +28,7 @@ interface AppSettingsRow {
   default_drawdown_tax_rate: number | null;
   property_utilities_category_ids: string | null;
   vehicle_gas_category_ids: string | null;
+  asset_class_target_allocations: string | null;
   // NOTE: the `auto_invest_salary_surplus` column (migration 0029) still
   // exists in the DB as a zombie (SQLite forward-only convention) — the
   // SELECT * below pulls it in but the row type intentionally doesn't
@@ -56,6 +65,22 @@ function parseIdArray(raw: string | null): number[] | null {
   }
 }
 
+/**
+ * Parse the JSON-encoded asset-class targets TEXT column. Malformed JSON,
+ * non-array contents, or rows failing the Zod shape fall back to null
+ * ("unset"). Mirrors parseIdArray's defensive read-boundary stance. Uses the
+ * exported AssetClassTargetsArraySchema so this file needs no `zod` import.
+ */
+function parseAssetClassTargets(raw: string | null): AssetClassTarget[] | null {
+  if (raw === null) return null;
+  try {
+    const result = AssetClassTargetsArraySchema.safeParse(JSON.parse(raw));
+    return result.success ? result.data : null;
+  } catch {
+    return null;
+  }
+}
+
 function rowToAppSettings(row: AppSettingsRow): AppSettings {
   const sidebarLayout: SidebarLayoutEntry[] | null = row.sidebar_layout
     ? JSON.parse(row.sidebar_layout)
@@ -81,6 +106,7 @@ function rowToAppSettings(row: AppSettingsRow): AppSettings {
     defaultDrawdownTaxRate: row.default_drawdown_tax_rate,
     propertyUtilitiesCategoryIds: parseIdArray(row.property_utilities_category_ids),
     vehicleGasCategoryIds: parseIdArray(row.vehicle_gas_category_ids),
+    assetClassTargetAllocations: parseAssetClassTargets(row.asset_class_target_allocations),
   });
 }
 
@@ -100,6 +126,10 @@ export class SettingsRepo {
   async update(patch: Partial<Omit<AppSettings, 'id'>>): Promise<void> {
     const current = await this.get();
     const merged = { ...current, ...patch };
+    // Single source of the Σ≤1 cap (Backend M3): delegate to the hierarchy
+    // module's validateClassTargets rather than re-deriving the reduce here.
+    const check = validateClassTargets(merged.assetClassTargetAllocations);
+    if (!check.ok) throw new Error(check.message);
     AppSettingsSchema.parse(merged);
 
     await this.db.execute(
@@ -119,7 +149,8 @@ export class SettingsRepo {
         default_compounding_frequency = ?,
         default_drawdown_tax_rate = ?,
         property_utilities_category_ids = ?,
-        vehicle_gas_category_ids = ?
+        vehicle_gas_category_ids = ?,
+        asset_class_target_allocations = ?
        WHERE id = 1`,
       [
         merged.sidebarLayout === null ? null : JSON.stringify(merged.sidebarLayout),
@@ -142,6 +173,9 @@ export class SettingsRepo {
         merged.vehicleGasCategoryIds === null
           ? null
           : JSON.stringify(merged.vehicleGasCategoryIds),
+        merged.assetClassTargetAllocations === null
+          ? null
+          : JSON.stringify(merged.assetClassTargetAllocations),
       ],
     );
   }

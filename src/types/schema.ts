@@ -433,6 +433,18 @@ export const CardLayoutEntrySchema = z.object({
 });
 export type CardLayoutEntry = z.infer<typeof CardLayoutEntrySchema>;
 
+export const AssetClassTargetSchema = z.object({
+  assetClass: z.nativeEnum(AssetClass),
+  targetPct: z.number().min(0).max(1),
+});
+export type AssetClassTarget = z.infer<typeof AssetClassTargetSchema>;
+
+// Exported array schema so the repo (which does NOT import zod) can .safeParse
+// the column without re-deriving the shape — mirrors how parseIdArray validates
+// at the read boundary. Backend H2: keep app-settings.ts's dependency surface
+// unchanged (no new `import { z } from 'zod'` there).
+export const AssetClassTargetsArraySchema = z.array(AssetClassTargetSchema);
+
 export const AppSettingsSchema = z.object({
   id: z.literal(1),
   sidebarLayout: z.array(SidebarLayoutEntrySchema).nullable(),
@@ -469,6 +481,12 @@ export const AppSettingsSchema = z.object({
   // (card shows empty state); [a, b, c] = sum across those category ids.
   propertyUtilitiesCategoryIds: z.array(z.number().int().positive()).nullable().default(null),
   vehicleGasCategoryIds: z.array(z.number().int().positive()).nullable().default(null),
+  // Household-level asset-class target allocations — the class-led hierarchy's
+  // strategic envelope. Each targetPct is a 0..1 fraction of the WHOLE
+  // portfolio; the Σ ≤ 1 invariant is enforced in SettingsRepo/the form (not
+  // here, so a partial in-progress edit can be held in component state). null =
+  // unset. Per-ticker refinement stays on holdings.target_allocation_pct.
+  assetClassTargetAllocations: AssetClassTargetsArraySchema.nullable().default(null),
   // NOTE: autoInvestSalarySurplus field removed 2026-05-26 (What-If revamp).
   // The migration 0029 column auto_invest_salary_surplus stays in SQL as a
   // zombie (SQLite forward-only convention); SettingsRepo no longer reads or

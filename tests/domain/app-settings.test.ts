@@ -279,6 +279,65 @@ describe('SettingsRepo — utility category id columns', () => {
   });
 });
 
+describe('SettingsRepo — assetClassTargetAllocations (migration 0045)', () => {
+  let db: SqliteAdapter;
+  let repo: SettingsRepo;
+
+  beforeEach(async () => {
+    db = new SqliteAdapter(':memory:');
+    await runMigrations(db, await loadAllMigrations());
+    repo = new SettingsRepo(db);
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  it('defaults assetClassTargetAllocations to null on the seeded row', async () => {
+    expect((await repo.get()).assetClassTargetAllocations).toBeNull();
+  });
+
+  it('round-trips assetClassTargetAllocations through update/get', async () => {
+    const targets = [
+      { assetClass: 'US_TOTAL_MARKET' as const, targetPct: 0.6 },
+      { assetClass: 'US_BONDS' as const, targetPct: 0.3 },
+    ];
+    await repo.update({ assetClassTargetAllocations: targets });
+    expect((await repo.get()).assetClassTargetAllocations).toEqual(targets);
+    await repo.update({ assetClassTargetAllocations: null });
+    expect((await repo.get()).assetClassTargetAllocations).toBeNull();
+  });
+
+  it('rejects asset-class targets summing to more than 100%', async () => {
+    await expect(
+      repo.update({
+        assetClassTargetAllocations: [
+          { assetClass: 'US_TOTAL_MARKET' as const, targetPct: 0.7 },
+          { assetClass: 'US_BONDS' as const, targetPct: 0.5 },
+        ],
+      }),
+    ).rejects.toThrow(/exceed|sum|100/i);
+  });
+
+  it('accepts asset-class targets summing to exactly 100%', async () => {
+    await expect(
+      repo.update({
+        assetClassTargetAllocations: [
+          { assetClass: 'US_TOTAL_MARKET' as const, targetPct: 0.5 },
+          { assetClass: 'US_BONDS' as const, targetPct: 0.5 },
+        ],
+      }),
+    ).resolves.not.toThrow();
+  });
+
+  it('tolerates malformed JSON in the column by returning null', async () => {
+    await db.execute(
+      "UPDATE app_settings SET asset_class_target_allocations = '{not json}' WHERE id = 1",
+    );
+    expect((await repo.get()).assetClassTargetAllocations).toBeNull();
+  });
+});
+
 describe('SettingsRepo — autoInvestSalarySurplus removed (2026-05-26 revamp)', () => {
   let db: SqliteAdapter;
   let repo: SettingsRepo;
