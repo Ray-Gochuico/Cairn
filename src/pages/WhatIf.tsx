@@ -319,7 +319,7 @@ export default function WhatIf() {
             early-retirement market years.{' '}
             <Link
               to="/calculators/backtest"
-              className="text-primary underline underline-offset-2 hover:text-primary/80"
+              className="text-primary underline underline-offset-4 hover:text-primary/80"
             >
               Explore with Historical Backtest →
             </Link>

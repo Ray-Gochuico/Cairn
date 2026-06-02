@@ -112,7 +112,7 @@ export default function Backtest() {
           For side-by-side scenario comparison, see{' '}
           <Link
             to="/what-if"
-            className="text-primary underline underline-offset-2 hover:text-primary/80"
+            className="text-primary underline underline-offset-4 hover:text-primary/80"
           >
             What-If →
           </Link>
