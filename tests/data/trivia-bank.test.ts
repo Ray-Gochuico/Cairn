@@ -7,6 +7,7 @@ import {
   isBareRotFigureAnswer,
   isPrimarySourceCitation,
   answerOf,
+  parseNumericAnswer,
   promptJaccard,
   JACCARD_THRESHOLD,
   ANSWER_INDEX_MIN_N,
@@ -124,11 +125,11 @@ describe('bank-v1.json integrity', () => {
   // assertion is a no-op until the Investments/Advanced seed batch lands, then
   // it bites. The synthetic prove-it-bites probe lives below.)
 
-  it('every math question self-verifies (Number(answer) ≈ check.expected within tolerance)', () => {
+  it('every math question self-verifies (parseNumericAnswer ≈ check.expected within tolerance)', () => {
     const mathQs = parsed.filter((q) => q.format === QuestionFormat.MATH);
     const offenders: string[] = [];
     for (const q of mathQs) {
-      const answer = Number(answerOf(q));
+      const answer = parseNumericAnswer(answerOf(q));
       if (Number.isNaN(answer)) {
         offenders.push(`${q.id}: answer "${answerOf(q)}" is not numeric`);
         continue;

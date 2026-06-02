@@ -5,6 +5,7 @@ import {
   isPrimarySourceCitation,
   normalizePrompt,
   promptJaccard,
+  parseNumericAnswer,
   STATUTORY_ANSWER_ALLOWLIST,
   JACCARD_THRESHOLD,
   DEFAULT_MATH_TOLERANCE,
@@ -92,6 +93,21 @@ describe('normalizePrompt / promptJaccard', () => {
     const a = 'What age do RMDs begin under SECURE 2.0?';
     const b = 'Which income is subject to the net investment income tax?';
     expect(promptJaccard(a, b)).toBeLessThan(JACCARD_THRESHOLD);
+  });
+});
+
+describe('parseNumericAnswer', () => {
+  it('strips currency, separators, percent and trailing units', () => {
+    expect(parseNumericAnswer('$600')).toBe(600);
+    expect(parseNumericAnswer('$1,210')).toBe(1210);
+    expect(parseNumericAnswer('4%')).toBe(4);
+    expect(parseNumericAnswer('9 years')).toBe(9);
+    expect(parseNumericAnswer('12 shares')).toBe(12);
+    expect(parseNumericAnswer('$1,000,000')).toBe(1000000);
+  });
+
+  it('returns NaN when no number is present', () => {
+    expect(Number.isNaN(parseNumericAnswer('not a number'))).toBe(true);
   });
 });
 

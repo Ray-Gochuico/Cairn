@@ -70,6 +70,21 @@ export function answerOf(q: Pick<TriviaQuestion, 'choices' | 'answerIndex'>): st
 }
 
 /**
+ * Parse the numeric value out of a math answer string for self-verification.
+ * Math answers may carry presentation formatting ("$1,210", "4%", "9 years"); the
+ * harness strips the currency sign, thousands separators, a trailing percent, and
+ * any trailing unit word(s), then parses the leading number. Returns NaN if no
+ * number is present (which the harness reports as an offender). The recompute it
+ * is compared against is INDEPENDENT (check.expr), so this never just echoes the
+ * stored answer.
+ */
+export function parseNumericAnswer(answer: string): number {
+  const cleaned = answer.trim().replace(/[$,%]/g, '');
+  const m = cleaned.match(/-?\d+(?:\.\d+)?/);
+  return m ? Number(m[0]) : Number.NaN;
+}
+
+/**
  * Default tolerance for math self-verification (panel Testing M2 / Backend M2).
  * The comparison ALWAYS applies a default — never strict `===` — so float drift
  * (0.1 + 0.2-class) can't false-fail correct math. Currency-cents granularity.
