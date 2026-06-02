@@ -37,13 +37,24 @@ describe('getHiddenCards', () => {
   });
 
   it('leaves unrelated ids untouched', () => {
-    localStorage.setItem('calculator-hidden-cards', '["net-worth","commission"]');
-    expect(getHiddenCards()).toEqual(['net-worth', 'commission']);
+    localStorage.setItem('calculator-hidden-cards', '["net-worth","paycheck"]');
+    expect(getHiddenCards()).toEqual(['net-worth', 'paycheck']);
   });
 
   it('de-dupes when both legacy and current id are present', () => {
     localStorage.setItem('calculator-hidden-cards', '["fire","financial-independence"]');
     expect(getHiddenCards()).toEqual(['financial-independence']);
+  });
+
+  // LEGACY_ID_MIGRATIONS: commission → commission-tax (Track-3 card-id rename)
+  it('migrates legacy "commission" id to "commission-tax"', () => {
+    localStorage.setItem('calculator-hidden-cards', '["commission"]');
+    expect(getHiddenCards()).toEqual(['commission-tax']);
+  });
+
+  it('de-dupes when both legacy "commission" and current "commission-tax" are present', () => {
+    localStorage.setItem('calculator-hidden-cards', '["commission","commission-tax"]');
+    expect(getHiddenCards()).toEqual(['commission-tax']);
   });
 });
 
