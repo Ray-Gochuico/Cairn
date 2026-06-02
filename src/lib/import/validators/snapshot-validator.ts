@@ -39,7 +39,7 @@ export function validateSnapshotRow(
     errors.push({
       field: 'account',
       message: raw.account?.trim()
-        ? `No account named "${raw.account}"`
+        ? `No account named "${raw.account}" — add it in Section 2 → Accounts first, then re-import.`
         : 'Account is required',
     });
   }

@@ -41,11 +41,17 @@ describe('validateSnapshotRow', () => {
     expect(r.errors).toContainEqual({ field: 'account', message: expect.stringMatching(/required|not.*match/i) });
   });
 
-  it('errors when account does not match any existing account', () => {
+  it('errors with an actionable message when account does not match any existing account', () => {
     const row = { account: 'Made Up Account', snapshot_date: '2023-06-30', total_value: '60000' };
     const r = validateSnapshotRow(row, 4, baseCtx);
     expect(r.status).toBe('error');
-    expect(r.errors).toContainEqual({ field: 'account', message: expect.stringMatching(/no.*account/i) });
+    const accountErr = r.errors.find((e) => e.field === 'account');
+    expect(accountErr).toBeDefined();
+    // Still names the account (back-compat) …
+    expect(accountErr!.message).toMatch(/no account named/i);
+    // … and now tells the user where to add it.
+    expect(accountErr!.message).toMatch(/section 2/i);
+    expect(accountErr!.message).toMatch(/re-?import/i);
   });
 
   it('errors when the date is not ISO 8601', () => {
