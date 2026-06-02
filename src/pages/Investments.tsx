@@ -201,10 +201,25 @@ interface DriftRow {
 }
 
 function computeDrift(valuations: HoldingValuation[]): DriftRow[] {
-  const total = valuations.reduce((a, b) => a + b.value, 0);
+  // Ticker drift is pinned to the WITHIN-ACCOUNT basis: the stored
+  // target_allocation_pct was authored per account (validated ≤100% per
+  // account in holdings-validation.ts), so the apples-to-apples actual is the
+  // holding's share of ITS account's total holding value — not the whole
+  // household (which made multi-account drift meaningless). Class-level drift
+  // (household basis) is computed separately in allocation-hierarchy.ts.
+  //
+  // Backend L1: key account totals on holding.accountId (a stable numeric id
+  // carried on every HoldingValuation via `holding`), NOT the display
+  // accountName — two same-named accounts must not be conflated. accountName is
+  // retained only for the display row.
+  const accountTotals = new Map<number, number>();
+  for (const v of valuations) {
+    accountTotals.set(v.holding.accountId, (accountTotals.get(v.holding.accountId) ?? 0) + v.value);
+  }
   return valuations
     .map<DriftRow>((v) => {
-      const actualPct = total === 0 ? 0 : v.value / total;
+      const accountTotal = accountTotals.get(v.holding.accountId) ?? 0;
+      const actualPct = accountTotal === 0 ? 0 : v.value / accountTotal;
       const drift = v.holding.targetAllocationPct != null
         ? actualPct - v.holding.targetAllocationPct
         : 0;

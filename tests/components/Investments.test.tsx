@@ -794,4 +794,37 @@ describe('Investments page — 529 section', () => {
     // p2's brokerage is filtered out
     expect(screen.queryByText("Bob's Brokerage")).not.toBeInTheDocument();
   });
+
+  it('computes ticker drift on the within-account basis (multi-account)', async () => {
+    // Two accounts, each holding a single ticker that is 100% of that
+    // account's value, each with target_allocation_pct = 1.0. Under the
+    // within-account basis the actual is 100% ⇒ 0 drift. Under the OLD
+    // household basis each holding would read ~50% (its account value over the
+    // household total) ⇒ a large negative drift.
+    primeStores({
+      accounts: [
+        { id: 1, name: 'Acct One', type: AccountType.ACCOUNT_BROKERAGE },
+        { id: 2, name: 'Acct Two', type: AccountType.ACCOUNT_BROKERAGE },
+      ],
+      holdings: [
+        { id: 1, accountId: 1, ticker: 'VTI', shareCount: 10, targetAllocationPct: 1.0 },
+        { id: 2, accountId: 2, ticker: 'BND', shareCount: 10, targetAllocationPct: 1.0 },
+      ],
+      snapshotValues: [
+        { accountId: 1, snapshotDate: '2026-04-01', totalValue: 40_000 },
+        { accountId: 2, snapshotDate: '2026-04-01', totalValue: 60_000 },
+      ],
+    });
+
+    render(
+      <MemoryRouter>
+        <Investments />
+      </MemoryRouter>,
+    );
+
+    // Each holding is 100% of its own account ⇒ within-account actual 100% ⇒
+    // 0 drift. At least two drift cells read "0.0%"/"+0.0%".
+    const driftCells = await screen.findAllByText(/^\+?0\.0%$/);
+    expect(driftCells.length).toBeGreaterThanOrEqual(2);
+  });
 });
