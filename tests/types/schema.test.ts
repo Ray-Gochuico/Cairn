@@ -967,6 +967,7 @@ describe('AppSettingsSchema', () => {
     refreshCadence: RefreshCadence.EVERY_LAUNCH,
     lastRefreshAt: null,
     statementsFolderPath: null,
+    lastSeenMonth: null,
   };
 
   it('accepts a valid settings object with null optionals', () => {

@@ -10,6 +10,7 @@ const VALID_BASE = {
   refreshCadence: RefreshCadence.EVERY_LAUNCH,
   lastRefreshAt: null,
   statementsFolderPath: null,
+  lastSeenMonth: null,
 };
 
 describe('AppSettingsSchema — utility category fields', () => {

@@ -24,6 +24,7 @@ describe('AppSettingsSchema.investmentsCardLayout', () => {
     refreshCadence: RefreshCadence.DAILY,
     lastRefreshAt: null,
     statementsFolderPath: null,
+    lastSeenMonth: null,
   };
 
   it('defaults investmentsCardLayout to null when omitted', () => {

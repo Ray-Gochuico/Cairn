@@ -338,6 +338,33 @@ describe('SettingsRepo — assetClassTargetAllocations (migration 0045)', () => 
   });
 });
 
+describe('SettingsRepo — lastSeenMonth (migration 0046)', () => {
+  let db: SqliteAdapter;
+  let repo: SettingsRepo;
+
+  beforeEach(async () => {
+    db = new SqliteAdapter(':memory:');
+    await runMigrations(db, await loadAllMigrations());
+    repo = new SettingsRepo(db);
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  it('lastSeenMonth defaults to null and round-trips through update()', async () => {
+    expect((await repo.get()).lastSeenMonth).toBeNull();
+    await repo.update({ lastSeenMonth: '2026-06' });
+    expect((await repo.get()).lastSeenMonth).toBe('2026-06');
+  });
+
+  it('writes null when lastSeenMonth is cleared', async () => {
+    await repo.update({ lastSeenMonth: '2026-05' });
+    await repo.update({ lastSeenMonth: null });
+    expect((await repo.get()).lastSeenMonth).toBeNull();
+  });
+});
+
 describe('SettingsRepo — autoInvestSalarySurplus removed (2026-05-26 revamp)', () => {
   let db: SqliteAdapter;
   let repo: SettingsRepo;

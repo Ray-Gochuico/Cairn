@@ -487,6 +487,11 @@ export const AppSettingsSchema = z.object({
   // here, so a partial in-progress edit can be held in component state). null =
   // unset. Per-ticker refinement stays on holdings.target_allocation_pct.
   assetClassTargetAllocations: AssetClassTargetsArraySchema.nullable().default(null),
+  // Migration 0046: tracks the YYYY-MM of the most recent month for which the
+  // app surfaced the monthly-input ritual prompt. Drives the once-per-month
+  // auto-route to /monthly (Wave 3). null = never prompted (first-ever open).
+  // Peer to lastRefreshAt — app/UI state, not household financial data.
+  lastSeenMonth: z.string().nullable(),
   // NOTE: autoInvestSalarySurplus field removed 2026-05-26 (What-If revamp).
   // The migration 0029 column auto_invest_salary_surplus stays in SQL as a
   // zombie (SQLite forward-only convention); SettingsRepo no longer reads or

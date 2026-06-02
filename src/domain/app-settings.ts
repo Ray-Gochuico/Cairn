@@ -29,6 +29,7 @@ interface AppSettingsRow {
   property_utilities_category_ids: string | null;
   vehicle_gas_category_ids: string | null;
   asset_class_target_allocations: string | null;
+  last_seen_month: string | null;
   // NOTE: the `auto_invest_salary_surplus` column (migration 0029) still
   // exists in the DB as a zombie (SQLite forward-only convention) — the
   // SELECT * below pulls it in but the row type intentionally doesn't
@@ -107,6 +108,7 @@ function rowToAppSettings(row: AppSettingsRow): AppSettings {
     propertyUtilitiesCategoryIds: parseIdArray(row.property_utilities_category_ids),
     vehicleGasCategoryIds: parseIdArray(row.vehicle_gas_category_ids),
     assetClassTargetAllocations: parseAssetClassTargets(row.asset_class_target_allocations),
+    lastSeenMonth: row.last_seen_month,
   });
 }
 
@@ -150,7 +152,8 @@ export class SettingsRepo {
         default_drawdown_tax_rate = ?,
         property_utilities_category_ids = ?,
         vehicle_gas_category_ids = ?,
-        asset_class_target_allocations = ?
+        asset_class_target_allocations = ?,
+        last_seen_month = ?
        WHERE id = 1`,
       [
         merged.sidebarLayout === null ? null : JSON.stringify(merged.sidebarLayout),
@@ -176,6 +179,7 @@ export class SettingsRepo {
         merged.assetClassTargetAllocations === null
           ? null
           : JSON.stringify(merged.assetClassTargetAllocations),
+        merged.lastSeenMonth,
       ],
     );
   }
