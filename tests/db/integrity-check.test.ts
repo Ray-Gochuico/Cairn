@@ -58,8 +58,29 @@ describe('assertDatabaseIntegrity (M1)', () => {
     }
   });
 
-  it('tolerates a multi-row quick_check result whose first row is ok', async () => {
-    // SQLite returns a single "ok" row when healthy; assert we read row[0].
+  it('rejects a genuine MULTI-ROW quick_check result (each row a problem)', async () => {
+    // When corrupt, SQLite returns ONE row PER problem (never an "ok" row).
+    // Build a real two-row result and assert row[0] (a problem line) is
+    // detected as corruption.
+    const corrupt = {
+      select: async (sql: string) => {
+        if (/quick_check/i.test(sql)) {
+          return [
+            { quick_check: 'row 3 missing from index idx_accounts' },
+            { quick_check: 'wrong # of entries in index idx_tx' },
+          ];
+        }
+        return [];
+      },
+    } as unknown as Parameters<typeof assertDatabaseIntegrity>[0];
+
+    await expect(assertDatabaseIntegrity(corrupt)).rejects.toBeInstanceOf(
+      DatabaseCorruptError,
+    );
+  });
+
+  it('passes for the healthy single "ok" row (the success shape)', async () => {
+    // SQLite returns exactly one row, value "ok", when the file is sound.
     await db.execute('CREATE TABLE t (id INTEGER PRIMARY KEY)');
     await expect(assertDatabaseIntegrity(db)).resolves.toBeUndefined();
   });

@@ -197,11 +197,18 @@ export async function validateBackupFile(path: string): Promise<BackupValidation
 }
 
 /**
+ * sessionStorage key carrying a failed-restore reason across the forced reload,
+ * so the freshly-booted app can surface what went wrong. Read-once (the reader
+ * removes it). See `takeRestoreFailureNotice`.
+ */
+export const RESTORE_FAILURE_NOTICE_KEY = 'cairn.restoreFailure';
+
+/**
  * Restore the live database from `source`, corruption-safely:
  *   1. close the live pool so no connection holds the file/WAL open;
- *   2. invoke Rust `db_restore` (re-validates, then swaps the file + clears the
- *      stale `-wal`/`-shm` sidecars);
- *   3. reload the webview so boot re-inits on the restored DB.
+ *   2. invoke Rust `db_restore` (re-validates, then ATOMICALLY swaps the file +
+ *      clears the stale `-wal`/`-shm` sidecars — see src-tauri/src/db_backup.rs);
+ *   3. ALWAYS reload the webview so boot re-inits a fresh pool.
  *
  * STEP 1 invokes the plugin's `close` command directly rather than
  * `Database.load(url).close()`. CRITICAL DISTINCTION: `Database.load` runs the
@@ -210,12 +217,21 @@ export async function validateBackupFile(path: string): Promise<BackupValidation
  * new pool while the original live pool's connections linger (still holding the
  * file open during the swap → corruption risk). The `close` command instead
  * looks up the EXISTING entry and `pool.close().await`s it deterministically,
- * draining every live connection before we touch the file. (See
- * tauri-plugin-sql 2.4.0 commands.rs `load` vs `close`.)
+ * draining every connection AND checkpointing the WAL before we touch the file.
+ * (See tauri-plugin-sql 2.4.0 commands.rs `load` vs `close`.)
  *
- * The close→restore→reload ORDER is the safety contract (see
- * `src-tauri/src/db_backup.rs`). If `db_restore` throws we do NOT reload, so the
- * caller can surface the error against the still-live (untouched) database.
+ * M-4 — RELOAD IS UNCONDITIONAL ONCE THE POOL IS CLOSED. After step 1 the
+ * session is running on a CLOSED pool; every subsequent query would fail, so
+ * leaving the app running (e.g. because `db_restore` threw) would brick it until
+ * a manual restart. We therefore reload whether step 2 succeeds OR throws. This
+ * is only safe because of H-1: a failed `db_restore` leaves the ORIGINAL
+ * `finance.db` byte-for-byte intact, so the post-reload boot re-inits cleanly on
+ * valid data. On failure we stash the reason in sessionStorage first so the app
+ * can surface it after reload (best-effort; never blocks the reload).
+ *
+ * If the CLOSE itself fails (step 1, before the point of no return), the pool
+ * may still be alive — we do NOT reload and propagate the error so the caller
+ * surfaces it against the still-live DB.
  *
  * `reload` is injectable for tests; it defaults to `window.location.reload`.
  */
@@ -224,13 +240,44 @@ export async function restoreFromBackup(
   opts: { reload?: () => void } = {},
 ): Promise<void> {
   const reload = opts.reload ?? (() => window.location.reload());
+
   // Deterministically close the EXISTING live pool (drains + closes every
-  // connection). Do NOT use Database.load here — see the doc comment above.
+  // connection, checkpoints WAL). Do NOT use Database.load here — see above.
+  // A failure here is BEFORE the point of no return: propagate without reload.
   await invoke('plugin:sql|close', { db: DB_URL });
-  // Swap the file. Any throw here leaves the live DB untouched (Rust validates
-  // before writing) — propagate so the UI shows it; do not reload.
-  await invoke('db_restore', { db: DB_URL, source });
-  reload();
+
+  // Point of no return: the pool is closed. From here we MUST reload no matter
+  // what, or the session is stuck on a dead pool (M-4).
+  try {
+    await invoke('db_restore', { db: DB_URL, source });
+  } catch (e) {
+    // H-1 guarantees the original finance.db is intact on a failed restore, so
+    // the reload below re-inits on valid data. Stash the reason for the app to
+    // show post-reload; swallow any sessionStorage error (never block reload).
+    try {
+      const reason = e instanceof Error ? e.message : String(e);
+      window.sessionStorage?.setItem(RESTORE_FAILURE_NOTICE_KEY, reason);
+    } catch {
+      // sessionStorage unavailable — the reload still happens; reason is lost.
+    }
+  } finally {
+    reload();
+  }
+}
+
+/**
+ * Read-and-clear the failed-restore reason left by `restoreFromBackup` before a
+ * forced reload. Returns the reason once (subsequent calls return null).
+ * Safe to call on every boot; returns null when there's nothing pending.
+ */
+export function takeRestoreFailureNotice(): string | null {
+  try {
+    const reason = window.sessionStorage?.getItem(RESTORE_FAILURE_NOTICE_KEY) ?? null;
+    if (reason !== null) window.sessionStorage.removeItem(RESTORE_FAILURE_NOTICE_KEY);
+    return reason;
+  } catch {
+    return null;
+  }
 }
 
 /**

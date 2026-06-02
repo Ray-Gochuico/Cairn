@@ -24,6 +24,7 @@ import {
   rotateBackups,
   validateBackupFile,
   restoreFromBackup,
+  takeRestoreFailureNotice,
   MAX_BACKUPS,
 } from '@/lib/backup-restore';
 
@@ -40,6 +41,8 @@ beforeEach(() => {
   // implementation set by one test does not leak into the next — clearAllMocks
   // only wipes call history, leaving the implementation in place.
   vi.resetAllMocks();
+  // Clear any cross-test restore-failure notice left in sessionStorage.
+  window.sessionStorage?.clear();
   mockAppConfigDir.mockResolvedValue('/Users/me/Library/Application Support/com.x.cairn');
   // db_backup/db_restore/db_validate_backup all resolve by default; individual
   // tests override as needed.
@@ -158,15 +161,50 @@ describe('restoreFromBackup', () => {
     expect(order).toEqual(['plugin:sql|close', 'db_restore', 'reload']);
   });
 
-  it('does NOT reload if db_restore throws (so the error is surfaced)', async () => {
-    // close resolves, db_restore rejects.
+  it('STILL reloads when db_restore throws — the pool is already closed (M-4)', async () => {
+    // close resolves, db_restore rejects. The session is on a closed pool, so
+    // reload MUST happen anyway (H-1 leaves the original DB intact, so boot
+    // re-inits cleanly). The thrown error is swallowed in favour of the reload.
+    const order: string[] = [];
     mockInvoke.mockImplementation(async (cmd: string) => {
-      if (cmd === 'db_restore') throw new Error('boom');
+      order.push(cmd);
+      if (cmd === 'db_restore') throw new Error('swap failed');
+      return undefined;
+    });
+    const reload = vi.fn(() => { order.push('reload'); });
+
+    await restoreFromBackup('/some/backup.db', { reload });
+
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(order).toEqual(['plugin:sql|close', 'db_restore', 'reload']);
+  });
+
+  it('stashes the failure reason for the post-reload app to surface (M-4)', async () => {
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'db_restore') throw new Error('disk full during restore');
+      return undefined;
+    });
+    await restoreFromBackup('/some/backup.db', { reload: vi.fn() });
+    // takeRestoreFailureNotice read-once returns the reason, then clears it.
+    expect(takeRestoreFailureNotice()).toBe('disk full during restore');
+    expect(takeRestoreFailureNotice()).toBeNull();
+  });
+
+  it('does NOT reload when the CLOSE itself fails (pool may still be live)', async () => {
+    // Failure BEFORE the point of no return: the pool might still be alive, so
+    // we propagate and do NOT reload (the caller surfaces it on the live DB).
+    mockInvoke.mockImplementation(async (cmd: string) => {
+      if (cmd === 'plugin:sql|close') throw new Error('close failed');
       return undefined;
     });
     const reload = vi.fn();
     await expect(restoreFromBackup('/some/backup.db', { reload })).rejects.toBeTruthy();
     expect(reload).not.toHaveBeenCalled();
+    // db_restore must never run if the close failed.
+    expect(mockInvoke).not.toHaveBeenCalledWith(
+      'db_restore',
+      expect.anything(),
+    );
   });
 });
 

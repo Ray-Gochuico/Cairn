@@ -37,29 +37,32 @@
 //!    holds a handle to the old inode or a dirty WAL. The closed pool stays in
 //!    the plugin's `DbInstances` map; step 4's reload replaces it.
 //! 3. `db_restore` re-validates (defence in depth) and then
-//!    `replace_database_file` copies backup → finance.db and DELETES the `-wal`
-//!    and `-shm` sidecars, so a stale WAL from the pre-restore database can't
-//!    shadow the freshly-restored file on reopen.
-//! 4. The JS side then `window.location.reload()`s; on reboot `Database.load`
-//!    issues `plugin:sql|load`, which `Pool::connect`s a FRESH pool over the
-//!    now-restored file (overwriting the closed pool in `DbInstances`). The
-//!    Rust process and its state survive a webview reload, so this re-init is
-//!    what brings the restored DB online — no app quit required.
+//!    `replace_database_file` performs an ATOMIC swap that always leaves a valid
+//!    `finance.db` (full ordering + crash analysis on that function): it stages
+//!    the backup into a sibling temp file, clears the OLD (already-checkpointed)
+//!    `-wal`/`-shm` sidecars, then `rename`s the temp file over `finance.db`.
+//!    The live file is NEVER the copy target, so the in-copy truncation window a
+//!    plain `fs::copy(backup, live)` would have is eliminated.
+//! 4. The JS side then ALWAYS `window.location.reload()`s (success or failure —
+//!    the pool was closed in step 2, so the session must re-init). On reboot
+//!    `Database.load` issues `plugin:sql|load`, which `Pool::connect`s a FRESH
+//!    pool over the file (the restored backup on success, or the still-intact
+//!    original on a failed restore — H-1 guarantees one or the other, never a
+//!    partial). The Rust process and its state survive a webview reload, so this
+//!    re-init brings the DB back online — no app quit required.
 //!
-//! The copy + sidecar-delete is the only window where a crash could leave a
-//! partial file, and we order it copy-first / delete-after: if the process dies
-//! mid-copy the sidecars are still the OLD ones (consistent with the old main
-//! file's last checkpoint) OR the next boot finds a fully-copied file with no
-//! sidecars (the restored state). There is no ordering that yields the restored
-//! main file shadowed by an unrelated WAL.
+//! CRASH SAFETY: see `replace_database_file` for the per-step analysis. Every
+//! failure point leaves `finance.db` either fully the original or fully the
+//! restored backup — there is no state that is a partially-written main file and
+//! none that leaves the restored file shadowed by a stale WAL.
 //!
 //! WHY THIS CAN'T CORRUPT EVEN IF THE JS CLOSE IS INCOMPLETE: `db_restore` only
-//! ever overwrites the live file AFTER its own re-validation passes, and the JS
-//! flow awaits `Database.close()` (which resolves only once `pool.close()` has
-//! drained every connection) before invoking this command. If a caller skipped
-//! the close, `std::fs::copy` would still write into the same inode any open
-//! connection holds — which is why the JS contract (close → invoke → reload) is
-//! load-bearing and enforced in `src/lib/backup-restore.ts`.
+//! ever swaps the live file AFTER its own re-validation passes, and the JS flow
+//! awaits the plugin's `close` command (which resolves only once `pool.close()`
+//! has drained every connection AND checkpointed the WAL) before invoking this
+//! command — that checkpoint is what makes clearing the sidecars in step 3
+//! lossless. The close → invoke → reload contract is load-bearing and enforced
+//! in `src/lib/backup-restore.ts`.
 
 use serde::Serialize;
 use sqlx::sqlite::SqliteConnectOptions;
@@ -78,9 +81,11 @@ use tauri_plugin_sql::{DbInstances, DbPool};
 ///
 /// Kept here (not read from JS) because the guard runs entirely in Rust before
 /// the webview is even told to reload. If a future migration is added, bump
-/// BOTH this constant and the JS `MAX_SCHEMA_VERSION` (a parity test in
-/// `tests/db/schema-version.test.ts` asserts the JS side equals the migration
-/// count; this constant is asserted equal to that count by review).
+/// BOTH this constant and the JS `MAX_SCHEMA_VERSION`. Both sides are pinned to
+/// the literal by tests so a one-sided bump fails CI: the Rust side by
+/// `tests::max_schema_version_is_pinned_to_46` below, the JS side by
+/// `tests/db/schema-version-guard.test.ts` (which also asserts the JS value
+/// equals the migration count).
 pub const MAX_SCHEMA_VERSION: i64 = 46;
 
 /// Outcome of validating a candidate backup file, surfaced to JS so the UI can
@@ -217,36 +222,81 @@ pub async fn validate_backup_file(path: &Path) -> BackupValidation {
     }
 }
 
-/// Replace `live` with a copy of `backup`, then clear the WAL/SHM sidecars.
+/// Atomically replace `live` with the contents of `backup`, leaving a VALID
+/// `finance.db` no matter where a failure occurs.
 ///
-/// PRECONDITION: the live pool must already be closed, so no connection holds an
-/// open handle to `live` or its WAL. Ordering is copy-first, delete-after (see
-/// the module-level safety note): there is no crash window that leaves the
-/// restored main file shadowed by a stale WAL.
+/// PRECONDITION: the live pool must already be closed (the JS step does this),
+/// so (a) no connection holds an open handle to `live`/its WAL, and (b) the WAL
+/// has been checkpointed into the main file by `pool.close()` — i.e. the
+/// original `live` file is self-contained and the `-wal`/`-shm` sidecars are
+/// stale/empty. Both facts are what make the deletion-before-rename ordering
+/// below safe.
 ///
-/// The sidecars are `<live>-wal` and `<live>-shm`. Deleting them is what makes a
-/// WAL-mode restore safe: on reopen SQLite would otherwise replay the OLD
-/// database's WAL frames over the freshly-restored main file. Missing sidecars
-/// are fine (a checkpointed/closed DB may have none), so a "not found" on delete
-/// is not an error.
+/// ORDERING (every crash point leaves a valid finance.db):
+///   1. Copy `backup` → a temp file in the SAME directory (`<live>.restore-tmp`).
+///      Crash here ⇒ `live` is byte-for-byte UNTOUCHED; only the temp file is
+///      partial (it is overwritten/cleaned on the next attempt). We never write
+///      through `live` directly, so the in-copy truncation window that a plain
+///      `fs::copy(backup, live)` has is eliminated.
+///   2. Delete the OLD `<live>-wal` / `-shm` sidecars. They were already
+///      checkpointed into `live` by the pool close, so removing them strands no
+///      data: if we crash after this but before the rename, `live` is still the
+///      ORIGINAL, fully-valid database. Doing the delete BEFORE the rename (not
+///      after) is deliberate — a stale WAL left next to the freshly-renamed file
+///      would be replayed over it on reopen and corrupt the restore.
+///   3. `rename(tmp, live)` — atomic on the same filesystem. Before it runs,
+///      `live` is the intact original; after it returns, `live` IS the restored
+///      backup, with no sidecars to shadow it. There is no intermediate state
+///      that is a partially-written main file.
+///
+/// On any error we attempt to remove the temp file (best-effort) so a failed
+/// restore doesn't litter the data dir; the live DB is reported untouched.
 pub fn replace_database_file(backup: &Path, live: &Path) -> Result<(), String> {
-    std::fs::copy(backup, live)
-        .map_err(|e| format!("db_restore: failed to copy backup over the live database: {e}"))?;
+    let tmp = restore_tmp_path(live);
 
+    // 1. Stage the restore in a sibling temp file. A mid-copy failure here
+    //    cannot corrupt `live` because `live` is never the copy target.
+    if let Err(e) = std::fs::copy(backup, &tmp) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(format!(
+            "db_restore: failed to stage the backup (your data is unchanged): {e}"
+        ));
+    }
+
+    // 2. Clear the OLD, already-checkpointed WAL sidecars BEFORE the rename so
+    //    nothing can shadow the restored file. `live` is still the valid
+    //    original at this point, so a failure here leaves recoverable data.
     for sidecar in sidecar_paths(live) {
         match std::fs::remove_file(&sidecar) {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => {
+                let _ = std::fs::remove_file(&tmp);
                 return Err(format!(
-                    "db_restore: copied the backup but failed to clear stale WAL sidecar {}: {e}. \
-                     Quit and reopen Cairn before making changes.",
+                    "db_restore: could not clear stale WAL sidecar {} (your data is unchanged): {e}",
                     sidecar.display()
-                ))
+                ));
             }
         }
     }
+
+    // 3. Atomic swap. Either `live` is the intact original (rename never ran) or
+    //    it is the fully-restored backup (rename returned) — never a partial.
+    if let Err(e) = std::fs::rename(&tmp, live) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(format!(
+            "db_restore: failed to finalize the restore (your data is unchanged): {e}"
+        ));
+    }
+
     Ok(())
+}
+
+/// The same-directory temp path the restore is staged into before the atomic
+/// rename. Same parent dir as `live` so `rename` stays on one filesystem.
+fn restore_tmp_path(live: &Path) -> PathBuf {
+    let as_str = live.to_string_lossy();
+    PathBuf::from(format!("{as_str}.restore-tmp"))
 }
 
 /// The `-wal` and `-shm` sidecar paths for a SQLite main-db path.
@@ -552,5 +602,94 @@ mod tests {
         // No live file and no sidecars at all — a fresh restore target.
         replace_database_file(&backup, &live).expect("replace with no sidecars");
         assert_eq!(count_rows(&live, "accounts").await, 2);
+    }
+
+    /// H-1: a FAILED restore must leave the ORIGINAL live database byte-for-byte
+    /// intact (never a truncated/partial file). We force the staging copy to
+    /// fail by making the live file's directory read-only, so the copy to the
+    /// sibling `<live>.restore-tmp` cannot be created. The original `live` must
+    /// survive unchanged because it is never the copy target.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn replace_database_file_failed_copy_leaves_original_intact() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        // Subdirectory we can lock down without affecting the TempDir cleanup.
+        let live_dir = dir.path().join("data");
+        std::fs::create_dir(&live_dir).unwrap();
+
+        // A real, valid backup elsewhere.
+        let backup = dir.path().join("backup.db");
+        let src = dir.path().join("seed.db");
+        let pool = seeded_pool(&src).await;
+        backup_to(&pool, &backup).await.unwrap();
+        pool.close().await;
+
+        // A pre-existing live DB with KNOWN distinct contents.
+        let live = live_dir.join("finance.db");
+        let original_bytes = b"ORIGINAL-LIVE-DB-CONTENTS-do-not-clobber".to_vec();
+        std::fs::write(&live, &original_bytes).unwrap();
+
+        // Make the directory read-only so creating `<live>.restore-tmp` fails.
+        let mut perms = std::fs::metadata(&live_dir).unwrap().permissions();
+        perms.set_mode(0o500); // r-x------ : can traverse + read, cannot create
+        std::fs::set_permissions(&live_dir, perms).unwrap();
+
+        let result = replace_database_file(&backup, &live);
+
+        // Restore failed...
+        assert!(result.is_err(), "a copy into a read-only dir must fail");
+        let msg = result.unwrap_err();
+        assert!(
+            msg.contains("your data is unchanged"),
+            "error should reassure the user: {msg}"
+        );
+
+        // ...restore permissions so we can read + assert + clean up.
+        let mut perms = std::fs::metadata(&live_dir).unwrap().permissions();
+        perms.set_mode(0o700);
+        std::fs::set_permissions(&live_dir, perms).unwrap();
+
+        // The ORIGINAL live file is byte-for-byte untouched.
+        let after = std::fs::read(&live).unwrap();
+        assert_eq!(
+            after, original_bytes,
+            "the original live database must survive a failed restore unchanged"
+        );
+        // No temp file stranded next to it.
+        assert!(
+            !restore_tmp_path(&live).exists(),
+            "the .restore-tmp staging file must not be left behind"
+        );
+    }
+
+    /// The staging temp file must not be left behind after a SUCCESSFUL restore
+    /// either (the rename consumes it).
+    #[tokio::test]
+    async fn replace_database_file_leaves_no_temp_file_on_success() {
+        let dir = tempfile::tempdir().unwrap();
+        let backup = dir.path().join("backup.db");
+        let live = dir.path().join("finance.db");
+        let src = dir.path().join("seed.db");
+        let pool = seeded_pool(&src).await;
+        backup_to(&pool, &backup).await.unwrap();
+        pool.close().await;
+
+        replace_database_file(&backup, &live).expect("replace");
+        assert!(
+            !restore_tmp_path(&live).exists(),
+            "the .restore-tmp staging file must be renamed away on success"
+        );
+        assert_eq!(count_rows(&live, "accounts").await, 2);
+    }
+
+    /// M-3: pin the Rust schema-version constant to the literal so a one-sided
+    /// bump (Rust-only) trips `cargo test` — not just JS-side review. The JS
+    /// `MAX_SCHEMA_VERSION` is asserted equal to this literal AND to the
+    /// migration count in `tests/db/schema-version-guard.test.ts`.
+    #[test]
+    fn max_schema_version_is_pinned_to_46() {
+        assert_eq!(MAX_SCHEMA_VERSION, 46);
     }
 }

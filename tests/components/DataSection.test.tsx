@@ -30,6 +30,7 @@ import {
   revealBackupsDir,
   validateBackupFile,
   restoreFromBackup,
+  RESTORE_FAILURE_NOTICE_KEY,
 } from '@/lib/backup-restore';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { DataSection } from '@/components/settings/DataSection';
@@ -52,6 +53,7 @@ function renderSection() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  window.sessionStorage.clear();
   mIsTauri.mockReturnValue(true);
   mRunBackup.mockResolvedValue('/Users/me/.../backups/cairn-20260602-100000.db');
   mSaveCopy.mockResolvedValue('/Users/me/Desktop/copy.db');
@@ -164,6 +166,17 @@ describe('DataSection — desktop (Tauri) path', () => {
     await screen.findByRole('dialog');
     await userEvent.click(screen.getByRole('button', { name: /replace and restore/i }));
     expect(await screen.findByText(/restore failed/i)).toHaveTextContent(/copy failed/);
+  });
+
+  it('surfaces a post-reload restore-failure notice from sessionStorage (M-4)', async () => {
+    // Simulate the prior session's forced reload having stashed a reason.
+    window.sessionStorage.setItem(RESTORE_FAILURE_NOTICE_KEY, 'disk full during restore');
+    renderSection();
+    expect(await screen.findByText(/restore did not complete/i)).toHaveTextContent(
+      /disk full during restore.*data was not changed/i,
+    );
+    // Read-once: the notice is cleared so a later remount won't re-show it.
+    expect(window.sessionStorage.getItem(RESTORE_FAILURE_NOTICE_KEY)).toBeNull();
   });
 });
 

@@ -9,6 +9,7 @@ import {
   revealBackupsDir,
   validateBackupFile,
   restoreFromBackup,
+  takeRestoreFailureNotice,
 } from '@/lib/backup-restore';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 
@@ -44,6 +45,14 @@ export function DataSection() {
     const t = setTimeout(() => setStatus(null), 6000);
     return () => clearTimeout(t);
   }, [status]);
+
+  // If a restore failed last session, the forced reload (M-4) left a reason in
+  // sessionStorage. Surface it here (read-once) so the user learns why — their
+  // original data is intact (H-1), and they can retry.
+  useEffect(() => {
+    const reason = takeRestoreFailureNotice();
+    if (reason) setError(`Restore did not complete: ${reason}. Your data was not changed.`);
+  }, []);
 
   async function handleBackupNow() {
     setError(null);
