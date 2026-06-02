@@ -1,6 +1,32 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { loadTriviaBank } from '@/lib/trivia/load-bank';
-import { TriviaBankSchema } from '@/lib/trivia/bank-schema';
+import { loadTriviaBank, reviewedOnly } from '@/lib/trivia/load-bank';
+import { TriviaBankSchema, type TriviaQuestion } from '@/lib/trivia/bank-schema';
+import { QuestionFormat, Topic } from '@/types/enums';
+
+const mk = (id: string, reviewed: boolean): TriviaQuestion => ({
+  id,
+  version: 1,
+  difficulty: 'Beginner',
+  format: QuestionFormat.DEFINITION,
+  topic: Topic.FOUNDATIONS,
+  prompt: `p ${id}`,
+  choices: ['a', 'b', 'c', 'd'],
+  answerIndex: 0,
+  explanation: 'e',
+  source: 'Cairn glossary',
+  reviewed,
+});
+
+describe('reviewedOnly (load-filter, D3)', () => {
+  it('keeps only reviewed:true rows', () => {
+    const mixed = [mk('a', true), mk('b', false), mk('c', true)];
+    expect(reviewedOnly(mixed).map((q) => q.id)).toEqual(['a', 'c']);
+  });
+
+  it('returns [] when nothing is reviewed', () => {
+    expect(reviewedOnly([mk('a', false), mk('b', false)])).toEqual([]);
+  });
+});
 
 describe('loadTriviaBank', () => {
   afterEach(() => vi.restoreAllMocks());
@@ -11,6 +37,11 @@ describe('loadTriviaBank', () => {
     expect(bank.length).toBeGreaterThan(0);
     expect(bank[0]).toHaveProperty('prompt');
     expect(bank[0].choices).toHaveLength(4);
+  });
+
+  it('serves only reviewed questions (the live bank passes through reviewedOnly)', async () => {
+    const bank = await loadTriviaBank();
+    expect(bank.every((q) => q.reviewed === true)).toBe(true);
   });
 
   // SEC-1: a malformed bank must THROW (not silently degrade), so the page can

@@ -75,3 +75,87 @@ export function answerOf(q: Pick<TriviaQuestion, 'choices' | 'answerIndex'>): st
  * (0.1 + 0.2-class) can't false-fail correct math. Currency-cents granularity.
  */
 export const DEFAULT_MATH_TOLERANCE = 0.01;
+
+/**
+ * Obvious placeholder / non-primary sources that must NEVER be the citation for
+ * a high-liability question (panel Finance H3). `"Cairn glossary"` is fine for
+ * Foundations etc., but not for Taxes/Insurance/Credit&Debt/Death.
+ */
+const PLACEHOLDER_SOURCES = ['src', 'cairn glossary', '', 'the irs', 'irs'];
+
+/**
+ * Real primary-source tokens (BROADENED beyond IRS-only per panel Finance H3 —
+ * these legit non-IRS sources already live in the bank and MUST pass):
+ *  - IRS forms/guidance: Pub/Publication N, Form N, Notice YYYY-N, Rev. Proc/Rul YYYY-N
+ *  - statute: IRC §, 26 U.S.C., §<digits>, a named federal Act (…Act of YYYY)
+ *  - consumer-finance regs: Truth in Lending/Savings Act, Regulation Z/DD (or Reg Z/DD),
+ *    generic CFR / Reg <letters>
+ *  - named studies: Bengen (YYYY), Trinity Study, CMS, any (YYYY)-dated study
+ *
+ * NECESSARY, NOT SUFFICIENT: this proves a citation is *shaped* like a primary
+ * source, NOT that it is correct/current — that is the human reviewer's job.
+ */
+const PRIMARY_SOURCE_PATTERNS: readonly RegExp[] = [
+  /\b(?:IRS )?Pub(?:lication)?\.?\s*\d+/i,
+  /\bForm\s*\d+/i,
+  /\bNotice\s*\d{4}-\d+/i,
+  /\bRev\.?\s*(?:Proc|Rul)\.?\s*\d{4}-\d+/i,
+  /\bIRC\b/i,
+  /\b26\s*U\.?S\.?C\.?/i,
+  /§\s*\d/,
+  /\bAct of \d{4}\b/i,
+  /\bTax Cuts and Jobs Act\b/i,
+  /\bTruth in (?:Lending|Savings) Act\b/i,
+  /\bReg(?:ulation)?\.?\s*(?:Z|DD)\b/i,
+  /\bReg(?:ulation)?\s+[A-Z]{1,2}\b/,
+  /\bCFR\b/,
+  /\bBengen\b/i,
+  /\bTrinity Study\b/i,
+  /\bCMS\b/,
+  /\(\d{4}\)/, // a (YYYY)-dated named study
+];
+
+/**
+ * True iff `source` is shaped like a real primary citation (and isn't a known
+ * placeholder). Used by the harness for high-liability topics.
+ */
+export function isPrimarySourceCitation(source: string): boolean {
+  const s = source.trim();
+  if (s.length < 4) return false;
+  if (PLACEHOLDER_SOURCES.includes(s.toLowerCase())) return false;
+  return PRIMARY_SOURCE_PATTERNS.some((re) => re.test(s));
+}
+
+/**
+ * Normalize a prompt for near-duplicate detection: lowercase, strip punctuation,
+ * collapse whitespace.
+ */
+export function normalizePrompt(prompt: string): string {
+  return prompt
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Token-set Jaccard similarity of two normalized prompts. */
+export function promptJaccard(a: string, b: string): number {
+  const sa = new Set(normalizePrompt(a).split(' ').filter(Boolean));
+  const sb = new Set(normalizePrompt(b).split(' ').filter(Boolean));
+  if (sa.size === 0 && sb.size === 0) return 1;
+  let inter = 0;
+  for (const t of sa) if (sb.has(t)) inter++;
+  const union = sa.size + sb.size - inter;
+  return union === 0 ? 0 : inter / union;
+}
+
+/**
+ * Near-duplicate prompt threshold + bucketing (panel Testing L1). Pinned as
+ * named consts so the dedup test is stable and stays inside testTimeout.
+ * Bucket by `topic` (dupes cluster there) → each bucket is ~O((600/13)²) ≈ 2k
+ * pairs, well within a single assertion; an un-bucketed O(n²) would be ~180k.
+ */
+export const JACCARD_THRESHOLD = 0.85;
+
+/** Min reviewed-pool size before the answerIndex distribution band is enforced. */
+export const ANSWER_INDEX_MIN_N = 100;
