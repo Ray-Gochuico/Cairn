@@ -315,7 +315,12 @@ export function ImportPreviewModal({
           state={state as unknown as ImportPreviewState<ImportEntity>}
           entity={entity}
         />
-        <div className="max-h-[55vh] overflow-y-auto">{previewTable}</div>
+        {/* The virtualized preview table owns its own bounded scroll parent
+            (max-h-[55vh] overflow-auto) so the virtualizer can measure a finite
+            viewport; an outer scroll wrapper here would nest two scrollers and
+            defeat the windowing. The empty-state path has no scroll and renders
+            fine inside this plain container. */}
+        <div>{previewTable}</div>
 
         {commitError && (
           <div className="text-xs text-destructive-soft-foreground italic bg-destructive/10 border border-destructive/30 rounded p-2">

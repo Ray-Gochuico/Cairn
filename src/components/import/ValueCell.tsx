@@ -43,7 +43,7 @@ export function ValueCell({ value, error, onChange }: Props) {
   }
   return (
     <span
-      className="cursor-text px-2 py-1 rounded hover:bg-slate-100 inline-block text-right tabular-nums"
+      className="cursor-text px-2 py-1 rounded hover:bg-muted inline-block text-right tabular-nums"
       onClick={() => setEditing(true)}
     >
       {value || '—'}
