@@ -13,8 +13,11 @@ describe('StoreErrorBanner', () => {
     render(<StoreErrorBanner errors={['boom']} onRetry={() => {}} />);
     const alert = screen.getByRole('alert');
     expect(alert).toBeInTheDocument();
-    // Reassuring, non-destructive copy — the user's data did NOT vanish.
-    expect(alert.textContent).toMatch(/couldn’t load|couldn't load|trouble loading/i);
+    // Copy covers BOTH load AND save failures (some stores set `error` on a
+    // failed update(), not only load()), and reassures the user nothing was
+    // lost — accurate whether the failure was a read or a write.
+    expect(alert.textContent).toMatch(/couldn’t load or save|couldn't load or save/i);
+    expect(alert.textContent).toMatch(/your saved data is safe/i);
   });
 
   it('surfaces the underlying error detail', () => {
