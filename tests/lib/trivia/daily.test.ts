@@ -292,4 +292,41 @@ describe('nextStreak', () => {
   it('is idempotent when already answered today', () => {
     expect(nextStreak({ current: 7, lastAnsweredISO: '2026-05-28', todayISO: '2026-05-28' })).toBe(7);
   });
+
+  // L1.2 — ≥1-of-4 participation contract. With the 4-set, the streak advances
+  // when you answer your FIRST question of the day; answering the 2nd/3rd/4th the
+  // same day is the idempotent no-op. This falls out of the existing model — the
+  // change is at the CALL SITE (Learn fires nextStreak per answer; only the first
+  // of the day moves it), so nextStreak itself needs no logic change. Pin the
+  // intent here so a future refactor can't silently make a 2nd same-day answer
+  // double-count.
+  describe('≥1-of-4 participation contract', () => {
+    it('answering question 1 of 4 today (lastAnswered=yesterday) advances the streak', () => {
+      expect(
+        nextStreak({ current: 3, lastAnsweredISO: '2026-05-31', todayISO: '2026-06-01' }),
+      ).toBe(4);
+    });
+    it('answering question 2/3/4 of 4 the same day is the idempotent no-op', () => {
+      // After the first answer, lastAnswered === today; subsequent answers hit
+      // the same-day branch and never move the streak.
+      const afterFirst = nextStreak({
+        current: 3,
+        lastAnsweredISO: '2026-05-31',
+        todayISO: '2026-06-01',
+      });
+      expect(afterFirst).toBe(4);
+      expect(
+        nextStreak({ current: afterFirst, lastAnsweredISO: '2026-06-01', todayISO: '2026-06-01' }),
+      ).toBe(4); // 2nd
+      expect(
+        nextStreak({ current: afterFirst, lastAnsweredISO: '2026-06-01', todayISO: '2026-06-01' }),
+      ).toBe(4); // 3rd / 4th — still no double-count
+    });
+    it('first-ever answer → 1; a gap → 1', () => {
+      expect(nextStreak({ current: 0, lastAnsweredISO: null, todayISO: '2026-06-01' })).toBe(1);
+      expect(nextStreak({ current: 9, lastAnsweredISO: '2026-05-20', todayISO: '2026-06-01' })).toBe(
+        1,
+      );
+    });
+  });
 });
