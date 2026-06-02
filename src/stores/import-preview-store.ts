@@ -80,12 +80,31 @@ function selectValidator(entity: ImportEntity): AnyValidator {
   }
 }
 
+/**
+ * Per-row identity cache entry. `sig` is a content signature of the merged
+ * raw input; `row` is the validated PreviewRow we produced for it.
+ */
+interface RowCacheEntry {
+  sig: string;
+  row: PreviewRow<unknown>;
+}
+
 function deriveRows<E extends ImportEntity>(
   entity: E,
   rawRows: ReadonlyArray<RawRow>,
   edits: Map<RowId, RawRow>,
   deletions: Set<RowId>,
   ctx: ValidationContext,
+  // Identity cache from the previous derive. Validators are pure functions of
+  // (merged, rowId, ctx) and ctx is fixed for the session, so a row whose
+  // merged input signature is unchanged yields a byte-identical PreviewRow —
+  // we reuse the prior object so its reference is stable. Without this, every
+  // edit re-derives ALL rows into fresh objects and the per-row React.memo in
+  // the preview tables can never skip an unrelated row (a 10k-row import would
+  // re-render all 10k rows on each keystroke). `prevCache` is read and the
+  // fresh cache is written in place.
+  prevCache?: Map<RowId, RowCacheEntry>,
+  nextCache?: Map<RowId, RowCacheEntry>,
 ): { derivedRows: PreviewRow<ResolvedFor<E>>[]; summary: ImportSummary } {
   const validator = selectValidator(entity);
   const derivedRows: PreviewRow<ResolvedFor<E>>[] = [];
@@ -93,7 +112,15 @@ function deriveRows<E extends ImportEntity>(
   for (let i = 0; i < rawRows.length; i++) {
     if (deletions.has(i)) continue;
     const merged: RawRow = { ...rawRows[i], ...(edits.get(i) ?? {}) };
-    const row = validator(merged, i, ctx) as PreviewRow<ResolvedFor<E>>;
+    const sig = JSON.stringify(merged);
+    const cached = prevCache?.get(i);
+    let row: PreviewRow<ResolvedFor<E>>;
+    if (cached && cached.sig === sig) {
+      row = cached.row as PreviewRow<ResolvedFor<E>>;
+    } else {
+      row = validator(merged, i, ctx) as PreviewRow<ResolvedFor<E>>;
+    }
+    nextCache?.set(i, { sig, row });
     derivedRows.push(row);
     switch (row.status as PreviewStatus) {
       case 'new': nNew++; break;
@@ -116,10 +143,20 @@ export function createImportPreviewStore<E extends ImportEntity>(
   return createStore<ImportPreviewState<E>>((set, get) => {
     const initialEdits = new Map<RowId, RawRow>();
     const initialDeletions = new Set<RowId>();
-    const { derivedRows, summary } = deriveRows(entity, parsed.rows, initialEdits, initialDeletions, ctx);
+    // Persistent per-row identity cache (see deriveRows). Lives for the whole
+    // import session so unchanged rows keep a stable PreviewRow reference
+    // across every edit, letting the per-row React.memo skip them.
+    let rowCache = new Map<RowId, RowCacheEntry>();
+    const { derivedRows, summary } = deriveRows(
+      entity, parsed.rows, initialEdits, initialDeletions, ctx, undefined, rowCache,
+    );
 
     const recompute = (s: ImportPreviewState<E>): ImportPreviewState<E> => {
-      const next = deriveRows(entity, s.rawRows, s.edits, s.deletions, s.ctx);
+      const nextCache = new Map<RowId, RowCacheEntry>();
+      const next = deriveRows(
+        entity, s.rawRows, s.edits, s.deletions, s.ctx, rowCache, nextCache,
+      );
+      rowCache = nextCache;
       return { ...s, derivedRows: next.derivedRows, summary: next.summary };
     };
 

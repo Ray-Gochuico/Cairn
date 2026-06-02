@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { DateCell } from './DateCell';
 import { AccountCell } from './AccountCell';
 import { ValueCell } from './ValueCell';
@@ -31,7 +32,10 @@ const ROW_BG: Record<PreviewStatus, string> = {
   error: 'bg-destructive/10',
 };
 
-export function TransactionPreviewRow({
+// React.memo so editing one cell re-renders only that row, not all of them.
+// `accounts`/`categories` are stable ctx references and the callbacks are
+// stable store actions, so the default shallow compare is meaningful.
+export const TransactionPreviewRow = memo(function TransactionPreviewRow({
   row,
   accounts,
   categories,
@@ -98,7 +102,7 @@ export function TransactionPreviewRow({
           <select
             value={conflictMode}
             onChange={(e) => onConflictChange(row.rowId, e.target.value as 'update' | 'skip')}
-            className="text-xs px-1.5 py-0.5 border border-slate-300 rounded w-full"
+            className="text-xs px-1.5 py-0.5 border border-input rounded w-full bg-transparent"
           >
             <option value="skip">Skip</option>
             <option value="update">Insert</option>
@@ -114,4 +118,4 @@ export function TransactionPreviewRow({
       </td>
     </tr>
   );
-}
+});

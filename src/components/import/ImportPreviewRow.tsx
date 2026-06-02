@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { AccountCell } from './AccountCell';
 import { DateCell } from './DateCell';
 import { ValueCell } from './ValueCell';
@@ -16,7 +17,7 @@ interface Props {
 const STATUS_BADGE: Record<PreviewStatus, string> = {
   new: 'bg-success-soft text-success-foreground',
   update: 'bg-warning-soft text-warning-foreground',
-  duplicate: 'bg-slate-100 text-slate-600',
+  duplicate: 'bg-muted text-muted-foreground',
   error: 'bg-destructive/15 text-destructive-soft-foreground',
 };
 
@@ -34,7 +35,11 @@ function formatExisting(existing: unknown): string {
   return '—';
 }
 
-export function ImportPreviewRow({ row, accounts, conflictMode, onEdit, onDelete, onConflictChange }: Props) {
+// React.memo so editing one cell re-renders only that row, not all of them.
+// `onEdit`/`onDelete`/`onConflictChange` are stable zustand store actions and
+// `accounts` is a stable ctx reference, so the default shallow compare is
+// meaningful: a row only re-renders when its own `row`/`conflictMode` changes.
+export const ImportPreviewRow = memo(function ImportPreviewRow({ row, accounts, conflictMode, onEdit, onDelete, onConflictChange }: Props) {
   const err = (field: string) => row.errors.find((e) => e.field === field);
   const showsConflict = row.status === 'update' || row.status === 'duplicate';
   return (
@@ -66,7 +71,7 @@ export function ImportPreviewRow({ row, accounts, conflictMode, onEdit, onDelete
           onChange={(v) => onEdit(row.rowId, { total_value: v })}
         />
       </td>
-      <td className="px-3 py-2 text-right tabular-nums text-slate-600">
+      <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
         {formatExisting(row.existing)}
       </td>
       <td className="px-3 py-2">
@@ -74,7 +79,7 @@ export function ImportPreviewRow({ row, accounts, conflictMode, onEdit, onDelete
           <select
             value={conflictMode}
             onChange={(e) => onConflictChange(row.rowId, e.target.value as 'update' | 'skip')}
-            className="text-xs px-1.5 py-0.5 border border-slate-300 rounded w-full"
+            className="text-xs px-1.5 py-0.5 border border-input rounded w-full bg-transparent"
           >
             <option value="update">Update</option>
             <option value="skip">Skip</option>
@@ -90,4 +95,4 @@ export function ImportPreviewRow({ row, accounts, conflictMode, onEdit, onDelete
       </td>
     </tr>
   );
-}
+});
