@@ -63,6 +63,11 @@ FinFlowChartv43.md
 # not committed (human review copy, not the shipped bank).
 src/data/trivia/bank-v1.generated.json
 
+# Per-cell authoring fragments (Track A bank generation). Each generation
+# teammate writes its batch here; the coordinator concatenates them into
+# bank-v1.staging.json. Intermediate operator scratch — not committed.
+src/data/trivia/_staging/
+
 
 # parallel-build git worktrees
 .claude/worktrees/
