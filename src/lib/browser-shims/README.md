@@ -23,6 +23,12 @@ sets no env var and is untouched.
 
 - **Yahoo refresh fails** in browser mode (CORS). The app boots fine; background
   refresh errors are swallowed by existing code.
+- **Populated-donut smoke:** because Yahoo is CORS-blocked, the Investments
+  donuts render empty on a fresh DB. Use the dev-only seed (`npm run
+  dev:browser:seed`, sets `VITE_SEED_DEMO=1`) or the manual runbook at
+  `docs/runbooks/populated-donut-smoke.md` to populate them. The seed is
+  triple-guarded (`DEV` + `VITE_BROWSER_SHIM` + `VITE_SEED_DEMO`) and never
+  ships in prod.
 - **Statements archive** can't write to a real folder. Picker returns a stub path.
 - **CSRF crumb auth** for Yahoo `quoteSummary` requires the Rust client. Browser
   shim returns an empty result for those calls.
