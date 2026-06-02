@@ -18,7 +18,8 @@ import { useViewFilter } from '@/lib/use-view-filter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import CardEditFrame from '@/components/investments/CardEditFrame';
-import type { CardLayoutEntry } from '@/types/schema';
+import { AssetClassTargetsForm } from '@/components/investments/AssetClassTargetsForm';
+import type { CardLayoutEntry, AssetClassTarget } from '@/types/schema';
 import ContributionsByBucketChart from '@/components/charts/ContributionsByBucketChart';
 import DonutChartCard from '@/components/charts/DonutChartCard';
 import { DonutEntityPicker, useDonutSelected, type DonutEntityPickerItem } from '@/components/charts/DonutEntityPicker';
@@ -688,6 +689,15 @@ export default function Investments() {
     [valuations],
   );
 
+  // Distinct asset classes the user actually holds — drives the
+  // AssetClassTargetsForm (only show classes with at least one held position)
+  // and gates the 'class-targets' card's `applicable`.
+  const heldClasses = useMemo(() => {
+    const set = new Set<AssetClass>();
+    for (const v of valuations) set.add(v.assetClass);
+    return [...set];
+  }, [valuations]);
+
   // Asset-allocation donut entity picker. Keys are the asset-class display
   // labels (already unique by definition); persisted under
   // `donut.assetAllocation.hidden`. We can't inject the picker into
@@ -888,6 +898,21 @@ export default function Investments() {
               </CardContent>
             </Card>
           ),
+      },
+      {
+        id: 'class-targets',
+        label: 'Asset-class targets',
+        size: 'compact',
+        applicable: heldClasses.length > 0,
+        render: () => (
+          <AssetClassTargetsForm
+            heldClasses={heldClasses}
+            initial={settings?.assetClassTargetAllocations ?? null}
+            onSave={async (targets: AssetClassTarget[]) => {
+              await updateSettings({ assetClassTargetAllocations: targets });
+            }}
+          />
+        ),
       },
       {
         id: 'per-company',
@@ -1170,6 +1195,10 @@ export default function Investments() {
       allocation,
       allocationPickerItems,
       filteredAllocation,
+      // class-targets
+      heldClasses,
+      settings?.assetClassTargetAllocations,
+      updateSettings,
       // drift
       driftWithTarget,
       // concentration
