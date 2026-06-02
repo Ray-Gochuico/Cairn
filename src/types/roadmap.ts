@@ -99,4 +99,11 @@ export interface RoadmapNode {
   body: string;
   prerequisites: NodeId[];
   evaluate: (ctx: RoadmapContext) => NodeResult;
+  /**
+   * Optional plain-language "what this is" definition for jargon-heavy nodes.
+   * Rendered glossarized in NodeDetailDrawer as the orienting first block.
+   * NUMBER-FREE + conservative — these make affirmative financial-literacy
+   * claims and go through the same finance sign-off gate as the trivia bank.
+   */
+  description?: string;
 }

@@ -6,7 +6,7 @@ import type { NodeResult, RoadmapContext, RoadmapNode } from '@/types/roadmap';
 import type { Household } from '@/types/schema';
 import { FilingStatus } from '@/types/enums';
 
-function makeNode(): RoadmapNode {
+function makeNode(overrides: Partial<RoadmapNode> = {}): RoadmapNode {
   return {
     id: 's1_employer_match',
     section: 1,
@@ -15,6 +15,7 @@ function makeNode(): RoadmapNode {
     body: 'Match details from the chart.',
     prerequisites: [],
     evaluate: () => ({ status: 'active' }),
+    ...overrides,
   };
 }
 
@@ -57,10 +58,11 @@ function renderDrawer(opts: {
   result: NodeResult;
   open?: boolean;
   onOpenChange?: (o: boolean) => void;
+  node?: Partial<RoadmapNode>;
 }) {
   return render(
     <NodeDetailDrawer
-      node={makeNode()}
+      node={makeNode(opts.node)}
       result={opts.result}
       ctx={makeCtx()}
       open={opts.open ?? true}
@@ -105,6 +107,37 @@ describe('NodeDetailDrawer', () => {
     expect(
       screen.getByRole('button', { name: /override status/i }),
     ).toBeInTheDocument();
+  });
+
+  it('renders the "What this is" section with the description text when set', () => {
+    renderDrawer({
+      result: { status: 'active' },
+      node: { description: 'A plain-language orientation for this node.' },
+    });
+    expect(
+      screen.getByRole('heading', { name: /^what this is$/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('A plain-language orientation for this node.'),
+    ).toBeInTheDocument();
+  });
+
+  it('does not render the "What this is" section when description is undefined', () => {
+    renderDrawer({ result: { status: 'active' } });
+    expect(
+      screen.queryByRole('heading', { name: /^what this is$/i }),
+    ).toBeNull();
+  });
+
+  it('glossarizes terms inside the description (e.g. MAGI → TermTooltip)', () => {
+    renderDrawer({
+      result: { status: 'active' },
+      node: { description: 'This routes you by your MAGI band.' },
+    });
+    // The wrapped term renders as the literal child of a TermTooltip
+    // <button> trigger (decoration-dotted). Assert MAGI is wrapped.
+    const magi = screen.getByText('MAGI');
+    expect(magi.closest('button')).not.toBeNull();
   });
 
   it('shows the auto-vs-override line when an override is active', () => {

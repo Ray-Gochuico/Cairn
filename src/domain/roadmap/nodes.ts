@@ -158,6 +158,8 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     section: 1,
     kind: 'action',
     title: 'Build a starter emergency cushion',
+    description:
+      'An emergency fund is cash you keep set aside and easy to reach, so an unexpected bill or a gap in income does not push you toward high-interest debt. This first step is just a small starter cushion; you build it up further later.',
     body: 'Stash the larger of one thousand dollars or one month of expenses somewhere liquid — typically a high-yield savings account at an FDIC-insured institution.',
     prerequisites: ['s0_min_debt_payments'],
     evaluate: evaluateSmallEmergencyFund,
@@ -185,6 +187,8 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     section: 1,
     kind: 'info',
     title: 'Consider an Investment Policy Statement (IPS)',
+    description:
+      'An IPS is a short plan you write for yourself, in plain words, that says how you intend to invest and when you will make changes. The point is to decide the rules ahead of time, while you are calm, so a scary market does not push you into a snap decision.',
     body: 'An IPS is a short written set of rules — target allocation, rebalancing triggers, contribution defaults — that you commit to in calm conditions so a market panic does not force you to invent a plan on the fly.',
     prerequisites: ['s1_track_expenses'],
     evaluate: evaluateIps,
@@ -261,6 +265,8 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     section: 2,
     kind: 'action',
     title: 'Refinance where you can, then attack by rate',
+    description:
+      'The avalanche method means putting your extra payments toward the debt with the highest interest rate first, while paying the minimum on the rest. Because it targets the costliest balance, it tends to reduce the total interest you pay over time — and lowering the rate itself, for example by refinancing, can help even more.',
     body: 'First try to get the rate itself down — refinance, balance-transfer offers, hardship programs. Then pay extra against whichever remaining balance has the highest rate (the avalanche order).',
     prerequisites: ['s2_moderate_debt_q'],
     evaluate: evaluateModerateInterestDebt,
@@ -283,6 +289,8 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     section: 3,
     kind: 'decision',
     title: 'Are you enrolled in an HSA-eligible HDHP?',
+    description:
+      'An HDHP is a high-deductible health plan: you pay more out of pocket before insurance starts covering costs, usually in exchange for a lower premium. Only an HSA-qualified HDHP lets you open and contribute to an HSA, so this step checks which kind of plan you have.',
     body: 'Only an HSA-qualified high-deductible plan unlocks HSA contributions. If yes, the HSA branch below applies. If no, jump to Section 4 (IRA).',
     prerequisites: ['s3_pick_medical_insurance'],
     evaluate: evaluateHdhpQ,
@@ -292,6 +300,8 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     section: 3,
     kind: 'action',
     title: 'Fund the HSA',
+    description:
+      'An HSA is a savings account paired with a qualifying high-deductible health plan. It is often called triple-tax-advantaged: contributions are tax-advantaged (pre-tax if made through payroll, otherwise deductible when you file), the money can grow without yearly tax, and withdrawals for qualified medical costs come out tax-free.',
     body: 'When the contribution is routed through payroll, it usually escapes FICA in addition to income tax — a benefit you do not get from depositing into a standalone HSA after the fact. For a relatively healthy household, the HDHP-plus-HSA combo is often the cheapest plan over a full year.',
     prerequisites: ['s3_hdhp_q'],
     evaluate: evaluateContributeHsa,
@@ -350,6 +360,8 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     section: 4,
     kind: 'action',
     title: 'Start an IRA contribution and check MAGI',
+    description:
+      'An IRA is an Individual Retirement Account you open on your own, separate from any workplace plan, to invest for retirement with tax advantages. It comes in two main flavors, Roth and traditional, which differ in when you get the tax break.',
     body: 'Open or fund an IRA, then compute your Modified Adjusted Gross Income so the next step can route you to the right Roth-vs-traditional branch.',
     prerequisites: ['s4_earned_income_q'],
     evaluate: evaluateContributeIra,
@@ -359,6 +371,8 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     section: 4,
     kind: 'info',
     title: 'Pick the branch your MAGI puts you in',
+    description:
+      'MAGI stands for Modified Adjusted Gross Income, an income figure the tax rules use to decide which retirement options are open to you. Where your MAGI falls determines whether you can contribute to a Roth IRA directly or need another route.',
     body: 'Roughly: above about $153k single (or $242k jointly), direct Roth contributions phase out — use a backdoor Roth. In the middle band — about $81k–$153k single or $129k–$242k jointly — a direct Roth contribution is generally the right move. Below that, you have a real choice between Roth and traditional, decided in the next step. (Verify current-year IRS thresholds — the app stores the 2026 values.)',
     prerequisites: ['s4_contribute_ira'],
     evaluate: evaluateIraBand,
@@ -368,6 +382,8 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     section: 4,
     kind: 'action',
     title: 'Use the backdoor Roth (contribute non-deductible, then convert)',
+    description:
+      'A backdoor Roth is a way to get money into a Roth IRA when your income is too high to contribute directly: you put money into a traditional IRA and then convert it to Roth. A wrinkle called the pro-rata rule can make part of that conversion taxable if you already hold pre-tax money in a traditional, SEP, or SIMPLE IRA (workplace 401(k) balances don\'t count), so it is worth understanding before you start.',
     body: 'For income levels above the direct Roth limit. Caution: if you hold any pre-tax balance in a traditional, SEP, or SIMPLE IRA, the IRS pro-rata rule will tax part of the conversion in proportion to those pre-tax dollars.',
     prerequisites: ['s4_ira_band'],
     evaluate: evaluateBackdoorRoth,
@@ -377,6 +393,8 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     section: 4,
     kind: 'action',
     title: 'Fund a Roth IRA up to the annual limit',
+    description:
+      'With a Roth IRA you contribute money you have already paid tax on, and in return qualified withdrawals in retirement are generally tax-free. It tends to appeal to people who expect their tax rate to be higher later than it is now.',
     body: 'For middle-band incomes. If late-year income or a bonus pushes you over the Roth limit, a recharacterization or backdoor conversion fixes it without penalty.',
     prerequisites: ['s4_ira_band'],
     evaluate: evaluateRothIra,
@@ -395,6 +413,8 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     section: 4,
     kind: 'action',
     title: 'Fund a traditional IRA up to the annual limit',
+    description:
+      'With a traditional IRA, your contribution may be deductible now, lowering this year\'s taxable income, and you pay tax later when you withdraw in retirement. Whether the deduction is available depends on your income and whether you have a retirement plan at work.',
     body: 'Makes sense when MAGI is low today and you do not expect to outgrow the direct-contribution band later.',
     prerequisites: ['s4_expect_higher_income_q'],
     evaluate: evaluateTraditionalIra,
@@ -404,6 +424,8 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     section: 4,
     kind: 'info',
     title: 'Optional: park the traditional IRA inside a solo-401(k)',
+    description:
+      'A solo-401(k) is a workplace-style retirement plan for someone who is self-employed with no employees (a spouse is allowed). If the plan accepts incoming rollovers, moving pre-tax IRA money into it can help set up a clean backdoor Roth by removing the balance that triggers the pro-rata rule.',
     body: 'If you are self-employed (or have side income) and you keep funding a traditional IRA, opening a solo-401(k) and rolling the IRA balance into it removes the pre-tax IRA balance that would otherwise trigger pro-rata on any future backdoor conversion.',
     prerequisites: ['s4_traditional_ira'],
     evaluate: evaluateSolo401k,
@@ -417,6 +439,8 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     section: 5,
     kind: 'decision',
     title: 'Does your employer run an ESPP?',
+    description:
+      'An ESPP, or Employee Stock Purchase Plan, lets you buy your company\'s stock through payroll, often at a discount. Many people sell the shares soon after buying to limit how much of their money is tied to their employer and to lock in the discount — though selling quickly can mean the discount is taxed as ordinary income rather than at lower long-term rates.',
     body: 'If yes, look at the plan terms. The common high-value pattern: about a 15% discount with same-day vesting, where buying and immediately selling locks in the discount as ordinary income with almost no price risk.',
     prerequisites: ['s4_backdoor_roth', 's4_roth_ira', 's4_traditional_ira'],
     evaluate: evaluateEsppQ,
@@ -444,6 +468,8 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     section: 5,
     kind: 'action',
     title: 'Pre-fund the purchase in the right vehicle',
+    description:
+      'A 529 is a tax-advantaged account for education costs, and a Coverdell ESA is a similar but more limited education account. For money earmarked for school, these can offer tax benefits that a regular savings account does not.',
     body: 'For generic short-term needs, a high-yield savings account is fine. For education specifically, a 529 (or a Coverdell ESA) usually wins on taxes. Under SECURE 2.0, unused 529 dollars can later be rolled to the beneficiary\'s Roth IRA up to a $35k lifetime cap, with age and account-age conditions.',
     prerequisites: ['s5_large_purchases_q'],
     evaluate: evaluateSaveShortTerm,
@@ -471,6 +497,8 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     section: 5,
     kind: 'info',
     title: 'If you cannot fully fund both an IRA and a 401(k), pick deliberately',
+    description:
+      'When you cannot max out everything, the order you fill these accounts matters because they differ in fund choices, fees, and withdrawal rules. A governmental 457(b) is a workplace plan some public employees have that is notable for not charging the usual early-withdrawal penalty, which can make it attractive if you might retire early.',
     body: 'The employer match always wins ties — never leave that on the table. Beyond that: IRAs usually have the widest fund menu and the loosest withdrawal rules; 401(k)s reduce your current-year MAGI more directly; governmental 457(b)s are unusual in that they have no 10% early-withdrawal penalty, which can make them especially valuable to early retirees.',
     prerequisites: ['s5_max_401k'],
     evaluate: evaluatePrioritizeIraVs401k,
@@ -493,6 +521,8 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     section: 6,
     kind: 'action',
     title: 'Run the mega backdoor Roth (after-tax 401(k) → Roth)',
+    description:
+      'The mega backdoor Roth is a way to move extra after-tax money through a workplace 401(k) into Roth, when the plan allows it. It is a separate mechanism from the regular backdoor Roth and only works if your specific plan supports the needed features, so the plan rules decide whether it is available to you.',
     body: 'Contribute after-tax dollars up to the combined IRS annual limit on total 401(k) contributions, then immediately convert that money to Roth inside the plan. This is a different mechanism from the regular backdoor Roth, and not every 401(k) plan permits it — read the summary plan description first.',
     prerequisites: ['s6_after_tax_401k_q'],
     evaluate: evaluateMegaBackdoor,
@@ -502,6 +532,8 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     section: 6,
     kind: 'action',
     title: 'Decide on 529 / ESA for future education',
+    description:
+      'A 529 plan is a state-sponsored, tax-advantaged account for education expenses. Many states add their own tax break for using their plan, which is one reason your own state\'s 529 is often the first one to look at.',
     body: "Many states offer an income-tax deduction or credit on contributions to that state's 529 plan; the in-state plan is often the right starting point for that reason alone.",
     prerequisites: ['s6_after_tax_401k_q'],
     evaluate: evaluate529,
@@ -511,6 +543,8 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     section: 6,
     kind: 'action',
     title: 'Save into a taxable brokerage (or prepay low-rate mortgage principal)',
+    description:
+      'A taxable brokerage is an ordinary investment account with no contribution cap and no age restriction on withdrawals, though you may owe tax on gains and dividends along the way. It is often the place extra savings go once tax-advantaged accounts are full.',
     body: 'Taxable brokerage accounts have no contribution cap and allow withdrawals any time without an age penalty, which makes them the natural overflow vehicle once tax-advantaged buckets are full. Extra principal on a low-rate mortgage gives a guaranteed return equal to the loan rate — often a fine alternative when investing-return expectations are modest.',
     prerequisites: ['s6_529_action'],
     evaluate: evaluateTaxableBrokerage,
@@ -520,6 +554,8 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     section: 6,
     kind: 'action',
     title: 'Consider tax-loss harvesting in taxable accounts',
+    description:
+      'Tax-loss harvesting means selling an investment that has dropped in value so the loss can offset taxes on gains elsewhere. The catch is the wash-sale rule: if you buy back the same or a substantially identical investment too close to the sale — and the rule reaches across your other accounts, including IRAs and a spouse\'s — the tax benefit of the loss can be disallowed.',
     body: 'Realizing a loss can offset realized gains and a small amount of ordinary income. Watch the wash-sale rule carefully — buying a substantially identical security within 30 days before or after the sale disallows the loss, and the rule applies across all of your accounts, including IRAs and your spouse\'s.',
     prerequisites: ['s6_taxable_brokerage'],
     evaluate: evaluateTaxLossHarvest,
@@ -538,6 +574,8 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     section: 6,
     kind: 'info',
     title: 'Consider a donor-advised fund for charitable giving',
+    description:
+      'A donor-advised fund, or DAF, is a charitable account you contribute to now, take the deduction for, and then recommend grants from to charities over time. Donating investments you\'ve held more than a year that have gone up in value is a common way to support causes while skipping the capital-gains tax you\'d owe if you sold them yourself.',
     body: 'A DAF lets you contribute several years\' worth of giving in one tax year — typically with appreciated stock to avoid capital-gains tax — take the deduction up front, and then grant the money to charities on your own schedule afterward.',
     prerequisites: ['s6_low_interest_debt'],
     evaluate: evaluateCharitableDaf,
@@ -547,6 +585,8 @@ export const NODES: ReadonlyArray<RoadmapNode> = [
     section: 6,
     kind: 'action',
     title: 'Rebalance back to your IPS on a regular cadence',
+    description:
+      'Rebalancing means periodically adjusting your investments back toward your intended mix after market moves have pushed it out of line. Doing it on a set schedule, or when things drift far enough, keeps your risk roughly where you meant it to be rather than drifting with the market.',
     body: 'Pick a cadence (annually is common) or a drift threshold and stick with it. Where you can, do rebalancing inside tax-advantaged accounts, or by directing new contributions into the underweight slice, so you do not generate avoidable capital gains in taxable accounts.',
     prerequisites: ['s6_charitable_daf'],
     evaluate: evaluateRebalance,
