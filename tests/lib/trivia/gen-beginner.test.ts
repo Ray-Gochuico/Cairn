@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { generateBeginnerQuestions } from '@/lib/trivia/gen-beginner';
 import { TriviaBankSchema } from '@/lib/trivia/bank-schema';
+import { QuestionFormat, Topic } from '@/types/enums';
 import type { GlossaryEntry } from '@/lib/glossary';
 
 const fixture: Record<string, GlossaryEntry> = {
@@ -47,5 +48,18 @@ describe('generateBeginnerQuestions', () => {
     const out = generateBeginnerQuestions(tiny);
     // Not enough distinct distractors to make a valid 4-choice question → skip.
     expect(out).toEqual([]);
+  });
+
+  // L3.4 — repointed to the taxonomy: emitted rows are CANDIDATES for review,
+  // never auto-servable. They carry format=definition + a safe default
+  // topic=Foundations (glossary entries have no topic; the reviewer retopics on
+  // curation) and reviewed=false (the load-filter keeps them out of the pool).
+  it('emits taxonomy candidates: format=definition, default topic=Foundations, reviewed=false', () => {
+    const out = generateBeginnerQuestions(fixture);
+    for (const q of out) {
+      expect(q.format).toBe(QuestionFormat.DEFINITION);
+      expect(q.topic).toBe(Topic.FOUNDATIONS);
+      expect(q.reviewed).toBe(false);
+    }
   });
 });
