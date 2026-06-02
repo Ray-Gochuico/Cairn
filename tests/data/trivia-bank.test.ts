@@ -5,7 +5,12 @@ import { QuestionFormat, Topic, Subtopic } from '@/types/enums';
 import {
   isHighLiability,
   isBareRotFigureAnswer,
+  isPrimarySourceCitation,
   answerOf,
+  promptJaccard,
+  JACCARD_THRESHOLD,
+  ANSWER_INDEX_MIN_N,
+  DEFAULT_MATH_TOLERANCE,
 } from '@/lib/trivia/integrity-constants';
 import { reviewedOnly } from '@/lib/trivia/load-bank';
 import { COVERAGE_FLOORS } from '@/lib/trivia/coverage-floors';
@@ -83,6 +88,16 @@ describe('bank-v1.json integrity', () => {
     expect(shortfalls).toEqual([]);
   });
 
+  // ---- L2.4: broadened primary-source citation for high-liability topics ----
+
+  it('every high-liability question cites a real primary source', () => {
+    const offenders = parsed
+      .filter((q) => isHighLiability(q.topic))
+      .filter((q) => !isPrimarySourceCitation(q.source))
+      .map((q) => `${q.id}: "${q.source}"`);
+    expect(offenders).toEqual([]);
+  });
+
   // ---- L2.4 / L3.3b: no bare inflation-adjusted figure as the graded answer ----
   // (statutory allowlist exempt; figures in `explanation` always allowed)
 
@@ -92,5 +107,122 @@ describe('bank-v1.json integrity', () => {
       .filter((q) => isBareRotFigureAnswer(answerOf(q)))
       .map((q) => `${q.id}: "${answerOf(q)}"`);
     expect(offenders).toEqual([]);
+  });
+
+  // ---- L2.5: distinct distractors + structural not-also-correct ----
+
+  it('every question has 4 distinct choices (no duplicate / not-also-correct dupes)', () => {
+    const offenders = parsed
+      .filter((q) => new Set(q.choices).size !== 4)
+      .map((q) => q.id);
+    expect(offenders).toEqual([]);
+  });
+
+  // ---- L2.5: math self-verification (always-applied tolerance) ----
+  // For format === 'math', the optional harness-only `check` must recompute to
+  // the graded numeric answer within tolerance. (No math rows yet — the
+  // assertion is a no-op until the Investments/Advanced seed batch lands, then
+  // it bites. The synthetic prove-it-bites probe lives below.)
+
+  it('every math question self-verifies (Number(answer) ≈ check.expected within tolerance)', () => {
+    const mathQs = parsed.filter((q) => q.format === QuestionFormat.MATH);
+    const offenders: string[] = [];
+    for (const q of mathQs) {
+      const answer = Number(answerOf(q));
+      if (Number.isNaN(answer)) {
+        offenders.push(`${q.id}: answer "${answerOf(q)}" is not numeric`);
+        continue;
+      }
+      if (!q.check) {
+        offenders.push(`${q.id}: math question missing a check{} recompute target`);
+        continue;
+      }
+      const expected = q.check.expected;
+      const tol = q.check.tolerance ?? DEFAULT_MATH_TOLERANCE;
+      if (Math.abs(answer - expected) > tol) {
+        offenders.push(`${q.id}: |${answer} - ${expected}| > ${tol}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  // ---- L2.8: answerIndex distribution band (min-N gated) ----
+  // The current 60 are ~58% "B"; a strict band would red now. Gate behind a
+  // minimum reviewed-pool size so seed batches + small pools don't trip it.
+  // Final target: each of the 4 positions holds 22–28%.
+
+  it('answerIndex distribution is reasonably uniform once the reviewed pool is large enough', () => {
+    const pool = reviewedOnly(parsed);
+    if (pool.length < ANSWER_INDEX_MIN_N) {
+      expect(pool.length).toBeLessThan(ANSWER_INDEX_MIN_N); // documents the gate is active
+      return;
+    }
+    const dist = [0, 0, 0, 0];
+    for (const q of pool) dist[q.answerIndex]++;
+    for (const n of dist) expect(n / pool.length).toBeGreaterThanOrEqual(0.2);
+  });
+
+  // ---- L2.9: prompt near-duplicate dedup (token-Jaccard, topic-bucketed) ----
+
+  it('has no exact-duplicate normalized prompts', () => {
+    const norm = parsed.map((q) => q.prompt.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim());
+    expect(new Set(norm).size).toBe(norm.length);
+  });
+
+  it('has no near-duplicate prompts within a topic bucket (token-Jaccard)', () => {
+    // Bucket by topic — dupes cluster there, and bucketing keeps this well
+    // inside testTimeout (~O((N/13)²) pairs vs ~O(N²) un-bucketed).
+    const buckets = new Map<string, TriviaQuestion[]>();
+    for (const q of parsed) {
+      const arr = buckets.get(q.topic) ?? [];
+      arr.push(q);
+      buckets.set(q.topic, arr);
+    }
+    const offenders: string[] = [];
+    for (const arr of buckets.values()) {
+      for (let i = 0; i < arr.length; i++) {
+        for (let j = i + 1; j < arr.length; j++) {
+          const sim = promptJaccard(arr[i].prompt, arr[j].prompt);
+          if (sim > JACCARD_THRESHOLD) {
+            offenders.push(`${arr[i].id} ~ ${arr[j].id} (${sim.toFixed(2)})`);
+          }
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});
+
+// Prove-it-bites probes — synthetic fixtures that exercise the FAILURE arm of
+// each guardrail, so a green run over the (already-clean) 60 can't lull us into
+// thinking the gate is a no-op. These assert the predicate itself catches bad
+// content.
+describe('integrity harness — prove-it-bites (synthetic)', () => {
+  it('citation gate catches a placeholder source on a high-liability row', () => {
+    const bad = { topic: Topic.TAXES, source: 'Cairn glossary' };
+    expect(isHighLiability(bad.topic) && !isPrimarySourceCitation(bad.source)).toBe(true);
+  });
+
+  it('figure gate catches a non-allowlisted bracket threshold as an answer', () => {
+    expect(isBareRotFigureAnswer('$47,025')).toBe(true);
+  });
+
+  it('distinct-choices gate catches a duplicated distractor', () => {
+    const choices = ['a', 'b', 'a', 'd'];
+    expect(new Set(choices).size !== 4).toBe(true);
+  });
+
+  it('math self-verify catches a wrong key beyond tolerance', () => {
+    const answer = Number('600');
+    const expected = 660;
+    expect(Math.abs(answer - expected) > DEFAULT_MATH_TOLERANCE).toBe(true);
+  });
+
+  it('dedup gate catches a near-duplicate prompt above threshold', () => {
+    const sim = promptJaccard(
+      'Which of these best describes a Roth IRA account?',
+      'Which of these best describes a Roth IRA?',
+    );
+    expect(sim > JACCARD_THRESHOLD).toBe(true);
   });
 });
