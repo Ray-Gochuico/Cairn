@@ -123,20 +123,26 @@ export class ScenariosRepo {
   }
 
   async setActive(id: number): Promise<void> {
+    // The not-found guard is a READ; keep it outside the atomic write set.
     const target = await this.findById(id);
     if (!target) throw new Error(`Scenario ${id} not found`);
 
-    await this.db.execute('BEGIN');
-    try {
-      await this.db.execute('UPDATE scenarios SET is_active = 0 WHERE is_active = 1');
-      await this.db.execute(
-        "UPDATE scenarios SET is_active = 1, updated_at = datetime('now') WHERE id = ?",
-        [id],
-      );
-      await this.db.execute('COMMIT');
-    } catch (e) {
-      try { await this.db.execute('ROLLBACK'); } catch { /* swallow */ }
-      throw e;
-    }
+    // The two writes MUST land atomically: `scenarios_one_active` is a partial
+    // UNIQUE index, so the clear-then-set order must commit as a unit (and a
+    // crash between them must not leave zero or two active rows). Expressed as
+    // separate BEGIN/COMMIT `db.execute` calls this wrapped NOTHING in prod —
+    // the plugin-sql connection POOL routes each call to a different
+    // connection. `executeBatch` pins both UPDATEs to one connection in a real
+    // transaction: genuinely all-or-nothing, rollback on any error.
+    await this.db.executeBatch(
+      [
+        { sql: 'UPDATE scenarios SET is_active = 0 WHERE is_active = 1' },
+        {
+          sql: "UPDATE scenarios SET is_active = 1, updated_at = datetime('now') WHERE id = ?",
+          params: [id],
+        },
+      ],
+      { transaction: true },
+    );
   }
 }

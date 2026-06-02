@@ -1,4 +1,4 @@
-import type { Database } from '@/db/db';
+import type { BatchStatement, Database } from '@/db/db';
 import {
   AssetValueSnapshotSchema,
   type AssetValueSnapshot,
@@ -69,28 +69,44 @@ export class AssetValueSnapshotsRepo {
     return rowToSnapshot(rows[0]);
   }
 
-  async create(snap: Omit<AssetValueSnapshot, 'id'>): Promise<number> {
+  /**
+   * Validate (Zod) and build the INSERT statement WITHOUT executing.
+   * `create` executes it and returns the new id; import-commit collects
+   * builders from many rows into one atomic `executeBatch`.
+   */
+  buildCreateStatement(snap: Omit<AssetValueSnapshot, 'id'>): BatchStatement {
     const validated = AssetValueSnapshotSchema.omit({ id: true }).parse(snap);
-    const result = await this.db.execute(
-      `INSERT INTO asset_value_snapshots (owner_type, owner_id, snapshot_date, value)
+    return {
+      sql: `INSERT INTO asset_value_snapshots (owner_type, owner_id, snapshot_date, value)
        VALUES (?, ?, ?, ?)`,
-      [
+      params: [
         validated.ownerType,
         validated.ownerId,
         validated.snapshotDate,
         validated.value,
       ],
-    );
+    };
+  }
+
+  async create(snap: Omit<AssetValueSnapshot, 'id'>): Promise<number> {
+    const { sql, params } = this.buildCreateStatement(snap);
+    const result = await this.db.execute(sql, params);
     if (!result.lastInsertId) {
       throw new Error('Failed to create AssetValueSnapshot: no lastInsertId returned');
     }
     return result.lastInsertId;
   }
 
-  async update(
+  /**
+   * Read the existing row, merge the patch, Zod-validate, and build the
+   * UPDATE statement WITHOUT executing. The READ stays here (batched callers
+   * keep it outside the atomic write set); only the write statement is
+   * batched. Throws if the id does not exist.
+   */
+  async buildUpdateStatement(
     id: number,
     patch: Partial<Omit<AssetValueSnapshot, 'id'>>,
-  ): Promise<void> {
+  ): Promise<BatchStatement> {
     const existing = await this.findById(id);
     if (!existing) throw new Error(`AssetValueSnapshot ${id} not found`);
     const merged = AssetValueSnapshotSchema.parse({
@@ -98,15 +114,23 @@ export class AssetValueSnapshotsRepo {
       ...patch,
       id,
     });
-    await this.db.execute(
-      `UPDATE asset_value_snapshots SET
+    return {
+      sql: `UPDATE asset_value_snapshots SET
          owner_type = ?,
          owner_id = ?,
          snapshot_date = ?,
          value = ?
        WHERE id = ?`,
-      [merged.ownerType, merged.ownerId, merged.snapshotDate, merged.value, id],
-    );
+      params: [merged.ownerType, merged.ownerId, merged.snapshotDate, merged.value, id],
+    };
+  }
+
+  async update(
+    id: number,
+    patch: Partial<Omit<AssetValueSnapshot, 'id'>>,
+  ): Promise<void> {
+    const { sql, params } = await this.buildUpdateStatement(id, patch);
+    await this.db.execute(sql, params);
   }
 
   async delete(id: number): Promise<void> {

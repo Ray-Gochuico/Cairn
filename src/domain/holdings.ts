@@ -1,4 +1,4 @@
-import type { Database } from '@/db/db';
+import type { BatchStatement, Database } from '@/db/db';
 import { HoldingSchema, type Holding } from '@/types/schema';
 
 interface HoldingRow {
@@ -48,51 +48,75 @@ export class HoldingsRepo {
     return rowToHolding(rows[0]);
   }
 
-  async create(holding: Omit<Holding, 'id'>): Promise<number> {
+  /**
+   * Validate (Zod) and build the INSERT statement for one holding WITHOUT
+   * executing. `create` executes it and returns the new id; import-commit
+   * collects builders from many rows into one atomic `executeBatch`.
+   */
+  buildCreateStatement(holding: Omit<Holding, 'id'>): BatchStatement {
     HoldingSchema.omit({ id: true }).parse(holding);
-    const result = await this.db.execute(
-      `INSERT INTO holdings (
+    return {
+      sql: `INSERT INTO holdings (
         account_id, ticker, share_count, target_allocation_pct, cost_basis
       ) VALUES (?, ?, ?, ?, ?)`,
-      [
+      params: [
         holding.accountId,
         holding.ticker,
         holding.shareCount,
         holding.targetAllocationPct ?? null,
         holding.costBasis ?? null,
-      ]
-    );
+      ],
+    };
+  }
+
+  async create(holding: Omit<Holding, 'id'>): Promise<number> {
+    const { sql, params } = this.buildCreateStatement(holding);
+    const result = await this.db.execute(sql, params);
     if (!result.lastInsertId) {
       throw new Error('Failed to create holding: no lastInsertId returned');
     }
     return result.lastInsertId;
   }
 
-  async update(
+  /**
+   * Read the existing row, merge the patch, Zod-validate, and build the
+   * UPDATE statement WITHOUT executing. The READ stays here (batched callers
+   * keep it outside the atomic write set); only the write statement is
+   * batched. Throws if the id does not exist.
+   */
+  async buildUpdateStatement(
     id: number,
     patch: Partial<Omit<Holding, 'id' | 'accountId'>>
-  ): Promise<void> {
+  ): Promise<BatchStatement> {
     const existing = await this.findById(id);
     if (!existing) throw new Error(`Holding ${id} not found`);
     const merged = { ...existing, ...patch };
     HoldingSchema.parse(merged);
 
-    await this.db.execute(
-      `UPDATE holdings SET
+    return {
+      sql: `UPDATE holdings SET
         ticker = ?,
         share_count = ?,
         target_allocation_pct = ?,
         cost_basis = ?,
         updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
-      [
+      params: [
         merged.ticker,
         merged.shareCount,
         merged.targetAllocationPct ?? null,
         merged.costBasis ?? null,
         id,
-      ]
-    );
+      ],
+    };
+  }
+
+  async update(
+    id: number,
+    patch: Partial<Omit<Holding, 'id' | 'accountId'>>
+  ): Promise<void> {
+    const { sql, params } = await this.buildUpdateStatement(id, patch);
+    await this.db.execute(sql, params);
   }
 
   async delete(id: number): Promise<void> {

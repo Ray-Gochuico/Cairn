@@ -1,4 +1,4 @@
-import type { Database } from '@/db/db';
+import type { BatchStatement, Database } from '@/db/db';
 import { EquityGrantSchema, type EquityGrant } from '@/types/schema';
 import type { GrantType } from '@/types/enums';
 
@@ -93,20 +93,26 @@ export class EquityGrantsRepo {
     return rows.map(rowToEquityGrant);
   }
 
-  async create(grant: Omit<EquityGrant, 'id'>): Promise<number> {
-    // Zod parse fills in defaults (e.g. companyValuation -> null when caller
-    // omits the key), then we destructure the validated payload into the
-    // INSERT. This avoids `undefined` reaching better-sqlite3 (which rejects
-    // it) when callers leave the calculator fields off.
+  /**
+   * Validate (Zod) and build the INSERT statement for one grant WITHOUT
+   * executing. `create` executes it and returns the new id; import-commit
+   * collects builders from many rows into one atomic `executeBatch`.
+   *
+   * Zod parse fills in defaults (e.g. companyValuation -> null when caller
+   * omits the key), then we destructure the validated payload into the
+   * INSERT. This avoids `undefined` reaching better-sqlite3 (which rejects
+   * it) when callers leave the calculator fields off.
+   */
+  buildCreateStatement(grant: Omit<EquityGrant, 'id'>): BatchStatement {
     const parsed = EquityGrantSchema.omit({ id: true }).parse(grant);
-    const result = await this.db.execute(
-      `INSERT INTO equity_grants (
+    return {
+      sql: `INSERT INTO equity_grants (
         household_id, owner_person_id, name, company_name,
         grant_date, strike_price, total_shares, vesting_schedule, current_fmv,
         grant_type,
         company_valuation, company_outstanding_shares, company_total_debt
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
+      params: [
         parsed.householdId,
         parsed.ownerPersonId,
         parsed.name,
@@ -120,25 +126,36 @@ export class EquityGrantsRepo {
         parsed.companyValuation,
         parsed.companyOutstandingShares,
         parsed.companyTotalDebt,
-      ]
-    );
+      ],
+    };
+  }
+
+  async create(grant: Omit<EquityGrant, 'id'>): Promise<number> {
+    const { sql, params } = this.buildCreateStatement(grant);
+    const result = await this.db.execute(sql, params);
     if (!result.lastInsertId) {
       throw new Error('Failed to create equity grant: no lastInsertId returned');
     }
     return result.lastInsertId;
   }
 
-  async update(
+  /**
+   * Read the existing row, merge the patch, Zod-validate, and build the
+   * UPDATE statement WITHOUT executing. The READ stays here (batched callers
+   * keep it outside the atomic write set); only the write statement is
+   * batched. Throws if the id does not exist.
+   */
+  async buildUpdateStatement(
     id: number,
     patch: Partial<Omit<EquityGrant, 'id' | 'householdId'>>
-  ): Promise<void> {
+  ): Promise<BatchStatement> {
     const existing = await this.findById(id);
     if (!existing) throw new Error(`EquityGrant ${id} not found`);
     const merged = { ...existing, ...patch };
     EquityGrantSchema.parse(merged);
 
-    await this.db.execute(
-      `UPDATE equity_grants SET
+    return {
+      sql: `UPDATE equity_grants SET
         owner_person_id = ?,
         name = ?,
         company_name = ?,
@@ -153,7 +170,7 @@ export class EquityGrantsRepo {
         company_total_debt = ?,
         updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
-      [
+      params: [
         merged.ownerPersonId,
         merged.name,
         merged.companyName,
@@ -167,8 +184,16 @@ export class EquityGrantsRepo {
         merged.companyOutstandingShares,
         merged.companyTotalDebt,
         id,
-      ]
-    );
+      ],
+    };
+  }
+
+  async update(
+    id: number,
+    patch: Partial<Omit<EquityGrant, 'id' | 'householdId'>>
+  ): Promise<void> {
+    const { sql, params } = await this.buildUpdateStatement(id, patch);
+    await this.db.execute(sql, params);
   }
 
   async delete(id: number): Promise<void> {

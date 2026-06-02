@@ -1,4 +1,4 @@
-import type { Database } from '@/db/db';
+import type { BatchStatement, Database } from '@/db/db';
 import { LoanSchema, type Loan } from '@/types/schema';
 import { LoanType } from '@/types/enums';
 import { amortize, type ScheduleEntry } from '@/lib/amortization';
@@ -58,16 +58,21 @@ export class LoansRepo {
     return rowToLoan(rows[0]);
   }
 
-  async create(loan: Omit<Loan, 'id'>): Promise<number> {
+  /**
+   * Validate (Zod) and build the INSERT statement for one loan WITHOUT
+   * executing. `create` executes it and returns the new id; import-commit
+   * collects builders from many rows into one atomic `executeBatch`.
+   */
+  buildCreateStatement(loan: Omit<Loan, 'id'>): BatchStatement {
     LoanSchema.omit({ id: true }).parse(loan);
-    const result = await this.db.execute(
-      `INSERT INTO loans (
+    return {
+      sql: `INSERT INTO loans (
         household_id, obligor_person_id, name, type,
         original_amount, current_balance, interest_rate, term_months,
         first_payment_date, monthly_payment, extra_payment_default,
         linked_property_id, linked_vehicle_id
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
+      params: [
         loan.householdId,
         loan.obligorPersonId ?? null,
         loan.name,
@@ -81,25 +86,36 @@ export class LoansRepo {
         loan.extraPaymentDefault,
         loan.linkedPropertyId ?? null,
         loan.linkedVehicleId ?? null,
-      ]
-    );
+      ],
+    };
+  }
+
+  async create(loan: Omit<Loan, 'id'>): Promise<number> {
+    const { sql, params } = this.buildCreateStatement(loan);
+    const result = await this.db.execute(sql, params);
     if (!result.lastInsertId) {
       throw new Error('Failed to create loan: no lastInsertId returned');
     }
     return result.lastInsertId;
   }
 
-  async update(
+  /**
+   * Read the existing row, merge the patch, Zod-validate, and build the
+   * UPDATE statement WITHOUT executing. The READ stays here (batched callers
+   * keep it outside the atomic write set); only the write statement is
+   * batched. Throws if the id does not exist.
+   */
+  async buildUpdateStatement(
     id: number,
     patch: Partial<Omit<Loan, 'id' | 'householdId'>>
-  ): Promise<void> {
+  ): Promise<BatchStatement> {
     const existing = await this.findById(id);
     if (!existing) throw new Error(`Loan ${id} not found`);
     const merged = { ...existing, ...patch };
     LoanSchema.parse(merged);
 
-    await this.db.execute(
-      `UPDATE loans SET
+    return {
+      sql: `UPDATE loans SET
         obligor_person_id = ?,
         name = ?,
         type = ?,
@@ -114,7 +130,7 @@ export class LoansRepo {
         linked_vehicle_id = ?,
         updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
-      [
+      params: [
         merged.obligorPersonId ?? null,
         merged.name,
         merged.type,
@@ -128,8 +144,16 @@ export class LoansRepo {
         merged.linkedPropertyId ?? null,
         merged.linkedVehicleId ?? null,
         id,
-      ]
-    );
+      ],
+    };
+  }
+
+  async update(
+    id: number,
+    patch: Partial<Omit<Loan, 'id' | 'householdId'>>
+  ): Promise<void> {
+    const { sql, params } = await this.buildUpdateStatement(id, patch);
+    await this.db.execute(sql, params);
   }
 
   async delete(id: number): Promise<void> {

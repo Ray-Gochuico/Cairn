@@ -1,4 +1,4 @@
-import type { Database } from '@/db/db';
+import type { BatchStatement, Database } from '@/db/db';
 import { ContributionSchema, type Contribution } from '@/types/schema';
 import { ContributionSource } from '@/types/enums';
 
@@ -80,19 +80,30 @@ export class ContributionsRepo {
     return rowToContribution(rows[0]);
   }
 
-  async create(contribution: Omit<Contribution, 'id'>): Promise<number> {
+  /**
+   * Validate (Zod) and build the INSERT statement for one contribution
+   * WITHOUT executing. `create` executes it and returns the new id;
+   * import-commit collects builders from many rows into one atomic
+   * `executeBatch`.
+   */
+  buildCreateStatement(contribution: Omit<Contribution, 'id'>): BatchStatement {
     ContributionSchema.omit({ id: true }).parse(contribution);
-    const result = await this.db.execute(
-      `INSERT INTO contributions (account_id, person_id, date, amount, source)
+    return {
+      sql: `INSERT INTO contributions (account_id, person_id, date, amount, source)
        VALUES (?, ?, ?, ?, ?)`,
-      [
+      params: [
         contribution.accountId,
         contribution.personId ?? null,
         contribution.date,
         contribution.amount,
         contribution.source,
-      ]
-    );
+      ],
+    };
+  }
+
+  async create(contribution: Omit<Contribution, 'id'>): Promise<number> {
+    const { sql, params } = this.buildCreateStatement(contribution);
+    const result = await this.db.execute(sql, params);
     if (!result.lastInsertId) {
       throw new Error('Failed to create contribution: no lastInsertId returned');
     }
