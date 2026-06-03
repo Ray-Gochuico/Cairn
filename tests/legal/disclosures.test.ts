@@ -99,10 +99,10 @@ describe('DISCLOSURES', () => {
 });
 
 describe('backtest disclosure', () => {
-  it('is registered at v1.1 with a non-empty body + acceptance label', () => {
+  it('is registered at v1.2 with a non-empty body + acceptance label', () => {
     const d = DISCLOSURES.backtest;
     expect(d).toBeDefined();
-    expect(d.version).toBe('1.1');
+    expect(d.version).toBe('1.2');
     expect(d.body.length).toBeGreaterThan(200);
     expect(d.acceptanceCheckboxLabel).toMatch(/not a prediction|historical outcomes/i);
   });
@@ -114,7 +114,7 @@ describe('backtest disclosure', () => {
     expect(body).toMatch(/2026 levels|brackets are held/i);
   });
 
-  it('v1.1 describes returns as REAL total returns for a stock/bond blend (B1 fix: no longer "nominal index")', () => {
+  it('v1.2 still describes returns as REAL total returns for a stock/bond blend (carried from v1.1; no longer "nominal index")', () => {
     const body = DISCLOSURES.backtest.body;
     // Engine drives blended REAL returns (Shiller real S&P + 10yr Treasury
     // deflated to real) across stocks + bonds — see src/lib/backtest/data.ts.
@@ -125,11 +125,27 @@ describe('backtest disclosure', () => {
     expect(body).not.toMatch(/nominal/i);
   });
 
-  it('v1.1 ships a diffFromPrevious that explains the nominal→real returns-basis correction', () => {
+  it('v1.2 states coverage ends in 2022, not "today" (M1 fix: Shiller data ends 2022)', () => {
+    const body = DISCLOSURES.backtest.body;
+    // The data asset ends at calendar 2022 (src/data/shiller.ts) — the copy
+    // must not claim coverage "to today".
+    expect(body).toMatch(/1871/);
+    expect(body).toMatch(/2022/);
+    expect(body).not.toMatch(/1871 to today/i);
+  });
+
+  it('v1.2 keeps example start years in range (no 2000 — out of range for a 30y horizon ending 2022)', () => {
+    const body = DISCLOSURES.backtest.body;
+    // Latest valid 30-year start is 1993 (1993 + 29 = 2022). "2000" would need
+    // data through 2029 and is therefore an invalid illustrative start.
+    expect(body).not.toMatch(/\b2000\b/);
+  });
+
+  it('v1.2 ships a diffFromPrevious that explains the data-coverage correction', () => {
     const diff = DISCLOSURES.backtest.diffFromPrevious;
     expect(diff).toBeTruthy();
     expect(diff!.length).toBeGreaterThan(40);
-    expect(diff).toMatch(/real/i);
-    expect(diff).toMatch(/nominal/i);
+    expect(diff).toMatch(/2022/);
+    expect(diff).toMatch(/coverage|data|ends|through/i);
   });
 });

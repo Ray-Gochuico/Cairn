@@ -5,14 +5,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import { coastFi } from '@/lib/coast-fi';
+import { realRateOf } from '@/lib/calculators/real-rate';
 import { currentAge } from '@/lib/dates';
 import { formatCurrency } from '@/lib/format';
 import { effectiveSwr } from '@/lib/scenarios/effective-swr';
+import { effectiveBaselineInflation } from '@/lib/scenarios/effective-inflation';
 import { totalInvestments } from '@/lib/scenarios/aggregate-investments';
 import type { MonthlyState } from '@/lib/scenarios';
 import { useScenariosStore } from '@/stores/scenarios-store';
 import { useSettingsStore } from '@/stores/settings-store';
-import type { Household, Person } from '@/types/schema';
+import type { AppSettings, Household, Person } from '@/types/schema';
 import type { Scenario } from '@/types/scenario';
 
 export interface FiCardsProps {
@@ -51,24 +53,6 @@ function pickRate(household: Household): { rate: number; label: string } | null 
 }
 
 /**
- * Convert a nominal annual return rate into the real (inflation-adjusted) rate
- * via the Fisher equation: (1 + r_real) = (1 + r_nominal) / (1 + inflation).
- *
- * Floored at 0 because a negative real rate makes Coast FI compounding
- * nonsensical for this UI (we'd be telling the user to save MORE than the FI
- * target today to "coast" — at that point the framing breaks down).
- *
- * Why this matters: `fiTarget` is in today's purchasing power (real $), so
- * discounting it back with a NOMINAL rate dramatically under-states the
- * required Coast FI portfolio. Pre-fix the card showed ~$369k at 7%/3% over
- * 25 years against a $2M FI target; the correct real-rate answer is ~$772k.
- */
-function realRateOf(nominalRate: number, inflation: number): number {
-  const real = (1 + nominalRate) / (1 + inflation) - 1;
-  return Math.max(0, real);
-}
-
-/**
  * Sentinel return for `computeCards` when the household/persons setup
  * isn't done yet. Distinct from "transient null" (no projection state
  * available for the current scenario) — callers render an empty-state
@@ -77,7 +61,7 @@ function realRateOf(nominalRate: number, inflation: number): number {
 const SETUP_REQUIRED = 'setup-required' as const;
 type ComputeResult = ComputedRow | null | typeof SETUP_REQUIRED;
 
-function computeCards(props: FiCardsProps): ComputeResult {
+function computeCards(props: FiCardsProps, settings: AppSettings | null): ComputeResult {
   const { scenarios, projections, household, persons } = props;
   // Cold-start: no household yet, or zero persons → caller renders the
   // setup-CTA empty state (W7-UX MF-8).
@@ -103,9 +87,13 @@ function computeCards(props: FiCardsProps): ComputeResult {
   const yearsUntilRetirement = Math.max(0, Math.min(...yearsByPerson));
 
   // Coast FI: discount the today's-$ FI target by the REAL growth rate.
-  // Mixing a real target with a nominal rate is the bug we're fixing — see
-  // realRateOf() above for the math and rationale (W7-Finance).
-  const realRate = realRateOf(rate.rate, household.inflationAssumption);
+  // Mixing a real target with a nominal rate is the bug fixed in W7-Finance.
+  // N1: resolve inflation through the CANONICAL chain (the same
+  // effectiveBaselineInflation the dashboard FI/Coast cards now use) so both
+  // surfaces produce identical coast numbers for the same household, and the
+  // shared realRateOf() applies the same 0-floor on the negative-real edge.
+  const inflation = effectiveBaselineInflation(ref, household, settings);
+  const realRate = realRateOf(rate.rate, inflation);
   const coastFiTarget = coastFi({
     requiredAtRetirement: fiTarget,
     annualRate: realRate,
@@ -357,7 +345,11 @@ function FiCardsEmptyState() {
 }
 
 export default function FiCards(props: FiCardsProps) {
-  const computed = computeCards(props);
+  // N1: feed the canonical inflation resolver the app settings so the Coast FI
+  // figure matches the dashboard cards exactly (household.inflationAssumption
+  // takes precedence; settings.defaultInflation is the fallback).
+  const settings = useSettingsStore((s) => s.settings);
+  const computed = computeCards(props, settings);
   if (computed === SETUP_REQUIRED) {
     return <FiCardsEmptyState />;
   }

@@ -96,6 +96,19 @@ describe('PaycheckCalculator', () => {
     expect(screen.getByText('Medicare')).toBeInTheDocument();
   });
 
+  it('M2: labels the federal-tax row as an estimate, not "Federal withholding"', async () => {
+    // result.federal is the annual bracket liability (computeTotalTax), not a
+    // payroll-withholding figure — the label must not call it "withholding".
+    primeStores();
+    render(<MemoryRouter><PaycheckCalculator /></MemoryRouter>);
+    expect(await screen.findByText('Estimated federal tax')).toBeInTheDocument();
+    expect(
+      screen.getByText(/annualized estimate, not payroll withholding/i),
+    ).toBeInTheDocument();
+    // The breakdown row must no longer be titled "Federal withholding".
+    expect(screen.queryByText('Federal withholding')).toBeNull();
+  });
+
   it('lowers take-home when extra federal withholding is entered', async () => {
     const user = userEvent.setup();
     primeStores();

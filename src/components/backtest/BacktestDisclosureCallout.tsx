@@ -24,7 +24,7 @@ export function BacktestDisclosureCallout() {
       </p>
       <p>
         <strong>Tax brackets are held at 2026 levels</strong> across the entire
-        1871-to-present replay — historical brackets are not reconstructed, so any income
+        1871-to-2022 replay — historical brackets are not reconstructed, so any income
         tax treatment is approximate. See Settings &rarr; Disclosures for the full set.
       </p>
     </div>

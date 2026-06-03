@@ -719,7 +719,12 @@ export default function PaycheckCalculator() {
 
                 <div>
                   <PaycheckBreakdownRow label="Gross pay" amount={result.gross / div} grossForPct={0} color={COLORS.gross} />
-                  <PaycheckBreakdownRow label="Federal withholding" amount={result.federal / div} grossForPct={result.gross / div} color={COLORS.federal} negative />
+                  {/* M2: result.federal is the annual bracket LIABILITY from
+                      computeTotalTax — not actual payroll withholding (which a
+                      W-4 + IRS percentage-method tables determine). Label it as
+                      an estimated annual tax so users don't read it as a
+                      paystub withholding figure. */}
+                  <PaycheckBreakdownRow label="Estimated federal tax" sublabel="annualized estimate, not payroll withholding" amount={result.federal / div} grossForPct={result.gross / div} color={COLORS.federal} negative />
                   <PaycheckBreakdownRow label="Social Security" sublabel="6.2% to wage base" amount={result.ss / div} grossForPct={result.gross / div} color={COLORS.ss} negative />
                   <PaycheckBreakdownRow
                     label="Medicare"

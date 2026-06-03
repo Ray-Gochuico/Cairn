@@ -72,7 +72,8 @@ const BACKTEST_ACCOUNT_ID = 1;
  * the user's REAL persons with their REAL `annualSalaryPretax` + `dateOfBirth`,
  * and the engine's retirement gate is `if (ageAtMonth(dob, monthISO) >= retireAt) return`
  * (engine.ts retirement gate). The backtest steps at HISTORICAL years
- * (1871–2025), so `ageAtMonth(realDOB, 1929-…)` is far below retirement age —
+ * (1871–2022, the Shiller data range), so `ageAtMonth(realDOB, 1929-…)` is far
+ * below retirement age —
  * often NEGATIVE for pre-birth years (ageAtMonth subtracts years). The gate is
  * therefore FALSE every year → the engine injects the user's full salary, taxes
  * it at 2026 brackets on "1929 income", and routes the surplus INTO the

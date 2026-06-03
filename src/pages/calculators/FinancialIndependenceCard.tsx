@@ -11,6 +11,7 @@ import { useCalculatorState } from '@/lib/calculator-state';
 import { NumberField } from '@/components/calculators/NumberField';
 import { sumLatestOnOrBefore } from '@/lib/growth-horizons';
 import { effectiveSwr } from '@/lib/scenarios/effective-swr';
+import { effectiveBaselineInflation } from '@/lib/scenarios/effective-inflation';
 import LineChartCard from '@/components/charts/LineChartCard';
 import { balanceTrajectory } from '@/lib/projection-trajectory';
 import { toRealSeries } from '@/lib/calculators/real-mode';
@@ -69,6 +70,17 @@ export function FinancialIndependenceCard({
     defaults,
   );
 
+  // ── Chart display mode (Nominal/Real toggle) + inflation ───────────────────
+  const [displayMode, setDisplayMode] = useChartDisplayMode(cardId ?? 'financial-independence');
+  // N1/N3: resolve inflation through the app's CANONICAL chain
+  // (household.inflationAssumption → settings.defaultInflation → 0.03) — the
+  // SAME resolver the What-If FiCards use — so the dashboard and What-If
+  // "years to FI" / "coast needed" numbers agree exactly for the same
+  // household, and so the table/headline and the deflated chart share one
+  // inflation figure. No active scenario on the dashboard → scenario = null.
+  const settings = useSettingsStore((s) => s.settings);
+  const inflation = effectiveBaselineInflation(null, household ?? null, settings);
+
   // ── Derived calculations (off the EDITED assumptions) ──────────────────────
   const targetFv = useMemo(() => {
     const swr = (values.withdrawalRatePct ?? 0) / 100;
@@ -86,11 +98,16 @@ export function FinancialIndependenceCard({
     if ((values.monthlyExpenses ?? 0) <= 0) return null;
     if (targetFv <= 0) return null;
 
+    // H1: targetFv is in today's dollars (real), but growthScenarios rates are
+    // NOMINAL. Pass `inflation` so the years-to-FI solve converts each rate to
+    // REAL first — otherwise a nominal balance reaches a real target too early
+    // (optimistic). The result still carries the nominal rate for display/chart.
     return financialIndependenceSeries({
       pv: values.currentPortfolio,
       annualContribution: values.annualContribution,
       targetFv,
       scenarios: household.growthScenarios,
+      inflation,
     });
   }, [
     household,
@@ -99,11 +116,8 @@ export function FinancialIndependenceCard({
     values.currentPortfolio,
     values.annualContribution,
     values.monthlyExpenses,
+    inflation,
   ]);
-
-  // ── Chart display mode (Nominal/Real toggle) ───────────────────────────────
-  const [displayMode, setDisplayMode] = useChartDisplayMode(cardId ?? 'financial-independence');
-  const inflation = useSettingsStore((s) => s.settings?.defaultInflation) ?? 0.025;
 
   const { chartData, chartSeries } = useMemo(() => {
     if (!series) return { chartData: [] as Record<string, number>[], chartSeries: [] as { dataKey: string; label: string; color: string }[] };
@@ -238,6 +252,11 @@ export function FinancialIndependenceCard({
           {formatPercent((values.withdrawalRatePct ?? 0) / 100)}
         </TermTooltip>
         )
+      </p>
+      <p className="text-xs text-muted-foreground mb-3">
+        Years assume <strong>real</strong> (inflation-adjusted) returns — the
+        target is in today's dollars, so each scenario's rate is discounted by
+        inflation before solving.
       </p>
       <table className="w-full text-sm">
         <thead>

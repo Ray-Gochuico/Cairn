@@ -44,7 +44,7 @@ describe('BacktestDisclosureCallout', () => {
     // guard pins it to the registry: a future body edit bumps the registry
     // version, which trips this assertion and forces a conscious callout review.
     expect(DISCLOSURES.backtest.title).toBe('About the Historical Backtest');
-    expect(DISCLOSURES.backtest.version).toBe('1.1');
+    expect(DISCLOSURES.backtest.version).toBe('1.2');
 
     render(<BacktestDisclosureCallout />);
     // The callout must carry the registry's load-bearing claims.

@@ -1,3 +1,5 @@
+import { realRateOf } from './calculators/real-rate';
+
 export interface YearsToFiInput {
   pv: number;            // present value (current portfolio)
   pmt: number;           // annual contribution
@@ -42,15 +44,29 @@ export function financialIndependenceSeries(input: {
   annualContribution: number;
   targetFv: number;
   scenarios: FinancialIndependenceScenario[];
+  /**
+   * Optional annual inflation (fraction, e.g. 0.025). When provided, each
+   * scenario's NOMINAL rate is converted to a REAL rate via the Fisher
+   * equation before the years-to-FI solve, because `targetFv` is expressed in
+   * today's dollars (a REAL figure). Omitting it preserves the legacy nominal
+   * solve. The returned `rate` is ALWAYS the original nominal rate, so the
+   * table display and chart trajectories (which deflate separately) are
+   * unaffected. See H1 / `src/lib/calculators/real-rate.ts`.
+   */
+  inflation?: number;
 }): FinancialIndependenceSeriesResult[] {
-  return input.scenarios.map((s) => ({
-    label: s.label,
-    rate: s.rate,
-    years: yearsToFi({
-      pv: input.pv,
-      pmt: input.annualContribution,
-      annualRate: s.rate,
-      targetFv: input.targetFv,
-    }),
-  }));
+  return input.scenarios.map((s) => {
+    const solveRate =
+      input.inflation === undefined ? s.rate : realRateOf(s.rate, input.inflation);
+    return {
+      label: s.label,
+      rate: s.rate,
+      years: yearsToFi({
+        pv: input.pv,
+        pmt: input.annualContribution,
+        annualRate: solveRate,
+        targetFv: input.targetFv,
+      }),
+    };
+  });
 }
