@@ -22,6 +22,7 @@ import {
   runBackup,
   backupFilename,
   rotateBackups,
+  listBackups,
   validateBackupFile,
   restoreFromBackup,
   takeRestoreFailureNotice,
@@ -122,6 +123,68 @@ describe('rotateBackups', () => {
     ]);
     await rotateBackups('/base/backups', 10);
     expect(mockRemove).not.toHaveBeenCalled();
+  });
+});
+
+describe('listBackups', () => {
+  it('parses cairn-*.db filenames into local-time Dates, newest-first', async () => {
+    mockReadDir.mockResolvedValue([
+      { name: 'cairn-20260102-030405.db', isFile: true, isDirectory: false },
+      { name: 'cairn-20260601-235900.db', isFile: true, isDirectory: false },
+      { name: 'cairn-20260102-030406.db', isFile: true, isDirectory: false },
+    ]);
+
+    const entries = await listBackups();
+
+    // Newest-first: 2026-06-01 23:59:00, then the two 2026-01-02 entries (the
+    // :06 second is one tick newer than :05).
+    expect(entries.map((e) => e.name)).toEqual([
+      'cairn-20260601-235900.db',
+      'cairn-20260102-030406.db',
+      'cairn-20260102-030405.db',
+    ]);
+
+    // The timestamp is parsed FROM the filename into LOCAL time, matching how
+    // backupFilename builds the name (new Date(y, mo-1, d, h, mi, s)).
+    const first = entries[0];
+    expect(first.takenAt.getFullYear()).toBe(2026);
+    expect(first.takenAt.getMonth()).toBe(5); // June (0-based)
+    expect(first.takenAt.getDate()).toBe(1);
+    expect(first.takenAt.getHours()).toBe(23);
+    expect(first.takenAt.getMinutes()).toBe(59);
+    expect(first.takenAt.getSeconds()).toBe(0);
+    // Round-trips: backupFilename(takenAt) reproduces the original filename.
+    expect(backupFilename(first.takenAt)).toBe('cairn-20260601-235900.db');
+  });
+
+  it('builds an absolute path under the backups dir', async () => {
+    mockReadDir.mockResolvedValue([
+      { name: 'cairn-20260102-030405.db', isFile: true, isDirectory: false },
+    ]);
+    const [entry] = await listBackups();
+    expect(entry.path).toBe(
+      '/Users/me/Library/Application Support/com.x.cairn/backups/cairn-20260102-030405.db',
+    );
+    // readDir is called against the backups dir.
+    expect(mockReadDir).toHaveBeenCalledWith(expect.stringContaining('backups'));
+  });
+
+  it('ignores non-cairn files and directories', async () => {
+    mockReadDir.mockResolvedValue([
+      { name: 'cairn-20260102-030405.db', isFile: true, isDirectory: false },
+      { name: 'notes.txt', isFile: true, isDirectory: false },
+      { name: 'cairn-bogus.db', isFile: true, isDirectory: false },
+      { name: 'cairn-20260102-030405.db.bak', isFile: true, isDirectory: false },
+      // A directory whose NAME matches the cairn pattern must still be skipped.
+      { name: 'cairn-20260103-000000.db', isFile: false, isDirectory: true },
+    ]);
+    const entries = await listBackups();
+    expect(entries.map((e) => e.name)).toEqual(['cairn-20260102-030405.db']);
+  });
+
+  it('returns [] when the backups dir does not exist yet (readDir throws)', async () => {
+    mockReadDir.mockRejectedValue(new Error('No such file or directory (os error 2)'));
+    await expect(listBackups()).resolves.toEqual([]);
   });
 });
 

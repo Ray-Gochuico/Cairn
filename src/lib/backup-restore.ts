@@ -191,6 +191,54 @@ export async function runBackup(now: Date = new Date()): Promise<string> {
   return dest;
 }
 
+/** One rotating backup file, surfaced to the in-app Restore list. */
+export interface BackupEntry {
+  /** The on-disk filename, e.g. `cairn-20260602-235000.db`. */
+  name: string;
+  /** Absolute path, ready to hand to `validateBackupFile`/`restoreFromBackup`. */
+  path: string;
+  /** When the backup was taken, parsed from the filename in LOCAL time. */
+  takenAt: Date;
+}
+
+/** Filename matcher shared with rotation: `cairn-YYYYMMDD-HHMMSS.db`, capturing
+ * each time field so we can rebuild the wall-clock Date the name encodes. */
+const BACKUP_NAME_RE = /^cairn-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})\.db$/;
+
+/**
+ * List the rotating `cairn-*.db` backups for the in-app Restore picker, newest
+ * first. The hidden `backups/` folder (under the app config dir) is not
+ * browsable in Finder, so the UI lists its contents directly instead of relying
+ * on a file dialog.
+ *
+ * Each timestamp is parsed FROM the filename into a LOCAL-time Date — the exact
+ * inverse of how `backupFilename` builds the name — so the displayed time
+ * matches the wall clock when the backup was taken (no fs `stat`, no extra
+ * capability). On the first run the folder doesn't exist yet, so a `readDir`
+ * failure is treated as "no backups" and returns `[]`.
+ */
+export async function listBackups(): Promise<BackupEntry[]> {
+  const dir = await backupsDirPath();
+  let entries: Awaited<ReturnType<typeof readDir>>;
+  try {
+    entries = await readDir(dir);
+  } catch {
+    // First run (or the folder was removed): nothing to list, not an error.
+    return [];
+  }
+  return entries
+    .flatMap((e): BackupEntry[] => {
+      if (!e.isFile) return [];
+      const m = BACKUP_NAME_RE.exec(e.name);
+      if (!m) return [];
+      const [, y, mo, d, h, mi, s] = m.map(Number);
+      // Local time — must mirror backupFilename's getFullYear()/getHours()/…
+      const takenAt = new Date(y, mo - 1, d, h, mi, s);
+      return [{ name: e.name, path: joinPath(dir, e.name), takenAt }];
+    })
+    .sort((a, b) => b.takenAt.getTime() - a.takenAt.getTime()); // newest first
+}
+
 /** Read-only pre-flight: ask Rust whether `path` is a restorable Cairn backup. */
 export async function validateBackupFile(path: string): Promise<BackupValidation> {
   return invoke<BackupValidation>('db_validate_backup', { path });
