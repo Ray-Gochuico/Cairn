@@ -43,7 +43,7 @@ drag, and open.
 > same as a `.zip`.
 
 **Download the latest build:**
-<https://github.com/raymondgochuico/cairn/releases/latest>
+<https://github.com/Ray-Gochuico/Cairn/releases/latest>
 
 Grab the file named `Cairn_<version>_aarch64.app.tar.gz`.
 

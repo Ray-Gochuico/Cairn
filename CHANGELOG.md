@@ -46,4 +46,4 @@ stored in a single local SQLite file. No account, no sync, no telemetry.
   calls (Yahoo Finance quote refresh and the updater check) are both
   user-controlled and contain no PII.
 
-[1.0.0]: https://github.com/raymondgochuico/cairn/releases/tag/v1.0.0
+[1.0.0]: https://github.com/Ray-Gochuico/Cairn/releases/tag/v1.0.0

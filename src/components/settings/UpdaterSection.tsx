@@ -43,7 +43,7 @@ type CheckState =
   | { phase: 'error'; message: string };
 
 const LAST_CHECKED_KEY = 'updater.lastChecked';
-const RELEASES_URL = 'https://github.com/raymondgochuico/cairn/releases';
+const RELEASES_URL = 'https://github.com/Ray-Gochuico/Cairn/releases';
 
 function formatLastChecked(iso: string | null): string {
   if (iso === null) return 'never';

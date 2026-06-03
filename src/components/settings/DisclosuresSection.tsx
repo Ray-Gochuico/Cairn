@@ -32,7 +32,7 @@ const DISPLAY_ORDER: readonly DisclosureId[] = ['app_wide', 'roadmap', 'learning
 // link gives users a readable copy without shipping a separate in-app viewer
 // for a 7,000-line generated document.
 const THIRD_PARTY_LICENSES_URL =
-  'https://github.com/raymondgochuico/cairn/blob/main/THIRD-PARTY-LICENSES.md';
+  'https://github.com/Ray-Gochuico/Cairn/blob/main/THIRD-PARTY-LICENSES.md';
 
 export function DisclosuresSection() {
   return (

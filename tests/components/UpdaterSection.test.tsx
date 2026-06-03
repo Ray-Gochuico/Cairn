@@ -133,7 +133,7 @@ describe('UpdaterSection — manual-only invariant', () => {
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: /view all releases/i }));
     expect(mockOpenUrl).toHaveBeenCalledWith(
-      'https://github.com/raymondgochuico/cairn/releases',
+      'https://github.com/Ray-Gochuico/Cairn/releases',
     );
   });
 });

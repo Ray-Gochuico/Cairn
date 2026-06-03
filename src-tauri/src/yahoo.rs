@@ -116,7 +116,7 @@ enum CrumbState {
 const PRICE_USER_AGENT: &str = concat!(
     "Cairn/",
     env!("CARGO_PKG_VERSION"),
-    " (+https://github.com/raymondgochuico/cairn)"
+    " (+https://github.com/Ray-Gochuico/Cairn)"
 );
 
 /// Spoofed Chrome UA confined to the quoteSummary / fund-composition path
@@ -402,7 +402,7 @@ mod tests {
             "price UA should identify as Cairn, got: {ua}"
         );
         assert!(
-            ua.contains("github.com/raymondgochuico/cairn"),
+            ua.contains("github.com/Ray-Gochuico/Cairn"),
             "price UA should carry the repo URL, got: {ua}"
         );
         assert!(

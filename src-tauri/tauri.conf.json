@@ -46,7 +46,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/raymondgochuico/cairn/releases/latest/download/latest.json"
+        "https://github.com/Ray-Gochuico/Cairn/releases/latest/download/latest.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVBNjE1QTI1QjE1QTgyMjQKUldRa2dscXhKVnBoV3N3elBtekhHelh2Ulo5OTVjcnprQmNhZWswNHNzeFNGTHB1Yk81Zi9TWHYK"
     }
