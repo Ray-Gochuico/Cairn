@@ -1,4 +1,4 @@
-import type { Database } from '@/db/db';
+import type { BatchStatement, Database } from '@/db/db';
 import { FundHoldingSchema, type FundHolding } from '@/types/schema';
 
 interface FundHoldingRow {
@@ -43,7 +43,17 @@ export class FundHoldingsRepo {
     holdings: { symbol: string; weight: number; name?: string | null }[],
     asOfDate: string
   ): Promise<void> {
-    await this.db.execute('DELETE FROM fund_holdings WHERE fund_ticker = ?', [fundTicker]);
+    // Atomicity (force-quit safety): the DELETE + per-row INSERTs are wrapped in
+    // a single executeBatch transaction so a crash mid-loop can never leave a
+    // fund's look-through deleted/partially-written (which would skew the donut
+    // weights for up to 90 days until the next sync). Behaviour-preserving: same
+    // DELETE, same per-row INSERTs, same params, same order, same validation —
+    // just committed all-or-nothing on one connection. Validation runs while
+    // BUILDING the statements (before the batch) so a bad row rejects before any
+    // write, exactly as the pre-transaction loop did.
+    const statements: BatchStatement[] = [
+      { sql: 'DELETE FROM fund_holdings WHERE fund_ticker = ?', params: [fundTicker] },
+    ];
     for (const h of holdings) {
       const holdingName = h.name ?? null;
       // Validate via schema before insert
@@ -54,11 +64,12 @@ export class FundHoldingsRepo {
         asOfDate,
         holdingName,
       });
-      await this.db.execute(
-        'INSERT INTO fund_holdings (fund_ticker, holding_ticker, weight, as_of_date, holding_name) VALUES (?, ?, ?, ?, ?)',
-        [fundTicker, h.symbol, h.weight, asOfDate, holdingName]
-      );
+      statements.push({
+        sql: 'INSERT INTO fund_holdings (fund_ticker, holding_ticker, weight, as_of_date, holding_name) VALUES (?, ?, ?, ?, ?)',
+        params: [fundTicker, h.symbol, h.weight, asOfDate, holdingName],
+      });
     }
+    await this.db.executeBatch(statements, { transaction: true });
   }
 
   async getAsOf(fundTicker: string): Promise<string | null> {
