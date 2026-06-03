@@ -22,16 +22,19 @@
  * solve then grows/discounts a real balance against a real target, all in
  * today's purchasing power.
  *
- * No floor is applied. When inflation exceeds the nominal return the result is
- * negative — the honest Fisher value — and the FV/PV solvers handle it (a
- * negative real rate pushes years-to-FI toward ∞ and coast-needed above the
- * target, which is the correct real-terms statement). The realistic scenario
- * rates (5–8%) against typical inflation (~2.5%) are always comfortably
- * positive, so the negative branch is an edge case, not the common path.
+ * The result is FLOORED at 0. A negative real rate (inflation exceeding the
+ * nominal return) makes the Coast-FI framing nonsensical — we'd be telling the
+ * user to save MORE than the FI target today to "coast" — so both the dashboard
+ * cards and the What-If FiCards clamp it to 0 (coast = the full target; FI
+ * years accumulate linearly at 0% real). This is the SINGLE shared real-rate
+ * helper for both surfaces: identical floor ⇒ identical numbers for the same
+ * household (N1 cross-card consistency). The realistic scenario rates (5–8%)
+ * against typical inflation (~2.5–3%) are always comfortably positive, so the
+ * clamp is an edge case, not the common path.
  *
  * @param nominalRate annual nominal return as a fraction (0.07 = 7%)
  * @param inflation   annual inflation as a fraction (0.025 = 2.5%)
  */
 export function realRateOf(nominalRate: number, inflation: number): number {
-  return (1 + nominalRate) / (1 + inflation) - 1;
+  return Math.max(0, (1 + nominalRate) / (1 + inflation) - 1);
 }

@@ -28,10 +28,11 @@ describe('realRateOf', () => {
     expect(realRateOf(0.06, 0)).toBeCloseTo(0.06, 12);
   });
 
-  it('returns a NEGATIVE real rate when inflation exceeds the nominal return', () => {
-    // (1.02 / 1.05) - 1 = 0.9714285714... - 1 = -0.0285714285...
-    // (No floor — the honest Fisher result; callers decide how to present it.)
-    expect(realRateOf(0.02, 0.05)).toBeCloseTo(-0.02857143, 8);
+  it('FLOORS at 0 when inflation exceeds the nominal return', () => {
+    // Raw Fisher: (1.02 / 1.05) - 1 = 0.9714285714... - 1 = -0.0285714285...
+    // Clamped to 0 so Coast-FI stays well-defined and BOTH surfaces (dashboard
+    // cards + What-If FiCards) agree on the negative-real edge (N1).
+    expect(realRateOf(0.02, 0.05)).toBe(0);
   });
 
   it('real rate is always strictly below the nominal rate for positive inflation', () => {

@@ -168,9 +168,10 @@ describe('FinancialIndependenceCard', () => {
 
   it('headline parses to a finite years value within a sensible range for the seeded fixture', () => {
     // $200k pv, $24k/yr pmt, target $1.5M (5000*12/0.04), Moderate=6%.
-    // H1: years are solved on the REAL rate (6% nominal → (1.06/1.025)−1 =
-    // 3.4146% real, settings.defaultInflation falls back to 2.5% with no
-    // settings primed) → ~26.6 years. Still finite and well within (5, 50).
+    // H1/N1: years are solved on the REAL rate. Inflation resolves via the
+    // canonical chain: the fixture's household.inflationAssumption = 0.03 wins
+    // (settings unprimed) → 6% nominal → (1.06/1.03)−1 = 2.9126% real →
+    // ~28.5 years. Still finite and well within (5, 50).
     primeStores();
     render(
       <MemoryRouter>
@@ -345,17 +346,24 @@ describe('FinancialIndependenceCard', () => {
     });
   });
 
-  it('H1: solves on REAL rates — Moderate 6% headline is ~26.6y (not the ~19.8y nominal solve)', () => {
+  it('H1/N1: solves on REAL rates — Moderate 6% headline is ~28.5y (not the ~19.8y nominal solve)', () => {
     // pv=$200k, pmt=$24k/yr, target=$1.5M, Moderate=6% nominal.
-    // Nominal solve = 19.78y; REAL solve (6%→3.4146% at 2.5% inflation) = 26.56y.
-    // The headline must reflect the larger, real-rate figure (the bug fix).
+    // Nominal solve = 19.78y. REAL solve with the fixture's household inflation
+    // 3% (resolver precedence: household.inflationAssumption wins over unprimed
+    // settings): 6% → (1.06/1.03)−1 = 2.9126% real → 28.55y.
+    //   pmt/r = 24000/0.0291262136 = 824_000.0
+    //   t = ln((1_500_000 + 824_000)/(200_000 + 824_000)) / ln(1.0291262136)
+    //     = ln(2_324_000 / 1_024_000) / ln(1.0291262136)
+    //     = ln(2.2695313) / 0.0287101 = 0.8196299 / 0.0287101 = 28.55y
     primeStores({ scenarios: [{ label: 'Moderate', rate: 0.06 }] });
     render(<MemoryRouter><FinancialIndependenceCard /></MemoryRouter>);
+    // The headline renders years.toFixed(1) → "28.5 years" (full precision
+    // 28.5465 rounds to 28.5 for display).
+    expect(screen.getByTestId('fi-headline').textContent).toMatch(/28\.5\s*years/);
     const value = parseFloat(
       screen.getByTestId('fi-headline').textContent!.replace(/[^\d.]/g, ''),
     );
-    expect(value).toBeCloseTo(26.56, 1);
-    // Guard against a regression back to the nominal solve.
+    // Guard against a regression back to the ~19.8y nominal solve.
     expect(value).toBeGreaterThan(22);
   });
 

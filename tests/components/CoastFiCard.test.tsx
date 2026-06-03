@@ -234,12 +234,14 @@ describe('CoastFiCard', () => {
     );
 
     // If older snapshots leaked in, pv would be ~1.3M and percent would skyrocket.
-    // H1: coast is discounted by the REAL Moderate rate (6% → (1.06/1.025)−1 =
-    // 3.4146%, settings.defaultInflation falls back to 2.5%): 1.5M / 1.034146^29
-    // ≈ $566.5k. Correct pv=300k → ~53%.
+    // H1/N1: coast is discounted by the REAL Moderate rate. Inflation resolves
+    // via the canonical chain (fixture household inflation 3% wins): 6% →
+    // (1.06/1.03)−1 = 2.9126% → 1.5M / 1.0291262^29 ≈ $652.4k. Correct pv=300k
+    // → ~46%. (Bound is loose — it only guards against the leaked-snapshot
+    // ~1.3M case skyrocketing the %.)
     const headline = screen.getByTestId('coastfi-headline');
     const value = parseFloat(headline.textContent!.replace(/[^\d.]/g, ''));
-    expect(value).toBeGreaterThan(50);
+    expect(value).toBeGreaterThan(40);
     expect(value).toBeLessThan(500);
   });
 
@@ -267,16 +269,18 @@ describe('CoastFiCard', () => {
     expect(screen.getByText(/\$1,500,000/)).toBeInTheDocument();
   });
 
-  it('H1: discounts the coast target by the REAL rate — Moderate "Coast today" ≈ $566,517 (not the ~$276,835 nominal)', () => {
+  it('H1/N1: discounts the coast target by the REAL rate — Moderate "Coast today" ≈ $652,380 (not the ~$276,835 nominal)', () => {
     // Single Moderate 6% scenario; target $1.5M; person born 1990-01-01, retire
     // 65, pinned 2026-05-14 → age 36 → 29 years to retirement.
     // Nominal discount = 1.5M / 1.06^29 = $276,835 (the OLD, optimistic figure).
-    // REAL discount (6% → (1.06/1.025)−1 = 3.4146% at 2.5% default inflation)
-    //   = 1.5M / 1.034146^29 = $566,517 (the corrected, higher coast-needed).
+    // REAL discount, inflation via canonical chain (fixture household
+    // inflationAssumption 3% wins over unprimed settings):
+    //   real = (1.06/1.03)−1 = 2.9126% ; 1.0291262136^29 = 2.29952
+    //   coast = 1_500_000 / 2.29952 = $652,380 (corrected, higher coast-needed).
     primeStores({ scenarios: [{ label: 'Moderate', rate: 0.06 }] });
     render(<MemoryRouter><CoastFiCard /></MemoryRouter>);
-    // formatCurrency rounds to whole dollars → "$566,517".
-    expect(screen.getByText('$566,517')).toBeInTheDocument();
+    // formatCurrency rounds to whole dollars → "$652,380".
+    expect(screen.getByText('$652,380')).toBeInTheDocument();
     // And the old nominal figure must NOT appear.
     expect(screen.queryByText('$276,835')).toBeNull();
   });

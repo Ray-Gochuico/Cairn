@@ -11,6 +11,7 @@ import { useCalculatorState } from '@/lib/calculator-state';
 import { NumberField } from '@/components/calculators/NumberField';
 import { sumLatestOnOrBefore } from '@/lib/growth-horizons';
 import { effectiveSwr } from '@/lib/scenarios/effective-swr';
+import { effectiveBaselineInflation } from '@/lib/scenarios/effective-inflation';
 import LineChartCard from '@/components/charts/LineChartCard';
 import { balanceTrajectory } from '@/lib/projection-trajectory';
 import { toRealSeries } from '@/lib/calculators/real-mode';
@@ -71,9 +72,14 @@ export function FinancialIndependenceCard({
 
   // ── Chart display mode (Nominal/Real toggle) + inflation ───────────────────
   const [displayMode, setDisplayMode] = useChartDisplayMode(cardId ?? 'financial-independence');
-  // SAME inflation source the chart's Real toggle uses (settings.defaultInflation),
-  // so the table/headline and the deflated chart agree.
-  const inflation = useSettingsStore((s) => s.settings?.defaultInflation) ?? 0.025;
+  // N1/N3: resolve inflation through the app's CANONICAL chain
+  // (household.inflationAssumption → settings.defaultInflation → 0.03) — the
+  // SAME resolver the What-If FiCards use — so the dashboard and What-If
+  // "years to FI" / "coast needed" numbers agree exactly for the same
+  // household, and so the table/headline and the deflated chart share one
+  // inflation figure. No active scenario on the dashboard → scenario = null.
+  const settings = useSettingsStore((s) => s.settings);
+  const inflation = effectiveBaselineInflation(null, household ?? null, settings);
 
   // ── Derived calculations (off the EDITED assumptions) ──────────────────────
   const targetFv = useMemo(() => {

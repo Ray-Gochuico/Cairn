@@ -12,6 +12,7 @@ import { useCalculatorState } from '@/lib/calculator-state';
 import { NumberField } from '@/components/calculators/NumberField';
 import { sumLatestOnOrBefore } from '@/lib/growth-horizons';
 import { effectiveSwr } from '@/lib/scenarios/effective-swr';
+import { effectiveBaselineInflation } from '@/lib/scenarios/effective-inflation';
 import LineChartCard from '@/components/charts/LineChartCard';
 import { balanceTrajectory } from '@/lib/projection-trajectory';
 import { toRealSeries } from '@/lib/calculators/real-mode';
@@ -65,7 +66,13 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
 
   // ── Chart display mode (hooks MUST be before the early return) ─────────────
   const [displayMode, setDisplayMode] = useChartDisplayMode(cardId ?? 'coast-fi');
-  const inflation = useSettingsStore((s) => s.settings?.defaultInflation) ?? 0.025;
+  // N1/N3: resolve inflation through the app's CANONICAL chain
+  // (household.inflationAssumption → settings.defaultInflation → 0.03) — the
+  // SAME resolver the What-If FiCards use — so the dashboard "coast needed"
+  // matches What-If exactly for the same household, and the table + deflated
+  // chart share one inflation figure. No active scenario here → scenario = null.
+  const settings = useSettingsStore((s) => s.settings);
+  const inflation = effectiveBaselineInflation(null, household ?? null, settings);
 
   // ── Empty-state guard ──────────────────────────────────────────────────────
   // withdrawalRate<=0 stays editable (targetFv guard → 0 rows) rather than
