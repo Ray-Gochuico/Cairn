@@ -150,18 +150,20 @@ balances, take 30 seconds to verify FileVault is on.
 
 ## Status
 
-Phase 5 / Bundle FINAL2 — final sprint before v1.0.0 ship. All feature work
-shipped; 25-item polish + ship-blocker bundle remains (~1 day). See
-[`docs/superpowers/specs/2026-05-28-a-plus-ship-plan.md`](docs/superpowers/specs/2026-05-28-a-plus-ship-plan.md).
+**v1.0.0 — shippable.** All feature work plus the full v1.0 distribution-readiness
+remediation are complete: all 7 ship-blockers and the High set are fixed, whole-database
+backup + restore are verified on real hardware, and the suite is green (4295 vitest +
+17 cargo tests, `tsc` clean). Overall ship-readiness **A−**. Shipping is gated only on
+tagging `v1.0.0` (and a first in-app updater round-trip once a `v1.0.1` exists).
 
 The app supports **light + dark** via system theme (Settings → Appearance).
 
 For the full picture:
 
-- [`docs/superpowers/specs/2026-05-28-current-state.md`](docs/superpowers/specs/2026-05-28-current-state.md) — post-Wave-6 + page-scoped cross-cutting snapshot, **read this first**.
-- [`docs/superpowers/specs/2026-05-28-a-plus-ship-plan.md`](docs/superpowers/specs/2026-05-28-a-plus-ship-plan.md) — Bundle FINAL2 queue + the canonical "what's next".
-- [`docs/reviews/2026-05-27-mega-scorecard.md`](docs/reviews/2026-05-27-mega-scorecard.md) — Wave-6 broad + Roadmap/What-If page-scoped consolidated scorecard.
-- [`docs/superpowers/specs/2026-05-11-finance-app-design.md`](docs/superpowers/specs/2026-05-11-finance-app-design.md) — master design spec (build phases + current status amendment).
+- [`docs/superpowers/specs/2026-06-03-current-state.md`](docs/superpowers/specs/2026-06-03-current-state.md) — post-remediation cross-cutting snapshot, **read this first**.
+- [`docs/superpowers/specs/2026-06-03-roadmap.md`](docs/superpowers/specs/2026-06-03-roadmap.md) — what's next (ship steps + the v1.0.x / v1.1+ / v2 backlog).
+- [`docs/reviews/2026-06-02-distribution-readiness-scorecard.md`](docs/reviews/2026-06-02-distribution-readiness-scorecard.md) — the 10-domain distribution-readiness panel + the wave-by-wave re-grades + dogfood verification.
+- [`docs/superpowers/specs/2026-05-11-finance-app-design.md`](docs/superpowers/specs/2026-05-11-finance-app-design.md) — master design spec (build phases).
 - [`docs/superpowers/conventions.md`](docs/superpowers/conventions.md) — engineering patterns.
 - [`docs/superpowers/plans/`](docs/superpowers/plans/) — per-feature plans.
 

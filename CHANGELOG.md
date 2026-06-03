@@ -22,6 +22,10 @@ stored in a single local SQLite file. No account, no sync, no telemetry.
 - A learning section with a 600-question finance trivia bank.
 - In-app legal disclosure and a Privacy & data panel mirroring the README's
   "100% local" guarantee.
+- Whole-database backup and restore (Settings → Data): one-click consistent
+  backups of your entire local database into a rotating folder, an in-app list
+  to restore from any of them, and an atomic, corruption-safe restore — so your
+  irreplaceable data survives a lost Mac or a damaged database.
 
 ### Distribution
 
