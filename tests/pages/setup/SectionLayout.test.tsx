@@ -19,12 +19,13 @@ vi.mock('@/lib/statements-archive', () => ({
 
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import SectionLayout from '@/pages/setup/SectionLayout';
 import {
   isSetupDismissed,
   shouldRedirectToSetup,
 } from '@/lib/setup-dismissal';
+import { markTailorDone } from '@/lib/onboarding-state';
 import { useAccountsStore } from '@/stores/accounts-store';
 
 describe('SectionLayout', () => {
@@ -297,5 +298,52 @@ describe('SectionLayout', () => {
     expect(
       screen.getByRole('button', { name: /finish setup/i }),
     ).toBeInTheDocument();
+  });
+
+  // A tiny probe that renders the current pathname so we can assert where
+  // handleFinish navigated.
+  function LocationProbe() {
+    const { pathname } = useLocation();
+    return <div data-testid="pathname">{pathname}</div>;
+  }
+
+  function renderAtSection4() {
+    localStorage.setItem(
+      'setupWizard.progress.v1',
+      JSON.stringify({
+        currentSection: 4,
+        sectionStatus: {
+          1: 'completed',
+          2: 'completed',
+          3: 'completed',
+          4: 'in_progress',
+        },
+        startedAt: '2026-05-26T12:00:00Z',
+      }),
+    );
+    return render(
+      <MemoryRouter initialEntries={['/setup']}>
+        <Routes>
+          <Route path="/setup" element={<SectionLayout />} />
+          <Route path="*" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+  }
+
+  it('handleFinish navigates to /welcome when Tailor is NOT done (new user)', async () => {
+    const user = userEvent.setup();
+    // Tailor marker absent → onboarding flow runs.
+    renderAtSection4();
+    await user.click(screen.getByRole('button', { name: /finish setup/i }));
+    expect(screen.getByTestId('pathname').textContent).toBe('/welcome');
+  });
+
+  it('handleFinish navigates to / when Tailor is ALREADY done (existing user via /setup?section=4)', async () => {
+    const user = userEvent.setup();
+    markTailorDone(); // guard: existing user re-entering the wizard skips onboarding
+    renderAtSection4();
+    await user.click(screen.getByRole('button', { name: /finish setup/i }));
+    expect(screen.getByTestId('pathname').textContent).toBe('/');
   });
 });

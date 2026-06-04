@@ -11,6 +11,7 @@ import Section2_WhatYouOwn from './Section2_WhatYouOwn';
 import Section3_WhatYouOwe from './Section3_WhatYouOwe';
 import Section4_History from './Section4_History';
 import { markSetupDismissed } from '@/lib/setup-dismissal';
+import { isTailorDone } from '@/lib/onboarding-state';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useAccountsStore } from '@/stores/accounts-store';
@@ -134,7 +135,10 @@ export default function SectionLayout({ initialSection }: Props) {
     // is independent of clearing the wizard progress below.
     markSetupDismissed();
     localStorage.removeItem(STORAGE_KEY);
-    navigate('/');
+    // New users go into the post-setup onboarding flow at /welcome; existing
+    // users who re-enter the wizard via /setup?section=4 (Tailor already done)
+    // go straight to the Dashboard — the guard prevents re-running onboarding.
+    navigate(isTailorDone() ? '/' : '/welcome');
   }, [navigate]);
 
   const currentSection = progress.currentSection;
