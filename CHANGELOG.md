@@ -5,6 +5,32 @@ All notable changes to Cairn are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Post-setup onboarding flow: after the data wizard, a "You're set up" → **Tailor**
+  → **Tour** sequence. *Tailor* reviews data-derived show/hide choices for sidebar
+  tabs and the 12 calculator cards (e.g. no equity grants → hide the Equity Grants
+  tab and the Equity Value calculator), fully reversible. *Tour* is a skippable
+  spotlight walkthrough of the tabs you kept, replayable any time from
+  Settings → Getting started.
+- A `Switch` UI primitive (`@radix-ui/react-switch`); the Settings → Sidebar editor
+  and the Calculators "manage cards" control now use it.
+- Investments donut: a collapsible legend ("Show all (N) / Show less") for long
+  legends (e.g. per-company exposure).
+
+### Changed
+
+- Calculator-card visibility moved from `localStorage` into the database
+  (migration `0047`, single source of truth) so it is covered by backup/restore;
+  the legacy `calculator-hidden-cards` key is imported once and retired.
+
+### Fixed
+
+- Investments per-company donut: thin/small wedges no longer render colorless
+  (a `minAngle` floor plus a 1px hairline stroke so each wedge keeps its fill).
+
 ## [1.0.0] - 2026-06-02
 
 First public release. Cairn is a local-only personal finance tracker for

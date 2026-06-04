@@ -152,7 +152,7 @@ balances, take 30 seconds to verify FileVault is on.
 
 **v1.0.0 — shippable.** All feature work plus the full v1.0 distribution-readiness
 remediation are complete: all 7 ship-blockers and the High set are fixed, whole-database
-backup + restore are verified on real hardware, and the suite is green (4295 vitest +
+backup + restore are verified on real hardware, and the suite is green (4405 vitest +
 17 cargo tests, `tsc` clean). Overall ship-readiness **A−**. Shipping is gated only on
 tagging `v1.0.0` (and a first in-app updater round-trip once a `v1.0.1` exists).
 
