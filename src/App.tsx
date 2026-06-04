@@ -75,6 +75,7 @@ const TickersTab = lazyWithRetry(() => import('./pages/inputs/TickersTab'));
 const ComingSoonTab = lazyWithRetry(() => import('./pages/inputs/tabs-coming-soon'));
 const CategoriesTab = lazyWithRetry(() => import('./pages/inputs/CategoriesTab'));
 const SetupWizard = lazyWithRetry(() => import('./pages/setup/SetupWizard'));
+const OnboardingController = lazyWithRetry(() => import('./pages/setup/OnboardingController'));
 const NotFound = lazyWithRetry(() => import('./pages/NotFound'));
 
 // Tiny helper: each route element renders inside a Suspense boundary so a
@@ -91,6 +92,15 @@ const router = createBrowserRouter([
   {
     path: '/setup',
     element: lazyRoute(SetupWizard),
+    errorElement: lazyRoute(NotFound),
+  },
+  {
+    // Post-setup onboarding (sibling of /setup, outside PageShell). The data
+    // wizard's handleFinish navigates here unless Tailor is already done; a
+    // reload here isn't hijacked by the first-launch redirect (path guard in
+    // main.tsx only fires on '/').
+    path: '/welcome',
+    element: lazyRoute(OnboardingController),
     errorElement: lazyRoute(NotFound),
   },
   {
