@@ -19,14 +19,23 @@ import { useContributionsStore } from '@/stores/contributions-store';
 import { useLoansStore } from '@/stores/loans-store';
 import { useEquityGrantsStore } from '@/stores/equity-grants-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import { getCurrentTaxYear } from '@/lib/current-tax-year';
 import { Button } from '@/components/ui/button';
-import { getHiddenCards, persistHiddenCards } from '@/lib/calculator-visibility';
+import { Switch } from '@/components/ui/switch';
+import {
+  applyCalculatorCardLayout,
+  CALCULATOR_CARD_IDS,
+} from '@/lib/calculator-card-layout';
+import type { CardLayoutEntry } from '@/types/schema';
 
 const STALE_BANNER_STORAGE_KEY = 'stale-tax-year-banner-dismissed';
 
-// Stable kebab-case ids for each calculator card.
-const CARD_IDS = {
+// Stable kebab-case ids for each calculator card. Exported (object form) for
+// reuse by the tailoring engine + the one-time import. The canonical ordered
+// list lives in calculator-card-layout.ts (CALCULATOR_CARD_IDS); these two
+// MUST stay in lock-step.
+export const CARD_IDS = {
   PAYCHECK: 'paycheck',
   BONUS: 'bonus-tax',
   COMMISSION: 'commission-tax',
@@ -42,7 +51,7 @@ const CARD_IDS = {
 } as const;
 
 // Human-friendly labels surfaced in the "manage" popover.
-const CARD_LABELS: Record<string, string> = {
+export const CARD_LABELS: Record<string, string> = {
   [CARD_IDS.PAYCHECK]: 'Paycheck',
   [CARD_IDS.BONUS]: 'Bonus tax',
   [CARD_IDS.COMMISSION]: 'Commission tax',
@@ -61,26 +70,54 @@ function labelFor(id: string): string {
   return CARD_LABELS[id] ?? id;
 }
 
+/**
+ * Build the next calculatorCardLayout from the current layout + a single
+ * id→hidden mutation. Always returns a COMPLETE entry per CALCULATOR_CARD_IDS
+ * so the persisted value is never partial (matches what the one-time import
+ * writes). Pure.
+ */
+function withCardHidden(
+  current: CardLayoutEntry[] | null,
+  id: string,
+  hidden: boolean,
+): CardLayoutEntry[] {
+  const hiddenById = new Map<string, boolean>();
+  for (const entry of current ?? []) hiddenById.set(entry.id, entry.hidden);
+  hiddenById.set(id, hidden);
+  return CALCULATOR_CARD_IDS.map((cardId) => ({
+    id: cardId,
+    hidden: hiddenById.get(cardId) === true,
+  }));
+}
+
+function CalculatorsSkeleton() {
+  // Lightweight placeholder shown until settings resolves (cold deep-link to
+  // /calculators; usually already warm via Sidebar's boot load). Mirrors the
+  // app's lazy-route loading affordance — a non-jumpy neutral block, NOT the
+  // 12 cards in a wrong (all-visible) state.
+  return (
+    <div className="space-y-4 min-w-0" data-testid="calculators-skeleton" aria-busy="true">
+      <div className="h-8 w-48 rounded-md bg-muted animate-pulse" />
+      <div className="h-4 w-full max-w-2xl rounded bg-muted animate-pulse" />
+      <div className="grid items-start grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 min-w-0">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="h-40 rounded-md border bg-muted/40 animate-pulse" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function CalculatorsLayout() {
-  // Note: the household/p1/p2 view filter from useViewFilter is intentionally
-  // NOT wired in here. Each calculator card has its own per-card behaviour —
-  // Paycheck / Financial Independence / CoastFI / Equity Value naturally split per-person via
-  // their underlying calcs; Bonus Tax always shows MFJ-combined for household
-  // and per-person for p1/p2; and each card already auto-shows or hides based
-  // on whether the relevant inputs exist. Adding a person filter at the
-  // layout level would shadow those behaviours, so it stays out-of-scope for
-  // Phase 3.
   const persons = usePersonsStore((s) => s.persons);
   const showOvertime = persons.some(
     (p) => p.employmentType === 'HOURLY' || p.employmentType === 'SALARY_WITH_OT',
   );
 
-  // Cold-boot hydration: the calculator cards READ persons/dependents from their
-  // stores, but none of them — nor the Dashboard landing page — LOAD them. So a
-  // returning user who lands here first (boot → Dashboard → Calculators, or a
-  // deep-link) would see empty "add a person" cards despite real data in the DB.
-  // Load them once for the whole grid. (household loads globally via the
-  // AppDisclaimerGate; the W-2 cards' useHouseholdTaxContext loads tax rules.)
+  // Cold-boot hydration. The cards READ persons/dependents/portfolio stores
+  // but none of them LOAD them, and settings is only boot-loaded by Sidebar —
+  // a cold deep-link to /calculators would otherwise see null settings (→
+  // skeleton forever) and empty cards. Load them all once for the grid.
   useEffect(() => {
     void usePersonsStore.getState().load();
     void useDependentsStore.getState().load();
@@ -88,15 +125,16 @@ export default function CalculatorsLayout() {
     void useContributionsStore.getState().load();
     void useLoansStore.getState().load();
     void useEquityGrantsStore.getState().load();
+    void useSettingsStore.getState().load();
   }, []);
+
+  const settings = useSettingsStore((s) => s.settings);
+  const updateSettings = useSettingsStore((s) => s.update);
 
   // Resolve the active tax year from the seeded set so we can warn when the
   // app's bundled rules predate the current calendar year.
   const taxItems = useTaxRulesStore((s) => s.items);
-  const seededYears = useMemo(
-    () => [...new Set(taxItems.map((r) => r.year))],
-    [taxItems],
-  );
+  const seededYears = useMemo(() => [...new Set(taxItems.map((r) => r.year))], [taxItems]);
   const { year: resolvedYear, isCurrent } = getCurrentTaxYear(seededYears);
   const showBanner = resolvedYear !== null && !isCurrent;
 
@@ -104,7 +142,6 @@ export default function CalculatorsLayout() {
     try {
       return sessionStorage.getItem(STALE_BANNER_STORAGE_KEY) === 'true';
     } catch {
-      // SSR / sandboxed environments where sessionStorage is unavailable
       return false;
     }
   });
@@ -118,48 +155,38 @@ export default function CalculatorsLayout() {
     setDismissed(true);
   };
 
-  // Track which cards the user has hidden. The React state is the source of
-  // truth within the session; localStorage is a side-effect persister kept in
-  // sync through `persistHiddenCards`. Storing an array (not a Set) keeps the
-  // value structurally comparable so functional updaters can bail out of
-  // redundant writes, and lets the popover render in a stable order matching
-  // the user's hide sequence.
-  const [hiddenIds, setHiddenIds] = useState<string[]>(() => getHiddenCards());
-
-  const handleHide = useCallback((id: string) => {
-    setHiddenIds((prev) => {
-      if (prev.includes(id)) return prev;
-      const next = [...prev, id];
-      persistHiddenCards(next);
-      return next;
-    });
-  }, []);
-
-  const handleShow = useCallback((id: string) => {
-    setHiddenIds((prev) => {
-      if (!prev.includes(id)) return prev;
-      const next = prev.filter((x) => x !== id);
-      persistHiddenCards(next);
-      return next;
-    });
-  }, []);
-
-  const handleShowAll = useCallback(() => {
-    setHiddenIds((prev) => {
-      if (prev.length === 0) return prev;
-      persistHiddenCards([]);
-      return [];
-    });
-  }, []);
-
-  const hiddenSet = useMemo(() => new Set(hiddenIds), [hiddenIds]);
-  const hiddenCount = hiddenIds.length;
+  // Hidden state is sourced SOLELY from the DB-backed overlay (single source
+  // of truth). No localStorage seed, no persistHiddenCards write path.
+  const cardLayout = settings?.calculatorCardLayout ?? null;
+  const hiddenSet = useMemo(
+    () => new Set(applyCalculatorCardLayout(CALCULATOR_CARD_IDS, cardLayout)),
+    [cardLayout],
+  );
+  const hiddenCount = hiddenSet.size;
 
   const [popoverOpen, setPopoverOpen] = useState(false);
 
-  useEffect(() => {
-    if (hiddenCount === 0) setPopoverOpen(false);
-  }, [hiddenCount]);
+  // Toggle one card. Writes the COMPLETE layout to the DB; the store refresh
+  // re-renders the grid. Fire-and-forget: update() rethrows on failure but the
+  // store records the error; we don't crash the page on a transient write.
+  // Closes the popover so the user sees the updated grid immediately.
+  const setCardHidden = useCallback(
+    (id: string, hidden: boolean) => {
+      const next = withCardHidden(settings?.calculatorCardLayout ?? null, id, hidden);
+      void updateSettings({ calculatorCardLayout: next }).catch(() => {});
+      setPopoverOpen(false);
+    },
+    [settings?.calculatorCardLayout, updateSettings],
+  );
+
+  const handleHide = useCallback((id: string) => setCardHidden(id, true), [setCardHidden]);
+
+  // Render-gate: until settings resolves we cannot know which cards are hidden,
+  // so show a skeleton rather than flashing all 12 in a wrong (all-visible)
+  // state. settings is usually already warm via Sidebar's boot load.
+  if (settings === null) {
+    return <CalculatorsSkeleton />;
+  }
 
   return (
     <div className="space-y-4 min-w-0">
@@ -175,9 +202,7 @@ export default function CalculatorsLayout() {
           role="alert"
           className="flex items-center justify-between gap-4 rounded-md border border-warning/40 bg-warning-soft px-4 py-3 text-sm text-warning-foreground"
         >
-          <span>
-            Using {resolvedYear} tax brackets — update the app for newer rates.
-          </span>
+          <span>Using {resolvedYear} tax brackets — update the app for newer rates.</span>
           <Button
             type="button"
             variant="ghost"
@@ -190,12 +215,7 @@ export default function CalculatorsLayout() {
           </Button>
         </div>
       )}
-      {/* `items-start` is LOAD-BEARING. This is a masonry grid: each card sets
-          its own grid-row span via useAutoRowSpan, which measures the card's
-          content height. Without items-start the grid's align-items defaults to
-          stretch, so each card is stretched to its tiny 8px grid area → the hook
-          measures 8px → span stays 1 → every card collapses to 8px and the cards
-          overlap. align-items:start lets each card size to its own content. */}
+      {/* `items-start` is LOAD-BEARING (masonry grid; see useAutoRowSpan). */}
       <div className="grid items-start grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 min-w-0 [grid-auto-rows:8px] [grid-auto-flow:row_dense]">
         {!hiddenSet.has(CARD_IDS.PAYCHECK) && (
           <PaycheckCard cardId={CARD_IDS.PAYCHECK} onHide={handleHide} />
@@ -204,10 +224,7 @@ export default function CalculatorsLayout() {
           <BonusTaxCard cardId={CARD_IDS.BONUS} onHide={handleHide} />
         )}
         {!hiddenSet.has(CARD_IDS.RETIREMENT_401K) && (
-          <Retirement401kWithdrawalCard
-            cardId={CARD_IDS.RETIREMENT_401K}
-            onHide={handleHide}
-          />
+          <Retirement401kWithdrawalCard cardId={CARD_IDS.RETIREMENT_401K} onHide={handleHide} />
         )}
         {!hiddenSet.has(CARD_IDS.COMMISSION) && (
           <CommissionTaxCard cardId={CARD_IDS.COMMISSION} onHide={handleHide} />
@@ -216,10 +233,7 @@ export default function CalculatorsLayout() {
           <OvertimeCard cardId={CARD_IDS.OVERTIME} onHide={handleHide} />
         )}
         {!hiddenSet.has(CARD_IDS.FINANCIAL_INDEPENDENCE) && (
-          <FinancialIndependenceCard
-            cardId={CARD_IDS.FINANCIAL_INDEPENDENCE}
-            onHide={handleHide}
-          />
+          <FinancialIndependenceCard cardId={CARD_IDS.FINANCIAL_INDEPENDENCE} onHide={handleHide} />
         )}
         {!hiddenSet.has(CARD_IDS.COAST_FI) && (
           <CoastFiCard cardId={CARD_IDS.COAST_FI} onHide={handleHide} />
@@ -240,74 +254,57 @@ export default function CalculatorsLayout() {
           <ContributionAllocatorCard cardId={CARD_IDS.CONTRIBUTION_ALLOCATOR} onHide={handleHide} />
         )}
       </div>
-      {hiddenCount > 0 && (
-        <footer className="pt-2 text-sm text-muted-foreground relative">
-          <button
-            type="button"
-            onClick={() => setPopoverOpen((v) => !v)}
-            aria-expanded={popoverOpen}
-            aria-haspopup="dialog"
-            className="cursor-pointer underline decoration-dotted underline-offset-4 hover:text-foreground transition-colors"
-          >
-            {hiddenCount === 1 ? '1 card hidden' : `${hiddenCount} cards hidden`}
-            {' — '}
-            <span className="font-medium">manage</span>
-          </button>
-          {popoverOpen && (
-            <>
-              {/* Backdrop — closes the popover when clicked outside. */}
-              <div
-                className="fixed inset-0 z-10"
-                aria-hidden="true"
-                onClick={() => setPopoverOpen(false)}
-              />
-              <div
-                role="dialog"
-                aria-label="Hidden calculator cards"
-                className="absolute left-0 bottom-full mb-2 w-72 rounded-md border bg-background shadow-lg p-2 z-20"
-              >
-                <div className="flex items-center justify-between px-2 pt-1 pb-2 border-b mb-1">
-                  <span className="text-xs font-medium text-muted-foreground">
-                    Hidden cards
-                  </span>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      handleShowAll();
-                      setPopoverOpen(false);
-                    }}
-                    className="h-6 text-xs"
-                  >
-                    Show all
-                  </Button>
-                </div>
-                <ul className="space-y-0.5 max-h-72 overflow-y-auto">
-                  {hiddenIds.map((id) => (
+      <footer className="pt-2 text-sm text-muted-foreground relative">
+        <button
+          type="button"
+          onClick={() => setPopoverOpen((v) => !v)}
+          aria-expanded={popoverOpen}
+          aria-haspopup="dialog"
+          className="cursor-pointer underline decoration-dotted underline-offset-4 hover:text-foreground transition-colors"
+        >
+          <span className="font-medium">Manage cards</span>
+          {hiddenCount > 0 && (
+            <> {' — '}{hiddenCount === 1 ? '1 card hidden' : `${hiddenCount} cards hidden`}</>
+          )}
+        </button>
+        {popoverOpen && (
+          <>
+            {/* Backdrop — closes the popover when clicked outside. */}
+            <div
+              className="fixed inset-0 z-10"
+              aria-hidden="true"
+              onClick={() => setPopoverOpen(false)}
+            />
+            <div
+              role="dialog"
+              aria-label="Manage calculator cards"
+              className="absolute left-0 bottom-full mb-2 w-72 rounded-md border bg-background shadow-md p-2 z-20"
+            >
+              <div className="px-2 pt-1 pb-2 border-b mb-1">
+                <span className="text-xs font-medium text-muted-foreground">Show / hide cards</span>
+              </div>
+              <ul className="space-y-0.5 max-h-80 overflow-y-auto">
+                {CALCULATOR_CARD_IDS.map((id) => {
+                  const visible = !hiddenSet.has(id);
+                  return (
                     <li
                       key={id}
-                      className="flex items-center justify-between gap-2 px-2 py-1 rounded hover:bg-muted/40"
+                      className="flex items-center justify-between gap-2 px-2 py-1.5 rounded hover:bg-muted/40"
                     >
                       <span className="text-sm text-foreground">{labelFor(id)}</span>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleShow(id)}
-                        aria-label={`Show ${labelFor(id)} card`}
-                        className="h-7"
-                      >
-                        Show
-                      </Button>
+                      <Switch
+                        checked={visible}
+                        onCheckedChange={(next) => setCardHidden(id, !next)}
+                        aria-label={labelFor(id)}
+                      />
                     </li>
-                  ))}
-                </ul>
-              </div>
-            </>
-          )}
-        </footer>
-      )}
+                  );
+                })}
+              </ul>
+            </div>
+          </>
+        )}
+      </footer>
     </div>
   );
 }

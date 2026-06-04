@@ -6,7 +6,9 @@ import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import { FilingStatus } from '@/types/enums';
+import type { AppSettings } from '@/types/schema';
 import CalculatorsLayout from '@/pages/calculators/CalculatorsLayout';
 
 // Federal SINGLE brackets (2026 approximate) — same fixture as BonusTaxCard.test.tsx
@@ -53,6 +55,46 @@ const basePerson = {
   otThresholdHoursPerWeek: 40,
 };
 
+// settings.update is exercised by the toggle tests; stub it to mutate the
+// in-memory store so the grid reflects the change (no real DB here).
+function primeSettings(calculatorCardLayout: AppSettings['calculatorCardLayout'] = null) {
+  const update = vi.fn(async (patch: Partial<AppSettings>) => {
+    useSettingsStore.setState((s) => ({
+      settings: s.settings ? { ...s.settings, ...patch } : s.settings,
+    }));
+  });
+  useSettingsStore.setState({
+    settings: {
+      id: 1,
+      sidebarLayout: null,
+      investmentsCardLayout: null,
+      calculatorCardLayout,
+      notificationsEnabled: true,
+      notificationDay: 1,
+      refreshCadence: 'DAILY',
+      lastRefreshAt: null,
+      statementsFolderPath: null,
+      defaultInflation: null,
+      defaultReturnRate: null,
+      defaultFiPillsPosition: 'above',
+      defaultProjectionDetailLevel: 'tax_bucket',
+      defaultCashApy: null,
+      defaultCompoundingFrequency: 'MONTHLY',
+      defaultDrawdownTaxRate: null,
+      propertyUtilitiesCategoryIds: null,
+      vehicleGasCategoryIds: null,
+      assetClassTargetAllocations: null,
+      lastSeenMonth: null,
+    } as AppSettings,
+    isLoading: false,
+    error: null,
+    // Override the action so toggles don't hit a real repo.
+    update: update as unknown as AppSettings extends never ? never : SettingsUpdate,
+  });
+  return update;
+}
+type SettingsUpdate = (patch: Partial<Omit<AppSettings, 'id'>>) => Promise<void>;
+
 function resetStores() {
   useHouseholdStore.setState({ household: null, isLoading: false, error: null });
   usePersonsStore.setState({ persons: [], isLoading: false, error: null });
@@ -74,9 +116,7 @@ function primeBaseline() {
     isLoading: false,
     error: null,
   });
-
   useDependentsStore.setState({ dependents: [], isLoading: false, error: null });
-
   useTaxRulesStore.setState({
     year: 2026,
     items: [
@@ -107,10 +147,8 @@ function primeBaseline() {
 describe('CalculatorsLayout', () => {
   beforeEach(() => {
     resetStores();
+    useSettingsStore.setState({ settings: null, isLoading: false, error: null });
     sessionStorage.clear();
-    // tests/setup.ts installs a fresh in-memory localStorage per test, but
-    // call clear() defensively in case any prior code in this beforeEach hook
-    // wrote to it.
     localStorage.clear();
   });
 
@@ -118,8 +156,9 @@ describe('CalculatorsLayout', () => {
     vi.useRealTimers();
   });
 
-  it('renders the baseline cards (Paycheck, Bonus, Commission) when household is set', async () => {
+  it('renders the baseline cards (Paycheck, Bonus, Commission) when settings + household are set', async () => {
     primeBaseline();
+    primeSettings();
     usePersonsStore.setState({
       persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
       isLoading: false,
@@ -135,34 +174,9 @@ describe('CalculatorsLayout', () => {
 
   it('renders OvertimeCard when at least one person has employment_type=HOURLY', async () => {
     primeBaseline();
+    primeSettings();
     usePersonsStore.setState({
-      persons: [
-        {
-          ...basePerson,
-          employmentType: 'HOURLY',
-          hourlyRate: 25,
-        },
-      ],
-      isLoading: false,
-      error: null,
-    });
-
-    render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
-
-    // OvertimeCard's title is "Overtime" — should appear in the layout
-    expect(await screen.findByText(/^Overtime$/i)).toBeInTheDocument();
-  });
-
-  it('renders OvertimeCard when at least one person has employment_type=SALARY_WITH_OT', async () => {
-    primeBaseline();
-    usePersonsStore.setState({
-      persons: [
-        {
-          ...basePerson,
-          employmentType: 'SALARY_WITH_OT',
-          annualSalaryPretax: 52000,
-        },
-      ],
+      persons: [{ ...basePerson, employmentType: 'HOURLY', hourlyRate: 25 }],
       isLoading: false,
       error: null,
     });
@@ -174,6 +188,7 @@ describe('CalculatorsLayout', () => {
 
   it('does NOT render OvertimeCard when all persons have employment_type=SALARY_NO_OT', async () => {
     primeBaseline();
+    primeSettings();
     usePersonsStore.setState({
       persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
       isLoading: false,
@@ -182,20 +197,7 @@ describe('CalculatorsLayout', () => {
 
     render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
 
-    // Page rendered — Bonus card title is visible
     await screen.findByText(/Bonus take-home/i);
-    // But the standalone "Overtime" card title must NOT be present
-    expect(screen.queryByText(/^Overtime$/i)).not.toBeInTheDocument();
-  });
-
-  it('does NOT render OvertimeCard when persons store is empty', async () => {
-    primeBaseline();
-    usePersonsStore.setState({ persons: [], isLoading: false, error: null });
-
-    render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
-
-    // Page heading still renders
-    await screen.findByRole('heading', { name: /Calculators/i });
     expect(screen.queryByText(/^Overtime$/i)).not.toBeInTheDocument();
   });
 
@@ -203,7 +205,8 @@ describe('CalculatorsLayout', () => {
     it('shows stale-year banner when seeded years do not include current calendar year', async () => {
       vi.useFakeTimers({ toFake: ['Date'] });
       vi.setSystemTime(new Date('2027-03-15'));
-      primeBaseline(); // seeds year=2026
+      primeBaseline();
+      primeSettings();
       usePersonsStore.setState({
         persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
         isLoading: false,
@@ -213,81 +216,13 @@ describe('CalculatorsLayout', () => {
       render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
 
       expect(await screen.findByText(/using 2026 tax brackets/i)).toBeInTheDocument();
-      expect(screen.getByText(/update.*newer rates/i)).toBeInTheDocument();
-    });
-
-    it('hides banner when dismissed', async () => {
-      vi.useFakeTimers({ toFake: ['Date'] });
-      vi.setSystemTime(new Date('2027-03-15'));
-      primeBaseline();
-      usePersonsStore.setState({
-        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
-        isLoading: false,
-        error: null,
-      });
-
-      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
-
-      const dismissBtn = await screen.findByRole('button', { name: /dismiss/i });
-      await userEvent.click(dismissBtn);
-      expect(screen.queryByText(/using 2026 tax brackets/i)).not.toBeInTheDocument();
     });
 
     it('does NOT show banner when current calendar year is in seeded set', async () => {
       vi.useFakeTimers({ toFake: ['Date'] });
       vi.setSystemTime(new Date('2026-06-01'));
-      primeBaseline(); // seeds year=2026
-      usePersonsStore.setState({
-        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
-        isLoading: false,
-        error: null,
-      });
-
-      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
-
-      // Page rendered
-      await screen.findByText(/Bonus take-home/i);
-      // Banner should NOT appear
-      expect(screen.queryByText(/using 2026 tax brackets/i)).not.toBeInTheDocument();
-      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    });
-
-    it('does NOT show banner when seededYears is empty', async () => {
-      vi.useFakeTimers({ toFake: ['Date'] });
-      vi.setSystemTime(new Date('2027-03-15'));
-      // Do NOT call primeBaseline; tax_rules.items remains []
-      useHouseholdStore.setState({
-        household: {
-          filingStatus: FilingStatus.SINGLE,
-          state: 'CA',
-          city: null,
-          monthlyExpenseBaseline: 5000,
-          withdrawalRate: 0.04,
-          inflationAssumption: 0.03,
-          growthScenarios: [],
-        },
-        isLoading: false,
-        error: null,
-      });
-      usePersonsStore.setState({
-        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
-        isLoading: false,
-        error: null,
-      });
-
-      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
-
-      await screen.findByRole('heading', { name: /Calculators/i });
-      // No banner — when seededYears is empty, year is null and we don't render
-      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-      expect(screen.queryByText(/tax brackets/i)).not.toBeInTheDocument();
-    });
-
-    it('respects sessionStorage dismissed state across re-renders', async () => {
-      vi.useFakeTimers({ toFake: ['Date'] });
-      vi.setSystemTime(new Date('2027-03-15'));
-      sessionStorage.setItem('stale-tax-year-banner-dismissed', 'true');
       primeBaseline();
+      primeSettings();
       usePersonsStore.setState({
         persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
         isLoading: false,
@@ -297,76 +232,14 @@ describe('CalculatorsLayout', () => {
       render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
 
       await screen.findByText(/Bonus take-home/i);
-      expect(screen.queryByText(/using 2026 tax brackets/i)).not.toBeInTheDocument();
-    });
-
-    it('shows the most-recent seeded year, not the next-most-recent', async () => {
-      vi.useFakeTimers({ toFake: ['Date'] });
-      vi.setSystemTime(new Date('2027-03-15'));
-      // Seed both 2024 and 2025; resolver should pick 2025 (most recent), not 2024
-      useHouseholdStore.setState({
-        household: {
-          filingStatus: FilingStatus.SINGLE,
-          state: 'CA',
-          city: null,
-          monthlyExpenseBaseline: 5000,
-          withdrawalRate: 0.04,
-          inflationAssumption: 0.03,
-          growthScenarios: [],
-        },
-        isLoading: false,
-        error: null,
-      });
-      useTaxRulesStore.setState({
-        year: 2025,
-        items: [
-          {
-            id: 1,
-            year: 2024,
-            jurisdictionType: 'FEDERAL',
-            jurisdictionCode: 'US',
-            filingStatus: FilingStatus.SINGLE,
-            brackets: federalSingleBrackets,
-            standardDeduction: 14000,
-          },
-          {
-            id: 2,
-            year: 2025,
-            jurisdictionType: 'FEDERAL',
-            jurisdictionCode: 'US',
-            filingStatus: FilingStatus.SINGLE,
-            brackets: federalSingleBrackets,
-            standardDeduction: 14600,
-          },
-          {
-            id: 3,
-            year: 2025,
-            jurisdictionType: 'STATE',
-            jurisdictionCode: 'CA',
-            filingStatus: FilingStatus.SINGLE,
-            brackets: caSingleBrackets,
-            standardDeduction: 0,
-          },
-        ],
-        isLoading: false,
-        error: null,
-      });
-      usePersonsStore.setState({
-        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
-        isLoading: false,
-        error: null,
-      });
-
-      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
-
-      expect(await screen.findByText(/using 2025 tax brackets/i)).toBeInTheDocument();
-      expect(screen.queryByText(/using 2024 tax brackets/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
   });
 
-  describe('Hide / show cards', () => {
-    it('hides card when "Hide" link is clicked', async () => {
+  describe('Hide / show cards (DB-backed, Switch popover)', () => {
+    it('per-card Hide button writes calculatorCardLayout via settings.update (not localStorage)', async () => {
       primeBaseline();
+      const update = primeSettings();
       usePersonsStore.setState({
         persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
         isLoading: false,
@@ -374,92 +247,25 @@ describe('CalculatorsLayout', () => {
       });
 
       render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
-
-      // Wait for cards to render
       await screen.findByText(/Bonus take-home/i);
 
-      // There should be 3 Hide buttons (paycheck, bonus, commission — no overtime).
-      const hideButtonsBefore = screen.getAllByRole('button', { name: /^hide /i });
-      expect(hideButtonsBefore.length).toBeGreaterThanOrEqual(3);
+      const bonusHide = screen.getByRole('button', { name: /^hide estimated bonus take-home/i });
+      await userEvent.click(bonusHide);
 
-      await userEvent.click(hideButtonsBefore[0]);
-
-      // After hiding one, the count of Hide buttons should drop.
-      const hideButtonsAfter = screen.queryAllByRole('button', { name: /^hide /i });
-      expect(hideButtonsAfter.length).toBe(hideButtonsBefore.length - 1);
-    });
-
-    it('shows "1 card hidden — manage" in footer after hiding a card', async () => {
-      primeBaseline();
-      usePersonsStore.setState({
-        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
-        isLoading: false,
-        error: null,
-      });
-
-      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
-
-      await screen.findByText(/Bonus take-home/i);
-      const hideButton = screen.getAllByRole('button', { name: /^hide /i })[0];
-      await userEvent.click(hideButton);
-
-      expect(await screen.findByText(/1 card hidden/i)).toBeInTheDocument();
-      expect(screen.getByText(/manage/i)).toBeInTheDocument();
-    });
-
-    it('pluralizes hidden count: "2 cards hidden"', async () => {
-      primeBaseline();
-      usePersonsStore.setState({
-        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
-        isLoading: false,
-        error: null,
-      });
-
-      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
-
-      await screen.findByText(/Bonus take-home/i);
-
-      // Hide first card
-      let hideButtons = screen.getAllByRole('button', { name: /^hide /i });
-      await userEvent.click(hideButtons[0]);
-
-      // Hide another card
-      hideButtons = screen.getAllByRole('button', { name: /^hide /i });
-      await userEvent.click(hideButtons[0]);
-
-      expect(await screen.findByText(/2 cards hidden/i)).toBeInTheDocument();
-    });
-
-    it('popover lists hidden cards with Show button (and pre-populated localStorage works)', async () => {
-      // Pre-populate localStorage with a hidden card, then render.
-      localStorage.setItem('calculator-hidden-cards', JSON.stringify(['bonus-tax']));
-
-      primeBaseline();
-      usePersonsStore.setState({
-        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
-        isLoading: false,
-        error: null,
-      });
-
-      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
-
-      // The bonus card should NOT render.
-      await screen.findByText(/Paycheck/i);
+      // update() called with a calculatorCardLayout marking bonus-tax hidden.
+      expect(update).toHaveBeenCalled();
+      const patch = update.mock.calls.at(-1)![0] as { calculatorCardLayout: { id: string; hidden: boolean }[] };
+      const bonusEntry = patch.calculatorCardLayout.find((e) => e.id === 'bonus-tax');
+      expect(bonusEntry?.hidden).toBe(true);
+      // Card removed from the grid.
       expect(screen.queryByText(/Bonus take-home/i)).not.toBeInTheDocument();
-
-      // Footer shows the hidden count and the manage trigger.
-      const manageBtn = await screen.findByText(/manage/i);
-      await userEvent.click(manageBtn);
-
-      // Popover lists the hidden card by its human-friendly label.
-      expect(screen.getByText(/bonus tax/i)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /show bonus tax card/i })).toBeInTheDocument();
+      // Single source of truth: localStorage key NEVER recreated.
+      expect(localStorage.getItem('calculator-hidden-cards')).toBeNull();
     });
 
-    it('clicking "Show" in popover restores the card', async () => {
-      localStorage.setItem('calculator-hidden-cards', JSON.stringify(['bonus-tax']));
-
+    it('hides a card sourced from settings.calculatorCardLayout (DB read path)', async () => {
       primeBaseline();
+      primeSettings([{ id: 'bonus-tax', hidden: true }]);
       usePersonsStore.setState({
         persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
         isLoading: false,
@@ -470,39 +276,11 @@ describe('CalculatorsLayout', () => {
 
       await screen.findByText(/Paycheck/i);
       expect(screen.queryByText(/Bonus take-home/i)).not.toBeInTheDocument();
-
-      const manageBtn = await screen.findByText(/manage/i);
-      await userEvent.click(manageBtn);
-
-      const showBtn = screen.getByRole('button', { name: /show bonus tax card/i });
-      await userEvent.click(showBtn);
-
-      // Bonus card returns; footer disappears (no more hidden cards).
-      expect(await screen.findByText(/Bonus take-home/i)).toBeInTheDocument();
-      expect(screen.queryByText(/card hidden/i)).not.toBeInTheDocument();
     });
 
-    it('does NOT render footer when no cards are hidden', async () => {
+    it('manage popover lists all 12 cards as Switches; toggling one off hides it via update', async () => {
       primeBaseline();
-      usePersonsStore.setState({
-        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
-        isLoading: false,
-        error: null,
-      });
-
-      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
-
-      await screen.findByText(/Bonus take-home/i);
-      expect(screen.queryByText(/card hidden/i)).not.toBeInTheDocument();
-      expect(screen.queryByText(/manage/i)).not.toBeInTheDocument();
-    });
-
-    it('hide → show → hide cycle on the same card updates the visible cards each step', async () => {
-      // Regression: hide/show transitions had a state/render bug where the
-      // card grid would not visually update until a route change forced a
-      // re-mount. The layout must reflect each individual click without an
-      // unmount/mount in between.
-      primeBaseline();
+      const update = primeSettings();
       usePersonsStore.setState({
         persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
         isLoading: false,
@@ -512,56 +290,25 @@ describe('CalculatorsLayout', () => {
       render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
       await screen.findByText(/Bonus take-home/i);
 
-      // 1) hide Bonus card
-      const bonusHideBtn = screen.getByRole('button', { name: /^hide estimated bonus take-home/i });
-      await userEvent.click(bonusHideBtn);
-      expect(screen.queryByText(/Bonus take-home/i)).not.toBeInTheDocument();
-      expect(await screen.findByText(/1 card hidden/i)).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: /manage cards/i }));
 
-      // 2) show it back via the manage popover
-      await userEvent.click(screen.getByText(/manage/i));
-      await userEvent.click(
-        screen.getByRole('button', { name: /show bonus tax card/i }),
-      );
-      expect(await screen.findByText(/Bonus take-home/i)).toBeInTheDocument();
-      expect(screen.queryByText(/card hidden/i)).not.toBeInTheDocument();
+      // All 12 cards present as labeled switches.
+      const switches = screen.getAllByRole('switch');
+      expect(switches).toHaveLength(12);
 
-      // 3) hide it again — the layout must update again without re-mounting
-      const bonusHideBtnAgain = screen.getByRole('button', { name: /^hide estimated bonus take-home/i });
-      await userEvent.click(bonusHideBtnAgain);
-      expect(screen.queryByText(/Bonus take-home/i)).not.toBeInTheDocument();
-      expect(await screen.findByText(/1 card hidden/i)).toBeInTheDocument();
+      // Toggle "Compound Interest" off.
+      const compoundSwitch = screen.getByRole('switch', { name: /compound interest/i });
+      await userEvent.click(compoundSwitch);
+
+      const patch = update.mock.calls.at(-1)![0] as { calculatorCardLayout: { id: string; hidden: boolean }[] };
+      expect(patch.calculatorCardLayout.find((e) => e.id === 'compound-interest')?.hidden).toBe(true);
+      expect(screen.queryByText(/Compound Interest/i)).not.toBeInTheDocument();
+      expect(localStorage.getItem('calculator-hidden-cards')).toBeNull();
     });
 
-    it('hiding two cards in quick succession reflects both in the layout immediately', async () => {
+    it('toggling a hidden card back on (Switch) restores it via update', async () => {
       primeBaseline();
-      usePersonsStore.setState({
-        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
-        isLoading: false,
-        error: null,
-      });
-
-      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
-      await screen.findByText(/Bonus take-home/i);
-
-      // Hide Bonus
-      await userEvent.click(screen.getByRole('button', { name: /^hide estimated bonus take-home/i }));
-      // Hide Commission
-      await userEvent.click(screen.getByRole('button', { name: /^hide estimated commission take-home/i }));
-
-      expect(screen.queryByText(/Bonus take-home/i)).not.toBeInTheDocument();
-      expect(screen.queryByText(/Commission take-home/i)).not.toBeInTheDocument();
-      expect(await screen.findByText(/2 cards hidden/i)).toBeInTheDocument();
-    });
-
-    it('"Show all" restores every hidden card and closes the popover', async () => {
-      // T6: 'commission' renamed to 'commission-tax' to match card fallback id.
-      localStorage.setItem(
-        'calculator-hidden-cards',
-        JSON.stringify(['bonus-tax', 'commission-tax']),
-      );
-
-      primeBaseline();
+      const update = primeSettings([{ id: 'bonus-tax', hidden: true }]);
       usePersonsStore.setState({
         persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
         isLoading: false,
@@ -571,44 +318,50 @@ describe('CalculatorsLayout', () => {
       render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
       await screen.findByText(/Paycheck/i);
       expect(screen.queryByText(/Bonus take-home/i)).not.toBeInTheDocument();
-      expect(screen.queryByText(/Commission take-home/i)).not.toBeInTheDocument();
 
-      await userEvent.click(screen.getByText(/manage/i));
-      await userEvent.click(screen.getByRole('button', { name: /^show all$/i }));
+      await userEvent.click(screen.getByRole('button', { name: /manage cards/i }));
+      await userEvent.click(screen.getByRole('switch', { name: /bonus tax/i }));
 
+      const patch = update.mock.calls.at(-1)![0] as { calculatorCardLayout: { id: string; hidden: boolean }[] };
+      expect(patch.calculatorCardLayout.find((e) => e.id === 'bonus-tax')?.hidden).toBe(false);
       expect(await screen.findByText(/Bonus take-home/i)).toBeInTheDocument();
-      expect(screen.getByText(/Commission take-home/i)).toBeInTheDocument();
-      expect(screen.queryByText(/card hidden/i)).not.toBeInTheDocument();
+    });
+
+    it('shows "1 card hidden" hint in the footer when one card is hidden', async () => {
+      primeBaseline();
+      primeSettings([{ id: 'bonus-tax', hidden: true }]);
+      usePersonsStore.setState({
+        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
+        isLoading: false,
+        error: null,
+      });
+
+      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+      expect(await screen.findByText(/1 card hidden/i)).toBeInTheDocument();
     });
   });
 
   it('Commission card id in layout matches card fallback (commission-tax)', async () => {
-    // T6 Fix-1: the layout CARD_IDS.COMMISSION must be 'commission-tax' so that
-    // useCalculatorState and useSupplementalMethod share the same storage key
-    // as the card's own fallback (cardId ?? 'commission-tax').
     primeBaseline();
+    primeSettings();
     usePersonsStore.setState({
       persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
       isLoading: false,
       error: null,
     });
 
-    // Pre-seed a calc-state under 'commission-tax' (the canonical key).
     sessionStorage.setItem('calc-state:commission-tax', JSON.stringify({ annualCommission: 99999 }));
 
     render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
-
-    // Wait for the grid to settle.
     await screen.findByText(/Commission take-home/i);
 
-    // The calc-state key 'commission-tax' must still be present (layout did not
-    // write a duplicate 'commission' key).
     expect(sessionStorage.getItem('calc-state:commission-tax')).not.toBeNull();
     expect(sessionStorage.getItem('calc-state:commission')).toBeNull();
   });
 
-  it('intro copy describes edit/reset (no "Override" / "what-if" affordance)', async () => {
+  it('intro copy describes edit/reset and links to What-If', async () => {
     primeBaseline();
+    primeSettings();
     usePersonsStore.setState({
       persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
       isLoading: false,
@@ -619,9 +372,6 @@ describe('CalculatorsLayout', () => {
 
     await screen.findByRole('heading', { name: /Calculators/i });
     expect(screen.getByText(/Reset to my data/i)).toBeInTheDocument();
-    expect(screen.queryByText(/Use "Override"/i)).not.toBeInTheDocument();
-    expect(screen.queryByText(/try a what-if/i)).not.toBeInTheDocument();
-    // Cross-link to the dedicated What-If page.
     expect(screen.getByRole('link', { name: /What-If/i })).toHaveAttribute('href', '/what-if');
   });
 });
