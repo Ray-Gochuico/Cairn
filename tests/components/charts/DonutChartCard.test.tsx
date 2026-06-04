@@ -108,6 +108,8 @@ describe('DonutChartCard', () => {
   it('falls back to WEDGE_PALETTE (never near-white) for colorless slices past index 9', () => {
     const many = Array.from({ length: 14 }, (_, i) => ({ name: `S${i}`, value: 1 }));
     render(<DonutChartCard title="X" data={many} />);
+    // 14 slices > LEGEND_COLLAPSE_THRESHOLD (6), so expand to show all first.
+    fireEvent.click(screen.getByRole('button', { name: /show all/i }));
     const legend = screen.getByLabelText('Chart legend');
     const li = within(legend).getByText('S11').closest('li')!;
     const css = (li.querySelector('span[aria-hidden]') as HTMLElement).style.backgroundColor;
