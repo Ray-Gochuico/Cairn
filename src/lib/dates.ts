@@ -1,22 +1,31 @@
 /**
- * Compute current age in whole years from an ISO date-of-birth string.
+ * Age in whole years for an ISO date-of-birth string as-of an explicit
+ * instant `today`. Pure over both args (no clock read) so callers that need
+ * a deterministic or injected "now" (the onboarding tailoring engine, tests)
+ * can pass it directly.
  *
- * Subtracts the calendar-year delta and adjusts down by one when the birthday
- * hasn't yet occurred this year (compares month, then day-of-month).
- *
- * Parses the DOB as UTC midnight (`T00:00:00Z`) and uses UTC accessors to
- * match `ageAtMonth`'s behaviour and avoid an off-by-one when the process
- * runs in a UTC-negative timezone (e.g., EST): a Jan-1 DOB would otherwise
- * shift into Dec-31 of the prior year under local-time parsing, producing an
- * age one year too high for the remainder of the day.
+ * Parses the DOB as UTC midnight (`T00:00:00Z`) and compares against `today`
+ * using UTC accessors — matching `currentAge`/`ageAtMonth` so a Jan-1 DOB
+ * never shifts into Dec-31 of the prior year in a UTC-negative timezone and
+ * reads one year too high. Subtracts the calendar-year delta, then adjusts
+ * down by one when the birthday hasn't yet occurred as-of `today`
+ * (month first, then day-of-month).
+ */
+export function currentAgeAsOf(dob: string, today: Date): number {
+  const birth = new Date(`${dob}T00:00:00Z`);
+  let age = today.getUTCFullYear() - birth.getUTCFullYear();
+  const m = today.getUTCMonth() - birth.getUTCMonth();
+  if (m < 0 || (m === 0 && today.getUTCDate() < birth.getUTCDate())) age--;
+  return age;
+}
+
+/**
+ * Compute current age in whole years from an ISO date-of-birth string,
+ * as-of the process clock. Thin delegate over `currentAgeAsOf` so the
+ * UTC-boundary logic lives in exactly one place.
  */
 export function currentAge(dob: string): number {
-  const birth = new Date(`${dob}T00:00:00Z`);
-  const now = new Date();
-  let age = now.getUTCFullYear() - birth.getUTCFullYear();
-  const m = now.getUTCMonth() - birth.getUTCMonth();
-  if (m < 0 || (m === 0 && now.getUTCDate() < birth.getUTCDate())) age--;
-  return age;
+  return currentAgeAsOf(dob, new Date());
 }
 
 /**

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { currentAge } from '@/lib/dates';
+import { currentAge, currentAgeAsOf } from '@/lib/dates';
 
 describe('currentAge', () => {
   beforeEach(() => {
@@ -66,5 +66,44 @@ describe('currentAge', () => {
     vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
     // On Jan 1 2026 UTC, person born 1990-01-01 UTC turns 36.
     expect(currentAge('1990-01-01')).toBe(36);
+  });
+});
+
+describe('currentAgeAsOf', () => {
+  it('returns the year delta when the birthday has already passed', () => {
+    // born 1990-01-01, as-of 2026-06-15 -> 36
+    expect(currentAgeAsOf('1990-01-01', new Date('2026-06-15'))).toBe(36);
+  });
+
+  it('returns the prior age when the birthday has not yet occurred this year', () => {
+    // born 1990-12-31, as-of 2026-06-15 -> 35
+    expect(currentAgeAsOf('1990-12-31', new Date('2026-06-15'))).toBe(35);
+  });
+
+  it('returns the new age when the birthday is exactly the as-of day', () => {
+    expect(currentAgeAsOf('1990-06-15', new Date('2026-06-15'))).toBe(36);
+  });
+
+  it('returns the prior age when same month but day-of-month not yet reached', () => {
+    expect(currentAgeAsOf('1990-06-15', new Date('2026-06-14'))).toBe(35);
+  });
+
+  it('returns the new age the day after the birthday', () => {
+    expect(currentAgeAsOf('1990-06-15', new Date('2026-06-16'))).toBe(36);
+  });
+
+  it('handles a baby born on the as-of day (age 0)', () => {
+    expect(currentAgeAsOf('2026-05-14', new Date('2026-05-14'))).toBe(0);
+  });
+
+  // UTC parity with currentAge: a Jan-1 DOB must not read one year high when
+  // the as-of instant is Dec-31 UTC (the EST off-by-one class). currentAgeAsOf
+  // compares both sides via UTC accessors, so passing a UTC instant is exact.
+  it('UTC: Jan-1 DOB is not one year high at Dec-31 23:30 UTC', () => {
+    expect(currentAgeAsOf('1990-01-01', new Date('2025-12-31T23:30:00Z'))).toBe(35);
+  });
+
+  it('UTC: Jan-1 DOB is correct on the exact birthday (Jan 1 UTC)', () => {
+    expect(currentAgeAsOf('1990-01-01', new Date('2026-01-01T00:00:00Z'))).toBe(36);
   });
 });
