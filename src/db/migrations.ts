@@ -20,7 +20,7 @@ export interface Migration {
  * `tests/db/schema-version-guard.test.ts` asserts this equals the migration
  * count AND pins the literal so a one-sided bump fails a test.
  */
-export const MAX_SCHEMA_VERSION = 46;
+export const MAX_SCHEMA_VERSION = 47;
 
 /**
  * Thrown by `runMigrations` when the database's stamped `user_version` is
@@ -238,6 +238,12 @@ export async function loadAllMigrations(): Promise<Migration[]> {
   // Drives the once-per-month auto-route to /monthly (Wave 3). Peer to
   // last_refresh_at — app/UI state, not household financial data.
   const m0046 = (await import('./migrations/0046_app_settings_last_seen_month.sql?raw')).default;
+  // 0047 moves calculator-card visibility from the 'calculator-hidden-cards'
+  // localStorage key into app_settings (single source of truth), mirroring the
+  // investments_card_layout precedent (0042). Additive ADD COLUMN TEXT, seeded
+  // NULL = all cards visible; a one-time importCalcVisibilityIfNeeded()
+  // back-fills the old localStorage value then clears the key.
+  const m0047 = (await import('./migrations/0047_calculators_card_layout.sql?raw')).default;
   return [
     { version: '0001_initial', sql: m0001 },
     { version: '0002_seed_tax_rules', sql: m0002 },
@@ -285,5 +291,6 @@ export async function loadAllMigrations(): Promise<Migration[]> {
     { version: '0044_equity_grant_type', sql: m0044 },
     { version: '0045_asset_class_target_allocations', sql: m0045 },
     { version: '0046_app_settings_last_seen_month', sql: m0046 },
+    { version: '0047_calculators_card_layout', sql: m0047 },
   ];
 }
