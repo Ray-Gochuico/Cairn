@@ -69,4 +69,12 @@ describe('Sidebar', () => {
     const link = screen.getByRole('link', { name: /^backtest$/i });
     expect(link).toHaveAttribute('href', '/calculators/backtest');
   });
+
+  it('tags each nav link with a data-tour-id matching its route (tour anchor)', () => {
+    render(<MemoryRouter><Sidebar /></MemoryRouter>);
+    const dashboard = screen.getByRole('link', { name: /dashboard/i });
+    expect(dashboard).toHaveAttribute('data-tour-id', '/');
+    const settings = screen.getByRole('link', { name: /settings/i });
+    expect(settings).toHaveAttribute('data-tour-id', '/settings');
+  });
 });

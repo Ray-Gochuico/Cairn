@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
+import TourOverlay from './TourOverlay';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { ViewFilter } from './ViewFilter';
 import { usePersonsStore } from '@/stores/persons-store';
@@ -45,6 +46,7 @@ export default function PageShell() {
           </ErrorBoundary>
         </main>
       </div>
+      <TourOverlay />
     </div>
   );
 }

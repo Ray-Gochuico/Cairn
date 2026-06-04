@@ -103,6 +103,7 @@ const SidebarLink = memo(function SidebarLink({
     <NavLink
       to={to}
       end={to === '/'}
+      data-tour-id={to}
       title={entry ? entry.shortDefinition : undefined}
       className={({ isActive }) =>
         cn(
