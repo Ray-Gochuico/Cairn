@@ -46,22 +46,44 @@ export default function TourOverlay() {
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const [cutout, setCutout] = useState<Rect | null>(null);
 
-  // Active steps for the current mode. Denominator = this list's length, so
-  // it naturally re-expands when mode flips to 'all' (never "7 of 6").
   const sections = settings ? applySidebarLayout(DEFAULT_SECTIONS, settings.sidebarLayout) : [];
   const visibleTos = sections.flatMap((s) => s.items.map((i) => i.to));
-  const steps = settings ? deriveTourSteps(visibleTos, mode) : [];
+
+  // Core steps for the forced walk; full visible set for counting/indexing.
+  const coreSteps = settings ? deriveTourSteps(visibleTos, 'core') : [];
+  const allSteps = settings ? deriveTourSteps(visibleTos, 'all') : [];
+  // Non-core steps only — the actual tab list walked after "See the rest →".
+  // stepIndex in 'all' mode is 0-based into this list.
+  const nonCoreSteps = settings ? deriveTourSteps(visibleTos, 'noncore') : [];
+
+  // Active step list for the current mode:
+  //   'core' → coreSteps (the forced walk, ≤6).
+  //   'all'  → nonCoreSteps (never re-shows a core tab). stepIndex is
+  //            reset to 0 by continueAll() so it correctly indexes into this list.
+  const steps = mode === 'core' ? coreSteps : nonCoreSteps;
 
   const total = steps.length;
   const safeIndex = total === 0 ? 0 : Math.min(stepIndex, total - 1);
   const step = steps[safeIndex] ?? null;
 
-  // Last core step gate + whether a non-core remainder exists ("See the rest").
-  const coreSteps = settings ? deriveTourSteps(visibleTos, 'core') : [];
-  const allSteps = settings ? deriveTourSteps(visibleTos, 'all') : [];
+  // "n of N" counter:
+  //   'core' → position in coreSteps (e.g. "3 of 6").
+  //   'all'  → position in allSteps so the denominator is the full visible
+  //            count and the user sees consistent "n of N" (e.g. "5 of 7" for
+  //            /loans when 7 tabs are visible). Never shows "of 6" after the
+  //            continuation, so the denominator naturally re-expands.
+  const counterPosition =
+    mode === 'core'
+      ? safeIndex + 1
+      : allSteps.findIndex((s) => s.to === step?.to) + 1;
+  const counterTotal = mode === 'core' ? coreSteps.length : allSteps.length;
+
+  // Gate for "See the rest →": only on the last core step when non-core tabs exist.
+  const hasRemainder = nonCoreSteps.length > 0;
   const isLastCoreStep = mode === 'core' && safeIndex === coreSteps.length - 1;
-  const hasRemainder = allSteps.length > coreSteps.length;
   const isLastStepOverall = safeIndex === total - 1;
+  // continueAll() resets stepIndex to 0 (index 0 in the nonCoreSteps list).
+  const firstNonCoreIndex = 0;
 
   const finish = useCallback(() => {
     markTourDone();
@@ -231,7 +253,7 @@ export default function TourOverlay() {
 
         <div className="mt-4 flex items-center justify-between gap-2">
           <span className="text-xs text-muted-foreground" aria-hidden="true">
-            {safeIndex + 1} of {total}
+            {counterPosition} of {counterTotal}
           </span>
           <div className="flex items-center gap-2">
             {safeIndex > 0 && (
@@ -245,7 +267,11 @@ export default function TourOverlay() {
             {isLastCoreStep ? (
               <>
                 {hasRemainder && (
-                  <Button variant="outline" size="sm" onClick={continueAll}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => continueAll(firstNonCoreIndex)}
+                  >
                     See the rest &rarr;
                   </Button>
                 )}

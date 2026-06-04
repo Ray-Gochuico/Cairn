@@ -24,8 +24,12 @@ interface TourState {
   next: () => void;
   /** Step back; clamped so stepIndex never goes negative. */
   back: () => void;
-  /** Enter "see the rest" — switch to 'all' without moving stepIndex. */
-  continueAll: () => void;
+  /**
+   * Enter "see the rest" — switch to 'all' and jump to `startIndex` (the
+   * index of the first non-core step in the 'all' step list). Callers must
+   * pass the correct index so the overlay never skips or re-shows a core tab.
+   */
+  continueAll: (startIndex: number) => void;
   /** Finish/skip: deactivate and reset for a clean future replay. */
   end: () => void;
 }
@@ -41,6 +45,6 @@ export const useTourStore = create<TourState>((set, get) => ({
   },
   next: () => set((s) => ({ stepIndex: s.stepIndex + 1 })),
   back: () => set((s) => ({ stepIndex: Math.max(0, s.stepIndex - 1) })),
-  continueAll: () => set({ mode: 'all' }),
+  continueAll: (startIndex: number) => set({ mode: 'all', stepIndex: startIndex }),
   end: () => set({ active: false, stepIndex: 0, mode: 'core' }),
 }));

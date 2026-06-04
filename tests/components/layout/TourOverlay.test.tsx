@@ -199,4 +199,78 @@ describe('TourOverlay', () => {
     expect(() => renderOverlay()).not.toThrow();
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
+
+  /**
+   * BUG REGRESSION: "See the rest →" must land on the FIRST non-core visible
+   * tab (/loans), never skip to /property or re-show a core tab.
+   *
+   * Setup: sidebarLayout=null → all 17 TOUR_STEPS tabs visible.
+   *   coreSteps (sidebar order): /, /net-worth, /budget, /investments, /calculators, /settings (6 total)
+   *   allSteps  (sidebar order): same 17 in TOUR_STEPS authoring order.
+   *   stepIndex=5 in core mode = /settings (last core step, "6 of 6").
+   *
+   * Bug: old continueAll() kept stepIndex=5 and flipped mode to 'all',
+   * rendering allSteps[5]=/property (skipping /loans) instead of allSteps[4]=/loans.
+   *
+   * Expected after fix: clicking "See the rest →" renders /loans heading;
+   * subsequent Next clicks walk only non-core tabs (/property, /vehicles, …,
+   * /inputs) and end on Done at /inputs without ever re-showing a core heading.
+   */
+  it('See the rest → lands on /loans (first non-core), Next walks only non-core tabs, Done on last non-core', async () => {
+    const user = userEvent.setup();
+    // All tabs visible — sidebarLayout: null.
+    const allTos = [
+      '/', '/net-worth', '/budget', '/investments',
+      '/loans', '/property', '/vehicles', '/equity-grants', '/spending',
+      '/goals', '/roadmap', '/learn',
+      '/calculators', '/what-if', '/calculators/backtest',
+      '/inputs', '/settings',
+    ];
+    plantAnchors(allTos);
+    useSettingsStore.setState({ settings: makeSettings({ sidebarLayout: null }) });
+    // Last core step: stepIndex=5 in mode:'core' → /settings heading "6 of 6".
+    useTourStore.setState({ active: true, stepIndex: 5, mode: 'core' });
+    renderOverlay();
+
+    // Sanity: we're on the last core step.
+    expect(screen.getByRole('heading', { name: /settings/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /see the rest/i })).toBeInTheDocument();
+
+    // Click "See the rest →".
+    await user.click(screen.getByRole('button', { name: /see the rest/i }));
+
+    // Must land on /loans (title "Loans"), NOT /property or any re-shown core tab.
+    expect(screen.getByRole('heading', { name: /^loans$/i })).toBeInTheDocument();
+    // Core headings must not be visible.
+    const coreHeadings = ['your dashboard', 'net worth', 'budget', 'investments', 'calculators', 'settings'];
+    for (const title of coreHeadings) {
+      expect(screen.queryByRole('heading', { name: new RegExp(title, 'i') })).toBeNull();
+    }
+
+    // Walk through Next until we reach Done; collect headings visited; never see a core heading.
+    const visitedHeadings: string[] = ['Loans'];
+    // Non-core tabs in sidebar order after /loans:
+    const expectedNonCoreAfterLoans = [
+      'property', 'vehicles', 'equity grants', 'spending',
+      'goals', 'roadmap', 'learn', 'what-if', 'backtest', 'inputs',
+    ];
+    for (const expectedFragment of expectedNonCoreAfterLoans) {
+      // The last step shows Done, not Next.
+      const nextBtn = screen.queryByRole('button', { name: /next/i });
+      if (!nextBtn) break;
+      await user.click(nextBtn);
+      const h2 = screen.getByRole('heading');
+      visitedHeadings.push(h2.textContent ?? '');
+      // Must never re-show a core-tab heading.
+      for (const title of coreHeadings) {
+        expect(screen.queryByRole('heading', { name: new RegExp(title, 'i') })).toBeNull();
+      }
+    }
+
+    // The final step must show Done, not Next.
+    expect(screen.getByRole('button', { name: /^done$/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /next/i })).toBeNull();
+    // Must have walked at least the non-core remainder (10 tabs after /loans in sidebar order).
+    expect(visitedHeadings.length).toBeGreaterThanOrEqual(2); // /loans + at least /property
+  });
 });

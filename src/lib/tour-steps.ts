@@ -135,10 +135,13 @@ export const TOUR_STEPS: TourStep[] = [
 /**
  * The ordered step list for the current tour pass.
  *
- *   - 'core': the curated-core tabs that are also currently visible
- *     (core ∩ visibleTos) — the forced walk, ≤6 steps.
- *   - 'all':  every visible tab that has a config entry (visibleTos ∩ config)
- *     — the "see the rest" continuation.
+ *   - 'core':    the curated-core tabs that are also currently visible
+ *                (core ∩ visibleTos) — the forced walk, ≤6 steps.
+ *   - 'all':     every visible tab that has a config entry (visibleTos ∩ config)
+ *                — full set including core; used only for computing counts and
+ *                finding the first non-core index.
+ *   - 'noncore': visible tabs that are NOT core (visibleTos ∩ config ∩ !core)
+ *                — the step list actually walked after "See the rest →".
  *
  * Iterates TOUR_STEPS (not visibleTos), so the result is always in sidebar
  * (config) order, an *intersection* (a visible `to` with no step is dropped),
@@ -147,10 +150,13 @@ export const TOUR_STEPS: TourStep[] = [
  */
 export function deriveTourSteps(
   visibleTos: string[],
-  mode: 'core' | 'all',
+  mode: 'core' | 'all' | 'noncore',
 ): TourStep[] {
   const visible = new Set(visibleTos);
-  return TOUR_STEPS.filter(
-    (step) => visible.has(step.to) && (mode === 'all' || step.core),
-  );
+  return TOUR_STEPS.filter((step) => {
+    if (!visible.has(step.to)) return false;
+    if (mode === 'core') return step.core;
+    if (mode === 'noncore') return !step.core;
+    return true; // 'all'
+  });
 }

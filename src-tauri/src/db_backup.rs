@@ -73,7 +73,7 @@ use tauri::Manager;
 use tauri_plugin_sql::{DbInstances, DbPool};
 
 /// The highest schema version this build understands. Derived from the
-/// migration list: it is the COUNT of registered migrations (currently 46),
+/// migration list: it is the COUNT of registered migrations (currently 47),
 /// which the JS migration runner stamps into `PRAGMA user_version` after
 /// migrations apply (see `src/db/migrations.ts` `MAX_SCHEMA_VERSION` — the two
 /// MUST stay in lock-step). `db_restore` refuses any backup whose stamped

@@ -213,8 +213,9 @@ export default function OnboardingController() {
     navigate('/');
   }, [navigate]);
 
-  // Tailor's own onDone/onSkip both lead into the tour (markers are owned by
-  // TailorStep per §B1; the controller just advances the sequence).
+  // Tailor's own onDone/onSkip both lead into the tour (completion markers are
+  // written by the controller via markTailorDone/markTourDone, not TailorStep;
+  // the controller just advances the sequence).
   const handleTailorDone = useCallback(() => goToTour(), [goToTour]);
   const handleTailorSkip = useCallback(() => goToTour(), [goToTour]);
 

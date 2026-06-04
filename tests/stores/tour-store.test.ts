@@ -24,7 +24,7 @@ describe('useTourStore', () => {
   it('start() is idempotent — a second call mid-tour does not reset progress', () => {
     useTourStore.getState().start();
     useTourStore.getState().next();
-    useTourStore.getState().continueAll();
+    useTourStore.getState().continueAll(1);
     expect(useTourStore.getState().stepIndex).toBe(1);
     // StrictMode double-invoke / re-entry must NOT rewind the user.
     useTourStore.getState().start();
@@ -46,19 +46,19 @@ describe('useTourStore', () => {
     expect(useTourStore.getState().stepIndex).toBe(0); // clamped, never negative
   });
 
-  it('continueAll() switches mode to all without moving stepIndex', () => {
+  it('continueAll(startIndex) switches mode to all and sets stepIndex to startIndex', () => {
     useTourStore.getState().start();
-    useTourStore.getState().next();
-    useTourStore.getState().continueAll();
+    useTourStore.getState().next(); // stepIndex → 1
+    useTourStore.getState().continueAll(0); // jump to 0 (first non-core)
     const s = useTourStore.getState();
     expect(s.mode).toBe('all');
-    expect(s.stepIndex).toBe(1);
+    expect(s.stepIndex).toBe(0);
   });
 
   it('end() deactivates and resets to step 0 / core mode', () => {
     useTourStore.getState().start();
     useTourStore.getState().next();
-    useTourStore.getState().continueAll();
+    useTourStore.getState().continueAll(0);
     useTourStore.getState().end();
     const s = useTourStore.getState();
     expect(s.active).toBe(false);
