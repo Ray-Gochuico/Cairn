@@ -365,6 +365,39 @@ describe('SettingsRepo — lastSeenMonth (migration 0046)', () => {
   });
 });
 
+describe('SettingsRepo — calculatorCardLayout (migration 0047)', () => {
+  let db: SqliteAdapter;
+  let repo: SettingsRepo;
+
+  beforeEach(async () => {
+    db = new SqliteAdapter(':memory:');
+    await runMigrations(db, await loadAllMigrations());
+    repo = new SettingsRepo(db);
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  it('defaults calculatorCardLayout to null on the seeded row', async () => {
+    expect((await repo.get()).calculatorCardLayout).toBeNull();
+  });
+
+  it('round-trips calculatorCardLayout through update/get', async () => {
+    await repo.update({ calculatorCardLayout: [{ id: 'paycheck', hidden: true }] });
+    expect((await repo.get()).calculatorCardLayout).toEqual([
+      { id: 'paycheck', hidden: true },
+    ]);
+    await repo.update({ calculatorCardLayout: null });
+    expect((await repo.get()).calculatorCardLayout).toBeNull();
+  });
+
+  it('persists an empty array distinctly from null', async () => {
+    await repo.update({ calculatorCardLayout: [] });
+    expect((await repo.get()).calculatorCardLayout).toEqual([]);
+  });
+});
+
 describe('SettingsRepo — autoInvestSalarySurplus removed (2026-05-26 revamp)', () => {
   let db: SqliteAdapter;
   let repo: SettingsRepo;

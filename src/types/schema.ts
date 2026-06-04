@@ -449,6 +449,7 @@ export const AppSettingsSchema = z.object({
   id: z.literal(1),
   sidebarLayout: z.array(SidebarLayoutEntrySchema).nullable(),
   investmentsCardLayout: z.array(CardLayoutEntrySchema).nullable().default(null),
+  calculatorCardLayout: z.array(CardLayoutEntrySchema).nullable().default(null),
   notificationsEnabled: z.boolean(),
   notificationDay: z.number().int().min(1).max(28),
   refreshCadence: z.nativeEnum(RefreshCadence),

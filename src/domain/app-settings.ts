@@ -14,6 +14,7 @@ interface AppSettingsRow {
   id: number;
   sidebar_layout: string | null;
   investments_card_layout: string | null;
+  calculator_card_layout: string | null;
   notifications_enabled: number;
   notification_day: number;
   refresh_cadence: string;
@@ -89,10 +90,14 @@ function rowToAppSettings(row: AppSettingsRow): AppSettings {
   const investmentsCardLayout: CardLayoutEntry[] | null = row.investments_card_layout
     ? JSON.parse(row.investments_card_layout)
     : null;
+  const calculatorCardLayout: CardLayoutEntry[] | null = row.calculator_card_layout
+    ? JSON.parse(row.calculator_card_layout)
+    : null;
   return AppSettingsSchema.parse({
     id: 1,
     sidebarLayout,
     investmentsCardLayout,
+    calculatorCardLayout,
     notificationsEnabled: row.notifications_enabled === 1,
     notificationDay: row.notification_day,
     refreshCadence: row.refresh_cadence,
@@ -138,6 +143,7 @@ export class SettingsRepo {
       `UPDATE app_settings SET
         sidebar_layout = ?,
         investments_card_layout = ?,
+        calculator_card_layout = ?,
         notifications_enabled = ?,
         notification_day = ?,
         refresh_cadence = ?,
@@ -158,6 +164,7 @@ export class SettingsRepo {
       [
         merged.sidebarLayout === null ? null : JSON.stringify(merged.sidebarLayout),
         merged.investmentsCardLayout === null ? null : JSON.stringify(merged.investmentsCardLayout),
+        merged.calculatorCardLayout === null ? null : JSON.stringify(merged.calculatorCardLayout),
         merged.notificationsEnabled ? 1 : 0,
         merged.notificationDay,
         merged.refreshCadence,

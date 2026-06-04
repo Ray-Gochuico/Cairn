@@ -39,3 +39,28 @@ describe('AppSettingsSchema.investmentsCardLayout', () => {
     expect(parsed.investmentsCardLayout).toEqual([{ id: 'sector', hidden: true }]);
   });
 });
+
+describe('AppSettingsSchema.calculatorCardLayout', () => {
+  const base = {
+    id: 1 as const,
+    sidebarLayout: null,
+    notificationsEnabled: true,
+    notificationDay: 1,
+    refreshCadence: RefreshCadence.DAILY,
+    lastRefreshAt: null,
+    statementsFolderPath: null,
+    lastSeenMonth: null,
+  };
+
+  it('defaults calculatorCardLayout to null when omitted', () => {
+    expect(AppSettingsSchema.parse(base).calculatorCardLayout).toBeNull();
+  });
+
+  it('accepts an array of card layout entries', () => {
+    const parsed = AppSettingsSchema.parse({
+      ...base,
+      calculatorCardLayout: [{ id: 'paycheck', hidden: true }],
+    });
+    expect(parsed.calculatorCardLayout).toEqual([{ id: 'paycheck', hidden: true }]);
+  });
+});
