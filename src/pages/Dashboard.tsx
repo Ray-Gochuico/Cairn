@@ -52,6 +52,9 @@ import { EditableWidget } from '@/components/dashboard/EditableWidget';
 import { usePillLayout } from '@/components/dashboard/use-pill-layout';
 import { useWidgetLayout } from '@/components/dashboard/use-widget-layout';
 import { SpendingWidget } from '@/components/dashboard/SpendingWidget';
+import { useTourStore } from '@/stores/tour-store';
+import { isSetupDismissed } from '@/lib/setup-dismissal';
+import { isTourDone, markTourDone } from '@/lib/onboarding-state';
 import type {
   Account,
   AccountSnapshot,
@@ -293,6 +296,54 @@ function computeLiquidInvestments(
     }
   }
   return [...latestByAccount.values()].reduce((sum, s) => sum + s.totalValue, 0);
+}
+
+/**
+ * Slim, low-contrast re-entry nudge for existing/returning users who never
+ * saw the first-run tour (e.g. they predate it, or bailed mid-flow). NOT a
+ * Card — a one-line row below NextMoveCard. Shown only while setup is
+ * dismissed and the tour-done marker is unset; "Take a quick tour" starts
+ * the in-place TourOverlay (mounted in PageShell, already on this route),
+ * dismiss records the marker so it never nags again. Never force-redirects.
+ */
+export function ExistingUserTourPrompt() {
+  // Read the gate once at mount: starting the tour must not make the row
+  // disappear out from under the click, and dismiss controls visibility
+  // via the explicit `hidden` flag below.
+  const [hidden, setHidden] = useState(
+    () => !(isSetupDismissed() && !isTourDone()),
+  );
+
+  if (hidden) return null;
+
+  const handleTakeTour = () => {
+    useTourStore.getState().start();
+  };
+
+  const handleDismiss = () => {
+    markTourDone();
+    setHidden(true);
+  };
+
+  return (
+    <div className="flex items-center gap-3 text-sm text-muted-foreground">
+      <span>New here? Take a quick tour of the main tabs.</span>
+      <button
+        type="button"
+        onClick={handleTakeTour}
+        className="text-primary hover:underline"
+      >
+        Take a quick tour
+      </button>
+      <button
+        type="button"
+        onClick={handleDismiss}
+        className="text-muted-foreground hover:underline"
+      >
+        Dismiss
+      </button>
+    </div>
+  );
 }
 
 export default function Dashboard() {
@@ -881,6 +932,8 @@ export default function Dashboard() {
         <NextMoveCard />
         <TodaysTriviaCard />
       </div>
+
+      <ExistingUserTourPrompt />
 
       {isInputPending && (
         <div className="rounded-md border border-warning/40 bg-warning-soft p-4 flex flex-wrap items-center justify-between gap-4">

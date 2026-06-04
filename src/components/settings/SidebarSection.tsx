@@ -96,7 +96,7 @@ export function SidebarSection() {
   };
 
   return (
-    <Card>
+    <Card id="sidebar-settings">
       <CardHeader>
         <CardTitle>Sidebar</CardTitle>
       </CardHeader>
