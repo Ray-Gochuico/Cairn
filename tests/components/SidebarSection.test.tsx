@@ -33,12 +33,28 @@ describe('SidebarSection', () => {
     }
   });
 
-  it('hiding a tab writes a hidden overlay entry for it', async () => {
+  it('renders a visibility Switch per tab, on (checked) by default', async () => {
+    render(<MemoryRouter><SidebarSection /></MemoryRouter>);
+    const netWorthSwitch = await screen.findByRole('switch', {
+      name: /toggle visibility of net worth/i,
+    });
+    // On = visible; a freshly-loaded layout hides nothing.
+    expect(netWorthSwitch).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('turning a tab Switch off writes a hidden overlay entry for it', async () => {
     render(<MemoryRouter><SidebarSection /></MemoryRouter>);
     const user = userEvent.setup();
-    const hideButton = await screen.findByRole('button', { name: /hide net worth/i });
-    await user.click(hideButton);
+    const netWorthSwitch = await screen.findByRole('switch', {
+      name: /toggle visibility of net worth/i,
+    });
+    await user.click(netWorthSwitch);
 
+    // The control now reads as off (hidden)…
+    await waitFor(() => {
+      expect(netWorthSwitch).toHaveAttribute('aria-checked', 'false');
+    });
+    // …and the overlay records the hidden tab.
     await waitFor(async () => {
       const settings = await new SettingsRepo(db).get();
       const entry = settings.sidebarLayout?.find((e) => e.to === '/net-worth');
@@ -46,10 +62,13 @@ describe('SidebarSection', () => {
     });
   });
 
-  it('the Settings tab hide toggle is disabled', async () => {
+  it('the Settings tab visibility Switch is disabled and stays on', async () => {
     render(<MemoryRouter><SidebarSection /></MemoryRouter>);
-    const settingsToggle = await screen.findByRole('button', { name: /hide settings/i });
-    expect(settingsToggle).toBeDisabled();
+    const settingsSwitch = await screen.findByRole('switch', {
+      name: /toggle visibility of settings/i,
+    });
+    expect(settingsSwitch).toBeDisabled();
+    expect(settingsSwitch).toHaveAttribute('aria-checked', 'true');
   });
 
   it('moving a tab down reorders it within its section in the stored overlay', async () => {

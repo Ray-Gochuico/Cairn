@@ -1,5 +1,8 @@
 import { useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ChevronUp, ChevronDown } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { useSettingsStore } from '@/stores/settings-store';
 import { DEFAULT_SECTIONS } from '@/components/layout/Sidebar';
 import { applySidebarLayout } from '@/lib/sidebar-layout';
@@ -127,33 +130,38 @@ export function SidebarSection() {
                       >
                         {item.label}
                       </span>
-                      <button
-                        type="button"
-                        aria-label={`Move ${item.label} up`}
-                        className="px-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-30"
-                        disabled={itemIndex === 0}
-                        onClick={() => move(sectionIndex, itemIndex, -1)}
-                      >
-                        ▲
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Move ${item.label} down`}
-                        className="px-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-30"
-                        disabled={itemIndex === section.items.length - 1}
-                        onClick={() => move(sectionIndex, itemIndex, 1)}
-                      >
-                        ▼
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Hide ${item.label}`}
-                        className="px-2 text-xs border rounded hover:bg-muted disabled:opacity-30"
-                        disabled={isLocked}
-                        onClick={() => toggleHidden(item.to)}
-                      >
-                        {isHidden ? 'Show' : 'Hide'}
-                      </button>
+                      <div className="ml-auto flex items-center gap-0.5">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground"
+                          aria-label={`Move ${item.label} up`}
+                          disabled={itemIndex === 0}
+                          onClick={() => move(sectionIndex, itemIndex, -1)}
+                        >
+                          <ChevronUp className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground"
+                          aria-label={`Move ${item.label} down`}
+                          disabled={itemIndex === section.items.length - 1}
+                          onClick={() => move(sectionIndex, itemIndex, 1)}
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <div className="flex items-center border-l pl-2">
+                        <Switch
+                          aria-label={`Toggle visibility of ${item.label}`}
+                          checked={!isHidden}
+                          disabled={isLocked}
+                          onCheckedChange={() => toggleHidden(item.to)}
+                        />
+                      </div>
                     </li>
                   );
                 })}
