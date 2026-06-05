@@ -9,12 +9,9 @@ the app. Documented workaround in README.
 
 ## Build & release procedure
 
-**`docs/RELEASING.md` is the single source of truth for how a release is
-built, signed, and published.** This file covers only the *signing
-posture* (the unsigned decision above and the future code-signing path
-below). Do not duplicate the build steps here — they drifted once
-already (this file used to describe a `.dmg` flow that the pipeline
-abandoned).
+The detailed release runbook is kept in the maintainer's local working tree
+(not in this public repo). This file covers only the *signing posture* (the
+unsigned decision above and the future code-signing path below).
 
 In short: `npm run tauri build` emits `src-tauri/target/release/bundle/
 macos/Cairn.app` (no `.dmg` — `bundle.targets` is `["app"]` because

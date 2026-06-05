@@ -158,14 +158,7 @@ tagging `v1.0.0` (and a first in-app updater round-trip once a `v1.0.1` exists).
 
 The app supports **light + dark** via system theme (Settings → Appearance).
 
-For the full picture:
-
-- [`docs/superpowers/specs/2026-06-03-current-state.md`](docs/superpowers/specs/2026-06-03-current-state.md) — post-remediation cross-cutting snapshot, **read this first**.
-- [`docs/superpowers/specs/2026-06-03-roadmap.md`](docs/superpowers/specs/2026-06-03-roadmap.md) — what's next (ship steps + the v1.0.x / v1.1+ / v2 backlog).
-- [`docs/reviews/2026-06-02-distribution-readiness-scorecard.md`](docs/reviews/2026-06-02-distribution-readiness-scorecard.md) — the 10-domain distribution-readiness panel + the wave-by-wave re-grades + dogfood verification.
-- [`docs/superpowers/specs/2026-05-11-finance-app-design.md`](docs/superpowers/specs/2026-05-11-finance-app-design.md) — master design spec (build phases).
-- [`docs/superpowers/conventions.md`](docs/superpowers/conventions.md) — engineering patterns.
-- [`docs/superpowers/plans/`](docs/superpowers/plans/) — per-feature plans.
+Design notes, specs, and the full roadmap are kept in the maintainer's local working tree (not in this public repo).
 
 ### Market data freshness
 
