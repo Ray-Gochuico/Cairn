@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { FolderOpenIcon, CopyIcon, ShieldCheckIcon, WifiIcon } from 'lucide-react';
 import { appDataDir } from '@tauri-apps/api/path';
 import { revealItemInDir, openUrl } from '@tauri-apps/plugin-opener';
+import { isWindows } from '@/lib/platform';
 
 /**
  * Settings → Privacy & data section. Surfaces three concrete facts so the
@@ -11,13 +12,15 @@ import { revealItemInDir, openUrl } from '@tauri-apps/plugin-opener';
  * taking the README's word for it:
  *
  *   1. Where the data lives (filesystem path) — with a "Show in Finder"
- *      action that reveals it directly. Clipboard fallback when the
- *      opener API isn't available (browser-shim / pre-Tauri context).
+ *      ("Show in File Explorer" on Windows) action that reveals it directly.
+ *      Clipboard fallback when the opener API isn't available (browser-shim /
+ *      pre-Tauri context).
  *   2. The complete outbound-network list — Yahoo Finance refresh
  *      (manual cadence) and the updater check (user-initiated only).
- *   3. Data-at-rest guidance — FileVault recommendation, because the
- *      SQLite file is not encrypted by the app and macOS file-mode
- *      protection only matters when the disk itself is encrypted.
+ *   3. Data-at-rest guidance — FileVault (macOS) / BitLocker (Windows)
+ *      recommendation, because the SQLite file is not encrypted by the app
+ *      and OS file-mode protection only matters when the disk itself is
+ *      encrypted. Platform-specific copy branches via `isWindows()`.
  *
  * This is the user-facing complement to the Security Wave-5 review's
  * Finding #1 (FileVault advisory).
@@ -32,8 +35,29 @@ import { revealItemInDir, openUrl } from '@tauri-apps/plugin-opener';
  * with a copy-to-clipboard fallback. In a browser shim it logs and
  * copies; in a Tauri prod context the OS opens Finder at the path.
  */
+// Documented default data-dir placeholder shown before the Tauri bridge
+// resolves the real on-disk path. Branches on the host OS so Windows users
+// see a Windows-shaped path instead of a macOS one. Both match the bundle
+// identifier in tauri.conf.json.
+const MAC_DEFAULT_DATA_PATH = '~/Library/Application Support/com.raymondgochuico.cairn/';
+const WINDOWS_DEFAULT_DATA_PATH = '%APPDATA%\\com.raymondgochuico.cairn\\finance.db';
+
+// Encryption-at-rest docs. On macOS we recommend FileVault (full-disk
+// encryption); on Windows, BitLocker. Each links to the vendor's own guide.
+const FILEVAULT_DOCS_URL =
+  'https://support.apple.com/guide/mac-help/protect-data-on-your-mac-with-filevault-mh11785/mac';
+const BITLOCKER_DOCS_URL =
+  'https://support.microsoft.com/windows/turn-on-device-encryption-0c453637-bc88-5f74-5105-741561aae838';
+
 export function PrivacySection() {
-  const [dataPath, setDataPath] = useState<string>('~/Library/Application Support/com.raymondgochuico.cairn/');
+  const windows = isWindows();
+  // Platform-correct names for the OS file browser and the recommended
+  // full-disk-encryption feature, used throughout the copy below.
+  const fileManagerName = windows ? 'File Explorer' : 'Finder';
+  const diskEncryptionName = windows ? 'BitLocker' : 'FileVault';
+  const [dataPath, setDataPath] = useState<string>(
+    windows ? WINDOWS_DEFAULT_DATA_PATH : MAC_DEFAULT_DATA_PATH,
+  );
   const [copied, setCopied] = useState(false);
 
   // Resolve the real on-disk path lazily so the section can render before
@@ -56,8 +80,9 @@ export function PrivacySection() {
     try {
       await revealItemInDir(dataPath);
     } catch {
-      // Opener not available (browser-shim) — copy the path so the user
-      // can paste it into Finder's Go → Go to Folder dialog manually.
+      // Opener not available (browser-shim) — copy the path so the user can
+      // paste it into their file browser manually (Finder's Go → Go to Folder
+      // on macOS, the File Explorer address bar on Windows).
       try {
         if (navigator.clipboard?.writeText) {
           await navigator.clipboard.writeText(dataPath);
@@ -72,7 +97,7 @@ export function PrivacySection() {
   };
 
   const handleOpenFileVaultDocs = () => {
-    void openUrl('https://support.apple.com/guide/mac-help/protect-data-on-your-mac-with-filevault-mh11785/mac');
+    void openUrl(windows ? BITLOCKER_DOCS_URL : FILEVAULT_DOCS_URL);
   };
 
   return (
@@ -89,7 +114,7 @@ export function PrivacySection() {
           </div>
           <p className="text-muted-foreground">
             Cairn stores everything &mdash; your transactions, accounts,
-            settings, and price cache &mdash; on this Mac inside a single
+            settings, and price cache &mdash; on this computer inside a single
             SQLite file. Nothing is uploaded; nothing syncs.
           </p>
           <code className="block break-all rounded-md border bg-muted/40 px-2 py-1 text-xs">
@@ -101,10 +126,10 @@ export function PrivacySection() {
               variant="outline"
               size="sm"
               onClick={handleShowInFinder}
-              aria-label="Show data folder in Finder"
+              aria-label={`Show data folder in ${fileManagerName}`}
             >
               <FolderOpenIcon className="mr-1 h-4 w-4" aria-hidden="true" />
-              Show in Finder
+              Show in {fileManagerName}
             </Button>
             {copied && (
               <span
@@ -163,18 +188,22 @@ export function PrivacySection() {
             Encryption at rest
           </div>
           <p className="text-muted-foreground">
-            macOS file permissions restrict your data file to your user
-            account &mdash; no other user on the same Mac can read it. For
-            an additional layer of protection (especially against laptop
-            theft), enable <strong>FileVault</strong> to encrypt your entire
-            disk:
+            {windows ? 'Windows' : 'macOS'} file permissions restrict your data
+            file to your user account &mdash; no other user on the same computer
+            can read it. For an additional layer of protection (especially
+            against laptop theft), enable <strong>{diskEncryptionName}</strong>{' '}
+            to encrypt your entire disk:
           </p>
           <p className="text-muted-foreground">
-            <em>System Settings &rarr; Privacy &amp; Security &rarr; FileVault</em>
+            <em>
+              {windows
+                ? 'Settings → Privacy & security → Device encryption (or BitLocker)'
+                : 'System Settings → Privacy & Security → FileVault'}
+            </em>
           </p>
           <p className="text-muted-foreground">
             Cairn does not currently implement its own SQLite encryption;
-            that is on the v1.1 roadmap. Until then, FileVault is the
+            that is on the v1.1 roadmap. Until then, {diskEncryptionName} is the
             recommended safeguard.
           </p>
           <Button
@@ -184,7 +213,7 @@ export function PrivacySection() {
             className="h-auto px-0 text-xs"
             onClick={handleOpenFileVaultDocs}
           >
-            Learn more about FileVault &rarr;
+            Learn more about {diskEncryptionName} &rarr;
           </Button>
         </section>
       </CardContent>

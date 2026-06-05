@@ -11,7 +11,7 @@
 //      future patch from re-introducing auto-polling).
 //   4. Up-to-date / available / error UI states render correctly.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -128,6 +128,65 @@ describe('UpdaterSection — manual-only invariant', () => {
   });
 
   it('"View all releases" link opens the GitHub releases page via openUrl', async () => {
+    render(<UpdaterSection />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /view all releases/i }));
+    expect(mockOpenUrl).toHaveBeenCalledWith(
+      'https://github.com/Ray-Gochuico/Cairn/releases',
+    );
+  });
+});
+
+describe('UpdaterSection — Windows (no signed update channel yet)', () => {
+  // On Windows there is no `windows-x86_64` entry in latest.json, so the
+  // updater plugin's check() is unreliable (false "up to date", false error,
+  // or a phantom "available"). We suppress the affirmative check path entirely
+  // and steer the user to re-download from Releases. The macOS path is wholly
+  // unchanged (the existing tests above don't stub navigator; jsdom's default
+  // UA is "darwin", so isWindows() is false for them).
+  const WINDOWS_UA =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+    '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    vi.stubGlobal('navigator', { userAgent: WINDOWS_UA });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('renders the "not available on Windows yet" message and NO check button', async () => {
+    render(<UpdaterSection />);
+    await waitFor(() => {
+      expect(
+        screen.getByText(/automatic updates aren't available on windows yet/i),
+      ).toBeInTheDocument();
+    });
+    // The check button must not exist on Windows.
+    expect(
+      screen.queryByRole('button', { name: /check for updates/i }),
+    ).not.toBeInTheDocument();
+    // But the user can still reach Releases.
+    expect(
+      screen.getByRole('button', { name: /view all releases/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('NEVER calls check() on Windows (no mount poll, no button to click)', async () => {
+    render(<UpdaterSection />);
+    // Let any effects flush.
+    await waitFor(() => {
+      expect(
+        screen.getByText(/automatic updates aren't available on windows yet/i),
+      ).toBeInTheDocument();
+    });
+    expect(mockCheck).not.toHaveBeenCalled();
+  });
+
+  it('"View all releases" still opens the GitHub releases page on Windows', async () => {
     render(<UpdaterSection />);
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: /view all releases/i }));

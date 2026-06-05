@@ -12,7 +12,7 @@
 // These render assertions double as a "the section still mounts"
 // regression guard if a future refactor breaks the appDataDir lookup.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -175,6 +175,72 @@ describe('PrivacySection', () => {
     await waitFor(() => {
       expect(mockOpenUrl).toHaveBeenCalledWith(
         expect.stringContaining('support.apple.com'),
+      );
+    });
+  });
+});
+
+describe('PrivacySection — Windows copy', () => {
+  // All copy that branches purely on isWindows() must read Windows-native:
+  // File Explorer (not Finder), BitLocker (not FileVault), "this computer"
+  // (not "this Mac"), and the %APPDATA% path placeholder.
+  const WINDOWS_UA =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+    '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockReveal.mockImplementation(async () => undefined);
+    mockOpenUrl.mockImplementation(async () => undefined);
+    vi.stubGlobal('navigator', { userAgent: WINDOWS_UA });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('uses "File Explorer" not "Finder" for the reveal button', () => {
+    // appDataDir resolution is irrelevant to this label, but keep the mock
+    // resolved so the section settles cleanly.
+    mockAppDataDir.mockResolvedValue('C\\\\Users\\\\me');
+    render(<PrivacySection />);
+    expect(
+      screen.getByRole('button', { name: /show data folder in file explorer/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/show in file explorer/i)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /show data folder in finder/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('says data lives on "this computer", not "this Mac"', () => {
+    mockAppDataDir.mockResolvedValue('C\\\\Users\\\\me');
+    render(<PrivacySection />);
+    expect(screen.getByText(/on this computer/i)).toBeInTheDocument();
+    expect(screen.queryByText(/on this mac/i)).not.toBeInTheDocument();
+  });
+
+  it('shows the %APPDATA% default path placeholder when appDataDir is unavailable', async () => {
+    mockAppDataDir.mockRejectedValueOnce(new Error('not available in browser'));
+    render(<PrivacySection />);
+    await waitFor(() => {
+      expect(
+        screen.getByText(/%APPDATA%\\com\.raymondgochuico\.cairn\\finance\.db/i),
+      ).toBeInTheDocument();
+    });
+  });
+
+  it('recommends BitLocker (not FileVault) and links to Microsoft docs', async () => {
+    mockAppDataDir.mockResolvedValue('C\\\\Users\\\\me');
+    render(<PrivacySection />);
+    expect(screen.getAllByText(/bitlocker/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/filevault/i)).not.toBeInTheDocument();
+    const link = screen.getByRole('button', { name: /learn more about bitlocker/i });
+    const user = userEvent.setup();
+    await user.click(link);
+    await waitFor(() => {
+      expect(mockOpenUrl).toHaveBeenCalledWith(
+        expect.stringContaining('support.microsoft.com'),
       );
     });
   });
