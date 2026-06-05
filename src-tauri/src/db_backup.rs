@@ -664,6 +664,80 @@ mod tests {
         );
     }
 
+    /// H-1 (Windows): a FAILED restore must leave the ORIGINAL live database
+    /// byte-for-byte intact even when the failure is the FINAL `rename` (step 3),
+    /// not the staging copy. On Windows `std::fs::rename` is backed by
+    /// `MoveFileEx`, whose replace-existing path needs the target opened with
+    /// `FILE_SHARE_DELETE`. An AV scanner / Search indexer / preview handler that
+    /// holds `finance.db` open WITHOUT delete-sharing makes that rename fail. We
+    /// reproduce that by opening the live file with `share_mode(0)` (NO sharing —
+    /// the share bitmask is 0, i.e. no read/write/DELETE sharing granted to
+    /// others; this is what blocks the replace, NOT a "deny-write" flag), then
+    /// assert `replace_database_file` ERRORS, reassures the user, and leaves the
+    /// original bytes untouched (it is never the copy target). The held handle is
+    /// dropped before the temp-file cleanup assertion so the dir can be removed.
+    ///
+    /// Compiled out on non-Windows (so macOS `cargo test` is unaffected); the
+    /// real OS-level proof is the A4 Windows hardware run.
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn replace_database_file_failed_rename_when_live_locked_leaves_original_intact() {
+        use std::os::windows::fs::OpenOptionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+
+        // A real, valid backup to restore FROM.
+        let backup = dir.path().join("backup.db");
+        let src = dir.path().join("seed.db");
+        let pool = seeded_pool(&src).await;
+        backup_to(&pool, &backup).await.unwrap();
+        pool.close().await;
+
+        // A pre-existing live DB with KNOWN distinct contents.
+        let live = dir.path().join("finance.db");
+        let original_bytes = b"ORIGINAL-LIVE-DB-CONTENTS-do-not-clobber".to_vec();
+        std::fs::write(&live, &original_bytes).unwrap();
+
+        // Open the live file with share_mode(0): no sharing granted to other
+        // openers, INCLUDING delete-sharing. MoveFileEx's replace of this target
+        // therefore fails — the same condition an AV/indexer lock creates.
+        let handle = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&live)
+            .expect("open live with no-share mode");
+
+        let result = replace_database_file(&backup, &live);
+
+        // The rename (step 3) must fail while the lock is held...
+        assert!(
+            result.is_err(),
+            "rename over a no-delete-share-locked live file must fail"
+        );
+        let msg = result.unwrap_err();
+        assert!(
+            msg.contains("your data is unchanged"),
+            "error should reassure the user: {msg}"
+        );
+
+        // ...and the ORIGINAL live file is byte-for-byte untouched (it was never
+        // the copy target; the staged temp was renamed-from, not the live file).
+        let after = std::fs::read(&live).unwrap();
+        assert_eq!(
+            after, original_bytes,
+            "the original live database must survive a failed restore unchanged"
+        );
+
+        // Release the lock so the temp-file cleanup + TempDir teardown can run.
+        drop(handle);
+
+        // The .restore-tmp staging file must not be stranded after the failure.
+        assert!(
+            !restore_tmp_path(&live).exists(),
+            "the .restore-tmp staging file must not be left behind"
+        );
+    }
+
     /// The staging temp file must not be left behind after a SUCCESSFUL restore
     /// either (the rename consumes it).
     #[tokio::test]

@@ -4,7 +4,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // importing the module under test. These packages have no runtime in vitest;
 // the real flow is exercised by the user in `npm run tauri dev`.
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
-vi.mock('@tauri-apps/api/path', () => ({ appConfigDir: vi.fn() }));
+// `join` is the async Tauri path API the module now uses instead of hardcoded
+// '/' separators. Mock it separator-aware: POSIX ('/') by default so the
+// existing exact-path assertions hold; an individual test re-points it at '\\'
+// to prove Windows separators flow through. NOTE: a mocked join proves the
+// call-wiring, not real OS separators — real proof is the A4 hardware run.
+vi.mock('@tauri-apps/api/path', () => ({
+  appConfigDir: vi.fn(),
+  join: vi.fn((...parts: string[]) => Promise.resolve(parts.join('/'))),
+}));
 vi.mock('@tauri-apps/plugin-fs', () => ({
   mkdir: vi.fn(),
   readDir: vi.fn(),
@@ -14,7 +22,7 @@ vi.mock('@tauri-apps/plugin-dialog', () => ({ save: vi.fn() }));
 vi.mock('@tauri-apps/plugin-opener', () => ({ revealItemInDir: vi.fn() }));
 
 import { invoke } from '@tauri-apps/api/core';
-import { appConfigDir } from '@tauri-apps/api/path';
+import { appConfigDir, join } from '@tauri-apps/api/path';
 import { mkdir, readDir, remove } from '@tauri-apps/plugin-fs';
 import { save } from '@tauri-apps/plugin-dialog';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
@@ -31,6 +39,7 @@ import {
 
 const mockInvoke = invoke as unknown as ReturnType<typeof vi.fn>;
 const mockAppConfigDir = appConfigDir as unknown as ReturnType<typeof vi.fn>;
+const mockJoin = join as unknown as ReturnType<typeof vi.fn>;
 const mockMkdir = mkdir as unknown as ReturnType<typeof vi.fn>;
 const mockReadDir = readDir as unknown as ReturnType<typeof vi.fn>;
 const mockRemove = remove as unknown as ReturnType<typeof vi.fn>;
@@ -45,6 +54,9 @@ beforeEach(() => {
   // Clear any cross-test restore-failure notice left in sessionStorage.
   window.sessionStorage?.clear();
   mockAppConfigDir.mockResolvedValue('/Users/me/Library/Application Support/com.x.cairn');
+  // resetAllMocks wiped join's implementation — re-arm the POSIX separator
+  // default (individual tests override for the Windows variant).
+  mockJoin.mockImplementation((...parts: string[]) => Promise.resolve(parts.join('/')));
   // db_backup/db_restore/db_validate_backup all resolve by default; individual
   // tests override as needed.
   mockInvoke.mockResolvedValue(undefined);
@@ -167,6 +179,24 @@ describe('listBackups', () => {
     );
     // readDir is called against the backups dir.
     expect(mockReadDir).toHaveBeenCalledWith(expect.stringContaining('backups'));
+  });
+
+  it('flows Windows separators through join (no mixed-separator path)', async () => {
+    // Windows variant: app config dir is a backslash path and join uses '\\'.
+    // This proves the path is built via join(...) carrying the platform
+    // separator end-to-end, never a hardcoded POSIX '/'. (Real OS-separator
+    // proof is the A4 hardware run; this only proves call-wiring.)
+    mockAppConfigDir.mockResolvedValue('C:\\Users\\me\\AppData\\Roaming\\com.x.cairn');
+    mockJoin.mockImplementation((...parts: string[]) => Promise.resolve(parts.join('\\')));
+    mockReadDir.mockResolvedValue([
+      { name: 'cairn-20260102-030405.db', isFile: true, isDirectory: false },
+    ]);
+    const [entry] = await listBackups();
+    expect(entry.path).toBe(
+      'C:\\Users\\me\\AppData\\Roaming\\com.x.cairn\\backups\\cairn-20260102-030405.db',
+    );
+    // No stray forward slash leaked into the Windows path.
+    expect(entry.path).not.toContain('/');
   });
 
   it('ignores non-cairn files and directories', async () => {

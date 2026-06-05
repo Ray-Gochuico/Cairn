@@ -1,29 +1,28 @@
 import { writeFile, readDir, exists } from '@tauri-apps/plugin-fs';
+import { join } from '@tauri-apps/api/path';
 
 /**
- * Pure path resolver for the PDF statements archive.
+ * Pure collision resolver for the PDF statements archive.
  *
- * Given the target archive `folder`, the desired `filename`, and the file
- * names already present in that folder (`existingNames`), returns the
- * absolute path the archiving step should write to.
+ * Given the desired `filename` and the file names already present in the
+ * target folder (`existingNames`), returns the collision-free FILENAME the
+ * archiving step should write (NOT a full path — joining it onto the folder
+ * is the async caller's job, via `join` from `@tauri-apps/api/path`, so the
+ * separator is correct on every OS).
  *
  * Policy: keep the original filename. On a name collision, insert a
  * ` (N)` suffix before the final extension — ` (2)`, ` (3)`, … — and walk
  * N upward until the name is free. Comparison is case-sensitive (it mirrors
  * the file system the archive lives on; the picker-chosen folder is treated
  * as-is). The impure read of `existingNames` is the caller's job (via the
- * fs plugin); this function is deterministic and unit-tested.
+ * fs plugin); this function is deterministic and unit-tested. Operating on
+ * bare names keeps it path-separator agnostic.
  */
-export function resolveArchivePath(
-  folder: string,
-  filename: string,
-  existingNames: string[],
-): string {
-  const dir = folder.replace(/\/+$/, '');
+export function resolveArchivePath(filename: string, existingNames: string[]): string {
   const taken = new Set(existingNames);
 
   if (!taken.has(filename)) {
-    return `${dir}/${filename}`;
+    return filename;
   }
 
   // Split off the final extension, if any, so the suffix lands before it.
@@ -37,7 +36,7 @@ export function resolveArchivePath(
     n += 1;
     candidate = `${stem} (${n})${ext}`;
   }
-  return `${dir}/${candidate}`;
+  return candidate;
 }
 
 /**
@@ -63,7 +62,11 @@ export async function archiveStatementPdf(
     }
     const entries = await readDir(folder);
     const existingNames = entries.map((e) => e.name);
-    const target = resolveArchivePath(folder, filename, existingNames);
+    const name = resolveArchivePath(filename, existingNames);
+    // Join with the platform separator (POSIX on macOS, backslash on Windows)
+    // rather than a hardcoded '/', which would build a mixed-separator path on
+    // Windows. `join` is an async Tauri IPC call.
+    const target = await join(folder, name);
     await writeFile(target, bytes);
     return null;
   } catch (e) {
