@@ -17,7 +17,7 @@ In short: `npm run tauri build` emits `src-tauri/target/release/bundle/
 macos/Cairn.app` (no `.dmg` — `bundle.targets` is `["app"]` because
 `bundle_dmg.sh` fails on macOS 26). The release artifact is a
 minisign-signed **`Cairn_<version>_aarch64.app.tar.gz`** (gzip+tar — the
-format the Tauri macOS updater requires; see RELEASING.md for the why).
+format the Tauri macOS updater requires; the README explains the why).
 
 ## How a friend installs (mirrored in README)
 
@@ -40,8 +40,13 @@ format the Tauri macOS updater requires; see RELEASING.md for the why).
 ## Cross-target builds
 
 - macOS Intel: `npm run tauri build -- --target x86_64-apple-darwin`
-- Windows: `npm run tauri build -- --target x86_64-pc-windows-msvc` (requires
-  building on Windows; cross-compile not in scope for v1)
+- Windows: built **on `windows-latest` in CI** via
+  `npm run tauri build -- --bundles nsis`. Ships as an unsigned
+  `*_x64-setup.exe` — SmartScreen shows "Windows protected your PC"; the
+  user clicks "More info → Run anyway" (same one-time posture as the macOS
+  Gatekeeper warning). No in-app updater on Windows yet — users re-download
+  the latest `…_x64-setup.exe` from the Releases page to update.
+  Cross-compiling Windows from macOS is not in scope.
 
 ## Future: code signing
 
