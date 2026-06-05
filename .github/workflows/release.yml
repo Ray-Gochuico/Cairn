@@ -123,8 +123,9 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          # Native arm64 build — runner IS aarch64-apple-darwin.
-          targets: aarch64-apple-darwin
+          # Universal build needs BOTH arches: the macos-15 runner is arm64,
+          # so x86_64-apple-darwin is the cross target lipo-merged alongside it.
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
 
       - name: Fail fast if updater key is missing
         # Without the secret, the sign step would fail mid-build and the
@@ -165,11 +166,14 @@ jobs:
             exit 1
           fi
 
-      - name: Build .app bundle
+      - name: Build universal .app bundle (arm64 + x86_64)
         # bundle.targets = ["app"] in tauri.conf.json, so this emits only
         # Cairn.app (no .dmg attempt — `bundle_dmg.sh` fails on macOS 26).
-        # Wall time on the macos-15 runner: ~5 min cold (no cargo cache).
-        run: npm run tauri build
+        # --target universal-apple-darwin lipo-merges both arches into one
+        # bundle that runs natively on Apple Silicon AND Intel Macs; the
+        # output moves to target/universal-apple-darwin/release/bundle/macos/.
+        # Wall time on the macos-15 runner: ~8 min cold (two arches).
+        run: npm run tauri build -- --target universal-apple-darwin
 
       - name: Tar+gzip the .app bundle (updater artifact)
         # The macOS updater requires gzip+tar (see WHY header). Working
@@ -178,25 +182,25 @@ jobs:
         # updater strips the first path component, so the entry name must
         # start with `Cairn.app/`. Mirrors `docs/RELEASING.md` step 3.
         run: |
-          cd src-tauri/target/release/bundle/macos
-          tar czf "Cairn_${{ steps.ver.outputs.version }}_aarch64.app.tar.gz" Cairn.app
+          cd src-tauri/target/universal-apple-darwin/release/bundle/macos
+          tar czf "Cairn_${{ steps.ver.outputs.version }}_universal.app.tar.gz" Cairn.app
 
       - name: Sign .app.tar.gz with the updater private key
         # Reads TAURI_SIGNING_PRIVATE_KEY from the job env (set above).
         # Produces `<file>.sig` next to the .app.tar.gz.
         run: |
           npx tauri signer sign \
-            "src-tauri/target/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_aarch64.app.tar.gz"
+            "src-tauri/target/universal-apple-darwin/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_universal.app.tar.gz"
 
       - name: Write latest.json (Tauri 2 updater manifest)
         # Schema: https://v2.tauri.app/plugin/updater/#static-json-file
-        # darwin-aarch64 is the only platform we ship — the macos-15
-        # runner is Apple Silicon, and Tauri's updater plugin will refuse to install
-        # an aarch64 update on a (hypothetical future) x86_64 install
-        # unless we also publish a darwin-x86_64 entry. v1 is arm64-only
-        # by maintainer policy; x86_64 support is a v1.x milestone.
+        # We ship a UNIVERSAL bundle, so darwin-aarch64 and darwin-x86_64 both
+        # point at the same Cairn_<v>_universal.app.tar.gz (+ the same minisign
+        # signature). Both keys are required: Tauri's updater matches the
+        # running arch's key exactly and refuses an update with no matching
+        # key, even though the universal binary would in fact run on it.
         run: |
-          APP_TARBALL="src-tauri/target/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_aarch64.app.tar.gz"
+          APP_TARBALL="src-tauri/target/universal-apple-darwin/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_universal.app.tar.gz"
           SIG=$(cat "${APP_TARBALL}.sig")
           # Use the CHANGELOG section for this version as the updater
           # release notes (shown in Settings → Updates), falling back to
@@ -229,7 +233,11 @@ jobs:
             "platforms": {
               "darwin-aarch64": {
                 "signature": "${SIG}",
-                "url": "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Cairn_${{ steps.ver.outputs.version }}_aarch64.app.tar.gz"
+                "url": "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Cairn_${{ steps.ver.outputs.version }}_universal.app.tar.gz"
+              },
+              "darwin-x86_64": {
+                "signature": "${SIG}",
+                "url": "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Cairn_${{ steps.ver.outputs.version }}_universal.app.tar.gz"
               }
             }
           }
@@ -255,8 +263,8 @@ jobs:
           # Drafts default to off so the moment this step succeeds, the
           # in-app updater's poll URL starts returning the new version.
           files: |
-            src-tauri/target/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_aarch64.app.tar.gz
-            src-tauri/target/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_aarch64.app.tar.gz.sig
+            src-tauri/target/universal-apple-darwin/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_universal.app.tar.gz
+            src-tauri/target/universal-apple-darwin/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_universal.app.tar.gz.sig
             latest.json
 
   # Windows installer (.exe). APPENDS to the release the mac job created.

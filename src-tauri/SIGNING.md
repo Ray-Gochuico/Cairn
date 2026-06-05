@@ -13,16 +13,18 @@ The detailed release runbook is kept in the maintainer's local working tree
 (not in this public repo). This file covers only the *signing posture* (the
 unsigned decision above and the future code-signing path below).
 
-In short: `npm run tauri build` emits `src-tauri/target/release/bundle/
-macos/Cairn.app` (no `.dmg` — `bundle.targets` is `["app"]` because
+In short: `npm run tauri build -- --target universal-apple-darwin` emits a
+universal `src-tauri/target/universal-apple-darwin/release/bundle/macos/
+Cairn.app` (no `.dmg` — `bundle.targets` is `["app"]` because
 `bundle_dmg.sh` fails on macOS 26). The release artifact is a
-minisign-signed **`Cairn_<version>_aarch64.app.tar.gz`** (gzip+tar — the
-format the Tauri macOS updater requires; the README explains the why).
+minisign-signed **`Cairn_<version>_universal.app.tar.gz`** (gzip+tar — the
+format the Tauri macOS updater requires; the README explains the why). It
+runs natively on both Apple Silicon and Intel Macs.
 
 ## How a friend installs (mirrored in README)
 
-1. Download `Cairn_<version>_aarch64.app.tar.gz` from the GitHub
-   Releases page.
+1. Download `Cairn_<version>_universal.app.tar.gz` from the GitHub
+   Releases page (one universal build for Apple Silicon + Intel).
 2. Double-click it. macOS Archive Utility unarchives it to `Cairn.app`
    in the same folder.
 3. Drag `Cairn.app` into the `Applications` folder.
@@ -39,7 +41,8 @@ format the Tauri macOS updater requires; the README explains the why).
 
 ## Cross-target builds
 
-- macOS Intel: `npm run tauri build -- --target x86_64-apple-darwin`
+- macOS (universal, both arches): `npm run tauri build -- --target universal-apple-darwin`
+  (the CI default — one bundle that runs on Apple Silicon + Intel)
 - Windows: built **on `windows-latest` in CI** via
   `npm run tauri build -- --bundles nsis`. Ships as an unsigned
   `*_x64-setup.exe` — SmartScreen shows "Windows protected your PC"; the

@@ -29,9 +29,10 @@ frequently.
 **Download the latest build:**
 <https://github.com/Ray-Gochuico/Cairn/releases/latest>
 
-### macOS (Apple Silicon)
+### macOS (Apple Silicon or Intel)
 
-The app is distributed as an unsigned, gzip-tarred `.app` bundle.
+The app is distributed as an unsigned, gzip-tarred `.app` bundle — a
+universal binary that runs natively on both Apple Silicon and Intel Macs.
 No App Store, no installer — just download, unarchive, drag, and open.
 
 > **Why `.app.tar.gz` (and not `.dmg` or `.app.zip`)?** Two reasons.
@@ -46,7 +47,8 @@ No App Store, no installer — just download, unarchive, drag, and open.
 > artifact. macOS Archive Utility unarchives `.tar.gz` on double-click,
 > same as a `.zip`.
 
-Grab the file named `Cairn_<version>_aarch64.app.tar.gz`.
+Grab the file named `Cairn_<version>_universal.app.tar.gz` (one universal
+build that works on both Apple Silicon and Intel Macs).
 
 **Then:**
 
