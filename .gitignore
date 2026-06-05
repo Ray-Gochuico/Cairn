@@ -71,3 +71,6 @@ src/data/trivia/_staging/
 
 # parallel-build git worktrees
 .claude/worktrees/
+
+# Internal planning / specs / reviews — kept local, out of the public repo.
+docs/
