@@ -82,7 +82,7 @@ export function deserializeBackup(json: string): Backup {
 // ───────────────────────────────────────────────────────────────────────────
 
 import { invoke } from '@tauri-apps/api/core';
-import { appConfigDir } from '@tauri-apps/api/path';
+import { appConfigDir, join } from '@tauri-apps/api/path';
 import { mkdir, readDir, remove } from '@tauri-apps/plugin-fs';
 import { save } from '@tauri-apps/plugin-dialog';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
@@ -116,15 +116,6 @@ export function isTauriRuntime(): boolean {
   return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 }
 
-/** Join path segments with the POSIX separator (macOS-first app; the app
- * config dir is always an absolute POSIX path on macOS). */
-function joinPath(...segments: string[]): string {
-  return segments
-    .map((s, i) => (i === 0 ? s.replace(/\/+$/, '') : s.replace(/^\/+|\/+$/g, '')))
-    .filter((s) => s.length > 0)
-    .join('/');
-}
-
 /** Two-digit zero-pad. */
 function pad2(n: number): string {
   return String(n).padStart(2, '0');
@@ -149,7 +140,7 @@ export function backupFilename(now: Date = new Date()): string {
  * (same base dir the plugin stores `finance.db` in). */
 export async function backupsDirPath(): Promise<string> {
   const base = await appConfigDir();
-  return joinPath(base, BACKUPS_DIR_NAME);
+  return join(base, BACKUPS_DIR_NAME);
 }
 
 /**
@@ -167,7 +158,7 @@ export async function rotateBackups(dir: string, keep: number = MAX_BACKUPS): Pr
   if (backups.length <= keep) return;
   const toRemove = backups.slice(0, backups.length - keep);
   for (const name of toRemove) {
-    await remove(joinPath(dir, name));
+    await remove(await join(dir, name));
   }
 }
 
@@ -179,7 +170,7 @@ export async function rotateBackups(dir: string, keep: number = MAX_BACKUPS): Pr
 export async function runBackup(now: Date = new Date()): Promise<string> {
   const dir = await backupsDirPath();
   await mkdir(dir, { recursive: true });
-  const dest = joinPath(dir, backupFilename(now));
+  const dest = await join(dir, backupFilename(now));
   await invoke('db_backup', { db: DB_URL, dest });
   // Rotation is best-effort cleanup; never let it mask a successful backup.
   try {
@@ -226,17 +217,26 @@ export async function listBackups(): Promise<BackupEntry[]> {
     // First run (or the folder was removed): nothing to list, not an error.
     return [];
   }
-  return entries
-    .flatMap((e): BackupEntry[] => {
-      if (!e.isFile) return [];
-      const m = BACKUP_NAME_RE.exec(e.name);
-      if (!m) return [];
-      const [, y, mo, d, h, mi, s] = m.map(Number);
-      // Local time — must mirror backupFilename's getFullYear()/getHours()/…
-      const takenAt = new Date(y, mo - 1, d, h, mi, s);
-      return [{ name: e.name, path: joinPath(dir, e.name), takenAt }];
-    })
-    .sort((a, b) => b.takenAt.getTime() - a.takenAt.getTime()); // newest first
+  // Sync pass: filter to cairn-*.db files and parse each name into a
+  // {name, takenAt}. The flatMap's `return []` drop-semantics (non-files,
+  // regex non-matches) need the flatten+filter to happen FIRST — so we keep it
+  // sync here and attach paths in a second, async pass below (join is an async
+  // Tauri IPC call; a naive Promise.all(entries.map(...)) couldn't drop rows).
+  const parsed = entries.flatMap((e): { name: string; takenAt: Date }[] => {
+    if (!e.isFile) return [];
+    const m = BACKUP_NAME_RE.exec(e.name);
+    if (!m) return [];
+    const [, y, mo, d, h, mi, s] = m.map(Number);
+    // Local time — must mirror backupFilename's getFullYear()/getHours()/…
+    const takenAt = new Date(y, mo - 1, d, h, mi, s);
+    return [{ name: e.name, takenAt }];
+  });
+  // Async pass: attach the platform-correct absolute path to each surviving
+  // entry via join (POSIX on macOS, backslash on Windows — never mixed).
+  const rows = await Promise.all(
+    parsed.map(async (e): Promise<BackupEntry> => ({ ...e, path: await join(dir, e.name) })),
+  );
+  return rows.sort((a, b) => b.takenAt.getTime() - a.takenAt.getTime()); // newest first
 }
 
 /** Read-only pre-flight: ask Rust whether `path` is a restorable Cairn backup. */
