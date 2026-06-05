@@ -14,9 +14,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { glob } from 'node:fs/promises';
+import { readdirSync, readFileSync } from 'node:fs';
+import { resolve, sep } from 'node:path';
 
 vi.mock('@tauri-apps/api/app', () => ({
   getVersion: vi.fn(async () => '1.0.0'),
@@ -139,7 +138,7 @@ describe('UpdaterSection — manual-only invariant', () => {
 });
 
 describe('UpdaterSection — architectural invariant (no other module imports plugin-updater)', () => {
-  it('only UpdaterSection.tsx imports @tauri-apps/plugin-updater', async () => {
+  it('only UpdaterSection.tsx imports @tauri-apps/plugin-updater', () => {
     // Walk every .ts/.tsx file under src/ and confirm only the
     // UpdaterSection imports the updater plugin. This is the guard
     // that catches a well-meaning future patch that wires `check()`
@@ -154,11 +153,16 @@ describe('UpdaterSection — architectural invariant (no other module imports pl
     const projectRoot = resolve(__dirname, '../..');
     const srcRoot = resolve(projectRoot, 'src');
     const found: string[] = [];
-    for await (const f of glob('**/*.{ts,tsx}', { cwd: srcRoot })) {
-      const absPath = resolve(srcRoot, f);
-      const contents = readFileSync(absPath, 'utf-8');
+    // Recursive readdir (Node >=18.17) instead of node:fs/promises `glob`
+    // (Node >=22 only) so this guard runs on the Node-20 CI runner too.
+    // Normalise to POSIX separators to match the asserted paths below.
+    const entries = readdirSync(srcRoot, { recursive: true }) as string[];
+    for (const entry of entries) {
+      if (!/\.(ts|tsx)$/.test(entry)) continue;
+      const rel = entry.split(sep).join('/');
+      const contents = readFileSync(resolve(srcRoot, entry), 'utf-8');
       if (/@tauri-apps\/plugin-updater/.test(contents)) {
-        found.push(f);
+        found.push(rel);
       }
     }
     expect(found.sort()).toEqual(
