@@ -39,11 +39,14 @@ name: Release
 #     `tar czf` + sign + latest.json steps keeps CI and the documented
 #     manual flow in lockstep on the SAME format and URL convention.
 #
-# WHY MACOS-14 RUNNER:
-#   - macos-14 is GitHub's Apple Silicon (M1) runner. Building Tauri on
-#     x86_64 and cross-compiling to aarch64 requires extra Rust target
-#     setup + a universal binary path. Native arm64 build is simpler and
-#     produces the artifact we actually ship.
+# WHY MACOS-15 RUNNER (pinned, not macos-latest):
+#   - macos-15 is an Apple Silicon (arm64) runner, so the native arm64
+#     build is simpler than cross-compiling from x86_64 (no extra Rust
+#     target setup or universal-binary path) and produces the artifact we
+#     actually ship.
+#   - We pin to macos-15 rather than `macos-latest`: the `-latest` alias
+#     floats (it is moving to macos-26), so pinning keeps the release
+#     runner reproducible and lets us adopt new macOS images deliberately.
 
 on:
   push:
@@ -53,12 +56,12 @@ on:
 jobs:
   # Test GATE — nothing builds or publishes unless the full suite passes.
   # A tag pushed from a red branch would otherwise ship straight to
-  # auto-updating users. Runs on macos-14 (same runner family as the
+  # auto-updating users. Runs on macos-15 (same runner family as the
   # build job) so this is also the project's only macOS test signal —
   # test.yml runs the JS suite on Linux and only `cargo check`s Rust.
   test-gate:
     name: Test gate (full suite + tsc + cargo test)
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 30
 
     steps:
@@ -66,7 +69,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # Node 22 = current LTS. Bumped off Node 20 because the Node-20
+          # action runtime is deprecated and GitHub forces Actions onto
+          # Node 24 by 2026-06-16; 22 keeps us on a supported LTS line.
+          node-version: '22'
           cache: 'npm'
 
       - uses: dtolnay/rust-toolchain@stable
@@ -92,7 +98,7 @@ jobs:
 
   build-macos-arm64:
     needs: test-gate  # do not build/sign/publish unless the gate is green
-    runs-on: macos-14  # Apple Silicon — native aarch64 build
+    runs-on: macos-15  # Apple Silicon — native aarch64 build
     permissions:
       contents: write  # create release + upload assets
 
@@ -109,8 +115,10 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          # Match test.yml. Node 20 LTS = maintainer's local version.
-          node-version: '20'
+          # Match test.yml. Node 22 = current LTS (bumped off Node 20:
+          # its action runtime is deprecated and GitHub forces Actions
+          # onto Node 24 by 2026-06-16).
+          node-version: '22'
           cache: 'npm'
 
       - uses: dtolnay/rust-toolchain@stable
@@ -155,7 +163,7 @@ jobs:
       - name: Build .app bundle
         # bundle.targets = ["app"] in tauri.conf.json, so this emits only
         # Cairn.app (no .dmg attempt — `bundle_dmg.sh` fails on macOS 26).
-        # Wall time on the macos-14 runner: ~5 min cold (no cargo cache).
+        # Wall time on the macos-15 runner: ~5 min cold (no cargo cache).
         run: npm run tauri build
 
       - name: Tar+gzip the .app bundle (updater artifact)
@@ -177,8 +185,8 @@ jobs:
 
       - name: Write latest.json (Tauri 2 updater manifest)
         # Schema: https://v2.tauri.app/plugin/updater/#static-json-file
-        # darwin-aarch64 is the only platform we ship — the macos-14
-        # runner is M1, and Tauri's updater plugin will refuse to install
+        # darwin-aarch64 is the only platform we ship — the macos-15
+        # runner is Apple Silicon, and Tauri's updater plugin will refuse to install
         # an aarch64 update on a (hypothetical future) x86_64 install
         # unless we also publish a darwin-x86_64 entry. v1 is arm64-only
         # by maintainer policy; x86_64 support is a v1.x milestone.
@@ -241,3 +249,89 @@ jobs:
             src-tauri/target/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_aarch64.app.tar.gz
             src-tauri/target/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_aarch64.app.tar.gz.sig
             latest.json
+
+  # Windows installer (.exe). APPENDS to the release the mac job created.
+  #
+  # WHY SERIALIZED AFTER build-macos-arm64 (not parallel):
+  #   - action-gh-release "create if missing, else append" is racy when
+  #     two jobs hit the same tag concurrently: both can see "no release
+  #     yet" and both try to CREATE it (a TOCTOU on the release). Gating
+  #     `needs: [test-gate, build-macos-arm64]` lets the mac job CREATE the
+  #     release (with its name + CHANGELOG body), then this job only
+  #     APPENDS the .exe asset. We omit `name:` and `body_path:` here for
+  #     the same reason — re-supplying them could clobber the release the
+  #     mac job already shaped.
+  #
+  # WHY shell: bash ON EVERY STEP:
+  #   - windows-latest defaults to PowerShell, where `${VAR#prefix}`,
+  #     `$()` subshells, `[ ... ]`, and `find` don't behave like POSIX sh.
+  #     Git Bash ships on the runner, so we pin `shell: bash` on every run
+  #     step to reuse the same scripts the mac job uses.
+  build-windows:
+    needs: [test-gate, build-macos-arm64]
+    runs-on: windows-latest
+    permissions:
+      contents: write  # append the .exe asset to the existing release
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Match the mac job. Node 22 = current LTS (Node 20 action
+          # runtime is deprecated; GitHub forces Actions onto Node 24 by
+          # 2026-06-16).
+          node-version: '22'
+          cache: 'npm'
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install npm deps
+        shell: bash
+        run: npm ci
+
+      - name: Extract version from tag
+        # v1.0.0 → 1.0.0 (also v1.0.0-rc.1 → 1.0.0-rc.1). Used by the
+        # version-match check below.
+        id: ver
+        shell: bash
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify tag version matches package.json
+        # PRERELEASE-TOLERANT: an -rc.N / +build suffix on the tag is fine
+        # as long as the CORE x.y.z matches package.json, so a release
+        # candidate (v1.0.0-rc.1) still builds against package.json 1.0.0.
+        shell: bash
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          TAG_VERSION="${{ steps.ver.outputs.version }}"
+          TAG_CORE="${TAG_VERSION%%[-+]*}"
+          if [ "$PKG_VERSION" != "$TAG_CORE" ]; then
+            echo "ERROR: tag v${TAG_VERSION} (core ${TAG_CORE}) doesn't match package.json ${PKG_VERSION}"; exit 1
+          fi
+
+      - name: Build NSIS installer (.exe)
+        # --bundles nsis overrides bundle.targets (["app"]) for THIS
+        # invocation only, so the macOS path stays byte-identical. No
+        # --target ⇒ output lands in the bare target/release/ tree.
+        shell: bash
+        run: npm run tauri build -- --bundles nsis
+
+      - name: Bundle hygiene (no data files leaked)
+        # Fail the build if any local DB / spreadsheet / env file got
+        # swept into the bundle. Mirrors the data-hygiene guard the mac
+        # path relies on.
+        shell: bash
+        run: |
+          hits=$(find src-tauri/target/release/bundle -type f \( -name '*.db' -o -name '*.sqlite' -o -name '*.csv' -o -name '.env' \) -print)
+          [ -z "$hits" ] || { echo "$hits"; exit 1; }
+
+      - name: Append Windows installer to the release
+        # NO name: / body_path: — this APPENDS the .exe to the release the
+        # mac job already created, preserving its name + CHANGELOG body.
+        # The glob tolerates either binary name (Cairn OR finance-app) in
+        # the *_x64-setup.exe suffix.
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: src-tauri/target/release/bundle/nsis/*_x64-setup.exe
