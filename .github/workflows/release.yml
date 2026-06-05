@@ -334,4 +334,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
+          # Match the mac job's prerelease setting so appending the .exe never
+          # flips a hyphenated rc tag (v1.1.0-rc.1) back to a full "latest"
+          # release — which the updater endpoint (/releases/latest) would serve.
+          prerelease: ${{ contains(github.ref_name, '-') }}
           files: src-tauri/target/release/bundle/nsis/*_x64-setup.exe
