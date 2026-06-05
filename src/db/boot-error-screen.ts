@@ -1,3 +1,5 @@
+import { isWindows } from '@/lib/platform';
+
 /**
  * Friendly, recovery-oriented boot-error screens.
  *
@@ -59,7 +61,10 @@ export function renderBootError(root: HTMLElement, e: unknown): void {
     detail.textContent = message;
 
     const revealBtn = document.createElement('button');
-    revealBtn.textContent = 'Reveal backups in Finder';
+    // File browser name is platform-specific (Finder on macOS, File Explorer on
+    // Windows). `isWindows()` only needs `navigator`, which exists in the
+    // WebView even on this pre-React boot-error path.
+    revealBtn.textContent = `Reveal backups in ${isWindows() ? 'File Explorer' : 'Finder'}`;
     revealBtn.style.padding = '8px 14px';
     revealBtn.style.borderRadius = '6px';
     revealBtn.style.border = '1px solid #d1d5db';

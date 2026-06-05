@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { getVersion } from '@tauri-apps/api/app';
 import { check } from '@tauri-apps/plugin-updater';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { isWindows } from '@/lib/platform';
 
 /**
  * Settings → Updates section. **Manual-only** updater check — the app
@@ -117,6 +118,50 @@ export function UpdaterSection() {
   };
 
   const isBusy = state.phase === 'checking' || state.phase === 'installing';
+
+  // Windows has no signed `windows-x86_64` channel in latest.json yet, so the
+  // updater plugin's check() is unreliable there (false "up to date"/error or a
+  // phantom "available"). Suppress the whole affirmative check path on Windows
+  // and steer the user to re-download from Releases. The macOS path below is
+  // untouched. See src/lib/platform.ts for why this is a UA sniff.
+  const windows = isWindows();
+
+  if (windows) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Updates</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            <div className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-sm">
+              <span className="text-muted-foreground">Current version</span>
+              <span className="font-mono">{currentVersion ?? '—'}</span>
+            </div>
+
+            <div
+              role="status"
+              className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm"
+            >
+              Automatic updates aren't available on Windows yet — re-download
+              the latest version from the Releases page to update.
+            </div>
+
+            <div className="flex items-center gap-3 flex-wrap">
+              <Button
+                type="button"
+                variant="link"
+                className="px-0"
+                onClick={handleOpenReleases}
+              >
+                View all releases
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderBootError } from '@/db/boot-error-screen';
 import { SchemaTooNewError } from '@/db/migrations';
 import { DatabaseCorruptError } from '@/db/integrity';
@@ -51,5 +51,30 @@ describe('renderBootError', () => {
     // Only the most recent screen remains.
     expect(root.textContent).toMatch(/database initialization failed/i);
     expect(root.textContent).not.toMatch(/update cairn/i);
+  });
+
+  describe('Windows file-browser label', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('labels the reveal button "File Explorer" on Windows', () => {
+      vi.stubGlobal('navigator', {
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) WebView2',
+      });
+      renderBootError(root, new DatabaseCorruptError('page 4 is never used'));
+      const btn = root.querySelector('button');
+      expect(btn?.textContent).toMatch(/reveal backups in file explorer/i);
+      expect(btn?.textContent).not.toMatch(/finder/i);
+    });
+
+    it('labels the reveal button "Finder" on macOS', () => {
+      vi.stubGlobal('navigator', {
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) WebKit',
+      });
+      renderBootError(root, new DatabaseCorruptError('page 4 is never used'));
+      const btn = root.querySelector('button');
+      expect(btn?.textContent).toMatch(/reveal backups in finder/i);
+    });
   });
 });
