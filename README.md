@@ -26,9 +26,13 @@ frequently.
 
 ## Install
 
-The app is distributed as an unsigned, gzip-tarred `.app` bundle (Apple
-Silicon Macs). No App Store, no installer — just download, unarchive,
-drag, and open.
+**Download the latest build:**
+<https://github.com/Ray-Gochuico/Cairn/releases/latest>
+
+### macOS (Apple Silicon)
+
+The app is distributed as an unsigned, gzip-tarred `.app` bundle.
+No App Store, no installer — just download, unarchive, drag, and open.
 
 > **Why `.app.tar.gz` (and not `.dmg` or `.app.zip`)?** Two reasons.
 > First, `bundle_dmg.sh` (Tauri's DMG bundler) fails on macOS 26 — its
@@ -41,9 +45,6 @@ drag, and open.
 > `.app.tar.gz` for both manual download and the updater keeps one
 > artifact. macOS Archive Utility unarchives `.tar.gz` on double-click,
 > same as a `.zip`.
-
-**Download the latest build:**
-<https://github.com/Ray-Gochuico/Cairn/releases/latest>
 
 Grab the file named `Cairn_<version>_aarch64.app.tar.gz`.
 
@@ -73,15 +74,35 @@ Grab the file named `Cairn_<version>_aarch64.app.tar.gz`.
 > downloaded the release yourself from the official link above and trust it.
 > The right-click → Open flow in step 3 is safer and just as permanent.
 
+### Windows
+
+Grab the file named `Cairn_<version>_x64-setup.exe` from the Releases page
+above and run it.
+
+**Windows SmartScreen will show "Windows protected your PC"** — this happens
+because the installer is unsigned (same situation as macOS; see
+[Why the security warning?](#why-the-security-warning) below). Click
+**"More info"**, then **"Run anyway"**. The NSIS installer runs and installs
+Cairn. If your machine doesn't already have WebView2, the installer will
+download and set it up automatically (this is the Microsoft WebView2 runtime
+that Tauri apps need; it's a one-time step).
+
+**To update on Windows:** there's no in-app updater on Windows yet — re-download
+the latest `…_x64-setup.exe` from the Releases page above and re-run it. Watch
+or ★ the repo and I'll ping you when a new version lands.
+
+**Found a bug?** Open an issue at
+<https://github.com/Ray-Gochuico/Cairn/issues>.
+
 ### Why the security warning?
 
 Cairn is distributed **unsigned** because it's a personal-finance side
 project, not commercial software — paying $99/yr for an Apple Developer
-account just so a handful of friends can install it isn't worth it. macOS
-shows a one-time scary "unidentified developer" dialog the first time you
-open any unsigned app from outside the App Store. After approving once, the
-dialog never appears again. The app itself is the same code you can read in
-this repo; nothing is hidden by the signing absence.
+account (or obtaining an EV code-signing certificate for Windows) just so a
+handful of friends can install it isn't worth it. Both macOS and Windows show
+a one-time warning the first time you open any unsigned app. After approving
+once, the warning never appears again. The app itself is the same code you
+can read in this repo; nothing is hidden by the signing absence.
 
 If/when Cairn ever scales beyond friends, code signing is a multi-step
 project, not a one-liner: enroll in the Apple Developer Program ($99/yr),
@@ -102,16 +123,23 @@ mirrored inside the app at **Settings → Privacy & data**.
 ### Where your data lives
 
 Everything Cairn knows — your accounts, transactions, settings, and
-price cache — lives in a single SQLite file on this Mac at:
+price cache — lives in a single SQLite file on your machine:
 
+**macOS:**
 ```
 ~/Library/Application Support/com.raymondgochuico.cairn/finance.db
 ```
-
 The parent directory's permissions are `drwx------` (owner-only), so
 no other macOS user on the same machine can read it. Settings →
 Privacy & data has a **Show in Finder** button that opens the folder
 for you.
+
+**Windows:**
+```
+%APPDATA%\com.raymondgochuico.cairn\finance.db
+```
+Settings → Privacy & data has a **Show in File Explorer** button that
+opens the folder for you.
 
 ### What network calls happen
 
@@ -134,12 +162,14 @@ opt-in calls still works.
 ### Encryption at rest
 
 Cairn does not currently implement its own SQLite encryption (that's
-on the v1.1 roadmap). macOS file-mode permissions protect the file
-from other users on the same machine, but a thief who pulls the disk
-out of an unlocked Mac could read the data in plaintext.
+on the v1.1 roadmap). OS file-mode permissions protect the file from
+other users on the same machine, but a thief who pulls the disk out of
+an unlocked device could read the data in plaintext.
 
-The recommended safeguard is **macOS FileVault**, which encrypts the
-entire disk with your login password:
+The recommended safeguard is full-disk encryption:
+
+**macOS — FileVault**, which encrypts the entire disk with your login
+password:
 
 > *System Settings → Privacy & Security → FileVault*
 
@@ -147,6 +177,15 @@ FileVault is on by default for new Macs since macOS 11, but is **not**
 retroactively enabled on machines that were upgraded from earlier
 versions. If you imported a transaction history with sensitive
 balances, take 30 seconds to verify FileVault is on.
+
+**Windows — BitLocker** (Windows Pro / Enterprise) or **Device
+Encryption** (Windows Home). To check:
+
+> *Settings → Privacy & security → Device encryption*
+> (or search "BitLocker" in the Start menu on Pro editions)
+
+If it shows "Device encryption is off," turn it on before storing
+sensitive balances in the app.
 
 ## Status
 
