@@ -35,10 +35,11 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          # Match release.yml. Node 20 LTS is what the maintainer runs
-          # locally; bumping the matrix is out-of-scope for this CI job
-          # (release.yml ships the actual artifact, not this one).
-          node-version: '20'
+          # Match release.yml. Node 22 = current LTS. Bumped off Node 20
+          # because the Node-20 action runtime is deprecated and GitHub
+          # forces Actions onto Node 24 by 2026-06-16; staying on a
+          # supported LTS line keeps CI green.
+          node-version: '22'
           cache: 'npm'
 
       - name: Install npm deps
