@@ -154,8 +154,13 @@ jobs:
         run: |
           PKG_VERSION=$(node -p "require('./package.json').version")
           TAG_VERSION="${{ steps.ver.outputs.version }}"
-          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
-            echo "ERROR: tag v${TAG_VERSION} doesn't match package.json version ${PKG_VERSION}"
+          # Tolerate a semver prerelease/build suffix (e.g. 1.0.0-rc.1) so an
+          # rc dry-run tag still builds — compare only the MAJOR.MINOR.PATCH
+          # core against package.json. ${VAR%%[-+]*} strips from the first
+          # '-' or '+'. An exact v1.0.0 tag is unchanged (core == tag).
+          TAG_CORE="${TAG_VERSION%%[-+]*}"
+          if [ "$PKG_VERSION" != "$TAG_CORE" ]; then
+            echo "ERROR: tag v${TAG_VERSION} (core ${TAG_CORE}) doesn't match package.json version ${PKG_VERSION}"
             echo "Bump package.json + src-tauri/Cargo.toml + src-tauri/tauri.conf.json first."
             exit 1
           fi
@@ -237,6 +242,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
+          # A tag with a hyphen (v1.0.0-rc.1) is a semver prerelease — mark it
+          # so GitHub's /releases/latest (and thus the updater endpoint) skips
+          # it. An exact vX.Y.Z tag has no hyphen → a normal "latest" release.
+          prerelease: ${{ contains(github.ref_name, '-') }}
           name: Cairn ${{ steps.ver.outputs.version }}
           # Release body = the full CHANGELOG so the Releases page shows
           # real content (not a placeholder). The updater's own notes
