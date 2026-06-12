@@ -1,29 +1,29 @@
 import { writeFile, readDir, exists } from '@tauri-apps/plugin-fs';
+import { join } from '@tauri-apps/api/path';
 
 /**
- * Pure path resolver for the PDF statements archive.
+ * Pure collision-free FILENAME resolver for the PDF statements archive.
  *
- * Given the target archive `folder`, the desired `filename`, and the file
- * names already present in that folder (`existingNames`), returns the
- * absolute path the archiving step should write to.
+ * Given the desired `filename` and the file names already present in the
+ * target folder (`existingNames`), returns the filename the archiving step
+ * should write to — a bare name, never a path. Joining it onto the
+ * picker-chosen folder is the caller's job (`archiveStatementPdf`) via
+ * Tauri's platform-aware `join()`; that call is async (an IPC round-trip),
+ * which is exactly why this resolver deals in bare names: it stays
+ * synchronous, deterministic, and unit-testable.
  *
  * Policy: keep the original filename. On a name collision, insert a
  * ` (N)` suffix before the final extension — ` (2)`, ` (3)`, … — and walk
  * N upward until the name is free. Comparison is case-sensitive (it mirrors
  * the file system the archive lives on; the picker-chosen folder is treated
  * as-is). The impure read of `existingNames` is the caller's job (via the
- * fs plugin); this function is deterministic and unit-tested.
+ * fs plugin).
  */
-export function resolveArchivePath(
-  folder: string,
-  filename: string,
-  existingNames: string[],
-): string {
-  const dir = folder.replace(/\/+$/, '');
+export function resolveArchivePath(filename: string, existingNames: string[]): string {
   const taken = new Set(existingNames);
 
   if (!taken.has(filename)) {
-    return `${dir}/${filename}`;
+    return filename;
   }
 
   // Split off the final extension, if any, so the suffix lands before it.
@@ -37,7 +37,7 @@ export function resolveArchivePath(
     n += 1;
     candidate = `${stem} (${n})${ext}`;
   }
-  return `${dir}/${candidate}`;
+  return candidate;
 }
 
 /**
@@ -48,9 +48,11 @@ export function resolveArchivePath(
  * — the design spec mandates that an archiving failure surfaces a
  * non-blocking warning and never fails the import that triggered it.
  *
- * Impure: it touches the `tauri-plugin-fs` API and is therefore smoke-tested
- * only, mirroring `src/pdf/extract.ts`. The non-colliding-path logic it
- * delegates to (`resolveArchivePath`) is pure and unit-tested.
+ * Impure: it touches the `tauri-plugin-fs` API and the async `join` from
+ * `@tauri-apps/api/path` (platform-correct separators — `\` on Windows).
+ * The non-colliding-name logic it delegates to (`resolveArchivePath`) is
+ * pure and unit-tested; the join/write wiring is unit-tested with mocks and
+ * smoke-tested for real, mirroring `src/pdf/extract.ts`.
  */
 export async function archiveStatementPdf(
   folder: string,
@@ -63,7 +65,8 @@ export async function archiveStatementPdf(
     }
     const entries = await readDir(folder);
     const existingNames = entries.map((e) => e.name);
-    const target = resolveArchivePath(folder, filename, existingNames);
+    const name = resolveArchivePath(filename, existingNames);
+    const target = await join(folder, name);
     await writeFile(target, bytes);
     return null;
   } catch (e) {
