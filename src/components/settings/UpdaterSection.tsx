@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { getVersion } from '@tauri-apps/api/app';
 import { check } from '@tauri-apps/plugin-updater';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { isWindows } from '@/lib/platform';
 
 /**
  * Settings → Updates section. **Manual-only** updater check — the app
@@ -16,6 +17,14 @@ import { openUrl } from '@tauri-apps/plugin-opener';
  * The Rust plugin verifies every downloaded artifact against the
  * minisign public key embedded in `tauri.conf.json:49`, so a malicious
  * release.json payload can't install a tampered binary.
+ *
+ * **Windows (distribution plan A3):** the published `latest.json` has no
+ * `windows-x86_64` key yet, so `check()` is unreliable there — it may show
+ * a false "up to date", a false error, or a phantom update. On Windows the
+ * component never calls `check()`: the entire check UI is replaced with a
+ * notice pointing at the Releases page (the "View all releases" link and
+ * the locally-read current version stay). Remove this branch when Phase C
+ * ships a `windows-x86_64` updater artifact.
  *
  * Local state machine:
  *   idle         → "Check for updates" button enabled, prior result hidden
@@ -117,6 +126,43 @@ export function UpdaterSection() {
   };
 
   const isBusy = state.phase === 'checking' || state.phase === 'installing';
+
+  // Windows: no `windows-x86_64` key in the published latest.json yet, so
+  // `check()` is unreliable (false "up to date" / false error / phantom
+  // update). Never call it — replace the whole check UI with a pointer to
+  // the Releases page. All hooks above still run (they are local-only
+  // reads), keeping the hook order identical across platforms.
+  if (isWindows()) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Updates</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-3">
+            Automatic updates aren't available on Windows yet &mdash; download
+            new versions from the Releases page.
+          </p>
+          <div className="space-y-3">
+            <div className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-sm">
+              <span className="text-muted-foreground">Current version</span>
+              <span className="font-mono">{currentVersion ?? '—'}</span>
+            </div>
+            <div className="flex items-center gap-3 flex-wrap">
+              <Button
+                type="button"
+                variant="link"
+                className="px-0"
+                onClick={handleOpenReleases}
+              >
+                View all releases
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>

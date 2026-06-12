@@ -17,7 +17,13 @@
  *
  * Extracted from `main.tsx` (which auto-runs `bootstrap()` on import) so the
  * branching is unit-testable in isolation.
+ *
+ * `isWindows` (a plain UA sniff in `@/lib/platform`) is safe to import
+ * statically here — it carries no Tauri dependency, preserving this module's
+ * "no static Tauri imports on the boot path" invariant.
  */
+import { isWindows } from '@/lib/platform';
+
 export function renderBootError(root: HTMLElement, e: unknown): void {
   const name = e instanceof Error ? e.name : '';
   const message = e instanceof Error ? e.message : String(e);
@@ -59,7 +65,9 @@ export function renderBootError(root: HTMLElement, e: unknown): void {
     detail.textContent = message;
 
     const revealBtn = document.createElement('button');
-    revealBtn.textContent = 'Reveal backups in Finder';
+    revealBtn.textContent = isWindows()
+      ? 'Reveal backups in File Explorer'
+      : 'Reveal backups in Finder';
     revealBtn.style.padding = '8px 14px';
     revealBtn.style.borderRadius = '6px';
     revealBtn.style.border = '1px solid #d1d5db';

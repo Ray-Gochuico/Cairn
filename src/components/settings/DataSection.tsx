@@ -17,6 +17,7 @@ import {
   type BackupEntry,
 } from '@/lib/backup-restore';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import { isWindows } from '@/lib/platform';
 
 /** Human-readable "when this backup was taken", e.g. "Jun 2, 2026, 11:50 PM". */
 function formatTakenAt(takenAt: Date): string {
@@ -30,8 +31,8 @@ function formatTakenAt(takenAt: Date): string {
  * "Back up now" takes a consistent whole-file copy of the entire database
  * (every table) into a rotating `backups/` folder beside the live data via the
  * Rust `db_backup` command (VACUUM INTO). "Save a copy…" writes a fresh backup
- * to any location via a native save dialog. "Reveal backups in Finder" opens
- * the rotating folder.
+ * to any location via a native save dialog. "Reveal backups in Finder"
+ * ("…in File Explorer" on Windows — plan A3) opens the rotating folder.
  *
  * RESTORE is list-driven. The rotating `backups/` folder lives under the app
  * config dir (`~/Library/Application Support/…/backups/`) — a HIDDEN location
@@ -205,10 +206,10 @@ export function DataSection() {
       </CardHeader>
       <CardContent className="space-y-6">
         <p className="text-sm text-muted-foreground">
-          Your data lives only on this Mac. Back it up regularly so you can
+          Your data lives only on this computer. Back it up regularly so you can
           recover everything — every account, transaction, and setting — if this
-          Mac is lost or the database is damaged. Backups are full, exact copies
-          of your database.
+          computer is lost or the database is damaged. Backups are full, exact
+          copies of your database.
         </p>
 
         {!tauri && (
@@ -239,7 +240,7 @@ export function DataSection() {
                 {busy === 'save' ? 'Saving…' : 'Save a copy…'}
               </Button>
               <Button variant="ghost" onClick={handleReveal} disabled={!tauri}>
-                Reveal backups in Finder
+                Reveal backups in {isWindows() ? 'File Explorer' : 'Finder'}
               </Button>
             </div>
           </div>
