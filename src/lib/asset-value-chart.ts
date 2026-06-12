@@ -5,6 +5,11 @@ import {
   type TimeWindow,
 } from '@/lib/snapshot-bucketing';
 import type { NetWorthChartRow } from '@/lib/net-worth-chart-data';
+import { assetValuesAsOf } from '@/lib/asset-snapshot-bucketing';
+import { loanBalanceHistory } from '@/lib/loan-history';
+import { sumLatestOnOrBefore } from '@/lib/growth-horizons';
+import type { EntityKind } from '@/lib/net-worth-chart-prefs';
+import type { AssetValueSnapshot, Loan } from '@/types/schema';
 
 /**
  * Pure derivation layer for the AssetValueChart (spec
@@ -153,4 +158,191 @@ export function xTickLabel(bucketEnd: string, window: TimeWindow): string {
   return window === '5Y' || window === 'ALL'
     ? String(d.getUTCFullYear())
     : MONTH_FMT.format(d);
+}
+
+/**
+ * Header label per spec §3.1: "Net worth" ONLY when the selection equals the
+ * entire eligible set (so a stale or partial pick can never masquerade as net
+ * worth); "Included net" when any loan is in a partial pick; "Total assets"
+ * for all-and-only assets; "Included assets" otherwise; a lone entity shows
+ * its own name.
+ */
+export function headerLabel(args: {
+  selected: ReadonlySet<string>;
+  eligibleAssets: readonly string[];
+  eligibleLoans: readonly string[];
+  nameByKey: ReadonlyMap<string, string>;
+}): string {
+  const { selected, eligibleAssets, eligibleLoans, nameByKey } = args;
+  if (selected.size === 1) {
+    const only = [...selected][0];
+    return nameByKey.get(only) ?? 'Included assets';
+  }
+  const selAssets = eligibleAssets.filter((k) => selected.has(k)).length;
+  const selLoans = eligibleLoans.filter((k) => selected.has(k)).length;
+  const fullSet =
+    selAssets === eligibleAssets.length &&
+    selLoans === eligibleLoans.length &&
+    selected.size === selAssets + selLoans;
+  if (fullSet) return 'Net worth';
+  if (selLoans > 0) return 'Included net';
+  if (selAssets === eligibleAssets.length && selected.size === selAssets) return 'Total assets';
+  return 'Included assets';
+}
+
+export interface BreakdownRow {
+  key: string;
+  kind: EntityKind;
+  name: string;
+  /** Signed: loans negative. */
+  value: number;
+  /**
+   * Change in net-worth contribution over the range — loan paydown is
+   * positive. NULL when there is no baseline — render '—', never '$0'.
+   */
+  delta: number | null;
+  deltaPct: number | null;
+  /** Fraction of gross included assets; null for loans and negative values. */
+  share: number | null;
+  estimateBacked: boolean;
+  /** Latest underlying observation date when older than one bucket; else null. */
+  asOf: string | null;
+}
+
+export function buildBreakdownRows(args: {
+  currentRow: NetWorthChartRow;
+  baselineRow: NetWorthChartRow | null;
+  entities: ReadonlyArray<{ key: string; kind: EntityKind; name: string }>;
+  estimateBacked: ReadonlySet<string>;
+  latestObservationByKey: ReadonlyMap<string, string>;
+  previousBucketEnd: string | null;
+}): BreakdownRow[] {
+  const { currentRow, baselineRow, entities, estimateBacked, latestObservationByKey, previousBucketEnd } = args;
+  const grossAssets = entities.reduce((sum, e) => {
+    if (e.kind === 'loan') return sum;
+    const v = currentRow[e.key];
+    return sum + (typeof v === 'number' && v > 0 ? v : 0);
+  }, 0);
+
+  const rows = entities.map<BreakdownRow>((e) => {
+    const raw = currentRow[e.key];
+    const value = typeof raw === 'number' ? raw : 0;
+    const baseRaw = baselineRow?.[e.key];
+    const base = typeof baseRaw === 'number' ? baseRaw : 0;
+    const delta = baselineRow ? value - base : null;
+    const isLoan = e.kind === 'loan';
+    const deltaPct = isLoan || delta === null ? null : deltaPctOrNull(delta, base);
+    const share = isLoan || value < 0 || grossAssets <= 0 ? null : value / grossAssets;
+    const obs = latestObservationByKey.get(e.key) ?? null;
+    const isEst = estimateBacked.has(e.key);
+    const stale =
+      !isEst && obs !== null && previousBucketEnd !== null && obs <= previousBucketEnd;
+    return {
+      key: e.key,
+      kind: e.kind,
+      name: e.name,
+      value,
+      delta,
+      deltaPct,
+      share,
+      estimateBacked: isEst,
+      asOf: stale ? obs : null,
+    };
+  });
+  return rows.sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
+}
+
+export interface TooltipRowsResult {
+  rows: Array<{ key: string; name: string; value: number }>;
+  moreCount: number;
+  /** SIGNED sum of the remainder (loans can make it negative). */
+  moreSum: number;
+}
+
+export function tooltipRows(
+  row: NetWorthChartRow,
+  nameByKey: ReadonlyMap<string, string>,
+  max = 5,
+): TooltipRowsResult {
+  const entries = Object.entries(row)
+    .filter(([k, v]) => k !== 'bucketEnd' && k !== 'netWorth' && typeof v === 'number' && v !== 0)
+    .map(([key, v]) => ({ key, name: nameByKey.get(key) ?? key, value: v as number }))
+    .sort((a, b) => Math.abs(b.value) - Math.abs(a.value));
+  const rows = entries.slice(0, max);
+  const rest = entries.slice(max);
+  return {
+    rows,
+    moreCount: rest.length,
+    moreSum: rest.reduce((s, e) => s + e.value, 0),
+  };
+}
+
+/** Properties/vehicles with zero value snapshots — their series is the flat estimate. */
+export function estimateBackedKeys(
+  entities: ReadonlyArray<{ key: string; kind: EntityKind; id: number }>,
+  assetValueSnapshots: ReadonlyArray<Pick<AssetValueSnapshot, 'ownerType' | 'ownerId'>>,
+): Set<string> {
+  const out = new Set<string>();
+  for (const e of entities) {
+    if (e.kind !== 'property' && e.kind !== 'vehicle') continue;
+    const ownerType = e.kind === 'property' ? 'PROPERTY' : 'VEHICLE';
+    const has = assetValueSnapshots.some((s) => s.ownerType === ownerType && s.ownerId === e.id);
+    if (!has) out.add(e.key);
+  }
+  return out;
+}
+
+/**
+ * Day-granular net worth as-of factory for the GrowthCard refeed (spec §3.7):
+ * the same as-of semantics the chart uses, so the two never disagree.
+ * Returns null when no account history reaches the date (mirrors
+ * sumLatestOnOrBefore) — the card renders "Not enough history yet".
+ */
+export function netWorthAsOfFactory(input: {
+  snapshots: ReadonlyArray<{ accountId: number; snapshotDate: string; totalValue: number }>;
+  properties: ReadonlyArray<{
+    id?: number;
+    purchaseDate: string | null;
+    purchasePrice: number | null;
+    currentEstimatedValue: number | null;
+    excludedFromNetWorth: boolean;
+  }>;
+  vehicles: ReadonlyArray<{
+    id?: number;
+    purchaseDate: string | null;
+    purchasePrice: number | null;
+    currentEstimatedValue: number | null;
+    excludedFromNetWorth: boolean;
+  }>;
+  loans: ReadonlyArray<Loan>;
+  assetValueSnapshots: ReadonlyArray<AssetValueSnapshot>;
+  todayIso: string;
+}): (dateIso: string) => number | null {
+  return (dateIso) => {
+    const acct = sumLatestOnOrBefore(input.snapshots, dateIso);
+    if (acct === null) return null;
+    let total = acct;
+    for (const [assets, ownerType] of [
+      [input.properties, 'PROPERTY'],
+      [input.vehicles, 'VEHICLE'],
+    ] as const) {
+      for (const a of assets) {
+        if (a.excludedFromNetWorth || a.id == null) continue;
+        total += assetValuesAsOf(input.assetValueSnapshots, ownerType, a.id, [dateIso], {
+          purchaseDate: a.purchaseDate,
+          purchasePrice: a.purchasePrice,
+          currentEstimatedValue: a.currentEstimatedValue,
+        })[0];
+      }
+    }
+    for (const l of input.loans) {
+      // Window must span dateIso → today so the anchor (today, currentBalance)
+      // back-walks to dateIso. A single-bucket [dateIso, dateIso] window would
+      // make dateIso itself the anchor and return TODAY'S balance for every
+      // historical date (bug caught in Task 8 quality review).
+      const walked = loanBalanceHistory(l, dateIso, input.todayIso, 'DAY', input.todayIso);
+      total -= walked[0]?.balance ?? l.currentBalance;
+    }
+    return total;
+  };
 }

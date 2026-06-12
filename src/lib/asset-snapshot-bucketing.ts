@@ -24,7 +24,7 @@ export interface AssetAnchor {
  * range. PRECONDITION: bucketEnds ascending.
  */
 export function assetValuesAsOf(
-  snapshots: AssetValueSnapshot[],
+  snapshots: ReadonlyArray<AssetValueSnapshot>,
   ownerType: AssetSnapshotOwnerType,
   ownerId: number,
   bucketEnds: string[],

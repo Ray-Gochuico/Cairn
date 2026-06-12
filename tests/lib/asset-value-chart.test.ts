@@ -8,8 +8,15 @@ import {
   deltaPctOrNull,
   xTicksFor,
   xTickLabel,
+  headerLabel,
+  buildBreakdownRows,
+  tooltipRows,
+  estimateBackedKeys,
+  netWorthAsOfFactory,
 } from '@/lib/asset-value-chart';
+import { loanBalanceHistory } from '@/lib/loan-history';
 import type { NetWorthChartRow } from '@/lib/net-worth-chart-data';
+import type { AssetValueSnapshot, Loan } from '@/types/schema';
 
 const TODAY = '2026-06-12';
 
@@ -147,5 +154,237 @@ describe('x ticks', () => {
     ];
     expect(xTicksFor(rows, '5Y')).toEqual(['2025-11-30', '2026-01-31']);
     expect(xTickLabel('2026-01-31', '5Y')).toBe('2026');
+  });
+});
+
+describe('headerLabel (spec §3.1 strict rules)', () => {
+  const assets = ['account:1', 'account:2', 'property:7'];
+  const loans = ['loan:9'];
+  const names = new Map([
+    ['account:1', 'Schwab'], ['account:2', '401k'], ['property:7', 'Home'], ['loan:9', 'Mortgage'],
+  ]);
+  const label = (selected: string[]) =>
+    headerLabel({ selected: new Set(selected), eligibleAssets: assets, eligibleLoans: loans, nameByKey: names });
+
+  it('"Net worth" only for the entire eligible set', () => {
+    expect(label([...assets, ...loans])).toBe('Net worth');
+  });
+  it('"Net worth" for all assets when there are no eligible loans at all', () => {
+    expect(headerLabel({ selected: new Set(assets), eligibleAssets: assets, eligibleLoans: [], nameByKey: names })).toBe('Net worth');
+  });
+  it('"Included net" for a partial pick containing a loan', () => {
+    expect(label(['account:1', 'loan:9'])).toBe('Included net');
+  });
+  it('"Total assets" for all assets, no loans selected (loans exist)', () => {
+    expect(label(assets)).toBe('Total assets');
+  });
+  it('"Included assets" for a partial assets-only pick', () => {
+    expect(label(['account:1', 'property:7'])).toBe('Included assets');
+  });
+  it('single entity: its name', () => {
+    expect(label(['account:1'])).toBe('Schwab');
+  });
+});
+
+describe('buildBreakdownRows', () => {
+  const current = { bucketEnd: '2026-06-30', netWorth: 200, 'account:1': 500, 'property:7': 0, 'loan:9': -300 } as NetWorthChartRow;
+  const baseline = { bucketEnd: '2026-01-31', netWorth: 80, 'account:1': 400, 'property:7': 0, 'loan:9': -320 } as NetWorthChartRow;
+  const entities = [
+    { key: 'account:1', kind: 'account' as const, name: 'Schwab' },
+    { key: 'property:7', kind: 'property' as const, name: 'Home' },
+    { key: 'loan:9', kind: 'loan' as const, name: 'Mortgage' },
+  ];
+
+  it('loan Δ = change in net-worth contribution (paydown positive); Δ% null for loans', () => {
+    const rows = buildBreakdownRows({
+      currentRow: current, baselineRow: baseline, entities,
+      estimateBacked: new Set(['property:7']), latestObservationByKey: new Map(), previousBucketEnd: '2026-05-31',
+    });
+    const loan = rows.find((r) => r.key === 'loan:9')!;
+    expect(loan.value).toBe(-300);
+    expect(loan.delta).toBe(20); // −300 − (−320)
+    expect(loan.deltaPct).toBeNull();
+  });
+
+  it('share of assets: assets only, loans null; rows sorted by |value| desc; Σ row Δ == header Δ', () => {
+    const rows = buildBreakdownRows({
+      currentRow: current, baselineRow: baseline, entities,
+      estimateBacked: new Set(), latestObservationByKey: new Map(), previousBucketEnd: null,
+    });
+    expect(rows.map((r) => r.key)).toEqual(['account:1', 'loan:9', 'property:7']);
+    expect(rows.find((r) => r.key === 'account:1')!.share).toBeCloseTo(1.0, 5); // 500 / 500
+    expect(rows.find((r) => r.key === 'loan:9')!.share).toBeNull();
+    expect(rows.every((r) => r.delta !== null)).toBe(true); // baseline present → deltas non-null
+    expect(rows.reduce((s, r) => s + (r.delta ?? 0), 0)).toBe(200 - 80);
+  });
+
+  it('null baseline (single-point series): every row has delta and deltaPct null', () => {
+    const rows = buildBreakdownRows({
+      currentRow: current, baselineRow: null, entities,
+      estimateBacked: new Set(), latestObservationByKey: new Map(), previousBucketEnd: null,
+    });
+    expect(rows).toHaveLength(3);
+    for (const r of rows) {
+      expect(r.delta).toBeNull();
+      expect(r.deltaPct).toBeNull();
+    }
+  });
+
+  it('negative-value account: excluded from gross assets, share null, still listed signed', () => {
+    const cur = { bucketEnd: '2026-06-30', netWorth: 400, 'account:1': 500, 'account:2': -100 } as NetWorthChartRow;
+    const rows = buildBreakdownRows({
+      currentRow: cur, baselineRow: null,
+      entities: [
+        { key: 'account:1', kind: 'account' as const, name: 'Schwab' },
+        { key: 'account:2', kind: 'account' as const, name: 'Margin' },
+      ],
+      estimateBacked: new Set(), latestObservationByKey: new Map(), previousBucketEnd: null,
+    });
+    const neg = rows.find((r) => r.key === 'account:2')!;
+    expect(neg.value).toBe(-100); // present, signed
+    expect(neg.share).toBeNull();
+    expect(rows.find((r) => r.key === 'account:1')!.share).toBeCloseTo(1.0, 5); // 500 / 500 — negative excluded from gross
+  });
+
+  it('estimate-backed entity with positive value still counts toward gross and gets a share', () => {
+    const cur = { bucketEnd: '2026-06-30', netWorth: 800, 'account:1': 500, 'property:7': 300 } as NetWorthChartRow;
+    const rows = buildBreakdownRows({
+      currentRow: cur, baselineRow: null,
+      entities: [
+        { key: 'account:1', kind: 'account' as const, name: 'Schwab' },
+        { key: 'property:7', kind: 'property' as const, name: 'Home' },
+      ],
+      estimateBacked: new Set(['property:7']), latestObservationByKey: new Map(), previousBucketEnd: null,
+    });
+    const home = rows.find((r) => r.key === 'property:7')!;
+    expect(home.estimateBacked).toBe(true);
+    expect(home.share).toBeCloseTo(300 / 800, 5);
+    expect(rows.find((r) => r.key === 'account:1')!.share).toBeCloseTo(500 / 800, 5);
+  });
+
+  it('estimate-backed rows are flagged; stale rows carry their as-of date', () => {
+    const rows = buildBreakdownRows({
+      currentRow: current, baselineRow: baseline, entities,
+      estimateBacked: new Set(['property:7']),
+      latestObservationByKey: new Map([['account:1', '2026-03-15']]),
+      previousBucketEnd: '2026-05-31',
+    });
+    expect(rows.find((r) => r.key === 'property:7')!.estimateBacked).toBe(true);
+    expect(rows.find((r) => r.key === 'account:1')!.asOf).toBe('2026-03-15'); // older than prev bucket
+    expect(rows.find((r) => r.key === 'loan:9')!.asOf).toBeNull();
+  });
+});
+
+describe('tooltipRows', () => {
+  it('top-5 by |value| with a signed remainder', () => {
+    const r = {
+      bucketEnd: '2026-06-30', netWorth: 0,
+      'account:1': 500, 'account:2': 400, 'account:3': 300, 'account:4': 200,
+      'account:5': 100, 'account:6': 50, 'loan:9': -75,
+    } as NetWorthChartRow;
+    const names = new Map(
+      ['1', '2', '3', '4', '5', '6'].map((n) => [`account:${n}`, `A${n}`] as [string, string]),
+    );
+    names.set('loan:9', 'Mortgage');
+    const t = tooltipRows(r, names, 5);
+    expect(t.rows.map((x) => x.name)).toEqual(['A1', 'A2', 'A3', 'A4', 'A5']);
+    expect(t.moreCount).toBe(2);
+    expect(t.moreSum).toBe(50 - 75); // signed: -25
+  });
+
+  it('≤max entries: moreCount 0, moreSum 0; zero-value entries excluded', () => {
+    const r = {
+      bucketEnd: '2026-06-30', netWorth: 425,
+      'account:1': 500, 'account:2': 0, 'loan:9': -75,
+    } as NetWorthChartRow;
+    const names = new Map([
+      ['account:1', 'A1'], ['account:2', 'A2'], ['loan:9', 'Mortgage'],
+    ]);
+    const t = tooltipRows(r, names, 5);
+    expect(t.rows.map((x) => x.name)).toEqual(['A1', 'Mortgage']); // zero-value A2 excluded
+    expect(t.moreCount).toBe(0);
+    expect(t.moreSum).toBe(0);
+  });
+});
+
+describe('estimateBackedKeys', () => {
+  it('flags properties/vehicles with zero snapshots', () => {
+    const snaps: Array<Pick<AssetValueSnapshot, 'ownerType' | 'ownerId'>> = [
+      { ownerType: 'PROPERTY', ownerId: 7 },
+    ];
+    const keys = estimateBackedKeys(
+      [
+        { key: 'property:7', kind: 'property', id: 7 },
+        { key: 'vehicle:3', kind: 'vehicle', id: 3 },
+        { key: 'account:1', kind: 'account', id: 1 },
+      ],
+      snaps,
+    );
+    expect(keys).toEqual(new Set(['vehicle:3']));
+  });
+});
+
+describe('netWorthAsOfFactory', () => {
+  it('null before any account history; otherwise accounts + assets − loans', () => {
+    const valueAsOf = netWorthAsOfFactory({
+      snapshots: [{ accountId: 1, snapshotDate: '2026-02-10', totalValue: 1000 }],
+      properties: [{ id: 7, purchaseDate: null, purchasePrice: null, currentEstimatedValue: 500, excludedFromNetWorth: false }],
+      vehicles: [],
+      loans: [],
+      assetValueSnapshots: [],
+      todayIso: '2026-06-12',
+    });
+    expect(valueAsOf('2026-01-15')).toBeNull();
+    expect(valueAsOf('2026-03-15')).toBe(1500);
+  });
+
+  it('loan leg back-walks from today — a historical date owes MORE than currentBalance', () => {
+    const loan: Loan = {
+      id: 9,
+      householdId: 1,
+      obligorPersonId: null,
+      name: 'Mortgage',
+      type: 'MORTGAGE',
+      originalAmount: 400000,
+      currentBalance: 350000,
+      interestRate: 0.04,
+      termMonths: 360,
+      firstPaymentDate: '2024-01-01',
+      monthlyPayment: 1909.66,
+      extraPaymentDefault: 0,
+      linkedPropertyId: null,
+      linkedVehicleId: null,
+    };
+    const todayIso = '2026-06-12';
+    const valueAsOf = netWorthAsOfFactory({
+      snapshots: [{ accountId: 1, snapshotDate: '2020-01-01', totalValue: 1_000_000 }],
+      properties: [],
+      vehicles: [],
+      loans: [loan],
+      assetValueSnapshots: [],
+      todayIso,
+    });
+    const date = '2025-12-12'; // ~6 months before today
+    // Oracle: the same back-walk the chart's loan series uses.
+    const oracle = loanBalanceHistory(loan, date, todayIso, 'DAY', todayIso)[0].balance;
+    expect(oracle).toBeGreaterThan(350000); // earlier in the amortization → larger balance
+    expect(valueAsOf(date)).toBeCloseTo(1_000_000 - oracle, 2); // matches the walk within $0.01
+  });
+
+  it('vehicles leg adds in; excludedFromNetWorth and id-less assets are skipped', () => {
+    const valueAsOf = netWorthAsOfFactory({
+      snapshots: [{ accountId: 1, snapshotDate: '2026-01-01', totalValue: 1000 }],
+      properties: [
+        { id: 8, purchaseDate: null, purchasePrice: null, currentEstimatedValue: 999, excludedFromNetWorth: true }, // skipped: excluded
+      ],
+      vehicles: [
+        { id: 3, purchaseDate: null, purchasePrice: null, currentEstimatedValue: 200, excludedFromNetWorth: false }, // counted
+        { purchaseDate: null, purchasePrice: null, currentEstimatedValue: 111, excludedFromNetWorth: false }, // skipped: no id
+      ],
+      loans: [],
+      assetValueSnapshots: [],
+      todayIso: '2026-06-12',
+    });
+    expect(valueAsOf('2026-03-15')).toBe(1200); // 1000 + vehicle 200 only
   });
 });
