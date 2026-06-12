@@ -40,8 +40,28 @@ format the Tauri macOS updater requires; see RELEASING.md for the why).
 ## Cross-target builds
 
 - macOS Intel: `npm run tauri build -- --target x86_64-apple-darwin`
-- Windows: `npm run tauri build -- --target x86_64-pc-windows-msvc` (requires
-  building on Windows; cross-compile not in scope for v1)
+- Windows x64: built in CI on a `windows-latest` GitHub Actions runner via
+  `npm run tauri build -- --bundles nsis`. Cross-compiling Windows from macOS
+  is not supported; the Windows artifact is produced exclusively in CI.
+
+## Windows signing posture
+
+The Windows installer (`Cairn_<version>_x64-setup.exe`) ships **unsigned**.
+There is no Authenticode certificate or Windows code-signing workflow today.
+
+**User-facing consequence:** Windows SmartScreen shows a one-time **"Windows
+protected your PC"** dialog on first run of the installer. The user clicks
+**"More info" → "Run anyway"** to proceed. This is a one-time prompt per
+machine.
+
+**Updater:** there is **no in-app updater for Windows yet**. Users must
+re-download the installer from the
+[Releases page](https://github.com/Ray-Gochuico/Cairn/releases) to update.
+
+**Future:** Windows code-signing (e.g. Azure Trusted Signing) is a potential
+future option if the project scales. That path would require obtaining a
+code-signing certificate, configuring it in the Tauri build/CI pipeline, and
+re-evaluating the updater story for Windows at the same time.
 
 ## Future: code signing
 

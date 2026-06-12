@@ -26,9 +26,17 @@ frequently.
 
 ## Install
 
-The app is distributed as an unsigned, gzip-tarred `.app` bundle (Apple
-Silicon Macs). No App Store, no installer — just download, unarchive,
-drag, and open.
+Cairn is distributed **unsigned** — no App Store, no installer wizard on
+macOS. Pick your platform below.
+
+**Download the latest build:**
+<https://github.com/Ray-Gochuico/Cairn/releases/latest>
+
+---
+
+### macOS (Apple Silicon)
+
+Grab the file named `Cairn_<version>_aarch64.app.tar.gz`.
 
 > **Why `.app.tar.gz` (and not `.dmg` or `.app.zip`)?** Two reasons.
 > First, `bundle_dmg.sh` (Tauri's DMG bundler) fails on macOS 26 — its
@@ -42,13 +50,6 @@ drag, and open.
 > artifact. macOS Archive Utility unarchives `.tar.gz` on double-click,
 > same as a `.zip`.
 
-**Download the latest build:**
-<https://github.com/Ray-Gochuico/Cairn/releases/latest>
-
-Grab the file named `Cairn_<version>_aarch64.app.tar.gz`.
-
-**Then:**
-
 1. Double-click the downloaded `.app.tar.gz` to unarchive it. macOS
    produces `Cairn.app` in the same folder.
 2. Drag `Cairn.app` into the `Applications` folder.
@@ -59,6 +60,10 @@ Grab the file named `Cairn_<version>_aarch64.app.tar.gz`.
    been altered since download, and your click records consent). macOS
    remembers the approval, so every launch after the first one is a normal
    double-click.
+
+   On **macOS 15 Sequoia and later**, if the "Open" button doesn't appear
+   in the dialog, go to **System Settings → Privacy & Security** and click
+   **"Open Anyway"** next to the Cairn entry.
 
 > **Advanced — only if you trust the source.** You *can* clear Gatekeeper
 > from Terminal instead:
@@ -73,20 +78,43 @@ Grab the file named `Cairn_<version>_aarch64.app.tar.gz`.
 > downloaded the release yourself from the official link above and trust it.
 > The right-click → Open flow in step 3 is safer and just as permanent.
 
+**Updates (macOS):** use **Settings → Updates → Check for updates** inside
+the app. The in-app updater downloads and installs the new version for you.
+
+---
+
+### Windows (64-bit)
+
+Grab the file named `Cairn_<version>_x64-setup.exe`.
+
+1. Run the downloaded `Cairn_<version>_x64-setup.exe`.
+2. Windows SmartScreen may show **"Windows protected your PC"** because the
+   installer is unsigned. Click **"More info"**, then **"Run anyway"**. This
+   is a one-time prompt — Windows remembers the approval for future launches.
+3. Follow the installer prompts. If prompted to install the **WebView2
+   runtime**, allow it — most Windows 10/11 PCs already have it, but it is
+   required for the app to run.
+
+**Updates (Windows):** there is **no in-app updater for Windows yet**. To
+update, download the new installer from the
+[Releases page](https://github.com/Ray-Gochuico/Cairn/releases) and run it.
+**Watch or star the repo** to get notified of new releases.
+
+---
+
 ### Why the security warning?
 
 Cairn is distributed **unsigned** because it's a personal-finance side
-project, not commercial software — paying $99/yr for an Apple Developer
-account just so a handful of friends can install it isn't worth it. macOS
-shows a one-time scary "unidentified developer" dialog the first time you
-open any unsigned app from outside the App Store. After approving once, the
-dialog never appears again. The app itself is the same code you can read in
-this repo; nothing is hidden by the signing absence.
+project, not commercial software. macOS shows a one-time "unidentified
+developer" dialog; Windows shows a one-time SmartScreen prompt. After
+approving once, neither warning appears again. The app itself is the same
+code you can read in this repo; nothing is hidden by the signing absence.
 
 If/when Cairn ever scales beyond friends, code signing is a multi-step
 project, not a one-liner: enroll in the Apple Developer Program ($99/yr),
 issue a Developer ID Application certificate, set `signingIdentity` in
-`tauri.conf.json`, then notarize and staple the build. The steps are
+`tauri.conf.json`, then notarize and staple the build. Windows code-signing
+(e.g. Azure Trusted Signing) is a separate future option. The steps are
 listed in `src-tauri/SIGNING.md`.
 
 ## Privacy
@@ -102,7 +130,9 @@ mirrored inside the app at **Settings → Privacy & data**.
 ### Where your data lives
 
 Everything Cairn knows — your accounts, transactions, settings, and
-price cache — lives in a single SQLite file on this Mac at:
+price cache — lives in a single SQLite file on your device.
+
+**macOS:**
 
 ```
 ~/Library/Application Support/com.raymondgochuico.cairn/finance.db
@@ -112,6 +142,16 @@ The parent directory's permissions are `drwx------` (owner-only), so
 no other macOS user on the same machine can read it. Settings →
 Privacy & data has a **Show in Finder** button that opens the folder
 for you.
+
+**Windows:**
+
+```
+%APPDATA%\com.raymondgochuico.cairn\finance.db
+```
+
+(`%APPDATA%` expands to `C:\Users\<you>\AppData\Roaming` on a typical
+install.) You can paste the path directly into File Explorer's address
+bar to open the folder.
 
 ### What network calls happen
 
@@ -134,12 +174,14 @@ opt-in calls still works.
 ### Encryption at rest
 
 Cairn does not currently implement its own SQLite encryption (that's
-on the v1.1 roadmap). macOS file-mode permissions protect the file
-from other users on the same machine, but a thief who pulls the disk
-out of an unlocked Mac could read the data in plaintext.
+on the v1.1 roadmap). OS-level file permissions protect the file from
+other users on the same machine, but a thief who pulls the disk out of
+an unlocked device could read the data in plaintext.
 
-The recommended safeguard is **macOS FileVault**, which encrypts the
-entire disk with your login password:
+The recommended safeguard is full-disk encryption, which encrypts the
+entire disk with your login credentials:
+
+**macOS — FileVault:**
 
 > *System Settings → Privacy & Security → FileVault*
 
@@ -147,6 +189,16 @@ FileVault is on by default for new Macs since macOS 11, but is **not**
 retroactively enabled on machines that were upgraded from earlier
 versions. If you imported a transaction history with sensitive
 balances, take 30 seconds to verify FileVault is on.
+
+**Windows — BitLocker / Device encryption:**
+
+> *Settings → Privacy & security → Device encryption*
+> (or search "BitLocker" in Start for the full BitLocker management panel)
+
+Device encryption is on by default on modern Windows 11 hardware signed
+in with a Microsoft account. BitLocker (available on Windows 10/11 Pro)
+provides the same protection with more management options. Verify it is
+enabled if you store sensitive financial data on the machine.
 
 ## Status
 
@@ -176,6 +228,10 @@ The refresh cadence (every launch / daily / weekly / manual) is set on
 entirely — opt out and the pill still surfaces the timestamp, but
 never nags. The "Refresh now" button there triggers an immediate price
 refresh from Yahoo Finance regardless of the chosen cadence.
+
+## Feedback
+
+Found a bug? Open an issue: <https://github.com/Ray-Gochuico/Cairn/issues>
 
 ## Development
 
@@ -227,7 +283,7 @@ enough.
 
 ## Tech stack
 
-- Tauri 2.x (Rust shell, macOS-first; Windows wired but not the primary ship target)
+- Tauri 2.x (Rust shell, macOS Apple Silicon + Windows x64)
 - React 19 + TypeScript + Vite 7
 - Tailwind CSS v3 + shadcn/ui (slate base, New York style)
 - Radix UI primitives (Dialog, Popover) + lucide-react icons + next-themes (light / dark / system)
