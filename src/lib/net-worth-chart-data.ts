@@ -1,10 +1,9 @@
 import {
-  absDays,
-  bucketSnapshotsByClosestDate,
+  bucketEndFor,
   type Granularity,
   type TimeWindow,
 } from '@/lib/snapshot-bucketing';
-import { bucketAssetSnapshots } from '@/lib/asset-snapshot-bucketing';
+import { assetValuesAsOf } from '@/lib/asset-snapshot-bucketing';
 import { loanBalanceHistory } from '@/lib/loan-history';
 import { entityKey, parseEntityKey } from '@/lib/entity-key';
 import type {
@@ -17,33 +16,6 @@ import type {
 } from '@/types/schema';
 
 const MAX_BUCKETS = 90;
-
-/**
- * Last day of period containing `dateIso`, per granularity. Mirrors the
- * private `bucketEndFor` in `src/lib/snapshot-bucketing.ts` and
- * `src/lib/loan-history.ts`. Re-implemented locally because neither file
- * exports it — keeping the two existing modules untouched.
- */
-function bucketEndFor(dateIso: string, g: Granularity): string {
-  const d = new Date(dateIso + 'T00:00:00Z');
-  if (g === 'DAY') return dateIso;
-  if (g === 'WEEK') {
-    const day = d.getUTCDay();
-    d.setUTCDate(d.getUTCDate() + (6 - day)); // Saturday
-    return d.toISOString().slice(0, 10);
-  }
-  if (g === 'MONTH') {
-    const end = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
-    return end.toISOString().slice(0, 10);
-  }
-  if (g === 'QUARTER') {
-    const q = Math.floor(d.getUTCMonth() / 3);
-    const end = new Date(Date.UTC(d.getUTCFullYear(), q * 3 + 3, 0));
-    return end.toISOString().slice(0, 10);
-  }
-  // YEAR
-  return `${d.getUTCFullYear()}-12-31`;
-}
 
 export interface NetWorthChartRow {
   bucketEnd: string;
@@ -73,19 +45,28 @@ export interface NetWorthChartInput {
  * Build the per-bucket row array consumed by `NetWorthTimeSeriesChart`'s
  * `<ComposedChart data=...>` prop.
  *
- * The bucket spine is the union of every snapshot date attached to a
- * selected entity (account_snapshots + asset_value_snapshots), bucketed
- * per granularity, filtered to >= cutoff. Loans don't contribute discrete
- * snapshot dates — their values are filled in at whatever buckets already
- * exist from the asset side. If selection includes ONLY loans and no
- * snapshots, the spine falls back to the last 12 buckets ending at today.
+ * As-of semantics over a CONTIGUOUS spine (spec §5.1):
  *
- * Per-bucket values:
- *   - account → bucketSnapshots' carry-forward series
- *   - property/vehicle → bucketAssetSnapshots (latest snapshot ≤ bucketEnd,
- *     or currentEstimatedValue fallback)
- *   - loan → loanBalanceHistory at that bucketEnd (negated so the bar
- *     stacks downward)
+ * The spine is every consecutive bucket end from
+ * max(cutoff, earliest observation among selected entities) through the
+ * bucket containing `today` — no gaps, so a categorical x-axis is
+ * time-honest. Observation starts: accounts → first snapshot;
+ * property/vehicle → min(first asset snapshot, purchaseDate). Loans and
+ * estimate-only assets don't define a start; if ONLY those are selected
+ * the spine falls back to the last 12 buckets ending at today.
+ *
+ * Per-bucket values are AS-OF — the latest observation ≤ bucketEnd, never
+ * a later one (no look-ahead). Snapshots before the cutoff still carry IN
+ * to the baseline bucket, an entity is 0 before its first observation,
+ * and a stale entity's last value persists through the newest bucket (the
+ * "current" reading is window-stable):
+ *   - account → latest account snapshot ≤ bucketEnd (same-date duplicates:
+ *     higher id, i.e. later insert, wins)
+ *   - property/vehicle → assetValuesAsOf (purchase anchoring 0 →
+ *     purchasePrice → snapshots; flat currentEstimatedValue only for
+ *     entities with no snapshots at all)
+ *   - loan → loanBalanceHistory back-walk anchored at `today` (negated so
+ *     the bar stacks downward)
  *
  * Returned rows are sorted ascending by bucketEnd and capped at the most
  * recent MAX_BUCKETS entries (matches InvestmentTimeSeriesChart).
@@ -145,122 +126,122 @@ export function buildNetWorthChartData(
   }
   if (resolved.length === 0) return [];
 
-  // ----- Build the bucket spine -----
-  // Collect all snapshot dates from selected accounts + selected
-  // properties/vehicles, filter by cutoff, bucket-end-ify, dedupe + sort.
+  // ----- Observation starts (spec §5.1) -----
+  // The spine begins at the first date any selected entity has real data:
+  // accounts → first snapshot; property/vehicle → min(first snapshot,
+  // purchaseDate). Estimate-only entities (no snapshots, no purchaseDate)
+  // and loans don't define a start — they render across whatever spine the
+  // others establish (or the synthetic fallback below).
+  const starts: string[] = [];
   const selectedAccountIds = new Set(
     resolved.filter((r) => r.kind === 'account').map((r) => r.id),
   );
-  const selectedAssetPairs = new Set(
-    resolved
-      .filter((r) => r.kind === 'property' || r.kind === 'vehicle')
-      .map(
-        (r) => `${r.kind === 'property' ? 'PROPERTY' : 'VEHICLE'}:${r.id}`,
-      ),
-  );
-
-  const bucketEndSet = new Set<string>();
+  const firstSnapByAccount = new Map<number, string>();
   for (const s of snapshots) {
     if (!selectedAccountIds.has(s.accountId)) continue;
-    if (cutoff && s.snapshotDate < cutoff) continue;
-    bucketEndSet.add(bucketEndFor(s.snapshotDate, granularity));
+    const prev = firstSnapByAccount.get(s.accountId);
+    if (!prev || s.snapshotDate < prev) firstSnapByAccount.set(s.accountId, s.snapshotDate);
   }
-  for (const s of assetValueSnapshots) {
-    const pair = `${s.ownerType}:${s.ownerId}`;
-    if (!selectedAssetPairs.has(pair)) continue;
-    if (cutoff && s.snapshotDate < cutoff) continue;
-    bucketEndSet.add(bucketEndFor(s.snapshotDate, granularity));
+  starts.push(...firstSnapByAccount.values());
+  for (const r of resolved) {
+    if (r.kind !== 'property' && r.kind !== 'vehicle') continue;
+    const ownerType = r.kind === 'property' ? 'PROPERTY' : 'VEHICLE';
+    let first: string | null = null;
+    for (const s of assetValueSnapshots) {
+      if (s.ownerType !== ownerType || s.ownerId !== r.id) continue;
+      if (first === null || s.snapshotDate < first) first = s.snapshotDate;
+    }
+    const purchase = r.kind === 'property' ? r.property?.purchaseDate : r.vehicle?.purchaseDate;
+    const start = [first, purchase ?? null].filter((d): d is string => d != null).sort()[0];
+    if (start) starts.push(start);
   }
 
-  // Loans-only selection: fall back to a synthesized 12-bucket spine
-  // ending at today so the chart still has somewhere to render.
-  if (bucketEndSet.size === 0) {
-    bucketEndSet.add(bucketEndFor(today, granularity));
-    // Walk backwards: 11 prior buckets at the granularity step.
+  // ----- Contiguous spine: window start → today, every bucket present -----
+  let spineStart: string;
+  if (starts.length === 0) {
+    // Loans-only / estimate-only selection: synthesize 12 buckets ending today.
     let cursor = bucketEndFor(today, granularity);
     for (let i = 0; i < 11; i++) {
-      cursor = prevBucketEnd(cursor, granularity);
-      if (cutoff && cursor < cutoff) break;
-      bucketEndSet.add(cursor);
+      const prev = prevBucketEnd(cursor, granularity);
+      if (cutoff && prev < cutoff) break;
+      cursor = prev;
     }
+    spineStart = cursor;
+  } else {
+    const earliest = [...starts].sort()[0];
+    spineStart = cutoff && cutoff > earliest ? cutoff : earliest;
+  }
+  const todayEnd = bucketEndFor(today, granularity);
+  const bucketEnds: string[] = [];
+  let cur = bucketEndFor(spineStart, granularity);
+  const SAFETY_CAP = 10_000;
+  while (cur <= todayEnd && bucketEnds.length < SAFETY_CAP) {
+    bucketEnds.push(cur);
+    cur = nextBucketEnd(cur, granularity);
+  }
+  const spine = bucketEnds.slice(-MAX_BUCKETS);
+  if (spine.length === 0) return [];
+  const from = spine[0];
+  const to = spine[spine.length - 1];
+
+  // ----- Per-account as-of series (carry-in included; 0 before first) -----
+  const accountValuesByKey = new Map<string, number[]>();
+  for (const accountId of selectedAccountIds) {
+    const sorted = snapshots
+      .filter((s) => s.accountId === accountId)
+      // Ascending id breaks same-date ties so a later insert (correction)
+      // wins — mirrors assetValuesAsOf's convention.
+      .sort(
+        (a, b) =>
+          a.snapshotDate.localeCompare(b.snapshotDate) ||
+          (a.id ?? 0) - (b.id ?? 0),
+      );
+    const series: number[] = new Array(spine.length);
+    let j = 0;
+    let last: number | null = null;
+    for (let i = 0; i < spine.length; i++) {
+      while (j < sorted.length && sorted[j].snapshotDate <= spine[i]) {
+        last = sorted[j].totalValue;
+        j++;
+      }
+      series[i] = last ?? 0;
+    }
+    accountValuesByKey.set(entityKey('account', accountId), series);
   }
 
-  // Always include a bucket at today so the chart's right edge lines up
-  // with the user's mental "now" — same nicety as InvestmentTimeSeriesChart's
-  // implicit behavior (its snapshots typically reach today already).
-  bucketEndSet.add(bucketEndFor(today, granularity));
-
-  const bucketEnds = [...bucketEndSet].sort().slice(-MAX_BUCKETS);
-  if (bucketEnds.length === 0) return [];
-
-  // Cap loan balance walks to start at the earliest bucket.
-  const from = bucketEnds[0];
-  const to = bucketEnds[bucketEnds.length - 1];
-
-  // ----- Per-account closest-date series via bucketSnapshotsByClosestDate -----
-  // The helper builds its own bucketEnds from the input snapshot dates,
-  // which may differ from OUR bucketEnds (e.g., the spine includes a
-  // "today" bucket beyond the latest snapshot, or starts earlier when
-  // loans-only selection synthesizes a 12-bucket spine). We align each
-  // account's series to OUR bucketEnds by picking the value at the
-  // closest series bucketEnd — same closest-date semantic, just nested.
-  const accountValuesByKey = new Map<string, number[]>();
-  if (selectedAccountIds.size > 0) {
-    const filtered = snapshots.filter(
-      (s) =>
-        selectedAccountIds.has(s.accountId) &&
-        (cutoff === null || s.snapshotDate >= cutoff),
+  // ----- Per-asset as-of series (purchase anchoring) -----
+  const assetValuesByKey = new Map<string, number[]>();
+  for (const r of resolved) {
+    if (r.kind !== 'property' && r.kind !== 'vehicle') continue;
+    const ownerType = r.kind === 'property' ? 'PROPERTY' : 'VEHICLE';
+    const entity = r.kind === 'property' ? r.property! : r.vehicle!;
+    assetValuesByKey.set(
+      r.key,
+      assetValuesAsOf(assetValueSnapshots, ownerType, r.id, spine, {
+        purchaseDate: entity.purchaseDate,
+        purchasePrice: entity.purchasePrice,
+        currentEstimatedValue: entity.currentEstimatedValue,
+      }),
     );
-    const series = bucketSnapshotsByClosestDate(
-      filtered,
-      granularity,
-      MAX_BUCKETS,
-    );
-    for (const accountId of selectedAccountIds) {
-      const raw = series.valuesByAccount.get(accountId) ?? [];
-      const aligned: number[] = new Array(bucketEnds.length);
-      for (let i = 0; i < bucketEnds.length; i++) {
-        if (series.bucketEnds.length === 0) {
-          aligned[i] = 0;
-          continue;
-        }
-        // Closest series bucketEnd to OUR bucketEnd; later wins ties to
-        // match the underlying helper's tiebreaker.
-        const target = bucketEnds[i];
-        let bestIdx = 0;
-        let bestDistance = Number.POSITIVE_INFINITY;
-        let bestEnd = '';
-        for (let j = 0; j < series.bucketEnds.length; j++) {
-          const end = series.bucketEnds[j];
-          const d = absDays(end, target);
-          if (d < bestDistance || (d === bestDistance && end > bestEnd)) {
-            bestDistance = d;
-            bestIdx = j;
-            bestEnd = end;
-          }
-        }
-        aligned[i] = raw[bestIdx] ?? 0;
-      }
-      accountValuesByKey.set(entityKey('account', accountId), aligned);
-    }
   }
 
   // ----- Per-loan back-walk via loanBalanceHistory -----
   const loanValuesByKey = new Map<string, number[]>();
   for (const r of resolved) {
     if (r.kind !== 'loan' || !r.loan) continue;
-    const walks = loanBalanceHistory(r.loan, from, to, granularity);
-    // Align walks to bucketEnds with carry-forward semantics — walks
+    // Thread the injected clock so the anchor bucket (= currentBalance)
+    // is placed by OUR `today`, not the real wall clock.
+    const walks = loanBalanceHistory(r.loan, from, to, granularity, today);
+    // Align walks to the spine with carry-forward semantics — walks
     // already produces one entry per bucketEnd in [from, to] per its
-    // contract, but those bucket ends are generated by the same logic
-    // as ours so they should match 1:1. We still defensively look up
-    // by date.
+    // contract, and the spine is generated by the same bucket-end logic
+    // so they should match 1:1. We still defensively look up by date.
     const byEnd = new Map<string, number>();
     for (const w of walks) byEnd.set(w.bucketEnd, w.balance);
-    const series: number[] = new Array(bucketEnds.length);
+    const series: number[] = new Array(spine.length);
     let last = r.loan.currentBalance;
-    for (let i = 0; i < bucketEnds.length; i++) {
-      const v = byEnd.get(bucketEnds[i]);
+    for (let i = 0; i < spine.length; i++) {
+      const v = byEnd.get(spine[i]);
       if (v != null) {
         last = v;
         series[i] = v;
@@ -273,8 +254,8 @@ export function buildNetWorthChartData(
 
   // ----- Build the row array -----
   const rows: NetWorthChartRow[] = [];
-  for (let i = 0; i < bucketEnds.length; i++) {
-    const bEnd = bucketEnds[i];
+  for (let i = 0; i < spine.length; i++) {
+    const bEnd = spine[i];
     const row: NetWorthChartRow = { bucketEnd: bEnd, netWorth: 0 };
     let assets = 0;
     let liabilities = 0;
@@ -284,33 +265,17 @@ export function buildNetWorthChartData(
         const v = accountValuesByKey.get(r.key)?.[i] ?? 0;
         row[r.key] = v;
         assets += v;
-      } else if (r.kind === 'property' && r.property) {
-        const v = bucketAssetSnapshots(
-          assetValueSnapshots,
-          'PROPERTY',
-          r.id,
-          [bEnd],
-          granularity,
-          r.property.currentEstimatedValue,
-        )[0];
-        row[r.key] = v;
-        assets += v;
-      } else if (r.kind === 'vehicle' && r.vehicle) {
-        const v = bucketAssetSnapshots(
-          assetValueSnapshots,
-          'VEHICLE',
-          r.id,
-          [bEnd],
-          granularity,
-          r.vehicle.currentEstimatedValue,
-        )[0];
+      } else if (r.kind === 'property' || r.kind === 'vehicle') {
+        const v = assetValuesByKey.get(r.key)![i];
         row[r.key] = v;
         assets += v;
       } else if (r.kind === 'loan' && r.loan) {
         const v = loanValuesByKey.get(r.key)?.[i] ?? 0;
         // Stack downward — recharts stacks negative values below zero
-        // separately from positive ones (controlled by stackId).
-        row[r.key] = -v;
+        // separately from positive ones (controlled by stackId). Guard
+        // v === 0 (pre-origination buckets): plain negation would store
+        // -0, which breaks Object.is/toBe(0) checks downstream.
+        row[r.key] = v === 0 ? 0 : -v;
         liabilities += v;
       }
     }
@@ -320,6 +285,38 @@ export function buildNetWorthChartData(
   }
 
   return rows;
+}
+
+/**
+ * Step from one bucket-end to the next, per granularity. Used to enumerate
+ * the contiguous spine. Mirrors the private `nextBucketEnd` in
+ * `src/lib/loan-history.ts` so spine buckets and loan-walk buckets are
+ * generated by identical logic and match 1:1.
+ */
+function nextBucketEnd(bucketEndIso: string, g: Granularity): string {
+  const d = new Date(bucketEndIso + 'T00:00:00Z');
+  if (g === 'DAY') {
+    d.setUTCDate(d.getUTCDate() + 1);
+    return d.toISOString().slice(0, 10);
+  }
+  if (g === 'WEEK') {
+    // bucketEnd is a Saturday; add 7 days.
+    d.setUTCDate(d.getUTCDate() + 7);
+    return d.toISOString().slice(0, 10);
+  }
+  if (g === 'MONTH') {
+    // bucketEnd is last day of month; first of next month is +1 day; bucket-end of that is last day of next month.
+    const end = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 2, 0));
+    return end.toISOString().slice(0, 10);
+  }
+  if (g === 'QUARTER') {
+    // bucketEnd is last day of quarter; next quarter ends three months later.
+    const m = d.getUTCMonth(); // 2, 5, 8, or 11
+    const end = new Date(Date.UTC(d.getUTCFullYear(), m + 4, 0));
+    return end.toISOString().slice(0, 10);
+  }
+  // YEAR
+  return `${d.getUTCFullYear() + 1}-12-31`;
 }
 
 /**

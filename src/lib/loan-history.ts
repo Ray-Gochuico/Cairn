@@ -133,6 +133,10 @@ function bucketEndFor(dateIso: string, g: Granularity): string {
 /**
  * Step from one bucket-end to the next, per granularity. Used to enumerate
  * bucket ends between `fromISO` and `toISO`.
+ *
+ * MIRROR CONTRACT: src/lib/net-worth-chart-data.ts keeps a byte-identical
+ * copy so the loan walk's bucket ends align 1:1 with the chart spine — if
+ * you change this, change that copy too.
  */
 function nextBucketEnd(bucketEndIso: string, g: Granularity): string {
   const d = new Date(bucketEndIso + 'T00:00:00Z');

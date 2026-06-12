@@ -81,28 +81,6 @@ function mkProperty(
   };
 }
 
-function mkVehicle(
-  id: number,
-  name: string,
-  overrides: Partial<Vehicle> = {},
-): Vehicle {
-  return {
-    id,
-    householdId: 1,
-    ownerPersonId: null,
-    name,
-    year: 2020,
-    make: 'Toyota',
-    model: 'Camry',
-    purchaseDate: null,
-    purchasePrice: null,
-    currentEstimatedValue: 22000,
-    linkedLoanId: null,
-    excludedFromNetWorth: false,
-    ...overrides,
-  };
-}
-
 function mkLoan(
   id: number,
   name: string,
@@ -234,54 +212,6 @@ describe('buildNetWorthChartData', () => {
     }
   });
 
-  it('prefers asset value snapshot over currentEstimatedValue when both exist', () => {
-    const property = mkProperty(10, 'Home', { currentEstimatedValue: 400000 });
-    const assetSnaps: AssetValueSnapshot[] = [
-      { id: 1, ownerType: 'PROPERTY', ownerId: 10, snapshotDate: '2026-03-15', value: 425000 },
-    ];
-    const rows = buildNetWorthChartData({
-      accounts: [],
-      snapshots: [],
-      properties: [property],
-      vehicles: [],
-      loans: [],
-      assetValueSnapshots: assetSnaps,
-      selectedKeys: new Set([entityKey('property', 10)]),
-      granularity: 'MONTH',
-      cutoff: null,
-      today: '2026-05-31',
-    });
-    const last = rows[rows.length - 1];
-    expect(last[entityKey('property', 10)]).toBe(425000);
-  });
-
-  it('anchors a March bucket with an April 1 snapshot if it is the closest data point', () => {
-    // March 23 (100) + April 1 (200) account snapshots. March bucket end =
-    // March 31. |Mar 23 − Mar 31| = 8, |Apr 1 − Mar 31| = 1 → April 1 wins
-    // the March bucket. Pins the closest-date sampling rule for the
-    // net-worth chart's account series.
-    const rows = buildNetWorthChartData({
-      accounts: [mkAccount(1, 'Brokerage')],
-      snapshots: [
-        mkSnapshot(1, 1, '2026-03-23', 100),
-        mkSnapshot(2, 1, '2026-04-01', 200),
-      ],
-      properties: [],
-      vehicles: [],
-      loans: [],
-      assetValueSnapshots: [],
-      selectedKeys: new Set([entityKey('account', 1)]),
-      granularity: 'MONTH',
-      cutoff: null,
-      today: '2026-04-30',
-    });
-    const marchRow = rows.find((r) =>
-      typeof r.bucketEnd === 'string' && r.bucketEnd.startsWith('2026-03'),
-    );
-    expect(marchRow).toBeDefined();
-    expect(marchRow![entityKey('account', 1)]).toBe(200);
-  });
-
   it('drops selected keys whose entities have been deleted', () => {
     const rows = buildNetWorthChartData({
       accounts: [],
@@ -296,5 +226,148 @@ describe('buildNetWorthChartData', () => {
       today: '2026-05-15',
     });
     expect(rows).toEqual([]);
+  });
+});
+
+describe('buildNetWorthChartData — as-of semantics (spec §5.1)', () => {
+  const base = {
+    properties: [] as Property[],
+    vehicles: [] as Vehicle[],
+    loans: [] as Loan[],
+    assetValueSnapshots: [] as AssetValueSnapshot[],
+    granularity: 'MONTH' as const,
+    today: '2026-06-12',
+  };
+
+  it('spine starts at the first observation bucket (no pre-data buckets)', () => {
+    const rows = buildNetWorthChartData({
+      ...base,
+      accounts: [mkAccount(1, 'Brokerage')],
+      snapshots: [mkSnapshot(1, 1, '2026-03-10', 100000)],
+      selectedKeys: new Set([entityKey('account', 1)]),
+      cutoff: '2026-01-01',
+    });
+    expect(rows[0].bucketEnd).toBe('2026-03-31');
+    expect(rows[0]['account:1']).toBe(100000);
+  });
+
+  it('carry-in: a pre-cutoff snapshot values the baseline bucket', () => {
+    const rows = buildNetWorthChartData({
+      ...base,
+      accounts: [mkAccount(1, 'Brokerage')],
+      snapshots: [
+        mkSnapshot(1, 1, '2025-11-20', 90000),
+        mkSnapshot(2, 1, '2026-04-10', 110000),
+      ],
+      selectedKeys: new Set([entityKey('account', 1)]),
+      cutoff: '2026-01-01',
+    });
+    expect(rows[0].bucketEnd).toBe('2026-01-31');
+    expect(rows[0]['account:1']).toBe(90000);
+  });
+
+  it('stale account: last value persists into the latest bucket (current is window-stable)', () => {
+    const make = (cutoff: string | null) =>
+      buildNetWorthChartData({
+        ...base,
+        accounts: [mkAccount(1, 'Old 401k')],
+        snapshots: [mkSnapshot(1, 1, '2025-01-15', 50000)],
+        selectedKeys: new Set([entityKey('account', 1)]),
+        cutoff,
+      });
+    const short = make('2026-03-12');
+    const all = make(null);
+    expect(short[short.length - 1]['account:1']).toBe(50000);
+    expect(all[all.length - 1]['account:1']).toBe(50000);
+  });
+
+  it('spine is contiguous month ends from window start through today', () => {
+    const rows = buildNetWorthChartData({
+      ...base,
+      accounts: [mkAccount(1, 'A')],
+      snapshots: [mkSnapshot(1, 1, '2026-01-10', 1000), mkSnapshot(2, 1, '2026-05-10', 2000)],
+      selectedKeys: new Set([entityKey('account', 1)]),
+      cutoff: '2026-01-01',
+    });
+    expect(rows.map((r) => r.bucketEnd)).toEqual([
+      '2026-01-31', '2026-02-28', '2026-03-31', '2026-04-30', '2026-05-31', '2026-06-30',
+    ]);
+    expect(rows.map((r) => r['account:1'])).toEqual([1000, 1000, 1000, 1000, 2000, 2000]);
+  });
+
+  it('WEEK spine is consecutive Saturdays from the first observation through today', () => {
+    // WEEK is the runtime default granularity — pin the spine at it too.
+    const rows = buildNetWorthChartData({
+      ...base,
+      granularity: 'WEEK',
+      accounts: [mkAccount(1, 'A')],
+      snapshots: [mkSnapshot(1, 1, '2026-05-20', 1000)],
+      selectedKeys: new Set([entityKey('account', 1)]),
+      cutoff: '2026-05-01',
+    });
+    // bucketEndFor(today=2026-06-12, WEEK) = Saturday 2026-06-13.
+    expect(rows.map((r) => r.bucketEnd)).toEqual([
+      '2026-05-23', '2026-05-30', '2026-06-06', '2026-06-13',
+    ]);
+    expect(rows.map((r) => r['account:1'])).toEqual([1000, 1000, 1000, 1000]);
+  });
+
+  it('sign-flip regression: money moving between tracked accounts nets to ~0 delta', () => {
+    const rows = buildNetWorthChartData({
+      ...base,
+      accounts: [mkAccount(1, 'Checking'), mkAccount(2, 'New brokerage')],
+      snapshots: [
+        mkSnapshot(1, 1, '2026-01-05', 100000),
+        mkSnapshot(2, 1, '2026-03-05', 0),
+        mkSnapshot(3, 2, '2026-03-05', 100000),
+      ],
+      selectedKeys: new Set([entityKey('account', 1), entityKey('account', 2)]),
+      cutoff: '2026-01-01',
+    });
+    expect(rows[0].netWorth).toBe(100000);
+    // Account 2's first snapshot is 2026-03-05 — its baseline bucket is 0
+    // (0-before-first at the builder level, not just in the helpers).
+    expect(rows[0]['account:2']).toBe(0);
+    expect(rows[rows.length - 1].netWorth).toBe(100000);
+  });
+
+  it('property with purchase info steps 0 → purchasePrice → snapshot', () => {
+    const rows = buildNetWorthChartData({
+      ...base,
+      accounts: [mkAccount(1, 'A')],
+      snapshots: [mkSnapshot(1, 1, '2026-01-10', 1000)],
+      // purchasePrice deliberately differs from mkProperty's default
+      // currentEstimatedValue (400000) so an anchor-field mixup can't pass.
+      properties: [mkProperty(7, 'Home', { purchaseDate: '2026-03-15', purchasePrice: 395000 })],
+      assetValueSnapshots: [
+        { id: 1, ownerType: 'PROPERTY', ownerId: 7, snapshotDate: '2026-05-10', value: 410000 },
+      ],
+      selectedKeys: new Set([entityKey('account', 1), entityKey('property', 7)]),
+      cutoff: '2026-01-01',
+    });
+    const byEnd = Object.fromEntries(rows.map((r) => [r.bucketEnd, r['property:7']]));
+    expect(byEnd['2026-02-28']).toBe(0);
+    expect(byEnd['2026-03-31']).toBe(395000);
+    expect(byEnd['2026-05-31']).toBe(410000);
+  });
+
+  it('loan back-walk receives the injected today (anchor placed by injected clock, not the real one)', () => {
+    // today is injected as 2025-01-15 — far in the real clock's past. If the
+    // builder threads it, the loan anchor is the last bucket ≤ 2025-01-15
+    // (2024-12-31 = currentBalance) and earlier buckets walk HIGHER; if the
+    // builder leaks the real clock, 2024-12-31 back-walks above currentBalance
+    // and this test fails.
+    const rows = buildNetWorthChartData({
+      ...base,
+      today: '2025-01-15',
+      accounts: [mkAccount(1, 'A')],
+      snapshots: [mkSnapshot(1, 1, '2024-08-10', 1000)],
+      loans: [mkLoan(9, 'Mortgage')],
+      selectedKeys: new Set([entityKey('account', 1), entityKey('loan', 9)]),
+      cutoff: '2024-07-01',
+    });
+    const byEnd = Object.fromEntries(rows.map((r) => [r.bucketEnd, r['loan:9']]));
+    expect(byEnd['2024-12-31']).toBe(-350000);            // anchor bucket: currentBalance verbatim
+    expect(byEnd['2024-11-30'] as number).toBeLessThan(-350000); // one month back-walked → higher balance → more negative
   });
 });
