@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -292,5 +292,44 @@ describe('DataSection — browser mode (no Tauri runtime)', () => {
     expect(screen.getByRole('button', { name: /save a copy/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /reveal backups/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /restore from a file/i })).toBeDisabled();
+  });
+});
+
+describe('DataSection — platform-aware copy (distribution plan A3)', () => {
+  // Real WebView2 UA shape — always contains "Windows NT".
+  const WEBVIEW2_UA =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0';
+
+  afterEach(() => {
+    // tests/setup.ts restores mocks but NOT stubbed globals.
+    vi.unstubAllGlobals();
+  });
+
+  it('labels the reveal button "Reveal backups in Finder" on macOS (default UA)', async () => {
+    renderSection();
+    expect(
+      screen.getByRole('button', { name: 'Reveal backups in Finder' }),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(mList).toHaveBeenCalled());
+  });
+
+  it('labels the reveal button "Reveal backups in File Explorer" on Windows', async () => {
+    vi.stubGlobal('navigator', { userAgent: WEBVIEW2_UA });
+    renderSection();
+    expect(
+      screen.getByRole('button', { name: 'Reveal backups in File Explorer' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/finder/i)).toBeNull();
+    await waitFor(() => expect(mList).toHaveBeenCalled());
+  });
+
+  it('describes the data location platform-neutrally ("this computer", never "this Mac")', async () => {
+    renderSection();
+    expect(
+      screen.getByText(/your data lives only on this computer/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/if this\s+computer is lost/i)).toBeInTheDocument();
+    expect(screen.queryByText(/this mac/i)).toBeNull();
+    await waitFor(() => expect(mList).toHaveBeenCalled());
   });
 });
