@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // importing the module under test. These packages have no runtime in vitest;
 // the real flow is exercised by the user in `npm run tauri dev`.
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn() }));
-vi.mock('@tauri-apps/api/path', () => ({ appConfigDir: vi.fn() }));
+vi.mock('@tauri-apps/api/path', () => ({ appConfigDir: vi.fn(), join: vi.fn() }));
 vi.mock('@tauri-apps/plugin-fs', () => ({
   mkdir: vi.fn(),
   readDir: vi.fn(),
@@ -14,7 +14,7 @@ vi.mock('@tauri-apps/plugin-dialog', () => ({ save: vi.fn() }));
 vi.mock('@tauri-apps/plugin-opener', () => ({ revealItemInDir: vi.fn() }));
 
 import { invoke } from '@tauri-apps/api/core';
-import { appConfigDir } from '@tauri-apps/api/path';
+import { appConfigDir, join } from '@tauri-apps/api/path';
 import { mkdir, readDir, remove } from '@tauri-apps/plugin-fs';
 import { save } from '@tauri-apps/plugin-dialog';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
@@ -31,11 +31,27 @@ import {
 
 const mockInvoke = invoke as unknown as ReturnType<typeof vi.fn>;
 const mockAppConfigDir = appConfigDir as unknown as ReturnType<typeof vi.fn>;
+const mockJoin = join as unknown as ReturnType<typeof vi.fn>;
 const mockMkdir = mkdir as unknown as ReturnType<typeof vi.fn>;
 const mockReadDir = readDir as unknown as ReturnType<typeof vi.fn>;
 const mockRemove = remove as unknown as ReturnType<typeof vi.fn>;
 const mockSave = save as unknown as ReturnType<typeof vi.fn>;
 const mockReveal = revealItemInDir as unknown as ReturnType<typeof vi.fn>;
+
+/**
+ * Separator-aware fake for `@tauri-apps/api/path`'s async `join()`: trims
+ * stray separators at segment boundaries (the real implementation normalizes
+ * them) and joins with `sep`. NOTE: a mocked join only proves the module
+ * CALLS the platform-aware API with the right segments — it does not prove
+ * real OS separator behavior. That proof is the A4 Windows-hardware run.
+ */
+function fakeJoin(sep: '/' | '\\') {
+  return async (...parts: string[]): Promise<string> =>
+    parts
+      .map((s, i) => (i === 0 ? s.replace(/[\\/]+$/, '') : s.replace(/^[\\/]+|[\\/]+$/g, '')))
+      .filter((s) => s.length > 0)
+      .join(sep);
+}
 
 beforeEach(() => {
   // resetAllMocks (not clearAllMocks) so a `mockRejectedValue`/`mockResolvedValue`
@@ -45,6 +61,9 @@ beforeEach(() => {
   // Clear any cross-test restore-failure notice left in sessionStorage.
   window.sessionStorage?.clear();
   mockAppConfigDir.mockResolvedValue('/Users/me/Library/Application Support/com.x.cairn');
+  // POSIX-joining fake by default (matches the macOS appConfigDir above); the
+  // Windows-separator suite below overrides both mocks together.
+  mockJoin.mockImplementation(fakeJoin('/'));
   // db_backup/db_restore/db_validate_backup all resolve by default; individual
   // tests override as needed.
   mockInvoke.mockResolvedValue(undefined);
@@ -185,6 +204,51 @@ describe('listBackups', () => {
   it('returns [] when the backups dir does not exist yet (readDir throws)', async () => {
     mockReadDir.mockRejectedValue(new Error('No such file or directory (os error 2)'));
     await expect(listBackups()).resolves.toEqual([]);
+  });
+});
+
+describe('Windows separators (mocked join — proves wiring, not OS behavior)', () => {
+  // The Windows app-config dir Tauri resolves for our bundle identifier.
+  // Trailing backslash on purpose: the join must not double the separator.
+  const WIN_BASE = 'C:\\Users\\me\\AppData\\Roaming\\com.raymondgochuico.cairn\\';
+
+  beforeEach(() => {
+    mockAppConfigDir.mockResolvedValue(WIN_BASE);
+    mockJoin.mockImplementation(fakeJoin('\\'));
+  });
+
+  it('listBackups builds backslash paths from a Windows app-config base', async () => {
+    mockReadDir.mockResolvedValue([
+      { name: 'cairn-20260102-030405.db', isFile: true, isDirectory: false },
+    ]);
+    const [entry] = await listBackups();
+    expect(entry.path).toBe(
+      'C:\\Users\\me\\AppData\\Roaming\\com.raymondgochuico.cairn\\backups\\cairn-20260102-030405.db',
+    );
+    expect(entry.path).not.toContain('/');
+  });
+
+  it('runBackup hands db_backup a backslash dest and returns it', async () => {
+    mockReadDir.mockResolvedValue([]);
+    const dest = await runBackup(new Date('2026-06-02T10:00:00'));
+    expect(dest).toBe(
+      'C:\\Users\\me\\AppData\\Roaming\\com.raymondgochuico.cairn\\backups\\cairn-20260602-100000.db',
+    );
+    expect(dest).not.toContain('/');
+    expect(mockInvoke).toHaveBeenCalledWith(
+      'db_backup',
+      expect.objectContaining({ db: 'sqlite:finance.db', dest }),
+    );
+  });
+
+  it('rotateBackups removes stale backups via backslash paths', async () => {
+    mockReadDir.mockResolvedValue([
+      { name: 'cairn-20260101-000000.db', isFile: true, isDirectory: false },
+      { name: 'cairn-20260102-000000.db', isFile: true, isDirectory: false },
+    ]);
+    await rotateBackups('C:\\base\\backups', 1);
+    expect(mockRemove).toHaveBeenCalledTimes(1);
+    expect(mockRemove.mock.calls[0][0]).toBe('C:\\base\\backups\\cairn-20260101-000000.db');
   });
 });
 
