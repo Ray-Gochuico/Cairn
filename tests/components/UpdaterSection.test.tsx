@@ -10,9 +10,15 @@
 //      (the architectural invariant that prevents an "innocent"
 //      future patch from re-introducing auto-polling).
 //   4. Up-to-date / available / error UI states render correctly.
+//
+// Windows (distribution plan A3): the published `latest.json` has NO
+// `windows-x86_64` key, so `check()` is unreliable there (false "up to
+// date", false error, or phantom update). On Windows the component must
+// never call `check()` at all — it suppresses the entire check UI and
+// points at the Releases page instead. macOS behavior is unchanged.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { readdirSync, readFileSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
@@ -134,6 +140,66 @@ describe('UpdaterSection — manual-only invariant', () => {
     expect(mockOpenUrl).toHaveBeenCalledWith(
       'https://github.com/Ray-Gochuico/Cairn/releases',
     );
+  });
+});
+
+describe('UpdaterSection — Windows (no windows-x86_64 key in latest.json yet)', () => {
+  // Real WebView2 UA shape — always contains "Windows NT".
+  const WEBVIEW2_UA =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    vi.stubGlobal('navigator', { userAgent: WEBVIEW2_UA });
+  });
+
+  afterEach(() => {
+    // tests/setup.ts restores mocks but NOT stubbed globals — unstub here so
+    // the jsdom navigator comes back for the rest of the suite.
+    vi.unstubAllGlobals();
+  });
+
+  it('suppresses the entire check UI and never calls check()', async () => {
+    render(<UpdaterSection />);
+    // The replacement notice renders…
+    expect(
+      screen.getByText(/automatic updates aren't available on windows yet/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/download new versions from the releases page/i),
+    ).toBeInTheDocument();
+    // …and the entire check/affirmative surface is gone, including the
+    // manual-only paragraph that refers to a button that no longer exists.
+    expect(screen.queryByRole('button', { name: /check for updates/i })).toBeNull();
+    expect(screen.queryByText(/last checked/i)).toBeNull();
+    expect(screen.queryByText(/you're up to date/i)).toBeNull();
+    expect(screen.queryByText(/only checks for updates when you click/i)).toBeNull();
+    // Flush the getVersion mount effect, then confirm check() never fired.
+    await waitFor(() => {
+      expect(screen.getByText('1.0.0')).toBeInTheDocument();
+    });
+    expect(mockCheck).not.toHaveBeenCalled();
+  });
+
+  it('still shows the current version (local-only read, no network)', async () => {
+    render(<UpdaterSection />);
+    expect(await screen.findByText('1.0.0')).toBeInTheDocument();
+    expect(screen.getByText(/current version/i)).toBeInTheDocument();
+    expect(mockCheck).not.toHaveBeenCalled();
+  });
+
+  it('keeps the "View all releases" link working', async () => {
+    render(<UpdaterSection />);
+    // fireEvent (not userEvent): navigator is stubbed to a bare object and
+    // userEvent.setup() expects the full jsdom navigator for its clipboard
+    // interception.
+    fireEvent.click(screen.getByRole('button', { name: /view all releases/i }));
+    expect(mockOpenUrl).toHaveBeenCalledWith(
+      'https://github.com/Ray-Gochuico/Cairn/releases',
+    );
+    // Flush the getVersion mount effect so it can't setState after teardown.
+    expect(await screen.findByText('1.0.0')).toBeInTheDocument();
   });
 });
 
