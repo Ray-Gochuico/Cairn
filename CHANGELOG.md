@@ -5,6 +5,34 @@ All notable changes to Cairn are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-06-12
+
+Cairn comes to Windows.
+
+### Added
+
+- **Windows (64-bit) support**: every release now ships a Windows installer
+  (`Cairn_<version>_x64-setup.exe`) alongside the macOS app. Like the macOS
+  build it is unsigned — Windows SmartScreen shows a one-time
+  "More info → Run anyway" prompt on first run. The WebView2 runtime installs
+  automatically if missing.
+- Platform-aware in-app guidance: Settings → Privacy & data, Settings → Data,
+  and the database-recovery screen now show the Windows data path,
+  "File Explorer" labels, and BitLocker / device-encryption advice on Windows
+  (FileVault/Finder remain on macOS).
+
+### Changed
+
+- On Windows, Settings → Updates explains that automatic updates aren't
+  available there yet and links to the Releases page instead of showing a
+  misleading "You're up to date".
+- README install instructions are split into per-platform sections.
+
+### Fixed
+
+- Backup/restore and PDF statement archiving now build file paths with
+  OS-correct separators, making both Windows-safe.
+
 ## [1.0.0] - 2026-06-04
 
 First public release. Cairn is a local-only personal finance tracker for
@@ -67,4 +95,5 @@ stored in a single local SQLite file. No account, no sync, no telemetry.
   calls (Yahoo Finance quote refresh and the updater check) are both
   user-controlled and contain no PII.
 
+[1.0.1]: https://github.com/Ray-Gochuico/Cairn/releases/tag/v1.0.1
 [1.0.0]: https://github.com/Ray-Gochuico/Cairn/releases/tag/v1.0.0

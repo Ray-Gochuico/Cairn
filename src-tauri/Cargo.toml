@@ -1,6 +1,6 @@
 [package]
 name = "finance-app"
-version = "1.0.0"
+version = "1.0.1"
 description = "Personal Finance Spreadsheet App"
 authors = ["Raymond Gochuico"]
 edition = "2021"
