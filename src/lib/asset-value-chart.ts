@@ -8,6 +8,7 @@ import type { NetWorthChartRow } from '@/lib/net-worth-chart-data';
 import { assetValuesAsOf } from '@/lib/asset-snapshot-bucketing';
 import { loanBalanceHistory } from '@/lib/loan-history';
 import { sumLatestOnOrBefore } from '@/lib/growth-horizons';
+import { entityKey } from '@/lib/entity-key';
 import type { EntityKind } from '@/lib/net-worth-chart-prefs';
 import type { AssetValueSnapshot, Loan } from '@/types/schema';
 
@@ -56,6 +57,51 @@ export function granularityForWindow(
   if (span <= 88) return 'MONTH';
   if (span <= 264) return 'QUARTER';
   return 'YEAR';
+}
+
+/**
+ * Earliest observation across the selected entities — MUST mirror the
+ * builder's observation-starts semantics (net-worth-chart-data.ts):
+ * accounts → first snapshot; property/vehicle → min(first snapshot,
+ * purchaseDate). Drives granularityForWindow's ALL-span so the contiguous
+ * spine stays within MAX_BUCKETS.
+ */
+export function earliestObservationIso(args: {
+  selectedKeys: ReadonlySet<string>;
+  snapshots: ReadonlyArray<{ accountId: number; snapshotDate: string }>;
+  assetValueSnapshots: ReadonlyArray<{
+    ownerType: string;
+    ownerId: number;
+    snapshotDate: string;
+  }>;
+  properties: ReadonlyArray<{ id?: number; purchaseDate: string | null }>;
+  vehicles: ReadonlyArray<{ id?: number; purchaseDate: string | null }>;
+}): string | null {
+  const { selectedKeys, snapshots, assetValueSnapshots, properties, vehicles } = args;
+  let min: string | null = null;
+  const consider = (d: string) => {
+    if (min === null || d < min) min = d;
+  };
+  for (const s of snapshots) {
+    if (selectedKeys.has(entityKey('account', s.accountId))) consider(s.snapshotDate);
+  }
+  for (const s of assetValueSnapshots) {
+    const kind =
+      s.ownerType === 'PROPERTY' ? 'property' : s.ownerType === 'VEHICLE' ? 'vehicle' : null;
+    if (kind !== null && selectedKeys.has(entityKey(kind, s.ownerId))) {
+      consider(s.snapshotDate);
+    }
+  }
+  for (const [assets, kind] of [
+    [properties, 'property'],
+    [vehicles, 'vehicle'],
+  ] as const) {
+    for (const a of assets) {
+      if (a.id == null || a.purchaseDate == null) continue;
+      if (selectedKeys.has(entityKey(kind, a.id))) consider(a.purchaseDate);
+    }
+  }
+  return min;
 }
 
 /** Bucket ends can land in the future (week's Saturday / month end) — never display them. */

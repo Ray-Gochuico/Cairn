@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   RANGE_TABS,
   granularityForWindow,
+  earliestObservationIso,
   clampDisplayDate,
   formatBucketDate,
   buildAssetValueView,
@@ -53,6 +54,80 @@ describe('granularityForWindow', () => {
     // (2026−2004)*12 + (Jun − Jun) = 264; one month earlier = 265
     expect(granularityForWindow('ALL', '2004-06-15', TODAY)).toBe('QUARTER'); // 264 mo — last QUARTER
     expect(granularityForWindow('ALL', '2004-05-15', TODAY)).toBe('YEAR');    // 265 mo — first YEAR
+  });
+});
+
+describe('earliestObservationIso (mirrors the builder observation starts)', () => {
+  it('property purchaseDate anchors the span before its first snapshot', () => {
+    expect(
+      earliestObservationIso({
+        selectedKeys: new Set(['property:7']),
+        snapshots: [],
+        assetValueSnapshots: [
+          { ownerType: 'PROPERTY', ownerId: 7, snapshotDate: '2024-03-31' },
+        ],
+        properties: [{ id: 7, purchaseDate: '2015-08-01' }],
+        vehicles: [],
+      }),
+    ).toBe('2015-08-01');
+  });
+
+  it('min(first snapshot, purchaseDate): the earlier snapshot wins', () => {
+    expect(
+      earliestObservationIso({
+        selectedKeys: new Set(['vehicle:3']),
+        snapshots: [],
+        assetValueSnapshots: [
+          { ownerType: 'VEHICLE', ownerId: 3, snapshotDate: '2018-04-01' },
+        ],
+        properties: [],
+        vehicles: [{ id: 3, purchaseDate: '2019-09-01' }],
+      }),
+    ).toBe('2018-04-01');
+  });
+
+  it('accounts-only: min selected snapshot date', () => {
+    expect(
+      earliestObservationIso({
+        selectedKeys: new Set(['account:1', 'account:2']),
+        snapshots: [
+          { accountId: 1, snapshotDate: '2025-07-10' },
+          { accountId: 2, snapshotDate: '2024-11-02' },
+        ],
+        assetValueSnapshots: [],
+        properties: [],
+        vehicles: [],
+      }),
+    ).toBe('2024-11-02');
+  });
+
+  it('unselected entities are ignored', () => {
+    expect(
+      earliestObservationIso({
+        selectedKeys: new Set(['account:1']),
+        snapshots: [
+          { accountId: 1, snapshotDate: '2025-07-10' },
+          { accountId: 2, snapshotDate: '2019-01-01' }, // not selected
+        ],
+        assetValueSnapshots: [
+          { ownerType: 'VEHICLE', ownerId: 3, snapshotDate: '2018-01-01' }, // not selected
+        ],
+        properties: [{ id: 7, purchaseDate: '2015-08-01' }], // not selected
+        vehicles: [{ id: 3, purchaseDate: '2016-02-01' }], // not selected
+      }),
+    ).toBe('2025-07-10');
+  });
+
+  it('nothing selected / no observations → null', () => {
+    expect(
+      earliestObservationIso({
+        selectedKeys: new Set<string>(),
+        snapshots: [{ accountId: 1, snapshotDate: '2025-07-10' }],
+        assetValueSnapshots: [],
+        properties: [],
+        vehicles: [],
+      }),
+    ).toBeNull();
   });
 });
 
