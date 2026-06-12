@@ -50,6 +50,13 @@ on:
     tags:
       - 'v*'
 
+# Make cargo resilient to transient crates.io network blips on the runner
+# (a "Connection reset by peer" while downloading a crate failed a release
+# build once). Retries the fetch instead of failing the whole release.
+env:
+  CARGO_NET_RETRY: "10"
+  CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+
 jobs:
   # Test GATE — nothing builds or publishes unless the full suite passes.
   # A tag pushed from a red branch would otherwise ship straight to
