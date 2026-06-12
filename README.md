@@ -34,9 +34,9 @@ macOS. Pick your platform below.
 
 ---
 
-### macOS (Apple Silicon)
+### macOS (Apple Silicon or Intel)
 
-Grab the file named `Cairn_<version>_aarch64.app.tar.gz`.
+Grab the file named `Cairn_<version>_universal.app.tar.gz`.
 
 > **Why `.app.tar.gz` (and not `.dmg` or `.app.zip`)?** Two reasons.
 > First, `bundle_dmg.sh` (Tauri's DMG bundler) fails on macOS 26 — its
