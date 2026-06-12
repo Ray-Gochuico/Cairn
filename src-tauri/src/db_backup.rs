@@ -664,6 +664,79 @@ mod tests {
         );
     }
 
+    /// H-1, Windows edition — the OTHER failure mode: step 3's `rename` over a
+    /// live `finance.db` that another process holds open WITHOUT
+    /// `FILE_SHARE_DELETE` (an AV scanner, the indexer, an Explorer preview
+    /// pane). `share_mode(0)` withholds ALL sharing — including delete-sharing,
+    /// which is specifically what blocks `MoveFileEx`'s replace (this is NOT a
+    /// "deny write" scenario; a read-only open without delete-sharing is
+    /// enough). Steps 1–2 are unaffected (the copy targets the sibling temp
+    /// file; no sidecars exist), so the failure lands exactly on the rename,
+    /// which must error and leave the original bytes intact.
+    ///
+    /// Compiled only on Windows; runs on `windows-latest` CI / the A4
+    /// hardware pass, never on the macOS dev machines.
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn replace_database_file_rename_over_no_share_open_leaves_original_intact() {
+        use std::os::windows::fs::OpenOptionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+
+        // A real, valid backup elsewhere.
+        let backup = dir.path().join("backup.db");
+        let src = dir.path().join("seed.db");
+        let pool = seeded_pool(&src).await;
+        backup_to(&pool, &backup).await.unwrap();
+        pool.close().await;
+
+        // A pre-existing live DB with KNOWN distinct contents.
+        let live = dir.path().join("finance.db");
+        let original_bytes = b"ORIGINAL-LIVE-DB-CONTENTS-do-not-clobber".to_vec();
+        std::fs::write(&live, &original_bytes).unwrap();
+
+        // Hold the live file open with NO sharing. While this handle is alive,
+        // no other open/delete/replace of `live` may succeed — the same shape
+        // as a third-party process pinning the DB without FILE_SHARE_DELETE.
+        let guard = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&live)
+            .expect("open the live db with share_mode(0)");
+
+        let result = replace_database_file(&backup, &live);
+
+        // The restore failed at the finalize step (the rename) — NOT earlier.
+        // Don't pin the OS error code: depending on the Windows version the
+        // rename surfaces 5 (ERROR_ACCESS_DENIED) or 32 (ERROR_SHARING_VIOLATION).
+        assert!(result.is_err(), "rename over a no-share open file must fail");
+        let msg = result.unwrap_err();
+        assert!(
+            msg.contains("failed to finalize the restore"),
+            "the failure must come from the rename step: {msg}"
+        );
+        assert!(
+            msg.contains("your data is unchanged"),
+            "error should reassure the user: {msg}"
+        );
+
+        // Release the no-share handle BEFORE reading the file back — while it
+        // is held, even our own re-open for the assertion would be refused.
+        drop(guard);
+
+        // The ORIGINAL live file is byte-for-byte untouched.
+        let after = std::fs::read(&live).unwrap();
+        assert_eq!(
+            after, original_bytes,
+            "the original live database must survive a failed restore unchanged"
+        );
+        // No temp file stranded next to it (the error path cleans it up).
+        assert!(
+            !restore_tmp_path(&live).exists(),
+            "the .restore-tmp staging file must not be left behind"
+        );
+    }
+
     /// The staging temp file must not be left behind after a SUCCESSFUL restore
     /// either (the rename consumes it).
     #[tokio::test]
