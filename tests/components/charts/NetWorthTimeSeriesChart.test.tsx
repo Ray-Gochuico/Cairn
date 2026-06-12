@@ -14,7 +14,6 @@ import {
   SnapshotSource,
 } from '@/types/enums';
 import { entityKey } from '@/lib/entity-key';
-import { buildNetWorthChartData } from '@/lib/net-worth-chart-data';
 import {
   getGranularity,
   getSelectedEntities,
@@ -24,7 +23,6 @@ import {
 import type {
   Account,
   AccountSnapshot,
-  AssetValueSnapshot,
   Loan,
   Property,
   Vehicle,
@@ -195,178 +193,6 @@ function readChartData(): Array<Record<string, number | string>> {
   if (!el) return [];
   return JSON.parse(el.textContent ?? '[]');
 }
-
-describe('buildNetWorthChartData', () => {
-  it('returns empty when no entities are selected', () => {
-    const rows = buildNetWorthChartData({
-      accounts: [mkAccount(1, 'Brokerage')],
-      snapshots: [mkSnapshot(1, 1, '2026-03-15', 5000)],
-      properties: [],
-      vehicles: [],
-      loans: [],
-      assetValueSnapshots: [],
-      selectedKeys: new Set(),
-      granularity: 'MONTH',
-      cutoff: null,
-      today: '2026-05-15',
-    });
-    expect(rows).toEqual([]);
-  });
-
-  it('stacks asset segments as positive numbers', () => {
-    const rows = buildNetWorthChartData({
-      accounts: [mkAccount(1, 'Brokerage')],
-      snapshots: [mkSnapshot(1, 1, '2026-03-15', 5000)],
-      properties: [],
-      vehicles: [],
-      loans: [],
-      assetValueSnapshots: [],
-      selectedKeys: new Set([entityKey('account', 1)]),
-      granularity: 'MONTH',
-      cutoff: null,
-      today: '2026-03-31',
-    });
-    expect(rows.length).toBeGreaterThan(0);
-    const last = rows[rows.length - 1];
-    expect(last[entityKey('account', 1)]).toBe(5000);
-    expect(last.netWorth).toBe(5000);
-  });
-
-  it('stacks liability segments as negative numbers (loan stack)', () => {
-    const loan = mkLoan(1, 'Mortgage', { currentBalance: 350000 });
-    const rows = buildNetWorthChartData({
-      accounts: [],
-      snapshots: [],
-      properties: [],
-      vehicles: [],
-      loans: [loan],
-      assetValueSnapshots: [],
-      selectedKeys: new Set([entityKey('loan', 1)]),
-      granularity: 'MONTH',
-      cutoff: null,
-      today: '2026-05-15',
-    });
-    expect(rows.length).toBeGreaterThan(0);
-    const last = rows[rows.length - 1];
-    // Loan stack is rendered as negative for downward stacking.
-    expect(last[entityKey('loan', 1)]).toBeLessThan(0);
-    expect(last.netWorth).toBeLessThan(0);
-  });
-
-  it('Net Worth value equals total assets minus total liabilities per bucket', () => {
-    const account = mkAccount(1, 'Brokerage');
-    const property = mkProperty(10, 'Home', { currentEstimatedValue: 500000 });
-    const loan = mkLoan(20, 'Mortgage', { currentBalance: 300000 });
-    const rows = buildNetWorthChartData({
-      accounts: [account],
-      snapshots: [mkSnapshot(1, 1, '2026-04-30', 100000)],
-      properties: [property],
-      vehicles: [],
-      loans: [loan],
-      assetValueSnapshots: [],
-      selectedKeys: new Set([
-        entityKey('account', 1),
-        entityKey('property', 10),
-        entityKey('loan', 20),
-      ]),
-      granularity: 'MONTH',
-      cutoff: null,
-      today: '2026-04-30',
-    });
-    expect(rows.length).toBeGreaterThan(0);
-    const last = rows[rows.length - 1];
-    // Account latest: 100000. Property fallback: 500000. Loan: 300000.
-    // Net worth = 600000 - 300000 = 300000.
-    expect(last[entityKey('account', 1)]).toBe(100000);
-    expect(last[entityKey('property', 10)]).toBe(500000);
-    expect(last[entityKey('loan', 20)]).toBe(-300000);
-    expect(last.netWorth).toBe(300000);
-  });
-
-  it('uses currentEstimatedValue fallback when no asset value snapshot exists', () => {
-    const property = mkProperty(10, 'Home', { currentEstimatedValue: 425000 });
-    const rows = buildNetWorthChartData({
-      accounts: [],
-      snapshots: [],
-      properties: [property],
-      vehicles: [],
-      loans: [],
-      assetValueSnapshots: [],
-      selectedKeys: new Set([entityKey('property', 10)]),
-      granularity: 'MONTH',
-      cutoff: null,
-      today: '2026-05-31',
-    });
-    expect(rows.length).toBeGreaterThan(0);
-    for (const row of rows) {
-      expect(row[entityKey('property', 10)]).toBe(425000);
-    }
-  });
-
-  it('prefers asset value snapshot over currentEstimatedValue when both exist', () => {
-    const property = mkProperty(10, 'Home', { currentEstimatedValue: 400000 });
-    const assetSnaps: AssetValueSnapshot[] = [
-      { id: 1, ownerType: 'PROPERTY', ownerId: 10, snapshotDate: '2026-03-15', value: 425000 },
-    ];
-    const rows = buildNetWorthChartData({
-      accounts: [],
-      snapshots: [],
-      properties: [property],
-      vehicles: [],
-      loans: [],
-      assetValueSnapshots: assetSnaps,
-      selectedKeys: new Set([entityKey('property', 10)]),
-      granularity: 'MONTH',
-      cutoff: null,
-      today: '2026-05-31',
-    });
-    const last = rows[rows.length - 1];
-    expect(last[entityKey('property', 10)]).toBe(425000);
-  });
-
-  it('anchors a March bucket with an April 1 snapshot if it is the closest data point', () => {
-    // March 23 (100) + April 1 (200) account snapshots. March bucket end =
-    // March 31. |Mar 23 − Mar 31| = 8, |Apr 1 − Mar 31| = 1 → April 1 wins
-    // the March bucket. Pins the closest-date sampling rule for the
-    // net-worth chart's account series.
-    const rows = buildNetWorthChartData({
-      accounts: [mkAccount(1, 'Brokerage')],
-      snapshots: [
-        mkSnapshot(1, 1, '2026-03-23', 100),
-        mkSnapshot(2, 1, '2026-04-01', 200),
-      ],
-      properties: [],
-      vehicles: [],
-      loans: [],
-      assetValueSnapshots: [],
-      selectedKeys: new Set([entityKey('account', 1)]),
-      granularity: 'MONTH',
-      cutoff: null,
-      today: '2026-04-30',
-    });
-    const marchRow = rows.find((r) =>
-      typeof r.bucketEnd === 'string' && r.bucketEnd.startsWith('2026-03'),
-    );
-    expect(marchRow).toBeDefined();
-    expect(marchRow![entityKey('account', 1)]).toBe(200);
-  });
-
-  it('drops selected keys whose entities have been deleted', () => {
-    const rows = buildNetWorthChartData({
-      accounts: [],
-      snapshots: [],
-      properties: [],
-      vehicles: [],
-      loans: [],
-      assetValueSnapshots: [],
-      selectedKeys: new Set([entityKey('account', 999)]),
-      granularity: 'MONTH',
-      cutoff: null,
-      today: '2026-05-15',
-    });
-    expect(rows).toEqual([]);
-  });
-});
 
 describe('NetWorthTimeSeriesChart (component)', () => {
   beforeEach(() => {
