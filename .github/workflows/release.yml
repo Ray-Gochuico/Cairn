@@ -40,10 +40,10 @@ name: Release
 #     manual flow in lockstep on the SAME format and URL convention.
 #
 # WHY MACOS-14 RUNNER:
-#   - macos-14 is GitHub's Apple Silicon (M1) runner. Building Tauri on
-#     x86_64 and cross-compiling to aarch64 requires extra Rust target
-#     setup + a universal binary path. Native arm64 build is simpler and
-#     produces the artifact we actually ship.
+#   - macos-14 is GitHub's Apple Silicon (M1) runner. We build a UNIVERSAL
+#     binary (--target universal-apple-darwin): the runner compiles the
+#     aarch64 slice natively and cross-compiles the x86_64 slice, then lipo
+#     fuses them so one .app.tar.gz runs on both Apple Silicon and Intel.
 
 on:
   push:
@@ -92,7 +92,7 @@ jobs:
 
   build-macos-arm64:
     needs: test-gate  # do not build/sign/publish unless the gate is green
-    runs-on: macos-14  # Apple Silicon — native aarch64 build
+    runs-on: macos-14  # Apple Silicon — builds a universal (arm64+x86_64) binary
     permissions:
       contents: write  # create release + upload assets
 
@@ -115,8 +115,10 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          # Native arm64 build — runner IS aarch64-apple-darwin.
-          targets: aarch64-apple-darwin
+          # Universal build — runner is aarch64-apple-darwin and builds
+          # both slices; x86_64-apple-darwin is cross-compiled, then `lipo`
+          # (via --target universal-apple-darwin) fuses them into one binary.
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       - name: Fail fast if updater key is missing
         # Without the secret, the sign step would fail mid-build and the
@@ -155,8 +157,12 @@ jobs:
       - name: Build .app bundle
         # bundle.targets = ["app"] in tauri.conf.json, so this emits only
         # Cairn.app (no .dmg attempt — `bundle_dmg.sh` fails on macOS 26).
-        # Wall time on the macos-14 runner: ~5 min cold (no cargo cache).
-        run: npm run tauri build
+        # --target universal-apple-darwin builds BOTH arch slices and lipo-
+        # fuses them, so the output lands under
+        # target/universal-apple-darwin/release/bundle/macos/ (not the plain
+        # target/release/...). Wall time on the macos-14 runner: ~15-30 min
+        # cold (two arch slices, no cargo cache).
+        run: npm run tauri build -- --target universal-apple-darwin
 
       - name: Tar+gzip the .app bundle (updater artifact)
         # The macOS updater requires gzip+tar (see WHY header). Working
@@ -165,25 +171,26 @@ jobs:
         # updater strips the first path component, so the entry name must
         # start with `Cairn.app/`. Mirrors `docs/RELEASING.md` step 3.
         run: |
-          cd src-tauri/target/release/bundle/macos
-          tar czf "Cairn_${{ steps.ver.outputs.version }}_aarch64.app.tar.gz" Cairn.app
+          cd src-tauri/target/universal-apple-darwin/release/bundle/macos
+          tar czf "Cairn_${{ steps.ver.outputs.version }}_universal.app.tar.gz" Cairn.app
 
       - name: Sign .app.tar.gz with the updater private key
         # Reads TAURI_SIGNING_PRIVATE_KEY from the job env (set above).
         # Produces `<file>.sig` next to the .app.tar.gz.
         run: |
           npx tauri signer sign \
-            "src-tauri/target/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_aarch64.app.tar.gz"
+            "src-tauri/target/universal-apple-darwin/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_universal.app.tar.gz"
 
       - name: Write latest.json (Tauri 2 updater manifest)
         # Schema: https://v2.tauri.app/plugin/updater/#static-json-file
-        # darwin-aarch64 is the only platform we ship — the macos-14
-        # runner is M1, and Tauri's updater plugin will refuse to install
-        # an aarch64 update on a (hypothetical future) x86_64 install
-        # unless we also publish a darwin-x86_64 entry. v1 is arm64-only
-        # by maintainer policy; x86_64 support is a v1.x milestone.
+        # We ship ONE universal .app.tar.gz that runs on both arches, so the
+        # manifest lists both darwin-aarch64 and darwin-x86_64 pointing at
+        # the SAME url with the SAME signature (minisign signs that one file;
+        # the same bytes satisfy both arches). Tauri's updater keys lookups
+        # by `darwin-<arch>`, so the x86_64 entry is required for Intel
+        # installs to see the update at all.
         run: |
-          APP_TARBALL="src-tauri/target/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_aarch64.app.tar.gz"
+          APP_TARBALL="src-tauri/target/universal-apple-darwin/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_universal.app.tar.gz"
           SIG=$(cat "${APP_TARBALL}.sig")
           # Use the CHANGELOG section for this version as the updater
           # release notes (shown in Settings → Updates), falling back to
@@ -216,7 +223,11 @@ jobs:
             "platforms": {
               "darwin-aarch64": {
                 "signature": "${SIG}",
-                "url": "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Cairn_${{ steps.ver.outputs.version }}_aarch64.app.tar.gz"
+                "url": "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Cairn_${{ steps.ver.outputs.version }}_universal.app.tar.gz"
+              },
+              "darwin-x86_64": {
+                "signature": "${SIG}",
+                "url": "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Cairn_${{ steps.ver.outputs.version }}_universal.app.tar.gz"
               }
             }
           }
@@ -238,8 +249,8 @@ jobs:
           # Drafts default to off so the moment this step succeeds, the
           # in-app updater's poll URL starts returning the new version.
           files: |
-            src-tauri/target/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_aarch64.app.tar.gz
-            src-tauri/target/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_aarch64.app.tar.gz.sig
+            src-tauri/target/universal-apple-darwin/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_universal.app.tar.gz
+            src-tauri/target/universal-apple-darwin/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_universal.app.tar.gz.sig
             latest.json
 
   build-windows:
