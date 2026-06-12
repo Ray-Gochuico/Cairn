@@ -294,7 +294,15 @@ jobs:
 
       - name: Install npm deps
         shell: bash
-        run: npm ci
+        # --ignore-scripts skips native postinstall compiles (notably
+        # better-sqlite3, a TEST-ONLY dep). On windows-latest, node 20's
+        # node-gyp can't recognize the runner's "Visual Studio 18" and the
+        # build fails. The Windows job only runs `tauri build` (vite + cargo),
+        # never the JS test suite, so better-sqlite3's native binary is never
+        # needed here. vite/esbuild/rollup ship prebuilt platform binaries via
+        # optionalDependencies (packages, not postinstall scripts), so the
+        # frontend build is unaffected.
+        run: npm ci --ignore-scripts
 
       - name: Extract version from tag
         # v0.1.0 → 0.1.0. Mirrors the Mac job's step; consumed by the

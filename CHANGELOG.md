@@ -5,6 +5,24 @@ All notable changes to Cairn are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-06-12
+
+Intel Macs join in, and the Windows installer actually ships.
+
+### Added
+
+- **Intel Mac support**: the macOS build is now a **universal binary**
+  (`Cairn_<version>_universal.app.tar.gz`) that runs natively on both Apple
+  Silicon and Intel Macs — one download for every Mac. The in-app updater
+  serves it to both architectures.
+
+### Fixed
+
+- **Windows installer now builds in CI.** The 1.0.1 Windows build failed while
+  compiling a native, test-only dependency on the GitHub runner; the Windows
+  build now skips that compile (it isn't needed to package the app), so
+  `Cairn_<version>_x64-setup.exe` ships starting with this release.
+
 ## [1.0.1] - 2026-06-12
 
 Cairn comes to Windows.
@@ -95,5 +113,6 @@ stored in a single local SQLite file. No account, no sync, no telemetry.
   calls (Yahoo Finance quote refresh and the updater check) are both
   user-controlled and contain no PII.
 
+[1.0.2]: https://github.com/Ray-Gochuico/Cairn/releases/tag/v1.0.2
 [1.0.1]: https://github.com/Ray-Gochuico/Cairn/releases/tag/v1.0.1
 [1.0.0]: https://github.com/Ray-Gochuico/Cairn/releases/tag/v1.0.0
