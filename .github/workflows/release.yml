@@ -241,3 +241,96 @@ jobs:
             src-tauri/target/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_aarch64.app.tar.gz
             src-tauri/target/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_aarch64.app.tar.gz.sig
             latest.json
+
+  build-windows:
+    name: Build Windows x64 (NSIS, unsigned)
+    # Serialized AFTER the Mac job, not parallel with it: build-macos-arm64
+    # creates the GitHub Release (name + CHANGELOG body), and this job only
+    # APPENDS the .exe to it. Running both concurrently would race
+    # action-gh-release's check-then-create flow into an `already_exists`
+    # failure. test-gate is implied transitively via build-macos-arm64 but
+    # listed explicitly so the gate intent survives a future refactor.
+    needs: [test-gate, build-macos-arm64]
+    runs-on: windows-latest  # host is x86_64-pc-windows-msvc — the target triple
+    timeout-minutes: 60  # cold cargo build + NSIS tooling download runs long on Windows runners
+    permissions:
+      contents: write  # append the installer asset to the existing release
+
+    # NOTE: deliberately NO TAURI_SIGNING_* env and no updater-secret
+    # fail-fast here. Windows ships no updater artifact in this phase
+    # (latest.json has no windows-x86_64 key), so nothing in this job
+    # reads the minisign key. The installer itself is unsigned —
+    # SmartScreen "More info → Run anyway" is the documented posture.
+    #
+    # Every `run:` step below sets `shell: bash` explicitly. The Windows
+    # runner defaults to PowerShell, which breaks `${GITHUB_REF_NAME#v}`,
+    # `>> "$GITHUB_OUTPUT"`, and `[ ... ]`. Git Bash ships on windows-latest.
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Match test-gate / build-macos-arm64. CI was just deliberately
+          # fixed to be green on Node 20 — bump all three jobs together
+          # or not at all.
+          node-version: '20'
+          cache: 'npm'
+
+      - uses: dtolnay/rust-toolchain@stable
+        # No `targets:` — unlike the Mac jobs (which pin aarch64), the
+        # host triple x86_64-pc-windows-msvc IS the build target.
+
+      - name: Install npm deps
+        shell: bash
+        run: npm ci
+
+      - name: Extract version from tag
+        # v0.1.0 → 0.1.0. Mirrors the Mac job's step; consumed by the
+        # tag-vs-package.json check below.
+        id: ver
+        shell: bash
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify tag version matches package.json
+        # Same three-sources-of-truth check as the Mac job, repeated here
+        # so a Windows-only re-run still refuses a mismatched tag.
+        shell: bash
+        run: |
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          TAG_VERSION="${{ steps.ver.outputs.version }}"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "ERROR: tag v${TAG_VERSION} doesn't match package.json version ${PKG_VERSION}"
+            echo "Bump package.json + src-tauri/Cargo.toml + src-tauri/tauri.conf.json first."
+            exit 1
+          fi
+
+      - name: Build NSIS installer
+        # `--bundles nsis` REPLACES the configured bundle.targets (["app"])
+        # for this invocation only, so the Mac job's plain `npm run tauri
+        # build` is byte-identical to before this job existed. Emits
+        # src-tauri/target/release/bundle/nsis/*_x64-setup.exe (no
+        # `--target` flag → plain target/release/). The Tauri CLI
+        # auto-downloads the NSIS toolchain on first use.
+        shell: bash
+        run: npm run tauri build -- --bundles nsis
+
+      - name: Bundle hygiene gate
+        # Assert no local data files leaked into anything we might upload.
+        # bash find, not Windows' native find.exe (which is a different tool).
+        shell: bash
+        run: |
+          hits=$(find src-tauri/target/release/bundle -type f \( -name '*.db' -o -name '*.sqlite' -o -name '*.csv' -o -name '.env' \) -print)
+          [ -z "$hits" ] || { echo "Forbidden files in bundle:"; echo "$hits"; exit 1; }
+
+      - name: Append Windows installer to the GitHub Release
+        # The release already exists (created by build-macos-arm64 with
+        # name + CHANGELOG body). Omitting `name:`/`body_path:` here is
+        # load-bearing: action-gh-release then leaves the existing release
+        # info untouched and only uploads the new asset. The suffix glob
+        # (not a hardcoded Cairn_ prefix) tolerates either binary-name
+        # outcome of the mainBinaryName config.
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: src-tauri/target/release/bundle/nsis/*_x64-setup.exe

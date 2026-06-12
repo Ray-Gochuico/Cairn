@@ -3,6 +3,7 @@
   "productName": "Cairn",
   "version": "1.0.0",
   "identifier": "com.raymondgochuico.cairn",
+  "mainBinaryName": "Cairn",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -41,6 +42,11 @@
       "minimumSystemVersion": "11.0",
       "entitlements": null,
       "hardenedRuntime": true
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      }
     }
   },
   "plugins": {
