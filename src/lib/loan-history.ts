@@ -22,9 +22,16 @@ import type { Granularity } from '@/lib/snapshot-bucketing';
  *  - QUARTER → last day of the quarter
  *  - YEAR    → Dec 31 of that year
  *
- * Anchor: the most recent bucketEnd ≤ today carries `loan.currentBalance`. The
- * back-walk produces earlier-bucket balances. Future buckets (after the anchor)
- * v1 holds flat at `currentBalance` — no forward projection.
+ * Anchor: the most recent bucketEnd ≤ `todayISO` carries `loan.currentBalance`.
+ * The back-walk produces earlier-bucket balances by stepping backward one
+ * compounding step per calendar-month boundary crossed between adjacent bucket
+ * ends. WEEK/DAY pairs that stay within the same calendar month produce 0 steps
+ * (balance held flat); pairs that straddle a month boundary produce exactly 1
+ * step — matching the rate of coarser granularities. Future buckets (after the
+ * anchor) are held flat at `currentBalance` — no forward projection.
+ *
+ * `todayISO` defaults to the real wall-clock date (UTC) and can be injected for
+ * testing or deterministic rendering.
  *
  * "Walked past origination": when the back-walked balance exceeds
  * `loan.originalAmount + $1` (rounding tolerance), the loan didn't exist that
@@ -37,6 +44,7 @@ export function loanBalanceHistory(
   fromISO: string,
   toISO: string,
   granularity: Granularity,
+  todayISO: string = new Date().toISOString().slice(0, 10),
 ): Array<{ bucketEnd: string; balance: number }> {
   const buckets = enumerateBucketEnds(fromISO, toISO, granularity);
   if (buckets.length === 0) return [];
@@ -45,7 +53,7 @@ export function loanBalanceHistory(
     return buckets.map((bucketEnd) => ({ bucketEnd, balance: 0 }));
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayISO;
   const anchorIdx = findAnchor(buckets, today);
   const monthlyRate = loan.interestRate / 12;
   const pmt = loan.monthlyPayment;
@@ -75,7 +83,7 @@ export function loanBalanceHistory(
       out[i] = { bucketEnd: buckets[i], balance: 0 };
       continue;
     }
-    const months = monthsBetweenBuckets(buckets[i + 1], buckets[i], granularity);
+    const months = monthsBetweenBuckets(buckets[i + 1], buckets[i]);
     for (let m = 0; m < months; m++) {
       const interest = bal * monthlyRate;
       const principal = pmt - interest;
@@ -182,22 +190,16 @@ function findAnchor(buckets: string[], today: string): number {
 }
 
 /**
- * Number of monthly compounding steps between two adjacent bucket ends.
- * `later` and `earlier` are both ISO bucket-end dates with `earlier < later`.
- *
- * For granularity = MONTH/QUARTER/YEAR the gap is fixed (1, 3, 12 months
- * respectively). For DAY/WEEK we approximate via days / 30 (rounded up to at
- * least 1 step when there's any gap at all), so the back-walk still advances.
+ * Number of monthly compounding steps between two adjacent bucket ends =
+ * calendar-month boundaries crossed between them (UTC). Adjacent MONTH ends
+ * → 1, QUARTER → 3, YEAR → 12, WEEK/DAY → 0 within a month and 1 when the
+ * pair straddles a month edge — so finer granularities amortize at the same
+ * calendar rate as coarser ones instead of one month per bucket.
  */
-function monthsBetweenBuckets(later: string, earlier: string, g: Granularity): number {
-  if (g === 'MONTH') return 1;
-  if (g === 'QUARTER') return 3;
-  if (g === 'YEAR') return 12;
-  // DAY or WEEK — compute calendar-day gap, divide by 30, floor with min 1.
-  const a = Date.parse(earlier + 'T00:00:00Z');
-  const b = Date.parse(later + 'T00:00:00Z');
-  if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a) return 0;
-  const days = Math.round((b - a) / 86_400_000);
-  const months = Math.floor(days / 30);
-  return Math.max(1, months);
+function monthsBetweenBuckets(later: string, earlier: string): number {
+  const a = new Date(earlier + 'T00:00:00Z');
+  const b = new Date(later + 'T00:00:00Z');
+  const am = a.getUTCFullYear() * 12 + a.getUTCMonth();
+  const bm = b.getUTCFullYear() * 12 + b.getUTCMonth();
+  return Math.max(0, bm - am);
 }
