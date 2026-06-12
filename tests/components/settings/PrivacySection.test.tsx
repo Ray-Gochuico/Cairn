@@ -12,8 +12,8 @@
 // These render assertions double as a "the section still mounts"
 // regression guard if a future refactor breaks the appDataDir lookup.
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('@tauri-apps/api/path', () => ({
@@ -176,6 +176,88 @@ describe('PrivacySection', () => {
       expect(mockOpenUrl).toHaveBeenCalledWith(
         expect.stringContaining('support.apple.com'),
       );
+    });
+  });
+});
+
+describe('PrivacySection — Windows copy (distribution plan A3)', () => {
+  // Real WebView2 UA shape — always contains "Windows NT".
+  const WEBVIEW2_UA =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0';
+  const WIN_PATH = 'C:\\Users\\ray\\AppData\\Roaming\\com.raymondgochuico.cairn\\';
+
+  beforeEach(() => {
+    // Runs after the file-level beforeEach, overriding the mac defaults.
+    vi.stubGlobal('navigator', { userAgent: WEBVIEW2_UA });
+    mockAppDataDir.mockImplementation(async () => WIN_PATH);
+  });
+
+  afterEach(() => {
+    // tests/setup.ts restores mocks but NOT stubbed globals.
+    vi.unstubAllGlobals();
+  });
+
+  it('never flashes the ~/Library placeholder before appDataDir resolves', () => {
+    // Keep appDataDir pending forever so we see the seeded placeholder.
+    mockAppDataDir.mockImplementation(() => new Promise(() => {}));
+    render(<PrivacySection />);
+    expect(screen.queryByText(/~\/Library/)).toBeNull();
+    expect(screen.getByText(/locating/i)).toBeInTheDocument();
+  });
+
+  it('upgrades to the resolved Windows path once appDataDir succeeds', async () => {
+    render(<PrivacySection />);
+    expect(await screen.findByText(WIN_PATH)).toBeInTheDocument();
+  });
+
+  it('says "this computer" / "File Explorer" — never Mac, Finder, or FileVault', async () => {
+    render(<PrivacySection />);
+    await screen.findByText(WIN_PATH);
+    expect(screen.getByText(/on this computer inside a single/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /show data folder in file explorer/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/show in file explorer/i)).toBeInTheDocument();
+    expect(screen.queryByText(/finder/i)).toBeNull();
+    expect(screen.queryByText(/this mac/i)).toBeNull();
+    expect(screen.queryByText(/macos/i)).toBeNull();
+    expect(screen.queryByText(/filevault/i)).toBeNull();
+  });
+
+  it('recommends BitLocker / device encryption with the Windows settings path', async () => {
+    render(<PrivacySection />);
+    await screen.findByText(WIN_PATH);
+    expect(screen.getByText(/windows file permissions restrict/i)).toBeInTheDocument();
+    expect(screen.getByText(/bitlocker/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/settings.*privacy.*security.*device encryption/i),
+    ).toBeInTheDocument();
+  });
+
+  it('"Learn more about device encryption" opens the Microsoft support page', async () => {
+    render(<PrivacySection />);
+    await screen.findByText(WIN_PATH);
+    // fireEvent (not userEvent): navigator is stubbed to a bare object and
+    // userEvent.setup() expects the full jsdom navigator for its clipboard
+    // interception.
+    fireEvent.click(
+      screen.getByRole('button', { name: /learn more about device encryption/i }),
+    );
+    await waitFor(() => {
+      expect(mockOpenUrl).toHaveBeenCalledWith(
+        'https://support.microsoft.com/en-us/windows/turn-on-device-encryption-0c453637-bc88-5f74-5105-741561aae838',
+      );
+    });
+  });
+
+  it('the reveal action still calls revealItemInDir with the resolved path (copy-only change)', async () => {
+    render(<PrivacySection />);
+    await screen.findByText(WIN_PATH);
+    fireEvent.click(
+      screen.getByRole('button', { name: /show data folder in file explorer/i }),
+    );
+    await waitFor(() => {
+      expect(mockReveal).toHaveBeenCalledWith(WIN_PATH);
     });
   });
 });
