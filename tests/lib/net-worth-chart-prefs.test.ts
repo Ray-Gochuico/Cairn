@@ -6,6 +6,7 @@ import {
   setTimeWindow,
   getSelectedEntities,
   setSelectedEntities,
+  makeChartPrefs,
   type SelectedEntity,
 } from '@/lib/net-worth-chart-prefs';
 
@@ -91,5 +92,49 @@ describe('net-worth-chart-prefs', () => {
       localStorage.setItem('netWorthChart.selectedEntities', '{not json');
       expect(getSelectedEntities()).toBeNull();
     });
+  });
+});
+
+describe('makeChartPrefs', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('namespaces keys so two surfaces are independent', () => {
+    const a = makeChartPrefs('netWorthChart');
+    const b = makeChartPrefs('dashboardAssetChart');
+    a.setTimeWindow('5Y');
+    b.setTimeWindow('6M');
+    expect(a.getTimeWindow()).toBe('5Y');
+    expect(b.getTimeWindow()).toBe('6M');
+    expect(localStorage.getItem('dashboardAssetChart.timeWindow')).toBe('6M');
+  });
+
+  it('reads the legacy netWorthChart keys (selection carries over)', () => {
+    localStorage.setItem('netWorthChart.selectedEntities', JSON.stringify([{ kind: 'account', id: 3 }]));
+    expect(makeChartPrefs('netWorthChart').getSelectedEntities()).toEqual([{ kind: 'account', id: 3 }]);
+  });
+
+  it('accepts the full window union including 3M, 6M, YTD', () => {
+    const p = makeChartPrefs('x');
+    for (const w of ['3M', '6M', 'YTD', '1Y', '5Y', 'ALL'] as const) {
+      p.setTimeWindow(w);
+      expect(p.getTimeWindow()).toBe(w);
+    }
+  });
+
+  it('returns null for garbage window or selection values', () => {
+    localStorage.setItem('x.timeWindow', '2W');
+    localStorage.setItem('x.selectedEntities', '{"not":"an array"}');
+    const p = makeChartPrefs('x');
+    expect(p.getTimeWindow()).toBeNull();
+    expect(p.getSelectedEntities()).toBeNull();
+  });
+
+  it('returns null for the time window on a fresh namespace', () => {
+    expect(makeChartPrefs('fresh').getTimeWindow()).toBeNull();
+  });
+
+  it('legacy getTimeWindow accepts the widened union (6M)', () => {
+    localStorage.setItem('netWorthChart.timeWindow', '6M');
+    expect(getTimeWindow()).toBe('6M');
   });
 });
