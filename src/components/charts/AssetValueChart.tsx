@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Area,
   AreaChart,
   CartesianGrid,
   ReferenceDot,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -16,6 +17,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   RANGE_TABS,
   buildAssetValueView,
+  deltaPctOrNull,
   earliestObservationIso,
   formatBucketDate,
   granularityForWindow,
@@ -54,10 +56,11 @@ import type { LoanType } from '@/types/enums';
  * Task 9 skeleton + Task 10 canvas polish: header (label / value / delta),
  * range tabs, Included picker, per-surface defaults + persistence, empty
  * states, and the AreaChart with directional gradient fill, end dot, and
- * hover tooltip (§3.3/§3.4). Tasks 11–12 extend this file with scrub/pin
- * and the breakdown panel — keep the section structure below (hoisted
- * constants → state → derivation memos → header / tabs / body) intact for
- * them.
+ * hover tooltip (§3.3/§3.4). Task 11 adds hover-scrub + click-to-pin
+ * (header precedence scrub > pin > latest, §3.5). Task 12 extends this
+ * file with the breakdown panel — keep the section structure below
+ * (hoisted constants → state → derivation memos → header / tabs / body)
+ * intact for it.
  */
 
 export type AssetValueChartSurface = 'netWorth' | 'dashboard';
@@ -128,6 +131,12 @@ const CURSOR = {
   stroke: AXIS_STROKE,
   strokeDasharray: '4 4',
 } as const;
+// Pin marker line (§3.5) — axis-toned, tighter dash than the scrub cursor.
+const PIN_LINE_DASH = '3 3' as const;
+// Crosshair on the plot area. Must be a STYLE prop: RechartsWrapper sets
+// inline `cursor: 'default'` on its wrapper div, which beats any class —
+// recharts merges user style after its defaults, so this wins.
+const CHART_WRAPPER_STYLE = { cursor: 'crosshair' } as const;
 const ACTIVE_DOT = { r: 4 } as const;
 const EMPTY_CHART_DATA: NetWorthChartRow[] = [];
 
@@ -338,6 +347,10 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
   const [window_, setWindow] = useState<TimeWindow>('1Y');
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Scrub = transient hover; pin = sticky click (spec §3.5). Each holds a
+  // bucketEnd id from chartData, or null when inactive.
+  const [scrubBucket, setScrubBucket] = useState<string | null>(null);
+  const [pinBucket, setPinBucket] = useState<string | null>(null);
 
   // Hydrate from localStorage on mount + whenever the eligible set changes:
   // saved window → state; saved selection → intersect with eligible; no
@@ -408,6 +421,29 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
     persistSelection(next);
   };
 
+  // Scrub/pin handlers are chart-level recharts props — useCallback keeps
+  // their identities stable across renders (recharts 3.x discipline above).
+  // Guarded setter: recharts rAF-throttles mousemove, and this bail means a
+  // re-render happens only on bucket CROSSING, not per pixel.
+  const handleScrub = useCallback(
+    (s: { activeLabel?: unknown; isTooltipActive?: boolean }) => {
+      const label =
+        s.isTooltipActive && typeof s.activeLabel === 'string' ? s.activeLabel : null;
+      setScrubBucket((prev) => (prev === label ? prev : label));
+    },
+    [],
+  );
+  const handleLeave = useCallback(() => setScrubBucket(null), []);
+  const handlePinToggle = useCallback(
+    (s: { activeLabel?: unknown }) => {
+      if (!cfg.allowPin) return;
+      if (typeof s.activeLabel !== 'string') return;
+      const label = s.activeLabel;
+      setPinBucket((prev) => (prev === label ? null : label));
+    },
+    [cfg.allowPin],
+  );
+
   // ----- Derivations -----
   // Derived per render ON PURPOSE (no mount-pinned memo): a frozen date
   // goes stale across midnight (stale cutoffs, vanishing new snapshots).
@@ -472,6 +508,32 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
     [chartData, window_, granularity, todayIso],
   );
 
+  const rowByBucket = useMemo(
+    () => new Map(chartData.map((r) => [r.bucketEnd, r] as const)),
+    [chartData],
+  );
+
+  // Stale-pin guard: clear when the pinned bucket no longer exists (e.g.
+  // granularity changed with the range tab). Survives 6M↔1Y (same WEEK ids).
+  useEffect(() => {
+    setPinBucket((p) => (p && !chartData.some((r) => r.bucketEnd === p) ? null : p));
+  }, [chartData]);
+
+  // Esc clears the pin. Registered only while pinned AND the picker is
+  // closed: window keydown listeners fire in registration order, so a pin
+  // set BEFORE the picker opened would otherwise see the event first and
+  // clear itself before the picker's preventDefault() could mark it handled.
+  // The defaultPrevented check still defers to any other Esc consumer that
+  // ran earlier (e.g. a route-level dialog).
+  useEffect(() => {
+    if (!pinBucket || pickerOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !e.defaultPrevented) setPinBucket(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [pinBucket, pickerOpen]);
+
   const nameByKey = useMemo(() => {
     const m = new Map<string, string>();
     for (const e of eligibleAll) m.set(entityKey(e.kind, e.id), e.name);
@@ -515,28 +577,56 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
   const hasSelection = selectedKeys.size > 0;
 
   // Sign-aware trend direction (spec §2 locked decision) — drives the line
-  // color, gradient fill, end dot, and delta-row tint together.
+  // color, gradient fill, and end dot. Keyed on the FULL-RANGE delta, never
+  // on the scrub/pin position (§3.5).
   const trendDown = view.delta !== null && view.delta < 0;
   const lineColor = trendDown ? DESTRUCTIVE : SUCCESS;
 
-  // Delta row pieces, kept as small string consts.
-  const deltaSign = trendDown ? '−' : '+';
-  const deltaDollar = view.delta !== null ? formatCurrency(Math.abs(view.delta)) : null;
+  // Header precedence: scrub > pin > latest (spec §3.5), resolved ROW-wise:
+  // a scrub/pin id missing from chartData (range change while hovering,
+  // midnight tick, store refresh) drops out of precedence entirely instead
+  // of pairing the LATEST value with a stale date suffix.
+  const scrubRow = scrubBucket ? rowByBucket.get(scrubBucket) ?? null : null;
+  const pinRow = pinBucket ? rowByBucket.get(pinBucket) ?? null : null;
+  const activeRow =
+    scrubRow ??
+    pinRow ??
+    (view.latest ? rowByBucket.get(view.latest.bucketEnd) ?? null : null);
+  const activeValue = activeRow ? activeRow.netWorth : view.latest?.value ?? null;
+  const activeDelta =
+    activeValue !== null && view.baseline ? activeValue - view.baseline.value : null;
+  const activeDeltaPct =
+    activeDelta !== null && view.baseline
+      ? deltaPctOrNull(activeDelta, view.baseline.value)
+      : null;
+  // Muted " · <date>" suffix while the header shows a non-latest bucket.
+  const activeDateText =
+    activeRow && activeRow.bucketEnd !== view.latest?.bucketEnd
+      ? formatBucketDate(activeRow.bucketEnd, todayIso)
+      : null;
+
+  // Delta row pieces, kept as small string consts. The ROW's direction
+  // follows the active delta (a scrubbed loss reads as a loss even on an
+  // up range); only the canvas stays keyed on trendDown.
+  const activeDown = activeDelta !== null && activeDelta < 0;
+  const deltaSign = activeDown ? '−' : '+';
+  const deltaDollar = activeDelta !== null ? formatCurrency(Math.abs(activeDelta)) : null;
   const deltaPctText =
-    view.deltaPct !== null
-      ? ` (${deltaSign}${Math.abs(view.deltaPct).toFixed(1)}%)`
+    activeDeltaPct !== null
+      ? ` (${deltaSign}${Math.abs(activeDeltaPct).toFixed(1)}%)`
       : '';
   const deltaText =
-    view.delta !== null
-      ? `${trendDown ? '▼' : '▲'} ${deltaSign}${deltaDollar}${deltaPctText}`
+    activeDelta !== null
+      ? `${activeDown ? '▼' : '▲'} ${deltaSign}${deltaDollar}${deltaPctText}`
       : null;
   const deltaAria =
-    view.delta !== null
-      ? `${trendDown ? 'Down' : 'Up'} ${deltaDollar}` +
-        (view.deltaPct !== null
-          ? `, ${Math.abs(view.deltaPct).toFixed(1)} percent`
+    activeDelta !== null
+      ? `${activeDown ? 'Down' : 'Up'} ${deltaDollar}` +
+        (activeDeltaPct !== null
+          ? `, ${Math.abs(activeDeltaPct).toFixed(1)} percent`
           : '') +
-        `, ${view.phrase}`
+        `, ${view.phrase}` +
+        (activeDateText ? `, as of ${activeDateText}` : '')
       : undefined;
 
   return (
@@ -545,11 +635,26 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
         {/* ----- Header: label / value / delta + (link · Included picker) ----- */}
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <div className="text-xs uppercase tracking-wider text-muted-foreground">
-              {label}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="text-xs uppercase tracking-wider text-muted-foreground">
+                {label}
+              </div>
+              {pinBucket && (
+                <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs text-muted-foreground">
+                  Pinned · {formatBucketDate(pinBucket, todayIso)}
+                  <button
+                    type="button"
+                    aria-label="Clear pinned date"
+                    onClick={() => setPinBucket(null)}
+                    className="hover:text-foreground"
+                  >
+                    ×
+                  </button>
+                </span>
+              )}
             </div>
             <div className={`font-semibold tabular-nums ${cfg.valueClass}`}>
-              {view.latest ? formatCurrency(view.latest.value) : '—'}
+              {activeValue !== null ? formatCurrency(activeValue) : '—'}
             </div>
             {deltaText !== null ? (
               <div className="flex flex-wrap items-baseline gap-1.5 text-sm tabular-nums">
@@ -559,13 +664,18 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
                 <span className="sr-only">{deltaAria}</span>
                 <span
                   aria-hidden="true"
-                  className={trendDown ? 'text-destructive' : 'text-success'}
+                  className={activeDown ? 'text-destructive' : 'text-success'}
                 >
                   {deltaText}
                 </span>
                 <span aria-hidden="true" className="text-muted-foreground">
                   {view.phrase}
                 </span>
+                {activeDateText && (
+                  <span aria-hidden="true" className="text-muted-foreground">
+                    · {activeDateText}
+                  </span>
+                )}
               </div>
             ) : (
               <div className="text-sm text-muted-foreground">
@@ -628,7 +738,14 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
           </p>
         ) : (
           <ResponsiveContainer width="100%" height={cfg.height}>
-            <AreaChart data={chartData} margin={CHART_MARGIN}>
+            <AreaChart
+              data={chartData}
+              margin={CHART_MARGIN}
+              onMouseMove={handleScrub}
+              onMouseLeave={handleLeave}
+              onClick={handlePinToggle}
+              style={CHART_WRAPPER_STYLE}
+            >
               {/* Plain SVG defs (not recharts components). baseValue="dataMin"
                   resolves against the PADDED domain in recharts 3.8.1, so the
                   vertical gradient reaches the plot bottom (design review). */}
@@ -674,6 +791,20 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
                 activeDot={ACTIVE_DOT}
                 isAnimationActive={false}
               />
+              {pinRow && (
+                <ReferenceLine
+                  x={pinRow.bucketEnd}
+                  stroke={AXIS_STROKE}
+                  strokeDasharray={PIN_LINE_DASH}
+                />
+              )}
+              {pinRow && (
+                <ReferenceDot
+                  x={pinRow.bucketEnd}
+                  y={pinRow.netWorth}
+                  shape={trendDown ? END_DOT_DOWN : END_DOT_UP}
+                />
+              )}
               {view.latest && (
                 <ReferenceDot
                   x={view.latest.bucketEnd}

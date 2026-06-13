@@ -50,7 +50,7 @@ vi.mock('recharts', () => ({
   Tooltip: () => null,
   ReferenceLine: ({ x }: { x: string }) => <div data-testid="pin-line" data-x={x} />,
   ReferenceDot: ({ x, y }: { x: string; y: number }) => (
-    <div data-testid="end-dot" data-x={x} data-y={y} />
+    <div data-testid="ref-dot" data-x={x} data-y={y} />
   ),
 }));
 
@@ -304,8 +304,9 @@ describe('canvas polish', () => {
   it('end dot sits on the last bucket; line + gradient are success-toned on an up range', () => {
     seedStores();
     renderChart('netWorth');
-    const dot = screen.getByTestId('end-dot');
-    expect(dot.getAttribute('data-x')).toBe(String(captured.data[captured.data.length - 1].bucketEnd));
+    const dots = screen.getAllByTestId('ref-dot');
+    expect(dots).toHaveLength(1); // end dot only — no pin active
+    expect(dots.some((d) => d.getAttribute('data-x') === String(captured.data[captured.data.length - 1].bucketEnd))).toBe(true);
     const area = screen.getByTestId('area-netWorth');
     expect(area.getAttribute('data-stroke')).toBe('hsl(var(--success))');
     expect(area.getAttribute('data-fill')).toMatch(/^url\(#avc-fill-netWorth-up\)$/);
@@ -334,5 +335,82 @@ describe('canvas polish', () => {
     const ticks = JSON.parse(screen.getByTestId('x-axis').getAttribute('data-ticks')!);
     expect(ticks.length).toBeGreaterThan(2);
     expect(ticks[0]).toBe(captured.data[0].bucketEnd);
+  });
+});
+
+describe('hover-scrub and pin', () => {
+  it('scrubbing updates the header to the hovered bucket and reverts on leave', () => {
+    seedStores();
+    renderChart('netWorth');
+    const firstBucket = String(captured.data[0].bucketEnd);
+    act(() => captured.onMouseMove!({ activeLabel: firstBucket, isTooltipActive: true }, {}));
+    expect(screen.getByText('$140,000')).toBeInTheDocument(); // baseline bucket value
+    act(() => captured.onMouseLeave!());
+    expect(screen.getByText('$170,000')).toBeInTheDocument();
+  });
+
+  it('clicking pins: reference line + pin dot render, header locks, Esc clears', () => {
+    seedStores();
+    renderChart('netWorth');
+    const firstBucket = String(captured.data[0].bucketEnd);
+    act(() => captured.onClick!({ activeLabel: firstBucket }, {}));
+    expect(screen.getByTestId('pin-line').getAttribute('data-x')).toBe(firstBucket);
+    // pin dot at the pinned bucket (a second ref-dot besides the end dot)
+    const dots = screen.getAllByTestId('ref-dot');
+    const pinDot = dots.find((d) => d.getAttribute('data-x') === firstBucket);
+    expect(pinDot).toBeDefined();
+    expect(pinDot!.getAttribute('data-y')).toBe('140000'); // y looked up from the pinned row
+    expect(screen.getByText('$140,000')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Clear pinned date' })).toBeInTheDocument();
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(screen.queryByTestId('pin-line')).not.toBeInTheDocument();
+    expect(screen.getByText('$170,000')).toBeInTheDocument();
+  });
+
+  it('scrub takes precedence over pin; leave reverts to the PIN, not latest', () => {
+    seedStores();
+    renderChart('netWorth');
+    const firstBucket = String(captured.data[0].bucketEnd);
+    const lastBucket = String(captured.data[captured.data.length - 1].bucketEnd);
+    act(() => captured.onClick!({ activeLabel: firstBucket }, {}));
+    act(() => captured.onMouseMove!({ activeLabel: lastBucket, isTooltipActive: true }, {}));
+    expect(screen.getByText('$170,000')).toBeInTheDocument(); // scrub wins
+    act(() => captured.onMouseLeave!());
+    expect(screen.getByText('$140,000')).toBeInTheDocument(); // back to pin
+  });
+
+  it('clicking the same bucket unpins; pin clears when the bucket vanishes on range change', async () => {
+    seedStores();
+    renderChart('netWorth');
+    const firstBucket = String(captured.data[0].bucketEnd);
+    act(() => captured.onClick!({ activeLabel: firstBucket }, {}));
+    act(() => captured.onClick!({ activeLabel: firstBucket }, {}));
+    expect(screen.queryByTestId('pin-line')).not.toBeInTheDocument();
+    act(() => captured.onClick!({ activeLabel: firstBucket }, {}));
+    await userEvent.click(screen.getByRole('tab', { name: '5Y' })); // WEEK→MONTH: bucket ids change
+    expect(screen.queryByTestId('pin-line')).not.toBeInTheDocument();
+  });
+
+  it('picker Esc wins over pin Esc (defaultPrevented)', async () => {
+    seedStores({ withLoan: true });
+    renderChart('netWorth');
+    const firstBucket = String(captured.data[0].bucketEnd);
+    act(() => captured.onClick!({ activeLabel: firstBucket }, {}));
+    await userEvent.click(screen.getByRole('button', { name: /Included · 3 of 3/ }));
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: /Included entities/ })).not.toBeInTheDocument();
+    expect(screen.getByTestId('pin-line')).toBeInTheDocument(); // pin SURVIVED the picker's Esc
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByTestId('pin-line')).not.toBeInTheDocument(); // second Esc clears the pin
+  });
+
+  it('dashboard surface ignores clicks (no pin)', () => {
+    seedStores();
+    renderChart('dashboard');
+    const firstBucket = String(captured.data[0].bucketEnd);
+    act(() => captured.onClick?.({ activeLabel: firstBucket }, {}));
+    expect(screen.queryByTestId('pin-line')).not.toBeInTheDocument();
   });
 });
