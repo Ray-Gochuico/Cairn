@@ -31,7 +31,11 @@ vi.mock('recharts', () => ({
     return (
       <div data-testid="rc-area-chart" data-bucket-count={(data as never[]).length}>
         <pre data-testid="rc-data">{JSON.stringify(data)}</pre>
-        {children}
+        {/* Children render inside an <svg> so the component's real SVG bits
+            (<defs>/<linearGradient>/<stop>, Task 10) get the SVG namespace —
+            in a <div> React logs "unrecognized tag / incorrect casing" noise
+            for them on every test. */}
+        <svg>{children}</svg>
       </div>
     );
   },
@@ -50,7 +54,9 @@ vi.mock('recharts', () => ({
   ),
 }));
 
-import AssetValueChart from '@/components/charts/AssetValueChart';
+import AssetValueChart, {
+  AssetValueTooltipContent,
+} from '@/components/charts/AssetValueChart';
 
 function mkAccount(id: number, name: string, overrides: Partial<Account> = {}): Account {
   return {
@@ -245,5 +251,88 @@ describe('AssetValueChart — skeleton', () => {
     expect(screen.getByRole('dialog', { name: /Included entities/ })).toBeInTheDocument();
     await userEvent.keyboard('{Escape}');
     expect(screen.queryByRole('dialog', { name: /Included entities/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('AssetValueTooltipContent', () => {
+  const row = {
+    bucketEnd: '2026-06-30', netWorth: 169925,
+    'account:1': 110000, 'account:2': 60000, 'account:3': 50, 'account:4': 40,
+    'account:5': 30, 'account:6': 20, 'loan:9': -215,
+  };
+  const nameByKey = new Map([
+    ['account:1', 'Schwab'], ['account:2', '401k'], ['account:3', 'A3'],
+    ['account:4', 'A4'], ['account:5', 'A5'], ['account:6', 'A6'], ['loan:9', 'Mortgage'],
+  ]);
+
+  it('renders clamped date, bold total, top-5 by |value|, signed +N more', () => {
+    render(
+      <AssetValueTooltipContent
+        active
+        payload={[{ value: 169925, payload: row }]}
+        label="2026-06-30"
+        nameByKey={nameByKey}
+        headerLabel="Net worth"
+        todayIso="2026-06-12"
+      />,
+    );
+    expect(screen.getByText('Jun 12, 2026')).toBeInTheDocument(); // clamped from 06-30
+    expect(screen.getByText('Net worth')).toBeInTheDocument();
+    expect(screen.getByText('$169,925')).toBeInTheDocument();
+    // Top-5 by |value|: 110000, 60000, |−215|, 50, 40 → Mortgage IS in the top-5.
+    expect(screen.getByText('Schwab')).toBeInTheDocument();
+    expect(screen.getByText('Mortgage')).toBeInTheDocument();
+    expect(screen.getByText('−$215')).toBeInTheDocument(); // loan negative, U+2212
+    expect(screen.getByText('A4')).toBeInTheDocument();
+    expect(screen.queryByText('A5')).not.toBeInTheDocument(); // remainder
+    expect(screen.getByText('+2 more')).toBeInTheDocument();
+    // 30 + 20 = +$50, signed sum. '$50' also appears as A3's own row value,
+    // so scope the assertion to the "+N more" row.
+    const moreRow = screen.getByText('+2 more').closest('li')!;
+    expect(within(moreRow).getByText('$50')).toBeInTheDocument();
+  });
+
+  it('renders nothing when inactive or payload empty', () => {
+    const { container } = render(
+      <AssetValueTooltipContent active={false} payload={[]} label="" nameByKey={nameByKey} headerLabel="x" todayIso="2026-06-12" />,
+    );
+    expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe('canvas polish', () => {
+  it('end dot sits on the last bucket; line + gradient are success-toned on an up range', () => {
+    seedStores();
+    renderChart('netWorth');
+    const dot = screen.getByTestId('end-dot');
+    expect(dot.getAttribute('data-x')).toBe(String(captured.data[captured.data.length - 1].bucketEnd));
+    const area = screen.getByTestId('area-netWorth');
+    expect(area.getAttribute('data-stroke')).toBe('hsl(var(--success))');
+    expect(area.getAttribute('data-fill')).toMatch(/^url\(#avc-fill-netWorth-up\)$/);
+  });
+
+  it('line + gradient turn destructive on a down range', () => {
+    seedStores();
+    useSnapshotsStore.setState({
+      snapshots: [
+        mkSnapshot(1, 1, '2025-07-10', 200000),
+        mkSnapshot(2, 1, '2026-06-05', 110000),
+        mkSnapshot(3, 2, '2025-07-10', 50000),
+        mkSnapshot(4, 2, '2026-06-05', 60000),
+      ],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    renderChart('netWorth');
+    const area = screen.getByTestId('area-netWorth');
+    expect(area.getAttribute('data-stroke')).toBe('hsl(var(--destructive))');
+    expect(area.getAttribute('data-fill')).toMatch(/^url\(#avc-fill-netWorth-down\)$/);
+  });
+
+  it('x-axis receives the explicit month-first tick array', () => {
+    seedStores();
+    renderChart('netWorth');
+    const ticks = JSON.parse(screen.getByTestId('x-axis').getAttribute('data-ticks')!);
+    expect(ticks.length).toBeGreaterThan(2);
+    expect(ticks[0]).toBe(captured.data[0].bucketEnd);
   });
 });

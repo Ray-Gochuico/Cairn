@@ -4,7 +4,9 @@ import {
   Area,
   AreaChart,
   CartesianGrid,
+  ReferenceDot,
   ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
@@ -15,8 +17,10 @@ import {
   RANGE_TABS,
   buildAssetValueView,
   earliestObservationIso,
+  formatBucketDate,
   granularityForWindow,
   headerLabel,
+  tooltipRows,
   xTickLabel,
   xTicksFor,
 } from '@/lib/asset-value-chart';
@@ -47,12 +51,13 @@ import type { LoanType } from '@/types/enums';
  * AssetValueChart — the Google-Finance-style growth chart (spec
  * docs/superpowers/specs/2026-06-12-asset-value-chart-design.md §3).
  *
- * Task 9 skeleton: header (label / value / delta), range tabs, Included
- * picker, per-surface defaults + persistence, empty states, and the base
- * AreaChart. Tasks 10–12 extend this file with gradient fill + end dot +
- * tooltip, scrub/pin, and the breakdown panel — keep the section structure
- * below (hoisted constants → state → derivation memos → header / tabs /
- * body) intact for them.
+ * Task 9 skeleton + Task 10 canvas polish: header (label / value / delta),
+ * range tabs, Included picker, per-surface defaults + persistence, empty
+ * states, and the AreaChart with directional gradient fill, end dot, and
+ * hover tooltip (§3.3/§3.4). Tasks 11–12 extend this file with scrub/pin
+ * and the breakdown panel — keep the section structure below (hoisted
+ * constants → state → derivation memos → header / tabs / body) intact for
+ * them.
  */
 
 export type AssetValueChartSurface = 'netWorth' | 'dashboard';
@@ -76,7 +81,10 @@ interface SurfaceConfig {
   showLink: boolean;
   /** Default selection: everything (net worth) vs assets only. */
   defaultIncludeLoans: boolean;
-  /** Gradient defs land in Task 10 — ids reserved per surface here. */
+  /**
+   * Per-direction gradient fill ids — unique per surface so the dashboard
+   * and net-worth charts can mount on one page without <defs> collisions.
+   */
   gradientUpId: string;
   gradientDownId: string;
 }
@@ -115,14 +123,30 @@ const GRID_STROKE = 'hsl(var(--border))' as const;
 const AXIS_STROKE = 'hsl(var(--muted-foreground))' as const;
 const SUCCESS = 'hsl(var(--success))' as const;
 const DESTRUCTIVE = 'hsl(var(--destructive))' as const;
-// Tooltip cursor (vertical dashed scrub line) — consumed when Task 10 adds
-// the <Tooltip>. Exported so tsc's noUnusedLocals stays green until then.
-export const CURSOR = {
+// Tooltip cursor — the vertical dashed scrub line.
+const CURSOR = {
   stroke: AXIS_STROKE,
   strokeDasharray: '4 4',
 } as const;
 const ACTIVE_DOT = { r: 4 } as const;
 const EMPTY_CHART_DATA: NetWorthChartRow[] = [];
+
+// End-of-series dot (spec §3.3): solid core + soft halo, tinted by trend
+// direction. Prebuilt per direction so the ReferenceDot `shape` prop keeps
+// a stable identity across renders.
+function endDotShape(color: string) {
+  return function EndDot(props: { cx?: number; cy?: number }) {
+    const { cx = 0, cy = 0 } = props;
+    return (
+      <g>
+        <circle cx={cx} cy={cy} r={8} fill={color} fillOpacity={0.15} />
+        <circle cx={cx} cy={cy} r={4} fill={color} />
+      </g>
+    );
+  };
+}
+const END_DOT_UP = endDotShape(SUCCESS);
+const END_DOT_DOWN = endDotShape(DESTRUCTIVE);
 
 // Whole-domain function form (spec §3.3) — the tuple-of-functions form
 // can't see the span, so padding must be computed from both ends at once.
@@ -151,6 +175,61 @@ interface EligibleEntity extends SelectedEntity {
 function loanDisplayName(name: string, type: LoanType): string {
   const trimmed = name.trim();
   return trimmed.length > 0 ? trimmed : loanTypeLabel(type);
+}
+
+// ----- Tooltip content (spec §3.4) -----
+
+export interface AssetValueTooltipProps {
+  active?: boolean;
+  payload?: Array<{ value?: number; payload?: NetWorthChartRow }>;
+  label?: string;
+  nameByKey: ReadonlyMap<string, string>;
+  headerLabel: string;
+  todayIso: string;
+}
+
+/**
+ * Single-Area charts put ONE entry in the recharts payload; the per-entity
+ * breakdown reads the raw row via entry.payload (spec §3.4). Exported for
+ * direct unit testing with a fabricated payload.
+ */
+export function AssetValueTooltipContent({
+  active,
+  payload,
+  label,
+  nameByKey,
+  headerLabel: hl,
+  todayIso,
+}: AssetValueTooltipProps) {
+  if (!active || !payload || payload.length === 0 || !payload[0].payload) return null;
+  const rowData = payload[0].payload;
+  const t = tooltipRows(rowData, nameByKey, 5);
+  return (
+    <div className="rounded-md border bg-background shadow-md p-3 text-sm min-w-[200px]">
+      <div className="text-xs text-muted-foreground mb-1">
+        {formatBucketDate(label ?? rowData.bucketEnd, todayIso)}
+      </div>
+      <div className="flex items-center justify-between gap-4 font-semibold tabular-nums">
+        <span>{hl}</span>
+        <span>{formatCurrency(rowData.netWorth)}</span>
+      </div>
+      <div className="border-t my-1.5" />
+      <ul className="space-y-0.5">
+        {t.rows.map((r) => (
+          <li key={r.key} className="flex items-center justify-between gap-4 tabular-nums">
+            <span className="text-muted-foreground truncate">{r.name}</span>
+            <span>{r.value < 0 ? `−${formatCurrency(Math.abs(r.value))}` : formatCurrency(r.value)}</span>
+          </li>
+        ))}
+        {t.moreCount > 0 && (
+          <li className="flex items-center justify-between gap-4 tabular-nums text-muted-foreground">
+            <span>+{t.moreCount} more</span>
+            <span>{t.moreSum < 0 ? `−${formatCurrency(Math.abs(t.moreSum))}` : formatCurrency(t.moreSum)}</span>
+          </li>
+        )}
+      </ul>
+    </div>
+  );
 }
 
 interface AssetValueChartProps {
@@ -424,15 +503,24 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
 
   const xTicks = useMemo(() => xTicksFor(chartData, window_), [chartData, window_]);
 
+  // Tooltip content re-renders per mousemove inside recharts; memoizing the
+  // ELEMENT (recharts cloneElement-injects active/payload/label into it)
+  // keeps that cheap.
+  const tooltipElement = useMemo(
+    () => <AssetValueTooltipContent nameByKey={nameByKey} headerLabel={label} todayIso={todayIso} />,
+    [nameByKey, label, todayIso],
+  );
+
   const hasEligible = eligibleAll.length > 0;
   const hasSelection = selectedKeys.size > 0;
 
-  // Sign-aware line color (spec §2 locked decision).
-  const lineColor = view.delta !== null && view.delta < 0 ? DESTRUCTIVE : SUCCESS;
+  // Sign-aware trend direction (spec §2 locked decision) — drives the line
+  // color, gradient fill, end dot, and delta-row tint together.
+  const trendDown = view.delta !== null && view.delta < 0;
+  const lineColor = trendDown ? DESTRUCTIVE : SUCCESS;
 
   // Delta row pieces, kept as small string consts.
-  const deltaDown = view.delta !== null && view.delta < 0;
-  const deltaSign = deltaDown ? '−' : '+';
+  const deltaSign = trendDown ? '−' : '+';
   const deltaDollar = view.delta !== null ? formatCurrency(Math.abs(view.delta)) : null;
   const deltaPctText =
     view.deltaPct !== null
@@ -440,11 +528,11 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
       : '';
   const deltaText =
     view.delta !== null
-      ? `${deltaDown ? '▼' : '▲'} ${deltaSign}${deltaDollar}${deltaPctText}`
+      ? `${trendDown ? '▼' : '▲'} ${deltaSign}${deltaDollar}${deltaPctText}`
       : null;
   const deltaAria =
     view.delta !== null
-      ? `${deltaDown ? 'Down' : 'Up'} ${deltaDollar}` +
+      ? `${trendDown ? 'Down' : 'Up'} ${deltaDollar}` +
         (view.deltaPct !== null
           ? `, ${Math.abs(view.deltaPct).toFixed(1)} percent`
           : '') +
@@ -471,7 +559,7 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
                 <span className="sr-only">{deltaAria}</span>
                 <span
                   aria-hidden="true"
-                  className={deltaDown ? 'text-destructive' : 'text-success'}
+                  className={trendDown ? 'text-destructive' : 'text-success'}
                 >
                   {deltaText}
                 </span>
@@ -541,6 +629,19 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
         ) : (
           <ResponsiveContainer width="100%" height={cfg.height}>
             <AreaChart data={chartData} margin={CHART_MARGIN}>
+              {/* Plain SVG defs (not recharts components). baseValue="dataMin"
+                  resolves against the PADDED domain in recharts 3.8.1, so the
+                  vertical gradient reaches the plot bottom (design review). */}
+              <defs>
+                <linearGradient id={cfg.gradientUpId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={SUCCESS} stopOpacity={0.22} />
+                  <stop offset="100%" stopColor={SUCCESS} stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id={cfg.gradientDownId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={DESTRUCTIVE} stopOpacity={0.22} />
+                  <stop offset="100%" stopColor={DESTRUCTIVE} stopOpacity={0} />
+                </linearGradient>
+              </defs>
               <CartesianGrid vertical={false} stroke={GRID_STROKE} />
               <XAxis
                 dataKey="bucketEnd"
@@ -561,18 +662,25 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
                 stroke={AXIS_STROKE}
                 fontSize={11}
               />
+              <Tooltip content={tooltipElement} cursor={CURSOR} />
               <Area
                 type="monotone"
                 dataKey="netWorth"
                 stroke={lineColor}
                 strokeWidth={cfg.strokeWidth}
-                fill={lineColor}
-                fillOpacity={0.12}
+                fill={trendDown ? `url(#${cfg.gradientDownId})` : `url(#${cfg.gradientUpId})`}
                 baseValue="dataMin"
                 dot={false}
                 activeDot={ACTIVE_DOT}
                 isAnimationActive={false}
               />
+              {view.latest && (
+                <ReferenceDot
+                  x={view.latest.bucketEnd}
+                  y={view.latest.value}
+                  shape={trendDown ? END_DOT_DOWN : END_DOT_UP}
+                />
+              )}
             </AreaChart>
           </ResponsiveContainer>
         )}
