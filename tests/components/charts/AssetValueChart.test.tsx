@@ -208,6 +208,16 @@ describe('AssetValueChart — skeleton', () => {
     expect(screen.getAllByText(/since Jul 2025/).length).toBeGreaterThan(0);
   });
 
+  it('wraps the card content in a labeled region: label, value, delta (spec §3.9)', () => {
+    seedStores();
+    renderChart('netWorth');
+    expect(
+      screen.getByRole('region', {
+        name: 'Net worth: $170,000, up $30,000 since Jul 2025',
+      }),
+    ).toBeInTheDocument();
+  });
+
   it('dashboard surface renders the Net Worth → link; netWorth surface does not', () => {
     seedStores();
     const { unmount } = renderChart('dashboard');
@@ -336,6 +346,26 @@ describe('canvas polish', () => {
     expect(ticks.length).toBeGreaterThan(2);
     expect(ticks[0]).toBe(captured.data[0].bucketEnd);
   });
+
+  it('scrub re-renders bail at the ChartCanvas memo boundary (recharts untouched)', () => {
+    // The AreaChart mock reassigns `captured` on EVERY canvas render, so
+    // object identity is a render counter: if a scrub re-render leaked
+    // through the memo(ChartCanvas) boundary, `captured` would be replaced.
+    seedStores();
+    renderChart('netWorth');
+    const before = captured;
+    const firstBucket = String(captured.data[0].bucketEnd);
+    act(() => captured.onMouseMove!({ activeLabel: firstBucket, isTooltipActive: true }, {}));
+    expect(screen.getByTestId('asset-chart-header-value').textContent).toBe('$140,000'); // header DID move
+    expect(captured).toBe(before); // canvas did NOT re-render
+    act(() => captured.onMouseLeave!());
+    expect(captured).toBe(before);
+    // Positive control: pinning DOES change a canvas prop (pinRow), so this
+    // render must pass THROUGH the memo — proving the identity assertions
+    // above can actually fail and aren't vacuous against a frozen mock.
+    act(() => captured.onClick!({ activeLabel: firstBucket }, {}));
+    expect(captured).not.toBe(before);
+  });
 });
 
 describe('hover-scrub and pin', () => {
@@ -349,6 +379,10 @@ describe('hover-scrub and pin', () => {
     expect(screen.getByText('$170,000')).toBeInTheDocument();
   });
 
+  // The pin tests scope header-value assertions to the header element
+  // (data-testid="asset-chart-header-value"): pinning auto-expands the
+  // Task 12 breakdown panel, whose footer Total renders the same dollar
+  // string. Intent unchanged — the HEADER shows the pinned/scrubbed value.
   it('clicking pins: reference line + pin dot render, header locks, Esc clears', () => {
     seedStores();
     renderChart('netWorth');
@@ -360,13 +394,13 @@ describe('hover-scrub and pin', () => {
     const pinDot = dots.find((d) => d.getAttribute('data-x') === firstBucket);
     expect(pinDot).toBeDefined();
     expect(pinDot!.getAttribute('data-y')).toBe('140000'); // y looked up from the pinned row
-    expect(screen.getByText('$140,000')).toBeInTheDocument();
+    expect(screen.getByTestId('asset-chart-header-value').textContent).toBe('$140,000');
     expect(screen.getByRole('button', { name: 'Clear pinned date' })).toBeInTheDocument();
     act(() => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     });
     expect(screen.queryByTestId('pin-line')).not.toBeInTheDocument();
-    expect(screen.getByText('$170,000')).toBeInTheDocument();
+    expect(screen.getByTestId('asset-chart-header-value').textContent).toBe('$170,000');
   });
 
   it('scrub takes precedence over pin; leave reverts to the PIN, not latest', () => {
@@ -376,9 +410,9 @@ describe('hover-scrub and pin', () => {
     const lastBucket = String(captured.data[captured.data.length - 1].bucketEnd);
     act(() => captured.onClick!({ activeLabel: firstBucket }, {}));
     act(() => captured.onMouseMove!({ activeLabel: lastBucket, isTooltipActive: true }, {}));
-    expect(screen.getByText('$170,000')).toBeInTheDocument(); // scrub wins
+    expect(screen.getByTestId('asset-chart-header-value').textContent).toBe('$170,000'); // scrub wins
     act(() => captured.onMouseLeave!());
-    expect(screen.getByText('$140,000')).toBeInTheDocument(); // back to pin
+    expect(screen.getByTestId('asset-chart-header-value').textContent).toBe('$140,000'); // back to pin
   });
 
   it('clicking the same bucket unpins; pin clears when the bucket vanishes on range change', async () => {
@@ -412,5 +446,102 @@ describe('hover-scrub and pin', () => {
     const firstBucket = String(captured.data[0].bucketEnd);
     act(() => captured.onClick?.({ activeLabel: firstBucket }, {}));
     expect(screen.queryByTestId('pin-line')).not.toBeInTheDocument();
+  });
+});
+
+describe('breakdown panel (netWorth surface)', () => {
+  it('is collapsed by default, expands with full rows + footer tie', async () => {
+    seedStores({ withLoan: true });
+    renderChart('netWorth');
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    const toggle = screen.getByRole('button', { name: /Breakdown/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(toggle);
+    const table = screen.getByRole('table');
+    const rows = within(table).getAllByRole('row');
+    expect(rows).toHaveLength(5); // header + 3 entities + footer
+    expect(within(table).getByText('Mortgage')).toBeInTheDocument();
+    const footer = rows[rows.length - 1];
+    expect(within(footer).getByText('Total')).toBeInTheDocument();
+    // Footer total ties to the header value (latest 170,000 − 350,000 loan = −$180,000)
+    expect(within(footer).getByText('−$180,000')).toBeInTheDocument();
+    expect(screen.getByText('Click the chart to pin a date.')).toBeInTheDocument();
+  });
+
+  it('pinning auto-expands and shows the pinned as-of date', () => {
+    seedStores({ withLoan: true });
+    renderChart('netWorth');
+    const firstBucket = String(captured.data[0].bucketEnd);
+    act(() => captured.onClick!({ activeLabel: firstBucket }, {}));
+    expect(screen.getByRole('table')).toBeInTheDocument();
+    expect(screen.getAllByText(/as of /).length).toBeGreaterThan(0);
+    expect(screen.queryByText('Click the chart to pin a date.')).not.toBeInTheDocument();
+  });
+
+  it('loan row: negative value, paydown-positive Δ, Δ% em-dash; est rows would badge', async () => {
+    seedStores({ withLoan: true });
+    renderChart('netWorth');
+    await userEvent.click(screen.getByRole('button', { name: /Breakdown/ }));
+    const table = screen.getByRole('table');
+    const loanRow = within(table).getByText('Mortgage').closest('tr')!;
+    expect(within(loanRow).getByText('−$350,000')).toBeInTheDocument();
+    // loan delta: back-walked baseline (> 350k) − 350k → positive contribution, rendered with +
+    expect(within(loanRow).getByText(/^\+\$/)).toBeInTheDocument();
+    const cells = within(loanRow).getAllByRole('cell');
+    // Δ% cell and Share cell are both em-dash for loans
+    expect(cells.some((c) => c.textContent === '—')).toBe(true);
+  });
+
+  it('"Only" focuses one entity without touching the saved selection; chip restores', async () => {
+    seedStores({ withLoan: true });
+    renderChart('netWorth');
+    await userEvent.click(screen.getByRole('button', { name: /Breakdown/ }));
+    const savedBefore = localStorage.getItem('netWorthChart.selectedEntities');
+    const schwabRow = within(screen.getByRole('table')).getByText('Schwab').closest('tr')!;
+    await userEvent.click(within(schwabRow).getByRole('button', { name: /^Only/ }));
+    expect(screen.getByRole('button', { name: /Included · 1 of 3/ })).toBeInTheDocument();
+    // Header label = the focused entity's name. Selector adjusted from the
+    // task's 'div *' (matches ANY div descendant — would also hit the
+    // breakdown row's name cell) to 'div': only the header-label div has
+    // 'Schwab' as its own text; the table name lives in a <td>.
+    expect(screen.getByText('Schwab', { selector: 'div' })).toBeInTheDocument();
+    expect(localStorage.getItem('netWorthChart.selectedEntities')).toBe(savedBefore);
+    await userEvent.click(screen.getByRole('button', { name: 'Clear focus' }));
+    expect(screen.getByRole('button', { name: /Included · 3 of 3/ })).toBeInTheDocument();
+  });
+
+  it('opening the picker exits the focus lens — popover always shows the saved selection', async () => {
+    seedStores({ withLoan: true });
+    renderChart('netWorth');
+    await userEvent.click(screen.getByRole('button', { name: /Breakdown/ }));
+    const schwabRow = within(screen.getByRole('table')).getByText('Schwab').closest('tr')!;
+    await userEvent.click(within(schwabRow).getByRole('button', { name: /^Only/ }));
+    // Lens active: chip present, picker count reads the 1-entity view.
+    expect(screen.getByText('Only · Schwab', { selector: 'span' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Included · 1 of 3/ })).toBeInTheDocument();
+    // Opening the picker drops the lens: checkboxes must reflect the SAVED
+    // selection a toggle edits, never effectiveKeys (an unchecked-looking
+    // box would otherwise silently REMOVE its entity from the saved set).
+    await userEvent.click(screen.getByRole('button', { name: /Included · 1 of 3/ }));
+    expect(screen.queryByRole('button', { name: 'Clear focus' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Included · 3 of 3/ })).toBeInTheDocument();
+    const dialog = screen.getByRole('dialog', { name: /Included entities/ });
+    const boxes = within(dialog).getAllByRole('checkbox');
+    expect(boxes).toHaveLength(3);
+    for (const box of boxes) expect(box).toBeChecked();
+    await userEvent.click(within(dialog).getByLabelText('Mortgage'));
+    expect(screen.getByRole('button', { name: /Included · 2 of 3/ })).toBeInTheDocument();
+  });
+
+  it('dashboard surface renders no breakdown toggle', () => {
+    seedStores();
+    renderChart('dashboard');
+    expect(screen.queryByRole('button', { name: /Breakdown/ })).not.toBeInTheDocument();
+  });
+
+  it('zero-eligible dashboard shows Total assets label (CF3)', () => {
+    seedEmptyStores();
+    renderChart('dashboard');
+    expect(screen.getByText('Total assets')).toBeInTheDocument();
   });
 });

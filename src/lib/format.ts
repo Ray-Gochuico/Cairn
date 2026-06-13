@@ -5,6 +5,14 @@ export const formatPercent = (n: number): string =>
   new Intl.NumberFormat('en-US', { style: 'percent', maximumFractionDigits: 1 }).format(n);
 
 /**
+ * Signed full-dollar form: a negative renders with a TRUE MINUS (U+2212,
+ * "−$215"); a non-negative renders plain ("$215" — no plus sign). For Δ
+ * cells that need an explicit +, callers prepend it.
+ */
+export const formatSignedCurrency = (v: number): string =>
+  v < 0 ? '−' + formatCurrency(Math.abs(v)) : formatCurrency(v);
+
+/**
  * Adaptive dollar formatter for chart axes. Scales suffix by magnitude:
  *   |v| < $1,000        -> "$500"
  *   $1k ≤ |v| < $1M     -> "$80k" / "$1.5k" (1 decimal only if non-whole)
