@@ -13,7 +13,7 @@ import type { Account, AccountSnapshot, Loan } from '@/types/schema';
 
 // Captured chart-level handlers — Task 11's scrub/pin tests drive these
 // directly (recharts renders nothing in jsdom; mock pattern extends the
-// old NetWorthTimeSeriesChart.test mock).
+// removed stacked-bar chart test's mock).
 interface CapturedChart {
   data: Array<Record<string, number | string>>;
   onMouseMove?: (s: { activeLabel?: string; isTooltipActive?: boolean }, e: unknown) => void;

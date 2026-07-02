@@ -460,7 +460,7 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
 
   const { filter } = useViewFilter();
 
-  // ----- Eligibility (rules unchanged from the old NetWorthTimeSeriesChart) -----
+  // ----- Eligibility (rules carried over from the removed stacked-bar chart) -----
   const eligibleAccounts = useMemo<EligibleEntity[]>(() => {
     return accounts
       .filter(

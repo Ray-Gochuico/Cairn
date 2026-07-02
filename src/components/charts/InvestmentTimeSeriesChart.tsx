@@ -60,7 +60,7 @@ const MAX_BUCKETS = 90;
 const CHART_MARGIN = { top: 8, right: 16, bottom: 8, left: 8 } as const;
 const LINE_DOT = { r: 3 } as const;
 // CSS-variable references so axes / grid flip with the theme (Wave-3
-// Design must-have #2). See NetWorthTimeSeriesChart for context.
+// Design must-have #2). See AssetValueChart for context.
 const GRID_STROKE = 'hsl(var(--border))' as const;
 const AXIS_STROKE = 'hsl(var(--muted-foreground))' as const;
 const TOTAL_LINE_STROKE = 'hsl(var(--foreground))' as const;

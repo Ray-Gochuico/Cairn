@@ -8,6 +8,9 @@ const STORAGE_KEY = 'dashboardWidgetLayout.v1';
  * the user never customized — rebuild it to the new defaults so the chart
  * lands in its designed slot instead of appended below the fold. Any other
  * saved layout is respected; reconcile() appends new ids at the end.
+ *
+ * One-time migration shipped 2026-06; safe to delete once no pre-chart
+ * layouts remain in the wild.
  */
 const PRE_ASSET_CHART_DEFAULT = ['pills-section', 'spending', 'concentration', 'goals'];
 

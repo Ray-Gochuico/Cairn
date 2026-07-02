@@ -42,8 +42,8 @@ export interface NetWorthChartInput {
 }
 
 /**
- * Build the per-bucket row array consumed by `NetWorthTimeSeriesChart`'s
- * `<ComposedChart data=...>` prop.
+ * Build the per-bucket row array consumed by `AssetValueChart`'s
+ * `<AreaChart data=...>` prop.
  *
  * As-of semantics over a CONTIGUOUS spine (spec §5.1):
  *
