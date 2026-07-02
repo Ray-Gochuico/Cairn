@@ -19,9 +19,14 @@ const MAX_BUCKETS = 90;
 
 export interface NetWorthChartRow {
   bucketEnd: string;
-  /** Positive per-entity stack values (`account:42` / `property:7` / `vehicle:3` keys). */
+  /**
+   * Per-entity value for this bucket, keyed by composite entity key
+   * (`account:42` / `property:7` / `vehicle:3` / `loan:9`). Assets are
+   * positive; loans are stored NEGATED (their negated balance) so the row
+   * sums directly into `netWorth`.
+   */
   [entityKey: string]: number | string;
-  /** Asset−Liability for this bucket — drives the overlaid Net Worth line. */
+  /** The single line value for this bucket: selected assets − selected loans. */
   netWorth: number;
 }
 
@@ -66,7 +71,7 @@ export interface NetWorthChartInput {
  *     purchasePrice → snapshots; flat currentEstimatedValue only for
  *     entities with no snapshots at all)
  *   - loan → loanBalanceHistory back-walk anchored at `today` (negated so
- *     the bar stacks downward)
+ *     it sums directly into `netWorth`)
  *
  * Returned rows are sorted ascending by bucketEnd and capped at the most
  * recent MAX_BUCKETS entries (matches InvestmentTimeSeriesChart).
@@ -271,10 +276,11 @@ export function buildNetWorthChartData(
         assets += v;
       } else if (r.kind === 'loan' && r.loan) {
         const v = loanValuesByKey.get(r.key)?.[i] ?? 0;
-        // Stack downward — recharts stacks negative values below zero
-        // separately from positive ones (controlled by stackId). Guard
-        // v === 0 (pre-origination buckets): plain negation would store
-        // -0, which breaks Object.is/toBe(0) checks downstream.
+        // Loans are stored NEGATED so netWorth sums directly (assets +
+        // negated loans) and downstream readers (tooltip, breakdown table)
+        // can display the signed value as-is. Guard v === 0 (pre-origination
+        // buckets): plain negation would store -0, which breaks
+        // Object.is/toBe(0) checks downstream.
         row[r.key] = v === 0 ? 0 : -v;
         liabilities += v;
       }

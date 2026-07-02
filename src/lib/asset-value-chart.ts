@@ -184,14 +184,27 @@ export function buildAssetValueView(
   return { points, latest, baseline, delta, deltaPct, phrase };
 }
 
-/** Explicit tick values: first bucket of each month (≤1Y) or year (5Y/ALL). */
-export function xTicksFor(rows: NetWorthChartRow[], window: TimeWindow): string[] {
+/**
+ * Explicit tick values: first bucket of each month (≤1Y) or year (5Y/ALL).
+ *
+ * Future-tick clamp (spec §5.1): under WEEK granularity the final bucket can
+ * end next Saturday, which may fall in a month/year `today` hasn't reached
+ * yet — ticking it would show the label (e.g. 'Jul') days early. Skip any
+ * candidate whose bucketEnd is still in the future; a suppressed tick is
+ * better than one with a premature label.
+ */
+export function xTicksFor(
+  rows: NetWorthChartRow[],
+  window: TimeWindow,
+  todayIso: string,
+): string[] {
   const yearly = window === '5Y' || window === 'ALL';
   const ticks: string[] = [];
   let prev = '';
   for (const r of rows) {
     const key = yearly ? r.bucketEnd.slice(0, 4) : r.bucketEnd.slice(0, 7);
     if (key !== prev) {
+      if (r.bucketEnd > todayIso) continue;
       ticks.push(r.bucketEnd);
       prev = key;
     }

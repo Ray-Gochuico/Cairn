@@ -8,8 +8,8 @@ import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
 import { useLoansStore } from '@/stores/loans-store';
 import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
-import { AccountType, LoanType, SnapshotSource } from '@/types/enums';
-import type { Account, AccountSnapshot, Loan } from '@/types/schema';
+import { AccountType, LoanType, PropertyType, SnapshotSource } from '@/types/enums';
+import type { Account, AccountSnapshot, Loan, Property } from '@/types/schema';
 
 // Captured chart-level handlers — Task 11's scrub/pin tests drive these
 // directly (recharts renders nothing in jsdom; mock pattern extends the
@@ -77,6 +77,13 @@ function mkLoan(id: number, name: string, overrides: Partial<Loan> = {}): Loan {
     originalAmount: 400000, currentBalance: 350000, interestRate: 0.04, termMonths: 360,
     firstPaymentDate: '2024-01-01', monthlyPayment: 1909.66, extraPaymentDefault: 0,
     linkedPropertyId: null, linkedVehicleId: null, ...overrides,
+  };
+}
+function mkProperty(id: number, name: string, overrides: Partial<Property> = {}): Property {
+  return {
+    id, householdId: 1, ownerPersonId: null, name, type: PropertyType.PRIMARY_RESIDENCE,
+    address: null, purchaseDate: null, purchasePrice: null, currentEstimatedValue: 400000,
+    linkedLoanId: null, excludedFromNetWorth: false, ...overrides,
   };
 }
 
@@ -446,6 +453,39 @@ describe('hover-scrub and pin', () => {
     const firstBucket = String(captured.data[0].bucketEnd);
     act(() => captured.onClick?.({ activeLabel: firstBucket }, {}));
     expect(screen.queryByTestId('pin-line')).not.toBeInTheDocument();
+  });
+});
+
+describe('estimated-values footnote (spec §3.6, chart-level)', () => {
+  it('shows the footnote when estimate-backed entities exceed 25% of gross included assets', () => {
+    // One account with a single snapshot (150000, no growth history) plus a
+    // property carrying only a flat currentEstimatedValue (no asset-value
+    // snapshots — estimate-backed per estimateBackedKeys). Gross included =
+    // 600000 + 150000 = 750000; estimate share = 600000 / 750000 = 80% > 25%.
+    useAccountsStore.setState({
+      accounts: [mkAccount(1, 'Schwab')], isLoading: false, error: null, load: async () => {},
+    } as never);
+    useSnapshotsStore.setState({
+      snapshots: [mkSnapshot(1, 1, '2026-06-05', 150000)],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    usePropertiesStore.setState({
+      properties: [mkProperty(1, 'Lake House', { currentEstimatedValue: 600000 })],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    useVehiclesStore.setState({ vehicles: [], isLoading: false, error: null, load: async () => {} } as never);
+    useLoansStore.setState({ loans: [], isLoading: false, error: null, load: async () => {} } as never);
+    useAssetValueSnapshotsStore.setState({
+      assetValueSnapshots: [], isLoading: false, error: null, load: async () => {},
+    } as never);
+    renderChart('netWorth');
+    expect(screen.getByText(/Estimated values make up 80% of included/)).toBeInTheDocument();
+  });
+
+  it('is absent for the standard seedStores fixture (accounts only, no estimates)', () => {
+    seedStores();
+    renderChart('netWorth');
+    expect(screen.queryByText(/Estimated values make up/)).not.toBeInTheDocument();
   });
 });
 

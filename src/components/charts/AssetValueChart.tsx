@@ -318,6 +318,11 @@ interface ChartCanvasProps {
  *     tickFormatter is a module constant (X_TICK_FORMATTERS[window_]).
  * Adding a prop? Keep it identity-stable across scrub re-renders or this
  * boundary leaks per-mousemove renders into recharts (3.x discipline above).
+ *
+ * A11y note (spec §3.9): recharts' accessibilityLayer gives the SVG
+ * arrow-key tooltip scrubbing, but that path does NOT drive our header
+ * (external handlers don't fire for keyboard) — the breakdown table is the
+ * accessible data path (spec §3.9).
  */
 const ChartCanvas = memo(function ChartCanvas({
   data,
@@ -787,7 +792,10 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
     return filter !== 'household' ? `${base} · Household` : base;
   }, [effectiveKeys, eligibleAssetKeys, eligibleLoanKeys, nameByKey, filter]);
 
-  const xTicks = useMemo(() => xTicksFor(chartData, window_), [chartData, window_]);
+  const xTicks = useMemo(
+    () => xTicksFor(chartData, window_, todayIso),
+    [chartData, window_, todayIso],
+  );
 
   // Tooltip content re-renders per mousemove inside recharts; memoizing the
   // ELEMENT (recharts cloneElement-injects active/payload/label into it)
@@ -938,6 +946,20 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
     [breakdownAnchorRow, view.baseline, rowByBucket, resolvedEntities, estBacked, latestObservationByKey, chartData],
   );
 
+  // Chart-level honesty cue (spec §3.6): when flat-estimate entities carry
+  // more than a quarter of the included assets, the line's growth is mostly
+  // unmeasured — say so once, under the chart.
+  const estimatedShare = useMemo(() => {
+    let gross = 0;
+    let est = 0;
+    for (const r of breakdownRows) {
+      if (r.kind === 'loan' || r.value <= 0) continue;
+      gross += r.value;
+      if (r.estimateBacked) est += r.value;
+    }
+    return gross > 0 ? est / gross : 0;
+  }, [breakdownRows]);
+
   return (
     <Card>
       <CardContent className="pt-6">
@@ -1082,6 +1104,14 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
               onMouseLeave={handleLeave}
               onClick={handlePinToggle}
             />
+          )}
+
+          {/* ----- Estimated-values footnote (spec §3.6 — chart-level, both surfaces) ----- */}
+          {hasSelection && estimatedShare > 0.25 && (
+            <p className="text-xs text-muted-foreground">
+              Estimated values make up {(estimatedShare * 100).toFixed(0)}% of included
+              assets — their history is flat until you add value snapshots.
+            </p>
           )}
 
           {/* ----- Breakdown panel (spec §3.6 — netWorth surface only) ----- */}

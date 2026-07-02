@@ -220,15 +220,32 @@ describe('x ticks', () => {
       row('2026-04-04', 1), row('2026-04-11', 1), row('2026-05-02', 1),
       row('2026-05-09', 1), row('2026-06-06', 1),
     ];
-    expect(xTicksFor(rows, '3M')).toEqual(['2026-04-04', '2026-05-02', '2026-06-06']);
+    expect(xTicksFor(rows, '3M', TODAY)).toEqual(['2026-04-04', '2026-05-02', '2026-06-06']);
     expect(xTickLabel('2026-04-04', '3M')).toBe('Apr');
   });
   it('5Y/ALL: first bucket of each year, labeled YYYY', () => {
     const rows = [
       row('2025-11-30', 1), row('2025-12-31', 1), row('2026-01-31', 1), row('2026-02-28', 1),
     ];
-    expect(xTicksFor(rows, '5Y')).toEqual(['2025-11-30', '2026-01-31']);
+    expect(xTicksFor(rows, '5Y', TODAY)).toEqual(['2025-11-30', '2026-01-31']);
     expect(xTickLabel('2026-01-31', '5Y')).toBe('2026');
+  });
+  it('suppresses a future tick whose bucket starts a new month days before today reaches it', () => {
+    // WEEK bucket ending 2026-07-04 (Saturday) is the FIRST '2026-07' bucket,
+    // but 2026-06-28 (today) hasn't reached it yet — showing the tick would
+    // label the x-axis 'Jul' days before July actually starts.
+    const rows = [
+      row('2026-06-06', 1), row('2026-06-13', 1), row('2026-06-20', 1),
+      row('2026-06-27', 1), row('2026-07-04', 1),
+    ];
+    expect(xTicksFor(rows, '3M', '2026-06-28')).toEqual(['2026-06-06']);
+  });
+  it('the same future bucket IS ticked once today reaches its bucket end', () => {
+    const rows = [
+      row('2026-06-06', 1), row('2026-06-13', 1), row('2026-06-20', 1),
+      row('2026-06-27', 1), row('2026-07-04', 1),
+    ];
+    expect(xTicksFor(rows, '3M', '2026-07-04')).toEqual(['2026-06-06', '2026-07-04']);
   });
 });
 
