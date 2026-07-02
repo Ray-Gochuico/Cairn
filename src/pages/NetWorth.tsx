@@ -139,8 +139,10 @@ export default function NetWorth() {
     visibleVehicles.length > 0 ||
     visibleLoans.length > 0;
 
-  // GrowthCard refeed (spec §3.7): same as-of semantics as the chart, so the
-  // sub-3M horizons and the chart header can never disagree.
+  // GrowthCard refeed (spec §3.7): same as-of valuation as the chart, so in
+  // the household view its horizons and the chart header always agree. Under
+  // a person filter they intentionally diverge — GrowthCard follows the
+  // visible* slices; the chart stays household-scoped (§3.1, "· Household").
   const netWorthGrowth = useMemo(() => {
     const valueAsOf = netWorthAsOfFactory({
       snapshots: visibleSnapshots,
@@ -210,7 +212,8 @@ export default function NetWorth() {
       <AssetValueChart surface="netWorth" />
 
       {/* Click-to-cycle day-level horizons (1d…1y), numerically consistent
-          with the chart header via the shared as-of factory above. */}
+          with the chart header in household view via the shared as-of
+          factory above (diverges intentionally under a person filter). */}
       <GrowthCard title="Net worth growth" horizons={netWorthGrowth} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

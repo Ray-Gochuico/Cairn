@@ -97,7 +97,7 @@ async function seedAccount(
     autoFetchEnabled: false,
     excludedFromNetWorth: false,
     stateOfPlan: null,
-      accentColor: null,
+    accentColor: null,
   });
 }
 

@@ -50,6 +50,10 @@ describe('makeChartPrefs', () => {
     expect(makeChartPrefs('fresh').getTimeWindow()).toBeNull();
   });
 
+  it('returns null for selected entities on a fresh namespace (!raw guard)', () => {
+    expect(makeChartPrefs('untouched').getSelectedEntities()).toBeNull();
+  });
+
   it('round-trips a list of entity tuples', () => {
     const p = makeChartPrefs('x');
     const sel: SelectedEntity[] = [
