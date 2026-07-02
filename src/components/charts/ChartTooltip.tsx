@@ -23,7 +23,7 @@ import type { CSSProperties } from 'react';
  *     <Tooltip {...CHART_TOOLTIP_PROPS} formatter={fmt} />
  *
  * Charts that ship a fully custom tooltip surface (e.g. the per-asset
- * decomposition tooltips in `NetWorthTimeSeriesChart` / `ProjectionChart`
+ * decomposition tooltips in `AssetValueChart` / `ProjectionChart`
  * / `InvestmentTimeSeriesChart`) override the *body* of the tooltip via
  * Recharts' `content` prop — those don't need this preset because the
  * white background lives inside Recharts' default body, not the cursor

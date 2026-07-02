@@ -59,8 +59,8 @@ const MAX_BUCKETS = 90;
 // the RenderedTicksReporter loop in the live crash was driving.
 const CHART_MARGIN = { top: 8, right: 16, bottom: 8, left: 8 } as const;
 const LINE_DOT = { r: 3 } as const;
-// CSS-variable references so axes / grid flip with the theme (Wave-3
-// Design must-have #2). See NetWorthTimeSeriesChart for context.
+// CSS-variable references (Wave-3 Design must-have #2): Recharts' default
+// axis/grid hexes don't flip with the theme, so we use CSS-var strokes.
 const GRID_STROKE = 'hsl(var(--border))' as const;
 const AXIS_STROKE = 'hsl(var(--muted-foreground))' as const;
 const TOTAL_LINE_STROKE = 'hsl(var(--foreground))' as const;

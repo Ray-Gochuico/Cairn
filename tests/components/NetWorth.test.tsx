@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { runMigrations } from '@/db/migrations';
@@ -97,7 +97,7 @@ async function seedAccount(
     autoFetchEnabled: false,
     excludedFromNetWorth: false,
     stateOfPlan: null,
-      accentColor: null,
+    accentColor: null,
   });
 }
 
@@ -214,11 +214,13 @@ describe('NetWorth page', () => {
       'href',
       '/inputs/accounts',
     );
-    // Should NOT render the chart card title in the empty state.
-    expect(screen.queryByText('Current Net Worth')).not.toBeInTheDocument();
+    // Should NOT render the chart hero in the empty state.
+    expect(
+      screen.queryByTestId('asset-chart-header-value'),
+    ).not.toBeInTheDocument();
   });
 
-  it('renders the current net worth when at least one snapshot exists', async () => {
+  it('renders the chart hero with the as-of net worth when at least one snapshot exists', async () => {
     const accountId = await seedAccount(db, 'Schwab');
     await seedSnapshot(db, accountId, '2024-06-28', 150000);
     await seedProperty(db, 600000);
@@ -231,22 +233,31 @@ describe('NetWorth page', () => {
       </MemoryRouter>,
     );
 
-    // 150000 + 600000 + 25000 - 350000 = 425000
-    await waitFor(() => {
-      expect(screen.getByText(/Current Net Worth/i)).toBeInTheDocument();
-    });
-    // Scope the assertion to the "Current Net Worth" MetricCard. The Net
-    // Worth growth card (added alongside the tiles) also surfaces $425,000
-    // as its current value, so a bare findByText now matches two nodes —
-    // walk up from the tile's label to its Card and assert the value within.
-    const currentNetWorthCard = screen
-      .getByText(/Current Net Worth/i)
-      .closest('div[class*="rounded-xl"]') as HTMLElement;
-    expect(currentNetWorthCard).not.toBeNull();
-    expect(within(currentNetWorthCard).getByText('$425,000')).toBeInTheDocument();
+    // The AssetValueChart header is now the page's single current-value
+    // source (spec §3.7). Expected value under as-of semantics with the
+    // netWorth surface's ALL-eligible default selection:
+    //   account:  latest snapshot on-or-before today → Schwab 2024-06-28
+    //             = 150,000 (carries forward as-of, never expires)
+    //   property: no value snapshots + no purchaseDate → flat
+    //             currentEstimatedValue = 600,000
+    //   vehicle:  same flat-estimate rule → 25,000
+    //   loan:     back-walk anchored at today → currentBalance = 350,000
+    //             (future buckets hold flat at the anchor, no projection)
+    //   150,000 + 600,000 + 25,000 − 350,000 = 425,000
+    // No fake clock needed: every fixture is an absolute date whose value
+    // carries forward to any "today" ≥ 2024-06-28, so the LATEST bucket is
+    // clock-independent (deltas/baselines are not asserted here).
+    const header = await screen.findByTestId('asset-chart-header-value');
+    await waitFor(() => expect(header.textContent).toBe('$425,000'));
+
+    // The three MetricCard tiles are gone — "one fact, one place": the
+    // current value lives in the chart header, MoM/YoY in GrowthCard's
+    // 1m/1y horizons.
+    expect(screen.queryByText('Current Net Worth')).not.toBeInTheDocument();
+    expect(screen.queryByText('Month over Month')).not.toBeInTheDocument();
   });
 
-  it('renders the new time-series chart and dual donuts', async () => {
+  it('renders the chart hero (range tabs) and dual donuts', async () => {
     const accountId = await seedAccount(db, 'Schwab');
     await seedSnapshot(db, accountId, '2024-05-31', 100000);
     await seedSnapshot(db, accountId, '2024-06-28', 105000);
@@ -259,13 +270,11 @@ describe('NetWorth page', () => {
       </MemoryRouter>,
     );
 
-    // The MetricCard tile heading stays.
-    await waitFor(() => {
-      expect(screen.getByText('Current Net Worth')).toBeInTheDocument();
-    });
+    // The chart hero renders its header value and the 3M…All range tabs.
+    await screen.findByTestId('asset-chart-header-value');
+    expect(screen.getByRole('tablist')).toBeInTheDocument();
 
-    // The new chart card and the two donuts render their card titles.
-    expect(screen.getByText('Net Worth Over Time')).toBeInTheDocument();
+    // The two donuts render their card titles.
     expect(screen.getByText('Assets')).toBeInTheDocument();
     expect(screen.getByText('Liabilities')).toBeInTheDocument();
   });
@@ -280,9 +289,7 @@ describe('NetWorth page', () => {
       </MemoryRouter>,
     );
 
-    await waitFor(() =>
-      expect(screen.getByText(/Current Net Worth/i)).toBeInTheDocument(),
-    );
+    await screen.findByTestId('asset-chart-header-value');
     expect(screen.queryByText(/last 12 months/i)).not.toBeInTheDocument();
   });
 
@@ -298,14 +305,12 @@ describe('NetWorth page', () => {
       </MemoryRouter>,
     );
 
-    await waitFor(() =>
-      expect(screen.getByText(/Current Net Worth/i)).toBeInTheDocument(),
-    );
+    await screen.findByTestId('asset-chart-header-value');
     expect(screen.queryByText(/Assets by category/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Liabilities by type/i)).not.toBeInTheDocument();
   });
 
-  it('view filter ?view=p1 scopes the current net worth to p1-owned items only', async () => {
+  it('view filter ?view=p1: chart stays household-scoped (labeled), GrowthCard scopes to p1', async () => {
     // The 0001 migration already seeds household(id=1); we just need persons
     // so the accounts.owner_person_id FK resolves. Inserted via raw SQL
     // because the 0001 migration has a narrower persons schema than
@@ -343,16 +348,18 @@ describe('NetWorth page', () => {
       </MemoryRouter>,
     );
 
-    // Net worth should show only p1's $50k, NOT the household total of $250k.
-    await waitFor(() => {
-      expect(screen.getByText(/Current Net Worth/i)).toBeInTheDocument();
-    });
-    // $50,000 appears at least twice — in the "Current Net Worth" tile and in
-    // the breakdown "Investments" row — so use findAllByText to allow both.
+    // The chart hero is household-scoped BY DESIGN (spec §3.1): it keeps the
+    // full $250k household total ($50k + $200k) and flags the scope with a
+    // "· Household" label suffix instead of silently filtering.
+    const header = await screen.findByTestId('asset-chart-header-value');
+    await waitFor(() => expect(header.textContent).toBe('$250,000'));
+    expect(screen.getByText(/· Household/)).toBeInTheDocument();
+
+    // The GrowthCard IS person-filtered (fed from the visible* slices): its
+    // current value shows only p1's $50k…
     const hits = await screen.findAllByText('$50,000');
     expect(hits.length).toBeGreaterThanOrEqual(1);
-    // The full household totals should NOT appear since the filter is on p1.
-    expect(screen.queryByText('$250,000')).not.toBeInTheDocument();
+    // …and p2's $200k never appears outside the household-labeled chart.
     expect(screen.queryByText('$200,000')).not.toBeInTheDocument();
   });
 

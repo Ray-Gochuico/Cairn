@@ -9,10 +9,10 @@ import type { AssetSnapshotOwnerType } from '@/types/enums';
  * 0 if the account has no qualifying snapshot — the donut treats that as
  * "skip this slice" (per spec § "Edge cases").
  *
- * Mirrors the per-account semantics inside NetWorth.tsx's
- * `latestSnapshotsTotal` (which aggregates across accounts); breaking out
- * the single-account variant lets the AssetsDonut and (potentially) the
- * NetWorthTimeSeriesChart consume the same value resolution.
+ * Mirrors the per-account "latest snapshot ≤ asOf" semantics used across
+ * the Net Worth surfaces; breaking out the single-account variant lets the
+ * AssetsDonut (and any future per-account consumer) use the same value
+ * resolution.
  */
 export function latestSnapshotForAccount(
   accountId: number,

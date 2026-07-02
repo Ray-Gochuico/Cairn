@@ -44,6 +44,7 @@ import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import { EmptyState } from '@/components/layout/EmptyState';
 import MetricCard from '@/components/cards/MetricCard';
 import { ConcentrationCard } from '@/components/cards/ConcentrationCard';
+import AssetValueChart from '@/components/charts/AssetValueChart';
 import { FreshnessBadge } from '@/components/ui/freshness-badge';
 import { NextMoveCard } from '@/components/dashboard/NextMoveCard';
 import { TodaysTriviaCard } from '@/components/dashboard/TodaysTriviaCard';
@@ -747,9 +748,9 @@ export default function Dashboard() {
   // NextMoveCard and the monthly-input nudge intentionally stay anchored at
   // the top — they're action prompts, not informational widgets, so making
   // them rearrangeable would risk burying calls to action.
-  type WidgetId = 'pills-section' | 'spending' | 'concentration' | 'goals';
+  type WidgetId = 'pills-section' | 'asset-value-chart' | 'spending' | 'concentration' | 'goals';
   const widgetIds = useMemo<readonly WidgetId[]>(
-    () => ['pills-section', 'spending', 'concentration', 'goals'],
+    () => ['pills-section', 'asset-value-chart', 'spending', 'concentration', 'goals'],
     [],
   );
   const widgetLayout = useWidgetLayout(widgetIds);
@@ -828,6 +829,11 @@ export default function Dashboard() {
       id: 'pills-section',
       label: 'Metric pills',
       render: () => pillsSectionContent,
+    },
+    {
+      id: 'asset-value-chart',
+      label: 'Asset value',
+      render: () => <AssetValueChart surface="dashboard" />,
     },
     {
       id: 'spending',

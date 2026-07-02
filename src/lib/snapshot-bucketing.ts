@@ -1,15 +1,16 @@
 export type Granularity = 'DAY' | 'WEEK' | 'MONTH' | 'QUARTER' | 'YEAR';
 
-export type TimeWindow = '3M' | '1Y' | '5Y' | 'ALL';
+export type TimeWindow = '3M' | '6M' | 'YTD' | '1Y' | '5Y' | 'ALL';
 
 /**
  * Returns the ISO (YYYY-MM-DD) cutoff date for a time window relative to `today`,
- * or `null` for `'ALL'` (no filtering). Uses UTC math so the result is
- * timezone-stable regardless of the caller's locale.
+ * or `null` for `'ALL'` (no filtering). `'YTD'` is Jan 1 of today's UTC year.
+ * Uses UTC math so the result is timezone-stable regardless of the caller's locale.
  */
 export function cutoffForWindow(w: TimeWindow, today: Date = new Date()): string | null {
   if (w === 'ALL') return null;
-  const monthsBack = w === '3M' ? 3 : w === '1Y' ? 12 : 60;
+  if (w === 'YTD') return `${today.getUTCFullYear()}-01-01`;
+  const monthsBack = w === '3M' ? 3 : w === '6M' ? 6 : w === '1Y' ? 12 : 60;
   const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
   d.setUTCMonth(d.getUTCMonth() - monthsBack);
   return d.toISOString().slice(0, 10);
@@ -40,7 +41,8 @@ export function absDays(a: string, b: string): number {
   return Math.abs(Math.round((da - db) / 86_400_000));
 }
 
-function bucketEndFor(dateIso: string, g: Granularity): string {
+/** Exported for chart libs that need bucket-end math. */
+export function bucketEndFor(dateIso: string, g: Granularity): string {
   const d = new Date(dateIso + 'T00:00:00Z');
   if (g === 'DAY') return dateIso;
   if (g === 'WEEK') {

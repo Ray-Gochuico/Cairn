@@ -182,3 +182,16 @@ describe('cutoffForWindow', () => {
     expect(cutoffForWindow('ALL', today)).toBeNull();
   });
 });
+
+describe('cutoffForWindow — 6M and YTD', () => {
+  it('6M cutoff is six months back (UTC)', () => {
+    expect(cutoffForWindow('6M', new Date(Date.UTC(2026, 5, 12)))).toBe('2025-12-12');
+  });
+  it('YTD cutoff is Jan 1 of the current UTC year', () => {
+    expect(cutoffForWindow('YTD', new Date(Date.UTC(2026, 5, 12)))).toBe('2026-01-01');
+  });
+  it('existing windows are unchanged', () => {
+    expect(cutoffForWindow('3M', new Date(Date.UTC(2026, 5, 12)))).toBe('2026-03-12');
+    expect(cutoffForWindow('ALL')).toBeNull();
+  });
+});

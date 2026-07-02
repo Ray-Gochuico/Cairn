@@ -84,3 +84,61 @@ describe('useWidgetLayout', () => {
     ]);
   });
 });
+
+describe('one-time migration for never-customized layouts', () => {
+  const NEW_DEFAULTS = ['pills-section', 'asset-value-chart', 'spending', 'concentration', 'goals'];
+
+  beforeEach(() => {
+    try { window.localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+  });
+
+  it('rebuilds the exact old default order to the new defaults', () => {
+    localStorage.setItem(
+      'dashboardWidgetLayout.v1',
+      JSON.stringify(['pills-section', 'spending', 'concentration', 'goals'].map((id) => ({ id, hidden: false }))),
+    );
+    const { result } = renderHook(() => useWidgetLayout(NEW_DEFAULTS));
+    expect(result.current.layout.map((e) => e.id)).toEqual(NEW_DEFAULTS);
+  });
+
+  it('leaves customized layouts alone (new id appends at the end)', () => {
+    localStorage.setItem(
+      'dashboardWidgetLayout.v1',
+      JSON.stringify([
+        { id: 'spending', hidden: false },
+        { id: 'pills-section', hidden: false },
+        { id: 'concentration', hidden: true },
+        { id: 'goals', hidden: false },
+      ]),
+    );
+    const { result } = renderHook(() => useWidgetLayout(NEW_DEFAULTS));
+    expect(result.current.layout.map((e) => e.id)).toEqual([
+      'spending', 'pills-section', 'concentration', 'goals', 'asset-value-chart',
+    ]);
+  });
+
+  it('leaves default-ORDER layouts with a hidden widget alone (hidden counts as customized)', () => {
+    // Same order as the old default, but the user hid one widget — that IS
+    // a customization, so the migration must not resurrect it into the new
+    // default (which would un-hide concentration).
+    localStorage.setItem(
+      'dashboardWidgetLayout.v1',
+      JSON.stringify([
+        { id: 'pills-section', hidden: false },
+        { id: 'spending', hidden: false },
+        { id: 'concentration', hidden: true },
+        { id: 'goals', hidden: false },
+      ]),
+    );
+    const { result } = renderHook(() => useWidgetLayout(NEW_DEFAULTS));
+    expect(result.current.layout.map((e) => e.id)).toEqual([
+      'pills-section', 'spending', 'concentration', 'goals', 'asset-value-chart',
+    ]);
+    expect(result.current.hidden('concentration')).toBe(true);
+  });
+
+  it('no saved layout: fresh defaults, no migration write needed', () => {
+    const { result } = renderHook(() => useWidgetLayout(NEW_DEFAULTS));
+    expect(result.current.layout.map((e) => e.id)).toEqual(NEW_DEFAULTS);
+  });
+});
