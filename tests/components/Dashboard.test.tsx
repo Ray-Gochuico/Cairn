@@ -235,6 +235,31 @@ describe('Dashboard goals strip', () => {
   });
 });
 
+describe('Dashboard asset value chart widget', () => {
+  beforeEach(() => {
+    resetStores();
+  });
+
+  it('renders the Asset value chart widget', async () => {
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+    // The chart card's header value renders unconditionally (recharts'
+    // ResponsiveContainer draws nothing in jsdom, but the header is plain
+    // DOM), so this testid is a stable presence marker for the widget.
+    const widget = screen.getByTestId('widget-asset-value-chart');
+    expect(await screen.findByTestId('asset-chart-header-value')).toBeInTheDocument();
+    // resetStores() seeds NO accounts/loans → zero eligible entities, so the
+    // header shows the dashboard surface's default-scope label. The dashboard
+    // surface defaults to assets-only (defaultIncludeLoans: false), hence
+    // 'Total assets' — NOT 'Net worth', which is the no-loans/full-set label
+    // when eligible entities exist.
+    expect(within(widget).getByText('Total assets')).toBeInTheDocument();
+  });
+});
+
 describe('Dashboard spending cards', () => {
   beforeEach(() => {
     resetStores();
