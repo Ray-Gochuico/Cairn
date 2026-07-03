@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Sidebar from '@/components/layout/Sidebar';
@@ -7,6 +7,9 @@ import { runMigrations, loadAllMigrations } from '@/db/migrations';
 import { setDatabase } from '@/db/db';
 import { SettingsRepo } from '@/domain/app-settings';
 import { useSettingsStore } from '@/stores/settings-store';
+import { useAccountsStore } from '@/stores/accounts-store';
+import { useSnapshotsStore } from '@/stores/snapshots-store';
+import { AccountType, SnapshotSource } from '@/types/enums';
 
 describe('Sidebar', () => {
   let db: SqliteAdapter;
@@ -16,6 +19,10 @@ describe('Sidebar', () => {
     await runMigrations(db, await loadAllMigrations());
     setDatabase(db);
     useSettingsStore.setState({ settings: null, isLoading: false, error: null });
+    // The pending-dot hook subscribes to these two stores — reset them so
+    // dot-test seeds never leak across tests.
+    useAccountsStore.setState({ accounts: [], isLoading: false, error: null, load: async () => {} } as never);
+    useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null, load: async () => {} } as never);
   });
 
   afterEach(async () => {
@@ -76,5 +83,50 @@ describe('Sidebar', () => {
     expect(dashboard).toHaveAttribute('data-tour-id', '/');
     const settings = screen.getByRole('link', { name: /settings/i });
     expect(settings).toHaveAttribute('data-tour-id', '/settings');
+  });
+
+  describe('Monthly check-in entry + pending dot', () => {
+    const mkAccount = (id: number, type: AccountType) =>
+      ({ id, type, excludedFromNetWorth: false, name: `A${id}` }) as never;
+    const mkSnap = (accountId: number, date: string, source: SnapshotSource) =>
+      ({ id: accountId * 100, accountId, snapshotDate: date, totalValue: 1, source }) as never;
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-06-15T12:00:00Z') });
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('has a Monthly check-in link pointing at /monthly in the System group', () => {
+      render(<MemoryRouter><Sidebar /></MemoryRouter>);
+      expect(screen.getByRole('link', { name: /Monthly check-in/ })).toHaveAttribute('href', '/monthly');
+    });
+
+    it('shows the pending dot when a derived account lacks last-month confirmation', () => {
+      useAccountsStore.setState({
+        accounts: [mkAccount(1, AccountType.ACCOUNT_BROKERAGE)],
+        isLoading: false, error: null, load: async () => {},
+      } as never);
+      useSnapshotsStore.setState({
+        snapshots: [mkSnap(1, '2026-05-29', SnapshotSource.AUTO_DERIVED)],
+        isLoading: false, error: null, load: async () => {},
+      } as never);
+      render(<MemoryRouter><Sidebar /></MemoryRouter>);
+      expect(screen.getByText(/monthly input pending/i)).toBeInTheDocument(); // sr-only text
+    });
+
+    it('no dot when last month is confirmed', () => {
+      useAccountsStore.setState({
+        accounts: [mkAccount(1, AccountType.ACCOUNT_BROKERAGE)],
+        isLoading: false, error: null, load: async () => {},
+      } as never);
+      useSnapshotsStore.setState({
+        snapshots: [mkSnap(1, '2026-05-29', SnapshotSource.USER_CONFIRMED)],
+        isLoading: false, error: null, load: async () => {},
+      } as never);
+      render(<MemoryRouter><Sidebar /></MemoryRouter>);
+      expect(screen.queryByText(/monthly input pending/i)).not.toBeInTheDocument();
+    });
   });
 });

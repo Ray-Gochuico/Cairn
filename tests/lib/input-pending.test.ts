@@ -4,9 +4,10 @@ import {
   lastMonthYyyymm,
   currentMonthYyyymm,
   shouldShowMonthlyPrompt,
+  monthlyInputPendingFor,
   MONTHLY_INPUT_GRACE_DAY,
 } from '@/lib/input-pending';
-import { SnapshotSource } from '@/types/enums';
+import { AccountType, SnapshotSource } from '@/types/enums';
 import type { AccountSnapshot } from '@/types/schema';
 
 function snap(
@@ -229,5 +230,48 @@ describe('lastMonthYyyymm', () => {
 
   it('handles the last day of a month', () => {
     expect(lastMonthYyyymm(new Date(2026, 2, 31))).toBe('2026-02');
+  });
+});
+
+describe('monthlyInputPendingFor (whole-store composition)', () => {
+  const day15 = new Date('2026-06-15T12:00:00Z'); // past the day-7 grace window
+  const acct = (id: number, type: AccountType, excluded = false) =>
+    ({ id, type, excludedFromNetWorth: excluded }) as never;
+  const wsnap = (accountId: number, date: string, source: SnapshotSource) =>
+    ({ id: accountId * 100, accountId, snapshotDate: date, totalValue: 1, source }) as never;
+
+  it('pending when an auto-derived account has no confirmed/manual snapshot last month', () => {
+    expect(
+      monthlyInputPendingFor(day15, [acct(1, AccountType.ACCOUNT_BROKERAGE)], [
+        wsnap(1, '2026-05-29', SnapshotSource.AUTO_DERIVED),
+      ]),
+    ).toBe(true);
+  });
+
+  it('clear when last month is confirmed', () => {
+    expect(
+      monthlyInputPendingFor(day15, [acct(1, AccountType.ACCOUNT_BROKERAGE)], [
+        wsnap(1, '2026-05-29', SnapshotSource.USER_CONFIRMED),
+      ]),
+    ).toBe(false);
+  });
+
+  it('manual-balance types and excluded accounts never count', () => {
+    expect(
+      monthlyInputPendingFor(day15, [
+        acct(1, AccountType.ACCOUNT_CASH),
+        acct(2, AccountType.ACCOUNT_SAVINGS),
+        acct(3, AccountType.ACCOUNT_CRYPTO),
+        acct(4, AccountType.ACCOUNT_BROKERAGE, true),
+      ], []),
+    ).toBe(false);
+  });
+
+  it('only last-month snapshots are considered (an old confirmation does not clear)', () => {
+    expect(
+      monthlyInputPendingFor(day15, [acct(1, AccountType.ACCOUNT_BROKERAGE)], [
+        wsnap(1, '2026-04-30', SnapshotSource.USER_CONFIRMED),
+      ]),
+    ).toBe(true);
   });
 });
