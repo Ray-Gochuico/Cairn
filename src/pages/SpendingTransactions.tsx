@@ -91,7 +91,7 @@ const TransactionRow = memo(function TransactionRow({
       )}
       <td className="py-2 pr-3 text-right">
         {t.amount < 0 ? (
-          <span className="text-success">-${Math.abs(t.amount).toFixed(2)}</span>
+          <span className="text-success-foreground">-${Math.abs(t.amount).toFixed(2)}</span>
         ) : (
           <span>${t.amount.toFixed(2)}</span>
         )}
@@ -133,7 +133,7 @@ const TransactionRow = memo(function TransactionRow({
               type="button"
               aria-label={`Delete ${t.merchant}`}
               onClick={() => t.id != null && onAskDelete(t.id)}
-              className="inline-flex h-7 w-7 items-center justify-center rounded-md border hover:bg-muted text-destructive"
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border hover:bg-muted text-destructive-soft-foreground"
             >
               <XIcon className="h-3.5 w-3.5" />
             </button>

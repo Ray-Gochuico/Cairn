@@ -113,10 +113,10 @@ const CONCENTRATION_TOOLTIP: Record<ConcentrationWarning['type'], string> = {
 
 function severityColor(severity: ConcentrationWarning['severity']): string {
   switch (severity) {
-    case 'HIGH': return 'text-destructive';
-    case 'MEDIUM': return 'text-warning';
+    case 'HIGH': return 'text-destructive-soft-foreground';
+    case 'MEDIUM': return 'text-warning-foreground';
     case 'LOW':
-    default: return 'text-info';
+    default: return 'text-info-foreground';
   }
 }
 
