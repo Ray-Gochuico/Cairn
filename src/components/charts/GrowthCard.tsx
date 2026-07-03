@@ -1,11 +1,12 @@
-import { useState, type KeyboardEvent } from 'react';
-import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowDown, ArrowUp } from 'lucide-react';
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatCurrency } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { HorizonGrowth } from '@/lib/growth-horizons';
@@ -29,27 +30,29 @@ function formatPct(fraction: number): string {
   return `${sign}${pct.toFixed(1)}%`;
 }
 
+// Short chip label per horizon key; the full label rides on aria-label.
+const CHIP_LABELS: Record<string, string> = {
+  '1d': '1D', '1w': '1W', '1m': '1M', '1q': '1Q', '1y': '1Y',
+};
+
 /**
- * Cycling growth card. Shows portfolio growth for one horizon at a time and
- * advances (wrapping) on click / Enter / Space / arrow keys. The whole card
- * is a button so the affordance is obvious and keyboard-accessible; the
- * chevrons are decorative hints that share the card's click (they stop
- * propagation only to drive direction, not to swallow the activation).
- *
- * Lives beside the donut cards on Investments / Net Worth, so it reuses the
- * same shadcn Card primitives and muted/foreground tokens to stay visually
- * consistent.
+ * Growth card with a visible horizon-chip row. Shows portfolio growth for
+ * the selected horizon; the chips replace the old whole-card
+ * click-to-cycle (which was undiscoverable, a surprising giant click
+ * target, and noisy for SRs). Lives beside the donut cards on
+ * Investments / Net Worth, so it reuses the same shadcn Card primitives
+ * and muted/foreground tokens to stay visually consistent.
  */
 export default function GrowthCard({
   title,
   horizons,
   valueFormatter = formatCurrency,
 }: GrowthCardProps) {
-  const [index, setIndex] = useState(0);
+  const [activeKey, setActiveKey] = useState(horizons[0]?.key ?? '1d');
 
-  // Defensive: with no horizons there's nothing to cycle. Render a minimal
-  // card rather than crash on horizons[index] below. (Pages always pass the
-  // five, so this is belt-and-suspenders.)
+  // Defensive: with no horizons there's nothing to show. Render a minimal
+  // card rather than crash on the find below. (Pages always pass the five,
+  // so this is belt-and-suspenders.)
   if (horizons.length === 0) {
     return (
       <Card>
@@ -63,62 +66,30 @@ export default function GrowthCard({
     );
   }
 
-  const count = horizons.length;
-  const advance = (step: number) =>
-    setIndex((i) => (i + step + count) % count);
-  const active = horizons[index];
-
-  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowRight') {
-      e.preventDefault();
-      advance(1);
-    } else if (e.key === 'ArrowLeft') {
-      e.preventDefault();
-      advance(-1);
-    }
-  };
+  const active = horizons.find((h) => h.key === activeKey) ?? horizons[0];
 
   const isUp = active.available && (active.deltaAbs ?? 0) >= 0;
   const deltaColor = isUp ? 'text-success' : 'text-destructive';
   const DeltaArrow = isUp ? ArrowUp : ArrowDown;
 
   return (
-    <Card
-      role="button"
-      tabIndex={0}
-      aria-label={`${title}: ${active.label}. Click to view the next time horizon.`}
-      onClick={() => advance(1)}
-      onKeyDown={onKeyDown}
-      className="cursor-pointer select-none transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-    >
+    <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle>{title}</CardTitle>
-        <div className="flex items-center gap-1 text-muted-foreground">
-          <button
-            type="button"
-            aria-label="Previous time horizon"
-            className="rounded p-0.5 hover:text-foreground"
-            onClick={(e) => {
-              // Stop the card's onClick (which advances) so the left chevron
-              // can step backward instead.
-              e.stopPropagation();
-              advance(-1);
-            }}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <button
-            type="button"
-            aria-label="Next time horizon"
-            className="rounded p-0.5 hover:text-foreground"
-            onClick={(e) => {
-              e.stopPropagation();
-              advance(1);
-            }}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
+        {/* One range grammar (Wave 3): the same segmented tabs as the
+            asset-value chart's window control. Radix gives the chip row
+            arrow-key roving focus + tab semantics for free — the old
+            whole-card role="button" cycle was invisible to discovery and
+            noisy for SRs. */}
+        <Tabs value={active.key} onValueChange={setActiveKey}>
+          <TabsList className="h-7" aria-label="Time horizon">
+            {horizons.map((h) => (
+              <TabsTrigger key={h.key} value={h.key} aria-label={h.label} className="px-2 py-0.5 text-xs">
+                {CHIP_LABELS[h.key] ?? h.key.toUpperCase()}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
       </CardHeader>
       <CardContent className="space-y-3">
         <div>
@@ -166,20 +137,6 @@ export default function GrowthCard({
             </div>
           </div>
         )}
-
-        {/* Position indicator — five dots, the active one filled. Mirrors the
-            horizon order so the user can see where they are in the cycle. */}
-        <div className="flex items-center gap-1.5 pt-1" aria-hidden>
-          {horizons.map((h, i) => (
-            <span
-              key={h.key}
-              className={cn(
-                'h-1.5 w-1.5 rounded-full',
-                i === index ? 'bg-foreground' : 'bg-muted-foreground/30',
-              )}
-            />
-          ))}
-        </div>
       </CardContent>
     </Card>
   );

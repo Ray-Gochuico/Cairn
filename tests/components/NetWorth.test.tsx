@@ -272,8 +272,11 @@ describe('NetWorth page', () => {
     );
 
     // The chart hero renders its header value and the 3M…All range tabs.
+    // (Two tablists exist since Wave 3: chart windows + GrowthCard chips —
+    // assert the chart's own 3M tab rather than a lone tablist.)
     await screen.findByTestId('asset-chart-header-value');
-    expect(screen.getByRole('tablist')).toBeInTheDocument();
+    expect(screen.getAllByRole('tablist').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole('tab', { name: '3M' })).toBeInTheDocument();
 
     // The two donuts render their card titles.
     expect(screen.getByText('Assets')).toBeInTheDocument();
