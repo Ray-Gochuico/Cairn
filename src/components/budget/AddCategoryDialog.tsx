@@ -204,7 +204,7 @@ export default function AddCategoryDialog({
           {justSavedName ? (
             <p
               role="status"
-              className="text-sm font-medium text-success"
+              className="text-sm font-medium text-success-foreground"
               data-testid="add-category-success"
             >
               ✓ Added {justSavedName}

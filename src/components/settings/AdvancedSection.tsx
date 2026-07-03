@@ -442,7 +442,7 @@ export function AdvancedSection() {
               Save
             </Button>
             {savedAt && !invalid && (
-              <span className="text-xs text-success">Saved</span>
+              <span className="text-xs text-success-foreground">Saved</span>
             )}
           </div>
 

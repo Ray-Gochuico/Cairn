@@ -202,7 +202,7 @@ export function TransactionEditDialog({
             </div>
           ) : (
             <>
-              <Button variant="ghost" className="text-destructive"
+              <Button variant="ghost" className="text-destructive-soft-foreground"
                 onClick={() => setConfirmingDelete(true)} disabled={saving}>
                 Delete
               </Button>

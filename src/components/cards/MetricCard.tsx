@@ -28,8 +28,8 @@ export interface MetricCardProps {
 
 function deltaClass(tone: MetricCardTone | undefined): string {
   switch (tone) {
-    case 'positive': return 'text-success';
-    case 'negative': return 'text-destructive';
+    case 'positive': return 'text-success-foreground';
+    case 'negative': return 'text-destructive-soft-foreground';
     case 'neutral':
     case undefined:
     default: return 'text-muted-foreground';

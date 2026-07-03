@@ -87,7 +87,7 @@ function ChangeCell({
     <span
       className={cn(
         'inline-flex items-center justify-end gap-1 tabular-nums',
-        isUp ? 'text-success' : 'text-destructive',
+        isUp ? 'text-success-foreground' : 'text-destructive-soft-foreground',
       )}
     >
       <Arrow className="h-3.5 w-3.5" aria-hidden />

@@ -90,7 +90,7 @@ export default function AddEquityGrantDialog({
         {savedName ? (
           <p
             role="status"
-            className="py-6 text-center text-sm font-medium text-success"
+            className="py-6 text-center text-sm font-medium text-success-foreground"
             data-testid="add-equity-grant-success"
           >
             ✓ Added {savedName}

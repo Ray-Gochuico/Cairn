@@ -196,7 +196,7 @@ export function ScenariosPanel({
                         role="menuitem"
                         aria-disabled={s.isBaseline}
                         disabled={s.isBaseline}
-                        className="block w-full text-left px-3 py-1.5 text-xs text-destructive hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="block w-full text-left px-3 py-1.5 text-xs text-destructive-soft-foreground hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
                         onClick={() => {
                           if (s.isBaseline) return;
                           if (s.id != null) void remove(s.id);

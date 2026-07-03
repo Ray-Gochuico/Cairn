@@ -235,6 +235,6 @@ describe('ConcentrationCard', () => {
     // destructive semantic token (--destructive maps to red in the palette).
     const icons = screen.getAllByLabelText(/HIGH severity/i);
     expect(icons.length).toBeGreaterThan(0);
-    expect(icons[0]).toHaveClass('text-destructive');
+    expect(icons[0]).toHaveClass('text-destructive-soft-foreground');
   });
 });

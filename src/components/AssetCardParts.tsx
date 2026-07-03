@@ -102,7 +102,7 @@ export function EquityRow({ label, value, tone }: EquityRowProps) {
       </span>
       <span
         className={`text-lg font-semibold ${
-          isNegative ? 'text-destructive' : 'text-success'
+          isNegative ? 'text-destructive-soft-foreground' : 'text-success-foreground'
         }`}
       >
         {currencyFormatter.format(value)}
