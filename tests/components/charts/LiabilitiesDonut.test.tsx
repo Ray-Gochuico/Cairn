@@ -203,6 +203,19 @@ describe('LiabilitiesDonut', () => {
       expect(screen.getByTestId('slice-Student debt').getAttribute('data-color')).toBe(before);
     });
 
+    it('share % stays anchored to total debt when a loan is hidden', async () => {
+      // Mortgage 350000, Car 15000, Student 22000 → full total 387000. Hide
+      // the mortgage: Car loan's legend share must still read 3.9%
+      // (15000/387000), NOT 40.5% (15000/37000).
+      seedThreeLoans();
+      render(<LiabilitiesDonut />);
+      const user = userEvent.setup();
+      await user.click(screen.getByRole('button', { name: /entities/i }));
+      await user.click(screen.getByRole('checkbox', { name: /Home mortgage/ }));
+      expect(screen.getByText(/\$15,000 · 3\.9%/)).toBeInTheDocument();
+      expect(screen.queryByText(/40\.5%/)).not.toBeInTheDocument();
+    });
+
     it('hiding a loan removes its slice from the donut', async () => {
       seedThreeLoans();
       render(<LiabilitiesDonut />);

@@ -384,6 +384,20 @@ describe('AssetsDonut', () => {
       expect(screen.getByTestId('slice-Brokerage').getAttribute('data-color')).toBe('#123456');
     });
 
+    it('share % stays anchored to the full asset universe when an entity is hidden', async () => {
+      // Brokerage 6000, Roth IRA 3400, Home 500000 → full total 509400.
+      // Hide Roth IRA: Brokerage's legend share must still read 1.2%
+      // (6000/509400), NOT 6000/506000 ≈ 1.2%… use Home instead for a
+      // discriminating number: Home stays 98.2% (500000/509400), NOT 98.8%.
+      seedThreeAssets();
+      render(<AssetsDonut />);
+      const user = userEvent.setup();
+      await user.click(screen.getByRole('button', { name: /entities/i }));
+      await user.click(screen.getByRole('checkbox', { name: /Roth IRA/ }));
+      expect(screen.getByText(/\$500,000 · 98\.2%/)).toBeInTheDocument();
+      expect(screen.queryByText(/98\.8%/)).not.toBeInTheDocument();
+    });
+
     it('hiding an entity removes its slice from the donut', async () => {
       seedThreeAssets();
       render(<AssetsDonut />);

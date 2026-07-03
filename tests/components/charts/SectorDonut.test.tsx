@@ -492,6 +492,19 @@ describe('SectorDonut — entity picker', () => {
     ).toBeInTheDocument();
   });
 
+  it('sector share % stays anchored to the full portfolio when a sector is hidden', async () => {
+    // Technology 1500, Financial Services 750 → full total 2250. Hide
+    // Financial Services: Technology's legend share must still read 66.7%
+    // (1500/2250), NOT 100.0%.
+    seedTwoSectors();
+    render(<SectorDonut />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /entities/i }));
+    await user.click(screen.getByRole('checkbox', { name: /Financial Services/ }));
+    expect(screen.getByText(/\$1,500 · 66\.7%/)).toBeInTheDocument();
+    expect(screen.queryByText(/100\.0%/)).not.toBeInTheDocument();
+  });
+
   it('persists hidden sector across remount', async () => {
     seedTwoSectors();
     const { unmount } = render(<SectorDonut />);

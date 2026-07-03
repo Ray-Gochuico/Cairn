@@ -70,6 +70,10 @@ export default function LiabilitiesDonut() {
     [slices, keyByName, selected],
   );
 
+  // Full-universe denominator (hidden loans included) so hiding one never
+  // re-normalizes the shares that remain.
+  const fullTotal = useMemo(() => slices.reduce((s, x) => s + x.value, 0), [slices]);
+
   if (slices.length === 0) {
     return (
       <Card>
@@ -111,6 +115,7 @@ export default function LiabilitiesDonut() {
       <DonutChartCard
         title="Liabilities"
         data={filteredSlices}
+        shareTotal={fullTotal}
         valueFormatter={formatCurrency}
       />
     </div>

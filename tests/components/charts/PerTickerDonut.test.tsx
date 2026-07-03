@@ -144,6 +144,18 @@ describe('PerTickerDonut', () => {
     ).toBeInTheDocument();
   });
 
+  it('share % stays anchored to the full portfolio when a ticker is hidden', async () => {
+    // AAPL 1000, MSFT 500, JPM 750 → full total 2250. Hide MSFT: AAPL's
+    // legend share must still read 44.4% (1000/2250), NOT 57.1% (1000/1750).
+    seedThreeTickers();
+    render(<PerTickerDonut />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /entities/i }));
+    await user.click(screen.getByRole('checkbox', { name: /MSFT/ }));
+    expect(screen.getByText(/\$1,000 · 44\.4%/)).toBeInTheDocument();
+    expect(screen.queryByText(/57\.1%/)).not.toBeInTheDocument();
+  });
+
   it('persists hidden ticker across remount', async () => {
     seedThreeTickers();
     const { unmount } = render(<PerTickerDonut />);

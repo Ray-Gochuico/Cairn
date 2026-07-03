@@ -715,6 +715,12 @@ export default function Investments() {
     () => allocation.filter((s) => allocationSelected.has(s.name)),
     [allocation, allocationSelected],
   );
+  // Full-universe denominator (hidden classes included) so hiding a class
+  // never re-normalizes the shares that remain.
+  const allocationTotal = useMemo(
+    () => allocation.reduce((s, x) => s + x.value, 0),
+    [allocation],
+  );
 
   // Two sibling target-vs-actual views (I10): class drift is household-level,
   // holding drift is within-class aggregated per ticker across accounts. Both
@@ -859,6 +865,7 @@ export default function Investments() {
                   title="Asset allocation"
                   subtitle="Approximate, using latest snapshot per account"
                   data={filteredAllocation}
+                  shareTotal={allocationTotal}
                   valueFormatter={formatCurrency}
                 />
               ) : (
@@ -1236,6 +1243,7 @@ export default function Investments() {
       allocation,
       allocationPickerItems,
       filteredAllocation,
+      allocationTotal,
       // class-targets
       heldClasses,
       settings?.assetClassTargetAllocations,
