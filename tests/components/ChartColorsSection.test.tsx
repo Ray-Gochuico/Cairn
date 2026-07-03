@@ -86,6 +86,21 @@ describe('ChartColorsSection', () => {
     });
   });
 
+  it('swatch popover is a dialog with Esc-close and focus restore', async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter><ChartColorsSection /></MemoryRouter>);
+    await waitFor(() => expect(screen.getByText('Brokerage')).toBeInTheDocument());
+    const trigger = screen.getAllByRole('button', { name: /edit color for/i })[0];
+    expect(trigger).toHaveAttribute('aria-haspopup', 'dialog');
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    await user.click(trigger);
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
   it('the Default tile clears an account override back to null', async () => {
     const user = userEvent.setup();
     await new AccountsRepo(db).update(1, { accentColor: '#4c78a8' });
