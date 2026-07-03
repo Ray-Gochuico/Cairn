@@ -143,4 +143,48 @@ describe('useAssetValueSnapshotsStore', () => {
       }),
     ).rejects.toThrow();
   });
+
+  describe('upsertForDate (Wave 2 §4 groundwork)', () => {
+    it('creates a row when none exists for (owner, date)', async () => {
+      const id = await useAssetValueSnapshotsStore
+        .getState()
+        .upsertForDate('PROPERTY', 1, '2026-07-02', 410_000);
+      expect(id).toBeGreaterThan(0);
+      const rows = await db.select<{ value: number }>(
+        `SELECT value FROM asset_value_snapshots WHERE owner_type='PROPERTY' AND owner_id=1 AND snapshot_date='2026-07-02'`,
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0].value).toBe(410_000);
+      // In-memory cache reflects it without a manual load().
+      expect(
+        useAssetValueSnapshotsStore.getState().assetValueSnapshots.find((s) => s.id === id)?.value,
+      ).toBe(410_000);
+    });
+
+    it('updates in place on a second same-date write — never a duplicate row', async () => {
+      const first = await useAssetValueSnapshotsStore
+        .getState()
+        .upsertForDate('PROPERTY', 1, '2026-07-02', 410_000);
+      const second = await useAssetValueSnapshotsStore
+        .getState()
+        .upsertForDate('PROPERTY', 1, '2026-07-02', 425_000);
+      expect(second).toBe(first);
+      const rows = await db.select<{ value: number }>(
+        `SELECT value FROM asset_value_snapshots WHERE owner_type='PROPERTY' AND owner_id=1 AND snapshot_date='2026-07-02'`,
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0].value).toBe(425_000);
+      expect(
+        useAssetValueSnapshotsStore.getState().assetValueSnapshots.filter((s) => s.id === first),
+      ).toHaveLength(1);
+    });
+
+    it('different dates and owners stay distinct rows', async () => {
+      await useAssetValueSnapshotsStore.getState().upsertForDate('PROPERTY', 1, '2026-07-01', 1);
+      await useAssetValueSnapshotsStore.getState().upsertForDate('PROPERTY', 1, '2026-07-02', 2);
+      await useAssetValueSnapshotsStore.getState().upsertForDate('VEHICLE', 1, '2026-07-02', 3);
+      const rows = await db.select<{ id: number }>(`SELECT id FROM asset_value_snapshots`);
+      expect(rows).toHaveLength(3);
+    });
+  });
 });

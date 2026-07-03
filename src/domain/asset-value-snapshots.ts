@@ -133,6 +133,34 @@ export class AssetValueSnapshotsRepo {
     await this.db.execute(sql, params);
   }
 
+  /**
+   * Insert-or-update the single row for (ownerType, ownerId, snapshotDate).
+   * The table has NO unique constraint on that triple — one-row-per-date is
+   * a caller convention (see migration 0026's header) — so this SELECTs
+   * authoritatively before writing rather than trusting any in-memory cache.
+   * If legacy duplicates exist, the newest (highest id) row is the one
+   * updated, matching the ORDER BY … id DESC convention of
+   * list()/listForOwner(). Returns the row id.
+   */
+  async upsertForDate(
+    ownerType: AssetSnapshotOwnerType,
+    ownerId: number,
+    snapshotDate: string,
+    value: number,
+  ): Promise<number> {
+    const rows = await this.db.select<{ id: number }>(
+      `SELECT id FROM asset_value_snapshots
+       WHERE owner_type = ? AND owner_id = ? AND snapshot_date = ?
+       ORDER BY id DESC LIMIT 1`,
+      [ownerType, ownerId, snapshotDate],
+    );
+    if (rows.length > 0) {
+      await this.update(rows[0].id, { value });
+      return rows[0].id;
+    }
+    return this.create({ ownerType, ownerId, snapshotDate, value });
+  }
+
   async delete(id: number): Promise<void> {
     await this.db.execute('DELETE FROM asset_value_snapshots WHERE id = ?', [id]);
   }
