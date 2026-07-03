@@ -37,6 +37,26 @@ describe('GROWTH_HORIZONS', () => {
     const oneDay = GROWTH_HORIZONS.find((h) => h.key === '1d')!;
     expect(oneDay.baselineDate(now)).toBe('2026-05-27');
   });
+
+  it('clamps month-end baselines to the last day of the target month (no forward normalization)', () => {
+    const b = (key: string, now: Date) =>
+      GROWTH_HORIZONS.find((h) => h.key === key)!.baselineDate(now);
+    // Mar 31 − 1mo used to normalize Feb 31 → Mar 3 (a "past month" 3 days
+    // into the CURRENT month). Clamp to the target month's last day.
+    expect(b('1m', new Date('2026-03-31T00:00:00Z'))).toBe('2026-02-28');
+    expect(b('1m', new Date('2024-03-31T00:00:00Z'))).toBe('2024-02-29'); // leap year
+    expect(b('1m', new Date('2026-05-31T00:00:00Z'))).toBe('2026-04-30');
+    expect(b('1q', new Date('2026-05-31T00:00:00Z'))).toBe('2026-02-28');
+    expect(b('1y', new Date('2024-02-29T00:00:00Z'))).toBe('2023-02-28'); // leap day − 1y
+  });
+
+  it('mid-month and 31→31 baselines are unchanged by the clamp', () => {
+    const b = (key: string, now: Date) =>
+      GROWTH_HORIZONS.find((h) => h.key === key)!.baselineDate(now);
+    expect(b('1m', new Date('2026-05-28T00:00:00Z'))).toBe('2026-04-28');
+    expect(b('1q', new Date('2026-05-28T00:00:00Z'))).toBe('2026-02-28');
+    expect(b('1m', new Date('2026-01-31T00:00:00Z'))).toBe('2025-12-31'); // Dec has 31 days — no clamp
+  });
 });
 
 describe('sumLatestOnOrBefore', () => {
@@ -186,6 +206,30 @@ describe('computeHorizonGrowth', () => {
       (r) => r.key === '1w',
     )!;
     expect(oneWeek.deltaPct).toBeCloseTo(0.1, 10);
+  });
+
+  it('nulls deltaPct above the ±999.9% display cap (near-zero baseline absurdity guard)', () => {
+    // A $12 baseline growing to $15,000 is a ~124,900% "gain" — the chart's
+    // deltaPctOrNull caps at |999.9%| and renders absolute-only; the card
+    // must do the same rather than print an absurd percent. deltaAbs stays.
+    const valueAsOf = (iso: string): number | null =>
+      iso === TODAY ? 15_000 : 12;
+    const oneWeek = computeHorizonGrowth(valueAsOf, now).find(
+      (r) => r.key === '1w',
+    )!;
+    expect(oneWeek.available).toBe(true);
+    expect(oneWeek.deltaAbs).toBe(14_988);
+    expect(oneWeek.deltaPct).toBeNull();
+  });
+
+  it('keeps deltaPct at exactly the ±999.9% cap boundary', () => {
+    // 100 → 1099.9 is +999.9% — the largest percent the chart still displays.
+    const valueAsOf = (iso: string): number | null =>
+      iso === TODAY ? 1099.9 : 100;
+    const oneWeek = computeHorizonGrowth(valueAsOf, now).find(
+      (r) => r.key === '1w',
+    )!;
+    expect(oneWeek.deltaPct).toBeCloseTo(9.999, 10);
   });
 
   it('queries each horizon at its own baseline date', () => {
