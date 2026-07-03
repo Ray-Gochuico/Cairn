@@ -15,14 +15,39 @@ export interface CsvColumn<T> {
 }
 
 /**
- * RFC-4180 escaping: a field containing a comma, a double-quote, or a
- * newline is wrapped in double-quotes, with embedded double-quotes doubled.
+ * Spreadsheet formula-injection guard (OWASP "CSV injection"): a field whose
+ * first character is '=', '+', '-', '@', TAB, or CR is interpreted as a
+ * formula by Excel / Google Sheets / Numbers on open. Prefix a single quote
+ * so it renders as literal text.
+ *
+ * Plain numbers are EXEMPT: numeric columns (amounts, balances, rates) export
+ * `number` values that stringify like "-123.45" — a leading minus on a real
+ * number is not executable, and guarding it would corrupt the column for
+ * re-import and spreadsheet arithmetic. Exponent forms are included because
+ * String(-1e21) is "-1e+21".
  */
-function escapeCsvField(value: string): string {
-  if (/[",\n]/.test(value)) {
-    return `"${value.replace(/"/g, '""')}"`;
+const FORMULA_LEAD = /^[=+\-@\t\r]/;
+const PLAIN_NUMBER = /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/;
+
+function guardFormulaInjection(value: string): string {
+  if (FORMULA_LEAD.test(value) && !PLAIN_NUMBER.test(value)) {
+    return `'${value}`;
   }
   return value;
+}
+
+/**
+ * RFC-4180 escaping: a field containing a comma, a double-quote, or a
+ * newline is wrapped in double-quotes, with embedded double-quotes doubled.
+ * Runs AFTER the formula-injection guard so the guarded text is what gets
+ * quoted.
+ */
+function escapeCsvField(value: string): string {
+  const guarded = guardFormulaInjection(value);
+  if (/[",\n]/.test(guarded)) {
+    return `"${guarded.replace(/"/g, '""')}"`;
+  }
+  return guarded;
 }
 
 /** `null` → empty cell; numbers and booleans stringify plainly. */

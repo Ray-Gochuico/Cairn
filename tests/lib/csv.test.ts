@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { toCsv, downloadCsv, type CsvColumn } from '@/lib/csv';
+import { parseCsv } from '@/lib/import/parse-csv';
 
 interface Row {
   name: string;
@@ -46,6 +47,51 @@ describe('toCsv', () => {
   it('quotes a header that itself contains a comma', () => {
     const csv = toCsv<Row>([], [{ header: 'a,b', value: (r) => r.name }]);
     expect(csv).toBe('"a,b"');
+  });
+});
+
+describe('toCsv — formula-injection guard', () => {
+  const cols: CsvColumn<{ v: string | number }>[] = [{ header: 'v', value: (r) => r.v }];
+  const cell = (v: string | number) => toCsv([{ v }], cols).split('\n')[1];
+
+  it('neutralizes leading = @ + TAB CR with a quote prefix', () => {
+    expect(cell('=cmd|/C calc')).toBe("'=cmd|/C calc");
+    expect(cell('@SUM(A1:A9)')).toBe("'@SUM(A1:A9)");
+    expect(cell('+1+1')).toBe("'+1+1");
+    expect(cell('\t=1+1')).toBe("'\t=1+1");
+    expect(cell('\r=1+1')).toBe("'\r=1+1");
+  });
+
+  it('guards minus-led TEXT (not a number)', () => {
+    expect(cell('-not a number')).toBe("'-not a number");
+  });
+
+  it('leaves plain numbers alone — including negatives and exponent forms', () => {
+    expect(cell(-123.45)).toBe('-123.45');
+    expect(cell('-123.45')).toBe('-123.45');
+    expect(cell('-1.5e3')).toBe('-1.5e3');
+    expect(cell(0.06)).toBe('0.06');
+  });
+
+  it('leaves ordinary text and mid-string specials alone', () => {
+    expect(cell('a=b')).toBe('a=b');
+    expect(cell('ACME + CO')).toBe('ACME + CO');
+  });
+
+  it('still applies RFC-4180 quoting AFTER the guard', () => {
+    expect(cell('=HYPERLINK("http://evil","x"),1')).toBe(
+      '"\'=HYPERLINK(""http://evil"",""x""),1"',
+    );
+  });
+
+  it('round-trips through the import parser with the guard visible and data intact', () => {
+    const rows = [{ v: '=cmd' }, { v: '-123.45' }, { v: 'plain, text' }];
+    const csv = toCsv(rows, cols);
+    const parsed = parseCsv(csv);
+    expect(parsed.errors).toEqual([]);
+    // Guarded text carries the apostrophe (the standard, accepted mitigation
+    // cost); numbers and ordinary text round-trip byte-identically.
+    expect(parsed.rows.map((r) => r.v)).toEqual(["'=cmd", '-123.45', 'plain, text']);
   });
 });
 
