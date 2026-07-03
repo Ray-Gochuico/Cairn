@@ -279,7 +279,7 @@ describe('WhatIf — projection footnote (W7-Legal R-LWI-4)', () => {
     setPosition(FiPillsPosition.ABOVE);
   });
 
-  it('renders the page-level footnote naming the three modeling omissions', () => {
+  it('renders the page-level footnote naming the modeling omissions', () => {
     render(
       <MemoryRouter>
         <WhatIf />
@@ -291,7 +291,7 @@ describe('WhatIf — projection footnote (W7-Legal R-LWI-4)', () => {
     expect(
       within(footnote).getByText(/what this projection doesn.t model/i),
     ).toBeInTheDocument();
-    // Three bullets: sequence-of-returns risk, Medicare/IRMAA, Roth ladder.
+    // Bullets: sequence-of-returns risk, Medicare/IRMAA, Roth ladder.
     expect(
       within(footnote).getByText(/sequence-of-returns risk/i),
     ).toBeInTheDocument();
@@ -303,6 +303,10 @@ describe('WhatIf — projection footnote (W7-Legal R-LWI-4)', () => {
     ).toBeInTheDocument();
     expect(
       within(footnote).getByText(/5-year seasoning rule/i),
+    ).toBeInTheDocument();
+    // Wave 2 §5: flat property/vehicle values are disclosed.
+    expect(
+      within(footnote).getByText(/property & vehicle appreciation/i),
     ).toBeInTheDocument();
     // Pointer to full disclosures.
     expect(

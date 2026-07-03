@@ -36,6 +36,13 @@ export interface MonthlyState {
    * time via `totalInvestments(state)` / `aggregateByTaxBucket(state, accounts)`.
    */
   investmentsByAccount: Record<number, number>;
+  /**
+   * GROSS value of non-excluded properties + vehicles, seeded at t=0 and
+   * held FLAT (no appreciation modeling — disclosed on the What-If page).
+   * The name predates Wave 2: it is NOT net of mortgages — computeNetWorth
+   * subtracts every loan separately via debtByLoan, so "equity" emerges from
+   * paydown. Displayed as "Property & vehicles" in the projection chart.
+   */
   homeEquity: number;
   cash: number;
   debtByLoan: Record<number, number>;
@@ -196,7 +203,9 @@ export function projectScenario(
   let state: MonthlyState = {
     monthISO: horizon.startISO,
     investmentsByAccount: { ...real.initialInvestmentsByAccount },
-    homeEquity: 0,
+    // Physical assets held flat (Wave 2 §5); `?? 0` defends hand-rolled
+    // RealState fixtures that pre-date the field.
+    homeEquity: real.initialPhysicalAssets ?? 0,
     cash: real.initialCash,
     debtByLoan: Object.fromEntries(real.loans.map((l) => [l.id!, l.currentBalance])),
     netWorth: 0,

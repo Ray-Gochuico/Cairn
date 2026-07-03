@@ -13,6 +13,9 @@ import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { useHousingPaymentsStore } from '@/stores/housing-payments-store';
 import { useVehicleLeasesStore } from '@/stores/vehicle-leases-store';
 import { useCategoriesStore } from '@/stores/categories-store';
+import { usePropertiesStore } from '@/stores/properties-store';
+import { useVehiclesStore } from '@/stores/vehicles-store';
+import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
 
 function todayMonthISO(): string {
   const d = new Date();
@@ -45,6 +48,9 @@ export function useRealState(): RealState | null {
   const housingPayments  = useHousingPaymentsStore((s) => s.housingPayments);
   const vehicleLeases    = useVehicleLeasesStore((s) => s.vehicleLeases);
   const categories       = useCategoriesStore((s) => s.categories);
+  const properties          = usePropertiesStore((s) => s.properties);
+  const vehicles            = useVehiclesStore((s) => s.vehicles);
+  const assetValueSnapshots = useAssetValueSnapshotsStore((s) => s.assetValueSnapshots);
 
   return useMemo<RealState | null>(() => {
     if (!household) return null;
@@ -69,6 +75,9 @@ export function useRealState(): RealState | null {
       taxRules,
       housingPayments,
       vehicleLeases,
+      properties,
+      vehicles,
+      assetValueSnapshots,
     });
     // NOTE (2026-05-26 revamp):
     // - The pre-revamp hook rewrote `real.baselineMonthlyExpenses` when the
@@ -80,5 +89,5 @@ export function useRealState(): RealState | null {
     // - 2026-05-27 v1.1: housingPayments + vehicleLeases are summed into
     //   step.expenses per projection month so rentals/leases that end stop
     //   contributing automatically.
-  }, [household, persons, loans, holdings, accounts, accountSnapshots, transactions, categories, inflation, returnRate, defaultCashApy, defaultDrawdownTaxRate, taxRules, housingPayments, vehicleLeases]);
+  }, [household, persons, loans, holdings, accounts, accountSnapshots, transactions, categories, inflation, returnRate, defaultCashApy, defaultDrawdownTaxRate, taxRules, housingPayments, vehicleLeases, properties, vehicles, assetValueSnapshots]);
 }
