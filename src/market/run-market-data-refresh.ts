@@ -10,6 +10,7 @@ import { YahooClient } from '@/market/yahoo-client';
 import { deriveTodaysSnapshot } from '@/market/daily-snapshot';
 import { syncStaleFunds } from '@/market/fund-holdings-sync';
 import { enrichTickerIfMissing } from '@/market/ticker-enrichment';
+import { useSnapshotsStore } from '@/stores/snapshots-store';
 
 /**
  * Run the three background market-data derivations — the stale fund-holdings
@@ -22,7 +23,9 @@ import { enrichTickerIfMissing } from '@/market/ticker-enrichment';
  * swallows its own errors: a Yahoo failure in one branch must not block the
  * others, and none of them may crash startup. This function returns
  * immediately — it does NOT await the IIFEs — so the UI mounts without
- * waiting on the network.
+ * waiting on the network. On a successful daily-snapshot derivation with
+ * upserted rows, the snapshots store is reloaded so mounted dashboards
+ * refeed.
  */
 export function runMarketDataRefresh(db: Database): void {
   // Refresh stale fund-of-funds holdings so the Concentration look-through
@@ -107,6 +110,15 @@ export function runMarketDataRefresh(db: Database): void {
         '[market] daily snapshot done: upserted=%o skipped=%o errors=%o',
         result.upserted, result.skipped, result.errors,
       );
+      // Refeed mounted surfaces (Wave 2 §3): a fresh AUTO_DERIVED row is
+      // invisible to stores hydrated before this IIFE landed — the dashboard
+      // would show stale values under a fresh badge. Reload only when rows
+      // actually changed; the store's in-flight de-dupe (snapshotsInflight)
+      // makes an overlapping load a no-op, and load() swallows its own
+      // errors, so this cannot crash the launch path.
+      if (result.upserted.length > 0) {
+        void useSnapshotsStore.getState().load();
+      }
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('[market] daily snapshot derivation failed:', err);
