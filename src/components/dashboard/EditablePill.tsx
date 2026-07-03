@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { GripVerticalIcon, XIcon, ChevronUpIcon, ChevronDownIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -37,6 +37,20 @@ export function EditablePill({
   onRemove,
   children,
 }: EditablePillProps) {
+  const upRef = useRef<HTMLButtonElement>(null);
+  const downRef = useRef<HTMLButtonElement>(null);
+  // When a click causes the clicked move button to disable (item reached
+  // the list boundary), the browser drops focus to <body>. Queue the
+  // intent in the click handler; after the re-render, hand focus to the
+  // counterpart so keyboard users stay in the toolbar.
+  const pendingRefocusRef = useRef<'up' | 'down' | null>(null);
+  useEffect(() => {
+    const pending = pendingRefocusRef.current;
+    pendingRefocusRef.current = null;
+    if (pending === 'up' && !canMoveUp) downRef.current?.focus();
+    else if (pending === 'down' && !canMoveDown) upRef.current?.focus();
+  });
+
   return (
     <div
       className={cn(
@@ -46,7 +60,13 @@ export function EditablePill({
       data-pill-id={id}
       data-testid={`pill-${id}`}
     >
-      {children}
+      {/* Wave-4 a11y: `inert` removes the pill body (usually a Link) from
+          the tab order and the accessibility tree while editing — the
+          aria-hidden click shield below only stops the mouse. React 19
+          renders the boolean prop as the HTML attribute. */}
+      <div inert={editing} data-testid={`pill-${id}-content`}>
+        {children}
+      </div>
       {editing ? (
         <>
           {/*
@@ -73,20 +93,28 @@ export function EditablePill({
             </span>
             <div className="flex items-center gap-1">
               <button
+                ref={upRef}
                 type="button"
                 aria-label={`Move ${label} earlier`}
                 disabled={!canMoveUp}
-                onClick={onMoveUp}
+                onClick={() => {
+                  pendingRefocusRef.current = 'up';
+                  onMoveUp();
+                }}
                 className="flex h-6 w-6 items-center justify-center rounded-md bg-muted/80 text-muted-foreground hover:bg-muted disabled:opacity-30"
                 data-testid={`pill-${id}-up`}
               >
                 <ChevronUpIcon className="h-3.5 w-3.5" />
               </button>
               <button
+                ref={downRef}
                 type="button"
                 aria-label={`Move ${label} later`}
                 disabled={!canMoveDown}
-                onClick={onMoveDown}
+                onClick={() => {
+                  pendingRefocusRef.current = 'down';
+                  onMoveDown();
+                }}
                 className="flex h-6 w-6 items-center justify-center rounded-md bg-muted/80 text-muted-foreground hover:bg-muted disabled:opacity-30"
                 data-testid={`pill-${id}-down`}
               >
