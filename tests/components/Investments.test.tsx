@@ -491,21 +491,22 @@ describe('Investments page — 529 section', () => {
 
       // All three asset classes visible in the legend initially.
       const legend = within(allocCard).getByLabelText('Chart legend');
-      expect(within(legend).getByText('US Bonds')).toBeInTheDocument();
-      expect(within(legend).getByText('Crypto')).toBeInTheDocument();
-      expect(within(legend).getByText('US Total Market')).toBeInTheDocument();
+      // Legend rows read "<name> — $value · pct%" since the Wave-3 upgrade.
+      expect(within(legend).getByText(/^US Bonds —/)).toBeInTheDocument();
+      expect(within(legend).getByText(/^Crypto —/)).toBeInTheDocument();
+      expect(within(legend).getByText(/^US Total Market —/)).toBeInTheDocument();
 
       const user = userEvent.setup();
       await user.click(
         within(allocCard).getByRole('button', { name: /entities \(3\/3\)/i }),
       );
-      await user.click(within(allocCard).getByLabelText(/US Bonds/));
+      await user.click(within(allocCard).getByRole('checkbox', { name: /US Bonds/ }));
 
       // US Bonds slice gone from the legend; the other two remain.
       const legend2 = within(allocCard).getByLabelText('Chart legend');
-      expect(within(legend2).queryByText('US Bonds')).toBeNull();
-      expect(within(legend2).getByText('Crypto')).toBeInTheDocument();
-      expect(within(legend2).getByText('US Total Market')).toBeInTheDocument();
+      expect(within(legend2).queryByText(/^US Bonds —/)).toBeNull();
+      expect(within(legend2).getByText(/^Crypto —/)).toBeInTheDocument();
+      expect(within(legend2).getByText(/^US Total Market —/)).toBeInTheDocument();
       expect(
         within(allocCard).getByRole('button', { name: /entities \(2\/3\)/i }),
       ).toBeInTheDocument();
@@ -551,7 +552,7 @@ describe('Investments page — 529 section', () => {
       };
       const legendSwatch = (label: string) => {
         const li = within(within(allocCard).getByLabelText('Chart legend'))
-          .getByText(label)
+          .getByText(new RegExp(`^${label} \u2014`))
           .closest('li')!;
         return (li.querySelector('span[aria-hidden]') as HTMLElement).style.backgroundColor;
       };
@@ -561,7 +562,7 @@ describe('Investments page — 529 section', () => {
         within(allocCard).getByRole('button', { name: /entities \(3\/3\)/i }),
       );
       const pickerSwatch = (label: string) => {
-        const row = within(allocCard).getByLabelText(new RegExp(label)).closest('li')!;
+        const row = within(allocCard).getByRole('checkbox', { name: new RegExp(label) }).closest('li')!;
         return (row.querySelector('span[aria-hidden]') as HTMLElement).style.background;
       };
 
@@ -573,7 +574,7 @@ describe('Investments page — 529 section', () => {
       // (2) Hide the LARGEST class (US Total Market) -> reindex. Crypto's legend
       // swatch must NOT move (it was keyed on the sorted-index source, not the
       // post-filter position).
-      await user.click(within(allocCard).getByLabelText(/US Total Market/));
+      await user.click(within(allocCard).getByRole('checkbox', { name: /US Total Market/ }));
       expect(legendSwatch('Crypto')).toBe(cryptoLegendBefore);
     });
   });

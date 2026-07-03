@@ -358,7 +358,7 @@ describe('AssetsDonut', () => {
       expect(before).toMatch(/^#[0-9a-f]{6}$/i);
       const user = userEvent.setup();
       await user.click(screen.getByRole('button', { name: /entities/i }));
-      await user.click(screen.getByLabelText(/Brokerage/));
+      await user.click(screen.getByRole('checkbox', { name: /Brokerage/ }));
       expect(screen.queryByTestId('slice-Brokerage')).not.toBeInTheDocument();
       expect(screen.getByTestId('slice-Home').getAttribute('data-color')).toBe(before);
     });
@@ -394,7 +394,7 @@ describe('AssetsDonut', () => {
 
       const user = userEvent.setup();
       await user.click(screen.getByRole('button', { name: /entities/i }));
-      await user.click(screen.getByLabelText(/Roth IRA/));
+      await user.click(screen.getByRole('checkbox', { name: /Roth IRA/ }));
 
       expect(screen.queryByTestId('slice-Roth IRA')).not.toBeInTheDocument();
       expect(screen.getByTestId('slice-Brokerage')).toBeInTheDocument();
@@ -409,7 +409,7 @@ describe('AssetsDonut', () => {
       const { unmount } = render(<AssetsDonut />);
       const user = userEvent.setup();
       await user.click(screen.getByRole('button', { name: /entities/i }));
-      await user.click(screen.getByLabelText(/Roth IRA/));
+      await user.click(screen.getByRole('checkbox', { name: /Roth IRA/ }));
       expect(screen.queryByTestId('slice-Roth IRA')).not.toBeInTheDocument();
       unmount();
 

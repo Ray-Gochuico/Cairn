@@ -134,7 +134,7 @@ describe('PerTickerDonut', () => {
 
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: /entities/i }));
-    await user.click(screen.getByLabelText(/MSFT/));
+    await user.click(screen.getByRole('checkbox', { name: /MSFT/ }));
 
     expect(screen.queryByTestId('slice-MSFT')).not.toBeInTheDocument();
     expect(screen.getByTestId('slice-AAPL')).toBeInTheDocument();
@@ -149,7 +149,7 @@ describe('PerTickerDonut', () => {
     const { unmount } = render(<PerTickerDonut />);
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: /entities/i }));
-    await user.click(screen.getByLabelText(/MSFT/));
+    await user.click(screen.getByRole('checkbox', { name: /MSFT/ }));
     expect(screen.queryByTestId('slice-MSFT')).not.toBeInTheDocument();
     unmount();
 

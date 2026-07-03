@@ -460,7 +460,7 @@ describe('SectorDonut — entity picker', () => {
 
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: /entities/i }));
-    await user.click(screen.getByLabelText(/Financial Services/));
+    await user.click(screen.getByRole('checkbox', { name: /Financial Services/ }));
 
     expect(screen.queryByTestId('slice-Financial Services')).not.toBeInTheDocument();
     expect(screen.getByTestId('slice-Technology')).toBeInTheDocument();
@@ -497,7 +497,7 @@ describe('SectorDonut — entity picker', () => {
     const { unmount } = render(<SectorDonut />);
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: /entities/i }));
-    await user.click(screen.getByLabelText(/Financial Services/));
+    await user.click(screen.getByRole('checkbox', { name: /Financial Services/ }));
     expect(screen.queryByTestId('slice-Financial Services')).not.toBeInTheDocument();
     unmount();
 

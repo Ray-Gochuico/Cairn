@@ -111,7 +111,7 @@ describe('DonutChartCard', () => {
     // 14 slices > LEGEND_COLLAPSE_THRESHOLD (6), so expand to show all first.
     fireEvent.click(screen.getByRole('button', { name: /show all/i }));
     const legend = screen.getByLabelText('Chart legend');
-    const li = within(legend).getByText('S11').closest('li')!;
+    const li = within(legend).getByText(/^S11 —/).closest('li')!;
     const css = (li.querySelector('span[aria-hidden]') as HTMLElement).style.backgroundColor;
     // jsdom serializes the inline color as rgb(...); normalize WEDGE_PALETTE
     // to the same form and assert membership + non-near-white.

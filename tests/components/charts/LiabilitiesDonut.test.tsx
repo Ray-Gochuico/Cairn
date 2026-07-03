@@ -198,7 +198,7 @@ describe('LiabilitiesDonut', () => {
       expect(before).toMatch(/^#[0-9a-f]{6}$/i);
       const user = userEvent.setup();
       await user.click(screen.getByRole('button', { name: /entities/i }));
-      await user.click(screen.getByLabelText(/Home mortgage/));
+      await user.click(screen.getByRole('checkbox', { name: /Home mortgage/ }));
       expect(screen.queryByTestId('slice-Home mortgage')).not.toBeInTheDocument();
       expect(screen.getByTestId('slice-Student debt').getAttribute('data-color')).toBe(before);
     });
@@ -210,7 +210,7 @@ describe('LiabilitiesDonut', () => {
 
       const user = userEvent.setup();
       await user.click(screen.getByRole('button', { name: /entities/i }));
-      await user.click(screen.getByLabelText(/Car loan/));
+      await user.click(screen.getByRole('checkbox', { name: /Car loan/ }));
 
       expect(screen.queryByTestId('slice-Car loan')).not.toBeInTheDocument();
       expect(screen.getByTestId('slice-Home mortgage')).toBeInTheDocument();
@@ -225,7 +225,7 @@ describe('LiabilitiesDonut', () => {
       const { unmount } = render(<LiabilitiesDonut />);
       const user = userEvent.setup();
       await user.click(screen.getByRole('button', { name: /entities/i }));
-      await user.click(screen.getByLabelText(/Car loan/));
+      await user.click(screen.getByRole('checkbox', { name: /Car loan/ }));
       expect(screen.queryByTestId('slice-Car loan')).not.toBeInTheDocument();
       unmount();
 
