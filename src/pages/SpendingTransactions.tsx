@@ -6,6 +6,9 @@ import { Input } from '@/components/ui/input';
 import DatePicker from '@/components/ui/DatePicker';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
+import { EmptyState } from '@/components/layout/EmptyState';
+import { Button } from '@/components/ui/button';
+import { Wallet } from 'lucide-react';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useAccountsStore } from '@/stores/accounts-store';
@@ -341,10 +344,18 @@ export default function SpendingTransactions() {
        * here we just render nothing extra until the retry succeeds.
        */}
       {hasStoreError ? null : transactions.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No transactions yet. Import a statement from{' '}
-          <Link to="/spending" className="underline text-foreground">Spending</Link> to get started.
-        </p>
+        // Import lives on /spending (there is no /inputs/transactions tab),
+        // so the CTA routes there.
+        <EmptyState
+          bare
+          icon={Wallet}
+          title="No transactions yet"
+          description="Import a statement from Spending to get started."
+        >
+          <Button asChild size="sm" variant="outline">
+            <Link to="/spending">Go to Spending</Link>
+          </Button>
+        </EmptyState>
       ) : sorted.length === 0 ? (
         <p className="text-sm text-muted-foreground">No transactions match the current view.</p>
       ) : (

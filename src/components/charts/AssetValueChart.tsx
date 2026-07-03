@@ -35,6 +35,7 @@ import {
   xTickLabel,
   xTicksFor,
   type AssetValuePoint,
+  type HeaderLabelOverrides,
 } from '@/lib/asset-value-chart';
 import {
   buildNetWorthChartData,
@@ -42,10 +43,12 @@ import {
 } from '@/lib/net-worth-chart-data';
 import {
   makeChartPrefs,
+  migrateLegacyInvestmentChartPrefs,
   type ChartPrefs,
   type EntityKind,
   type SelectedEntity,
 } from '@/lib/net-worth-chart-prefs';
+import { filterByOwnerPersonId } from '@/lib/filter-by-view';
 import { entityKey, parseEntityKey } from '@/lib/entity-key';
 import { cutoffForWindow, type TimeWindow } from '@/lib/snapshot-bucketing';
 import {
@@ -77,27 +80,43 @@ import type { LoanType } from '@/types/enums';
  * intact for it.
  */
 
-export type AssetValueChartSurface = 'netWorth' | 'dashboard';
+export type AssetValueChartSurface = 'netWorth' | 'dashboard' | 'investments';
 
 // Per-surface persisted preferences. 'netWorthChart' reuses the legacy
-// chart's localStorage keys so existing selections carry over.
+// chart's localStorage keys so existing selections carry over;
+// 'investmentChart' is fresh (the legacy investment-chart keys stored an
+// incompatible shape) and is fed by migrateLegacyInvestmentChartPrefs.
 const PREFS: Record<AssetValueChartSurface, ChartPrefs> = {
   netWorth: makeChartPrefs('netWorthChart'),
   dashboard: makeChartPrefs('dashboardAssetChart'),
+  investments: makeChartPrefs('investmentChart'),
 };
 
 interface SurfaceConfig {
   height: number;
   strokeWidth: number;
   valueClass: string;
-  /** Breakdown panel (Task 12) — netWorth surface only. */
+  /** Breakdown panel (Task 12) — netWorth + investments surfaces. */
   showBreakdown: boolean;
-  /** Click-to-pin (Task 11) — netWorth surface only. */
+  /** Click-to-pin (Task 11) — netWorth + investments surfaces. */
   allowPin: boolean;
   /** Header-right "Net Worth →" link — dashboard surface only. */
   showLink: boolean;
   /** Default selection: everything (net worth) vs assets only. */
   defaultIncludeLoans: boolean;
+  /** Which entity kinds are eligible. 'accountsOnly' → investments surface. */
+  entityScope: 'all' | 'accountsOnly';
+  /**
+   * Scope eligible accounts by the ?view person filter. The retired
+   * investments time-series chart received page-filtered accounts, so the
+   * investments surface keeps that behavior; netWorth/dashboard stay
+   * household-wide and keep the '· Household' label suffix instead.
+   */
+  respectViewFilter: boolean;
+  /** headerLabel wording overrides (accounts-only surfaces must not say "Net worth"). */
+  labels?: HeaderLabelOverrides;
+  /** Body copy for the zero-eligible empty state. */
+  emptyCopy: string;
   /**
    * Per-direction gradient fill ids — unique per surface so the dashboard
    * and net-worth charts can mount on one page without <defs> collisions.
@@ -115,6 +134,10 @@ const SURFACES: Record<AssetValueChartSurface, SurfaceConfig> = {
     allowPin: true,
     showLink: false,
     defaultIncludeLoans: true,
+    entityScope: 'all',
+    respectViewFilter: false,
+    emptyCopy:
+      'Add an account, property, vehicle, or loan in Inputs to see your wealth over time.',
     gradientUpId: 'avc-fill-netWorth-up',
     gradientDownId: 'avc-fill-netWorth-down',
   },
@@ -126,15 +149,39 @@ const SURFACES: Record<AssetValueChartSurface, SurfaceConfig> = {
     allowPin: false,
     showLink: true,
     defaultIncludeLoans: false,
+    entityScope: 'all',
+    respectViewFilter: false,
+    emptyCopy:
+      'Add an account, property, vehicle, or loan in Inputs to see your wealth over time.',
     gradientUpId: 'avc-fill-dashboard-up',
     gradientDownId: 'avc-fill-dashboard-down',
+  },
+  investments: {
+    height: 320,
+    strokeWidth: 2.5,
+    valueClass: 'text-3xl',
+    showBreakdown: true,
+    allowPin: true,
+    showLink: false,
+    defaultIncludeLoans: false, // vacuous under accountsOnly — kept for type shape
+    entityScope: 'accountsOnly',
+    respectViewFilter: true,
+    labels: {
+      fullSet: 'Total investments',
+      allAssets: 'Total investments',
+      partialAssets: 'Included accounts',
+    },
+    emptyCopy:
+      'Add an account with balance snapshots in Inputs to see your investments over time.',
+    gradientUpId: 'avc-fill-investments-up',
+    gradientDownId: 'avc-fill-investments-down',
   },
 };
 
 // ----- Hoisted recharts props (recharts 3.x re-render discipline) -----
 // Every object/function prop must keep a stable identity across renders —
-// fresh literals re-trigger recharts' internal axis-layout dispatch (see
-// InvestmentTimeSeriesChart's RenderedTicksReporter comment).
+// fresh literals re-trigger recharts' internal axis-layout dispatch
+// (measured via a rendered-ticks reporter on the old investments chart).
 const CHART_MARGIN = { top: 8, right: 16, bottom: 8, left: 8 } as const;
 const GRID_STROKE = 'hsl(var(--border))' as const;
 const AXIS_STROKE = 'hsl(var(--muted-foreground))' as const;
@@ -463,11 +510,25 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
     loadAssetValueSnapshots,
   ]);
 
-  const { filter } = useViewFilter();
+  const { filter, persons } = useViewFilter();
+
+  // Investments surface only: the eligible-account universe honors the
+  // ?view person filter (parity with the retired investments time-series
+  // chart, which received page-filtered accounts). Other surfaces pass through.
+  const scopedAccounts = useMemo(
+    () => (cfg.respectViewFilter ? filterByOwnerPersonId(accounts, filter, persons) : accounts),
+    [accounts, filter, persons, cfg.respectViewFilter],
+  );
 
   // ----- Eligibility (rules carried over from the removed stacked-bar chart) -----
+  // Investments-surface account rule: EVERY account type with ≥1 snapshot is
+  // eligible (parity with the retired chart, whose tests pinned cash/savings
+  // inclusion) — deliberately NOT narrowed to investment account types. One
+  // divergence from that chart: excludedFromNetWorth accounts are dropped,
+  // matching this component's existing rule (excluded-accounts must not leak
+  // into wealth charts).
   const eligibleAccounts = useMemo<EligibleEntity[]>(() => {
-    return accounts
+    return scopedAccounts
       .filter(
         (a) =>
           a.id != null &&
@@ -475,9 +536,10 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
           snapshots.some((s) => s.accountId === a.id),
       )
       .map((a) => ({ kind: 'account' as const, id: a.id!, name: a.name }));
-  }, [accounts, snapshots]);
+  }, [scopedAccounts, snapshots]);
 
   const eligibleProperties = useMemo<EligibleEntity[]>(() => {
+    if (cfg.entityScope === 'accountsOnly') return [];
     return properties
       .filter((p) => p.id != null && !p.excludedFromNetWorth)
       .filter((p) => {
@@ -489,9 +551,10 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
         return hasSnapshot || hasFallback;
       })
       .map((p) => ({ kind: 'property' as const, id: p.id!, name: p.name }));
-  }, [properties, assetValueSnapshots]);
+  }, [properties, assetValueSnapshots, cfg.entityScope]);
 
   const eligibleVehicles = useMemo<EligibleEntity[]>(() => {
+    if (cfg.entityScope === 'accountsOnly') return [];
     return vehicles
       .filter((v) => v.id != null && !v.excludedFromNetWorth)
       .filter((v) => {
@@ -503,9 +566,10 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
         return hasSnapshot || hasFallback;
       })
       .map((v) => ({ kind: 'vehicle' as const, id: v.id!, name: v.name }));
-  }, [vehicles, assetValueSnapshots]);
+  }, [vehicles, assetValueSnapshots, cfg.entityScope]);
 
   const eligibleLoans = useMemo<EligibleEntity[]>(() => {
+    if (cfg.entityScope === 'accountsOnly') return [];
     return loans
       .filter((l) => l.id != null)
       .map((l) => ({
@@ -513,7 +577,7 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
         id: l.id!,
         name: loanDisplayName(l.name, l.type),
       }));
-  }, [loans]);
+  }, [loans, cfg.entityScope]);
 
   const eligibleAll = useMemo<EligibleEntity[]>(
     () => [
@@ -561,6 +625,10 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
   // write to storage.
   const eligibleJoin = eligibleAll.map((e) => entityKey(e.kind, e.id)).join(',');
   useEffect(() => {
+    // Legacy investment-chart prefs must land in the investmentChart
+    // namespace BEFORE the reads below. Surface-gated + idempotent; runs
+    // in the effect (not module scope) so tests can seed legacy keys first.
+    if (surface === 'investments') migrateLegacyInvestmentChartPrefs();
     const savedW = prefs.getTimeWindow();
     if (savedW) setWindow(savedW);
 
@@ -788,9 +856,12 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
       eligibleAssets: eligibleAssetKeys,
       eligibleLoans: eligibleLoanKeys,
       nameByKey,
+      labels: cfg.labels,
     });
-    return filter !== 'household' ? `${base} · Household` : base;
-  }, [effectiveKeys, eligibleAssetKeys, eligibleLoanKeys, nameByKey, filter]);
+    // View-filter-respecting surfaces already scope their data to the
+    // filtered person — no "· Household" honesty suffix needed there.
+    return filter !== 'household' && !cfg.respectViewFilter ? `${base} · Household` : base;
+  }, [effectiveKeys, eligibleAssetKeys, eligibleLoanKeys, nameByKey, filter, cfg.labels, cfg.respectViewFilter]);
 
   const xTicks = useMemo(
     () => xTicksFor(chartData, window_, todayIso),
@@ -809,14 +880,12 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
   const hasSelection = effectiveKeys.size > 0;
 
   // CF3 (Task 9 review): with ZERO eligible entities, headerLabel
-  // degenerates to "Net worth" (empty selection == empty eligible set) —
-  // vacuous next to the empty-state CTA. Show the surface's default-scope
-  // label instead; the lib stays pure.
+  // degenerates to the full-set label (empty selection == empty eligible
+  // set) — vacuous next to the empty-state CTA. Show the surface's
+  // default-scope label instead; the lib stays pure.
   const displayLabel = hasEligible
     ? label
-    : cfg.defaultIncludeLoans
-      ? 'Net worth'
-      : 'Total assets';
+    : cfg.labels?.fullSet ?? (cfg.defaultIncludeLoans ? 'Net worth' : 'Total assets');
 
   // Sign-aware trend direction (spec §2 locked decision) — drives the line
   // color, gradient fill, and end dot inside ChartCanvas. Keyed on the
@@ -1075,10 +1144,7 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
           {/* ----- Body: empty states or the area chart ----- */}
           {!hasEligible ? (
             <div className="py-8 text-center space-y-3">
-              <p className="text-sm text-muted-foreground">
-                Add an account, property, vehicle, or loan in Inputs to see your
-                wealth over time.
-              </p>
+              <p className="text-sm text-muted-foreground">{cfg.emptyCopy}</p>
               <Button asChild size="sm" variant="outline">
                 <Link to="/inputs/accounts">Add an account</Link>
               </Button>

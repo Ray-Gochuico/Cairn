@@ -54,8 +54,69 @@ describe('ConcentrationCard', () => {
     );
     expect(screen.getByText(/0 warnings/i)).toBeInTheDocument();
     expect(screen.getByText(/no concentration issues detected/i)).toBeInTheDocument();
-    // "See full breakdown" link is hidden when there are no warnings.
-    expect(screen.queryByRole('link', { name: /see full breakdown/i })).not.toBeInTheDocument();
+    // Empty portfolio: no largest position to show; the deep link is
+    // ALWAYS rendered (the healthy state is no longer a dead end).
+    expect(screen.queryByText(/largest position/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /see full breakdown/i })).toHaveAttribute(
+      'href', '/investments#concentration',
+    );
+  });
+
+  it('healthy state shows the largest effective position and a deep link', () => {
+    // Diversified fixture: every ticker ≤15% (soft threshold) and every
+    // asset class ≤50%, so ZERO warnings fire — but perTicker is non-empty.
+    // Largest position: VTI at 14 of 100 shares → 14.0%.
+    useAccountsStore.setState({
+      accounts: [{
+        id: 1, householdId: 1, ownerPersonId: null, beneficiaryDependentId: null,
+        name: 'Brokerage', institution: null, type: AccountType.ACCOUNT_BROKERAGE,
+        cryptoWalletAddress: null, autoFetchEnabled: false,
+        excludedFromNetWorth: false, stateOfPlan: null, accentColor: null,
+      }],
+      isLoading: false, error: null, load: async () => {},
+    });
+    const mkHolding = (id: number, ticker: string, shareCount: number) =>
+      ({ id, accountId: 1, ticker, shareCount, targetAllocationPct: null, costBasis: null });
+    useHoldingsStore.setState({
+      holdings: [
+        mkHolding(1, 'VTI', 14), mkHolding(2, 'BND', 13), mkHolding(3, 'VXUS', 13),
+        mkHolding(4, 'GLD', 12), mkHolding(5, 'VNQ', 12), mkHolding(6, 'TIP', 12),
+        mkHolding(7, 'VWO', 12), mkHolding(8, 'AAPL', 12),
+      ],
+      isLoading: false, error: null, load: async () => {},
+    });
+    useSnapshotsStore.setState({
+      snapshots: [{
+        id: 1, accountId: 1, snapshotDate: '2026-05-01', totalValue: 100_000,
+        source: SnapshotSource.MANUAL,
+      }],
+      isLoading: false, error: null, load: async () => {},
+    });
+    const mkTicker = (ticker: string, assetClass: AssetClass) =>
+      ({ ticker, name: null, assetClass, leverageFactor: 1, direction: TickerDirection.LONG, userAdded: false, accentColor: null, sector: null, industry: null });
+    useTickersStore.setState({
+      tickers: [
+        mkTicker('VTI', AssetClass.US_TOTAL_MARKET), mkTicker('BND', AssetClass.US_BONDS),
+        mkTicker('VXUS', AssetClass.INTL_DEVELOPED), mkTicker('GLD', AssetClass.COMMODITIES),
+        mkTicker('VNQ', AssetClass.REAL_ESTATE), mkTicker('TIP', AssetClass.TIPS),
+        mkTicker('VWO', AssetClass.EMERGING_MARKETS), mkTicker('AAPL', AssetClass.SINGLE_STOCK),
+      ],
+      isLoading: false, error: null, load: async () => {},
+      upsert: async () => {}, remove: async () => {}, lookup: () => undefined,
+    });
+
+    render(
+      <MemoryRouter>
+        <ConcentrationCard />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText(/No concentration issues detected/)).toBeInTheDocument();
+    expect(screen.getByText(/Largest position/)).toBeInTheDocument();
+    expect(screen.getByText(/VTI/)).toBeInTheDocument();
+    expect(screen.getByText(/14\.0%/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /See full breakdown/ })).toHaveAttribute(
+      'href', '/investments#concentration',
+    );
   });
 
   it('renders the warning count and warning messages when warnings fire', () => {
@@ -125,9 +186,9 @@ describe('ConcentrationCard', () => {
     expect(screen.getByText(/\d+ warnings?/)).toBeInTheDocument();
     // AAPL message must surface in the top 3.
     expect(screen.getByText(/AAPL is 30\.0% of effective exposure/i)).toBeInTheDocument();
-    // "See full breakdown" link points at Investments.
+    // "See full breakdown" deep-links to the Concentration Health card.
     const link = screen.getByRole('link', { name: /see full breakdown/i });
-    expect(link).toHaveAttribute('href', '/investments');
+    expect(link).toHaveAttribute('href', '/investments#concentration');
   });
 
   it('uses red severity icon (text-red-500) for HIGH severity warnings', () => {

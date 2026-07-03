@@ -114,6 +114,9 @@ describe('SpendingTransactions page', () => {
     await waitFor(() => {
       expect(screen.getByText(/no transactions yet/i)).toBeInTheDocument();
     });
+    // Canonical EmptyState + CTA into the surface that fixes the emptiness.
+    expect(screen.getByText(/no transactions yet/i)).toHaveClass('font-medium');
+    expect(screen.getByRole('link', { name: /go to spending/i })).toHaveAttribute('href', '/spending');
   });
 
   it('inline-edits a transaction category and persists via the transactions store', async () => {

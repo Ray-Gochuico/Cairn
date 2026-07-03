@@ -206,6 +206,21 @@ describe('SectorDonut — drill into industry view', () => {
     expect(screen.getByTestId('slice-Financials')).toBeTruthy();
   });
 
+  it('industry legend shares are share-of-SECTOR (complete partition), not share-of-portfolio', () => {
+    // Technology = 1200 + 1000 + 800 = 3000 of a 3750 portfolio. Drilled-in
+    // industries are a COMPLETE partition of the sector, so the honest
+    // denominator is the sector total: Semiconductors 40.0% (1200/3000),
+    // NOT 32.0% (1200/3750). Pins the deliberate shareTotal={undefined} in
+    // drill-in view — a future "pass shareTotal unconditionally" cleanup
+    // must go red here.
+    render(<SectorDonut />);
+    fireEvent.click(screen.getByTestId('slice-Technology'));
+    expect(screen.getByText(/\$1,200 · 40\.0%/)).toBeInTheDocument();
+    expect(screen.getByText(/\$1,000 · 33\.3%/)).toBeInTheDocument();
+    expect(screen.getByText(/\$800 · 26\.7%/)).toBeInTheDocument();
+    expect(screen.queryByText(/32\.0%|21\.3%/)).toBeNull();
+  });
+
   it('does not drill again when a wedge is clicked in industry view', () => {
     render(<SectorDonut />);
     fireEvent.click(screen.getByTestId('slice-Technology'));
@@ -448,7 +463,7 @@ describe('SectorDonut — entity picker', () => {
     seedTwoSectors();
     render(<SectorDonut />);
     expect(
-      screen.getByRole('button', { name: /entities \(2\/2\)/i }),
+      screen.getByRole('button', { name: /Included · 2 of 2/ }),
     ).toBeInTheDocument();
   });
 
@@ -459,13 +474,13 @@ describe('SectorDonut — entity picker', () => {
     expect(screen.getByTestId('slice-Financial Services')).toBeInTheDocument();
 
     const user = userEvent.setup();
-    await user.click(screen.getByRole('button', { name: /entities/i }));
-    await user.click(screen.getByLabelText(/Financial Services/));
+    await user.click(screen.getByRole('button', { name: /Included ·/ }));
+    await user.click(screen.getByRole('checkbox', { name: /Financial Services/ }));
 
     expect(screen.queryByTestId('slice-Financial Services')).not.toBeInTheDocument();
     expect(screen.getByTestId('slice-Technology')).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /entities \(1\/2\)/i }),
+      screen.getByRole('button', { name: /Included · 1 of 2/ }),
     ).toBeInTheDocument();
   });
 
@@ -473,31 +488,51 @@ describe('SectorDonut — entity picker', () => {
     seedTwoSectors();
     render(<SectorDonut />);
     // Picker is visible in sector view
-    expect(screen.getByRole('button', { name: /entities/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Included ·/ })).toBeInTheDocument();
     // Drill into Technology
     fireEvent.click(screen.getByTestId('slice-Technology'));
     expect(screen.getByText('Industries — Technology')).toBeInTheDocument();
     // Picker should be hidden — the picker operates on sectors only.
-    expect(screen.queryByRole('button', { name: /entities/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Included ·/ })).toBeNull();
   });
 
   it('picker reappears when returning to sector view via "Back to sectors"', () => {
     seedTwoSectors();
     render(<SectorDonut />);
     fireEvent.click(screen.getByTestId('slice-Technology'));
-    expect(screen.queryByRole('button', { name: /entities/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Included ·/ })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /back to sectors/i }));
     expect(
-      screen.getByRole('button', { name: /entities \(2\/2\)/i }),
+      screen.getByRole('button', { name: /Included · 2 of 2/ }),
     ).toBeInTheDocument();
+  });
+
+  it('sector share % stays anchored to the full portfolio when a sector is hidden', async () => {
+    // Technology 1500, Financial Services 750 → full total 2250. Hide
+    // Financial Services: Technology's legend share must still read 66.7%
+    // (1500/2250), NOT 100.0%.
+    seedTwoSectors();
+    render(<SectorDonut />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /Included ·/ }));
+    await user.click(screen.getByRole('checkbox', { name: /Financial Services/ }));
+    expect(screen.getByText(/\$1,500 · 66\.7%/)).toBeInTheDocument();
+    expect(screen.queryByText(/100\.0%/)).not.toBeInTheDocument();
+  });
+
+  it('picker lives in the card header, not an absolute overlay', () => {
+    seedTwoSectors();
+    render(<SectorDonut />);
+    const trigger = screen.getByRole('button', { name: /Included ·/ });
+    expect(trigger.closest('[class*="absolute"]')).toBeNull();
   });
 
   it('persists hidden sector across remount', async () => {
     seedTwoSectors();
     const { unmount } = render(<SectorDonut />);
     const user = userEvent.setup();
-    await user.click(screen.getByRole('button', { name: /entities/i }));
-    await user.click(screen.getByLabelText(/Financial Services/));
+    await user.click(screen.getByRole('button', { name: /Included ·/ }));
+    await user.click(screen.getByRole('checkbox', { name: /Financial Services/ }));
     expect(screen.queryByTestId('slice-Financial Services')).not.toBeInTheDocument();
     unmount();
 

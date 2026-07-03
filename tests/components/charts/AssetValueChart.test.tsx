@@ -8,6 +8,7 @@ import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
 import { useLoansStore } from '@/stores/loans-store';
 import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
+import { usePersonsStore } from '@/stores/persons-store';
 import { AccountType, LoanType, PropertyType, SnapshotSource } from '@/types/enums';
 import type { Account, AccountSnapshot, Loan, Property } from '@/types/schema';
 
@@ -122,7 +123,7 @@ function seedEmptyStores() {
   useAssetValueSnapshotsStore.setState({ assetValueSnapshots: [], isLoading: false, error: null, load: async () => {} } as never);
 }
 
-function renderChart(surface: 'netWorth' | 'dashboard') {
+function renderChart(surface: 'netWorth' | 'dashboard' | 'investments') {
   return render(
     <MemoryRouter>
       <AssetValueChart surface={surface} />
@@ -583,5 +584,143 @@ describe('breakdown panel (netWorth surface)', () => {
     seedEmptyStores();
     renderChart('dashboard');
     expect(screen.getByText('Total assets')).toBeInTheDocument();
+  });
+});
+
+describe('AssetValueChart — investments surface', () => {
+  function seedInvestmentStores() {
+    usePersonsStore.setState({
+      persons: [], isLoading: false, error: null, load: async () => {},
+    } as never);
+    useAccountsStore.setState({
+      accounts: [
+        mkAccount(1, 'Brokerage'),
+        mkAccount(2, 'Everyday cash', { type: AccountType.ACCOUNT_CASH }),
+        mkAccount(3, 'No snapshots yet'),
+        mkAccount(4, 'Old excluded', { excludedFromNetWorth: true }),
+      ],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    useSnapshotsStore.setState({
+      snapshots: [
+        mkSnapshot(1, 1, '2025-07-10', 90000),
+        mkSnapshot(2, 1, '2026-06-05', 110000),
+        mkSnapshot(3, 2, '2026-06-05', 5000),
+        mkSnapshot(4, 4, '2026-06-05', 7777),
+      ],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    usePropertiesStore.setState({ properties: [], isLoading: false, error: null, load: async () => {} } as never);
+    useVehiclesStore.setState({ vehicles: [], isLoading: false, error: null, load: async () => {} } as never);
+    useLoansStore.setState({ loans: [mkLoan(9, 'Mortgage')], isLoading: false, error: null, load: async () => {} } as never);
+    useAssetValueSnapshotsStore.setState({ assetValueSnapshots: [], isLoading: false, error: null, load: async () => {} } as never);
+  }
+
+  it('eligibility parity: any account type with ≥1 snapshot; no-snapshot and excluded accounts are out', async () => {
+    seedInvestmentStores();
+    renderChart('investments');
+    // Brokerage + cash → 2 of 2 (loan/property/vehicle never counted).
+    await userEvent.click(screen.getByRole('button', { name: /Included · 2 of 2/ }));
+    const dialog = screen.getByRole('dialog', { name: /Included entities/ });
+    expect(within(dialog).getByLabelText('Brokerage')).toBeInTheDocument();
+    expect(within(dialog).getByLabelText('Everyday cash')).toBeInTheDocument();
+    expect(within(dialog).queryByLabelText('No snapshots yet')).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText('Old excluded')).not.toBeInTheDocument();
+    // accountsOnly scope: no Loans/Properties/Vehicles section headings.
+    expect(within(dialog).queryByText('Loans')).not.toBeInTheDocument();
+    expect(within(dialog).queryByText('Properties')).not.toBeInTheDocument();
+  });
+
+  it('full selection reads "Total investments"; a partial pick reads the single account name', async () => {
+    seedInvestmentStores();
+    renderChart('investments');
+    expect(screen.getByText('Total investments')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Included · 2 of 2/ }));
+    await userEvent.click(
+      within(screen.getByRole('dialog', { name: /Included entities/ })).getByLabelText('Everyday cash'),
+    );
+    // 1 of 2 selected → single-entity rule shows the account's own name.
+    // Scoped to the header-label div: the still-open picker renders the
+    // same string in its checkbox <label>.
+    expect(screen.getByText('Brokerage', { selector: 'div' })).toBeInTheDocument();
+  });
+
+  it('persists to the investmentChart namespace', async () => {
+    seedInvestmentStores();
+    renderChart('investments');
+    await userEvent.click(screen.getByRole('tab', { name: '6M' }));
+    expect(localStorage.getItem('investmentChart.timeWindow')).toBe('6M');
+    expect(localStorage.getItem('netWorthChart.timeWindow')).toBeNull();
+  });
+
+  it('migrates legacy investment-chart prefs on mount (selection + window carry over)', async () => {
+    seedInvestmentStores();
+    localStorage.setItem('investment-chart-selected-accounts', JSON.stringify([1]));
+    localStorage.setItem('investment-chart-time-window', '5Y');
+    renderChart('investments');
+    // Migrated selection: only account 1 → single-entity label.
+    expect(await screen.findByText('Brokerage')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Included · 1 of 2/ })).toBeInTheDocument();
+    expect(localStorage.getItem('investment-chart-selected-accounts')).toBeNull();
+    expect(localStorage.getItem('investmentChart.selectedEntities')).not.toBeNull();
+  });
+
+  it('renders the breakdown toggle and no "Net Worth →" link', () => {
+    seedInvestmentStores();
+    renderChart('investments');
+    expect(screen.getByRole('button', { name: /Breakdown/ })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Net Worth/ })).not.toBeInTheDocument();
+  });
+
+  it('empty state: accounts-only copy with an Add-account CTA', () => {
+    usePersonsStore.setState({ persons: [], isLoading: false, error: null, load: async () => {} } as never);
+    useAccountsStore.setState({ accounts: [], isLoading: false, error: null, load: async () => {} } as never);
+    useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null, load: async () => {} } as never);
+    usePropertiesStore.setState({ properties: [], isLoading: false, error: null, load: async () => {} } as never);
+    useVehiclesStore.setState({ vehicles: [], isLoading: false, error: null, load: async () => {} } as never);
+    useLoansStore.setState({ loans: [], isLoading: false, error: null, load: async () => {} } as never);
+    useAssetValueSnapshotsStore.setState({ assetValueSnapshots: [], isLoading: false, error: null, load: async () => {} } as never);
+    renderChart('investments');
+    expect(screen.getByText(/balance snapshots/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Add an account/ })).toHaveAttribute('href', '/inputs/accounts');
+    // Zero-eligible label fallback is the surface's full-set label.
+    expect(screen.getByText('Total investments')).toBeInTheDocument();
+  });
+
+  it('respects the ?view person filter (parity with the old chart) and drops the "· Household" suffix', async () => {
+    seedInvestmentStores();
+    usePersonsStore.setState({
+      persons: [
+        { id: 1, householdId: 1, name: 'Alice' },
+        { id: 2, householdId: 1, name: 'Bob' },
+      ],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    useAccountsStore.setState({
+      accounts: [
+        mkAccount(1, 'Alice Brokerage', { ownerPersonId: 1 }),
+        mkAccount(2, 'Bob Brokerage', { ownerPersonId: 2 }),
+      ],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    useSnapshotsStore.setState({
+      snapshots: [
+        mkSnapshot(1, 1, '2026-06-05', 50000),
+        mkSnapshot(2, 2, '2026-06-05', 200000),
+      ],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    render(
+      <MemoryRouter initialEntries={['/?view=p1']}>
+        <AssetValueChart surface="investments" />
+      </MemoryRouter>,
+    );
+    // Only Alice's account is eligible under ?view=p1 → 1 of 1, and the
+    // single-entity label is her account's own name (never "· Household").
+    expect(screen.queryByText(/· Household/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Included · 1 of 1/ }));
+    const dialog = screen.getByRole('dialog', { name: /Included entities/ });
+    expect(within(dialog).getByLabelText('Alice Brokerage')).toBeInTheDocument();
+    expect(within(dialog).queryByLabelText('Bob Brokerage')).not.toBeInTheDocument();
   });
 });

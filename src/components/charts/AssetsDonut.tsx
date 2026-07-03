@@ -147,6 +147,10 @@ export default function AssetsDonut() {
     [slices, keyByName, selected],
   );
 
+  // Full-universe denominator (hidden entities included) so hiding one
+  // never re-normalizes the shares that remain.
+  const fullTotal = useMemo(() => slices.reduce((s, x) => s + x.value, 0), [slices]);
+
   // When there's nothing to chart at all (no entities upstream), render a
   // calm empty-state card. Picker would have nothing to select so we skip
   // it.
@@ -186,17 +190,13 @@ export default function AssetsDonut() {
     );
   }
 
-  // Position the picker absolutely on top of DonutChartCard's CardHeader
-  // so we don't have to fork DonutChartCard. Top-right of the card lands
-  // it just past where the title naturally ends.
   return (
-    <div className="relative">
-      <div className="absolute top-4 right-4 z-10">{picker}</div>
-      <DonutChartCard
-        title="Assets"
-        data={filteredSlices.length === 0 ? EMPTY_SLICES : filteredSlices}
-        valueFormatter={formatCurrency}
-      />
-    </div>
+    <DonutChartCard
+      title="Assets"
+      data={filteredSlices.length === 0 ? EMPTY_SLICES : filteredSlices}
+      shareTotal={fullTotal}
+      valueFormatter={formatCurrency}
+      headerRight={picker}
+    />
   );
 }

@@ -29,18 +29,6 @@ interface Snap {
   totalValue: number;
 }
 
-/**
- * Absolute day-distance between two ISO (YYYY-MM-DD) dates. UTC math so
- * the result is timezone-stable. Exported so sibling helpers
- * (`asset-snapshot-bucketing.ts`) can share the same tiebreaker math
- * instead of duplicating it.
- */
-export function absDays(a: string, b: string): number {
-  const da = new Date(`${a}T00:00:00Z`).getTime();
-  const db = new Date(`${b}T00:00:00Z`).getTime();
-  return Math.abs(Math.round((da - db) / 86_400_000));
-}
-
 /** Exported for chart libs that need bucket-end math. */
 export function bucketEndFor(dateIso: string, g: Granularity): string {
   const d = new Date(dateIso + 'T00:00:00Z');
@@ -112,99 +100,6 @@ export function bucketSnapshots(
       }
     }
     valuesByAccount.set(accountId, values);
-  }
-
-  return { bucketEnds, valuesByAccount };
-}
-
-/**
- * Step from one bucket end to the start of the next bucket (i.e. one day
- * after `currentEnd`). Used to enumerate consecutive bucket ends without
- * relying on the input snapshot dates landing inside every bucket.
- */
-function nextBucketStart(currentEnd: string, _g: Granularity): string {
-  const d = new Date(`${currentEnd}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + 1);
-  return d.toISOString().slice(0, 10);
-}
-
-/**
- * Same return shape as `bucketSnapshots`, but each (account, bucket) cell
- * holds the value of the snapshot whose snapshotDate is CLOSEST to the
- * bucket end, NOT the latest one at-or-before the bucket end. A snapshot
- * dated AFTER a bucket end can still claim that bucket if it's the closest
- * available data point. A single sparse snapshot can anchor many
- * consecutive buckets (the chart shows a flat horizontal between them,
- * which is the natural "best guess" rendering).
- *
- * Tiebreaker for equidistant snapshots: the LATER snapshotDate wins
- * (deterministic; matches the "later overwrites earlier" pattern used
- * elsewhere in this codebase).
- *
- * Used by chart code that wants intuitive sparse-data rendering. Other
- * consumers should keep using `bucketSnapshots`.
- */
-export function bucketSnapshotsByClosestDate(
-  snapshots: Snap[],
-  granularity: Granularity,
-  maxBuckets: number,
-): BucketedSeries {
-  if (snapshots.length === 0) {
-    return { bucketEnds: [], valuesByAccount: new Map() };
-  }
-
-  // Bucket-end list: enumerate from the earliest snapshot's bucket end up
-  // through the latest snapshot's bucket end, then cap to maxBuckets (the
-  // most-recent window). Mirrors bucketSnapshots' "buckets are derived
-  // from input dates" semantic, but walks contiguous buckets so a single
-  // sparse snapshot still produces multiple bucket cells.
-  const sortedDates = snapshots
-    .map((s) => s.snapshotDate)
-    .sort((a, b) => a.localeCompare(b));
-  const minDate = sortedDates[0];
-  const maxDate = sortedDates[sortedDates.length - 1];
-
-  const ends: string[] = [];
-  let cursor = bucketEndFor(minDate, granularity);
-  const upperBound = bucketEndFor(maxDate, granularity);
-  while (cursor <= upperBound) {
-    ends.push(cursor);
-    cursor = bucketEndFor(nextBucketStart(cursor, granularity), granularity);
-  }
-  const bucketEnds = ends.slice(Math.max(0, ends.length - maxBuckets));
-
-  // Group snapshots by account so we don't re-scan the whole list for
-  // every (account, bucket) cell.
-  const byAccount = new Map<number, Snap[]>();
-  for (const s of snapshots) {
-    const arr = byAccount.get(s.accountId);
-    if (arr) arr.push(s);
-    else byAccount.set(s.accountId, [s]);
-  }
-
-  const valuesByAccount = new Map<number, number[]>();
-  for (const [accountId, snaps] of byAccount) {
-    const series: number[] = [];
-    for (const end of bucketEnds) {
-      let bestValue = 0;
-      let bestDistance = Number.POSITIVE_INFINITY;
-      let bestDate = '';
-      for (const s of snaps) {
-        const d = absDays(s.snapshotDate, end);
-        // Strict <: equal distances fall through; the later snapshot
-        // wins via the dedicated tiebreaker on the next line.
-        if (
-          d < bestDistance ||
-          (d === bestDistance && s.snapshotDate > bestDate)
-        ) {
-          bestDistance = d;
-          bestValue = s.totalValue;
-          bestDate = s.snapshotDate;
-        }
-      }
-      series.push(bestValue);
-    }
-    valuesByAccount.set(accountId, series);
   }
 
   return { bucketEnds, valuesByAccount };

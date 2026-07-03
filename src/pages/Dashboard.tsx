@@ -798,10 +798,12 @@ export default function Dashboard() {
   // Widget layout (whole-row blocks the user can re-order or hide).
   // NextMoveCard and the monthly-input nudge intentionally stay anchored at
   // the top — they're action prompts, not informational widgets, so making
-  // them rearrangeable would risk burying calls to action.
-  type WidgetId = 'pills-section' | 'asset-value-chart' | 'spending' | 'concentration' | 'goals';
+  // them rearrangeable would risk burying calls to action. Trivia is a
+  // widget (default LAST): a daily game should not outrank money data, and
+  // widget-hood finally lets users hide it.
+  type WidgetId = 'pills-section' | 'asset-value-chart' | 'spending' | 'concentration' | 'goals' | 'trivia';
   const widgetIds = useMemo<readonly WidgetId[]>(
-    () => ['pills-section', 'asset-value-chart', 'spending', 'concentration', 'goals'],
+    () => ['pills-section', 'asset-value-chart', 'spending', 'concentration', 'goals', 'trivia'],
     [],
   );
   const widgetLayout = useWidgetLayout(widgetIds);
@@ -900,15 +902,15 @@ export default function Dashboard() {
     {
       id: 'concentration',
       label: 'Concentration warnings',
-      render: () => (
-        // ConcentrationCard intentionally stays household-wide regardless of
-        // the person filter — its semantics ("is one ticker too big a share
-        // of *the portfolio*?") don't change when you focus on a single
-        // owner.
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <ConcentrationCard />
-        </div>
-      ),
+      // ConcentrationCard intentionally stays household-wide regardless of
+      // the person filter — its semantics ("is one ticker too big a share
+      // of *the portfolio*?") don't change when you focus on a single
+      // owner.
+      // Full width (protected view — must never shrink). The old
+      // md:grid-cols-2 wrapper held it alone in a permanently half-empty
+      // row; ConcentrationCard's healthy state now carries a largest-
+      // position summary, so the full-width card is never vacuous.
+      render: () => <ConcentrationCard />,
     },
     {
       id: 'goals',
@@ -940,6 +942,11 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       ),
+    },
+    {
+      id: 'trivia',
+      label: 'Daily trivia',
+      render: () => <TodaysTriviaCard />,
     },
   ];
   const widgetById = new Map(widgetDefs.map((w) => [w.id, w]));
@@ -985,10 +992,10 @@ export default function Dashboard() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <NextMoveCard />
-        <TodaysTriviaCard />
-      </div>
+      {/* Action prompt stays anchored at the top, now full width — the
+          trivia card is widget 'trivia' (re-orderable/hideable, default
+          last) instead of a permanent co-tenant of this row. */}
+      <NextMoveCard />
 
       <ExistingUserTourPrompt />
 

@@ -96,6 +96,15 @@ export function SectorDonut() {
   );
   const allKeys = useMemo(() => pickerItems.map((i) => i.key), [pickerItems]);
   const selected = useDonutSelected(STORAGE_KEY, allKeys);
+  // Full-universe denominator for the SECTOR view only (hidden sectors
+  // included) so hiding one never re-normalizes the rest. The industry
+  // drill-in keeps the default rendered-total denominator: industries are a
+  // complete partition of the drilled sector, so "share of shown" IS the
+  // honest number there.
+  const fullSectorTotal = useMemo(
+    () => sectorSlices.reduce((s, x) => s + x.value, 0),
+    [sectorSlices],
+  );
 
   const slices = useMemo(() => {
     if (selectedSector === null) {
@@ -172,16 +181,15 @@ export function SectorDonut() {
   }
 
   return (
-    <div className="relative">
-      {picker && <div className="absolute top-4 right-4 z-10">{picker}</div>}
-      <DonutChartCard
-        title={title}
-        subtitle={subtitle}
-        data={slices}
-        onClickSlice={selectedSector === null ? onClickSlice : undefined}
-        valueFormatter={formatCurrency}
-      />
-    </div>
+    <DonutChartCard
+      title={title}
+      subtitle={subtitle}
+      data={slices}
+      shareTotal={selectedSector === null ? fullSectorTotal : undefined}
+      onClickSlice={selectedSector === null ? onClickSlice : undefined}
+      valueFormatter={formatCurrency}
+      headerRight={picker ?? undefined}
+    />
   );
 }
 

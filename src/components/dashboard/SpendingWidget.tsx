@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import { PieChartIcon, BarChart3Icon } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -11,20 +10,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import BarChartCard from '@/components/charts/BarChartCard';
-import { paletteColorAt, CHART_NEUTRAL } from '@/components/charts/palette';
-import { CHART_TOOLTIP_PROPS } from '@/components/charts/ChartTooltip';
-import { rangeBounds, summarizeSpendingForRange, type SpendingRange } from '@/lib/spending-widget';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { CategoryDonut, withCategoryColors } from '@/components/spending/CategoryDonut';
+import { RANGE_OPTIONS, rangeBounds, summarizeSpendingForRange, type SpendingRange } from '@/lib/spending-widget';
 import type { Account, Category, Transaction } from '@/types/schema';
 import { cn } from '@/lib/utils';
-
-const RANGE_OPTIONS: Array<{ value: SpendingRange; label: string }> = [
-  { value: 'this-month', label: 'This month' },
-  { value: 'last-month', label: 'Last month' },
-  { value: 'last-30', label: 'Last 30 days' },
-  { value: 'last-90', label: 'Last 90 days' },
-  { value: 'ytd', label: 'Year to date' },
-  { value: 'last-12', label: 'Last 12 months' },
-];
 
 const currencyFormatter = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -70,16 +60,6 @@ export interface SpendingWidgetProps {
   asOf?: Date;
 }
 
-function colorForCategory(
-  index: number,
-  override: string | null,
-  isUncategorized: boolean,
-): string {
-  if (override) return override;
-  if (isUncategorized) return CHART_NEUTRAL;
-  return paletteColorAt(index);
-}
-
 export function SpendingWidget({
   transactions,
   categories,
@@ -107,11 +87,7 @@ export function SpendingWidget({
   // Decorate each category row with a chart color so the donut, the bar
   // chart, and the legend all use the same palette assignment.
   const rows = useMemo(
-    () =>
-      summary.byCategory.map((row, idx) => ({
-        ...row,
-        chartColor: colorForCategory(idx, row.color, row.categoryId === null),
-      })),
+    () => withCategoryColors(summary.byCategory),
     [summary.byCategory],
   );
 
@@ -166,8 +142,22 @@ export function SpendingWidget({
             </button>
           </div>
         </div>
+        {/* Range control: segmented tabs (app-wide range grammar — AssetValueChart,
+            GrowthCard, Spending hero). The VOCABULARY stays calendar ranges
+            (this month / last 30 days / …), NOT chart windows (3M/6M/1Y) —
+            these answer "what did I spend in <period>", a different question
+            from a chart's lookback window. Only the control style unifies. */}
+        <Tabs value={range} onValueChange={(v) => setRange(v as SpendingRange)}>
+          <TabsList aria-label="Time range" className="h-auto flex-wrap" data-testid="spending-widget-range-tabs">
+            {RANGE_OPTIONS.map((opt) => (
+              <TabsTrigger key={opt.value} value={opt.value}>
+                {opt.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
         <div
-          className="grid grid-cols-1 md:grid-cols-4 gap-2"
+          className="grid grid-cols-1 md:grid-cols-3 gap-2"
           data-testid="spending-widget-filters"
         >
           <Input
@@ -191,18 +181,6 @@ export function SpendingWidget({
                     {a.name}
                   </SelectItem>
                 ))}
-            </SelectContent>
-          </Select>
-          <Select value={range} onValueChange={(v) => setRange(v as SpendingRange)}>
-            <SelectTrigger aria-label="Time range" data-testid="spending-widget-range-select">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {RANGE_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
             </SelectContent>
           </Select>
           <div
@@ -236,48 +214,11 @@ export function SpendingWidget({
             <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_220px] gap-6 items-center">
               <div className="min-h-[260px]" data-testid="spending-widget-chart">
                 {chartMode === 'donut' ? (
-                  <div className="relative h-[260px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={donutSlices}
-                          dataKey="value"
-                          nameKey="name"
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={70}
-                          outerRadius={100}
-                          paddingAngle={1}
-                          isAnimationActive={false}
-                        >
-                          {donutSlices.map((slice, idx) => (
-                            <Cell key={`${slice.name}-${idx}`} fill={slice.color} />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          {...CHART_TOOLTIP_PROPS}
-                          formatter={(value, name) => {
-                            if (typeof value !== 'number') return [String(value), String(name)];
-                            const pct = summary.total > 0
-                              ? ` (${((value / summary.total) * 100).toFixed(1)}%)`
-                              : '';
-                            return [`${formatUSD(value)}${pct}`, String(name)];
-                          }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div
-                      className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"
-                      data-testid="spending-widget-center"
-                    >
-                      <div className="text-xs uppercase tracking-wider text-muted-foreground">
-                        Total spending
-                      </div>
-                      <div className="text-2xl font-semibold tabular-nums">
-                        {formatUSD(summary.total)}
-                      </div>
-                    </div>
-                  </div>
+                  <CategoryDonut
+                    slices={donutSlices}
+                    total={summary.total}
+                    centerTestId="spending-widget-center"
+                  />
                 ) : (
                   <BarChartCard
                     title=""

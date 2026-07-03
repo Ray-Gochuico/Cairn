@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+import { GraduationCap } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/layout/EmptyState';
 import { Card } from '@/components/ui/card';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
@@ -90,7 +94,11 @@ export default function Learn() {
   if (!household) {
     return (
       <PageContainer width="prose">
-        <div className="text-sm text-muted-foreground">Set up your household to start learning.</div>
+        <EmptyState icon={GraduationCap} title="Set up your household to start learning.">
+          <Button asChild size="sm" variant="outline">
+            <Link to="/inputs/household">Set up household</Link>
+          </Button>
+        </EmptyState>
       </PageContainer>
     );
   }
@@ -220,10 +228,12 @@ export default function Learn() {
 
       <Card className="p-6 space-y-6">
         {questions.length === 0 ? (
-          <div className="rounded-md border p-6 text-center text-sm text-muted-foreground">
-            You've answered every question available — new ones ship with each update. Come back
-            tomorrow.
-          </div>
+          <EmptyState
+            bare
+            icon={GraduationCap}
+            title="You've answered every question available"
+            description="New ones ship with each update. Come back tomorrow."
+          />
         ) : (
           <>
             {beginnerQs.length > 0 && (

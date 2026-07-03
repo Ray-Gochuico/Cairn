@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useDonutSelection } from './useDonutSelection';
 
@@ -16,7 +16,11 @@ interface Props {
   localStorageKey: string;
   /** All eligible items (their `key` defines the universe of `allKeys`). */
   items: ReadonlyArray<DonutEntityPickerItem>;
-  /** Optional override of the picker button label prefix. Default: "Entities". */
+  /**
+   * No longer shown on the trigger (which reads "Included · n of m",
+   * the app-wide IncludedPicker grammar); names the dialog for SRs via
+   * `aria-label="<buttonLabel> picker"`. Default: "Entities".
+   */
   buttonLabel?: string;
 }
 
@@ -40,6 +44,21 @@ export function DonutEntityPicker({
   );
   const [open, setOpen] = useState(false);
 
+  // Esc closes the picker. preventDefault marks the event handled so any
+  // window-level Esc consumers registered earlier (e.g. AssetValueChart's
+  // pin-Esc, which checks defaultPrevented) defer to the popover.
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [open]);
+
   if (items.length === 0) return null;
 
   return (
@@ -52,7 +71,7 @@ export function DonutEntityPicker({
         aria-expanded={open}
         aria-haspopup="dialog"
       >
-        {buttonLabel} ({selected.size}/{items.length})
+        Included · {selected.size} of {items.length}
       </Button>
       {open && (
         <>

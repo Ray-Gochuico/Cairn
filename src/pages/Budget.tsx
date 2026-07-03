@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ClipboardList } from 'lucide-react';
+import { EmptyState } from '@/components/layout/EmptyState';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import {
@@ -19,7 +21,6 @@ import {
 import BudgetOverlayRow from '@/components/budget/BudgetOverlayRow';
 import BudgetCategoryPicker from '@/components/budget/BudgetCategoryPicker';
 import type { AddCategoryPayload } from '@/components/budget/AddCategoryDialog';
-import { Card, CardContent } from '@/components/ui/card';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 
@@ -177,6 +178,10 @@ export default function Budget() {
             Set a monthly target per category and track it against actual spending.
           </p>
         </div>
+        {/* Deliberately a native month select, NOT the app's range tabs: this
+            picks one specific calendar month out of an unbounded list (a
+            point, not a range) — tabs can't enumerate it. See Wave-3 range
+            grammar decision. */}
         <select
           aria-label="Month"
           className="flex h-9 rounded-md border border-input bg-transparent px-2 py-1 text-sm"
@@ -195,11 +200,12 @@ export default function Budget() {
           </span>
         </div>
       ) : (
-        <Card>
-          <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            Set a monthly budget on a category below to see the budget-vs-actual overlay.
-          </CardContent>
-        </Card>
+        // No CTA — the category rows to edit are directly below on this page.
+        <EmptyState
+          icon={ClipboardList}
+          title="No budgets set"
+          description="Set a monthly budget on a category below to see the budget-vs-actual overlay."
+        />
       )}
 
       {/* Always render the picker so the "+ Add category" entry is reachable

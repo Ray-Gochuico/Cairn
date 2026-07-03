@@ -219,23 +219,37 @@ export function xTickLabel(bucketEnd: string, window: TimeWindow): string {
     : MONTH_FMT.format(d);
 }
 
+export interface HeaderLabelOverrides {
+  /** Selection == the entire eligible set. Default 'Net worth'. */
+  fullSet?: string;
+  /** Partial pick containing a loan. Default 'Included net'. */
+  withLoans?: string;
+  /** All-and-only assets while loans exist. Default 'Total assets'. */
+  allAssets?: string;
+  /** Any other partial assets-only pick. Default 'Included assets'. */
+  partialAssets?: string;
+}
+
 /**
- * Header label per spec §3.1: "Net worth" ONLY when the selection equals the
- * entire eligible set (so a stale or partial pick can never masquerade as net
- * worth); "Included net" when any loan is in a partial pick; "Total assets"
- * for all-and-only assets; "Included assets" otherwise; a lone entity shows
- * its own name.
+ * Header label per spec §3.1. The RULES are fixed: the full-set label ONLY
+ * when the selection equals the entire eligible set (so a stale or partial
+ * pick can never masquerade as the total); the with-loans label when any
+ * loan is in a partial pick; the all-assets label for all-and-only assets;
+ * the partial-assets label otherwise; a lone entity shows its own name.
+ * Only the WORDING is surface-configurable via `labels` — an accounts-only
+ * surface must not say "Net worth" (loans are out of scope by construction).
  */
 export function headerLabel(args: {
   selected: ReadonlySet<string>;
   eligibleAssets: readonly string[];
   eligibleLoans: readonly string[];
   nameByKey: ReadonlyMap<string, string>;
+  labels?: HeaderLabelOverrides;
 }): string {
-  const { selected, eligibleAssets, eligibleLoans, nameByKey } = args;
+  const { selected, eligibleAssets, eligibleLoans, nameByKey, labels } = args;
   if (selected.size === 1) {
     const only = [...selected][0];
-    return nameByKey.get(only) ?? 'Included assets';
+    return nameByKey.get(only) ?? labels?.partialAssets ?? 'Included assets';
   }
   const selAssets = eligibleAssets.filter((k) => selected.has(k)).length;
   const selLoans = eligibleLoans.filter((k) => selected.has(k)).length;
@@ -243,10 +257,11 @@ export function headerLabel(args: {
     selAssets === eligibleAssets.length &&
     selLoans === eligibleLoans.length &&
     selected.size === selAssets + selLoans;
-  if (fullSet) return 'Net worth';
-  if (selLoans > 0) return 'Included net';
-  if (selAssets === eligibleAssets.length && selected.size === selAssets) return 'Total assets';
-  return 'Included assets';
+  if (fullSet) return labels?.fullSet ?? 'Net worth';
+  if (selLoans > 0) return labels?.withLoans ?? 'Included net';
+  if (selAssets === eligibleAssets.length && selected.size === selAssets)
+    return labels?.allAssets ?? 'Total assets';
+  return labels?.partialAssets ?? 'Included assets';
 }
 
 export interface BreakdownRow {

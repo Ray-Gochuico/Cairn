@@ -119,6 +119,12 @@ export const TOUR_STEPS: TourStep[] = [
   },
   // System
   {
+    to: '/monthly',
+    title: 'Monthly check-in',
+    body: "Once a month, confirm last month's balances here — a dot on this tab means input is waiting.",
+    core: false,
+  },
+  {
     to: '/inputs',
     title: 'Inputs',
     body: 'Add or edit the underlying data — people, accounts, holdings, and more.',

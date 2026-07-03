@@ -35,7 +35,7 @@ describe('DonutChartCard legend collapse (B1)', () => {
     render(<DonutChartCard title="t" data={slices(6)} />);
     const legend = screen.getByLabelText('Chart legend');
     expect(within(legend).getAllByRole('listitem')).toHaveLength(6);
-    expect(within(legend).getByText('S5')).toBeTruthy();
+    expect(within(legend).getByText(/^S5 —/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: /show all/i })).toBeNull();
   });
 
@@ -43,8 +43,8 @@ describe('DonutChartCard legend collapse (B1)', () => {
     render(<DonutChartCard title="t" data={slices(7)} />);
     const legend = screen.getByLabelText('Chart legend');
     expect(within(legend).getAllByRole('listitem')).toHaveLength(5);
-    expect(within(legend).getByText('S4')).toBeTruthy();
-    expect(within(legend).queryByText('S5')).toBeNull();
+    expect(within(legend).getByText(/^S4 —/)).toBeTruthy();
+    expect(within(legend).queryByText(/^S5 —/)).toBeNull();
     const toggle = screen.getByRole('button', { name: 'Show all (7)' });
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
   });
@@ -55,7 +55,7 @@ describe('DonutChartCard legend collapse (B1)', () => {
     await user.click(screen.getByRole('button', { name: 'Show all (7)' }));
     const legend = screen.getByLabelText('Chart legend');
     expect(within(legend).getAllByRole('listitem')).toHaveLength(7);
-    expect(within(legend).getByText('S6')).toBeTruthy();
+    expect(within(legend).getByText(/^S6 —/)).toBeTruthy();
     const toggle = screen.getByRole('button', { name: 'Show less' });
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
   });
@@ -84,5 +84,47 @@ describe('DonutChartCard legend collapse (B1)', () => {
     rerender(<DonutChartCard title="t" data={slices(7)} />);
     expect(screen.getByRole('button', { name: 'Show all (7)' })).toBeTruthy();
     expect(within(screen.getByLabelText('Chart legend')).getAllByRole('listitem')).toHaveLength(5);
+  });
+});
+
+describe('legend value + share % (protected-views upgrade)', () => {
+  const valueSlices = [
+    { name: 'AAPL', value: 400 },
+    { name: 'MSFT', value: 100 },
+  ];
+
+  it('renders value and share per legend row, formatted via valueFormatter', () => {
+    render(
+      <DonutChartCard title="T" data={valueSlices} valueFormatter={(v) => `$${v}`} />,
+    );
+    expect(screen.getByText(/\$400 · 80\.0%/)).toBeInTheDocument();
+    expect(screen.getByText(/\$100 · 20\.0%/)).toBeInTheDocument();
+  });
+
+  it('anchors share to shareTotal when provided (hidden slices do not re-normalize)', () => {
+    render(
+      <DonutChartCard title="T" data={valueSlices} valueFormatter={(v) => `$${v}`} shareTotal={1000} />,
+    );
+    // 400/1000 and 100/1000 — NOT 400/500.
+    expect(screen.getByText(/\$400 · 40\.0%/)).toBeInTheDocument();
+    expect(screen.getByText(/\$100 · 10\.0%/)).toBeInTheDocument();
+  });
+
+  it('exposes the chart as role="img" with a top-slices summary label', () => {
+    render(<DonutChartCard title="Sector exposure" data={valueSlices} shareTotal={1000} />);
+    const img = screen.getByRole('img');
+    expect(img).toHaveAccessibleName('Sector exposure: AAPL 40.0%, MSFT 10.0%');
+  });
+
+  it('legend rows are buttons wired to onClickSlice when provided; plain text otherwise', async () => {
+    const onClickSlice = vi.fn();
+    const { unmount } = render(
+      <DonutChartCard title="T" data={valueSlices} onClickSlice={onClickSlice} />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /AAPL/ }));
+    expect(onClickSlice).toHaveBeenCalledWith('AAPL');
+    unmount();
+    render(<DonutChartCard title="T" data={valueSlices} />);
+    expect(screen.queryByRole('button', { name: /AAPL/ })).not.toBeInTheDocument();
   });
 });

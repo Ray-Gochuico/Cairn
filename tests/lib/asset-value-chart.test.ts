@@ -276,6 +276,28 @@ describe('headerLabel (spec §3.1 strict rules)', () => {
   it('single entity: its name', () => {
     expect(label(['account:1'])).toBe('Schwab');
   });
+
+  it('labels override: accounts-only surface says "Total investments" / "Included accounts"', () => {
+    const labels = { fullSet: 'Total investments', allAssets: 'Total investments', partialAssets: 'Included accounts' };
+    // No eligible loans at all + everything selected → fullSet label.
+    expect(
+      headerLabel({ selected: new Set(assets), eligibleAssets: assets, eligibleLoans: [], nameByKey: names, labels }),
+    ).toBe('Total investments');
+    // Partial pick → partialAssets label.
+    expect(
+      headerLabel({ selected: new Set([assets[0], assets[1]]), eligibleAssets: assets, eligibleLoans: [], nameByKey: names, labels }),
+    ).toBe('Included accounts');
+    // Single entity still shows its own name (override does not apply).
+    expect(
+      headerLabel({ selected: new Set([assets[0]]), eligibleAssets: assets, eligibleLoans: [], nameByKey: names, labels }),
+    ).toBe(names.get(assets[0]));
+  });
+
+  it('labels override: omitted fields keep the default wording', () => {
+    expect(
+      headerLabel({ selected: new Set(assets), eligibleAssets: assets, eligibleLoans: [], nameByKey: names, labels: {} }),
+    ).toBe('Net worth');
+  });
 });
 
 describe('buildBreakdownRows', () => {

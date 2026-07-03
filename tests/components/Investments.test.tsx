@@ -453,8 +453,56 @@ describe('Investments page — 529 section', () => {
       });
 
       expect(
-        within(allocCard).getByRole('button', { name: /entities \(3\/3\)/i }),
+        within(allocCard).getByRole('button', { name: /Included · 3 of 3/ }),
       ).toBeInTheDocument();
+    });
+
+    it('allocation shares stay anchored to the full universe when a class is hidden', async () => {
+      // VTI 10 / BND 5 / BTC 1 shares of a $30,000 snapshot → $18,750 (62.5%),
+      // $9,375 (31.3%), $1,875 (6.3%). Hiding US Bonds must NOT re-normalize:
+      // US Total Market stays 62.5% (not 18,750/20,625 = 90.9%) and Crypto
+      // stays 6.3% (not 9.1%) — shareTotal={allocationTotal} pin.
+      primeStores({
+        accounts: [
+          { id: 1, name: 'Brokerage', type: AccountType.ACCOUNT_BROKERAGE },
+        ],
+        holdings: [
+          { id: 1, accountId: 1, ticker: 'VTI', shareCount: 10 },
+          { id: 2, accountId: 1, ticker: 'BND', shareCount: 5 },
+          { id: 3, accountId: 1, ticker: 'BTC', shareCount: 1 },
+        ],
+        snapshotValues: [
+          { accountId: 1, snapshotDate: '2026-04-01', totalValue: 30_000 },
+        ],
+      });
+
+      render(
+        <MemoryRouter>
+          <Investments />
+        </MemoryRouter>,
+      );
+
+      const allocCard = await waitFor(() => {
+        const title = screen.getByText('Asset allocation');
+        const wrap = title.closest('[data-testid="asset-allocation-card"]');
+        if (!wrap) throw new Error('Asset allocation card not found');
+        const legend = within(wrap as HTMLElement).queryByLabelText('Chart legend');
+        if (!legend) throw new Error('legend not yet rendered');
+        const items = within(legend as HTMLElement).queryAllByRole('listitem');
+        if (items.length < 3) throw new Error('not all slices loaded yet');
+        return wrap as HTMLElement;
+      });
+
+      const user = userEvent.setup();
+      await user.click(
+        within(allocCard).getByRole('button', { name: /Included · 3 of 3/ }),
+      );
+      await user.click(within(allocCard).getByRole('checkbox', { name: /US Bonds/ }));
+
+      const legend = within(allocCard).getByLabelText('Chart legend');
+      expect(within(legend).getByText(/^US Total Market — \$18,750 · 62\.5%$/)).toBeInTheDocument();
+      expect(within(legend).getByText(/^Crypto — \$1,875 · 6\.3%$/)).toBeInTheDocument();
+      expect(within(legend).queryByText(/90\.9%|9\.1%/)).toBeNull();
     });
 
     it('hiding an asset class removes its slice from the legend', async () => {
@@ -491,23 +539,24 @@ describe('Investments page — 529 section', () => {
 
       // All three asset classes visible in the legend initially.
       const legend = within(allocCard).getByLabelText('Chart legend');
-      expect(within(legend).getByText('US Bonds')).toBeInTheDocument();
-      expect(within(legend).getByText('Crypto')).toBeInTheDocument();
-      expect(within(legend).getByText('US Total Market')).toBeInTheDocument();
+      // Legend rows read "<name> — $value · pct%" since the Wave-3 upgrade.
+      expect(within(legend).getByText(/^US Bonds —/)).toBeInTheDocument();
+      expect(within(legend).getByText(/^Crypto —/)).toBeInTheDocument();
+      expect(within(legend).getByText(/^US Total Market —/)).toBeInTheDocument();
 
       const user = userEvent.setup();
       await user.click(
-        within(allocCard).getByRole('button', { name: /entities \(3\/3\)/i }),
+        within(allocCard).getByRole('button', { name: /Included · 3 of 3/ }),
       );
-      await user.click(within(allocCard).getByLabelText(/US Bonds/));
+      await user.click(within(allocCard).getByRole('checkbox', { name: /US Bonds/ }));
 
       // US Bonds slice gone from the legend; the other two remain.
       const legend2 = within(allocCard).getByLabelText('Chart legend');
-      expect(within(legend2).queryByText('US Bonds')).toBeNull();
-      expect(within(legend2).getByText('Crypto')).toBeInTheDocument();
-      expect(within(legend2).getByText('US Total Market')).toBeInTheDocument();
+      expect(within(legend2).queryByText(/^US Bonds —/)).toBeNull();
+      expect(within(legend2).getByText(/^Crypto —/)).toBeInTheDocument();
+      expect(within(legend2).getByText(/^US Total Market —/)).toBeInTheDocument();
       expect(
-        within(allocCard).getByRole('button', { name: /entities \(2\/3\)/i }),
+        within(allocCard).getByRole('button', { name: /Included · 2 of 3/ }),
       ).toBeInTheDocument();
     });
 
@@ -551,17 +600,17 @@ describe('Investments page — 529 section', () => {
       };
       const legendSwatch = (label: string) => {
         const li = within(within(allocCard).getByLabelText('Chart legend'))
-          .getByText(label)
+          .getByText(new RegExp(`^${label} \u2014`))
           .closest('li')!;
         return (li.querySelector('span[aria-hidden]') as HTMLElement).style.backgroundColor;
       };
 
       const user = userEvent.setup();
       await user.click(
-        within(allocCard).getByRole('button', { name: /entities \(3\/3\)/i }),
+        within(allocCard).getByRole('button', { name: /Included · 3 of 3/ }),
       );
       const pickerSwatch = (label: string) => {
-        const row = within(allocCard).getByLabelText(new RegExp(label)).closest('li')!;
+        const row = within(allocCard).getByRole('checkbox', { name: new RegExp(label) }).closest('li')!;
         return (row.querySelector('span[aria-hidden]') as HTMLElement).style.background;
       };
 
@@ -573,7 +622,7 @@ describe('Investments page — 529 section', () => {
       // (2) Hide the LARGEST class (US Total Market) -> reindex. Crypto's legend
       // swatch must NOT move (it was keyed on the sorted-index source, not the
       // post-filter position).
-      await user.click(within(allocCard).getByLabelText(/US Total Market/));
+      await user.click(within(allocCard).getByRole('checkbox', { name: /US Total Market/ }));
       expect(legendSwatch('Crypto')).toBe(cryptoLegendBefore);
     });
   });
@@ -789,8 +838,9 @@ describe('Investments page — 529 section', () => {
       </MemoryRouter>,
     );
 
-    // p1's brokerage is visible (in the Accounts list)
-    expect(screen.getByText("Alice's Brokerage")).toBeInTheDocument();
+    // p1's brokerage is visible (Accounts list; the view-filtered
+    // AssetValueChart header also shows the lone account's name — ≥1 match).
+    expect(screen.getAllByText("Alice's Brokerage").length).toBeGreaterThanOrEqual(1);
     // p2's brokerage is filtered out
     expect(screen.queryByText("Bob's Brokerage")).not.toBeInTheDocument();
   });

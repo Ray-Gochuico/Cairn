@@ -101,6 +101,13 @@ describe('DonutChartCard', () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
+  it('renders headerRight beside the title', () => {
+    render(
+      <DonutChartCard title="T" data={[{ name: 'A', value: 1 }]} headerRight={<button type="button">Picker</button>} />,
+    );
+    expect(screen.getByRole('button', { name: 'Picker' })).toBeInTheDocument();
+  });
+
   // I9 fix: a colorless slice past index 9 must fall back to WEDGE_PALETTE
   // (never a near-white CHART_PALETTE tail entry). The real <Cell fill> is
   // mocked, but the legend swatch is plain DOM rendered off the same
@@ -111,7 +118,7 @@ describe('DonutChartCard', () => {
     // 14 slices > LEGEND_COLLAPSE_THRESHOLD (6), so expand to show all first.
     fireEvent.click(screen.getByRole('button', { name: /show all/i }));
     const legend = screen.getByLabelText('Chart legend');
-    const li = within(legend).getByText('S11').closest('li')!;
+    const li = within(legend).getByText(/^S11 —/).closest('li')!;
     const css = (li.querySelector('span[aria-hidden]') as HTMLElement).style.backgroundColor;
     // jsdom serializes the inline color as rgb(...); normalize WEDGE_PALETTE
     // to the same form and assert membership + non-near-white.

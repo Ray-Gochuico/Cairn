@@ -49,6 +49,7 @@ function plantAnchors(tos: string[]) {
 /** A sidebarLayout overlay hiding all non-core tabs → core ∩ visible = the 6 core. */
 const HIDE_NONCORE = [
   { to: '/loans', hidden: true },
+  { to: '/monthly', hidden: true },
   { to: '/property', hidden: true },
   { to: '/vehicles', hidden: true },
   { to: '/equity-grants', hidden: true },
@@ -224,7 +225,7 @@ describe('TourOverlay', () => {
       '/loans', '/property', '/vehicles', '/equity-grants', '/spending',
       '/goals', '/roadmap', '/learn',
       '/calculators', '/what-if', '/calculators/backtest',
-      '/inputs', '/settings',
+      '/monthly', '/inputs', '/settings',
     ];
     plantAnchors(allTos);
     useSettingsStore.setState({ settings: makeSettings({ sidebarLayout: null }) });
@@ -252,7 +253,8 @@ describe('TourOverlay', () => {
     // Non-core tabs in sidebar order after /loans:
     const expectedNonCoreAfterLoans = [
       'property', 'vehicles', 'equity grants', 'spending',
-      'goals', 'roadmap', 'learn', 'what-if', 'backtest', 'inputs',
+      'goals', 'roadmap', 'learn', 'what-if', 'backtest',
+      'monthly check-in', 'inputs',
     ];
     for (const expectedFragment of expectedNonCoreAfterLoans) {
       // The last step shows Done, not Next.

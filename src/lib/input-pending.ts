@@ -1,5 +1,5 @@
 import type { AccountSnapshot } from '@/types/schema';
-import { SnapshotSource } from '@/types/enums';
+import { AccountType, SnapshotSource } from '@/types/enums';
 
 /**
  * Last day-of-month (inclusive) of the post-month-end grace window. Days
@@ -102,4 +102,49 @@ export function shouldShowMonthlyPrompt(args: {
 }): boolean {
   if (args.lastSeenMonth === null) return true;
   return args.lastSeenMonth !== currentMonthYyyymm(args.today);
+}
+
+/**
+ * Account types whose balances are entered by hand "as of today" rather
+ * than auto-derived — the monthly window gives them a balance card, not a
+ * confirm-last-month check, so they never count toward "pending".
+ * (Dashboard.tsx keeps a private MANUAL_BALANCE_TYPES copy that predates
+ * this export; aligning it is deliberately deferred so Wave 1's Dashboard
+ * edits merge cleanly — flagged for a later cleanup.)
+ */
+export const MANUAL_BALANCE_ACCOUNT_TYPES: ReadonlySet<AccountType> = new Set([
+  AccountType.ACCOUNT_CASH,
+  AccountType.ACCOUNT_SAVINGS,
+  AccountType.ACCOUNT_CRYPTO,
+]);
+
+/**
+ * Whole-store composition of isMonthlyInputPending: takes raw accounts +
+ * snapshots and derives the eligible-id and last-month slices itself.
+ * Household-wide (no view filter) — built for global chrome like the
+ * sidebar dot; page surfaces that honor ?view= keep composing the inputs
+ * themselves (Dashboard).
+ */
+export function monthlyInputPendingFor(
+  today: Date,
+  accounts: ReadonlyArray<{
+    id?: number | null;
+    type: AccountType;
+    excludedFromNetWorth: boolean;
+  }>,
+  snapshots: ReadonlyArray<AccountSnapshot>,
+): boolean {
+  const accountIds = accounts
+    .filter(
+      (a) =>
+        a.id != null &&
+        !a.excludedFromNetWorth &&
+        !MANUAL_BALANCE_ACCOUNT_TYPES.has(a.type),
+    )
+    .map((a) => a.id as number);
+  const lastMonth = lastMonthYyyymm(today);
+  const snapshotsLastMonth = snapshots.filter(
+    (s) => s.snapshotDate.slice(0, 7) === lastMonth,
+  );
+  return isMonthlyInputPending(today, { accountIds, snapshotsLastMonth });
 }

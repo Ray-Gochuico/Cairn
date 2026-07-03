@@ -1,5 +1,9 @@
 import { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+import { Compass } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/layout/EmptyState';
 import { useDisclosureGate } from '@/legal/useDisclosureGate';
 import { DisclosureModal } from '@/legal/DisclosureModal';
 import { useHouseholdStore } from '@/stores/household-store';
@@ -108,9 +112,11 @@ export default function Roadmap() {
   if (!household) {
     return (
       <PageContainer>
-        <div className="text-sm text-muted-foreground">
-          Set up your household to see your Roadmap.
-        </div>
+        <EmptyState icon={Compass} title="Set up your household to see your Roadmap.">
+          <Button asChild size="sm" variant="outline">
+            <Link to="/inputs/household">Set up household</Link>
+          </Button>
+        </EmptyState>
       </PageContainer>
     );
   }
@@ -129,9 +135,11 @@ export default function Roadmap() {
   if (!ctx) {
     return (
       <PageContainer>
-        <div className="text-sm text-muted-foreground">
-          Set up your household to see your Roadmap.
-        </div>
+        <EmptyState icon={Compass} title="Set up your household to see your Roadmap.">
+          <Button asChild size="sm" variant="outline">
+            <Link to="/inputs/household">Set up household</Link>
+          </Button>
+        </EmptyState>
       </PageContainer>
     );
   }

@@ -1,11 +1,14 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { PageContainer } from '@/components/layout/PageContainer';
+import { EmptyState } from '@/components/layout/EmptyState';
+import { Wallet } from 'lucide-react';
 import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import { MarkReimbursedDialog } from '@/components/dialogs/MarkReimbursedDialog';
 import { TransactionEditDialog } from '@/components/dialogs/TransactionEditDialog';
 import BarChartCard from '@/components/charts/BarChartCard';
 import TransactionsSectionImporter from '@/components/setup/TransactionsSectionImporter';
+import { SpendingSummaryHero } from '@/components/spending/SpendingSummaryHero';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useHouseholdStore } from '@/stores/household-store';
@@ -227,15 +230,6 @@ export default function Spending() {
     [visibleTransactions, estimatedMonthlyInflow, categories],
   );
 
-  // Budget data
-  const budget = household?.monthlyExpenseBaseline ?? 0;
-  const currentTotal = summary.currentMonthTotal;
-  const budgetPct = budget > 0 ? Math.min(currentTotal / budget, 1) : 0;
-  const overBudget = budget > 0 && currentTotal > budget;
-
-  // MoM comparison (month-to-date vs last month's full total)
-  const momDelta = currentTotal - summary.previousMonthTotal;
-
   // Recurring total
   const recurringTotal = recurring.reduce((s, g) => s + g.averageAmount, 0);
 
@@ -263,6 +257,17 @@ export default function Spending() {
           <ExportCsvButton baseName="transactions" columns={csvColumns} rows={transactions} />
         </div>
       </div>
+
+      {/* Glance hero first, chores second. Replaces the old "Current month
+          vs budget + MoM" grid (same numbers, new home). Mounts only with
+          data — the no-data page stays import-first. */}
+      {transactions.length > 0 && (
+        <SpendingSummaryHero
+          transactions={visibleTransactions}
+          categories={categories}
+          monthlyBudget={household?.monthlyExpenseBaseline ?? 0}
+        />
+      )}
 
       {/* Unified PDF + CSV import surface, extracted so the wizard's Section 4
           can mount the same primitive without duplicating queue logic. */}
@@ -325,61 +330,6 @@ export default function Spending() {
               />
             </section>
           )}
-
-          {/* Current month vs budget + MoM */}
-          <section className="grid grid-cols-2 gap-4">
-            <div className="border rounded-lg p-4 space-y-2">
-              <h2 className="text-sm font-medium text-muted-foreground">
-                {summary.currentMonth} spending
-              </h2>
-              <p className="text-2xl font-semibold">
-                ${currentTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </p>
-              {budget > 0 && (
-                <>
-                  <div className="w-full bg-muted rounded-full h-2">
-                    <div
-                      className={`h-2 rounded-full ${overBudget ? 'bg-destructive' : 'bg-primary'}`}
-                      style={{ width: `${budgetPct * 100}%` }}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {overBudget
-                      ? `$${(currentTotal - budget).toFixed(2)} over budget`
-                      : `$${(budget - currentTotal).toFixed(2)} under budget`}{' '}
-                    (budget: ${budget.toLocaleString()})
-                  </p>
-                </>
-              )}
-            </div>
-
-            <div className="border rounded-lg p-4 space-y-2">
-              <h2 className="text-sm font-medium text-muted-foreground">
-                Month-to-date vs last month
-              </h2>
-              <div className="space-y-1">
-                <p className="text-sm text-muted-foreground">This month so far</p>
-                <p className="text-2xl font-semibold">
-                  ${currentTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-sm text-muted-foreground">Last month (full)</p>
-                <p className="text-lg font-medium text-muted-foreground">
-                  {summary.previousMonthTotal > 0
-                    ? `$${summary.previousMonthTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                    : 'No prior-month data'}
-                </p>
-              </div>
-              {summary.previousMonthTotal > 0 && (
-                <p className={`text-xs ${momDelta === 0 ? 'text-muted-foreground' : momDelta > 0 ? 'text-destructive' : 'text-success'}`}>
-                  {momDelta === 0
-                    ? 'Same as last month so far'
-                    : `${momDelta > 0 ? '+' : ''}$${Math.abs(momDelta).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} vs last month's full total (month in progress)`}
-                </p>
-              )}
-            </div>
-          </section>
 
           {/* Money in vs out (last 30 days) */}
           <section>
@@ -516,9 +466,14 @@ export default function Spending() {
           )}
         </div>
         {transactions.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No transactions yet. Import a statement to get started.
-          </p>
+          // Data-empty (≠ filter-empty below): canonical EmptyState; no CTA —
+          // the importer drop-zone is ON this page, directly above.
+          <EmptyState
+            bare
+            icon={Wallet}
+            title="No transactions yet"
+            description="Import a statement to get started."
+          />
         ) : visibleTransactions.length === 0 ? (
           <p className="text-sm text-muted-foreground">No transactions to show.</p>
         ) : (

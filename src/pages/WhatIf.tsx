@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowDownUp } from 'lucide-react';
+import { GitBranch } from 'lucide-react';
+import { EmptyState } from '@/components/layout/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageContainer } from '@/components/layout/PageContainer';
@@ -257,22 +259,21 @@ export default function WhatIf() {
             accounts={accounts}
           />
         ) : (
-          <div
-            className="py-12 text-center text-muted-foreground"
-            data-testid="whatif-projection-empty"
-          >
-            <p className="mb-3 text-sm">
-              Add a person and at least one account to see your projection.
-            </p>
-            <div className="flex flex-wrap justify-center gap-2 text-sm">
-              <Link to="/inputs/persons" className="underline text-foreground">
-                Set up persons
-              </Link>
-              <span aria-hidden="true">·</span>
-              <Link to="/inputs/accounts" className="underline text-foreground">
-                Set up accounts
-              </Link>
-            </div>
+          <div data-testid="whatif-projection-empty">
+            <EmptyState
+              bare
+              icon={GitBranch}
+              title="Add a person and at least one account to see your projection."
+            >
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button asChild variant="outline" size="sm">
+                  <Link to="/inputs/persons">Set up persons</Link>
+                </Button>
+                <Button asChild variant="outline" size="sm">
+                  <Link to="/inputs/accounts">Set up accounts</Link>
+                </Button>
+              </div>
+            </EmptyState>
           </div>
         )}
       </CardContent>

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { AlertTriangleIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { useConcentration } from '@/lib/use-concentration';
+import { topEffectiveExposures } from '@/lib/concentration';
 import { FreshnessBadge } from '@/components/ui/freshness-badge';
 
 /**
@@ -24,6 +25,9 @@ function severityColor(severity: 'HIGH' | 'MEDIUM' | 'LOW'): string {
 function ConcentrationCardImpl() {
   const report = useConcentration();
   const count = report.warnings.length;
+  // Healthy-state summary: the biggest effective position keeps the card
+  // informative when there is nothing to warn about (no more dead end).
+  const largest = topEffectiveExposures(report.perTicker, 1)[0] ?? null;
 
   return (
     <Card className="min-w-0 h-full" data-testid="concentration-card">
@@ -40,7 +44,25 @@ function ConcentrationCardImpl() {
       </CardHeader>
       <CardContent className="min-w-0 space-y-2 text-sm pt-0">
         {count === 0 ? (
-          <p className="text-muted-foreground">No concentration issues detected.</p>
+          <div className="space-y-2">
+            <p className="text-muted-foreground">No concentration issues detected.</p>
+            {largest && (
+              <p className="text-sm text-muted-foreground">
+                Largest position:{' '}
+                <span className="font-mono text-foreground">{largest.ticker}</span>
+                {' · '}
+                <span className="tabular-nums">
+                  {(largest.pctOfPortfolio * 100).toFixed(1)}%
+                </span>
+              </p>
+            )}
+            <Link
+              to="/investments#concentration"
+              className="inline-block text-sm text-primary underline hover:no-underline"
+            >
+              See full breakdown
+            </Link>
+          </div>
         ) : (
           <>
             {report.warnings.slice(0, 3).map((w, i) => (
@@ -56,7 +78,7 @@ function ConcentrationCardImpl() {
               </div>
             ))}
             <Link
-              to="/investments"
+              to="/investments#concentration"
               className="inline-block text-sm text-primary underline hover:no-underline"
             >
               See full breakdown

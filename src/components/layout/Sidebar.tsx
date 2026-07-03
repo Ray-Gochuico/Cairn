@@ -13,6 +13,7 @@ import {
   Target,
   Compass,
   Calculator,
+  CalendarCheck,
   GraduationCap,
   GitBranch,
   History,
@@ -26,6 +27,7 @@ import { useHousingPaymentsStore } from '@/stores/housing-payments-store';
 import { useVehicleLeasesStore } from '@/stores/vehicle-leases-store';
 import { applySidebarLayout, type SidebarSectionShape } from '@/lib/sidebar-layout';
 import { getGlossaryEntry } from '@/lib/glossary';
+import { useMonthlyInputPending } from './use-monthly-input-pending';
 
 /**
  * Default sidebar grouping. The icons swapped from emoji to lucide-react
@@ -69,6 +71,12 @@ export const DEFAULT_SECTIONS: SidebarSectionShape[] = [
   {
     label: 'System',
     items: [
+      // Monthly check-in leads the group — it's a recurring ACTION, above
+      // the configuration pages. For users with a customized sidebar
+      // layout, applySidebarLayout treats '/monthly' as an unknown id and
+      // appends it after their ordered System items — accepted (their
+      // saved order wins; the entry still shows up).
+      { to: '/monthly', label: 'Monthly check-in', icon: CalendarCheck },
       { to: '/inputs', label: 'Inputs', icon: PenSquare },
       { to: '/settings', label: 'Settings', icon: SettingsIcon },
     ],
@@ -80,6 +88,8 @@ interface SidebarLinkProps {
   label: string;
   icon: LucideIcon;
   glossaryTerm?: string;
+  /** Warning-toned pending dot (monthly check-in). Boolean keeps memo effective. */
+  showDot?: boolean;
 }
 
 /**
@@ -97,6 +107,7 @@ const SidebarLink = memo(function SidebarLink({
   label,
   icon: Icon,
   glossaryTerm,
+  showDot = false,
 }: SidebarLinkProps) {
   const entry = glossaryTerm ? getGlossaryEntry(glossaryTerm) : null;
   return (
@@ -116,6 +127,15 @@ const SidebarLink = memo(function SidebarLink({
     >
       <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
       <span>{label}</span>
+      {showDot && (
+        <>
+          <span
+            className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-warning"
+            aria-hidden="true"
+          />
+          <span className="sr-only">, monthly input pending</span>
+        </>
+      )}
     </NavLink>
   );
 });
@@ -125,6 +145,7 @@ export default function Sidebar() {
   const load = useSettingsStore((s) => s.load);
   const loadHousingPayments = useHousingPaymentsStore((s) => s.load);
   const loadVehicleLeases = useVehicleLeasesStore((s) => s.load);
+  const monthlyPending = useMonthlyInputPending();
 
   // Sidebar is always mounted (PageShell), so loading the settings store
   // here makes the layout overlay take effect on every page. load()
@@ -157,6 +178,7 @@ export default function Sidebar() {
               label={i.label}
               icon={i.icon}
               glossaryTerm={i.glossaryTerm}
+              showDot={i.to === '/monthly' && monthlyPending}
             />
           ))}
         </div>

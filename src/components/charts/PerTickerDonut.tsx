@@ -134,6 +134,9 @@ export function PerTickerDonut() {
     () => slices.filter((s) => selected.has(s.name)),
     [slices, selected],
   );
+  // Full-universe denominator (hidden slices included) so hiding a ticker
+  // never re-normalizes the shares that remain (protected-visibility rule).
+  const fullTotal = useMemo(() => slices.reduce((s, x) => s + x.value, 0), [slices]);
 
   // Identify wedges whose ticker is itself classified as a fund — these are
   // funds whose look-through failed (concentration's math falls back to
@@ -190,17 +193,16 @@ export function PerTickerDonut() {
   }
 
   return (
-    <div className="relative">
-      <div className="absolute top-4 right-4 z-10">{picker}</div>
-      <DonutChartCard
-        title="Per-company exposure"
-        subtitle={subtitle}
-        data={filteredSlices}
-        valueFormatter={formatCurrency}
-        tooltipNameFormatter={tooltipNameFormatter}
-        legendLabelFormatter={legendLabelFormatter}
-      />
-    </div>
+    <DonutChartCard
+      title="Per-company exposure"
+      subtitle={subtitle}
+      data={filteredSlices}
+      shareTotal={fullTotal}
+      valueFormatter={formatCurrency}
+      tooltipNameFormatter={tooltipNameFormatter}
+      legendLabelFormatter={legendLabelFormatter}
+      headerRight={picker}
+    />
   );
 }
 

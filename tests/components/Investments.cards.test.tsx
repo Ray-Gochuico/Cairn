@@ -36,6 +36,11 @@ describe('investments card registry contract', () => {
     const out = applyCardLayout(reg, null).map((c) => c.size);
     expect(out).toEqual(['wide', 'compact', 'compact', 'compact']);
   });
+
+  // Wave-3 adjacency (protected views): the three donuts form one compact
+  // row with Concentration Health DIRECTLY beneath its inputs; class-targets
+  // moves next to drift (which consumes the targets). Pinned against the
+  // real page registry via the rendered card anchors below.
 });
 
 // -----------------------------------------------------------------------------
@@ -402,5 +407,77 @@ describe('Investments Target vs Actual — two sibling tables', () => {
     expect(vtiRow).toHaveTextContent('60.0%'); // actual (household)
     expect(vtiRow).toHaveTextContent('50.0%'); // target (household, = actual − drift)
     expect(vtiRow).toHaveTextContent('+10.0%'); // drift
+  });
+});
+
+describe('Wave-3 concentration adjacency + deep links', () => {
+  // jsdom has no scrollIntoView; install a recorder so both the hash-scroll
+  // effect and the warning->donut buttons are assertable.
+  const scrolledTo: string[] = [];
+  beforeEach(() => {
+    dbSelectImpl.current = async () => [];
+    primeBaseStores();
+    scrolledTo.length = 0;
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolledTo.push((this as HTMLElement).id);
+    };
+  });
+
+  function seedHoldingsForClassTargets() {
+    // One holding makes heldClasses non-empty so 'class-targets' is
+    // applicable — required to pin its new position AFTER concentration.
+    useHoldingsStore.setState({
+      holdings: [
+        { id: 1, accountId: 1, ticker: 'VTI', shareCount: 10, targetAllocationPct: null, costBasis: null },
+      ],
+      isLoading: false, error: null, load: async () => {},
+    });
+  }
+
+  it('default order: allocation → per-company → sector → concentration → class-targets (card anchors in DOM order)', async () => {
+    seedHoldingsForClassTargets();
+    render(
+      <MemoryRouter>
+        <Investments />
+      </MemoryRouter>,
+    );
+    await screen.findByText(/Investments growth/i);
+    const ids = Array.from(
+      document.querySelectorAll('#allocation, #per-company, #sector, #concentration, #class-targets'),
+    ).map((e) => e.id);
+    expect(ids).toEqual(['allocation', 'per-company', 'sector', 'concentration', 'class-targets']);
+  });
+
+  it('#concentration deep link scrolls the concentration card into view on arrival', async () => {
+    render(
+      <MemoryRouter initialEntries={['/investments#concentration']}>
+        <Investments />
+      </MemoryRouter>,
+    );
+    await screen.findByText(/Investments growth/i);
+    await waitFor(() => expect(scrolledTo).toContain('concentration'));
+  });
+
+  it('a per-ticker warning row renders a "View in donut" button that scrolls to the per-company card', async () => {
+    // AAPL at 30% of effective exposure fires PER_TICKER_HIGH.
+    useHoldingsStore.setState({
+      holdings: [
+        { id: 1, accountId: 1, ticker: 'AAPL', shareCount: 30, targetAllocationPct: null, costBasis: null },
+        { id: 2, accountId: 1, ticker: 'BND', shareCount: 70, targetAllocationPct: null, costBasis: null },
+      ],
+      isLoading: false, error: null, load: async () => {},
+    });
+    render(
+      <MemoryRouter>
+        <Investments />
+      </MemoryRouter>,
+    );
+    await screen.findByText(/Investments growth/i);
+    const buttons = await screen.findAllByRole('button', { name: /view in donut/i });
+    expect(buttons.length).toBeGreaterThan(0);
+    const user = userEvent.setup();
+    await user.click(buttons[0]);
+    await waitFor(() => expect(scrolledTo.length).toBeGreaterThan(0));
+    expect(['per-company', 'allocation']).toContain(scrolledTo[scrolledTo.length - 1]);
   });
 });

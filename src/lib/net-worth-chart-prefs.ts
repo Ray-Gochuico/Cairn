@@ -101,3 +101,58 @@ export function makeChartPrefs(namespace: string): ChartPrefs {
     },
   };
 }
+
+const LEGACY_INVESTMENT_KEYS = {
+  accounts: 'investment-chart-selected-accounts',
+  window: 'investment-chart-time-window',
+  granularity: 'investment-chart-granularity',
+} as const;
+
+/**
+ * One-time port of the retired legacy investment-chart keys into the
+ * `investmentChart` makeChartPrefs namespace. The legacy selection was a
+ * bare number[] of account ids (incompatible with the SelectedEntity[]
+ * shape this module stores), so a namespace reuse à la netWorthChart was
+ * impossible — this migration preserves saved selections instead. The
+ * legacy window union ('3M'|'1Y'|'5Y'|'ALL') is a subset of TimeWindow, so
+ * it ports verbatim; granularity is dropped (derived from the window now).
+ * Existing values under the new namespace always win. Idempotent: legacy
+ * keys are removed whether or not their values were usable.
+ */
+export function migrateLegacyInvestmentChartPrefs(): void {
+  try {
+    const target = makeChartPrefs('investmentChart');
+
+    const rawWindow = localStorage.getItem(LEGACY_INVESTMENT_KEYS.window);
+    if (
+      rawWindow !== null &&
+      target.getTimeWindow() === null &&
+      VALID_WINDOWS.has(rawWindow)
+    ) {
+      target.setTimeWindow(rawWindow as TimeWindow);
+    }
+
+    const rawAccounts = localStorage.getItem(LEGACY_INVESTMENT_KEYS.accounts);
+    if (rawAccounts !== null && target.getSelectedEntities() === null) {
+      try {
+        const parsed: unknown = JSON.parse(rawAccounts);
+        if (
+          Array.isArray(parsed) &&
+          parsed.every((v): v is number => typeof v === 'number')
+        ) {
+          target.setSelectedEntities(
+            parsed.map((id) => ({ kind: 'account' as const, id })),
+          );
+        }
+      } catch {
+        // corrupt legacy JSON — fall through to the key removal below
+      }
+    }
+
+    localStorage.removeItem(LEGACY_INVESTMENT_KEYS.accounts);
+    localStorage.removeItem(LEGACY_INVESTMENT_KEYS.window);
+    localStorage.removeItem(LEGACY_INVESTMENT_KEYS.granularity);
+  } catch {
+    // localStorage unavailable — defaults apply, nothing to migrate
+  }
+}

@@ -43,6 +43,13 @@ function latestSnapshotPerAccount(snapshots: AccountSnapshot[]): Map<number, num
  * and fund-holdings stores when they mount; otherwise this returns a report
  * built from empty data (zero warnings, zero exposures). Dashboard and
  * Investments already do this in their `useEffect` mount blocks.
+ *
+ * DECISION (2026-07, Wave 1 review Minor 4): concentration percentages
+ * DELIBERATELY include accounts flagged `excludedFromNetWorth`. These are
+ * RISK-EXPOSURE views ("how concentrated is the money I actually hold"),
+ * not wealth aggregates — an excluded account's AAPL position still moves
+ * with AAPL. Net-worth surfaces filter excluded accounts; this hook (and
+ * the allocation views built on the same valueHoldings pipeline) must not.
  */
 export function useConcentration(): ConcentrationReport {
   const holdings = useHoldingsStore((s) => s.holdings);

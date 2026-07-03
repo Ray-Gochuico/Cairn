@@ -334,7 +334,7 @@ describe('AssetsDonut', () => {
       seedThreeAssets();
       render(<AssetsDonut />);
       expect(
-        screen.getByRole('button', { name: /entities \(3\/3\)/i }),
+        screen.getByRole('button', { name: /Included · 3 of 3/ }),
       ).toBeInTheDocument();
     });
 
@@ -357,8 +357,8 @@ describe('AssetsDonut', () => {
       const before = screen.getByTestId('slice-Home').getAttribute('data-color');
       expect(before).toMatch(/^#[0-9a-f]{6}$/i);
       const user = userEvent.setup();
-      await user.click(screen.getByRole('button', { name: /entities/i }));
-      await user.click(screen.getByLabelText(/Brokerage/));
+      await user.click(screen.getByRole('button', { name: /Included ·/ }));
+      await user.click(screen.getByRole('checkbox', { name: /Brokerage/ }));
       expect(screen.queryByTestId('slice-Brokerage')).not.toBeInTheDocument();
       expect(screen.getByTestId('slice-Home').getAttribute('data-color')).toBe(before);
     });
@@ -384,6 +384,27 @@ describe('AssetsDonut', () => {
       expect(screen.getByTestId('slice-Brokerage').getAttribute('data-color')).toBe('#123456');
     });
 
+    it('share % stays anchored to the full asset universe when an entity is hidden', async () => {
+      // Brokerage 6000, Roth IRA 3400, Home 500000 → full total 509400.
+      // Hide Roth IRA: Brokerage's legend share must still read 1.2%
+      // (6000/509400), NOT 6000/506000 ≈ 1.2%… use Home instead for a
+      // discriminating number: Home stays 98.2% (500000/509400), NOT 98.8%.
+      seedThreeAssets();
+      render(<AssetsDonut />);
+      const user = userEvent.setup();
+      await user.click(screen.getByRole('button', { name: /Included ·/ }));
+      await user.click(screen.getByRole('checkbox', { name: /Roth IRA/ }));
+      expect(screen.getByText(/\$500,000 · 98\.2%/)).toBeInTheDocument();
+      expect(screen.queryByText(/98\.8%/)).not.toBeInTheDocument();
+    });
+
+    it('picker lives in the card header, not an absolute overlay', () => {
+      seedThreeAssets();
+      render(<AssetsDonut />);
+      const trigger = screen.getByRole('button', { name: /Included ·/ });
+      expect(trigger.closest('[class*="absolute"]')).toBeNull();
+    });
+
     it('hiding an entity removes its slice from the donut', async () => {
       seedThreeAssets();
       render(<AssetsDonut />);
@@ -393,14 +414,14 @@ describe('AssetsDonut', () => {
       expect(screen.getByTestId('slice-Home')).toBeInTheDocument();
 
       const user = userEvent.setup();
-      await user.click(screen.getByRole('button', { name: /entities/i }));
-      await user.click(screen.getByLabelText(/Roth IRA/));
+      await user.click(screen.getByRole('button', { name: /Included ·/ }));
+      await user.click(screen.getByRole('checkbox', { name: /Roth IRA/ }));
 
       expect(screen.queryByTestId('slice-Roth IRA')).not.toBeInTheDocument();
       expect(screen.getByTestId('slice-Brokerage')).toBeInTheDocument();
       expect(screen.getByTestId('slice-Home')).toBeInTheDocument();
       expect(
-        screen.getByRole('button', { name: /entities \(2\/3\)/i }),
+        screen.getByRole('button', { name: /Included · 2 of 3/ }),
       ).toBeInTheDocument();
     });
 
@@ -408,8 +429,8 @@ describe('AssetsDonut', () => {
       seedThreeAssets();
       const { unmount } = render(<AssetsDonut />);
       const user = userEvent.setup();
-      await user.click(screen.getByRole('button', { name: /entities/i }));
-      await user.click(screen.getByLabelText(/Roth IRA/));
+      await user.click(screen.getByRole('button', { name: /Included ·/ }));
+      await user.click(screen.getByRole('checkbox', { name: /Roth IRA/ }));
       expect(screen.queryByTestId('slice-Roth IRA')).not.toBeInTheDocument();
       unmount();
 
@@ -423,12 +444,12 @@ describe('AssetsDonut', () => {
       seedThreeAssets();
       render(<AssetsDonut />);
       const user = userEvent.setup();
-      await user.click(screen.getByRole('button', { name: /entities/i }));
+      await user.click(screen.getByRole('button', { name: /Included ·/ }));
       await user.click(screen.getByRole('button', { name: /hide all/i }));
       expect(screen.getByText(/all entities hidden/i)).toBeInTheDocument();
       // Picker button still visible so the user can recover.
       expect(
-        screen.getByRole('button', { name: /entities \(0\/3\)/i }),
+        screen.getByRole('button', { name: /Included · 0 of 3/ }),
       ).toBeInTheDocument();
     });
   });

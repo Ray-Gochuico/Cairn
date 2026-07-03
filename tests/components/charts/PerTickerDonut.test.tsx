@@ -123,7 +123,7 @@ describe('PerTickerDonut', () => {
     seedThreeTickers();
     render(<PerTickerDonut />);
     expect(
-      screen.getByRole('button', { name: /entities \(3\/3\)/i }),
+      screen.getByRole('button', { name: /Included · 3 of 3/ }),
     ).toBeInTheDocument();
   });
 
@@ -133,23 +133,42 @@ describe('PerTickerDonut', () => {
     expect(screen.getByTestId('slice-MSFT')).toBeInTheDocument();
 
     const user = userEvent.setup();
-    await user.click(screen.getByRole('button', { name: /entities/i }));
-    await user.click(screen.getByLabelText(/MSFT/));
+    await user.click(screen.getByRole('button', { name: /Included ·/ }));
+    await user.click(screen.getByRole('checkbox', { name: /MSFT/ }));
 
     expect(screen.queryByTestId('slice-MSFT')).not.toBeInTheDocument();
     expect(screen.getByTestId('slice-AAPL')).toBeInTheDocument();
     expect(screen.getByTestId('slice-JPM')).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /entities \(2\/3\)/i }),
+      screen.getByRole('button', { name: /Included · 2 of 3/ }),
     ).toBeInTheDocument();
+  });
+
+  it('share % stays anchored to the full portfolio when a ticker is hidden', async () => {
+    // AAPL 1000, MSFT 500, JPM 750 → full total 2250. Hide MSFT: AAPL's
+    // legend share must still read 44.4% (1000/2250), NOT 57.1% (1000/1750).
+    seedThreeTickers();
+    render(<PerTickerDonut />);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /Included ·/ }));
+    await user.click(screen.getByRole('checkbox', { name: /MSFT/ }));
+    expect(screen.getByText(/\$1,000 · 44\.4%/)).toBeInTheDocument();
+    expect(screen.queryByText(/57\.1%/)).not.toBeInTheDocument();
+  });
+
+  it('picker lives in the card header, not an absolute overlay', () => {
+    seedThreeTickers();
+    render(<PerTickerDonut />);
+    const trigger = screen.getByRole('button', { name: /Included ·/ });
+    expect(trigger.closest('[class*="absolute"]')).toBeNull();
   });
 
   it('persists hidden ticker across remount', async () => {
     seedThreeTickers();
     const { unmount } = render(<PerTickerDonut />);
     const user = userEvent.setup();
-    await user.click(screen.getByRole('button', { name: /entities/i }));
-    await user.click(screen.getByLabelText(/MSFT/));
+    await user.click(screen.getByRole('button', { name: /Included ·/ }));
+    await user.click(screen.getByRole('checkbox', { name: /MSFT/ }));
     expect(screen.queryByTestId('slice-MSFT')).not.toBeInTheDocument();
     unmount();
 
@@ -160,6 +179,6 @@ describe('PerTickerDonut', () => {
 
   it('does not render the picker button when there are no tickers', () => {
     render(<PerTickerDonut />);
-    expect(screen.queryByRole('button', { name: /entities/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Included ·/ })).toBeNull();
   });
 });

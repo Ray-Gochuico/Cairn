@@ -5,8 +5,7 @@ import { shadeHexColor } from '@/lib/color';
  * derived) — picked for chart-specific aesthetic and distinguishability.
  * Positions 10–19 are lighter pair counterparts from Vega's tableau20
  * scheme, hue-matched to the first 10. Used by all chart primitives
- * (DonutChartCard, LineChartCard, BarChartCard) and the
- * InvestmentTimeSeriesChart per-account stack.
+ * (DonutChartCard, LineChartCard, BarChartCard).
  *
  * Charts with ≤10 categories look identical to the prior 10-color
  * palette. Charts with 11–20 categories get distinct lighter colors

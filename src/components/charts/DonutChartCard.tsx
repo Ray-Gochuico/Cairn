@@ -58,10 +58,21 @@ export interface DonutChartCardProps {
   /**
    * Optional. Invoked with the clicked slice's `name` when a wedge is
    * clicked. Setting this also flips the donut to a pointer cursor so
-   * the affordance is visible. Used by SectorDonut to drill into a
-   * sector's industry breakdown.
+   * the affordance is visible (and turns the legend rows into keyboard-
+   * reachable buttons). Used by SectorDonut to drill into a sector's
+   * industry breakdown.
    */
   onClickSlice?: (sliceName: string) => void;
+  /**
+   * Denominator for legend/tooltip share %. Pass the FULL universe total
+   * (picker-hidden slices included) so hiding a slice never re-normalizes
+   * the shares that remain — anchoring concentration reads to the whole
+   * portfolio (protected-visibility honesty rule). Falls back to the sum
+   * of rendered slices when omitted.
+   */
+  shareTotal?: number;
+  /** Header-right slot (entity pickers) — replaces consumers' absolute-positioned overlays. */
+  headerRight?: ReactNode;
 }
 
 export default function DonutChartCard({
@@ -76,8 +87,26 @@ export default function DonutChartCard({
   tooltipNameFormatter,
   legendLabelFormatter,
   onClickSlice,
+  shareTotal,
+  headerRight,
 }: DonutChartCardProps) {
   const total = data.reduce((sum, slice) => sum + slice.value, 0);
+  // Share denominator: the full universe when the caller anchors it,
+  // otherwise the rendered slices (legend AND tooltip share one base so
+  // the two %s can never disagree).
+  const shareBase = shareTotal ?? total;
+  const pctOf = (value: number) =>
+    shareBase > 0 ? `${((value / shareBase) * 100).toFixed(1)}%` : null;
+  const fmt = valueFormatter ?? ((v: number) => String(v));
+  // role="img" summary: top 3 slices by value + a remainder count. Kept as
+  // a plain computed string so SRs read one sentence, not 11 wedge nodes.
+  const topForAria = [...data].sort((a, b) => b.value - a.value).slice(0, 3);
+  const ariaSummary =
+    data.length === 0
+      ? title
+      : `${title}: ` +
+        topForAria.map((s) => `${s.name} ${pctOf(s.value) ?? ''}`.trim()).join(', ') +
+        (data.length > 3 ? `, +${data.length - 3} more` : '');
   const collapsible = data.length > LEGEND_COLLAPSE_THRESHOLD;
   const [expanded, setExpanded] = useState(false);
   // Drop a stale expanded state when the data shrinks back at/under the
@@ -106,12 +135,20 @@ export default function DonutChartCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        {subtitle ? <CardDescription>{subtitle}</CardDescription> : null}
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <CardTitle>{title}</CardTitle>
+            {subtitle ? <CardDescription>{subtitle}</CardDescription> : null}
+          </div>
+          {headerRight ? <div className="shrink-0">{headerRight}</div> : null}
+        </div>
       </CardHeader>
       <CardContent>
         <div className="flex flex-col items-center">
-          <ResponsiveContainer width="100%" height={height}>
+          {/* One-sentence summary for SRs (role="img" makes the SVG innards
+              presentational); the legend below stays the granular path. */}
+          <div role="img" aria-label={ariaSummary} className="w-full">
+            <ResponsiveContainer width="100%" height={height}>
             <PieChart>
               <Pie
                 data={data}
@@ -171,31 +208,54 @@ export default function DonutChartCard({
                   if (typeof value !== 'number') {
                     return [String(value ?? ''), displayName];
                   }
-                  const pct = total > 0 ? ` (${((value / total) * 100).toFixed(1)}%)` : '';
+                  const pct = shareBase > 0 ? ` (${((value / shareBase) * 100).toFixed(1)}%)` : '';
                   const formatted = valueFormatter ? `${valueFormatter(value)}${pct}` : `${value}${pct}`;
                   return [formatted, displayName];
                 }}
               />
             </PieChart>
-          </ResponsiveContainer>
+            </ResponsiveContainer>
+          </div>
           {data.length > 0 && (
             <ul
               className="mt-3 flex max-h-40 flex-wrap justify-center gap-x-3 gap-y-1 overflow-y-auto text-xs text-muted-foreground"
               aria-label="Chart legend"
             >
-              {visibleLegend.map((slice, idx) => (
-                <li
-                  key={`${slice.name}-${idx}`}
-                  className="inline-flex items-center gap-1.5 whitespace-nowrap"
-                >
-                  <span
-                    aria-hidden
-                    className="inline-block h-2 w-2 rounded-sm"
-                    style={{ backgroundColor: colorAt(slice, idx) }}
-                  />
-                  {legendLabelFormatter ? legendLabelFormatter(slice.name) : slice.name}
-                </li>
-              ))}
+              {visibleLegend.map((slice, idx) => {
+                const pct = pctOf(slice.value);
+                const rowContent = (
+                  <>
+                    <span
+                      aria-hidden
+                      className="inline-block h-2 w-2 rounded-sm shrink-0"
+                      style={{ backgroundColor: colorAt(slice, idx) }}
+                    />
+                    {legendLabelFormatter ? legendLabelFormatter(slice.name) : slice.name}
+                    {' — '}
+                    {fmt(slice.value)}
+                    {pct ? ` · ${pct}` : ''}
+                  </>
+                );
+                return (
+                  <li
+                    key={`${slice.name}-${idx}`}
+                    className="inline-flex items-center gap-1.5 whitespace-nowrap"
+                  >
+                    {onClickSlice ? (
+                      // Keyboard-reachable drill-down twin of the wedge click.
+                      <button
+                        type="button"
+                        onClick={() => onClickSlice(slice.name)}
+                        className="inline-flex items-center gap-1.5 whitespace-nowrap hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+                      >
+                        {rowContent}
+                      </button>
+                    ) : (
+                      rowContent
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
           {collapsible && (

@@ -84,12 +84,34 @@ describe('Dashboard widget reposition', () => {
 
   it('renders every dashboard widget under a stable data-widget-id wrapper', () => {
     renderDashboard();
-    // The five widgets currently composed on the dashboard.
+    // The six widgets currently composed on the dashboard.
     expect(screen.getByTestId('widget-pills-section')).toBeInTheDocument();
     expect(screen.getByTestId('widget-asset-value-chart')).toBeInTheDocument();
     expect(screen.getByTestId('widget-spending')).toBeInTheDocument();
     expect(screen.getByTestId('widget-concentration')).toBeInTheDocument();
     expect(screen.getByTestId('widget-goals')).toBeInTheDocument();
+    expect(screen.getByTestId('widget-trivia')).toBeInTheDocument();
+  });
+
+  it('trivia is a widget rendered LAST by default, not part of the prime row', () => {
+    renderDashboard();
+    const order = Array.from(document.querySelectorAll('[data-widget-id]')).map(
+      (el) => el.getAttribute('data-widget-id'),
+    );
+    expect(order[order.length - 1]).toBe('trivia');
+    // The trivia heading appears exactly once — inside the widget list, not
+    // duplicated in a hard-coded prime row.
+    const headings = screen.getAllByText(/today's questions/i);
+    expect(headings).toHaveLength(1);
+    expect(headings[0].closest('[data-widget-id]')?.getAttribute('data-widget-id')).toBe('trivia');
+  });
+
+  it('trivia can be hidden into the tray like any widget', () => {
+    renderDashboard();
+    fireEvent.click(screen.getByTestId('dashboard-edit-toggle'));
+    fireEvent.click(screen.getByTestId('widget-trivia-remove'));
+    expect(screen.queryByTestId('widget-trivia')).toBeNull();
+    expect(screen.getByTestId('widget-add-trivia')).toBeInTheDocument();
   });
 
   it('reveals widget move/remove controls only when editing is on', () => {
@@ -143,7 +165,9 @@ describe('Dashboard widget reposition', () => {
     renderDashboard();
     fireEvent.click(screen.getByTestId('dashboard-edit-toggle'));
     expect(screen.getByTestId('widget-pills-section-up')).toBeDisabled();
-    expect(screen.getByTestId('widget-goals-down')).toBeDisabled();
+    // Trivia is the last widget by default (2026-07 hierarchy change).
+    expect(screen.getByTestId('widget-trivia-down')).toBeDisabled();
+    expect(screen.getByTestId('widget-goals-down')).not.toBeDisabled();
   });
 
   it('persists hidden widgets across remount via localStorage', () => {
