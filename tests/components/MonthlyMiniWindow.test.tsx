@@ -272,4 +272,141 @@ describe('MonthlyMiniWindow', () => {
     expect(await screen.findByText(/monthly check-in/i)).toBeInTheDocument();
     expect(screen.queryByText(/it.s a new month/i)).not.toBeInTheDocument();
   });
+
+  describe('Confirm all', () => {
+    /** Last month's close (the exact date the page queries by). */
+    function lastMonthCloseISO(): string {
+      const today = new Date();
+      const prev = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const d = new Date(Date.UTC(prev.getFullYear(), prev.getMonth() + 1, 0));
+      while (d.getUTCDay() === 0 || d.getUTCDay() === 6) {
+        d.setUTCDate(d.getUTCDate() - 1);
+      }
+      return d.toISOString().slice(0, 10);
+    }
+
+    async function seedDerivedAccount(
+      name: string,
+      totalValue: number,
+      source: SnapshotSource,
+    ): Promise<number> {
+      const accountsRepo = new AccountsRepo(db);
+      const accountId = await accountsRepo.create({
+        householdId: 1,
+        ownerPersonId: null,
+        beneficiaryDependentId: null,
+        name,
+        institution: null,
+        type: AccountType.ACCOUNT_BROKERAGE,
+        cryptoWalletAddress: null,
+        autoFetchEnabled: false,
+        excludedFromNetWorth: false,
+        stateOfPlan: null,
+        accentColor: null,
+      });
+      await new AccountSnapshotsRepo(db).upsert({
+        accountId,
+        snapshotDate: lastMonthCloseISO(),
+        totalValue,
+        source,
+      });
+      return accountId;
+    }
+
+    it('Confirm all ratifies every AUTO_DERIVED card and announces the result', async () => {
+      const user = userEvent.setup();
+      await seedDerivedAccount('Brokerage One', 5000, SnapshotSource.AUTO_DERIVED);
+      await seedDerivedAccount('Brokerage Two', 7000, SnapshotSource.AUTO_DERIVED);
+      await seedDerivedAccount('Already Done', 9000, SnapshotSource.USER_CONFIRMED);
+      render(
+        <MemoryRouter>
+          <MonthlyMiniWindow />
+        </MemoryRouter>,
+      );
+      const confirmAll = await screen.findByRole('button', { name: /confirm all/i });
+      await user.click(confirmAll);
+      const close = lastMonthCloseISO();
+      await waitFor(() => {
+        const snaps = useSnapshotsStore.getState().snapshots;
+        const lastMonthSnaps = snaps.filter((s) => s.snapshotDate === close);
+        expect(lastMonthSnaps.length).toBeGreaterThanOrEqual(3);
+        expect(
+          lastMonthSnaps.every(
+            (s) =>
+              s.source === SnapshotSource.USER_CONFIRMED ||
+              s.source === SnapshotSource.MANUAL,
+          ),
+        ).toBe(true);
+      });
+      expect(screen.getByRole('status')).toHaveTextContent(/confirmed 2 account values/i);
+      // Cards reflect the batch confirmation without a remount.
+      expect(screen.getAllByText('Confirmed').length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('Confirm all is disabled while the batch is in flight', async () => {
+      const user = userEvent.setup();
+      await seedDerivedAccount('Brokerage One', 5000, SnapshotSource.AUTO_DERIVED);
+      render(
+        <MemoryRouter>
+          <MonthlyMiniWindow />
+        </MemoryRouter>,
+      );
+      const confirmAll = await screen.findByRole('button', { name: /confirm all/i });
+      const orig = useSnapshotsStore.getState().upsert;
+      let release: () => void = () => {};
+      const gate = new Promise<void>((res) => { release = res; });
+      useSnapshotsStore.setState({
+        upsert: (async (input: Parameters<typeof orig>[0]) => {
+          await gate;
+          return orig(input);
+        }) as typeof orig,
+      } as never);
+      try {
+        await user.click(confirmAll);
+        expect(screen.getByRole('button', { name: /confirming/i })).toBeDisabled();
+        release();
+        await waitFor(() =>
+          expect(screen.queryByRole('button', { name: /confirm all/i })).not.toBeInTheDocument(),
+        );
+      } finally {
+        useSnapshotsStore.setState({ upsert: orig } as never);
+      }
+    });
+
+    it('no Confirm all button when nothing is pending', async () => {
+      await seedDerivedAccount('Already Done', 9000, SnapshotSource.USER_CONFIRMED);
+      render(
+        <MemoryRouter>
+          <MonthlyMiniWindow />
+        </MemoryRouter>,
+      );
+      await screen.findByText(/confirm last month's values/i);
+      expect(screen.queryByRole('button', { name: /confirm all/i })).not.toBeInTheDocument();
+    });
+
+    it('per-card confirm still works after the batch machinery lands (prop-derived mode)', async () => {
+      const user = userEvent.setup();
+      const id1 = await seedDerivedAccount('Brokerage One', 5000, SnapshotSource.AUTO_DERIVED);
+      await seedDerivedAccount('Brokerage Two', 7000, SnapshotSource.AUTO_DERIVED);
+      render(
+        <MemoryRouter>
+          <MonthlyMiniWindow />
+        </MemoryRouter>,
+      );
+      await screen.findByText('Brokerage One');
+      // Confirm ONLY the first card via its own button.
+      const confirms = screen.getAllByRole('button', { name: /^confirm$/i });
+      await user.click(confirms[0]);
+      const close = lastMonthCloseISO();
+      await waitFor(() => {
+        const s = useSnapshotsStore
+          .getState()
+          .snapshots.find((x) => x.accountId === id1 && x.snapshotDate === close);
+        expect(s?.source).toBe(SnapshotSource.USER_CONFIRMED);
+      });
+      // Exactly one card flipped; the sibling stays pending.
+      expect(screen.getAllByText('Confirmed')).toHaveLength(1);
+      expect(screen.getAllByRole('button', { name: /^confirm$/i })).toHaveLength(1);
+    });
+  });
 });

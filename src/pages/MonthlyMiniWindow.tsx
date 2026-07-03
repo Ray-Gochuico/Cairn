@@ -87,16 +87,17 @@ interface DerivedValueCardProps {
 
 function DerivedValueCard({ account, snapshot }: DerivedValueCardProps) {
   const upsertSnapshot = useSnapshotsStore((s) => s.upsert);
-  // Initialize from snapshot.source so a previously-confirmed card stays
-  // visibly confirmed instead of disappearing when the user re-opens the
-  // mini-window. Banner-dismissal still depends on the upsert having flipped
-  // the source on the underlying snapshot, which it has.
-  const initialMode: CardMode =
+  // Local state covers the optimistic in-card confirm and Skip; the PROP
+  // wins whenever the underlying snapshot is already ratified — so a
+  // parent-level "Confirm all" (or a confirmation from another session)
+  // flips this card without a remount. Reopen behavior is unchanged:
+  // sourceConfirmed reproduces the old initialMode logic on every render
+  // instead of only at mount.
+  const [localMode, setLocalMode] = useState<CardMode>('pending');
+  const sourceConfirmed =
     snapshot.source === SnapshotSource.USER_CONFIRMED ||
-    snapshot.source === SnapshotSource.MANUAL
-      ? 'confirmed'
-      : 'pending';
-  const [mode, setMode] = useState<CardMode>(initialMode);
+    snapshot.source === SnapshotSource.MANUAL;
+  const mode: CardMode = sourceConfirmed ? 'confirmed' : localMode;
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState<string>(String(snapshot.totalValue));
   const [error, setError] = useState<string | null>(null);
@@ -112,7 +113,7 @@ function DerivedValueCard({ account, snapshot }: DerivedValueCardProps) {
         totalValue: value,
         source: SnapshotSource.USER_CONFIRMED,
       });
-      setMode('confirmed');
+      setLocalMode('confirmed');
       setEditing(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Save failed');
@@ -180,7 +181,7 @@ function DerivedValueCard({ account, snapshot }: DerivedValueCardProps) {
             <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
               Edit
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setMode('skipped')}>
+            <Button size="sm" variant="ghost" onClick={() => setLocalMode('skipped')}>
               Skip
             </Button>
           </div>
@@ -530,6 +531,47 @@ export default function MonthlyMiniWindow() {
       .filter((x): x is { account: Account; snapshot: AccountSnapshot } => x !== null);
   }, [accounts, snapshots, lastMonthClose]);
 
+  // --- "Confirm all" batch over the derived cards -----------------------------
+
+  const upsertSnapshot = useSnapshotsStore((s) => s.upsert);
+  const pendingDerived = useMemo(
+    () => derivedCards.filter(({ snapshot }) => snapshot.source === SnapshotSource.AUTO_DERIVED),
+    [derivedCards],
+  );
+  const [confirmingAll, setConfirmingAll] = useState(false);
+  const [confirmAllResult, setConfirmAllResult] = useState<string | null>(null);
+
+  const confirmAll = async () => {
+    setConfirmingAll(true);
+    setConfirmAllResult(null);
+    let ok = 0;
+    let failed = 0;
+    // Sequential on purpose: mirrors the per-card single-writer flow and
+    // keeps sqlite happy; N is small (a household's account count). A
+    // concurrent per-card confirm double-writes the same (accountId,
+    // snapshotDate) row, which the store's upsert makes idempotent — so
+    // per-card busy flags are intentionally not lifted.
+    for (const { snapshot } of pendingDerived) {
+      try {
+        await upsertSnapshot({
+          accountId: snapshot.accountId,
+          snapshotDate: snapshot.snapshotDate,
+          totalValue: snapshot.totalValue,
+          source: SnapshotSource.USER_CONFIRMED,
+        });
+        ok += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    setConfirmAllResult(
+      failed === 0
+        ? `Confirmed ${ok} account value${ok === 1 ? '' : 's'}.`
+        : `Confirmed ${ok}, ${failed} failed — use the per-card buttons to retry.`,
+    );
+    setConfirmingAll(false);
+  };
+
   // --- Section 2: loan payment cards -----------------------------------------
 
   const [loanSchedules, setLoanSchedules] = useState<
@@ -650,10 +692,24 @@ export default function MonthlyMiniWindow() {
         <>
           {derivedCards.length > 0 && (
             <section className="space-y-2">
-              <SectionTitle
-                title="Confirm last month's values"
-                description="Review the auto-derived end-of-month total for each account. Edit if Yahoo's number looks off."
-              />
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <SectionTitle
+                  title="Confirm last month's values"
+                  description="Review the auto-derived end-of-month total for each account. Edit if Yahoo's number looks off."
+                />
+                {pendingDerived.length > 0 && (
+                  <Button size="sm" variant="outline" disabled={confirmingAll} onClick={confirmAll}>
+                    {confirmingAll
+                      ? 'Confirming…'
+                      : `Confirm all (${pendingDerived.length})`}
+                  </Button>
+                )}
+              </div>
+              {confirmAllResult && (
+                <p role="status" className="text-sm text-muted-foreground">
+                  {confirmAllResult}
+                </p>
+              )}
               {derivedCards.map(({ account, snapshot }) => (
                 <DerivedValueCard
                   key={account.id}
