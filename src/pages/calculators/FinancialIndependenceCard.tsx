@@ -3,6 +3,8 @@ import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useContributionsStore } from '@/stores/contributions-store';
+import { useAccountsStore } from '@/stores/accounts-store';
+import { filterSnapshotsForNetWorth } from '@/lib/account-inclusion';
 import { CalculatorCard } from './CalculatorCard';
 import { financialIndependenceSeries } from '@/lib/financial-independence';
 import { formatCurrency, formatPercent } from '@/lib/format';
@@ -33,6 +35,7 @@ export function FinancialIndependenceCard({
   const persons = usePersonsStore((s) => s.persons);
   const snapshots = useSnapshotsStore((s) => s.snapshots);
   const contributions = useContributionsStore((s) => s.contributions);
+  const accounts = useAccountsStore((s) => s.accounts);
 
   // ── Real-data defaults (memoized from the stores) ──────────────────────────
   const defaults = useMemo(() => {
@@ -40,7 +43,12 @@ export function FinancialIndependenceCard({
     // (shared with What-If/Backtest). It applies the snapshotDate <= today
     // cutoff the old hand-rolled loop omitted.
     const todayIso = new Date().toISOString().slice(0, 10);
-    const currentPortfolio = sumLatestOnOrBefore(snapshots, todayIso) ?? 0;
+    // Excluded-from-net-worth accounts opt out of the portfolio prefill.
+    // Excluded-SET filtering: an unhydrated accounts store filters nothing,
+    // so a cold /calculators deep link degrades to the unfiltered prefill
+    // until CalculatorsLayout's accounts load resolves — never to $0.
+    const currentPortfolio =
+      sumLatestOnOrBefore(filterSnapshotsForNetWorth(snapshots, accounts), todayIso) ?? 0;
 
     // Rolling 12-month contribution total — used as the annual PMT figure for
     // the FV solver. We compare ISO date strings; chronological order matches
@@ -63,7 +71,7 @@ export function FinancialIndependenceCard({
       monthlyExpenses: household?.monthlyExpenseBaseline ?? 0,
       withdrawalRatePct,
     };
-  }, [household, snapshots, contributions]);
+  }, [household, snapshots, contributions, accounts]);
 
   const { values, setValue, reset, isOverridden } = useCalculatorState(
     cardId ?? 'financial-independence',

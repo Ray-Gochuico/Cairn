@@ -84,6 +84,7 @@ async function seedAccount(
   db: SqliteAdapter,
   name: string,
   ownerPersonId: number | null = null,
+  excludedFromNetWorth = false,
 ): Promise<number> {
   const repo = new AccountsRepo(db);
   return repo.create({
@@ -95,7 +96,7 @@ async function seedAccount(
     type: AccountType.ACCOUNT_BROKERAGE,
     cryptoWalletAddress: null,
     autoFetchEnabled: false,
-    excludedFromNetWorth: false,
+    excludedFromNetWorth,
     stateOfPlan: null,
     accentColor: null,
   });
@@ -361,6 +362,26 @@ describe('NetWorth page', () => {
     expect(hits.length).toBeGreaterThanOrEqual(1);
     // …and p2's $200k never appears outside the household-labeled chart.
     expect(screen.queryByText('$200,000')).not.toBeInTheDocument();
+  });
+
+  it('GrowthCard net worth drops excludedFromNetWorth accounts (agrees with the chart)', async () => {
+    const a = await seedAccount(db, 'Visible');
+    const b = await seedAccount(db, 'Hidden', null, true);
+    await seedSnapshot(db, a, '2026-06-01', 100_000);
+    await seedSnapshot(db, b, '2026-06-01', 50_000);
+
+    render(
+      <MemoryRouter>
+        <NetWorth />
+      </MemoryRouter>,
+    );
+    await screen.findByText('Net worth growth');
+    // The leak would render $150,000 in the growth card while the chart
+    // header shows $100,000. Post-fix both agree: $150,000 appears nowhere.
+    await waitFor(() => {
+      expect(screen.queryByText('$150,000')).not.toBeInTheDocument();
+      expect(screen.getAllByText('$100,000').length).toBeGreaterThan(0);
+    });
   });
 
   it('imports a snapshot CSV end-to-end and persists the new row', async () => {

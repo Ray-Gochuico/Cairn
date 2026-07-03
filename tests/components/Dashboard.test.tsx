@@ -359,3 +359,39 @@ describe('Dashboard spending cards', () => {
     expect(screen.getByText(/\$2,500 under/i)).toBeInTheDocument();
   });
 });
+
+describe('Dashboard pills — excluded accounts', () => {
+  beforeEach(() => {
+    resetStores();
+  });
+
+  it('Net Worth and Liquid Investments pills drop excludedFromNetWorth accounts', () => {
+    primeStores({
+      accounts: [
+        { id: 1, name: 'Brokerage', type: AccountType.ACCOUNT_BROKERAGE },
+        {
+          id: 2,
+          name: 'Hidden brokerage',
+          type: AccountType.ACCOUNT_BROKERAGE,
+          excludedFromNetWorth: true,
+        },
+      ],
+      snapshotValues: [
+        { accountId: 1, snapshotDate: '2026-04-30', totalValue: 100_000 },
+        { accountId: 2, snapshotDate: '2026-04-30', totalValue: 50_000 },
+      ],
+    });
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+    const cards = screen.getAllByTestId('metric-card');
+    const netWorthCard = cards.find((c) => within(c).queryByText('Net Worth'))!;
+    expect(within(netWorthCard).getByText('$100,000')).toBeInTheDocument();
+    const liquidCard = cards.find((c) =>
+      within(c).queryByText('Liquid Investments'),
+    )!;
+    expect(within(liquidCard).getByText('$100,000')).toBeInTheDocument();
+  });
+});

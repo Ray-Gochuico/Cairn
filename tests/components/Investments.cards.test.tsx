@@ -287,6 +287,51 @@ describe('Investments cards edit mode', () => {
     expect(labelInStrip).toBeDefined();
     expect(labelInStrip!.className).toMatch(/line-through/);
   });
+
+  it('Investments growth card drops excludedFromNetWorth accounts from horizon sums', async () => {
+    primeBaseStores();
+    useAccountsStore.setState({
+      accounts: [
+        ...useAccountsStore.getState().accounts,
+        {
+          id: 2,
+          householdId: 1,
+          ownerPersonId: null,
+          beneficiaryDependentId: null,
+          name: 'Hidden 401k',
+          institution: null,
+          type: AccountType.ACCOUNT_401K,
+          cryptoWalletAddress: null,
+          autoFetchEnabled: false,
+          excludedFromNetWorth: true,
+          stateOfPlan: null,
+          accentColor: null,
+        },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+    useSnapshotsStore.setState({
+      snapshots: [
+        { id: 1, accountId: 1, snapshotDate: '2026-04-01', totalValue: 50_000, source: SnapshotSource.MANUAL },
+        { id: 2, accountId: 2, snapshotDate: '2026-04-01', totalValue: 30_000, source: SnapshotSource.MANUAL },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+
+    render(
+      <MemoryRouter>
+        <Investments />
+      </MemoryRouter>,
+    );
+    await screen.findByText(/Investments growth/i);
+    // Leak: $80,000 (50k + 30k). Fixed: $50,000 only.
+    expect(screen.queryByText('$80,000')).not.toBeInTheDocument();
+    expect(screen.getAllByText('$50,000').length).toBeGreaterThan(0);
+  });
 });
 
 describe('Investments Target vs Actual — two sibling tables', () => {

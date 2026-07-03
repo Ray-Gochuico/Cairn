@@ -2,6 +2,8 @@ import { useMemo } from 'react';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
+import { useAccountsStore } from '@/stores/accounts-store';
+import { filterSnapshotsForNetWorth } from '@/lib/account-inclusion';
 import { CalculatorCard } from './CalculatorCard';
 import { coastFi } from '@/lib/coast-fi';
 import { realRateOf } from '@/lib/calculators/real-rate';
@@ -36,6 +38,7 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
   const { household } = useHouseholdStore();
   const persons = usePersonsStore((s) => s.persons);
   const snapshots = useSnapshotsStore((s) => s.snapshots);
+  const accounts = useAccountsStore((s) => s.accounts);
 
   // ── Real-data defaults (memoized from the stores) ──────────────────────────
   const defaults = useMemo(() => {
@@ -43,7 +46,12 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
     // (shared with What-If/Backtest). It applies the snapshotDate <= today
     // cutoff the old hand-rolled loop omitted.
     const todayIso = new Date().toISOString().slice(0, 10);
-    const currentPortfolio = sumLatestOnOrBefore(snapshots, todayIso) ?? 0;
+    // Excluded-from-net-worth accounts opt out of the portfolio prefill.
+    // Excluded-SET filtering: an unhydrated accounts store filters nothing,
+    // so a cold /calculators deep link degrades to the unfiltered prefill
+    // until CalculatorsLayout's accounts load resolves — never to $0.
+    const currentPortfolio =
+      sumLatestOnOrBefore(filterSnapshotsForNetWorth(snapshots, accounts), todayIso) ?? 0;
 
     // Shortest years-until-retirement across persons (fallback 20).
     let yearsUntilRetirement = 20;
@@ -60,7 +68,7 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
     const withdrawalRate = effectiveSwr(null, household);
 
     return { currentPortfolio, yearsUntilRetirement, annualExpenses, withdrawalRate };
-  }, [household, persons, snapshots]);
+  }, [household, persons, snapshots, accounts]);
 
   const { values, setValue, reset, isOverridden } = useCalculatorState(cardId ?? 'coast-fi', defaults);
 

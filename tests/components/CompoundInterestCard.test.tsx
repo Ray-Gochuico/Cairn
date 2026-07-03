@@ -3,12 +3,14 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CompoundInterestCard } from '@/pages/calculators/CompoundInterestCard';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
+import { useAccountsStore } from '@/stores/accounts-store';
 import { SnapshotSource } from '@/types/enums';
 
 describe('CompoundInterestCard', () => {
   beforeEach(() => {
     sessionStorage.clear();
     useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null });
+    useAccountsStore.setState({ accounts: [], isLoading: false, error: null });
   });
 
   it('persists the what-if inputs via the kit', async () => {
@@ -121,6 +123,29 @@ describe('CompoundInterestCard', () => {
     });
     render(<CompoundInterestCard />);
     expect((screen.getByLabelText(/initial amount/i) as HTMLInputElement).value).toBe('250000');
+  });
+
+  it('initial-amount prefill drops excludedFromNetWorth accounts', () => {
+    useSnapshotsStore.setState({
+      snapshots: [
+        { id: 1, accountId: 1, snapshotDate: '2026-04-01', totalValue: 250_000, source: SnapshotSource.MANUAL },
+        { id: 2, accountId: 2, snapshotDate: '2026-04-01', totalValue: 99_000, source: SnapshotSource.MANUAL },
+      ],
+      isLoading: false,
+      error: null,
+    });
+    useAccountsStore.setState({
+      accounts: [
+        { id: 1, excludedFromNetWorth: false },
+        { id: 2, excludedFromNetWorth: true },
+      ],
+      isLoading: false,
+      error: null,
+    } as never);
+    render(<CompoundInterestCard />);
+    expect(
+      (screen.getByLabelText(/initial amount/i) as HTMLInputElement).value,
+    ).toBe('250000');
   });
 
   it('falls back to the 1000 demo default when there is no portfolio', () => {

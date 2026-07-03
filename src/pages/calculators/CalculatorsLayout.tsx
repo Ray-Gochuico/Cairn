@@ -15,6 +15,7 @@ import { ContributionAllocatorCard } from './ContributionAllocatorCard';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
+import { useAccountsStore } from '@/stores/accounts-store';
 import { useContributionsStore } from '@/stores/contributions-store';
 import { useLoansStore } from '@/stores/loans-store';
 import { useEquityGrantsStore } from '@/stores/equity-grants-store';
@@ -117,11 +118,14 @@ export default function CalculatorsLayout() {
   // Cold-boot hydration. The cards READ persons/dependents/portfolio stores
   // but none of them LOAD them, and settings is only boot-loaded by Sidebar —
   // a cold deep-link to /calculators would otherwise see null settings (→
-  // skeleton forever) and empty cards. Load them all once for the grid.
+  // skeleton forever) and empty cards. Load them all once for the grid
+  // (accounts feed the excluded-from-net-worth filter on the portfolio
+  // prefills).
   useEffect(() => {
     void usePersonsStore.getState().load();
     void useDependentsStore.getState().load();
     void useSnapshotsStore.getState().load();
+    void useAccountsStore.getState().load();
     void useContributionsStore.getState().load();
     void useLoansStore.getState().load();
     void useEquityGrantsStore.getState().load();

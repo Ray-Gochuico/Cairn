@@ -170,6 +170,15 @@ describe('totalCashReserve', () => {
     expect(totalCashReserve(accounts, snapshots)).toBe(300);
   });
 
+  it('excluded-from-net-worth cash accounts do NOT count toward the reserve', () => {
+    const accounts = [
+      makeAccount(1, AccountType.ACCOUNT_CASH),
+      makeAccount(2, AccountType.ACCOUNT_SAVINGS, { excludedFromNetWorth: true }),
+    ];
+    const snapshots = [makeSnapshot(1, 4000), makeSnapshot(2, 6000)];
+    expect(totalCashReserve(accounts, snapshots)).toBe(4000);
+  });
+
   it('treats negative snapshots as zero (overdrawn shouldn\'t reduce target met)', () => {
     const accounts = [makeAccount(1, AccountType.ACCOUNT_CASH)];
     const snapshots = [makeSnapshot(1, -500)];

@@ -6,6 +6,7 @@ import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useContributionsStore } from '@/stores/contributions-store';
+import { useAccountsStore } from '@/stores/accounts-store';
 import { FilingStatus, ContributionSource, SnapshotSource } from '@/types/enums';
 import { FinancialIndependenceCard } from '@/pages/calculators/FinancialIndependenceCard';
 import type { GrowthScenario } from '@/types/schema';
@@ -53,6 +54,7 @@ function resetStores() {
   usePersonsStore.setState({ persons: [], isLoading: false, error: null });
   useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null });
   useContributionsStore.setState({ contributions: [], isLoading: false, error: null });
+  useAccountsStore.setState({ accounts: [], isLoading: false, error: null });
 }
 
 function primeStores(opts?: {
@@ -390,5 +392,49 @@ describe('FinancialIndependenceCard', () => {
     render(<MemoryRouter><FinancialIndependenceCard /></MemoryRouter>);
     await user.click(screen.getByRole('button', { name: /^real$/i }));
     expect(sessionStorage.getItem('calc-display-mode:financial-independence')).toBe('REAL');
+  });
+
+  it('current-portfolio prefill drops excludedFromNetWorth accounts', () => {
+    primeStores({
+      snapshotValues: [
+        { accountId: 1, snapshotDate: '2026-04-01', totalValue: 200_000 },
+        { accountId: 2, snapshotDate: '2026-04-01', totalValue: 50_000 },
+      ],
+    });
+    useAccountsStore.setState({
+      accounts: [
+        { id: 1, excludedFromNetWorth: false },
+        { id: 2, excludedFromNetWorth: true },
+      ],
+      isLoading: false,
+      error: null,
+    } as never);
+    render(
+      <MemoryRouter>
+        <FinancialIndependenceCard />
+      </MemoryRouter>,
+    );
+    // Assertion idiom matches the card tests' existing prefill checks
+    // (string .value on the number input).
+    expect(
+      (screen.getByLabelText(/current portfolio/i) as HTMLInputElement).value,
+    ).toBe('200000');
+  });
+
+  it('prefill is unchanged when the accounts store is not hydrated (excluded-set semantics)', () => {
+    primeStores({
+      snapshotValues: [
+        { accountId: 1, snapshotDate: '2026-04-01', totalValue: 200_000 },
+      ],
+    });
+    // accounts: [] (resetStores) — degrades to no filtering, never to $0.
+    render(
+      <MemoryRouter>
+        <FinancialIndependenceCard />
+      </MemoryRouter>,
+    );
+    expect(
+      (screen.getByLabelText(/current portfolio/i) as HTMLInputElement).value,
+    ).toBe('200000');
   });
 });
