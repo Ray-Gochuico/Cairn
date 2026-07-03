@@ -146,6 +146,8 @@ export default function Roadmap() {
 
   return (
     <PageContainer className="space-y-4">
+      {/* Wave-4 a11y: Roadmap was the only routed page without an h1. */}
+      <h1 className="text-2xl font-semibold">Roadmap</h1>
       <DisclosureBanner />
       <NextMoveHero results={results} />
       {/* Status legend explains the six possible node-status icons. Lives

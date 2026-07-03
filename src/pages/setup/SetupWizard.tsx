@@ -7,6 +7,7 @@ import { useHouseholdStore } from '@/stores/household-store';
 import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import type { SectionIndex } from './sections';
+import { documentTitleFor } from '@/lib/route-titles';
 
 /**
  * Setup wizard route handler. Gates the new SectionLayout behind the
@@ -32,6 +33,10 @@ export default function SetupWizard() {
   const persons = usePersonsStore((s) => s.persons);
   const loadPersons = usePersonsStore((s) => s.load);
   const [stepZeroAccepted, setStepZeroAccepted] = useState(false);
+
+  // Wave-4 a11y: /setup renders outside PageShell, so it sets its own tab
+  // title (PageShell's route-title effect never runs here).
+  useEffect(() => { document.title = documentTitleFor('/setup'); }, []);
 
   useEffect(() => {
     if (!household) void loadHousehold();

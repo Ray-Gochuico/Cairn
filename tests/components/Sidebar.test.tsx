@@ -42,6 +42,11 @@ describe('Sidebar', () => {
     expect(screen.getByRole('link', { name: /dashboard/i })).toBeInTheDocument();
   });
 
+  it('renders the primary navigation landmark', () => {
+    render(<MemoryRouter><Sidebar /></MemoryRouter>);
+    expect(screen.getByRole('navigation', { name: 'Primary' })).toBeInTheDocument();
+  });
+
   it('renders all default tabs when no layout is stored', async () => {
     render(<MemoryRouter><Sidebar /></MemoryRouter>);
     await waitFor(() => {

@@ -16,6 +16,7 @@ import { TailorStep } from '@/components/onboarding/TailorStep';
 import { useTourStore } from '@/stores/tour-store';
 import { markTailorDone, markTourDone } from '@/lib/onboarding-state';
 import { usePersonsStore } from '@/stores/persons-store';
+import { documentTitleFor } from '@/lib/route-titles';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
 import { usePropertiesStore } from '@/stores/properties-store';
@@ -63,6 +64,10 @@ function someLoadingNow(): boolean {
 export default function OnboardingController() {
   const navigate = useNavigate();
   const { start: tourStart } = useTourStore();
+
+  // Wave-4 a11y: /welcome renders outside PageShell, so it sets its own
+  // tab title (PageShell's route-title effect never runs here).
+  useEffect(() => { document.title = documentTitleFor('/welcome'); }, []);
 
   // Subscribe to the load/error posture of each of the 7 entity stores.
   // Subscribe to scalar fields individually to avoid creating new objects on
