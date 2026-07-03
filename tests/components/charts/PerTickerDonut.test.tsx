@@ -156,6 +156,13 @@ describe('PerTickerDonut', () => {
     expect(screen.queryByText(/57\.1%/)).not.toBeInTheDocument();
   });
 
+  it('picker lives in the card header, not an absolute overlay', () => {
+    seedThreeTickers();
+    render(<PerTickerDonut />);
+    const trigger = screen.getByRole('button', { name: /Included ·/ });
+    expect(trigger.closest('[class*="absolute"]')).toBeNull();
+  });
+
   it('persists hidden ticker across remount', async () => {
     seedThreeTickers();
     const { unmount } = render(<PerTickerDonut />);

@@ -216,6 +216,13 @@ describe('LiabilitiesDonut', () => {
       expect(screen.queryByText(/40\.5%/)).not.toBeInTheDocument();
     });
 
+    it('picker lives in the card header, not an absolute overlay', () => {
+      seedThreeLoans();
+      render(<LiabilitiesDonut />);
+      const trigger = screen.getByRole('button', { name: /Included ·/ });
+      expect(trigger.closest('[class*="absolute"]')).toBeNull();
+    });
+
     it('hiding a loan removes its slice from the donut', async () => {
       seedThreeLoans();
       render(<LiabilitiesDonut />);

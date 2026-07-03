@@ -193,18 +193,16 @@ export function PerTickerDonut() {
   }
 
   return (
-    <div className="relative">
-      <div className="absolute top-4 right-4 z-10">{picker}</div>
-      <DonutChartCard
-        title="Per-company exposure"
-        subtitle={subtitle}
-        data={filteredSlices}
-        shareTotal={fullTotal}
-        valueFormatter={formatCurrency}
-        tooltipNameFormatter={tooltipNameFormatter}
-        legendLabelFormatter={legendLabelFormatter}
-      />
-    </div>
+    <DonutChartCard
+      title="Per-company exposure"
+      subtitle={subtitle}
+      data={filteredSlices}
+      shareTotal={fullTotal}
+      valueFormatter={formatCurrency}
+      tooltipNameFormatter={tooltipNameFormatter}
+      legendLabelFormatter={legendLabelFormatter}
+      headerRight={picker}
+    />
   );
 }
 

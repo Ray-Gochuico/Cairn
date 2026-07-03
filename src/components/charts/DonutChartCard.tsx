@@ -71,6 +71,8 @@ export interface DonutChartCardProps {
    * of rendered slices when omitted.
    */
   shareTotal?: number;
+  /** Header-right slot (entity pickers) — replaces consumers' absolute-positioned overlays. */
+  headerRight?: ReactNode;
 }
 
 export default function DonutChartCard({
@@ -86,6 +88,7 @@ export default function DonutChartCard({
   legendLabelFormatter,
   onClickSlice,
   shareTotal,
+  headerRight,
 }: DonutChartCardProps) {
   const total = data.reduce((sum, slice) => sum + slice.value, 0);
   // Share denominator: the full universe when the caller anchors it,
@@ -132,8 +135,13 @@ export default function DonutChartCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        {subtitle ? <CardDescription>{subtitle}</CardDescription> : null}
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <CardTitle>{title}</CardTitle>
+            {subtitle ? <CardDescription>{subtitle}</CardDescription> : null}
+          </div>
+          {headerRight ? <div className="shrink-0">{headerRight}</div> : null}
+        </div>
       </CardHeader>
       <CardContent>
         <div className="flex flex-col items-center">

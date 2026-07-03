@@ -101,6 +101,13 @@ describe('DonutChartCard', () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
+  it('renders headerRight beside the title', () => {
+    render(
+      <DonutChartCard title="T" data={[{ name: 'A', value: 1 }]} headerRight={<button type="button">Picker</button>} />,
+    );
+    expect(screen.getByRole('button', { name: 'Picker' })).toBeInTheDocument();
+  });
+
   // I9 fix: a colorless slice past index 9 must fall back to WEDGE_PALETTE
   // (never a near-white CHART_PALETTE tail entry). The real <Cell fill> is
   // mocked, but the legend swatch is plain DOM rendered off the same

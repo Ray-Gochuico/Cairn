@@ -398,6 +398,13 @@ describe('AssetsDonut', () => {
       expect(screen.queryByText(/98\.8%/)).not.toBeInTheDocument();
     });
 
+    it('picker lives in the card header, not an absolute overlay', () => {
+      seedThreeAssets();
+      render(<AssetsDonut />);
+      const trigger = screen.getByRole('button', { name: /Included ·/ });
+      expect(trigger.closest('[class*="absolute"]')).toBeNull();
+    });
+
     it('hiding an entity removes its slice from the donut', async () => {
       seedThreeAssets();
       render(<AssetsDonut />);

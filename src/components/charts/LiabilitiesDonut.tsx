@@ -110,14 +110,12 @@ export default function LiabilitiesDonut() {
   }
 
   return (
-    <div className="relative">
-      <div className="absolute top-4 right-4 z-10">{picker}</div>
-      <DonutChartCard
-        title="Liabilities"
-        data={filteredSlices}
-        shareTotal={fullTotal}
-        valueFormatter={formatCurrency}
-      />
-    </div>
+    <DonutChartCard
+      title="Liabilities"
+      data={filteredSlices}
+      shareTotal={fullTotal}
+      valueFormatter={formatCurrency}
+      headerRight={picker}
+    />
   );
 }

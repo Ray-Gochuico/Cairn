@@ -562,10 +562,9 @@ export default function Investments() {
 
   // Asset-allocation donut entity picker. Keys are the asset-class display
   // labels (already unique by definition); persisted under
-  // `donut.assetAllocation.hidden`. We can't inject the picker into
-  // DonutChartCard's CardHeader without modifying the primitive, so we
-  // float it over the card via an absolute wrapper — same pattern as the
-  // Assets / Liabilities donuts.
+  // `donut.assetAllocation.hidden`. The picker renders in the card header
+  // via DonutChartCard's headerRight slot (Wave 3) — the old
+  // absolute-positioned overlay workaround is retired.
   const allocationPickerItems = useMemo<DonutEntityPickerItem[]>(
     () =>
       allocation.map((s) => ({
@@ -732,13 +731,7 @@ export default function Investments() {
         applicable: true,
         render: () =>
           allocation.length > 0 ? (
-            <div className="relative" data-testid="asset-allocation-card">
-              <div className="absolute top-4 right-4 z-10">
-                <DonutEntityPicker
-                  localStorageKey="donut.assetAllocation.hidden"
-                  items={allocationPickerItems}
-                />
-              </div>
+            <div data-testid="asset-allocation-card">
               {filteredAllocation.length > 0 ? (
                 <DonutChartCard
                   title="Asset allocation"
@@ -746,14 +739,30 @@ export default function Investments() {
                   data={filteredAllocation}
                   shareTotal={allocationTotal}
                   valueFormatter={formatCurrency}
+                  headerRight={
+                    <DonutEntityPicker
+                      localStorageKey="donut.assetAllocation.hidden"
+                      items={allocationPickerItems}
+                    />
+                  }
                 />
               ) : (
                 <Card>
                   <CardHeader>
-                    <CardTitle>Asset allocation</CardTitle>
-                    <CardDescription>
-                      Approximate, using latest snapshot per account
-                    </CardDescription>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <CardTitle>Asset allocation</CardTitle>
+                        <CardDescription>
+                          Approximate, using latest snapshot per account
+                        </CardDescription>
+                      </div>
+                      {/* Picker must stay reachable in the all-hidden state
+                          or the user can never re-show a class. */}
+                      <DonutEntityPicker
+                        localStorageKey="donut.assetAllocation.hidden"
+                        items={allocationPickerItems}
+                      />
+                    </div>
                   </CardHeader>
                   <CardContent>
                     <p className="text-sm text-muted-foreground py-8 text-center">

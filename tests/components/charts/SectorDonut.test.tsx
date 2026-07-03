@@ -505,6 +505,13 @@ describe('SectorDonut — entity picker', () => {
     expect(screen.queryByText(/100\.0%/)).not.toBeInTheDocument();
   });
 
+  it('picker lives in the card header, not an absolute overlay', () => {
+    seedTwoSectors();
+    render(<SectorDonut />);
+    const trigger = screen.getByRole('button', { name: /Included ·/ });
+    expect(trigger.closest('[class*="absolute"]')).toBeNull();
+  });
+
   it('persists hidden sector across remount', async () => {
     seedTwoSectors();
     const { unmount } = render(<SectorDonut />);

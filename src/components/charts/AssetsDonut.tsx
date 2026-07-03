@@ -190,18 +190,13 @@ export default function AssetsDonut() {
     );
   }
 
-  // Position the picker absolutely on top of DonutChartCard's CardHeader
-  // so we don't have to fork DonutChartCard. Top-right of the card lands
-  // it just past where the title naturally ends.
   return (
-    <div className="relative">
-      <div className="absolute top-4 right-4 z-10">{picker}</div>
-      <DonutChartCard
-        title="Assets"
-        data={filteredSlices.length === 0 ? EMPTY_SLICES : filteredSlices}
-        shareTotal={fullTotal}
-        valueFormatter={formatCurrency}
-      />
-    </div>
+    <DonutChartCard
+      title="Assets"
+      data={filteredSlices.length === 0 ? EMPTY_SLICES : filteredSlices}
+      shareTotal={fullTotal}
+      valueFormatter={formatCurrency}
+      headerRight={picker}
+    />
   );
 }

@@ -181,17 +181,15 @@ export function SectorDonut() {
   }
 
   return (
-    <div className="relative">
-      {picker && <div className="absolute top-4 right-4 z-10">{picker}</div>}
-      <DonutChartCard
-        title={title}
-        subtitle={subtitle}
-        data={slices}
-        shareTotal={selectedSector === null ? fullSectorTotal : undefined}
-        onClickSlice={selectedSector === null ? onClickSlice : undefined}
-        valueFormatter={formatCurrency}
-      />
-    </div>
+    <DonutChartCard
+      title={title}
+      subtitle={subtitle}
+      data={slices}
+      shareTotal={selectedSector === null ? fullSectorTotal : undefined}
+      onClickSlice={selectedSector === null ? onClickSlice : undefined}
+      valueFormatter={formatCurrency}
+      headerRight={picker ?? undefined}
+    />
   );
 }
 
