@@ -28,10 +28,22 @@
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
     --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    /* Wave-4 a11y: 46.9% → 45% L so muted text clears 4.5:1 on bg-muted
+     * surfaces (TabsList inactive labels were 4.34:1). On white it goes
+     * 4.75 → ~5.1:1. Visually a hair darker everywhere muted text is used. */
+    --muted-foreground: 215.4 16.3% 45%;
     --accent: 210 40% 96.1%;
     --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
+    /* Wave-4 a11y: red-600-ish. The old 0 84.2% 60.2% put the near-white
+     * --destructive-foreground at ~3.7:1 on solid destructive buttons (AA
+     * fail at 14px across 21 variant="destructive" call sites). 45% L
+     * clears 4.5:1 with margin (~5.5:1). Soft tints (bg-destructive/10..20)
+     * get slightly deeper; text-destructive-soft-foreground still clears AA
+     * on all of them — locked by tests/styles/destructive-token-contrast.
+     * Chart consumers (AssetValueChart down-stroke, PaycheckCalculator
+     * 'extra' slice, BelowGoalList depleted swatch) render a darker red —
+     * verified deliberately in this wave's visual pass. */
+    --destructive: 0 72% 45%;
     --destructive-foreground: 210 40% 98%;       /* near-white (text on SOLID destructive fill) */
     --destructive-soft-foreground: 0 72% 41%;    /* red-700 (text on destructive soft tint, e.g. bg-destructive/10) */
     --border: 214.3 31.8% 91.4%;
