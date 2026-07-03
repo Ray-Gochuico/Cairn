@@ -16,8 +16,7 @@ import { sumLatestOnOrBefore } from '@/lib/growth-horizons';
 import { effectiveSwr } from '@/lib/scenarios/effective-swr';
 import { effectiveBaselineInflation } from '@/lib/scenarios/effective-inflation';
 import LineChartCard from '@/components/charts/LineChartCard';
-import { balanceTrajectory } from '@/lib/projection-trajectory';
-import { toRealSeries } from '@/lib/calculators/real-mode';
+import { buildProjectionChartData } from '@/lib/calculators/projection-chart';
 import { RealNominalToggle } from '@/components/calculators/RealNominalToggle';
 import { useChartDisplayMode } from '@/lib/calculators/use-chart-display-mode';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -124,44 +123,11 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
     }),
   }));
 
-  // ── Chart data — O(n) per scenario: compute each trajectory ONCE, then index ─
-  // Mirror FinancialIndependenceCard: pre-compute all scenario trajectories outside
-  // the per-year loop so balanceTrajectory() is called once per scenario, not
-  // once per (scenario × year).
   const { chartData, chartSeries } = useMemo(() => {
     const horizon = Math.max(0, Math.round(values.yearsUntilRetirement));
     const scenarios = household?.growthScenarios ?? [];
     // Dash patterns for WCAG 1.4.1 (opt-in, additive).
     const DASH_PATTERNS = [undefined, '5 5', '2 2', '8 4'] as const;
-    if (horizon < 1 || scenarios.length === 0) {
-      return {
-        chartData: [] as Record<string, number>[],
-        chartSeries: [
-          ...scenarios.map((s, i) => ({
-            dataKey: s.label,
-            label: s.label,
-            color: CHART_PALETTE[i % CHART_PALETTE.length],
-            strokeDasharray: DASH_PATTERNS[i % DASH_PATTERNS.length],
-          })),
-          { dataKey: 'target', label: 'Required at retirement', color: CHART_NEUTRAL, strokeDasharray: '2 2' as const },
-        ],
-      };
-    }
-    // Compute each scenario's full trajectory ONCE (O(horizon) per scenario).
-    const trajectories = scenarios.map((s) => ({
-      label: s.label,
-      pts: balanceTrajectory(values.currentPortfolio, 0, s.rate, horizon),
-    }));
-    // Build the per-year chart-point array by indexing the pre-computed arrays.
-    const nominal = Array.from({ length: horizon + 1 }, (_, t) => {
-      const point: Record<string, number> = { year: t, target: targetFv };
-      for (const tr of trajectories) point[tr.label] = tr.pts[t].balance;
-      return point;
-    });
-    const data =
-      displayMode === 'REAL'
-        ? toRealSeries(nominal, inflation, { valueKeys: scenarios.map((s) => s.label), yearKey: 'year' })
-        : nominal;
     const seriesDefs = [
       ...scenarios.map((s, i) => ({
         dataKey: s.label,
@@ -171,6 +137,20 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
       })),
       { dataKey: 'target', label: 'Required at retirement', color: CHART_NEUTRAL, strokeDasharray: '2 2' as const },
     ];
+    if (horizon < 1 || scenarios.length === 0) {
+      return { chartData: [] as Record<string, number>[], chartSeries: seriesDefs };
+    }
+    // Single source for the rows (target-line basis lives in the builder —
+    // see src/lib/calculators/projection-chart.ts). Coast = no contributions.
+    const data = buildProjectionChartData({
+      pv: values.currentPortfolio,
+      annualContribution: 0,
+      targetFv,
+      scenarios,
+      inflation,
+      displayMode,
+      horizon,
+    });
     return { chartData: data, chartSeries: seriesDefs };
   }, [
     values.yearsUntilRetirement,
@@ -281,7 +261,9 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
           <p className="text-xs text-muted-foreground mb-3">
             Coast amounts assume <strong>real</strong> (inflation-adjusted)
             returns — the target is in today's dollars, so each scenario's rate
-            is discounted by inflation before solving.
+            is discounted by inflation before solving. The chart matches: the
+            Nominal view grows the target line with inflation; the Real view
+            holds it flat in today's dollars.
           </p>
           <table className="w-full text-sm">
             <thead>

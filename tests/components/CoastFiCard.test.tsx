@@ -565,4 +565,16 @@ describe('CoastFiCard', () => {
       (screen.getByLabelText(/current portfolio/i) as HTMLInputElement).value,
     ).toBe('200000');
   });
+
+  it('explains the target-line basis for both chart views', () => {
+    primeStores();
+    render(
+      <MemoryRouter>
+        <CoastFiCard />
+      </MemoryRouter>,
+    );
+    expect(
+      screen.getByText(/nominal view grows the target line with inflation/i),
+    ).toBeInTheDocument();
+  });
 });

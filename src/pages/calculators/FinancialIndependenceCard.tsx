@@ -15,8 +15,7 @@ import { sumLatestOnOrBefore } from '@/lib/growth-horizons';
 import { effectiveSwr } from '@/lib/scenarios/effective-swr';
 import { effectiveBaselineInflation } from '@/lib/scenarios/effective-inflation';
 import LineChartCard from '@/components/charts/LineChartCard';
-import { balanceTrajectory } from '@/lib/projection-trajectory';
-import { toRealSeries } from '@/lib/calculators/real-mode';
+import { buildProjectionChartData } from '@/lib/calculators/projection-chart';
 import { RealNominalToggle } from '@/components/calculators/RealNominalToggle';
 import { useChartDisplayMode } from '@/lib/calculators/use-chart-display-mode';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -133,19 +132,17 @@ export function FinancialIndependenceCard({
     const horizon = finite.length
       ? Math.min(50, Math.max(10, Math.ceil(Math.max(...finite))))
       : 30;
-    const trajectories = series.map((s) => ({
-      label: s.label,
-      pts: balanceTrajectory(values.currentPortfolio, values.annualContribution, s.rate, horizon),
-    }));
-    const nominal = Array.from({ length: horizon + 1 }, (_, t) => {
-      const point: Record<string, number> = { year: t, target: targetFv };
-      for (const tr of trajectories) point[tr.label] = tr.pts[t].balance;
-      return point;
+    // Single source for the rows (target-line basis lives in the builder —
+    // see src/lib/calculators/projection-chart.ts).
+    const data = buildProjectionChartData({
+      pv: values.currentPortfolio,
+      annualContribution: values.annualContribution,
+      targetFv,
+      scenarios: series,
+      inflation,
+      displayMode,
+      horizon,
     });
-    const data =
-      displayMode === 'REAL'
-        ? toRealSeries(nominal, inflation, { valueKeys: series.map((s) => s.label), yearKey: 'year' })
-        : nominal;
     // Dash patterns for WCAG 1.4.1: series distinguished by both colour AND
     // stroke pattern (solid / dashed / dotted for up to 3 scenario trajectories;
     // the Target reference line is always dotted).
@@ -264,7 +261,9 @@ export function FinancialIndependenceCard({
       <p className="text-xs text-muted-foreground mb-3">
         Years assume <strong>real</strong> (inflation-adjusted) returns — the
         target is in today's dollars, so each scenario's rate is discounted by
-        inflation before solving.
+        inflation before solving. The chart matches: the Nominal view grows the
+        target line with inflation; the Real view holds it flat in today's
+        dollars.
       </p>
       <table className="w-full text-sm">
         <thead>
