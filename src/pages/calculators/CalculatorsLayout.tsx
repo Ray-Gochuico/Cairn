@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PaycheckCard } from './PaycheckCard';
 import { BonusTaxCard } from './BonusTaxCard';
@@ -169,6 +169,24 @@ export default function CalculatorsLayout() {
   const hiddenCount = hiddenSet.size;
 
   const [popoverOpen, setPopoverOpen] = useState(false);
+  const manageTriggerRef = useRef<HTMLButtonElement>(null);
+
+  // Esc closes the Manage-cards popover and returns focus to its trigger.
+  // Pattern: AssetValueChart's IncludedPicker — listener registered only
+  // while open; preventDefault marks the event handled so outer Esc
+  // handlers that respect defaultPrevented defer to the innermost popover.
+  useEffect(() => {
+    if (!popoverOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setPopoverOpen(false);
+        manageTriggerRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [popoverOpen]);
 
   // Toggle one card. Writes the COMPLETE layout to the DB; the store refresh
   // re-renders the grid. Fire-and-forget: update() rethrows on failure but the
@@ -260,6 +278,7 @@ export default function CalculatorsLayout() {
       </div>
       <footer className="pt-2 text-sm text-muted-foreground relative">
         <button
+          ref={manageTriggerRef}
           type="button"
           onClick={() => setPopoverOpen((v) => !v)}
           aria-expanded={popoverOpen}
