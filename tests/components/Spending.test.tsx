@@ -23,7 +23,7 @@ vi.mock('@/lib/statements-archive', () => ({
   archiveStatementPdf: vi.fn().mockResolvedValue(null),
   resolveArchivePath: vi.fn(),
 }));
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { useHouseholdStore } from '@/stores/household-store';
 import { TransactionsRepo } from '@/domain/transactions';
 import { AccountsRepo } from '@/domain/accounts';
@@ -166,6 +166,22 @@ describe('Spending page', () => {
       expect(screen.getByText('Shopping')).toBeInTheDocument();
       expect(screen.getByText('Food & Drink')).toBeInTheDocument();
     });
+  });
+
+  it('(hero) renders the glance hero with range tabs on a seeded-transactions page', async () => {
+    await useCategoriesStore.getState().load();
+    await useTransactionsStore.getState().createMany([
+      {
+        householdId: 1, date: '2026-03-05', merchant: 'AMAZON', merchantRaw: null,
+        amount: 54.23, categoryId: 37, sourceAccountId: null, propertyId: null,
+        vehicleId: null, personId: null, sourcePdfFilename: null, reimbursable: false,
+        reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
+      },
+    ]);
+    renderPage();
+    const hero = await screen.findByTestId('spending-hero');
+    expect(within(hero).getByRole('tablist')).toBeInTheDocument();
+    expect(within(hero).getByRole('tab', { name: 'This month' })).toHaveAttribute('aria-selected', 'true');
   });
 
   it('(c) shows top merchants, subscription count, and awaiting-reimbursement row', async () => {

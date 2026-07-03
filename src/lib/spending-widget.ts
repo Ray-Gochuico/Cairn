@@ -9,6 +9,20 @@ export type SpendingRange =
   | 'ytd'
   | 'last-12';
 
+/**
+ * Shared label vocabulary for the range control — imported by BOTH the
+ * dashboard SpendingWidget and the Spending page hero so the two can
+ * literally never drift.
+ */
+export const RANGE_OPTIONS: ReadonlyArray<{ value: SpendingRange; label: string }> = [
+  { value: 'this-month', label: 'This month' },
+  { value: 'last-month', label: 'Last month' },
+  { value: 'last-30', label: 'Last 30 days' },
+  { value: 'last-90', label: 'Last 90 days' },
+  { value: 'ytd', label: 'Year to date' },
+  { value: 'last-12', label: 'Last 12 months' },
+];
+
 export interface SpendingRangeBounds {
   startInclusive: string; // YYYY-MM-DD
   endInclusive: string;   // YYYY-MM-DD

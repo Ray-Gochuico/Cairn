@@ -11,18 +11,9 @@ import {
 } from '@/components/ui/select';
 import BarChartCard from '@/components/charts/BarChartCard';
 import { CategoryDonut, withCategoryColors } from '@/components/spending/CategoryDonut';
-import { rangeBounds, summarizeSpendingForRange, type SpendingRange } from '@/lib/spending-widget';
+import { RANGE_OPTIONS, rangeBounds, summarizeSpendingForRange, type SpendingRange } from '@/lib/spending-widget';
 import type { Account, Category, Transaction } from '@/types/schema';
 import { cn } from '@/lib/utils';
-
-const RANGE_OPTIONS: Array<{ value: SpendingRange; label: string }> = [
-  { value: 'this-month', label: 'This month' },
-  { value: 'last-month', label: 'Last month' },
-  { value: 'last-30', label: 'Last 30 days' },
-  { value: 'last-90', label: 'Last 90 days' },
-  { value: 'ytd', label: 'Year to date' },
-  { value: 'last-12', label: 'Last 12 months' },
-];
 
 const currencyFormatter = new Intl.NumberFormat('en-US', {
   style: 'currency',
