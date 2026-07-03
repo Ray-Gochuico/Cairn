@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   makeChartPrefs,
+  migrateLegacyInvestmentChartPrefs,
   type SelectedEntity,
 } from '@/lib/net-worth-chart-prefs';
 
@@ -85,5 +86,57 @@ describe('makeChartPrefs', () => {
   it('returns null when the persisted value is garbage JSON', () => {
     localStorage.setItem('x.selectedEntities', '{not json');
     expect(makeChartPrefs('x').getSelectedEntities()).toBeNull();
+  });
+});
+
+describe('migrateLegacyInvestmentChartPrefs', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('ports the legacy number[] selection into investmentChart.selectedEntities and removes the legacy keys', () => {
+    localStorage.setItem('investment-chart-selected-accounts', JSON.stringify([3, 7]));
+    localStorage.setItem('investment-chart-time-window', '5Y');
+    localStorage.setItem('investment-chart-granularity', 'MONTH');
+    migrateLegacyInvestmentChartPrefs();
+    const p = makeChartPrefs('investmentChart');
+    expect(p.getSelectedEntities()).toEqual([
+      { kind: 'account', id: 3 },
+      { kind: 'account', id: 7 },
+    ]);
+    expect(p.getTimeWindow()).toBe('5Y');
+    expect(localStorage.getItem('investment-chart-selected-accounts')).toBeNull();
+    expect(localStorage.getItem('investment-chart-time-window')).toBeNull();
+    expect(localStorage.getItem('investment-chart-granularity')).toBeNull();
+  });
+
+  it('never clobbers values already saved under the new namespace', () => {
+    localStorage.setItem('investment-chart-selected-accounts', JSON.stringify([3]));
+    localStorage.setItem('investment-chart-time-window', '1Y');
+    const p = makeChartPrefs('investmentChart');
+    p.setSelectedEntities([{ kind: 'account', id: 99 }]);
+    p.setTimeWindow('6M');
+    migrateLegacyInvestmentChartPrefs();
+    expect(p.getSelectedEntities()).toEqual([{ kind: 'account', id: 99 }]);
+    expect(p.getTimeWindow()).toBe('6M');
+    // Legacy keys are still cleaned up.
+    expect(localStorage.getItem('investment-chart-selected-accounts')).toBeNull();
+  });
+
+  it('is a no-op (and idempotent) with no legacy keys present', () => {
+    migrateLegacyInvestmentChartPrefs();
+    migrateLegacyInvestmentChartPrefs();
+    const p = makeChartPrefs('investmentChart');
+    expect(p.getSelectedEntities()).toBeNull();
+    expect(p.getTimeWindow()).toBeNull();
+  });
+
+  it('tolerates garbage legacy values: drops them, still removes the keys', () => {
+    localStorage.setItem('investment-chart-selected-accounts', '{"not":"an array"}');
+    localStorage.setItem('investment-chart-time-window', '2W');
+    migrateLegacyInvestmentChartPrefs();
+    const p = makeChartPrefs('investmentChart');
+    expect(p.getSelectedEntities()).toBeNull();
+    expect(p.getTimeWindow()).toBeNull();
+    expect(localStorage.getItem('investment-chart-selected-accounts')).toBeNull();
+    expect(localStorage.getItem('investment-chart-time-window')).toBeNull();
   });
 });
