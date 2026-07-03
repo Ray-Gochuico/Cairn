@@ -4,7 +4,25 @@ import userEvent from '@testing-library/user-event';
 import { CompoundInterestCard } from '@/pages/calculators/CompoundInterestCard';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useAccountsStore } from '@/stores/accounts-store';
-import { SnapshotSource } from '@/types/enums';
+import { SnapshotSource, AccountType } from '@/types/enums';
+import type { Account } from '@/types/schema';
+
+function mkAccount(id: number, type: AccountType = AccountType.ACCOUNT_BROKERAGE, excluded = false): Account {
+  return {
+    id,
+    householdId: 1,
+    ownerPersonId: null,
+    beneficiaryDependentId: null,
+    name: `Acct ${id}`,
+    institution: null,
+    type,
+    cryptoWalletAddress: null,
+    autoFetchEnabled: false,
+    excludedFromNetWorth: excluded,
+    stateOfPlan: null,
+    accentColor: null,
+  } as unknown as Account;
+}
 
 describe('CompoundInterestCard', () => {
   beforeEach(() => {
@@ -121,6 +139,8 @@ describe('CompoundInterestCard', () => {
       ],
       isLoading: false, error: null,
     });
+    // Wave 2: the FI-eligible selector needs a matching eligible account.
+    useAccountsStore.setState({ accounts: [mkAccount(1)], isLoading: false, error: null });
     render(<CompoundInterestCard />);
     expect((screen.getByLabelText(/initial amount/i) as HTMLInputElement).value).toBe('250000');
   });
@@ -135,13 +155,10 @@ describe('CompoundInterestCard', () => {
       error: null,
     });
     useAccountsStore.setState({
-      accounts: [
-        { id: 1, excludedFromNetWorth: false },
-        { id: 2, excludedFromNetWorth: true },
-      ],
+      accounts: [mkAccount(1), mkAccount(2, AccountType.ACCOUNT_BROKERAGE, true)],
       isLoading: false,
       error: null,
-    } as never);
+    });
     render(<CompoundInterestCard />);
     expect(
       (screen.getByLabelText(/initial amount/i) as HTMLInputElement).value,
