@@ -448,7 +448,7 @@ describe('SectorDonut — entity picker', () => {
     seedTwoSectors();
     render(<SectorDonut />);
     expect(
-      screen.getByRole('button', { name: /entities \(2\/2\)/i }),
+      screen.getByRole('button', { name: /Included · 2 of 2/ }),
     ).toBeInTheDocument();
   });
 
@@ -459,13 +459,13 @@ describe('SectorDonut — entity picker', () => {
     expect(screen.getByTestId('slice-Financial Services')).toBeInTheDocument();
 
     const user = userEvent.setup();
-    await user.click(screen.getByRole('button', { name: /entities/i }));
+    await user.click(screen.getByRole('button', { name: /Included ·/ }));
     await user.click(screen.getByRole('checkbox', { name: /Financial Services/ }));
 
     expect(screen.queryByTestId('slice-Financial Services')).not.toBeInTheDocument();
     expect(screen.getByTestId('slice-Technology')).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /entities \(1\/2\)/i }),
+      screen.getByRole('button', { name: /Included · 1 of 2/ }),
     ).toBeInTheDocument();
   });
 
@@ -473,22 +473,22 @@ describe('SectorDonut — entity picker', () => {
     seedTwoSectors();
     render(<SectorDonut />);
     // Picker is visible in sector view
-    expect(screen.getByRole('button', { name: /entities/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Included ·/ })).toBeInTheDocument();
     // Drill into Technology
     fireEvent.click(screen.getByTestId('slice-Technology'));
     expect(screen.getByText('Industries — Technology')).toBeInTheDocument();
     // Picker should be hidden — the picker operates on sectors only.
-    expect(screen.queryByRole('button', { name: /entities/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Included ·/ })).toBeNull();
   });
 
   it('picker reappears when returning to sector view via "Back to sectors"', () => {
     seedTwoSectors();
     render(<SectorDonut />);
     fireEvent.click(screen.getByTestId('slice-Technology'));
-    expect(screen.queryByRole('button', { name: /entities/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Included ·/ })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /back to sectors/i }));
     expect(
-      screen.getByRole('button', { name: /entities \(2\/2\)/i }),
+      screen.getByRole('button', { name: /Included · 2 of 2/ }),
     ).toBeInTheDocument();
   });
 
@@ -499,7 +499,7 @@ describe('SectorDonut — entity picker', () => {
     seedTwoSectors();
     render(<SectorDonut />);
     const user = userEvent.setup();
-    await user.click(screen.getByRole('button', { name: /entities/i }));
+    await user.click(screen.getByRole('button', { name: /Included ·/ }));
     await user.click(screen.getByRole('checkbox', { name: /Financial Services/ }));
     expect(screen.getByText(/\$1,500 · 66\.7%/)).toBeInTheDocument();
     expect(screen.queryByText(/100\.0%/)).not.toBeInTheDocument();
@@ -509,7 +509,7 @@ describe('SectorDonut — entity picker', () => {
     seedTwoSectors();
     const { unmount } = render(<SectorDonut />);
     const user = userEvent.setup();
-    await user.click(screen.getByRole('button', { name: /entities/i }));
+    await user.click(screen.getByRole('button', { name: /Included ·/ }));
     await user.click(screen.getByRole('checkbox', { name: /Financial Services/ }));
     expect(screen.queryByTestId('slice-Financial Services')).not.toBeInTheDocument();
     unmount();

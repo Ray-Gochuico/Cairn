@@ -453,7 +453,7 @@ describe('Investments page — 529 section', () => {
       });
 
       expect(
-        within(allocCard).getByRole('button', { name: /entities \(3\/3\)/i }),
+        within(allocCard).getByRole('button', { name: /Included · 3 of 3/ }),
       ).toBeInTheDocument();
     });
 
@@ -498,7 +498,7 @@ describe('Investments page — 529 section', () => {
 
       const user = userEvent.setup();
       await user.click(
-        within(allocCard).getByRole('button', { name: /entities \(3\/3\)/i }),
+        within(allocCard).getByRole('button', { name: /Included · 3 of 3/ }),
       );
       await user.click(within(allocCard).getByRole('checkbox', { name: /US Bonds/ }));
 
@@ -508,7 +508,7 @@ describe('Investments page — 529 section', () => {
       expect(within(legend2).getByText(/^Crypto —/)).toBeInTheDocument();
       expect(within(legend2).getByText(/^US Total Market —/)).toBeInTheDocument();
       expect(
-        within(allocCard).getByRole('button', { name: /entities \(2\/3\)/i }),
+        within(allocCard).getByRole('button', { name: /Included · 2 of 3/ }),
       ).toBeInTheDocument();
     });
 
@@ -559,7 +559,7 @@ describe('Investments page — 529 section', () => {
 
       const user = userEvent.setup();
       await user.click(
-        within(allocCard).getByRole('button', { name: /entities \(3\/3\)/i }),
+        within(allocCard).getByRole('button', { name: /Included · 3 of 3/ }),
       );
       const pickerSwatch = (label: string) => {
         const row = within(allocCard).getByRole('checkbox', { name: new RegExp(label) }).closest('li')!;

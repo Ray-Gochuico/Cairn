@@ -174,7 +174,7 @@ describe('LiabilitiesDonut', () => {
       seedThreeLoans();
       render(<LiabilitiesDonut />);
       expect(
-        screen.getByRole('button', { name: /entities \(3\/3\)/i }),
+        screen.getByRole('button', { name: /Included · 3 of 3/ }),
       ).toBeInTheDocument();
     });
 
@@ -197,7 +197,7 @@ describe('LiabilitiesDonut', () => {
       const before = screen.getByTestId('slice-Student debt').getAttribute('data-color');
       expect(before).toMatch(/^#[0-9a-f]{6}$/i);
       const user = userEvent.setup();
-      await user.click(screen.getByRole('button', { name: /entities/i }));
+      await user.click(screen.getByRole('button', { name: /Included ·/ }));
       await user.click(screen.getByRole('checkbox', { name: /Home mortgage/ }));
       expect(screen.queryByTestId('slice-Home mortgage')).not.toBeInTheDocument();
       expect(screen.getByTestId('slice-Student debt').getAttribute('data-color')).toBe(before);
@@ -210,7 +210,7 @@ describe('LiabilitiesDonut', () => {
       seedThreeLoans();
       render(<LiabilitiesDonut />);
       const user = userEvent.setup();
-      await user.click(screen.getByRole('button', { name: /entities/i }));
+      await user.click(screen.getByRole('button', { name: /Included ·/ }));
       await user.click(screen.getByRole('checkbox', { name: /Home mortgage/ }));
       expect(screen.getByText(/\$15,000 · 3\.9%/)).toBeInTheDocument();
       expect(screen.queryByText(/40\.5%/)).not.toBeInTheDocument();
@@ -222,14 +222,14 @@ describe('LiabilitiesDonut', () => {
       expect(screen.getByTestId('slice-Car loan')).toBeInTheDocument();
 
       const user = userEvent.setup();
-      await user.click(screen.getByRole('button', { name: /entities/i }));
+      await user.click(screen.getByRole('button', { name: /Included ·/ }));
       await user.click(screen.getByRole('checkbox', { name: /Car loan/ }));
 
       expect(screen.queryByTestId('slice-Car loan')).not.toBeInTheDocument();
       expect(screen.getByTestId('slice-Home mortgage')).toBeInTheDocument();
       expect(screen.getByTestId('slice-Student debt')).toBeInTheDocument();
       expect(
-        screen.getByRole('button', { name: /entities \(2\/3\)/i }),
+        screen.getByRole('button', { name: /Included · 2 of 3/ }),
       ).toBeInTheDocument();
     });
 
@@ -237,7 +237,7 @@ describe('LiabilitiesDonut', () => {
       seedThreeLoans();
       const { unmount } = render(<LiabilitiesDonut />);
       const user = userEvent.setup();
-      await user.click(screen.getByRole('button', { name: /entities/i }));
+      await user.click(screen.getByRole('button', { name: /Included ·/ }));
       await user.click(screen.getByRole('checkbox', { name: /Car loan/ }));
       expect(screen.queryByTestId('slice-Car loan')).not.toBeInTheDocument();
       unmount();
@@ -251,7 +251,7 @@ describe('LiabilitiesDonut', () => {
       seedThreeLoans();
       render(<LiabilitiesDonut />);
       const user = userEvent.setup();
-      await user.click(screen.getByRole('button', { name: /entities/i }));
+      await user.click(screen.getByRole('button', { name: /Included ·/ }));
       await user.click(screen.getByRole('button', { name: /hide all/i }));
       expect(screen.getByText(/all entities hidden/i)).toBeInTheDocument();
     });
