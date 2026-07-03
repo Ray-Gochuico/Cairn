@@ -209,6 +209,60 @@ describe('MonthlyMiniWindow', () => {
     });
   });
 
+  it('announces a failed confirm via role="alert" (Wave-4: inline card errors are announced)', async () => {
+    const user = userEvent.setup();
+    const accountsRepo = new AccountsRepo(db);
+    const accountId = await accountsRepo.create({
+      householdId: 1,
+      ownerPersonId: null,
+      beneficiaryDependentId: null,
+      name: 'Brokerage One',
+      institution: null,
+      type: AccountType.ACCOUNT_BROKERAGE,
+      cryptoWalletAddress: null,
+      autoFetchEnabled: false,
+      excludedFromNetWorth: false,
+      stateOfPlan: null,
+      accentColor: null,
+    });
+    const snapshotsRepo = new AccountSnapshotsRepo(db);
+    const today = new Date();
+    const prev = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const lastBizDayUtc = new Date(
+      Date.UTC(prev.getFullYear(), prev.getMonth() + 1, 0),
+    );
+    while (lastBizDayUtc.getUTCDay() === 0 || lastBizDayUtc.getUTCDay() === 6) {
+      lastBizDayUtc.setUTCDate(lastBizDayUtc.getUTCDate() - 1);
+    }
+    await snapshotsRepo.upsert({
+      accountId,
+      snapshotDate: lastBizDayUtc.toISOString().slice(0, 10),
+      totalValue: 5000,
+      source: SnapshotSource.AUTO_DERIVED,
+    });
+
+    render(
+      <MemoryRouter>
+        <MonthlyMiniWindow />
+      </MemoryRouter>,
+    );
+    const confirmBtn = await screen.findByRole('button', { name: /^confirm$/i });
+
+    // Same store-stubbing idiom as the Confirm-all in-flight test.
+    const orig = useSnapshotsStore.getState().upsert;
+    useSnapshotsStore.setState({
+      upsert: (async () => {
+        throw new Error('Save failed');
+      }) as typeof orig,
+    } as never);
+    try {
+      await user.click(confirmBtn);
+      expect(await screen.findByRole('alert')).toHaveTextContent(/failed/i);
+    } finally {
+      useSnapshotsStore.setState({ upsert: orig } as never);
+    }
+  });
+
   it('renders a loan-payment card with the next amortization entry', async () => {
     const loansRepo = new LoansRepo(db);
     const future = new Date();

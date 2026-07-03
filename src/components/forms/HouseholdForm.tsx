@@ -276,7 +276,7 @@ export default function HouseholdForm({
       </Card>
 
       {fieldErrors.length > 0 && (
-        <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive-soft-foreground">
+        <div role="alert" className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive-soft-foreground">
           <div className="font-medium mb-1">Fix these before saving:</div>
           <ul className="list-disc pl-5">
             {fieldErrors.map((e) => (
@@ -289,7 +289,7 @@ export default function HouseholdForm({
       )}
 
       {error && (
-        <div className="text-sm text-destructive-soft-foreground">{error}</div>
+        <div role="alert" className="text-sm text-destructive-soft-foreground">{error}</div>
       )}
 
       <div className="flex justify-end items-center gap-3">

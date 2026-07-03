@@ -112,7 +112,7 @@ function ContributionForm({ initial, accounts, persons, onSubmit, onCancel }: Co
       </Card>
 
       {Object.keys(form.formState.errors).length > 0 && (
-        <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive-soft-foreground">
+        <div role="alert" className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive-soft-foreground">
           <div className="font-medium mb-1">Fix these before saving:</div>
           <ul className="list-disc pl-5">
             {Object.entries(form.formState.errors).map(([field, err]) => (
