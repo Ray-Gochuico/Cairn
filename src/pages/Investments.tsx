@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
@@ -248,13 +248,15 @@ function renderCardFlow(cards: InvestmentsCardEntry[]): ReactNode[] {
   // Group consecutive `compact` cards into the existing 3-up donut grid; render
   // `wide` cards full-width. Preserves today's layout when the three donuts
   // are visible and adjacent — a wide card between them simply splits the grid.
+  // Every card wrapper carries id={card.id} as an anchor target for deep
+  // links (#concentration) and the warning->donut scroll buttons.
   const out: ReactNode[] = [];
   let compactRun: InvestmentsCardEntry[] = [];
   const flushCompact = () => {
     if (compactRun.length === 0) return;
     out.push(
       <div key={`grid-${compactRun[0].id}`} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {compactRun.map((c) => <div key={c.id}>{c.render()}</div>)}
+        {compactRun.map((c) => <div key={c.id} id={c.id}>{c.render()}</div>)}
       </div>,
     );
     compactRun = [];
@@ -262,7 +264,7 @@ function renderCardFlow(cards: InvestmentsCardEntry[]): ReactNode[] {
   for (const card of cards) {
     if (card.size === 'compact') { compactRun.push(card); continue; }
     flushCompact();
-    out.push(<div key={card.id}>{card.render()}</div>);
+    out.push(<div key={card.id} id={card.id}>{card.render()}</div>);
   }
   flushCompact();
   return out;
@@ -819,6 +821,11 @@ export default function Investments() {
     return max;
   }, [visibleSnapshots]);
 
+  // Default order only — customized users keep their saved order
+  // (applyCardLayout orders by saved index and appends unknown ids). The
+  // donut trio (allocation, per-company, sector) stays adjacent as one 3-up
+  // compact row with Concentration Health directly beneath its inputs;
+  // class-targets sits next to drift, which consumes the targets.
   const cardRegistry: InvestmentsCardEntry[] = useMemo(
     () => [
       {
@@ -899,6 +906,112 @@ export default function Investments() {
           ),
       },
       {
+        id: 'per-company',
+        label: 'Per-company exposure',
+        size: 'compact',
+        applicable: true,
+        render: () => <PerTickerDonut />,
+      },
+      {
+        id: 'sector',
+        label: 'Sector exposure',
+        size: 'compact',
+        applicable: true,
+        render: () => <SectorDonut />,
+      },
+      {
+        id: 'concentration',
+        label: 'Concentration Health',
+        size: 'wide',
+        applicable: true,
+        render: () => (
+          <Card data-testid="concentration-section">
+            <CardHeader>
+              <CardTitle>
+                <TermTooltip term="CONCENTRATION">Concentration</TermTooltip> Health
+              </CardTitle>
+              <CardDescription>
+                Effective exposure after fund look-through and leverage. Warnings
+                fire when a single ticker exceeds 25%, an asset class exceeds 60%,
+                or total leverage exceeds 1.5x.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {concentration.warnings.length === 0 ? (
+                <div className="text-sm text-muted-foreground">
+                  No concentration issues detected.
+                </div>
+              ) : (
+                <ul className="space-y-3">
+                  {concentration.warnings.map((w, i) => (
+                    <li
+                      key={`${w.type}-${w.ticker ?? w.assetClass ?? i}`}
+                      className="flex items-start gap-3"
+                    >
+                      <AlertTriangleIcon
+                        className={`h-5 w-5 shrink-0 mt-0.5 ${severityColor(w.severity)}`}
+                        aria-label={`${w.severity} severity`}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm">{w.message}</div>
+                        <details className="mt-1">
+                          <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
+                            Why this matters
+                          </summary>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {CONCENTRATION_TOOLTIP[w.type]}
+                          </p>
+                        </details>
+                        {/* Anchor-scroll to the donut that visualizes this
+                            warning's subject (ticker → per-company card;
+                            asset class → allocation card). A slice-focus
+                            pulse is a noted follow-up (needs a focus channel
+                            on useDonutSelection). */}
+                        {(w.ticker || w.assetClass) && (
+                          <button
+                            type="button"
+                            className="mt-1 text-xs font-medium text-primary hover:underline"
+                            onClick={() =>
+                              document
+                                .getElementById(w.ticker ? 'per-company' : 'allocation')
+                                ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                            }
+                          >
+                            View in donut
+                          </button>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {(() => {
+                const top = topEffectiveExposures(concentration.perTicker, 3);
+                if (top.length === 0) return null;
+                return (
+                  <div className="mt-6 border-t pt-4">
+                    <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
+                      Top 3 effective exposures
+                    </div>
+                    <ul className="space-y-1 text-sm">
+                      {top.map((t) => (
+                        <li key={t.ticker} className="flex justify-between gap-2 tabular-nums">
+                          <span className="font-mono">{t.ticker}</span>
+                          <span className="text-muted-foreground">
+                            {(t.pctOfPortfolio * 100).toFixed(1)}%
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })()}
+            </CardContent>
+          </Card>
+        ),
+      },
+      {
         id: 'class-targets',
         label: 'Asset-class targets',
         size: 'compact',
@@ -912,20 +1025,6 @@ export default function Investments() {
             }}
           />
         ),
-      },
-      {
-        id: 'per-company',
-        label: 'Per-company exposure',
-        size: 'compact',
-        applicable: true,
-        render: () => <PerTickerDonut />,
-      },
-      {
-        id: 'sector',
-        label: 'Sector exposure',
-        size: 'compact',
-        applicable: true,
-        render: () => <SectorDonut />,
       },
       {
         id: 'drift',
@@ -1032,80 +1131,6 @@ export default function Investments() {
                   </div>
                 )}
               </div>
-            </CardContent>
-          </Card>
-        ),
-      },
-      {
-        id: 'concentration',
-        label: 'Concentration Health',
-        size: 'wide',
-        applicable: true,
-        render: () => (
-          <Card data-testid="concentration-section">
-            <CardHeader>
-              <CardTitle>
-                <TermTooltip term="CONCENTRATION">Concentration</TermTooltip> Health
-              </CardTitle>
-              <CardDescription>
-                Effective exposure after fund look-through and leverage. Warnings
-                fire when a single ticker exceeds 25%, an asset class exceeds 60%,
-                or total leverage exceeds 1.5x.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {concentration.warnings.length === 0 ? (
-                <div className="text-sm text-muted-foreground">
-                  No concentration issues detected.
-                </div>
-              ) : (
-                <ul className="space-y-3">
-                  {concentration.warnings.map((w, i) => (
-                    <li
-                      key={`${w.type}-${w.ticker ?? w.assetClass ?? i}`}
-                      className="flex items-start gap-3"
-                    >
-                      <AlertTriangleIcon
-                        className={`h-5 w-5 shrink-0 mt-0.5 ${severityColor(w.severity)}`}
-                        aria-label={`${w.severity} severity`}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm">{w.message}</div>
-                        <details className="mt-1">
-                          <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
-                            Why this matters
-                          </summary>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {CONCENTRATION_TOOLTIP[w.type]}
-                          </p>
-                        </details>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {(() => {
-                const top = topEffectiveExposures(concentration.perTicker, 3);
-                if (top.length === 0) return null;
-                return (
-                  <div className="mt-6 border-t pt-4">
-                    <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
-                      Top 3 effective exposures
-                    </div>
-                    <ul className="space-y-1 text-sm">
-                      {top.map((t) => (
-                        <li key={t.ticker} className="flex justify-between gap-2 tabular-nums">
-                          <span className="font-mono">{t.ticker}</span>
-                          <span className="text-muted-foreground">
-                            {(t.pctOfPortfolio * 100).toFixed(1)}%
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                );
-              })()}
             </CardContent>
           </Card>
         ),
@@ -1277,6 +1302,15 @@ export default function Investments() {
     () => applyCardLayout(cardRegistry, cardLayout),
     [cardRegistry, cardLayout],
   );
+
+  // Deep links like /investments#concentration (ConcentrationCard's "See
+  // full breakdown") scroll to the target card once cards have rendered.
+  // A hidden card (customized layout) simply no-ops — the user's layout wins.
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (!hash) return;
+    document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [hash, visibleCards]);
 
   // Edit mode needs to render every applicable card (including hidden ones,
   // so the user can re-show them) in stored order. applyCardLayout drops
