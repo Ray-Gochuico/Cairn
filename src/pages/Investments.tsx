@@ -952,7 +952,7 @@ export default function Investments() {
                             <td className="py-2 px-2 text-right tabular-nums text-muted-foreground">{formatCurrency(r.actualValue)}</td>
                             <td className="py-2 px-2 text-right tabular-nums">{(r.actualPct * 100).toFixed(1)}%</td>
                             <td className="py-2 px-2 text-right tabular-nums">{r.targetPct != null ? `${(r.targetPct * 100).toFixed(1)}%` : '—'}</td>
-                            <td className={`py-2 pl-2 text-right tabular-nums ${r.targetPct == null ? 'text-muted-foreground' : r.driftPct >= 0 ? 'text-success-foreground' : 'text-destructive'}`}>
+                            <td className={`py-2 pl-2 text-right tabular-nums ${r.targetPct == null ? 'text-muted-foreground' : r.driftPct >= 0 ? 'text-success-foreground' : 'text-destructive-soft-foreground'}`}>
                               {r.targetPct == null ? '—' : `${r.driftPct >= 0 ? '+' : ''}${(r.driftPct * 100).toFixed(1)}%`}
                             </td>
                           </tr>
@@ -1001,7 +1001,7 @@ export default function Investments() {
                               <td className="py-2 px-2 text-right tabular-nums text-muted-foreground">{formatCurrency(r.actualValue)}</td>
                               <td className="py-2 px-2 text-right tabular-nums">{(r.actualPct * 100).toFixed(1)}%</td>
                               <td className="py-2 px-2 text-right tabular-nums">{targetPctHousehold != null ? `${(targetPctHousehold * 100).toFixed(1)}%` : '—'}</td>
-                              <td className={`py-2 pl-2 text-right tabular-nums ${r.targetValue == null ? 'text-muted-foreground' : r.driftPct >= 0 ? 'text-success-foreground' : 'text-destructive'}`}>
+                              <td className={`py-2 pl-2 text-right tabular-nums ${r.targetValue == null ? 'text-muted-foreground' : r.driftPct >= 0 ? 'text-success-foreground' : 'text-destructive-soft-foreground'}`}>
                                 {r.targetValue == null ? '—' : `${r.driftPct >= 0 ? '+' : ''}${(r.driftPct * 100).toFixed(1)}%`}
                               </td>
                             </tr>
