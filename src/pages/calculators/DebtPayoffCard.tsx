@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useLoansStore } from '@/stores/loans-store';
-import { amortize } from '@/lib/amortization';
+import { amortize, nextPaymentDateFrom } from '@/lib/amortization';
 import { CalculatorCard } from './CalculatorCard';
 import { formatCurrency } from '@/lib/format';
 import { Input } from '@/components/ui/input';
@@ -52,9 +52,12 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
     defaults,
   );
 
+  // One "today" per mount: anchors every remaining schedule consistently.
+  const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
+
   const projections = useMemo(
-    () => projectionsFor(loans, values.strategy, values.extraTotal),
-    [loans, values.strategy, values.extraTotal],
+    () => projectionsFor(loans, values.strategy, values.extraTotal, todayIso),
+    [loans, values.strategy, values.extraTotal, todayIso],
   );
 
   // Baseline: every loan with extraPayment=0. Used to estimate "savings" from
@@ -67,13 +70,14 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
         principal: loan.currentBalance,
         annualRatePct: loan.interestRate,
         termMonths: loan.termMonths,
-        firstPaymentDate: loan.firstPaymentDate,
+        firstPaymentDate: nextPaymentDateFrom(loan.firstPaymentDate, todayIso),
+        monthlyPayment: loan.monthlyPayment,
         extraPayment: 0,
       });
       sum += a.totalInterest;
     }
     return sum;
-  }, [loans]);
+  }, [loans, todayIso]);
 
   if (loans.length === 0) {
     return (
