@@ -140,5 +140,6 @@ describe('Roadmap page', () => {
     expect(
       screen.getByText(/set up your household to see your roadmap/i),
     ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /set up household/i })).toHaveAttribute('href', '/inputs/household');
   });
 });

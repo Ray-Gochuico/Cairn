@@ -44,6 +44,8 @@ describe('Budget page', () => {
       expect(screen.getByText('Groceries')).toBeInTheDocument();
     });
     expect(screen.getByText(/set a monthly budget/i)).toBeInTheDocument();
+    // Canonical EmptyState shape: titled "No budgets set" (medium-weight line).
+    expect(screen.getByText(/no budgets set/i)).toHaveClass('font-medium');
   });
 
   it('editing a budget input persists the value via the categories store', async () => {

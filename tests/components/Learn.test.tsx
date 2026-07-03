@@ -125,6 +125,7 @@ describe('Learn page (4-set)', () => {
       </MemoryRouter>,
     );
     expect(screen.getByText(/set up your household/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /set up household/i })).toHaveAttribute('href', '/inputs/household');
   });
 
   it('shows the learning disclosure modal on first visit (household present, unaccepted)', async () => {

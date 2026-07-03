@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { PageContainer } from '@/components/layout/PageContainer';
+import { EmptyState } from '@/components/layout/EmptyState';
+import { Wallet } from 'lucide-react';
 import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import { MarkReimbursedDialog } from '@/components/dialogs/MarkReimbursedDialog';
 import { TransactionEditDialog } from '@/components/dialogs/TransactionEditDialog';
@@ -464,9 +466,14 @@ export default function Spending() {
           )}
         </div>
         {transactions.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No transactions yet. Import a statement to get started.
-          </p>
+          // Data-empty (≠ filter-empty below): canonical EmptyState; no CTA —
+          // the importer drop-zone is ON this page, directly above.
+          <EmptyState
+            bare
+            icon={Wallet}
+            title="No transactions yet"
+            description="Import a statement to get started."
+          />
         ) : visibleTransactions.length === 0 ? (
           <p className="text-sm text-muted-foreground">No transactions to show.</p>
         ) : (

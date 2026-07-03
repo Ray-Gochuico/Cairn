@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ClipboardList } from 'lucide-react';
+import { EmptyState } from '@/components/layout/EmptyState';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import {
@@ -19,7 +21,6 @@ import {
 import BudgetOverlayRow from '@/components/budget/BudgetOverlayRow';
 import BudgetCategoryPicker from '@/components/budget/BudgetCategoryPicker';
 import type { AddCategoryPayload } from '@/components/budget/AddCategoryDialog';
-import { Card, CardContent } from '@/components/ui/card';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 
@@ -195,11 +196,12 @@ export default function Budget() {
           </span>
         </div>
       ) : (
-        <Card>
-          <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            Set a monthly budget on a category below to see the budget-vs-actual overlay.
-          </CardContent>
-        </Card>
+        // No CTA — the category rows to edit are directly below on this page.
+        <EmptyState
+          icon={ClipboardList}
+          title="No budgets set"
+          description="Set a monthly budget on a category below to see the budget-vs-actual overlay."
+        />
       )}
 
       {/* Always render the picker so the "+ Add category" entry is reachable

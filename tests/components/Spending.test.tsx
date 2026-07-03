@@ -121,6 +121,8 @@ describe('Spending page', () => {
         screen.getByText(/no transactions yet/i),
       ).toBeInTheDocument();
     });
+    // Canonical EmptyState shape: the title is the medium-weight line.
+    expect(screen.getByText(/no transactions yet/i)).toHaveClass('font-medium');
   });
 
   it('(a2) does not render the legacy standalone "Import CSV" button in the header', () => {

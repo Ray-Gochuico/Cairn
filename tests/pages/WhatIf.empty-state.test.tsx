@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import WhatIf from '@/pages/WhatIf';
 import { FiPillsPosition } from '@/types/enums';
@@ -209,8 +209,13 @@ describe('WhatIf — empty-state guard rejects sentinel zero-data projections (W
       </MemoryRouter>,
     );
     // The CTA is on screen, the chart stub is not.
-    expect(screen.getByTestId('whatif-projection-empty')).toBeInTheDocument();
+    const empty = screen.getByTestId('whatif-projection-empty');
+    expect(empty).toBeInTheDocument();
     expect(screen.queryByTestId('projection-chart-stub')).not.toBeInTheDocument();
+    // Canonical EmptyState keeps BOTH existing links as buttons.
+    expect(within(empty).getByRole('link', { name: /set up persons/i })).toHaveAttribute('href', '/inputs/persons');
+    expect(within(empty).getByRole('link', { name: /set up accounts/i })).toHaveAttribute('href', '/inputs/accounts');
+    expect(within(empty).getByText(/add a person and at least one account/i)).toHaveClass('font-medium');
   });
 
   it('still renders the chart when at least one state has positive cash', () => {
