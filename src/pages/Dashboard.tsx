@@ -27,7 +27,7 @@ import { useTickersStore } from '@/stores/tickers-store';
 import { useFundHoldingsStore } from '@/stores/fund-holdings-store';
 import { AccountType, GoalType } from '@/types/enums';
 import { netWorthForMonth, type NetWorthInput } from '@/lib/networth';
-import { netWorthAsOfFactory } from '@/lib/asset-value-chart';
+import { netWorthAsOfFactory, deltaPctOrNull } from '@/lib/asset-value-chart';
 import { GROWTH_HORIZONS } from '@/lib/growth-horizons';
 import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
 import { includedAccountIds, filterSnapshotsForNetWorth } from '@/lib/account-inclusion';
@@ -129,9 +129,8 @@ function formatSignedUSD(value: number): string {
   return signedCurrencyFormatter.format(value);
 }
 
-function formatPercentDelta(current: number, baseline: number): string {
-  if (baseline === 0) return '';
-  const pct = ((current - baseline) / Math.abs(baseline)) * 100;
+/** " (+50.0%)" suffix for a pct already vetted by deltaPctOrNull (0–100 scale). */
+function formatPctSuffix(pct: number): string {
   const sign = pct >= 0 ? '+' : '';
   return ` (${sign}${pct.toFixed(1)}%)`;
 }
@@ -669,11 +668,16 @@ export default function Dashboard() {
 
   const hasNetWorthBaseline = netWorthNow !== null && netWorthMonthAgo !== null;
   const netWorthDelta = hasNetWorthBaseline ? netWorthNow - netWorthMonthAgo : 0;
+  // Percent via the chart's shared deltaPctOrNull: null on a ≤0 baseline
+  // (Wave 1's GrowthCard convention) AND above the ±999.9% display cap —
+  // a near-zero baseline must not print a five-digit percent on the front
+  // page while the chart header below suppresses it. The $ delta always shows.
+  const netWorthDeltaPct = hasNetWorthBaseline
+    ? deltaPctOrNull(netWorthDelta, netWorthMonthAgo)
+    : null;
   const netWorthDeltaLabel = hasNetWorthBaseline
     ? `${formatSignedUSD(netWorthDelta)}${
-        // Percent only against a positive baseline — Wave 1's GrowthCard
-        // convention (a ≤0 baseline makes the ratio meaningless).
-        netWorthMonthAgo > 0 ? formatPercentDelta(netWorthNow, netWorthMonthAgo) : ''
+        netWorthDeltaPct !== null ? formatPctSuffix(netWorthDeltaPct) : ''
       }`
     : undefined;
   const netWorthDeltaTone = !hasNetWorthBaseline

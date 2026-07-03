@@ -537,7 +537,9 @@ function stepMonth(
     real,
     annualGross,
     payload,
-    perPersonMonthlyGross.map((g) => g * 12),
+    // A negative "salary" (unconstrained raise deltaAmount) is not a wage;
+    // floor at 0 — household-total semantics preserved for all sane inputs.
+    perPersonMonthlyGross.map((g) => Math.max(0, g) * 12),
   );
   s.incomeAfterTax = (annualGross - annualTax) / 12;
 

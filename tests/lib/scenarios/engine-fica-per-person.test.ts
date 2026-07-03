@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { projectScenario } from '@/lib/scenarios/engine';
 import { captureRealState } from '@/lib/scenarios/state-snapshot';
 import { emptyLeverPayload } from '@/lib/scenarios/lever-types';
-import type { Bracket } from '@/lib/tax';
+import { computeHouseholdFica, type Bracket } from '@/lib/tax';
 import type { Household, Person, TaxRule } from '@/types/schema';
 
 // Historical anchor (Wave 2 §6): a dual-$150k MFJ household vs a single
@@ -67,5 +67,46 @@ describe('engine FICA — per-person Social Security wage base (historical ancho
     const single = afterTaxMonthly([person(1, 135_000)]);
     expect(single).toBeGreaterThan(0);
     expect(Number.isFinite(single)).toBe(true);
+  });
+
+  it('a negative-salary-exceeding raise event cannot crash the projection — wages floor at 0 for FICA', () => {
+    // A raise event's deltaAmount is unconstrained (IncomePopover has no min),
+    // so one earner's modeled "salary" can go NEGATIVE while the household
+    // total stays positive. computeHouseholdFica throws on negative wages;
+    // pre-fix the per-person threading crashed projectScenario (and the
+    // What-If page — projectionsFor has no try/catch). The engine boundary
+    // floors each earner's gross at 0: a negative "salary" is not a wage.
+    const real = captureRealState({
+      accounts: [], accountSnapshots: [], holdings: [], loans: [], loanPayments: [],
+      transactions: [], household,
+      persons: [person(1, 60_000), person(2, 150_000)],
+      appSettings: {
+        defaultInflation: 0, defaultReturnRate: 0,
+        defaultCashApy: null, defaultDrawdownTaxRate: null,
+      },
+      startISO: '2026-05',
+      taxRules,
+    });
+    const payload = emptyLeverPayload();
+    payload.income = {
+      perPerson: [
+        // −200k raise on a 60k earner → modeled salary −140k from 2026-06.
+        { annualRaiseRate: 0, events: [{ when: '2026-06-01', type: 'raise', deltaAmount: -200_000 }] },
+        { annualRaiseRate: 0, events: [] },
+      ],
+    };
+
+    let states: ReturnType<typeof projectScenario> | undefined;
+    expect(() => {
+      states = projectScenario(real, payload, { startISO: '2026-05', months: 3 });
+    }).not.toThrow();
+    expect(states).toHaveLength(3);
+
+    // 2026-06: P1 gross −140k/12, P2 +150k/12 → household annual gross 10k.
+    // FICA runs on the FLOORED wages [0, 150k]; the MFJ standard deduction
+    // (29,200) swallows the 10k ordinary gross, so FICA is the ONLY tax and
+    // the after-tax figure isolates the floored expectation exactly.
+    const flooredFica = computeHouseholdFica([0, 150_000], 'MFJ').total; // 9,300 SS + 2,175 Medicare
+    expect(states![1].incomeAfterTax).toBeCloseTo((10_000 - flooredFica) / 12, 6);
   });
 });

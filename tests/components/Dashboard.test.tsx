@@ -444,4 +444,23 @@ describe('net-worth MoM pill (Wave 2 §2)', () => {
     // the headline).
     expect(screen.queryByText('vs last month')).not.toBeInTheDocument();
   });
+
+  it('suppresses the percent above the ±999.9% cap (near-zero baseline) — $ delta only', () => {
+    // $12 → $15,000 is a ~124,900% "gain"; the chart header suppresses such
+    // percents via deltaPctOrNull, and the pill must not print one either.
+    primeStores({
+      accounts: [{ id: 1 }],
+      snapshotValues: [
+        { accountId: 1, snapshotDate: iso(45), totalValue: 12 },
+        { accountId: 1, snapshotDate: iso(1), totalValue: 15_000 },
+      ],
+    });
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+    const cards = screen.getAllByTestId('metric-card');
+    const netWorthCard = cards.find((c) => within(c).queryByText('Net Worth'))!;
+    expect(within(netWorthCard).getByText('vs last month')).toBeInTheDocument();
+    // Exact match: if a percent were appended the delta text would read
+    // '+$14,988 (+124900.0%)' and this query would fail.
+    expect(within(netWorthCard).getByText('+$14,988')).toBeInTheDocument();
+  });
 });
