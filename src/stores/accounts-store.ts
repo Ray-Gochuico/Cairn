@@ -26,20 +26,36 @@ interface AccountsState {
   remove: (id: number) => Promise<void>;
 }
 
+/**
+ * In-flight de-dupe: if a load() is already in progress, return its promise
+ * instead of starting a second DB round-trip. Cleared after settle so later
+ * load() calls (after a CRUD mutation) still re-fetch. Same pattern as
+ * snapshots-store / loans-store; matters here because the always-mounted
+ * sidebar pending-dot hook load()s this store alongside every page that
+ * reads accounts.
+ */
+let accountsInflight: Promise<void> | null = null;
+
 export const useAccountsStore = create<AccountsState>((set, get) => ({
   accounts: [],
   isLoading: false,
   error: null,
 
   load: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const repo = new AccountsRepo(getDatabase());
-      const accounts = await repo.list();
-      set({ accounts, isLoading: false });
-    } catch (e) {
-      set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load' });
-    }
+    if (accountsInflight) return accountsInflight;
+    accountsInflight = (async () => {
+      set({ isLoading: true, error: null });
+      try {
+        const repo = new AccountsRepo(getDatabase());
+        const accounts = await repo.list();
+        set({ accounts, isLoading: false });
+      } catch (e) {
+        set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load' });
+      } finally {
+        accountsInflight = null;
+      }
+    })();
+    return accountsInflight;
   },
 
   create: async (account) => {

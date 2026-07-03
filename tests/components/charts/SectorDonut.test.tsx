@@ -206,6 +206,21 @@ describe('SectorDonut — drill into industry view', () => {
     expect(screen.getByTestId('slice-Financials')).toBeTruthy();
   });
 
+  it('industry legend shares are share-of-SECTOR (complete partition), not share-of-portfolio', () => {
+    // Technology = 1200 + 1000 + 800 = 3000 of a 3750 portfolio. Drilled-in
+    // industries are a COMPLETE partition of the sector, so the honest
+    // denominator is the sector total: Semiconductors 40.0% (1200/3000),
+    // NOT 32.0% (1200/3750). Pins the deliberate shareTotal={undefined} in
+    // drill-in view — a future "pass shareTotal unconditionally" cleanup
+    // must go red here.
+    render(<SectorDonut />);
+    fireEvent.click(screen.getByTestId('slice-Technology'));
+    expect(screen.getByText(/\$1,200 · 40\.0%/)).toBeInTheDocument();
+    expect(screen.getByText(/\$1,000 · 33\.3%/)).toBeInTheDocument();
+    expect(screen.getByText(/\$800 · 26\.7%/)).toBeInTheDocument();
+    expect(screen.queryByText(/32\.0%|21\.3%/)).toBeNull();
+  });
+
   it('does not drill again when a wedge is clicked in industry view', () => {
     render(<SectorDonut />);
     fireEvent.click(screen.getByTestId('slice-Technology'));

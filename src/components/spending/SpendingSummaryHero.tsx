@@ -118,7 +118,7 @@ export function SpendingSummaryHero({
               {isThisMonth && (
                 <p
                   className={`text-sm ${
-                    lastMonthTotal <= 0
+                    lastMonthTotal <= 0 || momDelta === 0
                       ? 'text-muted-foreground'
                       : momDelta > 0
                         ? 'text-destructive'
@@ -127,7 +127,11 @@ export function SpendingSummaryHero({
                 >
                   {lastMonthTotal <= 0
                     ? 'No prior-month data'
-                    : `${momDelta >= 0 ? '+' : '−'}${formatUSD(Math.abs(momDelta))} vs last month's full total (month in progress)`}
+                    : momDelta === 0
+                      ? // Exactly-even months are neutral, not a green "+$0"
+                        // (parity with the old summary grid's copy).
+                        'Same as last month so far'
+                      : `${momDelta > 0 ? '+' : '−'}${formatUSD(Math.abs(momDelta))} vs last month's full total (month in progress)`}
                 </p>
               )}
               {isThisMonth && monthlyBudget > 0 && (

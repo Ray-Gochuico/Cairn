@@ -54,7 +54,8 @@ describe('ConcentrationCard', () => {
     );
     expect(screen.getByText(/0 warnings/i)).toBeInTheDocument();
     expect(screen.getByText(/no concentration issues detected/i)).toBeInTheDocument();
-    // Empty portfolio: no largest position to show, and no deep link either.
+    // Empty portfolio: no largest position to show; the deep link is
+    // ALWAYS rendered (the healthy state is no longer a dead end).
     expect(screen.queryByText(/largest position/i)).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /see full breakdown/i })).toHaveAttribute(
       'href', '/investments#concentration',

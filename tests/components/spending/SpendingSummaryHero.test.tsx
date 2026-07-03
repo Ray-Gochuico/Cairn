@@ -95,6 +95,18 @@ describe('SpendingSummaryHero', () => {
     expect(screen.queryByText(/under budget/i)).not.toBeInTheDocument();
   });
 
+  it('zero MoM delta reads "Same as last month so far" in muted text (not "+$0" in green)', () => {
+    // June-to-date exactly equals May's full total → delta $0.
+    const equalTxns: Transaction[] = [
+      txn({ id: 1, date: '2026-06-05', categoryId: 1, amount: 500 }),
+      txn({ id: 2, date: '2026-05-08', categoryId: 1, amount: 500 }),
+    ];
+    render(<SpendingSummaryHero transactions={equalTxns} categories={cats} monthlyBudget={0} asOf={JUNE_15} />);
+    const line = screen.getByText(/same as last month so far/i);
+    expect(line).toHaveClass('text-muted-foreground');
+    expect(screen.queryByText(/\+\$0 vs last month/)).not.toBeInTheDocument();
+  });
+
   it('renders the category donut center total for the selected range', () => {
     render(<SpendingSummaryHero transactions={txns} categories={cats} monthlyBudget={0} asOf={JUNE_15} />);
     expect(screen.getByTestId('spending-hero-center')).toHaveTextContent('Total spending');

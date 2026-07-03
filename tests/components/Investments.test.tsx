@@ -457,6 +457,54 @@ describe('Investments page — 529 section', () => {
       ).toBeInTheDocument();
     });
 
+    it('allocation shares stay anchored to the full universe when a class is hidden', async () => {
+      // VTI 10 / BND 5 / BTC 1 shares of a $30,000 snapshot → $18,750 (62.5%),
+      // $9,375 (31.3%), $1,875 (6.3%). Hiding US Bonds must NOT re-normalize:
+      // US Total Market stays 62.5% (not 18,750/20,625 = 90.9%) and Crypto
+      // stays 6.3% (not 9.1%) — shareTotal={allocationTotal} pin.
+      primeStores({
+        accounts: [
+          { id: 1, name: 'Brokerage', type: AccountType.ACCOUNT_BROKERAGE },
+        ],
+        holdings: [
+          { id: 1, accountId: 1, ticker: 'VTI', shareCount: 10 },
+          { id: 2, accountId: 1, ticker: 'BND', shareCount: 5 },
+          { id: 3, accountId: 1, ticker: 'BTC', shareCount: 1 },
+        ],
+        snapshotValues: [
+          { accountId: 1, snapshotDate: '2026-04-01', totalValue: 30_000 },
+        ],
+      });
+
+      render(
+        <MemoryRouter>
+          <Investments />
+        </MemoryRouter>,
+      );
+
+      const allocCard = await waitFor(() => {
+        const title = screen.getByText('Asset allocation');
+        const wrap = title.closest('[data-testid="asset-allocation-card"]');
+        if (!wrap) throw new Error('Asset allocation card not found');
+        const legend = within(wrap as HTMLElement).queryByLabelText('Chart legend');
+        if (!legend) throw new Error('legend not yet rendered');
+        const items = within(legend as HTMLElement).queryAllByRole('listitem');
+        if (items.length < 3) throw new Error('not all slices loaded yet');
+        return wrap as HTMLElement;
+      });
+
+      const user = userEvent.setup();
+      await user.click(
+        within(allocCard).getByRole('button', { name: /Included · 3 of 3/ }),
+      );
+      await user.click(within(allocCard).getByRole('checkbox', { name: /US Bonds/ }));
+
+      const legend = within(allocCard).getByLabelText('Chart legend');
+      expect(within(legend).getByText(/^US Total Market — \$18,750 · 62\.5%$/)).toBeInTheDocument();
+      expect(within(legend).getByText(/^Crypto — \$1,875 · 6\.3%$/)).toBeInTheDocument();
+      expect(within(legend).queryByText(/90\.9%|9\.1%/)).toBeNull();
+    });
+
     it('hiding an asset class removes its slice from the legend', async () => {
       primeStores({
         accounts: [
