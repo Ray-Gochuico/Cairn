@@ -107,8 +107,8 @@ interface SurfaceConfig {
   /** Which entity kinds are eligible. 'accountsOnly' → investments surface. */
   entityScope: 'all' | 'accountsOnly';
   /**
-   * Scope eligible accounts by the ?view person filter. The old
-   * InvestmentTimeSeriesChart received page-filtered accounts, so the
+   * Scope eligible accounts by the ?view person filter. The retired
+   * investments time-series chart received page-filtered accounts, so the
    * investments surface keeps that behavior; netWorth/dashboard stay
    * household-wide and keep the '· Household' label suffix instead.
    */
@@ -180,8 +180,8 @@ const SURFACES: Record<AssetValueChartSurface, SurfaceConfig> = {
 
 // ----- Hoisted recharts props (recharts 3.x re-render discipline) -----
 // Every object/function prop must keep a stable identity across renders —
-// fresh literals re-trigger recharts' internal axis-layout dispatch (see
-// InvestmentTimeSeriesChart's RenderedTicksReporter comment).
+// fresh literals re-trigger recharts' internal axis-layout dispatch
+// (measured via a rendered-ticks reporter on the old investments chart).
 const CHART_MARGIN = { top: 8, right: 16, bottom: 8, left: 8 } as const;
 const GRID_STROKE = 'hsl(var(--border))' as const;
 const AXIS_STROKE = 'hsl(var(--muted-foreground))' as const;
@@ -513,8 +513,8 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
   const { filter, persons } = useViewFilter();
 
   // Investments surface only: the eligible-account universe honors the
-  // ?view person filter (parity with the retired InvestmentTimeSeriesChart,
-  // which received page-filtered accounts). Other surfaces pass through.
+  // ?view person filter (parity with the retired investments time-series
+  // chart, which received page-filtered accounts). Other surfaces pass through.
   const scopedAccounts = useMemo(
     () => (cfg.respectViewFilter ? filterByOwnerPersonId(accounts, filter, persons) : accounts),
     [accounts, filter, persons, cfg.respectViewFilter],

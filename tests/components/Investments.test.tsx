@@ -789,8 +789,9 @@ describe('Investments page — 529 section', () => {
       </MemoryRouter>,
     );
 
-    // p1's brokerage is visible (in the Accounts list)
-    expect(screen.getByText("Alice's Brokerage")).toBeInTheDocument();
+    // p1's brokerage is visible (Accounts list; the view-filtered
+    // AssetValueChart header also shows the lone account's name — ≥1 match).
+    expect(screen.getAllByText("Alice's Brokerage").length).toBeGreaterThanOrEqual(1);
     // p2's brokerage is filtered out
     expect(screen.queryByText("Bob's Brokerage")).not.toBeInTheDocument();
   });

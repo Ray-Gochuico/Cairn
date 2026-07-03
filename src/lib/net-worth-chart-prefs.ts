@@ -109,7 +109,7 @@ const LEGACY_INVESTMENT_KEYS = {
 } as const;
 
 /**
- * One-time port of the retired investment-chart-prefs.ts keys into the
+ * One-time port of the retired legacy investment-chart keys into the
  * `investmentChart` makeChartPrefs namespace. The legacy selection was a
  * bare number[] of account ids (incompatible with the SelectedEntity[]
  * shape this module stores), so a namespace reuse à la netWorthChart was

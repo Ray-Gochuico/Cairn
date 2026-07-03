@@ -74,7 +74,7 @@ export interface NetWorthChartInput {
  *     it sums directly into `netWorth`)
  *
  * Returned rows are sorted ascending by bucketEnd and capped at the most
- * recent MAX_BUCKETS entries (matches InvestmentTimeSeriesChart).
+ * recent MAX_BUCKETS entries.
  */
 export function buildNetWorthChartData(
   input: NetWorthChartInput,

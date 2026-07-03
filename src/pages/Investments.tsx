@@ -25,7 +25,7 @@ import ContributionsByBucketChart from '@/components/charts/ContributionsByBucke
 import DonutChartCard from '@/components/charts/DonutChartCard';
 import { DonutEntityPicker, useDonutSelected, type DonutEntityPickerItem } from '@/components/charts/DonutEntityPicker';
 import { paletteColorAt } from '@/components/charts/palette';
-import InvestmentTimeSeriesChart from '@/components/charts/InvestmentTimeSeriesChart';
+import AssetValueChart from '@/components/charts/AssetValueChart';
 import PerTickerDonut from '@/components/charts/PerTickerDonut';
 import SectorDonut from '@/components/charts/SectorDonut';
 import GrowthCard from '@/components/charts/GrowthCard';
@@ -820,13 +820,11 @@ export default function Investments() {
         label: 'Investments Over Time',
         size: 'wide',
         applicable: true,
-        render: () => (
-          <InvestmentTimeSeriesChart
-            accounts={visibleAccounts}
-            holdings={visibleHoldings}
-            snapshots={visibleSnapshots}
-          />
-        ),
+        // AssetValueChart 'investments' surface reads stores + the ?view
+        // filter itself (respectViewFilter) — no props to thread. Card id
+        // and label are UNCHANGED so saved investments_card_layout rows
+        // keep applying (applyCardLayout matches by id).
+        render: () => <AssetValueChart surface="investments" />,
       },
       {
         id: 'growth',
@@ -1230,10 +1228,8 @@ export default function Investments() {
       },
     ],
     [
-      // time-series
+      // contributions (time-series reads stores itself now)
       visibleAccounts,
-      visibleHoldings,
-      visibleSnapshots,
       // growth
       investmentsGrowth,
       // allocation

@@ -17,9 +17,9 @@ import { describe, expect, it } from 'vitest';
 // the prop list. Files with a top-of-file `// recharts-policy: allow`
 // comment are exempted (escape hatch for future cases).
 //
-// Replaces the InvestmentTimeSeriesChart sentinel test pattern, which
-// admitted in its own comment that jsdom can't drive recharts' animation
-// lifecycle — see tests/components/InvestmentTimeSeriesChart.test.tsx.
+// Replaces the per-chart sentinel test pattern (retired with the old
+// investments time-series chart), which admitted in its own comment that
+// jsdom can't drive recharts' animation lifecycle.
 
 const SRC_DIR = path.resolve(__dirname, '..', '..', 'src');
 const CHART_TAG_OPEN_RE = /<(Pie|Bar|Line|Area)\b/g;
