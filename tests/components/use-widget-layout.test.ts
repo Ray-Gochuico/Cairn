@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
-import { useWidgetLayout } from '@/components/dashboard/use-widget-layout';
+import { migrateUncustomizedLayout, useWidgetLayout } from '@/components/dashboard/use-widget-layout';
 
 const STORAGE_KEY = 'dashboardWidgetLayout.v1';
 
@@ -140,5 +140,44 @@ describe('one-time migration for never-customized layouts', () => {
   it('no saved layout: fresh defaults, no migration write needed', () => {
     const { result } = renderHook(() => useWidgetLayout(NEW_DEFAULTS));
     expect(result.current.layout.map((e) => e.id)).toEqual(NEW_DEFAULTS);
+  });
+});
+
+describe('migrateUncustomizedLayout — either pristine generation', () => {
+  const NEW_DEFAULTS = ['pills-section', 'asset-value-chart', 'spending', 'concentration', 'goals', 'trivia'];
+
+  beforeEach(() => localStorage.clear());
+
+  it('rebuilds the 4-id pre-chart pristine layout to the new defaults', () => {
+    localStorage.setItem('dashboardWidgetLayout.v1', JSON.stringify(
+      ['pills-section', 'spending', 'concentration', 'goals'].map((id) => ({ id, hidden: false })),
+    ));
+    migrateUncustomizedLayout(NEW_DEFAULTS);
+    expect(JSON.parse(localStorage.getItem('dashboardWidgetLayout.v1')!)).toEqual(
+      NEW_DEFAULTS.map((id) => ({ id, hidden: false })),
+    );
+  });
+
+  it('rebuilds the 5-id post-chart pristine layout to the new defaults', () => {
+    localStorage.setItem('dashboardWidgetLayout.v1', JSON.stringify(
+      ['pills-section', 'asset-value-chart', 'spending', 'concentration', 'goals'].map((id) => ({ id, hidden: false })),
+    ));
+    migrateUncustomizedLayout(NEW_DEFAULTS);
+    expect(JSON.parse(localStorage.getItem('dashboardWidgetLayout.v1')!)).toEqual(
+      NEW_DEFAULTS.map((id) => ({ id, hidden: false })),
+    );
+  });
+
+  it('leaves ANY customized layout alone (order changed / something hidden)', () => {
+    const custom = [
+      { id: 'spending', hidden: false },
+      { id: 'pills-section', hidden: false },
+      { id: 'asset-value-chart', hidden: true },
+      { id: 'concentration', hidden: false },
+      { id: 'goals', hidden: false },
+    ];
+    localStorage.setItem('dashboardWidgetLayout.v1', JSON.stringify(custom));
+    migrateUncustomizedLayout(NEW_DEFAULTS);
+    expect(JSON.parse(localStorage.getItem('dashboardWidgetLayout.v1')!)).toEqual(custom);
   });
 });
