@@ -35,7 +35,9 @@ export interface InputPendingInput {
  *     pinging users immediately.
  *   - On day > 7, pending if ANY tracked account is missing a USER_CONFIRMED
  *     or MANUAL snapshot for last month. AUTO_DERIVED alone counts as
- *     pending because the user hasn't ratified the derived value.
+ *     pending because the user hasn't ratified the derived value. A
+ *     confirmed/manual row clears the account no matter how many auto rows
+ *     surround it.
  *
  * Pure: no DB, no React, no globals. Caller composes the inputs.
  */
@@ -47,15 +49,19 @@ export function isMonthlyInputPending(
   if (day === 1) return true;
   if (day <= MONTHLY_INPUT_GRACE_DAY) return false;
   // day > 7: any account without a USER_CONFIRMED/MANUAL snapshot for last
-  // month means input is still pending. Empty accountIds → nothing to
-  // confirm → not pending.
+  // month means input is still pending. Daily AUTO_DERIVED rows coexist with
+  // the month-end confirmation, so the check must scan ALL of the account's
+  // rows (.some), not just the first (.find) — an auto row must never mask a
+  // real confirmation. No snapshot at all → pending. Empty accountIds →
+  // nothing to confirm → not pending.
   return input.accountIds.some((accId) => {
-    const snap = input.snapshotsLastMonth.find((s) => s.accountId === accId);
-    return (
-      !snap ||
-      (snap.source !== SnapshotSource.USER_CONFIRMED &&
-        snap.source !== SnapshotSource.MANUAL)
+    const confirmed = input.snapshotsLastMonth.some(
+      (s) =>
+        s.accountId === accId &&
+        (s.source === SnapshotSource.USER_CONFIRMED ||
+          s.source === SnapshotSource.MANUAL),
     );
+    return !confirmed;
   });
 }
 

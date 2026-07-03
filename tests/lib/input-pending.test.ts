@@ -131,6 +131,50 @@ describe('isMonthlyInputPending', () => {
       isMonthlyInputPending(today, { accountIds: [], snapshotsLastMonth: [] }),
     ).toBe(false);
   });
+
+  it('day 15: a USER_CONFIRMED row clears the account even when daily AUTO_DERIVED rows also exist', () => {
+    const today = new Date(2026, 4, 15);
+    expect(
+      isMonthlyInputPending(today, {
+        accountIds: [1],
+        snapshotsLastMonth: [
+          snap(1, '2026-04-01', SnapshotSource.AUTO_DERIVED),
+          snap(1, '2026-04-15', SnapshotSource.AUTO_DERIVED),
+          snap(1, '2026-04-30', SnapshotSource.USER_CONFIRMED),
+        ],
+      }),
+    ).toBe(false);
+  });
+
+  it('day 15: order-independent — confirmation first or last in the array', () => {
+    const today = new Date(2026, 4, 15);
+    const rows = [
+      snap(1, '2026-04-30', SnapshotSource.MANUAL),
+      snap(1, '2026-04-01', SnapshotSource.AUTO_DERIVED),
+    ];
+    expect(
+      isMonthlyInputPending(today, { accountIds: [1], snapshotsLastMonth: rows }),
+    ).toBe(false);
+    expect(
+      isMonthlyInputPending(today, {
+        accountIds: [1],
+        snapshotsLastMonth: [...rows].reverse(),
+      }),
+    ).toBe(false);
+  });
+
+  it('day 15: one account confirmed does not clear a sibling with only AUTO_DERIVED rows', () => {
+    const today = new Date(2026, 4, 15);
+    expect(
+      isMonthlyInputPending(today, {
+        accountIds: [1, 2],
+        snapshotsLastMonth: [
+          snap(1, '2026-04-30', SnapshotSource.USER_CONFIRMED),
+          snap(2, '2026-04-02', SnapshotSource.AUTO_DERIVED),
+        ],
+      }),
+    ).toBe(true);
+  });
 });
 
 describe('MONTHLY_INPUT_GRACE_DAY', () => {
