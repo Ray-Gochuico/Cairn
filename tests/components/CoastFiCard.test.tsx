@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
+import { useAccountsStore } from '@/stores/accounts-store';
 import { FilingStatus, SnapshotSource } from '@/types/enums';
 import { CoastFiCard } from '@/pages/calculators/CoastFiCard';
 import type { GrowthScenario, Person } from '@/types/schema';
@@ -43,6 +44,7 @@ function resetStores() {
   useHouseholdStore.setState({ household: null, isLoading: false, error: null });
   usePersonsStore.setState({ persons: [], isLoading: false, error: null });
   useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null });
+  useAccountsStore.setState({ accounts: [], isLoading: false, error: null });
 }
 
 function primeStores(opts?: {
@@ -537,5 +539,42 @@ describe('CoastFiCard', () => {
     // The "% of CoastFI" headline must still be numeric (chart computation didn't break it).
     const headline = screen.getByTestId('coastfi-headline');
     expect(headline.textContent).toMatch(/\d+%\s*of\s*CoastFI/i);
+  });
+
+  it('current-portfolio prefill drops excludedFromNetWorth accounts', () => {
+    primeStores({
+      snapshotValues: [
+        { accountId: 1, snapshotDate: '2026-04-01', totalValue: 200_000 },
+        { accountId: 2, snapshotDate: '2026-04-01', totalValue: 50_000 },
+      ],
+    });
+    useAccountsStore.setState({
+      accounts: [
+        { id: 1, excludedFromNetWorth: false },
+        { id: 2, excludedFromNetWorth: true },
+      ],
+      isLoading: false,
+      error: null,
+    } as never);
+    render(
+      <MemoryRouter>
+        <CoastFiCard />
+      </MemoryRouter>,
+    );
+    expect(
+      (screen.getByLabelText(/current portfolio/i) as HTMLInputElement).value,
+    ).toBe('200000');
+  });
+
+  it('explains the target-line basis for both chart views', () => {
+    primeStores();
+    render(
+      <MemoryRouter>
+        <CoastFiCard />
+      </MemoryRouter>,
+    );
+    expect(
+      screen.getByText(/nominal view grows the target line with inflation/i),
+    ).toBeInTheDocument();
   });
 });

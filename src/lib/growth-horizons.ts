@@ -67,7 +67,7 @@ export interface HorizonGrowth {
   baseline: number | null;
   /** current - baseline; null unless both are present. */
   deltaAbs: number | null;
-  /** Fraction (0.1 = +10%); null if baseline is 0 or either value is null. */
+  /** Fraction (0.1 = +10%); null unless both values are present and baseline > 0. */
   deltaPct: number | null;
   /** True only if both current and baseline are non-null. */
   available: boolean;
@@ -143,7 +143,8 @@ export function sumLatestOnOrBefore(
  * calendar day; each `baseline` is `valueAsOf(horizon.baselineDate(now))`.
  *
  * available = current != null && baseline != null. deltaAbs/deltaPct are only
- * computed when available; deltaPct is null when baseline is 0 (division guard).
+ * computed when available; deltaPct additionally requires baseline > 0 (zero
+ * divides by zero; a negative baseline sign-flips the ratio).
  */
 export function computeHorizonGrowth(
   valueAsOf: (dateIso: string) => number | null,
@@ -156,10 +157,13 @@ export function computeHorizonGrowth(
     const baseline = valueAsOf(baselineDate);
     const available = current != null && baseline != null;
     const deltaAbs = available ? current - baseline : null;
-    // deltaPct is a fraction; guard against a zero baseline (the card shows
-    // the absolute delta in that case and suppresses the percentage).
+    // deltaPct is a fraction; null on a NON-POSITIVE baseline. Zero baseline
+    // divides by zero; a NEGATIVE baseline flips the sign (−$10k → −$5k is a
+    // +$5k improvement but a −50% ratio — green arrow, negative percent).
+    // Matches the chart's deltaPctOrNull convention (baseline must be > 0);
+    // the card renders absolute-only when pct is null.
     const deltaPct =
-      available && baseline !== 0 ? (current - baseline) / baseline : null;
+      available && baseline > 0 ? (current - baseline) / baseline : null;
     return {
       key: h.key,
       label: h.label,

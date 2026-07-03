@@ -4,6 +4,17 @@ export interface AmortizationInput {
   termMonths: number;
   firstPaymentDate: string;   // YYYY-MM-DD
   extraPayment: number;
+  /**
+   * Contract monthly payment (P&I). When provided and > 0 the schedule uses
+   * it verbatim instead of re-deriving a payment from principal/termMonths —
+   * the correct way to project the REMAINDER of a seasoned loan from its
+   * current balance (re-deriving spreads the balance over the full term
+   * again, understating the payment and overstating remaining interest).
+   * `termMonths` remains only a safety cap on schedule length. Omit, or pass
+   * 0/undefined, to derive the payment (new-loan mode; 0 covers loans whose
+   * stored monthlyPayment was never entered).
+   */
+  monthlyPayment?: number;
 }
 
 export interface ScheduleEntry {
@@ -29,9 +40,13 @@ export function amortize(input: AmortizationInput): Amortization {
 
   const r = input.annualRatePct / 12;
   const n = input.termMonths;
-  const monthlyPayment = r === 0
+  const derivedPayment = r === 0
     ? input.principal / n
     : (input.principal * r) / (1 - Math.pow(1 + r, -n));
+  const monthlyPayment =
+    input.monthlyPayment != null && input.monthlyPayment > 0
+      ? input.monthlyPayment
+      : derivedPayment;
 
   let balance = input.principal;
   let totalInterest = 0;
@@ -42,11 +57,8 @@ export function amortize(input: AmortizationInput): Amortization {
   const startMonth = startDate.getUTCMonth();
   const startDay = startDate.getUTCDate();
 
-  for (let i = 0; balance > 0.005 && i < n + 360 /* safety */; i++) {
-    // Clamp day to last day of target month so e.g. Jan-31 + 1mo → Feb-28/29,
-    // not Mar-2 (which is what naive setUTCMonth produces).
-    const lastDayOfTargetMonth = new Date(Date.UTC(startYear, startMonth + i + 1, 0)).getUTCDate();
-    const date = new Date(Date.UTC(startYear, startMonth + i, Math.min(startDay, lastDayOfTargetMonth)));
+  for (let i = 0; balance > 0.005 && i < n + 360 /* safety cap: also bounds a below-interest contract payment (negative amortization never pays off) */; i++) {
+    const date = paymentDateAt(startYear, startMonth, startDay, i);
     const interest = balance * r;
     let principal = monthlyPayment - interest;
     let extra = input.extraPayment;
@@ -57,7 +69,7 @@ export function amortize(input: AmortizationInput): Amortization {
     balance -= principal + extra;
     totalInterest += interest;
     schedule.push({
-      paymentDate: date.toISOString().slice(0, 10),
+      paymentDate: date,
       principal: round2(principal),
       interest: round2(interest),
       extra: round2(extra),
@@ -70,6 +82,43 @@ export function amortize(input: AmortizationInput): Amortization {
     totalInterest: round2(totalInterest),
     schedule,
   };
+}
+
+/**
+ * The i-th monthly payment date from a start Y/M/D, with the day-of-month
+ * clamped to the target month's length (Jan-31 start → Feb-28/29, not Mar-2).
+ * UTC throughout. Shared by amortize()'s schedule loop and
+ * nextPaymentDateFrom() so the anchor and the schedule can never disagree.
+ */
+function paymentDateAt(startYear: number, startMonth: number, startDay: number, i: number): string {
+  const lastDay = new Date(Date.UTC(startYear, startMonth + i + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(startYear, startMonth + i, Math.min(startDay, lastDay)))
+    .toISOString()
+    .slice(0, 10);
+}
+
+/**
+ * First scheduled payment date on-or-after `todayISO`, stepping monthly from
+ * `firstPaymentDate` with the same day-of-month clamping as the schedule.
+ * A future firstPaymentDate returns itself. Today counting as "next" (>=,
+ * not >) keeps a payment due today inside the remaining schedule.
+ *
+ * Use this to anchor a remaining-schedule amortize() call: passing the
+ * ORIGINAL firstPaymentDate would date the projected payments years in the
+ * past.
+ */
+export function nextPaymentDateFrom(firstPaymentDate: string, todayISO: string): string {
+  if (firstPaymentDate >= todayISO) return firstPaymentDate;
+  const start = new Date(firstPaymentDate + 'T00:00:00Z');
+  const today = new Date(todayISO + 'T00:00:00Z');
+  const startYear = start.getUTCFullYear();
+  const startMonth = start.getUTCMonth();
+  const startDay = start.getUTCDate();
+  let k =
+    (today.getUTCFullYear() - startYear) * 12 +
+    (today.getUTCMonth() - startMonth);
+  if (paymentDateAt(startYear, startMonth, startDay, k) < todayISO) k += 1;
+  return paymentDateAt(startYear, startMonth, startDay, k);
 }
 
 function round2(n: number): number {

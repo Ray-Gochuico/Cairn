@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -85,6 +85,15 @@ function renderLoans() {
 describe('Loans page', () => {
   beforeEach(() => {
     resetStores();
+    // Pin "today": schedules anchor at nextPaymentDateFrom(firstPaymentDate, today).
+    // toFake:['Date'] only (same pattern as FinancialIndependenceCard.test.tsx)
+    // so userEvent's internal timers are untouched.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-06-20T12:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('shows empty state when no loans exist', () => {
@@ -106,7 +115,9 @@ describe('Loans page', () => {
   it('expands a loan to show amortization schedule with truncation', async () => {
     const user = userEvent.setup();
 
-    // 360-month 30-year mortgage — schedule.length will be 360 > 60, triggering truncation
+    // 30-year mortgage paying $2,500/mo — the contract payment pays $400k @6%
+    // off in 323 months (> 60, triggering truncation; far from any rounding
+    // knife-edge).
     useLoansStore.setState({
       loans: [
         makeLoan({
@@ -116,6 +127,7 @@ describe('Loans page', () => {
           interestRate: 0.06,
           termMonths: 360,
           firstPaymentDate: '2026-01-01',
+          monthlyPayment: 2500,
         }),
       ],
       isLoading: false,
@@ -139,11 +151,11 @@ describe('Loans page', () => {
       expect(screen.getByText('Remaining')).toBeInTheDocument();
     });
 
-    // Truncation indicator: 360 payments, showing 24 (first 12 + last 12), omitting 336
-    expect(screen.getByText(/336 payments omitted/i)).toBeInTheDocument();
+    // Truncation indicator: 323 payments, showing 24 (first 12 + last 12), omitting 299
+    expect(screen.getByText(/299 payments omitted/i)).toBeInTheDocument();
 
     // "Show all" button should appear
-    const showAllBtn = screen.getByRole('button', { name: /show all 360 payments/i });
+    const showAllBtn = screen.getByRole('button', { name: /show all 323 payments/i });
     expect(showAllBtn).toBeInTheDocument();
 
     // Click "Show all" — truncation indicator disappears, all rows appear
@@ -153,8 +165,9 @@ describe('Loans page', () => {
       expect(screen.queryByText(/payments omitted/i)).not.toBeInTheDocument();
     });
 
-    // All 360 row dates should be in the document (first + last known dates)
-    expect(screen.getByText('2026-01-01')).toBeInTheDocument();
+    // First row = next payment date from the pinned today
+    // (nextPaymentDateFrom('2026-01-01', '2026-06-20') = 2026-07-01).
+    expect(screen.getByText('2026-07-01')).toBeInTheDocument();
 
     // "Show first/last 12" button appears after expanding all
     expect(screen.getByRole('button', { name: /show first\/last 12/i })).toBeInTheDocument();

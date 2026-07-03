@@ -6,7 +6,7 @@
  * Re-exported by DebtPayoffCard.tsx; imported directly by tests and any
  * future consumers.
  */
-import { amortize, type Amortization } from '@/lib/amortization';
+import { amortize, nextPaymentDateFrom, type Amortization } from '@/lib/amortization';
 import type { Loan } from '@/types/schema';
 
 export type Strategy = 'none' | 'snowball' | 'avalanche';
@@ -49,17 +49,24 @@ export function projectionsFor(
   loans: Loan[],
   strategy: Strategy,
   extraTotal: number,
+  /** Injectable for tests / deterministic rendering; anchors the remaining schedule. */
+  todayISO: string = new Date().toISOString().slice(0, 10),
 ): LoanProjection[] {
   const targetIdx = pickStrategyTargetIndex(loans, strategy);
   return loans.map((loan, i) => {
     const strategyExtra =
       strategy !== 'none' && i === targetIdx ? Math.max(0, extraTotal) : 0;
     const extraApplied = loan.extraPaymentDefault + strategyExtra;
+    // REMAINING-schedule projection: current balance + the loan's contract
+    // payment, anchored at the next payment date from today. Re-deriving a
+    // payment from the original term overstated remaining interest ~37% on
+    // seasoned loans (wave-1 review, finding 2). termMonths stays a safety cap.
     const amortization = amortize({
       principal: loan.currentBalance,
       annualRatePct: loan.interestRate,
       termMonths: loan.termMonths,
-      firstPaymentDate: loan.firstPaymentDate,
+      firstPaymentDate: nextPaymentDateFrom(loan.firstPaymentDate, todayISO),
+      monthlyPayment: loan.monthlyPayment,
       extraPayment: extraApplied,
     });
     return { loan, amortization, extraApplied };

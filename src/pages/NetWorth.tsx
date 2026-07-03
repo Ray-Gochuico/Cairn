@@ -24,6 +24,7 @@ import LiabilitiesDonut from '@/components/charts/LiabilitiesDonut';
 import GrowthCard from '@/components/charts/GrowthCard';
 import { computeHorizonGrowth } from '@/lib/growth-horizons';
 import { netWorthAsOfFactory } from '@/lib/asset-value-chart';
+import { filterSnapshotsForNetWorth } from '@/lib/account-inclusion';
 
 /**
  * NetWorth page — the AssetValueChart hero + growth card + two donuts
@@ -145,7 +146,11 @@ export default function NetWorth() {
   // visible* slices; the chart stays household-scoped (§3.1, "· Household").
   const netWorthGrowth = useMemo(() => {
     const valueAsOf = netWorthAsOfFactory({
-      snapshots: visibleSnapshots,
+      // Excluded accounts opt out of net worth (shared selector) — the chart
+      // filters them when building its eligible set, so without this filter
+      // the growth card and the chart header would disagree. The factory
+      // already drops excluded properties/vehicles itself.
+      snapshots: filterSnapshotsForNetWorth(visibleSnapshots, accounts),
       properties: visibleProperties,
       vehicles: visibleVehicles,
       loans: visibleLoans,
@@ -153,7 +158,7 @@ export default function NetWorth() {
       todayIso: new Date().toISOString().slice(0, 10),
     });
     return computeHorizonGrowth(valueAsOf, new Date());
-  }, [visibleSnapshots, visibleProperties, visibleVehicles, visibleLoans, assetValueSnapshots]);
+  }, [visibleSnapshots, accounts, visibleProperties, visibleVehicles, visibleLoans, assetValueSnapshots]);
 
   if (!hasAnyData) {
     return (

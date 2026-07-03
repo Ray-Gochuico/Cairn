@@ -27,6 +27,7 @@ import { useTickersStore } from '@/stores/tickers-store';
 import { useFundHoldingsStore } from '@/stores/fund-holdings-store';
 import { AccountType, GoalType } from '@/types/enums';
 import { netWorthForMonth, type NetWorthInput } from '@/lib/networth';
+import { includedAccountIds, filterSnapshotsForNetWorth } from '@/lib/account-inclusion';
 import { summarizeSpending } from '@/lib/spending-analysis';
 import { isMonthlyInputPending, lastMonthYyyymm } from '@/lib/input-pending';
 import { computeGoalProgress, type GoalProgressResult } from '@/lib/goal-progress';
@@ -272,17 +273,25 @@ function MiniGoalCard({ projection }: { projection: GoalProjection }) {
 /**
  * Sum the latest snapshot total per account whose type is in
  * LIQUID_INVESTMENT_TYPES, scoped to snapshots at or before the current
- * month. Accounts excluded from net worth are still counted here — the
- * "excluded" flag is about net-worth tallying, not liquidity classification.
+ * month. Accounts excluded from net worth are dropped (shared selector) so
+ * this pill agrees with every other wealth aggregate.
  */
 function computeLiquidInvestments(
   accounts: Account[],
   snapshots: AccountSnapshot[],
   asOfMonth: string,
 ): number {
+  // Shared exclusion semantics: an account hidden from net worth is hidden
+  // from the Liquid Investments pill too (same seam class as the NW pill).
+  const included = includedAccountIds(accounts);
   const liquidAccountIds = new Set(
     accounts
-      .filter((a) => LIQUID_INVESTMENT_TYPES.has(a.type) && a.id !== undefined)
+      .filter(
+        (a) =>
+          LIQUID_INVESTMENT_TYPES.has(a.type) &&
+          a.id !== undefined &&
+          included.has(a.id),
+      )
       .map((a) => a.id as number),
   );
   if (liquidAccountIds.size === 0) return 0;
@@ -495,7 +504,11 @@ export default function Dashboard() {
   );
 
   const netWorthInput = useMemo<NetWorthInput>(() => ({
-    snapshots: visibleSnapshots.map((s) => ({
+    // Excluded accounts opt out of net worth (shared selector). Properties /
+    // vehicles carry their own excludedFromNetWorth flag into netWorthForMonth;
+    // account SNAPSHOTS were the leak — filter them here. `accounts` (the full
+    // store slice) supplies the excluded-id set regardless of the person filter.
+    snapshots: filterSnapshotsForNetWorth(visibleSnapshots, accounts).map((s) => ({
       accountId: s.accountId,
       snapshotMonth: s.snapshotDate.slice(0, 7),
       totalValue: s.totalValue,
@@ -511,7 +524,7 @@ export default function Dashboard() {
       excludedFromNetWorth: v.excludedFromNetWorth,
     })),
     loans: visibleLoans.map((l) => ({ id: l.id!, currentBalance: l.currentBalance })),
-  }), [visibleSnapshots, visibleProperties, visibleVehicles, visibleLoans]);
+  }), [visibleSnapshots, accounts, visibleProperties, visibleVehicles, visibleLoans]);
 
   const currentNetWorth = useMemo(
     () => netWorthForMonth(currentMonth, netWorthInput),

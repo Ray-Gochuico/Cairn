@@ -71,4 +71,22 @@ describe('projectionsFor (from @/lib/debt-payoff)', () => {
     const s: Strategy = 'avalanche';
     expect(['none', 'snowball', 'avalanche']).toContain(s);
   });
+
+  it('projects the REMAINING schedule: contract payment + next payment date from the injected today', () => {
+    const seasoned = makeLoan({
+      id: 9,
+      currentBalance: 10000,
+      interestRate: 0.06,
+      termMonths: 60,
+      firstPaymentDate: '2020-01-15',
+      monthlyPayment: 500,
+    });
+    const [p] = projectionsFor([seasoned], 'none', 0, '2026-07-03');
+    // Anchored at the next payment on-or-after 2026-07-03, not back in 2020.
+    expect(p.amortization.schedule[0].paymentDate).toBe('2026-07-15');
+    // Contract payment drives the split: interest 10000·0.005 = 50.
+    expect(p.amortization.monthlyPayment).toBe(500);
+    expect(p.amortization.schedule[0].interest).toBeCloseTo(50, 2);
+    expect(p.amortization.schedule[0].principal).toBeCloseTo(450, 2);
+  });
 });

@@ -14,6 +14,7 @@ import { applyCardLayout, type InvestmentsCardEntry } from '@/lib/investments-ca
 import { getDatabase } from '@/db/db';
 import { AccountType, AssetClass } from '@/types/enums';
 import { filterByOwnerPersonId } from '@/lib/filter-by-view';
+import { includedAccountIds } from '@/lib/account-inclusion';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -411,19 +412,19 @@ export default function Investments() {
   );
 
   // Investment-only account ids for the growth card — drop cash/savings so the
-  // card measures "investments value", not total liquid assets. Derived from
-  // visibleAccounts so the view filter (household / p1 / p2 / joint) flows
-  // through: an account excluded by the filter never enters this set.
-  const investmentAccountIds = useMemo(
-    () =>
-      new Set(
-        visibleAccounts
-          .filter((a) => INVESTMENT_ACCOUNT_TYPES.has(a.type))
-          .map((a) => a.id)
-          .filter((id): id is number => id != null),
-      ),
-    [visibleAccounts],
-  );
+  // card measures "investments value", not total liquid assets, and drop
+  // excluded-from-net-worth accounts (shared selector) so this card agrees
+  // with the Portfolio-by-account card, which already excludes them. Derived
+  // from visibleAccounts so the view filter flows through.
+  const investmentAccountIds = useMemo(() => {
+    const included = includedAccountIds(visibleAccounts);
+    return new Set(
+      visibleAccounts
+        .filter((a) => INVESTMENT_ACCOUNT_TYPES.has(a.type))
+        .map((a) => a.id)
+        .filter((id): id is number => id != null && included.has(id)),
+    );
+  }, [visibleAccounts]);
 
   // Growth across the five horizons (1d…1y). sumLatestOnOrBefore reads the
   // full snapshots array and scopes to investment accounts via the id set;

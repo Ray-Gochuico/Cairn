@@ -2,6 +2,7 @@ import type { NodeResult, RoadmapContext } from '@/types/roadmap';
 import { AccountType } from '@/types/enums';
 import type { Account, AccountSnapshot } from '@/types/schema';
 import { computeBaselineExpenses } from '@/lib/expense-baseline';
+import { includedAccountIds } from '@/lib/account-inclusion';
 
 /**
  * Emergency-fund evaluators for the three EF nodes in Section 1.
@@ -43,9 +44,21 @@ function latestSnapshotValue(snapshots: AccountSnapshot[], accountId: number): n
   return winner?.totalValue ?? 0;
 }
 
+/**
+ * DECISION (2026-07 wave 1): excluded-from-net-worth accounts do NOT count
+ * toward the EF cash reserve. Every other wealth aggregate (net worth,
+ * dashboard pills, growth cards) drops them, so counting them here would
+ * show a reserve the user cannot reconcile with any other surface — and the
+ * common reasons to exclude an account (not the user's money, managed for
+ * someone else, double-tracked elsewhere) also disqualify it as an emergency
+ * reserve. Counter-argument acknowledged: cash in an excluded account is
+ * still spendable in a crisis — users who want it counted can uncheck the
+ * exclusion on the account.
+ */
 export function totalCashReserve(accounts: Account[], snapshots: AccountSnapshot[]): number {
+  const included = includedAccountIds(accounts);
   return accounts
-    .filter((a) => CASH_TYPES.has(a.type))
+    .filter((a) => CASH_TYPES.has(a.type) && a.id != null && included.has(a.id))
     .reduce((sum, a) => sum + Math.max(0, latestSnapshotValue(snapshots, a.id ?? -1)), 0);
 }
 

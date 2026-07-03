@@ -19,6 +19,8 @@ import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import { useCalculatorState } from '@/lib/calculator-state';
 import { NumberField } from '@/components/calculators/NumberField';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
+import { useAccountsStore } from '@/stores/accounts-store';
+import { filterSnapshotsForNetWorth } from '@/lib/account-inclusion';
 import { sumLatestOnOrBefore } from '@/lib/growth-horizons';
 import { useSettingsStore } from '@/stores/settings-store';
 import { CHART_PALETTE } from '@/components/charts/palette';
@@ -50,11 +52,17 @@ const PERIODS_PER_YEAR: Record<CompoundFrequency, number> = {
 
 export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardProps = {}) {
   const { snapshots } = useSnapshotsStore();
+  const accounts = useAccountsStore((s) => s.accounts);
   // Kit-managed input state: persists in sessionStorage under calc-state:compound-interest.
   // pv is prefilled from the latest portfolio snapshot; falls back to 1000 demo default.
   const defaults = useMemo(() => {
     const todayIso = new Date().toISOString().slice(0, 10);
-    const currentPortfolio = sumLatestOnOrBefore(snapshots, todayIso) ?? 0;
+    // Excluded-from-net-worth accounts opt out of the portfolio prefill.
+    // Excluded-SET filtering: an unhydrated accounts store filters nothing,
+    // so a cold /calculators deep link degrades to the unfiltered prefill
+    // until CalculatorsLayout's accounts load resolves — never to $0.
+    const currentPortfolio =
+      sumLatestOnOrBefore(filterSnapshotsForNetWorth(snapshots, accounts), todayIso) ?? 0;
     return {
       pv: currentPortfolio > 0 ? currentPortfolio : 1000,   // portfolio prefill; 1000 demo fallback
       monthlyContribution: 100,
@@ -63,7 +71,7 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
       variancePercent: null as number | null,
       frequency: 'MONTHLY' as CompoundFrequency,
     };
-  }, [snapshots]);
+  }, [snapshots, accounts]);
 
   const { values, setValue, reset, isOverridden } = useCalculatorState(
     cardId ?? 'compound-interest',

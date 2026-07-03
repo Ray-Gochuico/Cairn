@@ -165,6 +165,29 @@ describe('computeHorizonGrowth', () => {
     expect(oneWeek.deltaPct).toBeNull(); // division by zero avoided
   });
 
+  it('nulls deltaPct on a NEGATIVE baseline (sign-flip guard; deltaAbs still carries direction)', () => {
+    // baseline −10,000 → current −5,000 is an IMPROVEMENT of +5,000, but the
+    // signed ratio is −50% — a green arrow with a negative percent. Matches
+    // the chart's deltaPctOrNull convention: pct requires baseline > 0.
+    const valueAsOf = (iso: string): number | null =>
+      iso === TODAY ? -5000 : -10000;
+    const oneWeek = computeHorizonGrowth(valueAsOf, now).find(
+      (r) => r.key === '1w',
+    )!;
+    expect(oneWeek.available).toBe(true);
+    expect(oneWeek.deltaAbs).toBe(5000);
+    expect(oneWeek.deltaPct).toBeNull();
+  });
+
+  it('positive baselines are unaffected by the sign-flip guard', () => {
+    const valueAsOf = (iso: string): number | null =>
+      iso === TODAY ? 1100 : 1000;
+    const oneWeek = computeHorizonGrowth(valueAsOf, now).find(
+      (r) => r.key === '1w',
+    )!;
+    expect(oneWeek.deltaPct).toBeCloseTo(0.1, 10);
+  });
+
   it('queries each horizon at its own baseline date', () => {
     // Assign a distinct baseline value per date so we can prove the right
     // date was passed to valueAsOf for each horizon.

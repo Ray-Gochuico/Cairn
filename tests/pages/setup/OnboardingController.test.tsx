@@ -218,4 +218,43 @@ describe('OnboardingController', () => {
       expect(mockComputeTailoring).toHaveBeenCalledTimes(1),
     );
   });
+
+  it('REGRESSION: Continue clicked BEFORE the 7 loads settle waits for macrotask-settled loads instead of hanging', async () => {
+    const user = userEvent.setup();
+    // Loads that settle ONLY when the test says so — like real Tauri IPC,
+    // whose responses arrive as macrotasks. Under the old queueMicrotask
+    // poll this test FREEZES: the microtask chain starves the event loop,
+    // so neither the deferred resolutions below nor vitest's own timers can
+    // ever run.
+    const settlers: Array<() => void> = [];
+    const deferredLoad = () =>
+      new Promise<void>((resolve) => {
+        settlers.push(resolve);
+      });
+    usePersonsStore.setState({ load: vi.fn(deferredLoad) } as never);
+    useAccountsStore.setState({ load: vi.fn(deferredLoad) } as never);
+    useHoldingsStore.setState({ load: vi.fn(deferredLoad) } as never);
+    usePropertiesStore.setState({ load: vi.fn(deferredLoad) } as never);
+    useVehiclesStore.setState({ load: vi.fn(deferredLoad) } as never);
+    useEquityGrantsStore.setState({ load: vi.fn(deferredLoad) } as never);
+    useLoansStore.setState({ load: vi.fn(deferredLoad) } as never);
+    // isLoading flags idle — ONLY the unsettled allSettled gate is in play.
+    setAllStores({ loading: false });
+    mockComputeTailoring.mockReturnValue(RESULT_NO_RECS);
+    mockHasAnyHideRecommendation.mockReturnValue(false);
+    renderController();
+
+    await user.click(screen.getByRole('button', { name: /continue/i }));
+
+    // Loads not settled yet: the decision must NOT have been made.
+    expect(screen.queryByTestId('tailor-step')).not.toBeInTheDocument();
+    expect(mockTourStart).not.toHaveBeenCalled();
+
+    // Settle all 7 loads on a macrotask boundary (the shape real IPC takes).
+    await new Promise<void>((r) => setTimeout(r, 0));
+    for (const settle of settlers) settle();
+
+    // The pending Continue must now complete (no-recs path → tour starts).
+    await waitFor(() => expect(mockTourStart).toHaveBeenCalledTimes(1));
+  });
 });

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Landmark } from 'lucide-react';
 import { useLoansStore } from '@/stores/loans-store';
-import { amortize, type Amortization, type ScheduleEntry } from '@/lib/amortization';
+import { amortize, nextPaymentDateFrom, type Amortization, type ScheduleEntry } from '@/lib/amortization';
 import { filterByObligorPersonId } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { LoanType } from '@/types/enums';
@@ -30,7 +30,9 @@ import { EmptyState } from '@/components/layout/EmptyState';
  * needs to schedule every loan synchronously to feed a Recharts series,
  * pulling the same loan rows from the store and calling `amortize()`
  * straight is simpler and keeps a single source of truth for the
- * "current balance forward" projection.
+ * "current balance forward" projection. Schedules use the loan's CONTRACT
+ * monthlyPayment anchored at the next payment date from today (falling back
+ * to a derived payment when monthlyPayment is 0/unset).
  *
  * Recharts only enters via the chart card wrapper (no Recharts import).
  */
@@ -70,22 +72,20 @@ interface LoanProjection {
   withoutExtra: Amortization;
 }
 
-function projectLoan(loan: Loan): LoanProjection {
-  const withDefault = amortize({
+function projectLoan(loan: Loan, todayIso: string): LoanProjection {
+  // REMAINING-schedule projection: contract payment + next payment date from
+  // today (wave-1 review, finding 2 — re-deriving a payment from the original
+  // term overstated remaining interest and dated the schedule in the past).
+  const base = {
     principal: loan.currentBalance,
     annualRatePct: loan.interestRate,
     termMonths: loan.termMonths,
-    firstPaymentDate: loan.firstPaymentDate,
-    extraPayment: loan.extraPaymentDefault,
-  });
+    firstPaymentDate: nextPaymentDateFrom(loan.firstPaymentDate, todayIso),
+    monthlyPayment: loan.monthlyPayment,
+  };
+  const withDefault = amortize({ ...base, extraPayment: loan.extraPaymentDefault });
   const withoutExtra = loan.extraPaymentDefault > 0
-    ? amortize({
-        principal: loan.currentBalance,
-        annualRatePct: loan.interestRate,
-        termMonths: loan.termMonths,
-        firstPaymentDate: loan.firstPaymentDate,
-        extraPayment: 0,
-      })
+    ? amortize({ ...base, extraPayment: 0 })
     : withDefault;
   return { loan, withDefault, withoutExtra };
 }
@@ -293,7 +293,7 @@ function LoanCard({ projection, expanded, onToggleExpand, schedule }: LoanCardPr
           </div>
           <div>
             <dt className="text-xs uppercase tracking-wider text-muted-foreground">
-              Lifetime interest
+              Remaining interest
             </dt>
             <dd className="font-medium">{formatCurrency(withDefault.totalInterest)}</dd>
           </div>
@@ -376,9 +376,12 @@ export default function Loans() {
     [loans, filter, persons],
   );
 
+  // One "today" per mount: anchors every remaining schedule consistently.
+  const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
+
   const projections = useMemo(
-    () => visibleLoans.map(projectLoan),
-    [visibleLoans],
+    () => visibleLoans.map((l) => projectLoan(l, todayIso)),
+    [visibleLoans, todayIso],
   );
 
   // Compute amortization schedules only for loans the user has expanded, to
@@ -393,13 +396,14 @@ export default function Loans() {
           principal: loan.currentBalance,
           annualRatePct: loan.interestRate,
           termMonths: loan.termMonths,
-          firstPaymentDate: loan.firstPaymentDate,
+          firstPaymentDate: nextPaymentDateFrom(loan.firstPaymentDate, todayIso),
+          monthlyPayment: loan.monthlyPayment,
           extraPayment: loan.extraPaymentDefault,
         }).schedule,
       );
     }
     return map;
-  }, [visibleLoans, expandedLoanIds]);
+  }, [visibleLoans, expandedLoanIds, todayIso]);
 
   const totalDebt = useMemo(
     () => visibleLoans.reduce((sum, l) => sum + l.currentBalance, 0),
@@ -411,7 +415,7 @@ export default function Loans() {
     [visibleLoans],
   );
 
-  const lifetimeInterest = useMemo(
+  const remainingInterest = useMemo(
     () => projections.reduce((sum, p) => sum + p.withDefault.totalInterest, 0),
     [projections],
   );
@@ -528,13 +532,13 @@ export default function Loans() {
         <Card>
           <CardHeader className="pb-2">
             <CardDescription className="text-xs uppercase tracking-wider">
-              Lifetime interest
+              Remaining interest
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-semibold">{formatCurrency(lifetimeInterest)}</div>
+            <div className="text-3xl font-semibold">{formatCurrency(remainingInterest)}</div>
             <div className="mt-1 text-sm text-muted-foreground">
-              If held to maturity at current rates
+              On remaining payments at current rates
             </div>
           </CardContent>
         </Card>

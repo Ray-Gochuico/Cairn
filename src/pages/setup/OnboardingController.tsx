@@ -34,7 +34,8 @@ import { useLoansStore } from '@/stores/loans-store';
  * "You're set up" card renders IMMEDIATELY; the "Step 1 of N" denominator is a
  * quiet placeholder ("Step 1") until the 7 entity stores resolve, then fills in
  * "of N". Continue is enabled at once; if clicked before the stores resolve it
- * awaits resolution (warm path is instant) before deciding Tailor-vs-skip.
+ * awaits the mount-time allSettled promise (macrotask-friendly — never a
+ * microtask poll) before deciding Tailor-vs-skip.
  *
  * Gating contract (also applied inside Tailor, §B1): we do not decide until
  * `ready` = all 7 stores resolved at least once && none loading; ANY store with
@@ -45,6 +46,19 @@ import { useLoansStore } from '@/stores/loans-store';
  */
 
 type Phase = 'intro' | 'tailor';
+
+/** Live isLoading probe across the 7 entity stores (getState — no subscription). */
+function someLoadingNow(): boolean {
+  return (
+    usePersonsStore.getState().isLoading ||
+    useAccountsStore.getState().isLoading ||
+    useHoldingsStore.getState().isLoading ||
+    usePropertiesStore.getState().isLoading ||
+    useVehiclesStore.getState().isLoading ||
+    useEquityGrantsStore.getState().isLoading ||
+    useLoansStore.getState().isLoading
+  );
+}
 
 export default function OnboardingController() {
   const navigate = useNavigate();
@@ -76,13 +90,16 @@ export default function OnboardingController() {
   const [phase, setPhase] = useState<Phase>('intro');
   // The decision, materialized once `ready`: { result, hasRecs, N }.
   const decisionRef = useRef<{ result: TailoringResult; hasRecs: boolean; n: number } | null>(null);
+  // The mount effect's Promise.allSettled, kept so awaitDecision can await
+  // the SAME settlement the effect observes (see the comment there).
+  const settleRef = useRef<Promise<void> | null>(null);
   const [resolvedN, setResolvedN] = useState<number | null>(null);
 
   // Kick all 7 loads once on mount; mark settled when every one resolves or
   // rejects (rejection sets the store's `error`, which the gate honors).
   useEffect(() => {
     let cancelled = false;
-    void Promise.allSettled([
+    settleRef.current = Promise.allSettled([
       usePersonsStore.getState().load(),
       useAccountsStore.getState().load(),
       useHoldingsStore.getState().load(),
@@ -151,46 +168,30 @@ export default function OnboardingController() {
     }
   }, [ready, resolvedN, computeDecision]);
 
-  // Mirror loadsSettled into a ref so awaitDecision's microtask loop reads the
-  // latest value without re-subscribing.
-  const loadsSettledRef = useRef(loadsSettled);
-  loadsSettledRef.current = loadsSettled;
-
-  function someLoadingNow(): boolean {
-    return (
-      usePersonsStore.getState().isLoading ||
-      useAccountsStore.getState().isLoading ||
-      useHoldingsStore.getState().isLoading ||
-      usePropertiesStore.getState().isLoading ||
-      useVehiclesStore.getState().isLoading ||
-      useEquityGrantsStore.getState().isLoading ||
-      useLoansStore.getState().isLoading
-    );
-  }
-
   /**
-   * Wait until `ready`, then resolve the decision. Lets Continue be clicked
-   * before the stores resolve (the warm path is already ready, so this is
-   * usually synchronous).
+   * Wait until the mount-time loads settle, then resolve the decision. Lets
+   * Continue be clicked before the stores resolve (the warm path latches via
+   * decisionRef, so this is usually synchronous).
+   *
+   * WHY await-a-promise, not poll: the previous implementation polled with a
+   * self-requeuing queueMicrotask loop. Microtasks starve the event loop, so
+   * the Tauri IPC responses and React renders that flip the polled flags are
+   * macrotasks that could NEVER arrive — a permanent hang whenever Continue
+   * was clicked before the 7 loads settled. Awaiting the allSettled chain
+   * (and yielding via setTimeout between residual isLoading checks) keeps
+   * the event loop turning.
    */
   const awaitDecision = useCallback(async () => {
-    // Fast path.
-    if (loadsSettled && !someLoadingNow()) return computeDecision();
-    // Slow path: poll the store states on a microtask cadence until settled.
-    // (loadsSettled is set by our own allSettled; we additionally wait out any
-    // residual isLoading.)
-    await new Promise<void>((resolve) => {
-      const tick = () => {
-        if (decisionRef.current || (loadsSettledRef.current && !someLoadingNow())) {
-          resolve();
-        } else {
-          queueMicrotask(tick);
-        }
-      };
-      tick();
-    });
+    if (decisionRef.current) return decisionRef.current;
+    await (settleRef.current ?? Promise.resolve());
+    // Wait out any residual isLoading (e.g. a re-load kicked off elsewhere)
+    // on a macrotask cadence — same wait contract as before, without the
+    // starvation.
+    while (someLoadingNow()) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    }
     return computeDecision();
-  }, [loadsSettled, computeDecision]);
+  }, [computeDecision]);
 
   const goToTour = useCallback(() => {
     tourStart();
