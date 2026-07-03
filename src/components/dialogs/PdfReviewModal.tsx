@@ -456,6 +456,11 @@ export function PdfReviewModal({
             {includedCount} of {rows.length} rows will be saved
           </div>
           <div className="flex items-center gap-3">
+            {/* Wave-4 a11y: live region mounts EMPTY so SRs announce the
+                change to "Saving rows…" when the batch write starts. */}
+            <span role="status" data-testid="pdf-save-status" className="sr-only">
+              {saving ? 'Saving rows…' : ''}
+            </span>
             {error && (
               <span className="text-sm text-destructive-soft-foreground" role="alert">
                 {error}

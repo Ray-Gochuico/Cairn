@@ -20,8 +20,10 @@ export function OutcomeSummary({ result, goalAmount }: Props) {
           --background clears AA on both themes: light 5.46:1 / dark 15.39:1. */}
       <div className="text-5xl font-bold text-success-foreground tabular-nums">{Math.round(pct)}%</div>
       {/* UX F3 (BT-8) — run-meta caption directly under the headline hero: what
-          this run covered (period count · goal · real dollars · data span). */}
-      <div data-testid="backtest-run-meta" className="text-xs text-muted-foreground">
+          this run covered (period count · goal · real dollars · data span).
+          role="status": announces run completion politely — this line mounts
+          with the results, so SRs read "N historical periods · goal …". */}
+      <div role="status" data-testid="backtest-run-meta" className="text-xs text-muted-foreground">
         {total} historical periods · goal {formatCompactCurrency(goalAmount)} · real dollars · 1871–{lastDataYear}
       </div>
       <div className="text-sm">

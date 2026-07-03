@@ -137,6 +137,9 @@ describe('ImportPreviewModal queuePosition + onSaved props', () => {
       />,
     );
     expect(screen.getByText(/File 2 of 5/)).toBeInTheDocument();
+    // Wave-4: the queue position is a live region so batch advancement is
+    // announced as the modal re-renders for each file.
+    expect(screen.getByRole('status')).toHaveTextContent('File 2 of 5');
   });
 
   it('does NOT render "File 1 of 1" when total is 1 (single-file caller)', () => {

@@ -207,6 +207,8 @@ describe('MonthlyMiniWindow', () => {
       );
       expect(updated?.source).toBe(SnapshotSource.USER_CONFIRMED);
     });
+    // Wave-4: the card's Confirmed flip is announced to screen readers.
+    expect(screen.getByRole('status')).toHaveTextContent('Confirmed');
   });
 
   it('announces a failed confirm via role="alert" (Wave-4: inline card errors are announced)', async () => {
@@ -392,7 +394,10 @@ describe('MonthlyMiniWindow', () => {
           ),
         ).toBe(true);
       });
-      expect(screen.getByRole('status')).toHaveTextContent(/confirmed 2 account values/i);
+      // Wave-4 adaptation: per-card "Confirmed" spans are role="status" too,
+      // so query all live regions and find the batch summary among them.
+      const statuses = screen.getAllByRole('status').map((el) => el.textContent ?? '');
+      expect(statuses.some((t) => /confirmed 2 account values/i.test(t))).toBe(true);
       // Cards reflect the batch confirmation without a remount.
       expect(screen.getAllByText('Confirmed').length).toBeGreaterThanOrEqual(2);
     });
@@ -458,8 +463,10 @@ describe('MonthlyMiniWindow', () => {
           .snapshots.find((x) => x.accountId === id1 && x.snapshotDate === close);
         expect(s?.source).toBe(SnapshotSource.USER_CONFIRMED);
       });
-      // Exactly one card flipped; the sibling stays pending.
+      // Exactly one card flipped; the sibling stays pending. Wave-4: the
+      // flip is a status announcement.
       expect(screen.getAllByText('Confirmed')).toHaveLength(1);
+      expect(screen.getByRole('status')).toHaveTextContent('Confirmed');
       expect(screen.getAllByRole('button', { name: /^confirm$/i })).toHaveLength(1);
     });
   });
