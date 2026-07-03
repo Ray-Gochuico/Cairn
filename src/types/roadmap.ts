@@ -7,6 +7,7 @@ import type {
   Contribution,
   AccountSnapshot,
   Transaction,
+  Category,
 } from './schema';
 
 /**
@@ -84,6 +85,15 @@ export interface RoadmapContext {
    * zero spending. Most rules will ignore this field entirely.
    */
   transactions: Transaction[];
+  /**
+   * Categories for real-spending classification (isRealSpending needs the
+   * category type to drop TRANSFER/INCOME rows). Optional ONLY so legacy
+   * hand-built test fixtures keep compiling — mirrors the
+   * RealStateInputs.categories precedent in state-snapshot.ts. useRoadmap
+   * always populates it; rules must default with `?? []` (uncategorized
+   * transactions still count as spending in that degraded case).
+   */
+  categories?: Category[];
   overrides: Map<NodeId, RoadmapNodeOverride>;
   thresholds: { low: number; high: number };
   taxYear: 2026;
