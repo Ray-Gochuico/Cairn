@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { SpendingWidget } from '@/components/dashboard/SpendingWidget';
 import { AccountType, CategoryType } from '@/types/enums';
@@ -92,11 +93,23 @@ describe('SpendingWidget', () => {
     expect(screen.getByTestId('spending-widget-bar-toggle')).toBeInTheDocument();
   });
 
-  it('defaults the time range to "This month" with matching bounds', () => {
+  it('defaults the time range to "This month" (selected tab) with matching bounds', () => {
     renderWidget([], []);
+    // Range control is segmented tabs (app-wide range grammar), not a select.
+    expect(screen.getByTestId('spending-widget-range-tabs')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'This month' })).toHaveAttribute('aria-selected', 'true');
     const bounds = screen.getByTestId('spending-widget-date-bounds');
     expect(bounds).toHaveTextContent('2026-05-01');
     expect(bounds).toHaveTextContent('2026-05-31');
+  });
+
+  it('switching the range tab recomputes the date bounds', async () => {
+    renderWidget([], []);
+    await userEvent.click(screen.getByRole('tab', { name: 'Last 30 days' }));
+    const bounds = screen.getByTestId('spending-widget-date-bounds');
+    // asOf 2026-05-25 → last 30 days = 2026-04-26 .. 2026-05-25.
+    expect(bounds).toHaveTextContent('2026-04-26');
+    expect(bounds).toHaveTextContent('2026-05-25');
   });
 
   it('shows the empty state when no transactions match', () => {

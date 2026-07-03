@@ -178,6 +178,10 @@ export default function Budget() {
             Set a monthly target per category and track it against actual spending.
           </p>
         </div>
+        {/* Deliberately a native month select, NOT the app's range tabs: this
+            picks one specific calendar month out of an unbounded list (a
+            point, not a range) — tabs can't enumerate it. See Wave-3 range
+            grammar decision. */}
         <select
           aria-label="Month"
           className="flex h-9 rounded-md border border-input bg-transparent px-2 py-1 text-sm"

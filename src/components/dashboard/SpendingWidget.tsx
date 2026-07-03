@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import BarChartCard from '@/components/charts/BarChartCard';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CategoryDonut, withCategoryColors } from '@/components/spending/CategoryDonut';
 import { RANGE_OPTIONS, rangeBounds, summarizeSpendingForRange, type SpendingRange } from '@/lib/spending-widget';
 import type { Account, Category, Transaction } from '@/types/schema';
@@ -141,8 +142,22 @@ export function SpendingWidget({
             </button>
           </div>
         </div>
+        {/* Range control: segmented tabs (app-wide range grammar — AssetValueChart,
+            GrowthCard, Spending hero). The VOCABULARY stays calendar ranges
+            (this month / last 30 days / …), NOT chart windows (3M/6M/1Y) —
+            these answer "what did I spend in <period>", a different question
+            from a chart's lookback window. Only the control style unifies. */}
+        <Tabs value={range} onValueChange={(v) => setRange(v as SpendingRange)}>
+          <TabsList aria-label="Time range" className="h-auto flex-wrap" data-testid="spending-widget-range-tabs">
+            {RANGE_OPTIONS.map((opt) => (
+              <TabsTrigger key={opt.value} value={opt.value}>
+                {opt.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
         <div
-          className="grid grid-cols-1 md:grid-cols-4 gap-2"
+          className="grid grid-cols-1 md:grid-cols-3 gap-2"
           data-testid="spending-widget-filters"
         >
           <Input
@@ -166,18 +181,6 @@ export function SpendingWidget({
                     {a.name}
                   </SelectItem>
                 ))}
-            </SelectContent>
-          </Select>
-          <Select value={range} onValueChange={(v) => setRange(v as SpendingRange)}>
-            <SelectTrigger aria-label="Time range" data-testid="spending-widget-range-select">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {RANGE_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
             </SelectContent>
           </Select>
           <div
