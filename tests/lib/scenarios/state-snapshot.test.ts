@@ -327,3 +327,62 @@ describe('captureRealState — Feature B expenseBasis precompute', () => {
     expect(real.expenseBasis).toEqual({ latestMonth: 0, rolling12m: 0 });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Wave 2 §5 — initialPhysicalAssets capture
+// ---------------------------------------------------------------------------
+
+import type { Property, Vehicle, AssetValueSnapshot } from '@/types/schema';
+
+describe('captureRealState — initialPhysicalAssets (Wave 2 §5)', () => {
+  const prop = (id: number, est: number | null, excluded = false): Property =>
+    ({
+      id, householdId: 1, ownerPersonId: null, name: `P${id}`, type: 'PRIMARY_RESIDENCE',
+      address: null, purchaseDate: null, purchasePrice: null,
+      currentEstimatedValue: est, linkedLoanId: null, excludedFromNetWorth: excluded,
+    } as unknown as Property);
+  const veh = (id: number, est: number | null): Vehicle =>
+    ({
+      id, householdId: 1, ownerPersonId: null, name: `V${id}`,
+      purchaseDate: null, purchasePrice: null,
+      currentEstimatedValue: est, excludedFromNetWorth: false,
+    } as unknown as Vehicle);
+  const avSnap = (ownerType: 'PROPERTY' | 'VEHICLE', ownerId: number, date: string, value: number): AssetValueSnapshot =>
+    ({ id: ownerId * 100 + value, ownerType, ownerId, snapshotDate: date, value } as unknown as AssetValueSnapshot);
+
+  // Minimal shared inputs — mirrors this file's existing captureRealState
+  // fixture style (top-level `household`; persons/taxRules inline).
+  const baseInputs = () => ({
+    accounts: [], accountSnapshots: [], holdings: [], loans: [], loanPayments: [],
+    transactions: [], household, persons: [],
+    appSettings: { defaultInflation: 0.025, defaultReturnRate: 0.07, defaultCashApy: null, defaultDrawdownTaxRate: null },
+    startISO: '2026-05', taxRules: [],
+  });
+
+  it('sums GROSS non-excluded property+vehicle values from currentEstimatedValue', () => {
+    const real = captureRealState({
+      ...baseInputs(),
+      properties: [prop(7, 400_000), prop(8, 999_999, true)], // excluded skipped
+      vehicles: [veh(3, 20_000)],
+    });
+    expect(real.initialPhysicalAssets).toBe(420_000);
+  });
+
+  it('a value snapshot on-or-before the start month beats the estimate field', () => {
+    const real = captureRealState({
+      ...baseInputs(),
+      properties: [prop(7, 400_000)],
+      vehicles: [],
+      assetValueSnapshots: [
+        avSnap('PROPERTY', 7, '2026-04-15', 410_000),
+        avSnap('PROPERTY', 7, '2026-07-01', 999_999), // after startISO month — ignored
+      ],
+    });
+    expect(real.initialPhysicalAssets).toBe(410_000);
+  });
+
+  it('legacy inputs without the new fields seed 0 (back-compat)', () => {
+    const real = captureRealState(baseInputs());
+    expect(real.initialPhysicalAssets).toBe(0);
+  });
+});

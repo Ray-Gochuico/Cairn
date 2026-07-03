@@ -72,6 +72,41 @@ export function computeFica(
   return computeFicaBreakdown(gross, filingStatus).total;
 }
 
+/**
+ * Household FICA across one OR two earners (Wave 2 §6, per IRS Form 8959 /
+ * per-return rules):
+ *   - Social Security: PER PERSON — each earner has their own annual wage
+ *     base. Feeding a combined dual-earner gross through one base (the old
+ *     engine path) under-collected ~$7.2k/yr for a dual-$150k household.
+ *   - Medicare 1.45%: linear, computed on the combined total.
+ *   - Additional Medicare 0.9%: on COMBINED wages above the per-RETURN
+ *     filing-status threshold — a dual-$150k MFJ couple owes it on $50k even
+ *     though neither earner crosses $250k alone.
+ * A single-element array is byte-identical to computeFica(gross, fs).
+ */
+export function computeHouseholdFica(
+  perPersonGrosses: number[],
+  filingStatus: keyof typeof ADDITIONAL_MEDICARE_THRESHOLD,
+): FicaBreakdown {
+  let socialSecurity = 0;
+  let combined = 0;
+  for (const gross of perPersonGrosses) {
+    if (gross < 0) throw new Error('gross must be non-negative');
+    socialSecurity +=
+      Math.min(gross, CONTRIBUTION_LIMITS_2026.SOCIAL_SECURITY_WAGE_BASE) * 0.062;
+    combined += gross;
+  }
+  const medicare = combined * 0.0145;
+  const threshold = ADDITIONAL_MEDICARE_THRESHOLD[filingStatus];
+  const additionalMedicare = combined > threshold ? (combined - threshold) * 0.009 : 0;
+  return {
+    socialSecurity,
+    medicare,
+    additionalMedicare,
+    total: socialSecurity + medicare + additionalMedicare,
+  };
+}
+
 export interface PretaxDeductionsInput {
   salary: number;
   pretax401kPct: number;             // 0..1
@@ -150,6 +185,15 @@ export interface TotalTaxInput {
     pretaxDcfsa: number;
     pretaxHsa: number;
   };
+  /**
+   * Per-person wage split of `gross` (Wave 2 §6). When present, FICA is
+   * computed per earner (own SS wage base each) with Medicare surtaxes on
+   * the combined return via computeHouseholdFica. When omitted, FICA runs
+   * on the combined `gross` — the legacy single-base behavior every
+   * single-person caller (computeBonusTax, PaycheckCalculator) relies on.
+   * Callers must ensure the entries sum to `gross`.
+   */
+  perPersonGross?: number[];
   // ---------------------------------------------------------------------------
   // Investment income (Task 3 — Finance review #5).
   // All optional. When omitted the legacy ordinary-only math runs unchanged.
@@ -326,7 +370,10 @@ export function computeTotalTax(input: TotalTaxInput): TotalTaxOutput {
   //     currently track this distinction. The slight over-collection of
   //     FICA for cafeteria-plan users is flagged in the app_wide v1.3
   //     "What we don't model" disclosure.
-  const fica = computeFica(input.gross, input.filingStatus);
+  const fica = computeHouseholdFica(
+    input.perPersonGross ?? [input.gross],
+    input.filingStatus,
+  ).total;
   const state = input.stateBrackets.length > 0 ? evaluateBrackets(input.stateBrackets, stateTaxableTotal) : 0;
   const city = input.cityBrackets ? evaluateBrackets(input.cityBrackets, cityTaxableTotal) : 0;
 

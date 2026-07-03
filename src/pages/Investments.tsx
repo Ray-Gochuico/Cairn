@@ -80,9 +80,11 @@ function formatCurrency(value: number): string {
 
 /**
  * Account types that count toward "investments value" on the growth card —
- * everything except plain cash/savings. Mirrors the investment-vs-cash split
- * called out in the schema (ACCOUNT_CASH / ACCOUNT_SAVINGS are the only
- * non-investment types).
+ * everything except plain cash/savings. This is DELIBERATELY not the shared
+ * retirement-FI definition (src/lib/fi-portfolio.ts): this card measures
+ * "how are my invested dollars doing", so 529s belong (they're invested)
+ * and cash doesn't (it isn't). The FI/Coast/Compound defaults use the
+ * shared selector instead.
  */
 const INVESTMENT_ACCOUNT_TYPES = new Set<AccountType>([
   AccountType.ACCOUNT_401K,

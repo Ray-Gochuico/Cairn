@@ -11,6 +11,7 @@ import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { useCategoriesStore } from '@/stores/categories-store';
+import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
 import {
   AccountType,
   ContributionSource,
@@ -50,6 +51,9 @@ function resetStores() {
   useVehiclesStore.setState({ vehicles: [], isLoading: false, error: null, load: async () => {} });
   useTransactionsStore.setState({ transactions: [], isLoading: false, error: null, load: async () => {} });
   useCategoriesStore.setState({ categories: [], isLoading: false, error: null, load: async () => {} });
+  useAssetValueSnapshotsStore.setState({
+    assetValueSnapshots: [], isLoading: false, error: null, load: async () => {},
+  });
 }
 
 interface PrimeOpts {
@@ -393,5 +397,70 @@ describe('Dashboard pills — excluded accounts', () => {
       within(c).queryByText('Liquid Investments'),
     )!;
     expect(within(liquidCard).getByText('$100,000')).toBeInTheDocument();
+  });
+});
+
+describe('net-worth MoM pill (Wave 2 §2)', () => {
+  beforeEach(() => {
+    resetStores();
+  });
+
+  const iso = (daysAgo: number) =>
+    new Date(Date.now() - daysAgo * 86_400_000).toISOString().slice(0, 10);
+
+  it('derives the delta from as-of history: two snapshots a month apart', () => {
+    primeStores({
+      accounts: [{ id: 1 }],
+      snapshotValues: [
+        { accountId: 1, snapshotDate: iso(45), totalValue: 10_000 },
+        { accountId: 1, snapshotDate: iso(1), totalValue: 15_000 },
+      ],
+    });
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+    // Scope to the Net Worth metric card — the AssetValueChart header shows
+    // the same (deliberately converged) delta, so a page-wide query is
+    // ambiguous.
+    const cards = screen.getAllByTestId('metric-card');
+    const netWorthCard = cards.find((c) => within(c).queryByText('Net Worth'))!;
+    expect(within(netWorthCard).getByText('vs last month')).toBeInTheDocument();
+    expect(within(netWorthCard).getByText(/\+\$5,000 \(\+50\.0%\)/)).toBeInTheDocument();
+  });
+
+  it('no account history: headline falls back to the estimate formula, no pill', () => {
+    usePropertiesStore.setState({
+      properties: [{
+        id: 7, householdId: 1, ownerPersonId: null, name: 'Home', type: 'PRIMARY_RESIDENCE',
+        address: null, purchaseDate: null, purchasePrice: null,
+        currentEstimatedValue: 400_000, linkedLoanId: null, excludedFromNetWorth: false,
+      } as never],
+      isLoading: false, error: null, load: async () => {},
+    });
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+    const cards = screen.getAllByTestId('metric-card');
+    const netWorthCard = cards.find((c) => within(c).queryByText('Net Worth'))!;
+    expect(within(netWorthCard).getByText('$400,000')).toBeInTheDocument();
+    // No account-snapshot history → factory null for both endpoints → NO pill
+    // anywhere on the page (the honest state; the estimate formula only backs
+    // the headline).
+    expect(screen.queryByText('vs last month')).not.toBeInTheDocument();
+  });
+
+  it('suppresses the percent above the ±999.9% cap (near-zero baseline) — $ delta only', () => {
+    // $12 → $15,000 is a ~124,900% "gain"; the chart header suppresses such
+    // percents via deltaPctOrNull, and the pill must not print one either.
+    primeStores({
+      accounts: [{ id: 1 }],
+      snapshotValues: [
+        { accountId: 1, snapshotDate: iso(45), totalValue: 12 },
+        { accountId: 1, snapshotDate: iso(1), totalValue: 15_000 },
+      ],
+    });
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+    const cards = screen.getAllByTestId('metric-card');
+    const netWorthCard = cards.find((c) => within(c).queryByText('Net Worth'))!;
+    expect(within(netWorthCard).getByText('vs last month')).toBeInTheDocument();
+    // Exact match: if a percent were appended the delta text would read
+    // '+$14,988 (+124900.0%)' and this query would fail.
+    expect(within(netWorthCard).getByText('+$14,988')).toBeInTheDocument();
   });
 });

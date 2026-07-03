@@ -3,8 +3,9 @@
  * must honor the "Excluded from net worth" checkbox (AccountForm). The
  * AssetValueChart already filters `excludedFromNetWorth` when building its
  * eligible-entity set; these helpers give every OTHER seam — dashboard pills,
- * growth cards, calculator prefills, the roadmap cash reserve — the same
- * one-line semantics so the numbers agree across surfaces.
+ * growth cards, the roadmap cash reserve — the same one-line semantics so
+ * the numbers agree across surfaces. (Calculator prefills do NOT use these:
+ * they need the retirement-FI INCLUDED set — see src/lib/fi-portfolio.ts.)
  *
  * Excluded-SET (not included-set) filtering: `filterSnapshotsForNetWorth`
  * drops only snapshots that provably belong to an excluded account. Snapshots

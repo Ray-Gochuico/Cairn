@@ -19,6 +19,19 @@ interface AssetValueSnapshotsState {
     ownerType: AssetSnapshotOwnerType,
     ownerId: number,
   ) => Promise<void>;
+  /**
+   * Insert-or-update the row for (ownerType, ownerId, snapshotDate) and sync
+   * the cache. NOT optimistic (unlike the other mutations): create-vs-update
+   * needs the repo's authoritative SELECT because the table has no unique
+   * constraint — an optimistic guess from a possibly-unloaded cache could
+   * mint duplicate same-date rows. Rethrows on failure (store conventions).
+   */
+  upsertForDate: (
+    ownerType: AssetSnapshotOwnerType,
+    ownerId: number,
+    snapshotDate: string,
+    value: number,
+  ) => Promise<number>;
 }
 
 let nextTempId = -1;
@@ -160,6 +173,18 @@ export const useAssetValueSnapshotsStore = create<AssetValueSnapshotsState>(
         set({ assetValueSnapshots: prev });
         throw e;
       }
+    },
+
+    upsertForDate: async (ownerType, ownerId, snapshotDate, value) => {
+      const repo = new AssetValueSnapshotsRepo(getDatabase());
+      const id = await repo.upsertForDate(ownerType, ownerId, snapshotDate, value);
+      const next = [...get().assetValueSnapshots];
+      const idx = next.findIndex((s) => s.id === id);
+      const row: AssetValueSnapshot = { id, ownerType, ownerId, snapshotDate, value };
+      if (idx >= 0) next[idx] = row;
+      else next.push(row);
+      set({ assetValueSnapshots: sortAssetSnapshots(next) });
+      return id;
     },
   }),
 );

@@ -1,4 +1,4 @@
-import type { Account, AccountSnapshot, Holding, Loan, LoanPayment, Transaction, Household, Person, TaxRule, JurisdictionType, HousingPayment, VehicleLease, Category } from '@/types/schema';
+import type { Account, AccountSnapshot, Holding, Loan, LoanPayment, Transaction, Household, Person, TaxRule, JurisdictionType, HousingPayment, VehicleLease, Category, Property, Vehicle, AssetValueSnapshot } from '@/types/schema';
 import type { Bracket } from '@/lib/tax';
 import { AccountType, type FilingStatus } from '@/types/enums';
 import { taxBucketForAccount } from '@/lib/account-tax-classification';
@@ -50,6 +50,15 @@ export interface RealStateInputs {
    * construct (their expenseBasis resolves to {0,0}, the custom-mode no-op).
    */
   categories?: Category[];
+  /**
+   * Properties/vehicles + their dated value snapshots (Wave 2 §5). Used ONLY
+   * to seed initialPhysicalAssets; optional + default [] so legacy engine
+   * fixtures that pre-date the field still construct (they seed 0 — the
+   * pre-Wave-2 behavior).
+   */
+  properties?: Property[];
+  vehicles?: Vehicle[];
+  assetValueSnapshots?: AssetValueSnapshot[];
 }
 
 export interface RealStateTaxBrackets {
@@ -108,6 +117,17 @@ export interface RealState {
   };
   /** Total cash bucket (CASH + SAVINGS) at projection start, from latest per-account snapshot. */
   initialCash: number;
+  /**
+   * Σ GROSS value of non-excluded properties + vehicles at projection start:
+   * latest asset_value_snapshot whose month <= startISO's month (the same
+   * month-inclusive convention latestSnapshotPerAccount uses), else
+   * currentEstimatedValue, else 0. GROSS deliberately — computeNetWorth
+   * subtracts EVERY loan (linked mortgages included) via debtByLoan each
+   * month, so netting linked balances here would double-count them. The
+   * engine holds this flat (no appreciation modeling; disclosed in the
+   * What-If footnote) and equity growth emerges from loan amortization.
+   */
+  initialPhysicalAssets: number;
   /** Per-account investment balances at projection start. Key = Account.id. */
   initialInvestmentsByAccount: Record<number, number>;
   /**
@@ -281,6 +301,45 @@ function pickStandardDeductionFor(
   return match?.standardDeduction ?? 0;
 }
 
+/**
+ * Latest value snapshot for one property/vehicle on-or-before startISO's
+ * month (month-inclusive, mirroring latestSnapshotPerAccount above), falling
+ * back to the entity's currentEstimatedValue. 0 when neither exists.
+ */
+function physicalAssetValueAtStart(
+  entity: { id?: number; currentEstimatedValue: number | null },
+  ownerType: 'PROPERTY' | 'VEHICLE',
+  snapshots: AssetValueSnapshot[],
+  startISO: string,
+): number {
+  const startMonth = startISO.slice(0, 7);
+  let winner: AssetValueSnapshot | null = null;
+  for (const s of snapshots) {
+    if (s.ownerType !== ownerType || s.ownerId !== entity.id) continue;
+    if (s.snapshotDate.slice(0, 7) > startMonth) continue;
+    if (!winner || s.snapshotDate > winner.snapshotDate) winner = s;
+  }
+  return winner ? winner.value : entity.currentEstimatedValue ?? 0;
+}
+
+function computeInitialPhysicalAssets(
+  properties: Property[],
+  vehicles: Vehicle[],
+  snapshots: AssetValueSnapshot[],
+  startISO: string,
+): number {
+  let total = 0;
+  for (const p of properties) {
+    if (p.id == null || p.excludedFromNetWorth) continue;
+    total += physicalAssetValueAtStart(p, 'PROPERTY', snapshots, startISO);
+  }
+  for (const v of vehicles) {
+    if (v.id == null || v.excludedFromNetWorth) continue;
+    total += physicalAssetValueAtStart(v, 'VEHICLE', snapshots, startISO);
+  }
+  return total;
+}
+
 export function captureRealState(inputs: RealStateInputs): RealState {
   const filingStatus = inputs.household.filingStatus as FilingStatus;
   const state = (inputs.household as { state?: string | null }).state ?? null;
@@ -338,6 +397,13 @@ export function captureRealState(inputs: RealStateInputs): RealState {
     rolling12m: rolling12mBaseline(inputs.transactions, categories, inputs.startISO),
   };
 
+  const initialPhysicalAssets = computeInitialPhysicalAssets(
+    inputs.properties ?? [],
+    inputs.vehicles ?? [],
+    inputs.assetValueSnapshots ?? [],
+    inputs.startISO,
+  );
+
   return {
     accounts: inputs.accounts,
     holdings: inputs.holdings,
@@ -347,6 +413,7 @@ export function captureRealState(inputs: RealStateInputs): RealState {
     persons: inputs.persons,
     accountsByBucket,
     initialCash,
+    initialPhysicalAssets,
     initialInvestmentsByAccount,
     cashAccountsWithBalances,
     defaults: {

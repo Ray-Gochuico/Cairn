@@ -6,6 +6,8 @@ import { HoldingsRepo } from '@/domain/holdings';
 import { AccountType } from '@/types/enums';
 import { runMarketDataRefresh } from '@/market/run-market-data-refresh';
 import * as tickerEnrichment from '@/market/ticker-enrichment';
+import * as dailySnapshot from '@/market/daily-snapshot';
+import { useSnapshotsStore } from '@/stores/snapshots-store';
 
 describe('runMarketDataRefresh', () => {
   let db: SqliteAdapter;
@@ -79,5 +81,52 @@ describe('runMarketDataRefresh', () => {
     // Once per distinct ticker (AAPL twice in holdings → counted once).
     const calledTickers = enrichSpy.mock.calls.map((c) => c[0]);
     expect(calledTickers.sort()).toEqual(['AAPL', 'MSFT']);
+  });
+
+  describe('daily-snapshot store refeed (Wave 2 §3)', () => {
+    const flush = async () => {
+      // The derivation runs inside a fire-and-forget IIFE — yield a few turns.
+      await new Promise((r) => setImmediate(r));
+      await new Promise((r) => setImmediate(r));
+      await new Promise((r) => setImmediate(r));
+    };
+
+    let loadSpy: ReturnType<typeof vi.fn>;
+    let originalLoad: () => Promise<void>;
+
+    beforeEach(() => {
+      loadSpy = vi.fn().mockResolvedValue(undefined);
+      originalLoad = useSnapshotsStore.getState().load;
+      useSnapshotsStore.setState({ load: loadSpy });
+    });
+
+    afterEach(() => {
+      useSnapshotsStore.setState({ load: originalLoad });
+    });
+
+    it('reloads the snapshots store when rows were upserted', async () => {
+      vi.spyOn(dailySnapshot, 'deriveTodaysSnapshot').mockResolvedValue({
+        upserted: [1, 2], skipped: [], partial: [], errors: [],
+      });
+      runMarketDataRefresh(db);
+      await flush();
+      expect(loadSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT reload on skipped/partial-only results', async () => {
+      vi.spyOn(dailySnapshot, 'deriveTodaysSnapshot').mockResolvedValue({
+        upserted: [], skipped: [3], partial: [4], errors: ['4/VTI: offline'],
+      });
+      runMarketDataRefresh(db);
+      await flush();
+      expect(loadSpy).not.toHaveBeenCalled();
+    });
+
+    it('does NOT reload (and does not crash) when the derivation rejects', async () => {
+      vi.spyOn(dailySnapshot, 'deriveTodaysSnapshot').mockRejectedValue(new Error('offline'));
+      expect(() => runMarketDataRefresh(db)).not.toThrow();
+      await flush();
+      expect(loadSpy).not.toHaveBeenCalled();
+    });
   });
 });

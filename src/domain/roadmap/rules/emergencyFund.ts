@@ -1,7 +1,7 @@
 import type { NodeResult, RoadmapContext } from '@/types/roadmap';
 import { AccountType } from '@/types/enums';
 import type { Account, AccountSnapshot } from '@/types/schema';
-import { computeBaselineExpenses } from '@/lib/expense-baseline';
+import { rolling12mBaseline } from '@/lib/expense-baseline';
 import { includedAccountIds } from '@/lib/account-inclusion';
 
 /**
@@ -13,10 +13,12 @@ import { includedAccountIds } from '@/lib/account-inclusion';
  * matches how the source chart treats it.
  *
  * Baseline expense source: the rule prefers the 12-month rolling
- * average computed from real transactions. When no transactions are
- * present yet (new user, no imports), we fall back to the household's
- * manually entered `monthlyExpenseBaseline` so the rule still produces
- * a meaningful target. The active source is surfaced in the evidence
+ * average computed from real spending (rolling12mBaseline — transfers,
+ * income rows, and pending reimbursables excluded; reimbursed charges
+ * count at net out-of-pocket). When no transactions are present yet
+ * (new user, no imports), we fall back to the household's manually
+ * entered `monthlyExpenseBaseline` so the rule still produces a
+ * meaningful target. The active source is surfaced in the evidence
  * string so users can see whether the figure is computed or self-set.
  *
  * Targets:
@@ -72,7 +74,12 @@ function efContext(
   ctx: RoadmapContext,
 ): { baseline: number; cash: number; baselineSource: BaselineSource } {
   const todayISO = ctx.today.toISOString().slice(0, 10);
-  const computed = computeBaselineExpenses(ctx.transactions, todayISO);
+  // Wave 2 §8: real-spending baseline — same isRealSpending/
+  // effectiveSpendingAmount pipeline as the Spending page and the What-If
+  // expense basis, so transfers (CC payments) and pending reimbursables
+  // can't inflate the EF target. Calendar-12-month window, distinct-months
+  // divisor (a 4-month history averages over 4, not 12).
+  const computed = rolling12mBaseline(ctx.transactions, ctx.categories ?? [], todayISO);
   if (computed > 0) {
     return {
       baseline: computed,

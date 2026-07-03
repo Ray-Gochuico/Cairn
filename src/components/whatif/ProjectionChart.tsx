@@ -438,7 +438,7 @@ export default function ProjectionChart({
                   <Area
                     type="monotone"
                     dataKey={`homeEquity_${scId}`}
-                    name="Home equity"
+                    name="Property & vehicles"
                     stackId="composition"
                     stroke="none"
                     fill={HOME_EQUITY_FILL}

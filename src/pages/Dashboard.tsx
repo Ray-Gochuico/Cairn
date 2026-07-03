@@ -27,6 +27,9 @@ import { useTickersStore } from '@/stores/tickers-store';
 import { useFundHoldingsStore } from '@/stores/fund-holdings-store';
 import { AccountType, GoalType } from '@/types/enums';
 import { netWorthForMonth, type NetWorthInput } from '@/lib/networth';
+import { netWorthAsOfFactory, deltaPctOrNull } from '@/lib/asset-value-chart';
+import { GROWTH_HORIZONS } from '@/lib/growth-horizons';
+import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
 import { includedAccountIds, filterSnapshotsForNetWorth } from '@/lib/account-inclusion';
 import { summarizeSpending } from '@/lib/spending-analysis';
 import { isMonthlyInputPending, lastMonthYyyymm } from '@/lib/input-pending';
@@ -69,9 +72,10 @@ import type {
  * Dashboard v1 — Phase 2 entry surface.
  *
  * Composition: pulls every store needed for the four headline metrics, then
- * computes them inline rather than dragging in a shared hook. NetWorth lives
- * in its own page (with MoM/YoY math); here we just need the current-month
- * value, so we re-call `netWorthForMonth` directly off the store data.
+ * computes them inline rather than dragging in a shared hook. The net-worth
+ * headline + MoM pill derive from `netWorthAsOfFactory` (the same as-of
+ * valuation the NetWorth chart uses), with `netWorthForMonth` kept only as
+ * the headline fallback when there is no account-snapshot history at all.
  *
  * "Liquid Investments" deliberately excludes tax-advantaged retirement
  * accounts (401k/IRA/529) and crypto, plus all illiquid assets (property,
@@ -125,21 +129,14 @@ function formatSignedUSD(value: number): string {
   return signedCurrencyFormatter.format(value);
 }
 
-function formatPercentDelta(current: number, baseline: number): string {
-  if (baseline === 0) return '';
-  const pct = ((current - baseline) / Math.abs(baseline)) * 100;
+/** " (+50.0%)" suffix for a pct already vetted by deltaPctOrNull (0–100 scale). */
+function formatPctSuffix(pct: number): string {
   const sign = pct >= 0 ? '+' : '';
   return ` (${sign}${pct.toFixed(1)}%)`;
 }
 
 function currentYyyymm(): string {
   return new Date().toISOString().slice(0, 7);
-}
-
-function priorYyyymm(yyyymm: string): string {
-  const [y, m] = yyyymm.split('-').map(Number);
-  const prev = new Date(Date.UTC(y, m - 2, 1));
-  return prev.toISOString().slice(0, 7);
 }
 
 /**
@@ -384,6 +381,10 @@ export default function Dashboard() {
   const loadVehicles = useVehiclesStore((s) => s.load);
   const vehiclesError = useVehiclesStore((s) => s.error);
 
+  const assetValueSnapshots = useAssetValueSnapshotsStore((s) => s.assetValueSnapshots);
+  const loadAssetValueSnapshots = useAssetValueSnapshotsStore((s) => s.load);
+  const assetValueSnapshotsError = useAssetValueSnapshotsStore((s) => s.error);
+
   const goals = useGoalsStore((s) => s.goals);
   const loadGoals = useGoalsStore((s) => s.load);
   const goalsError = useGoalsStore((s) => s.error);
@@ -418,6 +419,7 @@ export default function Dashboard() {
     loadSnapshots();
     loadProperties();
     loadVehicles();
+    loadAssetValueSnapshots();
     loadGoals();
     loadContributions();
     loadHoldings();
@@ -432,6 +434,7 @@ export default function Dashboard() {
     loadSnapshots,
     loadProperties,
     loadVehicles,
+    loadAssetValueSnapshots,
     loadGoals,
     loadContributions,
     loadHoldings,
@@ -456,6 +459,7 @@ export default function Dashboard() {
     snapshotsError,
     propertiesError,
     vehiclesError,
+    assetValueSnapshotsError,
     goalsError,
     contributionsError,
     holdingsError,
@@ -467,7 +471,6 @@ export default function Dashboard() {
 
   const today = useMemo(() => new Date(), []);
   const currentMonth = useMemo(() => currentYyyymm(), []);
-  const previousMonth = useMemo(() => priorYyyymm(currentMonth), [currentMonth]);
 
   // Apply the view filter to every entity rendered in the headline metrics
   // and the goals strip. ConcentrationCard intentionally stays household-wide
@@ -526,15 +529,41 @@ export default function Dashboard() {
     loans: visibleLoans.map((l) => ({ id: l.id!, currentBalance: l.currentBalance })),
   }), [visibleSnapshots, accounts, visibleProperties, visibleVehicles, visibleLoans]);
 
-  const currentNetWorth = useMemo(
-    () => netWorthForMonth(currentMonth, netWorthInput),
-    [currentMonth, netWorthInput],
+  // MoM pill honesty (Wave 2 §2): price BOTH endpoints with real as-of
+  // history — accounts at latest-snapshot-≤-date, properties/vehicles via
+  // asset_value_snapshots (flat-estimate fallback), loans back-walked from
+  // today's balance. netWorthForMonth priced both months at TODAY'S
+  // estimates/balances, so paydown never moved this delta.
+  const todayIso = useMemo(() => today.toISOString().slice(0, 10), [today]);
+  const oneMonthAgoIso = useMemo(
+    () => GROWTH_HORIZONS.find((h) => h.key === '1m')!.baselineDate(today),
+    [today],
   );
-
-  const previousNetWorth = useMemo(
-    () => netWorthForMonth(previousMonth, netWorthInput),
-    [previousMonth, netWorthInput],
+  const netWorthValueAsOf = useMemo(
+    () =>
+      netWorthAsOfFactory({
+        // Excluded accounts opt out of net worth (shared selector) — same
+        // filter the NetWorth page applies before this factory; the factory
+        // drops excluded properties/vehicles itself.
+        snapshots: filterSnapshotsForNetWorth(visibleSnapshots, accounts),
+        properties: visibleProperties,
+        vehicles: visibleVehicles,
+        loans: visibleLoans,
+        assetValueSnapshots,
+        todayIso,
+      }),
+    [visibleSnapshots, accounts, visibleProperties, visibleVehicles, visibleLoans, assetValueSnapshots, todayIso],
   );
+  const netWorthNow = useMemo(() => netWorthValueAsOf(todayIso), [netWorthValueAsOf, todayIso]);
+  const netWorthMonthAgo = useMemo(
+    () => netWorthValueAsOf(oneMonthAgoIso),
+    [netWorthValueAsOf, oneMonthAgoIso],
+  );
+  // Factory is null only when NO account has any snapshot history; fall back
+  // to the estimate-based formula so a properties-only user still sees a
+  // headline instead of a dash. (The two agree whenever properties have no
+  // value snapshots; when they do, the factory is the honest one.)
+  const currentNetWorth = netWorthNow ?? netWorthForMonth(currentMonth, netWorthInput);
 
   const totalDebt = useMemo(
     () => visibleLoans.reduce((sum, l) => sum + l.currentBalance, 0),
@@ -637,10 +666,19 @@ export default function Dashboard() {
   const currentMonthSpend = spendingSummary.currentMonthTotal;
   const monthlyBudget = household?.monthlyExpenseBaseline ?? 0;
 
-  const netWorthDelta = currentNetWorth - previousNetWorth;
-  const hasNetWorthBaseline = previousNetWorth !== 0;
+  const hasNetWorthBaseline = netWorthNow !== null && netWorthMonthAgo !== null;
+  const netWorthDelta = hasNetWorthBaseline ? netWorthNow - netWorthMonthAgo : 0;
+  // Percent via the chart's shared deltaPctOrNull: null on a ≤0 baseline
+  // (Wave 1's GrowthCard convention) AND above the ±999.9% display cap —
+  // a near-zero baseline must not print a five-digit percent on the front
+  // page while the chart header below suppresses it. The $ delta always shows.
+  const netWorthDeltaPct = hasNetWorthBaseline
+    ? deltaPctOrNull(netWorthDelta, netWorthMonthAgo)
+    : null;
   const netWorthDeltaLabel = hasNetWorthBaseline
-    ? `${formatSignedUSD(netWorthDelta)}${formatPercentDelta(currentNetWorth, previousNetWorth)}`
+    ? `${formatSignedUSD(netWorthDelta)}${
+        netWorthDeltaPct !== null ? formatPctSuffix(netWorthDeltaPct) : ''
+      }`
     : undefined;
   const netWorthDeltaTone = !hasNetWorthBaseline
     ? 'neutral'

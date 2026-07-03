@@ -417,6 +417,23 @@ describe('estimateBackedKeys', () => {
 });
 
 describe('netWorthAsOfFactory', () => {
+  const mortgage: Loan = {
+    id: 9,
+    householdId: 1,
+    obligorPersonId: null,
+    name: 'Mortgage',
+    type: 'MORTGAGE',
+    originalAmount: 400000,
+    currentBalance: 350000,
+    interestRate: 0.04,
+    termMonths: 360,
+    firstPaymentDate: '2024-01-01',
+    monthlyPayment: 1909.66,
+    extraPaymentDefault: 0,
+    linkedPropertyId: null,
+    linkedVehicleId: null,
+  };
+
   it('null before any account history; otherwise accounts + assets − loans', () => {
     const valueAsOf = netWorthAsOfFactory({
       snapshots: [{ accountId: 1, snapshotDate: '2026-02-10', totalValue: 1000 }],
@@ -431,34 +448,18 @@ describe('netWorthAsOfFactory', () => {
   });
 
   it('loan leg back-walks from today — a historical date owes MORE than currentBalance', () => {
-    const loan: Loan = {
-      id: 9,
-      householdId: 1,
-      obligorPersonId: null,
-      name: 'Mortgage',
-      type: 'MORTGAGE',
-      originalAmount: 400000,
-      currentBalance: 350000,
-      interestRate: 0.04,
-      termMonths: 360,
-      firstPaymentDate: '2024-01-01',
-      monthlyPayment: 1909.66,
-      extraPaymentDefault: 0,
-      linkedPropertyId: null,
-      linkedVehicleId: null,
-    };
     const todayIso = '2026-06-12';
     const valueAsOf = netWorthAsOfFactory({
       snapshots: [{ accountId: 1, snapshotDate: '2020-01-01', totalValue: 1_000_000 }],
       properties: [],
       vehicles: [],
-      loans: [loan],
+      loans: [mortgage],
       assetValueSnapshots: [],
       todayIso,
     });
     const date = '2025-12-12'; // ~6 months before today
     // Oracle: the same back-walk the chart's loan series uses.
-    const oracle = loanBalanceHistory(loan, date, todayIso, 'DAY', todayIso)[0].balance;
+    const oracle = loanBalanceHistory(mortgage, date, todayIso, 'DAY', todayIso)[0].balance;
     expect(oracle).toBeGreaterThan(350000); // earlier in the amortization → larger balance
     expect(valueAsOf(date)).toBeCloseTo(1_000_000 - oracle, 2); // matches the walk within $0.01
   });
@@ -478,5 +479,47 @@ describe('netWorthAsOfFactory', () => {
       todayIso: '2026-06-12',
     });
     expect(valueAsOf('2026-03-15')).toBe(1200); // 1000 + vehicle 200 only
+  });
+
+  it('loan paydown between months moves the 1-month delta even with flat account values (MoM pill feed)', () => {
+    const todayIso = '2026-06-12';
+    const valueAsOf = netWorthAsOfFactory({
+      snapshots: [{ accountId: 1, snapshotDate: '2026-01-01', totalValue: 500_000 }],
+      properties: [],
+      vehicles: [],
+      loans: [mortgage],
+      assetValueSnapshots: [],
+      todayIso,
+    });
+    const now = valueAsOf(todayIso)!;
+    const monthAgo = valueAsOf('2026-05-12')!;
+    // One month of principal on this fixture ≈ $1,909.66 − 350,000×0.04/12 ≈ $743.
+    // netWorthForMonth showed 0 here forever — both months used currentBalance.
+    expect(now).toBeGreaterThan(monthAgo);
+    expect(now - monthAgo).toBeGreaterThan(700);
+    expect(now - monthAgo).toBeLessThan(1000);
+  });
+
+  it('an estimate edit on a snapshot-less property moves both endpoints equally — no fake MoM gain', () => {
+    const make = (est: number) =>
+      netWorthAsOfFactory({
+        snapshots: [{ accountId: 1, snapshotDate: '2026-01-01', totalValue: 100_000 }],
+        properties: [
+          { id: 7, purchaseDate: null, purchasePrice: null, currentEstimatedValue: est, excludedFromNetWorth: false },
+        ],
+        vehicles: [],
+        loans: [],
+        assetValueSnapshots: [],
+        todayIso: '2026-06-12',
+      });
+    const delta = (f: (d: string) => number | null) => f('2026-06-12')! - f('2026-05-12')!;
+    expect(delta(make(400_000))).toBe(0);
+    // Estimate bumped: the flat-estimate fallback moves BOTH endpoints, so the
+    // pill cannot manufacture retroactive growth out of an estimate edit.
+    // (Once Task 7 lands, the edit also writes a today-dated snapshot, at
+    // which point the delta reflects the change from the edit date forward —
+    // honestly, via real history.)
+    expect(delta(make(430_000))).toBe(0);
+    expect(make(430_000)('2026-05-12')).toBe(530_000);
   });
 });

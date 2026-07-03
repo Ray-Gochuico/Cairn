@@ -23,6 +23,9 @@ import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
+import { usePropertiesStore } from '@/stores/properties-store';
+import { useVehiclesStore } from '@/stores/vehicles-store';
+import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
 import {
   detectMilestones,
   effectiveSwr,
@@ -47,6 +50,9 @@ export default function WhatIf() {
   const loadTransactions   = useTransactionsStore((s) => s.load);
   const loadPersons        = usePersonsStore((s) => s.load);
   const loadTaxYears       = useTaxRulesStore((s) => s.loadAvailableYears);
+  const loadProperties     = usePropertiesStore((s) => s.load);
+  const loadVehicles       = useVehiclesStore((s) => s.load);
+  const loadAssetSnapshots = useAssetValueSnapshotsStore((s) => s.load);
 
   const household          = useHouseholdStore((s) => s.household);
   const persons            = usePersonsStore((s) => s.persons);
@@ -102,7 +108,10 @@ export default function WhatIf() {
     loadTransactions();
     loadPersons();
     loadTaxYears();
-  }, [load, loadLoans, loadHoldings, loadAccounts, loadSnapshots, loadTransactions, loadPersons, loadTaxYears]);
+    loadProperties();
+    loadVehicles();
+    loadAssetSnapshots();
+  }, [load, loadLoans, loadHoldings, loadAccounts, loadSnapshots, loadTransactions, loadPersons, loadTaxYears, loadProperties, loadVehicles, loadAssetSnapshots]);
 
   const real = useRealState();
 
@@ -300,7 +309,7 @@ export default function WhatIf() {
       <MilestoneStrip scenarios={scenarios} milestones={milestones} />
 
       {/*
-        Page-level projection footnote — surfaces three modeling
+        Page-level projection footnote — surfaces the modeling
         omissions specific to long-horizon What-If projections.
         See W7-Legal R-LWI-4. Full disclosures live in
         Settings → Disclosures.
@@ -346,6 +355,13 @@ export default function WhatIf() {
             — assumes qualified distributions (age 59½ + the 5-year rule).
             Non-qualified Roth withdrawals can incur tax + penalty not
             reflected here.
+          </li>
+          <li>
+            <span className="font-medium">Property &amp; vehicle appreciation</span>{' '}
+            — projections count your current property and vehicle values but
+            hold them flat for the whole horizon; net worth grows from those
+            assets only through loan paydown. Appreciation and depreciation
+            are not modeled.
           </li>
         </ul>
         <div className="pt-1">

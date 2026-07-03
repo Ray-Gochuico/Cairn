@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluateBrackets, type Bracket, computeFica, computeFicaBreakdown, computePretaxDeductions, computeBonusTax, computeTotalTax, type TotalTaxInput } from '@/lib/tax';
+import { evaluateBrackets, type Bracket, computeFica, computeFicaBreakdown, computeHouseholdFica, computePretaxDeductions, computeBonusTax, computeTotalTax, type TotalTaxInput } from '@/lib/tax';
 
 const federal2026Single: Bracket[] = [
   { min: 0, max: 11600, rate: 0.10 },
@@ -381,5 +381,61 @@ describe('computeTotalTax', () => {
     const out = computeTotalTax({ ...baseInput, gross: 0, stateBrackets: txSingle, cityBrackets: null });
     expect(out.federal).toBe(0);
     expect(out.total).toBeCloseTo(out.fica, 2); // FICA still computed on 0 gross = 0
+  });
+});
+
+describe('computeHouseholdFica — per-person SS wage base, per-return Medicare (Wave 2 §6)', () => {
+  it('a single-element household is byte-identical to computeFica', () => {
+    expect(computeHouseholdFica([150_000], 'MFJ').total).toBe(computeFica(150_000, 'MFJ'));
+    expect(computeHouseholdFica([300_000], 'SINGLE').total).toBe(computeFica(300_000, 'SINGLE'));
+  });
+
+  it('dual $100k MFJ (below every threshold) is exactly 2x the single-earner figure', () => {
+    expect(computeHouseholdFica([100_000, 100_000], 'MFJ').total).toBeCloseTo(
+      2 * computeFica(100_000, 'MFJ'),
+      8,
+    );
+  });
+
+  it('dual $150k MFJ: SS gets TWO wage bases; Additional Medicare stays per-return', () => {
+    const out = computeHouseholdFica([150_000, 150_000], 'MFJ');
+    expect(out.socialSecurity).toBeCloseTo(2 * 150_000 * 0.062, 8);            // 18,600 — not min(300k, base)·6.2%
+    expect(out.medicare).toBeCloseTo(300_000 * 0.0145, 8);                      // combined
+    expect(out.additionalMedicare).toBeCloseTo((300_000 - 250_000) * 0.009, 8); // combined − MFJ threshold
+    expect(out.total).toBeCloseTo(2 * computeFica(150_000, 'MFJ') + 450, 6);
+  });
+
+  it('each earner caps at their OWN wage base', () => {
+    const out = computeHouseholdFica([200_000, 200_000], 'MFJ');
+    expect(out.socialSecurity).toBeCloseTo(2 * 184_500 * 0.062, 8);
+  });
+
+  it('empty household totals 0; negative gross throws', () => {
+    expect(computeHouseholdFica([], 'MFJ').total).toBe(0);
+    expect(() => computeHouseholdFica([-1], 'MFJ')).toThrow();
+  });
+});
+
+describe('computeTotalTax — optional perPersonGross routes FICA through the household calc', () => {
+  const base = {
+    filingStatus: 'MFJ' as const,
+    federalBrackets: [{ min: 0, max: null, rate: 0.1 }],
+    stateBrackets: [],
+    cityBrackets: null,
+    standardDeduction: 0,
+    pretax: { pretax401k: 0, pretaxHealth: 0, pretaxDcfsa: 0, pretaxHsa: 0 },
+  };
+
+  it('omitted → identical to legacy combined-gross FICA', () => {
+    expect(computeTotalTax({ ...base, gross: 300_000 }).fica).toBeCloseTo(
+      computeFica(300_000, 'MFJ'),
+      8,
+    );
+  });
+
+  it('provided → per-person SS bases', () => {
+    expect(
+      computeTotalTax({ ...base, gross: 300_000, perPersonGross: [150_000, 150_000] }).fica,
+    ).toBeCloseTo(2 * computeFica(150_000, 'MFJ') + 450, 6);
   });
 });

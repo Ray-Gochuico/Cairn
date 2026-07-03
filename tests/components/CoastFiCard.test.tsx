@@ -6,9 +6,9 @@ import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useAccountsStore } from '@/stores/accounts-store';
-import { FilingStatus, SnapshotSource } from '@/types/enums';
+import { FilingStatus, SnapshotSource, AccountType } from '@/types/enums';
 import { CoastFiCard } from '@/pages/calculators/CoastFiCard';
-import type { GrowthScenario, Person } from '@/types/schema';
+import type { Account, GrowthScenario, Person } from '@/types/schema';
 
 const fourScenarios: GrowthScenario[] = [
   { label: 'Conservative', rate: 0.05 },
@@ -39,6 +39,23 @@ const basePerson: Person = {
   hsaMonthlyContribution: 0,
   hsaEligible: false,
 };
+
+function mkAccount(id: number, type: AccountType = AccountType.ACCOUNT_BROKERAGE, excluded = false): Account {
+  return {
+    id,
+    householdId: 1,
+    ownerPersonId: null,
+    beneficiaryDependentId: null,
+    name: `Acct ${id}`,
+    institution: null,
+    type,
+    cryptoWalletAddress: null,
+    autoFetchEnabled: false,
+    excludedFromNetWorth: excluded,
+    stateOfPlan: null,
+    accentColor: null,
+  } as unknown as Account;
+}
 
 function resetStores() {
   useHouseholdStore.setState({ household: null, isLoading: false, error: null });
@@ -86,6 +103,15 @@ function primeStores(opts?: {
       totalValue: s.totalValue,
       source: SnapshotSource.MANUAL,
     })),
+    isLoading: false,
+    error: null,
+  });
+
+  // Wave 2: the shared FI-eligible selector (src/lib/fi-portfolio.ts) needs a
+  // matching eligible account per snapshot — an unmatched accountId no longer
+  // counts toward the prefill. Seed one brokerage per distinct accountId.
+  useAccountsStore.setState({
+    accounts: [...new Set(defaultSnapshots.map((s) => s.accountId))].map((id) => mkAccount(id)),
     isLoading: false,
     error: null,
   });
@@ -549,13 +575,10 @@ describe('CoastFiCard', () => {
       ],
     });
     useAccountsStore.setState({
-      accounts: [
-        { id: 1, excludedFromNetWorth: false },
-        { id: 2, excludedFromNetWorth: true },
-      ],
+      accounts: [mkAccount(1), mkAccount(2, AccountType.ACCOUNT_BROKERAGE, true)],
       isLoading: false,
       error: null,
-    } as never);
+    });
     render(
       <MemoryRouter>
         <CoastFiCard />

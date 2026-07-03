@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { projectScenario } from '@/lib/scenarios/engine';
 import { captureRealState } from '@/lib/scenarios/state-snapshot';
 import { emptyLeverPayload } from '@/lib/scenarios/lever-types';
-import type { Holding, Loan, Household, Person, Account, AccountSnapshot, TaxRule } from '@/types/schema';
+import type { Holding, Loan, Household, Person, Account, AccountSnapshot, TaxRule, Property } from '@/types/schema';
 import type { Bracket } from '@/lib/tax';
 import { totalInvestments } from '@/lib/scenarios/aggregate-investments';
 
@@ -237,5 +237,42 @@ describe('projectScenario — initial-state regression for negative-growth chart
     for (let i = 0; i < states.length; i++) {
       expect(totalInvestments(states[i])).toBeGreaterThanOrEqual(0);
     }
+  });
+});
+
+describe('projectScenario — physical assets seed net worth once, flat, loans amortize (Wave 2 §5)', () => {
+  it('t=0 NW = investments + home − mortgage (counted once); equity grows only via paydown', () => {
+    const mortgage: Loan = {
+      id: 9, householdId: 1, obligorPersonId: null, name: 'Mortgage', type: 'MORTGAGE',
+      originalAmount: 400_000, currentBalance: 350_000, interestRate: 0.04,
+      termMonths: 360, firstPaymentDate: '2024-01-01', monthlyPayment: 1_909.66,
+      extraPaymentDefault: 0, linkedPropertyId: 7, linkedVehicleId: null,
+    } as unknown as Loan;
+    const home = {
+      id: 7, householdId: 1, ownerPersonId: null, name: 'Home', type: 'PRIMARY_RESIDENCE',
+      address: null, purchaseDate: null, purchasePrice: null,
+      currentEstimatedValue: 400_000, linkedLoanId: 9, excludedFromNetWorth: false,
+    } as unknown as Property;
+
+    const real = captureRealState({
+      accounts: [brokerage],
+      accountSnapshots: [makeSnap(1, 50_000)],
+      holdings: [], loans: [mortgage], loanPayments: [], transactions: [],
+      household, persons,
+      appSettings: { defaultInflation: 0.025, defaultReturnRate: 0.07 },
+      startISO: '2026-05', taxRules: baseTaxRules,
+      properties: [home], vehicles: [], assetValueSnapshots: [],
+    });
+    const states = projectScenario(real, emptyLeverPayload(), { startISO: '2026-05', months: 13 });
+
+    // 50k investments + 400k home − 350k mortgage. The old engine said 50k − 350k.
+    // Gross seed + full debt subtraction ⇒ the mortgage is counted exactly once.
+    expect(states[0].netWorth).toBeCloseTo(100_000, 0);
+    expect(states[0].homeEquity).toBe(400_000);
+    // Held flat — no appreciation modeling (disclosed in the What-If footnote).
+    expect(states[12].homeEquity).toBe(400_000);
+    // The loan side amortizes, so NW rises via paydown independent of savings.
+    const debtAt = (i: number) => Object.values(states[i].debtByLoan).reduce((a, b) => a + b, 0);
+    expect(debtAt(12)).toBeLessThan(debtAt(0));
   });
 });

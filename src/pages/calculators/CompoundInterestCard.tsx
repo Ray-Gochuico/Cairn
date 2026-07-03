@@ -20,8 +20,7 @@ import { useCalculatorState } from '@/lib/calculator-state';
 import { NumberField } from '@/components/calculators/NumberField';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useAccountsStore } from '@/stores/accounts-store';
-import { filterSnapshotsForNetWorth } from '@/lib/account-inclusion';
-import { sumLatestOnOrBefore } from '@/lib/growth-horizons';
+import { fiEligiblePortfolioValue } from '@/lib/fi-portfolio';
 import { useSettingsStore } from '@/stores/settings-store';
 import { CHART_PALETTE } from '@/components/charts/palette';
 import { RealNominalToggle } from '@/components/calculators/RealNominalToggle';
@@ -56,13 +55,12 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
   // Kit-managed input state: persists in sessionStorage under calc-state:compound-interest.
   // pv is prefilled from the latest portfolio snapshot; falls back to 1000 demo default.
   const defaults = useMemo(() => {
+    // Shared FI-eligible definition (src/lib/fi-portfolio.ts): non-excluded
+    // accounts minus 529s, latest snapshot per account on-or-before today.
+    // Pre-Wave-2 this summed EVERY account — a 529 inflated the retirement
+    // default.
     const todayIso = new Date().toISOString().slice(0, 10);
-    // Excluded-from-net-worth accounts opt out of the portfolio prefill.
-    // Excluded-SET filtering: an unhydrated accounts store filters nothing,
-    // so a cold /calculators deep link degrades to the unfiltered prefill
-    // until CalculatorsLayout's accounts load resolves — never to $0.
-    const currentPortfolio =
-      sumLatestOnOrBefore(filterSnapshotsForNetWorth(snapshots, accounts), todayIso) ?? 0;
+    const currentPortfolio = fiEligiblePortfolioValue(accounts, snapshots, todayIso);
     return {
       pv: currentPortfolio > 0 ? currentPortfolio : 1000,   // portfolio prefill; 1000 demo fallback
       monthlyContribution: 100,

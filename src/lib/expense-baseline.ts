@@ -1,38 +1,11 @@
 import type { Transaction, Category } from '@/types/schema';
 import { isRealSpending, effectiveSpendingAmount } from '@/lib/spending-analysis';
 
-/**
- * Computes a monthly expense baseline from a 12-month rolling window of
- * transactions, anchored at `asOfISO`. The divisor is the number of
- * distinct YYYY-MM months observed in the window (capped at 12 by the
- * window itself). A user with 4 months of data gets `totalOutflow / 4`,
- * not `totalOutflow / 12` — so the baseline reflects their actual
- * average rather than being diluted by months with no records.
- *
- * Returns 0 when no qualifying transactions exist in the window.
- *
- * Sign convention: per the Transaction schema (`src/types/schema.ts`),
- * `amount > 0` is a purchase (expense) and `amount < 0` is a refund or
- * credit. Other consumers (spending-analysis, recurring) follow the
- * same convention. We filter `amount > 0` here to sum actual outflows.
- */
-export function computeBaselineExpenses(
-  transactions: Transaction[],
-  asOfISO: string,
-): number {
-  const startMs = Date.parse(asOfISO);
-  const horizonMs = 12 * 30 * 86_400_000;
-  const recent = transactions.filter(
-    (t) =>
-      t.amount > 0 &&
-      Date.parse(t.date) >= startMs - horizonMs &&
-      Date.parse(t.date) <= startMs,
-  );
-  if (recent.length === 0) return 0;
-  const totalOutflow = recent.reduce((acc, t) => acc + t.amount, 0);
-  const monthsObserved = new Set(recent.map((t) => t.date.slice(0, 7))).size;
-  return totalOutflow / Math.max(monthsObserved, 1);
-}
+// NOTE (Wave 2 §8): the legacy raw `amount > 0` baseline helper — which
+// counted credit-card-payment transfers and pending reimbursables as spending
+// — was DELETED from this module. Its only consumer (the Roadmap
+// emergency-fund rules) now uses `rolling12mBaseline` below, the same
+// real-spending pipeline as the Spending page and the What-If expense basis.
 
 export interface MonthlyExpenseTotal {
   monthISO: string;       // 'YYYY-MM'
@@ -41,8 +14,9 @@ export interface MonthlyExpenseTotal {
 
 /**
  * Returns the top N most-recent month totals (descending by monthISO),
- * using the same sign convention as `computeBaselineExpenses`.
+ * using the raw amount-sign convention (`amount > 0` = expense outflow).
  * Future months (relative to `asOfISO`) are excluded.
+ * (Pre-existing orphan — no src callers; deliberately untouched in Wave 2.)
  */
 export function recentMonthlyExpenseTotals(
   transactions: Transaction[],
@@ -72,10 +46,11 @@ export function recentMonthlyExpenseTotals(
  * dropped boundary months non-deterministically by day-of-month and diverged from
  * latestCompleteMonthBaseline's month-string compare; the calendar bound coheres
  * with it (same `slice(0,7)` granularity). Divisor = distinct YYYY-MM months
- * observed (so 4 months of data → /4, not /12), matching computeBaselineExpenses'
- * shape. Unlike that helper this routes through isRealSpending/effectiveSpendingAmount
- * so the figure matches the Spending page (excludes TRANSFER/INCOME, nets
- * reimbursements). Returns 0 when no real spending exists in the window.
+ * observed (so 4 months of data → /4, not /12). Routes through
+ * isRealSpending/effectiveSpendingAmount so the figure matches the Spending
+ * page (excludes TRANSFER/INCOME, nets reimbursements) — unlike the deleted
+ * raw-sum legacy helper (Wave 2 §8; see note at top of file).
+ * Returns 0 when no real spending exists in the window.
  *
  * Note (intentional, coheres with latestMonth): rolling12m INCLUDES asOf's
  * in-progress month (it averages every observed month `<= asOfMonth`); latestMonth

@@ -36,6 +36,13 @@ export interface MonthlyState {
    * time via `totalInvestments(state)` / `aggregateByTaxBucket(state, accounts)`.
    */
   investmentsByAccount: Record<number, number>;
+  /**
+   * GROSS value of non-excluded properties + vehicles, seeded at t=0 and
+   * held FLAT (no appreciation modeling — disclosed on the What-If page).
+   * The name predates Wave 2: it is NOT net of mortgages — computeNetWorth
+   * subtracts every loan separately via debtByLoan, so "equity" emerges from
+   * paydown. Displayed as "Property & vehicles" in the projection chart.
+   */
   homeEquity: number;
   cash: number;
   debtByLoan: Record<number, number>;
@@ -111,13 +118,22 @@ export interface Horizon {
 // from the LeverPayload's annual* fields (introduced 2026-05-27 R2 wiring
 // sweep). Zero-defaults preserve legacy projection sentinels for scenarios
 // that don't model investment income.
+//
+// FICA (Wave 2 §6): the per-person wage split is threaded through so Social
+// Security caps at EACH earner's own wage base — the old combined-gross path
+// applied one base across the household, hiding ~$7.2k/yr of FICA for a
+// dual-$150k couple as phantom after-tax income.
 function annualHouseholdTax(
   real: RealState,
   annualHouseholdGross: number,
   payload: LeverPayload,
+  perPersonAnnualGross: number[],
 ): number {
   return computeTotalTax({
     gross: annualHouseholdGross,
+    // Wave 2 §6: per-person wage split so Social Security caps at each
+    // earner's own wage base instead of one base across the household.
+    perPersonGross: perPersonAnnualGross,
     filingStatus: real.household.filingStatus,
     federalBrackets: real.taxBrackets.federal,
     stateBrackets: real.taxBrackets.state,
@@ -187,7 +203,9 @@ export function projectScenario(
   let state: MonthlyState = {
     monthISO: horizon.startISO,
     investmentsByAccount: { ...real.initialInvestmentsByAccount },
-    homeEquity: 0,
+    // Physical assets held flat (Wave 2 §5); `?? 0` defends hand-rolled
+    // RealState fixtures that pre-date the field.
+    homeEquity: real.initialPhysicalAssets ?? 0,
     cash: real.initialCash,
     debtByLoan: Object.fromEntries(real.loans.map((l) => [l.id!, l.currentBalance])),
     netWorth: 0,
@@ -492,17 +510,21 @@ function stepMonth(
   // deducted normally; the cash-floor rule (step 6) will route the resulting
   // deficit out of investments — modeling a SWR-style drawdown without needing
   // a separate withdrawal-engine code path.
-  let monthlyGrossIncome = 0;
+  const perPersonMonthlyGross: number[] = [];
   real.persons.forEach((p, idx) => {
     const plan = payload.income.perPerson[idx] ?? payload.income.perPerson[0];
     const baseSalary = p.annualSalaryPretax ?? 0;
     const retireAt = payload.retirementAgeOverride ?? (p as { targetRetirementAge?: number }).targetRetirementAge ?? null;
     if (retireAt !== null) {
       const personAge = ageAtMonth((p as { dateOfBirth?: string }).dateOfBirth, monthISO);
-      if (personAge >= retireAt) return; // retired this month → no salary
+      if (personAge >= retireAt) {
+        perPersonMonthlyGross.push(0); // retired this month → no salary
+        return;
+      }
     }
-    monthlyGrossIncome += computeMonthlyIncomeForPerson(baseSalary, plan, monthISO, startYear);
+    perPersonMonthlyGross.push(computeMonthlyIncomeForPerson(baseSalary, plan, monthISO, startYear));
   });
+  const monthlyGrossIncome = perPersonMonthlyGross.reduce((a, b) => a + b, 0);
 
   // 3. Bracket-real federal + FICA + state + city tax via computeTotalTax.
   // Annualize monthly gross, compute annual tax once, amortize back to monthly drag.
@@ -511,7 +533,14 @@ function stepMonth(
   // annual* fields so they're taxed at the LTCG schedule (when present) and
   // contribute to NIIT MAGI/net-II calculation.
   const annualGross = monthlyGrossIncome * 12;
-  const annualTax = annualHouseholdTax(real, annualGross, payload);
+  const annualTax = annualHouseholdTax(
+    real,
+    annualGross,
+    payload,
+    // A negative "salary" (unconstrained raise deltaAmount) is not a wage;
+    // floor at 0 — household-total semantics preserved for all sane inputs.
+    perPersonMonthlyGross.map((g) => Math.max(0, g) * 12),
+  );
   s.incomeAfterTax = (annualGross - annualTax) / 12;
 
   // 4. Expenses: baseline trended + period deltas.

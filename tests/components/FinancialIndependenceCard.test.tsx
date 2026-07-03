@@ -7,9 +7,9 @@ import { usePersonsStore } from '@/stores/persons-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useContributionsStore } from '@/stores/contributions-store';
 import { useAccountsStore } from '@/stores/accounts-store';
-import { FilingStatus, ContributionSource, SnapshotSource } from '@/types/enums';
+import { FilingStatus, ContributionSource, SnapshotSource, AccountType } from '@/types/enums';
 import { FinancialIndependenceCard } from '@/pages/calculators/FinancialIndependenceCard';
-import type { GrowthScenario } from '@/types/schema';
+import type { Account, GrowthScenario } from '@/types/schema';
 
 // The "today" that all test logic is pinned to — must be a stable ISO string
 // so that:
@@ -48,6 +48,23 @@ const basePerson = {
   hsaMonthlyContribution: 0,
   hsaEligible: false,
 };
+
+function mkAccount(id: number, type: AccountType = AccountType.ACCOUNT_BROKERAGE, excluded = false): Account {
+  return {
+    id,
+    householdId: 1,
+    ownerPersonId: null,
+    beneficiaryDependentId: null,
+    name: `Acct ${id}`,
+    institution: null,
+    type,
+    cryptoWalletAddress: null,
+    autoFetchEnabled: false,
+    excludedFromNetWorth: excluded,
+    stateOfPlan: null,
+    accentColor: null,
+  } as unknown as Account;
+}
 
 function resetStores() {
   useHouseholdStore.setState({ household: null, isLoading: false, error: null });
@@ -97,6 +114,15 @@ function primeStores(opts?: {
       totalValue: s.totalValue,
       source: SnapshotSource.MANUAL,
     })),
+    isLoading: false,
+    error: null,
+  });
+
+  // Wave 2: the shared FI-eligible selector (src/lib/fi-portfolio.ts) needs a
+  // matching eligible account per snapshot — an unmatched accountId no longer
+  // counts toward the prefill. Seed one brokerage per distinct accountId.
+  useAccountsStore.setState({
+    accounts: [...new Set(defaultSnapshots.map((s) => s.accountId))].map((id) => mkAccount(id)),
     isLoading: false,
     error: null,
   });
@@ -402,13 +428,10 @@ describe('FinancialIndependenceCard', () => {
       ],
     });
     useAccountsStore.setState({
-      accounts: [
-        { id: 1, excludedFromNetWorth: false },
-        { id: 2, excludedFromNetWorth: true },
-      ],
+      accounts: [mkAccount(1), mkAccount(2, AccountType.ACCOUNT_BROKERAGE, true)],
       isLoading: false,
       error: null,
-    } as never);
+    });
     render(
       <MemoryRouter>
         <FinancialIndependenceCard />
@@ -421,13 +444,17 @@ describe('FinancialIndependenceCard', () => {
     ).toBe('200000');
   });
 
-  it('prefill is unchanged when the accounts store is not hydrated (excluded-set semantics)', () => {
+  it('prefill reads $0 while the accounts store is unhydrated (FI-eligible set needs accounts; CalculatorsLayout loads them)', () => {
+    // Wave 2 replaced excluded-SET filtering (unhydrated accounts → no
+    // filtering) with the shared FI-eligible INCLUDED set: no accounts means
+    // no eligible ids, so the prefill honestly reads 0 until the accounts
+    // load (guaranteed by CalculatorsLayout's hydration effect) resolves.
     primeStores({
       snapshotValues: [
         { accountId: 1, snapshotDate: '2026-04-01', totalValue: 200_000 },
       ],
     });
-    // accounts: [] (resetStores) — degrades to no filtering, never to $0.
+    useAccountsStore.setState({ accounts: [], isLoading: false, error: null });
     render(
       <MemoryRouter>
         <FinancialIndependenceCard />
@@ -435,7 +462,33 @@ describe('FinancialIndependenceCard', () => {
     );
     expect(
       (screen.getByLabelText(/current portfolio/i) as HTMLInputElement).value,
-    ).toBe('200000');
+    ).toBe('0');
+  });
+
+  it('excludes 529 and excluded-from-net-worth balances from the Current portfolio default', () => {
+    primeStores(); // household + persons as the file's default prime does
+    useAccountsStore.setState({
+      accounts: [
+        mkAccount(1),                                        // eligible brokerage
+        mkAccount(2, AccountType.ACCOUNT_529),               // education money
+        mkAccount(3, AccountType.ACCOUNT_BROKERAGE, true),   // excluded from NW
+      ],
+      isLoading: false,
+      error: null,
+    });
+    useSnapshotsStore.setState({
+      snapshots: [
+        { id: 1, accountId: 1, snapshotDate: '2026-04-01', totalValue: 100_000, source: SnapshotSource.MANUAL },
+        { id: 2, accountId: 2, snapshotDate: '2026-04-01', totalValue: 50_000, source: SnapshotSource.MANUAL },
+        { id: 3, accountId: 3, snapshotDate: '2026-04-01', totalValue: 25_000, source: SnapshotSource.MANUAL },
+      ],
+      isLoading: false,
+      error: null,
+    });
+    render(<MemoryRouter><FinancialIndependenceCard /></MemoryRouter>);
+    expect(
+      (screen.getByLabelText(/current portfolio/i) as HTMLInputElement).value,
+    ).toBe('100000');
   });
 
   it('explains the target-line basis for both chart views', () => {

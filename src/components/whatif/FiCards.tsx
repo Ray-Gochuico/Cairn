@@ -78,6 +78,12 @@ function computeCards(props: FiCardsProps, settings: AppSettings | null): Comput
   const swr = effectiveSwr(ref, household);
   if (swr <= 0) return null;
 
+  // Seed-derived "liquid net worth": non-excluded accounts via the projection
+  // seed (computeInitialBalances), so 529s are included here unlike the
+  // dashboard FI defaults (src/lib/fi-portfolio.ts — the shared retirement-FI
+  // definition excludes them). Kept as-is deliberately: the seed IS the
+  // number the projection compounds, and re-deriving it here would let the
+  // cards disagree with the chart they annotate.
   const liquidNw = totalInvestments(seed) + seed.cash;
   const fiTarget = (household.monthlyExpenseBaseline * 12) / swr;
 

@@ -27,7 +27,8 @@ function toIsoDay(d: Date): string {
  * calendar day never drifts with the running machine's timezone — a late
  * evening local instant won't slip the "yesterday" date back two days.
  * Day-based horizons (1d, 1w) subtract whole days; calendar horizons
- * (1m, 1q, 1y) step the UTC month/year and let Date normalize overflow.
+ * (1m, 1q, 1y) step the UTC month/year, clamping to the target month's
+ * last day.
  */
 function minusDays(now: Date, days: number): string {
   return toIsoDay(new Date(now.getTime() - days * 24 * 60 * 60 * 1000));
@@ -35,20 +36,18 @@ function minusDays(now: Date, days: number): string {
 
 function minusMonths(now: Date, months: number): string {
   // Anchor on the UTC Y/M/D so we don't reintroduce TZ drift via local
-  // getters. setUTCMonth handles negative/overflow month indices.
-  const d = new Date(
-    Date.UTC(
-      now.getUTCFullYear(),
-      now.getUTCMonth(),
-      now.getUTCDate(),
-      0,
-      0,
-      0,
-      0,
-    ),
-  );
-  d.setUTCMonth(d.getUTCMonth() - months);
-  return toIsoDay(d);
+  // getters. Clamp the day to the target month's last day: the previous
+  // setUTCMonth() approach let Date normalize overflow FORWARD (Mar 31 −
+  // 1mo → Feb 31 → Mar 3), putting a "past month" baseline 3 days into
+  // the CURRENT month. subMonths semantics, inline — date-fns' version
+  // runs on local time, which this module deliberately avoids.
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth();
+  const day = now.getUTCDate();
+  // Day 0 of month (m − months + 1) = last day of month (m − months);
+  // Date.UTC normalizes negative/overflow month indices across years.
+  const lastDayOfTarget = new Date(Date.UTC(y, m - months + 1, 0)).getUTCDate();
+  return toIsoDay(new Date(Date.UTC(y, m - months, Math.min(day, lastDayOfTarget))));
 }
 
 export const GROWTH_HORIZONS: HorizonDef[] = [
@@ -67,7 +66,10 @@ export interface HorizonGrowth {
   baseline: number | null;
   /** current - baseline; null unless both are present. */
   deltaAbs: number | null;
-  /** Fraction (0.1 = +10%); null unless both values are present and baseline > 0. */
+  /**
+   * Fraction (0.1 = +10%); null unless both values are present, baseline > 0,
+   * and the ratio is within the ±999.9% display cap.
+   */
   deltaPct: number | null;
   /** True only if both current and baseline are non-null. */
   available: boolean;
@@ -160,10 +162,13 @@ export function computeHorizonGrowth(
     // deltaPct is a fraction; null on a NON-POSITIVE baseline. Zero baseline
     // divides by zero; a NEGATIVE baseline flips the sign (−$10k → −$5k is a
     // +$5k improvement but a −50% ratio — green arrow, negative percent).
-    // Matches the chart's deltaPctOrNull convention (baseline must be > 0);
-    // the card renders absolute-only when pct is null.
-    const deltaPct =
+    // Matches the chart's deltaPctOrNull convention (baseline must be > 0,
+    // and |pct| ≤ 999.9% — a near-zero positive baseline would otherwise
+    // print an absurd five-digit percent); the card renders absolute-only
+    // when pct is null.
+    const rawPct =
       available && baseline > 0 ? (current - baseline) / baseline : null;
+    const deltaPct = rawPct !== null && Math.abs(rawPct) > 9.999 ? null : rawPct;
     return {
       key: h.key,
       label: h.label,

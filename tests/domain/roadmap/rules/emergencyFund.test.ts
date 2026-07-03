@@ -6,8 +6,8 @@ import {
   totalCashReserve,
 } from '@/domain/roadmap/rules/emergencyFund';
 import type { RoadmapContext } from '@/types/roadmap';
-import type { Account, AccountSnapshot, Household, Person, Transaction } from '@/types/schema';
-import { AccountType, FilingStatus, SnapshotSource } from '@/types/enums';
+import type { Account, AccountSnapshot, Category, Household, Person, Transaction } from '@/types/schema';
+import { AccountType, CategoryType, FilingStatus, SnapshotSource } from '@/types/enums';
 
 function makeHousehold(patch: Partial<Household> = {}): Household {
   return {
@@ -102,6 +102,7 @@ function makeContext(opts: {
   savings?: number;
   stability?: 'stable' | 'unstable' | null;
   transactions?: Transaction[];
+  categories?: Category[];
 } = {}): RoadmapContext {
   const accounts: Account[] = [];
   const snapshots: AccountSnapshot[] = [];
@@ -125,6 +126,7 @@ function makeContext(opts: {
     contributions: [],
     snapshots,
     transactions: opts.transactions ?? [],
+    categories: opts.categories ?? [],
     overrides: new Map(),
     thresholds: { low: 5, high: 8 },
     taxYear: 2026,
@@ -132,7 +134,7 @@ function makeContext(opts: {
   };
 }
 
-function tx(id: number, date: string, amount: number): Transaction {
+function tx(id: number, date: string, amount: number, patch: Partial<Transaction> = {}): Transaction {
   return ({
     id,
     householdId: 1,
@@ -142,6 +144,10 @@ function tx(id: number, date: string, amount: number): Transaction {
     merchantRaw: null,
     categoryId: 1,
     sourceAccountId: 1,
+    reimbursable: false,
+    reimbursedAt: null,
+    reimbursedAmount: null,
+    ...patch,
   } as unknown) as Transaction;
 }
 
@@ -339,5 +345,60 @@ describe('emergency-fund rule — real expense baseline from transactions', () =
     expect(r.status).toBe('active');
     expect(r.evidence).toMatch(/\$1,000/);
     expect(r.evidence).toMatch(/from 12-mo avg/);
+  });
+});
+
+describe('EF baseline uses REAL spending — transfers and reimbursements excluded (Wave 2 §8)', () => {
+  const spendCat: Category = {
+    id: 1, name: 'Everything', parentCategoryId: null, color: null, icon: null,
+    type: CategoryType.NEED, isCapital: false, systemManaged: false, monthlyBudget: null,
+  };
+  const transferCat: Category = {
+    ...spendCat, id: 9, name: 'CC Payments', type: CategoryType.TRANSFER,
+  };
+
+  it('credit-card-payment transfers no longer inflate the EF target', () => {
+    // $8k/mo of transfers + $2k/mo of real spending for 3 months.
+    const transactions = [
+      tx(1, '2026-03-05', 8000, { categoryId: 9 }),
+      tx(2, '2026-04-05', 8000, { categoryId: 9 }),
+      tx(3, '2026-05-05', 8000, { categoryId: 9 }),
+      tx(4, '2026-03-10', 2000),
+      tx(5, '2026-04-10', 2000),
+      tx(6, '2026-05-10', 2000),
+    ];
+    const ctx = makeContext({
+      cash: 2500,
+      transactions,
+      categories: [spendCat, transferCat],
+    });
+    const r = evaluateSmallEmergencyFund(ctx);
+    // Real baseline = $2,000/mo → small-EF target = max($1k, $2k) = $2,000;
+    // $2,500 cash meets it. The raw-amount baseline said $10k/mo → active at 25%.
+    expect(r.status).toBe('done');
+    expect(r.evidence).toMatch(/\$2,000/);
+    expect(r.evidence).toMatch(/from 12-mo avg/);
+  });
+
+  it('pending reimbursables are excluded; reimbursed ones count at net out-of-pocket', () => {
+    const transactions = [
+      tx(1, '2026-05-02', 3000, { reimbursable: true }),                                   // pending → excluded
+      tx(2, '2026-05-03', 1000, { reimbursable: true, reimbursedAt: '2026-05-20', reimbursedAmount: 800 }), // → $200
+      tx(3, '2026-05-04', 1800),
+    ];
+    const ctx = makeContext({ cash: 100, transactions, categories: [spendCat] });
+    const r = evaluateSmallEmergencyFund(ctx);
+    // Baseline = (200 + 1800) / 1 month = $2,000 → target $2,000.
+    expect(r.evidence).toMatch(/\$2,000/);
+  });
+
+  it('all-transfer history falls back to the household baseline (from Household suffix)', () => {
+    const transactions = [tx(1, '2026-05-05', 8000, { categoryId: 9 })];
+    const ctx = makeContext({
+      baseline: 5000, cash: 100, transactions, categories: [spendCat, transferCat],
+    });
+    const r = evaluateSmallEmergencyFund(ctx);
+    expect(r.evidence).toMatch(/\$5,000/);
+    expect(r.evidence).toMatch(/from Household/);
   });
 });

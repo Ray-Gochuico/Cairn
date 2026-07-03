@@ -301,6 +301,9 @@ function realFingerprint(real: RealState): string {
     Math.round(real.initialCash ?? 0),
     Math.round(investmentSum),
     Math.round(loanSum),
+    // Wave 2 §5: physical-asset seed must invalidate cached projections when
+    // a property/vehicle value changes, or the chart survives the edit stale.
+    Math.round(real.initialPhysicalAssets ?? 0),
     tb?.federal?.length ?? 0,
     tb?.state?.length ?? 0,
     tb?.city?.length ?? 0,

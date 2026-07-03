@@ -9,6 +9,7 @@ import { useLoansStore } from '@/stores/loans-store';
 import { useContributionsStore } from '@/stores/contributions-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
+import { useCategoriesStore } from '@/stores/categories-store';
 import { useRoadmapOverridesStore } from '@/stores/roadmap-overrides-store';
 import { useRoadmap } from '@/domain/roadmap/context';
 import { evaluate } from '@/domain/roadmap/evaluate';
@@ -67,6 +68,7 @@ export default function Roadmap() {
   const loadContributions = useContributionsStore((s) => s.load);
   const loadSnapshots = useSnapshotsStore((s) => s.load);
   const loadTransactions = useTransactionsStore((s) => s.load);
+  const loadCategories = useCategoriesStore((s) => s.load);
   const loadOverrides = useRoadmapOverridesStore((s) => s.load);
 
   useEffect(() => {
@@ -77,6 +79,7 @@ export default function Roadmap() {
     void loadContributions();
     void loadSnapshots();
     void loadTransactions();
+    void loadCategories();
     void loadOverrides();
   }, [
     loadHousehold,
@@ -86,6 +89,7 @@ export default function Roadmap() {
     loadContributions,
     loadSnapshots,
     loadTransactions,
+    loadCategories,
     loadOverrides,
   ]);
 

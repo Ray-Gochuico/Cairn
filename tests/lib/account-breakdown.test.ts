@@ -278,3 +278,18 @@ describe('computeAccountBreakdown', () => {
     expect(rows[1]).toMatchObject({ name: 'Taxable', type: AccountType.ACCOUNT_BROKERAGE });
   });
 });
+
+describe('one-month baseline inherits the month-end clamp (Wave 2 §7)', () => {
+  it('Mar 31 baseline is Feb 28 — a Mar 2 snapshot no longer poses as "last month"', () => {
+    const account = acct({ id: 1, type: AccountType.ACCOUNT_BROKERAGE, name: 'Brokerage' });
+    const snapshots = [
+      snap(1, '2026-02-27', 111),
+      snap(1, '2026-03-02', 222),
+      snap(1, '2026-03-30', 333),
+    ];
+    const out = computeAccountBreakdown([account], snapshots, new Date('2026-03-31T12:00:00Z'));
+    // Old bug: baseline 2026-03-03 → picked the Mar 2 snapshot (222).
+    expect(out.rows[0].valueAsOf).toBe(111);
+    expect(out.rows[0].currentValue).toBe(333);
+  });
+});

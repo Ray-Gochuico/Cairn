@@ -3,7 +3,7 @@ import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useAccountsStore } from '@/stores/accounts-store';
-import { filterSnapshotsForNetWorth } from '@/lib/account-inclusion';
+import { fiEligiblePortfolioValue } from '@/lib/fi-portfolio';
 import { CalculatorCard } from './CalculatorCard';
 import { coastFi } from '@/lib/coast-fi';
 import { realRateOf } from '@/lib/calculators/real-rate';
@@ -12,7 +12,6 @@ import { formatCurrency, formatPercent } from '@/lib/format';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import { useCalculatorState } from '@/lib/calculator-state';
 import { NumberField } from '@/components/calculators/NumberField';
-import { sumLatestOnOrBefore } from '@/lib/growth-horizons';
 import { effectiveSwr } from '@/lib/scenarios/effective-swr';
 import { effectiveBaselineInflation } from '@/lib/scenarios/effective-inflation';
 import LineChartCard from '@/components/charts/LineChartCard';
@@ -41,16 +40,12 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
 
   // ── Real-data defaults (memoized from the stores) ──────────────────────────
   const defaults = useMemo(() => {
-    // Latest snapshot per account on or before today — the canonical helper
-    // (shared with What-If/Backtest). It applies the snapshotDate <= today
-    // cutoff the old hand-rolled loop omitted.
+    // Shared FI-eligible definition (src/lib/fi-portfolio.ts): non-excluded
+    // accounts minus 529s, latest snapshot per account on-or-before today.
+    // Pre-Wave-2 this summed EVERY account — a 529 inflated the retirement
+    // default.
     const todayIso = new Date().toISOString().slice(0, 10);
-    // Excluded-from-net-worth accounts opt out of the portfolio prefill.
-    // Excluded-SET filtering: an unhydrated accounts store filters nothing,
-    // so a cold /calculators deep link degrades to the unfiltered prefill
-    // until CalculatorsLayout's accounts load resolves — never to $0.
-    const currentPortfolio =
-      sumLatestOnOrBefore(filterSnapshotsForNetWorth(snapshots, accounts), todayIso) ?? 0;
+    const currentPortfolio = fiEligiblePortfolioValue(accounts, snapshots, todayIso);
 
     // Shortest years-until-retirement across persons (fallback 20).
     let yearsUntilRetirement = 20;
