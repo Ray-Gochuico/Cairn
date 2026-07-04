@@ -166,23 +166,27 @@ export default function Sidebar() {
 
   return (
     <aside className="w-56 border-r bg-card p-2 flex flex-col gap-1 overflow-y-auto">
-      {sections.map((s) => (
-        <div key={s.label} className="mb-2">
-          <div className="px-3 pt-3 pb-1 text-xs uppercase tracking-wider text-muted-foreground">
-            {s.label}
+      {/* Wave-4 a11y: labeled nav landmark so AT users can jump straight to
+          the primary navigation (covers every section incl. Monthly). */}
+      <nav aria-label="Primary" className="flex flex-col gap-1">
+        {sections.map((s) => (
+          <div key={s.label} className="mb-2">
+            <div className="px-3 pt-3 pb-1 text-xs uppercase tracking-wider text-muted-foreground">
+              {s.label}
+            </div>
+            {s.items.map((i) => (
+              <SidebarLink
+                key={i.to}
+                to={i.to}
+                label={i.label}
+                icon={i.icon}
+                glossaryTerm={i.glossaryTerm}
+                showDot={i.to === '/monthly' && monthlyPending}
+              />
+            ))}
           </div>
-          {s.items.map((i) => (
-            <SidebarLink
-              key={i.to}
-              to={i.to}
-              label={i.label}
-              icon={i.icon}
-              glossaryTerm={i.glossaryTerm}
-              showDot={i.to === '/monthly' && monthlyPending}
-            />
-          ))}
-        </div>
-      ))}
+        ))}
+      </nav>
     </aside>
   );
 }

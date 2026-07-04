@@ -173,7 +173,7 @@ export function TailorStep({ result, totalSteps = 3, onDone, onSkip }: TailorSte
           )}
 
           {saveError && (
-            <div className="rounded-md border border-destructive/50 px-3 py-2 text-sm text-destructive">
+            <div role="alert" className="rounded-md border border-destructive/50 px-3 py-2 text-sm text-destructive-soft-foreground">
               Couldn't save your choices. Please try again.
             </div>
           )}

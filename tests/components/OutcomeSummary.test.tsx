@@ -63,6 +63,11 @@ describe('OutcomeSummary', () => {
     expect(screen.getByText(/2 of 3/)).toBeInTheDocument();
   });
 
+  it('announces the results-ready run-meta line', () => {
+    render(<OutcomeSummary result={makeResult()} goalAmount={1_000_000} />);
+    expect(screen.getByRole('status')).toHaveTextContent(/historical periods/);
+  });
+
   it('shows the run-meta caption', () => {
     render(<OutcomeSummary result={makeResult()} goalAmount={1_000_000} />);
     const meta = screen.getByTestId('backtest-run-meta');

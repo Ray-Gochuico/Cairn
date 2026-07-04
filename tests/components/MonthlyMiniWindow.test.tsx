@@ -207,6 +207,62 @@ describe('MonthlyMiniWindow', () => {
       );
       expect(updated?.source).toBe(SnapshotSource.USER_CONFIRMED);
     });
+    // Wave-4: the card's Confirmed flip is announced to screen readers.
+    expect(screen.getByRole('status')).toHaveTextContent('Confirmed');
+  });
+
+  it('announces a failed confirm via role="alert" (Wave-4: inline card errors are announced)', async () => {
+    const user = userEvent.setup();
+    const accountsRepo = new AccountsRepo(db);
+    const accountId = await accountsRepo.create({
+      householdId: 1,
+      ownerPersonId: null,
+      beneficiaryDependentId: null,
+      name: 'Brokerage One',
+      institution: null,
+      type: AccountType.ACCOUNT_BROKERAGE,
+      cryptoWalletAddress: null,
+      autoFetchEnabled: false,
+      excludedFromNetWorth: false,
+      stateOfPlan: null,
+      accentColor: null,
+    });
+    const snapshotsRepo = new AccountSnapshotsRepo(db);
+    const today = new Date();
+    const prev = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const lastBizDayUtc = new Date(
+      Date.UTC(prev.getFullYear(), prev.getMonth() + 1, 0),
+    );
+    while (lastBizDayUtc.getUTCDay() === 0 || lastBizDayUtc.getUTCDay() === 6) {
+      lastBizDayUtc.setUTCDate(lastBizDayUtc.getUTCDate() - 1);
+    }
+    await snapshotsRepo.upsert({
+      accountId,
+      snapshotDate: lastBizDayUtc.toISOString().slice(0, 10),
+      totalValue: 5000,
+      source: SnapshotSource.AUTO_DERIVED,
+    });
+
+    render(
+      <MemoryRouter>
+        <MonthlyMiniWindow />
+      </MemoryRouter>,
+    );
+    const confirmBtn = await screen.findByRole('button', { name: /^confirm$/i });
+
+    // Same store-stubbing idiom as the Confirm-all in-flight test.
+    const orig = useSnapshotsStore.getState().upsert;
+    useSnapshotsStore.setState({
+      upsert: (async () => {
+        throw new Error('Save failed');
+      }) as typeof orig,
+    } as never);
+    try {
+      await user.click(confirmBtn);
+      expect(await screen.findByRole('alert')).toHaveTextContent(/failed/i);
+    } finally {
+      useSnapshotsStore.setState({ upsert: orig } as never);
+    }
   });
 
   it('renders a loan-payment card with the next amortization entry', async () => {
@@ -338,7 +394,10 @@ describe('MonthlyMiniWindow', () => {
           ),
         ).toBe(true);
       });
-      expect(screen.getByRole('status')).toHaveTextContent(/confirmed 2 account values/i);
+      // Wave-4 adaptation: per-card "Confirmed" spans are role="status" too,
+      // so query all live regions and find the batch summary among them.
+      const statuses = screen.getAllByRole('status').map((el) => el.textContent ?? '');
+      expect(statuses.some((t) => /confirmed 2 account values/i.test(t))).toBe(true);
       // Cards reflect the batch confirmation without a remount.
       expect(screen.getAllByText('Confirmed').length).toBeGreaterThanOrEqual(2);
     });
@@ -404,8 +463,10 @@ describe('MonthlyMiniWindow', () => {
           .snapshots.find((x) => x.accountId === id1 && x.snapshotDate === close);
         expect(s?.source).toBe(SnapshotSource.USER_CONFIRMED);
       });
-      // Exactly one card flipped; the sibling stays pending.
+      // Exactly one card flipped; the sibling stays pending. Wave-4: the
+      // flip is a status announcement.
       expect(screen.getAllByText('Confirmed')).toHaveLength(1);
+      expect(screen.getByRole('status')).toHaveTextContent('Confirmed');
       expect(screen.getAllByRole('button', { name: /^confirm$/i })).toHaveLength(1);
     });
   });

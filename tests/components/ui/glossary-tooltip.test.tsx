@@ -18,11 +18,11 @@ describe('TermTooltip', () => {
   it('opens a popover whose content matches the glossary entry on click', async () => {
     const user = userEvent.setup();
     render(<TermTooltip term="DCFSA" />);
-    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /DCFSA/ }));
 
-    const tooltip = await screen.findByRole('tooltip');
+    const tooltip = await screen.findByRole('dialog');
     const expected = getGlossaryEntry('DCFSA');
     expect(expected).not.toBeNull();
     expect(tooltip).toHaveTextContent(expected!.shortDefinition);
@@ -34,14 +34,14 @@ describe('TermTooltip', () => {
     const trigger = screen.getByRole('button', { name: /SWR/ });
 
     await user.hover(trigger);
-    expect(await screen.findByRole('tooltip')).toBeInTheDocument();
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
 
     await user.unhover(trigger);
     // The Radix-backed implementation debounces hover-out by ~120 ms so
     // the user can move the cursor into the popover without it closing
     // prematurely. Wait for the eventual dismissal.
     await waitFor(() =>
-      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument(),
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
     );
   });
 

@@ -24,11 +24,11 @@ const MAP: Record<
   NodeStatus,
   { Icon: LucideIcon; cls: string; label: string; tooltip: string }
 > = {
-  done: { Icon: Check, cls: 'text-success', label: 'done', tooltip: 'Done' },
-  active: { Icon: ArrowRight, cls: 'text-info', label: 'active', tooltip: 'Active — your current focus' },
+  done: { Icon: Check, cls: 'text-success-foreground', label: 'done', tooltip: 'Done' },
+  active: { Icon: ArrowRight, cls: 'text-info-foreground', label: 'active', tooltip: 'Active — your current focus' },
   unanswered: {
     Icon: HelpCircle,
-    cls: 'text-warning',
+    cls: 'text-warning-foreground',
     label: 'unanswered',
     tooltip: 'Unanswered — needs input',
   },

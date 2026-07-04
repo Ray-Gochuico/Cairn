@@ -1,10 +1,11 @@
-import { useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import { useEffect, useRef } from 'react';
+import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import TourOverlay from './TourOverlay';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { ViewFilter } from './ViewFilter';
 import { usePersonsStore } from '@/stores/persons-store';
+import { documentTitleFor } from '@/lib/route-titles';
 
 export default function PageShell() {
   // Load persons ONCE at the shell level so the per-person view filter is
@@ -18,6 +19,23 @@ export default function PageShell() {
   useEffect(() => {
     void loadPersons();
   }, [loadPersons]);
+
+  // Wave-4 a11y: SPA navigations are silent for AT without this — set the
+  // tab title per route and move focus onto the <main> landmark so screen
+  // readers announce "<title>, main". We focus <main> (not the page h1):
+  // routes are lazy chunks, so on pathname-change the new h1 may not exist
+  // yet. Skipped on first render (initial focus belongs to the document).
+  const location = useLocation();
+  const mainRef = useRef<HTMLElement | null>(null);
+  const firstRenderRef = useRef(true);
+  useEffect(() => {
+    document.title = documentTitleFor(location.pathname);
+    if (firstRenderRef.current) {
+      firstRenderRef.current = false;
+      return;
+    }
+    mainRef.current?.focus();
+  }, [location.pathname]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-background text-foreground">
@@ -40,7 +58,11 @@ export default function PageShell() {
         <header className="flex justify-end items-center px-6 py-2 border-b border-border min-h-[44px]">
           <ViewFilter />
         </header>
-        <main id="main" className="flex-1 min-w-0 overflow-y-auto">
+        {/* tabIndex={-1}: programmatically focusable for the route-change
+            effect above AND makes the #main skip-link actually move focus
+            in WebKit. outline-none — this focus is programmatic context,
+            not a visible tab stop. */}
+        <main id="main" ref={mainRef} tabIndex={-1} className="flex-1 min-w-0 overflow-y-auto outline-none">
           <ErrorBoundary>
             <Outlet />
           </ErrorBoundary>

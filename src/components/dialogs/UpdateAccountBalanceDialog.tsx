@@ -98,7 +98,7 @@ export function UpdateAccountBalanceDialog({
           </div>
           <div>
             <Label htmlFor="balance-date">As of</Label>
-            <DatePicker id="balance-date" value={date} onChange={setDate} />
+            <DatePicker id="balance-date" label="As of" value={date} onChange={setDate} />
           </div>
           {error && (
             <div className="text-sm text-destructive-soft-foreground" role="alert">

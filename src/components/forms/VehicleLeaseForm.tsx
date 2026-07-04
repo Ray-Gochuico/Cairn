@@ -132,6 +132,7 @@ export default function VehicleLeaseForm({
               <Label htmlFor="startDate">Start date</Label>
               <DatePicker
                 id="startDate"
+                label="Start date"
                 value={form.watch('startDate')}
                 onChange={(v) =>
                   form.setValue('startDate', v, {
@@ -145,6 +146,7 @@ export default function VehicleLeaseForm({
               <Label htmlFor="endDate">End date (optional)</Label>
               <DatePicker
                 id="endDate"
+                label="End date"
                 value={form.watch('endDate') ?? ''}
                 onChange={(v) =>
                   form.setValue('endDate', v === '' ? null : v, {
@@ -160,7 +162,7 @@ export default function VehicleLeaseForm({
       </Card>
 
       {Object.keys(form.formState.errors).length > 0 && (
-        <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive-soft-foreground">
+        <div role="alert" className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive-soft-foreground">
           <div className="font-medium mb-1">Fix these before saving:</div>
           <ul className="list-disc pl-5">
             {Object.entries(form.formState.errors).map(([field, err]) => (

@@ -121,8 +121,8 @@ export function SpendingSummaryHero({
                     lastMonthTotal <= 0 || momDelta === 0
                       ? 'text-muted-foreground'
                       : momDelta > 0
-                        ? 'text-destructive'
-                        : 'text-success'
+                        ? 'text-destructive-soft-foreground'
+                        : 'text-success-foreground'
                   }`}
                 >
                   {lastMonthTotal <= 0

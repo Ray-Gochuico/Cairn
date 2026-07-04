@@ -203,7 +203,9 @@ export function FreshnessBadge({
       </PopoverPrimitive.Trigger>
       <PopoverPrimitive.Portal>
         <PopoverPrimitive.Content
-          role="tooltip"
+          // Wave-4 a11y: no role override — Radix's default role="dialog"
+          // is the truthful role; the tooltip role forbids the interactive
+          // Refresh-now / Settings controls this popover contains.
           sideOffset={6}
           collisionPadding={8}
           onPointerEnter={cancelClose}

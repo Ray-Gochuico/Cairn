@@ -279,4 +279,17 @@ describe('PdfReviewModal', () => {
       expect(propertySelect).toHaveValue(String(propertyId));
     });
   });
+
+  it('exposes a polite live region for save progress', async () => {
+    const result = makeResult([
+      { date: '2026-03-05', merchantRaw: 'WHOLE FOODS MARKET', merchant: 'WHOLE FOODS MARKET', amount: 54.23 },
+    ]);
+    renderModal(result, []);
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('WHOLE FOODS MARKET')).toBeInTheDocument();
+    });
+    // Region exists (empty) before saving so SRs pick up the change to
+    // "Saving…" — live regions must pre-exist their first update.
+    expect(screen.getByTestId('pdf-save-status')).toHaveAttribute('role', 'status');
+  });
 });

@@ -279,7 +279,7 @@ export function Retirement401kWithdrawalCard({
           />
           <div
             data-testid="401k-penalty-row"
-            className={earlyPenaltyApplies && planType !== 'ROTH' ? 'text-destructive' : undefined}
+            className={earlyPenaltyApplies && planType !== 'ROTH' ? 'text-destructive-soft-foreground' : undefined}
           >
             <ResultRow
               orientation="inline"

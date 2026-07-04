@@ -39,9 +39,9 @@ export default function BudgetOverlayRow({ row, onBudgetCommit }: BudgetOverlayR
     ? `${currency(remaining as number)} over`
     : `${currency(remaining as number)} left`;
   const labelColor = overBudget
-    ? 'text-destructive'
+    ? 'text-destructive-soft-foreground'
     : actual > 0
-      ? 'text-success'
+      ? 'text-success-foreground'
       : 'text-muted-foreground';
 
   return (

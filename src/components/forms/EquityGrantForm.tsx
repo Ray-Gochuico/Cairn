@@ -232,6 +232,7 @@ export default function EquityGrantForm({
               <Label htmlFor="grant-date">Grant date</Label>
               <DatePicker
                 id="grant-date"
+                label="Grant date"
                 value={form.watch('grantDate')}
                 onChange={(v) =>
                   form.setValue('grantDate', v, { shouldDirty: true, shouldTouch: true })
@@ -400,6 +401,7 @@ export default function EquityGrantForm({
                       <td className="py-1 pr-2 align-top">
                         <DatePicker
                           id={`vesting-row-${i}-date`}
+                          label={`Vesting row ${i + 1} date`}
                           value={row.date}
                           onChange={(v) => updateRow(i, { date: v })}
                         />
@@ -444,7 +446,7 @@ export default function EquityGrantForm({
       </Card>
 
       {fieldErrors.length > 0 && (
-        <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive-soft-foreground">
+        <div role="alert" className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive-soft-foreground">
           <div className="font-medium mb-1">Fix these before saving:</div>
           <ul className="list-disc pl-5">
             {fieldErrors.map((e) => (

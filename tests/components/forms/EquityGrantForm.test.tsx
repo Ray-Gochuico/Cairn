@@ -32,9 +32,9 @@ function setupForm(opts: {
 async function selectDate(user: UserEvent, pickerId: string, isoDate: string) {
   const [yyyy, mm, dd] = isoDate.split('-');
   const root = screen.getByTestId(`${pickerId}-picker`);
-  await user.selectOptions(within(root).getByLabelText('Year'), yyyy);
-  await user.selectOptions(within(root).getByLabelText('Month'), mm);
-  await user.selectOptions(within(root).getByLabelText('Day'), dd);
+  await user.selectOptions(within(root).getByLabelText(/year$/i), yyyy);
+  await user.selectOptions(within(root).getByLabelText(/month$/i), mm);
+  await user.selectOptions(within(root).getByLabelText(/day$/i), dd);
 }
 
 describe('EquityGrantForm — calculator section', () => {

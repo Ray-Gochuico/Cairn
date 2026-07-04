@@ -284,10 +284,12 @@ export function ImportPreviewModal({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
+            {/* Wave-4 a11y: status span announces batch advancement as the
+                modal re-renders for each queued file. */}
             {queuePosition && queuePosition.total > 1 ? (
-              <>
+              <span role="status">
                 File {queuePosition.current} of {queuePosition.total} ·{' '}
-              </>
+              </span>
             ) : null}
             {parsed.rows.length} rows parsed
             {parsed.errors.length > 0 && (

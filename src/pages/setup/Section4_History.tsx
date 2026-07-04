@@ -319,6 +319,7 @@ function AccountSnapshotInlineForm({
         <Label htmlFor="snapshot-date">Snapshot date</Label>
         <DatePicker
           id="snapshot-date"
+          label="Snapshot date"
           value={date}
           onChange={(v) => setDate(v)}
         />
@@ -420,6 +421,7 @@ function ContributionInlineForm({
         <Label htmlFor="contribution-date">Date</Label>
         <DatePicker
           id="contribution-date"
+          label="Date"
           value={date}
           onChange={(v) => setDate(v)}
         />

@@ -337,7 +337,7 @@ export default function Spending() {
             <div className="grid grid-cols-3 gap-4">
               <div className="border rounded-lg p-4 space-y-1">
                 <p className="text-xs uppercase tracking-wider text-muted-foreground">Money in</p>
-                <p className="text-2xl font-semibold text-success">
+                <p className="text-2xl font-semibold text-success-foreground">
                   ${cashflow.inflow.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
                 <p className="text-xs text-muted-foreground">Estimated from salary</p>
@@ -351,7 +351,7 @@ export default function Spending() {
               </div>
               <div className="border rounded-lg p-4 space-y-1">
                 <p className="text-xs uppercase tracking-wider text-muted-foreground">Net</p>
-                <p className={`text-2xl font-semibold ${cashflow.net >= 0 ? 'text-success' : 'text-destructive'}`}>
+                <p className={`text-2xl font-semibold ${cashflow.net >= 0 ? 'text-success-foreground' : 'text-destructive-soft-foreground'}`}>
                   {cashflow.net >= 0 ? '+' : ''}${cashflow.net.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
                 <p className="text-xs text-muted-foreground">
@@ -510,7 +510,7 @@ export default function Spending() {
                     )}
                     <td className="py-2 text-right">
                       {t.amount < 0 ? (
-                        <span className="text-success">-${Math.abs(t.amount).toFixed(2)}</span>
+                        <span className="text-success-foreground">-${Math.abs(t.amount).toFixed(2)}</span>
                       ) : (
                         <span>${t.amount.toFixed(2)}</span>
                       )}

@@ -129,7 +129,7 @@ export function ManageScenariosModal({
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-7 px-2 text-xs text-destructive"
+                          className="h-7 px-2 text-xs text-destructive-soft-foreground"
                           disabled={s.isBaseline}
                           onClick={() => {
                             if (s.isBaseline) return;

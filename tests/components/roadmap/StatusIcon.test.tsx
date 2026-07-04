@@ -8,9 +8,9 @@ describe('StatusIcon', () => {
   // the raw emerald/blue/amber/slate utilities in the 2026-05-27 design
   // polish sweep. Asserts shape, not exact hex.
   const STATUS_COLOR: Record<NodeStatus, string> = {
-    done: 'text-success',
-    active: 'text-info',
-    unanswered: 'text-warning',
+    done: 'text-success-foreground',
+    active: 'text-info-foreground',
+    unanswered: 'text-warning-foreground',
     'not-started': 'text-muted-foreground',
     skipped: 'text-muted-foreground',
     info: 'text-muted-foreground',

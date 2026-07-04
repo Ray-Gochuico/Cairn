@@ -69,7 +69,7 @@ export default function GrowthCard({
   const active = horizons.find((h) => h.key === activeKey) ?? horizons[0];
 
   const isUp = active.available && (active.deltaAbs ?? 0) >= 0;
-  const deltaColor = isUp ? 'text-success' : 'text-destructive';
+  const deltaColor = isUp ? 'text-success-foreground' : 'text-destructive-soft-foreground';
   const DeltaArrow = isUp ? ArrowUp : ArrowDown;
 
   return (

@@ -221,12 +221,12 @@ export function DataHealthPopover() {
                 <div key={row.ticker} className="flex items-center gap-2 font-mono">
                   <span className="w-16">{row.ticker}</span>
                   {row.status === 'ok' && (
-                    <span className="text-success">
+                    <span className="text-success-foreground">
                       ok · {row.sectorCount} sectors loaded
                     </span>
                   )}
                   {row.status === 'empty' && (
-                    <span className="text-warning">
+                    <span className="text-warning-foreground">
                       empty · Yahoo returned no sectorWeightings (bond/commodity fund?)
                     </span>
                   )}

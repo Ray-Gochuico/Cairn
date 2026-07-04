@@ -114,6 +114,8 @@ describe('Roadmap page', () => {
     expect(screen.getByText('Section 0')).toBeInTheDocument();
     expect(screen.getByText('Section 6')).toBeInTheDocument();
     expect(screen.getByText('Budget and Essentials')).toBeInTheDocument();
+    // Wave-4 a11y: the page has an h1 landmark heading.
+    expect(screen.getByRole('heading', { level: 1, name: 'Roadmap' })).toBeInTheDocument();
   });
 
   it('renders the status legend above the section cards (W7-UX MF-2)', () => {

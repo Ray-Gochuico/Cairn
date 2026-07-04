@@ -142,4 +142,15 @@ describe('CategoryMultiSelect', () => {
     expect(screen.queryByLabelText(/Internet/)).toBeNull();
     expect(screen.getByLabelText(/Utilities/)).toBeInTheDocument();
   });
+
+  it('Escape closes the picker and restores focus to the trigger', async () => {
+    const user = userEvent.setup();
+    rendered();
+    const trigger = screen.getByRole('button', { name: /utilities categories \(/i });
+    await user.click(trigger);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
 });

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { GripVerticalIcon, XIcon, ChevronUpIcon, ChevronDownIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -32,6 +32,20 @@ export function EditableWidget({
   onRemove,
   children,
 }: EditableWidgetProps) {
+  const upRef = useRef<HTMLButtonElement>(null);
+  const downRef = useRef<HTMLButtonElement>(null);
+  // When a click causes the clicked move button to disable (item reached
+  // the list boundary), the browser drops focus to <body>. Queue the
+  // intent in the click handler; after the re-render, hand focus to the
+  // counterpart so keyboard users stay in the toolbar.
+  const pendingRefocusRef = useRef<'up' | 'down' | null>(null);
+  useEffect(() => {
+    const pending = pendingRefocusRef.current;
+    pendingRefocusRef.current = null;
+    if (pending === 'up' && !canMoveUp) downRef.current?.focus();
+    else if (pending === 'down' && !canMoveDown) upRef.current?.focus();
+  });
+
   return (
     <div
       className={cn(
@@ -41,7 +55,13 @@ export function EditableWidget({
       data-widget-id={id}
       data-testid={`widget-${id}`}
     >
-      {children}
+      {/* Wave-4 a11y: `inert` removes the whole widget body from the tab
+          order and the accessibility tree while editing — the aria-hidden
+          click shield below only stops the mouse. React 19 renders the
+          boolean prop as the HTML attribute. */}
+      <div inert={editing} data-testid={`widget-${id}-content`}>
+        {children}
+      </div>
       {editing ? (
         <>
           <div
@@ -63,20 +83,28 @@ export function EditableWidget({
             </span>
             <div className="flex items-center gap-1">
               <button
+                ref={upRef}
                 type="button"
                 aria-label={`Move ${label} up`}
                 disabled={!canMoveUp}
-                onClick={onMoveUp}
+                onClick={() => {
+                  pendingRefocusRef.current = 'up';
+                  onMoveUp();
+                }}
                 className="flex h-7 w-7 items-center justify-center rounded-md bg-muted/90 text-muted-foreground shadow hover:bg-muted disabled:opacity-30"
                 data-testid={`widget-${id}-up`}
               >
                 <ChevronUpIcon className="h-4 w-4" />
               </button>
               <button
+                ref={downRef}
                 type="button"
                 aria-label={`Move ${label} down`}
                 disabled={!canMoveDown}
-                onClick={onMoveDown}
+                onClick={() => {
+                  pendingRefocusRef.current = 'down';
+                  onMoveDown();
+                }}
                 className="flex h-7 w-7 items-center justify-center rounded-md bg-muted/90 text-muted-foreground shadow hover:bg-muted disabled:opacity-30"
                 data-testid={`widget-${id}-down`}
               >

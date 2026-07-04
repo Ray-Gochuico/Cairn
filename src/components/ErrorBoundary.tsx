@@ -101,7 +101,7 @@ export default class ErrorBoundary extends Component<Props, State> {
       // muscle-memory of how the production UI feels.
       return (
         <div className="p-6 max-w-3xl" role="alert" data-testid="error-boundary-dev">
-          <h1 className="text-2xl font-semibold text-destructive mb-2">Something broke</h1>
+          <h1 className="text-2xl font-semibold text-destructive-soft-foreground mb-2">Something broke</h1>
           <p className="text-sm text-muted-foreground mb-4">
             A render error was caught. The stack below is visible because the
             app is running in development mode.

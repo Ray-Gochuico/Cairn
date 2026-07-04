@@ -67,7 +67,7 @@ export default function PaycheckBreakdownRow({
     variant === 'total'
       ? 'text-success-foreground'
       : negative
-        ? 'text-destructive'
+        ? 'text-destructive-soft-foreground'
         : 'text-foreground';
 
   // The swatch + label (+ sublabel + surtax tag) become the ResultRow `label`.

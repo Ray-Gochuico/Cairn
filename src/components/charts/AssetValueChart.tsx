@@ -1084,7 +1084,7 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
                   <span className="sr-only">{deltaAria}</span>
                   <span
                     aria-hidden="true"
-                    className={activeDown ? 'text-destructive' : 'text-success'}
+                    className={activeDown ? 'text-destructive-soft-foreground' : 'text-success-foreground'}
                   >
                     {deltaText}
                   </span>
@@ -1249,7 +1249,7 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
                             )}
                           </td>
                           <td
-                            className={`py-1.5 px-2 text-right${r.value < 0 ? ' text-destructive' : ''}`}
+                            className={`py-1.5 px-2 text-right${r.value < 0 ? ' text-destructive-soft-foreground' : ''}`}
                           >
                             {formatSignedCurrency(r.value)}
                           </td>
@@ -1258,8 +1258,8 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
                               r.delta === null || r.delta === 0
                                 ? 'text-muted-foreground'
                                 : r.delta > 0
-                                  ? 'text-success'
-                                  : 'text-destructive'
+                                  ? 'text-success-foreground'
+                                  : 'text-destructive-soft-foreground'
                             }`}
                           >
                             {r.delta === null
@@ -1294,7 +1294,7 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
                       <tr className="border-t font-medium">
                         <td className="py-1.5 pr-2 text-left">Total</td>
                         <td
-                          className={`py-1.5 px-2 text-right${breakdownAnchorRow.netWorth < 0 ? ' text-destructive' : ''}`}
+                          className={`py-1.5 px-2 text-right${breakdownAnchorRow.netWorth < 0 ? ' text-destructive-soft-foreground' : ''}`}
                         >
                           {formatSignedCurrency(breakdownAnchorRow.netWorth)}
                         </td>

@@ -111,6 +111,7 @@ export default function GoalForm({
               <Label htmlFor="targetDate">Target date</Label>
               <DatePicker
                 id="targetDate"
+                label="Target date"
                 value={form.watch('targetDate')}
                 onChange={(v) =>
                   form.setValue('targetDate', v, { shouldDirty: true, shouldTouch: true })
@@ -178,7 +179,7 @@ export default function GoalForm({
       </Card>
 
       {fieldErrors.length > 0 && (
-        <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive-soft-foreground">
+        <div role="alert" className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive-soft-foreground">
           <div className="font-medium mb-1">Fix these before saving:</div>
           <ul className="list-disc pl-5">
             {fieldErrors.map((e) => (

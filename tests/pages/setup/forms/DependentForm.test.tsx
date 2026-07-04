@@ -20,7 +20,7 @@ describe('Wizard DependentForm (adapter)', () => {
   it('renders the underlying dependent form fields', () => {
     render(<DependentForm />);
     expect(screen.getByLabelText(/^name$/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/date of birth/i)).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: /date of birth/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/type/i)).toBeInTheDocument();
   });
 

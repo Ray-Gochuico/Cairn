@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { Category } from '@/types/schema';
@@ -93,6 +93,25 @@ export function CategoryMultiSelect({
 }: CategoryMultiSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  // Esc closes the picker and returns focus to the trigger button.
+  // Pattern: AssetValueChart's IncludedPicker — listener registered only
+  // while open; preventDefault marks the event handled so outer Esc
+  // handlers that respect defaultPrevented (chart pin-clear, dialogs)
+  // defer to the innermost popover.
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [open]);
 
   const allLeaves = useMemo(() => {
     const isLeaf = leafSelector(categories, filterFn);
@@ -134,6 +153,7 @@ export function CategoryMultiSelect({
   return (
     <div className="relative inline-block">
       <Button
+        ref={triggerRef}
         type="button"
         size="sm"
         variant="outline"

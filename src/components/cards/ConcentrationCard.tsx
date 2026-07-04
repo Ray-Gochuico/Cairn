@@ -15,10 +15,10 @@ import { FreshnessBadge } from '@/components/ui/freshness-badge';
  */
 function severityColor(severity: 'HIGH' | 'MEDIUM' | 'LOW'): string {
   switch (severity) {
-    case 'HIGH': return 'text-destructive';
-    case 'MEDIUM': return 'text-warning';
+    case 'HIGH': return 'text-destructive-soft-foreground';
+    case 'MEDIUM': return 'text-warning-foreground';
     case 'LOW':
-    default: return 'text-info';
+    default: return 'text-info-foreground';
   }
 }
 

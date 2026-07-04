@@ -26,9 +26,9 @@ const loadEmploymentBonusMigration = () =>
 async function selectDate(user: UserEvent, pickerId: string, isoDate: string) {
   const [yyyy, mm, dd] = isoDate.split('-');
   const root = screen.getByTestId(`${pickerId}-picker`);
-  await user.selectOptions(within(root).getByLabelText('Year'), yyyy);
-  await user.selectOptions(within(root).getByLabelText('Month'), mm);
-  await user.selectOptions(within(root).getByLabelText('Day'), dd);
+  await user.selectOptions(within(root).getByLabelText(/year$/i), yyyy);
+  await user.selectOptions(within(root).getByLabelText(/month$/i), mm);
+  await user.selectOptions(within(root).getByLabelText(/day$/i), dd);
 }
 
 async function seedPerson(db: SqliteAdapter, name: string): Promise<number> {
@@ -92,7 +92,7 @@ describe('LoansTab', () => {
     expect(screen.getByLabelText(/current balance/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/interest rate/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/term \(months\)/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/first payment date/i)).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: /first payment date/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/monthly payment/i)).toBeInTheDocument();
   });
 

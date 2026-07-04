@@ -98,7 +98,7 @@ export function AssetClassTargetsForm({ heldClasses, initial, onSave }: AssetCla
             // contrast on the light card surface — bare `text-success` is the
             // saturated chart green and fails contrast as text.
             className={`tabular-nums font-medium ${
-              sumWhole > 100 ? 'text-destructive' : sumWhole === 100 ? 'text-success-foreground' : ''
+              sumWhole > 100 ? 'text-destructive-soft-foreground' : sumWhole === 100 ? 'text-success-foreground' : ''
             }`}
           >
             {sumWhole.toFixed(0)}%

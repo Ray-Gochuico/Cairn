@@ -35,9 +35,9 @@ const loadCashApyMigration = () =>
 async function selectDate(user: UserEvent, pickerId: string, isoDate: string) {
   const [yyyy, mm, dd] = isoDate.split('-');
   const root = screen.getByTestId(`${pickerId}-picker`);
-  await user.selectOptions(within(root).getByLabelText('Year'), yyyy);
-  await user.selectOptions(within(root).getByLabelText('Month'), mm);
-  await user.selectOptions(within(root).getByLabelText('Day'), dd);
+  await user.selectOptions(within(root).getByLabelText(/year$/i), yyyy);
+  await user.selectOptions(within(root).getByLabelText(/month$/i), mm);
+  await user.selectOptions(within(root).getByLabelText(/day$/i), dd);
 }
 
 async function seedPerson(db: SqliteAdapter, name: string): Promise<number> {
@@ -141,7 +141,7 @@ describe('GoalsTab', () => {
     expect(screen.getByLabelText(/^name$/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/^type$/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/target amount/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/target date/i)).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: /target date/i })).toBeInTheDocument();
   });
 
   it('creates a goal via the form', async () => {

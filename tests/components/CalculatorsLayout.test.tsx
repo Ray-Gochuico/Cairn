@@ -327,6 +327,24 @@ describe('CalculatorsLayout', () => {
       expect(await screen.findByText(/Bonus take-home/i)).toBeInTheDocument();
     });
 
+    it('Escape closes Manage cards and restores focus to the footer trigger', async () => {
+      primeBaseline();
+      primeSettings();
+      usePersonsStore.setState({
+        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
+        isLoading: false,
+        error: null,
+      });
+
+      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+      const trigger = await screen.findByRole('button', { name: /manage cards/i });
+      await userEvent.click(trigger);
+      expect(screen.getByRole('dialog', { name: /manage calculator cards/i })).toBeInTheDocument();
+      await userEvent.keyboard('{Escape}');
+      expect(screen.queryByRole('dialog', { name: /manage calculator cards/i })).not.toBeInTheDocument();
+      expect(trigger).toHaveFocus();
+    });
+
     it('shows "1 card hidden" hint in the footer when one card is hidden', async () => {
       primeBaseline();
       primeSettings([{ id: 'bonus-tax', hidden: true }]);
