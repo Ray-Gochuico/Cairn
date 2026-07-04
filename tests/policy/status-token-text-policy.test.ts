@@ -49,7 +49,11 @@ function stripComments(source: string): string {
       i += 2;
       continue;
     }
-    if (source[i] === '/' && source[i + 1] === '/') {
+    // Line comment — but NOT a protocol `//` (https://, file://, …): a `//`
+    // immediately preceded by `:` is part of a URL string literal, and
+    // stripping from there would hide a violating class later on the same
+    // line (Wave-5 ride-along R1; self-test below).
+    if (source[i] === '/' && source[i + 1] === '/' && source[i - 1] !== ':') {
       while (i < n && source[i] !== '\n') i += 1;
       continue;
     }
@@ -60,6 +64,17 @@ function stripComments(source: string): string {
 }
 
 describe('status-token text policy', () => {
+  // Self-test fixtures (R1): the detector itself must not be blinded by a
+  // protocol `//` in a string literal, while real line comments still strip.
+  it('stripComments self-test: an https:// URL does not hide a violation on the same line', () => {
+    const fixture = `<a href="https://example.com" className="text-destructive">boom</a>`;
+    expect(BARE_RE.test(stripComments(fixture))).toBe(true);
+  });
+
+  it('stripComments self-test: a real line comment is still stripped', () => {
+    expect(BARE_RE.test(stripComments('const x = 1; // text-destructive'))).toBe(false);
+  });
+
   it('src/ has zero bare text-{success|warning|info|destructive} classes', async () => {
     const violations: string[] = [];
     for (const file of await collectSourceFiles(SRC_DIR)) {

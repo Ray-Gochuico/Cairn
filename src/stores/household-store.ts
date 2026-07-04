@@ -3,6 +3,7 @@ import { HouseholdRepo, type DisclosureDocumentId } from '@/domain/household';
 import { DisclosureAcceptancesRepo } from '@/domain/disclosure-acceptances';
 import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import { getDatabase } from '@/db/db';
+import { createDedupedLoad } from '@/stores/create-entity-store';
 import type { Household } from '@/types/schema';
 
 interface HouseholdState {
@@ -26,16 +27,11 @@ export const useHouseholdStore = create<HouseholdState>((set, get) => ({
   isLoading: false,
   error: null,
 
-  load: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const repo = new HouseholdRepo(getDatabase());
-      const household = await repo.get();
-      set({ household, isLoading: false });
-    } catch (e) {
-      set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load' });
-    }
-  },
+  // Shared de-duped load (see create-entity-store.ts for semantics + the
+  // accepted initial-mount TOCTOU).
+  load: createDedupedLoad<HouseholdState, 'household'>(set, 'household', async () =>
+    new HouseholdRepo(getDatabase()).get(),
+  ),
 
   update: async (patch) => {
     set({ isLoading: true, error: null });

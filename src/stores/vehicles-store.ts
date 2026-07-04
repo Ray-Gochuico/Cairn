@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { VehiclesRepo } from '@/domain/vehicles';
 import { getDatabase } from '@/db/db';
+import { createDedupedLoad } from '@/stores/create-entity-store';
 import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
 import type { Vehicle } from '@/types/schema';
 
@@ -19,16 +20,11 @@ export const useVehiclesStore = create<VehiclesState>((set, get) => ({
   isLoading: false,
   error: null,
 
-  load: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const repo = new VehiclesRepo(getDatabase());
-      const vehicles = await repo.list();
-      set({ vehicles, isLoading: false });
-    } catch (e) {
-      set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load' });
-    }
-  },
+  // Shared de-duped load (see create-entity-store.ts for semantics + the
+  // accepted initial-mount TOCTOU).
+  load: createDedupedLoad<VehiclesState, 'vehicles'>(set, 'vehicles', async () =>
+    new VehiclesRepo(getDatabase()).list(),
+  ),
 
   create: async (vehicle) => {
     const repo = new VehiclesRepo(getDatabase());

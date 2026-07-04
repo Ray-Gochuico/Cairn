@@ -1,6 +1,7 @@
-import { readdir, readFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { collectSourceFiles, lineNumberOf, stripComments } from './source-walker';
 
 // Source-level policy guard for the recharts 3.x render-loop escape hatch.
 //
@@ -26,30 +27,9 @@ const CHART_TAG_OPEN_RE = /<(Pie|Bar|Line|Area)\b/g;
 const REQUIRED_PROP = 'isAnimationActive={false}';
 const ALLOW_COMMENT = '// recharts-policy: allow';
 
-async function collectSourceFiles(dir: string): Promise<string[]> {
-  const out: string[] = [];
-  const entries = await readdir(dir, { withFileTypes: true });
-  for (const entry of entries) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      out.push(...(await collectSourceFiles(full)));
-      continue;
-    }
-    if (!entry.isFile()) continue;
-    if (entry.name.endsWith('.ts') || entry.name.endsWith('.tsx')) {
-      out.push(full);
-    }
-  }
-  return out;
-}
-
-function lineNumberOf(source: string, index: number): number {
-  let line = 1;
-  for (let i = 0; i < index && i < source.length; i++) {
-    if (source.charCodeAt(i) === 10 /* \n */) line += 1;
-  }
-  return line;
-}
+// collectSourceFiles, lineNumberOf, and stripComments moved to
+// ./source-walker.ts (Wave 5) — shared with the migration/IPC/clock
+// policy tests. findJsxTagEnd stays here: it's recharts-specific.
 
 // Find the end of a JSX opening tag that begins at `startIdx` (the `<`).
 // Walks character-by-character tracking string/template literals and JSX-
@@ -139,47 +119,6 @@ function findJsxTagEnd(source: string, startIdx: number): number {
     i += 1;
   }
   return -1;
-}
-
-// Strip `//` line comments and `/* */` block comments while preserving line
-// numbers (each removed char becomes a space, newlines preserved). This keeps
-// regex match indices aligned with the original source so error messages
-// still point at the right line. Without this, JSX comments like
-// `// <JavascriptAnimate>` inside a multi-line <Bar ...> prop list would
-// prematurely terminate the `[^>]*` match at the `>` in the comment.
-function stripComments(source: string): string {
-  const out: string[] = [];
-  let i = 0;
-  const n = source.length;
-  while (i < n) {
-    const ch = source[i];
-    const next = source[i + 1];
-    // Block comment
-    if (ch === '/' && next === '*') {
-      out.push('  ');
-      i += 2;
-      while (i < n && !(source[i] === '*' && source[i + 1] === '/')) {
-        out.push(source[i] === '\n' ? '\n' : ' ');
-        i += 1;
-      }
-      if (i < n) {
-        out.push('  ');
-        i += 2;
-      }
-      continue;
-    }
-    // Line comment
-    if (ch === '/' && next === '/') {
-      while (i < n && source[i] !== '\n') {
-        out.push(' ');
-        i += 1;
-      }
-      continue;
-    }
-    out.push(ch);
-    i += 1;
-  }
-  return out.join('');
 }
 
 describe('recharts animation policy', () => {

@@ -74,3 +74,7 @@ src/data/trivia/_staging/
 
 # Internal planning / specs / reviews — kept local, out of the public repo.
 docs/
+
+# Playwright (e2e smoke scaffold)
+/test-results/
+/playwright-report/

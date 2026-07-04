@@ -1,5 +1,6 @@
 import { fetch } from '@tauri-apps/plugin-http';
 import { invoke } from '@tauri-apps/api/core';
+import { observeYahooShape } from '@/market/yahoo-schemas';
 
 export interface QuoteResult {
   ticker: string;
@@ -142,7 +143,9 @@ export class YahooClient {
   async quoteSummary(ticker: string, modules: string[]): Promise<unknown> {
     try {
       const body = await invoke<string>('yahoo_quote_summary', { ticker, modules });
-      return JSON.parse(body);
+      const parsed: unknown = JSON.parse(body);
+      observeYahooShape('quoteSummary', parsed); // observe-only; never transforms (see yahoo-schemas.ts)
+      return parsed;
     } catch (err) {
       // Surface Tauri-side rejection (CSRF crumb stale, rate limit, network)
       // — without this, the upstream syncStaleFunds catch reduces it to a
@@ -262,6 +265,7 @@ export class YahooClient {
       throw new Error(`Yahoo chart fetch failed for ${ticker}: ${res.status} ${res.statusText}`);
     }
     const data = (await res.json()) as ChartResponse;
+    observeYahooShape('chart', data); // observe-only; never transforms (see yahoo-schemas.ts)
     if (data.chart.error) {
       throw new Error(`Yahoo error for ${ticker}: ${data.chart.error.description}`);
     }

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { AccountsRepo } from '@/domain/accounts';
 import { getDatabase } from '@/db/db';
+import { createDedupedLoad } from '@/stores/create-entity-store';
 import type { Account } from '@/types/schema';
 
 // Roadmap chart-answer columns are owned by roadmap decision nodes, not
@@ -26,37 +27,18 @@ interface AccountsState {
   remove: (id: number) => Promise<void>;
 }
 
-/**
- * In-flight de-dupe: if a load() is already in progress, return its promise
- * instead of starting a second DB round-trip. Cleared after settle so later
- * load() calls (after a CRUD mutation) still re-fetch. Same pattern as
- * snapshots-store / loans-store; matters here because the always-mounted
- * sidebar pending-dot hook load()s this store alongside every page that
- * reads accounts.
- */
-let accountsInflight: Promise<void> | null = null;
-
 export const useAccountsStore = create<AccountsState>((set, get) => ({
   accounts: [],
   isLoading: false,
   error: null,
 
-  load: async () => {
-    if (accountsInflight) return accountsInflight;
-    accountsInflight = (async () => {
-      set({ isLoading: true, error: null });
-      try {
-        const repo = new AccountsRepo(getDatabase());
-        const accounts = await repo.list();
-        set({ accounts, isLoading: false });
-      } catch (e) {
-        set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load' });
-      } finally {
-        accountsInflight = null;
-      }
-    })();
-    return accountsInflight;
-  },
+  // Shared de-duped load (see create-entity-store.ts for semantics + the
+  // accepted initial-mount TOCTOU). De-dupe matters here because the
+  // always-mounted sidebar pending-dot hook load()s this store alongside
+  // every page that reads accounts.
+  load: createDedupedLoad<AccountsState, 'accounts'>(set, 'accounts', async () =>
+    new AccountsRepo(getDatabase()).list(),
+  ),
 
   create: async (account) => {
     const repo = new AccountsRepo(getDatabase());

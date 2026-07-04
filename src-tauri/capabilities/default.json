@@ -27,13 +27,17 @@
     "fs:default",
     {
       "identifier": "fs:allow-read-dir",
-      "__comment__": "Lets the backup rotation list the app-data backups/ folder (readDir) to find the oldest cairn-*.db files to prune. Scoped to $HOME, which covers ~/Library/Application Support/<bundle id>/backups on macOS. See src/lib/backup-restore.ts rotateBackups().",
-      "allow": [{ "path": "$HOME/**/*" }]
+      "__comment__": "Two callers: (1) backup rotation/listing readDirs $APPCONFIG/backups (explicit entries below; fs:default's recursive app-dir read covers it too); (2) the statements archive (src/lib/statements-archive.ts) readDirs settings.statementsFolderPath — a user-chosen folder PERSISTED across sessions, so the dialog's session-only auto-grant is not enough and the $HOME scope must stay. Narrowing $HOME away silently breaks PDF archiving (it degrades to a warning string, never throws).",
+      "allow": [
+        { "path": "$APPCONFIG/backups" },
+        { "path": "$APPCONFIG/backups/**" },
+        { "path": "$HOME/**/*" }
+      ]
     },
     {
       "identifier": "fs:allow-remove",
-      "__comment__": "Lets the backup rotation delete the oldest cairn-*.db backups beyond MAX_BACKUPS. Scoped to $HOME. See src/lib/backup-restore.ts rotateBackups().",
-      "allow": [{ "path": "$HOME/**/*" }]
+      "__comment__": "Backup rotation (src/lib/backup-restore.ts rotateBackups) deletes the oldest cairn-*.db files beyond MAX_BACKUPS — the ONLY remove caller in the app. Narrowed from $HOME/**/* (Wave 5, 2026-07): the webview can now only delete inside the app's own backups dir.",
+      "allow": [{ "path": "$APPCONFIG/backups/**" }]
     },
     {
       "identifier": "fs:allow-write-file",
@@ -47,8 +51,8 @@
     },
     {
       "identifier": "fs:allow-mkdir",
-      "__comment__": "Static $HOME-scoped mkdir access. Same rationale as fs:allow-write-file above: dialog-granted fs scope from tauri-plugin-dialog 2.7.1 is session-only; this static scope provides cross-restart persistence. Does not cover paths outside $HOME.",
-      "allow": [{ "path": "$HOME/**/*" }]
+      "__comment__": "runBackup ensures $APPCONFIG/backups exists (recursive mkdir) — the ONLY mkdir caller. Narrowed from $HOME/**/* (Wave 5, 2026-07). $APPCONFIG itself is listed because a recursive mkdir on first run may create the parent; fs:default's create-app-specific-dirs also covers that.",
+      "allow": [{ "path": "$APPCONFIG" }, { "path": "$APPCONFIG/backups" }]
     },
     "updater:default"
   ]

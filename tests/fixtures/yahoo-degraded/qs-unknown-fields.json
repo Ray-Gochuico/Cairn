@@ -1,0 +1,25 @@
+{
+  "quoteSummary": {
+    "result": [
+      {
+        "topHoldings": {
+          "holdings": [
+            {
+              "symbol": "AAPL",
+              "holdingPercent": { "raw": 0.07, "fmt": "7.00%" },
+              "holdingName": "Apple Inc",
+              "futureField": true
+            }
+          ],
+          "sectorWeightings": [{ "technology": { "raw": 0.3, "fmt": "30%" } }],
+          "brandNewBlock": { "nested": { "deep": [1, 2, 3] } }
+        },
+        "fundProfile": { "categoryName": "Large Blend", "family": "Vanguard" },
+        "price": { "quoteType": "ETF", "marketCap": { "raw": 1000000 } },
+        "assetProfile": { "sector": "Technology", "industry": "Software", "zip": "95014" }
+      }
+    ],
+    "error": null,
+    "extraTopLevel": "ignored"
+  }
+}

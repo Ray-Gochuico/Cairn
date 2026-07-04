@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { getDatabase } from '@/db/db';
 import { AssetValueSnapshotsRepo } from '@/domain/asset-value-snapshots';
+import { createDedupedLoad } from '@/stores/create-entity-store';
 import type { AssetValueSnapshot } from '@/types/schema';
 import type { AssetSnapshotOwnerType } from '@/types/enums';
 
@@ -76,18 +77,13 @@ export const useAssetValueSnapshotsStore = create<AssetValueSnapshotsState>(
     isLoading: false,
     error: null,
 
-    load: async () => {
-      set({ isLoading: true, error: null });
-      try {
-        const items = await new AssetValueSnapshotsRepo(getDatabase()).list();
-        set({ assetValueSnapshots: items, isLoading: false });
-      } catch (e) {
-        set({
-          isLoading: false,
-          error: e instanceof Error ? e.message : 'Failed to load',
-        });
-      }
-    },
+    // Shared de-duped load (see create-entity-store.ts for semantics + the
+    // accepted initial-mount TOCTOU).
+    load: createDedupedLoad<AssetValueSnapshotsState, 'assetValueSnapshots'>(
+      set,
+      'assetValueSnapshots',
+      async () => new AssetValueSnapshotsRepo(getDatabase()).list(),
+    ),
 
     create: async (snap) => {
       const repo = new AssetValueSnapshotsRepo(getDatabase());

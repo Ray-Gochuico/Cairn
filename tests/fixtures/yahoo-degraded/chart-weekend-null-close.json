@@ -1,0 +1,12 @@
+{
+  "chart": {
+    "result": [
+      {
+        "meta": { "regularMarketPrice": 50, "currency": "USD" },
+        "timestamp": [1750000000],
+        "indicators": { "quote": [{ "close": [null] }] }
+      }
+    ],
+    "error": null
+  }
+}

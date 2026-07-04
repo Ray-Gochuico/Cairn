@@ -624,3 +624,26 @@ describe('migration registry completeness (guardrail)', () => {
     expect(registered).toHaveLength(unique.length);
   });
 });
+
+describe('loadAllMigrations ordering contract', () => {
+  it('returns every migration, in on-disk filename order, each with non-empty SQL', async () => {
+    const migrations = await loadAllMigrations();
+    const onDisk = readdirSync(resolve(__dirname, '../../src/db/migrations'))
+      .filter((f) => f.endsWith('.sql'))
+      .sort() // zero-padded numeric prefixes: lexicographic == apply order
+      .map((f) => f.replace(/\.sql$/, ''));
+    // Order-sensitive: the concurrent loader (Wave 5) must produce the SAME
+    // array the sequential-await implementation did — Promise.all preserves
+    // input order, and this pins it.
+    expect(migrations.map((m) => m.version)).toEqual(onDisk);
+    for (const m of migrations) {
+      expect(typeof m.sql).toBe('string');
+      expect(m.sql.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('two concurrent calls both resolve the full set (loader is re-entrant)', async () => {
+    const [a, b] = await Promise.all([loadAllMigrations(), loadAllMigrations()]);
+    expect(a.map((m) => m.version)).toEqual(b.map((m) => m.version));
+  });
+});

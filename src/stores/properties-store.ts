@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { PropertiesRepo } from '@/domain/properties';
 import { getDatabase } from '@/db/db';
+import { createDedupedLoad } from '@/stores/create-entity-store';
 import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
 import type { Property } from '@/types/schema';
 
@@ -19,16 +20,11 @@ export const usePropertiesStore = create<PropertiesState>((set, get) => ({
   isLoading: false,
   error: null,
 
-  load: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const repo = new PropertiesRepo(getDatabase());
-      const properties = await repo.list();
-      set({ properties, isLoading: false });
-    } catch (e) {
-      set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load' });
-    }
-  },
+  // Shared de-duped load (see create-entity-store.ts for semantics + the
+  // accepted initial-mount TOCTOU).
+  load: createDedupedLoad<PropertiesState, 'properties'>(set, 'properties', async () =>
+    new PropertiesRepo(getDatabase()).list(),
+  ),
 
   create: async (property) => {
     const repo = new PropertiesRepo(getDatabase());
