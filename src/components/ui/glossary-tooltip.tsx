@@ -31,7 +31,7 @@ interface TermTooltipProps {
  * (content gets focus on keyboard open, focus returns to trigger on
  * close), Tab / Shift-Tab inside, Escape closes, click-outside closes.
  * The content keeps Radix's default `role="dialog"` (Wave-4 a11y:
- * role="tooltip" forbids interactive content, and this popover holds
+ * the tooltip role forbids interactive content, and this popover holds
  * the "Learn more" link). The popover *can* hold focus — Tab into the
  * "Learn more" link is supported.
  *
@@ -120,7 +120,7 @@ export function TermTooltip({ term, children, className }: TermTooltipProps) {
       <PopoverPrimitive.Portal>
         <PopoverPrimitive.Content
           // Wave-4 a11y: no role override — Radix's default role="dialog"
-          // is the truthful role; role="tooltip" forbids the interactive
+          // is the truthful role; the tooltip role forbids the interactive
           // "Learn more" link this popover contains.
           sideOffset={6}
           collisionPadding={8}
