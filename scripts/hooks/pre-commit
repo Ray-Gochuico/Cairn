@@ -8,6 +8,10 @@
 #                             failures surface, not just the first. Falls
 #                             back to "no tests" pass when staged changes
 #                             don't touch testable code (docs-only commits).
+#                             Additionally maps staged paths to suites
+#                             --changed can't see (tests/policy always;
+#                             tests/db when migrations/*.sql staged) via
+#                             extra-test-paths.mjs.
 #
 #   SKIP_PRE_COMMIT=full      Full suite, no --bail. Same surface area as
 #                             the previous behavior but every failure
@@ -49,6 +53,21 @@ else
   # the changed source files. --passWithNoTests is a safety net for
   # docs-only commits.
   npx vitest run --changed --reporter=dot --passWithNoTests
+
+  # Blind-spot closer (see scripts/hooks/extra-test-paths.mjs for the why):
+  # --changed cannot see tests/policy (fs-based, no import edges) or the
+  # tests/db suite when only a migrations/*.sql file is staged (?raw imports
+  # aren't traced). Map staged paths to extra suites and run them in a
+  # SECOND pass — positional filters would INTERSECT with --changed, not
+  # union, so one combined invocation can't express this.
+  if [ -f scripts/hooks/extra-test-paths.mjs ]; then
+    EXTRA="$(git diff --cached --name-only --diff-filter=ACMRD | node scripts/hooks/extra-test-paths.mjs)"
+    if [ -n "$EXTRA" ]; then
+      echo "[pre-commit] running mapped suites: $EXTRA"
+      # shellcheck disable=SC2086 — word-splitting into path args is intended.
+      npx vitest run --reporter=dot $EXTRA
+    fi
+  fi
 fi
 
 echo "[pre-commit] running tsc --noEmit..."
