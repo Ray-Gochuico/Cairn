@@ -14,6 +14,7 @@
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "test:stress": "STRESS=1 vitest run tests/stress --passWithNoTests",
+    "test:e2e": "playwright test",
     "install-hooks": "sh scripts/hooks/install.sh"
   },
   "dependencies": {
@@ -53,6 +54,7 @@
     "zustand": "^5.0.13"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@tauri-apps/cli": "^2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
