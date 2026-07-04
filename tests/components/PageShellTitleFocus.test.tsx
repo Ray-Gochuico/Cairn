@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RouterProvider, createMemoryRouter } from 'react-router-dom';
 import PageShell from '@/components/layout/PageShell';
@@ -29,7 +29,8 @@ function renderAt(initialPath: string) {
     ],
     { initialEntries: [initialPath] },
   );
-  return render(<RouterProvider router={router} />);
+  render(<RouterProvider router={router} />);
+  return router;
 }
 
 describe('PageShell route title + focus', () => {
@@ -68,5 +69,21 @@ describe('PageShell route title + focus', () => {
   it('exposes the primary navigation landmark', () => {
     renderAt('/');
     expect(screen.getByRole('navigation', { name: 'Primary' })).toBeInTheDocument();
+  });
+
+  // R3 (Wave-5 ride-along): the focus-main effect is keyed on
+  // location.pathname — a SAME-path navigation that only changes the query
+  // string (e.g. Investments' transient ?view=p1 focus param) must NOT yank
+  // focus away from whatever control the user is on.
+  it('same-path query navigation (?view=p1) does not steal focus to <main>', async () => {
+    const router = renderAt('/');
+    const link = screen.getByRole('link', { name: /roadmap/i });
+    link.focus();
+    expect(link).toHaveFocus();
+    await act(async () => {
+      await router.navigate('/?view=p1');
+    });
+    expect(document.getElementById('main')).not.toHaveFocus();
+    expect(link).toHaveFocus(); // user's position untouched
   });
 });

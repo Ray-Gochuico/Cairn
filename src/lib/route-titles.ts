@@ -4,8 +4,10 @@
  * announce the new title when focus moves into <main> — see PageShell).
  * Kept as a plain table (not derived from the router) so it is pure and
  * unit-testable; App.tsx's route list is the source — update BOTH when
- * adding a route (the exhaustive test in tests/lib/route-titles.test.ts
- * is the tripwire). Display names mirror each page's h1 / sidebar label
+ * adding a route. The tripwire is REAL (Wave-5 R4): tests/lib/
+ * route-titles.test.ts walks the route paths actually registered in
+ * App.tsx and fails when a registered route lacks an exact entry here or
+ * an entry here goes stale. Display names mirror each page's h1 / sidebar label
  * (Sidebar.tsx, InputsLayout.tsx) so the announced title matches what
  * sighted users see.
  */
@@ -50,6 +52,15 @@ const TITLES: Record<string, string> = {
   '/inputs/categories': 'Inputs · Categories',
   '/inputs/tickers': 'Inputs · Tickers',
 };
+
+/**
+ * Read-only view of the exact-match keys, for the App.tsx↔TITLES parity
+ * test (R4). `titleForPath`'s ancestor fallback would mask a missing entry
+ * for a new nested route, so the tripwire needs exact-key visibility.
+ */
+export function knownTitlePaths(): string[] {
+  return Object.keys(TITLES);
+}
 
 /** Exact match first, then walk up path segments; null when nothing matches. */
 export function titleForPath(pathname: string): string | null {

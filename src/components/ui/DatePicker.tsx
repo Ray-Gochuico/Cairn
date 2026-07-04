@@ -133,9 +133,10 @@ export default function DatePicker({
   return (
     // Wave-4 a11y: labeled group so AT announces the field context once,
     // and each select's name carries the context ("Purchase date year"
-    // instead of a bare "Year").
+    // instead of a bare "Year"). No label → no group role (R5): a nameless
+    // group is announcement noise, so the wrapper stays a plain div then.
     <div
-      role="group"
+      role={label ? 'group' : undefined}
       aria-label={label}
       className="flex flex-wrap gap-2"
       data-testid={id ? `${id}-picker` : undefined}
