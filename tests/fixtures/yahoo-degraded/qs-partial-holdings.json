@@ -1,0 +1,17 @@
+{
+  "quoteSummary": {
+    "result": [
+      {
+        "topHoldings": {
+          "holdings": [
+            { "symbol": "AAPL", "holdingPercent": { "raw": 0.07 }, "holdingName": "Apple Inc" },
+            { "symbol": "MSFT" },
+            { "holdingPercent": { "raw": 0.05 }, "holdingName": "No Symbol Corp" },
+            { "symbol": "NVDA", "holdingPercent": { "raw": 0.04 } }
+          ]
+        }
+      }
+    ],
+    "error": null
+  }
+}

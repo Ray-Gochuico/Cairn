@@ -1,0 +1,11 @@
+{
+  "chart": {
+    "result": [
+      {
+        "meta": { "chartPreviousClose": 100, "currency": "USD" },
+        "indicators": { "quote": [{ "close": [100] }] }
+      }
+    ],
+    "error": null
+  }
+}

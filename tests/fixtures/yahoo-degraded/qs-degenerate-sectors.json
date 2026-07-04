@@ -1,0 +1,19 @@
+{
+  "quoteSummary": {
+    "result": [
+      {
+        "topHoldings": {
+          "sectorWeightings": [
+            {},
+            { "healthcare": { "raw": 0 } },
+            { "technology": { "raw": "not-a-number" } },
+            { "realestate": { "raw": 0.12 } },
+            null,
+            { "financial_services": { "raw": 0.2 } }
+          ]
+        }
+      }
+    ],
+    "error": null
+  }
+}
