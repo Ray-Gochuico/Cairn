@@ -135,9 +135,21 @@ function DerivedValueCard({ account, snapshot }: DerivedValueCardProps) {
               </span>
             </div>
           </div>
-          {mode === 'confirmed' && (
-            <span role="status" className="text-sm font-medium text-success-foreground">Confirmed</span>
-          )}
+          {/* Pre-mounted empty (Wave-5 a11y fix): a live region that only
+              appears once populated never fires the polite announcement on
+              most SR/browser pairs — it has nothing to diff against. Mount
+              the node from the start and let the TEXT be the conditional
+              part. */}
+          <span
+            role="status"
+            className={
+              mode === 'confirmed'
+                ? 'text-sm font-medium text-success-foreground'
+                : undefined
+            }
+          >
+            {mode === 'confirmed' && 'Confirmed'}
+          </span>
           {mode === 'skipped' && (
             <span className="text-sm text-muted-foreground">Skipped</span>
           )}
@@ -256,9 +268,17 @@ function LoanPaymentCard({ loan, nextEntry }: LoanPaymentCardProps) {
               {nextEntry.extra > 0 ? ` · Extra ${formatUSD(nextEntry.extra)}` : ''}
             </div>
           </div>
-          {mode === 'confirmed' && (
-            <span role="status" className="text-sm font-medium text-success-foreground">Recorded</span>
-          )}
+          {/* Pre-mounted empty (Wave-5 a11y fix) — see DerivedValueCard. */}
+          <span
+            role="status"
+            className={
+              mode === 'confirmed'
+                ? 'text-sm font-medium text-success-foreground'
+                : undefined
+            }
+          >
+            {mode === 'confirmed' && 'Recorded'}
+          </span>
           {mode === 'skipped' && (
             <span className="text-sm text-muted-foreground">Skipped</span>
           )}
@@ -340,9 +360,17 @@ function CashBalanceCard({ account, latestBalance }: CashBalanceCardProps) {
               )}
             </div>
           </div>
-          {mode === 'confirmed' && (
-            <span role="status" className="text-sm font-medium text-success-foreground">Saved</span>
-          )}
+          {/* Pre-mounted empty (Wave-5 a11y fix) — see DerivedValueCard. */}
+          <span
+            role="status"
+            className={
+              mode === 'confirmed'
+                ? 'text-sm font-medium text-success-foreground'
+                : undefined
+            }
+          >
+            {mode === 'confirmed' && 'Saved'}
+          </span>
           {mode === 'skipped' && (
             <span className="text-sm text-muted-foreground">Skipped</span>
           )}
@@ -427,9 +455,17 @@ function AssetValueCard({ name, currentValue, kind, onSave }: AssetValueCardProp
               . Update if it changed — optional.
             </div>
           </div>
-          {mode === 'confirmed' && (
-            <span role="status" className="text-sm font-medium text-success-foreground">Updated</span>
-          )}
+          {/* Pre-mounted empty (Wave-5 a11y fix) — see DerivedValueCard. */}
+          <span
+            role="status"
+            className={
+              mode === 'confirmed'
+                ? 'text-sm font-medium text-success-foreground'
+                : undefined
+            }
+          >
+            {mode === 'confirmed' && 'Updated'}
+          </span>
           {mode === 'skipped' && (
             <span className="text-sm text-muted-foreground">Skipped</span>
           )}
@@ -705,11 +741,15 @@ export default function MonthlyMiniWindow() {
                   </Button>
                 )}
               </div>
-              {confirmAllResult && (
-                <p role="status" className="text-sm text-muted-foreground">
-                  {confirmAllResult}
-                </p>
-              )}
+              {/* Pre-mounted empty (Wave-5 a11y fix): mounting this <p> only
+                  once confirmAllResult is set means the live region appears
+                  already-filled, so the polite announcement never fires on
+                  most SR/browser pairs (same bug as the per-card statuses
+                  above). Mount it for the section's whole lifetime and let
+                  the text be the conditional part. */}
+              <p role="status" className="text-sm text-muted-foreground">
+                {confirmAllResult}
+              </p>
               {derivedCards.map(({ account, snapshot }) => (
                 <DerivedValueCard
                   key={account.id}

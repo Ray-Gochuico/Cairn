@@ -158,7 +158,9 @@ describe('AssetValueChart — skeleton', () => {
   it('range tabs render, default 1Y, click persists to the surface namespace', async () => {
     seedStores();
     renderChart('netWorth');
-    const tabs = screen.getByRole('tablist');
+    // Labeled (Wave-5 a11y ride-along): mirrors GrowthCard's "Time horizon"
+    // TabsList so the range control has a name for SR users.
+    const tabs = screen.getByRole('tablist', { name: /time range/i });
     expect(within(tabs).getAllByRole('tab').map((t) => t.textContent)).toEqual(
       ['3M', '6M', 'YTD', '1Y', '5Y', 'All'],
     );

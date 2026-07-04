@@ -198,6 +198,15 @@ describe('MonthlyMiniWindow', () => {
         screen.getByRole('button', { name: /^confirm$/i }),
       ).toBeInTheDocument(),
     );
+    // Wave-5 a11y fix: the status live region is pre-mounted EMPTY from the
+    // start (not conditionally rendered with text already inside) — that's
+    // what makes the polite announcement actually fire for SR users. Two
+    // status regions exist once the "Confirm last month's values" section
+    // is showing (the card's own span + the batch-summary paragraph), both
+    // empty before any confirm — assert every one of them is empty.
+    for (const el of screen.getAllByRole('status')) {
+      expect(el).toHaveTextContent('');
+    }
     await user.click(screen.getByRole('button', { name: /^confirm$/i }));
 
     await waitFor(() => {
@@ -208,7 +217,10 @@ describe('MonthlyMiniWindow', () => {
       expect(updated?.source).toBe(SnapshotSource.USER_CONFIRMED);
     });
     // Wave-4: the card's Confirmed flip is announced to screen readers.
-    expect(screen.getByRole('status')).toHaveTextContent('Confirmed');
+    // The batch-summary status stays empty (no "Confirm all" click here),
+    // so scope to the one that actually carries text.
+    const statusTexts = screen.getAllByRole('status').map((el) => el.textContent ?? '');
+    expect(statusTexts).toContain('Confirmed');
   });
 
   it('announces a failed confirm via role="alert" (Wave-4: inline card errors are announced)', async () => {
@@ -464,9 +476,12 @@ describe('MonthlyMiniWindow', () => {
         expect(s?.source).toBe(SnapshotSource.USER_CONFIRMED);
       });
       // Exactly one card flipped; the sibling stays pending. Wave-4: the
-      // flip is a status announcement.
+      // flip is a status announcement. Wave-5: every card (plus the batch
+      // summary paragraph) pre-mounts its own role="status" span now, so
+      // scope the assertion to the ones actually carrying text.
       expect(screen.getAllByText('Confirmed')).toHaveLength(1);
-      expect(screen.getByRole('status')).toHaveTextContent('Confirmed');
+      const statusTexts = screen.getAllByRole('status').map((el) => el.textContent ?? '');
+      expect(statusTexts.filter((t) => t === 'Confirmed')).toHaveLength(1);
       expect(screen.getAllByRole('button', { name: /^confirm$/i })).toHaveLength(1);
     });
   });
