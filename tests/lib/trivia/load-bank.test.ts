@@ -1,5 +1,10 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import { loadTriviaBank, reviewedOnly } from '@/lib/trivia/load-bank';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import {
+  loadTriviaBank,
+  reviewedOnly,
+  findDuplicateIds,
+  __resetTriviaBankCacheForTests,
+} from '@/lib/trivia/load-bank';
 import { TriviaBankSchema, type TriviaQuestion } from '@/lib/trivia/bank-schema';
 import { QuestionFormat, Topic } from '@/types/enums';
 
@@ -50,20 +55,42 @@ describe('loadTriviaBank', () => {
     expect(() => TriviaBankSchema.parse([{ id: 'broken' }])).toThrow();
   });
 
-  // SEC-1: cross-row id collisions are invisible to per-row schema validation;
-  // the loader must catch them (a dup id makes the daily selector ambiguous).
-  it('throws when two rows share an id', () => {
-    const q = {
-      id: 'beg-dup', version: 1, difficulty: 'Beginner',
-      format: 'definition', topic: 'Foundations',
-      prompt: 'p?', choices: ['a', 'b', 'c', 'd'], answerIndex: 0,
-      explanation: 'e', source: 's',
-    };
-    const detectDupes = (rows: Array<{ id: string }>) => {
-      const ids = rows.map((r) => r.id);
-      return ids.some((id, i) => ids.indexOf(id) !== i);
-    };
-    expect(detectDupes([q, { ...q }])).toBe(true);
-    expect(detectDupes([q, { ...q, id: 'beg-other' }])).toBe(false);
+});
+
+// SEC-1: cross-row id collisions are invisible to per-row schema validation;
+// the loader must catch them (a dup id makes the daily selector ambiguous).
+// This exercises the REAL exported scanner (the previous version of this
+// test asserted against a local detectDupes copy, not the shipped code).
+describe('findDuplicateIds', () => {
+  it('returns each duplicated id once, in first-collision order', () => {
+    const rows = [{ id: 'a' }, { id: 'b' }, { id: 'a' }, { id: 'c' }, { id: 'b' }, { id: 'a' }];
+    expect(findDuplicateIds(rows)).toEqual(['a', 'b']);
+  });
+  it('returns [] when all ids are unique', () => {
+    expect(findDuplicateIds([{ id: 'a' }, { id: 'b' }])).toEqual([]);
+  });
+  it('returns [] for an empty bank', () => {
+    expect(findDuplicateIds([])).toEqual([]);
+  });
+});
+
+describe('loadTriviaBank promise cache', () => {
+  beforeEach(() => __resetTriviaBankCacheForTests());
+
+  it('two calls return the SAME promise (dashboard card + /learn share one parse)', async () => {
+    const p1 = loadTriviaBank();
+    const p2 = loadTriviaBank();
+    expect(p1).toBe(p2);
+    // Settle before the test ends so this load's parse can't bleed into the
+    // next test's parse-count spy.
+    await p1;
+  });
+
+  it('the bank is schema-parsed exactly once across repeated calls', async () => {
+    const parseSpy = vi.spyOn(TriviaBankSchema, 'parse');
+    await Promise.all([loadTriviaBank(), loadTriviaBank()]);
+    await loadTriviaBank(); // post-settle call reuses the cache too (static asset)
+    expect(parseSpy).toHaveBeenCalledTimes(1);
+    parseSpy.mockRestore();
   });
 });
