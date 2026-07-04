@@ -4,6 +4,14 @@ import { getDatabase } from '@/db/db';
 import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
 import type { Property } from '@/types/schema';
 
+/**
+ * In-flight de-dupe: if a load() is already in progress, return its promise
+ * instead of starting a second DB round-trip. Cleared after settle so later
+ * load() calls (after a CRUD mutation) still re-fetch. Carries the accepted
+ * initial-mount TOCTOU documented in src/stores/persons-store.ts.
+ */
+let propertiesInflight: Promise<void> | null = null;
+
 interface PropertiesState {
   properties: Property[];
   isLoading: boolean;
@@ -20,14 +28,20 @@ export const usePropertiesStore = create<PropertiesState>((set, get) => ({
   error: null,
 
   load: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const repo = new PropertiesRepo(getDatabase());
-      const properties = await repo.list();
-      set({ properties, isLoading: false });
-    } catch (e) {
-      set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load' });
-    }
+    if (propertiesInflight) return propertiesInflight;
+    propertiesInflight = (async () => {
+      set({ isLoading: true, error: null });
+      try {
+        const repo = new PropertiesRepo(getDatabase());
+        const properties = await repo.list();
+        set({ properties, isLoading: false });
+      } catch (e) {
+        set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load' });
+      } finally {
+        propertiesInflight = null;
+      }
+    })();
+    return propertiesInflight;
   },
 
   create: async (property) => {
