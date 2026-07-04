@@ -1132,7 +1132,7 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
 
           {/* ----- Range tabs ----- */}
           <Tabs value={window_} onValueChange={handleWindowChange}>
-            <TabsList>
+            <TabsList aria-label="Time range">
               {RANGE_TABS.map((t) => (
                 <TabsTrigger key={t.value} value={t.value}>
                   {t.label}
