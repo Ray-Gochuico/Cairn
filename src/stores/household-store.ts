@@ -3,15 +3,8 @@ import { HouseholdRepo, type DisclosureDocumentId } from '@/domain/household';
 import { DisclosureAcceptancesRepo } from '@/domain/disclosure-acceptances';
 import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import { getDatabase } from '@/db/db';
+import { createDedupedLoad } from '@/stores/create-entity-store';
 import type { Household } from '@/types/schema';
-
-/**
- * In-flight de-dupe: if a load() is already in progress, return its promise
- * instead of starting a second DB round-trip. Cleared after settle so later
- * load() calls (after a mutation) still re-fetch. Carries the accepted
- * initial-mount TOCTOU documented in src/stores/persons-store.ts.
- */
-let householdInflight: Promise<void> | null = null;
 
 interface HouseholdState {
   household: Household | null;
@@ -34,22 +27,11 @@ export const useHouseholdStore = create<HouseholdState>((set, get) => ({
   isLoading: false,
   error: null,
 
-  load: async () => {
-    if (householdInflight) return householdInflight;
-    householdInflight = (async () => {
-      set({ isLoading: true, error: null });
-      try {
-        const repo = new HouseholdRepo(getDatabase());
-        const household = await repo.get();
-        set({ household, isLoading: false });
-      } catch (e) {
-        set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load' });
-      } finally {
-        householdInflight = null;
-      }
-    })();
-    return householdInflight;
-  },
+  // Shared de-duped load (see create-entity-store.ts for semantics + the
+  // accepted initial-mount TOCTOU).
+  load: createDedupedLoad<HouseholdState, 'household'>(set, 'household', async () =>
+    new HouseholdRepo(getDatabase()).get(),
+  ),
 
   update: async (patch) => {
     set({ isLoading: true, error: null });

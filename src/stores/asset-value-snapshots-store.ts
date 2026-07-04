@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { getDatabase } from '@/db/db';
 import { AssetValueSnapshotsRepo } from '@/domain/asset-value-snapshots';
+import { createDedupedLoad } from '@/stores/create-entity-store';
 import type { AssetValueSnapshot } from '@/types/schema';
 import type { AssetSnapshotOwnerType } from '@/types/enums';
 
@@ -36,14 +37,6 @@ interface AssetValueSnapshotsState {
 
 let nextTempId = -1;
 const allocTempId = () => nextTempId--;
-
-/**
- * In-flight de-dupe: if a load() is already in progress, return its promise
- * instead of starting a second DB round-trip. Cleared after settle so later
- * load() calls still re-fetch. Carries the accepted initial-mount TOCTOU
- * documented in src/stores/persons-store.ts.
- */
-let assetValueSnapshotsInflight: Promise<void> | null = null;
 
 /**
  * Mirrors AssetValueSnapshotsRepo.list() ordering:
@@ -84,24 +77,13 @@ export const useAssetValueSnapshotsStore = create<AssetValueSnapshotsState>(
     isLoading: false,
     error: null,
 
-    load: async () => {
-      if (assetValueSnapshotsInflight) return assetValueSnapshotsInflight;
-      assetValueSnapshotsInflight = (async () => {
-        set({ isLoading: true, error: null });
-        try {
-          const items = await new AssetValueSnapshotsRepo(getDatabase()).list();
-          set({ assetValueSnapshots: items, isLoading: false });
-        } catch (e) {
-          set({
-            isLoading: false,
-            error: e instanceof Error ? e.message : 'Failed to load',
-          });
-        } finally {
-          assetValueSnapshotsInflight = null;
-        }
-      })();
-      return assetValueSnapshotsInflight;
-    },
+    // Shared de-duped load (see create-entity-store.ts for semantics + the
+    // accepted initial-mount TOCTOU).
+    load: createDedupedLoad<AssetValueSnapshotsState, 'assetValueSnapshots'>(
+      set,
+      'assetValueSnapshots',
+      async () => new AssetValueSnapshotsRepo(getDatabase()).list(),
+    ),
 
     create: async (snap) => {
       const repo = new AssetValueSnapshotsRepo(getDatabase());

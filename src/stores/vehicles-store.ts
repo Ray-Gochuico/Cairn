@@ -1,16 +1,9 @@
 import { create } from 'zustand';
 import { VehiclesRepo } from '@/domain/vehicles';
 import { getDatabase } from '@/db/db';
+import { createDedupedLoad } from '@/stores/create-entity-store';
 import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
 import type { Vehicle } from '@/types/schema';
-
-/**
- * In-flight de-dupe: if a load() is already in progress, return its promise
- * instead of starting a second DB round-trip. Cleared after settle so later
- * load() calls (after a CRUD mutation) still re-fetch. Carries the accepted
- * initial-mount TOCTOU documented in src/stores/persons-store.ts.
- */
-let vehiclesInflight: Promise<void> | null = null;
 
 interface VehiclesState {
   vehicles: Vehicle[];
@@ -27,22 +20,11 @@ export const useVehiclesStore = create<VehiclesState>((set, get) => ({
   isLoading: false,
   error: null,
 
-  load: async () => {
-    if (vehiclesInflight) return vehiclesInflight;
-    vehiclesInflight = (async () => {
-      set({ isLoading: true, error: null });
-      try {
-        const repo = new VehiclesRepo(getDatabase());
-        const vehicles = await repo.list();
-        set({ vehicles, isLoading: false });
-      } catch (e) {
-        set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load' });
-      } finally {
-        vehiclesInflight = null;
-      }
-    })();
-    return vehiclesInflight;
-  },
+  // Shared de-duped load (see create-entity-store.ts for semantics + the
+  // accepted initial-mount TOCTOU).
+  load: createDedupedLoad<VehiclesState, 'vehicles'>(set, 'vehicles', async () =>
+    new VehiclesRepo(getDatabase()).list(),
+  ),
 
   create: async (vehicle) => {
     const repo = new VehiclesRepo(getDatabase());
