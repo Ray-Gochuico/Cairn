@@ -164,3 +164,64 @@ describe('Yahoo degraded-shape fixtures (salvage characterization)', () => {
     void warnSpy; // asserted in the Path A describe below (appended in Step 4)
   });
 });
+
+describe('observe-only shape telemetry (Path A)', () => {
+  let client: YahooClient;
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    client = new YahooClient();
+    vi.clearAllMocks();
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  it('a degraded quoteSummary shape logs one [yahoo-shape] warn AND extraction is unchanged', async () => {
+    mockQuoteSummary('qs-degenerate-sectors.json');
+    const { sectors } = await client.fundSectorWeightings('VTI');
+    expect(sectors).toEqual([
+      { sector: 'Real Estate', weight: 0.12 },
+      { sector: 'Financial Services', weight: 0.2 },
+    ]); // byte-identical to the characterization above — observation ≠ transformation
+    const shapeWarns = warnSpy.mock.calls.filter(
+      (args) => typeof args[0] === 'string' && args[0].startsWith('[yahoo-shape]'),
+    );
+    expect(shapeWarns.length).toBe(1);
+  });
+
+  it('a degraded chart shape logs one [yahoo-shape] warn AND salvage is unchanged', async () => {
+    mockChartResponse('chart-missing-price.json');
+    await expect(client.quote('TEST')).rejects.toThrow('No regularMarketPrice for TEST');
+    // missing-price is a legal-optional field in the schema; the warn contract
+    // is exercised with a structurally-broken envelope instead:
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      json: async () => ({ chart: { result: 'not-an-array', error: null } }),
+    });
+    // Old behavior preserved: a string `result` still throws from the client
+    // (string indexing makes `result?.[0]` truthy, then `.meta` access
+    // TypeErrors) — the [yahoo-shape] warn is the NEW signal, the throw is not.
+    await expect(client.quote('TEST')).rejects.toThrow();
+    const shapeWarns = warnSpy.mock.calls.filter(
+      (args) => typeof args[0] === 'string' && args[0].startsWith('[yahoo-shape]'),
+    );
+    expect(shapeWarns.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('unknown/extra fields do NOT warn (loose schemas tolerate forward drift)', async () => {
+    mockQuoteSummary('qs-unknown-fields.json');
+    await client.fundTopHoldings('VTI');
+    const shapeWarns = warnSpy.mock.calls.filter(
+      (args) => typeof args[0] === 'string' && args[0].startsWith('[yahoo-shape]'),
+    );
+    expect(shapeWarns).toEqual([]);
+  });
+
+  it('observeYahooShape NEVER throws, even on alien input', async () => {
+    const { observeYahooShape } = await import('@/market/yahoo-schemas');
+    expect(() => observeYahooShape('chart', null)).not.toThrow();
+    expect(() => observeYahooShape('quoteSummary', 'a string')).not.toThrow();
+    expect(() => observeYahooShape('chart', { chart: { result: 42 } })).not.toThrow();
+  });
+});
