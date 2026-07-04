@@ -99,7 +99,7 @@ export function TransactionEditDialog({
         <div className="space-y-3 py-2">
           <div>
             <Label htmlFor="edit-date">Date</Label>
-            <DatePicker id="edit-date" value={date} onChange={setDate} />
+            <DatePicker id="edit-date" label="Date" value={date} onChange={setDate} />
           </div>
           <div>
             <Label htmlFor="edit-merchant">Merchant</Label>

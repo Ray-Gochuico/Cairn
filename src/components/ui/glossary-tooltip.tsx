@@ -30,10 +30,10 @@ interface TermTooltipProps {
  * flip / shift positioning at viewport edges, focus management
  * (content gets focus on keyboard open, focus returns to trigger on
  * close), Tab / Shift-Tab inside, Escape closes, click-outside closes.
- * We override the content's `role` from "dialog" to "tooltip" so
- * existing call-sites and tests that look for `role="tooltip"` keep
- * working. The popover *can* hold focus though — Tab into the "Learn
- * more" link is supported.
+ * The content keeps Radix's default `role="dialog"` (Wave-4 a11y:
+ * role="tooltip" forbids interactive content, and this popover holds
+ * the "Learn more" link). The popover *can* hold focus — Tab into the
+ * "Learn more" link is supported.
  *
  * Definitions live in `src/lib/glossary.ts`. If a term isn't in the
  * glossary, the wrapper falls back to a plain inline span (no UI nag)
@@ -119,8 +119,9 @@ export function TermTooltip({ term, children, className }: TermTooltipProps) {
       </PopoverPrimitive.Trigger>
       <PopoverPrimitive.Portal>
         <PopoverPrimitive.Content
-          // Match the test contract from the hand-rolled implementation.
-          role="tooltip"
+          // Wave-4 a11y: no role override — Radix's default role="dialog"
+          // is the truthful role; role="tooltip" forbids the interactive
+          // "Learn more" link this popover contains.
           sideOffset={6}
           collisionPadding={8}
           onPointerEnter={cancelClose}

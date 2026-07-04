@@ -132,6 +132,7 @@ export default function HousingPaymentForm({
               <Label htmlFor="startDate">Start date</Label>
               <DatePicker
                 id="startDate"
+                label="Start date"
                 value={form.watch('startDate')}
                 onChange={(v) =>
                   form.setValue('startDate', v, {
@@ -145,6 +146,7 @@ export default function HousingPaymentForm({
               <Label htmlFor="endDate">End date (optional)</Label>
               <DatePicker
                 id="endDate"
+                label="End date"
                 value={form.watch('endDate') ?? ''}
                 onChange={(v) =>
                   form.setValue('endDate', v === '' ? null : v, {

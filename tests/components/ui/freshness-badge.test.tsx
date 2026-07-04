@@ -216,7 +216,7 @@ describe('FreshnessBadge', () => {
     const user = userEvent.setup();
     const badge = screen.getByTestId('freshness-badge');
     await user.hover(badge);
-    const tooltip = await screen.findByRole('tooltip');
+    const tooltip = await screen.findByRole('dialog');
     expect(tooltip).toHaveTextContent(/refresh cadence/i);
     expect(tooltip).toHaveTextContent(/weekly/i);
   });

@@ -111,6 +111,7 @@ export default function GoalForm({
               <Label htmlFor="targetDate">Target date</Label>
               <DatePicker
                 id="targetDate"
+                label="Target date"
                 value={form.watch('targetDate')}
                 onChange={(v) =>
                   form.setValue('targetDate', v, { shouldDirty: true, shouldTouch: true })

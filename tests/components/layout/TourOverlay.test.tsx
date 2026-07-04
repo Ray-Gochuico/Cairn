@@ -93,7 +93,10 @@ describe('TourOverlay', () => {
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByRole('heading', { name: /your dashboard/i })).toBeInTheDocument();
     expect(dialog).toHaveAttribute('aria-live', 'polite');
-    expect(within(dialog).getByText(/1 of 6/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/^1 of 6$/i)).toBeInTheDocument();
+    // Wave-4: the dialog is aria-live=polite, so the sr-only counter twin
+    // announces progress on every step change.
+    expect(within(dialog).getByText(/^Step \d+ of \d+$/)).toHaveClass('sr-only');
   });
 
   it('focuses the step heading on render', () => {
@@ -125,10 +128,10 @@ describe('TourOverlay', () => {
     useTourStore.setState({ active: true });
     renderOverlay();
     await user.click(screen.getByRole('button', { name: /next/i }));
-    expect(screen.getByText(/2 of 6/i)).toBeInTheDocument();
+    expect(screen.getByText(/^2 of 6$/i)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /net worth/i })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /back/i }));
-    expect(screen.getByText(/1 of 6/i)).toBeInTheDocument();
+    expect(screen.getByText(/^1 of 6$/i)).toBeInTheDocument();
   });
 
   it('last core step shows See the rest (secondary) + Done (primary); Done ends + marks', async () => {
@@ -139,7 +142,7 @@ describe('TourOverlay', () => {
     useSettingsStore.setState({ settings: makeSettings({ sidebarLayout: hideAllButLoans }) });
     useTourStore.setState({ active: true, stepIndex: 5, mode: 'core' }); // last core step (/settings)
     renderOverlay();
-    expect(screen.getByText(/6 of 6/i)).toBeInTheDocument();
+    expect(screen.getByText(/^6 of 6$/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /see the rest/i })).toBeInTheDocument();
     const done = screen.getByRole('button', { name: /^done$/i });
     await user.click(done);
@@ -158,7 +161,7 @@ describe('TourOverlay', () => {
     expect(useTourStore.getState().mode).toBe('all');
     // 7 visible tabs total (6 core + Loans); advanced to index 6 → "7 of 7"
     // OR stays at 5 → "6 of 7". Either way the denominator is the full 7.
-    expect(screen.getByText(/ of 7/i)).toBeInTheDocument();
+    expect(screen.getByText(/^\d+ of 7$/i)).toBeInTheDocument();
     expect(screen.queryByText(/of 6/i)).toBeNull();
   });
 

@@ -40,9 +40,9 @@ const loadEmploymentBonusMigration = () =>
 async function selectDate(user: UserEvent, pickerId: string, isoDate: string) {
   const [yyyy, mm, dd] = isoDate.split('-');
   const root = screen.getByTestId(`${pickerId}-picker`);
-  await user.selectOptions(within(root).getByLabelText('Year'), yyyy);
-  await user.selectOptions(within(root).getByLabelText('Month'), mm);
-  await user.selectOptions(within(root).getByLabelText('Day'), dd);
+  await user.selectOptions(within(root).getByLabelText(/year$/i), yyyy);
+  await user.selectOptions(within(root).getByLabelText(/month$/i), mm);
+  await user.selectOptions(within(root).getByLabelText(/day$/i), dd);
 }
 
 describe('PersonsTab', () => {
@@ -76,7 +76,7 @@ describe('PersonsTab', () => {
     await waitFor(() => screen.getByRole('button', { name: /add person/i }));
     await user.click(screen.getByRole('button', { name: /add person/i }));
     expect(screen.getByLabelText(/name/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/date of birth/i)).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: /date of birth/i })).toBeInTheDocument();
   });
 
   it('creates a person via the form', async () => {

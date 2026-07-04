@@ -20,7 +20,7 @@ describe('Wizard PersonForm (adapter)', () => {
   it('renders the underlying person form fields', () => {
     render(<PersonForm />);
     expect(screen.getByLabelText(/^name$/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/date of birth/i)).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: /date of birth/i })).toBeInTheDocument();
   });
 
   it('renders an Add Person submit button', () => {

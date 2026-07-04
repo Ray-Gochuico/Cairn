@@ -398,6 +398,7 @@ export default function SpendingTransactions() {
                       <td className="py-2 pr-3">
                         <DatePicker
                           id={`edit-date-${t.id}`}
+                          label="Date"
                           value={draft.date}
                           onChange={(v) => setDraft({ ...draft, date: v })}
                         />

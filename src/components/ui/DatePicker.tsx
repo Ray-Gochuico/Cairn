@@ -7,6 +7,12 @@ export interface DatePickerProps {
   onChange: (next: string) => void;
   /** Optional id; used to associate label htmlFor with the year select. */
   id?: string;
+  /**
+   * Accessible name for the Year/Month/Day trio, e.g. "Purchase date".
+   * Renders role="group" + aria-label on the wrapper and prefixes each
+   * select's aria-label so "Year" is never announced context-free.
+   */
+  label?: string;
   /** Disables all three selects. */
   disabled?: boolean;
   /** Lowest year to offer. Defaults to 1900. */
@@ -53,6 +59,7 @@ export default function DatePicker({
   value,
   onChange,
   id,
+  label,
   disabled = false,
   minYear = 1900,
   maxYear,
@@ -124,10 +131,18 @@ export default function DatePicker({
     'flex h-9 rounded-md border border-input bg-transparent px-2 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50';
 
   return (
-    <div className="flex flex-wrap gap-2" data-testid={id ? `${id}-picker` : undefined}>
+    // Wave-4 a11y: labeled group so AT announces the field context once,
+    // and each select's name carries the context ("Purchase date year"
+    // instead of a bare "Year").
+    <div
+      role="group"
+      aria-label={label}
+      className="flex flex-wrap gap-2"
+      data-testid={id ? `${id}-picker` : undefined}
+    >
       <select
         id={id}
-        aria-label="Year"
+        aria-label={label ? `${label} year` : 'Year'}
         className={selectClass}
         disabled={disabled}
         value={year}
@@ -139,7 +154,7 @@ export default function DatePicker({
         ))}
       </select>
       <select
-        aria-label="Month"
+        aria-label={label ? `${label} month` : 'Month'}
         className={selectClass}
         disabled={disabled}
         value={month}
@@ -152,7 +167,7 @@ export default function DatePicker({
         })}
       </select>
       <select
-        aria-label="Day"
+        aria-label={label ? `${label} day` : 'Day'}
         className={selectClass}
         disabled={disabled}
         value={day}

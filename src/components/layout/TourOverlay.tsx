@@ -252,8 +252,15 @@ export default function TourOverlay() {
         <p className="mt-2 text-sm text-muted-foreground">{step.body}</p>
 
         <div className="mt-4 flex items-center justify-between gap-2">
-          <span className="text-xs text-muted-foreground" aria-hidden="true">
-            {counterPosition} of {counterTotal}
+          <span className="text-xs text-muted-foreground">
+            <span aria-hidden="true">
+              {counterPosition} of {counterTotal}
+            </span>
+            {/* Wave-4 a11y: the dialog is aria-live=polite, so this
+                announces progress on every step change. */}
+            <span className="sr-only">
+              Step {counterPosition} of {counterTotal}
+            </span>
           </span>
           <div className="flex items-center gap-2">
             {safeIndex > 0 && (

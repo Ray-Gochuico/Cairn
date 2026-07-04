@@ -57,6 +57,26 @@ describe('MetricCard text overflow', () => {
     expect(link).toHaveAttribute('aria-label', 'Awaiting Reimbursement: $12,345');
   });
 
+  it('link name includes value, delta and subtitle', () => {
+    // Wave-4 a11y: delta and subtitle are visible to sighted users, so the
+    // link's accessible name carries them too (em-dash separators read as
+    // natural pauses).
+    render(
+      <MemoryRouter>
+        <MetricCard
+          label="Net worth"
+          value="$1,234"
+          delta="+$100 MoM"
+          subtitle="as of Jul 2"
+          href="/net-worth"
+        />
+      </MemoryRouter>,
+    );
+    expect(
+      screen.getByRole('link', { name: 'Net worth: $1,234 — +$100 MoM — as of Jul 2' }),
+    ).toBeInTheDocument();
+  });
+
   it('does not set aria-label when no href is provided (no link to label)', () => {
     render(
       <MemoryRouter>

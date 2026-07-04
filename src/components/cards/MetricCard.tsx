@@ -104,11 +104,11 @@ function MetricCardImpl({
   );
 
   if (href) {
-    // The composed accessible name on the wrapping link gives screen-reader
-    // and keyboard-focus users the full label even when the visible label
-    // line-clamps. Delta/subtitle are intentionally excluded to keep the
-    // announcement short; they're available via the visible text on hover.
-    const ariaLabel = `${label}: ${value}`;
+    // Wave-4 a11y: compose the FULL sentence — the delta and subtitle are
+    // visible to sighted users but were omitted from the link name, so SR
+    // users lost the trend and the as-of context. Em-dash separators read
+    // as natural pauses.
+    const ariaLabel = [`${label}: ${value}`, delta, subtitle].filter(Boolean).join(' — ');
     return (
       <Link
         to={href}

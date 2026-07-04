@@ -242,6 +242,7 @@ export default function LoanForm({
               <Label htmlFor="firstPaymentDate">First payment date</Label>
               <DatePicker
                 id="firstPaymentDate"
+                label="First payment date"
                 value={form.watch('firstPaymentDate')}
                 onChange={(v) => {
                   form.setValue('firstPaymentDate', v, { shouldDirty: true, shouldTouch: true });

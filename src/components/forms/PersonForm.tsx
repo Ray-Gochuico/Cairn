@@ -169,6 +169,7 @@ export default function PersonForm({
               <Label htmlFor="dateOfBirth">Date of birth</Label>
               <DatePicker
                 id="dateOfBirth"
+                label="Date of birth"
                 value={form.watch('dateOfBirth')}
                 onChange={(v) =>
                   form.setValue('dateOfBirth', v, { shouldDirty: true, shouldTouch: true })

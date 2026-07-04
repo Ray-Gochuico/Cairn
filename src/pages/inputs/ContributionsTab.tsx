@@ -79,6 +79,7 @@ function ContributionForm({ initial, accounts, persons, onSubmit, onCancel }: Co
               <Label htmlFor="date">Date</Label>
               <DatePicker
                 id="date"
+                label="Date"
                 value={form.watch('date')}
                 onChange={(v) =>
                   form.setValue('date', v, { shouldDirty: true, shouldTouch: true })

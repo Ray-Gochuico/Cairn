@@ -153,6 +153,7 @@ export default function VehicleForm({
               <Label htmlFor="purchaseDate">Purchase date (optional)</Label>
               <DatePicker
                 id="purchaseDate"
+                label="Purchase date"
                 value={form.watch('purchaseDate') ?? ''}
                 onChange={(v) =>
                   form.setValue('purchaseDate', v === '' ? null : v, {

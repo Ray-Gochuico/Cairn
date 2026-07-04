@@ -85,6 +85,7 @@ export function MarkReimbursedDialog({
             <Label htmlFor="reimbursed-date">Reimbursed date</Label>
             <DatePicker
               id="reimbursed-date"
+              label="Reimbursed date"
               value={date}
               onChange={setDate}
             />

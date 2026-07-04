@@ -232,6 +232,7 @@ export default function EquityGrantForm({
               <Label htmlFor="grant-date">Grant date</Label>
               <DatePicker
                 id="grant-date"
+                label="Grant date"
                 value={form.watch('grantDate')}
                 onChange={(v) =>
                   form.setValue('grantDate', v, { shouldDirty: true, shouldTouch: true })
@@ -400,6 +401,7 @@ export default function EquityGrantForm({
                       <td className="py-1 pr-2 align-top">
                         <DatePicker
                           id={`vesting-row-${i}-date`}
+                          label={`Vesting row ${i + 1} date`}
                           value={row.date}
                           onChange={(v) => updateRow(i, { date: v })}
                         />
