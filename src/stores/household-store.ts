@@ -5,6 +5,14 @@ import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import { getDatabase } from '@/db/db';
 import type { Household } from '@/types/schema';
 
+/**
+ * In-flight de-dupe: if a load() is already in progress, return its promise
+ * instead of starting a second DB round-trip. Cleared after settle so later
+ * load() calls (after a mutation) still re-fetch. Carries the accepted
+ * initial-mount TOCTOU documented in src/stores/persons-store.ts.
+ */
+let householdInflight: Promise<void> | null = null;
+
 interface HouseholdState {
   household: Household | null;
   isLoading: boolean;
@@ -27,14 +35,20 @@ export const useHouseholdStore = create<HouseholdState>((set, get) => ({
   error: null,
 
   load: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const repo = new HouseholdRepo(getDatabase());
-      const household = await repo.get();
-      set({ household, isLoading: false });
-    } catch (e) {
-      set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load' });
-    }
+    if (householdInflight) return householdInflight;
+    householdInflight = (async () => {
+      set({ isLoading: true, error: null });
+      try {
+        const repo = new HouseholdRepo(getDatabase());
+        const household = await repo.get();
+        set({ household, isLoading: false });
+      } catch (e) {
+        set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load' });
+      } finally {
+        householdInflight = null;
+      }
+    })();
+    return householdInflight;
   },
 
   update: async (patch) => {
