@@ -707,9 +707,10 @@ export default function Investments() {
         applicable: true,
         render: () => (
           /*
-           * Investments growth card. Click (or use the chevrons / arrow keys)
-           * to cycle the horizon from "since yesterday" through "past year".
-           * Sits above the donut grid so the headline number reads first.
+           * Investments growth card. Horizon chips (1D…1Y) select the
+           * period; fed from the chart-universe as-of sums above so this
+           * card and the chart header can't disagree (round-2 A2). Sits
+           * above the donut grid so the headline number reads first.
            */
           <GrowthCard title="Investments growth" horizons={investmentsGrowth} />
         ),
