@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createDedupedLoad } from '@/stores/create-entity-store';
+import { createDedupedLoad, createDedupedLoadPartial } from '@/stores/create-entity-store';
 
 interface FakeState {
   items: number[];
@@ -65,5 +65,53 @@ describe('createDedupedLoad', () => {
     });
     await load();
     expect(state.error).toBe('Failed to load');
+  });
+});
+
+describe('createDedupedLoadPartial (multi-key loads, e.g. learning-state)', () => {
+  interface MultiState { a: number[]; b: string | null; isLoading: boolean; error: string | null }
+
+  function harnessP() {
+    let state: Partial<MultiState> = {};
+    const set = vi.fn((partial: Partial<MultiState>) => { state = { ...state, ...partial }; });
+    return { set, state: () => state };
+  }
+
+  it('collapses concurrent calls to one fetch and spreads the partial on success', async () => {
+    const h = harnessP();
+    const fetchPartial = vi.fn(async () => ({ a: [1, 2], b: 'x' }) as Partial<MultiState>);
+    const load = createDedupedLoadPartial<MultiState>(h.set, fetchPartial);
+    await Promise.all([load(), load()]);
+    expect(fetchPartial).toHaveBeenCalledTimes(1);
+    expect(h.state()).toMatchObject({ a: [1, 2], b: 'x', isLoading: false });
+  });
+
+  it('re-fetches after settle', async () => {
+    const h = harnessP();
+    const fetchPartial = vi.fn(async () => ({}) as Partial<MultiState>);
+    const load = createDedupedLoadPartial<MultiState>(h.set, fetchPartial);
+    await load();
+    await load();
+    expect(fetchPartial).toHaveBeenCalledTimes(2);
+  });
+
+  it('swallows errors into state.error and clears the guard', async () => {
+    const h = harnessP();
+    const load = createDedupedLoadPartial<MultiState>(h.set, async () => {
+      throw new Error('boom');
+    });
+    await load();
+    expect(h.state()).toMatchObject({ isLoading: false, error: 'boom' });
+    await load(); // guard cleared — a second call runs (and fails) again
+    expect(h.state().error).toBe('boom');
+  });
+
+  it('non-Error throws fall back to the shared message', async () => {
+    const h = harnessP();
+    const load = createDedupedLoadPartial<MultiState>(h.set, async () => {
+      throw 'string-throw';
+    });
+    await load();
+    expect(h.state().error).toBe('Failed to load');
   });
 });

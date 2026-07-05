@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { RoadmapOverridesRepo } from '@/domain/roadmap-overrides-repo';
+import { createDedupedLoad } from '@/stores/create-entity-store';
 import { getDatabase } from '@/db/db';
 import { useHouseholdStore } from '@/stores/household-store';
 import type { NodeId, RoadmapNodeOverride, OverrideStatus } from '@/types/roadmap';
@@ -29,18 +30,15 @@ export const useRoadmapOverridesStore = create<RoadmapOverridesState>((set, get)
   isLoading: false,
   error: null,
 
-  load: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const repo = new RoadmapOverridesRepo(getDatabase());
-      const rows = await repo.list();
-      const map = new Map<NodeId, RoadmapNodeOverride>();
-      for (const row of rows) map.set(row.nodeId, row);
-      set({ overridesByNodeId: map, isLoading: false });
-    } catch (e) {
-      set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load overrides' });
-    }
-  },
+  // Shared de-duped load (see create-entity-store.ts). fetchData builds the
+  // Map so the public overridesByNodeId shape is unchanged.
+  load: createDedupedLoad<RoadmapOverridesState, 'overridesByNodeId'>(set, 'overridesByNodeId', async () => {
+    const repo = new RoadmapOverridesRepo(getDatabase());
+    const rows = await repo.list();
+    const map = new Map<NodeId, RoadmapNodeOverride>();
+    for (const row of rows) map.set(row.nodeId, row);
+    return map;
+  }),
 
   setOverride: async (nodeId, status, note) => {
     const repo = new RoadmapOverridesRepo(getDatabase());

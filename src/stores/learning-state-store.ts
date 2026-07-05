@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { LearningStateRepo } from '@/domain/learning-state';
+import { createDedupedLoadPartial } from '@/stores/create-entity-store';
 import { getDatabase } from '@/db/db';
 import { localTodayISO } from '@/lib/trivia/daily';
 import type { LearningState, LearningAnswer } from '@/types/schema';
@@ -41,20 +42,18 @@ export const useLearningStore = create<LearningStoreState>((set, get) => ({
   isLoading: false,
   error: null,
 
-  load: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const repo = new LearningStateRepo(getDatabase());
-      const [learningState, answeredQuestionIds, answeredKeysByDay] = await Promise.all([
-        repo.get(),
-        repo.listAnsweredQuestionIds(),
-        repo.getAnsweredKeysByDay(localTodayISO(new Date())),
-      ]);
-      set({ learningState, answeredQuestionIds, answeredKeysByDay, isLoading: false });
-    } catch (e) {
-      set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load' });
-    }
-  },
+  // Shared de-duped multi-key load (createDedupedLoadPartial): one fetch
+  // lands three public fields, so the single-key factory doesn't fit and
+  // collapsing them into one object would break the fields' consumers.
+  load: createDedupedLoadPartial<LearningStoreState>(set, async () => {
+    const repo = new LearningStateRepo(getDatabase());
+    const [learningState, answeredQuestionIds, answeredKeysByDay] = await Promise.all([
+      repo.get(),
+      repo.listAnsweredQuestionIds(),
+      repo.getAnsweredKeysByDay(localTodayISO(new Date())),
+    ]);
+    return { learningState, answeredQuestionIds, answeredKeysByDay };
+  }),
 
   update: async (patch) => {
     set({ isLoading: true, error: null });

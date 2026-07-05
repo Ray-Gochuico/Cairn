@@ -65,3 +65,36 @@ export function createDedupedLoad<TState extends EntityLoadState, K extends keyo
     return inflight;
   };
 }
+
+/**
+ * Multi-key sibling of createDedupedLoad for stores whose one load lands
+ * SEVERAL state fields (learning-state: learningState + answeredQuestionIds
+ * + answeredKeysByDay). Identical semantics — swallow-into-error, in-flight
+ * collapse, guard cleared in finally — but `fetchPartial` returns a Partial
+ * of the state that is spread on success. Prefer createDedupedLoad when a
+ * single key suffices.
+ */
+export function createDedupedLoadPartial<TState extends EntityLoadState>(
+  set: (partial: Partial<TState>) => void,
+  fetchPartial: () => Promise<Partial<TState>>,
+): () => Promise<void> {
+  let inflight: Promise<void> | null = null;
+  return () => {
+    if (inflight) return inflight;
+    inflight = (async () => {
+      set({ isLoading: true, error: null } as Partial<TState>);
+      try {
+        const partial = await fetchPartial();
+        set({ ...partial, isLoading: false } as Partial<TState>);
+      } catch (e) {
+        set({
+          isLoading: false,
+          error: e instanceof Error ? e.message : 'Failed to load',
+        } as Partial<TState>);
+      } finally {
+        inflight = null;
+      }
+    })();
+    return inflight;
+  };
+}
