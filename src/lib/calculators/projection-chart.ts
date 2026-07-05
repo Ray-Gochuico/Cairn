@@ -29,13 +29,21 @@ export interface ProjectionChartInput {
  * t — and the REAL view deflates trajectories AND the grown target, landing
  * the target exactly flat at `targetFv`. Both views therefore cross in the
  * SAME year, which matches the tables' real-rate solves.
+ *
+ * Contribution basis (round-2 A3 — the sibling of the target-line fix):
+ * `annualContribution` is treated as REAL-flat, matching the table solve
+ * (`financialIndependenceSeries` solves at the Fisher real rate, which
+ * models a constant TODAY'S-dollars contribution). The nominal trajectories
+ * therefore grow the year-t contribution by (1+inflation)^t; the REAL view
+ * deflates back to a flat real contribution. Both views cross the target in
+ * ceil(yearsToFi) — locked by the historical-anchor tests.
  */
 export function buildProjectionChartData(
   input: ProjectionChartInput,
 ): Record<string, number>[] {
   const trajectories = input.scenarios.map((s) => ({
     label: s.label,
-    pts: balanceTrajectory(input.pv, input.annualContribution, s.rate, input.horizon),
+    pts: balanceTrajectory(input.pv, input.annualContribution, s.rate, input.horizon, input.inflation),
   }));
   const nominal = Array.from({ length: input.horizon + 1 }, (_, t) => {
     const point: Record<string, number> = {

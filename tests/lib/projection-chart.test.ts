@@ -45,7 +45,12 @@ describe('buildProjectionChartData — target-line basis (nominal-on-real, 4th i
     expect(crossingYear(rows, 'Moderate')).toBe(19);
   });
 
-  it('mode-invariance holds WITH contributions (pv $100k, $20k/yr, 6%, 2.5% infl → year 30, not the flat-target year 20)', () => {
+  it('WITH contributions the crossing equals the table solve in BOTH modes (historical anchor)', () => {
+    // pv $100k, $20k/yr real-flat, 6% nominal, 2.5% inflation, target $1M real.
+    // Real rate = 1.06/1.025 − 1 ≈ 3.4146%; yearsToFi ≈ 24.97 → first charted
+    // crossing at year 25. The pre-fix flat-NOMINAL contribution crossed at
+    // year 30 (the OLD expectation below) — ~5 years LATE vs the solve, the
+    // review's "15.2y table vs year-17 chart" pessimism class.
     const scenarioB = {
       pv: 100_000,
       annualContribution: 20_000,
@@ -54,6 +59,13 @@ describe('buildProjectionChartData — target-line basis (nominal-on-real, 4th i
       inflation: 0.025,
       horizon: 40,
     };
+    const solve = yearsToFi({
+      pv: scenarioB.pv,
+      pmt: scenarioB.annualContribution,
+      annualRate: realRateOf(0.06, 0.025),
+      targetFv: scenarioB.targetFv,
+    });
+    const expected = Math.ceil(solve);
     const nominal = crossingYear(
       buildProjectionChartData({ ...scenarioB, displayMode: 'NOMINAL' }),
       'Moderate',
@@ -62,10 +74,8 @@ describe('buildProjectionChartData — target-line basis (nominal-on-real, 4th i
       buildProjectionChartData({ ...scenarioB, displayMode: 'REAL' }),
       'Moderate',
     );
-    expect(nominal).toBe(30);
-    expect(real).toBe(30);
-    // The pre-fix flat target crossed at year 20 — the review's "12.1y vs
-    // 15.8y" class of optimism.
+    expect(nominal).toBe(expected);
+    expect(real).toBe(expected);
   });
 
   it('NOMINAL target grows by (1+i)^t; REAL target is flat at targetFv', () => {
