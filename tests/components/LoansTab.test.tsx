@@ -11,7 +11,9 @@ import { usePersonsStore } from '@/stores/persons-store';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
 import { PersonsRepo } from '@/domain/persons';
-import { LoanType } from '@/types/enums';
+import { LoansRepo } from '@/domain/loans';
+import { PropertiesRepo } from '@/domain/properties';
+import { LoanType, PropertyType } from '@/types/enums';
 import LoansTab from '@/pages/inputs/LoansTab';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -199,5 +201,35 @@ describe('LoansTab', () => {
     expect(
       await screen.findByTestId('import-csv-file-input'),
     ).toBeInTheDocument();
+  });
+
+  async function seedMortgageWithProperty(excluded: boolean) {
+    const loanId = await new LoansRepo(db).create({
+      householdId: 1, obligorPersonId: null, name: 'Home mortgage', type: LoanType.MORTGAGE,
+      originalAmount: 400000, currentBalance: 350000, interestRate: 0.06, termMonths: 360,
+      firstPaymentDate: '2020-01-01', monthlyPayment: 2400, extraPaymentDefault: 0,
+      linkedPropertyId: null, linkedVehicleId: null,
+    });
+    await new PropertiesRepo(db).create({
+      householdId: 1, ownerPersonId: null, name: 'House', type: PropertyType.PRIMARY_RESIDENCE,
+      address: null, purchaseDate: null, purchasePrice: null, currentEstimatedValue: 500000,
+      linkedLoanId: loanId, excludedFromNetWorth: excluded,
+    });
+  }
+
+  it('shows a muted "collateral excluded" badge when the linked property is excluded (round-2 A4)', async () => {
+    await seedMortgageWithProperty(true);
+
+    render(<MemoryRouter><LoansTab /></MemoryRouter>);
+    expect(await screen.findByText('Home mortgage')).toBeInTheDocument();
+    expect(screen.getByText(/collateral excluded/i)).toBeInTheDocument();
+  });
+
+  it('no badge when the linked property counts toward net worth', async () => {
+    await seedMortgageWithProperty(false);
+
+    render(<MemoryRouter><LoansTab /></MemoryRouter>);
+    expect(await screen.findByText('Home mortgage')).toBeInTheDocument();
+    expect(screen.queryByText(/collateral excluded/i)).not.toBeInTheDocument();
   });
 });

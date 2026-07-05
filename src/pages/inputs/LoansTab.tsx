@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import LoanForm, { DEFAULT_LOAN, LOAN_TYPE_LABELS } from '@/components/forms/LoanForm';
 import { ImportCsvButton } from '@/components/import/ImportCsvButton';
+import { loanHasExcludedCollateral } from '@/lib/loan-collateral';
 
 export default function LoansTab() {
   const { loans, load, create, update, remove } = useLoansStore();
@@ -113,7 +114,17 @@ export default function LoansTab() {
             <Card key={l.id}>
               <CardContent className="flex items-center justify-between py-3">
                 <div>
-                  <div className="font-medium">{l.name}</div>
+                  <div className="flex items-center gap-2">
+                    <div className="font-medium">{l.name}</div>
+                    {loanHasExcludedCollateral(l, properties, vehicles) && (
+                      <span
+                        className="text-xs font-medium uppercase tracking-wider text-muted-foreground bg-muted rounded px-2 py-1"
+                        title="This loan's collateral is excluded from net worth, but the loan still counts as debt."
+                      >
+                        collateral excluded
+                      </span>
+                    )}
+                  </div>
                   <div className="text-xs text-muted-foreground">
                     {LOAN_TYPE_LABELS[l.type]}
                     {' · '}
