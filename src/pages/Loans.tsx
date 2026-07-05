@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Landmark } from 'lucide-react';
 import { useLoansStore } from '@/stores/loans-store';
-import { amortize, nextPaymentDateFrom, type Amortization, type ScheduleEntry } from '@/lib/amortization';
+import { amortize, nextPaymentDateFrom, scheduleIsCapped, type Amortization, type ScheduleEntry } from '@/lib/amortization';
 import { filterByObligorPersonId } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { LoanType } from '@/types/enums';
@@ -246,6 +246,12 @@ function LoanCard({ projection, expanded, onToggleExpand, schedule }: LoanCardPr
     ? formatPaymentMonth(lastNoExtraEntry.paymentDate)
     : '—';
 
+  // Round-2 A1 (same class as DebtPayoffCard): a capped schedule's tail is
+  // the safety cap, not a payoff. Each figure suppresses based on the
+  // schedule that produced it; the savings box needs BOTH schedules honest.
+  const capped = scheduleIsCapped(withDefault.schedule);
+  const savingsCapped = capped || (hasExtra && scheduleIsCapped(withoutExtra.schedule));
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -257,6 +263,14 @@ function LoanCard({ projection, expanded, onToggleExpand, schedule }: LoanCardPr
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {capped && (
+          <div
+            role="note"
+            className="rounded-md border border-warning/40 bg-warning-soft px-3 py-2 text-sm text-warning-foreground"
+          >
+            Payment doesn't cover monthly interest — this loan never pays off at this payment.
+          </div>
+        )}
         <div>
           <div className="flex justify-between text-sm mb-1">
             <span className="text-muted-foreground">
@@ -289,13 +303,13 @@ function LoanCard({ projection, expanded, onToggleExpand, schedule }: LoanCardPr
             <dt className="text-xs uppercase tracking-wider text-muted-foreground">
               Projected payoff
             </dt>
-            <dd className="font-medium">{payoffDate}</dd>
+            <dd className="font-medium">{capped ? '—' : payoffDate}</dd>
           </div>
           <div>
             <dt className="text-xs uppercase tracking-wider text-muted-foreground">
               Remaining interest
             </dt>
-            <dd className="font-medium">{formatCurrency(withDefault.totalInterest)}</dd>
+            <dd className="font-medium">{capped ? '—' : formatCurrency(withDefault.totalInterest)}</dd>
           </div>
           <div>
             <dt className="text-xs uppercase tracking-wider text-muted-foreground">
@@ -311,7 +325,7 @@ function LoanCard({ projection, expanded, onToggleExpand, schedule }: LoanCardPr
           </div>
         </dl>
 
-        {hasExtra ? (
+        {hasExtra && !savingsCapped ? (
           <div className="rounded-md bg-success-soft border border-success/30 px-3 py-2 text-sm text-success-foreground">
             <div className="font-medium">
               With {formatCurrency(loan.extraPaymentDefault)}/mo extra
@@ -417,6 +431,13 @@ export default function Loans() {
 
   const remainingInterest = useMemo(
     () => projections.reduce((sum, p) => sum + p.withDefault.totalInterest, 0),
+    [projections],
+  );
+
+  // Round-2 A1: any capped schedule poisons the interest sum — suppress the
+  // aggregate tile rather than present the cap's accumulation as real.
+  const anyCapped = useMemo(
+    () => projections.some((p) => scheduleIsCapped(p.withDefault.schedule)),
     [projections],
   );
 
@@ -536,9 +557,13 @@ export default function Loans() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-semibold">{formatCurrency(remainingInterest)}</div>
+            <div className="text-3xl font-semibold">
+              {anyCapped ? '—' : formatCurrency(remainingInterest)}
+            </div>
             <div className="mt-1 text-sm text-muted-foreground">
-              On remaining payments at current rates
+              {anyCapped
+                ? 'Hidden — a payment below interest never pays off'
+                : 'On remaining payments at current rates'}
             </div>
           </CardContent>
         </Card>
