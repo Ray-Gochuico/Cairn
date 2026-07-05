@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import DonutChartCard, { type DonutSlice } from './DonutChartCard';
 import { DonutEntityPicker, useDonutSelected, type DonutEntityPickerItem } from './DonutEntityPicker';
@@ -50,6 +50,35 @@ export function SectorDonut() {
   const fundSectors = useFundSectorsStore((s) => s.fundSectors);
   const loadFundSectors = useFundSectorsStore((s) => s.load);
   const [selectedSector, setSelectedSector] = useState<string | null>(null);
+
+  // Round-2 B4 focus retention: drilling swaps the content under the
+  // pointer/focus. On drill-in, focus the Back button (the only new
+  // interactive element); on back, restore focus to the legend button for
+  // the sector that was drilled (the legend rows are DonutChartCard's
+  // keyboard twins of the wedges — reached via a container query because
+  // the card owns that DOM). requestAnimationFrame lets the re-render
+  // commit before focusing.
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const backButtonRef = useRef<HTMLButtonElement | null>(null);
+  const lastDrilledRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (selectedSector !== null) {
+      lastDrilledRef.current = selectedSector;
+      requestAnimationFrame(() => backButtonRef.current?.focus());
+    } else if (lastDrilledRef.current !== null) {
+      const name = lastDrilledRef.current;
+      lastDrilledRef.current = null;
+      requestAnimationFrame(() => {
+        const buttons = wrapperRef.current?.querySelectorAll<HTMLButtonElement>('button') ?? [];
+        for (const b of buttons) {
+          if ((b.textContent ?? '').includes(name)) {
+            b.focus();
+            return;
+          }
+        }
+      });
+    }
+  }, [selectedSector]);
 
   // Load fund sectors on mount so the donut has data on first paint. The
   // Investments page also loads the holdings/tickers/fund-holdings stores
@@ -144,6 +173,7 @@ export function SectorDonut() {
   const title = selectedSector ? `Industries — ${selectedSector}` : 'Sector exposure';
   const subtitle = selectedSector ? (
     <button
+      ref={backButtonRef}
       type="button"
       onClick={() => setSelectedSector(null)}
       className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
@@ -181,15 +211,17 @@ export function SectorDonut() {
   }
 
   return (
-    <DonutChartCard
-      title={title}
-      subtitle={subtitle}
-      data={slices}
-      shareTotal={selectedSector === null ? fullSectorTotal : undefined}
-      onClickSlice={selectedSector === null ? onClickSlice : undefined}
-      valueFormatter={formatCurrency}
-      headerRight={picker ?? undefined}
-    />
+    <div ref={wrapperRef}>
+      <DonutChartCard
+        title={title}
+        subtitle={subtitle}
+        data={slices}
+        shareTotal={selectedSector === null ? fullSectorTotal : undefined}
+        onClickSlice={selectedSector === null ? onClickSlice : undefined}
+        valueFormatter={formatCurrency}
+        headerRight={picker ?? undefined}
+      />
+    </div>
   );
 }
 

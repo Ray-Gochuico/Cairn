@@ -24,12 +24,20 @@ describe('GrowthCard — horizon chips', () => {
     render(<GrowthCard title="Investments growth" horizons={HORIZONS} />);
     const tabs = within(screen.getByRole('tablist')).getAllByRole('tab');
     expect(tabs.map((t) => t.textContent)).toEqual(['1D', '1W', '1M', '3M', '1Y']);
-    expect(screen.getByRole('tab', { name: 'Since yesterday' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: '1D — since yesterday' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('every chip accessible name STARTS with its visible label (WCAG 2.5.3 label-in-name)', () => {
+    render(<GrowthCard title="Investments growth" horizons={HORIZONS} />);
+    for (const tab of within(screen.getByRole('tablist')).getAllByRole('tab')) {
+      const visible = tab.textContent ?? '';
+      expect(tab.getAttribute('aria-label') ?? '').toMatch(new RegExp(`^${visible} — `));
+    }
   });
 
   it('clicking a chip drives the big number + delta', async () => {
     render(<GrowthCard title="Investments growth" horizons={HORIZONS} />);
-    await userEvent.click(screen.getByRole('tab', { name: 'Past 3 months' }));
+    await userEvent.click(screen.getByRole('tab', { name: '3M — past 3 months' }));
     expect(screen.getByText('$95,000')).toBeInTheDocument();
     expect(screen.getByText(/-\$5,000|−\$5,000/)).toBeInTheDocument();
     expect(screen.getByText('Past 3 months')).toBeInTheDocument();
@@ -37,7 +45,7 @@ describe('GrowthCard — horizon chips', () => {
 
   it('unavailable horizon shows "Not enough history yet"', async () => {
     render(<GrowthCard title="Investments growth" horizons={HORIZONS} />);
-    await userEvent.click(screen.getByRole('tab', { name: 'Past year' }));
+    await userEvent.click(screen.getByRole('tab', { name: '1Y — past year' }));
     expect(screen.getByText(/not enough history yet/i)).toBeInTheDocument();
   });
 

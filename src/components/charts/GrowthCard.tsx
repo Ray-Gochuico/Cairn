@@ -85,11 +85,22 @@ export default function GrowthCard({
             noisy for SRs. */}
         <Tabs value={active.key} onValueChange={setActiveKey}>
           <TabsList className="h-7" aria-label="Time horizon">
-            {horizons.map((h) => (
-              <TabsTrigger key={h.key} value={h.key} aria-label={h.label} className="px-2 py-0.5 text-xs">
-                {CHIP_LABELS[h.key] ?? h.key.toUpperCase()}
-              </TabsTrigger>
-            ))}
+            {horizons.map((h) => {
+              const chip = CHIP_LABELS[h.key] ?? h.key.toUpperCase();
+              return (
+                <TabsTrigger
+                  key={h.key}
+                  value={h.key}
+                  // Label-in-name (WCAG 2.5.3): the accessible name STARTS
+                  // with the visible chip so voice-control users can say
+                  // what they see; the long horizon phrase rides after it.
+                  aria-label={`${chip} — ${h.label.toLowerCase()}`}
+                  className="px-2 py-0.5 text-xs"
+                >
+                  {chip}
+                </TabsTrigger>
+              );
+            })}
           </TabsList>
         </Tabs>
       </CardHeader>

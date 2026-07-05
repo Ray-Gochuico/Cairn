@@ -37,7 +37,7 @@ const tabs: TabDef[] = [
 export default function InputsLayout() {
   return (
     <div className="flex h-full">
-      <nav className="w-48 border-r p-2 flex flex-col gap-1 overflow-y-auto">
+      <nav aria-label="Input categories" className="w-48 border-r p-2 flex flex-col gap-1 overflow-y-auto">
         <div className="px-3 pt-2 pb-1 text-xs uppercase tracking-wider text-muted-foreground">
           Input categories
         </div>
