@@ -25,16 +25,23 @@ function mapYahooCategoryToAssetClass(category: string | null, quoteType: string
   return 'OTHER';
 }
 
+/**
+ * Best-effort sector/industry enrichment for one ticker. Returns TRUE when
+ * any tickers-table row was written (re-enrichment, first-encounter row, or
+ * the unclassified stub on a Yahoo failure) so callers know whether the
+ * tickers store needs a refeed (round-2 C2); FALSE on the already-enriched
+ * early skip or when a failure wrote nothing.
+ */
 export async function enrichTickerIfMissing(
   ticker: string,
   deps: { yahoo: YahooClient; tickers: TickersRepo },
-): Promise<void> {
+): Promise<boolean> {
   const existing = await deps.tickers.lookup(ticker);
   // Skip only when the ticker exists AND already has a sector. A null
   // sector means either (a) the ticker pre-dates migration 0016, or
   // (b) Yahoo couldn't classify it on a previous attempt — either way,
   // retry on the next refresh until something non-null comes back.
-  if (existing && existing.sector) return;
+  if (existing && existing.sector) return false;
 
   try {
     // For existing tickers, name/assetClass/leverage are already populated, so we
@@ -68,6 +75,7 @@ export async function enrichTickerIfMissing(
         industry: assetProfile.industry,
       });
     }
+    return true;
   } catch {
     // Best-effort: if Yahoo errors, leave fields null. The next refresh will
     // retry (since sector stays null). Concentration math falls back to OTHER.
@@ -87,9 +95,11 @@ export async function enrichTickerIfMissing(
           sector: null,
           industry: null,
         });
+        return true; // stub row written — unclassified detection needs the refeed
       } catch {
         // Swallow — function must remain best-effort.
       }
     }
   }
+  return false;
 }
