@@ -328,7 +328,7 @@ describe('canvas polish', () => {
     expect(dots).toHaveLength(1); // end dot only — no pin active
     expect(dots.some((d) => d.getAttribute('data-x') === String(captured.data[captured.data.length - 1].bucketEnd))).toBe(true);
     const area = screen.getByTestId('area-netWorth');
-    expect(area.getAttribute('data-stroke')).toBe('hsl(var(--success))');
+    expect(area.getAttribute('data-stroke')).toBe('hsl(var(--chart-success))');
     expect(area.getAttribute('data-fill')).toMatch(/^url\(#avc-fill-netWorth-up\)$/);
   });
 
@@ -345,7 +345,7 @@ describe('canvas polish', () => {
     } as never);
     renderChart('netWorth');
     const area = screen.getByTestId('area-netWorth');
-    expect(area.getAttribute('data-stroke')).toBe('hsl(var(--destructive))');
+    expect(area.getAttribute('data-stroke')).toBe('hsl(var(--chart-danger))');
     expect(area.getAttribute('data-fill')).toMatch(/^url\(#avc-fill-netWorth-down\)$/);
   });
 

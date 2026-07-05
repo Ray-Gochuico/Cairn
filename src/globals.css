@@ -71,13 +71,19 @@
 
     /* Chart-stroke red — legible as a thin LINE on the light canvas (≈ #dc2626).
        Distinct from --destructive (a button-FILL token); see BT-5.
-       Contrast as a thin stroke on the light canvas: 4.63:1. */
+       Contrast as a thin stroke on the light canvas: 4.80:1. */
     --chart-danger: 0 72% 51%;
     /* Chart-stroke amber — a deeper amber (≈ amber-700, #c2730a) so a thin LINE
        clears the 3:1 stroke floor on the light canvas; raw --warning (amber-500)
        is only 2.14:1 here. Distinct from --warning (a FILL token); see BT-5.
        Contrast as a thin stroke on the light canvas: 3.73:1. */
     --chart-warning: 36 95% 38%;
+    /* Chart-stroke green — a deeper emerald so a thin LINE clears the 3:1
+       stroke floor on the light canvas; raw --success (emerald-500) is only
+       2.30:1 here. Distinct from --success (a FILL token); same shape as
+       --chart-danger/--chart-warning above. Contrast as a thin stroke on
+       the light canvas: 3.70:1. */
+    --chart-success: 142 71% 35%;
   }
 
   .dark {
@@ -118,12 +124,16 @@
 
     /* Brighter so a 1.25–2px stroke still clears ~3:1 on the dark canvas
        (≈ #ef4444); dark --destructive (0 62.8% 30.6%) is a fill token and reads
-       ~2:1 as a thin stroke. See BT-5. Contrast on the dark canvas: 5.20:1. */
+       ~2:1 as a thin stroke. See BT-5. Contrast on the dark canvas: 5.72:1. */
     --chart-danger: 0 84% 63%;
     /* Brighter amber on the dark canvas (≈ #fbbf24), mirroring --chart-danger's
        brighter-on-dark approach so the below-tier line stays vivid. Distinct
-       from --warning (a fill token). Contrast on the dark canvas: 11.81:1. */
+       from --warning (a fill token). Contrast on the dark canvas: 11.67:1. */
     --chart-warning: 42 96% 57%;
+    /* Same value as dark --success — emerald-500 is already vivid AND 8.70:1
+       as a stroke on the dark canvas, so no retune is needed; the token
+       exists so chart code binds ONE stroke-safe pair across themes. */
+    --chart-success: 142 71% 45%;
   }
 
   body { @apply bg-background text-foreground; }

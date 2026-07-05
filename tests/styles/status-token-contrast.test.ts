@@ -124,3 +124,22 @@ describe('muted-foreground (TabsList inactive labels, ui/tabs.tsx)', () => {
       expectPair(body, name, 'muted-foreground', 'background'));
   }
 });
+
+describe('chart stroke tokens clear the 3:1 non-text floor (WCAG 1.4.11)', () => {
+  // Thin chart LINES (1.25–2.5px) — the *-stroke tokens exist because the
+  // fill tokens fail as strokes (light --success 2.30:1; dark --destructive
+  // 2.00:1 — round-2 B1). 3:1 is the graphical-object floor, not AA text.
+  const STROKE_MIN = 3;
+  const STROKE_TOKENS = ['chart-success', 'chart-danger', 'chart-warning'];
+  for (const { name, body } of THEMES) {
+    for (const token of STROKE_TOKENS) {
+      it(`${name}: --${token} on background >= 3:1`, () => {
+        const ratio = contrastRatio(hsl(body, token), hsl(body, 'background'));
+        expect(
+          ratio,
+          `${name}: --${token} on --background was ${ratio.toFixed(2)}:1 (needs >= ${STROKE_MIN}:1)`,
+        ).toBeGreaterThanOrEqual(STROKE_MIN);
+      });
+    }
+  }
+});
