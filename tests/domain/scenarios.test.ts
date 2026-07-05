@@ -90,13 +90,19 @@ describe('ScenariosRepo basic CRUD', () => {
 
   it('updates fields including the JSON blob and refreshes updatedAt', async () => {
     const id = await repo.create(variant());
+    // Deterministic seam for the second-granularity datetime('now') stamp:
+    // pin updated_at to a known past sentinel so the strict `>` below proves
+    // update() actually refreshes it. (SQLite's own clock can't be faked
+    // from JS, and a 1.1s sleep — the old approach — was both slow and
+    // paired with a vacuous `>=`.)
+    await db.execute("UPDATE scenarios SET updated_at = '2000-01-01 00:00:00' WHERE id = ?", [id]);
     const before = await repo.findById(id);
-    await new Promise((r) => setTimeout(r, 1100));
     await repo.update(id, { name: 'Renamed', leverPayload: { ...emptyLeverPayload(), lumpSums: [{ when: '2030-06-01', amount: 5000, destination: 'cash' }] } });
     const after = await repo.findById(id);
     expect(after!.name).toBe('Renamed');
     expect(after!.leverPayload.lumpSums).toHaveLength(1);
-    expect(after!.updatedAt >= before!.updatedAt).toBe(true);
+    expect(before!.updatedAt).toBe('2000-01-01 00:00:00');
+    expect(after!.updatedAt > before!.updatedAt).toBe(true); // STRICT — the stamp moved
   });
 
   it('update() rejects an unknown id', async () => {

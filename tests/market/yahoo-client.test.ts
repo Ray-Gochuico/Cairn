@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -12,6 +12,15 @@ import { resolve } from 'node:path';
 // "Refresh fund data".
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
+}));
+
+// The chart path (`quote()` / `historical()`) transports through
+// @tauri-apps/plugin-http's `fetch` (Rust shell, no CORS) — NOT the global
+// fetch — so failure-path tests mock the module seam. Default: unset; only
+// the round-2 D4 failure tests program it (no earlier test touches charts).
+const mockFetch = vi.fn();
+vi.mock('@tauri-apps/plugin-http', () => ({
+  fetch: (...args: unknown[]) => mockFetch(...args),
 }));
 
 import { invoke } from '@tauri-apps/api/core';
@@ -307,6 +316,33 @@ describe('YahooClient', () => {
         ticker: 'AAPL',
         modules: ['assetProfile'],
       });
+    });
+  });
+
+  describe('failure paths (round-2 D4)', () => {
+    afterEach(() => {
+      mockFetch.mockReset();
+    });
+
+    it('chart fetch surfaces a non-ok response as a thrown error with ticker + status', async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 429, statusText: 'Too Many Requests' });
+      await expect(client.quote('VTI')).rejects.toThrow(
+        'Yahoo chart fetch failed for VTI: 429 Too Many Requests',
+      );
+    });
+
+    it('chart fetch propagates a transport-level rejection (offline)', async () => {
+      mockFetch.mockRejectedValue(new TypeError('Load failed'));
+      await expect(client.quote('VTI')).rejects.toThrow('Load failed');
+    });
+
+    it('malformed invoke JSON rejects quoteSummary with a SyntaxError (JSON.parse path)', async () => {
+      // quoteSummary console.errors before rethrowing — silence for a clean run.
+      const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockInvoke.mockResolvedValueOnce('{not json');
+      await expect(client.quoteSummary('VTI', ['topHoldings'])).rejects.toThrow(SyntaxError);
+      expect(errSpy).toHaveBeenCalled();
+      errSpy.mockRestore();
     });
   });
 });
