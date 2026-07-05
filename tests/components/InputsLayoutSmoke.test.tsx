@@ -32,6 +32,7 @@ import CategoriesTab from '@/pages/inputs/CategoriesTab';
 import PersonsTab from '@/pages/inputs/PersonsTab';
 import TickersTab from '@/pages/inputs/TickersTab';
 import HouseholdTab from '@/pages/inputs/HouseholdTab';
+import InputsLayout from '@/pages/inputs/InputsLayout';
 import { AssetClass, Direction } from '@/types/schema';
 
 function assertCompactRow(row: HTMLElement) {
@@ -155,6 +156,15 @@ describe('Inputs layout smoke — cramped-row fix', () => {
     const row = screen.getAllByTestId('tickers-row')[0];
     assertCompactRow(row);
     expect(row.querySelector('[class*="truncate"]')).not.toBeNull();
+  });
+
+  it('the tab rail is a named navigation landmark', () => {
+    render(
+      <MemoryRouter>
+        <InputsLayout />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('navigation', { name: 'Input categories' })).toBeInTheDocument();
   });
 
   it('HouseholdTab content wrapper carries min-w-0 so long labels can break', async () => {

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { TransactionsRepo } from '@/domain/transactions';
+import { createDedupedLoad } from '@/stores/create-entity-store';
 import { getDatabase } from '@/db/db';
 import { detectRecurring } from '@/lib/recurring';
 import type { Transaction, Category } from '@/types/schema';
@@ -54,16 +55,11 @@ export const useTransactionsStore = create<TransactionsState>((set, get) => ({
   isLoading: false,
   error: null,
 
-  load: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const repo = new TransactionsRepo(getDatabase());
-      const transactions = await repo.list();
-      set({ transactions, isLoading: false });
-    } catch (e) {
-      set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load' });
-    }
-  },
+  // Shared de-duped load (see create-entity-store.ts for semantics + the
+  // accepted initial-mount TOCTOU).
+  load: createDedupedLoad<TransactionsState, 'transactions'>(set, 'transactions', async () =>
+    new TransactionsRepo(getDatabase()).list(),
+  ),
 
   create: async (t) => {
     const repo = new TransactionsRepo(getDatabase());

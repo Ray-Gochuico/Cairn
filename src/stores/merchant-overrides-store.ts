@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { MerchantOverridesRepo } from '@/domain/merchant-overrides';
+import { createDedupedLoad } from '@/stores/create-entity-store';
 import { getDatabase } from '@/db/db';
 import type { MerchantOverride } from '@/types/schema';
 
@@ -18,16 +19,11 @@ export const useMerchantOverridesStore = create<MerchantOverridesState>((set, ge
   isLoading: false,
   error: null,
 
-  load: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const repo = new MerchantOverridesRepo(getDatabase());
-      const overrides = await repo.list();
-      set({ overrides, isLoading: false });
-    } catch (e) {
-      set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load' });
-    }
-  },
+  // Shared de-duped load (see create-entity-store.ts for semantics + the
+  // accepted initial-mount TOCTOU).
+  load: createDedupedLoad<MerchantOverridesState, 'overrides'>(set, 'overrides', async () =>
+    new MerchantOverridesRepo(getDatabase()).list(),
+  ),
 
   create: async (override) => {
     const repo = new MerchantOverridesRepo(getDatabase());

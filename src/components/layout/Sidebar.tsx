@@ -130,7 +130,11 @@ const SidebarLink = memo(function SidebarLink({
       {showDot && (
         <>
           <span
-            className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-warning"
+            // --chart-warning, not --warning: the raw amber fill token is
+            // 2.13:1 on the light card — below the 3:1 non-text floor for
+            // a meaningful indicator. The chart-stroke amber clears 3:1 on
+            // both themes (globals.css, BT-5 family).
+            className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-[hsl(var(--chart-warning))]"
             aria-hidden="true"
           />
           <span className="sr-only">, monthly input pending</span>

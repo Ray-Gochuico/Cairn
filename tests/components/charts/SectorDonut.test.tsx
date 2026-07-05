@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useTickersStore } from '@/stores/tickers-store';
 import { useFundSectorsStore } from '@/stores/fund-sectors-store';
@@ -228,6 +228,28 @@ describe('SectorDonut — drill into industry view', () => {
     fireEvent.click(screen.getByTestId('slice-Semiconductors'));
     // Still in Technology industry view, not switched to anything else.
     expect(screen.getByText('Industries — Technology')).toBeTruthy();
+  });
+
+  it('drill-in focuses the Back button; back restores focus to the drilled legend button (round-2 B4)', async () => {
+    const user = userEvent.setup();
+    render(<SectorDonut />);
+    // Drill in via the LEGEND button (DonutChartCard's keyboard twin of the
+    // wedge) — unambiguous, unlike the mocked slice buttons.
+    const legend = await screen.findByRole('list', { name: /chart legend/i });
+    const legendButton = within(legend).getByRole('button', { name: /technology/i });
+    await user.click(legendButton);
+    const back = await screen.findByRole('button', { name: /back to sectors/i });
+    await waitFor(() => expect(back).toHaveFocus());
+    await user.click(back);
+    // Focus lands on the first interactive twin of the drilled sector (in
+    // production DOM that's the legend row button — real recharts wedges are
+    // SVG paths; the jsdom recharts mock also renders slice buttons, so
+    // assert by focused-button text rather than a specific node).
+    await waitFor(() => {
+      const focused = document.activeElement as HTMLElement | null;
+      expect(focused?.tagName).toBe('BUTTON');
+      expect(focused?.textContent ?? '').toMatch(/technology/i);
+    });
   });
 });
 

@@ -80,25 +80,6 @@ function formatCurrency(value: number): string {
 }
 
 /**
- * Account types that count toward "investments value" on the growth card —
- * everything except plain cash/savings. This is DELIBERATELY not the shared
- * retirement-FI definition (src/lib/fi-portfolio.ts): this card measures
- * "how are my invested dollars doing", so 529s belong (they're invested)
- * and cash doesn't (it isn't). The FI/Coast/Compound defaults use the
- * shared selector instead.
- */
-const INVESTMENT_ACCOUNT_TYPES = new Set<AccountType>([
-  AccountType.ACCOUNT_401K,
-  AccountType.ACCOUNT_ROTH_401K,
-  AccountType.ACCOUNT_ROTH_IRA,
-  AccountType.ACCOUNT_TRAD_IRA,
-  AccountType.ACCOUNT_BROKERAGE,
-  AccountType.ACCOUNT_HSA,
-  AccountType.ACCOUNT_CRYPTO,
-  AccountType.ACCOUNT_529,
-]);
-
-/**
  * Educational copy for each warning type, surfaced as a tooltip on the
  * Concentration Health section. Phase 3 keeps tooltips simple — a `title`
  * attribute renders a native browser tooltip; no popover library required.
@@ -137,6 +118,11 @@ const ASSET_CLASS_LABEL: Record<AssetClass, string> = {
   CASH: 'Cash',
   OTHER: 'Other',
 };
+
+// localStorage key for the Portfolio-by-account "Investable only" toggle.
+// Module scope so the useCallback below can close over it with an empty
+// dep array (round-2 C1).
+const INVESTABLE_ONLY_KEY = 'investments.byAccount.investableOnly';
 
 /**
  * Load asset_class for each ticker from the `tickers` table. Missing rows
@@ -416,32 +402,32 @@ export default function Investments() {
     [contributions, filter, visibleAccountIds],
   );
 
-  // Investment-only account ids for the growth card — drop cash/savings so the
-  // card measures "investments value", not total liquid assets, and drop
-  // excluded-from-net-worth accounts (shared selector) so this card agrees
-  // with the Portfolio-by-account card, which already excludes them. Derived
-  // from visibleAccounts so the view filter flows through.
-  const investmentAccountIds = useMemo(() => {
-    const included = includedAccountIds(visibleAccounts);
-    return new Set(
-      visibleAccounts
-        .filter((a) => INVESTMENT_ACCOUNT_TYPES.has(a.type))
-        .map((a) => a.id)
-        .filter((id): id is number => id != null && included.has(id)),
-    );
-  }, [visibleAccounts]);
+  // Growth-card universe == the AssetValueChart 'investments' surface's
+  // universe (round-2 A2): every view-visible account that isn't excluded
+  // from net worth — deliberately NOT narrowed to investment account types
+  // (the chart's parity tests pin cash/savings inclusion), so the two
+  // stacked cards can never disagree. The chart's extra "has ≥1 snapshot"
+  // eligibility clause is a summing no-op here (sumLatestOnOrBefore yields
+  // nothing for snapshot-less accounts). The chart's transient "Included"
+  // picker deliberately does NOT drive this card: the picker is an
+  // exploratory focus tool; this card describes the surface's full eligible
+  // set, matching the chart's "Total investments" header.
+  const growthAccountIds = useMemo(
+    () => includedAccountIds(visibleAccounts),
+    [visibleAccounts],
+  );
 
   // Growth across the five horizons (1d…1y). sumLatestOnOrBefore reads the
-  // full snapshots array and scopes to investment accounts via the id set;
+  // full snapshots array and scopes to the chart universe via the id set;
   // forward-only history means most horizons resolve to null today and the
   // card shows "Not enough history yet" for them — that's expected.
   const investmentsGrowth = useMemo(
     () =>
       computeHorizonGrowth(
-        (iso) => sumLatestOnOrBefore(snapshots, iso, investmentAccountIds),
+        (iso) => sumLatestOnOrBefore(snapshots, iso, growthAccountIds),
         new Date(),
       ),
-    [snapshots, investmentAccountIds],
+    [snapshots, growthAccountIds],
   );
 
   // Concentration health is intentionally household-wide regardless of the
@@ -460,7 +446,6 @@ export default function Investments() {
   // everything held. Persisted in localStorage (a single boolean — simpler
   // than the donut pickers' hidden-set shape) so the choice survives reloads;
   // the lazy initializer reads it once and guards against unavailable storage.
-  const INVESTABLE_ONLY_KEY = 'investments.byAccount.investableOnly';
   const [investableOnly, setInvestableOnly] = useState<boolean>(() => {
     try {
       return localStorage.getItem(INVESTABLE_ONLY_KEY) === '1';
@@ -468,7 +453,12 @@ export default function Investments() {
       return false;
     }
   });
-  const handleToggleInvestableOnly = (next: boolean) => {
+  // useCallback with [] — setInvestableOnly is a stable setState and
+  // INVESTABLE_ONLY_KEY is module-scope. Without this, the fresh function
+  // identity sat in the cardRegistry memo's dep array and recomputed the
+  // entire 480-line registry on every render (round-2 C1). The other 24
+  // registry deps were audited stable — see the wave-6 plan, Task 11.
+  const handleToggleInvestableOnly = useCallback((next: boolean) => {
     setInvestableOnly(next);
     try {
       if (next) localStorage.setItem(INVESTABLE_ONLY_KEY, '1');
@@ -476,7 +466,7 @@ export default function Investments() {
     } catch {
       // Private-mode / disabled storage: keep the in-memory toggle working.
     }
-  };
+  }, []);
 
   // One-shot sector backfill on first mount when the user holds funds but
   // the fund_sectors table is empty. Covers existing users whose
@@ -717,9 +707,10 @@ export default function Investments() {
         applicable: true,
         render: () => (
           /*
-           * Investments growth card. Click (or use the chevrons / arrow keys)
-           * to cycle the horizon from "since yesterday" through "past year".
-           * Sits above the donut grid so the headline number reads first.
+           * Investments growth card. Horizon chips (1D…1Y) select the
+           * period; fed from the chart-universe as-of sums above so this
+           * card and the chart header can't disagree (round-2 A2). Sits
+           * above the donut grid so the headline number reads first.
            */
           <GrowthCard title="Investments growth" horizons={investmentsGrowth} />
         ),
@@ -895,7 +886,10 @@ export default function Investments() {
       {
         id: 'class-targets',
         label: 'Asset-class targets',
-        size: 'compact',
+        // Wide (round-2 D1): as the only compact card between two wide
+        // neighbors it rendered as a one-third-width orphan row. The id is
+        // UNCHANGED so saved investments_card_layout rows keep applying.
+        size: 'wide',
         applicable: heldClasses.length > 0,
         render: () => (
           <AssetClassTargetsForm

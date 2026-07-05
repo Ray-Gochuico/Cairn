@@ -185,8 +185,14 @@ const SURFACES: Record<AssetValueChartSurface, SurfaceConfig> = {
 const CHART_MARGIN = { top: 8, right: 16, bottom: 8, left: 8 } as const;
 const GRID_STROKE = 'hsl(var(--border))' as const;
 const AXIS_STROKE = 'hsl(var(--muted-foreground))' as const;
-const SUCCESS = 'hsl(var(--success))' as const;
-const DESTRUCTIVE = 'hsl(var(--destructive))' as const;
+// Trend strokes bind the *-stroke tokens, NOT the fill tokens: light
+// --success is 2.30:1 and dark --destructive 2.00:1 as thin lines (round-2
+// B1; see --chart-success/--chart-danger in globals.css, ≥3:1 both themes).
+// The gradients + end/pin dots deliberately ride the SAME constants so the
+// fill wash, dots, and line stay one hue family — swapping only the stroke
+// would pair a compliant line with an off-hue wash.
+const SUCCESS = 'hsl(var(--chart-success))' as const;
+const DESTRUCTIVE = 'hsl(var(--chart-danger))' as const;
 // Tooltip cursor — the vertical dashed scrub line.
 const CURSOR = {
   stroke: AXIS_STROKE,

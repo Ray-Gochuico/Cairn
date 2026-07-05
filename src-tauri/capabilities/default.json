@@ -45,11 +45,6 @@
       "allow": [{ "path": "$HOME/**/*" }]
     },
     {
-      "identifier": "fs:allow-read-file",
-      "__comment__": "Static $HOME-scoped read access. Same rationale as fs:allow-write-file above: dialog-granted fs scope from tauri-plugin-dialog 2.7.1 is session-only; this static scope provides cross-restart persistence. Does not cover paths outside $HOME.",
-      "allow": [{ "path": "$HOME/**/*" }]
-    },
-    {
       "identifier": "fs:allow-mkdir",
       "__comment__": "runBackup ensures $APPCONFIG/backups exists (recursive mkdir) — the ONLY mkdir caller. Narrowed from $HOME/**/* (Wave 5, 2026-07). $APPCONFIG itself is listed because a recursive mkdir on first run may create the parent; fs:default's create-app-specific-dirs also covers that.",
       "allow": [{ "path": "$APPCONFIG" }, { "path": "$APPCONFIG/backups" }]

@@ -883,4 +883,78 @@ describe('Investments page — 529 section', () => {
     expect(bndRow).toHaveTextContent('$60,000');
     expect(bndRow).toHaveTextContent('60.0%');
   });
+
+  it('growth card sums the CHART universe: cash included, excluded accounts dropped (round-2 A2)', async () => {
+    // Seeds via primeStores — the file's house pattern (every store's load()
+    // is stubbed there, so no capture/restore dance is needed).
+    primeStores({
+      accounts: [
+        { id: 1, name: 'Acct 1', type: AccountType.ACCOUNT_BROKERAGE },
+        { id: 2, name: 'Acct 2', type: AccountType.ACCOUNT_CASH }, // old code dropped cash from the growth card
+        { id: 3, name: 'Acct 3', type: AccountType.ACCOUNT_BROKERAGE, excludedFromNetWorth: true }, // excluded → stays out
+      ],
+      snapshotValues: [
+        { accountId: 1, snapshotDate: '2026-01-02', totalValue: 2000 },
+        { accountId: 2, snapshotDate: '2026-01-02', totalValue: 1000 },
+        { accountId: 3, snapshotDate: '2026-01-02', totalValue: 5000 },
+      ],
+    });
+
+    render(
+      <MemoryRouter>
+        <Investments />
+      </MemoryRouter>,
+    );
+
+    // renderCardFlow wraps each card in <div id={card.id}> — scope to the growth card.
+    const growth = await waitFor(() => {
+      const el = document.getElementById('growth');
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    // Chart universe = accounts 1 + 2 (cash counts, excluded doesn't) = $3,000.
+    expect(within(growth).getByText('$3,000')).toBeInTheDocument();
+    expect(within(growth).queryByText('$2,000')).not.toBeInTheDocument(); // old universe
+    expect(within(growth).queryByText('$8,000')).not.toBeInTheDocument(); // excluded leaked
+  });
+
+  it('class-targets renders as a wide card (own row), not a one-third orphan (round-2 D1)', async () => {
+    // Seed exactly as the asset-allocation donut test does: asset-class rows
+    // via the DB mock + one account with three classified holdings, so
+    // heldClasses is non-empty and the card is applicable.
+    dbSelectImpl.current = async () => [
+      { ticker: 'VTI', asset_class: 'US_TOTAL_MARKET' },
+      { ticker: 'BND', asset_class: 'US_BONDS' },
+      { ticker: 'BTC', asset_class: 'CRYPTO' },
+    ];
+    primeStores({
+      accounts: [
+        { id: 1, name: 'Brokerage', type: AccountType.ACCOUNT_BROKERAGE },
+      ],
+      holdings: [
+        { id: 1, accountId: 1, ticker: 'VTI', shareCount: 10 },
+        { id: 2, accountId: 1, ticker: 'BND', shareCount: 5 },
+        { id: 3, accountId: 1, ticker: 'BTC', shareCount: 1 },
+      ],
+      snapshotValues: [
+        { accountId: 1, snapshotDate: '2026-04-01', totalValue: 30_000 },
+      ],
+    });
+
+    render(
+      <MemoryRouter>
+        <Investments />
+      </MemoryRouter>,
+    );
+    const wrapper = await waitFor(() => {
+      const el = document.getElementById('class-targets');
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    // renderCardFlow puts compact cards inside a `lg:grid-cols-3` grid div;
+    // wide cards are direct children of the page's space-y flow.
+    expect(wrapper.parentElement!.className).not.toContain('lg:grid-cols-3');
+    // The form's field grid spreads at lg so the wide card isn't two skinny columns.
+    expect(wrapper.querySelector('.grid')!.className).toContain('lg:grid-cols-4');
+  });
 });

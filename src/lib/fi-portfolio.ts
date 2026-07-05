@@ -20,8 +20,11 @@ import { sumLatestOnOrBefore } from '@/lib/growth-horizons';
  *    a de-facto retirement account post-65).
  *
  * Deliberate outliers (documented at their definitions, not silently divergent):
- *  - Investments-page growth card: investment TYPES only (excludes cash,
- *    includes 529) — it measures "investments value", not FI readiness.
+ *  - Investments-page growth card: the ASSET-VALUE-CHART universe (wave-6
+ *    round-2 A2) — every view-visible account that isn't excluded from net
+ *    worth, ALL types (cash and 529 included), so the card can never
+ *    disagree with the chart stacked above it. The chart's transient
+ *    "Included" picker does not drive it. Not FI readiness.
  *  - What-If FiCards: derived from the projection seed (non-excluded, all
  *    types incl. 529) — restructuring the engine seed is out of scope.
  */

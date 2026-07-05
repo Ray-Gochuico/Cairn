@@ -166,7 +166,7 @@ export function PerTickerDonut() {
   }
 
   const subtitle = opaqueFunds.length > 0
-    ? `After fund look-through · ${opaqueFunds.join(', ')} couldn't be looked through (click "Refresh fund data")`
+    ? `After fund look-through · ${opaqueFunds.join(', ')} couldn't be looked through (Data health → Refresh fund data)`
     : 'After fund look-through';
 
   const picker = (

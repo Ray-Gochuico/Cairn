@@ -192,11 +192,10 @@ describe('SpendingWidget', () => {
     expect(screen.getByTestId('spending-widget-center')).toBeInTheDocument();
   });
 
-  it('renders a disabled "Compare to" link stub (comparison not yet computed)', () => {
+  it('has no Compare-to stub (removed — a permanently disabled control is a broken promise)', () => {
     renderWidget([], []);
-    const compare = screen.getByTestId('spending-widget-compare');
-    expect(compare).toBeInTheDocument();
-    expect(compare).toBeDisabled();
+    expect(screen.queryByTestId('spending-widget-compare')).not.toBeInTheDocument();
+    expect(screen.queryByText(/compare to/i)).not.toBeInTheDocument();
   });
 
   it('includes only the accounts passed in the account-filter select', () => {

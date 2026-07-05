@@ -50,10 +50,12 @@ export function applyCalculatorCardLayout(
 }
 
 /**
- * Module-level single-fire latch. settings-store.load() has no in-flight
- * de-dupe and is called from multiple mounts (Sidebar, CalculatorsLayout), so
- * without this latch concurrent post-load resolves could double-import. The
- * latch holds the in-flight promise; it is cleared in a finally so a failed
+ * Module-level single-fire latch. settings-store.load() IS in-flight
+ * de-duped (createDedupedLoad), but the import fires macrotask-deferred on
+ * EVERY successful settings fetch — and loads re-fetch after settle — so
+ * repeated loads would re-enter this function. The latch collapses
+ * concurrent import runs into one promise; the DB-field non-null check
+ * below makes later re-entries no-ops. Cleared in a finally so a failed
  * (fail-soft) import can retry on the next load.
  */
 let importInflight: Promise<void> | null = null;

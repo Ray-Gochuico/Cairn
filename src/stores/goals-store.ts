@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { GoalsRepo } from '@/domain/goals';
+import { createDedupedLoad } from '@/stores/create-entity-store';
 import { getDatabase } from '@/db/db';
 import type { Goal } from '@/types/schema';
 
@@ -21,16 +22,11 @@ export const useGoalsStore = create<GoalsState>((set, get) => ({
   isLoading: false,
   error: null,
 
-  load: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const repo = new GoalsRepo(getDatabase());
-      const goals = await repo.list();
-      set({ goals, isLoading: false });
-    } catch (e) {
-      set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load' });
-    }
-  },
+  // Shared de-duped load (see create-entity-store.ts for semantics + the
+  // accepted initial-mount TOCTOU).
+  load: createDedupedLoad<GoalsState, 'goals'>(set, 'goals', async () =>
+    new GoalsRepo(getDatabase()).list(),
+  ),
 
   create: async (goal) => {
     const repo = new GoalsRepo(getDatabase());

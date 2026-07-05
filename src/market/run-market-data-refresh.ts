@@ -11,6 +11,9 @@ import { deriveTodaysSnapshot } from '@/market/daily-snapshot';
 import { syncStaleFunds } from '@/market/fund-holdings-sync';
 import { enrichTickerIfMissing } from '@/market/ticker-enrichment';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
+import { useFundHoldingsStore } from '@/stores/fund-holdings-store';
+import { useFundSectorsStore } from '@/stores/fund-sectors-store';
+import { useTickersStore } from '@/stores/tickers-store';
 
 /**
  * Run the three background market-data derivations — the stale fund-holdings
@@ -53,6 +56,15 @@ export function runMarketDataRefresh(db: Database): void {
         result.skipped,
         result.errors,
       );
+      // Refeed mounted surfaces (round-2 C2, same convention as the
+      // daily-snapshot IIFE below): syncStaleFunds writes fund_holdings AND
+      // fund_sectors, so a successful refresh reloads both stores — the
+      // manual Data-health path already did (DataHealthPopover). Only when
+      // rows actually changed; load() de-dupes and swallows its own errors.
+      if (result.refreshed.length > 0) {
+        void useFundHoldingsStore.getState().load();
+        void useFundSectorsStore.getState().load();
+      }
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('[market] background fund-holdings sync failed:', err);
@@ -85,8 +97,15 @@ export function runMarketDataRefresh(db: Database): void {
       // populated and swallows its own per-ticker errors, so this stays
       // O(network calls) only for the unenriched subset and one failure can't
       // abort the rest.
+      let wroteAny = false;
       for (const ticker of distinctTickers) {
-        await enrichTickerIfMissing(ticker, { yahoo, tickers });
+        if (await enrichTickerIfMissing(ticker, { yahoo, tickers })) wroteAny = true;
+      }
+      // Refeed once after the serial loop (not per ticker): the tickers
+      // store powers the unclassified banner + donut groupings, and a
+      // single reload after N upserts is enough (round-2 C2).
+      if (wroteAny) {
+        void useTickersStore.getState().load();
       }
     } catch (err) {
       // eslint-disable-next-line no-console
@@ -113,9 +132,9 @@ export function runMarketDataRefresh(db: Database): void {
       // Refeed mounted surfaces (Wave 2 §3): a fresh AUTO_DERIVED row is
       // invisible to stores hydrated before this IIFE landed — the dashboard
       // would show stale values under a fresh badge. Reload only when rows
-      // actually changed; the store's in-flight de-dupe (snapshotsInflight)
-      // makes an overlapping load a no-op, and load() swallows its own
-      // errors, so this cannot crash the launch path.
+      // actually changed; the store's in-flight de-dupe (createDedupedLoad,
+      // create-entity-store.ts) makes an overlapping load a no-op, and
+      // load() swallows its own errors, so this cannot crash the launch path.
       if (result.upserted.length > 0) {
         void useSnapshotsStore.getState().load();
       }

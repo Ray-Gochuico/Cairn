@@ -118,7 +118,11 @@ export default function PropertiesTab() {
                     {p.ownerPersonId == null
                       ? 'Joint'
                       : personById.get(p.ownerPersonId) ?? 'Unknown owner'}
-                    {p.excludedFromNetWorth ? ' · excluded from net worth' : ''}
+                    {p.excludedFromNetWorth
+                      ? p.linkedLoanId != null
+                        ? ' · excluded from net worth (linked mortgage still counts)'
+                        : ' · excluded from net worth'
+                      : ''}
                   </div>
                 </div>
                 <div className="flex gap-2">

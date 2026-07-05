@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { EmptyState } from '@/components/layout/EmptyState';
-import { Wallet } from 'lucide-react';
+import { Pencil, Wallet } from 'lucide-react';
 import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import { MarkReimbursedDialog } from '@/components/dialogs/MarkReimbursedDialog';
 import { TransactionEditDialog } from '@/components/dialogs/TransactionEditDialog';
@@ -334,7 +334,7 @@ export default function Spending() {
           {/* Money in vs out (last 30 days) */}
           <section>
             <h2 className="text-lg font-medium mb-3">Money in vs out (last 30 days)</h2>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="border rounded-lg p-4 space-y-1">
                 <p className="text-xs uppercase tracking-wider text-muted-foreground">Money in</p>
                 <p className="text-2xl font-semibold text-success-foreground">
@@ -522,7 +522,7 @@ export default function Spending() {
                         className="text-xs px-2 py-1 border rounded hover:bg-muted"
                         onClick={() => setEditTarget(t)}
                       >
-                        ✏️
+                        <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
                       </button>
                     </td>
                   </tr>

@@ -7,7 +7,11 @@ import { AccountType } from '@/types/enums';
 import { runMarketDataRefresh } from '@/market/run-market-data-refresh';
 import * as tickerEnrichment from '@/market/ticker-enrichment';
 import * as dailySnapshot from '@/market/daily-snapshot';
+import * as fundSync from '@/market/fund-holdings-sync';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
+import { useFundHoldingsStore } from '@/stores/fund-holdings-store';
+import { useFundSectorsStore } from '@/stores/fund-sectors-store';
+import { useTickersStore } from '@/stores/tickers-store';
 
 describe('runMarketDataRefresh', () => {
   let db: SqliteAdapter;
@@ -67,7 +71,7 @@ describe('runMarketDataRefresh', () => {
 
     const enrichSpy = vi
       .spyOn(tickerEnrichment, 'enrichTickerIfMissing')
-      .mockResolvedValue(undefined);
+      .mockResolvedValue(false);
 
     runMarketDataRefresh(db);
 
@@ -127,6 +131,103 @@ describe('runMarketDataRefresh', () => {
       expect(() => runMarketDataRefresh(db)).not.toThrow();
       await flush();
       expect(loadSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('fund-sync + enrichment store refeed (round-2 C2)', () => {
+    const flush = async () => {
+      await new Promise((r) => setImmediate(r));
+      await new Promise((r) => setImmediate(r));
+      await new Promise((r) => setImmediate(r));
+    };
+
+    // Seed one held ticker so the enrichment loop has work (copied from the
+    // "enriches every distinct held ticker" seed above, single holding).
+    const seedOneHolding = async () => {
+      const accounts = new AccountsRepo(db);
+      const holdings = new HoldingsRepo(db);
+      const accountId = await accounts.create({
+        householdId: 1,
+        ownerPersonId: null,
+        beneficiaryDependentId: null,
+        name: 'Brokerage',
+        institution: null,
+        type: AccountType.ACCOUNT_BROKERAGE,
+        cryptoWalletAddress: null,
+        autoFetchEnabled: false,
+        excludedFromNetWorth: false,
+        stateOfPlan: null,
+        accentColor: null,
+      });
+      await holdings.create({ accountId, ticker: 'AAPL', shareCount: 10, targetAllocationPct: null, costBasis: null });
+    };
+
+    let fundHoldingsLoad: ReturnType<typeof vi.fn>;
+    let fundSectorsLoad: ReturnType<typeof vi.fn>;
+    let tickersLoad: ReturnType<typeof vi.fn>;
+    let originals: Array<() => Promise<void>>;
+
+    beforeEach(() => {
+      fundHoldingsLoad = vi.fn().mockResolvedValue(undefined);
+      fundSectorsLoad = vi.fn().mockResolvedValue(undefined);
+      tickersLoad = vi.fn().mockResolvedValue(undefined);
+      originals = [
+        useFundHoldingsStore.getState().load,
+        useFundSectorsStore.getState().load,
+        useTickersStore.getState().load,
+      ];
+      useFundHoldingsStore.setState({ load: fundHoldingsLoad });
+      useFundSectorsStore.setState({ load: fundSectorsLoad });
+      useTickersStore.setState({ load: tickersLoad });
+    });
+
+    afterEach(() => {
+      useFundHoldingsStore.setState({ load: originals[0] });
+      useFundSectorsStore.setState({ load: originals[1] });
+      useTickersStore.setState({ load: originals[2] });
+    });
+
+    it('reloads fund-holdings AND fund-sectors when the sync refreshed a fund', async () => {
+      vi.spyOn(fundSync, 'syncStaleFunds').mockResolvedValue({
+        refreshed: ['VTI'], skipped: [], errors: [],
+      });
+      runMarketDataRefresh(db);
+      await flush();
+      expect(fundHoldingsLoad).toHaveBeenCalledTimes(1);
+      expect(fundSectorsLoad).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT reload the fund stores on a skipped-only sync', async () => {
+      vi.spyOn(fundSync, 'syncStaleFunds').mockResolvedValue({
+        refreshed: [], skipped: ['VTI'], errors: [],
+      });
+      runMarketDataRefresh(db);
+      await flush();
+      expect(fundHoldingsLoad).not.toHaveBeenCalled();
+      expect(fundSectorsLoad).not.toHaveBeenCalled();
+    });
+
+    it('does NOT reload (and does not crash) when the sync rejects', async () => {
+      vi.spyOn(fundSync, 'syncStaleFunds').mockRejectedValue(new Error('offline'));
+      expect(() => runMarketDataRefresh(db)).not.toThrow();
+      await flush();
+      expect(fundHoldingsLoad).not.toHaveBeenCalled();
+    });
+
+    it('reloads the tickers store once when any enrichment wrote a row', async () => {
+      await seedOneHolding();
+      vi.spyOn(tickerEnrichment, 'enrichTickerIfMissing').mockResolvedValue(true);
+      runMarketDataRefresh(db);
+      await flush();
+      expect(tickersLoad).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT reload the tickers store when every enrichment was a no-op', async () => {
+      await seedOneHolding();
+      vi.spyOn(tickerEnrichment, 'enrichTickerIfMissing').mockResolvedValue(false);
+      runMarketDataRefresh(db);
+      await flush();
+      expect(tickersLoad).not.toHaveBeenCalled();
     });
   });
 });

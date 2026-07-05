@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { CategoriesRepo } from '@/domain/categories';
+import { createDedupedLoad } from '@/stores/create-entity-store';
 import { getDatabase } from '@/db/db';
 import type { Category } from '@/types/schema';
 
@@ -18,16 +19,11 @@ export const useCategoriesStore = create<CategoriesState>((set, get) => ({
   isLoading: false,
   error: null,
 
-  load: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const repo = new CategoriesRepo(getDatabase());
-      const categories = await repo.list();
-      set({ categories, isLoading: false });
-    } catch (e) {
-      set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load' });
-    }
-  },
+  // Shared de-duped load (see create-entity-store.ts for semantics + the
+  // accepted initial-mount TOCTOU).
+  load: createDedupedLoad<CategoriesState, 'categories'>(set, 'categories', async () =>
+    new CategoriesRepo(getDatabase()).list(),
+  ),
 
   create: async (cat) => {
     const repo = new CategoriesRepo(getDatabase());

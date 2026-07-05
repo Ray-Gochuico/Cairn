@@ -160,7 +160,7 @@ export function DataHealthPopover() {
   return (
     <PopoverPrimitive.Root>
       <PopoverPrimitive.Trigger asChild>
-        <Button variant="outline" size="sm" aria-haspopup="dialog">
+        <Button variant="outline" size="sm">
           <ActivityIcon className="h-4 w-4 mr-1.5" aria-hidden="true" />
           Data health
         </Button>
@@ -187,56 +187,72 @@ export function DataHealthPopover() {
               size="sm"
               onClick={handleForceRefreshSectors}
               disabled={forceSectorsRunning}
-              title="Clear and re-fetch fund sectors per ticker. Shows per-ticker status."
+              aria-describedby="force-sectors-explain"
             >
               {forceSectorsRunning ? 'Refreshing sectors…' : 'Force refresh sectors'}
             </Button>
           </div>
-          {refreshResult && (
-            <div className="text-xs text-muted-foreground">
-              {refreshResult.refreshed.length > 0 && (
-                <span className="mr-3">
-                  Refreshed: {refreshResult.refreshed.join(', ')}
-                </span>
-              )}
-              {refreshResult.skipped.length > 0 && (
-                <span className="mr-3">
-                  Skipped: {refreshResult.skipped.join(', ')}
-                </span>
-              )}
-              {refreshResult.errors.length > 0 && (
-                <span className="text-destructive-soft-foreground">
-                  Errors: {refreshResult.errors.join('; ')}
-                </span>
-              )}
-            </div>
-          )}
-          {sectorRefreshRows && sectorRefreshRows.length > 0 && (
-            <div
-              className="rounded-md border bg-muted/30 p-3 text-xs space-y-1"
-              data-testid="force-sectors-status"
-            >
-              <div className="font-medium text-foreground">Force-refresh sectors status</div>
-              {sectorRefreshRows.map((row) => (
-                <div key={row.ticker} className="flex items-center gap-2 font-mono">
-                  <span className="w-16">{row.ticker}</span>
-                  {row.status === 'ok' && (
-                    <span className="text-success-foreground">
-                      ok · {row.sectorCount} sectors loaded
-                    </span>
-                  )}
-                  {row.status === 'empty' && (
-                    <span className="text-warning-foreground">
-                      empty · Yahoo returned no sectorWeightings (bond/commodity fund?)
-                    </span>
-                  )}
-                  {row.status === 'error' && (
-                    <span className="text-destructive-soft-foreground">error · {row.error}</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+          <p id="force-sectors-explain" className="text-xs text-muted-foreground">
+            Force refresh clears cached sectors and re-fetches per ticker, showing per-ticker
+            status below.
+          </p>
+          {/* Round-2 B3: live regions PRE-MOUNT empty so the async results
+              are announced (a region inserted together with its text never
+              fires — MonthlyMiniWindow pattern). Styling lives on the inner
+              boxes so an empty region has no visual footprint. */}
+          <div role="status" data-testid="refresh-result-region">
+            {refreshResult && (
+              <div className="text-xs text-muted-foreground">
+                {refreshResult.refreshed.length > 0 && (
+                  <span className="mr-3">
+                    Refreshed: {refreshResult.refreshed.join(', ')}
+                  </span>
+                )}
+                {refreshResult.skipped.length > 0 && (
+                  <span className="mr-3">
+                    Skipped: {refreshResult.skipped.join(', ')}
+                  </span>
+                )}
+                {refreshResult.errors.length > 0 && (
+                  <span className="text-destructive-soft-foreground">
+                    Errors: {refreshResult.errors.join('; ')}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+          <div
+            role="status"
+            data-testid="force-sectors-region"
+            aria-busy={forceSectorsRunning}
+          >
+            {sectorRefreshRows && sectorRefreshRows.length > 0 && (
+              <div
+                className="rounded-md border bg-muted/30 p-3 text-xs space-y-1"
+                data-testid="force-sectors-status"
+              >
+                <div className="font-medium text-foreground">Force-refresh sectors status</div>
+                {sectorRefreshRows.map((row) => (
+                  <div key={row.ticker} className="flex items-center gap-2 font-mono">
+                    <span className="w-16">{row.ticker}</span>
+                    {row.status === 'ok' && (
+                      <span className="text-success-foreground">
+                        ok · {row.sectorCount} sectors loaded
+                      </span>
+                    )}
+                    {row.status === 'empty' && (
+                      <span className="text-warning-foreground">
+                        empty · Yahoo returned no sectorWeightings (bond/commodity fund?)
+                      </span>
+                    )}
+                    {row.status === 'error' && (
+                      <span className="text-destructive-soft-foreground">error · {row.error}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </PopoverPrimitive.Content>
       </PopoverPrimitive.Portal>
     </PopoverPrimitive.Root>

@@ -207,6 +207,20 @@ export default function PropertyForm({
               <input type="checkbox" {...form.register('excludedFromNetWorth')} />
               Exclude from net worth
             </label>
+            {/* Round-2 A4 disclosure: exclusion hides the asset but NOT its
+                linked debt — net worth then carries the mortgage with no
+                offsetting value. Valuation unchanged by design (link-exclusion
+                is an owner-level modeling decision). */}
+            {form.watch('excludedFromNetWorth') && form.watch('linkedLoanId') != null && (
+              <p
+                role="note"
+                data-testid="excluded-linked-loan-note"
+                className="mt-1 text-xs text-warning-foreground"
+              >
+                Linked mortgage still counts toward net worth — excluding this property hides the
+                asset but keeps the debt.
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>

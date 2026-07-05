@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { FundHoldingsRepo } from '@/domain/fund-holdings';
+import { createDedupedLoad } from '@/stores/create-entity-store';
 import { getDatabase } from '@/db/db';
 import type { FundHolding } from '@/types/schema';
 
@@ -16,16 +17,11 @@ export const useFundHoldingsStore = create<FundHoldingsState>((set, get) => ({
   isLoading: false,
   error: null,
 
-  load: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const repo = new FundHoldingsRepo(getDatabase());
-      const fundHoldings = await repo.listAll();
-      set({ fundHoldings, isLoading: false });
-    } catch (e) {
-      set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load' });
-    }
-  },
+  // Shared de-duped load (see create-entity-store.ts for semantics + the
+  // accepted initial-mount TOCTOU).
+  load: createDedupedLoad<FundHoldingsState, 'fundHoldings'>(set, 'fundHoldings', async () =>
+    new FundHoldingsRepo(getDatabase()).listAll(),
+  ),
 
   getForFund: (fundTicker) => {
     return get().fundHoldings.filter((h) => h.fundTicker === fundTicker);

@@ -45,8 +45,9 @@ jobs:
         run: npm ci
 
       - name: Run unit suite
-        # The pre-commit hook uses `--bail=1`; CI deliberately does NOT
-        # bail so a single flake doesn't hide other regressions.
+        # The pre-commit hook runs a scoped fast lane (`vitest --changed`
+        # plus mapped policy/db suites, no bail); CI runs the FULL suite and
+        # deliberately does NOT bail so one flake can't hide other regressions.
         run: npm test
 
       - name: Type check

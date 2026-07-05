@@ -452,6 +452,35 @@ describe('Spending page', () => {
     });
   });
 
+  it('Money in vs out stacks on narrow screens and the edit glyph is an svg icon (round-2 D2)', async () => {
+    // Seed transactions exactly as the cashflow test above does (same
+    // real-clock recent-date idiom — this file is on the grandfathered
+    // real-clock allowlist; do NOT add fake timers here).
+    await useCategoriesStore.getState().load();
+    const recentDate = new Date(Date.now() - 5 * 86_400_000).toISOString().slice(0, 10);
+    const txn: Omit<Transaction, 'id'> = {
+      householdId: 1, date: recentDate, merchant: 'GROCERY', merchantRaw: 'GROCERY',
+      amount: 200, categoryId: null, sourceAccountId: null, propertyId: null,
+      vehicleId: null, personId: null, sourcePdfFilename: 'test.pdf', reimbursable: false,
+      reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
+    };
+    await useTransactionsStore.getState().createMany([txn]);
+
+    renderPage();
+
+    const heading = await screen.findByText(/money in vs out/i);
+    const grid = heading.parentElement!.querySelector('.grid') as HTMLElement;
+    expect(grid.className).toContain('grid-cols-1');
+    expect(grid.className).toContain('sm:grid-cols-3');
+
+    const editButtons = screen.getAllByRole('button', { name: /^edit /i });
+    expect(editButtons.length).toBeGreaterThan(0);
+    for (const b of editButtons) {
+      expect(b.textContent).not.toContain('✏️');
+      expect(b.querySelector('svg')).not.toBeNull();
+    }
+  });
+
   it('(e) imports a transaction CSV end-to-end via the unified import surface', async () => {
     await useCategoriesStore.getState().load();
     useHouseholdStore.setState({

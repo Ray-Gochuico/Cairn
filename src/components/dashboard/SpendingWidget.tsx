@@ -31,9 +31,9 @@ function formatUSD(n: number): string {
  * Layout (top → bottom):
  *  1. Filter bar — merchant search, source-account select, time-range select,
  *     custom date-window inputs (only shown when range = 'custom' isn't used
- *     yet; user can override start/end manually for now), and a "Compare to"
- *     link stub (comparison computation is a follow-up; the link wires the
- *     affordance now).
+ *     yet; user can override start/end manually for now). (The old disabled
+ *     "Compare to…" stub was removed in round-2 D2 — a permanently disabled
+ *     control is a broken promise; git history keeps the idea.)
  *  2. Chart row — donut (default) or horizontal bar, toggled via the
  *     corner button. Donut shows the category breakdown with a center label
  *     "Total spending $X,XXX"; bar shows the same data as horizontal bars.
@@ -191,17 +191,6 @@ export function SpendingWidget({
             <span>→</span>
             <span>{bounds.endInclusive}</span>
           </div>
-        </div>
-        <div className="text-xs">
-          <button
-            type="button"
-            className="text-primary hover:underline disabled:cursor-not-allowed disabled:opacity-50"
-            disabled
-            title="Comparison view coming soon"
-            data-testid="spending-widget-compare"
-          >
-            Compare to…
-          </button>
         </div>
       </CardHeader>
       <CardContent className="space-y-6">

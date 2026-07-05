@@ -121,6 +121,29 @@ export function nextPaymentDateFrom(firstPaymentDate: string, todayISO: string):
   return paymentDateAt(startYear, startMonth, startDay, k);
 }
 
+/**
+ * True when `schedule` ended at amortize()'s safety cap with principal still
+ * owing — i.e. the contract payment doesn't amortize the balance within
+ * termMonths + 360 months. The classic cause is a payment at or below the
+ * monthly interest (negative amortization: the balance grows forever); a
+ * technically-amortizing payment that would need longer than the cap trips
+ * this too. Either way the schedule's tail figures (last paymentDate,
+ * accumulated totalInterest) describe the CAP, not a payoff, and callers
+ * must not present them as one (round-2 finding A1).
+ *
+ * Detection is by residual balance on the final row (> half a cent, the
+ * loop's own `balance > 0.005` continue condition) rather than by row
+ * count, so it never false-positives on a loan that pays off exactly at
+ * the cap length. Callers must pass the COMPLETE schedule as returned by
+ * amortize() — a truncated prefix of a healthy loan still carries a
+ * residual balance and would return true. An empty schedule (zero
+ * principal) is not capped.
+ */
+export function scheduleIsCapped(schedule: ReadonlyArray<ScheduleEntry>): boolean {
+  if (schedule.length === 0) return false;
+  return schedule[schedule.length - 1].balance > 0.005;
+}
+
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }

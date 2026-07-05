@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { ScenariosRepo } from '@/domain/scenarios';
+import { createDedupedLoad } from '@/stores/create-entity-store';
 import { getDatabase } from '@/db/db';
 import {
   emptyLeverPayload,
@@ -87,20 +88,18 @@ export const useScenariosStore = create<ScenariosState>((set, get) => ({
       .scenarios.filter((s) => s.visible && s.id != null)
       .map((s) => s.id as number),
 
-  load: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const repo = new ScenariosRepo(getDatabase());
-      let scenarios = await repo.list();
-      if (scenarios.length === 0) {
-        await repo.create(BASELINE_DEFAULTS);
-        scenarios = await repo.list();
-      }
-      set({ scenarios, isLoading: false });
-    } catch (e) {
-      set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load scenarios' });
+  // Shared de-duped load (see create-entity-store.ts). The first-boot
+  // Baseline seed lives inside fetchData — the in-flight guard now also
+  // prevents a concurrent double-seed (two mounts racing an empty table).
+  load: createDedupedLoad<ScenariosState, 'scenarios'>(set, 'scenarios', async () => {
+    const repo = new ScenariosRepo(getDatabase());
+    let scenarios = await repo.list();
+    if (scenarios.length === 0) {
+      await repo.create(BASELINE_DEFAULTS);
+      scenarios = await repo.list();
     }
-  },
+    return scenarios;
+  }),
 
   create: async (input) => {
     const repo = new ScenariosRepo(getDatabase());

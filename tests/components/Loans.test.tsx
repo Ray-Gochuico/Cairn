@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useLoansStore } from '@/stores/loans-store';
@@ -377,5 +377,59 @@ describe('Loans page', () => {
     expect(screen.queryByText(/payments omitted/i)).not.toBeInTheDocument();
     // No "show all" button either
     expect(screen.queryByRole('button', { name: /show all/i })).not.toBeInTheDocument();
+  });
+
+  describe('never-pays-off guard (round-2 A1)', () => {
+    const underwater: Loan = {
+      id: 77,
+      householdId: 1,
+      obligorPersonId: null,
+      name: 'Underwater Mortgage',
+      type: LoanType.MORTGAGE,
+      originalAmount: 320000,
+      currentBalance: 300000,
+      interestRate: 0.06,
+      termMonths: 360,
+      firstPaymentDate: '2020-01-01',
+      monthlyPayment: 1000, // < $1,500/mo interest
+      extraPaymentDefault: 0,
+      linkedPropertyId: null,
+      linkedVehicleId: null,
+    };
+
+    it('suppresses the card payoff/interest figures and shows the inline warning', async () => {
+      useLoansStore.setState({
+        loans: [underwater],
+        isLoading: false,
+        error: null,
+        load: async () => {},
+      });
+      renderLoans();
+
+      expect(
+        await screen.findByText(/never pays off at the current payment/i),
+      ).toBeInTheDocument();
+      // Projected payoff + Remaining interest dd's are suppressed on the card…
+      const card = screen.getByText('Underwater Mortgage').closest('[class*="rounded"]') as HTMLElement;
+      expect(within(card).getAllByText('—').length).toBeGreaterThanOrEqual(2);
+      // …and the page-level Remaining-interest summary tile is too. (Anchored
+      // via the tile's capped subtext — the label text 'Remaining interest'
+      // also appears as a LoanCard dt, so it is ambiguous for getByText.)
+      const summarySubtext = screen.getByText(/hidden — a payment below interest never pays off/i);
+      const summaryCard = summarySubtext.closest('[class*="rounded"]') as HTMLElement;
+      expect(within(summaryCard).getByText('—')).toBeInTheDocument();
+    });
+
+    it('an amortizing loan keeps real figures and shows no warning', async () => {
+      useLoansStore.setState({
+        loans: [{ ...underwater, id: 78, name: 'Healthy', monthlyPayment: 2200 }],
+        isLoading: false,
+        error: null,
+        load: async () => {},
+      });
+      renderLoans();
+      expect(await screen.findByText('Healthy')).toBeInTheDocument();
+      expect(screen.queryByText(/never pays off at the current payment/i)).not.toBeInTheDocument();
+    });
   });
 });

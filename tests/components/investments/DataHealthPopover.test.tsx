@@ -116,4 +116,54 @@ describe('DataHealthPopover', () => {
     expect(log).toHaveTextContent(/error · boom/);
     expect(upsertSectors).toHaveBeenCalledTimes(1); // only the non-empty fetch writes
   });
+
+  it('pre-mounts BOTH result panes as empty role="status" live regions on open (round-2 B3)', async () => {
+    const user = userEvent.setup();
+    render(<DataHealthPopover />);
+    await user.click(screen.getByRole('button', { name: /data health/i }));
+    // Before any refresh runs: two pre-mounted, EMPTY status regions —
+    // pre-mounting is what makes the later announcement actually fire
+    // (MonthlyMiniWindow pattern).
+    const statuses = screen.getAllByRole('status');
+    expect(statuses).toHaveLength(2);
+    for (const el of statuses) expect(el).toHaveTextContent('');
+  });
+
+  it('the sector-rows status region carries aria-busy while the run is in flight', async () => {
+    const user = userEvent.setup();
+    // One fund ticker whose sector fetch hangs on a deferred promise so the
+    // busy state is observable mid-flight.
+    listAll.mockResolvedValueOnce([{ ticker: 'VTI' }]);
+    lookup.mockImplementation(async () => ({ assetClass: 'US_TOTAL_MARKET' }));
+    let release!: (v: { sectors: Array<{ sector: string; weight: number }>; asOf: string }) => void;
+    const gate = new Promise<{ sectors: Array<{ sector: string; weight: number }>; asOf: string }>(
+      (r) => (release = r),
+    );
+    fundSectorWeightings.mockImplementation(() => gate);
+
+    render(<DataHealthPopover />);
+    await user.click(screen.getByRole('button', { name: /data health/i }));
+    await user.click(screen.getByRole('button', { name: /force refresh sectors/i }));
+    expect(screen.getByTestId('force-sectors-region')).toHaveAttribute('aria-busy', 'true');
+
+    release({ sectors: [{ sector: 'Tech', weight: 1 }], asOf: '2026-07-01' });
+    await screen.findByTestId('force-sectors-status');
+    expect(screen.getByTestId('force-sectors-region')).toHaveAttribute('aria-busy', 'false');
+  });
+
+  it('drops the redundant aria-haspopup and surfaces the force-refresh explanation as visible text', async () => {
+    const user = userEvent.setup();
+    render(<DataHealthPopover />);
+    const trigger = screen.getByRole('button', { name: /data health/i });
+    // Radix supplies aria-haspopup="dialog" itself; the JSX must not set it
+    // redundantly — assert the trigger still exposes it (from Radix) and the
+    // explanation paragraph exists inside the open popover.
+    expect(trigger).toHaveAttribute('aria-haspopup', 'dialog');
+    await user.click(trigger);
+    const explain = screen.getByText(/clears cached sectors and re-fetches per ticker/i);
+    expect(explain).toBeVisible();
+    const force = screen.getByRole('button', { name: /force refresh sectors/i });
+    expect(force).toHaveAttribute('aria-describedby', explain.id);
+    expect(force).not.toHaveAttribute('title');
+  });
 });

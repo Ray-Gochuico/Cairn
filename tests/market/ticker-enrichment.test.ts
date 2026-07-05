@@ -222,7 +222,8 @@ describe('enrichTickerIfMissing', () => {
     const tickers = makeTickersMock();
 
     // Should not throw
-    await expect(enrichTickerIfMissing('BAD', { yahoo, tickers })).resolves.toBeUndefined();
+    // (round-2 C2: now reports the stub write so callers refeed the store)
+    await expect(enrichTickerIfMissing('BAD', { yahoo, tickers })).resolves.toBe(true);
 
     // Contract: an unclassified holding is detected by row-missing OR
     // name === null. The stub here lets the UI surface "needs attention"
@@ -249,7 +250,8 @@ describe('enrichTickerIfMissing', () => {
       lookup: vi.fn().mockResolvedValue(existingTicker),
     });
 
-    await expect(enrichTickerIfMissing('VTI', { yahoo, tickers })).resolves.toBeUndefined();
+    // (round-2 C2: nothing written for an existing row on failure → false)
+    await expect(enrichTickerIfMissing('VTI', { yahoo, tickers })).resolves.toBe(false);
 
     expect(tickers.upsert).not.toHaveBeenCalled();
   });
@@ -278,5 +280,47 @@ describe('enrichTickerIfMissing', () => {
     expect(tickers.upsert).toHaveBeenCalledWith(
       expect.objectContaining({ assetClass: 'CRYPTO' }),
     );
+  });
+});
+
+describe('enrichTickerIfMissing return value (round-2 C2: did a row get written?)', () => {
+  // Reuses the file's makeYahooMock/makeTickersMock/existingTicker fixtures
+  // rather than duplicating them (the plan's deps()/row() fixtures are the
+  // same shapes).
+  it('returns false on the already-enriched early skip (no write)', async () => {
+    const yahoo = makeYahooMock();
+    const tickers = makeTickersMock({
+      lookup: vi.fn().mockResolvedValue({ ...existingTicker, sector: 'Technology' }),
+    });
+    await expect(enrichTickerIfMissing('VTI', { yahoo, tickers })).resolves.toBe(false);
+  });
+
+  it('returns true when it re-enriches an existing sector-less row', async () => {
+    const yahoo = makeYahooMock({
+      assetProfile: vi.fn().mockResolvedValue({ sector: 'Technology', industry: 'Software' }),
+    });
+    const tickers = makeTickersMock({ lookup: vi.fn().mockResolvedValue({ ...existingTicker }) });
+    await expect(enrichTickerIfMissing('VTI', { yahoo, tickers })).resolves.toBe(true);
+  });
+
+  it('returns true when it creates a brand-new enriched row', async () => {
+    const yahoo = makeYahooMock({
+      assetProfile: vi.fn().mockResolvedValue({ sector: 'Technology', industry: 'Software' }),
+      fundProfile: vi.fn().mockResolvedValue({ category: 'Large Blend', quoteType: 'ETF' }),
+    });
+    const tickers = makeTickersMock();
+    await expect(enrichTickerIfMissing('NEWT', { yahoo, tickers })).resolves.toBe(true);
+  });
+
+  it('returns true when Yahoo fails but the unclassified stub row is written', async () => {
+    const yahoo = makeYahooMock({ assetProfile: vi.fn().mockRejectedValue(new Error('429')) });
+    const tickers = makeTickersMock();
+    await expect(enrichTickerIfMissing('NEWT', { yahoo, tickers })).resolves.toBe(true);
+  });
+
+  it('returns false when Yahoo fails for an EXISTING row (nothing written)', async () => {
+    const yahoo = makeYahooMock({ assetProfile: vi.fn().mockRejectedValue(new Error('429')) });
+    const tickers = makeTickersMock({ lookup: vi.fn().mockResolvedValue({ ...existingTicker }) });
+    await expect(enrichTickerIfMissing('VTI', { yahoo, tickers })).resolves.toBe(false);
   });
 });

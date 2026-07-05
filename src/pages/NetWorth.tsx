@@ -216,9 +216,9 @@ export default function NetWorth() {
       {/* The hero: current value, range delta, area chart, breakdown. */}
       <AssetValueChart surface="netWorth" />
 
-      {/* Click-to-cycle day-level horizons (1d…1y), numerically consistent
-          with the chart header in household view via the shared as-of
-          factory above (diverges intentionally under a person filter). */}
+      {/* Horizon chips (1d…1y), numerically consistent with the chart
+          header in household view via the shared as-of factory above
+          (diverges intentionally under a person filter). */}
       <GrowthCard title="Net worth growth" horizons={netWorthGrowth} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
