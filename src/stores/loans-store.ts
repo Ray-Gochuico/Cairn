@@ -1,14 +1,8 @@
 import { create } from 'zustand';
 import { LoansRepo } from '@/domain/loans';
+import { createDedupedLoad } from '@/stores/create-entity-store';
 import { getDatabase } from '@/db/db';
 import type { Loan } from '@/types/schema';
-
-/**
- * In-flight de-dupe: if a load() is already in progress, return its promise
- * instead of starting a second DB round-trip. Cleared after settle so later
- * load() calls (after a CRUD mutation) still re-fetch.
- */
-let loansInflight: Promise<void> | null = null;
 
 interface LoansState {
   loans: Loan[];
@@ -31,22 +25,11 @@ export const useLoansStore = create<LoansState>((set, get) => ({
   isLoading: false,
   error: null,
 
-  load: async () => {
-    if (loansInflight) return loansInflight;
-    loansInflight = (async () => {
-      set({ isLoading: true, error: null });
-      try {
-        const repo = new LoansRepo(getDatabase());
-        const loans = await repo.list();
-        set({ loans, isLoading: false });
-      } catch (e) {
-        set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load' });
-      } finally {
-        loansInflight = null;
-      }
-    })();
-    return loansInflight;
-  },
+  // Shared de-duped load (see create-entity-store.ts for semantics + the
+  // accepted initial-mount TOCTOU).
+  load: createDedupedLoad<LoansState, 'loans'>(set, 'loans', async () =>
+    new LoansRepo(getDatabase()).list(),
+  ),
 
   create: async (loan) => {
     const repo = new LoansRepo(getDatabase());

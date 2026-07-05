@@ -1,25 +1,8 @@
 import { create } from 'zustand';
 import { PersonsRepo } from '@/domain/persons';
+import { createDedupedLoad } from '@/stores/create-entity-store';
 import { getDatabase } from '@/db/db';
 import type { Person } from '@/types/schema';
-
-/**
- * In-flight de-dupe: if a load() is already in progress, return its promise
- * instead of starting a second DB round-trip. Cleared after settle so later
- * load() calls (after a CRUD mutation) still re-fetch.
- *
- * Known, accepted TOCTOU (do NOT "fix" without re-reading this): a CRUD
- * mutation's `await get().load()` that fires while an *initial* load() is still
- * in flight piggybacks the pre-mutation in-flight promise and could briefly
- * show stale data. This is unreproducible on the synchronous better-sqlite3
- * test adapter (the piggybacked SELECT runs after the write commits), so it has
- * no honest regression test; the only window is the sub-second, pre-interactive
- * initial-mount race on the async Tauri adapter. Accepted as negligible by the
- * Track-3 final review (2026-06-01). A bypass (clear *Inflight before the
- * post-write load, or add a private forceReload()) was scoped and declined:
- * 6 stores of churn in hot code for a defect with no testable failure.
- */
-let personsInflight: Promise<void> | null = null;
 
 /**
  * The chart-answer columns added by the roadmap rule-engine migration
@@ -52,22 +35,11 @@ export const usePersonsStore = create<PersonsState>((set, get) => ({
   isLoading: false,
   error: null,
 
-  load: async () => {
-    if (personsInflight) return personsInflight;
-    personsInflight = (async () => {
-      set({ isLoading: true, error: null });
-      try {
-        const repo = new PersonsRepo(getDatabase());
-        const persons = await repo.list();
-        set({ persons, isLoading: false });
-      } catch (e) {
-        set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load' });
-      } finally {
-        personsInflight = null;
-      }
-    })();
-    return personsInflight;
-  },
+  // Shared de-duped load (see create-entity-store.ts for semantics + the
+  // accepted initial-mount TOCTOU).
+  load: createDedupedLoad<PersonsState, 'persons'>(set, 'persons', async () =>
+    new PersonsRepo(getDatabase()).list(),
+  ),
 
   create: async (person) => {
     const repo = new PersonsRepo(getDatabase());
