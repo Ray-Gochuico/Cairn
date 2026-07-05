@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { HoldingsRepo } from '@/domain/holdings';
 import { getDatabase } from '@/db/db';
+import { createDedupedLoad } from '@/stores/create-entity-store';
 import type { Holding } from '@/types/schema';
 
 interface HoldingsState {
@@ -23,17 +24,13 @@ export const useHoldingsStore = create<HoldingsState>((set, get) => ({
    * in-memory by callers (HoldingsTab, Investments page) — that lets the
    * UI swap accounts without re-querying. Components that genuinely need
    * a SQL-level filter can call HoldingsRepo.listForAccount directly.
+   *
+   * Shared de-duped load (see create-entity-store.ts for semantics + the
+   * accepted initial-mount TOCTOU).
    */
-  load: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const repo = new HoldingsRepo(getDatabase());
-      const holdings = await repo.listAll();
-      set({ holdings, isLoading: false });
-    } catch (e) {
-      set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load' });
-    }
-  },
+  load: createDedupedLoad<HoldingsState, 'holdings'>(set, 'holdings', async () =>
+    new HoldingsRepo(getDatabase()).listAll(),
+  ),
 
   create: async (holding) => {
     const repo = new HoldingsRepo(getDatabase());

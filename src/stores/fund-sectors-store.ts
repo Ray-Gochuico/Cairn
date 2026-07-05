@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { FundSectorsRepo } from '@/domain/fund-sectors';
+import { createDedupedLoad } from '@/stores/create-entity-store';
 import { getDatabase } from '@/db/db';
 import type { FundSector } from '@/types/schema';
 
@@ -15,14 +16,9 @@ export const useFundSectorsStore = create<FundSectorsState>((set) => ({
   isLoading: false,
   error: null,
 
-  load: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const repo = new FundSectorsRepo(getDatabase());
-      const fundSectors = await repo.listAll();
-      set({ fundSectors, isLoading: false });
-    } catch (e) {
-      set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load' });
-    }
-  },
+  // Shared de-duped load (see create-entity-store.ts for semantics + the
+  // accepted initial-mount TOCTOU).
+  load: createDedupedLoad<FundSectorsState, 'fundSectors'>(set, 'fundSectors', async () =>
+    new FundSectorsRepo(getDatabase()).listAll(),
+  ),
 }));

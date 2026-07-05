@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { HousingPaymentsRepo } from '@/domain/housing-payments';
+import { createDedupedLoad } from '@/stores/create-entity-store';
 import { getDatabase } from '@/db/db';
 import type { HousingPayment } from '@/types/schema';
 
@@ -21,19 +22,11 @@ export const useHousingPaymentsStore = create<HousingPaymentsState>((set, get) =
   isLoading: false,
   error: null,
 
-  load: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const repo = new HousingPaymentsRepo(getDatabase());
-      const housingPayments = await repo.list();
-      set({ housingPayments, isLoading: false });
-    } catch (e) {
-      set({
-        isLoading: false,
-        error: e instanceof Error ? e.message : 'Failed to load',
-      });
-    }
-  },
+  // Shared de-duped load (see create-entity-store.ts for semantics + the
+  // accepted initial-mount TOCTOU).
+  load: createDedupedLoad<HousingPaymentsState, 'housingPayments'>(set, 'housingPayments', async () =>
+    new HousingPaymentsRepo(getDatabase()).list(),
+  ),
 
   create: async (payment) => {
     const repo = new HousingPaymentsRepo(getDatabase());

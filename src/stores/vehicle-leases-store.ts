@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { VehicleLeasesRepo } from '@/domain/vehicle-leases';
+import { createDedupedLoad } from '@/stores/create-entity-store';
 import { getDatabase } from '@/db/db';
 import type { VehicleLease } from '@/types/schema';
 
@@ -21,19 +22,11 @@ export const useVehicleLeasesStore = create<VehicleLeasesState>((set, get) => ({
   isLoading: false,
   error: null,
 
-  load: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const repo = new VehicleLeasesRepo(getDatabase());
-      const vehicleLeases = await repo.list();
-      set({ vehicleLeases, isLoading: false });
-    } catch (e) {
-      set({
-        isLoading: false,
-        error: e instanceof Error ? e.message : 'Failed to load',
-      });
-    }
-  },
+  // Shared de-duped load (see create-entity-store.ts for semantics + the
+  // accepted initial-mount TOCTOU).
+  load: createDedupedLoad<VehicleLeasesState, 'vehicleLeases'>(set, 'vehicleLeases', async () =>
+    new VehicleLeasesRepo(getDatabase()).list(),
+  ),
 
   create: async (lease) => {
     const repo = new VehicleLeasesRepo(getDatabase());

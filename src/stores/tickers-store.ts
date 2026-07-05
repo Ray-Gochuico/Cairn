@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { TickersRepo } from '@/domain/tickers';
+import { createDedupedLoad } from '@/stores/create-entity-store';
 import { getDatabase } from '@/db/db';
 import type { Ticker } from '@/types/schema';
 
@@ -19,16 +20,11 @@ export const useTickersStore = create<TickersState>((set, get) => ({
   isLoading: false,
   error: null,
 
-  load: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const repo = new TickersRepo(getDatabase());
-      const tickers = await repo.list();
-      set({ tickers, isLoading: false });
-    } catch (e) {
-      set({ isLoading: false, error: e instanceof Error ? e.message : 'Failed to load' });
-    }
-  },
+  // Shared de-duped load (see create-entity-store.ts for semantics + the
+  // accepted initial-mount TOCTOU).
+  load: createDedupedLoad<TickersState, 'tickers'>(set, 'tickers', async () =>
+    new TickersRepo(getDatabase()).list(),
+  ),
 
   upsert: async (ticker) => {
     const repo = new TickersRepo(getDatabase());
