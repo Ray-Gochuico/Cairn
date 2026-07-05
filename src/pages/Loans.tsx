@@ -268,7 +268,7 @@ function LoanCard({ projection, expanded, onToggleExpand, schedule }: LoanCardPr
             role="note"
             className="rounded-md border border-warning/40 bg-warning-soft px-3 py-2 text-sm text-warning-foreground"
           >
-            Payment doesn't cover monthly interest — this loan never pays off at this payment.
+            This loan never pays off at the current payment.
           </div>
         )}
         <div>

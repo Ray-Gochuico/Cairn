@@ -62,9 +62,14 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
 
   // Baseline: every loan with extraPayment=0. Used to estimate "savings" from
   // the user's combined defaults + strategy choice. Recomputed only when the
-  // loan set changes.
-  const baselineInterest = useMemo(() => {
-    let sum = 0;
+  // loan set changes. Also reports WHICH loans' baselines are capped (review
+  // F1): a below-interest contract payment that an extra RESCUES still has a
+  // never-amortizing extra-less baseline, so "savings vs no-extra" would
+  // difference a real projection against the cap's accumulation — the same
+  // rule as Loans.tsx's savingsCapped (both sides must be honest).
+  const baseline = useMemo(() => {
+    let interest = 0;
+    const cappedNames: string[] = [];
     for (const loan of loans) {
       const a = amortize({
         principal: loan.currentBalance,
@@ -74,9 +79,10 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
         monthlyPayment: loan.monthlyPayment,
         extraPayment: 0,
       });
-      sum += a.totalInterest;
+      interest += a.totalInterest;
+      if (scheduleIsCapped(a.schedule)) cappedNames.push(loan.name);
     }
-    return sum;
+    return { interest, cappedNames };
   }, [loans, todayIso]);
 
   if (loans.length === 0) {
@@ -99,15 +105,19 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
     (a, p) => a + p.amortization.totalInterest,
     0,
   );
-  const interestSavings = Math.max(0, baselineInterest - totalInterest);
+  const interestSavings = Math.max(0, baseline.interest - totalInterest);
 
-  // Round-2 A1: a contract payment ≤ monthly interest runs amortize() to its
+  // Round-2 A1: a never-amortizing contract payment runs amortize() to its
   // safety cap — the "payoff date" is the cap month and "total interest" is
   // the cap's accumulation (~$9.2M on the probe), both lies. Any capped loan
   // poisons every aggregate (payoff = max over schedules; interest + savings
   // are sums over them), so the whole strip suppresses, not just one tile.
   const cappedProjections = projections.filter((p) => scheduleIsCapped(p.amortization.schedule));
   const anyCapped = cappedProjections.length > 0;
+  // Review F1: the savings tile differences against the EXTRA-LESS baseline,
+  // so it is poisoned when EITHER side is capped — including the rescued
+  // case (projection amortizes, baseline doesn't).
+  const savingsCapped = anyCapped || baseline.cappedNames.length > 0;
 
   // Estimated full-debt payoff: latest payment date across all schedules.
   // ISO YYYY-MM-DD strings sort lexicographically as dates do.
@@ -130,18 +140,31 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
         </span>
       }
     >
-      {anyCapped && (
+      {savingsCapped && (
         <div
           role="note"
           data-testid="debt-never-payoff-notice"
           className="rounded-md border border-warning/40 bg-warning-soft px-3 py-2 text-sm text-warning-foreground"
         >
-          Payment doesn't cover monthly interest —{' '}
-          <span className="font-medium">
-            {cappedProjections.map((p) => p.loan.name).join(', ')}
-          </span>{' '}
-          never {cappedProjections.length === 1 ? 'pays' : 'pay'} off at this payment. Payoff and
-          interest figures are hidden; fix the payment or rate in Inputs.
+          {anyCapped ? (
+            <>
+              <span className="font-medium">
+                {cappedProjections.map((p) => p.loan.name).join(', ')}
+              </span>{' '}
+              never {cappedProjections.length === 1 ? 'pays' : 'pay'} off at the current payment.
+              Payoff and interest figures are hidden; fix the payment or rate in Inputs.
+            </>
+          ) : (
+            // Rescued case (F1): the projection amortizes thanks to extra
+            // payments, but the extra-less baseline never does — only the
+            // savings comparison is meaningless, so only it hides.
+            <>
+              Without extra payments{' '}
+              <span className="font-medium">{baseline.cappedNames.join(', ')}</span>{' '}
+              never {baseline.cappedNames.length === 1 ? 'pays' : 'pay'} off, so the savings
+              comparison is hidden.
+            </>
+          )}
         </div>
       )}
       {/* Aggregate metric strip */}
@@ -158,7 +181,7 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
         />
         <StatTile
           label="Savings vs no-extra"
-          value={anyCapped ? '—' : formatCurrency(interestSavings)}
+          value={savingsCapped ? '—' : formatCurrency(interestSavings)}
           testId="debt-savings"
         />
       </div>

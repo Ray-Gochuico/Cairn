@@ -392,7 +392,7 @@ describe('DebtPayoffCard', () => {
       );
 
       const notice = screen.getByTestId('debt-never-payoff-notice');
-      expect(notice).toHaveTextContent(/doesn't cover monthly interest/i);
+      expect(notice).toHaveTextContent(/never pays off at the current payment/i);
       expect(notice).toHaveTextContent('Underwater');
 
       // All three aggregate tiles are suppressed (any capped loan poisons the sums).
@@ -422,6 +422,36 @@ describe('DebtPayoffCard', () => {
       );
       expect(screen.queryByTestId('debt-never-payoff-notice')).not.toBeInTheDocument();
       expect(screen.getByTestId('debt-aggregate-payoff')).not.toHaveTextContent('—');
+    });
+
+    it('a rescuing extra keeps real payoff/interest but suppresses savings and still warns (review F1)', () => {
+      // $300k @6% → $1,500/mo interest; the $1,000 contract payment alone
+      // never amortizes, but the $600 extraPaymentDefault nets $100+/mo of
+      // paydown → the PROJECTION pays off (~556 months, inside the cap)
+      // while the extra-less BASELINE runs to the cap. "Savings vs no-extra"
+      // would difference a real number against the cap's accumulation.
+      useLoansStore.setState({
+        loans: [{ ...underwater(), extraPaymentDefault: 600 }],
+        isLoading: false,
+        error: null,
+      });
+      render(
+        <MemoryRouter>
+          <DebtPayoffCard />
+        </MemoryRouter>,
+      );
+
+      const notice = screen.getByTestId('debt-never-payoff-notice');
+      expect(notice).toHaveTextContent(/without extra payments/i);
+      expect(notice).toHaveTextContent('Underwater');
+
+      // Savings is baseline-poisoned → suppressed; the other two tiles are
+      // real (the with-extra projection amortizes).
+      expect(screen.getByTestId('debt-savings')).toHaveTextContent('—');
+      expect(screen.getByTestId('debt-total-interest')).not.toHaveTextContent('—');
+      expect(screen.getByTestId('debt-aggregate-payoff')).toHaveTextContent(/[A-Z][a-z]{2} \d{4}/);
+      // Per-row payoff keeps a real date too.
+      expect(screen.getByTestId('debt-loan-payoff-9')).toHaveTextContent(/[A-Z][a-z]{2} \d{4}/);
     });
   });
 });

@@ -132,9 +132,9 @@ export function runMarketDataRefresh(db: Database): void {
       // Refeed mounted surfaces (Wave 2 §3): a fresh AUTO_DERIVED row is
       // invisible to stores hydrated before this IIFE landed — the dashboard
       // would show stale values under a fresh badge. Reload only when rows
-      // actually changed; the store's in-flight de-dupe (snapshotsInflight)
-      // makes an overlapping load a no-op, and load() swallows its own
-      // errors, so this cannot crash the launch path.
+      // actually changed; the store's in-flight de-dupe (createDedupedLoad,
+      // create-entity-store.ts) makes an overlapping load a no-op, and
+      // load() swallows its own errors, so this cannot crash the launch path.
       if (result.upserted.length > 0) {
         void useSnapshotsStore.getState().load();
       }

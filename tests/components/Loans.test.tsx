@@ -407,7 +407,7 @@ describe('Loans page', () => {
       renderLoans();
 
       expect(
-        await screen.findByText(/doesn't cover monthly interest/i),
+        await screen.findByText(/never pays off at the current payment/i),
       ).toBeInTheDocument();
       // Projected payoff + Remaining interest dd's are suppressed on the card…
       const card = screen.getByText('Underwater Mortgage').closest('[class*="rounded"]') as HTMLElement;
@@ -429,7 +429,7 @@ describe('Loans page', () => {
       });
       renderLoans();
       expect(await screen.findByText('Healthy')).toBeInTheDocument();
-      expect(screen.queryByText(/doesn't cover monthly interest/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/never pays off at the current payment/i)).not.toBeInTheDocument();
     });
   });
 });

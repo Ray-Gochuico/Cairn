@@ -133,9 +133,11 @@ export function nextPaymentDateFrom(firstPaymentDate: string, todayISO: string):
  *
  * Detection is by residual balance on the final row (> half a cent, the
  * loop's own `balance > 0.005` continue condition) rather than by row
- * count, so it works on any schedule the caller holds and never
- * false-positives on a loan that pays off exactly at the cap length.
- * An empty schedule (zero principal) is not capped.
+ * count, so it never false-positives on a loan that pays off exactly at
+ * the cap length. Callers must pass the COMPLETE schedule as returned by
+ * amortize() — a truncated prefix of a healthy loan still carries a
+ * residual balance and would return true. An empty schedule (zero
+ * principal) is not capped.
  */
 export function scheduleIsCapped(schedule: ReadonlyArray<ScheduleEntry>): boolean {
   if (schedule.length === 0) return false;

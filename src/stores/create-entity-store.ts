@@ -13,16 +13,20 @@
  * Known, accepted TOCTOU (do NOT "fix" without re-reading this — canonical
  * note, relocated from persons-store when the hand-rolled guards migrated
  * here in wave 6): a CRUD mutation's `await get().load()` that fires while
- * an *initial* load() is still in flight piggybacks the pre-mutation
- * in-flight promise and could briefly show stale data. This is
- * unreproducible on the synchronous better-sqlite3 test adapter (the
+ * ANY load() is still in flight — not just the initial-mount one — collapses
+ * into that pre-write in-flight promise and can briefly show stale data
+ * until the next load. The common window in practice is the sub-second,
+ * pre-interactive initial-mount race on the async Tauri adapter; another is
+ * PARALLEL mutations against one store, where the second write's trailing
+ * refresh piggybacks the first's — so don't batch parallel mutations
+ * against a single store and rely on each one's own load() for freshness
+ * (sequence them, or issue one load after the batch settles).
+ * Unreproducible on the synchronous better-sqlite3 test adapter (the
  * piggybacked SELECT runs after the write commits), so it has no honest
- * regression test; the only window is the sub-second, pre-interactive
- * initial-mount race on the async Tauri adapter. Accepted as negligible by
- * the Track-3 final review (2026-06-01). A bypass (clear the guard before
- * the post-write load, or add a private forceReload()) was scoped and
- * declined: many stores of churn in hot code for a defect with no testable
- * failure.
+ * regression test. Accepted as negligible by the Track-3 final review
+ * (2026-06-01). A bypass (clear the guard before the post-write load, or
+ * add a private forceReload()) was scoped and declined: many stores of
+ * churn in hot code for a defect with no testable failure.
  *
  * Deliberately NOT a whole-store factory: each store's data key (`accounts`,
  * `properties`, …) is public API with many component consumers, and CRUD
@@ -93,7 +97,9 @@ export function createDedupedLoad<TState extends EntityLoadState, K extends keyo
  */
 export function createDedupedLoadPartial<TState extends EntityLoadState>(
   set: (partial: Partial<TState>) => void,
-  fetchPartial: () => Promise<Partial<TState>>,
+  // Omit the factory-managed keys so a fetcher can't accidentally clobber
+  // the isLoading/error lifecycle it doesn't own (review minor).
+  fetchPartial: () => Promise<Omit<Partial<TState>, 'isLoading' | 'error'>>,
 ): () => Promise<void> {
   let inflight: Promise<void> | null = null;
   return () => {
