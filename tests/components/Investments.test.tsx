@@ -917,4 +917,44 @@ describe('Investments page — 529 section', () => {
     expect(within(growth).queryByText('$2,000')).not.toBeInTheDocument(); // old universe
     expect(within(growth).queryByText('$8,000')).not.toBeInTheDocument(); // excluded leaked
   });
+
+  it('class-targets renders as a wide card (own row), not a one-third orphan (round-2 D1)', async () => {
+    // Seed exactly as the asset-allocation donut test does: asset-class rows
+    // via the DB mock + one account with three classified holdings, so
+    // heldClasses is non-empty and the card is applicable.
+    dbSelectImpl.current = async () => [
+      { ticker: 'VTI', asset_class: 'US_TOTAL_MARKET' },
+      { ticker: 'BND', asset_class: 'US_BONDS' },
+      { ticker: 'BTC', asset_class: 'CRYPTO' },
+    ];
+    primeStores({
+      accounts: [
+        { id: 1, name: 'Brokerage', type: AccountType.ACCOUNT_BROKERAGE },
+      ],
+      holdings: [
+        { id: 1, accountId: 1, ticker: 'VTI', shareCount: 10 },
+        { id: 2, accountId: 1, ticker: 'BND', shareCount: 5 },
+        { id: 3, accountId: 1, ticker: 'BTC', shareCount: 1 },
+      ],
+      snapshotValues: [
+        { accountId: 1, snapshotDate: '2026-04-01', totalValue: 30_000 },
+      ],
+    });
+
+    render(
+      <MemoryRouter>
+        <Investments />
+      </MemoryRouter>,
+    );
+    const wrapper = await waitFor(() => {
+      const el = document.getElementById('class-targets');
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    // renderCardFlow puts compact cards inside a `lg:grid-cols-3` grid div;
+    // wide cards are direct children of the page's space-y flow.
+    expect(wrapper.parentElement!.className).not.toContain('lg:grid-cols-3');
+    // The form's field grid spreads at lg so the wide card isn't two skinny columns.
+    expect(wrapper.querySelector('.grid')!.className).toContain('lg:grid-cols-4');
+  });
 });

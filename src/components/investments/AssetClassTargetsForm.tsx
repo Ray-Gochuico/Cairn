@@ -75,7 +75,7 @@ export function AssetClassTargetsForm({ heldClasses, initial, onSave }: AssetCla
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {heldClasses.map((cls) => (
             <NumberField
               key={cls}

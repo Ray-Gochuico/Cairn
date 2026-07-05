@@ -885,7 +885,10 @@ export default function Investments() {
       {
         id: 'class-targets',
         label: 'Asset-class targets',
-        size: 'compact',
+        // Wide (round-2 D1): as the only compact card between two wide
+        // neighbors it rendered as a one-third-width orphan row. The id is
+        // UNCHANGED so saved investments_card_layout rows keep applying.
+        size: 'wide',
         applicable: heldClasses.length > 0,
         render: () => (
           <AssetClassTargetsForm
