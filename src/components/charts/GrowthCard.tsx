@@ -31,8 +31,10 @@ function formatPct(fraction: number): string {
 }
 
 // Short chip label per horizon key; the full label rides on aria-label.
+// '1q' renders as '3M' — range-grammar parity with the asset-value chart's
+// 3M/6M/YTD/1Y window tabs stacked directly above this card (round-2 A2).
 const CHIP_LABELS: Record<string, string> = {
-  '1d': '1D', '1w': '1W', '1m': '1M', '1q': '1Q', '1y': '1Y',
+  '1d': '1D', '1w': '1W', '1m': '1M', '1q': '3M', '1y': '1Y',
 };
 
 /**

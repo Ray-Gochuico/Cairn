@@ -2,7 +2,7 @@
  * Pure logic backing the portfolio "growth card" (see
  * src/components/charts/GrowthCard.tsx). The card shows how a single value
  * (investments value, or net worth) has changed versus a baseline measured
- * one of five horizons ago: yesterday, a week, a month, a quarter, a year.
+ * one of five horizons ago: yesterday, a week, a month, 3 months, a year.
  *
  * Everything here is deterministic and side-effect free so it can be unit
  * tested without a DB or React — the caller injects both the "now" instant
@@ -54,7 +54,7 @@ export const GROWTH_HORIZONS: HorizonDef[] = [
   { key: '1d', label: 'Since yesterday', baselineDate: (now) => minusDays(now, 1) },
   { key: '1w', label: 'Past week', baselineDate: (now) => minusDays(now, 7) },
   { key: '1m', label: 'Past month', baselineDate: (now) => minusMonths(now, 1) },
-  { key: '1q', label: 'Past quarter', baselineDate: (now) => minusMonths(now, 3) },
+  { key: '1q', label: 'Past 3 months', baselineDate: (now) => minusMonths(now, 3) },
   { key: '1y', label: 'Past year', baselineDate: (now) => minusMonths(now, 12) },
 ];
 

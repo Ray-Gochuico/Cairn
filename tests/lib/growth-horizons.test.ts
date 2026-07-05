@@ -57,6 +57,11 @@ describe('GROWTH_HORIZONS', () => {
     expect(b('1q', new Date('2026-05-28T00:00:00Z'))).toBe('2026-02-28');
     expect(b('1m', new Date('2026-01-31T00:00:00Z'))).toBe('2025-12-31'); // Dec has 31 days — no clamp
   });
+
+  it("the quarter horizon reads 'Past 3 months' (range-grammar parity with the chart's 3M tab)", () => {
+    const q = GROWTH_HORIZONS.find((h) => h.key === '1q')!;
+    expect(q.label).toBe('Past 3 months');
+  });
 });
 
 describe('sumLatestOnOrBefore', () => {

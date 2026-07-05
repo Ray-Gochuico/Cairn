@@ -80,25 +80,6 @@ function formatCurrency(value: number): string {
 }
 
 /**
- * Account types that count toward "investments value" on the growth card —
- * everything except plain cash/savings. This is DELIBERATELY not the shared
- * retirement-FI definition (src/lib/fi-portfolio.ts): this card measures
- * "how are my invested dollars doing", so 529s belong (they're invested)
- * and cash doesn't (it isn't). The FI/Coast/Compound defaults use the
- * shared selector instead.
- */
-const INVESTMENT_ACCOUNT_TYPES = new Set<AccountType>([
-  AccountType.ACCOUNT_401K,
-  AccountType.ACCOUNT_ROTH_401K,
-  AccountType.ACCOUNT_ROTH_IRA,
-  AccountType.ACCOUNT_TRAD_IRA,
-  AccountType.ACCOUNT_BROKERAGE,
-  AccountType.ACCOUNT_HSA,
-  AccountType.ACCOUNT_CRYPTO,
-  AccountType.ACCOUNT_529,
-]);
-
-/**
  * Educational copy for each warning type, surfaced as a tooltip on the
  * Concentration Health section. Phase 3 keeps tooltips simple — a `title`
  * attribute renders a native browser tooltip; no popover library required.
@@ -416,32 +397,32 @@ export default function Investments() {
     [contributions, filter, visibleAccountIds],
   );
 
-  // Investment-only account ids for the growth card — drop cash/savings so the
-  // card measures "investments value", not total liquid assets, and drop
-  // excluded-from-net-worth accounts (shared selector) so this card agrees
-  // with the Portfolio-by-account card, which already excludes them. Derived
-  // from visibleAccounts so the view filter flows through.
-  const investmentAccountIds = useMemo(() => {
-    const included = includedAccountIds(visibleAccounts);
-    return new Set(
-      visibleAccounts
-        .filter((a) => INVESTMENT_ACCOUNT_TYPES.has(a.type))
-        .map((a) => a.id)
-        .filter((id): id is number => id != null && included.has(id)),
-    );
-  }, [visibleAccounts]);
+  // Growth-card universe == the AssetValueChart 'investments' surface's
+  // universe (round-2 A2): every view-visible account that isn't excluded
+  // from net worth — deliberately NOT narrowed to investment account types
+  // (the chart's parity tests pin cash/savings inclusion), so the two
+  // stacked cards can never disagree. The chart's extra "has ≥1 snapshot"
+  // eligibility clause is a summing no-op here (sumLatestOnOrBefore yields
+  // nothing for snapshot-less accounts). The chart's transient "Included"
+  // picker deliberately does NOT drive this card: the picker is an
+  // exploratory focus tool; this card describes the surface's full eligible
+  // set, matching the chart's "Total investments" header.
+  const growthAccountIds = useMemo(
+    () => includedAccountIds(visibleAccounts),
+    [visibleAccounts],
+  );
 
   // Growth across the five horizons (1d…1y). sumLatestOnOrBefore reads the
-  // full snapshots array and scopes to investment accounts via the id set;
+  // full snapshots array and scopes to the chart universe via the id set;
   // forward-only history means most horizons resolve to null today and the
   // card shows "Not enough history yet" for them — that's expected.
   const investmentsGrowth = useMemo(
     () =>
       computeHorizonGrowth(
-        (iso) => sumLatestOnOrBefore(snapshots, iso, investmentAccountIds),
+        (iso) => sumLatestOnOrBefore(snapshots, iso, growthAccountIds),
         new Date(),
       ),
-    [snapshots, investmentAccountIds],
+    [snapshots, growthAccountIds],
   );
 
   // Concentration health is intentionally household-wide regardless of the
