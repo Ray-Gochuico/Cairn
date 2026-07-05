@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useLoansStore } from '@/stores/loans-store';
@@ -365,6 +365,64 @@ describe('DebtPayoffCard', () => {
     const parseDate = (s: string) => new Date(s).getTime();
     // Avalanche + $500 extra → high-rate (18%) loan pays off BEFORE the low-rate (5%) one.
     expect(parseDate(highRatePayoff)).toBeLessThan(parseDate(lowRatePayoff));
+  });
+
+  describe('never-pays-off guard (round-2 A1)', () => {
+    const underwater = () =>
+      makeLoan({
+        id: 9,
+        name: 'Underwater',
+        currentBalance: 300000,
+        interestRate: 0.06,
+        termMonths: 360,
+        monthlyPayment: 1000, // < $1,500/mo interest → never amortizes
+        firstPaymentDate: '2020-01-01',
+      });
+
+    it('shows the warning notice and suppresses aggregate + per-row figures', () => {
+      useLoansStore.setState({
+        loans: [underwater(), makeLoan({ id: 2, name: 'Healthy', currentBalance: 5000 })],
+        isLoading: false,
+        error: null,
+      });
+      render(
+        <MemoryRouter>
+          <DebtPayoffCard />
+        </MemoryRouter>,
+      );
+
+      const notice = screen.getByTestId('debt-never-payoff-notice');
+      expect(notice).toHaveTextContent(/doesn't cover monthly interest/i);
+      expect(notice).toHaveTextContent('Underwater');
+
+      // All three aggregate tiles are suppressed (any capped loan poisons the sums).
+      expect(screen.getByTestId('debt-total-interest')).toHaveTextContent('—');
+      expect(screen.getByTestId('debt-aggregate-payoff')).toHaveTextContent('—');
+      expect(screen.getByTestId('debt-savings')).toHaveTextContent('—');
+
+      // Capped row: payoff cell carries the inline warning, interest cell is '—'.
+      expect(screen.getByTestId('debt-loan-payoff-9')).toHaveTextContent(/never at this payment/i);
+      const cappedRow = screen.getByTestId('debt-loan-row-9');
+      expect(within(cappedRow).getByText('—')).toBeInTheDocument();
+
+      // The healthy loan's row keeps a real payoff date (a "Mon YYYY" string).
+      expect(screen.getByTestId('debt-loan-payoff-2')).toHaveTextContent(/[A-Z][a-z]{2} \d{4}/);
+    });
+
+    it('renders no notice and real figures when every loan amortizes', () => {
+      useLoansStore.setState({
+        loans: [makeLoan({ id: 1 })],
+        isLoading: false,
+        error: null,
+      });
+      render(
+        <MemoryRouter>
+          <DebtPayoffCard />
+        </MemoryRouter>,
+      );
+      expect(screen.queryByTestId('debt-never-payoff-notice')).not.toBeInTheDocument();
+      expect(screen.getByTestId('debt-aggregate-payoff')).not.toHaveTextContent('—');
+    });
   });
 });
 

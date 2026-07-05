@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useLoansStore } from '@/stores/loans-store';
-import { amortize, nextPaymentDateFrom } from '@/lib/amortization';
+import { amortize, nextPaymentDateFrom, scheduleIsCapped } from '@/lib/amortization';
 import { CalculatorCard } from './CalculatorCard';
 import { formatCurrency } from '@/lib/format';
 import { Input } from '@/components/ui/input';
@@ -101,6 +101,14 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
   );
   const interestSavings = Math.max(0, baselineInterest - totalInterest);
 
+  // Round-2 A1: a contract payment ≤ monthly interest runs amortize() to its
+  // safety cap — the "payoff date" is the cap month and "total interest" is
+  // the cap's accumulation (~$9.2M on the probe), both lies. Any capped loan
+  // poisons every aggregate (payoff = max over schedules; interest + savings
+  // are sums over them), so the whole strip suppresses, not just one tile.
+  const cappedProjections = projections.filter((p) => scheduleIsCapped(p.amortization.schedule));
+  const anyCapped = cappedProjections.length > 0;
+
   // Estimated full-debt payoff: latest payment date across all schedules.
   // ISO YYYY-MM-DD strings sort lexicographically as dates do.
   const lastPaymentDates = projections
@@ -122,21 +130,35 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
         </span>
       }
     >
+      {anyCapped && (
+        <div
+          role="note"
+          data-testid="debt-never-payoff-notice"
+          className="rounded-md border border-warning/40 bg-warning-soft px-3 py-2 text-sm text-warning-foreground"
+        >
+          Payment doesn't cover monthly interest —{' '}
+          <span className="font-medium">
+            {cappedProjections.map((p) => p.loan.name).join(', ')}
+          </span>{' '}
+          never {cappedProjections.length === 1 ? 'pays' : 'pay'} off at this payment. Payoff and
+          interest figures are hidden; fix the payment or rate in Inputs.
+        </div>
+      )}
       {/* Aggregate metric strip */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
         <StatTile
           label="Total interest"
-          value={formatCurrency(totalInterest)}
+          value={anyCapped ? '—' : formatCurrency(totalInterest)}
           testId="debt-total-interest"
         />
         <StatTile
           label="Estimated payoff"
-          value={formatPayoffDate(aggregatePayoffDate)}
+          value={anyCapped ? '—' : formatPayoffDate(aggregatePayoffDate)}
           testId="debt-aggregate-payoff"
         />
         <StatTile
           label="Savings vs no-extra"
-          value={formatCurrency(interestSavings)}
+          value={anyCapped ? '—' : formatCurrency(interestSavings)}
           testId="debt-savings"
         />
       </div>
@@ -208,6 +230,7 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
         <tbody>
           {projections.map((p) => {
             const last = p.amortization.schedule[p.amortization.schedule.length - 1];
+            const capped = scheduleIsCapped(p.amortization.schedule);
             return (
               <tr
                 key={p.loan.id ?? p.loan.name}
@@ -226,10 +249,14 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
                   className="py-2 tabular-nums"
                   data-testid={`debt-loan-payoff-${p.loan.id ?? p.loan.name}`}
                 >
-                  {formatPayoffDate(last?.paymentDate)}
+                  {capped ? (
+                    <span className="text-warning-foreground">Never at this payment</span>
+                  ) : (
+                    formatPayoffDate(last?.paymentDate)
+                  )}
                 </td>
                 <td className="py-2 tabular-nums">
-                  {formatCurrency(p.amortization.totalInterest)}
+                  {capped ? '—' : formatCurrency(p.amortization.totalInterest)}
                 </td>
               </tr>
             );
