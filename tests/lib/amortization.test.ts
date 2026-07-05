@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { amortize, nextPaymentDateFrom } from '@/lib/amortization';
+import { amortize, nextPaymentDateFrom, scheduleIsCapped } from '@/lib/amortization';
 import { loanBalanceHistory } from '@/lib/loan-history';
 import type { Loan } from '@/types/schema';
 import { LoanType } from '@/types/enums';
@@ -196,5 +196,74 @@ describe('nextPaymentDateFrom', () => {
 
   it('a future firstPaymentDate returns itself', () => {
     expect(nextPaymentDateFrom('2027-01-01', '2026-07-03')).toBe('2027-01-01');
+  });
+});
+
+describe('scheduleIsCapped', () => {
+  it('flags a contract payment below monthly interest (negative amortization, never pays off)', () => {
+    // $300k @ 6% → $1,500/mo interest; a $1,000 contract payment loses ground
+    // every month, so the loop runs to the termMonths+360 cap with a GROWING balance.
+    const a = amortize({
+      principal: 300_000,
+      annualRatePct: 0.06,
+      termMonths: 360,
+      firstPaymentDate: '2026-08-01',
+      extraPayment: 0,
+      monthlyPayment: 1_000,
+    });
+    expect(a.schedule).toHaveLength(360 + 360); // exactly the safety cap
+    expect(scheduleIsCapped(a.schedule)).toBe(true);
+    // The residual is the tell: the balance GREW past the principal.
+    expect(a.schedule[a.schedule.length - 1].balance).toBeGreaterThan(300_000);
+  });
+
+  it('flags an exactly-interest-only payment (balance never moves)', () => {
+    // 100k * (0.06/12) = $500/mo interest, payment $500 → principal 0 forever.
+    const a = amortize({
+      principal: 100_000,
+      annualRatePct: 0.06,
+      termMonths: 120,
+      firstPaymentDate: '2026-08-01',
+      extraPayment: 0,
+      monthlyPayment: 500,
+    });
+    expect(scheduleIsCapped(a.schedule)).toBe(true);
+  });
+
+  it('a normal amortizing loan is not capped', () => {
+    const a = amortize({
+      principal: 10_000,
+      annualRatePct: 0.05,
+      termMonths: 60,
+      firstPaymentDate: '2026-08-01',
+      extraPayment: 0,
+    });
+    expect(scheduleIsCapped(a.schedule)).toBe(false);
+    expect(a.schedule[a.schedule.length - 1].balance).toBe(0);
+  });
+
+  it('an extra payment can rescue a below-interest contract payment', () => {
+    // Payment $400 < $500 interest, but extra $600 nets $500/mo of paydown.
+    const a = amortize({
+      principal: 100_000,
+      annualRatePct: 0.06,
+      termMonths: 120,
+      firstPaymentDate: '2026-08-01',
+      extraPayment: 600,
+      monthlyPayment: 400,
+    });
+    expect(scheduleIsCapped(a.schedule)).toBe(false);
+  });
+
+  it('a zero-principal loan produces an empty schedule and is not capped', () => {
+    const a = amortize({
+      principal: 0,
+      annualRatePct: 0.05,
+      termMonths: 12,
+      firstPaymentDate: '2026-08-01',
+      extraPayment: 0,
+    });
+    expect(a.schedule).toHaveLength(0);
+    expect(scheduleIsCapped(a.schedule)).toBe(false);
   });
 });
