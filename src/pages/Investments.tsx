@@ -119,6 +119,11 @@ const ASSET_CLASS_LABEL: Record<AssetClass, string> = {
   OTHER: 'Other',
 };
 
+// localStorage key for the Portfolio-by-account "Investable only" toggle.
+// Module scope so the useCallback below can close over it with an empty
+// dep array (round-2 C1).
+const INVESTABLE_ONLY_KEY = 'investments.byAccount.investableOnly';
+
 /**
  * Load asset_class for each ticker from the `tickers` table. Missing rows
  * fall back to AssetClass.OTHER. We use IN (?,?,...) rather than a
@@ -441,7 +446,6 @@ export default function Investments() {
   // everything held. Persisted in localStorage (a single boolean — simpler
   // than the donut pickers' hidden-set shape) so the choice survives reloads;
   // the lazy initializer reads it once and guards against unavailable storage.
-  const INVESTABLE_ONLY_KEY = 'investments.byAccount.investableOnly';
   const [investableOnly, setInvestableOnly] = useState<boolean>(() => {
     try {
       return localStorage.getItem(INVESTABLE_ONLY_KEY) === '1';
@@ -449,7 +453,12 @@ export default function Investments() {
       return false;
     }
   });
-  const handleToggleInvestableOnly = (next: boolean) => {
+  // useCallback with [] — setInvestableOnly is a stable setState and
+  // INVESTABLE_ONLY_KEY is module-scope. Without this, the fresh function
+  // identity sat in the cardRegistry memo's dep array and recomputed the
+  // entire 480-line registry on every render (round-2 C1). The other 24
+  // registry deps were audited stable — see the wave-6 plan, Task 11.
+  const handleToggleInvestableOnly = useCallback((next: boolean) => {
     setInvestableOnly(next);
     try {
       if (next) localStorage.setItem(INVESTABLE_ONLY_KEY, '1');
@@ -457,7 +466,7 @@ export default function Investments() {
     } catch {
       // Private-mode / disabled storage: keep the in-memory toggle working.
     }
-  };
+  }, []);
 
   // One-shot sector backfill on first mount when the user holds funds but
   // the fund_sectors table is empty. Covers existing users whose
