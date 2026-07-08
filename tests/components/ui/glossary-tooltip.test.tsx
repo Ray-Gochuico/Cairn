@@ -67,4 +67,43 @@ describe('TermTooltip', () => {
       expect(warn).toHaveBeenCalled();
     }
   });
+
+  it('keyboard (Enter) open moves focus INTO the popover content', async () => {
+    const user = userEvent.setup();
+    render(<TermTooltip term="DCFSA" />);
+    await user.tab(); // focus the trigger button
+    await user.keyboard('{Enter}');
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.contains(document.activeElement)).toBe(true);
+  });
+
+  it('hover open keeps focus where it was (no focus steal for pointer users)', async () => {
+    const user = userEvent.setup();
+    render(<TermTooltip term="DCFSA" />);
+    await user.hover(screen.getByRole('button'));
+    await screen.findByRole('dialog');
+    expect(screen.getByRole('dialog').contains(document.activeElement)).toBe(false);
+  });
+
+  it('keyboard open still moves focus into the content AFTER a prior hover open/close (stale pointer flag)', async () => {
+    // Regression (Wave-8 review): the hover-away close goes through the
+    // component's own scheduleClose timer -> direct setOpen(false), which
+    // never fires Radix's onOpenChange -- so a pointerOpenRef reset wired
+    // only there stays stale and mislabels the NEXT keyboard open as
+    // pointer-initiated, stranding focus on the trigger (MUST-3b, back).
+    const user = userEvent.setup();
+    render(<TermTooltip term="DCFSA" />);
+    const trigger = screen.getByRole('button');
+    await user.hover(trigger);
+    await screen.findByRole('dialog');
+    await user.unhover(trigger);
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    // Ensure the trigger holds keyboard focus (Radix's close may have already
+    // restored focus to it; otherwise Tab reaches it as the first tabbable).
+    if (document.activeElement !== trigger) await user.tab();
+    expect(document.activeElement).toBe(trigger);
+    await user.keyboard('{Enter}');
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.contains(document.activeElement)).toBe(true);
+  });
 });

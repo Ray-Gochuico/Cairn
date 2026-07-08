@@ -1,43 +1,54 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { runMigrations } from '@/db/migrations';
 import { setDatabase } from '@/db/db';
 import { useLearningStore } from '@/stores/learning-state-store';
-import { localTodayISO } from '@/lib/trivia/daily';
 
 const loadInitial = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
 const loadLearning = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0037_learning_state.sql'), 'utf-8');
+const loadPreferenceDefault = () =>
+  readFileSync(
+    resolve(__dirname, '../../src/db/migrations/0048_learning_preference_default.sql'),
+    'utf-8',
+  );
 
 describe('useLearningStore', () => {
   let db: SqliteAdapter;
 
   beforeEach(async () => {
+    // Clock-free (Wave 8 policy ratchet): pin 'today' so the partition test
+    // can use a literal ISO date instead of reading the real clock.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 6, 7, 12, 0, 0));
     db = new SqliteAdapter(':memory:');
     await runMigrations(db, [
       { version: '0001_initial', sql: loadInitial() },
       { version: '0037_learning_state', sql: loadLearning() },
+      { version: '0048_learning_preference_default', sql: loadPreferenceDefault() },
     ]);
     setDatabase(db);
     useLearningStore.setState({
       learningState: null,
       answeredQuestionIds: [],
-      answeredKeysByDay: { priorDays: [], today: [] },
+      answeredKeysByDay: { priorDays: [], today: [], todayDetails: [] },
+      answeredStats: null,
       isLoading: false,
       error: null,
     });
   });
 
   afterEach(async () => {
+    vi.useRealTimers();
     await db.close();
   });
 
   it('loads the seeded state + empty answer list', async () => {
     await useLearningStore.getState().load();
-    expect(useLearningStore.getState().learningState?.difficultyPreference).toBe('Beginner');
+    expect(useLearningStore.getState().learningState?.difficultyPreference).toBe('Mixed');
     expect(useLearningStore.getState().answeredQuestionIds).toEqual([]);
   });
 
@@ -62,7 +73,7 @@ describe('useLearningStore', () => {
   });
 
   it('exposes date-partitioned answeredKeysByDay (prior-day vs today)', async () => {
-    const today = localTodayISO(new Date());
+    const today = '2026-07-07';
     await useLearningStore.getState().load();
     // A prior-day answer and a today answer.
     await useLearningStore.getState().recordAnswer({
@@ -82,5 +93,31 @@ describe('useLearningStore', () => {
     const { answeredKeysByDay } = useLearningStore.getState();
     expect(answeredKeysByDay.priorDays).toEqual(['beg-apr@v1']);
     expect(answeredKeysByDay.today).toEqual(['beg-apy@v1']);
+  });
+
+  it('recordAnswer with a statePatch folds the streak write into ONE store refresh', async () => {
+    await useLearningStore.getState().load();
+    await useLearningStore.getState().recordAnswer(
+      { questionId: 'beg-apr', answeredIsoDate: '2026-07-07', chosenIndex: 1, wasCorrect: false, questionVersion: 1 },
+      { streakCount: 1, lastAnsweredIsoDate: '2026-07-07' },
+    );
+    const s = useLearningStore.getState();
+    expect(s.learningState?.streakCount).toBe(1);
+    expect(s.learningState?.lastAnsweredIsoDate).toBe('2026-07-07');
+    expect(s.answeredKeysByDay.today).toEqual(['beg-apr@v1']);
+    expect(s.answeredKeysByDay.todayDetails).toEqual([{ key: 'beg-apr@v1', chosenIndex: 1 }]);
+    expect(s.answeredStats).toEqual({ answered: 1, correct: 0 });
+  });
+
+  it('recordAnswer without a patch still refreshes (back-compat single-arg call)', async () => {
+    await useLearningStore.getState().load();
+    await useLearningStore.getState().recordAnswer({
+      questionId: 'beg-apy',
+      answeredIsoDate: '2026-07-07',
+      chosenIndex: 0,
+      wasCorrect: true,
+      questionVersion: 1,
+    });
+    expect(useLearningStore.getState().answeredStats).toEqual({ answered: 1, correct: 1 });
   });
 });

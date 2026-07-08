@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   localTodayISO,
   yesterday,
-  selectDailyQuestion,
   selectDailySet,
   nextStreak,
 } from '@/lib/trivia/daily';
@@ -54,109 +53,6 @@ describe('yesterday', () => {
   });
   it('crosses a year boundary', () => {
     expect(yesterday('2026-01-01')).toBe('2025-12-31');
-  });
-});
-
-describe('selectDailyQuestion', () => {
-  it('pins to lastShownQuestionId when lastShownIsoDate is today', () => {
-    const out = selectDailyQuestion({
-      bank,
-      answeredIds: [],
-      difficulty: 'Beginner',
-      todayISO: '2026-05-28',
-      state: { lastShownIsoDate: '2026-05-28', lastShownQuestionId: 'beg-2' },
-    });
-    expect(out?.id).toBe('beg-2');
-  });
-
-  it('filters by Beginner difficulty', () => {
-    const out = selectDailyQuestion({
-      bank,
-      answeredIds: [],
-      difficulty: 'Beginner',
-      todayISO: '2026-05-28',
-      state: { lastShownIsoDate: null, lastShownQuestionId: null },
-    });
-    expect(out?.difficulty).toBe('Beginner');
-  });
-
-  it('filters by Advanced difficulty', () => {
-    const out = selectDailyQuestion({
-      bank,
-      answeredIds: [],
-      difficulty: 'Advanced',
-      todayISO: '2026-05-28',
-      state: { lastShownIsoDate: null, lastShownQuestionId: null },
-    });
-    expect(out?.difficulty).toBe('Advanced');
-  });
-
-  it('excludes already-answered questions (version-aware keys)', () => {
-    const out = selectDailyQuestion({
-      bank,
-      // Keyed (id, version) — the bank's questions are all v1.
-      answeredIds: [answeredKey('beg-1', 1), answeredKey('beg-2', 1)],
-      difficulty: 'Beginner',
-      todayISO: '2026-05-28',
-      state: { lastShownIsoDate: null, lastShownQuestionId: null },
-    });
-    expect(out?.id).toBe('beg-3');
-  });
-
-  it('re-prompts a question whose version was bumped after it was answered (v1.2 correction)', () => {
-    // The user answered beg-1 at v1; a content correction ships beg-1 at v2.
-    // The old v1 key no longer matches the current v2 question → it is eligible
-    // again. (Restrict the pool to beg-1 so the assertion is unambiguous.)
-    const correctedBank = [q('beg-1', 'Beginner')].map((b) => ({ ...b, version: 2 }));
-    const out = selectDailyQuestion({
-      bank: correctedBank,
-      answeredIds: [answeredKey('beg-1', 1)], // only the OLD version was answered
-      difficulty: 'Beginner',
-      todayISO: '2026-05-28',
-      state: { lastShownIsoDate: null, lastShownQuestionId: null },
-    });
-    expect(out?.id).toBe('beg-1');
-    expect(out?.version).toBe(2);
-  });
-
-  it('is stable within a day for the same inputs', () => {
-    const args = {
-      bank,
-      answeredIds: [] as string[],
-      difficulty: 'Beginner' as const,
-      todayISO: '2026-05-28',
-      state: { lastShownIsoDate: null, lastShownQuestionId: null },
-    };
-    expect(selectDailyQuestion(args)?.id).toBe(selectDailyQuestion(args)?.id);
-  });
-
-  it('returns null when the eligible pool is exhausted', () => {
-    const out = selectDailyQuestion({
-      bank,
-      answeredIds: [answeredKey('beg-1', 1), answeredKey('beg-2', 1), answeredKey('beg-3', 1)],
-      difficulty: 'Beginner',
-      todayISO: '2026-05-28',
-      state: { lastShownIsoDate: null, lastShownQuestionId: null },
-    });
-    expect(out).toBeNull();
-  });
-
-  it('Mixed mode can draw from both pools', () => {
-    // Across many days, Mixed should yield at least one of each tier.
-    const seen = new Set<string>();
-    for (let day = 1; day <= 60; day++) {
-      const iso = `2026-07-${String(day).padStart(2, '0')}`;
-      const out = selectDailyQuestion({
-        bank,
-        answeredIds: [],
-        difficulty: 'Mixed',
-        todayISO: iso,
-        state: { lastShownIsoDate: null, lastShownQuestionId: null },
-      });
-      if (out) seen.add(out.difficulty);
-    }
-    expect(seen.has('Beginner')).toBe(true);
-    expect(seen.has('Advanced')).toBe(true);
   });
 });
 
@@ -276,6 +172,120 @@ describe('selectDailySet', () => {
     const set = selectDailySet({ bank: richBank, answeredIds: [], todayISO: '2026-06-01' });
     const ids = new Set(richBank.map((x) => x.id));
     expect(set.every((x) => ids.has(x.id))).toBe(true);
+  });
+
+  describe('difficulty preference (Wave 8, D1)', () => {
+    it("preference 'Beginner' serves 4 Beginner questions", () => {
+      const set = selectDailySet({
+        bank: richBank, answeredIds: [], todayISO: '2026-06-01', preference: 'Beginner',
+      });
+      expect(set).toHaveLength(4);
+      expect(set.every((x) => x.difficulty === 'Beginner')).toBe(true);
+    });
+
+    it("preference 'Advanced' serves 4 Advanced questions", () => {
+      const set = selectDailySet({
+        bank: richBank, answeredIds: [], todayISO: '2026-06-01', preference: 'Advanced',
+      });
+      expect(set).toHaveLength(4);
+      expect(set.every((x) => x.difficulty === 'Advanced')).toBe(true);
+    });
+
+    it("preference omitted or 'Mixed' is byte-identical to today's 2+2 walk", () => {
+      const legacy = selectDailySet({ bank: richBank, answeredIds: [], todayISO: '2026-06-01' });
+      const mixed = selectDailySet({
+        bank: richBank, answeredIds: [], todayISO: '2026-06-01', preference: 'Mixed',
+      });
+      expect(mixed.map((x) => x.id)).toEqual(legacy.map((x) => x.id));
+      expect(legacy.filter((x) => x.difficulty === 'Beginner')).toHaveLength(2);
+    });
+
+    it('is deterministic per day under every preference', () => {
+      for (const preference of ['Beginner', 'Advanced', 'Mixed'] as const) {
+        const a = selectDailySet({ bank: richBank, answeredIds: [], todayISO: '2026-06-02', preference });
+        const b = selectDailySet({ bank: richBank, answeredIds: [], todayISO: '2026-06-02', preference });
+        expect(a.map((x) => x.id)).toEqual(b.map((x) => x.id));
+      }
+    });
+
+    it('answering one question never re-rolls the others, under every preference', () => {
+      for (const preference of ['Beginner', 'Advanced', 'Mixed'] as const) {
+        const base = selectDailySet({ bank: richBank, answeredIds: [], todayISO: '2026-06-03', preference });
+        for (const answered of base) {
+          const after = selectDailySet({
+            bank: richBank,
+            answeredIds: [],
+            answeredTodayIds: [answeredKey(answered.id, answered.version)],
+            todayISO: '2026-06-03',
+            preference,
+          });
+          expect(after.map((x) => x.id)).toEqual(base.map((x) => x.id));
+        }
+      }
+    });
+
+    it('MID-DAY TOGGLE: a today-answered question stays in the set under the new preference', () => {
+      // Answer one Advanced under Mix, then flip to Basics: the answered
+      // Advanced is anchored in; unanswered slots re-fill with Beginners;
+      // the set stays at 4 (one unanswered old pick evicted).
+      const mixed = selectDailySet({ bank: richBank, answeredIds: [], todayISO: '2026-06-01', preference: 'Mixed' });
+      const answeredAdv = mixed.find((x) => x.difficulty === 'Advanced')!;
+      const after = selectDailySet({
+        bank: richBank,
+        answeredIds: [],
+        answeredTodayIds: [answeredKey(answeredAdv.id, answeredAdv.version)],
+        todayISO: '2026-06-01',
+        preference: 'Beginner',
+      });
+      expect(after).toHaveLength(4);
+      expect(after.map((x) => x.id)).toContain(answeredAdv.id);
+      expect(after.filter((x) => x.difficulty === 'Beginner')).toHaveLength(3);
+    });
+
+    it('MID-DAY TOGGLE before answering anything re-rolls the whole set', () => {
+      const after = selectDailySet({
+        bank: richBank, answeredIds: [], answeredTodayIds: [], todayISO: '2026-06-01', preference: 'Advanced',
+      });
+      expect(after.every((x) => x.difficulty === 'Advanced')).toBe(true);
+    });
+
+    it('a fully-answered day survives any toggle: all answered stay, set does not grow with unanswered', () => {
+      const mixed = selectDailySet({ bank: richBank, answeredIds: [], todayISO: '2026-06-01', preference: 'Mixed' });
+      const keys = mixed.map((x) => answeredKey(x.id, x.version));
+      const after = selectDailySet({
+        bank: richBank, answeredIds: [], answeredTodayIds: keys, todayISO: '2026-06-01', preference: 'Beginner',
+      });
+      // The 4 answered are all present and nothing unanswered was padded in.
+      expect(after.map((x) => answeredKey(x.id, x.version)).sort()).toEqual([...keys].sort());
+    });
+
+    it('marathon day (>4 answered via toggles): the set is exactly the answered questions', () => {
+      // 2B+2A answered under Mixed, then 2 more Beginners answered under
+      // Basics ⇒ 6 answered today. The set shows all 6 ("6 of 6"), honest.
+      const sixKeys = [
+        'beg-found', 'beg-budget', 'beg-savings', 'beg-spend', 'adv-invest', 'adv-tax',
+      ].map((id) => answeredKey(id, 1));
+      const after = selectDailySet({
+        bank: richBank, answeredIds: [], answeredTodayIds: sixKeys, todayISO: '2026-06-01', preference: 'Mixed',
+      });
+      expect(after.map((x) => answeredKey(x.id, x.version)).sort()).toEqual([...sixKeys].sort());
+    });
+
+    it("a strict preference does NOT borrow from the other tier (exhausted Basics ⇒ [])", () => {
+      const onlyAdvLeft = richBank.filter((x) => x.difficulty === 'Beginner')
+        .map((x) => answeredKey(x.id, x.version));
+      const set = selectDailySet({
+        bank: richBank, answeredIds: onlyAdvLeft, todayISO: '2026-06-01', preference: 'Beginner',
+      });
+      expect(set).toEqual([]); // the PAGE handles this honestly (T6 exhausted copy)
+    });
+
+    it('canonical order: Beginner picks precede Advanced picks', () => {
+      const set = selectDailySet({ bank: richBank, answeredIds: [], todayISO: '2026-06-04', preference: 'Mixed' });
+      const diffs = set.map((x) => x.difficulty);
+      expect(diffs.slice(0, 2)).toEqual(['Beginner', 'Beginner']);
+      expect(diffs.slice(2)).toEqual(['Advanced', 'Advanced']);
+    });
   });
 });
 

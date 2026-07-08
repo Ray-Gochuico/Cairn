@@ -569,7 +569,7 @@ export type VehicleLease = z.infer<typeof VehicleLeaseSchema>;
 
 export const LearningStateSchema = z.object({
   id: z.literal(1).default(1),
-  difficultyPreference: z.nativeEnum(LearningDifficulty).default(LearningDifficulty.BEGINNER),
+  difficultyPreference: z.nativeEnum(LearningDifficulty).default(LearningDifficulty.MIXED),
   lastShownQuestionId: z.string().nullable().default(null),
   lastShownIsoDate: z.string().nullable().default(null),
   streakCount: z.number().int().nonnegative().default(0),

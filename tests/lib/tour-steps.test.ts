@@ -72,4 +72,10 @@ describe('deriveTourSteps', () => {
     const dup = deriveTourSteps(['/', '/', '/net-worth'], 'core');
     expect(dup.map((s) => s.to)).toEqual(['/', '/net-worth']); // no duplicate steps
   });
+
+  it('the Learn step describes what Learn actually is (no phantom "lessons")', () => {
+    const learn = TOUR_STEPS.find((s) => s.to === '/learn')!;
+    expect(learn.body).toBe('A few quick questions each day to sharpen your financial know-how.');
+    expect(learn.body).not.toMatch(/lesson/i);
+  });
 });

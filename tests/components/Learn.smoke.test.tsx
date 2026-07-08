@@ -31,6 +31,7 @@ describe('Learn page — live bank smoke', () => {
       { version: '0001_initial', sql: sql('0001_initial') },
       { version: '0017_disclosure_foundations', sql: sql('0017_disclosure_foundations') },
       { version: '0037_learning_state', sql: sql('0037_learning_state') },
+    { version: '0048_learning_preference_default', sql: sql('0048_learning_preference_default') },
     ]);
     setDatabase(db);
     useHouseholdStore.setState({ household: null, isLoading: false, error: null });
@@ -72,7 +73,7 @@ describe('Learn page — live bank smoke', () => {
         </MemoryRouter>,
       ),
     ).not.toThrow();
-    // Reaches a stable rendered state (the Basics group from the real bank).
-    expect(await screen.findByText(/^Basics$/)).toBeInTheDocument();
+    // Reaches a stable rendered state (the stepper over the real 600-row bank).
+    expect(await screen.findByText(/Question 1 of \d+/)).toBeInTheDocument();
   });
 });

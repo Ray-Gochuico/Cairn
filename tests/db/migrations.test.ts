@@ -432,6 +432,22 @@ it('0047 adds calculator_card_layout to app_settings (nullable, seeded null)', a
   await db.close();
 });
 
+it('0048 flips the learning difficulty preference default to Mixed', async () => {
+  // 0037 seeded the singleton 'Beginner' (v1 default, never user-visible after
+  // v2 removed the toggle). Wave 8 revives the preference with Mix as the
+  // product default; 0048 aligns the stored row. Fresh installs run
+  // 0037 (seed 'Beginner') → 0048 (flip) in one chain, so both upgrade and
+  // fresh paths land on 'Mixed'.
+  const db = new SqliteAdapter(':memory:');
+  await runMigrations(db, await loadAllMigrations());
+  const rows = await db.select<{ difficulty_preference: string }>(
+    'SELECT difficulty_preference FROM learning_state WHERE id = 1',
+  );
+  expect(rows).toHaveLength(1);
+  expect(rows[0].difficulty_preference).toBe('Mixed');
+  await db.close();
+});
+
 it('0042 adds investments_card_layout to app_settings (nullable, seeded null)', async () => {
   const db = new SqliteAdapter(':memory:');
   await runMigrations(db, await loadAllMigrations());
@@ -462,7 +478,9 @@ describe('0037_learning_state migration', () => {
     );
     expect(rows).toHaveLength(1);
     expect(rows[0].id).toBe(1);
-    expect(rows[0].difficulty_preference).toBe('Beginner');
+    // 0037 seeds 'Beginner' (the v1 default); 0048 — always later in the full
+    // chain this test runs — flips the singleton to 'Mixed' (Wave 8).
+    expect(rows[0].difficulty_preference).toBe('Mixed');
     expect(rows[0].streak_count).toBe(0);
     await db.close();
   });
@@ -554,7 +572,12 @@ describe('0043 retires the legacy household disclosure columns', () => {
     // The historical chain as an existing v1.0-era install would have it:
     // every migration EXCEPT the two this feature adds.
     const historical = all.filter(
-      (m) => m.version !== '0037_learning_state' && m.version !== '0043_drop_household_disclosure_columns',
+      (m) =>
+        m.version !== '0037_learning_state' &&
+        m.version !== '0043_drop_household_disclosure_columns' &&
+        // 0048 UPDATEs learning_state, which 0037 creates — it is part of the
+        // learning feature and cannot precede it in the simulated upgrade.
+        m.version !== '0048_learning_preference_default',
     );
     await runMigrations(db, historical);
     // Columns exist on the upgraded-from schema (added in 0017).
@@ -564,6 +587,7 @@ describe('0043 retires the legacy household disclosure columns', () => {
     await runMigrations(db, [
       all.find((m) => m.version === '0037_learning_state')!,
       all.find((m) => m.version === '0043_drop_household_disclosure_columns')!,
+      all.find((m) => m.version === '0048_learning_preference_default')!,
     ]);
     cols = await db.select<{ name: string }>('PRAGMA table_info(household)');
     const names = cols.map((c) => c.name);

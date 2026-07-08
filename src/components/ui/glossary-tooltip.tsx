@@ -47,6 +47,12 @@ export function TermTooltip({ term, children, className }: TermTooltipProps) {
   // popover disappearing. 120 ms is the same delay the Radix HoverCard
   // primitive uses by default.
   const closeTimer = useRef<number | null>(null);
+  // Wave-8 a11y: whether the CURRENT open was pointer-initiated. Pointer
+  // flows fire pointerenter before click, so the ref is true for hover and
+  // mouse-click opens; a keyboard Enter "click" never sees pointerenter and
+  // leaves it false. Reset on EVERY close (the effect below) so a stale
+  // hover can't mislabel a later keyboard open.
+  const pointerOpenRef = useRef(false);
 
   const cancelClose = () => {
     if (closeTimer.current !== null) {
@@ -60,6 +66,16 @@ export function TermTooltip({ term, children, className }: TermTooltipProps) {
   };
 
   useEffect(() => () => cancelClose(), []);
+
+  // Reset the pointer-open flag on EVERY close, whatever the close path.
+  // Radix's onOpenChange(false) only fires for closes Radix initiates
+  // (Escape, click-outside); the component's own hover-away close goes
+  // through scheduleClose → setOpen(false) directly and would leave a stale
+  // `true` behind — mislabeling the NEXT keyboard open as pointer-initiated
+  // and stranding focus on the trigger (the review's MUST-3b regression).
+  useEffect(() => {
+    if (!open) pointerOpenRef.current = false;
+  }, [open]);
 
   useEffect(() => {
     if (entry) return;
@@ -75,7 +91,13 @@ export function TermTooltip({ term, children, className }: TermTooltipProps) {
   }
 
   return (
-    <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
+    <PopoverPrimitive.Root
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) pointerOpenRef.current = false;
+      }}
+    >
       <PopoverPrimitive.Trigger asChild>
         <button
           type="button"
@@ -91,6 +113,7 @@ export function TermTooltip({ term, children, className }: TermTooltipProps) {
           // from running afterward (composeEventHandlers skips when
           // defaultPrevented).
           onPointerEnter={() => {
+            pointerOpenRef.current = true;
             cancelClose();
             setOpen(true);
           }}
@@ -126,14 +149,15 @@ export function TermTooltip({ term, children, className }: TermTooltipProps) {
           collisionPadding={8}
           onPointerEnter={cancelClose}
           onPointerLeave={scheduleClose}
-          // Radix tries to focus the content on open via keyboard. The
-          // tooltip is informational — keep focus on the trigger so
-          // sighted-keyboard users see the dotted underline indicator,
-          // but still allow Tab to move into the popover (Learn more
-          // link). `event.preventDefault()` in onOpenAutoFocus keeps
-          // focus on the trigger; Tab still works since Radix wires up
-          // its own focus-trap-on-content.
-          onOpenAutoFocus={(e) => e.preventDefault()}
+          // Wave-8 a11y (review MUST-3): this popover is NON-modal — Radix
+          // does NOT trap focus here (the previous comment claimed it did).
+          // For POINTER opens we keep focus where it is (hover must never
+          // steal focus); for KEYBOARD opens we let Radix move focus into
+          // the content so Tab reaches the "Learn more" link and Escape/
+          // close returns focus to the trigger.
+          onOpenAutoFocus={(e) => {
+            if (pointerOpenRef.current) e.preventDefault();
+          }}
           className="z-50 w-72 rounded-md border bg-popover px-3 py-2 text-left text-sm text-popover-foreground shadow-md outline-none"
         >
           <div className="font-semibold mb-1">{entry.term}</div>

@@ -174,3 +174,12 @@ export const JACCARD_THRESHOLD = 0.85;
 
 /** Min reviewed-pool size before the answerIndex distribution band is enforced. */
 export const ANSWER_INDEX_MIN_N = 100;
+
+/**
+ * Wave 8 grandfathered ceiling for the "correct answer is strictly the
+ * longest option" fraction over reviewed DEFINITION rows. Measured 0.933 at
+ * 600 reviewed (2026-07-07); frozen just above so the number can only
+ * improve. Lower this constant as rebalance batches land (target: no slot
+ * tell — parity with the answerIndex band's spirit).
+ */
+export const LONGEST_ANSWER_TELL_MAX = 0.94;

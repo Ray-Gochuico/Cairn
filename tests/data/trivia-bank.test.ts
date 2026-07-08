@@ -12,6 +12,7 @@ import {
   JACCARD_THRESHOLD,
   ANSWER_INDEX_MIN_N,
   DEFAULT_MATH_TOLERANCE,
+  LONGEST_ANSWER_TELL_MAX,
 } from '@/lib/trivia/integrity-constants';
 import { reviewedOnly } from '@/lib/trivia/load-bank';
 import { COVERAGE_FLOORS } from '@/lib/trivia/coverage-floors';
@@ -143,6 +144,17 @@ describe('bank-v1.json integrity', () => {
       if (Math.abs(answer - expected) > tol) {
         offenders.push(`${q.id}: |${answer} - ${expected}| > ${tol}`);
       }
+      // Wave 8: recompute INDEPENDENTLY from check.expr (does not echo the
+      // stored answer) — ported from the staging harness; all shipped math
+      // rows carry an expr.
+      if (q.check.expr) {
+        const computed = Function(`"use strict"; return (${q.check.expr});`)() as number;
+        if (Math.abs(computed - expected) > tol) {
+          offenders.push(`${q.id}: check.expr recomputes ${computed}, bank says ${expected}`);
+        }
+      } else {
+        offenders.push(`${q.id}: math question missing check.expr (recompute target)`);
+      }
     }
     expect(offenders).toEqual([]);
   });
@@ -160,7 +172,14 @@ describe('bank-v1.json integrity', () => {
     }
     const dist = [0, 0, 0, 0];
     for (const q of pool) dist[q.answerIndex]++;
-    for (const n of dist) expect(n / pool.length).toBeGreaterThanOrEqual(0.2);
+    for (const n of dist) {
+      expect(n / pool.length).toBeGreaterThanOrEqual(0.2);
+      // Wave 8 upper bound: no slot may hold more than 30% (slot 1 sat at
+      // 30.3% pre-rebalance — a mild "when in doubt pick B" tell). Tighten
+      // to 0.28 at the next authoring rebalance (the ~93-question top-up),
+      // which should land all four slots in the 22–28% target band.
+      expect(n / pool.length).toBeLessThanOrEqual(0.3);
+    }
   });
 
   // ---- L2.9: prompt near-duplicate dedup (token-Jaccard, topic-bucketed) ----
@@ -189,6 +208,48 @@ describe('bank-v1.json integrity', () => {
           }
         }
       }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  // ---- Wave 8: longest-option tell (grandfathered ratchet) ----
+  // 93.3% of reviewed definition rows have the correct answer STRICTLY
+  // longest — a test-taking tell ("pick the longest"). Rewriting ~375
+  // approved rows is an authoring campaign, not a test fix, so this ships
+  // as a ratchet at the measured level: the fraction may only FALL. At the
+  // next authoring rebalance, drive it toward parity by lengthening the best
+  // distractor (never by truncating correct answers into vagueness), then
+  // lower the constant.
+  it('the strictly-longest-answer fraction over reviewed definitions never rises', () => {
+    const defs = reviewedOnly(parsed).filter((q) => q.format === QuestionFormat.DEFINITION);
+    const tells = defs.filter((q) => {
+      const lens = q.choices.map((c) => c.length);
+      const max = Math.max(...lens);
+      return lens[q.answerIndex] === max && lens.filter((l) => l === max).length === 1;
+    });
+    expect(tells.length / defs.length).toBeLessThanOrEqual(LONGEST_ANSWER_TELL_MAX);
+  });
+
+  // ---- Wave 8: numeric-signature cross-topic dupe gate ----
+  // Two math questions with the same prompt numbers AND the same computed
+  // answer are the same exercise wearing different topic hats — the topic-
+  // bucketed Jaccard gate can't see across buckets. Live dupe caught by the
+  // 2026-07 review: adv-foundations-compounding-frequency-math ≡
+  // adv-savings-compounding-frequency-math (both $10,000 @ 6% ⇒ $16.78).
+  it('no two math questions share a numeric signature (prompt numbers + expected answer)', () => {
+    const signature = (q: TriviaQuestion) => {
+      const nums = (q.prompt.match(/-?\d[\d,]*(?:\.\d+)?/g) ?? [])
+        .map((s) => Number(s.replace(/,/g, '')))
+        .sort((a, b) => a - b);
+      return `${nums.join('|')}⇒${q.check?.expected}`;
+    };
+    const seen = new Map<string, string>();
+    const offenders: string[] = [];
+    for (const q of parsed.filter((x) => x.format === QuestionFormat.MATH)) {
+      const sig = signature(q);
+      const prev = seen.get(sig);
+      if (prev) offenders.push(`${prev} ≡ ${q.id} (${sig})`);
+      else seen.set(sig, q.id);
     }
     expect(offenders).toEqual([]);
   });
@@ -225,5 +286,21 @@ describe('integrity harness — prove-it-bites (synthetic)', () => {
       'Which of these best describes a Roth IRA?',
     );
     expect(sim > JACCARD_THRESHOLD).toBe(true);
+  });
+
+  it('check.expr recompute catches an expr that disagrees with expected', () => {
+    const computed = Function('"use strict"; return (100*1.10);')() as number;
+    expect(Math.abs(computed - 200) > DEFAULT_MATH_TOLERANCE).toBe(true);
+  });
+
+  it('longest-tell predicate catches a strictly-longest correct answer', () => {
+    const lens = ['short', 'the much much longer correct definition answer', 'mid one', 'tiny'].map((c) => c.length);
+    expect(lens[1] === Math.max(...lens)).toBe(true);
+  });
+
+  it('numeric-signature gate catches a same-numbers same-answer pair', () => {
+    const sig = (prompt: string, expected: number) =>
+      `${(prompt.match(/-?\d[\d,]*(?:\.\d+)?/g) ?? []).map((s) => Number(s.replace(/,/g, ''))).sort((a, b) => a - b).join('|')}⇒${expected}`;
+    expect(sig('$10,000 at 6% for one year', 16.78)).toBe(sig('You deposit $10,000 at a 6% rate for one year', 16.78));
   });
 });
