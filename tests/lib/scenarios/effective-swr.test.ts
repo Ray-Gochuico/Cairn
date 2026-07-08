@@ -3,21 +3,21 @@ import { effectiveSwr } from '@/lib/scenarios/effective-swr';
 import { emptyLeverPayload } from '@/lib/scenarios/lever-types';
 import type { Household } from '@/types/schema';
 import type { Scenario } from '@/types/scenario';
+import { makeHousehold as makeBaseHousehold } from '../../factories';
 
-function makeHousehold(rate: number | null): Household {
-  return {
-    id: 1,
-    filingStatus: 'SINGLE',
-    state: 'CA',
-    city: null,
-    monthlyExpenseBaseline: 4000,
-    withdrawalRate: rate as number,
-    inflationAssumption: 0.025,
-    growthScenarios: [{ label: 'Moderate', rate: 0.07 }],
-    interestThresholdLowPct: null,
-    interestThresholdHighPct: null,
-  } as Household;
-}
+// Deliberately allows a schema-INVALID household: effectiveSwr must tolerate
+// a runtime household whose withdrawalRate is missing/null, and
+// HouseholdSchema.parse would reject null — so the null is spread on AFTER
+// the parse. Everything else delegates to the shared factory.
+const makeHousehold = (rate: number | null): Household =>
+  ({
+    ...makeBaseHousehold({
+      monthlyExpenseBaseline: 4000,
+      inflationAssumption: 0.025,
+      growthScenarios: [{ label: 'Moderate', rate: 0.07 }],
+    }),
+    withdrawalRate: rate,
+  }) as Household;
 
 function makeScenario(swrOverride: number | null): Scenario {
   return {

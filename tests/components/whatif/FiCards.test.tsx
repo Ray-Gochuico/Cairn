@@ -7,6 +7,7 @@ import type { MonthlyState } from '@/lib/scenarios';
 import type { Scenario } from '@/types/scenario';
 import type { Household, Person } from '@/types/schema';
 import { useSettingsStore } from '@/stores/settings-store';
+import { makeHousehold as makeBaseHousehold } from '../../factories';
 
 /**
  * Wave-7 UX MF-6: FiCards now renders a deep-link to Settings → Advanced
@@ -19,32 +20,20 @@ function renderWithRouter(ui: React.ReactElement) {
   return render(<MemoryRouter>{ui}</MemoryRouter>);
 }
 
-function makeHousehold(overrides: Partial<Household> = {}): Household {
-  return {
-    id: 1,
-    name: null,
-    filingStatus: 'SINGLE',
-    state: 'CA',
-    city: null,
-    monthlyExpenseBaseline: 4000, // → fiTarget = 48000 / 0.04 = 1,200,000
-    withdrawalRate: 0.04,
+// This file's fixtures pin fiTarget = 4000·12/0.04 = $1,200,000 and the
+// three standard growth scenarios across many call sites — one wrapper
+// carries those file-local defaults instead of overrides at every call.
+const makeHousehold = (overrides: Partial<Household> = {}): Household =>
+  makeBaseHousehold({
+    monthlyExpenseBaseline: 4000,
     inflationAssumption: 0.025,
     growthScenarios: [
       { label: 'Conservative', rate: 0.04 },
       { label: 'Moderate', rate: 0.06 },
       { label: 'Aggressive', rate: 0.08 },
     ],
-    interestThresholdLowPct: null,
-    interestThresholdHighPct: null,
-    hasWrittenIps: null,
-    hasHsaQualifiedHdhp: null,
-    makesCharitableGifts: null,
-    upcomingLargePurchase: null,
-    upcomingPurchaseAmount: null,
-    upcomingPurchaseMonths: null,
     ...overrides,
-  } as Household;
-}
+  });
 
 function makePerson(overrides: Partial<Person> = {}): Person {
   return {
