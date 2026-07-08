@@ -1,4 +1,4 @@
-import { amortize, scheduleIsCapped } from '@/lib/amortization';
+import { amortize, nextPaymentDateFrom, scheduleIsCapped } from '@/lib/amortization';
 
 export interface LoanPreviewInput {
   id: number;
@@ -7,6 +7,35 @@ export interface LoanPreviewInput {
   monthlyPayment: number;
   termMonths: number;
   firstPaymentDate: string;
+}
+
+/**
+ * Wave-9 F5 (the date-sibling of the Wave-7 monthlyPayment fix): preview
+ * inputs must anchor at the NEXT due date, not the original firstPaymentDate —
+ * otherwise seasoned loans preview payoffs in the past and windowed levers
+ * never overlap the schedule the engine (apply-real, real calendar months)
+ * actually steps through. Single construction point for every preview caller.
+ */
+export function buildLoanPreviewInput(
+  loan: {
+    id?: number | null | undefined;
+    currentBalance: number;
+    interestRate: number;
+    monthlyPayment: number;
+    termMonths: number;
+    firstPaymentDate: string;
+  },
+  todayISO: string,
+): LoanPreviewInput | null {
+  if (loan.id == null) return null;
+  return {
+    id: loan.id,
+    currentBalance: loan.currentBalance,
+    interestRate: loan.interestRate,
+    monthlyPayment: loan.monthlyPayment,
+    termMonths: loan.termMonths,
+    firstPaymentDate: nextPaymentDateFrom(loan.firstPaymentDate, todayISO),
+  };
 }
 
 interface Window { start?: string; end?: string }
