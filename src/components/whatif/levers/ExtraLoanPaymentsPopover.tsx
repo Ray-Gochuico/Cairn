@@ -132,10 +132,40 @@ export default function ExtraLoanPaymentsPopover({ open, onOpenChange }: Props) 
                   onChange={(e) => setRow(i, { end: e.target.value || undefined })}
                 />
               </div>
-              <div className="text-sm text-muted-foreground">
-                {preview && row.extraMonthly > 0
-                  ? `Payoff: ${fmtMonth(preview.payoffMonthISO)} → was ${fmtMonth(preview.baselinePayoffMonthISO)} (–${preview.monthsSaved} months)`
-                  : ''}
+              <div className="text-sm">
+                {preview && row.extraMonthly > 0 ? (
+                  preview.capped ? (
+                    /* Wave-7 W1 (same class as the Wave-6 DebtPayoffCard/Loans
+                       guards): a capped simulation's tail is amortize()'s
+                       safety cap, not a payoff — suppress the figures and say
+                       why. House warning-note trio; AA-locked tokens. */
+                    <span
+                      role="note"
+                      data-testid={`whatif-extra-never-payoff-${loan.id}`}
+                      className="block rounded-md border border-warning/40 bg-warning-soft px-2 py-1 text-xs text-warning-foreground"
+                    >
+                      Never pays off at this payment + extra — the payment doesn't
+                      cover monthly interest. Preview hidden.
+                    </span>
+                  ) : preview.baselineCapped ? (
+                    /* Rescued: the extra makes an otherwise never-amortizing
+                       loan pay off. "was <month> (–N months)" would difference
+                       against the CAP, so the comparison is replaced with the
+                       honest cause instead of a fake saving. */
+                    <span
+                      data-testid={`whatif-extra-rescued-${loan.id}`}
+                      className="text-muted-foreground"
+                    >
+                      {`Payoff: ${fmtMonth(preview.payoffMonthISO)} — without this extra it never pays off`}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      {`Payoff: ${fmtMonth(preview.payoffMonthISO)} → was ${fmtMonth(preview.baselinePayoffMonthISO)} (–${preview.monthsSaved} months)`}
+                    </span>
+                  )
+                ) : (
+                  ''
+                )}
               </div>
             </div>
           );

@@ -93,3 +93,60 @@ describe('ExtraLoanPaymentsPopover', () => {
     expect((inputs[1] as HTMLInputElement).value).toBe('150');
   });
 });
+
+describe('never-pays-off guard (wave-7 W1)', () => {
+  // $300k @ 6% → $1,500/mo interest; the $1,000 contract payment loses ground.
+  const seedUnderwater = () => {
+    useLoansStore.setState({
+      loans: [
+        {
+          id: 9, householdId: 1, name: 'Underwater', type: 'MORTGAGE',
+          currentBalance: 300000, interestRate: 0.06, monthlyPayment: 1000,
+          termMonths: 360, firstPaymentDate: '2020-01-01',
+        } as any,
+      ],
+      isLoading: false, error: null, load: async () => {},
+    } as any);
+  };
+
+  it('replaces the preview with the warning note when payment + extra never pays off', async () => {
+    resetStores();
+    seedUnderwater();
+    const user = userEvent.setup();
+    render(<MemoryRouter><ExtraLoanPaymentsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+    // $25 extra still leaves $1,025 < $1,500/mo interest.
+    const input = screen.getAllByLabelText(/extra \/ mo/i)[0];
+    await user.clear(input);
+    await user.type(input, '25');
+    const note = screen.getByTestId('whatif-extra-never-payoff-9');
+    expect(note).toHaveTextContent(/never pays off/i);
+    expect(screen.queryByText(/Payoff:/)).not.toBeInTheDocument();
+  });
+
+  it('rescued: shows the real payoff but suppresses the capped-baseline comparison', async () => {
+    resetStores();
+    seedUnderwater();
+    const user = userEvent.setup();
+    render(<MemoryRouter><ExtraLoanPaymentsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+    // $2,000 extra → $3,000/mo amortizes (~139 months).
+    const input = screen.getAllByLabelText(/extra \/ mo/i)[0];
+    await user.clear(input);
+    await user.type(input, '2000');
+    const rescued = screen.getByTestId('whatif-extra-rescued-9');
+    expect(rescued).toHaveTextContent(/^Payoff: [A-Z][a-z]{2} \d{4} — without this extra it never pays off$/);
+    // No fake "(–N months)" saving against the cap.
+    expect(rescued.textContent).not.toMatch(/months\)/);
+    expect(screen.queryByTestId('whatif-extra-never-payoff-9')).not.toBeInTheDocument();
+  });
+
+  it('a healthy loan keeps the exact classic preview string', async () => {
+    resetStores(); // the file's standard two healthy loans
+    const user = userEvent.setup();
+    render(<MemoryRouter><ExtraLoanPaymentsPopover open onOpenChange={() => {}} /></MemoryRouter>);
+    const input = screen.getAllByLabelText(/extra \/ mo/i)[0];
+    await user.clear(input);
+    await user.type(input, '300');
+    expect(screen.getAllByText(/Payoff: .+ → was .+ \(–\d+ months\)/)[0]).toBeInTheDocument();
+    expect(screen.queryByTestId(/whatif-extra-never-payoff/)).not.toBeInTheDocument();
+  });
+});
