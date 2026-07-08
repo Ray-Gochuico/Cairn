@@ -97,4 +97,9 @@ describe('TriviaQuestionSchema', () => {
     expect(parsed.reviewedBy).toBe('user');
     expect(parsed.reviewedAt).toBe('2026-06-01');
   });
+
+  it('rejects ids outside the kebab charset (the answeredKey id@vN grammar)', () => {
+    expect(() => TriviaQuestionSchema.parse({ ...valid, id: 'beg@apr' })).toThrow();
+    expect(() => TriviaQuestionSchema.parse({ ...valid, id: 'Beg-APR' })).toThrow();
+  });
 });

@@ -26,7 +26,9 @@ import { QuestionFormat, Topic, Subtopic } from '@/types/enums';
  */
 export const TriviaQuestionSchema = z
   .object({
-    id: z.string().min(1),
+    // Kebab lowercase only: answeredKey() builds `id@vN`, so '@' (or any
+    // charset surprise) in an id would corrupt the answered-key grammar.
+    id: z.string().min(1).regex(/^[a-z0-9][a-z0-9-]*$/, 'question id must be kebab-case [a-z0-9-]'),
     version: z.number().int().positive(),
     difficulty: z.enum(['Beginner', 'Advanced']),
     format: z.nativeEnum(QuestionFormat),
