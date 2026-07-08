@@ -161,6 +161,34 @@ export class AssetValueSnapshotsRepo {
     return this.create({ ownerType, ownerId, snapshotDate, value });
   }
 
+  /**
+   * Batch-friendly sibling of upsertForDate (wave-7 W2). The CSV import
+   * paths commit every write as ONE atomic executeBatch, so they can't call
+   * the read-then-write upsert mid-batch; here the existence SELECT runs at
+   * statement-collection time (the same read-outside/write-inside split the
+   * entity repos' buildUpdateStatement uses) and only the resulting write
+   * joins the batch. Preserves the one-row-per-(owner_type, owner_id,
+   * snapshot_date) convention documented above — callers must not mix this
+   * with raw INSERTs for the same key.
+   */
+  async buildUpsertForDateStatement(
+    ownerType: AssetSnapshotOwnerType,
+    ownerId: number,
+    snapshotDate: string,
+    value: number,
+  ): Promise<BatchStatement> {
+    const rows = await this.db.select<{ id: number }>(
+      `SELECT id FROM asset_value_snapshots
+       WHERE owner_type = ? AND owner_id = ? AND snapshot_date = ?
+       ORDER BY id DESC LIMIT 1`,
+      [ownerType, ownerId, snapshotDate],
+    );
+    if (rows.length > 0) {
+      return this.buildUpdateStatement(rows[0].id, { value });
+    }
+    return this.buildCreateStatement({ ownerType, ownerId, snapshotDate, value });
+  }
+
   async delete(id: number): Promise<void> {
     await this.db.execute('DELETE FROM asset_value_snapshots WHERE id = ?', [id]);
   }
