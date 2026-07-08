@@ -3,35 +3,14 @@ import { computeMagi } from '@/domain/roadmap/rules/iraBranch';
 import { evaluateEmployerMatchQ } from '@/domain/roadmap/rules/section1';
 import { evaluateMax401k } from '@/domain/roadmap/rules/sections5to6';
 import { evaluateAfterTax401kQ } from '@/domain/roadmap/rules/section4Misc';
-import type { Account, Contribution, Household, Person } from '@/types/schema';
+import type { Account, Contribution, Person } from '@/types/schema';
 import type { RoadmapContext } from '@/types/roadmap';
-import { AccountType, ContributionSource, FilingStatus } from '@/types/enums';
+import { AccountType, ContributionSource } from '@/types/enums';
+import { makeHousehold } from '../../factories';
 
 // ── Helpers: copied verbatim from tests/domain/roadmap/rules/sections5to6.test.ts
 // (fully typed, zero `as` casts) — keep in sync with that file if schema changes.
 
-function makeHousehold(patch: Partial<Household> = {}): Household {
-  return {
-    id: 1,
-    name: null,
-    filingStatus: FilingStatus.SINGLE,
-    state: 'CA',
-    city: null,
-    monthlyExpenseBaseline: 5000,
-    withdrawalRate: 0.04,
-    inflationAssumption: 0.03,
-    growthScenarios: [],
-    interestThresholdLowPct: null,
-    interestThresholdHighPct: null,
-    hasWrittenIps: null,
-    hasHsaQualifiedHdhp: null,
-    makesCharitableGifts: null,
-    upcomingLargePurchase: null,
-    upcomingPurchaseAmount: null,
-    upcomingPurchaseMonths: null,
-    ...patch,
-  };
-}
 
 function makePerson(patch: Partial<Person> = {}): Person {
   return {

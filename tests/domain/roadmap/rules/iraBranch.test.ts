@@ -7,30 +7,10 @@ import {
   evaluateTraditionalIra,
 } from '@/domain/roadmap/rules/iraBranch';
 import type { RoadmapContext } from '@/types/roadmap';
-import type { Account, Contribution, Household, Person } from '@/types/schema';
+import type { Account, Contribution, Person } from '@/types/schema';
 import { AccountType, ContributionSource, FilingStatus } from '@/types/enums';
+import { makeHousehold } from '../../../factories';
 
-function makeHousehold(filingStatus: 'SINGLE' | 'MFJ' | 'MFS' | 'HOH' = 'SINGLE'): Household {
-  return {
-    id: 1,
-    name: null,
-    filingStatus: filingStatus as Household['filingStatus'],
-    state: 'CA',
-    city: null,
-    monthlyExpenseBaseline: 5000,
-    withdrawalRate: 0.04,
-    inflationAssumption: 0.03,
-    growthScenarios: [],
-    interestThresholdLowPct: null,
-    interestThresholdHighPct: null,
-    hasWrittenIps: null,
-    hasHsaQualifiedHdhp: null,
-    makesCharitableGifts: null,
-    upcomingLargePurchase: null,
-    upcomingPurchaseAmount: null,
-    upcomingPurchaseMonths: null,
-  };
-}
 
 function makePerson(opts: {
   salary?: number;
@@ -112,7 +92,7 @@ function makeContext(opts: {
   accounts?: Account[];
 } = {}): RoadmapContext {
   return {
-    household: makeHousehold(opts.filingStatus ?? 'SINGLE'),
+    household: makeHousehold({ filingStatus: (opts.filingStatus ?? 'SINGLE') as FilingStatus }),
     persons: opts.persons ?? [makePerson({ salary: 100_000 })],
     accounts: opts.accounts ?? [],
     loans: [],

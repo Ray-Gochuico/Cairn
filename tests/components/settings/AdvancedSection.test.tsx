@@ -18,6 +18,7 @@ import {
   CategoryType,
 } from '@/types/enums';
 import type { Household, AppSettings, Category } from '@/types/schema';
+import { makeHousehold } from '../../factories';
 
 function makeSettings(patch: Partial<AppSettings> = {}): AppSettings {
   return {
@@ -86,28 +87,6 @@ function resetSettingsStore(
   return update;
 }
 
-function makeHousehold(patch: Partial<Household> = {}): Household {
-  return {
-    id: 1,
-    name: null,
-    filingStatus: FilingStatus.SINGLE,
-    state: 'CA',
-    city: null,
-    monthlyExpenseBaseline: 5000,
-    withdrawalRate: 0.04,
-    inflationAssumption: 0.03,
-    growthScenarios: [],
-    interestThresholdLowPct: null,
-    interestThresholdHighPct: null,
-    hasWrittenIps: null,
-    hasHsaQualifiedHdhp: null,
-    makesCharitableGifts: null,
-    upcomingLargePurchase: null,
-    upcomingPurchaseAmount: null,
-    upcomingPurchaseMonths: null,
-    ...patch,
-  };
-}
 
 function resetStore(household: Household | null, update: any = vi.fn().mockResolvedValue(undefined)) {
   useHouseholdStore.setState({

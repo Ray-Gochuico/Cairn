@@ -1,5 +1,7 @@
 import type { Database } from '@/db/db';
 import { DISCLOSURES } from '@/legal/disclosures';
+import { lastBusinessDayOfMonth } from '@/lib/business-days';
+import { lastMonthYyyymm } from '@/lib/input-pending';
 
 /**
  * DEV-ONLY demo-data seed for browser smoke tests of the Investments donuts.
@@ -24,7 +26,8 @@ import { DISCLOSURES } from '@/legal/disclosures';
  * a persisted IndexedDB DB is a no-op.
  *
  * Tickers (VTI, FXAIX, AAPL, MSFT, NVDA, BND) are already seeded by migrations
- * 0006/0038, so this does not write the `tickers` table.
+ * 0006/0038; this module only UPDATEs their sector/industry columns (step 8)
+ * — it never inserts ticker rows.
  */
 
 export const DEMO_SEED = {
@@ -94,19 +97,27 @@ export async function seedDemoData(db: Database): Promise<void> {
   await addHolding(k401Id, 'FXAIX', 350);
   await addHolding(k401Id, 'BND', 180); // bond fund
 
-  // 5. account_snapshots — THE critical rows. One per account, dated today,
-  //    AUTO_DERIVED. Positive totals so latestSnapshotForAccount() > 0 and the
-  //    value split in valueHoldings() yields real per-holding dollars.
-  async function addSnapshot(accountId: number, totalValue: number): Promise<void> {
+  // 5. account_snapshots — THE critical rows. Two per account: dated today
+  //    (drives every latest-value donut) and dated LAST MONTH'S CLOSE
+  //    (wave-7 W7: the Monthly check-in's Section 1 only shows confirm
+  //    cards for accounts with an AUTO_DERIVED snapshot at
+  //    lastBusinessDayOfMonth(last month) — today-only snapshots left the
+  //    demo/e2e Monthly window with nothing to confirm). Last-month values
+  //    sit slightly below today's so the month reads as growth.
+  async function addSnapshot(accountId: number, snapshotDate: string, totalValue: number): Promise<void> {
     await db.execute(
       `INSERT OR REPLACE INTO account_snapshots (account_id, snapshot_date, total_value, source)
        VALUES (?, ?, ?, 'AUTO_DERIVED')`,
-      [accountId, today, totalValue],
+      [accountId, snapshotDate, totalValue],
     );
   }
-  await addSnapshot(brokerageId, 285000);
-  await addSnapshot(rothId, 92000);
-  await addSnapshot(k401Id, 410000);
+  const lastMonthClose = lastBusinessDayOfMonth(lastMonthYyyymm(new Date()));
+  await addSnapshot(brokerageId, today, 285000);
+  await addSnapshot(rothId, today, 92000);
+  await addSnapshot(k401Id, today, 410000);
+  await addSnapshot(brokerageId, lastMonthClose, 277500);
+  await addSnapshot(rothId, lastMonthClose, 89500);
+  await addSnapshot(k401Id, lastMonthClose, 402000);
 
   // 6. Loans — LiabilitiesDonut needs current_balance > 0.
   async function addLoan(
@@ -182,6 +193,29 @@ export async function seedDemoData(db: Database): Promise<void> {
   ];
   await seedFundSectors('VTI', usSectors);
   await seedFundSectors('FXAIX', usSectors);
+
+  // 8b. Sector/industry for the directly-held single names (wave-7 W3). The
+  //    ticker-seed migrations (0006/0038) predate the sector columns (0016),
+  //    so AAPL/MSFT/NVDA sit at sector NULL and the Sector donut buckets
+  //    them as 'Unclassified' in demo mode (no network → the runtime Yahoo
+  //    enrichment path never fills them). Mirror what ticker-enrichment.ts
+  //    would write, using the exact Title-Case vocabulary
+  //    snakeToTitleSector() produces so single-name wedges merge with the
+  //    fund-distributed wedges. BND stays sector-NULL on purpose:
+  //    assetClassToPseudoSector maps US_BONDS → 'Fixed Income', which is
+  //    already the wedge a bond fund should land in.
+  const DEMO_TICKER_PROFILES: ReadonlyArray<readonly [string, string, string]> = [
+    ['AAPL', 'Technology', 'Consumer Electronics'],
+    ['MSFT', 'Technology', 'Software—Infrastructure'],
+    ['NVDA', 'Technology', 'Semiconductors'],
+  ];
+  for (const [ticker, sector, industry] of DEMO_TICKER_PROFILES) {
+    await db.execute(`UPDATE tickers SET sector = ?, industry = ? WHERE ticker = ?`, [
+      sector,
+      industry,
+      ticker,
+    ]);
+  }
 
   // 9. Disclosure acceptance so AppDisclaimerGate doesn't block the smoke.
   await db.execute(

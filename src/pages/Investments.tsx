@@ -16,15 +16,19 @@ import { AccountType, AssetClass } from '@/types/enums';
 import { filterByOwnerPersonId } from '@/lib/filter-by-view';
 import { includedAccountIds } from '@/lib/account-inclusion';
 import { useViewFilter } from '@/lib/use-view-filter';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import CardEditFrame from '@/components/investments/CardEditFrame';
 import { DataHealthPopover } from '@/components/investments/DataHealthPopover';
 import { AssetClassTargetsForm } from '@/components/investments/AssetClassTargetsForm';
+import AllocationCard from '@/components/investments/AllocationCard';
+import DriftCard from '@/components/investments/DriftCard';
+import ConcentrationHealthCard from '@/components/investments/ConcentrationHealthCard';
+import Plans529Card from '@/components/investments/Plans529Card';
+import { ASSET_CLASS_LABEL } from '@/lib/asset-class-labels';
 import type { CardLayoutEntry, AssetClassTarget } from '@/types/schema';
 import ContributionsByBucketChart from '@/components/charts/ContributionsByBucketChart';
-import DonutChartCard from '@/components/charts/DonutChartCard';
-import { DonutEntityPicker, useDonutSelected, type DonutEntityPickerItem } from '@/components/charts/DonutEntityPicker';
+import { useDonutSelected, type DonutEntityPickerItem } from '@/components/charts/DonutEntityPicker';
 import { paletteColorAt } from '@/components/charts/palette';
 import AssetValueChart from '@/components/charts/AssetValueChart';
 import PerTickerDonut from '@/components/charts/PerTickerDonut';
@@ -45,8 +49,7 @@ import { ExportCsvButton } from '@/components/ExportCsvButton';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import { FreshnessBadge } from '@/components/ui/freshness-badge';
 import type { CsvColumn } from '@/lib/csv';
-import { topEffectiveExposures, type ConcentrationWarning } from '@/lib/concentration';
-import { AlertTriangleIcon, PieChart } from 'lucide-react';
+import { PieChart } from 'lucide-react';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import { EmptyState } from '@/components/layout/EmptyState';
@@ -68,56 +71,6 @@ import { syncStaleFunds } from '@/market/fund-holdings-sync';
  * (weighted by share count) — a deliberate simplification while
  * PriceCache.currentPrice still requires Yahoo connectivity.
  */
-
-const currencyFormatter = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  maximumFractionDigits: 0,
-});
-
-function formatCurrency(value: number): string {
-  return currencyFormatter.format(value);
-}
-
-/**
- * Educational copy for each warning type, surfaced as a tooltip on the
- * Concentration Health section. Phase 3 keeps tooltips simple — a `title`
- * attribute renders a native browser tooltip; no popover library required.
- */
-const CONCENTRATION_TOOLTIP: Record<ConcentrationWarning['type'], string> = {
-  PER_TICKER_HIGH: "A single ticker's outsized share concentrates idiosyncratic risk.",
-  PER_TICKER_SOFT: "Watch this ticker — it's getting concentrated.",
-  PER_ASSET_CLASS_HIGH: 'Heavy weight in one asset class amplifies its drawdowns.',
-  PER_ASSET_CLASS_SOFT: 'Asset-class exposure is approaching concentrated territory.',
-  LEVERAGE_HIGH: 'Effective leverage means small moves cause big P&L swings.',
-};
-
-function severityColor(severity: ConcentrationWarning['severity']): string {
-  switch (severity) {
-    case 'HIGH': return 'text-destructive-soft-foreground';
-    case 'MEDIUM': return 'text-warning-foreground';
-    case 'LOW':
-    default: return 'text-info-foreground';
-  }
-}
-
-const ASSET_CLASS_LABEL: Record<AssetClass, string> = {
-  US_TOTAL_MARKET: 'US Total Market',
-  US_LARGE_CAP: 'US Large Cap',
-  US_MID_CAP: 'US Mid Cap',
-  US_SMALL_CAP: 'US Small Cap',
-  INTL_DEVELOPED: 'Intl Developed',
-  EMERGING_MARKETS: 'Emerging Markets',
-  US_BONDS: 'US Bonds',
-  INTL_BONDS: 'Intl Bonds',
-  TIPS: 'TIPS',
-  REAL_ESTATE: 'Real Estate',
-  COMMODITIES: 'Commodities',
-  CRYPTO: 'Crypto',
-  SINGLE_STOCK: 'Single Stock',
-  CASH: 'Cash',
-  OTHER: 'Other',
-};
 
 // localStorage key for the Portfolio-by-account "Investable only" toggle.
 // Module scope so the useCallback below can close over it with an empty
@@ -184,35 +137,6 @@ function aggregateByAssetClass(
     .filter((b) => b.value > 0)
     .sort((a, b) => b.value - a.value)
     .map((b, idx) => ({ ...b, color: paletteColorAt(idx) }));
-}
-
-/**
- * Project a 529 plan's value forward to the beneficiary's 18th birthday.
- * Uses monthly compounding at `growthRate` annual, plus the beneficiary's
- * recent monthly contribution rate. Returns `currentValue` if the
- * beneficiary is already 18 or older (monthsUntil clamps to 0).
- */
-function projectedAtAge18(
-  currentValue: number,
-  monthlyContrib: number,
-  dobIso: string,
-  growthRate: number,
-): number {
-  const dob = new Date(dobIso);
-  const eighteen = new Date(dob);
-  eighteen.setFullYear(eighteen.getFullYear() + 18);
-  const now = new Date();
-  const monthsUntil = Math.max(
-    0,
-    (eighteen.getFullYear() - now.getFullYear()) * 12 +
-      (eighteen.getMonth() - now.getMonth()),
-  );
-  const r = growthRate / 12;
-  if (r === 0) return currentValue + monthlyContrib * monthsUntil;
-  return (
-    currentValue * Math.pow(1 + r, monthsUntil) +
-    (monthlyContrib * (Math.pow(1 + r, monthsUntil) - 1)) / r
-  );
 }
 
 /**
@@ -720,62 +644,14 @@ export default function Investments() {
         label: 'Asset allocation',
         size: 'compact',
         applicable: true,
-        render: () =>
-          allocation.length > 0 ? (
-            <div data-testid="asset-allocation-card">
-              {filteredAllocation.length > 0 ? (
-                <DonutChartCard
-                  title="Asset allocation"
-                  subtitle="Approximate, using latest snapshot per account"
-                  data={filteredAllocation}
-                  shareTotal={allocationTotal}
-                  valueFormatter={formatCurrency}
-                  headerRight={
-                    <DonutEntityPicker
-                      localStorageKey="donut.assetAllocation.hidden"
-                      items={allocationPickerItems}
-                    />
-                  }
-                />
-              ) : (
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <CardTitle>Asset allocation</CardTitle>
-                        <CardDescription>
-                          Approximate, using latest snapshot per account
-                        </CardDescription>
-                      </div>
-                      {/* Picker must stay reachable in the all-hidden state
-                          or the user can never re-show a class. */}
-                      <DonutEntityPicker
-                        localStorageKey="donut.assetAllocation.hidden"
-                        items={allocationPickerItems}
-                      />
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground py-8 text-center">
-                      All entities hidden. Open the picker above to show at least one.
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          ) : (
-            <Card data-testid="asset-allocation-card">
-              <CardHeader>
-                <CardTitle>Asset allocation</CardTitle>
-                <CardDescription>
-                  Approximate, using latest snapshot per account
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="text-sm text-muted-foreground">
-                No holding values yet — confirm an account snapshot in the monthly window.
-              </CardContent>
-            </Card>
-          ),
+        render: () => (
+          <AllocationCard
+            allocation={allocation}
+            filteredAllocation={filteredAllocation}
+            allocationTotal={allocationTotal}
+            pickerItems={allocationPickerItems}
+          />
+        ),
       },
       {
         id: 'per-company',
@@ -796,92 +672,7 @@ export default function Investments() {
         label: 'Concentration Health',
         size: 'wide',
         applicable: true,
-        render: () => (
-          <Card data-testid="concentration-section">
-            <CardHeader>
-              <CardTitle>
-                <TermTooltip term="CONCENTRATION">Concentration</TermTooltip> Health
-              </CardTitle>
-              <CardDescription>
-                Effective exposure after fund look-through and leverage. Warnings
-                fire when a single ticker exceeds 25%, an asset class exceeds 60%,
-                or total leverage exceeds 1.5x.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {concentration.warnings.length === 0 ? (
-                <div className="text-sm text-muted-foreground">
-                  No concentration issues detected.
-                </div>
-              ) : (
-                <ul className="space-y-3">
-                  {concentration.warnings.map((w, i) => (
-                    <li
-                      key={`${w.type}-${w.ticker ?? w.assetClass ?? i}`}
-                      className="flex items-start gap-3"
-                    >
-                      <AlertTriangleIcon
-                        className={`h-5 w-5 shrink-0 mt-0.5 ${severityColor(w.severity)}`}
-                        aria-label={`${w.severity} severity`}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm">{w.message}</div>
-                        <details className="mt-1">
-                          <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
-                            Why this matters
-                          </summary>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {CONCENTRATION_TOOLTIP[w.type]}
-                          </p>
-                        </details>
-                        {/* Anchor-scroll to the donut that visualizes this
-                            warning's subject (ticker → per-company card;
-                            asset class → allocation card). A slice-focus
-                            pulse is a noted follow-up (needs a focus channel
-                            on useDonutSelection). */}
-                        {(w.ticker || w.assetClass) && (
-                          <button
-                            type="button"
-                            className="mt-1 text-xs font-medium text-primary hover:underline"
-                            onClick={() =>
-                              document
-                                .getElementById(w.ticker ? 'per-company' : 'allocation')
-                                ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                            }
-                          >
-                            View in donut
-                          </button>
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {(() => {
-                const top = topEffectiveExposures(concentration.perTicker, 3);
-                if (top.length === 0) return null;
-                return (
-                  <div className="mt-6 border-t pt-4">
-                    <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
-                      Top 3 effective exposures
-                    </div>
-                    <ul className="space-y-1 text-sm">
-                      {top.map((t) => (
-                        <li key={t.ticker} className="flex justify-between gap-2 tabular-nums">
-                          <span className="font-mono">{t.ticker}</span>
-                          <span className="text-muted-foreground">
-                            {(t.pctOfPortfolio * 100).toFixed(1)}%
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                );
-              })()}
-            </CardContent>
-          </Card>
-        ),
+        render: () => <ConcentrationHealthCard report={concentration} />,
       },
       {
         id: 'class-targets',
@@ -906,109 +697,7 @@ export default function Investments() {
         label: 'Target vs Actual',
         size: 'wide',
         applicable: true,
-        render: () => (
-          <Card>
-            <CardHeader>
-              <CardTitle>Target vs Actual</CardTitle>
-              <CardDescription>
-                Approximate, using latest snapshot per account, over held positions
-                only. Asset classes are household-level; holdings refine within
-                their class.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* ── By asset class (household) ── */}
-              <div>
-                <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">By asset class</div>
-                {classRows.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">
-                    No holdings yet. Set asset-class targets above to track drift.
-                  </div>
-                ) : (
-                  // Column priority (narrow → wide): Asset class + Drift always
-                  // visible (pinned ends); Target, then Actual, then Invested are
-                  // the first to scroll under overflow-x-auto. Drift is the point.
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm" aria-label="By asset class">
-                      <thead>
-                        <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground border-b">
-                          <th className="py-2 pr-2">Asset class</th>
-                          <th className="py-2 px-2 text-right">Invested</th>
-                          <th className="py-2 px-2 text-right">Actual</th>
-                          <th className="py-2 px-2 text-right">Target</th>
-                          <th className="py-2 pl-2 text-right">Drift</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {classRows.map((r) => (
-                          <tr key={r.assetClass} data-testid={`class-row-${r.assetClass}`} className="border-b last:border-b-0">
-                            <td className="py-2 pr-2">{ASSET_CLASS_LABEL[r.assetClass]}</td>
-                            <td className="py-2 px-2 text-right tabular-nums text-muted-foreground">{formatCurrency(r.actualValue)}</td>
-                            <td className="py-2 px-2 text-right tabular-nums">{(r.actualPct * 100).toFixed(1)}%</td>
-                            <td className="py-2 px-2 text-right tabular-nums">{r.targetPct != null ? `${(r.targetPct * 100).toFixed(1)}%` : '—'}</td>
-                            <td className={`py-2 pl-2 text-right tabular-nums ${r.targetPct == null ? 'text-muted-foreground' : r.driftPct >= 0 ? 'text-success-foreground' : 'text-destructive-soft-foreground'}`}>
-                              {r.targetPct == null ? '—' : `${r.driftPct >= 0 ? '+' : ''}${(r.driftPct * 100).toFixed(1)}%`}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-
-              {/* ── By holding (within-class, aggregated per ticker across accounts) ── */}
-              <div>
-                <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">By holding</div>
-                {/* UX H2/H3 + Finance M2 CAPTION — the dual-basis reconciliation note.
-                    Without it a user who typed VTI 30% sees the within-class basis
-                    render as 75% and thinks the app is wrong. The Target column below
-                    is rendered on the HOUSEHOLD basis (= targetValue / household), so
-                    Actual − Target = Drift reconciles cleanly in this table. */}
-                <p className="text-xs text-muted-foreground mb-2">
-                  Targets shown as each holding’s share of its asset-class target,
-                  expressed as a % of your whole portfolio — so Actual − Target = Drift.
-                </p>
-                {holdingRows.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">No holdings with values yet.</div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm" aria-label="By holding">
-                      <thead>
-                        <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground border-b">
-                          <th className="py-2 pr-2">Ticker</th>
-                          <th className="py-2 px-2 text-right">Invested</th>
-                          <th className="py-2 px-2 text-right">Actual</th>
-                          <th className="py-2 px-2 text-right">Target</th>
-                          <th className="py-2 pl-2 text-right">Drift</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {holdingRows.map((r) => {
-                          // Reconciling identity: targetPct(household) = actualPct − driftPct
-                          // (since driftPct = (actualValue − targetValue)/household and
-                          // actualPct = actualValue/household). No extra state needed.
-                          const targetPctHousehold = r.targetValue == null ? null : r.actualPct - r.driftPct;
-                          return (
-                            <tr key={r.ticker} data-testid={`holding-row-${r.ticker}`} className="border-b last:border-b-0">
-                              <td className="py-2 pr-2 font-mono">{r.ticker}</td>
-                              <td className="py-2 px-2 text-right tabular-nums text-muted-foreground">{formatCurrency(r.actualValue)}</td>
-                              <td className="py-2 px-2 text-right tabular-nums">{(r.actualPct * 100).toFixed(1)}%</td>
-                              <td className="py-2 px-2 text-right tabular-nums">{targetPctHousehold != null ? `${(targetPctHousehold * 100).toFixed(1)}%` : '—'}</td>
-                              <td className={`py-2 pl-2 text-right tabular-nums ${r.targetValue == null ? 'text-muted-foreground' : r.driftPct >= 0 ? 'text-success-foreground' : 'text-destructive-soft-foreground'}`}>
-                                {r.targetValue == null ? '—' : `${r.driftPct >= 0 ? '+' : ''}${(r.driftPct * 100).toFixed(1)}%`}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ),
+        render: () => <DriftCard classRows={classRows} holdingRows={holdingRows} />,
       },
       {
         id: 'contributions',
@@ -1053,84 +742,14 @@ export default function Investments() {
         size: 'wide',
         applicable: plans529.length > 0,
         render: () => (
-          <Card data-testid="529-section">
-            <CardHeader>
-              <CardTitle>529 Plans</CardTitle>
-              <CardDescription>
-                College savings — current value, contributions YTD, and
-                projected value at the beneficiary's 18th birthday using the
-                Moderate growth scenario ({(moderateRate * 100).toFixed(1)}%).
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ul className="divide-y">
-                {plans529.map((plan) => {
-                  const dep =
-                    plan.beneficiaryDependentId != null
-                      ? dependentById.get(plan.beneficiaryDependentId)
-                      : null;
-                  const latestSnap =
-                    plan.id != null ? latestSnapByAccount.get(plan.id) : undefined;
-                  const currentValue = latestSnap?.totalValue ?? 0;
-                  // YTD = sum of contributions in the current calendar year.
-                  const yearPrefix = String(today529.getFullYear());
-                  const ytdContribs = visibleContributions
-                    .filter(
-                      (c) =>
-                        c.accountId === plan.id && c.date.startsWith(yearPrefix),
-                    )
-                    .reduce((sum, c) => sum + c.amount, 0);
-                  // Approximate the projection's monthly inflow with YTD ÷ months
-                  // elapsed this year. Coarse but matches what the user can see
-                  // in the contribution log; refines automatically as the year
-                  // progresses.
-                  const monthsThisYear = today529.getMonth() + 1;
-                  const monthlyAvg =
-                    monthsThisYear > 0 ? ytdContribs / monthsThisYear : 0;
-                  const projected =
-                    dep != null
-                      ? projectedAtAge18(
-                          currentValue,
-                          monthlyAvg,
-                          dep.dateOfBirth,
-                          moderateRate,
-                        )
-                      : currentValue;
-                  return (
-                    <li
-                      key={plan.id}
-                      className="flex items-center justify-between gap-4 py-3"
-                    >
-                      <div className="min-w-0">
-                        <div className="font-medium truncate">{plan.name}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {dep ? `for ${dep.name}` : 'no beneficiary set'}
-                          {plan.stateOfPlan ? ` · ${plan.stateOfPlan}` : ''}
-                          {plan.institution ? ` · ${plan.institution}` : ''}
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0 text-sm space-y-0.5">
-                        <div className="font-mono tabular-nums">
-                          {formatCurrency(currentValue)}{' '}
-                          <span className="text-muted-foreground">now</span>
-                        </div>
-                        <div className="font-mono tabular-nums">
-                          {formatCurrency(ytdContribs)}{' '}
-                          <span className="text-muted-foreground">YTD</span>
-                        </div>
-                        {dep != null && (
-                          <div className="font-mono tabular-nums">
-                            {formatCurrency(projected)}{' '}
-                            <span className="text-muted-foreground">at 18</span>
-                          </div>
-                        )}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </CardContent>
-          </Card>
+          <Plans529Card
+            plans={plans529}
+            dependentById={dependentById}
+            latestSnapByAccount={latestSnapByAccount}
+            contributions={visibleContributions}
+            today={today529}
+            moderateRate={moderateRate}
+          />
         ),
       },
     ],

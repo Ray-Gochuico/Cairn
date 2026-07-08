@@ -1,13 +1,23 @@
 // src/lib/import/commit/vehicle.ts
 import type { BatchStatement, Database } from '@/db/db';
 import type { VehiclesRepo } from '@/domain/vehicles';
+import type { AssetValueSnapshotsRepo } from '@/domain/asset-value-snapshots';
 import type { CommitResult, PreviewRow } from '@/lib/import/types';
 import type { VehicleResolved } from '@/lib/import/validators/vehicle';
 
 interface Deps {
   db: Database;
   vehicles: VehiclesRepo;
+  /** Wave-7 W2: lets a CSV value CHANGE join the estimate→snapshot seam atomically. */
+  assetValueSnapshots: AssetValueSnapshotsRepo;
   householdId: number;
+  /**
+   * Import-run date (YYYY-MM-DD) — the snapshot date for value changes,
+   * mirroring the store seam's "an estimate edit IS a value observation
+   * dated today". Injected (not read from the clock here) so commit tests
+   * stay clock-free.
+   */
+  todayIso: string;
 }
 
 export async function commitVehicleImport(
@@ -38,6 +48,31 @@ export async function commitVehicleImport(
     const payload = { ...row.resolved, householdId: deps.householdId };
     if (row.status === 'update' && row.existingId != null) {
       statements.push(await deps.vehicles.buildUpdateStatement(row.existingId, payload));
+      // Wave-7 W2: mirror the vehicles-store estimate→snapshot seam. A CSV
+      // value CHANGE is a value observation exactly like a form edit — the
+      // store's update() (vehicles-store.ts) records it as a today-dated
+      // snapshot, so the import must too, or CSV-updated vehicles stay flat
+      // "est." entities with zero history (the Wave-2 seam bypass). Same
+      // gate as the store: non-null AND actually different. NEW rows mint no
+      // snapshot — parity with the store's create(), which deliberately
+      // keeps est.-only semantics for new entities. Reads run at collection
+      // time, before any write — the atomic-batch contract above ("fails on
+      // row N ⇒ 0 rows committed") is preserved.
+      const before = await deps.vehicles.findById(row.existingId);
+      if (
+        payload.currentEstimatedValue != null &&
+        before !== null &&
+        payload.currentEstimatedValue !== before.currentEstimatedValue
+      ) {
+        statements.push(
+          await deps.assetValueSnapshots.buildUpsertForDateStatement(
+            'VEHICLE',
+            row.existingId,
+            deps.todayIso,
+            payload.currentEstimatedValue,
+          ),
+        );
+      }
       updated += 1;
     } else if (row.status === 'new') {
       statements.push(deps.vehicles.buildCreateStatement(payload));

@@ -9,19 +9,10 @@ import type { AppSettings, Household } from '@/types/schema';
 import type { Scenario } from '@/types/scenario';
 import { FiPillsPosition, ProjectionDetailLevel, RefreshCadence } from '@/types/enums';
 import { emptyLeverPayload, type InflationSchedule } from '@/lib/scenarios/lever-types';
+import { makeHousehold as makeBaseHousehold } from '../../factories';
 
-function makeHousehold(inflationAssumption: number): Household {
-  return {
-    id: 1,
-    filingStatus: 'SINGLE',
-    state: 'CA',
-    city: null,
-    monthlyExpenseBaseline: 4500,
-    withdrawalRate: 0.04,
-    inflationAssumption,
-    growthScenarios: [],
-  } as unknown as Household;
-}
+const makeHousehold = (inflationAssumption: number): Household =>
+  makeBaseHousehold({ monthlyExpenseBaseline: 4500, inflationAssumption });
 
 function makeSettings(defaultInflation: number | null): AppSettings {
   return {

@@ -7,30 +7,9 @@ import {
 } from '@/domain/roadmap/rules/emergencyFund';
 import type { RoadmapContext } from '@/types/roadmap';
 import type { Account, AccountSnapshot, Category, Household, Person, Transaction } from '@/types/schema';
-import { AccountType, CategoryType, FilingStatus, SnapshotSource } from '@/types/enums';
+import { AccountType, CategoryType, SnapshotSource } from '@/types/enums';
+import { makeHousehold } from '../../../factories';
 
-function makeHousehold(patch: Partial<Household> = {}): Household {
-  return {
-    id: 1,
-    name: null,
-    filingStatus: FilingStatus.SINGLE,
-    state: 'CA',
-    city: null,
-    monthlyExpenseBaseline: 5000,
-    withdrawalRate: 0.04,
-    inflationAssumption: 0.03,
-    growthScenarios: [],
-    interestThresholdLowPct: null,
-    interestThresholdHighPct: null,
-    hasWrittenIps: null,
-    hasHsaQualifiedHdhp: null,
-    makesCharitableGifts: null,
-    upcomingLargePurchase: null,
-    upcomingPurchaseAmount: null,
-    upcomingPurchaseMonths: null,
-    ...patch,
-  };
-}
 
 function makePerson(stability: 'stable' | 'unstable' | null = null): Person {
   return {

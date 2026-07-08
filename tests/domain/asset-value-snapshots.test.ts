@@ -152,4 +152,38 @@ describe('AssetValueSnapshotsRepo', () => {
       }),
     ).rejects.toThrow();
   });
+
+  describe('buildUpsertForDateStatement (wave-7 W2 — batch-friendly seam)', () => {
+    it('returns an INSERT when no row exists for (owner, date) and executes in a batch', async () => {
+      const stmt = await repo.buildUpsertForDateStatement('PROPERTY', 7, '2026-07-07', 500_000);
+      await db.executeBatch([stmt], { transaction: true });
+      const rows = await db.select<{ value: number }>(
+        `SELECT value FROM asset_value_snapshots WHERE owner_type = 'PROPERTY' AND owner_id = 7 AND snapshot_date = '2026-07-07'`,
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0].value).toBe(500_000);
+    });
+
+    it('returns an UPDATE for an existing same-date row — no duplicate rows', async () => {
+      await repo.create({ ownerType: 'PROPERTY', ownerId: 7, snapshotDate: '2026-07-07', value: 480_000 });
+      const stmt = await repo.buildUpsertForDateStatement('PROPERTY', 7, '2026-07-07', 505_000);
+      await db.executeBatch([stmt], { transaction: true });
+      const rows = await db.select<{ value: number }>(
+        `SELECT value FROM asset_value_snapshots WHERE owner_type = 'PROPERTY' AND owner_id = 7 AND snapshot_date = '2026-07-07'`,
+      );
+      expect(rows).toHaveLength(1); // upsert, not append
+      expect(rows[0].value).toBe(505_000);
+    });
+
+    it('scopes by owner type: a VEHICLE row at the same id/date does not collide', async () => {
+      await repo.create({ ownerType: 'VEHICLE', ownerId: 7, snapshotDate: '2026-07-07', value: 30_000 });
+      const stmt = await repo.buildUpsertForDateStatement('PROPERTY', 7, '2026-07-07', 500_000);
+      await db.executeBatch([stmt], { transaction: true });
+      const all = await db.select<{ owner_type: string; value: number }>(
+        `SELECT owner_type, value FROM asset_value_snapshots WHERE owner_id = 7 AND snapshot_date = '2026-07-07' ORDER BY owner_type`,
+      );
+      expect(all).toHaveLength(2);
+      expect(all.map((r) => r.owner_type)).toEqual(['PROPERTY', 'VEHICLE']);
+    });
+  });
 });

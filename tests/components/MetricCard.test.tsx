@@ -123,4 +123,27 @@ describe('MetricCard text overflow', () => {
     );
     expect(screen.queryByRole('link')).toBeNull();
   });
+
+  describe('valueTone (wave-7 W5)', () => {
+    it('positive/negative tone the VALUE with the status tokens', () => {
+      render(
+        <MemoryRouter>
+          <MetricCard label="Net" value="+$120.00" valueTone="positive" />
+        </MemoryRouter>,
+      );
+      expect(screen.getByTestId('metric-card-value').className).toContain('text-success-foreground');
+    });
+
+    it('omitted valueTone leaves the value untinted (existing renders byte-identical)', () => {
+      render(
+        <MemoryRouter>
+          <MetricCard label="Money out" value="$50.00" />
+        </MemoryRouter>,
+      );
+      const cls = screen.getByTestId('metric-card-value').className;
+      expect(cls).not.toContain('text-success-foreground');
+      expect(cls).not.toContain('text-destructive-soft-foreground');
+      expect(cls).not.toContain('text-muted-foreground'); // value ≠ delta default
+    });
+  });
 });

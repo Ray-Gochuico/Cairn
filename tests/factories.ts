@@ -6,6 +6,7 @@ import {
   EquityGrantSchema,
   AccountSchema,
   HoldingSchema,
+  HouseholdSchema,
   type Person,
   type Loan,
   type Property,
@@ -13,8 +14,9 @@ import {
   type EquityGrant,
   type Account,
   type Holding,
+  type Household,
 } from '@/types/schema';
-import { LoanType, PropertyType, AccountType } from '@/types/enums';
+import { LoanType, PropertyType, AccountType, FilingStatus } from '@/types/enums';
 
 /**
  * Zod-parsing fixture factories for unit tests. Each `make*` builds a minimal
@@ -139,6 +141,21 @@ export function makeHolding(overrides: Partial<Holding> = {}): Holding {
     shareCount: 10,
     targetAllocationPct: null,
     costBasis: null,
+    ...overrides,
+  });
+}
+
+export function makeHousehold(overrides: Partial<Household> = {}): Household {
+  return HouseholdSchema.parse({
+    id: 1,
+    name: null,
+    filingStatus: FilingStatus.SINGLE,
+    state: 'CA',
+    city: null,
+    monthlyExpenseBaseline: 5000,
+    withdrawalRate: 0.04,
+    inflationAssumption: 0.03,
+    growthScenarios: [],
     ...overrides,
   });
 }

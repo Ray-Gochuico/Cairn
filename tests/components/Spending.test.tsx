@@ -481,6 +481,32 @@ describe('Spending page', () => {
     }
   });
 
+  it('money in/out tiles are shared MetricCards inside the responsive grid (wave-7 W5)', async () => {
+    // Seed transactions exactly as the 'Money in vs out stacks…' test above
+    // does (same real-clock recent-date idiom — grandfathered allowlist file).
+    await useCategoriesStore.getState().load();
+    const recentDate = new Date(Date.now() - 5 * 86_400_000).toISOString().slice(0, 10);
+    const txn: Omit<Transaction, 'id'> = {
+      householdId: 1, date: recentDate, merchant: 'GROCERY', merchantRaw: 'GROCERY',
+      amount: 200, categoryId: null, sourceAccountId: null, propertyId: null,
+      vehicleId: null, personId: null, sourcePdfFilename: 'test.pdf', reimbursable: false,
+      reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
+    };
+    await useTransactionsStore.getState().createMany([txn]);
+
+    renderPage();
+
+    const heading = await screen.findByText(/money in vs out/i);
+    const grid = heading.parentElement!.querySelector('.grid') as HTMLElement;
+    // Wave-6 responsive contract preserved on the SAME element…
+    expect(grid.className).toContain('grid-cols-1');
+    expect(grid.className).toContain('sm:grid-cols-3');
+    // …and the tiles are now the shared primitive.
+    expect(within(grid).getAllByTestId('metric-card')).toHaveLength(3);
+    expect(within(grid).getByText('Estimated from salary')).toBeInTheDocument();
+    expect(within(grid).getByText(/surplus|deficit/i)).toBeInTheDocument();
+  });
+
   it('(e) imports a transaction CSV end-to-end via the unified import surface', async () => {
     await useCategoriesStore.getState().load();
     useHouseholdStore.setState({
@@ -699,6 +725,58 @@ describe('Spending page', () => {
     // Lease line: 450 across 1 lease.
     expect(screen.getByText(/\$450/)).toBeInTheDocument();
     expect(screen.getByText(/Leases · 1 lease/i)).toBeInTheDocument();
+  });
+
+  it('Recurring/Subscriptions/Reimbursement sections render as shared Cards (wave-7 W5)', async () => {
+    await useCategoriesStore.getState().load();
+
+    // Rentals + leases exactly as the recurring-obligations test seeds them…
+    await new HousingPaymentsRepo(db).create({
+      householdId: 1,
+      ownerPersonId: null,
+      name: 'Apt',
+      monthlyAmount: 2400,
+      startDate: '2025-01-01',
+      endDate: null,
+    });
+    await new VehicleLeasesRepo(db).create({
+      householdId: 1,
+      ownerPersonId: null,
+      name: 'Tesla',
+      monthlyAmount: 450,
+      startDate: '2025-01-01',
+      endDate: null,
+    });
+
+    // …AND transactions exactly as the subscriptions/reimbursement test (c)
+    // seeds them, so all three sections mount together.
+    const netflixBase: Omit<Transaction, 'id'> = {
+      householdId: 1, merchant: 'NETFLIX', merchantRaw: 'NETFLIX.COM',
+      amount: 15.49, categoryId: 37, sourceAccountId: null, propertyId: null,
+      vehicleId: null, personId: null, sourcePdfFilename: 'mar.pdf', reimbursable: false,
+      reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
+      date: '2026-01-09',
+    };
+    const reimbursableTxn: Omit<Transaction, 'id'> = {
+      householdId: 1, date: '2026-03-10', merchant: 'ACME EXPENSE', merchantRaw: 'ACME EXPENSE',
+      amount: 200, categoryId: 37, sourceAccountId: null, propertyId: null,
+      vehicleId: null, personId: null, sourcePdfFilename: 'mar.pdf', reimbursable: true,
+      reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
+    };
+    await useTransactionsStore.getState().createMany([
+      { ...netflixBase, date: '2026-01-09' },
+      { ...netflixBase, date: '2026-02-09' },
+      { ...netflixBase, date: '2026-03-09' },
+      reimbursableTxn,
+    ]);
+
+    renderPage();
+
+    expect(await screen.findByTestId('spending-recurring-card')).toBeInTheDocument();
+    expect(screen.getByTestId('spending-subscriptions-card')).toBeInTheDocument();
+    expect(screen.getByTestId('spending-reimbursement-card')).toBeInTheDocument();
+    // Copy contract survives the wrapper swap.
+    expect(screen.getByText(/active rent \+ vehicle leases/i)).toBeInTheDocument();
   });
 
   it('(unified-errors) surfaces a per-file error pane when a CSV file read fails', async () => {

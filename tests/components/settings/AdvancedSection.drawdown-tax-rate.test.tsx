@@ -12,7 +12,8 @@ import {
   ProjectionDetailLevel,
   CompoundingFrequency,
 } from '@/types/enums';
-import type { Household, AppSettings } from '@/types/schema';
+import type { AppSettings } from '@/types/schema';
+import { makeHousehold } from '../../factories';
 
 // Wave-5 Task 1 (Finance NEW-W5-1) — Settings → Advanced input for the
 // household-default retirement drawdown gross-up tax rate. Engine + schema
@@ -43,28 +44,6 @@ function makeSettings(patch: Partial<AppSettings> = {}): AppSettings {
   };
 }
 
-function makeHousehold(patch: Partial<Household> = {}): Household {
-  return {
-    id: 1,
-    name: null,
-    filingStatus: FilingStatus.SINGLE,
-    state: 'CA',
-    city: null,
-    monthlyExpenseBaseline: 5000,
-    withdrawalRate: 0.04,
-    inflationAssumption: 0.03,
-    growthScenarios: [],
-    interestThresholdLowPct: null,
-    interestThresholdHighPct: null,
-    hasWrittenIps: null,
-    hasHsaQualifiedHdhp: null,
-    makesCharitableGifts: null,
-    upcomingLargePurchase: null,
-    upcomingPurchaseAmount: null,
-    upcomingPurchaseMonths: null,
-    ...patch,
-  };
-}
 
 function resetCategoriesStore() {
   useCategoriesStore.setState({
