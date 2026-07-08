@@ -71,7 +71,7 @@ describe('LearningStateRepo', () => {
     });
     // Keyed (id, version): `beg-apr@v1`, not the bare id.
     expect(await repo.listAnsweredQuestionIds()).toEqual(['beg-apr@v1']);
-    expect(await repo.countAnswered()).toBe(1);
+    expect(await repo.answeredStats()).toEqual({ answered: 1, correct: 1 });
   });
 
   it('treats a same-(id, version) re-answer as a no-op (one-shot per version)', async () => {
@@ -86,7 +86,8 @@ describe('LearningStateRepo', () => {
     await expect(
       repo.recordAnswer({ ...a, answeredIsoDate: '2026-05-29', chosenIndex: 1, wasCorrect: false }),
     ).resolves.not.toThrow();
-    expect(await repo.countAnswered()).toBe(1);
+    // The duplicate write is a no-op: still one row, still one correct.
+    expect(await repo.answeredStats()).toEqual({ answered: 1, correct: 1 });
   });
 
   it('records a bumped version as a new row (v1.2 re-prompt after a content correction)', async () => {
@@ -100,8 +101,15 @@ describe('LearningStateRepo', () => {
     await repo.recordAnswer(v1);
     // Same question, version bumped after a correction — answerable again.
     await repo.recordAnswer({ ...v1, answeredIsoDate: '2026-06-01', questionVersion: 2 });
-    expect(await repo.countAnswered()).toBe(2);
+    expect(await repo.answeredStats()).toEqual({ answered: 2, correct: 2 });
     expect((await repo.listAnsweredQuestionIds()).sort()).toEqual(['beg-apr@v1', 'beg-apr@v2']);
+  });
+
+  it('answeredStats aggregates was_correct (the all-time progress line)', async () => {
+    await repo.recordAnswer({ questionId: 'a', answeredIsoDate: '2026-07-01', chosenIndex: 0, wasCorrect: true, questionVersion: 1 });
+    await repo.recordAnswer({ questionId: 'b', answeredIsoDate: '2026-07-02', chosenIndex: 1, wasCorrect: false, questionVersion: 1 });
+    await repo.recordAnswer({ questionId: 'c', answeredIsoDate: '2026-07-03', chosenIndex: 2, wasCorrect: true, questionVersion: 1 });
+    expect(await repo.answeredStats()).toEqual({ answered: 3, correct: 2 });
   });
 
   // L1.0 — date-aware producer for the derive anchor (§3.0). Partitions the
@@ -110,7 +118,11 @@ describe('LearningStateRepo', () => {
   // migration.
   describe('getAnsweredKeysByDay', () => {
     it('returns {priorDays:[], today:[]} for an empty table', async () => {
-      expect(await repo.getAnsweredKeysByDay('2026-06-01')).toEqual({ priorDays: [], today: [] });
+      expect(await repo.getAnsweredKeysByDay('2026-06-01')).toEqual({
+        priorDays: [],
+        today: [],
+        todayDetails: [],
+      });
     });
 
     it('partitions prior-day vs today keys (version-aware)', async () => {
@@ -144,6 +156,17 @@ describe('LearningStateRepo', () => {
       const out = await repo.getAnsweredKeysByDay('2026-06-01');
       expect(out.today).toEqual(['beg-apr@v2']);
       expect(out.priorDays).toEqual([]);
+    });
+
+    it("returns today's chosen_index per key (todayDetails) for graded-reveal rehydration", async () => {
+      await repo.recordAnswer({
+        questionId: 'beg-apr', answeredIsoDate: '2026-07-07', chosenIndex: 2, wasCorrect: false, questionVersion: 1,
+      });
+      await repo.recordAnswer({
+        questionId: 'adv-tax', answeredIsoDate: '2026-07-06', chosenIndex: 0, wasCorrect: true, questionVersion: 1,
+      });
+      const { todayDetails } = await repo.getAnsweredKeysByDay('2026-07-07');
+      expect(todayDetails).toEqual([{ key: 'beg-apr@v1', chosenIndex: 2 }]); // prior-day rows excluded
     });
   });
 

@@ -64,21 +64,16 @@ export class LearningStateRepo {
   }
 
   async recordAnswer(a: Omit<LearningAnswer, 'id'>): Promise<void> {
-    try {
-      await this.db.execute(
-        `INSERT INTO learning_answers (
-          question_id, answered_iso_date, chosen_index, was_correct, question_version
-        ) VALUES (?, ?, ?, ?, ?)`,
-        [a.questionId, a.answeredIsoDate, a.chosenIndex, a.wasCorrect ? 1 : 0, a.questionVersion],
-      );
-    } catch (err) {
-      // UNIQUE(question_id, question_version) hit = this exact version already
-      // answered; one-shot-per-version rule, treat as no-op. A bumped version
-      // (v1.2 correction) is a NEW (id, version) pair, so it is NOT swallowed —
-      // it inserts a fresh row and the question re-prompts.
-      if (String(err).includes('UNIQUE')) return;
-      throw err;
-    }
+    // INSERT OR IGNORE: a same-(question_id, question_version) re-answer hits
+    // the composite UNIQUE and is skipped — the one-shot-per-version rule —
+    // without string-matching driver error text. A bumped version (v1.2
+    // correction) is a NEW pair, so it inserts and the question re-prompts.
+    await this.db.execute(
+      `INSERT OR IGNORE INTO learning_answers (
+        question_id, answered_iso_date, chosen_index, was_correct, question_version
+      ) VALUES (?, ?, ?, ?, ?)`,
+      [a.questionId, a.answeredIsoDate, a.chosenIndex, a.wasCorrect ? 1 : 0, a.questionVersion],
+    );
   }
 
   /**
@@ -97,11 +92,12 @@ export class LearningStateRepo {
     return rows.map((r) => answeredKey(r.question_id, r.question_version));
   }
 
-  async countAnswered(): Promise<number> {
-    const rows = await this.db.select<{ n: number }>(
-      'SELECT COUNT(*) AS n FROM learning_answers',
+  /** All-time participation + accuracy for the Learn header's progress line (Wave 8). */
+  async answeredStats(): Promise<{ answered: number; correct: number }> {
+    const rows = await this.db.select<{ n: number; c: number }>(
+      'SELECT COUNT(*) AS n, COALESCE(SUM(was_correct), 0) AS c FROM learning_answers',
     );
-    return rows[0]?.n ?? 0;
+    return { answered: rows[0]?.n ?? 0, correct: rows[0]?.c ?? 0 };
   }
 
   /**
@@ -116,20 +112,27 @@ export class LearningStateRepo {
    * `listAnsweredQuestionIds()` is kept for back-compat / other call sites; this
    * method is additive (a later cleanup may express the old one as priorDays ∪
    * today, but do not churn it here).
+   *
+   * `todayDetails` (Wave 8) powers the stepped-back graded reveal: the
+   * chosen_index was persisted since 0037 but never read back until now, so a
+   * later same-day visit can rehydrate exactly what the user picked.
    */
   async getAnsweredKeysByDay(
     todayISO: string,
-  ): Promise<{ priorDays: string[]; today: string[] }> {
+  ): Promise<{ priorDays: string[]; today: string[]; todayDetails: Array<{ key: string; chosenIndex: number }> }> {
     const rows = await this.db.select<{
       question_id: string;
       question_version: number;
       answered_iso_date: string;
-    }>('SELECT question_id, question_version, answered_iso_date FROM learning_answers');
+      chosen_index: number;
+    }>('SELECT question_id, question_version, answered_iso_date, chosen_index FROM learning_answers');
     const key = (r: { question_id: string; question_version: number }) =>
       answeredKey(r.question_id, r.question_version);
+    const todayRows = rows.filter((r) => r.answered_iso_date === todayISO);
     return {
       priorDays: rows.filter((r) => r.answered_iso_date !== todayISO).map(key),
-      today: rows.filter((r) => r.answered_iso_date === todayISO).map(key),
+      today: todayRows.map(key),
+      todayDetails: todayRows.map((r) => ({ key: key(r), chosenIndex: r.chosen_index })),
     };
   }
 }
