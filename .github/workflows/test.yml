@@ -104,13 +104,11 @@ jobs:
         run: cargo test
 
   e2e-smoke:
-    name: Browser-shim smoke (Playwright, advisory)
+    name: Browser-shim smoke (Playwright)
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Scaffold phase: advisory-only so a flaky cold-start can't block merges.
-    # Flip to required (delete this line) once it's proven stable for a few
-    # weeks — tracked as a Wave 5 follow-up.
-    continue-on-error: true
+    # Required since wave-7: five deterministic flows (boot, net-worth hero,
+    # What-If lever, CSV round-trip, Monthly confirm) — no longer advisory.
     steps:
       - uses: actions/checkout@v4
 
