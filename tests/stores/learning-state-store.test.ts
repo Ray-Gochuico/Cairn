@@ -11,6 +11,11 @@ const loadInitial = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
 const loadLearning = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0037_learning_state.sql'), 'utf-8');
+const loadPreferenceDefault = () =>
+  readFileSync(
+    resolve(__dirname, '../../src/db/migrations/0048_learning_preference_default.sql'),
+    'utf-8',
+  );
 
 describe('useLearningStore', () => {
   let db: SqliteAdapter;
@@ -20,6 +25,7 @@ describe('useLearningStore', () => {
     await runMigrations(db, [
       { version: '0001_initial', sql: loadInitial() },
       { version: '0037_learning_state', sql: loadLearning() },
+      { version: '0048_learning_preference_default', sql: loadPreferenceDefault() },
     ]);
     setDatabase(db);
     useLearningStore.setState({
@@ -37,7 +43,7 @@ describe('useLearningStore', () => {
 
   it('loads the seeded state + empty answer list', async () => {
     await useLearningStore.getState().load();
-    expect(useLearningStore.getState().learningState?.difficultyPreference).toBe('Beginner');
+    expect(useLearningStore.getState().learningState?.difficultyPreference).toBe('Mixed');
     expect(useLearningStore.getState().answeredQuestionIds).toEqual([]);
   });
 

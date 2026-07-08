@@ -35,6 +35,9 @@ const HAND_CURATED_DATA_ALLOWLIST: ReadonlySet<string> = new Set([
   '0038_seed_modern_etfs',
   '0039_default_daily_refresh',
   '0040_clear_synthetic_snapshots',
+  // 0048 is a singleton default flip on learning_state (Wave 8 Learn redesign):
+  // one UPDATE of a UI-preference row, no financial reference data.
+  '0048_learning_preference_default',
 ]);
 
 /** Mirror of the runner's pre-split comment strip (src/db/migrations.ts). */

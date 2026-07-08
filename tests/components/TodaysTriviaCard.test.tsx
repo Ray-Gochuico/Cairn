@@ -53,6 +53,7 @@ async function boot(open: boolean): Promise<SqliteAdapter> {
     { version: '0001_initial', sql: sql('0001_initial') },
     { version: '0017_disclosure_foundations', sql: sql('0017_disclosure_foundations') },
     { version: '0037_learning_state', sql: sql('0037_learning_state') },
+    { version: '0048_learning_preference_default', sql: sql('0048_learning_preference_default') },
   ]);
   setDatabase(db);
   useHouseholdStore.setState({ household: null, isLoading: false, error: null });

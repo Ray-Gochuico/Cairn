@@ -1105,7 +1105,7 @@ describe('LearningStateSchema', () => {
   it('applies defaults for an empty object', () => {
     const parsed = LearningStateSchema.parse({});
     expect(parsed.id).toBe(1);
-    expect(parsed.difficultyPreference).toBe(LearningDifficulty.BEGINNER);
+    expect(parsed.difficultyPreference).toBe(LearningDifficulty.MIXED);
     expect(parsed.streakCount).toBe(0);
     expect(parsed.lastShownQuestionId).toBeNull();
     expect(parsed.lastShownIsoDate).toBeNull();

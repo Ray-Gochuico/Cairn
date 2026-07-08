@@ -86,7 +86,7 @@ use tauri_plugin_sql::{DbInstances, DbPool};
 /// `tests::max_schema_version_is_pinned_to_47` below, the JS side by
 /// `tests/db/schema-version-guard.test.ts` (which also asserts the JS value
 /// equals the migration count).
-pub const MAX_SCHEMA_VERSION: i64 = 47;
+pub const MAX_SCHEMA_VERSION: i64 = 48;
 
 /// Outcome of validating a candidate backup file, surfaced to JS so the UI can
 /// show a specific message before the destructive confirm.

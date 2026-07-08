@@ -13,6 +13,11 @@ const loadInitial = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0001_initial.sql'), 'utf-8');
 const loadLearning = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0037_learning_state.sql'), 'utf-8');
+const loadPreferenceDefault = () =>
+  readFileSync(
+    resolve(__dirname, '../../src/db/migrations/0048_learning_preference_default.sql'),
+    'utf-8',
+  );
 
 describe('LearningStateRepo', () => {
   let db: SqliteAdapter;
@@ -23,6 +28,7 @@ describe('LearningStateRepo', () => {
     await runMigrations(db, [
       { version: '0001_initial', sql: loadInitial() },
       { version: '0037_learning_state', sql: loadLearning() },
+      { version: '0048_learning_preference_default', sql: loadPreferenceDefault() },
     ]);
     repo = new LearningStateRepo(db);
   });
@@ -34,7 +40,7 @@ describe('LearningStateRepo', () => {
   it('returns the seeded singleton with defaults', async () => {
     const s = await repo.get();
     expect(s.id).toBe(1);
-    expect(s.difficultyPreference).toBe('Beginner');
+    expect(s.difficultyPreference).toBe('Mixed');
     expect(s.streakCount).toBe(0);
     expect(s.lastShownQuestionId).toBeNull();
     expect(s.lastShownIsoDate).toBeNull();
