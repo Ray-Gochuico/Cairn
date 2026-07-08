@@ -67,4 +67,21 @@ describe('TermTooltip', () => {
       expect(warn).toHaveBeenCalled();
     }
   });
+
+  it('keyboard (Enter) open moves focus INTO the popover content', async () => {
+    const user = userEvent.setup();
+    render(<TermTooltip term="DCFSA" />);
+    await user.tab(); // focus the trigger button
+    await user.keyboard('{Enter}');
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.contains(document.activeElement)).toBe(true);
+  });
+
+  it('hover open keeps focus where it was (no focus steal for pointer users)', async () => {
+    const user = userEvent.setup();
+    render(<TermTooltip term="DCFSA" />);
+    await user.hover(screen.getByRole('button'));
+    await screen.findByRole('dialog');
+    expect(screen.getByRole('dialog').contains(document.activeElement)).toBe(false);
+  });
 });
