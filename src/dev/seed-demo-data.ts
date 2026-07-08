@@ -1,5 +1,7 @@
 import type { Database } from '@/db/db';
 import { DISCLOSURES } from '@/legal/disclosures';
+import { lastBusinessDayOfMonth } from '@/lib/business-days';
+import { lastMonthYyyymm } from '@/lib/input-pending';
 
 /**
  * DEV-ONLY demo-data seed for browser smoke tests of the Investments donuts.
@@ -95,19 +97,27 @@ export async function seedDemoData(db: Database): Promise<void> {
   await addHolding(k401Id, 'FXAIX', 350);
   await addHolding(k401Id, 'BND', 180); // bond fund
 
-  // 5. account_snapshots — THE critical rows. One per account, dated today,
-  //    AUTO_DERIVED. Positive totals so latestSnapshotForAccount() > 0 and the
-  //    value split in valueHoldings() yields real per-holding dollars.
-  async function addSnapshot(accountId: number, totalValue: number): Promise<void> {
+  // 5. account_snapshots — THE critical rows. Two per account: dated today
+  //    (drives every latest-value donut) and dated LAST MONTH'S CLOSE
+  //    (wave-7 W7: the Monthly check-in's Section 1 only shows confirm
+  //    cards for accounts with an AUTO_DERIVED snapshot at
+  //    lastBusinessDayOfMonth(last month) — today-only snapshots left the
+  //    demo/e2e Monthly window with nothing to confirm). Last-month values
+  //    sit slightly below today's so the month reads as growth.
+  async function addSnapshot(accountId: number, snapshotDate: string, totalValue: number): Promise<void> {
     await db.execute(
       `INSERT OR REPLACE INTO account_snapshots (account_id, snapshot_date, total_value, source)
        VALUES (?, ?, ?, 'AUTO_DERIVED')`,
-      [accountId, today, totalValue],
+      [accountId, snapshotDate, totalValue],
     );
   }
-  await addSnapshot(brokerageId, 285000);
-  await addSnapshot(rothId, 92000);
-  await addSnapshot(k401Id, 410000);
+  const lastMonthClose = lastBusinessDayOfMonth(lastMonthYyyymm(new Date()));
+  await addSnapshot(brokerageId, today, 285000);
+  await addSnapshot(rothId, today, 92000);
+  await addSnapshot(k401Id, today, 410000);
+  await addSnapshot(brokerageId, lastMonthClose, 277500);
+  await addSnapshot(rothId, lastMonthClose, 89500);
+  await addSnapshot(k401Id, lastMonthClose, 402000);
 
   // 6. Loans — LiabilitiesDonut needs current_balance > 0.
   async function addLoan(

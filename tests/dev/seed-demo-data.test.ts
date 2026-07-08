@@ -34,7 +34,7 @@ describe('seedDemoData', () => {
     const rows = await db.select<{ account_id: number; total_value: number; snapshot_date: string }>(
       'SELECT account_id, total_value, snapshot_date FROM account_snapshots',
     );
-    expect(rows.length).toBe(DEMO_SEED.accountCount);
+    expect(rows.length).toBe(DEMO_SEED.accountCount * 2);
     for (const r of rows) expect(r.total_value).toBeGreaterThan(0);
     // All snapshots dated <= today so latestSnapshotForAccount picks them up.
     const today = new Date().toISOString().slice(0, 10);
@@ -80,7 +80,7 @@ describe('seedDemoData', () => {
     const loans = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM loans');
     expect(persons[0].n).toBe(1);
     expect(accts[0].n).toBe(DEMO_SEED.accountCount);
-    expect(snaps[0].n).toBe(DEMO_SEED.accountCount);
+    expect(snaps[0].n).toBe(DEMO_SEED.accountCount * 2);
     expect(loans[0].n).toBe(DEMO_SEED.loanCount);
   });
 
@@ -112,6 +112,18 @@ describe('seedDemoData', () => {
     const valued = valueHoldings(accountObjs, holdingObjs, latestPerAccount, assetClassByTicker);
     const total = valued.reduce((a, v) => a + v.value, 0);
     expect(total).toBeGreaterThan(0);
+  });
+
+  it('seeds an AUTO_DERIVED last-month-close snapshot per account (Monthly confirm has work)', async () => {
+    await seedDemoData(db);
+    const { lastBusinessDayOfMonth } = await import('@/lib/business-days');
+    const { lastMonthYyyymm } = await import('@/lib/input-pending');
+    const close = lastBusinessDayOfMonth(lastMonthYyyymm(new Date()));
+    const rows = await db.select<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM account_snapshots WHERE snapshot_date = ? AND source = 'AUTO_DERIVED'`,
+      [close],
+    );
+    expect(rows[0].n).toBe(DEMO_SEED.accountCount);
   });
 
   it('backfills sector/industry for directly-held single names (Sector donut demo coverage)', async () => {
