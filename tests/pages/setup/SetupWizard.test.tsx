@@ -24,33 +24,11 @@ import { useHouseholdStore } from '@/stores/household-store';
 import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
-import { FilingStatus } from '@/types/enums';
 import type { Household } from '@/types/schema';
 import { DISCLOSURES } from '@/legal/disclosures';
 import SetupWizard from '@/pages/setup/SetupWizard';
+import { makeHousehold } from '../../factories';
 
-function makeHousehold(patch: Partial<Household> = {}): Household {
-  return {
-    id: 1,
-    name: null,
-    filingStatus: FilingStatus.SINGLE,
-    state: 'CA',
-    city: null,
-    monthlyExpenseBaseline: 5000,
-    withdrawalRate: 0.04,
-    inflationAssumption: 0.024,
-    growthScenarios: [],
-    interestThresholdLowPct: null,
-    interestThresholdHighPct: null,
-    hasWrittenIps: null,
-    hasHsaQualifiedHdhp: null,
-    makesCharitableGifts: null,
-    upcomingLargePurchase: null,
-    upcomingPurchaseAmount: null,
-    upcomingPurchaseMonths: null,
-    ...patch,
-  };
-}
 
 function resetStores(opts: {
   household?: Household | null;
@@ -125,7 +103,7 @@ describe('SetupWizard route handler', () => {
 
   it('mounts SectionLayout at Section 1 when the disclaimer is already accepted', () => {
     resetStores({
-      household: makeHousehold(),
+      household: makeHousehold({ inflationAssumption: 0.024 }),
       appWideAccepted: DISCLOSURES.app_wide.version,
     });
     renderAt(['/setup']);
@@ -136,7 +114,7 @@ describe('SetupWizard route handler', () => {
 
   it('?section=4 jumps to Section 4 when persons exist (existing household)', () => {
     resetStores({
-      household: makeHousehold(),
+      household: makeHousehold({ inflationAssumption: 0.024 }),
       appWideAccepted: DISCLOSURES.app_wide.version,
       persons: [{ id: 1, name: 'Alice' }],
     });
@@ -155,7 +133,7 @@ describe('SetupWizard route handler', () => {
 
   it('?section=4 with persons skips the disclaimer even if not yet accepted', () => {
     resetStores({
-      household: makeHousehold(),
+      household: makeHousehold({ inflationAssumption: 0.024 }),
       persons: [{ id: 1, name: 'Alice' }],
     });
     renderAt(['/setup?section=4']);

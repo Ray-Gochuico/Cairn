@@ -8,35 +8,12 @@ import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import { DisclosureAcceptancesRepo } from '@/domain/disclosure-acceptances';
 import { DISCLOSURES } from '@/legal/disclosures';
 import { setDatabase } from '@/db/db';
-import { FilingStatus } from '@/types/enums';
-import type { Household } from '@/types/schema';
+import { makeHousehold } from '../factories';
 
 // Minimal non-null household — the gate's `if (!household) return children`
 // guard needs a household, but disclosure acceptance is read from the
 // acceptances store (single source of truth, MF-1), NOT a household column
 // (those were dropped in 0043).
-function makeHousehold(patch: Partial<Household> = {}): Household {
-  return {
-    id: 1,
-    name: null,
-    filingStatus: FilingStatus.SINGLE,
-    state: 'CA',
-    city: null,
-    monthlyExpenseBaseline: 5000,
-    withdrawalRate: 0.04,
-    inflationAssumption: 0.03,
-    growthScenarios: [],
-    interestThresholdLowPct: null,
-    interestThresholdHighPct: null,
-    hasWrittenIps: null,
-    hasHsaQualifiedHdhp: null,
-    makesCharitableGifts: null,
-    upcomingLargePurchase: null,
-    upcomingPurchaseAmount: null,
-    upcomingPurchaseMonths: null,
-    ...patch,
-  };
-}
 
 // Seed the acceptances projection as a COMPLETED load (`status: 'ready'`).
 // Without `ready` the gate sits in its loading state and renders neither

@@ -23,32 +23,11 @@ import {
 } from '@/domain/roadmap/rules/section4Misc';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
-import type { Account, Household, Person } from '@/types/schema';
+import type { Account, Person } from '@/types/schema';
 import type { RoadmapContext } from '@/types/roadmap';
-import { AccountType, FilingStatus } from '@/types/enums';
+import { AccountType } from '@/types/enums';
+import { makeHousehold } from '../../../factories';
 
-function makeHousehold(patch: Partial<Household> = {}): Household {
-  return {
-    id: 1,
-    name: null,
-    filingStatus: FilingStatus.SINGLE,
-    state: 'CA',
-    city: null,
-    monthlyExpenseBaseline: 5000,
-    withdrawalRate: 0.04,
-    inflationAssumption: 0.03,
-    growthScenarios: [],
-    interestThresholdLowPct: null,
-    interestThresholdHighPct: null,
-    hasWrittenIps: null,
-    hasHsaQualifiedHdhp: null,
-    makesCharitableGifts: null,
-    upcomingLargePurchase: null,
-    upcomingPurchaseAmount: null,
-    upcomingPurchaseMonths: null,
-    ...patch,
-  };
-}
 
 function makePerson(patch: Partial<Person> = {}): Person {
   return {

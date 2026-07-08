@@ -2,31 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { evaluate } from '@/domain/roadmap/evaluate';
 import { NODES } from '@/domain/roadmap/nodes';
 import type { RoadmapContext, RoadmapNodeOverride } from '@/types/roadmap';
-import { FilingStatus } from '@/types/enums';
-import type { Household } from '@/types/schema';
+import { makeHousehold } from '../../factories';
 
-function makeHousehold(patch: Partial<Household> = {}): Household {
-  return {
-    id: 1,
-    name: null,
-    filingStatus: FilingStatus.SINGLE,
-    state: 'CA',
-    city: null,
-    monthlyExpenseBaseline: 5000,
-    withdrawalRate: 0.04,
-    inflationAssumption: 0.03,
-    growthScenarios: [],
-    interestThresholdLowPct: null,
-    interestThresholdHighPct: null,
-    hasWrittenIps: null,
-    hasHsaQualifiedHdhp: null,
-    makesCharitableGifts: null,
-    upcomingLargePurchase: null,
-    upcomingPurchaseAmount: null,
-    upcomingPurchaseMonths: null,
-    ...patch,
-  };
-}
 
 function makeContext(patch: Partial<RoadmapContext> = {}): RoadmapContext {
   const household = patch.household ?? makeHousehold();

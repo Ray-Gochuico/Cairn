@@ -8,8 +8,7 @@ import type {
   RoadmapContext,
   RoadmapNode,
 } from '@/types/roadmap';
-import type { Household } from '@/types/schema';
-import { FilingStatus } from '@/types/enums';
+import { makeHousehold } from '../../factories';
 
 function makeNode(id: NodeId, title = id): RoadmapNode {
   return {
@@ -23,27 +22,6 @@ function makeNode(id: NodeId, title = id): RoadmapNode {
   };
 }
 
-function makeHousehold(): Household {
-  return {
-    id: 1,
-    name: null,
-    filingStatus: FilingStatus.SINGLE,
-    state: 'CA',
-    city: null,
-    monthlyExpenseBaseline: 5000,
-    withdrawalRate: 0.04,
-    inflationAssumption: 0.03,
-    growthScenarios: [],
-    interestThresholdLowPct: null,
-    interestThresholdHighPct: null,
-    hasWrittenIps: null,
-    hasHsaQualifiedHdhp: null,
-    makesCharitableGifts: null,
-    upcomingLargePurchase: null,
-    upcomingPurchaseAmount: null,
-    upcomingPurchaseMonths: null,
-  };
-}
 
 function makeCtx(): RoadmapContext {
   return {

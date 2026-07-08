@@ -5,30 +5,8 @@ import {
 } from '@/domain/roadmap/rules/budgetEssentials';
 import type { RoadmapContext } from '@/types/roadmap';
 import type { Household } from '@/types/schema';
-import { FilingStatus } from '@/types/enums';
+import { makeHousehold } from '../../../factories';
 
-function makeHousehold(patch: Partial<Household> = {}): Household {
-  return {
-    id: 1,
-    name: null,
-    filingStatus: FilingStatus.SINGLE,
-    state: 'CA',
-    city: null,
-    monthlyExpenseBaseline: 5000,
-    withdrawalRate: 0.04,
-    inflationAssumption: 0.03,
-    growthScenarios: [],
-    interestThresholdLowPct: null,
-    interestThresholdHighPct: null,
-    hasWrittenIps: null,
-    hasHsaQualifiedHdhp: null,
-    makesCharitableGifts: null,
-    upcomingLargePurchase: null,
-    upcomingPurchaseAmount: null,
-    upcomingPurchaseMonths: null,
-    ...patch,
-  };
-}
 
 function makeContext(patch: Partial<Household> = {}): RoadmapContext {
   return {

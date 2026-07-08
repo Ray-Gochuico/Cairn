@@ -11,33 +11,11 @@ import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { useRoadmapOverridesStore } from '@/stores/roadmap-overrides-store';
 import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
-import { FilingStatus } from '@/types/enums';
 import type { Household } from '@/types/schema';
+import { makeHousehold } from '../../factories';
 
 const ACCEPTED = '1.0';
 
-function makeHousehold(patch: Partial<Household> = {}): Household {
-  return {
-    id: 1,
-    name: null,
-    filingStatus: FilingStatus.SINGLE,
-    state: 'CA',
-    city: null,
-    monthlyExpenseBaseline: 5000,
-    withdrawalRate: 0.04,
-    inflationAssumption: 0.03,
-    growthScenarios: [],
-    interestThresholdLowPct: null,
-    interestThresholdHighPct: null,
-    hasWrittenIps: null,
-    hasHsaQualifiedHdhp: null,
-    makesCharitableGifts: null,
-    upcomingLargePurchase: null,
-    upcomingPurchaseAmount: null,
-    upcomingPurchaseMonths: null,
-    ...patch,
-  };
-}
 
 // The roadmap gate reads the acceptances projection (single source of truth,
 // MF-1), not a household column. Default to an accepted roadmap so the
