@@ -50,8 +50,8 @@ export function TermTooltip({ term, children, className }: TermTooltipProps) {
   // Wave-8 a11y: whether the CURRENT open was pointer-initiated. Pointer
   // flows fire pointerenter before click, so the ref is true for hover and
   // mouse-click opens; a keyboard Enter "click" never sees pointerenter and
-  // leaves it false. Reset on close so a stale hover can't mislabel a later
-  // keyboard open.
+  // leaves it false. Reset on EVERY close (the effect below) so a stale
+  // hover can't mislabel a later keyboard open.
   const pointerOpenRef = useRef(false);
 
   const cancelClose = () => {
@@ -66,6 +66,16 @@ export function TermTooltip({ term, children, className }: TermTooltipProps) {
   };
 
   useEffect(() => () => cancelClose(), []);
+
+  // Reset the pointer-open flag on EVERY close, whatever the close path.
+  // Radix's onOpenChange(false) only fires for closes Radix initiates
+  // (Escape, click-outside); the component's own hover-away close goes
+  // through scheduleClose → setOpen(false) directly and would leave a stale
+  // `true` behind — mislabeling the NEXT keyboard open as pointer-initiated
+  // and stranding focus on the trigger (the review's MUST-3b regression).
+  useEffect(() => {
+    if (!open) pointerOpenRef.current = false;
+  }, [open]);
 
   useEffect(() => {
     if (entry) return;
