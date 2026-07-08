@@ -113,4 +113,24 @@ describe('seedDemoData', () => {
     const total = valued.reduce((a, v) => a + v.value, 0);
     expect(total).toBeGreaterThan(0);
   });
+
+  it('backfills sector/industry for directly-held single names (Sector donut demo coverage)', async () => {
+    await seedDemoData(db);
+    const rows = await db.select<{ ticker: string; sector: string | null; industry: string | null }>(
+      "SELECT ticker, sector, industry FROM tickers WHERE ticker IN ('AAPL', 'MSFT', 'NVDA') ORDER BY ticker",
+    );
+    expect(rows).toHaveLength(3);
+    for (const r of rows) {
+      // Real-world GICS sector for all three; Title-Case matches
+      // snakeToTitleSector's fund-weight vocabulary so wedges merge.
+      expect(r.sector).toBe('Technology');
+      expect(r.industry).not.toBeNull();
+    }
+    // BND deliberately stays sector-NULL: assetClassToPseudoSector maps
+    // US_BONDS → 'Fixed Income', which is already the wedge we want.
+    const bnd = await db.select<{ sector: string | null }>(
+      "SELECT sector FROM tickers WHERE ticker = 'BND'",
+    );
+    expect(bnd[0].sector).toBeNull();
+  });
 });

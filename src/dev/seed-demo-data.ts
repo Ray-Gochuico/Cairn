@@ -24,7 +24,8 @@ import { DISCLOSURES } from '@/legal/disclosures';
  * a persisted IndexedDB DB is a no-op.
  *
  * Tickers (VTI, FXAIX, AAPL, MSFT, NVDA, BND) are already seeded by migrations
- * 0006/0038, so this does not write the `tickers` table.
+ * 0006/0038; this module only UPDATEs their sector/industry columns (step 8)
+ * — it never inserts ticker rows.
  */
 
 export const DEMO_SEED = {
@@ -182,6 +183,29 @@ export async function seedDemoData(db: Database): Promise<void> {
   ];
   await seedFundSectors('VTI', usSectors);
   await seedFundSectors('FXAIX', usSectors);
+
+  // 8b. Sector/industry for the directly-held single names (wave-7 W3). The
+  //    ticker-seed migrations (0006/0038) predate the sector columns (0016),
+  //    so AAPL/MSFT/NVDA sit at sector NULL and the Sector donut buckets
+  //    them as 'Unclassified' in demo mode (no network → the runtime Yahoo
+  //    enrichment path never fills them). Mirror what ticker-enrichment.ts
+  //    would write, using the exact Title-Case vocabulary
+  //    snakeToTitleSector() produces so single-name wedges merge with the
+  //    fund-distributed wedges. BND stays sector-NULL on purpose:
+  //    assetClassToPseudoSector maps US_BONDS → 'Fixed Income', which is
+  //    already the wedge a bond fund should land in.
+  const DEMO_TICKER_PROFILES: ReadonlyArray<readonly [string, string, string]> = [
+    ['AAPL', 'Technology', 'Consumer Electronics'],
+    ['MSFT', 'Technology', 'Software—Infrastructure'],
+    ['NVDA', 'Technology', 'Semiconductors'],
+  ];
+  for (const [ticker, sector, industry] of DEMO_TICKER_PROFILES) {
+    await db.execute(`UPDATE tickers SET sector = ?, industry = ? WHERE ticker = ?`, [
+      sector,
+      industry,
+      ticker,
+    ]);
+  }
 
   // 9. Disclosure acceptance so AppDisclaimerGate doesn't block the smoke.
   await db.execute(
