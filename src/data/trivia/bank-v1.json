@@ -8854,23 +8854,23 @@
   },
   {
     "id": "adv-savings-compounding-frequency-math",
-    "version": 1,
+    "version": 2,
     "difficulty": "Advanced",
     "format": "math",
     "topic": "Savings",
-    "prompt": "You deposit $10,000 at a 6% nominal annual rate for one year. How much MORE interest do you earn if it compounds monthly instead of just once annually?",
+    "prompt": "You deposit $10,000 at an 8% nominal annual rate for one year. How much MORE interest do you earn if it compounds monthly instead of just once annually?",
     "choices": [
-      "about $16.78 more, because monthly compounding earns interest on interest within the year",
-      "exactly $600 more, because monthly compounding doubles the annual interest",
+      "about $30 more, because monthly compounding earns interest on interest within the year",
+      "exactly $800 more, because monthly compounding doubles the annual interest",
       "$0 more, because the nominal rate is identical either way",
-      "about $50 more, one-twelfth of the annual interest"
+      "about $67 more, one-twelfth of the annual interest"
     ],
     "answerIndex": 0,
-    "explanation": "Annual compounding pays $10,000 × 6% = $600. Monthly compounding pays $10,000 × (1 + 0.06/12)^12 − $10,000 ≈ $616.78, so the extra is about $16.78. The gap comes from earning interest on each month's interest; it widens with higher rates and longer horizons.",
+    "explanation": "Annual compounding ends the year at $10,800. Monthly compounding applies 8%/12 twelve times, ending near $10,830 — about $30 more, because each month's interest itself starts earning interest. The gap grows with the rate, the balance, and time.",
     "source": "Compound interest formula A = P(1 + r/n)^n",
     "check": {
-      "expr": "10000*(1+0.06/12)**12 - 10000*1.06",
-      "expected": 16.78,
+      "expr": "10000*(1+0.08/12)**12 - 10000*1.08",
+      "expected": 30.00,
       "tolerance": 0.05
     },
     "reviewed": true,

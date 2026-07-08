@@ -143,6 +143,17 @@ describe('bank-v1.json integrity', () => {
       if (Math.abs(answer - expected) > tol) {
         offenders.push(`${q.id}: |${answer} - ${expected}| > ${tol}`);
       }
+      // Wave 8: recompute INDEPENDENTLY from check.expr (does not echo the
+      // stored answer) — ported from the staging harness; all shipped math
+      // rows carry an expr.
+      if (q.check.expr) {
+        const computed = Function(`"use strict"; return (${q.check.expr});`)() as number;
+        if (Math.abs(computed - expected) > tol) {
+          offenders.push(`${q.id}: check.expr recomputes ${computed}, bank says ${expected}`);
+        }
+      } else {
+        offenders.push(`${q.id}: math question missing check.expr (recompute target)`);
+      }
     }
     expect(offenders).toEqual([]);
   });
@@ -192,6 +203,30 @@ describe('bank-v1.json integrity', () => {
     }
     expect(offenders).toEqual([]);
   });
+
+  // ---- Wave 8: numeric-signature cross-topic dupe gate ----
+  // Two math questions with the same prompt numbers AND the same computed
+  // answer are the same exercise wearing different topic hats — the topic-
+  // bucketed Jaccard gate can't see across buckets. Live dupe caught by the
+  // 2026-07 review: adv-foundations-compounding-frequency-math ≡
+  // adv-savings-compounding-frequency-math (both $10,000 @ 6% ⇒ $16.78).
+  it('no two math questions share a numeric signature (prompt numbers + expected answer)', () => {
+    const signature = (q: TriviaQuestion) => {
+      const nums = (q.prompt.match(/-?\d[\d,]*(?:\.\d+)?/g) ?? [])
+        .map((s) => Number(s.replace(/,/g, '')))
+        .sort((a, b) => a - b);
+      return `${nums.join('|')}⇒${q.check?.expected}`;
+    };
+    const seen = new Map<string, string>();
+    const offenders: string[] = [];
+    for (const q of parsed.filter((x) => x.format === QuestionFormat.MATH)) {
+      const sig = signature(q);
+      const prev = seen.get(sig);
+      if (prev) offenders.push(`${prev} ≡ ${q.id} (${sig})`);
+      else seen.set(sig, q.id);
+    }
+    expect(offenders).toEqual([]);
+  });
 });
 
 // Prove-it-bites probes — synthetic fixtures that exercise the FAILURE arm of
@@ -225,5 +260,16 @@ describe('integrity harness — prove-it-bites (synthetic)', () => {
       'Which of these best describes a Roth IRA?',
     );
     expect(sim > JACCARD_THRESHOLD).toBe(true);
+  });
+
+  it('check.expr recompute catches an expr that disagrees with expected', () => {
+    const computed = Function('"use strict"; return (100*1.10);')() as number;
+    expect(Math.abs(computed - 200) > DEFAULT_MATH_TOLERANCE).toBe(true);
+  });
+
+  it('numeric-signature gate catches a same-numbers same-answer pair', () => {
+    const sig = (prompt: string, expected: number) =>
+      `${(prompt.match(/-?\d[\d,]*(?:\.\d+)?/g) ?? []).map((s) => Number(s.replace(/,/g, ''))).sort((a, b) => a - b).join('|')}⇒${expected}`;
+    expect(sig('$10,000 at 6% for one year', 16.78)).toBe(sig('You deposit $10,000 at a 6% rate for one year', 16.78));
   });
 });
