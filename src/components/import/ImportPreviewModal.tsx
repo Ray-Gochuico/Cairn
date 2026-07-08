@@ -194,9 +194,14 @@ export function ImportPreviewModal({
           result = await commitPropertyImport(rows as any, {
             db,
             properties: new PropertiesRepo(db),
+            assetValueSnapshots: new AssetValueSnapshotsRepo(db),
             householdId,
+            todayIso: new Date().toISOString().slice(0, 10),
           });
           await loadProperties();
+          // A value change may have minted a snapshot — refeed its store so
+          // charts/value-history reflect it without an app reload.
+          await loadAssetValueSnapshots();
           break;
         }
         case 'vehicle': {
