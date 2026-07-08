@@ -96,7 +96,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     to: '/learn',
     title: 'Learn',
-    body: 'Bite-sized lessons and a daily question to sharpen your financial know-how.',
+    body: 'A few quick questions each day to sharpen your financial know-how.',
     core: false,
   },
   {
