@@ -626,7 +626,7 @@ export default function MonthlyMiniWindow() {
         .filter((l): l is Loan & { id: number } => l.id !== undefined)
         .map(async (l) => {
           try {
-            const schedule = await repo.projectedSchedule(l.id);
+            const schedule = await repo.projectedSchedule(l.id, todayISO());
             return [l.id, schedule[0] ?? null] as const;
           } catch {
             return [l.id, null] as const;

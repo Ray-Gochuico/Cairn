@@ -1,7 +1,7 @@
 import type { BatchStatement, Database } from '@/db/db';
 import { LoanSchema, type Loan } from '@/types/schema';
 import { LoanType } from '@/types/enums';
-import { amortize, type ScheduleEntry } from '@/lib/amortization';
+import { amortize, nextPaymentDateFrom, type ScheduleEntry } from '@/lib/amortization';
 
 interface LoanRow {
   id: number;
@@ -161,23 +161,23 @@ export class LoansRepo {
   }
 
   /**
-   * Project the remaining amortization schedule for a loan from its current
-   * balance forward. Uses the loan's stored rate, term, first-payment date,
-   * and default extra-payment amount. Callers (LoansTab, monthly mini-window)
-   * use this to render the payoff curve and to auto-fill upcoming payments.
-   *
-   * Note: principal is the current balance (remaining), not the original
-   * amount — what users care about is the schedule from today forward.
+   * Remaining schedule for a (possibly seasoned) loan. Wave-9 F3: mirrors
+   * Loans.tsx `projectLoan` / debt-payoff.ts — the CONTRACT monthlyPayment is
+   * authoritative (amortize() only derives a payment when none is stored),
+   * and the schedule anchors at the next payment date on/after `todayISO`,
+   * not the original firstPaymentDate. The Monthly ritual records
+   * schedule[0] into loan_payments, so both inputs are correctness-critical.
    */
-  async projectedSchedule(id: number): Promise<ScheduleEntry[]> {
+  async projectedSchedule(id: number, todayISO: string): Promise<ScheduleEntry[]> {
     const loan = await this.findById(id);
     if (!loan) throw new Error(`Loan ${id} not found`);
     const result = amortize({
       principal: loan.currentBalance,
       annualRatePct: loan.interestRate,
       termMonths: loan.termMonths,
-      firstPaymentDate: loan.firstPaymentDate,
+      firstPaymentDate: nextPaymentDateFrom(loan.firstPaymentDate, todayISO),
       extraPayment: loan.extraPaymentDefault,
+      monthlyPayment: loan.monthlyPayment,
     });
     return result.schedule;
   }
