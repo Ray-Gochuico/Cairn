@@ -418,6 +418,16 @@ export interface BonusTaxInput {
   stateBrackets: Bracket[];
   cityBrackets: Bracket[] | null;
   standardDeduction: StandardDeductionInput;
+  /**
+   * Wave-9 F1: per-earner annual base grosses EXCLUDING `bonus`. When
+   * present, FICA runs per earner (own SS wage base each, Medicare surtax on
+   * the combined return) in BOTH the with- and without-bonus passes, with
+   * `bonus` attributed to the earner at `recipientIndex` (default 0).
+   * Entries must sum to `personGross - bonus`. When omitted, the legacy
+   * combined-base behavior is preserved.
+   */
+  perPersonBaseGross?: number[];
+  recipientIndex?: number;
 }
 
 export interface BonusTaxOutput {
@@ -450,8 +460,14 @@ export interface BonusTaxOutput {
 export function computeBonusTax(input: BonusTaxInput): BonusTaxOutput {
   const grossWithoutBonus = input.personGross - input.bonus;
 
+  // Wave-9 F1: per-earner FICA split; the bonus rides on the recipient.
+  const baseSplit = input.perPersonBaseGross;
+  const recipient = input.recipientIndex ?? 0;
+  const withSplit = baseSplit?.map((g, i) => (i === recipient ? g + input.bonus : g));
+
   const withBonus = computeTotalTax({
     gross: input.personGross,
+    perPersonGross: withSplit,
     filingStatus: input.filingStatus,
     federalBrackets: input.federalBrackets,
     stateBrackets: input.stateBrackets,
@@ -462,6 +478,7 @@ export function computeBonusTax(input: BonusTaxInput): BonusTaxOutput {
 
   const withoutBonus = computeTotalTax({
     gross: grossWithoutBonus,
+    perPersonGross: baseSplit,
     filingStatus: input.filingStatus,
     federalBrackets: input.federalBrackets,
     stateBrackets: input.stateBrackets,

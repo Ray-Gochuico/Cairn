@@ -439,3 +439,51 @@ describe('computeTotalTax — optional perPersonGross routes FICA through the ho
     ).toBeCloseTo(2 * computeFica(150_000, 'MFJ') + 450, 6);
   });
 });
+
+describe('computeBonusTax perPersonBaseGross (wave-9 F1)', () => {
+  // Zero-rate brackets isolate FICA. NOTE the no-tax-state shape: a single
+  // zero-rate bracket, never [].
+  const ZERO: Bracket[] = [{ min: 0, max: null, rate: 0 }];
+  const base = {
+    pretax: { pretax401k: 0, pretaxHealth: 0, pretaxDcfsa: 0, pretaxHsa: 0 },
+    filingStatus: 'MFJ' as const,
+    federalBrackets: ZERO,
+    stateBrackets: ZERO,
+    cityBrackets: null,
+    standardDeduction: { federal: 0, state: 0, city: 0 },
+  };
+
+  it('caps Social Security per earner: dual-$150k MFJ, $30k bonus to earner 0', () => {
+    const r = computeBonusTax({
+      ...base,
+      personGross: 330_000, // 150k + 150k + 30k bonus
+      bonus: 30_000,
+      perPersonBaseGross: [150_000, 150_000],
+      recipientIndex: 0,
+    });
+    // Earner 0: 180k stays under the $184,500 wage base → SS on the bonus is
+    // the full 6.2% = $1,860. Medicare 1.45% × 30k = $435; Additional
+    // Medicare 0.9% on the excess over the MFJ $250k threshold = $270.
+    expect(r.bonusBreakdown.fica).toBeCloseTo(1_860 + 435 + 270, 6);
+  });
+
+  it('legacy combined-base behavior is unchanged when perPersonBaseGross is omitted', () => {
+    const r = computeBonusTax({ ...base, personGross: 330_000, bonus: 30_000 });
+    // Combined 300k already exceeds the wage base → SS delta 0; only the
+    // Medicare legs move: 435 + 270.
+    expect(r.bonusBreakdown.fica).toBeCloseTo(435 + 270, 6);
+  });
+
+  it('attributes the bonus to recipientIndex (earner already over the base)', () => {
+    const r = computeBonusTax({
+      ...base,
+      personGross: 430_000,
+      bonus: 30_000,
+      perPersonBaseGross: [250_000, 150_000], // earner 0 is over $184,500 already
+      recipientIndex: 0,
+    });
+    // SS delta 0 for earner 0; Medicare 435; AddMed 0.9% × 30k (already over
+    // the 250k threshold without the bonus) = 270.
+    expect(r.bonusBreakdown.fica).toBeCloseTo(435 + 270, 6);
+  });
+});
