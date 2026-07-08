@@ -433,3 +433,36 @@ describe('Loans page', () => {
     });
   });
 });
+
+describe('buildDebtSeries current-month seeding (wave-9 M10)', () => {
+  it('a loan whose next payment falls next month still contributes currentBalance to the current bar', async () => {
+    const { buildDebtSeries } = await import('@/pages/Loans');
+    const mkProjection = (name: string, firstMonth: string, balance: number) => {
+      const amort = {
+        schedule: [
+          {
+            paymentDate: `${firstMonth}-01`,
+            principal: 100,
+            interest: 50,
+            extra: 0,
+            balance: balance - 100,
+          },
+        ],
+        monthlyPayment: 150,
+        totalInterest: 50,
+      };
+      return {
+        loan: { ...makeLoan({ name }), currentBalance: balance, type: LoanType.MORTGAGE },
+        withDefault: amort,
+        withoutExtra: amort,
+      };
+    };
+    const { rows } = buildDebtSeries(
+      [mkProjection('Due next month', '2026-08', 250000)],
+      '2026-07-08',
+    );
+    const july = rows.find((r) => r.month === '2026-07');
+    expect(july).toBeDefined();
+    expect(july![LoanType.MORTGAGE]).toBe(250000);
+  });
+});
