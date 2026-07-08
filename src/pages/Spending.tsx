@@ -8,6 +8,7 @@ import { MarkReimbursedDialog } from '@/components/dialogs/MarkReimbursedDialog'
 import { TransactionEditDialog } from '@/components/dialogs/TransactionEditDialog';
 import BarChartCard from '@/components/charts/BarChartCard';
 import MetricCard from '@/components/cards/MetricCard';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import TransactionsSectionImporter from '@/components/setup/TransactionsSectionImporter';
 import { SpendingSummaryHero } from '@/components/spending/SpendingSummaryHero';
 import { useTransactionsStore } from '@/stores/transactions-store';
@@ -282,37 +283,37 @@ export default function Spending() {
 
       {(housingPayments.length > 0 || vehicleLeases.length > 0) && (
         <section aria-label="Recurring obligations">
-          <div className="border rounded-lg p-4 space-y-1">
-            <h2 className="text-sm font-medium text-muted-foreground">
-              Recurring obligations
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              Active rent + vehicle leases.
-            </p>
-            <div className="text-2xl font-semibold font-mono">
-              {obligationCurrencyFormatter.format(recurringObligation)}/mo
-            </div>
-            <div className="mt-3 flex gap-6 border-t pt-3">
-              <div>
-                <div className="text-base font-semibold tabular-nums">
-                  {obligationCurrencyFormatter.format(housingObligation)}
+          <Card data-testid="spending-recurring-card">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Recurring obligations</CardTitle>
+              <CardDescription>Active rent + vehicle leases.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-semibold font-mono">
+                {obligationCurrencyFormatter.format(recurringObligation)}/mo
+              </div>
+              <div className="mt-3 flex gap-6 border-t pt-3">
+                <div>
+                  <div className="text-base font-semibold tabular-nums">
+                    {obligationCurrencyFormatter.format(housingObligation)}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Rent · {housingPayments.length} rental
+                    {housingPayments.length === 1 ? '' : 's'}
+                  </div>
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  Rent · {housingPayments.length} rental
-                  {housingPayments.length === 1 ? '' : 's'}
+                <div>
+                  <div className="text-base font-semibold tabular-nums">
+                    {obligationCurrencyFormatter.format(leaseObligation)}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Leases · {vehicleLeases.length} lease
+                    {vehicleLeases.length === 1 ? '' : 's'}
+                  </div>
                 </div>
               </div>
-              <div>
-                <div className="text-base font-semibold tabular-nums">
-                  {obligationCurrencyFormatter.format(leaseObligation)}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Leases · {vehicleLeases.length} lease
-                  {vehicleLeases.length === 1 ? '' : 's'}
-                </div>
-              </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </section>
       )}
 
@@ -390,59 +391,72 @@ export default function Spending() {
           )}
 
           {/* Recurring subscriptions */}
-          <section>
-            <h2 className="text-lg font-medium mb-1">Subscriptions</h2>
-            {recurring.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No recurring subscriptions detected.</p>
-            ) : (
-              <>
-                <p className="text-sm text-muted-foreground mb-3">
-                  ${recurringTotal.toFixed(2)}/mo across {recurring.length} service{recurring.length !== 1 ? 's' : ''}
-                </p>
-                <ul className="space-y-1">
-                  {recurring.map((g) => (
-                    <li key={g.merchant} className="flex items-center justify-between text-sm">
-                      <span>{g.merchant}</span>
-                      <span className="text-muted-foreground">
-                        ${g.averageAmount.toFixed(2)}/mo · {g.occurrences}×
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
+          <section aria-label="Subscriptions">
+            <Card data-testid="spending-subscriptions-card">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Subscriptions</CardTitle>
+                {recurring.length > 0 && (
+                  <CardDescription>
+                    ${recurringTotal.toFixed(2)}/mo across {recurring.length} service
+                    {recurring.length !== 1 ? 's' : ''}
+                  </CardDescription>
+                )}
+              </CardHeader>
+              <CardContent>
+                {recurring.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No recurring subscriptions detected.</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {recurring.map((g) => (
+                      <li key={g.merchant} className="flex items-center justify-between text-sm">
+                        <span>{g.merchant}</span>
+                        <span className="text-muted-foreground">
+                          ${g.averageAmount.toFixed(2)}/mo · {g.occurrences}×
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
           </section>
 
           {/* Awaiting reimbursement */}
-          <section>
-            <h2 className="text-lg font-medium mb-3">Awaiting reimbursement</h2>
-            {awaitingReimbursement.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No pending reimbursements.</p>
-            ) : (
-              <ul className="space-y-2">
-                {awaitingReimbursement.map((t) => (
-                  <li
-                    key={t.id}
-                    className="flex items-center justify-between text-sm border rounded-lg px-4 py-2"
-                  >
-                    <div>
-                      <span className="font-medium">{t.merchant}</span>
-                      <span className="ml-2 text-muted-foreground">{t.date}</span>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <span>${t.amount.toFixed(2)}</span>
-                      <button
-                        type="button"
-                        onClick={() => setReimbursedTarget(t)}
-                        className="text-xs px-2 py-1 border rounded hover:bg-muted"
+          <section aria-label="Awaiting reimbursement">
+            <Card data-testid="spending-reimbursement-card">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Awaiting reimbursement</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {awaitingReimbursement.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No pending reimbursements.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {awaitingReimbursement.map((t) => (
+                      <li
+                        key={t.id}
+                        className="flex items-center justify-between text-sm border rounded-lg px-4 py-2"
                       >
-                        Mark reimbursed
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
+                        <div>
+                          <span className="font-medium">{t.merchant}</span>
+                          <span className="ml-2 text-muted-foreground">{t.date}</span>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <span>${t.amount.toFixed(2)}</span>
+                          <button
+                            type="button"
+                            onClick={() => setReimbursedTarget(t)}
+                            className="text-xs px-2 py-1 border rounded hover:bg-muted"
+                          >
+                            Mark reimbursed
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
           </section>
         </>
       )}

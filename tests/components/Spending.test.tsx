@@ -727,6 +727,58 @@ describe('Spending page', () => {
     expect(screen.getByText(/Leases · 1 lease/i)).toBeInTheDocument();
   });
 
+  it('Recurring/Subscriptions/Reimbursement sections render as shared Cards (wave-7 W5)', async () => {
+    await useCategoriesStore.getState().load();
+
+    // Rentals + leases exactly as the recurring-obligations test seeds them…
+    await new HousingPaymentsRepo(db).create({
+      householdId: 1,
+      ownerPersonId: null,
+      name: 'Apt',
+      monthlyAmount: 2400,
+      startDate: '2025-01-01',
+      endDate: null,
+    });
+    await new VehicleLeasesRepo(db).create({
+      householdId: 1,
+      ownerPersonId: null,
+      name: 'Tesla',
+      monthlyAmount: 450,
+      startDate: '2025-01-01',
+      endDate: null,
+    });
+
+    // …AND transactions exactly as the subscriptions/reimbursement test (c)
+    // seeds them, so all three sections mount together.
+    const netflixBase: Omit<Transaction, 'id'> = {
+      householdId: 1, merchant: 'NETFLIX', merchantRaw: 'NETFLIX.COM',
+      amount: 15.49, categoryId: 37, sourceAccountId: null, propertyId: null,
+      vehicleId: null, personId: null, sourcePdfFilename: 'mar.pdf', reimbursable: false,
+      reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
+      date: '2026-01-09',
+    };
+    const reimbursableTxn: Omit<Transaction, 'id'> = {
+      householdId: 1, date: '2026-03-10', merchant: 'ACME EXPENSE', merchantRaw: 'ACME EXPENSE',
+      amount: 200, categoryId: 37, sourceAccountId: null, propertyId: null,
+      vehicleId: null, personId: null, sourcePdfFilename: 'mar.pdf', reimbursable: true,
+      reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
+    };
+    await useTransactionsStore.getState().createMany([
+      { ...netflixBase, date: '2026-01-09' },
+      { ...netflixBase, date: '2026-02-09' },
+      { ...netflixBase, date: '2026-03-09' },
+      reimbursableTxn,
+    ]);
+
+    renderPage();
+
+    expect(await screen.findByTestId('spending-recurring-card')).toBeInTheDocument();
+    expect(screen.getByTestId('spending-subscriptions-card')).toBeInTheDocument();
+    expect(screen.getByTestId('spending-reimbursement-card')).toBeInTheDocument();
+    // Copy contract survives the wrapper swap.
+    expect(screen.getByText(/active rent \+ vehicle leases/i)).toBeInTheDocument();
+  });
+
   it('(unified-errors) surfaces a per-file error pane when a CSV file read fails', async () => {
     await useCategoriesStore.getState().load();
     useHouseholdStore.setState({
