@@ -12,6 +12,7 @@ import {
   JACCARD_THRESHOLD,
   ANSWER_INDEX_MIN_N,
   DEFAULT_MATH_TOLERANCE,
+  LONGEST_ANSWER_TELL_MAX,
 } from '@/lib/trivia/integrity-constants';
 import { reviewedOnly } from '@/lib/trivia/load-bank';
 import { COVERAGE_FLOORS } from '@/lib/trivia/coverage-floors';
@@ -211,6 +212,24 @@ describe('bank-v1.json integrity', () => {
     expect(offenders).toEqual([]);
   });
 
+  // ---- Wave 8: longest-option tell (grandfathered ratchet) ----
+  // 93.3% of reviewed definition rows have the correct answer STRICTLY
+  // longest — a test-taking tell ("pick the longest"). Rewriting ~375
+  // approved rows is an authoring campaign, not a test fix, so this ships
+  // as a ratchet at the measured level: the fraction may only FALL. At the
+  // next authoring rebalance, drive it toward parity by lengthening the best
+  // distractor (never by truncating correct answers into vagueness), then
+  // lower the constant.
+  it('the strictly-longest-answer fraction over reviewed definitions never rises', () => {
+    const defs = reviewedOnly(parsed).filter((q) => q.format === QuestionFormat.DEFINITION);
+    const tells = defs.filter((q) => {
+      const lens = q.choices.map((c) => c.length);
+      const max = Math.max(...lens);
+      return lens[q.answerIndex] === max && lens.filter((l) => l === max).length === 1;
+    });
+    expect(tells.length / defs.length).toBeLessThanOrEqual(LONGEST_ANSWER_TELL_MAX);
+  });
+
   // ---- Wave 8: numeric-signature cross-topic dupe gate ----
   // Two math questions with the same prompt numbers AND the same computed
   // answer are the same exercise wearing different topic hats — the topic-
@@ -272,6 +291,11 @@ describe('integrity harness — prove-it-bites (synthetic)', () => {
   it('check.expr recompute catches an expr that disagrees with expected', () => {
     const computed = Function('"use strict"; return (100*1.10);')() as number;
     expect(Math.abs(computed - 200) > DEFAULT_MATH_TOLERANCE).toBe(true);
+  });
+
+  it('longest-tell predicate catches a strictly-longest correct answer', () => {
+    const lens = ['short', 'the much much longer correct definition answer', 'mid one', 'tiny'].map((c) => c.length);
+    expect(lens[1] === Math.max(...lens)).toBe(true);
   });
 
   it('numeric-signature gate catches a same-numbers same-answer pair', () => {
