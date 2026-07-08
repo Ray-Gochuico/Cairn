@@ -36,7 +36,7 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     term: 'DCFSA',
     shortDefinition: 'Dependent Care FSA — pre-tax money set aside for childcare or eldercare.',
     fullDefinition:
-      'A workplace account that lets you contribute pre-tax dollars (up to ~$5,000 / year) for qualified childcare or eldercare expenses, lowering your taxable income.',
+      'A workplace account that lets you contribute pre-tax dollars (up to $7,500 / year as of 2026, raised by the 2025 OBBBA) for qualified childcare or eldercare expenses, lowering your taxable income.',
     examples: ['Daycare', 'After-school programs', 'Summer day camp', 'Adult day care'],
   },
   FSA: {
@@ -132,7 +132,7 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     shortDefinition:
       'An Individual Retirement Account funded with after-tax dollars — withdrawals in retirement are tax-free.',
     fullDefinition:
-      'Annual contribution cap (~$7,000 / yr in 2026, higher if 50+); income-limited (phases out at higher MAGI but the Backdoor Roth conversion route is available).',
+      'Annual contribution cap ($7,500 / yr in 2026 per IRS Notice 2025-67, higher if 50+); income-limited (phases out at higher MAGI but the Backdoor Roth conversion route is available).',
   },
   'TRADITIONAL IRA': {
     term: 'Traditional IRA',
@@ -308,7 +308,7 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     shortDefinition:
       'An extra 10% federal tax on retirement-account withdrawals taken before age 59½.',
     fullDefinition:
-      'Applies on top of regular income tax. Limited exceptions exist (separation from service at 55, hardship, SEPP/72(t)) but the default rule is: < 59½ → +10%.',
+      'Applies on top of regular income tax. Limited exceptions exist — SEPP/72(t) payment plans, total disability, certain medical expenses, and separation from service at 55+ (that exception covers only the plan of the employer you separated from). A hardship withdrawal lets you take the money out but does NOT waive the 10% penalty. Default rule: < 59½ → +10%.',
   },
   AGI: {
     term: 'AGI',
@@ -457,7 +457,7 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     shortDefinition:
       'Simplified Employee Pension IRA — a retirement plan for self-employed people and small businesses.',
     fullDefinition:
-      'Employer-funded (employee contributions not allowed). Limit is ~25% of net self-employment income, up to the same IRS combined cap as a solo-401(k). Counts as pre-tax IRA balance for the pro-rata rule.',
+      'Employer-funded (employee contributions not allowed). Limit is ~25% of W-2 compensation for employees — which works out to ~20% of net self-employment income for the self-employed, because the contribution reduces its own base. Same IRS combined cap as a solo-401(k). Counts as pre-tax IRA balance for the pro-rata rule.',
   },
   SIMPLE: {
     term: 'SIMPLE IRA',
