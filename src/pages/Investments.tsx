@@ -16,13 +16,15 @@ import { AccountType, AssetClass } from '@/types/enums';
 import { filterByOwnerPersonId } from '@/lib/filter-by-view';
 import { includedAccountIds } from '@/lib/account-inclusion';
 import { useViewFilter } from '@/lib/use-view-filter';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import CardEditFrame from '@/components/investments/CardEditFrame';
 import { DataHealthPopover } from '@/components/investments/DataHealthPopover';
 import { AssetClassTargetsForm } from '@/components/investments/AssetClassTargetsForm';
 import AllocationCard from '@/components/investments/AllocationCard';
 import DriftCard from '@/components/investments/DriftCard';
+import ConcentrationHealthCard from '@/components/investments/ConcentrationHealthCard';
+import Plans529Card from '@/components/investments/Plans529Card';
 import { ASSET_CLASS_LABEL } from '@/lib/asset-class-labels';
 import type { CardLayoutEntry, AssetClassTarget } from '@/types/schema';
 import ContributionsByBucketChart from '@/components/charts/ContributionsByBucketChart';
@@ -47,8 +49,7 @@ import { ExportCsvButton } from '@/components/ExportCsvButton';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import { FreshnessBadge } from '@/components/ui/freshness-badge';
 import type { CsvColumn } from '@/lib/csv';
-import { topEffectiveExposures, type ConcentrationWarning } from '@/lib/concentration';
-import { AlertTriangleIcon, PieChart } from 'lucide-react';
+import { PieChart } from 'lucide-react';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import { EmptyState } from '@/components/layout/EmptyState';
@@ -70,38 +71,6 @@ import { syncStaleFunds } from '@/market/fund-holdings-sync';
  * (weighted by share count) — a deliberate simplification while
  * PriceCache.currentPrice still requires Yahoo connectivity.
  */
-
-const currencyFormatter = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  maximumFractionDigits: 0,
-});
-
-function formatCurrency(value: number): string {
-  return currencyFormatter.format(value);
-}
-
-/**
- * Educational copy for each warning type, surfaced as a tooltip on the
- * Concentration Health section. Phase 3 keeps tooltips simple — a `title`
- * attribute renders a native browser tooltip; no popover library required.
- */
-const CONCENTRATION_TOOLTIP: Record<ConcentrationWarning['type'], string> = {
-  PER_TICKER_HIGH: "A single ticker's outsized share concentrates idiosyncratic risk.",
-  PER_TICKER_SOFT: "Watch this ticker — it's getting concentrated.",
-  PER_ASSET_CLASS_HIGH: 'Heavy weight in one asset class amplifies its drawdowns.',
-  PER_ASSET_CLASS_SOFT: 'Asset-class exposure is approaching concentrated territory.',
-  LEVERAGE_HIGH: 'Effective leverage means small moves cause big P&L swings.',
-};
-
-function severityColor(severity: ConcentrationWarning['severity']): string {
-  switch (severity) {
-    case 'HIGH': return 'text-destructive-soft-foreground';
-    case 'MEDIUM': return 'text-warning-foreground';
-    case 'LOW':
-    default: return 'text-info-foreground';
-  }
-}
 
 // localStorage key for the Portfolio-by-account "Investable only" toggle.
 // Module scope so the useCallback below can close over it with an empty
@@ -168,35 +137,6 @@ function aggregateByAssetClass(
     .filter((b) => b.value > 0)
     .sort((a, b) => b.value - a.value)
     .map((b, idx) => ({ ...b, color: paletteColorAt(idx) }));
-}
-
-/**
- * Project a 529 plan's value forward to the beneficiary's 18th birthday.
- * Uses monthly compounding at `growthRate` annual, plus the beneficiary's
- * recent monthly contribution rate. Returns `currentValue` if the
- * beneficiary is already 18 or older (monthsUntil clamps to 0).
- */
-function projectedAtAge18(
-  currentValue: number,
-  monthlyContrib: number,
-  dobIso: string,
-  growthRate: number,
-): number {
-  const dob = new Date(dobIso);
-  const eighteen = new Date(dob);
-  eighteen.setFullYear(eighteen.getFullYear() + 18);
-  const now = new Date();
-  const monthsUntil = Math.max(
-    0,
-    (eighteen.getFullYear() - now.getFullYear()) * 12 +
-      (eighteen.getMonth() - now.getMonth()),
-  );
-  const r = growthRate / 12;
-  if (r === 0) return currentValue + monthlyContrib * monthsUntil;
-  return (
-    currentValue * Math.pow(1 + r, monthsUntil) +
-    (monthlyContrib * (Math.pow(1 + r, monthsUntil) - 1)) / r
-  );
 }
 
 /**
@@ -732,92 +672,7 @@ export default function Investments() {
         label: 'Concentration Health',
         size: 'wide',
         applicable: true,
-        render: () => (
-          <Card data-testid="concentration-section">
-            <CardHeader>
-              <CardTitle>
-                <TermTooltip term="CONCENTRATION">Concentration</TermTooltip> Health
-              </CardTitle>
-              <CardDescription>
-                Effective exposure after fund look-through and leverage. Warnings
-                fire when a single ticker exceeds 25%, an asset class exceeds 60%,
-                or total leverage exceeds 1.5x.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {concentration.warnings.length === 0 ? (
-                <div className="text-sm text-muted-foreground">
-                  No concentration issues detected.
-                </div>
-              ) : (
-                <ul className="space-y-3">
-                  {concentration.warnings.map((w, i) => (
-                    <li
-                      key={`${w.type}-${w.ticker ?? w.assetClass ?? i}`}
-                      className="flex items-start gap-3"
-                    >
-                      <AlertTriangleIcon
-                        className={`h-5 w-5 shrink-0 mt-0.5 ${severityColor(w.severity)}`}
-                        aria-label={`${w.severity} severity`}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm">{w.message}</div>
-                        <details className="mt-1">
-                          <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
-                            Why this matters
-                          </summary>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {CONCENTRATION_TOOLTIP[w.type]}
-                          </p>
-                        </details>
-                        {/* Anchor-scroll to the donut that visualizes this
-                            warning's subject (ticker → per-company card;
-                            asset class → allocation card). A slice-focus
-                            pulse is a noted follow-up (needs a focus channel
-                            on useDonutSelection). */}
-                        {(w.ticker || w.assetClass) && (
-                          <button
-                            type="button"
-                            className="mt-1 text-xs font-medium text-primary hover:underline"
-                            onClick={() =>
-                              document
-                                .getElementById(w.ticker ? 'per-company' : 'allocation')
-                                ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                            }
-                          >
-                            View in donut
-                          </button>
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {(() => {
-                const top = topEffectiveExposures(concentration.perTicker, 3);
-                if (top.length === 0) return null;
-                return (
-                  <div className="mt-6 border-t pt-4">
-                    <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
-                      Top 3 effective exposures
-                    </div>
-                    <ul className="space-y-1 text-sm">
-                      {top.map((t) => (
-                        <li key={t.ticker} className="flex justify-between gap-2 tabular-nums">
-                          <span className="font-mono">{t.ticker}</span>
-                          <span className="text-muted-foreground">
-                            {(t.pctOfPortfolio * 100).toFixed(1)}%
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                );
-              })()}
-            </CardContent>
-          </Card>
-        ),
+        render: () => <ConcentrationHealthCard report={concentration} />,
       },
       {
         id: 'class-targets',
@@ -887,84 +742,14 @@ export default function Investments() {
         size: 'wide',
         applicable: plans529.length > 0,
         render: () => (
-          <Card data-testid="529-section">
-            <CardHeader>
-              <CardTitle>529 Plans</CardTitle>
-              <CardDescription>
-                College savings — current value, contributions YTD, and
-                projected value at the beneficiary's 18th birthday using the
-                Moderate growth scenario ({(moderateRate * 100).toFixed(1)}%).
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ul className="divide-y">
-                {plans529.map((plan) => {
-                  const dep =
-                    plan.beneficiaryDependentId != null
-                      ? dependentById.get(plan.beneficiaryDependentId)
-                      : null;
-                  const latestSnap =
-                    plan.id != null ? latestSnapByAccount.get(plan.id) : undefined;
-                  const currentValue = latestSnap?.totalValue ?? 0;
-                  // YTD = sum of contributions in the current calendar year.
-                  const yearPrefix = String(today529.getFullYear());
-                  const ytdContribs = visibleContributions
-                    .filter(
-                      (c) =>
-                        c.accountId === plan.id && c.date.startsWith(yearPrefix),
-                    )
-                    .reduce((sum, c) => sum + c.amount, 0);
-                  // Approximate the projection's monthly inflow with YTD ÷ months
-                  // elapsed this year. Coarse but matches what the user can see
-                  // in the contribution log; refines automatically as the year
-                  // progresses.
-                  const monthsThisYear = today529.getMonth() + 1;
-                  const monthlyAvg =
-                    monthsThisYear > 0 ? ytdContribs / monthsThisYear : 0;
-                  const projected =
-                    dep != null
-                      ? projectedAtAge18(
-                          currentValue,
-                          monthlyAvg,
-                          dep.dateOfBirth,
-                          moderateRate,
-                        )
-                      : currentValue;
-                  return (
-                    <li
-                      key={plan.id}
-                      className="flex items-center justify-between gap-4 py-3"
-                    >
-                      <div className="min-w-0">
-                        <div className="font-medium truncate">{plan.name}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {dep ? `for ${dep.name}` : 'no beneficiary set'}
-                          {plan.stateOfPlan ? ` · ${plan.stateOfPlan}` : ''}
-                          {plan.institution ? ` · ${plan.institution}` : ''}
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0 text-sm space-y-0.5">
-                        <div className="font-mono tabular-nums">
-                          {formatCurrency(currentValue)}{' '}
-                          <span className="text-muted-foreground">now</span>
-                        </div>
-                        <div className="font-mono tabular-nums">
-                          {formatCurrency(ytdContribs)}{' '}
-                          <span className="text-muted-foreground">YTD</span>
-                        </div>
-                        {dep != null && (
-                          <div className="font-mono tabular-nums">
-                            {formatCurrency(projected)}{' '}
-                            <span className="text-muted-foreground">at 18</span>
-                          </div>
-                        )}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </CardContent>
-          </Card>
+          <Plans529Card
+            plans={plans529}
+            dependentById={dependentById}
+            latestSnapByAccount={latestSnapByAccount}
+            contributions={visibleContributions}
+            today={today529}
+            moderateRate={moderateRate}
+          />
         ),
       },
     ],
