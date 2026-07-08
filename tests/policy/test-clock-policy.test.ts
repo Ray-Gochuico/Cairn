@@ -38,7 +38,6 @@ const REAL_CLOCK_ALLOWLIST: ReadonlySet<string> = new Set([
   'tests/lib/loan-history.test.ts',
   'tests/market/price-cache.test.ts',
   'tests/pdf/layout.test.ts',
-  'tests/stores/learning-state-store.test.ts',
   'tests/stores/properties-store.test.ts',
   'tests/stores/vehicles-store.test.ts',
   'tests/types/schema.test.ts',
