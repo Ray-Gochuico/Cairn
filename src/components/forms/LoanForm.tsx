@@ -101,7 +101,11 @@ export default function LoanForm({
   const tryAutoFillMonthlyPayment = () => {
     if (monthlyPaymentEditedManually) return;
     const v = form.getValues();
-    const principal = v.currentBalance > 0 ? v.currentBalance : v.originalAmount;
+    // Wave-9 F4: the CONTRACT payment amortizes the ORIGINAL amount over the
+    // full term. Using currentBalance over the full term understates every
+    // seasoned loan's payment (the balance has less time left, not more).
+    // Balance-only fallback covers rows where original wasn't provided.
+    const principal = v.originalAmount > 0 ? v.originalAmount : v.currentBalance;
     if (principal > 0 && v.interestRate >= 0 && v.termMonths > 0 && v.firstPaymentDate) {
       try {
         const result = amortize({
