@@ -171,7 +171,14 @@ describe('bank-v1.json integrity', () => {
     }
     const dist = [0, 0, 0, 0];
     for (const q of pool) dist[q.answerIndex]++;
-    for (const n of dist) expect(n / pool.length).toBeGreaterThanOrEqual(0.2);
+    for (const n of dist) {
+      expect(n / pool.length).toBeGreaterThanOrEqual(0.2);
+      // Wave 8 upper bound: no slot may hold more than 30% (slot 1 sat at
+      // 30.3% pre-rebalance — a mild "when in doubt pick B" tell). Tighten
+      // to 0.28 at the next authoring rebalance (the ~93-question top-up),
+      // which should land all four slots in the 22–28% target band.
+      expect(n / pool.length).toBeLessThanOrEqual(0.3);
+    }
   });
 
   // ---- L2.9: prompt near-duplicate dedup (token-Jaccard, topic-bucketed) ----
