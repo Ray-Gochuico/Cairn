@@ -38,6 +38,10 @@ const HAND_CURATED_DATA_ALLOWLIST: ReadonlySet<string> = new Set([
   // 0048 is a singleton default flip on learning_state (Wave 8 Learn redesign):
   // one UPDATE of a UI-preference row, no financial reference data.
   '0048_learning_preference_default',
+  // 0049 deletes duplicate AMORTIZATION loan_payments rows (Wave 9 M37
+  // corruption cleanup) before adding the partial UNIQUE index — a targeted
+  // dedupe DELETE, no hand-typed reference data.
+  '0049_loan_payments_unique_amortization',
 ]);
 
 /** Mirror of the runner's pre-split comment strip (src/db/migrations.ts). */
