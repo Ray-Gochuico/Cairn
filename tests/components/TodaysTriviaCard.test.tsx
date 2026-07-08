@@ -13,6 +13,9 @@ import { QuestionFormat, Topic } from '@/types/enums';
 import type { TriviaQuestion } from '@/lib/trivia/bank-schema';
 import { TodaysTriviaCard } from '@/components/dashboard/TodaysTriviaCard';
 
+// The store's REAL load — the MUST-1 loading test stubs it; boot() restores it.
+const realLearningLoad = useLearningStore.getState().load;
+
 const sql = (name: string) =>
   readFileSync(resolve(__dirname, `../../src/db/migrations/${name}.sql`), 'utf-8');
 
@@ -61,9 +64,11 @@ async function boot(open: boolean): Promise<SqliteAdapter> {
   useLearningStore.setState({
     learningState: null,
     answeredQuestionIds: [],
-    answeredKeysByDay: { priorDays: [], today: [] },
+    answeredKeysByDay: { priorDays: [], today: [], todayDetails: [] },
+    answeredStats: null,
     isLoading: false,
     error: null,
+    load: realLearningLoad,
   });
   if (open) {
     await db.execute(
@@ -174,5 +179,63 @@ describe('TodaysTriviaCard (X of 4)', () => {
     expect(await screen.findByText(/today's questions/i)).toBeInTheDocument();
     expect(screen.queryByText(/About the Learning feature/i)).not.toBeInTheDocument();
     expect(screen.getByText(/open learn →/i)).toBeInTheDocument();
+  });
+
+  it('MUST-1: renders aria-busy (never "0 of 0 · Start") while the learning store has no data', async () => {
+    db = await boot(true);
+    useLearningStore.setState({ learningState: null, load: async () => {} });
+    const { container } = render(
+      <MemoryRouter>
+        <TodaysTriviaCard />
+      </MemoryRouter>,
+    );
+    await new Promise((r) => setTimeout(r, 0)); // let the bank promise settle
+    expect(container.querySelector('[aria-busy="true"]')).not.toBeNull();
+    expect(screen.queryByText(/0 of 0/)).toBeNull();
+    expect(screen.queryByText(/Start →/)).toBeNull();
+  });
+
+  it('MUST-1: pool exhausted (total 0) shows the calm caught-up branch, not "0 of 0 answered"', async () => {
+    db = await boot(true);
+    for (const q of FIXTURE_BANK) {
+      await db.execute(
+        `INSERT INTO learning_answers (question_id, answered_iso_date, chosen_index, was_correct, question_version)
+         VALUES (?, '2026-05-01', 0, 1, 1)`,
+        [q.id],
+      );
+    }
+    await useLearningStore.getState().load();
+    render(
+      <MemoryRouter>
+        <TodaysTriviaCard />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText(/caught up/i)).toBeInTheDocument();
+    expect(screen.queryByText(/0 of 0/)).toBeNull();
+  });
+
+  it('D5: the subtitle follows the difficulty preference', async () => {
+    db = await boot(true);
+    await db.execute(`UPDATE learning_state SET difficulty_preference = 'Beginner' WHERE id = 1`);
+    await useLearningStore.getState().load();
+    render(
+      <MemoryRouter>
+        <TodaysTriviaCard />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText('Basics questions today.')).toBeInTheDocument();
+    expect(screen.queryByText(/mix of Basics/i)).toBeNull();
+  });
+
+  it('SHOULD-13: the View link carries a descriptive aria-label', async () => {
+    db = await boot(true);
+    render(
+      <MemoryRouter>
+        <TodaysTriviaCard />
+      </MemoryRouter>,
+    );
+    expect(
+      await screen.findByRole('link', { name: /view today's questions on the learn page/i }),
+    ).toBeInTheDocument();
   });
 });
