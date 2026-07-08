@@ -22,6 +22,12 @@ export interface MetricCardProps {
   value: string;
   delta?: string;
   deltaTone?: MetricCardTone;
+  /**
+   * Optional tone for the VALUE itself (wave-7 W5: the Spending money-in/out
+   * tiles tint the number, not a delta). Omitted → no extra class, so every
+   * pre-existing render is byte-identical.
+   */
+  valueTone?: MetricCardTone;
   href?: string;
   subtitle?: string;
 }
@@ -36,11 +42,25 @@ function deltaClass(tone: MetricCardTone | undefined): string {
   }
 }
 
+// Separate from deltaClass on purpose: the delta's undefined/neutral default
+// is muted-foreground, which is WRONG for a value (it must keep the card's
+// normal foreground when untinted).
+function valueClass(tone: MetricCardTone | undefined): string {
+  switch (tone) {
+    case 'positive': return 'text-success-foreground';
+    case 'negative': return 'text-destructive-soft-foreground';
+    case 'neutral':
+    case undefined:
+    default: return '';
+  }
+}
+
 function MetricCardImpl({
   label,
   value,
   delta,
   deltaTone,
+  valueTone,
   href,
   subtitle,
 }: MetricCardProps) {
@@ -76,7 +96,10 @@ function MetricCardImpl({
       <CardContent className="space-y-1 min-w-0">
         <div className="flex items-baseline gap-2 flex-wrap min-w-0">
           <div
-            className="text-xl sm:text-2xl md:text-3xl font-semibold leading-tight tabular-nums whitespace-nowrap overflow-hidden text-ellipsis min-w-0 max-w-full"
+            className={cn(
+              'text-xl sm:text-2xl md:text-3xl font-semibold leading-tight tabular-nums whitespace-nowrap overflow-hidden text-ellipsis min-w-0 max-w-full',
+              valueClass(valueTone),
+            )}
             title={value}
             data-testid="metric-card-value"
           >

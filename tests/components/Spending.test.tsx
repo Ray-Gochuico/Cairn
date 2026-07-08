@@ -481,6 +481,32 @@ describe('Spending page', () => {
     }
   });
 
+  it('money in/out tiles are shared MetricCards inside the responsive grid (wave-7 W5)', async () => {
+    // Seed transactions exactly as the 'Money in vs out stacks…' test above
+    // does (same real-clock recent-date idiom — grandfathered allowlist file).
+    await useCategoriesStore.getState().load();
+    const recentDate = new Date(Date.now() - 5 * 86_400_000).toISOString().slice(0, 10);
+    const txn: Omit<Transaction, 'id'> = {
+      householdId: 1, date: recentDate, merchant: 'GROCERY', merchantRaw: 'GROCERY',
+      amount: 200, categoryId: null, sourceAccountId: null, propertyId: null,
+      vehicleId: null, personId: null, sourcePdfFilename: 'test.pdf', reimbursable: false,
+      reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
+    };
+    await useTransactionsStore.getState().createMany([txn]);
+
+    renderPage();
+
+    const heading = await screen.findByText(/money in vs out/i);
+    const grid = heading.parentElement!.querySelector('.grid') as HTMLElement;
+    // Wave-6 responsive contract preserved on the SAME element…
+    expect(grid.className).toContain('grid-cols-1');
+    expect(grid.className).toContain('sm:grid-cols-3');
+    // …and the tiles are now the shared primitive.
+    expect(within(grid).getAllByTestId('metric-card')).toHaveLength(3);
+    expect(within(grid).getByText('Estimated from salary')).toBeInTheDocument();
+    expect(within(grid).getByText(/surplus|deficit/i)).toBeInTheDocument();
+  });
+
   it('(e) imports a transaction CSV end-to-end via the unified import surface', async () => {
     await useCategoriesStore.getState().load();
     useHouseholdStore.setState({

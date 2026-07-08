@@ -7,6 +7,7 @@ import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import { MarkReimbursedDialog } from '@/components/dialogs/MarkReimbursedDialog';
 import { TransactionEditDialog } from '@/components/dialogs/TransactionEditDialog';
 import BarChartCard from '@/components/charts/BarChartCard';
+import MetricCard from '@/components/cards/MetricCard';
 import TransactionsSectionImporter from '@/components/setup/TransactionsSectionImporter';
 import { SpendingSummaryHero } from '@/components/spending/SpendingSummaryHero';
 import { useTransactionsStore } from '@/stores/transactions-store';
@@ -335,29 +336,23 @@ export default function Spending() {
           <section>
             <h2 className="text-lg font-medium mb-3">Money in vs out (last 30 days)</h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="border rounded-lg p-4 space-y-1">
-                <p className="text-xs uppercase tracking-wider text-muted-foreground">Money in</p>
-                <p className="text-2xl font-semibold text-success-foreground">
-                  ${cashflow.inflow.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </p>
-                <p className="text-xs text-muted-foreground">Estimated from salary</p>
-              </div>
-              <div className="border rounded-lg p-4 space-y-1">
-                <p className="text-xs uppercase tracking-wider text-muted-foreground">Money out</p>
-                <p className="text-2xl font-semibold">
-                  ${cashflow.outflow.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </p>
-                <p className="text-xs text-muted-foreground">Transactions in window</p>
-              </div>
-              <div className="border rounded-lg p-4 space-y-1">
-                <p className="text-xs uppercase tracking-wider text-muted-foreground">Net</p>
-                <p className={`text-2xl font-semibold ${cashflow.net >= 0 ? 'text-success-foreground' : 'text-destructive-soft-foreground'}`}>
-                  {cashflow.net >= 0 ? '+' : ''}${cashflow.net.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {cashflow.net >= 0 ? 'Surplus' : 'Deficit'}
-                </p>
-              </div>
+              <MetricCard
+                label="Money in"
+                value={`$${cashflow.inflow.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                valueTone="positive"
+                subtitle="Estimated from salary"
+              />
+              <MetricCard
+                label="Money out"
+                value={`$${cashflow.outflow.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                subtitle="Transactions in window"
+              />
+              <MetricCard
+                label="Net"
+                value={`${cashflow.net >= 0 ? '+' : ''}$${cashflow.net.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                valueTone={cashflow.net >= 0 ? 'positive' : 'negative'}
+                subtitle={cashflow.net >= 0 ? 'Surplus' : 'Deficit'}
+              />
             </div>
             {cashflow.outflowByCategory.length > 0 && (
               <ul className="mt-3 space-y-1">
