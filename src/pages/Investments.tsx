@@ -21,10 +21,12 @@ import { Button } from '@/components/ui/button';
 import CardEditFrame from '@/components/investments/CardEditFrame';
 import { DataHealthPopover } from '@/components/investments/DataHealthPopover';
 import { AssetClassTargetsForm } from '@/components/investments/AssetClassTargetsForm';
+import AllocationCard from '@/components/investments/AllocationCard';
+import DriftCard from '@/components/investments/DriftCard';
+import { ASSET_CLASS_LABEL } from '@/lib/asset-class-labels';
 import type { CardLayoutEntry, AssetClassTarget } from '@/types/schema';
 import ContributionsByBucketChart from '@/components/charts/ContributionsByBucketChart';
-import DonutChartCard from '@/components/charts/DonutChartCard';
-import { DonutEntityPicker, useDonutSelected, type DonutEntityPickerItem } from '@/components/charts/DonutEntityPicker';
+import { useDonutSelected, type DonutEntityPickerItem } from '@/components/charts/DonutEntityPicker';
 import { paletteColorAt } from '@/components/charts/palette';
 import AssetValueChart from '@/components/charts/AssetValueChart';
 import PerTickerDonut from '@/components/charts/PerTickerDonut';
@@ -100,24 +102,6 @@ function severityColor(severity: ConcentrationWarning['severity']): string {
     default: return 'text-info-foreground';
   }
 }
-
-const ASSET_CLASS_LABEL: Record<AssetClass, string> = {
-  US_TOTAL_MARKET: 'US Total Market',
-  US_LARGE_CAP: 'US Large Cap',
-  US_MID_CAP: 'US Mid Cap',
-  US_SMALL_CAP: 'US Small Cap',
-  INTL_DEVELOPED: 'Intl Developed',
-  EMERGING_MARKETS: 'Emerging Markets',
-  US_BONDS: 'US Bonds',
-  INTL_BONDS: 'Intl Bonds',
-  TIPS: 'TIPS',
-  REAL_ESTATE: 'Real Estate',
-  COMMODITIES: 'Commodities',
-  CRYPTO: 'Crypto',
-  SINGLE_STOCK: 'Single Stock',
-  CASH: 'Cash',
-  OTHER: 'Other',
-};
 
 // localStorage key for the Portfolio-by-account "Investable only" toggle.
 // Module scope so the useCallback below can close over it with an empty
@@ -720,62 +704,14 @@ export default function Investments() {
         label: 'Asset allocation',
         size: 'compact',
         applicable: true,
-        render: () =>
-          allocation.length > 0 ? (
-            <div data-testid="asset-allocation-card">
-              {filteredAllocation.length > 0 ? (
-                <DonutChartCard
-                  title="Asset allocation"
-                  subtitle="Approximate, using latest snapshot per account"
-                  data={filteredAllocation}
-                  shareTotal={allocationTotal}
-                  valueFormatter={formatCurrency}
-                  headerRight={
-                    <DonutEntityPicker
-                      localStorageKey="donut.assetAllocation.hidden"
-                      items={allocationPickerItems}
-                    />
-                  }
-                />
-              ) : (
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <CardTitle>Asset allocation</CardTitle>
-                        <CardDescription>
-                          Approximate, using latest snapshot per account
-                        </CardDescription>
-                      </div>
-                      {/* Picker must stay reachable in the all-hidden state
-                          or the user can never re-show a class. */}
-                      <DonutEntityPicker
-                        localStorageKey="donut.assetAllocation.hidden"
-                        items={allocationPickerItems}
-                      />
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground py-8 text-center">
-                      All entities hidden. Open the picker above to show at least one.
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          ) : (
-            <Card data-testid="asset-allocation-card">
-              <CardHeader>
-                <CardTitle>Asset allocation</CardTitle>
-                <CardDescription>
-                  Approximate, using latest snapshot per account
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="text-sm text-muted-foreground">
-                No holding values yet — confirm an account snapshot in the monthly window.
-              </CardContent>
-            </Card>
-          ),
+        render: () => (
+          <AllocationCard
+            allocation={allocation}
+            filteredAllocation={filteredAllocation}
+            allocationTotal={allocationTotal}
+            pickerItems={allocationPickerItems}
+          />
+        ),
       },
       {
         id: 'per-company',
@@ -906,109 +842,7 @@ export default function Investments() {
         label: 'Target vs Actual',
         size: 'wide',
         applicable: true,
-        render: () => (
-          <Card>
-            <CardHeader>
-              <CardTitle>Target vs Actual</CardTitle>
-              <CardDescription>
-                Approximate, using latest snapshot per account, over held positions
-                only. Asset classes are household-level; holdings refine within
-                their class.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {/* ── By asset class (household) ── */}
-              <div>
-                <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">By asset class</div>
-                {classRows.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">
-                    No holdings yet. Set asset-class targets above to track drift.
-                  </div>
-                ) : (
-                  // Column priority (narrow → wide): Asset class + Drift always
-                  // visible (pinned ends); Target, then Actual, then Invested are
-                  // the first to scroll under overflow-x-auto. Drift is the point.
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm" aria-label="By asset class">
-                      <thead>
-                        <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground border-b">
-                          <th className="py-2 pr-2">Asset class</th>
-                          <th className="py-2 px-2 text-right">Invested</th>
-                          <th className="py-2 px-2 text-right">Actual</th>
-                          <th className="py-2 px-2 text-right">Target</th>
-                          <th className="py-2 pl-2 text-right">Drift</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {classRows.map((r) => (
-                          <tr key={r.assetClass} data-testid={`class-row-${r.assetClass}`} className="border-b last:border-b-0">
-                            <td className="py-2 pr-2">{ASSET_CLASS_LABEL[r.assetClass]}</td>
-                            <td className="py-2 px-2 text-right tabular-nums text-muted-foreground">{formatCurrency(r.actualValue)}</td>
-                            <td className="py-2 px-2 text-right tabular-nums">{(r.actualPct * 100).toFixed(1)}%</td>
-                            <td className="py-2 px-2 text-right tabular-nums">{r.targetPct != null ? `${(r.targetPct * 100).toFixed(1)}%` : '—'}</td>
-                            <td className={`py-2 pl-2 text-right tabular-nums ${r.targetPct == null ? 'text-muted-foreground' : r.driftPct >= 0 ? 'text-success-foreground' : 'text-destructive-soft-foreground'}`}>
-                              {r.targetPct == null ? '—' : `${r.driftPct >= 0 ? '+' : ''}${(r.driftPct * 100).toFixed(1)}%`}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-
-              {/* ── By holding (within-class, aggregated per ticker across accounts) ── */}
-              <div>
-                <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">By holding</div>
-                {/* UX H2/H3 + Finance M2 CAPTION — the dual-basis reconciliation note.
-                    Without it a user who typed VTI 30% sees the within-class basis
-                    render as 75% and thinks the app is wrong. The Target column below
-                    is rendered on the HOUSEHOLD basis (= targetValue / household), so
-                    Actual − Target = Drift reconciles cleanly in this table. */}
-                <p className="text-xs text-muted-foreground mb-2">
-                  Targets shown as each holding’s share of its asset-class target,
-                  expressed as a % of your whole portfolio — so Actual − Target = Drift.
-                </p>
-                {holdingRows.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">No holdings with values yet.</div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm" aria-label="By holding">
-                      <thead>
-                        <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground border-b">
-                          <th className="py-2 pr-2">Ticker</th>
-                          <th className="py-2 px-2 text-right">Invested</th>
-                          <th className="py-2 px-2 text-right">Actual</th>
-                          <th className="py-2 px-2 text-right">Target</th>
-                          <th className="py-2 pl-2 text-right">Drift</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {holdingRows.map((r) => {
-                          // Reconciling identity: targetPct(household) = actualPct − driftPct
-                          // (since driftPct = (actualValue − targetValue)/household and
-                          // actualPct = actualValue/household). No extra state needed.
-                          const targetPctHousehold = r.targetValue == null ? null : r.actualPct - r.driftPct;
-                          return (
-                            <tr key={r.ticker} data-testid={`holding-row-${r.ticker}`} className="border-b last:border-b-0">
-                              <td className="py-2 pr-2 font-mono">{r.ticker}</td>
-                              <td className="py-2 px-2 text-right tabular-nums text-muted-foreground">{formatCurrency(r.actualValue)}</td>
-                              <td className="py-2 px-2 text-right tabular-nums">{(r.actualPct * 100).toFixed(1)}%</td>
-                              <td className="py-2 px-2 text-right tabular-nums">{targetPctHousehold != null ? `${(targetPctHousehold * 100).toFixed(1)}%` : '—'}</td>
-                              <td className={`py-2 pl-2 text-right tabular-nums ${r.targetValue == null ? 'text-muted-foreground' : r.driftPct >= 0 ? 'text-success-foreground' : 'text-destructive-soft-foreground'}`}>
-                                {r.targetValue == null ? '—' : `${r.driftPct >= 0 ? '+' : ''}${(r.driftPct * 100).toFixed(1)}%`}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ),
+        render: () => <DriftCard classRows={classRows} holdingRows={holdingRows} />,
       },
       {
         id: 'contributions',
