@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { AssetClass } from '@/types/enums';
 import type { AssetClassTarget } from '@/types/schema';
@@ -34,16 +34,26 @@ export interface AssetClassTargetsFormProps {
 
 export function AssetClassTargetsForm({ heldClasses, initial, onSave }: AssetClassTargetsFormProps) {
   // whole-percent state per class (null = blank).
+  // Wave-9 M9: seed from the UNION of held classes and every saved target —
+  // dropping saved-but-unheld targets at init meant Save rebuilt the array
+  // without them (silent erasure). Non-held classes still render (with their
+  // saved %) so the user can see and edit everything Save will write.
   const initialPct = useMemo(() => {
     const m = new Map<AssetClass, number | null>();
     for (const c of heldClasses) m.set(c, null);
-    for (const t of initial ?? []) if (m.has(t.assetClass)) m.set(t.assetClass, t.targetPct * 100);
+    for (const t of initial ?? []) m.set(t.assetClass, t.targetPct * 100);
     return m;
   }, [heldClasses, initial]);
 
   const [pct, setPct] = useState<Map<AssetClass, number | null>>(initialPct);
+  const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Late store hydration refreshes a PRISTINE form only — user edits win.
+  useEffect(() => {
+    if (!dirty) setPct(initialPct);
+  }, [initialPct, dirty]);
 
   const sumWhole = [...pct.values()].reduce<number>((a, v) => a + (v ?? 0), 0);
 
@@ -76,14 +86,21 @@ export function AssetClassTargetsForm({ heldClasses, initial, onSave }: AssetCla
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {heldClasses.map((cls) => (
+          {[...pct.keys()].map((cls) => (
             <NumberField
               key={cls}
               id={`class-target-${cls}`}
-              label={ASSET_CLASS_LABEL[cls]}
+              label={
+                heldClasses.includes(cls)
+                  ? ASSET_CLASS_LABEL[cls]
+                  : `${ASSET_CLASS_LABEL[cls]} (not held)`
+              }
               ariaLabel={`${ASSET_CLASS_LABEL[cls]} target`}
               value={pct.get(cls) ?? null}
-              onChange={(v) => setPct((prev) => new Map(prev).set(cls, v))}
+              onChange={(v) => {
+                setDirty(true);
+                setPct((prev) => new Map(prev).set(cls, v));
+              }}
               suffix="%"
               step="1"
               min={0}
