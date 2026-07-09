@@ -10,7 +10,7 @@ import { useDependentsStore } from '@/stores/dependents-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import {
   computeTotalTax,
-  computeFicaBreakdown,
+  computeHouseholdFica,
   computePretaxDeductions,
 } from '@/lib/tax';
 // Finance #2: health-FSA cap, sourced from the same 2026 constants module the
@@ -200,6 +200,16 @@ export default function PaycheckCalculator() {
     };
   }, [persons]);
 
+  // Wave-9 F1/M49: the combined gross is EDITABLE, so per-person figures
+  // derive from salary SHARES — editing the total scales each earner
+  // proportionally to their real salary. Degenerate households (no persons /
+  // zero salaries) collapse to one earner carrying the whole gross.
+  const salaryShares = useMemo(() => {
+    const total = persons.reduce((s, p) => s + p.annualSalaryPretax, 0);
+    if (total <= 0 || persons.length === 0) return [1];
+    return persons.map((p) => p.annualSalaryPretax / total);
+  }, [persons]);
+
   const values = useMemo<FormValues | undefined>(() => {
     if (!household) return undefined;
     return {
@@ -290,6 +300,7 @@ export default function PaycheckCalculator() {
     if (!federal || !state) return null;
 
     const gross = f.grossAnnual;
+    const perPersonGross = salaryShares.map((s) => gross * s);
     const pretax = computePretaxDeductions({
       salary: gross,
       pretax401kPct: f.pretax401kPct / 100,
@@ -315,10 +326,17 @@ export default function PaycheckCalculator() {
     // is out of this plan's edit scope), so this line stays a single named
     // reference rather than an inline magic number.
     const fsaAnnual = Math.min(f.fsaMonthly * 12, CONTRIBUTION_LIMITS_2026.HEALTH_FSA);
-    const pretaxTotal = pretax.total + fsaAnnual;
+    // Wave-9 M49: the blended single call caps the WHOLE household at one
+    // $24,500 limit. Re-derive the deferral per earner at the form's blended
+    // % of each share, capping each earner separately.
+    const pretax401k = perPersonGross
+      .map((g) => Math.min(g * (f.pretax401kPct / 100), CONTRIBUTION_LIMITS_2026.EMPLOYEE_401K))
+      .reduce((a, b) => a + b, 0);
+    const pretaxTotal = pretax.total - pretax.pretax401k + pretax401k + fsaAnnual;
 
     const tax = computeTotalTax({
       gross,
+      perPersonGross, // wave-9 F1
       filingStatus: f.filingStatus,
       federalBrackets: federal.brackets,
       stateBrackets: state.brackets,
@@ -329,14 +347,15 @@ export default function PaycheckCalculator() {
         city: city?.standardDeduction ?? 0,
       },
       pretax: {
-        pretax401k: pretax.pretax401k,
+        pretax401k,
         pretaxHealth: pretax.pretaxHealth + fsaAnnual, // FSA folded into the §125 bucket
         pretaxDcfsa: pretax.pretaxDcfsa,
         pretaxHsa: pretax.pretaxHsa,
       },
     });
 
-    const fica = computeFicaBreakdown(gross, f.filingStatus);
+    // Wave-9 F1: per-earner SS wage bases (Medicare surtax on the combined return).
+    const fica = computeHouseholdFica(perPersonGross, f.filingStatus);
 
     const postTaxTotal = (gross * f.roth401kPct) / 100 + f.otherPostTaxMonthly * 12;
     const extraWithholdingTotal =
@@ -377,7 +396,7 @@ export default function PaycheckCalculator() {
     f.grossAnnual, f.payFrequency, f.filingStatus, f.dependents, f.state, f.city,
     f.pretax401kPct, f.healthMonthly, f.hsaMonthly, f.fsaMonthly,
     f.roth401kPct, f.otherPostTaxMonthly, f.extraFederalPerPaycheck,
-    taxItems, resolvedYear, persons.length, combined.dcfsaMonthly,
+    taxItems, resolvedYear, persons.length, combined.dcfsaMonthly, salaryShares,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Results "Show as" display period (independent of the Income pay frequency).

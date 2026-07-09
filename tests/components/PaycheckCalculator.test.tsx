@@ -403,4 +403,53 @@ describe('PaycheckCalculator', () => {
     const buttons = Array.from(group.querySelectorAll('[aria-pressed]'));
     expect(buttons.length).toBe(4);
   });
+
+  function primeDualEarnerMFJ(pct: number) {
+    primeStores();
+    useHouseholdStore.setState({
+      household: {
+        ...useHouseholdStore.getState().household!,
+        filingStatus: FilingStatus.MFJ,
+      },
+      isLoading: false,
+      error: null,
+    });
+    const alice = usePersonsStore.getState().persons[0];
+    usePersonsStore.setState({
+      persons: [
+        { ...alice, id: 1, name: 'Alice', annualSalaryPretax: 150000, pretax401kPct: pct },
+        { ...alice, id: 2, name: 'Bob', annualSalaryPretax: 150000, pretax401kPct: pct },
+      ],
+      isLoading: false,
+      error: null,
+    });
+    const items = useTaxRulesStore.getState().items.map((i) => ({
+      ...i,
+      filingStatus: FilingStatus.MFJ,
+    }));
+    useTaxRulesStore.setState({ year: 2026, items, isLoading: false, error: null });
+  }
+
+  it('per-earner FICA: dual-$150k MFJ shows SS $18,600 (wave-9 F1)', async () => {
+    // SS = 2 × min(150k, 184.5k) × 6.2% = $18,600. The combined-base bug
+    // showed min(300k, 184.5k) × 6.2% = $11,439.
+    const user = userEvent.setup();
+    primeDualEarnerMFJ(0);
+    render(<MemoryRouter><PaycheckCalculator /></MemoryRouter>);
+    await screen.findByTestId('paycheck-calc-takehome');
+    await user.click(screen.getByRole('button', { name: 'Annual' }));
+    expect(screen.getAllByText(/\$18,600/).length).toBeGreaterThan(0);
+  });
+
+  it('401(k) cap applies PER PERSON, not once on the blended household (wave-9 M49)', async () => {
+    // Two $150k earners each at 20% → each defers min(30k, 24.5k) = $24,500;
+    // household $49,000. Pre-fix the single blended call capped the WHOLE
+    // household at $24,500.
+    const user = userEvent.setup();
+    primeDualEarnerMFJ(0.20);
+    render(<MemoryRouter><PaycheckCalculator /></MemoryRouter>);
+    await screen.findByTestId('paycheck-calc-takehome');
+    await user.click(screen.getByRole('button', { name: 'Annual' }));
+    expect(screen.getAllByText(/\$49,000/).length).toBeGreaterThan(0);
+  });
 });
