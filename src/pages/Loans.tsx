@@ -282,7 +282,7 @@ function LoanCard({ projection, expanded, onToggleExpand, schedule }: LoanCardPr
             <span className="text-muted-foreground">
               Paid {formatCurrency(paid)}
             </span>
-            <span className="font-mono">
+            <span className="tabular-nums">
               {formatCurrency(loan.currentBalance)} remaining
             </span>
           </div>

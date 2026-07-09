@@ -331,7 +331,7 @@ export default function Spending() {
               <CardDescription>Active rent + vehicle leases.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-semibold font-mono">
+              <div className="text-2xl font-semibold tabular-nums">
                 {obligationCurrencyFormatter.format(recurringObligation)}/mo
               </div>
               <div className="mt-3 flex gap-6 border-t pt-3">

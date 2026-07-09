@@ -231,6 +231,7 @@ export default function DonutChartCard({
             >
               {visibleLegend.map((slice, idx) => {
                 const pct = pctOf(slice.value);
+                const label = legendLabelFormatter ? legendLabelFormatter(slice.name) : slice.name;
                 const rowContent = (
                   <>
                     <span
@@ -238,23 +239,26 @@ export default function DonutChartCard({
                       className="inline-block h-2 w-2 rounded-sm shrink-0"
                       style={{ backgroundColor: colorAt(slice, idx) }}
                     />
-                    {legendLabelFormatter ? legendLabelFormatter(slice.name) : slice.name}
-                    {' — '}
-                    {fmt(slice.value)}
-                    {pct ? ` · ${pct}` : ''}
+                    {/* Round-3 S11: only the NAME truncates — the value and
+                        share-% readouts are protected (improve-never-remove)
+                        and stay whole; the full name rides on title. */}
+                    <span className="truncate" title={label}>{label}</span>
+                    <span className="shrink-0 whitespace-nowrap">
+                      {' — '}{fmt(slice.value)}{pct ? ` · ${pct}` : ''}
+                    </span>
                   </>
                 );
                 return (
                   <li
                     key={`${slice.name}-${idx}`}
-                    className="inline-flex items-center gap-1.5 whitespace-nowrap"
+                    className="inline-flex items-center gap-1.5 min-w-0 max-w-full"
                   >
                     {onClickSlice ? (
                       // Keyboard-reachable drill-down twin of the wedge click.
                       <button
                         type="button"
                         onClick={() => onClickSlice(slice.name)}
-                        className="inline-flex items-center gap-1.5 whitespace-nowrap hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+                        className="inline-flex items-center gap-1.5 min-w-0 max-w-full hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
                       >
                         {rowContent}
                       </button>

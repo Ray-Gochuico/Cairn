@@ -513,8 +513,12 @@ describe('Investments page — 529 section', () => {
       await user.click(within(allocCard).getByRole('checkbox', { name: /US Bonds/ }));
 
       const legend = within(allocCard).getByLabelText('Chart legend');
-      expect(within(legend).getByText(/^US Total Market — \$18,750 · 62\.5%$/)).toBeInTheDocument();
-      expect(within(legend).getByText(/^Crypto — \$1,875 · 6\.3%$/)).toBeInTheDocument();
+      // Round-3 S11: the name is a title-carrying truncate span, the readouts
+      // a sibling span — assert on the whole row's text.
+      expect(within(legend).getByTitle('US Total Market').closest('li')!)
+        .toHaveTextContent('US Total Market — $18,750 · 62.5%');
+      expect(within(legend).getByTitle('Crypto').closest('li')!)
+        .toHaveTextContent('Crypto — $1,875 · 6.3%');
       expect(within(legend).queryByText(/90\.9%|9\.1%/)).toBeNull();
     });
 
@@ -552,10 +556,11 @@ describe('Investments page — 529 section', () => {
 
       // All three asset classes visible in the legend initially.
       const legend = within(allocCard).getByLabelText('Chart legend');
-      // Legend rows read "<name> — $value · pct%" since the Wave-3 upgrade.
-      expect(within(legend).getByText(/^US Bonds —/)).toBeInTheDocument();
-      expect(within(legend).getByText(/^Crypto —/)).toBeInTheDocument();
-      expect(within(legend).getByText(/^US Total Market —/)).toBeInTheDocument();
+      // Legend rows read "<name> — $value · pct%"; the name carries a title
+      // attribute since the round-3 S11 truncation split.
+      expect(within(legend).getByTitle('US Bonds')).toBeInTheDocument();
+      expect(within(legend).getByTitle('Crypto')).toBeInTheDocument();
+      expect(within(legend).getByTitle('US Total Market')).toBeInTheDocument();
 
       const user = userEvent.setup();
       await user.click(
@@ -565,9 +570,9 @@ describe('Investments page — 529 section', () => {
 
       // US Bonds slice gone from the legend; the other two remain.
       const legend2 = within(allocCard).getByLabelText('Chart legend');
-      expect(within(legend2).queryByText(/^US Bonds —/)).toBeNull();
-      expect(within(legend2).getByText(/^Crypto —/)).toBeInTheDocument();
-      expect(within(legend2).getByText(/^US Total Market —/)).toBeInTheDocument();
+      expect(within(legend2).queryByTitle('US Bonds')).toBeNull();
+      expect(within(legend2).getByTitle('Crypto')).toBeInTheDocument();
+      expect(within(legend2).getByTitle('US Total Market')).toBeInTheDocument();
       expect(
         within(allocCard).getByRole('button', { name: /Included · 2 of 3/ }),
       ).toBeInTheDocument();
@@ -613,7 +618,7 @@ describe('Investments page — 529 section', () => {
       };
       const legendSwatch = (label: string) => {
         const li = within(within(allocCard).getByLabelText('Chart legend'))
-          .getByText(new RegExp(`^${label} \u2014`))
+          .getByTitle(label)
           .closest('li')!;
         return (li.querySelector('span[aria-hidden]') as HTMLElement).style.backgroundColor;
       };
