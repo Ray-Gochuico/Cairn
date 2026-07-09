@@ -40,6 +40,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { formatCurrency, formatPercent, formatDate } from '@/lib/format';
 import { minusMonths } from '@/lib/growth-horizons';
+import { useLocalToday } from '@/lib/use-local-today';
+import { dateFromLocalISO } from '@/lib/dates';
 import { UpdateAccountBalanceDialog } from '@/components/dialogs/UpdateAccountBalanceDialog';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import type { CsvColumn } from '@/lib/csv';
@@ -381,10 +383,10 @@ export default function Goals() {
     reload,
   );
 
-  // Stable "today" per render cycle — passed into computeGoalProgress so the
-  // helper isn't recomputed twice from new Date() drift inside a single
-  // render. Recomputed on each commit which is fine for a date-precision UI.
-  const today = useMemo(() => new Date(), []);
+  // Live LOCAL day (Wave 11 T9): re-derives at the midnight/month flip via
+  // useLocalToday; every projection memo keys on it.
+  const todayISO = useLocalToday();
+  const today = useMemo(() => dateFromLocalISO(todayISO), [todayISO]);
 
   const annualRate = useMemo(() => pickModerateRate(household), [household]);
 

@@ -5,6 +5,8 @@ import { usePersonsStore } from '@/stores/persons-store';
 import { CalculatorCard } from './CalculatorCard';
 import { computeEquityValue, vestingChartData, grantOrdinaryIncomeOnVest, isIsoAmtPreference } from '@/lib/equity-value';
 import { formatCurrency, formatDate } from '@/lib/format';
+import { useLocalToday } from '@/lib/use-local-today';
+import { dateFromLocalISO } from '@/lib/dates';
 import { FreshnessBadge } from '@/components/ui/freshness-badge';
 import { ResultRow } from '@/components/calculators/ResultRow';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
@@ -28,9 +30,10 @@ export function EquityValueCard({ cardId, onHide }: EquityValueCardProps = {}) {
   const equityGrants = useEquityGrantsStore((s) => s.equityGrants);
   const persons = usePersonsStore((s) => s.persons);
 
-  // Stable "today" so computeEquityValue isn't fed a fresh Date on every
-  // memo recompute when the inputs change.
-  const today = useMemo(() => new Date(), []);
+  // Live LOCAL day (Wave 11 T9): re-derives at the midnight flip via
+  // useLocalToday.
+  const todayISO = useLocalToday();
+  const today = useMemo(() => dateFromLocalISO(todayISO), [todayISO]);
 
   // Owner name lookup (id is non-nullable on persisted Person rows).
   const personById = useMemo(

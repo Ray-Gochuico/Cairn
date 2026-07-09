@@ -26,6 +26,8 @@ import type { AddCategoryPayload } from '@/components/budget/AddCategoryDialog';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import { formatCurrency, formatMonth } from '@/lib/format';
+import { useLocalToday } from '@/lib/use-local-today';
+import { localTodayISO } from '@/lib/dates';
 
 export default function Budget() {
   const categories = useCategoriesStore((s) => s.categories);
@@ -47,12 +49,17 @@ export default function Budget() {
   const storeErrors = [categoriesError, transactionsError];
   const gate = useLoadGate([categoriesLoading, transactionsLoading], storeErrors, reload);
 
+  // Live LOCAL month (Wave 11 T9) — the month LIST and "current month" follow
+  // useLocalToday so a page left open across a month flip re-derives.
+  const todayISO = useLocalToday();
+  const currentMonth = todayISO.slice(0, 7);
   const months = useMemo(() => {
     const set = new Set(transactions.map((t) => t.date.slice(0, 7)));
-    set.add(new Date().toISOString().slice(0, 7));
+    set.add(currentMonth);
     return [...set].sort((a, b) => b.localeCompare(a));
-  }, [transactions]);
-  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  }, [transactions, currentMonth]);
+  // The SELECTED month is user state; init to the current local month.
+  const [month, setMonth] = useState(() => localTodayISO().slice(0, 7));
 
   const summary = useMemo(
     () => summarizeBudget(categories, transactions, month),

@@ -25,6 +25,8 @@ import AssetsDonut from '@/components/charts/AssetsDonut';
 import LiabilitiesDonut from '@/components/charts/LiabilitiesDonut';
 import GrowthCard from '@/components/charts/GrowthCard';
 import { computeHorizonGrowth } from '@/lib/growth-horizons';
+import { useLocalToday } from '@/lib/use-local-today';
+import { dateFromLocalISO } from '@/lib/dates';
 import { netWorthAsOfFactory } from '@/lib/asset-value-chart';
 import { filterSnapshotsForNetWorth } from '@/lib/account-inclusion';
 
@@ -162,6 +164,10 @@ export default function NetWorth() {
     visibleVehicles.length > 0 ||
     visibleLoans.length > 0;
 
+  // Live LOCAL day (Wave 11 T9) — feeds both the as-of valuation and the
+  // growth "now" so they never drift across a midnight flip.
+  const todayISO = useLocalToday();
+
   // GrowthCard refeed (spec §3.7): same as-of valuation as the chart, so in
   // the household view its horizons and the chart header always agree. Under
   // a person filter they intentionally diverge — GrowthCard follows the
@@ -177,10 +183,10 @@ export default function NetWorth() {
       vehicles: visibleVehicles,
       loans: visibleLoans,
       assetValueSnapshots,
-      todayIso: new Date().toISOString().slice(0, 10),
+      todayIso: todayISO,
     });
-    return computeHorizonGrowth(valueAsOf, new Date());
-  }, [visibleSnapshots, accounts, visibleProperties, visibleVehicles, visibleLoans, assetValueSnapshots]);
+    return computeHorizonGrowth(valueAsOf, dateFromLocalISO(todayISO));
+  }, [visibleSnapshots, accounts, visibleProperties, visibleVehicles, visibleLoans, assetValueSnapshots, todayISO]);
 
   // W10 M5: never show "No net worth snapshots yet" while loads are in
   // flight — the empty copy is only honest once every consumed store settled.
