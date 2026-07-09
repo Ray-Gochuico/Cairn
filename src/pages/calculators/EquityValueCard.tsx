@@ -6,7 +6,6 @@ import { CalculatorCard } from './CalculatorCard';
 import { computeEquityValue, vestingChartData, grantOrdinaryIncomeOnVest, isIsoAmtPreference } from '@/lib/equity-value';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { useLocalToday } from '@/lib/use-local-today';
-import { dateFromLocalISO } from '@/lib/dates';
 import { FreshnessBadge } from '@/components/ui/freshness-badge';
 import { ResultRow } from '@/components/calculators/ResultRow';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
@@ -33,7 +32,6 @@ export function EquityValueCard({ cardId, onHide }: EquityValueCardProps = {}) {
   // Live LOCAL day (Wave 11 T9): re-derives at the midnight flip via
   // useLocalToday.
   const todayISO = useLocalToday();
-  const today = useMemo(() => dateFromLocalISO(todayISO), [todayISO]);
 
   // Owner name lookup (id is non-nullable on persisted Person rows).
   const personById = useMemo(
@@ -51,7 +49,7 @@ export function EquityValueCard({ cardId, onHide }: EquityValueCardProps = {}) {
     const allUpcomingDates: string[] = [];
 
     for (const g of equityGrants) {
-      const result = computeEquityValue(g, today);
+      const result = computeEquityValue(g, todayISO);
       totalUnvestedAcc += result.unvestedValue;
       for (const d of result.upcomingVestDates) {
         allUpcomingDates.push(d);
@@ -85,7 +83,7 @@ export function EquityValueCard({ cardId, onHide }: EquityValueCardProps = {}) {
       totalUnvested: totalUnvestedAcc,
       upcomingVests: deduped,
     };
-  }, [equityGrants, personById, today]);
+  }, [equityGrants, personById, todayISO]);
 
   const totalVested = useMemo(
     () => perPerson.reduce((sum, p) => sum + p.vested, 0),
@@ -95,8 +93,8 @@ export function EquityValueCard({ cardId, onHide }: EquityValueCardProps = {}) {
   const chartData = useMemo(() => vestingChartData(equityGrants), [equityGrants]);
 
   const totalOrdinaryIncome = useMemo(
-    () => equityGrants.reduce((sum, g) => sum + grantOrdinaryIncomeOnVest(g, today), 0),
-    [equityGrants, today],
+    () => equityGrants.reduce((sum, g) => sum + grantOrdinaryIncomeOnVest(g, todayISO), 0),
+    [equityGrants, todayISO],
   );
 
   const hasIso = useMemo(

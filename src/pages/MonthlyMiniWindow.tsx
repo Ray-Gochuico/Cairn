@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLoadGate } from '@/lib/use-load-gate';
+import { useLocalToday } from '@/lib/use-local-today';
+import { localTodayISO, dateFromLocalISO } from '@/lib/dates';
 import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
 import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import { useAccountsStore } from '@/stores/accounts-store';
@@ -68,8 +70,10 @@ function formatUSD(value: number): string {
   }).format(value);
 }
 
+// Save-time "today" from LOCAL parts (Wave 11 T10) — a snapshot stamped by
+// the user's calendar day, not UTC.
 function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  return localTodayISO();
 }
 
 function monthLabel(yyyymm: string): string {
@@ -582,7 +586,8 @@ export default function MonthlyMiniWindow() {
     reload,
   );
 
-  const today = useMemo(() => new Date(), []);
+  const todayLocalISO = useLocalToday();
+  const today = useMemo(() => dateFromLocalISO(todayLocalISO), [todayLocalISO]);
   const lastMonth = useMemo(() => lastMonthYyyymm(today), [today]);
   const lastMonthClose = useMemo(
     () => lastBusinessDayOfMonth(lastMonth),

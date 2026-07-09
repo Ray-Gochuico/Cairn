@@ -20,7 +20,6 @@ import AddEquityGrantDialog from '@/components/equity-grants/AddEquityGrantDialo
 import type { CsvColumn } from '@/lib/csv';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { useLocalToday } from '@/lib/use-local-today';
-import { dateFromLocalISO } from '@/lib/dates';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import { EmptyState } from '@/components/layout/EmptyState';
@@ -204,7 +203,6 @@ export default function EquityGrants() {
   // Live LOCAL day (Wave 11 T9): re-derives at the midnight flip via
   // useLocalToday so a page left open overnight re-values vesting.
   const todayISO = useLocalToday();
-  const today = useMemo(() => dateFromLocalISO(todayISO), [todayISO]);
 
   // Owner name lookup (id is non-nullable on persisted Person rows). Uses the
   // full persons list (from useViewFilter) so we can still resolve names for
@@ -235,9 +233,9 @@ export default function EquityGrants() {
     return visibleGrants.map((grant) => ({
       grant,
       ownerName: personById.get(grant.ownerPersonId) ?? 'Unknown',
-      result: computeEquityValue(grant, today),
+      result: computeEquityValue(grant, todayISO),
     }));
-  }, [visibleGrants, personById, today]);
+  }, [visibleGrants, personById, todayISO]);
 
   const totals = useMemo(() => {
     return projections.reduce(

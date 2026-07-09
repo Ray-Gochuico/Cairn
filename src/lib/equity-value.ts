@@ -33,8 +33,10 @@ export interface EquityValueResult {
   upcomingVestDates: string[];
 }
 
-export function computeEquityValue(grant: GrantInput, today: Date): EquityValueResult {
-  const todayIso = today.toISOString().slice(0, 10);
+export function computeEquityValue(grant: GrantInput, todayIso: string): EquityValueResult {
+  // Wave 11 T10: takes the LOCAL calendar day (YYYY-MM-DD) directly — the
+  // callers hold useLocalToday()'s value — so vest-date comparisons are
+  // timezone-proof and clock-free-testable (no internal toISOString derivation).
   let vestedPct = 0;
   for (const entry of grant.vestingSchedule) {
     if (entry.date <= todayIso) vestedPct = entry.cumulativePct;
@@ -114,9 +116,9 @@ export function vestingChartData(
  */
 export function grantOrdinaryIncomeOnVest(
   grant: GrantInput,
-  today: Date,
+  todayIso: string,
 ): number {
-  const { unvestedShares } = computeEquityValue(grant, today);
+  const { unvestedShares } = computeEquityValue(grant, todayIso);
   if (grant.grantType === GrantType.ISO) return 0; // AMT preference, not ordinary income
   const perShare =
     grant.grantType === GrantType.NSO

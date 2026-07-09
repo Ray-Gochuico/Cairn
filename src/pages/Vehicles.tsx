@@ -15,6 +15,7 @@ import { filterByOwnerPersonId } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { resolveUtilityCategoryIds } from '@/lib/category-config';
 import { monthlyLeaseObligation } from '@/lib/recurring-obligations';
+import { useLocalToday } from '@/lib/use-local-today';
 import { CategoryMultiSelect } from '@/components/categories/CategoryMultiSelect';
 import { LoanType } from '@/types/enums';
 import {
@@ -422,7 +423,7 @@ export default function Vehicles() {
     reload,
   );
 
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = useLocalToday();
 
   const visibleVehicles = useMemo(
     () => filterByOwnerPersonId(vehicles, filter, persons),
@@ -434,7 +435,7 @@ export default function Vehicles() {
     [vehicleLeases, filter, persons],
   );
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIso;
   const totalMonthlyLeaseObligation = useMemo(
     () => monthlyLeaseObligation(visibleLeases, today),
     [visibleLeases, today],

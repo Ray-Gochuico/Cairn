@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { localTodayISO } from '@/lib/dates';
 import {
   VehicleLeaseBaseSchema,
   type VehicleLease,
@@ -28,7 +29,9 @@ export const DEFAULT_VEHICLE_LEASE: VehicleLeaseFormValues = {
   ownerPersonId: null,
   name: '',
   monthlyAmount: 0,
-  startDate: new Date().toISOString().slice(0, 10),
+  // Filled with the LOCAL calendar day at form mount (Wave 11 T10) — empty
+  // here to avoid a module-load-frozen UTC default.
+  startDate: '',
   endDate: null,
 };
 
@@ -51,9 +54,13 @@ export default function VehicleLeaseForm({
   onCancel,
   submitLabel = 'Save',
 }: VehicleLeaseFormProps) {
+  const defaults = useMemo(
+    () => ({ ...initial, startDate: initial.startDate || localTodayISO() }),
+    [initial],
+  );
   const form = useForm<VehicleLeaseFormValues>({
     resolver: zodResolver(VehicleLeaseFormSchema),
-    defaultValues: initial,
+    defaultValues: defaults,
   });
 
   const onlyOnePerson = persons.length === 1;

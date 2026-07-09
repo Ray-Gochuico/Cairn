@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { formatCurrencyCents } from '@/lib/format';
+import { useLocalToday } from '@/lib/use-local-today';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { EmptyState } from '@/components/layout/EmptyState';
 import { useLoadGate } from '@/lib/use-load-gate';
@@ -265,8 +266,8 @@ export default function Spending() {
   // Recurring total — wave-9 M20: per-month figures (quarterly billers ÷3).
   const recurringTotal = recurring.reduce((s, g) => s + g.monthlyAmount, 0);
 
-  // Recurring obligations (rent + vehicle leases) active today.
-  const todayISO = new Date().toISOString().slice(0, 10);
+  // Recurring obligations (rent + vehicle leases) active today (Wave 11 T10).
+  const todayISO = useLocalToday();
   const recurringObligation = useMemo(
     () => monthlyRecurringObligation(housingPayments, vehicleLeases, todayISO),
     [housingPayments, vehicleLeases, todayISO],

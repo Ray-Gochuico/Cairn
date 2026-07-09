@@ -15,6 +15,7 @@ import { filterByOwnerPersonId } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { resolveUtilityCategoryIds } from '@/lib/category-config';
 import { monthlyHousingObligation } from '@/lib/recurring-obligations';
+import { useLocalToday } from '@/lib/use-local-today';
 import { CategoryMultiSelect } from '@/components/categories/CategoryMultiSelect';
 import { PROPERTY_TYPE_LABELS } from '@/components/forms/PropertyForm';
 import {
@@ -429,7 +430,7 @@ export default function Property() {
     reload,
   );
 
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = useLocalToday();
 
   const visibleProperties = useMemo(
     () => filterByOwnerPersonId(properties, filter, persons),
@@ -441,7 +442,7 @@ export default function Property() {
     [housingPayments, filter, persons],
   );
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIso;
   const totalMonthlyHousingObligation = useMemo(
     () => monthlyHousingObligation(visibleRentals, today),
     [visibleRentals, today],

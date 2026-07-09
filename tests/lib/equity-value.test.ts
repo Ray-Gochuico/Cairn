@@ -20,39 +20,47 @@ const grant = {
 
 describe('computeEquityValue', () => {
   it('returns 0 vested before cliff', () => {
-    const result = computeEquityValue(grant, new Date('2024-06-01'));
+    const result = computeEquityValue(grant, '2024-06-01');
     expect(result.vestedShares).toBe(0);
     expect(result.vestedValue).toBe(0);
   });
 
+  it('takes a LOCAL ISO day and is exact on the vest-date boundary (Wave 11 T10)', () => {
+    const g = { ...grant, vestingSchedule: [{ date: '2026-07-09', cumulativePct: 1.0 }] };
+    // day before the vest: unvested
+    expect(computeEquityValue(g, '2026-07-08').vestedShares).toBe(0);
+    // the vest day itself (<=): vested
+    expect(computeEquityValue(g, '2026-07-09').vestedShares).toBe(1000);
+  });
+
   it('returns 25% vested after first cliff', () => {
-    const result = computeEquityValue(grant, new Date('2025-06-01'));
+    const result = computeEquityValue(grant, '2025-06-01');
     expect(result.vestedShares).toBe(250);
     expect(result.vestedValue).toBe(250 * 50);
     expect(result.unvestedShares).toBe(750);
   });
 
   it('returns 100% vested after final entry', () => {
-    const result = computeEquityValue(grant, new Date('2029-01-01'));
+    const result = computeEquityValue(grant, '2029-01-01');
     expect(result.vestedShares).toBe(1000);
     expect(result.unvestedShares).toBe(0);
   });
 
   it('upcoming vest dates lists next 3 future entries', () => {
-    const result = computeEquityValue(grant, new Date('2025-06-01'));
+    const result = computeEquityValue(grant, '2025-06-01');
     expect(result.upcomingVestDates).toEqual(['2026-01-15', '2027-01-15', '2028-01-15']);
   });
 
   it('monthlyCost amortizes total strike cost over vesting duration', () => {
     // total strike = 5 * 1000 = 5000; vesting duration = 48 months
-    const result = computeEquityValue(grant, new Date('2025-06-01'));
+    const result = computeEquityValue(grant, '2025-06-01');
     expect(result.monthlyCost).toBeCloseTo(5000 / 48, 2);
   });
 
   // Bonus tests
   it('strike price = 0 (RSU) yields monthlyCost = 0', () => {
     const rsuGrant = { ...grant, strikePrice: 0 };
-    const result = computeEquityValue(rsuGrant, new Date('2025-06-01'));
+    const result = computeEquityValue(rsuGrant, '2025-06-01');
     expect(result.monthlyCost).toBe(0);
   });
 
@@ -65,7 +73,7 @@ describe('computeEquityValue', () => {
       currentFmv: 25,
       vestingSchedule: [{ date: '2024-01-15', cumulativePct: 1.0 }],
     };
-    const result = computeEquityValue(immediateGrant, new Date('2024-06-01'));
+    const result = computeEquityValue(immediateGrant, '2024-06-01');
     // Wave-9 F9: the old pin (monthlyCost 1000 forever) WAS the bug — a
     // fully-vested grant has no remaining strike outlay. The max(1, ...)
     // duration clamp still guards the division for in-flight schedules.
@@ -76,18 +84,18 @@ describe('computeEquityValue', () => {
 
   it('today exactly on a vest date counts that entry (<= condition)', () => {
     // 2025-01-15 is exactly the first vest date; pct should be 0.25
-    const result = computeEquityValue(grant, new Date('2025-01-15T12:00:00Z'));
+    const result = computeEquityValue(grant, '2025-01-15');
     expect(result.vestedShares).toBe(250);
   });
 
   it('upcomingVestDates is empty array when fully vested', () => {
-    const result = computeEquityValue(grant, new Date('2029-01-01'));
+    const result = computeEquityValue(grant, '2029-01-01');
     expect(result.upcomingVestDates).toEqual([]);
   });
 
   it('currentFmv = 0 yields vestedValue = 0 regardless of shares', () => {
     const zeroFmvGrant = { ...grant, currentFmv: 0 };
-    const result = computeEquityValue(zeroFmvGrant, new Date('2025-06-01'));
+    const result = computeEquityValue(zeroFmvGrant, '2025-06-01');
     expect(result.vestedValue).toBe(0);
     expect(result.unvestedValue).toBe(0);
     // shares still vest correctly
@@ -236,7 +244,7 @@ const baseOrdinaryGrant = {
     { date: '2099-01-15', cumulativePct: 1.0 },
   ],
 };
-const today2026 = new Date('2026-05-31');
+const today2026 = '2026-05-31';
 
 describe('grantOrdinaryIncomeOnVest', () => {
   it('RSU: unvestedShares × currentFmv (strike is 0)', () => {
@@ -315,9 +323,9 @@ describe('monthlyCost fully-vested clamp (wave-9 F9)', () => {
         { date: '2026-01-01', cumulativePct: 1 },
       ],
     };
-    const during = computeEquityValue(grant, new Date('2025-06-01T00:00:00Z'));
+    const during = computeEquityValue(grant, '2025-06-01');
     expect(during.monthlyCost).toBeCloseTo(5000 / 24, 6); // vesting in flight: period average
-    const after = computeEquityValue(grant, new Date('2029-01-01T00:00:00Z'));
+    const after = computeEquityValue(grant, '2029-01-01');
     expect(after.monthlyCost).toBe(0);
     expect(after.upcomingVestDates).toEqual([]);
   });
@@ -329,7 +337,7 @@ describe('option value nets the strike (wave-9 M64)', () => {
     grantType: GrantType.NSO,
     vestingSchedule: [{ date: '2025-01-01', cumulativePct: 0.5 }, { date: '2026-01-01', cumulativePct: 1 }],
   });
-  const T = new Date('2025-06-01T00:00:00Z');
+  const T = '2025-06-01';
 
   it('in-the-money NSO: value = (fmv − strike) × shares', () => {
     const r = computeEquityValue(nso(17), T);

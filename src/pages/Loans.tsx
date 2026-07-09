@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/card';
 import BarChartCard, { type BarChartSeries } from '@/components/charts/BarChartCard';
 import { formatCurrency, formatMonth } from '@/lib/format';
+import { useLocalToday } from '@/lib/use-local-today';
 import { Button } from '@/components/ui/button';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import type { CsvColumn } from '@/lib/csv';
@@ -393,8 +394,9 @@ export default function Loans() {
     [loans, filter, persons],
   );
 
-  // One "today" per mount: anchors every remaining schedule consistently.
-  const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  // Live LOCAL day (Wave 11 T10): anchors every remaining schedule; re-derives
+  // at the midnight flip.
+  const todayIso = useLocalToday();
 
   const projections = useMemo(
     () => visibleLoans.map((l) => projectLoan(l, todayIso)),

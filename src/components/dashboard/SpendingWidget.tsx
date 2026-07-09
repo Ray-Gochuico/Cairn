@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import { useLocalToday } from '@/lib/use-local-today';
+import { dateFromLocalISO } from '@/lib/dates';
 import { PieChartIcon, BarChart3Icon } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -66,7 +68,8 @@ export function SpendingWidget({
   accounts,
   asOf,
 }: SpendingWidgetProps) {
-  const today = useMemo(() => asOf ?? new Date(), [asOf]);
+  const localToday = useLocalToday();
+  const today = useMemo(() => asOf ?? dateFromLocalISO(localToday), [asOf, localToday]);
 
   const [merchantQuery, setMerchantQuery] = useState('');
   const [accountId, setAccountId] = useState<string>('all');
