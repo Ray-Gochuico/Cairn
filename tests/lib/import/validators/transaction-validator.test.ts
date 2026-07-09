@@ -152,3 +152,37 @@ describe('transactionAmountSign (wave-9 chip b)', () => {
     expect(r.resolved.amount).toBe(-42.5);
   });
 });
+
+describe('reimbursement round-trip (wave-9 S79)', () => {
+  it('parses reimbursed_at/reimbursed_amount and implies reimbursable', () => {
+    const row = {
+      date: '2024-02-01', account: 'Chase Checking', amount: '100',
+      merchant: 'Hotel', reimbursable: 'false',
+      reimbursed_at: '2026-05-01', reimbursed_amount: '40',
+    };
+    const r = validateTransactionRow(row, 13, ctx);
+    expect(r.errors).toEqual([]);
+    expect(r.resolved).toMatchObject({
+      reimbursable: true, reimbursedAt: '2026-05-01', reimbursedAmount: 40,
+    });
+  });
+
+  it('defaults the reimbursement fields to null when the columns are absent', () => {
+    const row = {
+      date: '2024-02-01', account: 'Chase Checking', amount: '100', merchant: 'Hotel',
+    };
+    const r = validateTransactionRow(row, 14, ctx);
+    expect(r.resolved.reimbursedAt).toBeNull();
+    expect(r.resolved.reimbursedAmount).toBeNull();
+  });
+
+  it('rejects a malformed reimbursed_at date', () => {
+    const row = {
+      date: '2024-02-01', account: 'Chase Checking', amount: '100',
+      merchant: 'Hotel', reimbursed_at: 'not-a-date',
+    };
+    const r = validateTransactionRow(row, 15, ctx);
+    expect(r.status).toBe('error');
+    expect(r.errors.some((e) => e.field === 'reimbursed_at')).toBe(true);
+  });
+});

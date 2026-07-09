@@ -339,7 +339,7 @@ describe('Spending page', () => {
       householdId: 1, date: '2026-03-05', merchant: 'AMAZON', merchantRaw: 'AMAZON.COM',
       amount: 54.23, categoryId: 37 /* Shopping */, sourceAccountId: 1, propertyId: null,
       vehicleId: null, personId: 1, sourcePdfFilename: 'mar.pdf', reimbursable: true,
-      reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: 'gift',
+      reimbursedAt: '2026-04-01', reimbursedAmount: 20, isRecurring: false, notes: 'gift',
     };
     await useTransactionsStore.getState().createMany([txn]);
 
@@ -358,10 +358,10 @@ describe('Spending page', () => {
     await Promise.resolve();
 
     expect(capturedCsv.split('\n')[0]).toBe(
-      'date,merchant,amount,category,account,person,reimbursable,notes',
+      'date,merchant,amount,category,account,person,reimbursable,reimbursed_at,reimbursed_amount,notes',
     );
     expect(capturedCsv.split('\n')[1]).toBe(
-      '2026-03-05,AMAZON,54.23,Shopping,Chase Checking,Alex,true,gift',
+      '2026-03-05,AMAZON,54.23,Shopping,Chase Checking,Alex,true,2026-04-01,20,gift',
     );
 
     createSpy.mockRestore();

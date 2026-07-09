@@ -10,6 +10,8 @@ export interface TransactionResolved {
   merchant?: string;
   categoryId?: number;
   reimbursable: boolean;
+  reimbursedAt: string | null;
+  reimbursedAmount: number | null;
   personId: number | null;
   source: string;
 }
@@ -26,6 +28,8 @@ export function validateTransactionRow(
   const errors: CellError[] = [];
   const resolved: TransactionResolved = {
     reimbursable: false,
+    reimbursedAt: null,
+    reimbursedAmount: null,
     personId: null,
     source: raw.source?.trim() || 'CSV_IMPORT',
   };
@@ -96,6 +100,31 @@ export function validateTransactionRow(
     resolved.reimbursable = true;
   } else if (!REIMB_FALSE.has(reimbRaw)) {
     errors.push({ field: 'reimbursable', message: 'Must be true / false (or 1/0, yes/no)' });
+  }
+
+  // Wave-9 S79: without these two optional columns a settled reimbursement
+  // re-imports as PENDING and drops out of every spending total (isRealSpending
+  // excludes pending reimbursables). A present reimbursed_at implies reimbursed.
+  const reimbAtRaw = (raw.reimbursed_at ?? '').trim();
+  if (!reimbAtRaw) {
+    resolved.reimbursedAt = null;
+  } else if (!ISO_DATE_RE.test(reimbAtRaw) || !isRealCalendarDate(reimbAtRaw)) {
+    errors.push({ field: 'reimbursed_at', message: 'Use YYYY-MM-DD format' });
+  } else {
+    resolved.reimbursedAt = reimbAtRaw;
+    resolved.reimbursable = true;
+  }
+
+  const reimbAmtRaw = (raw.reimbursed_amount ?? '').trim();
+  if (!reimbAmtRaw) {
+    resolved.reimbursedAmount = null;
+  } else {
+    const amt = parseImportAmount(reimbAmtRaw);
+    if (amt == null) {
+      errors.push({ field: 'reimbursed_amount', message: `Unparseable amount "${reimbAmtRaw}"` });
+    } else {
+      resolved.reimbursedAmount = amt;
+    }
   }
 
   if (ctx.persons) {

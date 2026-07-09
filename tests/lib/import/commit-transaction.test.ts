@@ -54,6 +54,8 @@ describe('commitTransactionImport', () => {
       merchant: 'AMAZON',
       categoryId: undefined,
       reimbursable: false,
+      reimbursedAt: null,
+      reimbursedAmount: null,
       personId: null,
       source: 'CSV_IMPORT',
     });
@@ -74,6 +76,32 @@ describe('commitTransactionImport', () => {
     });
   });
 
+  it('writes reimbursement fields through so a settled reimbursement survives (wave-9 S79)', async () => {
+    const row = makeRow(1, 'new', {
+      accountId,
+      date: '2024-03-15',
+      amount: 100,
+      merchant: 'HOTEL',
+      categoryId: undefined,
+      reimbursable: true,
+      reimbursedAt: '2026-05-01',
+      reimbursedAmount: 40,
+      personId: null,
+      source: 'CSV_IMPORT',
+    });
+    await commitTransactionImport([row], {
+      db,
+      transactions: transactionsRepo,
+      householdId: 1,
+    });
+    const all = await transactionsRepo.list();
+    expect(all[0]).toMatchObject({
+      reimbursable: true,
+      reimbursedAt: '2026-05-01',
+      reimbursedAmount: 40,
+    });
+  });
+
   it('skips DUPLICATE rows entirely (committableRows excludes them by default)', async () => {
     // The modal already filters duplicates via committableRows when the user
     // doesn't opt in. This test confirms that if a duplicate sneaks through
@@ -86,6 +114,8 @@ describe('commitTransactionImport', () => {
       merchant: 'AMAZON',
       categoryId: undefined,
       reimbursable: false,
+      reimbursedAt: null,
+      reimbursedAmount: null,
       personId: null,
       source: 'CSV_IMPORT',
     });
@@ -105,6 +135,8 @@ describe('commitTransactionImport', () => {
       merchant: 'AMAZON',
       categoryId: undefined,
       reimbursable: false,
+      reimbursedAt: null,
+      reimbursedAmount: null,
       personId: null,
       source: 'CSV_IMPORT',
     });
@@ -115,6 +147,8 @@ describe('commitTransactionImport', () => {
       merchant: 'WHATEVER',
       categoryId: undefined,
       reimbursable: false,
+      reimbursedAt: null,
+      reimbursedAmount: null,
       personId: null,
       source: 'CSV_IMPORT',
     } as TransactionResolved);
@@ -146,6 +180,8 @@ describe('commitTransactionImport', () => {
       merchant: 'AMAZON',
       categoryId: undefined,
       reimbursable: false,
+      reimbursedAt: null,
+      reimbursedAmount: null,
       personId: null,
       source: 'CSV_IMPORT',
     });

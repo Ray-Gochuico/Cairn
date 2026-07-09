@@ -172,6 +172,10 @@ export default function Spending() {
         value: (t) => (t.personId != null ? (personById.get(t.personId) ?? '') : ''),
       },
       { header: 'reimbursable', value: (t) => t.reimbursable },
+      // Wave-9 S79: without these two, a settled reimbursement round-trips
+      // as PENDING and silently drops out of every spending total.
+      { header: 'reimbursed_at', value: (t) => t.reimbursedAt ?? '' },
+      { header: 'reimbursed_amount', value: (t) => t.reimbursedAmount ?? '' },
       { header: 'notes', value: (t) => t.notes },
     ],
     [categoryById, accountById, personById],
