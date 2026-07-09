@@ -381,6 +381,16 @@ export default function Learn() {
               <h2 ref={promptRef} tabIndex={-1} className="text-base font-semibold outline-none">
                 {current.prompt}
               </h2>
+              {/* W10 chip: an answer-write failure (Wave-8: deliberately NOT
+                  the load-failure card) surfaces here so the quiz keeps going.
+                  Pre-mounted + aria-live so the polite announcement fires
+                  without adding a second role="status" (the GradedReveal owns
+                  that one). */}
+              <p aria-live="polite" className="text-xs text-muted-foreground">
+                {learningError !== null && learningState !== null
+                  ? "Couldn’t save that answer — it may not count toward today’s progress. It'll retry on your next answer."
+                  : null}
+              </p>
               {chosenFor(current) !== undefined ? (
                 <GradedReveal question={current} chosenIndex={chosenFor(current)!} revealRef={revealRef} />
               ) : (

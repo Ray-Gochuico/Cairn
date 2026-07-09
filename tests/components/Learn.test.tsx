@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { render, screen, cleanup, waitFor, within } from '@testing-library/react';
+import { render, screen, act, cleanup, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
@@ -181,6 +181,20 @@ describe('Learn page (one-at-a-time stepper, Wave 8)', () => {
     render(<MemoryRouter><Learn /></MemoryRouter>);
     expect(await screen.findByText(/couldn't load today's questions/i)).toBeInTheDocument();
     expect(screen.queryByText(/answered every question/i)).toBeNull();
+  });
+
+  it('shows a calm inline notice — quiz intact — when the answer write failed (W10 chip)', async () => {
+    await seedLearningAccepted(db);
+    render(<MemoryRouter><Learn /></MemoryRouter>);
+    // Wait for the quiz to hydrate (learningState non-null), then simulate a
+    // post-answer write failure.
+    await screen.findByText('Question 1 of 4');
+    act(() => {
+      useLearningStore.setState({ error: 'disk full' } as never);
+    });
+    expect(screen.getByText(/couldn.t save that answer/i)).toBeInTheDocument();
+    // The quiz did NOT collapse into the load-failure card:
+    expect(screen.queryByText(/couldn.t load today.s questions/i)).not.toBeInTheDocument();
   });
 
   it("MUST-4: a rejected bank load renders the calm error card (the page's SEC-1 catch arm)", async () => {

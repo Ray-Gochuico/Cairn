@@ -87,9 +87,16 @@ export const useLearningStore = create<LearningStoreState>((set) => ({
   },
 
   recordAnswer: async (a, statePatch) => {
-    const repo = new LearningStateRepo(getDatabase());
-    await repo.recordAnswer(a);
-    if (statePatch) await repo.update(statePatch);
-    set(await fetchAll());
+    try {
+      const repo = new LearningStateRepo(getDatabase());
+      await repo.recordAnswer(a);
+      if (statePatch) await repo.update(statePatch);
+      set({ ...(await fetchAll()), error: null });
+    } catch (e) {
+      // W10 chip: an answer-write failure must be visible (Learn renders a
+      // calm notice) but must never crash the session — swallow-into-error,
+      // matching the load() contract.
+      set({ error: e instanceof Error ? e.message : 'Failed to save your answer' });
+    }
   },
 }));
