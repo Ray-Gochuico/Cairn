@@ -40,7 +40,11 @@ export function computeEquityValue(grant: GrantInput, today: Date): EquityValueR
         (lastDate.getUTCMonth() - grantDate.getUTCMonth())
     )
   );
-  const monthlyCost = (grant.strikePrice * grant.totalShares) / vestingDurationMonths;
+  // Wave-9 F9: a fully-vested grant has no remaining strike outlay — the
+  // vesting-period average is only meaningful while vesting is in flight.
+  const lastVestDate = grant.vestingSchedule[grant.vestingSchedule.length - 1].date;
+  const monthlyCost =
+    todayIso >= lastVestDate ? 0 : (grant.strikePrice * grant.totalShares) / vestingDurationMonths;
 
   const upcomingVestDates = grant.vestingSchedule
     .filter((e) => e.date > todayIso)

@@ -53,7 +53,7 @@ describe('computeEquityValue', () => {
     expect(result.monthlyCost).toBe(0);
   });
 
-  it('single-entry schedule (immediate full vest at grant date) clamps duration to 1 month', () => {
+  it('single-entry schedule (immediate full vest at grant date) is fully vested with no monthly cost', () => {
     const immediateGrant = {
       grantDate: '2024-01-15',
       strikePrice: 10,
@@ -62,8 +62,10 @@ describe('computeEquityValue', () => {
       vestingSchedule: [{ date: '2024-01-15', cumulativePct: 1.0 }],
     };
     const result = computeEquityValue(immediateGrant, new Date('2024-06-01'));
-    // duration = max(1, 0 months) = 1; monthlyCost = 10 * 100 / 1 = 1000
-    expect(result.monthlyCost).toBe(1000);
+    // Wave-9 F9: the old pin (monthlyCost 1000 forever) WAS the bug — a
+    // fully-vested grant has no remaining strike outlay. The max(1, ...)
+    // duration clamp still guards the division for in-flight schedules.
+    expect(result.monthlyCost).toBe(0);
     expect(result.vestedShares).toBe(100);
     expect(result.unvestedShares).toBe(0);
   });
@@ -289,5 +291,25 @@ describe('isIsoAmtPreference', () => {
 
   it('returns false for NSO', () => {
     expect(isIsoAmtPreference(GrantType.NSO)).toBe(false);
+  });
+});
+
+describe('monthlyCost fully-vested clamp (wave-9 F9)', () => {
+  it('monthlyCost clamps to $0 once the grant is fully vested (wave-9 F9)', () => {
+    const grant = {
+      grantDate: '2024-01-01',
+      strikePrice: 5,
+      totalShares: 1000,
+      currentFmv: 20,
+      vestingSchedule: [
+        { date: '2025-01-01', cumulativePct: 0.5 },
+        { date: '2026-01-01', cumulativePct: 1 },
+      ],
+    };
+    const during = computeEquityValue(grant, new Date('2025-06-01T00:00:00Z'));
+    expect(during.monthlyCost).toBeCloseTo(5000 / 24, 6); // vesting in flight: period average
+    const after = computeEquityValue(grant, new Date('2029-01-01T00:00:00Z'));
+    expect(after.monthlyCost).toBe(0);
+    expect(after.upcomingVestDates).toEqual([]);
   });
 });
