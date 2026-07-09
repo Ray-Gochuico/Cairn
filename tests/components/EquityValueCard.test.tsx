@@ -285,8 +285,10 @@ describe('EquityValueCard', () => {
       </MemoryRouter>,
     );
 
-    // unvested ResultRow must show a $-value
-    expect(screen.getByTestId('equity-total-unvested').textContent).toMatch(/\$[\d,]+/);
+    // T21 exact pin: ISO unvested value is the INTRINSIC spread —
+    // 750 unvested × ($50 FMV − $10 strike) = $30,000 (equity-value.ts
+    // perShare; the older $37,500 comment assumed FMV × shares and was stale).
+    expect(screen.getByTestId('equity-total-unvested').textContent).toBe('$30,000');
 
     // upcoming vests block must be present and contain the realistic near-term date
     const upcomingBlock = screen.getByTestId('equity-upcoming-vests');
@@ -325,8 +327,8 @@ describe('EquityValueCard', () => {
     const personRow = screen.getByTestId('equity-person-row-1');
     expect(within(personRow).getByText('RSU')).toBeInTheDocument();
 
-    // unvested row is present
-    expect(screen.getByTestId('equity-total-unvested').textContent).toMatch(/\$[\d,]+/);
+    // T21 exact pin: unvested = 250 shares × $100 FMV = $25,000.
+    expect(screen.getByTestId('equity-total-unvested').textContent).toBe('$25,000');
   });
 
   it('does not render equity-upcoming-vests block when all vests are in the past', () => {
@@ -426,8 +428,8 @@ describe('EquityValueCard', () => {
         <EquityValueCard />
       </MemoryRouter>,
     );
-    // The ordinary-income ResultRow must be present and show a $-value
-    expect(screen.getByTestId('equity-ordinary-income').textContent).toMatch(/\$[\d,]+/);
+    // T21 exact pin: NSO spread = 750 unvested × ($50 − $10 strike) = $30,000.
+    expect(screen.getByTestId('equity-ordinary-income').textContent).toBe('$30,000');
   });
 
   it('shows est. ordinary income row for an RSU grant with unvested shares', () => {
@@ -453,7 +455,8 @@ describe('EquityValueCard', () => {
         <EquityValueCard />
       </MemoryRouter>,
     );
-    expect(screen.getByTestId('equity-ordinary-income').textContent).toMatch(/\$[\d,]+/);
+    // T21 exact pin: RSU income = 750 unvested × $50 FMV = $37,500.
+    expect(screen.getByTestId('equity-ordinary-income').textContent).toBe('$37,500');
   });
 
   it('shows AMT note when an ISO grant is present', () => {
