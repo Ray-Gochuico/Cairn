@@ -393,7 +393,11 @@ export function computeTotalTax(input: TotalTaxInput): TotalTaxOutput {
   // Net II = qualified divs + non-qualified divs + LTCG (interest income
   // not modeled separately yet — would also flow here when threaded).
   // MAGI ≈ ordinary + qualified income for v1; the engine doesn't model the
-  // foreign-earned-income exclusion add-back.
+  // foreign-earned-income exclusion add-back. NOTE (round-3): the OTHER
+  // NIIT guard (computeIncrementalNiit below) proxies MAGI differently —
+  // W-2 + cap gains + existing investment income — because its input
+  // surface is the withdrawal calculator, not the dividend engine. Both
+  // proxies ≈ AGI for v1; neither adds back FEIE.
   const netInvestmentIncome = qualifiedIncome + nonQualifiedDividends;
   const magi = ordinaryIncome + qualifiedIncome;
   const niit = netInvestmentIncome > 0
@@ -676,7 +680,10 @@ export function calculate401kWithdrawalTax(input: WithdrawalTaxInput): Withdrawa
   if (netInvestmentIncome > 0) {
     // MAGI for NIIT purposes ≈ AGI for v1 (no foreign-earned-income
     // exclusion add-back modeled). Use pre-SD ordinary income +
-    // capital gains + other investment income as the proxy.
+    // capital gains + other investment income as the proxy. NOTE
+    // (round-3): the dividend-engine NIIT guard above proxies MAGI as
+    // ordinary + qualified income instead — a different input surface
+    // (it has no W-2/withdrawal split); both proxies ≈ AGI for v1.
     const magiBase =
       input.annualW2Income + input.annualCapitalGains + existingInvestmentIncome;
     const niitWithout = computeNiit({

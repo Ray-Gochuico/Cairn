@@ -1,3 +1,4 @@
+import { formatCurrency } from '@/lib/format';
 /**
  * Shared sub-components used by both the Property and Vehicles asset-equity
  * pages. Extracted to avoid bit-for-bit duplication.
@@ -6,12 +7,6 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { formatCurrency } from '@/lib/format';
-
-export function formatCurrencyShared(value: number): string {
-  return formatCurrency(value);
-}
-
 export interface ValueEditorProps {
   initialValue: number | null;
   onSave: (value: number | null) => Promise<void>;
