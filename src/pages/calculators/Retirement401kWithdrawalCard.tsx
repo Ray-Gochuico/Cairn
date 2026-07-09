@@ -226,7 +226,7 @@ export function Retirement401kWithdrawalCard({
   return (
     <CalculatorCard
       cardId={cardId}
-      title="401k withdrawal tax"
+      title="401k withdrawal take-home"
       headline={
         <span data-testid="401k-withdrawal-net">{headline}</span>
       }

@@ -116,7 +116,7 @@ export function computeTailoring(input: TailoringInput): TailoringResult {
     { id: 'compound-interest', label: 'Compound Interest', visible: true, reason: 'Always available' },
     { id: 'contribution-allocator', label: 'Contribution allocator', visible: true, reason: 'Always available' },
     { id: 'backtest', label: 'Historical Backtest', visible: true, reason: 'Always available' },
-    { id: 'retirement-401k-withdrawal', label: '401k withdrawal tax', visible: true, reason: 'Always available' },
+    { id: 'retirement-401k-withdrawal', label: '401k withdrawal take-home', visible: true, reason: 'Always available' },
     { id: 'debt-payoff', label: 'Debt Payoff', visible: true, reason: 'Always available — add a loan to use it' },
     // Conditional (4).
     {
