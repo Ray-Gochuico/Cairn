@@ -1,5 +1,42 @@
 import { describe, it, expect } from 'vitest';
-import { formatCompactCurrency, formatSignedCurrency } from '@/lib/format';
+import {
+  formatCompactCurrency,
+  formatSignedCurrency,
+  formatDate,
+  formatMonth,
+  formatCurrencyCents,
+} from '@/lib/format';
+
+describe('formatDate', () => {
+  it('renders a calendar-day ISO string as Mon D, YYYY', () => {
+    expect(formatDate('2028-06-15')).toBe('Jun 15, 2028');
+  });
+  it('is UTC-stable: the displayed day never shifts for west-of-UTC locales', () => {
+    expect(formatDate('2026-01-01')).toBe('Jan 1, 2026');
+    expect(formatDate('2026-12-31')).toBe('Dec 31, 2026');
+  });
+});
+
+describe('formatMonth', () => {
+  it('renders YYYY-MM as Mon YYYY', () => {
+    expect(formatMonth('2026-07')).toBe('Jul 2026');
+  });
+  it('accepts a full ISO day and formats its month', () => {
+    expect(formatMonth('2027-01-15')).toBe('Jan 2027');
+  });
+});
+
+describe('formatCurrencyCents', () => {
+  it('renders exact cents with thousands separators', () => {
+    expect(formatCurrencyCents(6846.84)).toBe('$6,846.84');
+  });
+  it('renders negatives with a leading minus and separators', () => {
+    expect(formatCurrencyCents(-2450)).toBe('-$2,450.00');
+  });
+  it('pads whole dollars to two decimals', () => {
+    expect(formatCurrencyCents(40)).toBe('$40.00');
+  });
+});
 
 describe('formatSignedCurrency', () => {
   it('renders negatives with a true minus (U+2212), full dollar form', () => {
