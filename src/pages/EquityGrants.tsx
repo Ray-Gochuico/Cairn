@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Gift } from 'lucide-react';
+import { useLoadGate } from '@/lib/use-load-gate';
+import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
 import { useEquityGrantsStore } from '@/stores/equity-grants-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { computeEquityValue, type EquityValueResult } from '@/lib/equity-value';
@@ -169,24 +171,26 @@ export default function EquityGrants() {
   const equityGrants = useEquityGrantsStore((s) => s.equityGrants);
   const loadGrants = useEquityGrantsStore((s) => s.load);
   const grantsError = useEquityGrantsStore((s) => s.error);
+  const grantsLoading = useEquityGrantsStore((s) => s.isLoading);
   const loadPersons = usePersonsStore((s) => s.load);
   const personsError = usePersonsStore((s) => s.error);
+  const personsLoading = usePersonsStore((s) => s.isLoading);
 
   // Controls the in-page Add Equity Grant dialog. Sits on the page (not in
   // the header div) so opening from the empty-state CTA stays trivial later.
   const [addOpen, setAddOpen] = useState(false);
 
-  const reload = () => {
-    loadGrants();
-    loadPersons();
-  };
-  useEffect(() => {
+  const reload = useCallback(() => {
     loadGrants();
     loadPersons();
   }, [loadGrants, loadPersons]);
 
   const storeErrors = [grantsError, personsError];
   const hasStoreError = storeErrors.some((e) => e != null);
+
+  // W10 M18: gate the empty state behind load settlement — never flash
+  // "No equity grants yet" while grants + persons are still loading.
+  const gate = useLoadGate([grantsLoading, personsLoading], storeErrors, reload);
 
   // Apply the view filter — grants are individual (ownerPersonId is
   // non-nullable), so 'joint' produces an empty list.
@@ -244,6 +248,14 @@ export default function EquityGrants() {
     );
   }, [projections]);
 
+  if (!gate.settled) {
+    return (
+      <PageContainer className="space-y-6">
+        <PageLoadingSpinner />
+      </PageContainer>
+    );
+  }
+
   if (equityGrants.length === 0) {
     return (
       <PageContainer className="space-y-6">
@@ -255,7 +267,7 @@ export default function EquityGrants() {
           </p>
         </div>
         {hasStoreError ? (
-          <StoreErrorBanner errors={storeErrors} onRetry={reload} />
+          <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
         ) : (
           <EmptyState
             icon={Gift}
@@ -273,7 +285,7 @@ export default function EquityGrants() {
 
   return (
     <PageContainer className="space-y-6">
-      <StoreErrorBanner errors={storeErrors} onRetry={reload} />
+      <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold mb-1">Equity Grants</h1>
