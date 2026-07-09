@@ -99,7 +99,7 @@ describe('BudgetOverlayRow', () => {
 
   describe('budget input', () => {
     it('renders a numeric input wired to the row\'s current budget', () => {
-      render(<BudgetOverlayRow row={row()} />);
+      render(<BudgetOverlayRow row={row()} onBudgetCommit={() => {}} />);
       const input = screen.getByLabelText(/budget for groceries/i) as HTMLInputElement;
       expect(input).toBeInTheDocument();
       expect(input.value).toBe('600');
@@ -109,10 +109,18 @@ describe('BudgetOverlayRow', () => {
       render(
         <BudgetOverlayRow
           row={row({ budget: null, remaining: null, pct: null })}
+          onBudgetCommit={() => {}}
         />,
       );
       const input = screen.getByLabelText(/budget for groceries/i) as HTMLInputElement;
       expect(input.value).toBe('');
+    });
+
+    it('renders static text, not an editable input, when the row has no commit handler (W10 M7)', () => {
+      render(<BudgetOverlayRow row={row({ categoryName: 'Misc', budget: null, remaining: null, pct: null })} />);
+      expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+      expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+      expect(screen.getByText('—')).toBeInTheDocument();
     });
   });
 
