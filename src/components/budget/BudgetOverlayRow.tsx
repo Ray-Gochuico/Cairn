@@ -1,8 +1,6 @@
 import type { BudgetRow } from '@/lib/budget-analysis';
 import { Input } from '@/components/ui/input';
-
-const currency = (n: number) =>
-  `$${Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+import { formatCurrency } from '@/lib/format';
 
 export interface BudgetOverlayRowProps {
   row: BudgetRow;
@@ -36,8 +34,8 @@ export default function BudgetOverlayRow({ row, onBudgetCommit }: BudgetOverlayR
   // is real spending, muted when actual = 0) otherwise. Hidden for unbudgeted.
   const showLabel = budget != null && remaining != null;
   const labelText = overBudget
-    ? `${currency(remaining as number)} over`
-    : `${currency(remaining as number)} left`;
+    ? `${formatCurrency(Math.abs(remaining as number))} over`
+    : `${formatCurrency(Math.abs(remaining as number))} left`;
   const labelColor = overBudget
     ? 'text-destructive-soft-foreground'
     : actual > 0
@@ -65,7 +63,7 @@ export default function BudgetOverlayRow({ row, onBudgetCommit }: BudgetOverlayR
         // category row to write), render a STATIC value — never an editable
         // input that silently discards every edit on blur.
         <span className="text-sm tabular-nums text-muted-foreground">
-          {budget != null ? currency(budget) : '—'}
+          {budget != null ? formatCurrency(Math.abs(budget)) : '—'}
         </span>
       )}
 
@@ -82,7 +80,7 @@ export default function BudgetOverlayRow({ row, onBudgetCommit }: BudgetOverlayR
         </div>
         {budget != null && (
           <div className="mt-1 text-xs text-muted-foreground tabular-nums">
-            {currency(actual)} of {currency(budget)}
+            {formatCurrency(Math.abs(actual))} of {formatCurrency(Math.abs(budget))}
           </div>
         )}
       </div>

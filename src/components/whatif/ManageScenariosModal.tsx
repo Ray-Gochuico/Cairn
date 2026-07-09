@@ -13,6 +13,7 @@ import { summarizeLevers } from '@/lib/whatif/lever-summary';
 import { RenameScenarioDialog } from './RenameScenarioDialog';
 import { SaveCurrentDialog } from './SaveCurrentDialog';
 import type { Milestones } from '@/lib/scenarios';
+import { formatCurrency } from '@/lib/format';
 
 interface ManageScenariosModalProps {
   milestones: Map<number, Milestones>;
@@ -26,7 +27,7 @@ function fmtMilestone(iso?: string): string {
 
 function fmtCurrency(n?: number): string {
   if (n == null) return '—';
-  return `$${Math.round(n).toLocaleString('en-US')}`;
+  return formatCurrency(n);
 }
 
 export function ManageScenariosModal({

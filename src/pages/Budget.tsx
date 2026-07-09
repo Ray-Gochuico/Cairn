@@ -25,10 +25,7 @@ import BudgetCategoryPicker from '@/components/budget/BudgetCategoryPicker';
 import type { AddCategoryPayload } from '@/components/budget/AddCategoryDialog';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
-import { formatMonth } from '@/lib/format';
-
-const currency = (n: number) =>
-  `$${Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+import { formatCurrency, formatMonth } from '@/lib/format';
 
 export default function Budget() {
   const categories = useCategoriesStore((s) => s.categories);
@@ -206,7 +203,7 @@ export default function Budget() {
         <div className="flex items-baseline justify-between border-b pb-2">
           <h2 className="text-lg font-semibold">Spending</h2>
           <span className="text-sm text-muted-foreground tabular-nums">
-            {currency(summary.totalActual)} of {currency(summary.totalBudget)}
+            {formatCurrency(Math.abs(summary.totalActual))} of {formatCurrency(Math.abs(summary.totalBudget))}
           </span>
         </div>
       ) : (
@@ -242,7 +239,7 @@ export default function Budget() {
                   {parentName}
                 </h3>
                 <span className="text-xs text-muted-foreground tabular-nums">
-                  {currency(groupActual)} of {currency(groupBudget)}
+                  {formatCurrency(Math.abs(groupActual))} of {formatCurrency(Math.abs(groupBudget))}
                 </span>
               </div>
               <div className="divide-y">
@@ -273,7 +270,7 @@ export default function Budget() {
                 {MISC_CATEGORY_NAME}
               </h3>
               <span className="text-xs text-muted-foreground tabular-nums">
-                {currency(misc.actual)} of {currency(misc.budget ?? 0)}
+                {formatCurrency(Math.abs(misc.actual))} of {formatCurrency(Math.abs(misc.budget ?? 0))}
               </span>
             </div>
             <div className="divide-y">

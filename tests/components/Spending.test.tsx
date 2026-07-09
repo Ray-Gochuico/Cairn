@@ -183,6 +183,28 @@ describe('Spending page', () => {
     });
   });
 
+  it('(cents) renders transaction-grain amounts with thousands separators and signed credits (Wave 11 T5)', async () => {
+    await useCategoriesStore.getState().load();
+    const big: Omit<Transaction, 'id'> = {
+      householdId: 1, date: '2026-03-05', merchant: 'BIG PURCHASE', merchantRaw: 'BIG',
+      amount: 6846.84, categoryId: 37, sourceAccountId: null, propertyId: null,
+      vehicleId: null, personId: null, sourcePdfFilename: null, reimbursable: false,
+      reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
+    };
+    const credit: Omit<Transaction, 'id'> = {
+      householdId: 1, date: '2026-03-06', merchant: 'REFUND', merchantRaw: 'REFUND',
+      amount: -2450, categoryId: 37, sourceAccountId: null, propertyId: null,
+      vehicleId: null, personId: null, sourcePdfFilename: null, reimbursable: false,
+      reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
+    };
+    await useTransactionsStore.getState().createMany([big, credit]);
+    renderPage();
+    await waitFor(() => {
+      expect(screen.getAllByText('$6,846.84').length).toBeGreaterThan(0);
+    });
+    expect(screen.getByText('-$2,450.00')).toBeInTheDocument();
+  });
+
   it('(hero) renders the glance hero with range tabs on a seeded-transactions page', async () => {
     await useCategoriesStore.getState().load();
     await useTransactionsStore.getState().createMany([

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { formatCurrencyCents } from '@/lib/format';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CategoryDonut, withCategoryColors } from '@/components/spending/CategoryDonut';
@@ -144,8 +145,8 @@ export function SpendingSummaryHero({
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {overBudget
-                      ? `$${(summary.total - monthlyBudget).toFixed(2)} over budget`
-                      : `$${(monthlyBudget - summary.total).toFixed(2)} under budget`}{' '}
+                      ? `${formatCurrencyCents(summary.total - monthlyBudget)} over budget`
+                      : `${formatCurrencyCents(monthlyBudget - summary.total)} under budget`}{' '}
                     (budget: ${monthlyBudget.toLocaleString()})
                   </p>
                 </div>

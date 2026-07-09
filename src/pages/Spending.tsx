@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { formatCurrencyCents } from '@/lib/format';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { EmptyState } from '@/components/layout/EmptyState';
 import { useLoadGate } from '@/lib/use-load-gate';
@@ -401,7 +402,7 @@ export default function Spending() {
                           ? (categoryById.get(row.categoryId)?.name ?? `Cat ${row.categoryId}`)
                           : 'Uncategorized'}
                       </span>
-                      <span>${row.total.toFixed(2)}</span>
+                      <span>{formatCurrencyCents(row.total)}</span>
                     </li>
                   ))}
               </ul>
@@ -429,7 +430,7 @@ export default function Spending() {
                 <CardTitle className="text-base">Subscriptions</CardTitle>
                 {recurring.length > 0 && (
                   <CardDescription>
-                    ${recurringTotal.toFixed(2)}/mo across {recurring.length} service
+                    {formatCurrencyCents(recurringTotal)}/mo across {recurring.length} service
                     {recurring.length !== 1 ? 's' : ''}
                   </CardDescription>
                 )}
@@ -443,7 +444,7 @@ export default function Spending() {
                       <li key={g.merchant} className="flex items-center justify-between text-sm">
                         <span>{g.merchant}</span>
                         <span className="text-muted-foreground">
-                          ${g.monthlyAmount.toFixed(2)}/mo
+                          {formatCurrencyCents(g.monthlyAmount)}/mo
                           {g.cadenceMonths > 1 ? ` · every ${g.cadenceMonths} mo` : ''} · {g.occurrences}×
                         </span>
                       </li>
@@ -475,7 +476,7 @@ export default function Spending() {
                           <span className="ml-2 text-muted-foreground">{t.date}</span>
                         </div>
                         <div className="flex items-center gap-4">
-                          <span>${t.amount.toFixed(2)}</span>
+                          <span>{formatCurrencyCents(t.amount)}</span>
                           <button
                             type="button"
                             onClick={() => setReimbursedTarget(t)}
@@ -556,9 +557,9 @@ export default function Spending() {
                     )}
                     <td className="py-2 text-right">
                       {t.amount < 0 ? (
-                        <span className="text-success-foreground">-${Math.abs(t.amount).toFixed(2)}</span>
+                        <span className="text-success-foreground">{formatCurrencyCents(t.amount)}</span>
                       ) : (
-                        <span>${t.amount.toFixed(2)}</span>
+                        <span>{formatCurrencyCents(t.amount)}</span>
                       )}
                     </td>
                     <td className="py-2 pr-2 text-right">
