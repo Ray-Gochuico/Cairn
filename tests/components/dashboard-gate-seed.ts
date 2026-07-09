@@ -4,6 +4,7 @@ import { useTickersStore } from '@/stores/tickers-store';
 import { useFundHoldingsStore } from '@/stores/fund-holdings-store';
 import { useRoadmapOverridesStore } from '@/stores/roadmap-overrides-store';
 import { useHouseholdStore } from '@/stores/household-store';
+import { seedResolvedStores } from '../helpers/seed-resolved-stores';
 
 /**
  * W10 S3/S4: Dashboard now gates its render behind useLoadGate over all 15
@@ -15,11 +16,16 @@ import { useHouseholdStore } from '@/stores/household-store';
  * no-op household load) so the gate settles synchronously.
  */
 export function seedDashboardGateStores(): void {
-  const noop = async () => {};
-  useAssetValueSnapshotsStore.setState({ assetValueSnapshots: [], isLoading: false, error: null, load: noop } as never);
-  useHoldingsStore.setState({ holdings: [], isLoading: false, error: null, load: noop } as never);
-  useTickersStore.setState({ tickers: [], isLoading: false, error: null, load: noop } as never);
-  useFundHoldingsStore.setState({ fundHoldings: [], isLoading: false, error: null, load: noop } as never);
-  useRoadmapOverridesStore.setState({ overridesByNodeId: new Map(), isLoading: false, error: null, load: noop } as never);
-  useHouseholdStore.setState((s) => ({ ...s, load: noop } as never));
+  // Round-3 consolidation: the MECHANISM lives in tests/helpers/
+  // seed-resolved-stores.ts; this wrapper keeps its store list (and the
+  // household special case, which merges only `load` — its state is
+  // caller-seeded).
+  seedResolvedStores([
+    { store: useAssetValueSnapshotsStore, collections: { assetValueSnapshots: [] } },
+    { store: useHoldingsStore, collections: { holdings: [] } },
+    { store: useTickersStore, collections: { tickers: [] } },
+    { store: useFundHoldingsStore, collections: { fundHoldings: [] } },
+    { store: useRoadmapOverridesStore, collections: { overridesByNodeId: new Map() } },
+  ]);
+  useHouseholdStore.setState((s) => ({ ...s, load: async () => {} } as never));
 }
