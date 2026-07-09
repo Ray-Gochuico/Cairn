@@ -97,10 +97,13 @@ function MetricCardImpl({
         <div className="flex items-baseline gap-2 flex-wrap min-w-0">
           <div
             className={cn(
-              'text-xl sm:text-2xl md:text-3xl font-semibold leading-tight tabular-nums whitespace-nowrap overflow-hidden text-ellipsis min-w-0 max-w-full',
+              // W10 design: a KPI exists to show magnitude — currency must never
+              // ellipsize. Drop overflow-hidden/text-ellipsis (and the title
+              // mirror), keep whitespace-nowrap, and step the font down one
+              // notch earlier so long values fit the same pills at 1280px.
+              'text-lg sm:text-xl md:text-2xl lg:text-3xl font-semibold leading-tight tabular-nums whitespace-nowrap min-w-0 max-w-full',
               valueClass(valueTone),
             )}
-            title={value}
             data-testid="metric-card-value"
           >
             {value}
