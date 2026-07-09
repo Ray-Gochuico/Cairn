@@ -35,6 +35,9 @@ export function TransactionPreviewTable({ state }: Props) {
           accounts={state.ctx.accounts}
           categories={categories}
           conflictMode={state.conflictMode.get(row.rowId) ?? 'skip'}
+          // Round-3 chip A: the store re-validates with the modal's effective
+          // ctx, so the FLIP flag rides on ctx — thread it to the rows.
+          signFlipped={state.ctx.transactionAmountSign === 'FLIP'}
           onEdit={state.edit}
           onDelete={state.delete}
           onConflictChange={state.setConflictMode}

@@ -13,6 +13,8 @@ interface Props {
   accounts: ReadonlyArray<{ id: number; name: string }>;
   categories: ReadonlyArray<{ id: number; name: string }>;
   conflictMode: 'update' | 'skip';
+  /** Round-3 chip A: true while the modal's "Flip signs" toggle is on. */
+  signFlipped?: boolean;
   onEdit: (rowId: RowId, patch: RawRow) => void;
   onDelete: (rowId: RowId) => void;
   onConflictChange: (rowId: RowId, mode: 'update' | 'skip') => void;
@@ -40,6 +42,7 @@ export const TransactionPreviewRow = memo(function TransactionPreviewRow({
   accounts,
   categories,
   conflictMode,
+  signFlipped = false,
   onEdit,
   onDelete,
   onConflictChange,
@@ -74,6 +77,14 @@ export const TransactionPreviewRow = memo(function TransactionPreviewRow({
           error={err('amount')}
           onChange={(v) => onEdit(row.rowId, { amount: v })}
         />
+        {/* Round-3 chip A: the raw cell stays editable (edits are RAW values);
+            while FLIP is on, echo the resolved amount that will actually be
+            committed so the table doesn't show -85.00 and write +85.00. */}
+        {signFlipped && typeof row.resolved?.amount === 'number' && (
+          <div className="text-[10px] text-muted-foreground tabular-nums text-right" aria-label="amount after sign flip">
+            → {row.resolved.amount.toFixed(2)}
+          </div>
+        )}
       </td>
       <td className="px-3 py-2">
         <MerchantCell
