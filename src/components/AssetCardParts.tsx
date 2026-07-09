@@ -89,11 +89,23 @@ export function ValueEditor({ initialValue, onSave, onCancel }: ValueEditorProps
 
 export interface EquityRowProps {
   label: string;
-  value: number;
+  /** W10 F7: null = value unknown (no snapshot AND no manual estimate) — a
+   *  number minus unknown is unknown, so render a neutral "—", never $0. */
+  value: number | null;
   tone?: 'negative';
 }
 
 export function EquityRow({ label, value, tone }: EquityRowProps) {
+  if (value === null) {
+    return (
+      <div className="flex items-center justify-between border-t pt-3">
+        <span className="text-xs uppercase tracking-wider text-muted-foreground">
+          {label}
+        </span>
+        <span className="text-lg font-semibold text-muted-foreground">—</span>
+      </div>
+    );
+  }
   const isNegative = tone === 'negative' || value < 0;
   return (
     <div className="flex items-center justify-between border-t pt-3">
