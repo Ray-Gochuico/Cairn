@@ -40,7 +40,11 @@ export function useRealState(): RealState | null {
   const settingsInflation = useSettingsStore((s) => s.settings?.defaultInflation);
   const scenariosInflation = useScenariosStore((s) => s.inflation);
   const inflation        = settingsInflation ?? scenariosInflation;
-  const returnRate       = useScenariosStore((s) => s.defaultReturnRate);
+  // Wave-9 M45 (sibling of NEW-W7-WI1 above): Settings → Advanced → Default
+  // return rate wins; the scenarios-store default (0.07) is the fallback.
+  const settingsReturnRate = useSettingsStore((s) => s.settings?.defaultReturnRate);
+  const scenariosReturnRate = useScenariosStore((s) => s.defaultReturnRate);
+  const returnRate       = settingsReturnRate ?? scenariosReturnRate;
   const settings         = useSettingsStore((s) => s.settings);
   const taxRules         = useTaxRulesStore((s) => s.items);
   const defaultCashApy   = settings?.defaultCashApy ?? null;

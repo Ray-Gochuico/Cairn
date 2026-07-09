@@ -142,6 +142,65 @@ describe('useRealState', () => {
     expect(result.current!.defaults.inflation).toBeCloseTo(0.025, 4);
   });
 
+  it('wave-9 M45: settings.defaultReturnRate overrides scenarios-store default when set', () => {
+    // Sibling of NEW-W7-WI1 above — pre-fix the field saved and was never read.
+    useSettingsStore.setState({
+      settings: {
+        id: 1,
+        sidebarLayout: null,
+        notificationsEnabled: true,
+        notificationDay: 1,
+        refreshCadence: 'EVERY_LAUNCH',
+        lastRefreshAt: null,
+        statementsFolderPath: null,
+        defaultInflation: null,
+        defaultReturnRate: 0.055,
+        defaultCashApy: null,
+        defaultDrawdownTaxRate: null,
+      } as any,
+      isLoading: false,
+      error: null,
+      load: async () => {},
+      update: async () => {},
+    } as any);
+    useScenariosStore.setState({
+      scenarios: [], isLoading: false, error: null,
+      horizonMonths: 360, dollarMode: 'nominal',
+      inflation: 0.025, defaultReturnRate: 0.07,
+    });
+    const { result } = renderHook(() => useRealState(), { wrapper });
+    expect(result.current!.defaults.returnRate).toBeCloseTo(0.055, 4);
+  });
+
+  it('wave-9 M45: falls back to the scenarios-store return rate when settings.defaultReturnRate is null', () => {
+    useSettingsStore.setState({
+      settings: {
+        id: 1,
+        sidebarLayout: null,
+        notificationsEnabled: true,
+        notificationDay: 1,
+        refreshCadence: 'EVERY_LAUNCH',
+        lastRefreshAt: null,
+        statementsFolderPath: null,
+        defaultInflation: null,
+        defaultReturnRate: null,
+        defaultCashApy: null,
+        defaultDrawdownTaxRate: null,
+      } as any,
+      isLoading: false,
+      error: null,
+      load: async () => {},
+      update: async () => {},
+    } as any);
+    useScenariosStore.setState({
+      scenarios: [], isLoading: false, error: null,
+      horizonMonths: 360, dollarMode: 'nominal',
+      inflation: 0.025, defaultReturnRate: 0.07,
+    });
+    const { result } = renderHook(() => useRealState(), { wrapper });
+    expect(result.current!.defaults.returnRate).toBeCloseTo(0.07, 4);
+  });
+
   it('threads tax-rules-store items onto RealState.taxBrackets for the household jurisdiction', () => {
     const federalRule: TaxRule = {
       year: 2026,
