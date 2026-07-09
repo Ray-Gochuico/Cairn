@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import type { Scenario } from '@/types/scenario';
@@ -458,6 +458,11 @@ describe('ProjectionChart — detail level rendering', () => {
     expect(screen.getByTestId('rc-area-taxAdvantaged_1')).toBeInTheDocument();
     expect(screen.getByTestId('rc-area-taxable_1')).toBeInTheDocument();
     expect(screen.queryByTestId('rc-area-investments_1')).not.toBeInTheDocument();
+
+    // W10 design: a legend row names the two bands.
+    const legend = screen.getByTestId('tax-bucket-legend');
+    expect(within(legend).getByText('Tax-advantaged')).toBeInTheDocument();
+    expect(within(legend).getByText('Taxable')).toBeInTheDocument();
   });
 
   it('per_account detail level: renders one area per investment account (cash excluded)', () => {
