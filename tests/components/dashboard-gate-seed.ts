@@ -4,6 +4,7 @@ import { useTickersStore } from '@/stores/tickers-store';
 import { useFundHoldingsStore } from '@/stores/fund-holdings-store';
 import { useRoadmapOverridesStore } from '@/stores/roadmap-overrides-store';
 import { useHouseholdStore } from '@/stores/household-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import { seedResolvedStores } from '../helpers/seed-resolved-stores';
 
 /**
@@ -28,4 +29,22 @@ export function seedDashboardGateStores(): void {
     { store: useRoadmapOverridesStore, collections: { overridesByNodeId: new Map() } },
   ]);
   useHouseholdStore.setState((s) => ({ ...s, load: async () => {} } as never));
+
+  // W13: settings joined the Dashboard gate (briefing visit stamps live in
+  // app_settings). Seed resolved with null stamps → 'Since <month>' fallback
+  // mode; update is a noop so the stamp effect never hits a DB in jsdom.
+  useSettingsStore.setState({
+    settings: {
+      id: 1,
+      lastRefreshAt: null,
+      refreshCadence: 'EVERY_LAUNCH',
+      lastSeenMonth: null,
+      lastVisitDate: null,
+      briefingBaselineDate: null,
+    },
+    isLoading: false,
+    error: null,
+    load: async () => {},
+    update: async () => {},
+  } as never);
 }
