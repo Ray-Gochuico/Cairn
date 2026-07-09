@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useScenariosStore } from '@/stores/scenarios-store';
 import { useLoansStore } from '@/stores/loans-store';
-import { previewExtraLoanPayment, type LoanPreviewInput } from '@/lib/whatif/extra-loan-preview';
+import { buildLoanPreviewInput, previewExtraLoanPayment } from '@/lib/whatif/extra-loan-preview';
 import type { ExtraLoanPayment } from '@/lib/scenarios';
 
 interface Props { open: boolean; onOpenChange: (n: boolean) => void }
@@ -47,21 +47,21 @@ export default function ExtraLoanPaymentsPopover({ open, onOpenChange }: Props) 
     if (open) setDraft(mergeWithPersisted(loans, active?.leverPayload.extraLoanPayments ?? []));
   }, [open, loans, active?.leverPayload]);
 
+  // Component code — the real-clock policy governs test files. The lib takes
+  // the date explicitly so it stays clock-free testable.
+  const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
+
   const previews = useMemo(() => {
     return draft.map((row) => {
       const loan = loans.find((l) => l.id === row.loanId);
-      if (!loan || loan.id == null) return null;
-      const preview: LoanPreviewInput = {
-        id: loan.id,
-        currentBalance: loan.currentBalance,
-        interestRate: loan.interestRate,
-        monthlyPayment: loan.monthlyPayment,
-        termMonths: loan.termMonths,
-        firstPaymentDate: loan.firstPaymentDate,
-      };
+      if (!loan) return null;
+      // Wave-9 F5: re-anchor at the next due date so seasoned loans don't
+      // preview payoffs in the past (and windowed levers actually apply).
+      const preview = buildLoanPreviewInput(loan, todayIso);
+      if (!preview) return null;
       return previewExtraLoanPayment(preview, row.extraMonthly, { start: row.start, end: row.end });
     });
-  }, [draft, loans]);
+  }, [draft, loans, todayIso]);
 
   const setRow = (i: number, patch: Partial<DraftRow>) => {
     setDraft((d) => d.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));

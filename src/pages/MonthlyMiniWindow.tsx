@@ -10,6 +10,7 @@ import { AccountType, SnapshotSource } from '@/types/enums';
 import { lastBusinessDayOfMonth } from '@/lib/business-days';
 import { lastMonthYyyymm } from '@/lib/input-pending';
 import { LoansRepo } from '@/domain/loans';
+import { LoanPaymentsRepo } from '@/domain/loan-payments';
 import { getDatabase } from '@/db/db';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -214,12 +215,14 @@ function DerivedValueCard({ account, snapshot }: DerivedValueCardProps) {
 interface LoanPaymentCardProps {
   loan: Loan;
   nextEntry: ScheduleEntry;
+  /** Wave-9 M37: an AMORTIZATION row for nextEntry.paymentDate already exists. */
+  alreadyRecorded: boolean;
 }
 
-function LoanPaymentCard({ loan, nextEntry }: LoanPaymentCardProps) {
+function LoanPaymentCard({ loan, nextEntry, alreadyRecorded }: LoanPaymentCardProps) {
   const createLoanPayment = useLoanPaymentsStore((s) => s.create);
   const updateLoan = useLoansStore((s) => s.update);
-  const [mode, setMode] = useState<CardMode>('pending');
+  const [mode, setMode] = useState<CardMode>(alreadyRecorded ? 'confirmed' : 'pending');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -246,7 +249,15 @@ function LoanPaymentCard({ loan, nextEntry }: LoanPaymentCardProps) {
       await updateLoan(loan.id, { currentBalance: newBalance });
       setMode('confirmed');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Save failed');
+      const msg = e instanceof Error ? e.message : 'Save failed';
+      // Wave-9 M37: the 0049 partial UNIQUE index turns a race/double-click
+      // into a constraint violation. The insert runs BEFORE the balance
+      // update, so a rejected duplicate never decrements the balance.
+      setError(
+        /unique/i.test(msg)
+          ? `A payment for ${nextEntry.paymentDate} is already recorded — duplicate skipped, balance unchanged.`
+          : msg,
+      );
     } finally {
       setBusy(false);
     }
@@ -283,6 +294,12 @@ function LoanPaymentCard({ loan, nextEntry }: LoanPaymentCardProps) {
             <span className="text-sm text-muted-foreground">Skipped</span>
           )}
         </div>
+
+        {mode === 'confirmed' && alreadyRecorded && (
+          <div className="text-sm text-muted-foreground">
+            Already recorded for {nextEntry.paymentDate}.
+          </div>
+        )}
 
         {mode === 'pending' && (
           <div className="flex gap-2">
@@ -611,7 +628,7 @@ export default function MonthlyMiniWindow() {
   // --- Section 2: loan payment cards -----------------------------------------
 
   const [loanSchedules, setLoanSchedules] = useState<
-    Map<number, ScheduleEntry | null>
+    Map<number, { entry: ScheduleEntry; alreadyRecorded: boolean } | null>
   >(new Map());
 
   useEffect(() => {
@@ -621,13 +638,22 @@ export default function MonthlyMiniWindow() {
     // a "Confirm" that decrements balance shifts the next-payment forward.
     let cancelled = false;
     const repo = new LoansRepo(getDatabase());
+    const paymentsRepo = new LoanPaymentsRepo(getDatabase());
     Promise.all(
       loans
         .filter((l): l is Loan & { id: number } => l.id !== undefined)
         .map(async (l) => {
           try {
-            const schedule = await repo.projectedSchedule(l.id);
-            return [l.id, schedule[0] ?? null] as const;
+            const schedule = await repo.projectedSchedule(l.id, todayISO());
+            const entry = schedule[0] ?? null;
+            if (!entry) return [l.id, null] as const;
+            // Wave-9 M37: a Confirm earlier this month already wrote this
+            // row — surface the card as recorded instead of re-offering it.
+            const payments = await paymentsRepo.listForLoan(l.id);
+            const alreadyRecorded = payments.some(
+              (p) => p.paymentDate === entry.paymentDate && p.source === 'AMORTIZATION',
+            );
+            return [l.id, { entry, alreadyRecorded }] as const;
           } catch {
             return [l.id, null] as const;
           }
@@ -644,10 +670,22 @@ export default function MonthlyMiniWindow() {
   const loanCards = useMemo(() => {
     return loans
       .filter((l): l is Loan & { id: number } => l.id !== undefined)
-      .map((loan) => ({ loan, nextEntry: loanSchedules.get(loan.id) ?? null }))
+      .map((loan) => {
+        const projected = loanSchedules.get(loan.id) ?? null;
+        return {
+          loan,
+          nextEntry: projected?.entry ?? null,
+          alreadyRecorded: projected?.alreadyRecorded ?? false,
+        };
+      })
       .filter(
-        (x): x is { loan: Loan & { id: number }; nextEntry: ScheduleEntry } =>
-          x.nextEntry !== null,
+        (
+          x,
+        ): x is {
+          loan: Loan & { id: number };
+          nextEntry: ScheduleEntry;
+          alreadyRecorded: boolean;
+        } => x.nextEntry !== null,
       );
   }, [loans, loanSchedules]);
 
@@ -766,11 +804,12 @@ export default function MonthlyMiniWindow() {
                 title="Record loan payments"
                 description="Each entry follows the loan's amortization schedule. Confirm posts the payment and decrements the balance."
               />
-              {loanCards.map(({ loan, nextEntry }) => (
+              {loanCards.map(({ loan, nextEntry, alreadyRecorded }) => (
                 <LoanPaymentCard
                   key={loan.id}
                   loan={loan}
                   nextEntry={nextEntry}
+                  alreadyRecorded={alreadyRecorded}
                 />
               ))}
             </section>

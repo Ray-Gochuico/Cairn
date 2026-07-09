@@ -5,7 +5,23 @@ export interface GrantInput {
   strikePrice: number;
   totalShares: number;
   currentFmv: number;
+  grantType: GrantType;
   vestingSchedule: { date: string; cumulativePct: number }[];
+}
+
+/**
+ * Wave-9 M64: holder value per share. Options (NSO/ISO) are worth the spread
+ * above strike — an underwater option is worth $0, not its full FMV. RSUs
+ * (strike 0) are worth full FMV. (Ordinary-income-at-vest treatment differs —
+ * see grantOrdinaryIncomeOnVest — but HOLDER VALUE nets the strike for both
+ * option types.)
+ */
+function perShareHolderValue(
+  grant: Pick<GrantInput, 'grantType' | 'currentFmv' | 'strikePrice'>,
+): number {
+  return grant.grantType === GrantType.NSO || grant.grantType === GrantType.ISO
+    ? Math.max(0, grant.currentFmv - grant.strikePrice)
+    : grant.currentFmv;
 }
 
 export interface EquityValueResult {
@@ -26,8 +42,9 @@ export function computeEquityValue(grant: GrantInput, today: Date): EquityValueR
   }
   const vestedShares = grant.totalShares * vestedPct;
   const unvestedShares = grant.totalShares - vestedShares;
-  const vestedValue = vestedShares * grant.currentFmv;
-  const unvestedValue = unvestedShares * grant.currentFmv;
+  const perShare = perShareHolderValue(grant); // wave-9 M64
+  const vestedValue = vestedShares * perShare;
+  const unvestedValue = unvestedShares * perShare;
 
   const grantDate = new Date(grant.grantDate + 'T00:00:00Z');
   const lastDate = new Date(
@@ -40,7 +57,11 @@ export function computeEquityValue(grant: GrantInput, today: Date): EquityValueR
         (lastDate.getUTCMonth() - grantDate.getUTCMonth())
     )
   );
-  const monthlyCost = (grant.strikePrice * grant.totalShares) / vestingDurationMonths;
+  // Wave-9 F9: a fully-vested grant has no remaining strike outlay — the
+  // vesting-period average is only meaningful while vesting is in flight.
+  const lastVestDate = grant.vestingSchedule[grant.vestingSchedule.length - 1].date;
+  const monthlyCost =
+    todayIso >= lastVestDate ? 0 : (grant.strikePrice * grant.totalShares) / vestingDurationMonths;
 
   const upcomingVestDates = grant.vestingSchedule
     .filter((e) => e.date > todayIso)
@@ -73,7 +94,7 @@ export function vestingChartData(
         (acc, v) => (v.date <= date ? v.cumulativePct : acc),
         0,
       );
-      return sum + pct * g.totalShares * g.currentFmv;
+      return sum + pct * g.totalShares * perShareHolderValue(g); // wave-9 M64
     }, 0),
   }));
 }
@@ -88,12 +109,11 @@ export function vestingChartData(
  *
  * Framed as an estimate — does NOT compute withheld tax or payroll/FICA impact.
  *
- * The param type is `GrantInput & { grantType: GrantType }` so the object is
- * directly assignable to `computeEquityValue`'s `GrantInput` parameter — no cast.
- * EquityGrant objects (which carry all GrantInput fields + grantType) satisfy this.
+ * EquityGrant objects (which carry all GrantInput fields incl. grantType)
+ * satisfy `GrantInput` directly — no cast.
  */
 export function grantOrdinaryIncomeOnVest(
-  grant: GrantInput & { grantType: GrantType },
+  grant: GrantInput,
   today: Date,
 ): number {
   const { unvestedShares } = computeEquityValue(grant, today);

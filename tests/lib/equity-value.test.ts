@@ -4,6 +4,9 @@ import { GrantType } from '@/types/enums';
 
 const grant = {
   grantDate: '2024-01-15',
+  // Legacy fixture: RSU-typed so the full-FMV pins below stay valid (wave-9
+  // M64 nets the strike for NSO/ISO only).
+  grantType: GrantType.RSU,
   strikePrice: 5,
   totalShares: 1000,
   currentFmv: 50,
@@ -53,17 +56,20 @@ describe('computeEquityValue', () => {
     expect(result.monthlyCost).toBe(0);
   });
 
-  it('single-entry schedule (immediate full vest at grant date) clamps duration to 1 month', () => {
+  it('single-entry schedule (immediate full vest at grant date) is fully vested with no monthly cost', () => {
     const immediateGrant = {
       grantDate: '2024-01-15',
+      grantType: GrantType.RSU,
       strikePrice: 10,
       totalShares: 100,
       currentFmv: 25,
       vestingSchedule: [{ date: '2024-01-15', cumulativePct: 1.0 }],
     };
     const result = computeEquityValue(immediateGrant, new Date('2024-06-01'));
-    // duration = max(1, 0 months) = 1; monthlyCost = 10 * 100 / 1 = 1000
-    expect(result.monthlyCost).toBe(1000);
+    // Wave-9 F9: the old pin (monthlyCost 1000 forever) WAS the bug — a
+    // fully-vested grant has no remaining strike outlay. The max(1, ...)
+    // duration clamp still guards the division for in-flight schedules.
+    expect(result.monthlyCost).toBe(0);
     expect(result.vestedShares).toBe(100);
     expect(result.unvestedShares).toBe(0);
   });
@@ -158,6 +164,7 @@ describe('vestingChartData', () => {
     // Σ shares×fmv = 1000×10 + 500×20 = 20000
     const grantA = {
       grantDate: '2024-01-01',
+      grantType: GrantType.RSU,
       strikePrice: 0,
       totalShares: 1000,
       currentFmv: 10,
@@ -168,6 +175,7 @@ describe('vestingChartData', () => {
     };
     const grantB = {
       grantDate: '2024-01-01',
+      grantType: GrantType.RSU,
       strikePrice: 0,
       totalShares: 500,
       currentFmv: 20,
@@ -201,6 +209,7 @@ describe('vestingChartData', () => {
   it('returns single point for a single-entry vesting schedule', () => {
     const singleVest = {
       grantDate: '2024-01-01',
+      grantType: GrantType.RSU,
       strikePrice: 0,
       totalShares: 100,
       currentFmv: 5,
@@ -218,6 +227,7 @@ describe('vestingChartData', () => {
 // - At "today" (2026-05-31, between the two), unvestedShares = 750
 const baseOrdinaryGrant = {
   grantDate: '2019-01-15',
+  grantType: GrantType.RSU,
   strikePrice: 0,
   totalShares: 1000,
   currentFmv: 50,
@@ -289,5 +299,57 @@ describe('isIsoAmtPreference', () => {
 
   it('returns false for NSO', () => {
     expect(isIsoAmtPreference(GrantType.NSO)).toBe(false);
+  });
+});
+
+describe('monthlyCost fully-vested clamp (wave-9 F9)', () => {
+  it('monthlyCost clamps to $0 once the grant is fully vested (wave-9 F9)', () => {
+    const grant = {
+      grantDate: '2024-01-01',
+      grantType: GrantType.RSU,
+      strikePrice: 5,
+      totalShares: 1000,
+      currentFmv: 20,
+      vestingSchedule: [
+        { date: '2025-01-01', cumulativePct: 0.5 },
+        { date: '2026-01-01', cumulativePct: 1 },
+      ],
+    };
+    const during = computeEquityValue(grant, new Date('2025-06-01T00:00:00Z'));
+    expect(during.monthlyCost).toBeCloseTo(5000 / 24, 6); // vesting in flight: period average
+    const after = computeEquityValue(grant, new Date('2029-01-01T00:00:00Z'));
+    expect(after.monthlyCost).toBe(0);
+    expect(after.upcomingVestDates).toEqual([]);
+  });
+});
+
+describe('option value nets the strike (wave-9 M64)', () => {
+  const nso = (fmv: number) => ({
+    grantDate: '2024-01-01', strikePrice: 10, totalShares: 1000, currentFmv: fmv,
+    grantType: GrantType.NSO,
+    vestingSchedule: [{ date: '2025-01-01', cumulativePct: 0.5 }, { date: '2026-01-01', cumulativePct: 1 }],
+  });
+  const T = new Date('2025-06-01T00:00:00Z');
+
+  it('in-the-money NSO: value = (fmv − strike) × shares', () => {
+    const r = computeEquityValue(nso(17), T);
+    expect(r.vestedValue).toBeCloseTo(500 * 7, 6);
+    expect(r.unvestedValue).toBeCloseTo(500 * 7, 6);
+  });
+
+  it('underwater NSO is worth $0, not full FMV', () => {
+    const r = computeEquityValue(nso(6), T);
+    expect(r.vestedValue).toBe(0);
+    expect(r.unvestedValue).toBe(0);
+  });
+
+  it('RSU keeps full FMV (strike 0 semantics unchanged)', () => {
+    const r = computeEquityValue({ ...nso(17), grantType: GrantType.RSU, strikePrice: 0 }, T);
+    expect(r.vestedValue).toBeCloseTo(500 * 17, 6);
+  });
+
+  it('vestingChartData nets the strike too', () => {
+    const pts = vestingChartData([nso(17)]);
+    expect(pts[pts.length - 1].vestedValue).toBeCloseTo(1000 * 7, 6);
   });
 });

@@ -109,4 +109,12 @@ export interface ValidationContext {
   existingEquityGrantConflicts?: ReadonlyMap<string, EquityGrant>;
   existingContributionDupKeys?: ReadonlySet<string>;
   existingAssetValueSnapshotConflicts?: ReadonlyMap<string, AssetValueSnapshot>;
+
+  /**
+   * Wave-9 chip: many bank CSVs export debits as NEGATIVE amounts, which
+   * isRealSpending (positive = spending) then ignores entirely — an imported
+   * file can show $0 Money out. 'FLIP' negates every parsed amount; the
+   * preview modal offers it when a file is majority-negative. Default 'AS_IS'.
+   */
+  transactionAmountSign?: 'AS_IS' | 'FLIP';
 }

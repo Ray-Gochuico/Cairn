@@ -1,6 +1,7 @@
 // src/lib/import/validators/snapshot-validator.ts
 import type { CellError, PreviewRow, RawRow, RowId, ValidationContext } from '@/lib/import/types';
 import { resolveAccount } from '@/lib/import/resolver';
+import { parseImportAmount } from '@/lib/import/amount';
 
 export interface SnapshotResolved {
   accountId?: number;
@@ -59,9 +60,10 @@ export function validateSnapshotRow(
   if (!valueRaw) {
     errors.push({ field: 'total_value', message: 'Value is required' });
   } else {
-    const numeric = Number(stripCurrencyDecoration(valueRaw));
-    if (!Number.isFinite(numeric)) {
-      errors.push({ field: 'total_value', message: 'Value must be numeric' });
+    // Wave-9 S78: shared locale-aware parsing (same semantics as transactions).
+    const numeric = parseImportAmount(valueRaw);
+    if (numeric == null) {
+      errors.push({ field: 'total_value', message: `Unparseable value "${valueRaw}"` });
     } else {
       resolved.totalValue = numeric;
     }
@@ -92,13 +94,6 @@ function parseExplicitId(s: string): number | null {
   if (!trimmed) return null;
   const n = Number(trimmed);
   return Number.isInteger(n) ? n : null;
-}
-
-function stripCurrencyDecoration(s: string): string {
-  let v = s.trim();
-  const parens = v.startsWith('(') && v.endsWith(')');
-  if (parens) v = `-${v.slice(1, -1)}`;
-  return v.replace(/[$,\s]/g, '');
 }
 
 function isRealCalendarDate(iso: string): boolean {

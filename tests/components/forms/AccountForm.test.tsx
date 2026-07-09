@@ -103,6 +103,35 @@ describe('AccountForm — APY field', () => {
   });
 });
 
+describe('AccountForm — APY round-trip (wave-9 M41)', () => {
+  it('APY round-trips: stored 0.04 shows as 4 and re-saves as 0.04, not 0.0004', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <AccountForm
+        initial={{ ...DEFAULT_ACCOUNT, type: AccountType.ACCOUNT_SAVINGS, apyRate: 0.04, name: 'HYSA' }}
+        persons={persons}
+        dependents={dependents}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByLabelText(/annual percent yield/i)).toHaveValue(4);
+
+    // Drive the RE-INIT path the M41 sweep flagged: the APY input is
+    // conditionally rendered, so switching type away and back remounts it —
+    // pre-fix the remounted %-labeled box showed the RAW stored fraction.
+    await user.selectOptions(screen.getByLabelText(/^type$/i), AccountType.ACCOUNT_BROKERAGE);
+    await user.selectOptions(screen.getByLabelText(/^type$/i), AccountType.ACCOUNT_SAVINGS);
+    expect(screen.getByLabelText(/annual percent yield/i)).toHaveValue(4);
+
+    // Save WITHOUT touching the APY field: the stored fraction must survive.
+    await user.click(screen.getByRole('button', { name: /save/i }));
+    await vi.waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(onSubmit.mock.calls[0][0].apyRate).toBeCloseTo(0.04, 10);
+  });
+});
+
 describe('AccountForm — zero persons (B1: no dead-end)', () => {
   it('renders the account fields (not a dead-end) when persons is empty', () => {
     render(

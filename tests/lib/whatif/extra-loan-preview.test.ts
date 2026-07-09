@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { previewExtraLoanPayment } from '@/lib/whatif/extra-loan-preview';
+import { previewExtraLoanPayment, buildLoanPreviewInput } from '@/lib/whatif/extra-loan-preview';
 
 const loan = {
   id: 1, name: 'Auto',
@@ -87,5 +87,37 @@ describe('never-pays-off cap guard (wave-7 W1)', () => {
     expect(p.capped).toBe(false);
     expect(p.baselineCapped).toBe(false);
     expect(p.monthsSaved).toBe(0);
+  });
+});
+
+describe('buildLoanPreviewInput (wave-9 F5 — seasoned-loan re-anchor)', () => {
+  const seasoned = {
+    id: 7,
+    currentBalance: 279163,
+    interestRate: 0.06,
+    monthlyPayment: 1798.65,
+    termMonths: 360,
+    firstPaymentDate: '2020-03-15',
+  };
+
+  it('re-anchors firstPaymentDate to the next due date on/after today', () => {
+    const input = buildLoanPreviewInput(seasoned, '2026-07-08');
+    expect(input).not.toBeNull();
+    expect(input!.firstPaymentDate).toBe('2026-07-15');
+    expect(input!.monthlyPayment).toBe(1798.65);
+  });
+
+  it('a future-windowed lever now actually applies (engine parity)', () => {
+    // Pre-fix the schedule was dated from 2020, so a 2027 window matched
+    // months the preview had already "spent" years earlier → $0.00 saved
+    // while apply-real (real calendar months) saved real interest.
+    const input = buildLoanPreviewInput(seasoned, '2026-07-08')!;
+    const preview = previewExtraLoanPayment(input, 500, { start: '2027-01-01', end: '2027-12-01' });
+    expect(preview.monthsSaved).toBeGreaterThan(0);
+    expect(preview.interestSaved).toBeGreaterThan(0);
+  });
+
+  it('returns null for an unsaved loan (id null)', () => {
+    expect(buildLoanPreviewInput({ ...seasoned, id: null }, '2026-07-08')).toBeNull();
   });
 });

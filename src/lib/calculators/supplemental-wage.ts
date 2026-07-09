@@ -57,6 +57,14 @@ export interface SupplementalWageTaxInput {
   stateBrackets: Bracket[];
   cityBrackets: Bracket[] | null;
   standardDeduction: { federal: number; state: number; city: number };
+  /**
+   * Wave-9 F1: per-person annual base salaries (no supplemental wages),
+   * aligned with the persons the caller aggregated into `baseSalary`
+   * (entries must sum to it). `recipientIndex` names the earner who receives
+   * `supplementalWages` (default 0). Omitted → legacy combined-base FICA.
+   */
+  perPersonBaseSalary?: number[];
+  recipientIndex?: number;
 }
 
 /**
@@ -74,6 +82,8 @@ export function computeSupplementalWageTax(input: SupplementalWageTaxInput): Bon
     stateBrackets: input.stateBrackets,
     cityBrackets: input.cityBrackets,
     standardDeduction: input.standardDeduction,
+    perPersonBaseGross: input.perPersonBaseSalary,
+    recipientIndex: input.recipientIndex,
   });
 }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { evaluateBrackets, type Bracket, computeFica, computeFicaBreakdown, computeHouseholdFica, computePretaxDeductions, computeBonusTax, computeTotalTax, type TotalTaxInput } from '@/lib/tax';
+import { evaluateBrackets, type Bracket, computeFica, computeFicaBreakdown, computeHouseholdFica, computePretaxDeductions, computeBonusTax, computeLtcgTax, computeTotalTax, type TotalTaxInput } from '@/lib/tax';
 
 const federal2026Single: Bracket[] = [
   { min: 0, max: 11600, rate: 0.10 },
@@ -437,5 +437,106 @@ describe('computeTotalTax — optional perPersonGross routes FICA through the ho
     expect(
       computeTotalTax({ ...base, gross: 300_000, perPersonGross: [150_000, 150_000] }).fica,
     ).toBeCloseTo(2 * computeFica(150_000, 'MFJ') + 450, 6);
+  });
+});
+
+describe('computeBonusTax perPersonBaseGross (wave-9 F1)', () => {
+  // Zero-rate brackets isolate FICA. NOTE the no-tax-state shape: a single
+  // zero-rate bracket, never [].
+  const ZERO: Bracket[] = [{ min: 0, max: null, rate: 0 }];
+  const base = {
+    pretax: { pretax401k: 0, pretaxHealth: 0, pretaxDcfsa: 0, pretaxHsa: 0 },
+    filingStatus: 'MFJ' as const,
+    federalBrackets: ZERO,
+    stateBrackets: ZERO,
+    cityBrackets: null,
+    standardDeduction: { federal: 0, state: 0, city: 0 },
+  };
+
+  it('caps Social Security per earner: dual-$150k MFJ, $30k bonus to earner 0', () => {
+    const r = computeBonusTax({
+      ...base,
+      personGross: 330_000, // 150k + 150k + 30k bonus
+      bonus: 30_000,
+      perPersonBaseGross: [150_000, 150_000],
+      recipientIndex: 0,
+    });
+    // Earner 0: 180k stays under the $184,500 wage base → SS on the bonus is
+    // the full 6.2% = $1,860. Medicare 1.45% × 30k = $435; Additional
+    // Medicare 0.9% on the excess over the MFJ $250k threshold = $270.
+    expect(r.bonusBreakdown.fica).toBeCloseTo(1_860 + 435 + 270, 6);
+  });
+
+  it('legacy combined-base behavior is unchanged when perPersonBaseGross is omitted', () => {
+    const r = computeBonusTax({ ...base, personGross: 330_000, bonus: 30_000 });
+    // Combined 300k already exceeds the wage base → SS delta 0; only the
+    // Medicare legs move: 435 + 270.
+    expect(r.bonusBreakdown.fica).toBeCloseTo(435 + 270, 6);
+  });
+
+  it('attributes the bonus to recipientIndex (earner already over the base)', () => {
+    const r = computeBonusTax({
+      ...base,
+      personGross: 430_000,
+      bonus: 30_000,
+      perPersonBaseGross: [250_000, 150_000], // earner 0 is over $184,500 already
+      recipientIndex: 0,
+    });
+    // SS delta 0 for earner 0; Medicare 435; AddMed 0.9% × 30k (already over
+    // the 250k threshold without the bonus) = 270.
+    expect(r.bonusBreakdown.fica).toBeCloseTo(435 + 270, 6);
+  });
+});
+
+describe('LTCG leftover standard deduction (wave-9 M65)', () => {
+  const LTCG_SINGLE: Bracket[] = [
+    { min: 0, max: 49_450, rate: 0 },
+    { min: 49_450, max: 545_500, rate: 0.15 },
+    { min: 545_500, max: null, rate: 0.20 },
+  ];
+
+  it('unusedOrdinaryDeduction shelters the bottom of the gains stack', () => {
+    // Retiree: $5k W-2, $15,750 SD → $10,750 of SD is unused. $60k LTCG:
+    // worksheet taxable gains = 60,000 − 10,750 = 49,250, all inside the 0%
+    // band → $0. Pre-fix: 49,450 @ 0% + 10,550 @ 15% = $1,582.50.
+    const fixed = computeLtcgTax({
+      ordinaryIncome: 0, // max(0, 5k − 15,750)
+      longTermGains: 60_000,
+      qualifiedDividends: 0,
+      ltcgBrackets: LTCG_SINGLE,
+      filingStatus: 'SINGLE',
+      unusedOrdinaryDeduction: 10_750,
+    });
+    expect(fixed.federalLtcgTax).toBe(0);
+    const legacy = computeLtcgTax({
+      ordinaryIncome: 0, longTermGains: 60_000, qualifiedDividends: 0,
+      ltcgBrackets: LTCG_SINGLE, filingStatus: 'SINGLE',
+    });
+    expect(legacy.federalLtcgTax).toBeCloseTo(1_582.5, 2);
+  });
+
+  it('computeTotalTax passes the leftover through (end-to-end)', () => {
+    const ZERO: Bracket[] = [{ min: 0, max: null, rate: 0 }];
+    const r = computeTotalTax({
+      gross: 5_000,
+      filingStatus: 'SINGLE',
+      federalBrackets: [{ min: 0, max: null, rate: 0.10 }],
+      stateBrackets: ZERO,
+      cityBrackets: null,
+      standardDeduction: { federal: 15_750, state: 0, city: 0 },
+      pretax: { pretax401k: 0, pretaxHealth: 0, pretaxDcfsa: 0, pretaxHsa: 0 },
+      longTermGains: 60_000,
+      qualifiedDividends: 0,
+      ltcgBrackets: LTCG_SINGLE,
+    });
+    expect(r.federal).toBe(0); // ordinary taxable 0; gains fully sheltered/0%-banded
+  });
+
+  it('no leftover when ordinary income exceeds the deduction (unchanged)', () => {
+    const r = computeLtcgTax({
+      ordinaryIncome: 60_000, longTermGains: 10_000, qualifiedDividends: 0,
+      ltcgBrackets: LTCG_SINGLE, filingStatus: 'SINGLE', unusedOrdinaryDeduction: 0,
+    });
+    expect(r.federalLtcgTax).toBeCloseTo(1_500, 2); // all at 15%
   });
 });

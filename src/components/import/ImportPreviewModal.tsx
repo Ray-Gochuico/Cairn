@@ -112,11 +112,41 @@ export function ImportPreviewModal({
   onCancelAll,
   onSaved,
 }: Props) {
+  // Wave-9 chip b: transaction files exported by banks often carry debits as
+  // NEGATIVE amounts, which isRealSpending (positive = spending) ignores — a
+  // whole file can land as $0 Money out. When the user opts in, we thread a
+  // 'FLIP' sign into the ctx so every parsed amount negates.
+  const [flipSigns, setFlipSigns] = useState(false);
+  const effectiveCtx = useMemo(
+    () =>
+      entity === 'transaction' && flipSigns
+        ? { ...ctx, transactionAmountSign: 'FLIP' as const }
+        : ctx,
+    [entity, ctx, flipSigns],
+  );
   const storeRef = useMemo(
-    () => createImportPreviewStore(entity, parsed, ctx),
-    [entity, parsed, ctx],
+    () => createImportPreviewStore(entity, parsed, effectiveCtx),
+    [entity, parsed, effectiveCtx],
   );
   const state = useStore(storeRef);
+
+  // Share of non-error transaction rows whose resolved amount is negative.
+  // Drives the "Flip signs" prompt (a majority-negative file is the tell-tale
+  // sign of the bank-debit convention).
+  const negativeShare = useMemo(() => {
+    if (entity !== 'transaction') return 0;
+    let total = 0;
+    let negative = 0;
+    for (const row of state.derivedRows) {
+      if (row.status === 'error') continue;
+      const amount = (row.resolved as { amount?: number } | undefined)?.amount;
+      if (typeof amount !== 'number') continue;
+      total += 1;
+      if (amount < 0) negative += 1;
+    }
+    return total === 0 ? 0 : negative / total;
+  }, [entity, state.derivedRows]);
+  const showFlipPrompt = entity === 'transaction' && (negativeShare >= 0.5 || flipSigns);
   const [committing, setCommitting] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
   const loadSnapshots = useSnapshotsStore((s) => s.load);
@@ -327,6 +357,21 @@ export function ImportPreviewModal({
           state={state as unknown as ImportPreviewState<ImportEntity>}
           entity={entity}
         />
+
+        {showFlipPrompt && (
+          <div className="text-xs border border-warning/40 bg-warning-soft text-warning-foreground rounded p-2">
+            Most amounts in this file are negative — banks often export spending
+            that way, and negative rows don&apos;t count as spending here.
+            <label className="mt-1 flex items-center gap-2 font-medium">
+              <input
+                type="checkbox"
+                checked={flipSigns}
+                onChange={(e) => setFlipSigns(e.target.checked)}
+              />
+              Flip signs (treat negatives as spending)
+            </label>
+          </div>
+        )}
         {/* The virtualized preview table owns its own bounded scroll parent
             (max-h-[55vh] overflow-auto) so the virtualizer can measure a finite
             viewport; an outer scroll wrapper here would nest two scrollers and

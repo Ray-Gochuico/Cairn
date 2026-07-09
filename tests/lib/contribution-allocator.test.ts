@@ -43,6 +43,22 @@ describe('allocateContribution', () => {
     expect(r.overweightClasses).toContain(AssetClass.US_TOTAL_MARKET); // named for the callout (M3)
   });
 
+  it('a targeted-but-unheld class is reported, not silently dropped (wave-9 allocator)', () => {
+    // US_TOTAL_MARKET holds VTI 10k; US_BONDS is targeted 50% but nothing is
+    // held there — the allocator has no buy vehicle, so its budget stays in cash.
+    const vals = [val('VTI', 10_000, 10, AssetClass.US_TOTAL_MARKET, null)];
+    const targets: AssetClassTarget[] = [
+      { assetClass: AssetClass.US_TOTAL_MARKET, targetPct: 0.5 },
+      { assetClass: AssetClass.US_BONDS, targetPct: 0.5 },
+    ];
+    const r = allocateContribution({ valuations: vals, classTargets: targets, householdTotal: 10_000, cash: 5_000 });
+    expect(r.unallocatableClasses).toEqual([
+      expect.objectContaining({ assetClass: AssetClass.US_BONDS }),
+    ]);
+    expect(r.unallocatableClasses[0].need).toBeGreaterThan(0);
+    expect(r.cashLeftOver).toBeGreaterThan(0);
+  });
+
   it('deploys all cash in exact dollars and reports zero leftover when a ticker can absorb it', () => {
     // One class, one ticker, target 100%. Add 250 ⇒ deploy the full $250 (no whole-share floor).
     const vals = [val('VOO', 1000, 10, AssetClass.US_LARGE_CAP, null)];

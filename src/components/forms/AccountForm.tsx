@@ -9,6 +9,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
+// Wave-9 M41 (mirrors PersonForm's pretax401kPctPercent pattern): the APY
+// input is a FORM-ONLY percent field (0..15); the storage fraction (0..0.15)
+// never touches the %-labeled input, so a re-init can't show a raw fraction
+// and a re-save can't divide twice (4% → 0.04% corruption).
+const fractionToPercent = (fraction: number): number => parseFloat((fraction * 100).toFixed(10));
+const percentToFraction = (percent: number): number => parseFloat((percent / 100).toFixed(10));
+
 // AccountSchema has allowMargin: z.boolean().default(false), which makes Zod's
 // *input* type treat that key as optional. RHF derives its resolver type from
 // the schema input type, so the resolver becomes Resolver<Partial<...>> and
@@ -21,10 +28,13 @@ const AccountFormSchema = AccountSchema.omit({
   employerMatchLimitPct: true,
   allowsMegaBackdoorRollover: true,
   hasHighFees: true,
+  apyRate: true,
 }).extend({
   allowMargin: z.boolean(),
-  apyRate: z.number().min(0).max(0.15).nullable(),
+  apyRatePercent: z.number().min(0).max(15).nullable(),
 });
+
+type InternalFormValues = z.infer<typeof AccountFormSchema>;
 
 // Strip roadmap rule-engine chart-answer columns; those are written by
 // roadmap decision nodes, not the account edit form.
@@ -91,10 +101,28 @@ export default function AccountForm({
   onCancel,
   submitLabel = 'Save',
 }: AccountFormProps) {
-  const form = useForm<AccountFormValues>({
+  // Translate storage shape → internal form shape: drop apyRate, synthesize
+  // apyRatePercent (0..15). Reverse on submit below.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { apyRate: _initialApyFraction, ...initialRest } = initial;
+  const internalInitial: InternalFormValues = {
+    ...initialRest,
+    apyRatePercent: _initialApyFraction != null ? fractionToPercent(_initialApyFraction) : null,
+  };
+
+  const form = useForm<InternalFormValues>({
     resolver: zodResolver(AccountFormSchema),
-    defaultValues: initial,
+    defaultValues: internalInitial,
   });
+
+  // Callers still receive storage-shaped AccountFormValues (apyRate fraction).
+  const wrappedSubmit = (values: InternalFormValues): Promise<void> => {
+    const { apyRatePercent, ...rest } = values;
+    return onSubmit({
+      ...rest,
+      apyRate: apyRatePercent != null ? percentToFraction(apyRatePercent) : null,
+    });
+  };
 
   const currentType = form.watch('type');
   const is529 = currentType === AccountType.ACCOUNT_529;
@@ -112,7 +140,7 @@ export default function AccountForm({
   }, [onlyOnePerson, persons, form]);
 
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+    <form onSubmit={form.handleSubmit(wrappedSubmit)} className="space-y-4">
       <Card>
         <CardHeader><CardTitle className="text-base">Account details</CardTitle></CardHeader>
         <CardContent className="space-y-3">
@@ -229,22 +257,19 @@ export default function AccountForm({
 
           {isCashOrSavings && (
             <div>
-              <Label htmlFor="apyRate">Annual percent yield (APY %)</Label>
+              <Label htmlFor="apyRatePercent">Annual percent yield (APY %)</Label>
               <Input
-                id="apyRate"
+                id="apyRatePercent"
                 type="number"
                 step="0.01"
                 min="0"
                 max="15"
                 placeholder="0.0"
-                defaultValue={
-                  initial.apyRate != null ? String(Math.round(initial.apyRate * 10000) / 100) : ''
-                }
-                {...form.register('apyRate', {
+                {...form.register('apyRatePercent', {
                   setValueAs: (v) => {
                     if (v === '' || v === null || v === undefined) return null;
                     const n = Number(v);
-                    return Number.isFinite(n) ? n / 100 : null;
+                    return Number.isFinite(n) ? n : null;
                   },
                 })}
               />

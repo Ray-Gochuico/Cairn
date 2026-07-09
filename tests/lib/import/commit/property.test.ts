@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { loadAllMigrations, runMigrations } from '@/db/migrations';
 import { PropertiesRepo } from '@/domain/properties';
@@ -129,5 +129,31 @@ describe('commitPropertyImport', () => {
       const snaps = await snapshotRows(existingId);
       expect(snaps).toEqual([{ snapshot_date: TODAY_ISO, value: 775000 }]);
     });
+  });
+
+  it('two same-name rows resolving to one entity commit ONE update + ONE snapshot (wave-9 chip)', async () => {
+    // Both rows are status='update' with the same existingId (the validator
+    // has no in-file dedupe); pre-fix each minted its own UPDATE + same-date
+    // upsert and `updated` counted 2 for one entity.
+    const base = baseResolved('Main');
+    base.currentEstimatedValue = 500000;
+    const existingId = await repo.create(base);
+    const first = baseResolved('Main');
+    first.currentEstimatedValue = 510000;
+    const second = baseResolved('Main');
+    second.currentEstimatedValue = 520000; // last row wins
+    const d = deps();
+    const batchSpy = vi.spyOn(d.db, 'executeBatch');
+    const res = await commitPropertyImport(
+      [makeRow(0, 'update', first, existingId), makeRow(1, 'update', second, existingId)],
+      d,
+    );
+    expect(res.updated).toBe(1);
+    const statements = batchSpy.mock.calls[0][0];
+    expect(statements.filter((st) => /UPDATE properties/i.test(st.sql))).toHaveLength(1);
+    expect(statements.filter((st) => /asset_value_snapshots/i.test(st.sql))).toHaveLength(1);
+    // The surviving payload is the LAST row's value.
+    const found = await repo.findById(existingId);
+    expect(found?.currentEstimatedValue).toBe(520000);
   });
 });

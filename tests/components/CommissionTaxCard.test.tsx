@@ -327,4 +327,116 @@ describe('CommissionTaxCard', () => {
     expect(Number((screen.getByLabelText(/Annual commission/i) as HTMLInputElement).value)).toBe(48000);
     expect(screen.getAllByText(/\$12,000/).length).toBeGreaterThan(0);
   });
+
+  function primeDualEarnerMFJ() {
+    // Two $150k earners, each deferring 10% into their own 401(k) ($15k each,
+    // household $30k — legitimately above one $24,500 cap). Recipient is
+    // persons[0] (expectedCommission $20k/yr, MONTHLY).
+    primeStores();
+    useHouseholdStore.setState({
+      household: {
+        ...useHouseholdStore.getState().household!,
+        filingStatus: FilingStatus.MFJ,
+      },
+      isLoading: false,
+      error: null,
+    });
+    const alice = usePersonsStore.getState().persons[0];
+    usePersonsStore.setState({
+      persons: [
+        {
+          ...alice,
+          id: 1,
+          name: 'Alice',
+          annualSalaryPretax: 150000,
+          pretax401kPct: 0.10,
+          expectedCommission: 20000,
+          expectedCommissionFrequency: 'MONTHLY',
+        },
+        {
+          ...alice,
+          id: 2,
+          name: 'Bob',
+          annualSalaryPretax: 150000,
+          pretax401kPct: 0.10,
+          expectedCommission: 0,
+        },
+      ],
+      isLoading: false,
+      error: null,
+    });
+    useTaxRulesStore.setState({
+      year: 2026,
+      items: [
+        {
+          id: 1,
+          year: 2026,
+          jurisdictionType: 'FEDERAL',
+          jurisdictionCode: 'US',
+          filingStatus: FilingStatus.MFJ,
+          brackets: federalSingleBrackets,
+          standardDeduction: 30000,
+        },
+        {
+          id: 2,
+          year: 2026,
+          jurisdictionType: 'STATE',
+          jurisdictionCode: 'CA',
+          filingStatus: FilingStatus.MFJ,
+          brackets: caSingleBrackets,
+          standardDeduction: 0,
+        },
+      ],
+      isLoading: false,
+      error: null,
+    });
+  }
+
+  it("commission 401(k) headroom is the RECIPIENT's, not the household aggregate (wave-9 F2)", async () => {
+    // Household aggregate $30k > $24,500 → pre-fix remaining cap = $0 and the
+    // commission deferral showed $0. The recipient personally defers $15k,
+    // leaving $9,500 of room; a $20k commission at their 10% defers $2,000.
+    const { formatCurrency } = await import('@/lib/format');
+    primeDualEarnerMFJ();
+    render(<MemoryRouter><CommissionTaxCard /></MemoryRouter>);
+    await screen.findByTestId('commission-takehome');
+    // $2,000/yr ÷ 12 → per-check figure:
+    expect(screen.getByText(formatCurrency(2000 / 12))).toBeInTheDocument();
+  });
+
+  it("FICA on commission caps SS at the recipient's own wage base (wave-9 F1)", async () => {
+    const { computeSupplementalWageTax, aggregateHouseholdPretax } = await import(
+      '@/lib/calculators/supplemental-wage'
+    );
+    const { formatCurrency } = await import('@/lib/format');
+    primeDualEarnerMFJ();
+    render(<MemoryRouter><CommissionTaxCard /></MemoryRouter>);
+    await screen.findByTestId('commission-takehome');
+
+    const agg = aggregateHouseholdPretax(usePersonsStore.getState().persons, {
+      filingStatus: FilingStatus.MFJ,
+      personCount: 2,
+      dependentCount: 0,
+    });
+    const common = {
+      baseSalary: 300_000,
+      supplementalWages: 20_000,
+      pretax: agg.pretax,
+      filingStatus: FilingStatus.MFJ,
+      federalBrackets: federalSingleBrackets,
+      stateBrackets: caSingleBrackets,
+      cityBrackets: null,
+      standardDeduction: { federal: 30000, state: 0, city: 0 },
+    };
+    const expected = computeSupplementalWageTax({
+      ...common,
+      perPersonBaseSalary: [150_000, 150_000],
+      recipientIndex: 0,
+    });
+    const legacy = computeSupplementalWageTax(common);
+    // Sanity: the fixture bites.
+    expect(expected.bonusBreakdown.fica).toBeGreaterThan(legacy.bonusBreakdown.fica);
+    // FICA renders per check (÷ 12 for MONTHLY).
+    expect(screen.getByText(formatCurrency(expected.bonusBreakdown.fica / 12))).toBeInTheDocument();
+  });
 });

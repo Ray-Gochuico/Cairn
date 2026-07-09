@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
@@ -13,6 +13,7 @@ import { useVehiclesStore } from '@/stores/vehicles-store';
 import { AccountsRepo } from '@/domain/accounts';
 import { AccountSnapshotsRepo } from '@/domain/snapshots';
 import { LoansRepo } from '@/domain/loans';
+import { LoanPaymentsRepo } from '@/domain/loan-payments';
 import { AccountType, LoanType, SnapshotSource } from '@/types/enums';
 import MonthlyMiniWindow from '@/pages/MonthlyMiniWindow';
 import { readFileSync } from 'node:fs';
@@ -308,6 +309,54 @@ describe('MonthlyMiniWindow', () => {
       expect(screen.getByText('Test Mortgage')).toBeInTheDocument();
     });
     expect(screen.getByText(/next scheduled payment/i)).toBeInTheDocument();
+  });
+
+  it("renders a loan card as already recorded when this month's AMORTIZATION row exists (wave-9 M37)", async () => {
+    // Seed: one loan whose next projected payment date already has an
+    // AMORTIZATION loan_payments row (as if Confirm ran earlier this month).
+    // A next-month firstPaymentDate makes the projected schedule[0] date
+    // deterministic (nextPaymentDateFrom returns the future anchor itself).
+    const loansRepo = new LoansRepo(db);
+    const future = new Date();
+    future.setDate(1);
+    future.setMonth(future.getMonth() + 1);
+    const firstPayment = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, '0')}-01`;
+    const loanId = await loansRepo.create({
+      householdId: 1,
+      obligorPersonId: null,
+      name: 'Seasoned mortgage',
+      type: LoanType.MORTGAGE,
+      originalAmount: 100000,
+      currentBalance: 100000,
+      interestRate: 0.05,
+      termMonths: 360,
+      firstPaymentDate: firstPayment,
+      monthlyPayment: 536.82,
+      extraPaymentDefault: 0,
+      linkedPropertyId: null,
+      linkedVehicleId: null,
+    });
+    await new LoanPaymentsRepo(db).create({
+      loanId,
+      paymentDate: firstPayment,
+      principal: 120.15,
+      interest: 416.67,
+      extra: 0,
+      source: 'AMORTIZATION',
+    });
+
+    render(
+      <MemoryRouter>
+        <MonthlyMiniWindow />
+      </MemoryRouter>,
+    );
+
+    const card = await screen.findByText('Seasoned mortgage');
+    const scope = card.closest('[class*="rounded"]') as HTMLElement;
+    expect(await within(scope).findByText(/already recorded/i)).toBeInTheDocument();
+    expect(
+      within(scope).queryByRole('button', { name: /^confirm$/i }),
+    ).not.toBeInTheDocument();
   });
 
   it('MonthlyMiniWindow.tsx reads no app_settings (keeps the hand-rolled migration array valid)', () => {

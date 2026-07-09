@@ -437,4 +437,80 @@ describe('BonusTaxCard', () => {
     await screen.findByTestId('bonus-takehome');
     expect(screen.getByRole('button', { name: /aggregate/i })).toHaveAttribute('aria-pressed', 'true');
   });
+
+  it("FICA on bonus uses the RECIPIENT's own SS wage base, not the combined household gross (wave-9 F1)", async () => {
+    // Two $150k earners (combined $300k > $184,500); $30k bonus to earner 0,
+    // who is personally under the wage base → SS must appear on the bonus.
+    // Pre-fix the combined base swallowed it (FICA-on-bonus row showed only
+    // the Medicare legs).
+    const { computeSupplementalWageTax } = await import('@/lib/calculators/supplemental-wage');
+    const { formatCurrency } = await import('@/lib/format');
+    primeStores();
+    useHouseholdStore.setState({
+      household: {
+        ...useHouseholdStore.getState().household!,
+        filingStatus: FilingStatus.MFJ,
+      },
+      isLoading: false,
+      error: null,
+    });
+    const alice = usePersonsStore.getState().persons[0];
+    usePersonsStore.setState({
+      persons: [
+        { ...alice, id: 1, name: 'Alice', annualSalaryPretax: 150000, expectedBonus: 30000 },
+        { ...alice, id: 2, name: 'Bob', annualSalaryPretax: 150000, expectedBonus: 0 },
+      ],
+      isLoading: false,
+      error: null,
+    });
+    useTaxRulesStore.setState({
+      year: 2026,
+      items: [
+        {
+          id: 1,
+          year: 2026,
+          jurisdictionType: 'FEDERAL',
+          jurisdictionCode: 'US',
+          filingStatus: FilingStatus.MFJ,
+          brackets: federalSingleBrackets,
+          standardDeduction: 30000,
+        },
+        {
+          id: 2,
+          year: 2026,
+          jurisdictionType: 'STATE',
+          jurisdictionCode: 'CA',
+          filingStatus: FilingStatus.MFJ,
+          brackets: caSingleBrackets,
+          standardDeduction: 0,
+        },
+      ],
+      isLoading: false,
+      error: null,
+    });
+
+    render(<MemoryRouter><BonusTaxCard /></MemoryRouter>);
+    fireEvent.change(screen.getByLabelText(/Bonus amount/i), { target: { value: '30000' } });
+    await screen.findByTestId('bonus-takehome');
+
+    const common = {
+      baseSalary: 300_000,
+      supplementalWages: 30_000,
+      pretax: { pretax401k: 0, pretaxHealth: 0, pretaxDcfsa: 0, pretaxHsa: 0 },
+      filingStatus: FilingStatus.MFJ,
+      federalBrackets: federalSingleBrackets,
+      stateBrackets: caSingleBrackets,
+      cityBrackets: null,
+      standardDeduction: { federal: 30000, state: 0, city: 0 },
+    };
+    const expected = computeSupplementalWageTax({
+      ...common,
+      perPersonBaseSalary: [150_000, 150_000],
+      recipientIndex: 0,
+    });
+    const legacy = computeSupplementalWageTax(common);
+    // Sanity: the fixture bites (per-earner SS actually differs).
+    expect(expected.bonusBreakdown.fica).toBeGreaterThan(legacy.bonusBreakdown.fica);
+    expect(screen.getByText(formatCurrency(expected.bonusBreakdown.fica))).toBeInTheDocument();
+  });
 });

@@ -5,6 +5,10 @@ export interface RecurringGroup {
   transactionIds: number[];
   averageAmount: number;
   occurrences: number;
+  /** Wave-9 M20: median charge cadence in whole months (1–3). */
+  cadenceMonths: number;
+  /** averageAmount normalized to a per-month figure (÷ cadenceMonths). */
+  monthlyAmount: number;
 }
 
 const DAY = 86_400_000;
@@ -59,20 +63,29 @@ export function detectRecurring(transactions: Transaction[], categories: Categor
     if ((Math.max(...amounts) - Math.min(...amounts)) / mean > AMOUNT_SPREAD_MAX) continue;
 
     let monthly = true;
+    const gapMonths: number[] = [];
     for (let i = 1; i < sorted.length; i++) {
       const gap = (Date.parse(sorted[i].date) - Date.parse(sorted[i - 1].date)) / DAY;
       if (!isMonthlyGap(gap)) {
         monthly = false;
         break;
       }
+      gapMonths.push(Math.max(1, Math.round(gap / MONTH_DAYS)));
     }
     if (!monthly) continue;
+    // Wave-9 M20: the gap check tolerates 1–3-month cadences, but the raw
+    // per-charge mean was rendered as "$X/mo" — a quarterly biller read 3×
+    // its true monthly cost. Median rounded gap = the group's cadence.
+    const sortedGaps = [...gapMonths].sort((a, b) => a - b);
+    const cadenceMonths = sortedGaps[Math.floor(sortedGaps.length / 2)] ?? 1;
 
     groups.push({
       merchant,
       transactionIds: sorted.map((t) => t.id).filter((id): id is number => id != null),
       averageAmount: mean,
       occurrences: sorted.length,
+      cadenceMonths,
+      monthlyAmount: mean / cadenceMonths,
     });
   }
   return groups;

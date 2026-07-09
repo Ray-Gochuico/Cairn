@@ -247,3 +247,27 @@ describe('backtestPlan — production-seed neutralization (BT-1/BT-2)', () => {
     expect(states[12].cash).toBe(100_000);
   });
 });
+
+describe('wave-9 M66 — real obligations must not drain the replay', () => {
+  it("a household's real debts and housing do not drain the replay", () => {
+    const clean = backtestPlan(prodSeed(1_500_000), cfg());
+    const indebtedSeed: RealState = {
+      ...prodSeed(1_500_000),
+      loans: [{
+        id: 9, householdId: 1, obligorPersonId: null, name: 'Mortgage', type: 'MORTGAGE',
+        originalAmount: 350_000, currentBalance: 300_000, interestRate: 0.06, termMonths: 360,
+        firstPaymentDate: '2021-08-01', monthlyPayment: 1_798.65, extraPaymentDefault: 0,
+        linkedPropertyId: null, linkedVehicleId: null,
+      } as never],
+      housingPayments: [{
+        id: 1, householdId: 1, kind: 'RENT', monthlyAmount: 2_500,
+        startDate: '2020-01-01', endDate: null,
+      } as never],
+    };
+    const indebted = backtestPlan(indebtedSeed, cfg());
+    expect(indebted.survivedCount).toBe(clean.survivedCount);
+    expect(indebted.outcomes.map((o) => o.annualBalances)).toEqual(
+      clean.outcomes.map((o) => o.annualBalances),
+    );
+  });
+});

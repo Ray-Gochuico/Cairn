@@ -141,10 +141,28 @@ export function SectorDonut() {
     }
     // Industry drill-down stays on perTicker: it operates on individual
     // companies (AAPL/MSFT/JPM) where the post-look-through view is correct.
-    return aggregateByIndustry(report.perTicker, sectorMap, selectedSector).map((s, i) => ({
-      ...s,
-      color: shadedColorForIndustry(selectedSector, i),
-    }));
+    const industrySlices = aggregateByIndustry(report.perTicker, sectorMap, selectedSector).map(
+      (s, i) => ({
+        ...s,
+        color: shadedColorForIndustry(selectedSector, i),
+      }),
+    );
+    // Wave-9 M8 (protected view — strictly additive): fund exposure reaches
+    // the SECTOR wedge via fund_sectors look-through, but there is no
+    // fund→industry dataset, so the drill-in under-reconciles (and no-ops
+    // for fund-only portfolios). Represent the unmapped remainder explicitly
+    // so drilled dollars always sum back to the wedge.
+    const wedge = sectorSlices.find((s) => s.name === selectedSector);
+    const drilled = industrySlices.reduce((sum, s) => sum + s.value, 0);
+    const remainder = (wedge?.value ?? 0) - drilled;
+    if (remainder > 0.005) {
+      industrySlices.push({
+        name: 'Fund exposure (no industry breakdown)',
+        value: remainder,
+        color: shadedColorForIndustry(selectedSector, industrySlices.length),
+      });
+    }
+    return industrySlices;
   }, [report.perTicker, sectorMap, selectedSector, sectorSlices, selected]);
 
   useEffect(() => {

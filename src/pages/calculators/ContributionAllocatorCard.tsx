@@ -162,6 +162,20 @@ export function ContributionAllocatorCard({ cardId, onHide }: Props = {}) {
             </div>
           )}
 
+          {result.unallocatableClasses.length > 0 && (
+            // Wave-9: a targeted class with NO held ticker has no buy vehicle,
+            // so its budget silently stayed in cash — name it and the leftover.
+            <div
+              role="note"
+              className="rounded-md border border-warning/40 bg-warning-soft px-3 py-2 text-sm text-warning-foreground"
+            >
+              You target {result.unallocatableClasses.map((u) => ASSET_CLASS_LABEL[u.assetClass]).join(', ')} but hold
+              nothing in {result.unallocatableClasses.length === 1 ? 'that class' : 'those classes'} —{' '}
+              {formatCurrency(result.unallocatableClasses.reduce((s, u) => s + u.need, 0))} stays in cash.
+              Add a holding in the class (Inputs → Holdings) or adjust your targets.
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <StatTile testId="allocator-total" label="Total allocated" value={formatCurrency(result.totalAllocated)} />
             <StatTile testId="allocator-cash-left" label="Cash left over" value={formatCurrency(result.cashLeftOver)} />

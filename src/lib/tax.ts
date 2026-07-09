@@ -248,6 +248,13 @@ export interface LtcgInput {
   ltcgBrackets: Bracket[];
   /** Filing status — kept for symmetry with other tax helpers; not currently used inside computeLtcgTax (brackets carry status). */
   filingStatus: 'SINGLE' | 'MFJ' | 'MFS' | 'HOH';
+  /**
+   * Wave-9 M65: standard deduction left UNUSED by ordinary income
+   * (max(0, deduction − ordinary income before flooring)). The QDCGT
+   * worksheet nets taxable income before splitting the stacks, so this
+   * remainder shelters the bottom of the gains stack. Default 0.
+   */
+  unusedOrdinaryDeduction?: number;
 }
 
 export interface LtcgOutput {
@@ -262,7 +269,8 @@ export interface LtcgOutput {
  * using the LTCG bracket schedule.
  */
 export function computeLtcgTax(input: LtcgInput): LtcgOutput {
-  const qualifiedIncome = input.longTermGains + input.qualifiedDividends;
+  const unused = Math.max(0, input.unusedOrdinaryDeduction ?? 0);
+  const qualifiedIncome = Math.max(0, input.longTermGains + input.qualifiedDividends - unused);
   if (qualifiedIncome <= 0) return { federalLtcgTax: 0 };
   if (input.ordinaryIncome < 0) throw new Error('ordinaryIncome must be non-negative');
 
@@ -353,6 +361,10 @@ export function computeTotalTax(input: TotalTaxInput): TotalTaxOutput {
       qualifiedDividends,
       ltcgBrackets: input.ltcgBrackets,
       filingStatus: input.filingStatus,
+      // Wave-9 M65: standard deduction the ordinary stack couldn't use
+      // shelters the bottom of the gains stack (QDCGT worksheet nets taxable
+      // income BEFORE splitting the stacks).
+      unusedOrdinaryDeduction: Math.max(0, sd.federal - Math.max(0, ordinaryIncome - pretaxTotal)),
     }).federalLtcgTax;
   }
   const federal = federalOrdinary + federalLtcg;
@@ -418,6 +430,16 @@ export interface BonusTaxInput {
   stateBrackets: Bracket[];
   cityBrackets: Bracket[] | null;
   standardDeduction: StandardDeductionInput;
+  /**
+   * Wave-9 F1: per-earner annual base grosses EXCLUDING `bonus`. When
+   * present, FICA runs per earner (own SS wage base each, Medicare surtax on
+   * the combined return) in BOTH the with- and without-bonus passes, with
+   * `bonus` attributed to the earner at `recipientIndex` (default 0).
+   * Entries must sum to `personGross - bonus`. When omitted, the legacy
+   * combined-base behavior is preserved.
+   */
+  perPersonBaseGross?: number[];
+  recipientIndex?: number;
 }
 
 export interface BonusTaxOutput {
@@ -450,8 +472,14 @@ export interface BonusTaxOutput {
 export function computeBonusTax(input: BonusTaxInput): BonusTaxOutput {
   const grossWithoutBonus = input.personGross - input.bonus;
 
+  // Wave-9 F1: per-earner FICA split; the bonus rides on the recipient.
+  const baseSplit = input.perPersonBaseGross;
+  const recipient = input.recipientIndex ?? 0;
+  const withSplit = baseSplit?.map((g, i) => (i === recipient ? g + input.bonus : g));
+
   const withBonus = computeTotalTax({
     gross: input.personGross,
+    perPersonGross: withSplit,
     filingStatus: input.filingStatus,
     federalBrackets: input.federalBrackets,
     stateBrackets: input.stateBrackets,
@@ -462,6 +490,7 @@ export function computeBonusTax(input: BonusTaxInput): BonusTaxOutput {
 
   const withoutBonus = computeTotalTax({
     gross: grossWithoutBonus,
+    perPersonGross: baseSplit,
     filingStatus: input.filingStatus,
     federalBrackets: input.federalBrackets,
     stateBrackets: input.stateBrackets,
@@ -592,12 +621,15 @@ export function calculate401kWithdrawalTax(input: WithdrawalTaxInput): Withdrawa
   let federalLtcgWithout = 0;
   let federalLtcgWith = 0;
   if (useLtcg && input.annualCapitalGains > 0) {
+    // Wave-9 M65: the leftover federal SD (unused by the ordinary stack)
+    // shelters the bottom of the gains stack in both passes.
     federalLtcgWithout = computeLtcgTax({
       ordinaryIncome: adjustedOrdinaryWithout,
       longTermGains: input.annualCapitalGains,
       qualifiedDividends: 0,
       ltcgBrackets: input.ltcgBrackets!,
       filingStatus: input.filingStatus,
+      unusedOrdinaryDeduction: Math.max(0, sd.federal - ordinaryBase),
     }).federalLtcgTax;
     federalLtcgWith = computeLtcgTax({
       ordinaryIncome: adjustedOrdinaryWith,
@@ -605,6 +637,7 @@ export function calculate401kWithdrawalTax(input: WithdrawalTaxInput): Withdrawa
       qualifiedDividends: 0,
       ltcgBrackets: input.ltcgBrackets!,
       filingStatus: input.filingStatus,
+      unusedOrdinaryDeduction: Math.max(0, sd.federal - (ordinaryBase + input.withdrawalAmount)),
     }).federalLtcgTax;
   }
 

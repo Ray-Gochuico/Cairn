@@ -403,4 +403,11 @@ describe('Retirement401kWithdrawalCard', () => {
     const radios = screen.getAllByRole('radio');
     expect(radios).toHaveLength(2);
   });
+
+  it("is titled '401k withdrawal take-home' — the headline is net-to-you (wave-9)", async () => {
+    primeStores();
+    render(<MemoryRouter><Retirement401kWithdrawalCard /></MemoryRouter>);
+    expect(await screen.findByText('401k withdrawal take-home')).toBeInTheDocument();
+    expect(screen.queryByText('401k withdrawal tax')).not.toBeInTheDocument();
+  });
 });

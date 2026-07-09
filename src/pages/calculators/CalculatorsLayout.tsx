@@ -62,7 +62,7 @@ export const CARD_LABELS: Record<string, string> = {
   [CARD_IDS.COMPOUND]: 'Compound Interest',
   [CARD_IDS.DEBT_PAYOFF]: 'Debt Payoff',
   [CARD_IDS.EQUITY]: 'Equity Value',
-  [CARD_IDS.RETIREMENT_401K]: '401k withdrawal tax',
+  [CARD_IDS.RETIREMENT_401K]: '401k withdrawal take-home',
   [CARD_IDS.BACKTEST]: 'Historical Backtest',
   [CARD_IDS.CONTRIBUTION_ALLOCATOR]: 'Contribution allocator',
 };

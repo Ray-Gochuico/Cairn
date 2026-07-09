@@ -1,6 +1,7 @@
 // src/lib/import/validators/transaction-validator.ts
 import type { CellError, PreviewRow, RawRow, RowId, ValidationContext } from '@/lib/import/types';
 import { resolveAccount, resolvePerson } from '@/lib/import/resolver';
+import { parseImportAmount } from '@/lib/import/amount';
 
 export interface TransactionResolved {
   accountId?: number;
@@ -9,6 +10,8 @@ export interface TransactionResolved {
   merchant?: string;
   categoryId?: number;
   reimbursable: boolean;
+  reimbursedAt: string | null;
+  reimbursedAmount: number | null;
   personId: number | null;
   source: string;
 }
@@ -25,6 +28,8 @@ export function validateTransactionRow(
   const errors: CellError[] = [];
   const resolved: TransactionResolved = {
     reimbursable: false,
+    reimbursedAt: null,
+    reimbursedAmount: null,
     personId: null,
     source: raw.source?.trim() || 'CSV_IMPORT',
   };
@@ -60,11 +65,16 @@ export function validateTransactionRow(
   if (!amountRaw) {
     errors.push({ field: 'amount', message: 'Amount is required' });
   } else {
-    const n = Number(stripCurrencyDecoration(amountRaw));
-    if (!Number.isFinite(n)) {
-      errors.push({ field: 'amount', message: 'Amount must be numeric' });
+    // Wave-9 S78: locale-aware parsing (EU "1.234,56" / "1 234,56" no longer
+    // corrupt silently); null → row error instead of a silently-wrong number.
+    const n = parseImportAmount(amountRaw);
+    if (n == null) {
+      errors.push({ field: 'amount', message: `Unparseable amount "${amountRaw}"` });
     } else {
-      resolved.amount = n;
+      // Wave-9 chip b: negative-debit bank CSVs opt into a whole-file sign flip
+      // (the preview modal offers it) so their spending isn't ignored by
+      // isRealSpending's positive-only convention.
+      resolved.amount = ctx.transactionAmountSign === 'FLIP' ? -n : n;
     }
   }
 
@@ -90,6 +100,31 @@ export function validateTransactionRow(
     resolved.reimbursable = true;
   } else if (!REIMB_FALSE.has(reimbRaw)) {
     errors.push({ field: 'reimbursable', message: 'Must be true / false (or 1/0, yes/no)' });
+  }
+
+  // Wave-9 S79: without these two optional columns a settled reimbursement
+  // re-imports as PENDING and drops out of every spending total (isRealSpending
+  // excludes pending reimbursables). A present reimbursed_at implies reimbursed.
+  const reimbAtRaw = (raw.reimbursed_at ?? '').trim();
+  if (!reimbAtRaw) {
+    resolved.reimbursedAt = null;
+  } else if (!ISO_DATE_RE.test(reimbAtRaw) || !isRealCalendarDate(reimbAtRaw)) {
+    errors.push({ field: 'reimbursed_at', message: 'Use YYYY-MM-DD format' });
+  } else {
+    resolved.reimbursedAt = reimbAtRaw;
+    resolved.reimbursable = true;
+  }
+
+  const reimbAmtRaw = (raw.reimbursed_amount ?? '').trim();
+  if (!reimbAmtRaw) {
+    resolved.reimbursedAmount = null;
+  } else {
+    const amt = parseImportAmount(reimbAmtRaw);
+    if (amt == null) {
+      errors.push({ field: 'reimbursed_amount', message: `Unparseable amount "${reimbAmtRaw}"` });
+    } else {
+      resolved.reimbursedAmount = amt;
+    }
   }
 
   if (ctx.persons) {
@@ -132,13 +167,6 @@ function parseExplicitId(s: string): number | null {
   if (!trimmed) return null;
   const n = Number(trimmed);
   return Number.isInteger(n) ? n : null;
-}
-
-function stripCurrencyDecoration(s: string): string {
-  let v = s.trim();
-  const parens = v.startsWith('(') && v.endsWith(')');
-  if (parens) v = `-${v.slice(1, -1)}`;
-  return v.replace(/[$,\s]/g, '');
 }
 
 function isRealCalendarDate(iso: string): boolean {

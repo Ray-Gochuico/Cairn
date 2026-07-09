@@ -65,8 +65,11 @@ export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
         state: tax.state.standardDeduction,
         city: tax.city?.standardDeduction ?? 0,
       },
+      // Wave-9 F1: per-earner SS wage bases; the bonus rides on seedPerson.
+      perPersonBaseSalary: persons.map((p) => p.annualSalaryPretax),
+      recipientIndex: Math.max(0, persons.findIndex((p) => p.id === seedPerson?.id)),
     });
-  }, [tax.ready, tax.federal, tax.state, tax.city, tax.totalSalary, tax.aggregatedPretax, household, annualBonus]);
+  }, [tax.ready, tax.federal, tax.state, tax.city, tax.totalSalary, tax.aggregatedPretax, household, annualBonus, persons, seedPerson]);
 
   const controls = (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">

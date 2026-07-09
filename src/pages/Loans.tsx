@@ -120,7 +120,10 @@ export interface DebtSeriesRow {
  * Returns the rows (capped at MAX_CHART_MONTHS) and the ordered list of
  * loan types present, so the chart knows how many series to draw.
  */
-function buildDebtSeries(projections: LoanProjection[]): {
+export function buildDebtSeries(
+  projections: LoanProjection[],
+  todayIso: string,
+): {
   rows: DebtSeriesRow[];
   typesPresent: LoanType[];
 } {
@@ -132,6 +135,23 @@ function buildDebtSeries(projections: LoanProjection[]): {
   );
 
   const rowsByMonth = new Map<string, DebtSeriesRow>();
+  // Wave-9 M10: schedules start at the NEXT due date, so a loan due next
+  // month has no entry for the CURRENT month — its whole balance silently
+  // vanished from the chart's first bar (contradicting the tile above).
+  // Seed the current month with currentBalance for any such loan.
+  const currentMonth = todayIso.slice(0, 7);
+  for (const p of projections) {
+    const firstMonth = p.withDefault.schedule[0]?.paymentDate.slice(0, 7);
+    if (firstMonth && firstMonth > currentMonth) {
+      let row = rowsByMonth.get(currentMonth);
+      if (!row) {
+        row = { month: currentMonth };
+        for (const tp of typesPresent) row[tp] = 0;
+        rowsByMonth.set(currentMonth, row);
+      }
+      row[p.loan.type] = (row[p.loan.type] as number) + p.loan.currentBalance;
+    }
+  }
   for (const p of projections) {
     const t = p.loan.type;
     for (const entry of p.withDefault.schedule) {
@@ -442,8 +462,8 @@ export default function Loans() {
   );
 
   const { rows: debtRows, typesPresent: debtTypes } = useMemo(
-    () => buildDebtSeries(projections),
-    [projections],
+    () => buildDebtSeries(projections, todayIso),
+    [projections, todayIso],
   );
 
   const debtChartSeries = useMemo<BarChartSeries[]>(

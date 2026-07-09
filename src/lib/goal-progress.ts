@@ -12,6 +12,13 @@ export interface GoalProgressResult {
   percentComplete: number;
   monthsUntilTarget: number;
   linearMonthlyNeeded: number;
+  /**
+   * Wave-9 M23: contribution needed per month AT THE SAME growth basis the
+   * on-track badge uses (annuity PMT at r, n) — the flat linear figure could
+   * read ~2.4× the amount the badge's own math says suffices. Infinity when
+   * the target date is now/past and the goal isn't met.
+   */
+  monthlyNeededWithGrowth: number;
   projectedAtTarget: number;
   onTrack: boolean;
 }
@@ -53,11 +60,27 @@ export function computeGoalProgress(input: GoalProgressInput): GoalProgressResul
       : input.currentSaved * Math.pow(1 + r, n) +
         (input.recentMonthlyContribution * (Math.pow(1 + r, n) - 1)) / r;
 
+  // Wave-9 M23: the flat linear figure contradicted the growth-aware
+  // on-track badge (same card, ~2.4× apart). Solve the annuity PMT at the
+  // SAME r and n the badge uses: contributions that, compounding monthly,
+  // close the gap left after current savings grow to the target date.
+  const fvOfCurrent = r === 0 ? input.currentSaved : input.currentSaved * Math.pow(1 + r, n);
+  const gapAtTarget = Math.max(0, input.targetAmount - fvOfCurrent);
+  const monthlyNeededWithGrowth =
+    remaining <= 0
+      ? 0
+      : n > 0
+        ? r === 0
+          ? remaining / n
+          : (gapAtTarget * r) / (Math.pow(1 + r, n) - 1)
+        : Infinity;
+
   return {
     currentSaved: input.currentSaved,
     percentComplete,
     monthsUntilTarget,
     linearMonthlyNeeded,
+    monthlyNeededWithGrowth,
     projectedAtTarget,
     onTrack: projectedAtTarget >= input.targetAmount,
   };

@@ -85,7 +85,10 @@ export async function commitTransactionImport(
   const statements: BatchStatement[] = [];
   for (const row of rows) {
     if (row.status === 'error') continue;
-    const { accountId, date, amount, merchant, categoryId, reimbursable, personId } = row.resolved;
+    const {
+      accountId, date, amount, merchant, categoryId, reimbursable,
+      reimbursedAt, reimbursedAmount, personId,
+    } = row.resolved;
     if (
       accountId === undefined
       || date === undefined
@@ -108,8 +111,8 @@ export async function commitTransactionImport(
         personId,
         sourcePdfFilename: null,
         reimbursable,
-        reimbursedAt: null,
-        reimbursedAmount: null,
+        reimbursedAt: reimbursedAt ?? null,
+        reimbursedAmount: reimbursedAmount ?? null,
         isRecurring: false,
         notes: null,
       }),

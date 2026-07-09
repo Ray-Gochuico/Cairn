@@ -176,6 +176,30 @@ describe('ContributionAllocatorCard', () => {
     expect(note).toHaveTextContent(/US Total Market/i);
   });
 
+  it('explains a targeted class with nothing held instead of a silent empty table (wave-9)', async () => {
+    // Target 50% Intl Developed, but the household holds nothing there — its
+    // budget can't be deployed and stays in cash. A large enough contribution
+    // keeps US Total Market from going overweight, so only the unheld-target
+    // note renders.
+    seedStores([
+      { assetClass: AssetClass.US_TOTAL_MARKET, targetPct: 0.5 },
+      { assetClass: AssetClass.INTL_DEVELOPED, targetPct: 0.5 },
+    ]);
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <ContributionAllocatorCard cardId="contribution-allocator" />
+      </MemoryRouter>,
+    );
+    const input = await screen.findByRole('spinbutton', { name: /contribution/i });
+    await user.clear(input);
+    await user.type(input, '1000');
+    const note = await screen.findByRole('note');
+    expect(note).toHaveTextContent(/hold\s+nothing/i);
+    expect(note).toHaveTextContent(/Intl Developed/i);
+    expect(note).toHaveTextContent(/stays in cash/i);
+  });
+
   it('discloses the snapshot-distribution approximation, held-positions-only (Finance L2)', async () => {
     seedStores([{ assetClass: AssetClass.US_TOTAL_MARKET, targetPct: 0.5 }]);
     render(

@@ -140,3 +140,47 @@ describe('computeGoalProgress', () => {
     expect(result.currentSaved).toBe(12_345);
   });
 });
+
+describe('monthlyNeededWithGrowth (wave-9 M23)', () => {
+  const today = new Date('2026-01-01');
+
+  it("solves the annuity PMT at the badge's own growth basis", () => {
+    // target 100k, saved 50k, 24mo, 6%/yr → r=0.005:
+    // FV(current) = 50,000×1.005^24 = 56,357.99; gap = 43,642.01;
+    // PMT = gap × r / (1.005^24 − 1) = 1,716.03.
+    const p = computeGoalProgress({
+      targetAmount: 100_000,
+      targetDate: '2028-01-01', // 24 months out
+      currentSaved: 50_000,
+      recentMonthlyContribution: 0,
+      annualGrowthRate: 0.06,
+      today,
+    });
+    expect(p.monthlyNeededWithGrowth).toBeCloseTo(1_716.03, 1);
+  });
+
+  it('r = 0 degenerates to the linear figure', () => {
+    const p = computeGoalProgress({
+      targetAmount: 12_000,
+      targetDate: '2027-01-01', // 12 months out
+      currentSaved: 0,
+      recentMonthlyContribution: 0,
+      annualGrowthRate: 0,
+      today,
+    });
+    expect(p.monthlyNeededWithGrowth).toBe(1_000);
+    expect(p.monthlyNeededWithGrowth).toBe(p.linearMonthlyNeeded);
+  });
+
+  it('growth alone covering the target needs $0/mo', () => {
+    const p = computeGoalProgress({
+      targetAmount: 60_000,
+      targetDate: '2031-01-01', // 60 months out; 50k×1.005^60 ≈ 67,443 > 60k
+      currentSaved: 50_000,
+      recentMonthlyContribution: 0,
+      annualGrowthRate: 0.06,
+      today,
+    });
+    expect(p.monthlyNeededWithGrowth).toBe(0);
+  });
+});

@@ -289,7 +289,7 @@ export default function TransactionsSectionImporter({
           filename={current.filename}
           fileBytes={current.fileBytes}
           existing={transactions}
-          onClose={dropAll}
+          onClose={advance}
           onSaved={async (_insertedCount, fileBytes) => {
             await archivePdfAfterSave(current.filename, fileBytes);
             advance();
@@ -303,9 +303,13 @@ export default function TransactionsSectionImporter({
           ctx={csvCtx}
           open={true}
           onOpenChange={(o) => {
-            if (!o) dropAll();
+            // Wave-9 S80 (mirrors ImportCsvButton's M4 fix): closing skips
+            // just the CURRENT file; "Cancel all" is the explicit batch drop.
+            if (!o) advance();
           }}
           queuePosition={position}
+          queueLength={queue.length}
+          onCancelAll={dropAll}
           onSaved={() => advance()}
         />
       )}

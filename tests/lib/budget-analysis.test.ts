@@ -192,3 +192,29 @@ describe('partitionTrackedRows', () => {
     expect(misc.actual).toBe(0);
   });
 });
+
+describe('parent-categorized spending (wave-9 M6)', () => {
+  const parentCats: Category[] = [
+    cat({ id: 1, name: 'Food', type: 'NEED' }),
+    cat({ id: 2, name: 'Groceries', parentCategoryId: 1, type: 'NEED', monthlyBudget: 400 }),
+  ];
+
+  it('a parent-categorized transaction lands in a synthesized row and totalActual', () => {
+    const s = summarizeBudget(parentCats, [txn({ categoryId: 1, amount: 120, date: '2026-07-03' })], '2026-07');
+    expect(s.totalActual).toBe(120);
+    const parentRow = s.rows.find((r) => r.categoryId === 1);
+    expect(parentRow).toBeDefined();
+    expect(parentRow!.actual).toBe(120);
+  });
+
+  it('the synthesized parent row rolls into Misc when untracked', () => {
+    const s = summarizeBudget(parentCats, [txn({ categoryId: 1, amount: 120, date: '2026-07-03' })], '2026-07');
+    const partition = partitionTrackedRows(s.rows, [2]);
+    expect(partition.misc.actual).toBe(120);
+  });
+
+  it('parents with no in-month actuals synthesize NO row (rows stay leaf-only)', () => {
+    const s = summarizeBudget(parentCats, [], '2026-07');
+    expect(s.rows.every((r) => r.categoryId !== 1)).toBe(true);
+  });
+});

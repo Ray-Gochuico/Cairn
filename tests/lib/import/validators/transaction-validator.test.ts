@@ -110,3 +110,79 @@ describe('validateTransactionRow', () => {
     expect(r.errors).toContainEqual({ field: 'person', message: expect.stringMatching(/no.*person/i) });
   });
 });
+
+describe('locale-aware amounts (wave-9 S78)', () => {
+  it('a European "1.234,56" amount resolves to 1234.56 with no error', () => {
+    const row = {
+      date: '2024-02-01', account: 'Chase Checking', amount: '1.234,56',
+      merchant: 'EU Store',
+    };
+    const r = validateTransactionRow(row, 9, ctx);
+    expect(r.errors).toEqual([]);
+    expect(r.resolved.amount).toBeCloseTo(1234.56, 10);
+  });
+
+  it('an unparseable amount becomes a row error, not a silently-wrong number', () => {
+    const row = {
+      date: '2024-02-01', account: 'Chase Checking', amount: '1,23,45',
+      merchant: 'Weird',
+    };
+    const r = validateTransactionRow(row, 10, ctx);
+    expect(r.status).toBe('error');
+    expect(r.errors.some((e) => e.field === 'amount')).toBe(true);
+  });
+});
+
+describe('transactionAmountSign (wave-9 chip b)', () => {
+  it('FLIP negates parsed amounts so negative-debit CSVs count as spending', () => {
+    const row = {
+      date: '2024-02-01', account: 'Chase Checking', amount: '-42.50',
+      merchant: 'Coffee',
+    };
+    const r = validateTransactionRow(row, 11, { ...ctx, transactionAmountSign: 'FLIP' });
+    expect(r.resolved.amount).toBe(42.5);
+  });
+
+  it('AS_IS (default) leaves the sign untouched', () => {
+    const row = {
+      date: '2024-02-01', account: 'Chase Checking', amount: '-42.50',
+      merchant: 'Coffee',
+    };
+    const r = validateTransactionRow(row, 12, ctx);
+    expect(r.resolved.amount).toBe(-42.5);
+  });
+});
+
+describe('reimbursement round-trip (wave-9 S79)', () => {
+  it('parses reimbursed_at/reimbursed_amount and implies reimbursable', () => {
+    const row = {
+      date: '2024-02-01', account: 'Chase Checking', amount: '100',
+      merchant: 'Hotel', reimbursable: 'false',
+      reimbursed_at: '2026-05-01', reimbursed_amount: '40',
+    };
+    const r = validateTransactionRow(row, 13, ctx);
+    expect(r.errors).toEqual([]);
+    expect(r.resolved).toMatchObject({
+      reimbursable: true, reimbursedAt: '2026-05-01', reimbursedAmount: 40,
+    });
+  });
+
+  it('defaults the reimbursement fields to null when the columns are absent', () => {
+    const row = {
+      date: '2024-02-01', account: 'Chase Checking', amount: '100', merchant: 'Hotel',
+    };
+    const r = validateTransactionRow(row, 14, ctx);
+    expect(r.resolved.reimbursedAt).toBeNull();
+    expect(r.resolved.reimbursedAmount).toBeNull();
+  });
+
+  it('rejects a malformed reimbursed_at date', () => {
+    const row = {
+      date: '2024-02-01', account: 'Chase Checking', amount: '100',
+      merchant: 'Hotel', reimbursed_at: 'not-a-date',
+    };
+    const r = validateTransactionRow(row, 15, ctx);
+    expect(r.status).toBe('error');
+    expect(r.errors.some((e) => e.field === 'reimbursed_at')).toBe(true);
+  });
+});

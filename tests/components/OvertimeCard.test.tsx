@@ -46,8 +46,10 @@ const baseHourlyPerson = {
   name: 'Alex',
   dateOfBirth: '1990-01-01',
   targetRetirementAge: 65,
-  // For SALARY_WITH_OT we still need an annualSalary; for HOURLY we use hourlyRate.
-  annualSalaryPretax: 100000,
+  // Wave-9 F13: the REAL HOURLY shape persists annualSalaryPretax = 0 — the
+  // wage base lives in the hourly rate ($25 × 40 × 52 = $52,000 derived).
+  // The old $100k fixture masked the $0-base bug.
+  annualSalaryPretax: 0,
   expectedCommission: 0,
   expectedCommissionFrequency: 'MONTHLY' as const,
   pretax401kPct: 0,
@@ -381,12 +383,14 @@ describe('OvertimeCard', () => {
 
     // Mirror the card: aggregate the SINGLE eligible person (household-wide caps
     // still count everyone — here personCount = 1, dependentCount = 0).
+    // Wave-9 F13: the HOURLY earner's wage base derives from rate × hours × 52.
+    const effective = { ...baseHourlyPerson, annualSalaryPretax: 25 * 40 * 52 };
     const agg = aggregateHouseholdPretax(
-      [{ ...baseHourlyPerson }],
+      [effective],
       { filingStatus: FilingStatus.SINGLE, personCount: 1, dependentCount: 0 },
     );
     const expected = computeSupplementalWageTax({
-      baseSalary: agg.totalSalary,           // 100000
+      baseSalary: agg.totalSalary,           // 52000 (derived)
       supplementalWages: 300,                // 8 hrs × $25 × 1.5
       pretax: agg.pretax,
       filingStatus: FilingStatus.SINGLE,
@@ -394,8 +398,85 @@ describe('OvertimeCard', () => {
       stateBrackets: caSingleBrackets,
       cityBrackets: null,
       standardDeduction: { federal: 15000, state: 0, city: 0 },
+      perPersonBaseSalary: [52_000],
+      recipientIndex: 0,
     });
 
+    expect(headline.textContent).toBe(formatCurrency(expected.bonusTakeHome));
+  });
+
+  it("derives an HOURLY earner's wage base from rate × hours × 52 (wave-9 F13)", async () => {
+    // $25/hr × 40h × 52 = $52,000 base. Pre-fix the base was $0 → OT taxed
+    // at the bottom bracket (marginal 7.65%, FICA only).
+    primeStores();
+    render(<MemoryRouter><OvertimeCard /></MemoryRouter>);
+    await screen.findByTestId('ot-takehome');
+    const label = screen.getByText(/Marginal rate on OT/i);
+    const row = label.closest('div')!.parentElement as HTMLElement;
+    const pct = parseFloat((row.textContent ?? '').replace(/[^\d.]/g, ''));
+    // Pre-fix (base $0) the OT marginal was FICA-only, rendering "7.7%". A
+    // real $52k base stacks federal (12%) + CA on top → well above 10%.
+    expect(pct).toBeGreaterThan(10);
+  });
+
+  it('stacks OT on the HOUSEHOLD base like Bonus/Commission (wave-9 M59)', async () => {
+    // HOURLY earner ($52k derived) + $200k salaried partner, MFJ: the OT
+    // premium must be taxed at the household's bracket, not the single
+    // earner's. Oracle: computeSupplementalWageTax with baseSalary 252k,
+    // perPersonBaseSalary [52k, 200k], recipientIndex 0.
+    const { aggregateHouseholdPretax, computeSupplementalWageTax } = await import(
+      '@/lib/calculators/supplemental-wage'
+    );
+    const { formatCurrency } = await import('@/lib/format');
+    primeStores();
+    useHouseholdStore.setState({
+      household: {
+        ...useHouseholdStore.getState().household!,
+        filingStatus: FilingStatus.MFJ,
+      },
+      isLoading: false,
+      error: null,
+    });
+    const partner = {
+      ...baseHourlyPerson,
+      id: 2,
+      name: 'Sam',
+      employmentType: 'SALARY_NO_OT' as const,
+      hourlyRate: null,
+      annualSalaryPretax: 200000,
+    };
+    usePersonsStore.setState({
+      persons: [{ ...baseHourlyPerson }, partner],
+      isLoading: false,
+      error: null,
+    });
+    const items = useTaxRulesStore.getState().items.map((i) => ({
+      ...i,
+      filingStatus: FilingStatus.MFJ,
+    }));
+    useTaxRulesStore.setState({ year: 2026, items, isLoading: false, error: null });
+
+    render(<MemoryRouter><OvertimeCard /></MemoryRouter>);
+    const headline = await screen.findByTestId('ot-takehome');
+
+    const effective = { ...baseHourlyPerson, annualSalaryPretax: 52_000 };
+    const agg = aggregateHouseholdPretax([effective, partner], {
+      filingStatus: FilingStatus.MFJ,
+      personCount: 2,
+      dependentCount: 0,
+    });
+    const expected = computeSupplementalWageTax({
+      baseSalary: agg.totalSalary, // 252000
+      supplementalWages: 300,
+      pretax: agg.pretax,
+      filingStatus: FilingStatus.MFJ,
+      federalBrackets: federalSingleBrackets,
+      stateBrackets: caSingleBrackets,
+      cityBrackets: null,
+      standardDeduction: { federal: 15000, state: 0, city: 0 },
+      perPersonBaseSalary: [52_000, 200_000],
+      recipientIndex: 0,
+    });
     expect(headline.textContent).toBe(formatCurrency(expected.bonusTakeHome));
   });
 
@@ -423,5 +504,51 @@ describe('OvertimeCard', () => {
     const label = document.querySelector('label[for="ot-row-0-preset"]');
     expect(label).not.toBeNull();
     expect(label!.textContent).toMatch(/Multiplier/i);
+  });
+
+  it('OBBBA deduction uses only the QUALIFIED half-time premium for a double-time row (wave-9 M62)', async () => {
+    const user = userEvent.setup();
+    primeStores();
+    render(<MemoryRouter><OvertimeCard /></MemoryRouter>);
+    await screen.findByTestId('ot-takehome');
+
+    // Switch row 0 from 1.5x to 2x: full premium/period = 8 × 25 × 1.0 = $200,
+    // qualified = 8 × 25 × 0.5 = $100. Annual (BI_WEEKLY, 26): full $5,200 vs
+    // qualified $2,600 — the deduction row must show $2,600.
+    const row0 = screen.getByTestId('ot-row-0');
+    await user.click(within(row0).getByRole('combobox', { name: /multiplier/i }));
+    await user.click(await screen.findByRole('option', { name: /2x/i }));
+
+    expect(await screen.findByText('$2,600')).toBeInTheDocument();
+    expect(screen.queryByText('$5,200')).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/only the FLSA half-time portion of your premium qualifies/i),
+    ).toBeInTheDocument();
+  });
+
+  it('MFS household gets NO OBBBA deduction and sees the caveat (wave-9 M60)', async () => {
+    primeStores();
+    useHouseholdStore.setState({
+      household: {
+        ...useHouseholdStore.getState().household!,
+        filingStatus: FilingStatus.MFS,
+      },
+      isLoading: false,
+      error: null,
+    });
+    const items = useTaxRulesStore.getState().items.map((i) => ({
+      ...i,
+      filingStatus: FilingStatus.MFS,
+    }));
+    useTaxRulesStore.setState({ year: 2026, items, isLoading: false, error: null });
+
+    render(<MemoryRouter><OvertimeCard /></MemoryRouter>);
+    await screen.findByTestId('ot-takehome');
+    // Deduction is $0 → the OBBBA block does not render at all…
+    expect(screen.queryByTestId('ot-obbba-deduction')).not.toBeInTheDocument();
+    // …and the MFS caveat explains why.
+    expect(
+      screen.getByText(/married filing separately doesn't qualify for the OBBBA overtime deduction/i),
+    ).toBeInTheDocument();
   });
 });

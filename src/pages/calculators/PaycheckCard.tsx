@@ -93,6 +93,10 @@ export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
         state: state.standardDeduction,
         city: city?.standardDeduction ?? 0,
       },
+      // Wave-9 F1: per-earner SS wage bases (bonus is 0 here, so attribution
+      // is moot — index 0 by convention).
+      perPersonBaseGross: persons.map((p) => p.annualSalaryPretax),
+      recipientIndex: 0,
     });
 
     const pretaxTotal =

@@ -31,6 +31,7 @@ import {
   periodsPerYear as paycheckPeriodsPerYear,
   type PaycheckPeriod,
 } from '@/lib/paycheck-periods';
+import { FilingStatus } from '@/types/enums';
 import type { Person } from '@/types/schema';
 
 const STARTER_ROW: OvertimeRow = {
@@ -97,9 +98,20 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
 
   const taxResult = useMemo(() => {
     if (!tax.ready || !household || !eligiblePerson || !tax.federal || !tax.state) return null;
-    const agg = aggregateHouseholdPretax([eligiblePerson], {
+    // Wave-9 F13: HOURLY persons persist annualSalaryPretax = 0 — their wage
+    // base lives in the hourly rate. Patch the eligible person's salary with
+    // the annualized base (card's possibly-overridden rate × regular hours ×
+    // 52) so OT stacks on a real base. A nonzero stored salary still wins.
+    const effectivePersons = persons.map((p) =>
+      p.id === eligiblePerson.id && p.employmentType === 'HOURLY' && p.annualSalaryPretax <= 0
+        ? { ...p, annualSalaryPretax: baseHourlyRate * p.regularHoursPerWeek * 52 }
+        : p,
+    );
+    // Wave-9 M59: household-wide aggregation (parity with Bonus/Commission)
+    // so the marginal bracket reflects the whole return.
+    const agg = aggregateHouseholdPretax(effectivePersons, {
       filingStatus: household.filingStatus,
-      personCount: persons.length,      // household-wide caps still count everyone
+      personCount: persons.length,
       dependentCount: dependents.length,
     });
     return computeSupplementalWageTax({
@@ -115,8 +127,11 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
         state: tax.state.standardDeduction,
         city: tax.city?.standardDeduction ?? 0,
       },
+      // Wave-9 F1: OT belongs to the eligible earner.
+      perPersonBaseSalary: effectivePersons.map((p) => p.annualSalaryPretax),
+      recipientIndex: Math.max(0, effectivePersons.findIndex((p) => p.id === eligiblePerson.id)),
     });
-  }, [tax.ready, tax.federal, tax.state, tax.city, household, eligiblePerson, persons, dependents, totalGross]);
+  }, [tax.ready, tax.federal, tax.state, tax.city, household, eligiblePerson, persons, dependents, totalGross, baseHourlyRate]);
 
   // ---- early returns ----
 
@@ -237,8 +252,10 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
   const overtimeTakeHome = taxResult.bonusTakeHome;
   // Annualize the premium before applying the annual cap so the deduction and
   // tax-saved figures reflect a full-year estimate, not just one pay period.
+  // Wave-9 M62: only the QUALIFIED (FLSA half-time) premium feeds OBBBA —
+  // totalPremium stays for pay display.
   const ppy = paycheckPeriodsPerYear(period);
-  const annualPremium = (overtime?.totalPremium ?? 0) * ppy;
+  const annualPremium = (overtime?.totalQualifiedPremium ?? 0) * ppy;
   const obbbaDeduction = obbbaOvertimeDeduction(annualPremium, household.filingStatus);
   const federalMarginalOnOt = totalGross > 0 ? taxResult.bonusBreakdown.federal / totalGross : 0;
   // federalMarginalOnOt is a rate (fraction); multiply by annual premium for the annual saving.
@@ -293,7 +310,17 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
             Does not model the $150k/$300k MAGI phase-out; the deduction sunsets after 2028; FICA and most state
             income taxes still apply.
           </p>
+          {overtime && overtime.totalPremium > overtime.totalQualifiedPremium && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Only the FLSA half-time portion of your premium qualifies — pay above 1.5× is excluded.
+            </p>
+          )}
         </div>
+      )}
+      {household.filingStatus === FilingStatus.MFS && (
+        <p className="text-xs text-muted-foreground mt-3">
+          Married filing separately doesn&#39;t qualify for the OBBBA overtime deduction.
+        </p>
       )}
 
       <p className="text-xs text-muted-foreground mt-3">

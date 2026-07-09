@@ -114,25 +114,42 @@ describe('LoansRepo', () => {
     ).rejects.toThrow();
   });
 
-  it('projectedSchedule returns the amortized schedule from current balance', async () => {
-    const id = await makeLoan(repo);
-    const schedule = await repo.projectedSchedule(id);
-    expect(schedule).toHaveLength(360);
-    expect(schedule[0].principal + schedule[0].interest).toBeCloseTo(2398.20, 1);
-    expect(schedule[359].balance).toBeCloseTo(0, 1);
+  it('projectedSchedule uses the CONTRACT payment and re-anchors to the next payment date (wave-9 F3)', async () => {
+    // Seasoned mortgage: $300k original @ 6%/360mo, first paid 2021-08-01,
+    // paid down to $279,163. Contract payment $1,798.65. The pre-fix code
+    // re-derived $1,673.72 from currentBalance/termMonths and dated the
+    // schedule from 2021 — the exact split the Monthly ritual then recorded.
+    const id = await makeLoan(repo, {
+      name: 'Seasoned mortgage',
+      originalAmount: 300000,
+      currentBalance: 279163,
+      interestRate: 0.06,
+      termMonths: 360,
+      firstPaymentDate: '2021-08-01',
+      monthlyPayment: 1798.65,
+    });
+    const schedule = await repo.projectedSchedule(id, '2026-07-08');
+    // Re-anchored: first entry is the next monthly anniversary on/after today.
+    expect(schedule[0].paymentDate).toBe('2026-08-01');
+    // Contract split: interest = 279,163 × 0.06/12 = $1,395.82; the row sums
+    // to the CONTRACT payment, not a re-derived one.
+    expect(schedule[0].interest).toBeCloseTo(1395.82, 1);
+    expect(schedule[0].principal + schedule[0].interest).toBeCloseTo(1798.65, 1);
   });
 
   it('projectedSchedule uses currentBalance (remaining), not originalAmount', async () => {
     // After paying down to a smaller balance, the schedule should reflect that
     const id = await makeLoan(repo);
     await repo.update(id, { currentBalance: 200000 });
-    const schedule = await repo.projectedSchedule(id);
+    // todayISO before the fixture's firstPaymentDate (2024-06-01): a future
+    // firstPaymentDate re-anchors to itself, so the pinned values hold.
+    const schedule = await repo.projectedSchedule(id, '2024-01-15');
     // The first payment's interest should be on the reduced balance (200000 * 0.06 / 12 = 1000)
     expect(schedule[0].interest).toBeCloseTo(1000, 1);
   });
 
   it('projectedSchedule throws for unknown loan id', async () => {
-    await expect(repo.projectedSchedule(9999)).rejects.toThrow();
+    await expect(repo.projectedSchedule(9999, '2024-01-15')).rejects.toThrow();
   });
 });
 

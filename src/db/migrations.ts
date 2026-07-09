@@ -20,7 +20,7 @@ export interface Migration {
  * `tests/db/schema-version-guard.test.ts` asserts this equals the migration
  * count AND pins the literal so a one-sided bump fails a test.
  */
-export const MAX_SCHEMA_VERSION = 48;
+export const MAX_SCHEMA_VERSION = 49;
 
 /**
  * Thrown by `runMigrations` when the database's stamped `user_version` is
@@ -263,6 +263,11 @@ const MIGRATION_REGISTRY: ReadonlyArray<
   // Learn v3 redesign's default (Wave 8). See the SQL header for why an
   // unconditional singleton UPDATE is correct.
   ['0048_learning_preference_default', () => import('./migrations/0048_learning_preference_default.sql?raw')],
+  // 0049 dedupes AMORTIZATION loan_payments duplicates (Monthly-ritual
+  // double-record corruption, Wave 9 M37) and adds a PARTIAL UNIQUE index on
+  // (loan_id, payment_date) WHERE source='AMORTIZATION' — same-day
+  // MANUAL/IMPORTED rows stay legal.
+  ['0049_loan_payments_unique_amortization', () => import('./migrations/0049_loan_payments_unique_amortization.sql?raw')],
 ];
 
 export async function loadAllMigrations(): Promise<Migration[]> {

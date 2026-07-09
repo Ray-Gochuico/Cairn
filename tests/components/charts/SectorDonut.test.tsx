@@ -563,3 +563,50 @@ describe('SectorDonut — entity picker', () => {
     expect(screen.getByTestId('slice-Technology')).toBeInTheDocument();
   });
 });
+
+describe('SectorDonut — fund-exposure remainder slice (wave-9 M8, protected view, additive)', () => {
+  it('industry drill-in shows the unmapped fund exposure as an explicit slice', async () => {
+    // Fund-only portfolio: the Technology wedge is 100% fund look-through.
+    // Pre-fix, drilling in rendered nothing (silent no-op — the empty-slices
+    // self-heal bounced straight back to the sector view).
+    setTickers([makeTicker({ ticker: 'VTI', assetClass: 'US_TOTAL_MARKET' })]);
+    setFundSectors([
+      { id: 1, fundTicker: 'VTI', sector: 'Technology', weight: 0.6, asOf: '2026-07-01' } as never,
+      { id: 2, fundTicker: 'VTI', sector: 'Financials', weight: 0.4, asOf: '2026-07-01' } as never,
+    ]);
+    setReport([{ ticker: 'VTI', effectiveExposure: 10_000 }]);
+    render(<SectorDonut />);
+    fireEvent.click(screen.getByTestId('slice-Technology'));
+    const slice = await screen.findByTestId('slice-Fund exposure (no industry breakdown)');
+    // The slice carries the WHOLE wedge value for a fund-only portfolio.
+    expect(slice.textContent).toContain('6000');
+  });
+
+  it('a mixed sector reconciles: remainder = wedge − drilled industries', async () => {
+    setTickers([
+      makeTicker({ ticker: 'AAPL', sector: 'Technology', industry: 'Consumer Electronics' }),
+      makeTicker({ ticker: 'VTI', assetClass: 'US_TOTAL_MARKET' }),
+    ]);
+    setFundSectors([
+      { id: 1, fundTicker: 'VTI', sector: 'Technology', weight: 0.5, asOf: '2026-07-01' } as never,
+      { id: 2, fundTicker: 'VTI', sector: 'Financials', weight: 0.5, asOf: '2026-07-01' } as never,
+    ]);
+    // Post-look-through perTicker keeps AAPL; tickerExposures keeps VTI whole.
+    setReport(
+      [
+        { ticker: 'AAPL', effectiveExposure: 1_000 },
+        { ticker: 'VTI', effectiveExposure: 4_000 },
+      ],
+      [
+        { ticker: 'AAPL', effectiveExposure: 1_000 },
+        { ticker: 'VTI', effectiveExposure: 4_000 },
+      ],
+    );
+    render(<SectorDonut />);
+    // Technology wedge = 1,000 (AAPL) + 4,000 × 0.5 (VTI) = 3,000.
+    fireEvent.click(screen.getByTestId('slice-Technology'));
+    expect(screen.getByTestId('slice-Consumer Electronics').textContent).toContain('1000');
+    const remainder = await screen.findByTestId('slice-Fund exposure (no industry breakdown)');
+    expect(remainder.textContent).toContain('2000');
+  });
+});
