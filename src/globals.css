@@ -1,3 +1,19 @@
+/* Trailhead Stone (Wave 12): committed self-hosted face. Inter Tight
+ * variable, latin subset, vendored from @fontsource-variable/inter-tight
+ * (SIL OFL 1.1 — see src/assets/fonts/OFL.txt). Single wght-axis file
+ * (~44KB) covers 100-900: font-medium/semibold/bold are all real weights.
+ * True tabular figures via the tnum feature — Tailwind's `tabular-nums`
+ * activates it (the numeric-surface guarantee, see Wave-12 Task 4). No
+ * italic file shipped: the few `italic` captions render a synthesized
+ * oblique (D1). */
+@font-face {
+  font-family: 'InterTightVariable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('./assets/fonts/inter-tight-latin-wght-normal.woff2') format('woff2-variations');
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
