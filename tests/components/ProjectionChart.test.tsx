@@ -19,7 +19,12 @@ vi.mock('recharts', () => {
     ResponsiveContainer: passthrough('rc-responsive'),
     ComposedChart: passthrough('rc-composed'),
     CartesianGrid: () => null,
-    XAxis: () => null,
+    // Round-3 S9: expose the tickFormatter so label humanization is assertable.
+    XAxis: ({ tickFormatter }: { tickFormatter?: (v: string) => string }) =>
+      React.createElement('div', {
+        'data-testid': 'rc-xaxis',
+        'data-sample-label': tickFormatter ? tickFormatter('2046-01') : '',
+      }),
     YAxis: (props: { domain?: unknown }) =>
       React.createElement('div', {
         'data-testid': 'rc-yaxis',
@@ -792,5 +797,31 @@ describe('ProjectionChart — per-account visibility toggle row (Task #19)', () 
       </MemoryRouter>,
     );
     expect(screen.queryByTestId('whatif-account-toggle-row')).not.toBeInTheDocument();
+  });
+});
+
+describe('ProjectionChart — humanized x-axis ticks (round-3 S9)', () => {
+  it('both XAxes humanize monthISO ticks to "Jan 2046"', () => {
+    const projections = new Map([[1, fixtureStates()]]);
+    const milestones = new Map<number, Milestones>([[1, {}]]);
+    render(
+      <MemoryRouter>
+        <ProjectionChart
+          scenarios={[baseline]}
+          projections={projections}
+          milestones={milestones}
+          dollarMode="nominal"
+          inflation={0.025}
+          startISO="2026-01"
+          detailLevel="single"
+          accounts={[]}
+        />
+      </MemoryRouter>,
+    );
+    const axes = screen.getAllByTestId('rc-xaxis');
+    expect(axes.length).toBeGreaterThanOrEqual(2); // upper + lower (debt) pane
+    for (const axis of axes) {
+      expect(axis.getAttribute('data-sample-label')).toBe('Jan 2046');
+    }
   });
 });

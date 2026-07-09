@@ -200,3 +200,19 @@ describe('ScenariosPanel', () => {
     expect(screen.queryByRole('button', { name: /save current/i })).not.toBeInTheDocument();
   });
 });
+
+describe('ScenariosPanel — humanized milestone dates (round-3 S9)', () => {
+  it('milestone chips render "FI Jan 2046", never the raw "2046/01"', () => {
+    const m = new Map<number, Milestones>();
+    m.set(1, { debtFreeISO: '2029-06', financialIndependenceISO: '2046-01' });
+    m.set(2, {});
+    render(
+      <MemoryRouter>
+        <ScenariosPanel milestones={m} onOpenManage={vi.fn()} onEditLevers={vi.fn()} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText(/FI Jan 2046/)).toBeInTheDocument();
+    expect(screen.queryByText(/2046\/01/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Debt-free Jun 2029/)).toBeInTheDocument();
+  });
+});

@@ -6,6 +6,7 @@ import { useScenariosStore } from '@/stores/scenarios-store';
 import { SaveCurrentDialog } from './SaveCurrentDialog';
 import { RenameScenarioDialog } from './RenameScenarioDialog';
 import type { Milestones } from '@/lib/scenarios';
+import { formatMonth } from '@/lib/format';
 
 interface ScenariosPanelProps {
   milestones: Map<number, Milestones>;
@@ -16,7 +17,7 @@ interface ScenariosPanelProps {
 const COLLAPSED_KEY = 'scenariosPanel.collapsed';
 
 function formatMilestone(iso?: string): string {
-  return iso ? iso.replace('-', '/') : '—';
+  return iso ? formatMonth(iso) : '—'; // round-3 S9: '2046/01' → 'Jan 2046'
 }
 
 export function ScenariosPanel({

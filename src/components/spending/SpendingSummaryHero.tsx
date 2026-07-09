@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { formatCurrencyCents } from '@/lib/format';
+import { formatCurrencyCents, formatDate } from '@/lib/format';
 import { useLocalToday } from '@/lib/use-local-today';
 import { dateFromLocalISO } from '@/lib/dates';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -115,9 +115,10 @@ export function SpendingSummaryHero({
                 {formatUSD(summary.total)}
               </div>
               <div className="flex items-center gap-1 text-xs text-muted-foreground tabular-nums">
-                <span>{bounds.startInclusive}</span>
+                {/* Round-3 S9: humanized bounds, not raw ISO. */}
+                <span>{formatDate(bounds.startInclusive)}</span>
                 <span>→</span>
-                <span>{bounds.endInclusive}</span>
+                <span>{formatDate(bounds.endInclusive)}</span>
               </div>
               {isThisMonth && (
                 <p

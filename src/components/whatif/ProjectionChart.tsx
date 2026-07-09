@@ -17,7 +17,7 @@ import type { MonthlyState, Milestones } from '@/lib/scenarios';
 import { toReal, totalInvestments, aggregateByTaxBucket } from '@/lib/scenarios';
 import { taxBucketForAccount } from '@/lib/account-tax-classification';
 import { ProjectionDetailLevel } from '@/types/enums';
-import { formatCompactCurrency } from '@/lib/format';
+import { formatCompactCurrency, formatMonth } from '@/lib/format';
 import { DecomposedTooltipContent } from './ProjectionTooltip';
 import { CHART_TOOLTIP_PROPS } from '@/components/charts/ChartTooltip';
 import { CHART_PALETTE } from '@/components/charts/palette';
@@ -390,7 +390,7 @@ export default function ProjectionChart({
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={upperRows} margin={{ top: 16, right: 16, bottom: 4, left: 4 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-            <XAxis dataKey="monthISO" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} minTickGap={32} />
+            <XAxis dataKey="monthISO" tickFormatter={formatMonth} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} minTickGap={32} />
             <YAxis
               tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
               tickFormatter={formatCompactCurrency}
@@ -538,7 +538,7 @@ export default function ProjectionChart({
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={lowerRows} margin={{ top: 4, right: 16, bottom: 16, left: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="monthISO" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} minTickGap={32} />
+              <XAxis dataKey="monthISO" tickFormatter={formatMonth} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} minTickGap={32} />
               <YAxis
                 tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
                 tickFormatter={formatCompactCurrency}
@@ -548,7 +548,7 @@ export default function ProjectionChart({
               <Tooltip
                 {...CHART_TOOLTIP_PROPS}
                 formatter={(value, name) => [formatCompactCurrency(Number(value)), String(name)]}
-                labelFormatter={(label) => String(label ?? '')}
+                labelFormatter={(label) => formatMonth(String(label ?? ''))}
                 cursor={{ strokeDasharray: '3 3' }}
               />
               {visible.map((sc) => (
