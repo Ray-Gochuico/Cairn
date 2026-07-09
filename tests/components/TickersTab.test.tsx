@@ -16,7 +16,7 @@ function mstrRowDeleteButton(): HTMLElement {
     .getAllByTestId('tickers-row')
     .find((r) => within(r).queryByText('MSTR'));
   if (!row) throw new Error('MSTR row not found');
-  return within(row).getByRole('button', { name: /^delete$/i });
+  return within(row).getByRole('button', { name: /^delete mstr$/i });
 }
 
 async function seedUserTicker(ticker: string) {
@@ -84,5 +84,31 @@ describe('TickersTab — delete confirmation', () => {
     await waitFor(() =>
       expect(useTickersStore.getState().tickers.some((t) => t.ticker === 'MSTR')).toBe(false),
     );
+  });
+
+  it('filters the ticker list by symbol or name via the search box (W10 design)', async () => {
+    const user = userEvent.setup();
+    await useTickersStore.getState().load();
+    await useTickersStore.getState().upsert({
+      ticker: 'ZZZA', name: 'Apple-like Co', assetClass: AssetClass.SINGLE_STOCK,
+      leverageFactor: 1, direction: Direction.LONG, userAdded: true, accentColor: null, sector: null, industry: null,
+    });
+    render(<MemoryRouter><TickersTab /></MemoryRouter>);
+    await screen.findByText('ZZZA');
+    await user.type(screen.getByRole('searchbox', { name: /search tickers/i }), 'apple-like');
+    expect(screen.getByText('ZZZA')).toBeInTheDocument();
+    // A row that doesn't match the query is filtered out.
+    expect(screen.queryByText('MSTR')).not.toBeInTheDocument();
+  });
+
+  it('system rows have no Delete control at all (W10 design)', async () => {
+    const user = userEvent.setup();
+    await seedUserTicker('MYCO');
+    await useTickersStore.getState().load();
+    render(<MemoryRouter><TickersTab /></MemoryRouter>);
+    await screen.findByText('MYCO');
+    // Search to just the user-added row to prove it HAS a delete…
+    await user.type(screen.getByRole('searchbox', { name: /search tickers/i }), 'MYCO');
+    expect(screen.getAllByRole('button', { name: /^delete/i })).toHaveLength(1);
   });
 });
