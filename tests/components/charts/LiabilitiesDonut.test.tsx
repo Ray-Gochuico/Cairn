@@ -255,6 +255,34 @@ describe('LiabilitiesDonut', () => {
       expect(screen.getByTestId('slice-Home mortgage')).toBeInTheDocument();
     });
 
+    it('hides exactly one wedge when two loans share a display label', async () => {
+      // Two loans with the SAME name "Loan". Their picker keys are the loan
+      // ids (1 vs 2), so they must be independently toggleable — the old
+      // name-keyed filter collapsed both under one key.
+      useLoansStore.setState({
+        loans: [
+          mkLoan(1, 'Loan', LoanType.AUTO, 15000),
+          mkLoan(2, 'Loan', LoanType.STUDENT, 22000),
+        ],
+        isLoading: false,
+        error: null,
+      });
+
+      render(<MemoryRouter><LiabilitiesDonut /></MemoryRouter>);
+      expect(screen.getAllByTestId('slice-Loan')).toHaveLength(2);
+
+      const user = userEvent.setup();
+      await user.click(screen.getByRole('button', { name: /Included ·/ }));
+      const boxes = screen.getAllByRole('checkbox', { name: /Loan/ });
+      expect(boxes).toHaveLength(2);
+      // Hide the FIRST loan (id 1, 15000); the second (22000) must remain.
+      await user.click(boxes[0]);
+
+      const remaining = screen.getAllByTestId('slice-Loan');
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0]).toHaveAttribute('data-value', '22000');
+    });
+
     it('shows the all-hidden message when every loan is hidden', async () => {
       seedThreeLoans();
       render(<MemoryRouter><LiabilitiesDonut /></MemoryRouter>);

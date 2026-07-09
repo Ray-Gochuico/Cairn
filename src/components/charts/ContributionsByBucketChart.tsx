@@ -98,6 +98,7 @@ export default function ContributionsByBucketChart({
       yFormatter={formatContributionY}
       xAxisInterval={0}
       xTickFormatter={formatContributionXTick}
+      emptyMessage="No contributions recorded in this window yet — log them in Inputs → Contributions."
     />
   );
 }

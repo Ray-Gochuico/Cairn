@@ -144,6 +144,13 @@ describe('Budget page', () => {
       });
       // Misc row exists but is zero on the default seed (every budgeted row tracked).
       expect(screen.getByRole('heading', { name: /^misc$/i })).toBeInTheDocument();
+
+      // Month select: OPTION VALUE stays the ISO YYYY-MM (summarize keys on it),
+      // but the label renders humanized 'Mon YYYY' (Wave 11 T4).
+      const monthSelect = screen.getByLabelText('Month');
+      const firstOpt = within(monthSelect).getAllByRole('option')[0] as HTMLOptionElement;
+      expect(firstOpt.value).toMatch(/^\d{4}-\d{2}$/);
+      expect(firstOpt.textContent).toMatch(/^[A-Z][a-z]{2} \d{4}$/);
     });
 
     it('untracking a category moves its spending into the Misc aggregation', async () => {

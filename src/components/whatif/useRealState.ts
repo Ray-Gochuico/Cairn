@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { captureRealState, type RealState } from '@/lib/scenarios';
+import { useLocalToday } from '@/lib/use-local-today';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useLoansStore } from '@/stores/loans-store';
@@ -17,12 +18,10 @@ import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
 import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
 
-function todayMonthISO(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-
 export function useRealState(): RealState | null {
+  // Live LOCAL month (Wave 11 T10): the projection start month follows
+  // useLocalToday so it re-derives at the month flip.
+  const todayISO = useLocalToday();
   const household        = useHouseholdStore((s) => s.household);
   const persons          = usePersonsStore((s) => s.persons);
   const loans            = useLoansStore((s) => s.loans);
@@ -58,7 +57,7 @@ export function useRealState(): RealState | null {
 
   return useMemo<RealState | null>(() => {
     if (!household) return null;
-    const startISO = todayMonthISO();
+    const startISO = todayISO.slice(0, 7);
     return captureRealState({
       accounts,
       accountSnapshots,
@@ -93,5 +92,5 @@ export function useRealState(): RealState | null {
     // - 2026-05-27 v1.1: housingPayments + vehicleLeases are summed into
     //   step.expenses per projection month so rentals/leases that end stop
     //   contributing automatically.
-  }, [household, persons, loans, holdings, accounts, accountSnapshots, transactions, categories, inflation, returnRate, defaultCashApy, defaultDrawdownTaxRate, taxRules, housingPayments, vehicleLeases, properties, vehicles, assetValueSnapshots]);
+  }, [household, persons, loans, holdings, accounts, accountSnapshots, transactions, categories, inflation, returnRate, defaultCashApy, defaultDrawdownTaxRate, taxRules, housingPayments, vehicleLeases, properties, vehicles, assetValueSnapshots, todayISO]);
 }

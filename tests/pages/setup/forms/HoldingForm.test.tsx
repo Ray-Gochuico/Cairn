@@ -77,4 +77,19 @@ describe('Wizard HoldingForm (adapter)', () => {
       screen.getByRole('button', { name: /add holding/i }),
     ).toBeInTheDocument();
   });
+
+  it('right-aligns numeric holding inputs with tabular numerals (Wave 11 T7)', () => {
+    useAccountsStore.setState({
+      accounts: [makeAccount(1, 'Brokerage')],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+      create: async () => 1,
+      update: async () => {},
+      remove: async () => {},
+    } as any);
+    render(<HoldingForm />);
+    expect(screen.getByLabelText('shares')).toHaveClass('tabular-nums');
+    expect(screen.getByLabelText('cost basis')).toHaveClass('tabular-nums');
+  });
 });

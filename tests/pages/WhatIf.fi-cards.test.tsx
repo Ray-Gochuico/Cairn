@@ -191,6 +191,20 @@ describe('WhatIf page — FI cards integration', () => {
     expect(screen.getByTestId('whatif-fi-number')).toHaveTextContent('$1,200,000');
   });
 
+  it('Coast FI explainer states BOTH bases: nominal and the Fisher real rate (T17)', () => {
+    render(
+      <MemoryRouter>
+        <WhatIf />
+      </MemoryRouter>,
+    );
+    // Moderate 6% nominal, 2.5% inflation → (1.06/1.025)-1 = 3.4146% real.
+    // The years-to-retirement suffix is clock-dependent, so match only the basis clause.
+    const coastCard = screen.getByTestId('whatif-coastfi-number');
+    expect(coastCard).toHaveTextContent(
+      'Moderate 6.0% nominal (≈3.4% real after 2.5% inflation)',
+    );
+  });
+
   it('progress row uses liquid NW (investments + cash) from the active scenario seed state', () => {
     render(
       <MemoryRouter>

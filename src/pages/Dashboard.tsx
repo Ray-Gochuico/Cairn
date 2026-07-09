@@ -27,11 +27,13 @@ import { useTickersStore } from '@/stores/tickers-store';
 import { useFundHoldingsStore } from '@/stores/fund-holdings-store';
 import { useRoadmapOverridesStore } from '@/stores/roadmap-overrides-store';
 import { useLoadGate } from '@/lib/use-load-gate';
+import { useLocalToday } from '@/lib/use-local-today';
+import { dateFromLocalISO } from '@/lib/dates';
 import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
 import { AccountType, GoalType } from '@/types/enums';
 import { netWorthForMonth, type NetWorthInput } from '@/lib/networth';
 import { netWorthAsOfFactory, deltaPctOrNull } from '@/lib/asset-value-chart';
-import { GROWTH_HORIZONS } from '@/lib/growth-horizons';
+import { GROWTH_HORIZONS, minusMonths } from '@/lib/growth-horizons';
 import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
 import { includedAccountIds, filterSnapshotsForNetWorth } from '@/lib/account-inclusion';
 import { summarizeSpending } from '@/lib/spending-analysis';
@@ -139,9 +141,6 @@ function formatPctSuffix(pct: number): string {
   return ` (${sign}${pct.toFixed(1)}%)`;
 }
 
-function currentYyyymm(): string {
-  return new Date().toISOString().slice(0, 7);
-}
 
 /**
  * Goals strip: lucide-icon per GoalType, mirrors the icon set on the
@@ -201,9 +200,7 @@ function monthlyContributionAvg(
   monthsBack = 6,
 ): number {
   if (linkedIds.length === 0 || monthsBack <= 0) return 0;
-  const cutoff = new Date(today);
-  cutoff.setMonth(cutoff.getMonth() - monthsBack);
-  const cutoffIso = cutoff.toISOString().slice(0, 10);
+  const cutoffIso = minusMonths(today, monthsBack);
   const linkedSet = new Set(linkedIds);
   const total = contributions
     .filter((c) => linkedSet.has(c.accountId) && c.date >= cutoffIso)
@@ -501,8 +498,9 @@ export default function Dashboard() {
   // pills or NextMoveCard's "Continue Setup →" while the 15 stores load.
   const gate = useLoadGate(dashboardIsLoading, storeErrors, reload);
 
-  const today = useMemo(() => new Date(), []);
-  const currentMonth = useMemo(() => currentYyyymm(), []);
+  const todayISO = useLocalToday();
+  const today = useMemo(() => dateFromLocalISO(todayISO), [todayISO]);
+  const currentMonth = todayISO.slice(0, 7);
 
   // Apply the view filter to the entities rendered in the headline metrics,
   // the goals strip, and the spending pills/widget (transactions are scoped
@@ -567,7 +565,7 @@ export default function Dashboard() {
   // asset_value_snapshots (flat-estimate fallback), loans back-walked from
   // today's balance. netWorthForMonth priced both months at TODAY'S
   // estimates/balances, so paydown never moved this delta.
-  const todayIso = useMemo(() => today.toISOString().slice(0, 10), [today]);
+  const todayIso = todayISO;
   const oneMonthAgoIso = useMemo(
     () => GROWTH_HORIZONS.find((h) => h.key === '1m')!.baselineDate(today),
     [today],

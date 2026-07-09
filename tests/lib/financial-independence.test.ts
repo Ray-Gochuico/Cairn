@@ -130,6 +130,20 @@ describe('financialIndependenceSeries', () => {
       expect(real[0].rate).toBe(0.07);
     });
 
+    it('nominal ≤ inflation is UNREACHABLE in real terms → Infinity (matches the unfloored chart)', () => {
+      // real rate = (1.02/1.05) - 1 = -2.86% → the real balance plateaus below
+      // the today's-dollars target and never reaches it. The pre-T17 floored
+      // solve would have shown a finite (optimistic) year count instead.
+      const res = financialIndependenceSeries({
+        pv: 100_000,
+        annualContribution: 24_000,
+        targetFv: 1_000_000,
+        scenarios: [{ label: 'X', rate: 0.02 }],
+        inflation: 0.05,
+      });
+      expect(res[0].years).toBe(Infinity);
+    });
+
     it('inflation = 0 reproduces the nominal solve exactly', () => {
       const base = financialIndependenceSeries({
         pv: 100_000,

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { formatCurrencyCents } from '@/lib/format';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -334,7 +335,7 @@ export default function EquityGrantForm({
                 <div className="text-sm">
                   Per-share value:{' '}
                   <span className="tabular-nums">
-                    {computedFmv == null ? '—' : `$${computedFmv.value.toFixed(2)}`}
+                    {computedFmv == null ? '—' : formatCurrencyCents(computedFmv.value)}
                   </span>
                 </div>
                 <Button

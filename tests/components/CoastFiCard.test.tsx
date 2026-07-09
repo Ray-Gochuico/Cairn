@@ -243,6 +243,10 @@ describe('CoastFiCard', () => {
     expect(screen.getByText('6%')).toBeInTheDocument();
     expect(screen.getByText('7%')).toBeInTheDocument();
     expect(screen.getByText('8%')).toBeInTheDocument();
+
+    // Wave 11 T19: the scenario table scrolls inside an overflow-x-auto wrapper
+    // so the browser build degrades without horizontal BODY scroll.
+    expect(screen.getByRole('table').closest('div')).toHaveClass('overflow-x-auto');
   });
 
   it('uses the latest snapshot per account when multiple are seeded', () => {

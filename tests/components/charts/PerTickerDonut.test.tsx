@@ -182,4 +182,25 @@ describe('PerTickerDonut', () => {
     render(<MemoryRouter><PerTickerDonut /></MemoryRouter>);
     expect(screen.queryByRole('button', { name: /Included ·/ })).toBeNull();
   });
+
+  it('shows Monthly-ritual guidance copy and mounts no empty pie when holdings are zero-value', () => {
+    // A held ticker whose effective exposure is 0 (a zero-value holding):
+    // hasData is false, so the donut must show guidance, not a blank pie.
+    setTickers([makeTicker({ ticker: 'AAPL' })]);
+    setReport([{ ticker: 'AAPL', effectiveExposure: 0 }]);
+    render(<MemoryRouter><PerTickerDonut /></MemoryRouter>);
+    expect(
+      screen.getByText(
+        /No holding values yet — confirm an account snapshot \(Monthly ritual\) to see exposure\./,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('rc-pie')).toBeNull();
+  });
+
+  it('still renders the share-% legend on a populated portfolio (protected view)', () => {
+    seedThreeTickers();
+    render(<MemoryRouter><PerTickerDonut /></MemoryRouter>);
+    // AAPL 1000 of 2250 → 44.4% share readout in the legend.
+    expect(screen.getByText(/44\.4%/)).toBeInTheDocument();
+  });
 });

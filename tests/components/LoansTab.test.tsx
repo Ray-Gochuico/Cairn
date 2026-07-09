@@ -113,7 +113,7 @@ describe('LoansTab', () => {
 
     await user.type(original, '400000');
     await user.type(balance, '400000');
-    await user.type(rate, '0.06');
+    await user.type(rate, '6');
     await selectDate(user, 'firstPaymentDate', '2024-06-01');
     // term already defaults to 360; clear and re-type to trigger blur
     await user.clear(term);
@@ -121,9 +121,9 @@ describe('LoansTab', () => {
     // Move focus off term to trigger onBlur
     await user.tab();
 
-    // Standard 30-year 6% on 400k → ~2398.20
+    // Standard 30-year 6% on 400k → ~2398.20 (MoneyInput formats with commas).
     await waitFor(() => {
-      expect(Number(monthly.value)).toBeCloseTo(2398.20, 1);
+      expect(Number(monthly.value.replace(/,/g, ''))).toBeCloseTo(2398.20, 1);
     });
   });
 
@@ -136,7 +136,7 @@ describe('LoansTab', () => {
     await user.type(screen.getByLabelText(/^name$/i), 'Primary Mortgage');
     await user.type(screen.getByLabelText(/original amount/i), '400000');
     await user.type(screen.getByLabelText(/current balance/i), '400000');
-    await user.type(screen.getByLabelText(/interest rate/i), '0.06');
+    await user.type(screen.getByLabelText(/interest rate/i), '6');
     await selectDate(user, 'firstPaymentDate', '2024-06-01');
     // Pick Alex as obligor via the radio
     await user.click(screen.getByRole('radio', { name: /alex/i }));
@@ -167,7 +167,7 @@ describe('LoansTab', () => {
     await user.type(screen.getByLabelText(/^name$/i), 'OldName');
     await user.type(screen.getByLabelText(/original amount/i), '100000');
     await user.type(screen.getByLabelText(/current balance/i), '100000');
-    await user.type(screen.getByLabelText(/interest rate/i), '0.05');
+    await user.type(screen.getByLabelText(/interest rate/i), '5');
     await selectDate(user, 'firstPaymentDate', '2023-01-01');
     await user.click(screen.getByRole('radio', { name: /alex/i }));
     await user.tab();

@@ -48,7 +48,6 @@ const TITLES: Record<string, string> = {
   '/inputs/vehicle-leases': 'Inputs · Vehicle Leases',
   '/inputs/goals': 'Inputs · Goals',
   '/inputs/plans-529': 'Inputs · 529 Plans',
-  '/inputs/growth-tax': 'Inputs · Growth & Tax',
   '/inputs/categories': 'Inputs · Categories',
   '/inputs/tickers': 'Inputs · Tickers',
 };

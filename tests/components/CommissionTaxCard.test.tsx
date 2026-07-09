@@ -439,4 +439,12 @@ describe('CommissionTaxCard', () => {
     // FICA renders per check (÷ 12 for MONTHLY).
     expect(screen.getByText(formatCurrency(expected.bonusBreakdown.fica / 12))).toBeInTheDocument();
   });
+
+  it('discloses the mandatory 37% flat tier above $1M, drops dev jargon, and does not falsely disclaim Additional Medicare', () => {
+    primeStores();
+    render(<MemoryRouter><CommissionTaxCard /></MemoryRouter>);
+    expect(screen.queryByText(/Additional Medicare/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/matches bonus card/)).not.toBeInTheDocument();
+    expect(screen.getByText(/37%/, { exact: false })).toBeInTheDocument();
+  });
 });

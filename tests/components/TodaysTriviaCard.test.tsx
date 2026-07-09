@@ -181,6 +181,23 @@ describe('TodaysTriviaCard (X of 4)', () => {
     expect(screen.getByText(/open learn →/i)).toBeInTheDocument();
   });
 
+  it('T25: the needs-acceptance branch has exactly ONE /learn CTA in a consistent style', async () => {
+    db = await boot(false);
+    render(
+      <MemoryRouter>
+        <TodaysTriviaCard />
+      </MemoryRouter>,
+    );
+    await screen.findByText(/today's questions/i);
+    const learnLinks = screen
+      .getAllByRole('link')
+      .filter((a) => a.getAttribute('href') === '/learn');
+    expect(learnLinks).toHaveLength(1);
+    expect(learnLinks[0].className).toContain('font-medium');
+    expect(learnLinks[0].className).toContain('text-info-foreground');
+    expect(learnLinks[0].className).toContain('underline');
+  });
+
   it('MUST-1: renders aria-busy (never "0 of 0 · Start") while the learning store has no data', async () => {
     db = await boot(true);
     useLearningStore.setState({ learningState: null, load: async () => {} });

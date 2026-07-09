@@ -184,7 +184,7 @@ describe('FreshnessBadge', () => {
     // local representation appears.
     expect(badge).toHaveAttribute(
       'aria-label',
-      `Market prices last updated ${t.toLocaleString()}`,
+      `Market prices last updated ${t.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}`,
     );
   });
 

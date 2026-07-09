@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import DonutChartCard, { type DonutSlice } from './DonutChartCard';
+import DonutChartCard from './DonutChartCard';
 import { DonutEntityPicker, useDonutSelected, type DonutEntityPickerItem } from './DonutEntityPicker';
 import { CHART_NEUTRAL } from './palette';
 import { colorForTicker } from '@/lib/chart-colors';
@@ -9,14 +9,9 @@ import { useTickersStore } from '@/stores/tickers-store';
 import { useFundHoldingsStore } from '@/stores/fund-holdings-store';
 import { formatCurrency } from '@/lib/format';
 import { useViewFilter } from '@/lib/use-view-filter';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { AssetClass } from '@/types/schema';
 
-// Module-level empty-data sentinel so the empty-state donut passes the
-// same `data` reference every render — recharts' Pie regenerates its
-// animation id on each new props object, and an inline `[]` would
-// re-animate on every parent re-render.
-const EMPTY_DONUT_DATA: DonutSlice[] = [];
 const STORAGE_KEY = 'donut.perTicker.hidden';
 
 /**
@@ -160,12 +155,19 @@ export function PerTickerDonut() {
   const hasData = slices.some((s) => s.value > 0);
 
   if (!hasData) {
+    // Keep the titled card but guide the user to the action that fills it,
+    // rather than mounting an empty pie. Mirrors AllocationCard's empty
+    // pattern so the 3-up grid keeps a consistent block.
     return (
-      <DonutChartCard
-        title={title}
-        subtitle="After fund look-through"
-        data={EMPTY_DONUT_DATA}
-      />
+      <Card>
+        <CardHeader>
+          <CardTitle>{title}</CardTitle>
+          <CardDescription>After fund look-through</CardDescription>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground">
+          No holding values yet — confirm an account snapshot (Monthly ritual) to see exposure.
+        </CardContent>
+      </Card>
     );
   }
 

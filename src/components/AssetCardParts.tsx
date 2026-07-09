@@ -6,15 +6,10 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-
-const currencyFormatter = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  maximumFractionDigits: 0,
-});
+import { formatCurrency } from '@/lib/format';
 
 export function formatCurrencyShared(value: number): string {
-  return currencyFormatter.format(value);
+  return formatCurrency(value);
 }
 
 export interface ValueEditorProps {
@@ -117,7 +112,7 @@ export function EquityRow({ label, value, tone }: EquityRowProps) {
           isNegative ? 'text-destructive-soft-foreground' : 'text-success-foreground'
         }`}
       >
-        {currencyFormatter.format(value)}
+        {formatCurrency(value)}
       </span>
     </div>
   );

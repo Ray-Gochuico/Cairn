@@ -95,7 +95,9 @@ export function PrivacySection() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Privacy &amp; data</CardTitle>
+        <CardTitle>
+          <h2 className="font-semibold leading-none tracking-tight">Privacy &amp; data</h2>
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6 text-sm">
         {/* Where your data lives — concrete path + reveal action. */}
@@ -136,43 +138,45 @@ export function PrivacySection() {
           </div>
         </section>
 
-        {/* Outbound network calls — the complete list. */}
-        <section className="space-y-2">
-          <div className="flex items-center gap-2 font-medium">
+        {/* Outbound network calls — the complete list, collapsed by default. */}
+        <details className="rounded-md border px-4 py-3 text-sm">
+          <summary className="flex cursor-pointer items-center gap-2 font-medium">
             <WifiIcon className="h-4 w-4" aria-hidden="true" />
-            Outbound network calls
+            About outbound network calls
+          </summary>
+          <div className="space-y-2 pt-2">
+            <p className="text-muted-foreground">
+              Cairn makes exactly two outbound calls, both user-controlled:
+            </p>
+            <ul className="list-disc space-y-2 pl-5 text-muted-foreground">
+              <li>
+                <strong className="text-foreground">Yahoo Finance refresh.</strong>{' '}
+                Fetches current quotes for tickers in your portfolio. Cadence is
+                set in the Market data section &mdash; choose{' '}
+                <em>Manual</em> to disable automatic refreshes. The{' '}
+                <em>Refresh now</em> button always works regardless of cadence.
+                No personally identifiable information is sent; only the ticker
+                symbols you have entered.
+              </li>
+              <li>
+                <strong className="text-foreground">Updater check.</strong>{' '}
+                Fetches the latest{' '}
+                <code className="text-xs">latest.json</code> from GitHub
+                Releases to compare against your installed version.{' '}
+                <strong className="text-foreground">
+                  Only fires when you click &ldquo;Check for updates&rdquo;
+                </strong>
+                {' '}in the Updates section &mdash; never on launch, never
+                in the background.
+              </li>
+            </ul>
+            <p className="text-muted-foreground">
+              No analytics. No telemetry. No crash reporters. No background
+              sync. If you launch Cairn with Wi-Fi off, every feature except
+              the two opt-in calls listed here still works.
+            </p>
           </div>
-          <p className="text-muted-foreground">
-            Cairn makes exactly two outbound calls, both user-controlled:
-          </p>
-          <ul className="list-disc space-y-2 pl-5 text-muted-foreground">
-            <li>
-              <strong className="text-foreground">Yahoo Finance refresh.</strong>{' '}
-              Fetches current quotes for tickers in your portfolio. Cadence is
-              set above in the Market data section &mdash; choose{' '}
-              <em>Manual</em> to disable automatic refreshes. The{' '}
-              <em>Refresh now</em> button always works regardless of cadence.
-              No personally identifiable information is sent; only the ticker
-              symbols you have entered.
-            </li>
-            <li>
-              <strong className="text-foreground">Updater check.</strong>{' '}
-              Fetches the latest{' '}
-              <code className="text-xs">latest.json</code> from GitHub
-              Releases to compare against your installed version.{' '}
-              <strong className="text-foreground">
-                Only fires when you click &ldquo;Check for updates&rdquo;
-              </strong>
-              {' '}in the Updates section above &mdash; never on launch, never
-              in the background.
-            </li>
-          </ul>
-          <p className="text-muted-foreground">
-            No analytics. No telemetry. No crash reporters. No background
-            sync. If you launch Cairn with Wi-Fi off, every feature except
-            the two opt-in calls above still works.
-          </p>
-        </section>
+        </details>
 
         {/* Encryption at rest — FileVault (macOS) / BitLocker-device-encryption
             (Windows) guidance. The macOS branch is byte-identical to the

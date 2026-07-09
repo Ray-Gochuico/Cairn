@@ -38,7 +38,10 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { formatCurrency, formatPercent } from '@/lib/format';
+import { formatCurrency, formatPercent, formatDate } from '@/lib/format';
+import { minusMonths } from '@/lib/growth-horizons';
+import { useLocalToday } from '@/lib/use-local-today';
+import { dateFromLocalISO } from '@/lib/dates';
 import { UpdateAccountBalanceDialog } from '@/components/dialogs/UpdateAccountBalanceDialog';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import type { CsvColumn } from '@/lib/csv';
@@ -107,9 +110,7 @@ function monthlyContributionAvg(
   monthsBack = 6,
 ): number {
   if (linkedIds.length === 0 || monthsBack <= 0) return 0;
-  const cutoff = new Date(today);
-  cutoff.setMonth(cutoff.getMonth() - monthsBack);
-  const cutoffIso = cutoff.toISOString().slice(0, 10);
+  const cutoffIso = minusMonths(today, monthsBack);
   const linkedSet = new Set(linkedIds);
   const total = contributions
     .filter((c) => linkedSet.has(c.accountId) && c.date >= cutoffIso)
@@ -161,8 +162,15 @@ function GoalProgressCard({
   // on-track, but the bar can't visually overflow).
   const pct = Math.min(1, Math.max(0, projection.percentComplete));
   const valuenow = Math.round(pct * 100);
+  // Wave 11 T24: a fully-funded goal reads "Funded ✓" at a capped 100%, not
+  // an "on track" badge with a 475%-style percent.
+  const funded = projection.percentComplete >= 1;
 
-  const onTrackBadge = projection.onTrack ? (
+  const onTrackBadge = funded ? (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-success-soft text-success-foreground">
+      Funded ✓
+    </span>
+  ) : projection.onTrack ? (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-success-soft text-success-foreground">
       On track
     </span>
@@ -195,7 +203,7 @@ function GoalProgressCard({
           <div className="text-xs text-muted-foreground mt-1">
             {GOAL_TYPE_LABELS[goal.type]} · target{' '}
             <span className="tabular-nums">{formatCurrency(goal.targetAmount)}</span>{' '}
-            by {goal.targetDate}
+            by {formatDate(goal.targetDate)}
           </div>
         </div>
         {onTrackBadge}
@@ -206,7 +214,7 @@ function GoalProgressCard({
             <span>
               <span className="tabular-nums">{formatCurrency(projection.currentSaved)}</span> saved
             </span>
-            <span className="tabular-nums">{formatPercent(projection.percentComplete)}</span>
+            <span className="tabular-nums">{formatPercent(Math.min(1, projection.percentComplete))}</span>
           </div>
           <div
             className="h-2 w-full overflow-hidden rounded-full bg-muted"
@@ -270,7 +278,7 @@ function GoalProgressCard({
                       <span className="font-medium">{info.name}</span>
                       <span className="text-muted-foreground ml-2">
                         {info.lastUpdated
-                          ? `updated ${info.lastUpdated}`
+                          ? `updated ${formatDate(info.lastUpdated)}`
                           : 'never updated'}
                       </span>
                     </span>
@@ -382,10 +390,10 @@ export default function Goals() {
     reload,
   );
 
-  // Stable "today" per render cycle — passed into computeGoalProgress so the
-  // helper isn't recomputed twice from new Date() drift inside a single
-  // render. Recomputed on each commit which is fine for a date-precision UI.
-  const today = useMemo(() => new Date(), []);
+  // Live LOCAL day (Wave 11 T9): re-derives at the midnight/month flip via
+  // useLocalToday; every projection memo keys on it.
+  const todayISO = useLocalToday();
+  const today = useMemo(() => dateFromLocalISO(todayISO), [todayISO]);
 
   const annualRate = useMemo(() => pickModerateRate(household), [household]);
 

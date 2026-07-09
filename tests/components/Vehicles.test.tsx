@@ -437,6 +437,31 @@ describe('Vehicles page', () => {
     expect(screen.getByText(/\$1,299/)).toBeInTheDocument();
   });
 
+  it('counts only active leases and badges ended ones (Wave 11 T18)', async () => {
+    useVehicleLeasesStore.setState({
+      vehicleLeases: [
+        {
+          id: 1, householdId: 1, ownerPersonId: null, name: 'Active Lease',
+          monthlyAmount: 700, startDate: '2025-06-01', endDate: null,
+        },
+        {
+          id: 2, householdId: 1, ownerPersonId: null, name: 'Ended Lease',
+          monthlyAmount: 599, startDate: '2019-01-01', endDate: '2020-01-01',
+        },
+      ],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+
+    renderPage();
+
+    // Caption counts only the active lease (not 2); the total excludes the ended one.
+    expect(await screen.findByText(/1 active lease/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/\$700/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/\$1,299/)).not.toBeInTheDocument();
+    // The ended lease's card shows a humanized "Ended <date>" badge.
+    expect(screen.getByText(/Ended Jan 1, 2020/)).toBeInTheDocument();
+  });
+
   it('renders the owner person tag on a lease card', async () => {
     usePersonsStore.setState({
       persons: [

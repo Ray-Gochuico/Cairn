@@ -18,7 +18,7 @@ import { buildProjectionChartData } from '@/lib/calculators/projection-chart';
 import { RealNominalToggle } from '@/components/calculators/RealNominalToggle';
 import { useChartDisplayMode } from '@/lib/calculators/use-chart-display-mode';
 import { useSettingsStore } from '@/stores/settings-store';
-import { CHART_PALETTE, CHART_NEUTRAL } from '@/components/charts/palette';
+import { fiChartSeries } from '@/lib/calculators/fi-chart-series';
 
 interface FinancialIndependenceCardProps {
   cardId?: string;
@@ -121,8 +121,13 @@ export function FinancialIndependenceCard({
     inflation,
   ]);
 
-  const { chartData, chartSeries } = useMemo(() => {
-    if (!series) return { chartData: [] as Record<string, number>[], chartSeries: [] as { dataKey: string; label: string; color: string }[] };
+  const { chartData, chartSeries, chartMarkers } = useMemo(() => {
+    if (!series)
+      return {
+        chartData: [] as Record<string, number>[],
+        chartSeries: [] as ReturnType<typeof fiChartSeries>['series'],
+        chartMarkers: [] as ReturnType<typeof fiChartSeries>['markers'],
+      };
     const finite = series.map((s) => s.years).filter((y) => Number.isFinite(y));
     const horizon = finite.length
       ? Math.min(50, Math.max(10, Math.ceil(Math.max(...finite))))
@@ -138,20 +143,13 @@ export function FinancialIndependenceCard({
       displayMode,
       horizon,
     });
-    // Dash patterns for WCAG 1.4.1: series distinguished by both colour AND
-    // stroke pattern (solid / dashed / dotted for up to 3 scenario trajectories;
-    // the Target reference line is always dotted).
-    const DASH_PATTERNS = [undefined, '5 5', '2 2', '8 4'] as const;
-    const seriesDefs = [
-      ...series.map((s, i) => ({
-        dataKey: s.label,
-        label: s.label,
-        color: CHART_PALETTE[i % CHART_PALETTE.length],
-        strokeDasharray: DASH_PATTERNS[i % DASH_PATTERNS.length],
-      })),
-      { dataKey: 'target', label: 'Target', color: CHART_NEUTRAL, strokeDasharray: '2 2' as const },
-    ];
-    return { chartData: data, chartSeries: seriesDefs };
+    // Wave 11 T13: scenario colours (no danger-red Optimistic), emphasized
+    // headline (Moderate) series, and target-crossing markers — via the shared
+    // fi-chart-series helper. The target-line basis in `data` follows the
+    // display toggle, so compare crossings against the row's own target value.
+    const targetBasis = data.length > 0 ? Number(data[data.length - 1].target) : targetFv;
+    const { series: seriesDefs, markers } = fiChartSeries(series, data, targetBasis);
+    return { chartData: data, chartSeries: seriesDefs, chartMarkers: markers };
   }, [series, values.currentPortfolio, values.annualContribution, targetFv, displayMode, inflation]);
 
   // ── Editable inputs (shared with the empty-state render below) ─────────────
@@ -230,10 +228,14 @@ export function FinancialIndependenceCard({
     series.find((s) => s.label === 'Moderate') ??
     series[Math.min(1, series.length - 1)] ??
     series[0];
+  // T17: a non-finite years value means the scenario's REAL rate is ≤ 0, so it
+  // never reaches the today's-dollars target — render "—", not "∞", and surface
+  // the explanatory note below the table.
   const yearsLabel =
     moderate && Number.isFinite(moderate.years)
       ? `${moderate.years.toFixed(1)} years`
-      : '∞';
+      : '—';
+  const anyUnreachable = series.some((s) => !Number.isFinite(s.years));
 
   return (
     <CalculatorCard
@@ -274,12 +276,18 @@ export function FinancialIndependenceCard({
               <td className="py-2">{s.label}</td>
               <td className="py-2 tabular-nums">{formatPercent(s.rate)}</td>
               <td className="py-2 tabular-nums">
-                {Number.isFinite(s.years) ? s.years.toFixed(1) : '∞'}
+                {Number.isFinite(s.years) ? s.years.toFixed(1) : '—'}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
+      {anyUnreachable && (
+        <p role="note" className="text-xs text-muted-foreground mt-2">
+          Returns at or below inflation — this scenario never reaches the target
+          in real terms.
+        </p>
+      )}
       {chartData.length > 1 && (
         <div className="mt-4">
           <div className="flex justify-end mb-2">
@@ -290,6 +298,7 @@ export function FinancialIndependenceCard({
             data={chartData}
             xKey="year"
             series={chartSeries}
+            markers={chartMarkers}
             yFormatter={formatCurrency}
           />
         </div>

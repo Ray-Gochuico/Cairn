@@ -44,3 +44,20 @@ export function ageAtMonth(dob: string | null | undefined, monthISO: string): nu
   if (m < 0 || (m === 0 && target.getUTCDate() < birth.getUTCDate())) age--;
   return age;
 }
+
+/** Local calendar day as YYYY-MM-DD (NOT toISOString, which is UTC). The
+ * canonical home (Wave 11 T8); trivia/daily.ts re-exports it. */
+export function localTodayISO(now: Date = new Date()): string {
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/** Parse a local calendar day back to a Date at LOCAL midnight — the inverse
+ * of localTodayISO. Use when a page needs a Date for local accessors
+ * (getFullYear/getMonth) derived from useLocalToday()'s string. */
+export function dateFromLocalISO(isoDay: string): Date {
+  const [y, m, d] = isoDay.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}

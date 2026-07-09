@@ -1,4 +1,7 @@
 import { useMemo, useState } from 'react';
+import { formatCurrencyCents } from '@/lib/format';
+import { useLocalToday } from '@/lib/use-local-today';
+import { dateFromLocalISO } from '@/lib/dates';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CategoryDonut, withCategoryColors } from '@/components/spending/CategoryDonut';
@@ -47,7 +50,8 @@ export function SpendingSummaryHero({
   monthlyBudget,
   asOf,
 }: SpendingSummaryHeroProps) {
-  const today = useMemo(() => asOf ?? new Date(), [asOf]);
+  const localToday = useLocalToday();
+  const today = useMemo(() => asOf ?? dateFromLocalISO(localToday), [asOf, localToday]);
   const [range, setRange] = useState<SpendingRange>('this-month');
 
   const bounds = useMemo(() => rangeBounds(range, today), [range, today]);
@@ -144,8 +148,8 @@ export function SpendingSummaryHero({
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {overBudget
-                      ? `$${(summary.total - monthlyBudget).toFixed(2)} over budget`
-                      : `$${(monthlyBudget - summary.total).toFixed(2)} under budget`}{' '}
+                      ? `${formatCurrencyCents(summary.total - monthlyBudget)} over budget`
+                      : `${formatCurrencyCents(monthlyBudget - summary.total)} under budget`}{' '}
                     (budget: ${monthlyBudget.toLocaleString()})
                   </p>
                 </div>

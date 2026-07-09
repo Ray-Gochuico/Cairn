@@ -207,15 +207,22 @@ export function DataSection() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Data</CardTitle>
+        <CardTitle>
+          <h2 className="font-semibold leading-none tracking-tight">Data</h2>
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        <p className="text-sm text-muted-foreground">
-          Your data lives only on this computer. Back it up regularly so you can
-          recover everything — every account, transaction, and setting — if this
-          computer is lost or the database is damaged. Backups are full, exact
-          copies of your database.
-        </p>
+        <details className="rounded-md border px-4 py-3 text-sm">
+          <summary className="cursor-pointer font-medium">About backups</summary>
+          <div className="pt-2 space-y-2">
+            <p className="text-muted-foreground">
+              Your data lives only on this computer. Back it up regularly so you can
+              recover everything — every account, transaction, and setting — if this
+              computer is lost or the database is damaged. Backups are full, exact
+              copies of your database.
+            </p>
+          </div>
+        </details>
 
         {!tauri && (
           <p

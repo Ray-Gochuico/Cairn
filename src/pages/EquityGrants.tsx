@@ -18,7 +18,8 @@ import { Button } from '@/components/ui/button';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import AddEquityGrantDialog from '@/components/equity-grants/AddEquityGrantDialog';
 import type { CsvColumn } from '@/lib/csv';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, formatDate } from '@/lib/format';
+import { useLocalToday } from '@/lib/use-local-today';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import { EmptyState } from '@/components/layout/EmptyState';
@@ -151,7 +152,7 @@ function EquityGrantCard({ projection }: EquityGrantCardProps) {
             <ul className="text-sm space-y-1">
               {upcomingVestDates.map((d) => (
                 <li key={d} className="tabular-nums">
-                  {d}
+                  {formatDate(d)}
                 </li>
               ))}
             </ul>
@@ -199,10 +200,9 @@ export default function EquityGrants() {
     [equityGrants, filter, persons],
   );
 
-  // Stable "today" per render cycle — passed into computeEquityValue so the
-  // helper isn't recomputed twice from new Date() drift inside a single
-  // render. Recomputed on each commit which is fine for date-precision UI.
-  const today = useMemo(() => new Date(), []);
+  // Live LOCAL day (Wave 11 T9): re-derives at the midnight flip via
+  // useLocalToday so a page left open overnight re-values vesting.
+  const todayISO = useLocalToday();
 
   // Owner name lookup (id is non-nullable on persisted Person rows). Uses the
   // full persons list (from useViewFilter) so we can still resolve names for
@@ -233,9 +233,9 @@ export default function EquityGrants() {
     return visibleGrants.map((grant) => ({
       grant,
       ownerName: personById.get(grant.ownerPersonId) ?? 'Unknown',
-      result: computeEquityValue(grant, today),
+      result: computeEquityValue(grant, todayISO),
     }));
-  }, [visibleGrants, personById, today]);
+  }, [visibleGrants, personById, todayISO]);
 
   const totals = useMemo(() => {
     return projections.reduce(

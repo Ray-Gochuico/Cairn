@@ -16,14 +16,36 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
-    baseURL: 'http://localhost:1422',
     trace: 'retain-on-failure',
   },
-  webServer: {
-    command: 'npm run dev:browser:seed',
-    url: 'http://localhost:1422',
-    reuseExistingServer: !process.env.CI,
-    // Cold start = vite + sql.js wasm fetch + 47 migrations + demo seed.
-    timeout: 120_000,
-  },
+  projects: [
+    {
+      // The seeded smoke suite (disclosures accepted, demo data present).
+      name: 'seeded',
+      testIgnore: /onboarding\.spec\.ts/,
+      use: { baseURL: 'http://localhost:1422' },
+    },
+    {
+      // T26: a FRESH (unseeded) IndexedDB so boot lands on the disclaimer +
+      // setup path — the only way to exercise the real onboarding happy path.
+      name: 'onboarding',
+      testMatch: /onboarding\.spec\.ts/,
+      use: { baseURL: 'http://localhost:1423' },
+    },
+  ],
+  webServer: [
+    {
+      command: 'npm run dev:browser:seed',
+      url: 'http://localhost:1422',
+      reuseExistingServer: !process.env.CI,
+      // Cold start = vite + sql.js wasm fetch + 47 migrations + demo seed.
+      timeout: 120_000,
+    },
+    {
+      command: 'npm run dev:browser:fresh',
+      url: 'http://localhost:1423',
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+    },
+  ],
 });

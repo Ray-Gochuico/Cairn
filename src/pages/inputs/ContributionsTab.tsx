@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { localTodayISO } from '@/lib/dates';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAccountsStore } from '@/stores/accounts-store';
@@ -210,7 +211,7 @@ export default function ContributionsTab() {
     );
   }
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localTodayISO();
   const defaultContribution: FormValues = {
     accountId: accounts[0].id!,
     personId: persons[0]?.id ?? null,

@@ -235,8 +235,8 @@ describe('Goals page', () => {
     expect(screen.getAllByRole('progressbar')).toHaveLength(3);
   });
 
-  it('shows on-track badge for an over-funded goal', () => {
-    // currentSaved already exceeds target → onTrack regardless of contributions
+  it('shows a capped "Funded ✓" terminal state for an over-funded goal (Wave 11 T24)', () => {
+    // currentSaved (12k) exceeds target (10k) → funded terminal state.
     primeStores({
       goals: [
         {
@@ -257,7 +257,15 @@ describe('Goals page', () => {
         <Goals />
       </MemoryRouter>,
     );
-    expect(screen.getByText(/^on track$/i)).toBeInTheDocument();
+    // Funded terminal state replaces the on/off-track badge and caps the percent.
+    expect(screen.getByText(/Funded ✓/)).toBeInTheDocument();
+    expect(screen.queryByText(/^on track$/i)).not.toBeInTheDocument();
+    expect(screen.getByText('100%')).toBeInTheDocument();
+    expect(screen.queryByText(/475%|120%/)).not.toBeInTheDocument();
+    const bar = screen.getByRole('progressbar', { name: /Already There progress/i });
+    expect(bar).toHaveAttribute('aria-valuenow', '100');
+    // Target date renders humanized (Wave 11 T4), not the raw ISO string.
+    expect(screen.getByText(/by Jan 1, 2030/)).toBeInTheDocument();
   });
 
   it('shows off-track badge for a goal that cannot meet the target', () => {
@@ -497,8 +505,8 @@ describe('Goals page', () => {
     // Brokerage row → muted "auto from prices" copy, no Update button.
     expect(screen.getByText(/auto from prices/i)).toBeInTheDocument();
     // Last-updated date is surfaced for each account.
-    expect(screen.getByText(/updated 2026-04-15/i)).toBeInTheDocument();
-    expect(screen.getByText(/updated 2026-05-01/i)).toBeInTheDocument();
+    expect(screen.getByText(/updated Apr 15, 2026/i)).toBeInTheDocument();
+    expect(screen.getByText(/updated May 1, 2026/i)).toBeInTheDocument();
   });
 
   it('view filter ?view=p1 hides p2 goals and keeps p1 goals visible', () => {

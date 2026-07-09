@@ -14,7 +14,9 @@ import { AssetSnapshotOwnerType } from '@/types/enums';
 import { filterByOwnerPersonId } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { resolveUtilityCategoryIds } from '@/lib/category-config';
-import { monthlyLeaseObligation } from '@/lib/recurring-obligations';
+import { monthlyLeaseObligation, isActiveOn } from '@/lib/recurring-obligations';
+import { useLocalToday } from '@/lib/use-local-today';
+import { formatDate } from '@/lib/format';
 import { CategoryMultiSelect } from '@/components/categories/CategoryMultiSelect';
 import { LoanType } from '@/types/enums';
 import {
@@ -290,17 +292,26 @@ function VehicleGasCard({
 interface LeaseCardProps {
   lease: VehicleLease;
   ownerLabel: string;
+  today: string;
   onRemove: () => void | Promise<void>;
 }
 
-function LeaseCard({ lease, ownerLabel, onRemove }: LeaseCardProps) {
+function LeaseCard({ lease, ownerLabel, today, onRemove }: LeaseCardProps) {
+  const ended = !isActiveOn(lease, today);
   return (
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <CardTitle className="text-base truncate">{lease.name}</CardTitle>
-            <CardDescription className="text-xs">Lease</CardDescription>
+            <CardDescription className="text-xs">
+              Lease
+              {ended && lease.endDate ? (
+                <span className="ml-2 text-muted-foreground">
+                  Ended {formatDate(lease.endDate)}
+                </span>
+              ) : null}
+            </CardDescription>
           </div>
           <div className="flex shrink-0 gap-2">
             <Button asChild size="sm" variant="outline">
@@ -422,7 +433,7 @@ export default function Vehicles() {
     reload,
   );
 
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = useLocalToday();
 
   const visibleVehicles = useMemo(
     () => filterByOwnerPersonId(vehicles, filter, persons),
@@ -434,9 +445,14 @@ export default function Vehicles() {
     [vehicleLeases, filter, persons],
   );
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIso;
   const totalMonthlyLeaseObligation = useMemo(
     () => monthlyLeaseObligation(visibleLeases, today),
+    [visibleLeases, today],
+  );
+  // Wave 11 T18: the count uses the same active predicate as the dollar total.
+  const activeLeases = useMemo(
+    () => visibleLeases.filter((l) => isActiveOn(l, today)),
     [visibleLeases, today],
   );
 
@@ -649,8 +665,8 @@ export default function Vehicles() {
                   </span>
                 </div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                  {visibleLeases.length} active lease
-                  {visibleLeases.length === 1 ? '' : 's'} · feeds Spending &amp;
+                  {activeLeases.length} active lease
+                  {activeLeases.length === 1 ? '' : 's'} · feeds Spending &amp;
                   What-If projection
                 </div>
               </div>
@@ -661,6 +677,7 @@ export default function Vehicles() {
               <LeaseCard
                 key={l.id}
                 lease={l}
+                today={today}
                 ownerLabel={
                   l.ownerPersonId == null
                     ? 'Joint'

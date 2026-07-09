@@ -21,11 +21,11 @@ function projectedAtAge18(
   monthlyContrib: number,
   dobIso: string,
   growthRate: number,
+  now: Date,
 ): number {
   const dob = new Date(dobIso);
   const eighteen = new Date(dob);
   eighteen.setFullYear(eighteen.getFullYear() + 18);
-  const now = new Date();
   const monthsUntil = Math.max(
     0,
     (eighteen.getFullYear() - now.getFullYear()) * 12 +
@@ -98,6 +98,7 @@ function Plans529CardImpl({
                     monthlyAvg,
                     dep.dateOfBirth,
                     moderateRate,
+                    today,
                   )
                 : currentValue;
             return (

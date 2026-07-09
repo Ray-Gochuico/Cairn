@@ -21,6 +21,48 @@ export const formatSignedCurrency = (v: number): string =>
  * For tooltip and detail-row dollar values prefer `formatCurrency` from
  * the same module, which renders the full "$80,000" form (no cents).
  */
+/**
+ * House date convention (Wave 11): calendar-day ISO strings ('YYYY-MM-DD')
+ * render as 'Jun 15, 2028'; year-months ('YYYY-MM') as 'Jul 2026'. Both
+ * format in UTC because the inputs are calendar DAYS, not instants —
+ * local-time formatting would shift the displayed day for users west of
+ * UTC (the DebtPayoffCard/formatPaymentMonth precedent, now canonical).
+ * Real instants (timestamps like backups/refreshes) do NOT use these;
+ * they use toLocaleString(undefined, { dateStyle: 'medium', timeStyle:
+ * 'short' }) at the call site.
+ */
+const DATE_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+  timeZone: 'UTC',
+});
+export function formatDate(isoDay: string): string {
+  return DATE_FORMATTER.format(new Date(`${isoDay}T00:00:00Z`));
+}
+
+const MONTH_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  year: 'numeric',
+  month: 'short',
+  timeZone: 'UTC',
+});
+export function formatMonth(isoMonth: string): string {
+  return MONTH_FORMATTER.format(new Date(`${isoMonth.slice(0, 7)}-01T00:00:00Z`));
+}
+
+/**
+ * Transaction-grain money: exact cents WITH thousands separators
+ * ($6,846.84). formatCurrency (whole dollars) stays the default for
+ * aggregates; this exists so no surface ever hand-rolls `toFixed(2)`.
+ */
+const CENTS_FORMATTER = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+export const formatCurrencyCents = (n: number): string => CENTS_FORMATTER.format(n);
+
 export function formatCompactCurrency(v: number): string {
   const abs = Math.abs(v);
   if (abs >= 1_000_000) {

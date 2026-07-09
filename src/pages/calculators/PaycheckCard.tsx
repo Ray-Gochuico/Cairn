@@ -7,6 +7,7 @@ import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { CalculatorCard } from './CalculatorCard';
 import { computePretaxDeductions, computeBonusTax } from '@/lib/tax';
 import { formatCurrency } from '@/lib/format';
+import { CONTRIBUTION_LIMITS_2026 } from '@/lib/contribution-limits';
 import { PAYCHECK_PERIODS, periodsPerYear, type PaycheckPeriod } from '@/lib/paycheck-periods';
 import { getCurrentTaxYear } from '@/lib/current-tax-year';
 import { ResultRow } from '@/components/calculators/ResultRow';
@@ -225,16 +226,14 @@ export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
         <summary className="cursor-pointer font-medium hover:text-foreground">
           What this calculator does NOT model
         </summary>
+        <p className="mt-2">
+          {`Social Security wage base — OASDI stops at $${CONTRIBUTION_LIMITS_2026.SOCIAL_SECURITY_WAGE_BASE.toLocaleString('en-US')} per person (2026); the calculator applies the cap per earner.`}
+        </p>
         <ul className="mt-2 list-disc pl-5 space-y-1">
           <li>
-            <TermTooltip term="FICA" /> wage-base limits — the OASDI portion stops
-            after $168,600 (2026 base); above that, federal-tax line is right but
-            FICA over-collects for high earners.
-          </li>
-          <li>
-            <TermTooltip term="NIIT">NIIT</TermTooltip> + Additional Medicare surtax
-            (0.9% above $200k single / $250k MFJ) — secondary effects on the
-            high-earner federal column.
+            <TermTooltip term="NIIT">NIIT</TermTooltip> (3.8% net investment
+            income tax) — applies to investment income, not wages, so it&#39;s
+            outside this estimate.
           </li>
           <li>
             <TermTooltip term="AMT">AMT</TermTooltip> on ISO exercises landing in

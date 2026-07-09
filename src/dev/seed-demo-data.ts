@@ -42,7 +42,19 @@ export const DEMO_SEED = {
 
 const TODAY = (): string => new Date().toISOString().slice(0, 10);
 
-export async function seedDemoData(db: Database): Promise<void> {
+/** First of the month `n` months before the reference ISO day, in UTC.
+ * Wave 11 T20: loan first-payment dates derive from the seed reference day so
+ * the seeded loans don't get more seasoned every real-world day. */
+const firstOfMonthMonthsAgo = (iso: string, n: number): string => {
+  const [y, m] = iso.split('-').map(Number);
+  const d = new Date(Date.UTC(y, m - 1 - n, 1));
+  return d.toISOString().slice(0, 10);
+};
+
+export async function seedDemoData(
+  db: Database,
+  opts?: { todayISO?: string },
+): Promise<void> {
   // Idempotency sentinel: if the demo person exists, assume already seeded.
   const existing = await db.select<{ n: number }>(
     'SELECT COUNT(*) AS n FROM persons WHERE name = ?',
@@ -50,7 +62,7 @@ export async function seedDemoData(db: Database): Promise<void> {
   );
   if ((existing[0]?.n ?? 0) > 0) return;
 
-  const today = TODAY();
+  const today = opts?.todayISO ?? TODAY();
 
   // 1. Household singleton (id = 1). OR IGNORE: a real household may already
   //    exist; we don't clobber it — the donuts only need accounts/snapshots.
@@ -128,15 +140,17 @@ export async function seedDemoData(db: Database): Promise<void> {
     rate: number,
     termMonths: number,
     monthly: number,
+    firstPaymentDate: string,
   ): Promise<void> {
     await db.execute(
       `INSERT INTO loans (household_id, name, type, original_amount, current_balance, interest_rate, term_months, first_payment_date, monthly_payment, extra_payment_default)
        VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
-      [name, type, original, balance, rate, termMonths, '2022-01-01', monthly],
+      [name, type, original, balance, rate, termMonths, firstPaymentDate, monthly],
     );
   }
-  await addLoan('Mortgage', 'MORTGAGE', 650000, 540000, 0.0625, 360, 4001);
-  await addLoan('Car Loan', 'AUTO', 42000, 22000, 0.049, 60, 791);
+  // Mortgage: 4.5y into a 30y note (visibly seasoned). Car: 18mo into 60.
+  await addLoan('Mortgage', 'MORTGAGE', 650000, 540000, 0.0625, 360, 4001, firstOfMonthMonthsAgo(today, 54));
+  await addLoan('Car Loan', 'AUTO', 42000, 22000, 0.049, 60, 791, firstOfMonthMonthsAgo(today, 18));
 
   // 7. fund_holdings — top underlyings per fund (weights sum < 1; concentration
   //    attributes the remainder to a shared 'Misc' wedge). holding_name powers

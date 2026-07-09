@@ -219,7 +219,7 @@ export function AdvancedSection() {
     <Card>
       <CardHeader className="cursor-pointer" onClick={() => setOpen((o) => !o)}>
         <CardTitle className="flex items-center justify-between">
-          <span>Advanced</span>
+          <h2 className="font-semibold leading-none tracking-tight">Advanced</h2>
           <button
             type="button"
             className="text-muted-foreground hover:text-foreground"

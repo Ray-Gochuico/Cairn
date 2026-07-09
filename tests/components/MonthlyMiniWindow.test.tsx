@@ -136,10 +136,59 @@ describe('MonthlyMiniWindow', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Brokerage One')).toBeInTheDocument();
+      expect(screen.getByText(/Brokerage One/)).toBeInTheDocument();
     });
     expect(screen.getByRole('button', { name: /^confirm$/i })).toBeInTheDocument();
     expect(screen.getByText(/\$12,345\.67/)).toBeInTheDocument();
+  });
+
+  it('T25: the value-to-verify leads and a prior-month context line anchors it', async () => {
+    const accountsRepo = new AccountsRepo(db);
+    const accountId = await accountsRepo.create({
+      householdId: 1,
+      ownerPersonId: null,
+      beneficiaryDependentId: null,
+      name: 'Brokerage One',
+      institution: null,
+      type: AccountType.ACCOUNT_BROKERAGE,
+      cryptoWalletAddress: null,
+      autoFetchEnabled: false,
+      excludedFromNetWorth: false,
+      stateOfPlan: null,
+      accentColor: null,
+    });
+
+    const today = new Date();
+    const prev = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const lastBizDayUtc = new Date(Date.UTC(prev.getFullYear(), prev.getMonth() + 1, 0));
+    while (lastBizDayUtc.getUTCDay() === 0 || lastBizDayUtc.getUTCDay() === 6) {
+      lastBizDayUtc.setUTCDate(lastBizDayUtc.getUTCDate() - 1);
+    }
+    const seedDate = lastBizDayUtc.toISOString().slice(0, 10);
+    const snapshotsRepo = new AccountSnapshotsRepo(db);
+    // A PRIOR value (two months back) so the "was $X (±%)" anchor renders.
+    await snapshotsRepo.upsert({
+      accountId,
+      snapshotDate: '2000-01-31',
+      totalValue: 10000,
+      source: SnapshotSource.USER_CONFIRMED,
+    });
+    await snapshotsRepo.upsert({
+      accountId,
+      snapshotDate: seedDate,
+      totalValue: 12500,
+      source: SnapshotSource.AUTO_DERIVED,
+    });
+
+    render(<MemoryRouter><MonthlyMiniWindow /></MemoryRouter>);
+
+    const value = await screen.findByTestId('derived-value');
+    expect(value.textContent).toMatch(/\$12,500/);
+    // Value node leads: it precedes the account-name node in document order.
+    const name = screen.getByText(/Brokerage One · as of/);
+    expect(value.compareDocumentPosition(name) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Prior context: 12,500 vs 10,000 = +25.0%.
+    expect(screen.getByTestId('derived-prior').textContent).toBe('was $10,000.00 (+25.0%)');
   });
 
   it('renders a cash-balance card for CASH accounts', async () => {
@@ -238,8 +287,9 @@ describe('MonthlyMiniWindow', () => {
     // Wave-4: the card's Confirmed flip is announced to screen readers.
     // The batch-summary status stays empty (no "Confirm all" click here),
     // so scope to the one that actually carries text.
+    // T25: the confirmed state is a "✓ Confirmed" pill inside the role="status".
     const statusTexts = screen.getAllByRole('status').map((el) => el.textContent ?? '');
-    expect(statusTexts).toContain('Confirmed');
+    expect(statusTexts.some((t) => t.includes('Confirmed'))).toBe(true);
 
     // W10 T6: confirming unmounted the Confirm button — focus must land on the
     // card's status region, not strand on <body>.
@@ -460,10 +510,10 @@ describe('MonthlyMiniWindow', () => {
       const alphaId = await seedDerivedAccount('Alpha', 5000, SnapshotSource.AUTO_DERIVED);
       const betaId = await seedDerivedAccount('Beta', 7000, SnapshotSource.AUTO_DERIVED);
       render(<MemoryRouter><MonthlyMiniWindow /></MemoryRouter>);
-      await screen.findByText('Alpha');
+      await screen.findByText(/Alpha/);
       // Skip the Alpha card.
-      const alphaCard = screen.getByText('Alpha').closest('div[class*="rounded"]') as HTMLElement
-        ?? screen.getByText('Alpha').closest('div')!;
+      const alphaCard = screen.getByText(/Alpha/).closest('div[class*="rounded"]') as HTMLElement
+        ?? screen.getByText(/Alpha/).closest('div')!;
       await user.click(within(alphaCard).getByRole('button', { name: /^skip$/i }));
       // Confirm-all count drops to 1.
       expect(await screen.findByRole('button', { name: /confirm all \(1\)/i })).toBeInTheDocument();
@@ -509,7 +559,7 @@ describe('MonthlyMiniWindow', () => {
       const statuses = screen.getAllByRole('status').map((el) => el.textContent ?? '');
       expect(statuses.some((t) => /confirmed 2 account values/i.test(t))).toBe(true);
       // Cards reflect the batch confirmation without a remount.
-      expect(screen.getAllByText('Confirmed').length).toBeGreaterThanOrEqual(2);
+      expect(screen.getAllByText(/Confirmed/).length).toBeGreaterThanOrEqual(2);
     });
 
     it('Confirm all is disabled while the batch is in flight', async () => {
@@ -562,7 +612,7 @@ describe('MonthlyMiniWindow', () => {
           <MonthlyMiniWindow />
         </MemoryRouter>,
       );
-      await screen.findByText('Brokerage One');
+      await screen.findByText(/Brokerage One/);
       // Confirm ONLY the first card via its own button.
       const confirms = screen.getAllByRole('button', { name: /^confirm$/i });
       await user.click(confirms[0]);
@@ -577,9 +627,9 @@ describe('MonthlyMiniWindow', () => {
       // flip is a status announcement. Wave-5: every card (plus the batch
       // summary paragraph) pre-mounts its own role="status" span now, so
       // scope the assertion to the ones actually carrying text.
-      expect(screen.getAllByText('Confirmed')).toHaveLength(1);
+      expect(screen.getAllByText(/Confirmed/)).toHaveLength(1);
       const statusTexts = screen.getAllByRole('status').map((el) => el.textContent ?? '');
-      expect(statusTexts.filter((t) => t === 'Confirmed')).toHaveLength(1);
+      expect(statusTexts.filter((t) => t.includes('Confirmed'))).toHaveLength(1);
       expect(screen.getAllByRole('button', { name: /^confirm$/i })).toHaveLength(1);
     });
   });

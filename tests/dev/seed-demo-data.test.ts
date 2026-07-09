@@ -145,4 +145,16 @@ describe('seedDemoData', () => {
     );
     expect(bnd[0].sector).toBeNull();
   });
+
+  it('derives loan first-payment dates from an injectable reference day (Wave 11 T20)', async () => {
+    await seedDemoData(db, { todayISO: '2026-07-08' });
+    const loans = await db.select<{ name: string; first_payment_date: string }>(
+      'SELECT name, first_payment_date FROM loans',
+    );
+    const byName = new Map(loans.map((l) => [l.name, l.first_payment_date]));
+    // Mortgage: exactly 54 months before 2026-07 → 2022-01-01.
+    expect(byName.get('Mortgage')).toBe('2022-01-01');
+    // Car loan: exactly 18 months before → 2025-01-01.
+    expect(byName.get('Car Loan')).toBe('2025-01-01');
+  });
 });

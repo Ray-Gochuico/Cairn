@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { formatCurrencyCents } from '@/lib/format';
 import {
   Dialog,
   DialogContent,
@@ -65,7 +66,7 @@ export function MarkReimbursedDialog({
         <DialogHeader>
           <DialogTitle>Mark as reimbursed</DialogTitle>
           <DialogDescription>
-            {transaction.merchant} — ${transaction.amount.toFixed(2)}
+            {transaction.merchant} — {formatCurrencyCents(transaction.amount)}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 py-2">

@@ -6,16 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { ImportCsvButton } from '@/components/import/ImportCsvButton';
-
-const currencyFormatter = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  maximumFractionDigits: 0,
-});
-
-function formatCurrency(value: number): string {
-  return currencyFormatter.format(value);
-}
+import { formatCurrency } from '@/lib/format';
 
 export interface ValueHistorySectionProps {
   /** PROPERTY or VEHICLE — the discriminator for the snapshots row. */

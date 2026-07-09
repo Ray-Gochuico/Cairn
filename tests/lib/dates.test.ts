@@ -1,5 +1,19 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { currentAge, currentAgeAsOf } from '@/lib/dates';
+import { currentAge, currentAgeAsOf, localTodayISO, dateFromLocalISO } from '@/lib/dates';
+
+describe('localTodayISO', () => {
+  it('formats a passed Date by LOCAL parts, not UTC', () => {
+    const d = new Date(2026, 0, 31, 23, 30);
+    expect(localTodayISO(d)).toBe('2026-01-31');
+  });
+});
+
+describe('dateFromLocalISO', () => {
+  it('parses an ISO day to LOCAL midnight so local accessors agree', () => {
+    const d = dateFromLocalISO('2026-07-08');
+    expect([d.getFullYear(), d.getMonth(), d.getDate()]).toEqual([2026, 6, 8]);
+  });
+});
 
 describe('currentAge', () => {
   beforeEach(() => {

@@ -424,11 +424,6 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
     shortDefinition:
       'The short symbols used to identify stocks, ETFs, and mutual funds on an exchange (e.g., VTI, AAPL, VOO).',
   },
-  'GROWTH & TAX': {
-    term: 'Growth & Tax',
-    shortDefinition:
-      'The Inputs page where you tune assumptions about long-term growth rates and tax-rule schedules used by every projection.',
-  },
 
   // ─── Roadmap node-body terms (W7-UX MF-3: glossarize Roadmap bodies) ──
   BACKDOOR: {

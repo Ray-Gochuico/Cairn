@@ -127,6 +127,52 @@ describe('Section1_WhoYouAre', () => {
     ).toBeInTheDocument();
   });
 
+  it('T23: renders each added person as a chip', () => {
+    usePersonsStore.setState({
+      persons: [
+        { id: 1, name: 'Alice', annualSalaryPretax: 0, hourlyRate: null } as unknown as Person,
+        { id: 2, name: 'Bob', annualSalaryPretax: 0, hourlyRate: null } as unknown as Person,
+      ],
+      isLoading: false, error: null, load: async () => {}, create: async () => 1,
+      update: async () => {}, remove: async () => {},
+    } as never);
+    render(<Section1_WhoYouAre status="in_progress" onSetStatus={() => {}} />);
+    const chips = screen.getByTestId('person-chips');
+    expect(within(chips).getByText('Alice')).toBeInTheDocument();
+    expect(within(chips).getByText('Bob')).toBeInTheDocument();
+    expect(within(chips).getByRole('button', { name: /edit alice/i })).toBeInTheDocument();
+    expect(within(chips).getByRole('button', { name: /remove bob/i })).toBeInTheDocument();
+  });
+
+  it('T23: Edit on a chip opens the person dialog pre-filled with the name', async () => {
+    const user = userEvent.setup();
+    usePersonsStore.setState({
+      persons: [{ id: 1, name: 'Alice', dateOfBirth: '1990-01-01', annualSalaryPretax: 0, hourlyRate: null } as unknown as Person],
+      isLoading: false, error: null, load: async () => {}, create: async () => 1,
+      update: async () => {}, remove: async () => {},
+    } as never);
+    render(<Section1_WhoYouAre status="in_progress" onSetStatus={() => {}} />);
+    await user.click(screen.getByRole('button', { name: /edit alice/i }));
+    expect(await screen.findByRole('heading', { name: /edit person/i })).toBeInTheDocument();
+    expect((screen.getByLabelText(/name/i) as HTMLInputElement).value).toBe('Alice');
+  });
+
+  it('T23: Remove on a chip confirms then calls remove(id)', async () => {
+    const user = userEvent.setup();
+    const remove = vi.fn().mockResolvedValue(undefined);
+    usePersonsStore.setState({
+      persons: [{ id: 7, name: 'Carol', annualSalaryPretax: 0, hourlyRate: null } as unknown as Person],
+      isLoading: false, error: null, load: async () => {}, create: async () => 1,
+      update: async () => {}, remove,
+    } as never);
+    render(<Section1_WhoYouAre status="in_progress" onSetStatus={() => {}} />);
+    await user.click(screen.getByRole('button', { name: /remove carol/i }));
+    // Confirm in the house ConfirmDialog.
+    const confirmBtn = await screen.findByRole('button', { name: /^(remove|confirm|delete)/i });
+    await user.click(confirmBtn);
+    expect(remove).toHaveBeenCalledWith(7);
+  });
+
   it('clicking Add manually on the Persons card opens the PersonForm dialog', async () => {
     const user = userEvent.setup();
     render(

@@ -209,6 +209,12 @@ describe('Section 4 stragglers', () => {
       const accts = [makeAccount(1, AccountType.ACCOUNT_401K, { allowsMegaBackdoorRollover: false })];
       expect(evaluateMegaBackdoor(makeContext({ accounts: accts })).status).toBe('skipped');
     });
+    it('cites the interpolated 2026 §415(c) combined limit, year-anchored, not the stale $66k', () => {
+      const accts = [makeAccount(1, AccountType.ACCOUNT_401K, { allowsMegaBackdoorRollover: true })];
+      const r = evaluateMegaBackdoor(makeContext({ accounts: accts }));
+      expect(r.evidence).toMatch(/\$72,000 .*2026/);
+      expect(r.evidence).not.toContain('$66k');
+    });
   });
 });
 
@@ -289,6 +295,12 @@ describe('Section 5/6 rules', () => {
     it('info with a 401(k) (chart guidance, not auto-tracked)', () => {
       const accts = [makeAccount(1, AccountType.ACCOUNT_401K)];
       expect(evaluateMax401k(makeContext({ accounts: accts })).status).toBe('info');
+    });
+    it('cites the interpolated 2026 deferral limit, year-anchored, not the stale $23k', () => {
+      const accts = [makeAccount(1, AccountType.ACCOUNT_401K)];
+      const r = evaluateMax401k(makeContext({ accounts: accts }));
+      expect(r.evidence).toMatch(/\$24,500 .*2026/);
+      expect(r.evidence).not.toContain('$23k');
     });
   });
 

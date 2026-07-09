@@ -214,9 +214,10 @@ describe('FinancialIndependenceCard', () => {
     expect(value).toBeLessThan(50);
   });
 
-  it('headline shows ∞ when contributions are 0 and growth cannot reach target', () => {
-    // Tiny portfolio, no contributions, only zero-rate scenario -> Infinity
-    // Use a single 0% scenario so the Moderate fallback is also unreachable.
+  it('renders "—" + an unreachable note when a scenario never reaches the target in real terms', () => {
+    // Tiny portfolio, no contributions, a single 0% nominal scenario. At 3%
+    // inflation the real rate is negative → unreachable → the headline and the
+    // row render "—" (not the old "∞") and an explanatory note appears.
     primeStores({
       scenarios: [{ label: 'Moderate', rate: 0 }],
       contributionAmounts: [],
@@ -232,7 +233,11 @@ describe('FinancialIndependenceCard', () => {
     );
 
     const headline = screen.getByTestId('fi-headline');
-    expect(headline.textContent).toContain('∞');
+    expect(headline.textContent).toBe('—');
+    expect(headline.textContent).not.toContain('∞');
+    expect(
+      screen.getByText(/never reaches the target in real terms/i),
+    ).toBeInTheDocument();
   });
 
   it('renders all scenarios from household.growthScenarios as table rows', () => {

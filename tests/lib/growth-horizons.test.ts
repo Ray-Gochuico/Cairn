@@ -3,7 +3,17 @@ import {
   GROWTH_HORIZONS,
   sumLatestOnOrBefore,
   computeHorizonGrowth,
+  minusMonths,
 } from '@/lib/growth-horizons';
+
+describe('minusMonths (exported, Wave 11 T8)', () => {
+  it('clamps to the target month last day (no forward overflow)', () => {
+    expect(minusMonths(new Date(Date.UTC(2026, 9, 31)), 6)).toBe('2026-04-30');
+  });
+  it('keeps the day when the target month has it', () => {
+    expect(minusMonths(new Date(Date.UTC(2026, 6, 15)), 6)).toBe('2026-01-15');
+  });
+});
 
 describe('GROWTH_HORIZONS', () => {
   it('defines the five horizons in 1d → 1y order', () => {

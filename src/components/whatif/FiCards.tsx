@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import { coastFi } from '@/lib/coast-fi';
-import { realRateOf } from '@/lib/calculators/real-rate';
+import { realRateOf, realRateOfUnfloored } from '@/lib/calculators/real-rate';
 import { currentAge } from '@/lib/dates';
 import { formatCurrency } from '@/lib/format';
 import { effectiveSwr } from '@/lib/scenarios/effective-swr';
@@ -32,6 +32,7 @@ interface ComputedRow {
   rate: number;
   rateLabel: string;
   swr: number;
+  inflation: number;
 }
 
 function pickReferenceScenario(scenarios: Scenario[]): Scenario | null {
@@ -114,6 +115,7 @@ function computeCards(props: FiCardsProps, settings: AppSettings | null): Comput
     rate: rate.rate,
     rateLabel: rate.label,
     swr,
+    inflation,
   };
 }
 
@@ -396,9 +398,14 @@ export default function FiCards(props: FiCardsProps) {
   }
   if (!computed) return null;
 
-  const { liquidNw, fiTarget, coastFiTarget, yearsUntilRetirement, rate, rateLabel, swr } = computed;
+  const { liquidNw, fiTarget, coastFiTarget, yearsUntilRetirement, rate, rateLabel, swr, inflation } =
+    computed;
   const ratePct = (rate * 100).toFixed(1);
   const withdrawalPct = (swr * 100).toFixed(1);
+  // T17: state BOTH bases so the modal/chart real-dollar numbers are legible —
+  // "Moderate 7.0% nominal (≈4.4% real after 2.5% inflation)".
+  const realPct = (realRateOfUnfloored(rate, inflation) * 100).toFixed(1);
+  const inflationPct = (inflation * 100).toFixed(1);
 
   return (
     <div className="space-y-2" data-testid="whatif-fi-cards-wrap">
@@ -429,7 +436,7 @@ export default function FiCards(props: FiCardsProps) {
           }
           target={coastFiTarget}
           liquidNw={liquidNw}
-          explainer={`${rateLabel} ${ratePct}% growth, ${yearsUntilRetirement}y to retirement`}
+          explainer={`${rateLabel} ${ratePct}% nominal (≈${realPct}% real after ${inflationPct}% inflation), ${yearsUntilRetirement}y to retirement`}
         />
       </div>
       <RetirementAgeControl scenarios={props.scenarios} persons={props.persons} />

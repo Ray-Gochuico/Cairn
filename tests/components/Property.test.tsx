@@ -527,6 +527,28 @@ describe('Property page', () => {
     expect(screen.getByText(/\$2,550/)).toBeInTheDocument();
   });
 
+  it('counts only active rentals and badges ended ones (Wave 11 T18)', async () => {
+    useHousingPaymentsStore.setState({
+      housingPayments: [
+        {
+          id: 1, householdId: 1, ownerPersonId: null, name: 'Active Apt',
+          monthlyAmount: 2400, startDate: '2025-01-01', endDate: null,
+        },
+        {
+          id: 2, householdId: 1, ownerPersonId: null, name: 'Old Rental',
+          monthlyAmount: 150, startDate: '2019-01-01', endDate: '2020-01-01',
+        },
+      ],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+
+    renderPage();
+
+    expect(await screen.findByText(/1 active rental/i)).toBeInTheDocument();
+    expect(screen.queryByText(/\$2,550/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Ended Jan 1, 2020/)).toBeInTheDocument();
+  });
+
   it('renders the owner person tag on a rental card', async () => {
     usePersonsStore.setState({
       persons: [

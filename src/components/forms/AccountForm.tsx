@@ -394,7 +394,7 @@ export default function AccountForm({
           <div className="space-y-2 pt-2">
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" {...form.register('autoFetchEnabled')} />
-              Auto-fetch balance (Phase 3+)
+              Auto-fetch balance
             </label>
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" {...form.register('excludedFromNetWorth')} />

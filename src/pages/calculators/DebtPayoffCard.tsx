@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useLoansStore } from '@/stores/loans-store';
+import { useLocalToday } from '@/lib/use-local-today';
 import { amortize, nextPaymentDateFrom, scheduleIsCapped } from '@/lib/amortization';
 import { CalculatorCard } from './CalculatorCard';
 import { formatCurrency } from '@/lib/format';
@@ -52,8 +53,8 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
     defaults,
   );
 
-  // One "today" per mount: anchors every remaining schedule consistently.
-  const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  // Live LOCAL day (Wave 11 T10): anchors every remaining schedule.
+  const todayIso = useLocalToday();
 
   const projections = useMemo(
     () => projectionsFor(loans, values.strategy, values.extraTotal, todayIso),
@@ -240,6 +241,7 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
       )}
 
       {/* Per-loan rows */}
+      <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-muted-foreground">
@@ -286,6 +288,7 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
           })}
         </tbody>
       </table>
+      </div>
     </CalculatorCard>
   );
 }

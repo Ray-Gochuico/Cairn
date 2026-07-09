@@ -371,6 +371,29 @@ describe('OvertimeCard', () => {
     expect(screen.getByText(/est\. annual federal tax saved/i)).toBeInTheDocument();
   });
 
+  it('T21: switching Bi-weekly → Weekly DOUBLES the annualized OBBBA figure (kills the hardcoded-26)', async () => {
+    // Same 8h premium row; annualization multiplies by periods/year. Bi-weekly
+    // uses 26, Weekly 52 — so the annual tax-saved figure must exactly double.
+    // A mutation that hardcodes 26 instead of periodsPerYear(period) would leave
+    // the two equal and this test would catch it.
+    const user = userEvent.setup();
+    primeStores();
+    render(<MemoryRouter><OvertimeCard /></MemoryRouter>);
+    await screen.findByTestId('ot-takehome');
+
+    const biweekly = parseFloat(
+      (await screen.findByTestId('ot-obbba-deduction')).textContent!.replace(/[$,]/g, ''),
+    );
+
+    await user.click(screen.getByRole('combobox', { name: /pay period/i }));
+    await user.click(await screen.findByRole('option', { name: /^weekly$/i }));
+
+    const weekly = parseFloat(
+      screen.getByTestId('ot-obbba-deduction').textContent!.replace(/[$,]/g, ''),
+    );
+    expect(weekly).toBeCloseTo(biweekly * 2, 0);
+  });
+
   it('headline equals computeSupplementalWageTax wiring exactly (parity, single eligible person)', async () => {
     const { aggregateHouseholdPretax, computeSupplementalWageTax } = await import(
       '@/lib/calculators/supplemental-wage'

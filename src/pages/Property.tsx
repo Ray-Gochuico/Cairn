@@ -14,7 +14,9 @@ import { AssetSnapshotOwnerType } from '@/types/enums';
 import { filterByOwnerPersonId } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { resolveUtilityCategoryIds } from '@/lib/category-config';
-import { monthlyHousingObligation } from '@/lib/recurring-obligations';
+import { monthlyHousingObligation, isActiveOn } from '@/lib/recurring-obligations';
+import { useLocalToday } from '@/lib/use-local-today';
+import { formatDate } from '@/lib/format';
 import { CategoryMultiSelect } from '@/components/categories/CategoryMultiSelect';
 import { PROPERTY_TYPE_LABELS } from '@/components/forms/PropertyForm';
 import {
@@ -297,17 +299,26 @@ function PropertyUtilitiesCard({
 interface RentalCardProps {
   rental: HousingPayment;
   ownerLabel: string;
+  today: string;
   onRemove: () => void | Promise<void>;
 }
 
-function RentalCard({ rental, ownerLabel, onRemove }: RentalCardProps) {
+function RentalCard({ rental, ownerLabel, today, onRemove }: RentalCardProps) {
+  const ended = !isActiveOn(rental, today);
   return (
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <CardTitle className="text-base truncate">{rental.name}</CardTitle>
-            <CardDescription className="text-xs">Rent</CardDescription>
+            <CardDescription className="text-xs">
+              Rent
+              {ended && rental.endDate ? (
+                <span className="ml-2 text-muted-foreground">
+                  Ended {formatDate(rental.endDate)}
+                </span>
+              ) : null}
+            </CardDescription>
           </div>
           <div className="flex shrink-0 gap-2">
             <Button asChild size="sm" variant="outline">
@@ -429,7 +440,7 @@ export default function Property() {
     reload,
   );
 
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = useLocalToday();
 
   const visibleProperties = useMemo(
     () => filterByOwnerPersonId(properties, filter, persons),
@@ -441,9 +452,14 @@ export default function Property() {
     [housingPayments, filter, persons],
   );
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIso;
   const totalMonthlyHousingObligation = useMemo(
     () => monthlyHousingObligation(visibleRentals, today),
+    [visibleRentals, today],
+  );
+  // Wave 11 T18: the count uses the same active predicate as the dollar total.
+  const activeRentals = useMemo(
+    () => visibleRentals.filter((r) => isActiveOn(r, today)),
     [visibleRentals, today],
   );
 
@@ -660,8 +676,8 @@ export default function Property() {
                   </span>
                 </div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                  {visibleRentals.length} active rental
-                  {visibleRentals.length === 1 ? '' : 's'} · feeds Spending &amp;
+                  {activeRentals.length} active rental
+                  {activeRentals.length === 1 ? '' : 's'} · feeds Spending &amp;
                   What-If projection
                 </div>
               </div>
@@ -672,6 +688,7 @@ export default function Property() {
               <RentalCard
                 key={r.id}
                 rental={r}
+                today={today}
                 ownerLabel={
                   r.ownerPersonId == null
                     ? 'Joint'

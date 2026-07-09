@@ -1,5 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
+import { localTodayISO } from '@/lib/dates';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   HousingPaymentBaseSchema,
@@ -28,7 +29,10 @@ export const DEFAULT_HOUSING_PAYMENT: HousingPaymentFormValues = {
   ownerPersonId: null,
   name: '',
   monthlyAmount: 0,
-  startDate: new Date().toISOString().slice(0, 10),
+  // Filled with the LOCAL calendar day at form mount (Wave 11 T10) — a
+  // module-level `new Date()` froze the draft's start date at bundle-load,
+  // in UTC. Empty here; the form supplies localTodayISO() per mount.
+  startDate: '',
   endDate: null,
 };
 
@@ -51,9 +55,13 @@ export default function HousingPaymentForm({
   onCancel,
   submitLabel = 'Save',
 }: HousingPaymentFormProps) {
+  const defaults = useMemo(
+    () => ({ ...initial, startDate: initial.startDate || localTodayISO() }),
+    [initial],
+  );
   const form = useForm<HousingPaymentFormValues>({
     resolver: zodResolver(HousingPaymentFormSchema),
-    defaultValues: initial,
+    defaultValues: defaults,
   });
 
   const onlyOnePerson = persons.length === 1;

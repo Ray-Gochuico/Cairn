@@ -19,12 +19,12 @@ export function OutcomeSummary({ result, goalAmount }: Props) {
           the page's headline figure). text-success-foreground on the page
           --background clears AA on both themes: light 5.46:1 / dark 15.39:1. */}
       <div className="text-5xl font-bold text-success-foreground tabular-nums">{Math.round(pct)}%</div>
-      {/* UX F3 (BT-8) — run-meta caption directly under the headline hero: what
-          this run covered (period count · goal · real dollars · data span).
-          role="status": announces run completion politely — this line mounts
-          with the results, so SRs read "N historical periods · goal …". */}
+      {/* UX F3 (BT-8) / BT-15 — run-meta caption directly under the headline
+          hero. role="status" announces the verdict, so the line LEADS with the
+          answer (success rate) rather than the period count, then names the
+          basis (real dollars) and the data span. */}
       <div role="status" data-testid="backtest-run-meta" className="text-xs text-muted-foreground">
-        {total} historical periods · goal {formatCompactCurrency(goalAmount)} · real dollars · 1871–{lastDataYear}
+        {Math.round(pct)}% of {total} historical periods met your goal · real dollars · 1871–{lastDataYear}
       </div>
       <div className="text-sm">
         <strong>{result.goalMetCount} of {total}</strong> historical periods ended at or

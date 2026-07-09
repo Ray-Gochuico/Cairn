@@ -16,7 +16,10 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import BarChartCard, { type BarChartSeries } from '@/components/charts/BarChartCard';
+import StackedAreaChartCard, { type StackedAreaSeries } from '@/components/charts/StackedAreaChartCard';
+import { CHART_PALETTE } from '@/components/charts/palette';
+import { formatCurrency, formatMonth } from '@/lib/format';
+import { useLocalToday } from '@/lib/use-local-today';
 import { Button } from '@/components/ui/button';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import type { CsvColumn } from '@/lib/csv';
@@ -38,16 +41,6 @@ import { EmptyState } from '@/components/layout/EmptyState';
  *
  * Recharts only enters via the chart card wrapper (no Recharts import).
  */
-
-const currencyFormatter = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  maximumFractionDigits: 0,
-});
-
-function formatCurrency(value: number): string {
-  return currencyFormatter.format(value);
-}
 
 const LOAN_TYPE_LABEL: Record<LoanType, string> = {
   MORTGAGE: 'Mortgage',
@@ -90,15 +83,6 @@ function projectLoan(loan: Loan, todayIso: string): LoanProjection {
     ? amortize({ ...base, extraPayment: 0 })
     : withDefault;
   return { loan, withDefault, withoutExtra };
-}
-
-function formatPaymentMonth(isoDate: string): string {
-  const d = new Date(isoDate + 'T00:00:00Z');
-  return d.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-  });
 }
 
 /**
@@ -198,7 +182,7 @@ function AmortizationTable({ schedule }: { schedule: ScheduleEntry[] }) {
         <tbody>
           {head.map((row, i) => (
             <tr key={`h-${i}`} className="border-b last:border-b-0">
-              <td className="py-1.5">{row.paymentDate}</td>
+              <td className="py-1.5">{formatMonth(row.paymentDate)}</td>
               <td className="py-1.5 text-right tabular-nums">{formatCurrency(row.principal)}</td>
               <td className="py-1.5 text-right tabular-nums">{formatCurrency(row.interest)}</td>
               <td className="py-1.5 text-right tabular-nums">{formatCurrency(row.balance)}</td>
@@ -213,7 +197,7 @@ function AmortizationTable({ schedule }: { schedule: ScheduleEntry[] }) {
           )}
           {tail.map((row, i) => (
             <tr key={`t-${i}`} className="border-b last:border-b-0">
-              <td className="py-1.5">{row.paymentDate}</td>
+              <td className="py-1.5">{formatMonth(row.paymentDate)}</td>
               <td className="py-1.5 text-right tabular-nums">{formatCurrency(row.principal)}</td>
               <td className="py-1.5 text-right tabular-nums">{formatCurrency(row.interest)}</td>
               <td className="py-1.5 text-right tabular-nums">{formatCurrency(row.balance)}</td>
@@ -255,7 +239,7 @@ function LoanCard({ projection, expanded, onToggleExpand, schedule }: LoanCardPr
     ? Math.min(100, Math.max(0, (paid / loan.originalAmount) * 100))
     : 0;
   const lastEntry = withDefault.schedule[withDefault.schedule.length - 1];
-  const payoffDate = lastEntry ? formatPaymentMonth(lastEntry.paymentDate) : '—';
+  const payoffDate = lastEntry ? formatMonth(lastEntry.paymentDate) : '—';
 
   const hasExtra = loan.extraPaymentDefault > 0;
   const interestSavings = hasExtra
@@ -265,7 +249,7 @@ function LoanCard({ projection, expanded, onToggleExpand, schedule }: LoanCardPr
     ? withoutExtra.schedule[withoutExtra.schedule.length - 1]
     : null;
   const payoffDateNoExtra = lastNoExtraEntry
-    ? formatPaymentMonth(lastNoExtraEntry.paymentDate)
+    ? formatMonth(lastNoExtraEntry.paymentDate)
     : '—';
 
   // Round-2 A1 (same class as DebtPayoffCard): a capped schedule's tail is
@@ -411,8 +395,9 @@ export default function Loans() {
     [loans, filter, persons],
   );
 
-  // One "today" per mount: anchors every remaining schedule consistently.
-  const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  // Live LOCAL day (Wave 11 T10): anchors every remaining schedule; re-derives
+  // at the midnight flip.
+  const todayIso = useLocalToday();
 
   const projections = useMemo(
     () => visibleLoans.map((l) => projectLoan(l, todayIso)),
@@ -467,12 +452,12 @@ export default function Loans() {
     [projections, todayIso],
   );
 
-  const debtChartSeries = useMemo<BarChartSeries[]>(
+  const debtChartSeries = useMemo<StackedAreaSeries[]>(
     () =>
-      debtTypes.map((t) => ({
+      debtTypes.map((t, i) => ({
         dataKey: t,
         label: LOAN_TYPE_LABEL[t],
-        stackId: 'debt',
+        color: CHART_PALETTE[i % CHART_PALETTE.length],
       })),
     [debtTypes],
   );
@@ -611,7 +596,7 @@ export default function Loans() {
       </div>
 
       {debtRows.length > 0 ? (
-        <BarChartCard
+        <StackedAreaChartCard
           title="Total debt over time"
           subtitle={
             debtTypes.length > 1
@@ -622,6 +607,11 @@ export default function Loans() {
           xKey="month"
           series={debtChartSeries}
           yFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+          xTickFormatter={
+            debtRows.length > 36
+              ? (m) => (String(m).endsWith('-01') ? String(m).slice(0, 4) : '')
+              : (m) => formatMonth(String(m))
+          }
         />
       ) : null}
     </PageContainer>

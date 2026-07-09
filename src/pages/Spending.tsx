@@ -1,5 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { formatCurrencyCents } from '@/lib/format';
+import { useLocalToday } from '@/lib/use-local-today';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { EmptyState } from '@/components/layout/EmptyState';
 import { useLoadGate } from '@/lib/use-load-gate';
@@ -31,6 +33,7 @@ import {
   monthlyRecurringObligation,
   monthlyHousingObligation,
   monthlyLeaseObligation,
+  isActiveOn,
 } from '@/lib/recurring-obligations';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { filterByPersonId } from '@/lib/filter-by-view';
@@ -264,8 +267,8 @@ export default function Spending() {
   // Recurring total — wave-9 M20: per-month figures (quarterly billers ÷3).
   const recurringTotal = recurring.reduce((s, g) => s + g.monthlyAmount, 0);
 
-  // Recurring obligations (rent + vehicle leases) active today.
-  const todayISO = new Date().toISOString().slice(0, 10);
+  // Recurring obligations (rent + vehicle leases) active today (Wave 11 T10).
+  const todayISO = useLocalToday();
   const recurringObligation = useMemo(
     () => monthlyRecurringObligation(housingPayments, vehicleLeases, todayISO),
     [housingPayments, vehicleLeases, todayISO],
@@ -278,11 +281,21 @@ export default function Spending() {
     () => monthlyLeaseObligation(vehicleLeases, todayISO),
     [vehicleLeases, todayISO],
   );
+  // Wave 11 T18: counts + card mount use the same active predicate as the
+  // dollar totals — an ended rent/lease no longer inflates the count.
+  const activeHousing = useMemo(
+    () => housingPayments.filter((h) => isActiveOn(h, todayISO)),
+    [housingPayments, todayISO],
+  );
+  const activeLeases = useMemo(
+    () => vehicleLeases.filter((l) => isActiveOn(l, todayISO)),
+    [vehicleLeases, todayISO],
+  );
 
   return (
     <PageContainer width="full" className="space-y-8">
       <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <h1 className="text-2xl font-semibold">Spending</h1>
         <div className="flex items-center gap-2">
           <ExportCsvButton baseName="transactions" columns={csvColumns} rows={transactions} />
@@ -310,7 +323,7 @@ export default function Spending() {
         </p>
       )}
 
-      {(housingPayments.length > 0 || vehicleLeases.length > 0) && (
+      {(activeHousing.length > 0 || activeLeases.length > 0) && (
         <section aria-label="Recurring obligations">
           <Card data-testid="spending-recurring-card">
             <CardHeader className="pb-2">
@@ -327,8 +340,8 @@ export default function Spending() {
                     {obligationCurrencyFormatter.format(housingObligation)}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    Rent · {housingPayments.length} rental
-                    {housingPayments.length === 1 ? '' : 's'}
+                    Rent · {activeHousing.length} rental
+                    {activeHousing.length === 1 ? '' : 's'}
                   </div>
                 </div>
                 <div>
@@ -336,8 +349,8 @@ export default function Spending() {
                     {obligationCurrencyFormatter.format(leaseObligation)}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    Leases · {vehicleLeases.length} lease
-                    {vehicleLeases.length === 1 ? '' : 's'}
+                    Leases · {activeLeases.length} lease
+                    {activeLeases.length === 1 ? '' : 's'}
                   </div>
                 </div>
               </div>
@@ -401,7 +414,7 @@ export default function Spending() {
                           ? (categoryById.get(row.categoryId)?.name ?? `Cat ${row.categoryId}`)
                           : 'Uncategorized'}
                       </span>
-                      <span>${row.total.toFixed(2)}</span>
+                      <span>{formatCurrencyCents(row.total)}</span>
                     </li>
                   ))}
               </ul>
@@ -429,7 +442,7 @@ export default function Spending() {
                 <CardTitle className="text-base">Subscriptions</CardTitle>
                 {recurring.length > 0 && (
                   <CardDescription>
-                    ${recurringTotal.toFixed(2)}/mo across {recurring.length} service
+                    {formatCurrencyCents(recurringTotal)}/mo across {recurring.length} service
                     {recurring.length !== 1 ? 's' : ''}
                   </CardDescription>
                 )}
@@ -443,7 +456,7 @@ export default function Spending() {
                       <li key={g.merchant} className="flex items-center justify-between text-sm">
                         <span>{g.merchant}</span>
                         <span className="text-muted-foreground">
-                          ${g.monthlyAmount.toFixed(2)}/mo
+                          {formatCurrencyCents(g.monthlyAmount)}/mo
                           {g.cadenceMonths > 1 ? ` · every ${g.cadenceMonths} mo` : ''} · {g.occurrences}×
                         </span>
                       </li>
@@ -475,7 +488,7 @@ export default function Spending() {
                           <span className="ml-2 text-muted-foreground">{t.date}</span>
                         </div>
                         <div className="flex items-center gap-4">
-                          <span>${t.amount.toFixed(2)}</span>
+                          <span>{formatCurrencyCents(t.amount)}</span>
                           <button
                             type="button"
                             onClick={() => setReimbursedTarget(t)}
@@ -556,9 +569,9 @@ export default function Spending() {
                     )}
                     <td className="py-2 text-right">
                       {t.amount < 0 ? (
-                        <span className="text-success-foreground">-${Math.abs(t.amount).toFixed(2)}</span>
+                        <span className="text-success-foreground">{formatCurrencyCents(t.amount)}</span>
                       ) : (
-                        <span>${t.amount.toFixed(2)}</span>
+                        <span>{formatCurrencyCents(t.amount)}</span>
                       )}
                     </td>
                     <td className="py-2 pr-2 text-right">

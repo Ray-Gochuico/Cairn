@@ -140,4 +140,38 @@ describe('BarChartCard', () => {
       expect(xAxis.dataset.sampleTick).toBe('01/26');
     });
   });
+
+  describe('emptyMessage (Wave 11 T11)', () => {
+    it('shows the message and does NOT mount the chart when every value is 0', () => {
+      const zeros = [
+        { month: '2026-01', value: 0 },
+        { month: '2026-02', value: 0 },
+      ];
+      render(
+        <BarChartCard
+          title="Contributions"
+          data={zeros}
+          xKey="month"
+          series={SERIES}
+          emptyMessage="No contributions yet"
+        />,
+      );
+      expect(screen.getByText('No contributions yet')).toBeInTheDocument();
+      expect(screen.queryByTestId('rc-barchart')).not.toBeInTheDocument();
+    });
+
+    it('renders the chart (no message) when there is real data', () => {
+      render(
+        <BarChartCard
+          title="Contributions"
+          data={makeData(3)}
+          xKey="month"
+          series={SERIES}
+          emptyMessage="No contributions yet"
+        />,
+      );
+      expect(screen.queryByText('No contributions yet')).not.toBeInTheDocument();
+      expect(screen.getByTestId('rc-barchart')).toBeInTheDocument();
+    });
+  });
 });

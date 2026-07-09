@@ -15,6 +15,14 @@ export interface DonutSlice {
   name: string;
   value: number;
   color?: string;
+  /**
+   * Stable entity identity for picker filtering, independent of the display
+   * `name`. Two entities can share a label (e.g. an account and a property
+   * both named "Nest Egg", or two loans both called "Loan"); keying the
+   * visibility filter on this — not on `name` — lets them be hidden/shown
+   * independently. Set by the entity-keyed donuts (Assets/Liabilities).
+   */
+  entityKey?: string;
 }
 
 // Long legends (Per-Company has ~11 items) wrap to 3+ rows and crowd the

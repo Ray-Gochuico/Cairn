@@ -191,7 +191,9 @@ describe('ConcentrationCard', () => {
     expect(link).toHaveAttribute('href', '/investments#concentration');
   });
 
-  it('uses red severity icon (text-red-500) for HIGH severity warnings', () => {
+  // Shared seed: 100% AAPL fires PER_TICKER_HIGH (HIGH) and
+  // PER_ASSET_CLASS_HIGH (HIGH) — two HIGH warnings.
+  function seedHighWarning() {
     useAccountsStore.setState({
       accounts: [{
         id: 1, householdId: 1, ownerPersonId: null, beneficiaryDependentId: null,
@@ -223,18 +225,31 @@ describe('ConcentrationCard', () => {
       isLoading: false, error: null, load: async () => {},
       upsert: async () => {}, remove: async () => {}, lookup: () => undefined,
     });
+  }
 
+  it('renders a visible "High" severity chip carrying the destructive token', () => {
+    seedHighWarning();
     render(
       <MemoryRouter>
         <ConcentrationCard />
       </MemoryRouter>,
     );
+    // At 100% AAPL, both PER_TICKER_HIGH and PER_ASSET_CLASS_HIGH (HIGH) fire.
+    // Severity is now surfaced as a visible text chip, not tint alone.
+    const chips = screen.getAllByText('High');
+    expect(chips.length).toBeGreaterThan(0);
+    expect(chips[0]).toHaveClass('bg-destructive-soft', 'text-destructive-soft-foreground');
+  });
 
-    // At 100% AAPL, both PER_TICKER_HIGH (HIGH/red) and PER_ASSET_CLASS_HIGH
-    // (HIGH/red) fire. There must be at least one icon carrying the
-    // destructive semantic token (--destructive maps to red in the palette).
-    const icons = screen.getAllByLabelText(/HIGH severity/i);
-    expect(icons.length).toBeGreaterThan(0);
-    expect(icons[0]).toHaveClass('text-destructive-soft-foreground');
+  it('marks the severity icon aria-hidden so the chip is the accessible signal', () => {
+    seedHighWarning();
+    const { container } = render(
+      <MemoryRouter>
+        <ConcentrationCard />
+      </MemoryRouter>,
+    );
+    // The icon no longer exposes an accessible severity label — the chip does.
+    expect(screen.queryByLabelText(/severity/i)).toBeNull();
+    expect(container.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
   });
 });

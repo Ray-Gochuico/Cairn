@@ -3,6 +3,7 @@ import {
   Legend,
   Line,
   LineChart,
+  ReferenceDot,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -17,6 +18,7 @@ import {
 } from '@/components/ui/card';
 import { CHART_PALETTE } from './palette';
 import { CHART_TOOLTIP_PROPS } from './ChartTooltip';
+import { ChartLegend } from './ChartLegend';
 
 // CSS-variable references so axes / grid flip with the theme (Wave-3
 // Design must-have #2).
@@ -39,6 +41,16 @@ export interface LineChartSeries {
    * behaviour (WCAG 1.4.1 additive fix; Charts Fence: additive/opt-in).
    */
   strokeDasharray?: string;
+  /** Optional emphasis width (default 2). The FI card drives the headline
+   * Moderate line at 2.5 (Wave 11 T13). */
+  strokeWidth?: number;
+}
+
+/** A target-crossing marker rendered as a ReferenceDot (Wave 11 T13). */
+export interface LineChartMarker {
+  x: string | number;
+  y: number;
+  color: string;
 }
 
 export interface LineChartCardProps {
@@ -49,6 +61,7 @@ export interface LineChartCardProps {
   xKey: string;
   series: LineChartSeries[];
   yFormatter?: (value: number) => string;
+  markers?: LineChartMarker[];
 }
 
 export default function LineChartCard({
@@ -59,6 +72,7 @@ export default function LineChartCard({
   xKey,
   series,
   yFormatter,
+  markers,
 }: LineChartCardProps) {
   return (
     <Card>
@@ -69,7 +83,7 @@ export default function LineChartCard({
       <CardContent>
         <ResponsiveContainer width="100%" height={height}>
           <LineChart data={data} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+            <CartesianGrid vertical={false} stroke={GRID_STROKE} />
             <XAxis dataKey={xKey} stroke={AXIS_STROKE} fontSize={12} tick={AXIS_TICK} />
             <YAxis
               stroke={AXIS_STROKE}
@@ -87,7 +101,7 @@ export default function LineChartCard({
                   : undefined
               }
             />
-            <Legend />
+            <Legend content={<ChartLegend />} />
             {series.map((s, idx) => (
               <Line
                 key={s.dataKey}
@@ -95,11 +109,22 @@ export default function LineChartCard({
                 dataKey={s.dataKey}
                 name={s.label}
                 stroke={s.color ?? CHART_PALETTE[idx % CHART_PALETTE.length]}
-                strokeWidth={2}
+                strokeWidth={s.strokeWidth ?? 2}
                 strokeDasharray={s.strokeDasharray}
                 dot={false}
                 activeDot={{ r: 4 }}
                 isAnimationActive={false}
+              />
+            ))}
+            {markers?.map((m, i) => (
+              <ReferenceDot
+                key={`marker-${i}`}
+                x={m.x}
+                y={m.y}
+                r={4}
+                fill={m.color}
+                stroke="hsl(var(--background))"
+                strokeWidth={1.5}
               />
             ))}
           </LineChart>

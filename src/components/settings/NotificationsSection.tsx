@@ -25,7 +25,9 @@ export function NotificationsSection() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Notifications</CardTitle>
+        <CardTitle>
+          <h2 className="font-semibold leading-none tracking-tight">Notifications</h2>
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <p className="text-sm text-muted-foreground mb-3">

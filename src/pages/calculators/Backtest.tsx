@@ -94,8 +94,25 @@ export default function Backtest() {
     }, 0);
   };
 
+  // BT-15 — page-level live region. Live regions that are inserted into the DOM
+  // WITH their content already present are unreliably announced; a region that
+  // is pre-mounted empty (from the first render) and only later has its text set
+  // fires dependably. The results subtree mounts all at once, so we announce the
+  // headline verdict from here instead of relying on OutcomeSummary's own status.
+  const announcement = result
+    ? `${Math.round(
+        result.startYears.count > 0
+          ? (result.goalMetCount / result.startYears.count) * 100
+          : 0,
+      )}% of ${result.startYears.count} historical periods met your goal`
+    : '';
+
   return (
     <div className="space-y-4 min-w-0" data-testid="backtest-page">
+      {/* BT-15 — pre-mounted sr-only announcer (empty until a run completes). */}
+      <div role="status" aria-live="polite" className="sr-only" data-testid="backtest-announcer">
+        {announcement}
+      </div>
       {/* W2 / BT-6 — ONE canonical back-nav markup for every calculator detail
           route (the paycheck detail page has the identical block). Match it
           byte-for-byte here so the two detail pages don't drift. */}
@@ -147,6 +164,19 @@ export default function Backtest() {
 
       {result ? (
         <>
+          {/* BT-15 — the answer above the fold: the Outcome card (success rate +
+              distribution) leads, so the verdict is the first thing rendered
+              after the params. The chart (with its BelowGoalList annotation)
+              follows as supporting detail. */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Outcome</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <OutcomeSummary result={result} goalAmount={config.goalAmount} />
+              <OutcomeHistogram result={result} goalAmount={config.goalAmount} />
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Portfolio value over retirement</CardTitle>
@@ -158,15 +188,6 @@ export default function Backtest() {
                 worstStartYear={result.endings.worst.startYear}
               />
               <BelowGoalList result={result} goalAmount={config.goalAmount} />
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Outcome</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <OutcomeSummary result={result} goalAmount={config.goalAmount} />
-              <OutcomeHistogram result={result} goalAmount={config.goalAmount} />
             </CardContent>
           </Card>
         </>

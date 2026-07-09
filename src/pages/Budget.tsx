@@ -25,9 +25,9 @@ import BudgetCategoryPicker from '@/components/budget/BudgetCategoryPicker';
 import type { AddCategoryPayload } from '@/components/budget/AddCategoryDialog';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
-
-const currency = (n: number) =>
-  `$${Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+import { formatCurrency, formatMonth } from '@/lib/format';
+import { useLocalToday } from '@/lib/use-local-today';
+import { localTodayISO } from '@/lib/dates';
 
 export default function Budget() {
   const categories = useCategoriesStore((s) => s.categories);
@@ -49,12 +49,17 @@ export default function Budget() {
   const storeErrors = [categoriesError, transactionsError];
   const gate = useLoadGate([categoriesLoading, transactionsLoading], storeErrors, reload);
 
+  // Live LOCAL month (Wave 11 T9) — the month LIST and "current month" follow
+  // useLocalToday so a page left open across a month flip re-derives.
+  const todayISO = useLocalToday();
+  const currentMonth = todayISO.slice(0, 7);
   const months = useMemo(() => {
     const set = new Set(transactions.map((t) => t.date.slice(0, 7)));
-    set.add(new Date().toISOString().slice(0, 7));
+    set.add(currentMonth);
     return [...set].sort((a, b) => b.localeCompare(a));
-  }, [transactions]);
-  const [month, setMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  }, [transactions, currentMonth]);
+  // The SELECTED month is user state; init to the current local month.
+  const [month, setMonth] = useState(() => localTodayISO().slice(0, 7));
 
   const summary = useMemo(
     () => summarizeBudget(categories, transactions, month),
@@ -197,7 +202,7 @@ export default function Budget() {
           value={month}
           onChange={(e) => setMonth(e.target.value)}
         >
-          {months.map((m) => <option key={m} value={m}>{m}</option>)}
+          {months.map((m) => <option key={m} value={m}>{formatMonth(m)}</option>)}
         </select>
       </div>
 
@@ -205,7 +210,7 @@ export default function Budget() {
         <div className="flex items-baseline justify-between border-b pb-2">
           <h2 className="text-lg font-semibold">Spending</h2>
           <span className="text-sm text-muted-foreground tabular-nums">
-            {currency(summary.totalActual)} of {currency(summary.totalBudget)}
+            {formatCurrency(Math.abs(summary.totalActual))} of {formatCurrency(Math.abs(summary.totalBudget))}
           </span>
         </div>
       ) : (
@@ -241,7 +246,7 @@ export default function Budget() {
                   {parentName}
                 </h3>
                 <span className="text-xs text-muted-foreground tabular-nums">
-                  {currency(groupActual)} of {currency(groupBudget)}
+                  {formatCurrency(Math.abs(groupActual))} of {formatCurrency(Math.abs(groupBudget))}
                 </span>
               </div>
               <div className="divide-y">
@@ -272,7 +277,7 @@ export default function Budget() {
                 {MISC_CATEGORY_NAME}
               </h3>
               <span className="text-xs text-muted-foreground tabular-nums">
-                {currency(misc.actual)} of {currency(misc.budget ?? 0)}
+                {formatCurrency(Math.abs(misc.actual))} of {formatCurrency(Math.abs(misc.budget ?? 0))}
               </span>
             </div>
             <div className="divide-y">

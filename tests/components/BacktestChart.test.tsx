@@ -267,6 +267,20 @@ describe('BacktestChart — Bands mode (after toggle)', () => {
     expect(screen.getByTestId('rc-line-p50')).toBeInTheDocument();
   });
 
+  it('the three percentile bands fill from the dark-aware --chart-band token', async () => {
+    // Task 15: band fills must ride --chart-band (a token that lightens in the
+    // dark theme so the 0.12/0.28-opacity washes stay visible) — NOT the raw
+    // CHART_PALETTE[0] hex, which vanishes at 48% L on the near-black canvas.
+    const user = userEvent.setup();
+    render(<BacktestChart {...defaultProps} />);
+    await user.click(screen.getByTestId('backtest-mode-bands'));
+    for (const key of ['band1025', 'band2575', 'band7590']) {
+      expect(screen.getByTestId(`rc-area-${key}`).getAttribute('data-fill')).toBe(
+        'hsl(var(--chart-band))',
+      );
+    }
+  });
+
   it('does NOT render per-start-year Lines in Bands mode', async () => {
     const user = userEvent.setup();
     const result = makeResult();

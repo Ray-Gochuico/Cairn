@@ -8,6 +8,7 @@
     "dev": "vite",
     "dev:browser": "VITE_BROWSER_SHIM=1 vite",
     "dev:browser:seed": "VITE_BROWSER_SHIM=1 VITE_SEED_DEMO=1 vite --port 1422 --strictPort",
+    "dev:browser:fresh": "VITE_BROWSER_SHIM=1 vite --port 1423 --strictPort",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",

@@ -40,6 +40,22 @@ function severityColor(severity: ConcentrationWarning['severity']): string {
   }
 }
 
+// Visible severity label + chip tint. The chip — not the icon tint alone —
+// is now the accessible severity signal (tint-only fails color-blind and
+// low-contrast readers), so the AlertTriangle beside it goes aria-hidden.
+const SEVERITY_CHIP_BASE =
+  'inline-flex shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-medium';
+function severityChip(
+  severity: ConcentrationWarning['severity'],
+): { label: string; className: string } {
+  switch (severity) {
+    case 'HIGH': return { label: 'High', className: 'bg-destructive-soft text-destructive-soft-foreground' };
+    case 'MEDIUM': return { label: 'Watch', className: 'bg-warning-soft text-warning-foreground' };
+    case 'LOW':
+    default: return { label: 'Note', className: 'bg-info-soft text-info-foreground' };
+  }
+}
+
 export interface ConcentrationHealthCardProps {
   report: ConcentrationReport;
 }
@@ -64,17 +80,22 @@ function ConcentrationHealthCardImpl({ report }: ConcentrationHealthCardProps) {
           </div>
         ) : (
           <ul className="space-y-3">
-            {report.warnings.map((w, i) => (
+            {report.warnings.map((w, i) => {
+              const chip = severityChip(w.severity);
+              return (
               <li
                 key={`${w.type}-${w.ticker ?? w.assetClass ?? i}`}
                 className="flex items-start gap-3"
               >
                 <AlertTriangleIcon
                   className={`h-5 w-5 shrink-0 mt-0.5 ${severityColor(w.severity)}`}
-                  aria-label={`${w.severity} severity`}
+                  aria-hidden="true"
                 />
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm">{w.message}</div>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="text-sm">{w.message}</div>
+                    <span className={`${SEVERITY_CHIP_BASE} ${chip.className}`}>{chip.label}</span>
+                  </div>
                   <details className="mt-1">
                     <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
                       Why this matters
@@ -103,7 +124,8 @@ function ConcentrationHealthCardImpl({ report }: ConcentrationHealthCardProps) {
                   )}
                 </div>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
 

@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { apyToApr, compoundInterestSeries, type CompoundFrequency } from '@/lib/compound-interest';
+import {
+  apyToApr,
+  compoundInterestSeries,
+  toRealSummary,
+  type CompoundFrequency,
+  type CompoundInterestInput,
+} from '@/lib/compound-interest';
 
 describe('compoundInterestSeries', () => {
   it('zero rate yields linear PV + PMT × months', () => {
@@ -62,6 +68,52 @@ describe('compoundInterestSeries', () => {
     });
     expect(r.finalLow).toBeCloseTo(r.finalMid, 6);
     expect(r.finalMid).toBeCloseTo(r.finalHigh, 6);
+  });
+});
+
+describe('toRealSummary', () => {
+  const INPUT: CompoundInterestInput = {
+    pv: 1000,
+    monthlyContribution: 100,
+    annualRate: 0.07,
+    years: 10,
+    frequency: 'MONTHLY',
+  };
+
+  it('deflates the final balance by the HORIZON deflator', () => {
+    const series = compoundInterestSeries(INPUT);
+    const real = toRealSummary(INPUT, series, 0.025);
+    expect(real.finalMid).toBeCloseTo(series.finalMid / 1.025 ** 10, 6);
+    expect(real.finalLow).toBeCloseTo(series.finalLow / 1.025 ** 10, 6);
+    expect(real.finalHigh).toBeCloseTo(series.finalHigh / 1.025 ** 10, 6);
+  });
+
+  it('deflates contributions per contribution period (not by the horizon)', () => {
+    // pv 1000 + 100/mo, 10y monthly, 2.5% inflation. Each of the 120 monthly
+    // contributions is deflated by its OWN elapsed time (p/12 years). The
+    // closed sum is 11,622.28 — deflating the whole $13,000 by the horizon
+    // (13000/1.025^10 = 10,155) would UNDERSTATE it (the nominal-on-real bug).
+    const series = compoundInterestSeries(INPUT);
+    const real = toRealSummary(INPUT, series, 0.025);
+    expect(real.totalContributed).toBeCloseTo(11622.281075, 4);
+    expect(real.finalMid).toBeCloseTo(15091.301748, 4);
+    expect(real.totalInterestMid).toBeCloseTo(3469.020673, 4);
+  });
+
+  it('identity holds in real terms: finalMid = totalContributed + totalInterestMid', () => {
+    const series = compoundInterestSeries(INPUT);
+    const real = toRealSummary(INPUT, series, 0.025);
+    expect(real.finalMid).toBeCloseTo(real.totalContributed + real.totalInterestMid, 6);
+  });
+
+  it('zero inflation returns the nominal summary unchanged (guard)', () => {
+    const series = compoundInterestSeries(INPUT);
+    const real = toRealSummary(INPUT, series, 0);
+    expect(real.finalLow).toBe(series.finalLow);
+    expect(real.finalMid).toBe(series.finalMid);
+    expect(real.finalHigh).toBe(series.finalHigh);
+    expect(real.totalContributed).toBe(series.totalContributed);
+    expect(real.totalInterestMid).toBe(series.totalInterestMid);
   });
 });
 

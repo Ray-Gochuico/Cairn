@@ -38,7 +38,9 @@ export function DisclosuresSection() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Disclosures</CardTitle>
+        <CardTitle>
+          <h2 className="font-semibold leading-none tracking-tight">Disclosures</h2>
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">

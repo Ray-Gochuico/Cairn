@@ -1,4 +1,5 @@
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { formatCurrencyCents } from '@/lib/format';
 import { useLoadGate } from '@/lib/use-load-gate';
 import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
 import { Link } from 'react-router-dom';
@@ -93,9 +94,9 @@ const TransactionRow = memo(function TransactionRow({
       )}
       <td className="py-2 pr-3 text-right">
         {t.amount < 0 ? (
-          <span className="text-success-foreground">-${Math.abs(t.amount).toFixed(2)}</span>
+          <span className="text-success-foreground">{formatCurrencyCents(t.amount)}</span>
         ) : (
-          <span>${t.amount.toFixed(2)}</span>
+          <span>{formatCurrencyCents(t.amount)}</span>
         )}
       </td>
       <td className="py-2 text-right">

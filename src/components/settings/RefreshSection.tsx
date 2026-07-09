@@ -21,7 +21,7 @@ function formatLastRefreshed(iso: string | null): string {
   if (iso === null) return 'never';
   const parsed = new Date(iso);
   if (Number.isNaN(parsed.getTime())) return 'never';
-  return parsed.toLocaleString();
+  return parsed.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 export function RefreshSection() {
@@ -53,7 +53,9 @@ export function RefreshSection() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Market data</CardTitle>
+        <CardTitle>
+          <h2 className="font-semibold leading-none tracking-tight">Market data</h2>
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <p className="text-sm text-muted-foreground mb-3">

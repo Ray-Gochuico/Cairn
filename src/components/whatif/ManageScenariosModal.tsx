@@ -7,32 +7,47 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { useScenariosStore } from '@/stores/scenarios-store';
+import { useScenariosStore, type DollarMode } from '@/stores/scenarios-store';
 import { useLoansStore } from '@/stores/loans-store';
 import { summarizeLevers } from '@/lib/whatif/lever-summary';
 import { RenameScenarioDialog } from './RenameScenarioDialog';
 import { SaveCurrentDialog } from './SaveCurrentDialog';
 import type { Milestones } from '@/lib/scenarios';
+import { formatCurrency } from '@/lib/format';
 
 interface ManageScenariosModalProps {
   milestones: Map<number, Milestones>;
   onClose: () => void;
   onEditLevers?: (scenarioId: number) => void;
+  /**
+   * The page's dollar toggle + the same inflation the chart uses. The modal
+   * sits ON the What-If page whose chart obeys this toggle, so the "30y NW"
+   * column must follow it too — a modal number 2.1× the chart's is exactly the
+   * nominal-on-real class this app has shipped before (T17).
+   */
+  dollarMode: DollarMode;
+  inflation: number;
 }
 
 function fmtMilestone(iso?: string): string {
   return iso ?? '—';
 }
 
-function fmtCurrency(n?: number): string {
+/** 30-year net worth in the page's chosen basis: deflated to today's dollars
+ *  in real mode, nominal otherwise. */
+function fmtNetWorth30y(n: number | undefined, dollarMode: DollarMode, inflation: number): string {
   if (n == null) return '—';
-  return `$${Math.round(n).toLocaleString('en-US')}`;
+  return dollarMode === 'real'
+    ? formatCurrency(n / Math.pow(1 + inflation, 30))
+    : formatCurrency(n);
 }
 
 export function ManageScenariosModal({
   milestones,
   onClose,
   onEditLevers,
+  dollarMode,
+  inflation,
 }: ManageScenariosModalProps) {
   const { scenarios, duplicate, remove } = useScenariosStore();
   const { loans } = useLoansStore();
@@ -66,7 +81,9 @@ export function ManageScenariosModal({
                 <th className="py-1 pr-2">Levers Applied</th>
                 <th className="py-1 pr-2">Debt-free</th>
                 <th className="py-1 pr-2">FI</th>
-                <th className="py-1 pr-2">30y NW</th>
+                <th className="py-1 pr-2">
+                  30y NW {dollarMode === 'real' ? "(today's $)" : '(nominal)'}
+                </th>
                 <th className="py-1 pr-2 w-44">Actions</th>
               </tr>
             </thead>
@@ -93,7 +110,7 @@ export function ManageScenariosModal({
                     <td className="py-2 pr-2 align-top">{fmtMilestone(ms?.debtFreeISO)}</td>
                     <td className="py-2 pr-2 align-top">{fmtMilestone(ms?.financialIndependenceISO)}</td>
                     <td className="py-2 pr-2 align-top tabular-nums">
-                      {fmtCurrency(ms?.netWorth30y)}
+                      {fmtNetWorth30y(ms?.netWorth30y, dollarMode, inflation)}
                     </td>
                     <td className="py-2 pr-2 align-top">
                       <div className="flex gap-1 flex-wrap">

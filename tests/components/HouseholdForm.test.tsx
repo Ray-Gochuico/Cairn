@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { FilingStatus } from '@/types/enums';
@@ -87,6 +87,50 @@ describe('HouseholdForm city dropdown', () => {
     // Wait for async submit
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(submittedCity).toBe('NY_NYC');
+  });
+
+  it('renders withdrawal + inflation as percent-entry fields with % suffixes (Wave 11 T6)', () => {
+    primeNyTaxRules();
+    render(
+      <MemoryRouter>
+        <HouseholdForm
+          values={{ ...HOUSEHOLD_DEFAULT_VALUES, withdrawalRate: 0.04, inflationAssumption: 0.024 }}
+          onSubmit={async () => {}}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getByLabelText(/withdrawal rate/i)).toHaveValue(4);
+    expect(screen.getByLabelText(/inflation assumption/i)).toHaveValue(2.4);
+    expect(screen.getAllByText('%').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('converts percent fields back to stored fractions; untouched resubmit preserves them (Wave 11 T6)', async () => {
+    primeNyTaxRules();
+    let submitted: { withdrawalRate: number; inflationAssumption: number } | null = null;
+    render(
+      <MemoryRouter>
+        <HouseholdForm
+          values={{ ...HOUSEHOLD_DEFAULT_VALUES, withdrawalRate: 0.04, inflationAssumption: 0.024 }}
+          onSubmit={async (v) => {
+            submitted = { withdrawalRate: v.withdrawalRate, inflationAssumption: v.inflationAssumption };
+          }}
+        />
+      </MemoryRouter>,
+    );
+    // Dirty an UNRELATED field (Save is disabled until dirty) but leave the
+    // rate fields untouched — the stored fractions must survive verbatim
+    // (no 100x drift).
+    fireEvent.change(screen.getByLabelText(/monthly expense/i), { target: { value: '5000' } });
+    fireEvent.click(screen.getByRole('button', { name: /save/i }));
+    await waitFor(() => expect(submitted).not.toBeNull());
+    expect(submitted).toEqual({ withdrawalRate: 0.04, inflationAssumption: 0.024 });
+
+    submitted = null;
+    fireEvent.change(screen.getByLabelText(/withdrawal rate/i), { target: { value: '3.5' } });
+    fireEvent.click(screen.getByRole('button', { name: /save/i }));
+    await waitFor(() => expect(submitted).not.toBeNull());
+    expect(submitted!.withdrawalRate).toBeCloseTo(0.035, 10);
+    expect(submitted!.inflationAssumption).toBeCloseTo(0.024, 10);
   });
 
   it('shows no city options when state has no seeded city rules', () => {

@@ -43,6 +43,8 @@ import {
 } from '@/lib/growth-horizons';
 import { computeAccountBreakdown } from '@/lib/account-breakdown';
 import { colorForAccount } from '@/lib/chart-colors';
+import { useLocalToday } from '@/lib/use-local-today';
+import { dateFromLocalISO } from '@/lib/dates';
 import { useConcentration } from '@/lib/use-concentration';
 import { valueHoldings, type HoldingValuation } from '@/lib/holdings-value';
 import { classTargetVsActual, holdingTargetVsActual } from '@/lib/allocation-hierarchy';
@@ -357,13 +359,16 @@ export default function Investments() {
   // full snapshots array and scopes to the chart universe via the id set;
   // forward-only history means most horizons resolve to null today and the
   // card shows "Not enough history yet" for them — that's expected.
+  // Live LOCAL day (Wave 11 T9): every clock-derived memo on this page keys
+  // on it, re-deriving at the midnight/month flip.
+  const todayISO = useLocalToday();
   const investmentsGrowth = useMemo(
     () =>
       computeHorizonGrowth(
         (iso) => sumLatestOnOrBefore(snapshots, iso, growthAccountIds),
-        new Date(),
+        dateFromLocalISO(todayISO),
       ),
-    [snapshots, growthAccountIds],
+    [snapshots, growthAccountIds, todayISO],
   );
 
   // Concentration health is intentionally household-wide regardless of the
@@ -533,7 +538,7 @@ export default function Investments() {
     [valuations, settings?.assetClassTargetAllocations],
   );
 
-  const currentMonth = new Date().toISOString().slice(0, 7);
+  const currentMonth = todayISO.slice(0, 7);
 
   // 12-month window for the stacked-by-bucket contributions chart, the sole
   // contributions chart on the page. The stack height reads as the monthly
@@ -572,7 +577,7 @@ export default function Investments() {
     return map;
   }, [visibleSnapshots]);
 
-  const today529 = useMemo(() => new Date(), []);
+  const today529 = useMemo(() => dateFromLocalISO(todayISO), [todayISO]);
   const moderateRate = useMemo(() => pickModerateRate(household), [household]);
 
   // Top-level card registry. Each `render` returns the same JSX the page used
@@ -590,10 +595,10 @@ export default function Investments() {
   // injected "now" — the helper is otherwise pure/deterministic.
   const accountBreakdown = useMemo(
     () =>
-      computeAccountBreakdown(visibleAccounts, visibleSnapshots, new Date(), {
+      computeAccountBreakdown(visibleAccounts, visibleSnapshots, dateFromLocalISO(todayISO), {
         investableOnly,
       }),
-    [visibleAccounts, visibleSnapshots, investableOnly],
+    [visibleAccounts, visibleSnapshots, investableOnly, todayISO],
   );
 
   // Per-account swatch/segment colors for the breakdown card. Resolved here
