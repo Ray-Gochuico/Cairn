@@ -311,7 +311,10 @@ export default function PaycheckCalculator() {
       // computePretaxDeductions via dcfsaLimit(filingStatus).
       dcfsaMonthly: combined.dcfsaMonthly,
       hsaMonthly: f.hsaMonthly,
-      hsaEligible: f.hsaMonthly > 0,
+      // Round-3 E2: honor the stored per-person flag — entering HSA dollars
+      // is not eligibility. The field stays editable; eligibility gates
+      // whether it deducts.
+      hsaEligible: persons.some((p) => p.hsaEligible),
       filingStatus: f.filingStatus,
       personCount: Math.max(persons.length, 1),
       dependentCount: f.dependents,
@@ -655,9 +658,11 @@ export default function PaycheckCalculator() {
               </div>
               <div className="rounded-md border border-dashed border-muted-foreground/40 bg-muted/30 p-3 text-xs text-muted-foreground">
                 <strong className="text-foreground">No allowances field.</strong> The IRS
-                removed withholding allowances from the W-4 in 2020. Modern withholding uses
-                filing status, dependents, and the dollar adjustment above — so Cairn omits
-                the legacy allowances input entirely.
+                removed withholding allowances from the W-4 in 2020. Cairn's estimate uses
+                your filing status, the standard deduction, and the extra dollar amount
+                above — so it omits the legacy allowances input entirely. Dependents affect
+                the household HSA limit (family vs self-only); child tax credits aren't
+                modeled yet.
               </div>
             </section>
           </CardContent>
@@ -826,8 +831,9 @@ export default function PaycheckCalculator() {
               <h3 className="text-sm font-semibold">2 · Federal withholding</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 We estimate federal income tax from the {resolvedYear} brackets using your filing
-                status, dependents, and the standard deduction. There are no W-4 "allowances"
-                anymore; dependents and any extra dollar amount do that job now.
+                status, the standard deduction, and any extra dollar amount you add. Dependents
+                affect the household HSA limit (family vs self-only); child tax credits aren't
+                modeled yet.
               </p>
             </div>
             <div>

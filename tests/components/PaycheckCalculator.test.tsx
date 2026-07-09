@@ -453,3 +453,46 @@ describe('PaycheckCalculator', () => {
     expect(screen.getAllByText(/\$49,000/).length).toBeGreaterThan(0);
   });
 });
+
+describe('HSA eligibility + dependents honesty (round-3 E2)', () => {
+  beforeEach(() => { resetStores(); });
+
+  it('a household with no hsaEligible person gets NO HSA deduction even with HSA dollars entered', async () => {
+    // The old code derived eligibility from hsaMonthly > 0, silently
+    // deducting $6,000/yr for an ineligible household.
+    primeStores();
+    usePersonsStore.setState((s) => ({
+      persons: s.persons.map((p) => ({ ...p, hsaMonthlyContribution: 500, hsaEligible: false })),
+    }));
+    render(<MemoryRouter><PaycheckCalculator /></MemoryRouter>);
+    await screen.findByTestId('paycheck-calc-takehome');
+    // With no eligible deduction the donut drops the zero-value Pre-tax
+    // slice entirely — no legend row renders (the eligible sibling test
+    // pins the positive case).
+    expect(screen.queryByTitle('Pre-tax')).not.toBeInTheDocument();
+  });
+
+  it('an hsaEligible household still deducts its HSA dollars (self-only cap)', async () => {
+    // Eligible: $500/mo = $6,000/yr elected, capped at the $4,400 self-only
+    // limit (1 person, 0 dependents).
+    primeStores();
+    usePersonsStore.setState((s) => ({
+      persons: s.persons.map((p) => ({ ...p, hsaMonthlyContribution: 500, hsaEligible: true })),
+    }));
+    render(<MemoryRouter><PaycheckCalculator /></MemoryRouter>);
+    await screen.findByTestId('paycheck-calc-takehome');
+    expect(screen.getByTitle('Pre-tax').closest('li')!).toHaveTextContent('Pre-tax — $4,400');
+  });
+
+  it('the dependents copy describes what dependents actually do', async () => {
+    primeStores();
+    render(<MemoryRouter><PaycheckCalculator /></MemoryRouter>);
+    await screen.findByTestId('paycheck-calc-takehome');
+    // The two copy sites no longer claim dependents drive the federal estimate…
+    expect(screen.queryByText(/filing status, dependents, and the dollar adjustment/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/dependents and any extra dollar amount do that job now/i)).not.toBeInTheDocument();
+    // …and say what dependents actually do (the HSA family-vs-self cap).
+    expect(screen.getAllByText(/dependents affect the household HSA limit/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/child tax credits aren.t modeled yet/i).length).toBeGreaterThan(0);
+  });
+});
