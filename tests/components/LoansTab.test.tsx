@@ -121,9 +121,9 @@ describe('LoansTab', () => {
     // Move focus off term to trigger onBlur
     await user.tab();
 
-    // Standard 30-year 6% on 400k → ~2398.20
+    // Standard 30-year 6% on 400k → ~2398.20 (MoneyInput formats with commas).
     await waitFor(() => {
-      expect(Number(monthly.value)).toBeCloseTo(2398.20, 1);
+      expect(Number(monthly.value.replace(/,/g, ''))).toBeCloseTo(2398.20, 1);
     });
   });
 

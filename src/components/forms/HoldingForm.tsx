@@ -130,6 +130,7 @@ export default function HoldingForm({
           type="number"
           step="any"
           placeholder="shares"
+          className="text-right tabular-nums"
           {...form.register('shareCount', { valueAsNumber: true })}
         />
       </div>
@@ -143,6 +144,7 @@ export default function HoldingForm({
           type="number"
           step="1"
           placeholder="30"
+          className="text-right tabular-nums"
           {...form.register('targetAllocationPctPercent', { setValueAs: nullableNumber })}
         />
       </div>
@@ -152,6 +154,7 @@ export default function HoldingForm({
           type="number"
           step="any"
           placeholder="cost basis"
+          className="text-right tabular-nums"
           {...form.register('costBasis', { setValueAs: nullableNumber })}
         />
       </div>

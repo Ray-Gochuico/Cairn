@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { LoanSchema, type Loan } from '@/types/schema';
+import { MoneyInput } from '@/components/ui/money-input';
 import { LoanType } from '@/types/enums';
 import { amortize } from '@/lib/amortization';
 import { Button } from '@/components/ui/button';
@@ -225,22 +226,38 @@ export default function LoanForm({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label htmlFor="originalAmount">Original amount ($)</Label>
-              <Input
-                id="originalAmount"
-                type="number"
-                step="any"
-                {...form.register('originalAmount', { valueAsNumber: true })}
-                onBlur={tryAutoFillMonthlyPayment}
+              <Controller
+                control={form.control}
+                name="originalAmount"
+                render={({ field }) => (
+                  <MoneyInput
+                    id="originalAmount"
+                    value={field.value ?? null}
+                    onValueChange={(v) => field.onChange(v ?? 0)}
+                    onBlur={() => {
+                      field.onBlur();
+                      tryAutoFillMonthlyPayment();
+                    }}
+                  />
+                )}
               />
             </div>
             <div>
               <Label htmlFor="currentBalance">Current balance ($)</Label>
-              <Input
-                id="currentBalance"
-                type="number"
-                step="any"
-                {...form.register('currentBalance', { valueAsNumber: true })}
-                onBlur={tryAutoFillMonthlyPayment}
+              <Controller
+                control={form.control}
+                name="currentBalance"
+                render={({ field }) => (
+                  <MoneyInput
+                    id="currentBalance"
+                    value={field.value ?? null}
+                    onValueChange={(v) => field.onChange(v ?? 0)}
+                    onBlur={() => {
+                      field.onBlur();
+                      tryAutoFillMonthlyPayment();
+                    }}
+                  />
+                )}
               />
             </div>
           </div>
@@ -291,25 +308,37 @@ export default function LoanForm({
             </div>
             <div>
               <Label htmlFor="monthlyPayment">Monthly payment ($)</Label>
-              <Input
-                id="monthlyPayment"
-                type="number"
-                step="any"
-                {...form.register('monthlyPayment', {
-                  valueAsNumber: true,
-                  onChange: () => setMonthlyPaymentEditedManually(true),
-                })}
+              <Controller
+                control={form.control}
+                name="monthlyPayment"
+                render={({ field }) => (
+                  <MoneyInput
+                    id="monthlyPayment"
+                    value={field.value ?? null}
+                    onValueChange={(v) => {
+                      setMonthlyPaymentEditedManually(true);
+                      field.onChange(v ?? 0);
+                    }}
+                    onBlur={field.onBlur}
+                  />
+                )}
               />
             </div>
           </div>
 
           <div>
             <Label htmlFor="extraPaymentDefault">Extra payment default ($)</Label>
-            <Input
-              id="extraPaymentDefault"
-              type="number"
-              step="any"
-              {...form.register('extraPaymentDefault', { valueAsNumber: true })}
+            <Controller
+              control={form.control}
+              name="extraPaymentDefault"
+              render={({ field }) => (
+                <MoneyInput
+                  id="extraPaymentDefault"
+                  value={field.value ?? null}
+                  onValueChange={(v) => field.onChange(v ?? 0)}
+                  onBlur={field.onBlur}
+                />
+              )}
             />
           </div>
 
