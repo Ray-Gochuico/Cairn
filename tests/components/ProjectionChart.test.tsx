@@ -459,10 +459,37 @@ describe('ProjectionChart — detail level rendering', () => {
     expect(screen.getByTestId('rc-area-taxable_1')).toBeInTheDocument();
     expect(screen.queryByTestId('rc-area-investments_1')).not.toBeInTheDocument();
 
-    // W10 design: a legend row names the two bands.
-    const legend = screen.getByTestId('tax-bucket-legend');
-    expect(within(legend).getByText('Tax-advantaged')).toBeInTheDocument();
-    expect(within(legend).getByText('Taxable')).toBeInTheDocument();
+    // Round-3 M4: the legend names ALL four stacked bands (it used to
+    // hardcode 2 of 4 — "Property & vehicles", usually the dominant band
+    // for homeowners, rendered as anonymous green).
+    const legend = screen.getByTestId('composition-legend');
+    for (const label of ['Tax-advantaged', 'Taxable', 'Property & vehicles', 'Cash']) {
+      expect(within(legend).getByText(label)).toBeInTheDocument();
+    }
+  });
+
+  it('the simple composition mode gets a legend for its three bands (round-3 M4)', () => {
+    const projections = new Map([[1, multiAccountStates()]]);
+    const milestones = new Map<number, Milestones>([[1, {}]]);
+    render(
+      <MemoryRouter>
+        <ProjectionChart
+          scenarios={[baseline]}
+          projections={projections}
+          milestones={milestones}
+          dollarMode="nominal"
+          inflation={0.025}
+          startISO="2026-01"
+          detailLevel="single"
+          accounts={mockAccounts}
+        />
+      </MemoryRouter>,
+    );
+    const legend = screen.getByTestId('composition-legend');
+    for (const label of ['Investments', 'Property & vehicles', 'Cash']) {
+      expect(within(legend).getByText(label)).toBeInTheDocument();
+    }
+    expect(within(legend).queryByText('Tax-advantaged')).not.toBeInTheDocument();
   });
 
   it('per_account detail level: renders one area per investment account (cash excluded)', () => {
