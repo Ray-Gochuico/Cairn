@@ -1,10 +1,12 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useLoansStore } from '@/stores/loans-store';
 import { usePersonsStore } from '@/stores/persons-store';
+import { usePropertiesStore } from '@/stores/properties-store';
+import { useVehiclesStore } from '@/stores/vehicles-store';
 import { LoanType } from '@/types/enums';
 import type { Loan } from '@/types/schema';
 
@@ -82,6 +84,10 @@ function resetStores() {
   // empty state.
   useLoansStore.setState({ loans: [], isLoading: false, error: null, load: async () => {} });
   usePersonsStore.setState({ persons: [], isLoading: false, error: null, load: async () => {} });
+  // W14: the page subscribes to properties/vehicles (LoanForm option lists) —
+  // stub their loads too so the gate settles without a DB.
+  usePropertiesStore.setState({ properties: [], isLoading: false, error: null, load: async () => {} });
+  useVehiclesStore.setState({ vehicles: [], isLoading: false, error: null, load: async () => {} });
 }
 
 function renderLoans() {
@@ -533,6 +539,59 @@ describe('person-view filter + extra-savings box (round-3 T21)', () => {
     expect(screen.getByText(/With \$200\/mo extra/)).toBeInTheDocument();
     const savingsLine = screen.getByText(formatCurrency(expected));
     expect(savingsLine).toBeInTheDocument();
+  });
+});
+
+describe('loans edit in place — EditDrawer (W14)', () => {
+  // Clock-free (test-clock ratchet): no assertion here depends on today.
+  beforeEach(() => {
+    resetStores();
+    // LoanForm needs at least one person to render its fields.
+    usePersonsStore.setState({
+      persons: [{ id: 1, householdId: 1, name: 'Alex' }] as never,
+    });
+  });
+
+  it('empty state offers an in-place "Add a loan" that opens the drawer (W14)', async () => {
+    renderLoans();
+    fireEvent.click(screen.getByRole('button', { name: /add a loan/i }));
+    expect(await screen.findByRole('dialog', { name: /add loan/i })).toBeInTheDocument();
+    // no deflection remains:
+    expect(screen.queryByRole('link', { name: /add a loan/i })).toBeNull();
+    expect(screen.queryByText(/in inputs/i)).toBeNull();
+  });
+
+  it('header has an "Add loan" button and the loan CSV import (W14)', () => {
+    useLoansStore.setState({ loans: [makeLoan({ name: 'Primary Mortgage' })] });
+    renderLoans();
+    expect(screen.getByRole('button', { name: /^add loan$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /import csv/i })).toBeInTheDocument();
+  });
+
+  it('each loan card has "Edit terms" opening a prefilled drawer; saving calls update (W14)', async () => {
+    const update = vi.fn(async () => {});
+    useLoansStore.setState({
+      loans: [makeLoan({ id: 9, name: 'Primary Mortgage' })],
+      update,
+    } as never);
+    renderLoans();
+    fireEvent.click(screen.getByRole('button', { name: /edit terms for primary mortgage/i }));
+    const dialog = await screen.findByRole('dialog', { name: /edit loan/i });
+    // prefill check: the form shows the seeded loan's name
+    expect(within(dialog).getByLabelText(/^name$/i)).toHaveValue('Primary Mortgage');
+    fireEvent.click(within(dialog).getByRole('button', { name: /^save$/i }));
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+    expect(update).toHaveBeenCalledWith(9, expect.objectContaining({ name: 'Primary Mortgage' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull()); // closes on success
+  });
+
+  it('drawer delete asks for confirmation with the payment-history warning (W14)', async () => {
+    useLoansStore.setState({ loans: [makeLoan({ id: 9, name: 'Primary Mortgage' })] });
+    renderLoans();
+    fireEvent.click(screen.getByRole('button', { name: /edit terms for primary mortgage/i }));
+    const dialog = await screen.findByRole('dialog', { name: /edit loan/i });
+    fireEvent.click(within(dialog).getByRole('button', { name: /delete loan/i }));
+    expect(await screen.findByText(/also deletes its recorded payment history/i)).toBeInTheDocument();
   });
 });
 
