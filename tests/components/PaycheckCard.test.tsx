@@ -234,4 +234,41 @@ describe('PaycheckCard', () => {
     const link = await screen.findByRole('link', { name: /open full calculator/i });
     expect(link).toHaveAttribute('href', '/calculators/paycheck');
   });
+
+  it('household FICA caps Social Security per earner (wave-9 F1)', async () => {
+    // Dual $150k: SS = 2 × 150k × 6.2% = $18,600; Medicare 300k × 1.45% =
+    // $4,350; AddMed MFJ over 250k = $450 → FICA $23,400. The combined-base
+    // bug showed min(300k, 184.5k) × 6.2% + medicare = $16,239.
+    const user = userEvent.setup();
+    primeStores();
+    useHouseholdStore.setState({
+      household: {
+        ...useHouseholdStore.getState().household!,
+        filingStatus: FilingStatus.MFJ,
+      },
+      isLoading: false,
+      error: null,
+    });
+    const alice = usePersonsStore.getState().persons[0];
+    usePersonsStore.setState({
+      persons: [
+        { ...alice, id: 1, name: 'Alice', annualSalaryPretax: 150000, pretax401kPct: 0 },
+        { ...alice, id: 2, name: 'Bob', annualSalaryPretax: 150000, pretax401kPct: 0 },
+      ],
+      isLoading: false,
+      error: null,
+    });
+    const items = useTaxRulesStore.getState().items.map((i) => ({
+      ...i,
+      filingStatus: FilingStatus.MFJ,
+    }));
+    useTaxRulesStore.setState({ year: 2026, items, isLoading: false, error: null });
+
+    render(<MemoryRouter><PaycheckCard /></MemoryRouter>);
+    await screen.findByTestId('paycheck-takehome');
+    // Annual period so the FICA row shows the yearly figure verbatim.
+    await user.selectOptions(screen.getByLabelText(/Period:/i), 'ANNUAL');
+    expect(screen.getByText('$23,400')).toBeInTheDocument();
+    expect(screen.queryByText('$16,239')).not.toBeInTheDocument();
+  });
 });
