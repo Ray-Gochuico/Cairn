@@ -11,7 +11,6 @@ import { useViewFilter } from '@/lib/use-view-filter';
 import { resolveUtilityCategoryIds } from '@/lib/category-config';
 import { monthlyHousingObligation } from '@/lib/recurring-obligations';
 import { CategoryMultiSelect } from '@/components/categories/CategoryMultiSelect';
-import { LoanType } from '@/types/enums';
 import { PROPERTY_TYPE_LABELS } from '@/components/forms/PropertyForm';
 import {
   propertyCostBasis,
@@ -447,15 +446,31 @@ export default function Property() {
   );
   const utilitiesIdSet = useMemo(() => new Set(utilitiesIds), [utilitiesIds]);
 
-  const mortgageById = useMemo(() => {
+  // Wave-9 M12: the schema stores BOTH link directions (property.linkedLoanId
+  // set on PropertyForm; loan.linkedPropertyId set on LoanForm) and any loan
+  // type can be explicitly collateralized against a property. Resolve the
+  // linked balance from either edge, any type, summing multiple liens and
+  // deduping loans linked via both edges at once.
+  const linkedLoanBalanceByPropertyId = useMemo(() => {
     const map = new Map<number, number>();
-    for (const l of loans) {
-      if (l.type === LoanType.MORTGAGE && l.id != null) {
-        map.set(l.id, l.currentBalance);
+    for (const p of properties) {
+      if (p.id == null) continue;
+      const seen = new Set<number>();
+      let sum = 0;
+      let any = false;
+      for (const l of loans) {
+        const linked =
+          (p.linkedLoanId != null && l.id === p.linkedLoanId) ||
+          (l.linkedPropertyId != null && l.linkedPropertyId === p.id);
+        if (!linked || l.id == null || seen.has(l.id)) continue;
+        seen.add(l.id);
+        sum += l.currentBalance;
+        any = true;
       }
+      if (any) map.set(p.id, sum);
     }
     return map;
-  }, [loans]);
+  }, [properties, loans]);
 
   const personNameById = useMemo(
     () =>
@@ -537,9 +552,8 @@ export default function Property() {
 
       <div className="space-y-6">
         {visibleProperties.map((p) => {
-          const mortgageBalance = p.linkedLoanId != null
-            ? mortgageById.get(p.linkedLoanId) ?? null
-            : null;
+          const mortgageBalance =
+            p.id != null ? linkedLoanBalanceByPropertyId.get(p.id) ?? null : null;
           const isEditing = editing?.id === p.id;
           const costBasis = propertyCostBasis(p.purchasePrice, p.id!, transactions, categories);
           const linkedTransactions = linkedSpendingTransactions(transactions, { propertyId: p.id! }, 12, categories);

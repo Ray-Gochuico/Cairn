@@ -791,3 +791,75 @@ describe('Property page — utilities card with configurable category set', () =
     expect(update).toHaveBeenCalledWith({ propertyUtilitiesCategoryIds: [11] });
   });
 });
+
+describe('equity linked-loan resolution (wave-9 M12)', () => {
+  const makeLoanRow = (overrides: Record<string, unknown>) => ({
+    id: 1,
+    householdId: 1,
+    obligorPersonId: null,
+    name: 'Loan',
+    type: 'MORTGAGE',
+    originalAmount: 350000,
+    currentBalance: 300000,
+    interestRate: 0.06,
+    termMonths: 360,
+    firstPaymentDate: '2021-08-01',
+    monthlyPayment: 1798.65,
+    extraPaymentDefault: 0,
+    linkedPropertyId: null,
+    linkedVehicleId: null,
+    ...overrides,
+  });
+
+  function seedPropertyWithLoan(loanOverrides: Record<string, unknown>, propertyOverrides: Record<string, unknown> = {}) {
+    usePropertiesStore.setState({
+      properties: [
+        {
+          id: 1,
+          householdId: 1,
+          ownerPersonId: null,
+          name: 'Linked Home',
+          type: PropertyType.PRIMARY_RESIDENCE,
+          address: null,
+          purchasePrice: 400000,
+          purchaseDate: '2020-01-01',
+          currentEstimatedValue: 500000,
+          linkedLoanId: null,
+          excludedFromNetWorth: false,
+          notes: null,
+          ...propertyOverrides,
+        } as never,
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+    useLoansStore.setState({
+      loans: [makeLoanRow(loanOverrides) as never],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+  }
+
+  beforeEach(() => {
+    resetStores();
+  });
+
+  it('equity subtracts a loan linked via loan.linkedPropertyId (wave-9 M12)', async () => {
+    // Property $500k, loan $300k pointing AT the property
+    // (property.linkedLoanId null). Pre-fix equity showed $500k.
+    seedPropertyWithLoan({ linkedPropertyId: 1 });
+    renderPage();
+    await screen.findAllByText('Linked Home');
+    expect(screen.getByText('$200,000')).toBeInTheDocument();
+  });
+
+  it('equity subtracts a non-MORTGAGE linked loan (wave-9 M12)', async () => {
+    // Same shape, loan type PERSONAL linked via property.linkedLoanId.
+    seedPropertyWithLoan({ type: 'PERSONAL' }, { linkedLoanId: 1 });
+    renderPage();
+    await screen.findAllByText('Linked Home');
+    expect(screen.getByText('$200,000')).toBeInTheDocument();
+  });
+});
