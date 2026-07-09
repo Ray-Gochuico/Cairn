@@ -1,8 +1,10 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import WhatIf from '@/pages/WhatIf';
+import { usePersonsStore } from '@/stores/persons-store';
+import { seedWhatIfRealStores } from './whatif-store-seed';
 
 vi.mock('@/components/whatif/ProjectionChart', () => ({
   default: () => <div data-testid="projection-chart-stub" />,
@@ -86,6 +88,13 @@ vi.mock('@/stores/loans-store', () => ({
 }));
 
 describe('WhatIf page management surfaces', () => {
+  beforeEach(() => {
+    seedWhatIfRealStores();
+    // persons is a REAL store here (not mocked like the sibling files); seed
+    // it resolved so the load gate settles synchronously.
+    usePersonsStore.setState({ persons: [], isLoading: false, error: null, load: async () => {} } as never);
+  });
+
   it('renders ScenariosPanel in the chart area with Save current + Manage buttons', () => {
     render(
       <MemoryRouter>

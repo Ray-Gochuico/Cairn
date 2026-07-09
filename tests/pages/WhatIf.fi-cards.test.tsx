@@ -1,7 +1,8 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import WhatIf from '@/pages/WhatIf';
+import { seedWhatIfRealStores } from './whatif-store-seed';
 import type { Household, Person } from '@/types/schema';
 
 vi.mock('@/components/whatif/ProjectionChart', () => ({
@@ -148,6 +149,10 @@ vi.mock('@/stores/persons-store', () => ({
 }));
 
 describe('WhatIf page — FI cards integration', () => {
+  beforeEach(() => {
+    seedWhatIfRealStores();
+  });
+
   it('renders the Financial Independence number + Coast FI cards above the chart', () => {
     render(
       <MemoryRouter>

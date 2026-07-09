@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import WhatIf from '@/pages/WhatIf';
 import { FiPillsPosition } from '@/types/enums';
 import { useSettingsStore } from '@/stores/settings-store';
+import { seedWhatIfRealStores } from './whatif-store-seed';
 import type { Household, Person } from '@/types/schema';
 
 // Stub the visual children so the test focuses on the page-level layout.
@@ -175,6 +176,7 @@ function setPosition(position: FiPillsPosition) {
 
 describe('WhatIf — FI pills layout', () => {
   beforeEach(() => {
+    seedWhatIfRealStores();
     setPosition(FiPillsPosition.ABOVE);
   });
 
@@ -276,6 +278,7 @@ describe('WhatIf — FI pills layout', () => {
 
 describe('WhatIf — projection footnote (W7-Legal R-LWI-4)', () => {
   beforeEach(() => {
+    seedWhatIfRealStores();
     setPosition(FiPillsPosition.ABOVE);
   });
 

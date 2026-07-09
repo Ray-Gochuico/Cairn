@@ -4,6 +4,8 @@ import { MemoryRouter } from 'react-router-dom';
 import WhatIf from '@/pages/WhatIf';
 import { FiPillsPosition } from '@/types/enums';
 import { useSettingsStore } from '@/stores/settings-store';
+import { useAccountsStore } from '@/stores/accounts-store';
+import { seedWhatIfRealStores } from './whatif-store-seed';
 import type { Household, Person } from '@/types/schema';
 
 // W7-UX MF-1: when the projection cache returns rows whose monetary
@@ -194,6 +196,7 @@ function seedSettings() {
 describe('WhatIf — empty-state guard rejects sentinel zero-data projections (W7-UX MF-1)', () => {
   beforeEach(() => {
     seedSettings();
+    seedWhatIfRealStores();
     // Default to all-zero sentinel rows; individual tests can replace.
     __projectionState.rows = [
       makeZeroState('2026-05'),
@@ -255,5 +258,15 @@ describe('WhatIf — empty-state guard rejects sentinel zero-data projections (W
       </MemoryRouter>,
     );
     expect(screen.getByTestId('projection-chart-stub')).toBeInTheDocument();
+  });
+
+  it('renders the loading skeleton, not setup/empty copy, while stores load (W10 M33)', () => {
+    // A consumed factory store still in flight — the gate must show the
+    // skeleton, never the setup/projection-empty copy.
+    useAccountsStore.setState({ accounts: [], isLoading: true, error: null, load: async () => {} } as never);
+    render(<MemoryRouter><WhatIf /></MemoryRouter>);
+    expect(screen.getByRole('status', { name: /loading page/i })).toBeInTheDocument();
+    expect(screen.queryByText(/set up your household/i)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('whatif-projection-empty')).not.toBeInTheDocument();
   });
 });
