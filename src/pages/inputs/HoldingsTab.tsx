@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
 import { useTickersStore } from '@/stores/tickers-store';
 import { Card, CardContent } from '@/components/ui/card';
 import { useConfirm } from '@/components/ui/confirm-dialog';
+import { useLoadGate } from '@/lib/use-load-gate';
+import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
+import { TabLoadingSkeleton } from '@/components/inputs/TabLoadingSkeleton';
 import HoldingForm, { type HoldingFormValues } from '@/components/forms/HoldingForm';
 import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 import { enrichTickerIfMissing } from '@/market/ticker-enrichment';
@@ -22,16 +25,21 @@ import { validateAccountTargetPct } from '@/lib/holdings-validation';
  */
 
 export default function HoldingsTab() {
-  const { accounts, load: loadAccounts } = useAccountsStore();
-  const { holdings, load: loadHoldings, create, update, remove } = useHoldingsStore();
+  const { accounts, load: loadAccounts, isLoading: accountsLoading, error: accountsError } = useAccountsStore();
+  const { holdings, load: loadHoldings, create, update, remove, isLoading: holdingsLoading, error: holdingsError } = useHoldingsStore();
   const loadTickers = useTickersStore((s) => s.load);
   const { confirm, dialog } = useConfirm();
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     loadAccounts();
     loadHoldings();
   }, [loadAccounts, loadHoldings]);
+  const gate = useLoadGate(
+    [holdingsLoading, accountsLoading],
+    [holdingsError, accountsError],
+    reload,
+  );
 
   // Default selection to the first account once accounts load.
   useEffect(() => {
@@ -79,7 +87,9 @@ export default function HoldingsTab() {
       return result.ok ? null : result.message;
     };
 
-  if (accounts.length === 0) {
+  // W10 M43: gate the "Add accounts first." / holdings copy on load
+  // settlement so neither flashes over unloaded accounts/holdings.
+  if (!gate.settled || accounts.length === 0) {
     return (
       <div className="p-6 max-w-3xl">
         <div className="flex items-start justify-between mb-1">
@@ -90,9 +100,14 @@ export default function HoldingsTab() {
           Per-account tickers and share counts. Used by the Investments page and the
           Net Worth chart.
         </p>
-        <div className="border rounded-md p-8 text-center text-muted-foreground">
-          Add accounts first.
-        </div>
+        <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
+        {!gate.settled ? (
+          <TabLoadingSkeleton />
+        ) : accountsError == null && holdingsError == null ? (
+          <div className="border rounded-md p-8 text-center text-muted-foreground">
+            Add accounts first.
+          </div>
+        ) : null}
       </div>
     );
   }

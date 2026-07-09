@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useContributionsStore } from '@/stores/contributions-store';
+import { useLoadGate } from '@/lib/use-load-gate';
+import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
+import { TabLoadingSkeleton } from '@/components/inputs/TabLoadingSkeleton';
 import { ContributionSchema, type Contribution } from '@/types/schema';
 import { ContributionSource } from '@/types/enums';
 import { Button } from '@/components/ui/button';
@@ -154,17 +157,22 @@ function ContributionForm({ initial, accounts, persons, onSubmit, onCancel }: Co
 }
 
 export default function ContributionsTab() {
-  const { contributions, load, create, update, remove } = useContributionsStore();
-  const { accounts, load: loadAccounts } = useAccountsStore();
+  const { contributions, load, create, update, remove, isLoading, error } = useContributionsStore();
+  const { accounts, load: loadAccounts, isLoading: accountsLoading, error: accountsError } = useAccountsStore();
   const { persons, load: loadPersons } = usePersonsStore();
   const { confirm, dialog } = useConfirm();
   const [mode, setMode] = useState<'list' | 'create' | { type: 'edit'; id: number }>('list');
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     load();
     loadAccounts();
     loadPersons();
   }, [load, loadAccounts, loadPersons]);
+  const gate = useLoadGate(
+    [isLoading, accountsLoading],
+    [error, accountsError],
+    reload,
+  );
 
   useEffect(() => {
     if (typeof mode === 'object' && mode.type === 'edit') {
@@ -179,7 +187,8 @@ export default function ContributionsTab() {
   const accountById = new Map(accountOptions.map((a) => [a.id, a.name]));
   const personById = new Map(personOptions.map((p) => [p.id, p.name]));
 
-  if (accounts.length === 0) {
+  // W10 M43: gate the "Add accounts first." copy on load settlement.
+  if (!gate.settled || accounts.length === 0) {
     return (
       <div className="p-6 max-w-3xl">
         <div className="flex items-start justify-between mb-1">
@@ -189,9 +198,14 @@ export default function ContributionsTab() {
         <p className="text-sm text-muted-foreground mb-6">
           Money flowing into your accounts — paychecks, bonuses, manual transfers.
         </p>
-        <div className="border rounded-md p-8 text-center text-muted-foreground">
-          Add accounts first.
-        </div>
+        <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
+        {!gate.settled ? (
+          <TabLoadingSkeleton />
+        ) : error == null && accountsError == null ? (
+          <div className="border rounded-md p-8 text-center text-muted-foreground">
+            Add accounts first.
+          </div>
+        ) : null}
       </div>
     );
   }

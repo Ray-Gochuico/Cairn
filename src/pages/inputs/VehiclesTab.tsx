@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useVehiclesStore } from '@/stores/vehicles-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useLoansStore } from '@/stores/loans-store';
@@ -6,21 +6,25 @@ import { LoanType } from '@/types/enums';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useConfirm } from '@/components/ui/confirm-dialog';
+import { useLoadGate } from '@/lib/use-load-gate';
+import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
+import { TabLoadingSkeleton } from '@/components/inputs/TabLoadingSkeleton';
 import VehicleForm, { DEFAULT_VEHICLE } from '@/components/forms/VehicleForm';
 import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 
 export default function VehiclesTab() {
-  const { vehicles, load, create, update, remove } = useVehiclesStore();
+  const { vehicles, load, create, update, remove, isLoading, error } = useVehiclesStore();
   const { persons, load: loadPersons } = usePersonsStore();
   const { loans, load: loadLoans } = useLoansStore();
   const { confirm, dialog } = useConfirm();
   const [mode, setMode] = useState<'list' | 'create' | { type: 'edit'; id: number }>('list');
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     load();
     loadPersons();
     loadLoans();
   }, [load, loadPersons, loadLoans]);
+  const gate = useLoadGate([isLoading], [error], reload);
 
   useEffect(() => {
     if (typeof mode === 'object' && mode.type === 'edit') {
@@ -96,10 +100,15 @@ export default function VehiclesTab() {
         Cars, trucks, motorcycles, and boats — with optional auto-loan linkage.
       </p>
 
-      {vehicles.length === 0 ? (
-        <div className="border rounded-md p-8 text-center text-muted-foreground">
-          No vehicles added yet.
-        </div>
+      <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
+      {!gate.settled ? (
+        <TabLoadingSkeleton />
+      ) : vehicles.length === 0 ? (
+        error == null ? (
+          <div className="border rounded-md p-8 text-center text-muted-foreground">
+            No vehicles added yet.
+          </div>
+        ) : null
       ) : (
         <div className="space-y-2">
           {vehicles.map((v) => (

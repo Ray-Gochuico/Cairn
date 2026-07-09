@@ -59,6 +59,10 @@ async function seedDependent(db: SqliteAdapter, name: string): Promise<number> {
   });
 }
 
+// The W10 gate tests override accounts.load with a no-op; capture + restore
+// the real load each beforeEach so later tests still hydrate from the DB.
+const realAccountsLoad = useAccountsStore.getState().load;
+
 describe('AccountsTab', () => {
   let db: SqliteAdapter;
 
@@ -68,7 +72,7 @@ describe('AccountsTab', () => {
     // (has_employer_match, etc.) added by the roadmap rule engine (W7-R1).
     await runMigrations(db, await loadAllMigrations());
     setDatabase(db);
-    useAccountsStore.setState({ accounts: [], isLoading: false, error: null });
+    useAccountsStore.setState({ accounts: [], isLoading: false, error: null, load: realAccountsLoad });
     usePersonsStore.setState({ persons: [], isLoading: false, error: null });
     useDependentsStore.setState({ dependents: [], isLoading: false, error: null });
     // Seed 2 persons so the owner radio renders all three options (Person 1 / Person 2 / Joint).
@@ -86,6 +90,20 @@ describe('AccountsTab', () => {
       expect(screen.getByText(/no accounts added yet/i)).toBeInTheDocument();
     });
     expect(screen.getByRole('button', { name: /add account/i })).toBeInTheDocument();
+  });
+
+  it('shows loading, not "No accounts added yet.", while the store loads (W10 M43)', () => {
+    useAccountsStore.setState({ accounts: [], isLoading: true, error: null, load: async () => {} } as never);
+    render(<MemoryRouter><AccountsTab /></MemoryRouter>);
+    expect(screen.getByRole('status', { name: /loading/i })).toBeInTheDocument();
+    expect(screen.queryByText(/no accounts added yet/i)).not.toBeInTheDocument();
+  });
+
+  it('shows the error banner instead of empty copy when the load failed (W10 M43)', () => {
+    useAccountsStore.setState({ accounts: [], isLoading: false, error: 'DB gone', load: async () => {} } as never);
+    render(<MemoryRouter><AccountsTab /></MemoryRouter>);
+    expect(screen.getByRole('alert')).toHaveTextContent(/couldn.t load or save/i);
+    expect(screen.queryByText(/no accounts added yet/i)).not.toBeInTheDocument();
   });
 
   it('opens the add-account form when clicking Add Account', async () => {
