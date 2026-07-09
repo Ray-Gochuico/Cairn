@@ -91,3 +91,24 @@ describe('detectRecurring', () => {
     ).toEqual([]);
   });
 });
+
+describe('cadence normalization (wave-9 M20)', () => {
+  it('a quarterly biller reports cadenceMonths 3 and a ÷3 monthly figure (wave-9 M20)', () => {
+    const txns = ['2026-01-05', '2026-04-05', '2026-07-05'].map((date, i) =>
+      txn(i + 1, 'Water Utility', date, 90),
+    );
+    const [g] = detectRecurring(txns, []);
+    expect(g.cadenceMonths).toBe(3);
+    expect(g.monthlyAmount).toBeCloseTo(30, 6);
+    expect(g.averageAmount).toBeCloseTo(90, 6); // per-charge mean unchanged
+  });
+
+  it('a monthly biller is unchanged (cadence 1)', () => {
+    const txns = ['2026-05-05', '2026-06-05', '2026-07-05'].map((date, i) =>
+      txn(i + 1, 'Stream Co', date, 15),
+    );
+    const [g] = detectRecurring(txns, []);
+    expect(g.cadenceMonths).toBe(1);
+    expect(g.monthlyAmount).toBeCloseTo(15, 6);
+  });
+});

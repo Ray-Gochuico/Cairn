@@ -232,8 +232,8 @@ export default function Spending() {
     [visibleTransactions, estimatedMonthlyInflow, categories],
   );
 
-  // Recurring total
-  const recurringTotal = recurring.reduce((s, g) => s + g.averageAmount, 0);
+  // Recurring total — wave-9 M20: per-month figures (quarterly billers ÷3).
+  const recurringTotal = recurring.reduce((s, g) => s + g.monthlyAmount, 0);
 
   // Recurring obligations (rent + vehicle leases) active today.
   const todayISO = new Date().toISOString().slice(0, 10);
@@ -411,7 +411,8 @@ export default function Spending() {
                       <li key={g.merchant} className="flex items-center justify-between text-sm">
                         <span>{g.merchant}</span>
                         <span className="text-muted-foreground">
-                          ${g.averageAmount.toFixed(2)}/mo · {g.occurrences}×
+                          ${g.monthlyAmount.toFixed(2)}/mo
+                          {g.cadenceMonths > 1 ? ` · every ${g.cadenceMonths} mo` : ''} · {g.occurrences}×
                         </span>
                       </li>
                     ))}
