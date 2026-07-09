@@ -10,11 +10,20 @@
  * between "fully eligible" and "fully phased out", so a MAGI inside
  * the range means a *partial* benefit.
  */
+import { CONTRIBUTION_LIMITS_2026 } from '@/lib/contribution-limits';
+
 export const TAX_YEAR_2026 = {
-  /** Annual contribution cap, all IRAs combined. */
-  iraContributionLimit: 7000,
-  /** Additional contribution permitted for filers 50+ on top of the cap. */
-  iraCatchUpAge50Plus: 1000,
+  /** Annual contribution cap, all IRAs combined. 2026 per Notice 2025-67. */
+  iraContributionLimit: 7500,
+  /** Additional contribution permitted for filers 50+ on top of the cap. 2026. */
+  iraCatchUpAge50Plus: 1100,
+
+  /** §402(g) elective deferral — references the app-wide constant so the
+   * paycheck engine and the roadmap can never disagree. $24,500 for 2026. */
+  electiveDeferralLimit: CONTRIBUTION_LIMITS_2026.EMPLOYEE_401K,
+  /** §415(c) combined DC limit (employee + employer + after-tax), 2026.
+   * Notice 2025-67. Roadmap mega-backdoor node is the only consumer. */
+  dcCombinedLimit: 72_000,
 
   /**
    * Roth IRA direct-contribution income phase-out. Above the start

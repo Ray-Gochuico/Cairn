@@ -1,6 +1,7 @@
 import type { NodeResult, RoadmapContext } from '@/types/roadmap';
 import { AccountType } from '@/types/enums';
 import { useHouseholdStore } from '@/stores/household-store';
+import { TAX_YEAR_2026 } from '../taxYear2026';
 
 /**
  * Sections 5 & 6 — Additional Savings + After-Tax & Taxable.
@@ -113,7 +114,7 @@ export function evaluateMax401k(ctx: RoadmapContext): NodeResult {
   }
   return {
     status: 'info',
-    evidence: 'Finish maxing the employer plan (or solo-401(k) if self-employed). The $23k limit is your target.',
+    evidence: `Finish maxing the employer plan (or solo-401(k) if self-employed). The $${TAX_YEAR_2026.electiveDeferralLimit.toLocaleString('en-US')} limit (tax year 2026) is your target.`,
     cta: { label: 'Open Contributions →', href: '/inputs/contributions' },
   };
 }

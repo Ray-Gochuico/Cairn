@@ -2,6 +2,7 @@ import type { NodeResult, RoadmapContext } from '@/types/roadmap';
 import { AccountType } from '@/types/enums';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useAccountsStore } from '@/stores/accounts-store';
+import { TAX_YEAR_2026 } from '../taxYear2026';
 
 /**
  * Section 4 stragglers — the IRA top + future-income decision + solo
@@ -130,7 +131,7 @@ export function evaluateMegaBackdoor(ctx: RoadmapContext): NodeResult {
   if (accts.some((a) => a.allowsMegaBackdoorRollover === true)) {
     return {
       status: 'active',
-      evidence: 'Mega backdoor is available — max after-tax contributions and roll into Roth up to the $66k combined limit.',
+      evidence: `Mega backdoor is available — max after-tax contributions and roll into Roth up to the $${TAX_YEAR_2026.dcCombinedLimit.toLocaleString('en-US')} combined limit (tax year 2026).`,
       cta: { label: 'Open Contributions →', href: '/inputs/contributions' },
     };
   }
