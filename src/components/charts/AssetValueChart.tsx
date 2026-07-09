@@ -211,7 +211,12 @@ const EMPTY_CHART_DATA: NetWorthChartRow[] = [];
 const CAIRN_END_DOT = function CairnEndDot(props: { cx?: number; cy?: number }) {
   const { cx = 0, cy = 0 } = props;
   return (
-    <g className="motion-safe:animate-in fade-in ease-out duration-[180ms]">
+    // Typed arbitrary property, not the bare duration-arbitrary form: the
+    // bare form is ambiguous (transition vs animation duration) — Tailwind
+    // warns and generates NOTHING for it, silently losing the 180ms. (Note:
+    // Tailwind's content scanner reads comments too — don't name the bare
+    // class form here or the warning comes back.)
+    <g className="motion-safe:animate-in fade-in ease-out [animation-duration:180ms]">
       <circle cx={cx} cy={cy} r={8} fill={HERO} fillOpacity={0.15} />
       <rect x={cx - 1.75} y={cy - 4.6} width={3.5} height={2.4} rx={1.2} fill={HERO} />
       <rect x={cx - 2.75} y={cy - 1.7} width={5.5} height={2.7} rx={1.35} fill={HERO} />
