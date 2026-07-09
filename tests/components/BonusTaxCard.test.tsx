@@ -513,4 +513,12 @@ describe('BonusTaxCard', () => {
     expect(expected.bonusBreakdown.fica).toBeGreaterThan(legacy.bonusBreakdown.fica);
     expect(screen.getByText(formatCurrency(expected.bonusBreakdown.fica))).toBeInTheDocument();
   });
+
+  it('does not falsely claim Additional Medicare is unmodeled (it IS modeled)', async () => {
+    primeStores();
+    render(<MemoryRouter><BonusTaxCard /></MemoryRouter>);
+    const input = await screen.findByLabelText(/Bonus amount/i);
+    fireEvent.change(input, { target: { value: '10000' } });
+    expect(screen.queryByText(/Additional Medicare/)).not.toBeInTheDocument();
+  });
 });

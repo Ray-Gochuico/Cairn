@@ -217,9 +217,8 @@ export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
             your state's ordinary brackets.
           </li>
           <li>
-            <TermTooltip term="NIIT">NIIT</TermTooltip> + Additional Medicare
-            surtax (0.9% above $200k single / $250k MFJ) — secondary effects on
-            the high-earner federal column.
+            <TermTooltip term="NIIT">NIIT</TermTooltip> (3.8% net investment
+            income tax) — applies to investment income, not the bonus itself.
           </li>
           <li>
             <TermTooltip term="AMT">AMT</TermTooltip> preference items if the

@@ -8,6 +8,7 @@ import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { FilingStatus } from '@/types/enums';
+import { CONTRIBUTION_LIMITS_2026 } from '@/lib/contribution-limits';
 
 // Federal SINGLE brackets (2026 approximate) — same as BonusTaxCard.test.tsx
 const federalSingleBrackets = [
@@ -277,5 +278,18 @@ describe('PaycheckCard', () => {
     await user.selectOptions(screen.getByLabelText(/Period:/i), 'ANNUAL');
     expect(screen.getByText('$23,400')).toBeInTheDocument();
     expect(screen.queryByText('$16,239')).not.toBeInTheDocument();
+  });
+
+  it('disclosure copy cites the live SS wage base, not the stale $168,600, and does not falsely disclaim Additional Medicare', async () => {
+    primeStores();
+    render(<MemoryRouter><PaycheckCard /></MemoryRouter>);
+    await screen.findByTestId('paycheck-takehome');
+    const wageBase = new RegExp(
+      `\\$${CONTRIBUTION_LIMITS_2026.SOCIAL_SECURITY_WAGE_BASE.toLocaleString('en-US')}`,
+    );
+    expect(screen.getByText(wageBase, { exact: false })).toBeInTheDocument();
+    expect(screen.queryByText(/168,600/)).not.toBeInTheDocument();
+    // Additional Medicare IS modeled (tax.ts) — it must not appear in the "not modeled" list.
+    expect(screen.queryByText(/Additional Medicare/)).not.toBeInTheDocument();
   });
 });

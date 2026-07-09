@@ -212,7 +212,7 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
 
       <p className="text-xs text-muted-foreground">
         Commission is taxed as supplemental wages. 401(k) contributions from commission are shown
-        but the tax calc uses your salary pretax only (matches bonus card).
+        but the tax calc uses your salary pretax only — same treatment as the bonus calculator.
       </p>
       {/* Wave-5 W5-5 — calculator framing parity with the 401k card.
           Commission income shares the supplemental-wage withholding ambiguity
@@ -225,10 +225,10 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
           <li>
             <strong>Aggregate vs. flat-rate withholding.</strong> Like bonuses,
             commission is a "supplemental wage" — the IRS allows either the 22%
-            flat rate or the aggregate method. Use the Aggregate / Flat 22%
-            toggle above to compare both; the flat figure is federal withholding
-            (reconciles at filing). State supplemental flat rates are still not
-            modeled.
+            flat rate (37% above $1M — mandatory, not an employer option) or the
+            aggregate method. Use the Aggregate / Flat 22% toggle above to compare
+            both; the flat figure is federal withholding (reconciles at filing).
+            State supplemental flat rates are still not modeled.
           </li>
           <li>
             <strong>State-specific supplemental-wage flat rates.</strong> CA, GA,
@@ -242,9 +242,8 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
             The engine treats each commission check as final.
           </li>
           <li>
-            <TermTooltip term="NIIT">NIIT</TermTooltip> + Additional Medicare
-            surtax (0.9% above $200k single / $250k MFJ) — secondary effects
-            for high earners.
+            <TermTooltip term="NIIT">NIIT</TermTooltip> (3.8% net investment
+            income tax) — applies to investment income, not commission wages.
           </li>
           <li>
             <TermTooltip term="AMT">AMT</TermTooltip> on ISO exercises landing
