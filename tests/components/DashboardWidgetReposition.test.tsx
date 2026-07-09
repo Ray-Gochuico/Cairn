@@ -14,6 +14,7 @@ import { useCategoriesStore } from '@/stores/categories-store';
 import { FilingStatus } from '@/types/enums';
 import type { GrowthScenario } from '@/types/schema';
 import Dashboard from '@/pages/Dashboard';
+import { seedDashboardGateStores } from './dashboard-gate-seed';
 
 const moderateScenarios: GrowthScenario[] = [
   { label: 'Conservative', rate: 0.05 },
@@ -44,6 +45,7 @@ function resetStores() {
   useVehiclesStore.setState({ vehicles: [], isLoading: false, error: null, load: async () => {} });
   useTransactionsStore.setState({ transactions: [], isLoading: false, error: null, load: async () => {} });
   useCategoriesStore.setState({ categories: [], isLoading: false, error: null, load: async () => {} });
+  seedDashboardGateStores();
   try { window.localStorage.removeItem('dashboardPillLayout.v1'); } catch { /* ignore */ }
   try { window.localStorage.removeItem('dashboardWidgetLayout.v1'); } catch { /* ignore */ }
 }

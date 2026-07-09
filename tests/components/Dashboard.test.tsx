@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { useGoalsStore } from '@/stores/goals-store';
@@ -12,6 +12,10 @@ import { useVehiclesStore } from '@/stores/vehicles-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
+import { useHoldingsStore } from '@/stores/holdings-store';
+import { useTickersStore } from '@/stores/tickers-store';
+import { useFundHoldingsStore } from '@/stores/fund-holdings-store';
+import { useRoadmapOverridesStore } from '@/stores/roadmap-overrides-store';
 import {
   AccountType,
   ContributionSource,
@@ -45,6 +49,7 @@ function resetStores() {
     },
     isLoading: false,
     error: null,
+    load: async () => {},
   });
   useLoansStore.setState({ loans: [], isLoading: false, error: null, load: async () => {} });
   usePropertiesStore.setState({ properties: [], isLoading: false, error: null, load: async () => {} });
@@ -54,6 +59,12 @@ function resetStores() {
   useAssetValueSnapshotsStore.setState({
     assetValueSnapshots: [], isLoading: false, error: null, load: async () => {},
   });
+  // W10 S3/S4: the dashboard now gates on these too (holdings/tickers/fund-
+  // holdings feed ConcentrationCard; roadmap-overrides feeds NextMoveCard).
+  useHoldingsStore.setState({ holdings: [], isLoading: false, error: null, load: async () => {} } as never);
+  useTickersStore.setState({ tickers: [], isLoading: false, error: null, load: async () => {} } as never);
+  useFundHoldingsStore.setState({ fundHoldings: [], isLoading: false, error: null, load: async () => {} } as never);
+  useRoadmapOverridesStore.setState({ overridesByNodeId: new Map(), isLoading: false, error: null, load: async () => {} } as never);
 }
 
 interface PrimeOpts {
@@ -462,5 +473,26 @@ describe('net-worth MoM pill (Wave 2 §2)', () => {
     // Exact match: if a percent were appended the delta text would read
     // '+$14,988 (+124900.0%)' and this query would fail.
     expect(within(netWorthCard).getByText('+$14,988')).toBeInTheDocument();
+  });
+});
+
+describe('Dashboard load gate (W10 S3/S4, M3)', () => {
+  beforeEach(() => {
+    resetStores();
+  });
+
+  it('loads roadmap overrides in reload() so NextMoveCard honors them (W10 M3)', () => {
+    const load = vi.fn(async () => {});
+    useRoadmapOverridesStore.setState({ overridesByNodeId: new Map(), isLoading: false, error: null, load } as never);
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+    expect(load).toHaveBeenCalled();
+  });
+
+  it('shows the loading skeleton, not $0 pills / Continue Setup, while stores load (W10 S3/S4)', () => {
+    useHouseholdStore.setState({ household: null, isLoading: true, error: null, load: async () => {} } as never);
+    render(<MemoryRouter><Dashboard /></MemoryRouter>);
+    expect(screen.getByRole('status', { name: /loading page/i })).toBeInTheDocument();
+    expect(screen.queryByText(/continue setup/i)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('metric-card-value')).not.toBeInTheDocument();
   });
 });

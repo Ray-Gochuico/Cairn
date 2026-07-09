@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   CheckIcon,
@@ -25,6 +25,9 @@ import { useContributionsStore } from '@/stores/contributions-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
 import { useTickersStore } from '@/stores/tickers-store';
 import { useFundHoldingsStore } from '@/stores/fund-holdings-store';
+import { useRoadmapOverridesStore } from '@/stores/roadmap-overrides-store';
+import { useLoadGate } from '@/lib/use-load-gate';
+import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
 import { AccountType, GoalType } from '@/types/enums';
 import { netWorthForMonth, type NetWorthInput } from '@/lib/networth';
 import { netWorthAsOfFactory, deltaPctOrNull } from '@/lib/asset-value-chart';
@@ -411,6 +414,12 @@ export default function Dashboard() {
   const loadCategories = useCategoriesStore((s) => s.load);
   const categoriesError = useCategoriesStore((s) => s.error);
 
+  // W10 M3: NextMoveCard applies ctx.overrides from useRoadmapOverridesStore,
+  // which NOTHING on the Dashboard route loaded — so user overrides were
+  // ignored in "Suggested next step" until they visited /roadmap. Load it here.
+  const loadOverrides = useRoadmapOverridesStore((s) => s.load);
+  const overridesError = useRoadmapOverridesStore((s) => s.error);
+
   // `reload` doubles as the Retry handler for the store-error banner.
   const reload = useCallback(() => {
     loadHousehold();
@@ -427,6 +436,7 @@ export default function Dashboard() {
     loadFundHoldings();
     loadTransactions();
     loadCategories();
+    loadOverrides();
   }, [
     loadHousehold,
     loadAccounts,
@@ -442,10 +452,26 @@ export default function Dashboard() {
     loadFundHoldings,
     loadTransactions,
     loadCategories,
+    loadOverrides,
   ]);
-  useEffect(() => {
-    reload();
-  }, [reload]);
+
+  const dashboardIsLoading = [
+    useHouseholdStore((s) => s.isLoading),
+    useAccountsStore((s) => s.isLoading),
+    useLoansStore((s) => s.isLoading),
+    useSnapshotsStore((s) => s.isLoading),
+    usePropertiesStore((s) => s.isLoading),
+    useVehiclesStore((s) => s.isLoading),
+    useAssetValueSnapshotsStore((s) => s.isLoading),
+    useGoalsStore((s) => s.isLoading),
+    useContributionsStore((s) => s.isLoading),
+    useHoldingsStore((s) => s.isLoading),
+    useTickersStore((s) => s.isLoading),
+    useFundHoldingsStore((s) => s.isLoading),
+    useTransactionsStore((s) => s.isLoading),
+    useCategoriesStore((s) => s.isLoading),
+    useRoadmapOverridesStore((s) => s.isLoading),
+  ];
 
   // Errors from the core data stores the dashboard reads. Surfaced as a banner
   // above the widgets so a load failure reads as a recoverable hiccup, not as
@@ -467,7 +493,12 @@ export default function Dashboard() {
     fundHoldingsError,
     transactionsError,
     categoriesError,
+    overridesError,
   ];
+
+  // W10 S3/S4: gate the whole dashboard on load settlement — never flash "$0"
+  // pills or NextMoveCard's "Continue Setup →" while the 15 stores load.
+  const gate = useLoadGate(dashboardIsLoading, storeErrors, reload);
 
   const today = useMemo(() => new Date(), []);
   const currentMonth = useMemo(() => currentYyyymm(), []);
@@ -956,9 +987,19 @@ export default function Dashboard() {
   const visibleWidgets = orderedWidgets.filter((w) => !w.entry.hidden);
   const hiddenWidgets = orderedWidgets.filter((w) => w.entry.hidden);
 
+  // W10 S3/S4: NextMoveCard, the $0 pills, and the widgets all mount post-settle
+  // only — never during the 15-store cold load.
+  if (!gate.settled) {
+    return (
+      <PageContainer className="space-y-6">
+        <PageLoadingSpinner />
+      </PageContainer>
+    );
+  }
+
   return (
     <PageContainer className="space-y-6">
-      <StoreErrorBanner errors={storeErrors} onRetry={reload} />
+      <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-3xl font-semibold">
