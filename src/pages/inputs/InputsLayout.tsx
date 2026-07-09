@@ -29,7 +29,6 @@ const tabs: TabDef[] = [
   { path: 'vehicle-leases', label: 'Vehicle Leases' },
   { path: 'goals', label: 'Goals' },
   { path: 'plans-529', label: '529 Plans', glossaryTerm: '529 PLAN' },
-  { path: 'growth-tax', label: 'Growth & Tax', glossaryTerm: 'GROWTH & TAX' },
   { path: 'categories', label: 'Categories' },
   { path: 'tickers', label: 'Tickers', glossaryTerm: 'TICKERS' },
 ];

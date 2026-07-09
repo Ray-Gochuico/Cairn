@@ -182,8 +182,19 @@ describe('Plan529Tab', () => {
     });
     // NY MFJ = $10,000.
     expect(screen.getByText(/\$10,000/)).toBeInTheDocument();
-    // Phase 5 disclaimer.
-    expect(screen.getByText(/phase 5 what-if/i)).toBeInTheDocument();
+    // T23: phase jargon removed — the caveat now reads "not applied yet".
+    expect(screen.getByText(/doesn't apply this in projections yet/i)).toBeInTheDocument();
+    expect(screen.queryByText(/phase 5/i)).not.toBeInTheDocument();
+  });
+
+  it('T23: an unlimited-deduction state reads "no dollar cap", never $999,999', async () => {
+    // New Mexico grants an unlimited state deduction (UNLIMITED_DEDUCTION_SENTINEL).
+    setHouseholdState('NM', FilingStatus.SINGLE);
+    render(<MemoryRouter><Plan529Tab /></MemoryRouter>);
+    await waitFor(() => {
+      expect(screen.getByText(/no dollar cap on the state income tax deduction/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/999,999/)).not.toBeInTheDocument();
   });
 
   it('hides deduction tooltip when household state is not in the deduction table', async () => {

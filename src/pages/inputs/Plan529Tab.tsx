@@ -15,7 +15,7 @@ import AccountForm, {
   type AccountFormValues,
 } from '@/components/forms/AccountForm';
 import { AccountType } from '@/types/enums';
-import { get529DeductionForState } from '@/lib/529-state-deductions';
+import { get529DeductionForState, UNLIMITED_DEDUCTION_SENTINEL } from '@/lib/529-state-deductions';
 import { formatCurrency } from '@/lib/format';
 
 const DEFAULT_529: AccountFormValues = {
@@ -81,10 +81,11 @@ export default function Plan529Tab() {
       role="status"
       className="text-sm rounded-md border border-info/40 bg-info-soft p-3 text-info-foreground"
     >
-      Your state ({deduction.state}) allows up to{' '}
-      {formatCurrency(deduction.maxAmount)}/yr state income tax deduction for 529
-      contributions. The Bonus Tax calc doesn't auto-deduct this in Phase 3 —
-      coming in Phase 5 What-If.
+      Your state ({deduction.state}){' '}
+      {deduction.maxAmount === UNLIMITED_DEDUCTION_SENTINEL
+        ? 'places no dollar cap on the state income tax deduction for 529 contributions'
+        : `allows up to ${formatCurrency(deduction.maxAmount)}/yr state income tax deduction for 529 contributions`}
+      . The Bonus Tax calc doesn't apply this in projections yet.
     </div>
   );
 

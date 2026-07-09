@@ -39,6 +39,15 @@ function Step0Disclaimer({ onComplete }: Props) {
     <DisclosureModal
       document={firstRunDoc}
       continueLabel="Continue to setup"
+      heroHeader={
+        <div className="px-6 pt-6 pb-2">
+          <h1 className="text-2xl font-semibold tracking-tight">Welcome to Cairn</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            A local-first financial planner — everything stays on this machine.
+            One thing to read before you start:
+          </p>
+        </div>
+      }
       onAccept={async (version) => {
         await acceptDisclaimer('app_wide', version);
         onComplete();

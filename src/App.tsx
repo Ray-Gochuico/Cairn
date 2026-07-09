@@ -72,7 +72,6 @@ const GoalsTab = lazyWithRetry(() => import('./pages/inputs/GoalsTab'));
 const EquityGrantsTab = lazyWithRetry(() => import('./pages/inputs/EquityGrantsTab'));
 const Plan529Tab = lazyWithRetry(() => import('./pages/inputs/Plan529Tab'));
 const TickersTab = lazyWithRetry(() => import('./pages/inputs/TickersTab'));
-const ComingSoonTab = lazyWithRetry(() => import('./pages/inputs/tabs-coming-soon'));
 const CategoriesTab = lazyWithRetry(() => import('./pages/inputs/CategoriesTab'));
 const SetupWizard = lazyWithRetry(() => import('./pages/setup/SetupWizard'));
 const OnboardingController = lazyWithRetry(() => import('./pages/setup/OnboardingController'));
@@ -157,14 +156,6 @@ const router = createBrowserRouter([
           { path: 'vehicle-leases', element: lazyRoute(VehicleLeasesTab) },
           { path: 'goals', element: lazyRoute(GoalsTab) },
           { path: 'plans-529', element: lazyRoute(Plan529Tab) },
-          {
-            path: 'growth-tax',
-            element: (
-              <Suspense fallback={<PageLoadingSpinner />}>
-                <ComingSoonTab name="Growth & Tax" phase={3} />
-              </Suspense>
-            ),
-          },
           { path: 'categories', element: lazyRoute(CategoriesTab) },
           { path: 'tickers', element: lazyRoute(TickersTab) },
         ],

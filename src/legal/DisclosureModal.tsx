@@ -15,6 +15,12 @@ interface Props {
   onAccept: (version: string) => void | Promise<void>;
   onCancel?: () => void;
   continueLabel?: string;
+  /**
+   * Optional branded header rendered ABOVE the disclosure title (T23). Only the
+   * first-run Setup Step 0 passes it (a welcome frame); re-prompt gates render
+   * without it, so their look is unchanged. The versioned body is NOT touched.
+   */
+  heroHeader?: React.ReactNode;
 }
 
 /**
@@ -60,6 +66,7 @@ export function DisclosureModal({
   onAccept,
   onCancel,
   continueLabel = 'Continue',
+  heroHeader,
 }: Props) {
   const [checked, setChecked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -125,6 +132,7 @@ export function DisclosureModal({
           if (!onCancel) e.preventDefault();
         }}
       >
+        {heroHeader}
         <div className="px-6 py-4 border-b">
           <DialogTitle className="text-lg font-semibold">{title}</DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">

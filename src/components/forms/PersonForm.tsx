@@ -174,6 +174,10 @@ export default function PersonForm({
                 onChange={(v) =>
                   form.setValue('dateOfBirth', v, { shouldDirty: true, shouldTouch: true })
                 }
+                // T23: household members are adults — cap the year dropdown at
+                // 16 years ago so it doesn't open on "next year". The dependents
+                // form (which needs child years) keeps the default ceiling.
+                maxYear={new Date().getFullYear() - 16}
               />
             </div>
           </div>

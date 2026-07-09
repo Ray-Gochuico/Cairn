@@ -19,6 +19,15 @@ describe('Step0Disclaimer', () => {
     expect(screen.getByText(/version 1\.5/i)).toBeInTheDocument();
   });
 
+  it('T23: shows the branded Welcome-to-Cairn frame above the disclaimer', () => {
+    render(<Step0Disclaimer onComplete={vi.fn()} />);
+    expect(screen.getByRole('heading', { name: /welcome to cairn/i })).toBeInTheDocument();
+    expect(screen.getByText(/a local-first financial planner/i)).toBeInTheDocument();
+    // The full versioned disclaimer body + checkbox are still present.
+    expect(screen.getByRole('heading', { name: 'Disclaimer' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox')).toBeInTheDocument();
+  });
+
   it('disables Continue until the checkbox is checked', () => {
     render(<Step0Disclaimer onComplete={vi.fn()} />);
     const button = screen.getByRole('button', { name: /continue to setup/i });

@@ -61,3 +61,21 @@ describe('PersonForm — W10 M44 error honesty', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 });
+
+describe('PersonForm — DOB adult-year ceiling (T23)', () => {
+  it("caps the Date-of-birth year dropdown at 16 years before today (household members are adults)", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-09T12:00:00'));
+    try {
+      render(<PersonForm initial={DEFAULT_PERSON} onSubmit={vi.fn()} onCancel={vi.fn()} />);
+      const yearSelect = screen.getByLabelText('Date of birth year') as HTMLSelectElement;
+      const yearOptions = Array.from(yearSelect.options)
+        .map((o) => o.value)
+        .filter((v) => v !== '');
+      // The dropdown used to open on next year; it now starts at 2026 − 16 = 2010.
+      expect(yearOptions[0]).toBe('2010');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
