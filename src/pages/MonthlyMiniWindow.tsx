@@ -805,7 +805,11 @@ export default function MonthlyMiniWindow() {
       .filter(
         (a) =>
           a.type === AccountType.ACCOUNT_CASH ||
-          a.type === AccountType.ACCOUNT_SAVINGS,
+          a.type === AccountType.ACCOUNT_SAVINGS ||
+          // Round-3 E1: crypto is a MANUAL_BALANCE_TYPES member (wallets are
+          // user-entered, Yahoo stays observe-only) — it gets the same
+          // monthly balance check-in as cash/savings.
+          a.type === AccountType.ACCOUNT_CRYPTO,
       )
       .filter((a) => !a.excludedFromNetWorth)
       .map((account) => {
@@ -939,8 +943,8 @@ export default function MonthlyMiniWindow() {
           {cashCards.length > 0 && (
             <section className="space-y-2">
               <SectionTitle
-                title="Update cash balances"
-                description="Cash and savings balances are entered by hand — there's no ticker to derive from."
+                title="Update cash & manual balances"
+                description="Cash, savings, and crypto-wallet balances are entered by hand — there's no ticker to derive from."
               />
               {cashCards.map(({ account, latestBalance }) => (
                 <CashBalanceCard

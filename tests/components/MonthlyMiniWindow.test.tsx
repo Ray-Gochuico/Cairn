@@ -532,6 +532,27 @@ describe('MonthlyMiniWindow', () => {
     expect(screen.getByRole('button', { name: 'Confirm Brokerage One' })).toHaveTextContent(/^Confirm$/);
   });
 
+  it('a crypto account gets a manual-balance card in the ritual (round-3 E1)', async () => {
+    // Crypto is a MANUAL_BALANCE_TYPES member (wallets are user-entered,
+    // Yahoo stays observe-only) but Section 3 re-admitted only cash+savings.
+    await new AccountsRepo(db).create({
+      householdId: 1,
+      ownerPersonId: null,
+      beneficiaryDependentId: null,
+      name: 'Cold wallet',
+      institution: null,
+      type: AccountType.ACCOUNT_CRYPTO,
+      cryptoWalletAddress: null,
+      autoFetchEnabled: false,
+      excludedFromNetWorth: false,
+      stateOfPlan: null,
+      accentColor: null,
+    });
+    render(<MemoryRouter><MonthlyMiniWindow /></MemoryRouter>);
+    expect(await screen.findByText('Cold wallet')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save Cold wallet balance' })).toBeInTheDocument(); // Task 5 aria names
+  });
+
   it('shows the "new month" eyebrow only when navigated with ?from=new-month', async () => {
     render(
       <MemoryRouter initialEntries={['/monthly?from=new-month']}>
