@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { Input } from '@/components/ui/input';
+import { formatDate } from '@/lib/format';
 import type {
   Account,
   AccountSnapshot,
@@ -70,6 +71,20 @@ function formatUSD(value: number): string {
   }).format(value);
 }
 
+/**
+ * Signed month-over-month change against a prior snapshot value. The percent is
+ * suppressed when the prior is near zero (the house percent-honesty guard used
+ * on Dashboard/NetWorth) — a % change off ~$0 is noise. Returns e.g.
+ * "was $10,000 (+23.5%)" or "was $0" when the base is too small to divide by.
+ */
+function formatPriorContext(current: number, prior: number): string {
+  const base = `was ${formatUSD(prior)}`;
+  if (Math.abs(prior) < 0.005) return base;
+  const pct = ((current - prior) / prior) * 100;
+  const sign = pct >= 0 ? '+' : '−';
+  return `${base} (${sign}${Math.abs(pct).toFixed(1)}%)`;
+}
+
 // Save-time "today" from LOCAL parts (Wave 11 T10) — a snapshot stamped by
 // the user's calendar day, not UTC.
 function todayISO(): string {
@@ -95,9 +110,12 @@ interface DerivedValueCardProps {
   // cards (child-local skip left them in the ratified batch).
   isSkipped: boolean;
   onSkip: (accountId: number) => void;
+  // T25: the account's most recent value BEFORE this close, so the confirm card
+  // gives the reviewer a "was $X (±Y%)" anchor for the number they're ratifying.
+  priorValue?: number | null;
 }
 
-function DerivedValueCard({ account, snapshot, isSkipped, onSkip }: DerivedValueCardProps) {
+function DerivedValueCard({ account, snapshot, isSkipped, onSkip, priorValue }: DerivedValueCardProps) {
   const upsertSnapshot = useSnapshotsStore((s) => s.upsert);
   // Local state covers the optimistic in-card confirm; the PROP wins whenever
   // the underlying snapshot is already ratified — so a parent-level "Confirm
@@ -140,31 +158,34 @@ function DerivedValueCard({ account, snapshot, isSkipped, onSkip }: DerivedValue
     <Card>
       <CardContent className="py-4 space-y-2">
         <div className="flex items-start justify-between gap-4">
+          {/* T25: the value-to-verify LEADS — the reviewer's eye lands on the
+              number they're ratifying, then its context (which account, as of
+              when), then last month's value for a sanity anchor. */}
           <div>
-            <div className="font-medium">{account.name}</div>
-            <div className="text-sm text-muted-foreground">
-              Derived value as of {snapshot.snapshotDate}:{' '}
-              <span className="font-medium text-foreground">
-                {formatUSD(snapshot.totalValue)}
-              </span>
+            <div className="text-2xl font-semibold tabular-nums" data-testid="derived-value">
+              {formatUSD(snapshot.totalValue)}
             </div>
+            <div className="text-sm text-muted-foreground">
+              {account.name} · as of {formatDate(snapshot.snapshotDate)}
+            </div>
+            {priorValue != null && (
+              <div className="text-xs text-muted-foreground tabular-nums" data-testid="derived-prior">
+                {formatPriorContext(snapshot.totalValue, priorValue)}
+              </div>
+            )}
           </div>
           {/* Pre-mounted empty (Wave-5 a11y fix): a live region that only
               appears once populated never fires the polite announcement on
               most SR/browser pairs — it has nothing to diff against. Mount
               the node from the start and let the TEXT be the conditional
-              part. */}
-          <span
-            ref={statusRef}
-            role="status"
-            tabIndex={-1}
-            className={
-              mode === 'confirmed'
-                ? 'text-sm font-medium text-success-foreground outline-none'
-                : 'outline-none'
-            }
-          >
-            {mode === 'confirmed' && 'Confirmed'}
+              part. The confirmed state is a pill INSIDE this region so the
+              announcement semantics are preserved. */}
+          <span ref={statusRef} role="status" tabIndex={-1} className="outline-none">
+            {mode === 'confirmed' && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-success-soft px-2 py-0.5 text-xs font-medium text-success-foreground">
+                ✓ Confirmed
+              </span>
+            )}
           </span>
           {mode === 'skipped' && (
             <span className="text-sm text-muted-foreground">Skipped</span>
@@ -606,19 +627,24 @@ export default function MonthlyMiniWindow() {
       .filter((a) => a.id !== undefined)
       .filter((a) => !MANUAL_BALANCE_TYPES.has(a.type))
       .filter((a) => !a.excludedFromNetWorth)
-      .map((account) => {
+      .flatMap((account) => {
         const snap = snapshots.find(
           (s) =>
             s.accountId === account.id &&
             s.snapshotDate === lastMonthClose,
         );
-        if (!snap) return null;
+        if (!snap) return [];
+        // T25: the latest value strictly BEFORE this close — the prior-month
+        // anchor. Sourced from the snapshots the page already loads (no store).
+        const prior = snapshots
+          .filter((s) => s.accountId === account.id && s.snapshotDate < lastMonthClose)
+          .sort((a, b) => b.snapshotDate.localeCompare(a.snapshotDate))[0];
+        const priorValue: number | null = prior?.totalValue ?? null;
         // Show the card regardless of source. Pending cards drive the
         // banner; confirmed cards stay visible with a checkmark so the
         // user sees their progress through the ritual.
-        return { account, snapshot: snap };
-      })
-      .filter((x): x is { account: Account; snapshot: AccountSnapshot } => x !== null);
+        return [{ account, snapshot: snap, priorValue }];
+      });
   }, [accounts, snapshots, lastMonthClose]);
 
   // --- "Confirm all" batch over the derived cards -----------------------------
@@ -844,13 +870,14 @@ export default function MonthlyMiniWindow() {
               <p role="status" className="text-sm text-muted-foreground">
                 {confirmAllResult}
               </p>
-              {derivedCards.map(({ account, snapshot }) => (
+              {derivedCards.map(({ account, snapshot, priorValue }) => (
                 <DerivedValueCard
                   key={account.id}
                   account={account}
                   snapshot={snapshot}
                   isSkipped={account.id != null && skippedIds.has(account.id)}
                   onSkip={onSkip}
+                  priorValue={priorValue}
                 />
               ))}
             </section>

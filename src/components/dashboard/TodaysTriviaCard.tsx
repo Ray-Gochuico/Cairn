@@ -87,12 +87,13 @@ export function TodaysTriviaCard() {
   if (gate.state === 'needs-acceptance') {
     return (
       <Card className="p-4 bg-info-soft border-info/30">
-        <div className="flex items-center justify-between text-xs uppercase tracking-wider text-info-foreground">
-          <span>Today's questions</span>
-          <Link to="/learn" aria-label="View today's questions on the Learn page" className="text-xs underline">View →</Link>
+        {/* T25: single CTA — the eyebrow "View →" duplicated this destination in
+            a second style. One consistent Learn link only. */}
+        <div className="text-xs uppercase tracking-wider text-info-foreground">
+          Today's questions
         </div>
         <div className="mt-1 text-sm font-medium">Start daily learning</div>
-        <Link to="/learn" className="mt-2 inline-block text-sm text-info-foreground underline">
+        <Link to="/learn" className="mt-2 inline-block text-sm font-medium text-info-foreground underline">
           Open Learn →
         </Link>
       </Card>
