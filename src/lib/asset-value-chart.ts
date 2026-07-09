@@ -120,7 +120,8 @@ const MONTH_YEAR_FMT = new Intl.DateTimeFormat('en-US', {
   year: 'numeric',
   timeZone: 'UTC',
 });
-const MONTH_FMT = new Intl.DateTimeFormat('en-US', { month: 'short', timeZone: 'UTC' });
+/** Round-3 M5: cap the hero x-axis at this many sparse, anchored labels. */
+const MAX_X_TICKS = 5;
 
 /** "Mar 31, 2026", display-clamped to today. */
 export function formatBucketDate(bucketEnd: string, todayIso: string): string {
@@ -209,14 +210,19 @@ export function xTicksFor(
       prev = key;
     }
   }
-  return ticks;
+  // Round-3 M5: cap the axis at MAX_X_TICKS sparse labels. Twelve month
+  // ticks on the 1Y hero read as noise (and bare 'Jan' labels were
+  // year-ambiguous); 3-5 anchored labels date the chart at a glance.
+  if (ticks.length <= MAX_X_TICKS) return ticks;
+  const step = Math.ceil(ticks.length / MAX_X_TICKS);
+  return ticks.filter((_, i) => i % step === 0);
 }
 
 export function xTickLabel(bucketEnd: string, window: TimeWindow): string {
   const d = new Date(bucketEnd + 'T00:00:00Z');
   return window === '5Y' || window === 'ALL'
     ? String(d.getUTCFullYear())
-    : MONTH_FMT.format(d);
+    : MONTH_YEAR_FMT.format(d); // 'Jan 2026' — year-anchored (round-3 M5)
 }
 
 export interface HeaderLabelOverrides {
