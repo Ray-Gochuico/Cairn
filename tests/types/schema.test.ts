@@ -968,6 +968,8 @@ describe('AppSettingsSchema', () => {
     lastRefreshAt: null,
     statementsFolderPath: null,
     lastSeenMonth: null,
+    lastVisitDate: null,
+    briefingBaselineDate: null,
   };
 
   it('accepts a valid settings object with null optionals', () => {

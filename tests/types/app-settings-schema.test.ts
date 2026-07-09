@@ -11,7 +11,34 @@ const VALID_BASE = {
   lastRefreshAt: null,
   statementsFolderPath: null,
   lastSeenMonth: null,
+  lastVisitDate: null,
+  briefingBaselineDate: null,
 };
+
+describe('AppSettingsSchema — briefing visit stamps (migration 0050)', () => {
+  it('accepts null for both stamps (first-ever open)', () => {
+    const parsed = AppSettingsSchema.parse(VALID_BASE);
+    expect(parsed.lastVisitDate).toBeNull();
+    expect(parsed.briefingBaselineDate).toBeNull();
+  });
+
+  it('accepts YYYY-MM-DD strings for both stamps', () => {
+    const parsed = AppSettingsSchema.parse({
+      ...VALID_BASE,
+      lastVisitDate: '2026-07-09',
+      briefingBaselineDate: '2026-07-06',
+    });
+    expect(parsed.lastVisitDate).toBe('2026-07-09');
+    expect(parsed.briefingBaselineDate).toBe('2026-07-06');
+  });
+
+  it('rejects non-string stamps', () => {
+    expect(() => AppSettingsSchema.parse({ ...VALID_BASE, lastVisitDate: 20260709 })).toThrow();
+    expect(() =>
+      AppSettingsSchema.parse({ ...VALID_BASE, briefingBaselineDate: 20260706 }),
+    ).toThrow();
+  });
+});
 
 describe('AppSettingsSchema — utility category fields', () => {
   it('defaults both fields to null when omitted', () => {

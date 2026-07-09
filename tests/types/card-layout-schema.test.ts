@@ -25,6 +25,8 @@ describe('AppSettingsSchema.investmentsCardLayout', () => {
     lastRefreshAt: null,
     statementsFolderPath: null,
     lastSeenMonth: null,
+    lastVisitDate: null,
+    briefingBaselineDate: null,
   };
 
   it('defaults investmentsCardLayout to null when omitted', () => {
@@ -50,6 +52,8 @@ describe('AppSettingsSchema.calculatorCardLayout', () => {
     lastRefreshAt: null,
     statementsFolderPath: null,
     lastSeenMonth: null,
+    lastVisitDate: null,
+    briefingBaselineDate: null,
   };
 
   it('defaults calculatorCardLayout to null when omitted', () => {

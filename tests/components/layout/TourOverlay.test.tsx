@@ -26,6 +26,8 @@ function makeSettings(over: Partial<AppSettings> = {}): AppSettings {
     lastRefreshAt: null,
     statementsFolderPath: null,
     lastSeenMonth: null,
+    lastVisitDate: null,
+    briefingBaselineDate: null,
     ...over,
   });
 }

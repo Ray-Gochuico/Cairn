@@ -83,10 +83,10 @@ use tauri_plugin_sql::{DbInstances, DbPool};
 /// the webview is even told to reload. If a future migration is added, bump
 /// BOTH this constant and the JS `MAX_SCHEMA_VERSION`. Both sides are pinned to
 /// the literal by tests so a one-sided bump fails CI: the Rust side by
-/// `tests::max_schema_version_is_pinned_to_49` below, the JS side by
+/// `tests::max_schema_version_is_pinned_to_50` below, the JS side by
 /// `tests/db/schema-version-guard.test.ts` (which also asserts the JS value
 /// equals the migration count).
-pub const MAX_SCHEMA_VERSION: i64 = 49;
+pub const MAX_SCHEMA_VERSION: i64 = 50;
 
 /// Outcome of validating a candidate backup file, surfaced to JS so the UI can
 /// show a specific message before the destructive confirm.
@@ -762,7 +762,7 @@ mod tests {
     /// `MAX_SCHEMA_VERSION` is asserted equal to this literal AND to the
     /// migration count in `tests/db/schema-version-guard.test.ts`.
     #[test]
-    fn max_schema_version_is_pinned_to_49() {
-        assert_eq!(MAX_SCHEMA_VERSION, 49);
+    fn max_schema_version_is_pinned_to_50() {
+        assert_eq!(MAX_SCHEMA_VERSION, 50);
     }
 }

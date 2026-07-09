@@ -18,7 +18,7 @@ describe('MAX_SCHEMA_VERSION', () => {
     // The Rust db_backup::MAX_SCHEMA_VERSION must equal this. Asserted here as
     // a literal so a migration addition that bumps one but not the other trips
     // a test. Keep src-tauri/src/db_backup.rs::MAX_SCHEMA_VERSION in sync.
-    expect(MAX_SCHEMA_VERSION).toBe(49);
+    expect(MAX_SCHEMA_VERSION).toBe(50);
   });
 });
 
