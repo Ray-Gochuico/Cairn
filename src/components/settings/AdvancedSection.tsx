@@ -1,3 +1,4 @@
+import { useExpandOnAnchor } from '@/lib/use-expand-on-anchor';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronDown, ChevronUp } from 'lucide-react';
@@ -46,6 +47,12 @@ export function AdvancedSection() {
   }, [loadCategories]);
 
   const [open, setOpen] = useState(false);
+  // Round-3 cleanup: a TOC/deep-link jump to #advanced must not land on a
+  // collapsed card. The user can still collapse it afterwards.
+  const anchored = useExpandOnAnchor('advanced');
+  useEffect(() => {
+    if (anchored) setOpen(true);
+  }, [anchored]);
   const [low, setLow] = useState<string>('');
   const [high, setHigh] = useState<string>('');
   const [inflation, setInflation] = useState<string>('');
