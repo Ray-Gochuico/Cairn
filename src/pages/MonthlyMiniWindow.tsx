@@ -1,5 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLoadGate } from '@/lib/use-load-gate';
+import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
+import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useLoansStore } from '@/stores/loans-store';
@@ -527,28 +530,49 @@ export default function MonthlyMiniWindow() {
 
   const accounts = useAccountsStore((s) => s.accounts);
   const loadAccounts = useAccountsStore((s) => s.load);
+  const accountsError = useAccountsStore((s) => s.error);
+  const accountsLoading = useAccountsStore((s) => s.isLoading);
 
   const snapshots = useSnapshotsStore((s) => s.snapshots);
   const loadSnapshots = useSnapshotsStore((s) => s.load);
+  const snapshotsError = useSnapshotsStore((s) => s.error);
+  const snapshotsLoading = useSnapshotsStore((s) => s.isLoading);
 
   const loans = useLoansStore((s) => s.loans);
   const loadLoans = useLoansStore((s) => s.load);
+  const loansError = useLoansStore((s) => s.error);
+  const loansLoading = useLoansStore((s) => s.isLoading);
 
   const properties = usePropertiesStore((s) => s.properties);
   const loadProperties = usePropertiesStore((s) => s.load);
   const updateProperty = usePropertiesStore((s) => s.update);
+  const propertiesError = usePropertiesStore((s) => s.error);
+  const propertiesLoading = usePropertiesStore((s) => s.isLoading);
 
   const vehicles = useVehiclesStore((s) => s.vehicles);
   const loadVehicles = useVehiclesStore((s) => s.load);
   const updateVehicle = useVehiclesStore((s) => s.update);
+  const vehiclesError = useVehiclesStore((s) => s.error);
+  const vehiclesLoading = useVehiclesStore((s) => s.isLoading);
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     loadAccounts();
     loadSnapshots();
     loadLoans();
     loadProperties();
     loadVehicles();
   }, [loadAccounts, loadSnapshots, loadLoans, loadProperties, loadVehicles]);
+
+  // W10 M38: telling a user their monthly ritual is DONE ("Nothing to confirm
+  // this month.") before the five loads settle is the worst false-empty
+  // instance — gate the whole ritual on load settlement. loan-payments is a
+  // parameterized non-factory store consumed only on the write path, so it's
+  // not part of the gate.
+  const gate = useLoadGate(
+    [accountsLoading, snapshotsLoading, loansLoading, propertiesLoading, vehiclesLoading],
+    [accountsError, snapshotsError, loansError, propertiesError, vehiclesError],
+    reload,
+  );
 
   const today = useMemo(() => new Date(), []);
   const lastMonth = useMemo(() => lastMonthYyyymm(today), [today]);
@@ -735,8 +759,18 @@ export default function MonthlyMiniWindow() {
     cashCards.length === 0 &&
     assetCards.length === 0;
 
+  // W10 M38: never fake a completed ritual while stores load.
+  if (!gate.settled) {
+    return (
+      <PageContainer width="prose" className="space-y-6">
+        <PageLoadingSpinner />
+      </PageContainer>
+    );
+  }
+
   return (
     <PageContainer width="prose" className="space-y-6">
+      <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
       <div>
         {fromNewMonth && (
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">

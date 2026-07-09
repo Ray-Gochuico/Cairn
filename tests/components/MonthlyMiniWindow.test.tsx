@@ -33,12 +33,22 @@ const loadAppSettingsMigration = () =>
 const loadCashApyMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0024_cash_apy.sql'), 'utf-8');
 
+// Capture the real store loads once — the W10 loading-gate test overrides
+// accounts.load with a no-op, and resetStores must restore the real loads so
+// later tests (which rely on the mount load fetching seeded DB rows) aren't
+// left with a no-op load. Merged setState would otherwise keep the no-op.
+const realAccountsLoad = useAccountsStore.getState().load;
+const realSnapshotsLoad = useSnapshotsStore.getState().load;
+const realLoansLoad = useLoansStore.getState().load;
+const realPropertiesLoad = usePropertiesStore.getState().load;
+const realVehiclesLoad = useVehiclesStore.getState().load;
+
 function resetStores() {
-  useAccountsStore.setState({ accounts: [], isLoading: false, error: null });
-  useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null });
-  useLoansStore.setState({ loans: [], isLoading: false, error: null });
-  usePropertiesStore.setState({ properties: [], isLoading: false, error: null });
-  useVehiclesStore.setState({ vehicles: [], isLoading: false, error: null });
+  useAccountsStore.setState({ accounts: [], isLoading: false, error: null, load: realAccountsLoad });
+  useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null, load: realSnapshotsLoad });
+  useLoansStore.setState({ loans: [], isLoading: false, error: null, load: realLoansLoad });
+  usePropertiesStore.setState({ properties: [], isLoading: false, error: null, load: realPropertiesLoad });
+  useVehiclesStore.setState({ vehicles: [], isLoading: false, error: null, load: realVehiclesLoad });
 }
 
 describe('MonthlyMiniWindow', () => {
@@ -73,6 +83,14 @@ describe('MonthlyMiniWindow', () => {
     expect(
       screen.getByRole('button', { name: /back to dashboard/i }),
     ).toBeInTheDocument();
+  });
+
+  it('shows loading — not "Nothing to confirm this month." — while stores load (W10 M38)', () => {
+    useAccountsStore.setState({ accounts: [], isLoading: true, error: null, load: async () => {} } as never);
+    // (remaining stores resolved-empty per the file's reset helper)
+    render(<MemoryRouter><MonthlyMiniWindow /></MemoryRouter>);
+    expect(screen.getByRole('status', { name: /loading page/i })).toBeInTheDocument();
+    expect(screen.queryByText(/nothing to confirm this month/i)).not.toBeInTheDocument();
   });
 
   it('renders a derived-value card when an AUTO_DERIVED snapshot exists for last month', async () => {
