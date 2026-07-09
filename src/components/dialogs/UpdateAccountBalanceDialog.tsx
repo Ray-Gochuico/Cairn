@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -81,6 +82,9 @@ export function UpdateAccountBalanceDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Update {accountName} balance</DialogTitle>
+          <DialogDescription className="sr-only">
+            Enter today's balance to record a new manual snapshot for this account.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 py-2">
           <div>

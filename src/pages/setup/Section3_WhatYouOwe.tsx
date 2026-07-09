@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -68,6 +69,9 @@ export default function Section3_WhatYouOwe({ status, onSetStatus }: Props) {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add a loan</DialogTitle>
+            <DialogDescription className="sr-only">
+              Add a loan with its balance, rate, and payment schedule.
+            </DialogDescription>
           </DialogHeader>
           <LoanForm onSaved={() => setDialog(null)} />
         </DialogContent>

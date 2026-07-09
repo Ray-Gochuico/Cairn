@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -173,6 +174,9 @@ export default function Section2_WhatYouOwn({ status, onSetStatus }: Props) {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add an account</DialogTitle>
+            <DialogDescription className="sr-only">
+              Add a cash, brokerage, or retirement account to track.
+            </DialogDescription>
           </DialogHeader>
           <AccountForm onSaved={() => setDialog(null)} />
         </DialogContent>
@@ -184,6 +188,9 @@ export default function Section2_WhatYouOwn({ status, onSetStatus }: Props) {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add a holding</DialogTitle>
+            <DialogDescription className="sr-only">
+              Add a ticker position held inside one of your accounts.
+            </DialogDescription>
           </DialogHeader>
           <HoldingForm onSaved={() => setDialog(null)} />
         </DialogContent>
@@ -195,6 +202,9 @@ export default function Section2_WhatYouOwn({ status, onSetStatus }: Props) {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add a property</DialogTitle>
+            <DialogDescription className="sr-only">
+              Add a property with its purchase details and estimated value.
+            </DialogDescription>
           </DialogHeader>
           <PropertyForm onSaved={() => setDialog(null)} />
         </DialogContent>
@@ -206,6 +216,9 @@ export default function Section2_WhatYouOwn({ status, onSetStatus }: Props) {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add rent / housing payment</DialogTitle>
+            <DialogDescription className="sr-only">
+              Add a recurring rent or housing payment.
+            </DialogDescription>
           </DialogHeader>
           <HousingPaymentForm onSaved={() => setDialog(null)} />
         </DialogContent>
@@ -217,6 +230,9 @@ export default function Section2_WhatYouOwn({ status, onSetStatus }: Props) {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add a vehicle</DialogTitle>
+            <DialogDescription className="sr-only">
+              Add a vehicle with its purchase details and estimated value.
+            </DialogDescription>
           </DialogHeader>
           <VehicleForm onSaved={() => setDialog(null)} />
         </DialogContent>
@@ -228,6 +244,9 @@ export default function Section2_WhatYouOwn({ status, onSetStatus }: Props) {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add vehicle lease</DialogTitle>
+            <DialogDescription className="sr-only">
+              Add a recurring vehicle lease payment.
+            </DialogDescription>
           </DialogHeader>
           <VehicleLeaseForm onSaved={() => setDialog(null)} />
         </DialogContent>
@@ -239,6 +258,9 @@ export default function Section2_WhatYouOwn({ status, onSetStatus }: Props) {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add an equity grant</DialogTitle>
+            <DialogDescription className="sr-only">
+              Add an equity grant with its vesting schedule.
+            </DialogDescription>
           </DialogHeader>
           <EquityGrantForm
             initial={DEFAULT_EQUITY_GRANT}

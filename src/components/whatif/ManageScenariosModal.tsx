@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -72,6 +73,9 @@ export function ManageScenariosModal({
       <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>Manage scenarios</DialogTitle>
+          <DialogDescription className="sr-only">
+            Rename, duplicate, or delete your saved what-if scenarios.
+          </DialogDescription>
         </DialogHeader>
         <div className="py-2 overflow-x-auto">
           <table className="w-full text-sm">
