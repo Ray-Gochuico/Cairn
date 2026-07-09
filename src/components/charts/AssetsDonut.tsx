@@ -11,6 +11,7 @@ import {
   latestSnapshotForAccount,
 } from '@/lib/latest-value';
 import { formatCurrency } from '@/lib/format';
+import { useViewFilter } from '@/lib/use-view-filter';
 import { entityKey } from '@/lib/entity-key';
 import { colorForAccount, colorForEntityKey } from '@/lib/chart-colors';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -34,6 +35,10 @@ const STORAGE_KEY = 'donut.assets.hidden';
  * use `entityKey(kind, id)` so account/property/vehicle ids never collide.
  */
 export default function AssetsDonut() {
+  // W10 T7: this donut is household-wide BY DESIGN. Flag that with the same
+  // "· Household" suffix AssetValueChart uses when a person view is active.
+  const { filter } = useViewFilter();
+  const title = filter !== 'household' ? 'Assets · Household' : 'Assets';
   const accounts = useAccountsStore((s) => s.accounts);
   const loadAccounts = useAccountsStore((s) => s.load);
   const snapshots = useSnapshotsStore((s) => s.snapshots);
@@ -158,7 +163,7 @@ export default function AssetsDonut() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Assets</CardTitle>
+          <CardTitle>{title}</CardTitle>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground">
           No assets recorded yet.
@@ -177,7 +182,7 @@ export default function AssetsDonut() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between gap-2">
-            <CardTitle>Assets</CardTitle>
+            <CardTitle>{title}</CardTitle>
             {picker}
           </div>
         </CardHeader>
@@ -192,7 +197,7 @@ export default function AssetsDonut() {
 
   return (
     <DonutChartCard
-      title="Assets"
+      title={title}
       data={filteredSlices.length === 0 ? EMPTY_SLICES : filteredSlices}
       shareTotal={fullTotal}
       valueFormatter={formatCurrency}

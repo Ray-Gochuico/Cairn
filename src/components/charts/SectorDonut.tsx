@@ -13,6 +13,7 @@ import {
   type FundSectorWeights,
 } from '@/lib/sector-classification';
 import { formatCurrency } from '@/lib/format';
+import { useViewFilter } from '@/lib/use-view-filter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 // Module-level empty-data sentinel for the empty-state donut. Hoisted so the
@@ -45,6 +46,9 @@ const STORAGE_KEY = 'donut.sector.hidden';
  * dependent slices of the chosen sector, not independently toggleable.
  */
 export function SectorDonut() {
+  // W10 T7: household-wide by design (protected view — additive title only).
+  const { filter } = useViewFilter();
+  const sectorBaseTitle = filter !== 'household' ? 'Sector exposure · Household' : 'Sector exposure';
   const report = useConcentration();
   const tickers = useTickersStore((s) => s.tickers);
   const fundSectors = useFundSectorsStore((s) => s.fundSectors);
@@ -181,14 +185,14 @@ export function SectorDonut() {
   if (!hasData) {
     return (
       <DonutChartCard
-        title="Sector exposure"
+        title={sectorBaseTitle}
         subtitle="After fund look-through"
         data={EMPTY_DONUT_DATA}
       />
     );
   }
 
-  const title = selectedSector ? `Industries — ${selectedSector}` : 'Sector exposure';
+  const title = selectedSector ? `Industries — ${selectedSector}` : sectorBaseTitle;
   const subtitle = selectedSector ? (
     <button
       ref={backButtonRef}
@@ -215,7 +219,7 @@ export function SectorDonut() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between gap-2">
-            <CardTitle>Sector exposure</CardTitle>
+            <CardTitle>{sectorBaseTitle}</CardTitle>
             {picker}
           </div>
         </CardHeader>

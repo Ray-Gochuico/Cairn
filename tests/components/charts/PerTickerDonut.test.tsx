@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useTickersStore } from '@/stores/tickers-store';
@@ -113,7 +114,7 @@ describe('PerTickerDonut', () => {
 
   it('renders one slice per ticker', () => {
     seedThreeTickers();
-    render(<PerTickerDonut />);
+    render(<MemoryRouter><PerTickerDonut /></MemoryRouter>);
     expect(screen.getByTestId('slice-AAPL')).toBeInTheDocument();
     expect(screen.getByTestId('slice-MSFT')).toBeInTheDocument();
     expect(screen.getByTestId('slice-JPM')).toBeInTheDocument();
@@ -121,7 +122,7 @@ describe('PerTickerDonut', () => {
 
   it('renders an Entities picker button with the count of visible tickers', () => {
     seedThreeTickers();
-    render(<PerTickerDonut />);
+    render(<MemoryRouter><PerTickerDonut /></MemoryRouter>);
     expect(
       screen.getByRole('button', { name: /Included · 3 of 3/ }),
     ).toBeInTheDocument();
@@ -129,7 +130,7 @@ describe('PerTickerDonut', () => {
 
   it('hiding a ticker removes its slice from the donut', async () => {
     seedThreeTickers();
-    render(<PerTickerDonut />);
+    render(<MemoryRouter><PerTickerDonut /></MemoryRouter>);
     expect(screen.getByTestId('slice-MSFT')).toBeInTheDocument();
 
     const user = userEvent.setup();
@@ -148,7 +149,7 @@ describe('PerTickerDonut', () => {
     // AAPL 1000, MSFT 500, JPM 750 → full total 2250. Hide MSFT: AAPL's
     // legend share must still read 44.4% (1000/2250), NOT 57.1% (1000/1750).
     seedThreeTickers();
-    render(<PerTickerDonut />);
+    render(<MemoryRouter><PerTickerDonut /></MemoryRouter>);
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: /Included ·/ }));
     await user.click(screen.getByRole('checkbox', { name: /MSFT/ }));
@@ -158,27 +159,27 @@ describe('PerTickerDonut', () => {
 
   it('picker lives in the card header, not an absolute overlay', () => {
     seedThreeTickers();
-    render(<PerTickerDonut />);
+    render(<MemoryRouter><PerTickerDonut /></MemoryRouter>);
     const trigger = screen.getByRole('button', { name: /Included ·/ });
     expect(trigger.closest('[class*="absolute"]')).toBeNull();
   });
 
   it('persists hidden ticker across remount', async () => {
     seedThreeTickers();
-    const { unmount } = render(<PerTickerDonut />);
+    const { unmount } = render(<MemoryRouter><PerTickerDonut /></MemoryRouter>);
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: /Included ·/ }));
     await user.click(screen.getByRole('checkbox', { name: /MSFT/ }));
     expect(screen.queryByTestId('slice-MSFT')).not.toBeInTheDocument();
     unmount();
 
-    render(<PerTickerDonut />);
+    render(<MemoryRouter><PerTickerDonut /></MemoryRouter>);
     expect(screen.queryByTestId('slice-MSFT')).not.toBeInTheDocument();
     expect(screen.getByTestId('slice-AAPL')).toBeInTheDocument();
   });
 
   it('does not render the picker button when there are no tickers', () => {
-    render(<PerTickerDonut />);
+    render(<MemoryRouter><PerTickerDonut /></MemoryRouter>);
     expect(screen.queryByRole('button', { name: /Included ·/ })).toBeNull();
   });
 });

@@ -520,6 +520,16 @@ export default function Goals() {
         </div>
       </div>
 
+      {visibleGoals.length === 0 ? (
+        // W10 T7: goals exist, but the person filter strips them all — explain
+        // instead of a silent header over an empty grid.
+        <EmptyState
+          bare
+          icon={Target}
+          title="No goals in this view"
+          description="Every goal belongs to someone else under this filter — switch to Household to see everything."
+        />
+      ) : (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {projections.map((p) => (
           <GoalProgressCard
@@ -532,6 +542,7 @@ export default function Goals() {
           />
         ))}
       </div>
+      )}
 
       {dialogTarget && (
         <UpdateAccountBalanceDialog

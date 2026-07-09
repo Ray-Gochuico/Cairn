@@ -354,10 +354,12 @@ describe('NetWorth page', () => {
 
     // The chart hero is household-scoped BY DESIGN (spec §3.1): it keeps the
     // full $250k household total ($50k + $200k) and flags the scope with a
-    // "· Household" label suffix instead of silently filtering.
+    // "· Household" label suffix instead of silently filtering. (W10 T7 added
+    // the same suffix to the Assets/Liabilities donuts, so scope specifically
+    // to the chart's own "Net worth · Household" label here.)
     const header = await screen.findByTestId('asset-chart-header-value');
     await waitFor(() => expect(header.textContent).toBe('$250,000'));
-    expect(screen.getByText(/· Household/)).toBeInTheDocument();
+    expect(screen.getByText(/net worth · Household/i)).toBeInTheDocument();
 
     // The GrowthCard IS person-filtered (fed from the visible* slices): its
     // current value shows only p1's $50k…

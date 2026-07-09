@@ -8,6 +8,7 @@ import { useConcentration } from '@/lib/use-concentration';
 import { useTickersStore } from '@/stores/tickers-store';
 import { useFundHoldingsStore } from '@/stores/fund-holdings-store';
 import { formatCurrency } from '@/lib/format';
+import { useViewFilter } from '@/lib/use-view-filter';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { AssetClass } from '@/types/schema';
 
@@ -45,6 +46,9 @@ const FUND_ASSET_CLASSES = new Set<AssetClass>([
 ]);
 
 export function PerTickerDonut() {
+  // W10 T7: household-wide by design (protected view — additive title only).
+  const { filter } = useViewFilter();
+  const title = filter !== 'household' ? 'Per-company exposure · Household' : 'Per-company exposure';
   const report = useConcentration();
   const tickers = useTickersStore((s) => s.tickers);
   const tickerClassMap = useMemo(
@@ -158,7 +162,7 @@ export function PerTickerDonut() {
   if (!hasData) {
     return (
       <DonutChartCard
-        title="Per-company exposure"
+        title={title}
         subtitle="After fund look-through"
         data={EMPTY_DONUT_DATA}
       />
@@ -179,7 +183,7 @@ export function PerTickerDonut() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between gap-2">
-            <CardTitle>Per-company exposure</CardTitle>
+            <CardTitle>{title}</CardTitle>
             {picker}
           </div>
         </CardHeader>
@@ -194,7 +198,7 @@ export function PerTickerDonut() {
 
   return (
     <DonutChartCard
-      title="Per-company exposure"
+      title={title}
       subtitle={subtitle}
       data={filteredSlices}
       shareTotal={fullTotal}

@@ -535,6 +535,24 @@ describe('Goals page', () => {
     expect(screen.queryByText('Joint goal')).not.toBeInTheDocument();
   });
 
+  it('explains a filtered-empty view instead of a silent header-over-nothing (W10 T7)', () => {
+    usePersonsStore.setState({
+      persons: [
+        { ...basePerson, id: 1, name: 'Alice' },
+        { ...basePerson, id: 2, name: 'Bob' },
+      ],
+      isLoading: false, error: null, load: async () => {},
+    });
+    primeStores({ goals: [{ name: "Bob's goal", forPersonId: 2 }] });
+    render(
+      <MemoryRouter initialEntries={['/goals?view=p1']}>
+        <Goals />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText(/no goals in this view/i)).toBeInTheDocument();
+    expect(screen.getByText(/switch to household/i)).toBeInTheDocument();
+  });
+
   it('Export CSV button downloads the goals table with the type label and person resolved', async () => {
     // Seed two persons so useViewFilter exposes them for FK resolution.
     usePersonsStore.setState({

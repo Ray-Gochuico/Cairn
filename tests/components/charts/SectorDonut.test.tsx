@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useTickersStore } from '@/stores/tickers-store';
@@ -122,7 +123,7 @@ beforeEach(() => {
 
 describe('SectorDonut — sector view (default)', () => {
   it('renders the empty state when there are no holdings', () => {
-    render(<SectorDonut />);
+    render(<MemoryRouter><SectorDonut /></MemoryRouter>);
     expect(screen.getByText('Sector exposure')).toBeTruthy();
     expect(screen.getByText('After fund look-through')).toBeTruthy();
   });
@@ -138,7 +139,7 @@ describe('SectorDonut — sector view (default)', () => {
       { ticker: 'MSFT', effectiveExposure: 500 },
       { ticker: 'JPM', effectiveExposure: 750 },
     ]);
-    render(<SectorDonut />);
+    render(<MemoryRouter><SectorDonut /></MemoryRouter>);
     expect(screen.getByTestId('slice-Technology')).toBeTruthy();
     expect(screen.getByTestId('slice-Financials')).toBeTruthy();
     expect(screen.getByText(/click a sector to drill in/)).toBeTruthy();
@@ -149,7 +150,7 @@ describe('SectorDonut — sector view (default)', () => {
       makeTicker({ ticker: 'VTI', assetClass: 'US_TOTAL_MARKET' }),
     ]);
     setReport([{ ticker: 'VTI', effectiveExposure: 5000 }]);
-    render(<SectorDonut />);
+    render(<MemoryRouter><SectorDonut /></MemoryRouter>);
     expect(screen.getByTestId('slice-Unclassified')).toBeTruthy();
   });
 
@@ -158,7 +159,7 @@ describe('SectorDonut — sector view (default)', () => {
       makeTicker({ ticker: 'BND', assetClass: 'US_BONDS' }),
     ]);
     setReport([{ ticker: 'BND', effectiveExposure: 2000 }]);
-    render(<SectorDonut />);
+    render(<MemoryRouter><SectorDonut /></MemoryRouter>);
     expect(screen.getByTestId('slice-Fixed Income')).toBeTruthy();
   });
 });
@@ -180,7 +181,7 @@ describe('SectorDonut — drill into industry view', () => {
   });
 
   it('switches to the industry view when a sector wedge is clicked', () => {
-    render(<SectorDonut />);
+    render(<MemoryRouter><SectorDonut /></MemoryRouter>);
     fireEvent.click(screen.getByTestId('slice-Technology'));
     expect(screen.getByText('Industries — Technology')).toBeTruthy();
     expect(screen.getByTestId('slice-Consumer Electronics')).toBeTruthy();
@@ -191,14 +192,14 @@ describe('SectorDonut — drill into industry view', () => {
   });
 
   it('shows a "Back to sectors" button while drilled in', () => {
-    render(<SectorDonut />);
+    render(<MemoryRouter><SectorDonut /></MemoryRouter>);
     fireEvent.click(screen.getByTestId('slice-Technology'));
     const back = screen.getByRole('button', { name: /back to sectors/i });
     expect(back).toBeTruthy();
   });
 
   it('returns to the sector view when "Back to sectors" is clicked', () => {
-    render(<SectorDonut />);
+    render(<MemoryRouter><SectorDonut /></MemoryRouter>);
     fireEvent.click(screen.getByTestId('slice-Technology'));
     fireEvent.click(screen.getByRole('button', { name: /back to sectors/i }));
     expect(screen.getByText('Sector exposure')).toBeTruthy();
@@ -213,7 +214,7 @@ describe('SectorDonut — drill into industry view', () => {
     // NOT 32.0% (1200/3750). Pins the deliberate shareTotal={undefined} in
     // drill-in view — a future "pass shareTotal unconditionally" cleanup
     // must go red here.
-    render(<SectorDonut />);
+    render(<MemoryRouter><SectorDonut /></MemoryRouter>);
     fireEvent.click(screen.getByTestId('slice-Technology'));
     expect(screen.getByText(/\$1,200 · 40\.0%/)).toBeInTheDocument();
     expect(screen.getByText(/\$1,000 · 33\.3%/)).toBeInTheDocument();
@@ -222,7 +223,7 @@ describe('SectorDonut — drill into industry view', () => {
   });
 
   it('does not drill again when a wedge is clicked in industry view', () => {
-    render(<SectorDonut />);
+    render(<MemoryRouter><SectorDonut /></MemoryRouter>);
     fireEvent.click(screen.getByTestId('slice-Technology'));
     // Click an industry wedge — should be a no-op (no onClick wired).
     fireEvent.click(screen.getByTestId('slice-Semiconductors'));
@@ -232,7 +233,7 @@ describe('SectorDonut — drill into industry view', () => {
 
   it('drill-in focuses the Back button; back restores focus to the drilled legend button (round-2 B4)', async () => {
     const user = userEvent.setup();
-    render(<SectorDonut />);
+    render(<MemoryRouter><SectorDonut /></MemoryRouter>);
     // Drill in via the LEGEND button (DonutChartCard's keyboard twin of the
     // wedge) — unambiguous, unlike the mocked slice buttons.
     const legend = await screen.findByRole('list', { name: /chart legend/i });
@@ -263,13 +264,13 @@ describe('SectorDonut — drill-view self-heals when the selected sector empties
       { ticker: 'AAPL', effectiveExposure: 1000 },
       { ticker: 'JPM', effectiveExposure: 500 },
     ]);
-    const { rerender } = render(<SectorDonut />);
+    const { rerender } = render(<MemoryRouter><SectorDonut /></MemoryRouter>);
     fireEvent.click(screen.getByTestId('slice-Technology'));
     expect(screen.getByText('Industries — Technology')).toBeTruthy();
 
     // Simulate AAPL being sold: Technology now has no holdings.
     setReport([{ ticker: 'JPM', effectiveExposure: 500 }]);
-    rerender(<SectorDonut />);
+    rerender(<MemoryRouter><SectorDonut /></MemoryRouter>);
     // Reset effect fires → sector view, Financials only.
     expect(screen.getByText('Sector exposure')).toBeTruthy();
     expect(screen.getByTestId('slice-Financials')).toBeTruthy();
@@ -291,7 +292,7 @@ describe('SectorDonut — fund sector look-through', () => {
       { fundTicker: 'VTI', sector: 'Consumer Cyclical', weight: 0.35, asOfDate: '2026-01-01' },
     ]);
 
-    render(<SectorDonut />);
+    render(<MemoryRouter><SectorDonut /></MemoryRouter>);
 
     expect(screen.getByTestId('slice-Technology')).toBeTruthy();
     expect(screen.getByTestId('slice-Healthcare')).toBeTruthy();
@@ -308,7 +309,7 @@ describe('SectorDonut — fund sector look-through', () => {
     // No fund sectors loaded — pseudo-sector path takes over.
     setFundSectors([]);
 
-    render(<SectorDonut />);
+    render(<MemoryRouter><SectorDonut /></MemoryRouter>);
 
     expect(screen.getByTestId('slice-Unclassified')).toBeTruthy();
   });
@@ -370,7 +371,7 @@ describe('SectorDonut — fund sector look-through', () => {
       { fundTicker: 'FXAIX', sector: 'Basic Materials', weight: 0.01, asOfDate: '2026-01-01' },
     ]);
 
-    render(<SectorDonut />);
+    render(<MemoryRouter><SectorDonut /></MemoryRouter>);
 
     // The eleven GICS sectors must each get a slice.
     expect(screen.getByTestId('slice-Technology')).toBeTruthy();
@@ -402,7 +403,7 @@ describe('SectorDonut — colors', () => {
       makeTicker({ ticker: 'AAPL', sector: 'Technology', industry: 'Consumer Electronics' }),
     ]);
     setReport([{ ticker: 'AAPL', effectiveExposure: 1000 }]);
-    render(<SectorDonut />);
+    render(<MemoryRouter><SectorDonut /></MemoryRouter>);
     const wedge = screen.getByTestId('slice-Technology');
     expect(wedge.dataset.color).toBe('#3b82f6');
   });
@@ -431,7 +432,7 @@ describe('SectorDonut — colors', () => {
       { fundTicker: 'VTI', sector: 'Basic Materials', weight: 0.05, asOfDate: '2026-01-01' },
       { fundTicker: 'VTI', sector: 'Real Estate', weight: 0.10, asOfDate: '2026-01-01' },
     ]);
-    render(<SectorDonut />);
+    render(<MemoryRouter><SectorDonut /></MemoryRouter>);
 
     // Every wedge must have a 6-digit hex AND must not be the neutral gray
     // (the fallback for unknown sectors). Both signals together catch a
@@ -457,7 +458,7 @@ describe('SectorDonut — colors', () => {
       { ticker: 'AAPL', effectiveExposure: 1000 },
       { ticker: 'MSFT', effectiveExposure: 800 },
     ]);
-    render(<SectorDonut />);
+    render(<MemoryRouter><SectorDonut /></MemoryRouter>);
     fireEvent.click(screen.getByTestId('slice-Technology'));
     const w1 = screen.getByTestId('slice-Consumer Electronics');
     const w2 = screen.getByTestId('slice-Software—Infrastructure');
@@ -483,7 +484,7 @@ describe('SectorDonut — entity picker', () => {
 
   it('renders an Entities picker button with the sector count', () => {
     seedTwoSectors();
-    render(<SectorDonut />);
+    render(<MemoryRouter><SectorDonut /></MemoryRouter>);
     expect(
       screen.getByRole('button', { name: /Included · 2 of 2/ }),
     ).toBeInTheDocument();
@@ -491,7 +492,7 @@ describe('SectorDonut — entity picker', () => {
 
   it('hiding a sector removes its wedge from the donut', async () => {
     seedTwoSectors();
-    render(<SectorDonut />);
+    render(<MemoryRouter><SectorDonut /></MemoryRouter>);
     expect(screen.getByTestId('slice-Technology')).toBeInTheDocument();
     expect(screen.getByTestId('slice-Financial Services')).toBeInTheDocument();
 
@@ -508,7 +509,7 @@ describe('SectorDonut — entity picker', () => {
 
   it('hides the picker button while drilled into an industry view', () => {
     seedTwoSectors();
-    render(<SectorDonut />);
+    render(<MemoryRouter><SectorDonut /></MemoryRouter>);
     // Picker is visible in sector view
     expect(screen.getByRole('button', { name: /Included ·/ })).toBeInTheDocument();
     // Drill into Technology
@@ -520,7 +521,7 @@ describe('SectorDonut — entity picker', () => {
 
   it('picker reappears when returning to sector view via "Back to sectors"', () => {
     seedTwoSectors();
-    render(<SectorDonut />);
+    render(<MemoryRouter><SectorDonut /></MemoryRouter>);
     fireEvent.click(screen.getByTestId('slice-Technology'));
     expect(screen.queryByRole('button', { name: /Included ·/ })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /back to sectors/i }));
@@ -534,7 +535,7 @@ describe('SectorDonut — entity picker', () => {
     // Financial Services: Technology's legend share must still read 66.7%
     // (1500/2250), NOT 100.0%.
     seedTwoSectors();
-    render(<SectorDonut />);
+    render(<MemoryRouter><SectorDonut /></MemoryRouter>);
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: /Included ·/ }));
     await user.click(screen.getByRole('checkbox', { name: /Financial Services/ }));
@@ -544,21 +545,21 @@ describe('SectorDonut — entity picker', () => {
 
   it('picker lives in the card header, not an absolute overlay', () => {
     seedTwoSectors();
-    render(<SectorDonut />);
+    render(<MemoryRouter><SectorDonut /></MemoryRouter>);
     const trigger = screen.getByRole('button', { name: /Included ·/ });
     expect(trigger.closest('[class*="absolute"]')).toBeNull();
   });
 
   it('persists hidden sector across remount', async () => {
     seedTwoSectors();
-    const { unmount } = render(<SectorDonut />);
+    const { unmount } = render(<MemoryRouter><SectorDonut /></MemoryRouter>);
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: /Included ·/ }));
     await user.click(screen.getByRole('checkbox', { name: /Financial Services/ }));
     expect(screen.queryByTestId('slice-Financial Services')).not.toBeInTheDocument();
     unmount();
 
-    render(<SectorDonut />);
+    render(<MemoryRouter><SectorDonut /></MemoryRouter>);
     expect(screen.queryByTestId('slice-Financial Services')).not.toBeInTheDocument();
     expect(screen.getByTestId('slice-Technology')).toBeInTheDocument();
   });
@@ -575,7 +576,7 @@ describe('SectorDonut — fund-exposure remainder slice (wave-9 M8, protected vi
       { id: 2, fundTicker: 'VTI', sector: 'Financials', weight: 0.4, asOf: '2026-07-01' } as never,
     ]);
     setReport([{ ticker: 'VTI', effectiveExposure: 10_000 }]);
-    render(<SectorDonut />);
+    render(<MemoryRouter><SectorDonut /></MemoryRouter>);
     fireEvent.click(screen.getByTestId('slice-Technology'));
     const slice = await screen.findByTestId('slice-Fund exposure (no industry breakdown)');
     // The slice carries the WHOLE wedge value for a fund-only portfolio.
@@ -602,7 +603,7 @@ describe('SectorDonut — fund-exposure remainder slice (wave-9 M8, protected vi
         { ticker: 'VTI', effectiveExposure: 4_000 },
       ],
     );
-    render(<SectorDonut />);
+    render(<MemoryRouter><SectorDonut /></MemoryRouter>);
     // Technology wedge = 1,000 (AAPL) + 4,000 × 0.5 (VTI) = 3,000.
     fireEvent.click(screen.getByTestId('slice-Technology'));
     expect(screen.getByTestId('slice-Consumer Electronics').textContent).toContain('1000');

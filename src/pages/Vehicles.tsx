@@ -552,6 +552,17 @@ export default function Vehicles() {
         <ExportCsvButton baseName="vehicles" columns={csvColumns} rows={vehicles} />
       </div>
 
+      {visibleVehicles.length === 0 && visibleLeases.length === 0 && (
+        // W10 T7: vehicles/leases exist, but the person filter strips them all
+        // — explain instead of a silent header over an empty grid.
+        <EmptyState
+          bare
+          icon={Car}
+          title="No vehicles in this view"
+          description="Every vehicle belongs to someone else under this filter — switch to Household to see everything."
+        />
+      )}
+
       <div className="space-y-6">
         {visibleVehicles.map((v) => {
           const loanBalance = v.linkedLoanId != null
