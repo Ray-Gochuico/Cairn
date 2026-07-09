@@ -108,7 +108,7 @@ describe('PersonForm — pretax 401(k) percent input', () => {
     await submitForm(user);
 
     const banner = await screen.findByRole('alert');
-    expect(banner).toHaveTextContent(/pretax401kPctPercent/);
+    expect(banner).toHaveTextContent(/pretax401k pct percent/i);
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
@@ -123,7 +123,7 @@ describe('PersonForm — pretax 401(k) percent input', () => {
     await submitForm(user);
 
     const banner = await screen.findByRole('alert');
-    expect(banner).toHaveTextContent(/pretax401kPctPercent/);
+    expect(banner).toHaveTextContent(/pretax401k pct percent/i);
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
