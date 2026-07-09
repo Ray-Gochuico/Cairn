@@ -102,8 +102,9 @@ export function EquityRow({ label, value, tone }: EquityRowProps) {
       <span className="text-xs uppercase tracking-wider text-muted-foreground">
         {label}
       </span>
+      {/* Wave-12 T4: tabular numerals — KPI money figures align digit-for-digit. */}
       <span
-        className={`text-lg font-semibold ${
+        className={`text-lg font-semibold tabular-nums ${
           isNegative ? 'text-destructive-soft-foreground' : 'text-success-foreground'
         }`}
       >
