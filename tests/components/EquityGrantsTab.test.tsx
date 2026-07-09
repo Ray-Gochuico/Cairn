@@ -354,8 +354,8 @@ describe('EquityGrantsTab', () => {
     await waitFor(() => {
       const { equityGrants } = useEquityGrantsStore.getState();
       expect(equityGrants).toHaveLength(0);
-      // Some error surface should be shown from RHF/zod validation.
-      expect(screen.getByText(/ownerPersonId/i)).toBeInTheDocument();
+      // W10 M44: the summary names the humanized field, not the raw RHF key.
+      expect(screen.getByText(/owner person id/i)).toBeInTheDocument();
     });
   }, 15000);
   // ↑ Same per-test timeout as the "creates a grant via the form" test —

@@ -63,6 +63,17 @@ describe('SectionLayout', () => {
     ).toBeInTheDocument();
   });
 
+  it('corrupt persisted progress falls back to defaults instead of crashing (W10 T5)', () => {
+    localStorage.setItem('setupWizard.progress.v1', JSON.stringify({ currentSection: 2, sectionStatus: 'garbage' }));
+    render(
+      <MemoryRouter>
+        <SectionLayout />
+      </MemoryRouter>,
+    );
+    // defaultProgress() → Section 1, not a crash from the unchecked cast.
+    expect(screen.getByRole('heading', { name: /Section 1 of 4/i })).toBeInTheDocument();
+  });
+
   it('persists currentSection to localStorage on advance', async () => {
     const user = userEvent.setup();
     render(

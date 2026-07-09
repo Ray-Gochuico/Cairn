@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -166,16 +166,44 @@ function RetirementAgeControl({
   const fallback = defaultRetirementAge(persons);
   const display = override ?? fallback ?? '';
 
-  const handleChange = async (raw: string) => {
-    if (raw === '') {
-      await useScenariosStore.getState().updateLever(active.id!, { retirementAgeOverride: null });
-      return;
-    }
-    const n = Math.round(Number(raw));
-    if (!Number.isFinite(n)) return;
-    const clamped = Math.max(30, Math.min(90, n));
-    await useScenariosStore.getState().updateLever(active.id!, { retirementAgeOverride: clamped });
-  };
+  return (
+    <RetirementAgeInput
+      key={active.id}
+      display={String(display)}
+      onCommit={async (raw) => {
+        if (raw === '') {
+          await useScenariosStore.getState().updateLever(active.id!, { retirementAgeOverride: null });
+          return;
+        }
+        const n = Math.round(Number(raw));
+        if (!Number.isFinite(n)) return;
+        const clamped = Math.max(30, Math.min(90, n));
+        await useScenariosStore.getState().updateLever(active.id!, { retirementAgeOverride: clamped });
+      }}
+      override={override}
+      fallback={fallback}
+    />
+  );
+}
+
+// W10 T11: commit the retirement age on BLUR / Enter, never per keystroke —
+// typing "65" used to persist 30 (clamped '6'), then 36…, corrupting the value
+// mid-type. A local draft mirrors the input; the clamp + updateLever fire once.
+function RetirementAgeInput({
+  display,
+  onCommit,
+  override,
+  fallback,
+}: {
+  display: string;
+  onCommit: (raw: string) => Promise<void>;
+  override: number | null;
+  fallback: number | null;
+}) {
+  const [draft, setDraft] = useState(display);
+  useEffect(() => { setDraft(display); }, [display]);
+
+  const commit = () => { void onCommit(draft.trim()); };
 
   return (
     <div className="flex items-center gap-2 text-sm" data-testid="whatif-retirement-age-control">
@@ -188,8 +216,15 @@ function RetirementAgeControl({
         min={30}
         max={90}
         step={1}
-        value={display}
-        onChange={(e) => handleChange(e.target.value)}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            commit();
+          }
+        }}
         aria-label="Retirement age"
         className="h-8 w-20 tabular-nums"
       />

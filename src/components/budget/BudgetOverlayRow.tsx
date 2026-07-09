@@ -48,17 +48,26 @@ export default function BudgetOverlayRow({ row, onBudgetCommit }: BudgetOverlayR
     <div className="grid grid-cols-[10rem_7rem_1fr_auto] items-center gap-3 py-2">
       <div className="text-sm font-medium">{categoryName}</div>
 
-      <Input
-        type="number"
-        step="1"
-        min="0"
-        className="h-8 w-24 tabular-nums"
-        aria-label={`Budget for ${categoryName}`}
-        defaultValue={budget ?? ''}
-        onBlur={(e) =>
-          onBudgetCommit?.(categoryId, e.target.value, e.target, budget)
-        }
-      />
+      {onBudgetCommit ? (
+        <Input
+          type="number"
+          step="1"
+          min="0"
+          className="h-8 w-24 tabular-nums"
+          aria-label={`Budget for ${categoryName}`}
+          defaultValue={budget ?? ''}
+          onBlur={(e) =>
+            onBudgetCommit(categoryId, e.target.value, e.target, budget)
+          }
+        />
+      ) : (
+        // W10 M7: with no commit handler (the synthetic "Misc" catch-all has no
+        // category row to write), render a STATIC value — never an editable
+        // input that silently discards every edit on blur.
+        <span className="text-sm tabular-nums text-muted-foreground">
+          {budget != null ? currency(budget) : '—'}
+        </span>
+      )}
 
       <div>
         <div

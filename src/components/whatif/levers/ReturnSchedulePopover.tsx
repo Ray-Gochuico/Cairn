@@ -168,8 +168,11 @@ export default function ReturnSchedulePopover({ open, onOpenChange }: Props) {
           {years.map((y) => {
             const override = draft.overrides[String(y)];
             const isSelected = y === selectedYear;
-            let bg = 'bg-muted';
-            if (override != null) bg = override >= 0 ? 'bg-success/30' : 'bg-destructive/20';
+            // W10: never stack a bg utility on the SELECTED chip — tailwind-merge
+            // in Button lets a trailing bg-muted clobber the variant's bg-primary
+            // (white-on-white). Only NON-selected chips get a bg tint.
+            let bg = isSelected ? '' : 'bg-muted';
+            if (!isSelected && override != null) bg = override >= 0 ? 'bg-success/30' : 'bg-destructive/20';
             return (
               <Button
                 key={y}

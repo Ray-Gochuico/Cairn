@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { FieldError, FormErrorSummary, useFormSubmit } from './form-errors';
 
 // Wave-9 M41 (mirrors PersonForm's pretax401kPctPercent pattern): the APY
 // input is a FORM-ONLY percent field (0..15); the storage fraction (0..0.15)
@@ -21,32 +22,33 @@ const percentToFraction = (percent: number): number => parseFloat((percent / 100
 // the schema input type, so the resolver becomes Resolver<Partial<...>> and
 // doesn't unify with strict AccountFormValues. Strip the .default() so input
 // and output types coincide — DEFAULT_ACCOUNT provides the runtime default.
+// W10 M24: the 401(k) plan-benefit flags used to have NO writer anywhere, so
+// the roadmap's employer-match / mega-backdoor CTAs dead-ended. They are now
+// editable on this form. employerMatchPct/employerMatchLimitPct are STORED as
+// FRACTIONS (section1.ts computes `salary * employerMatchLimitPct`), so like
+// apyRate they get form-only whole-percent twins that never touch storage.
 const AccountFormSchema = AccountSchema.omit({
   id: true,
-  hasEmployerMatch: true,
   employerMatchPct: true,
   employerMatchLimitPct: true,
-  allowsMegaBackdoorRollover: true,
   hasHighFees: true,
   apyRate: true,
 }).extend({
   allowMargin: z.boolean(),
+  // Strip the schema's .default(null) (which makes these optional in the input
+  // type and breaks resolver unification, same as allowMargin above).
+  hasEmployerMatch: z.boolean().nullable(),
+  allowsMegaBackdoorRollover: z.boolean().nullable(),
   apyRatePercent: z.number().min(0).max(15).nullable(),
+  employerMatchPctPercent: z.number().min(0).max(100).nullable(),
+  employerMatchLimitPctPercent: z.number().min(0).max(100).nullable(),
 });
 
 type InternalFormValues = z.infer<typeof AccountFormSchema>;
 
-// Strip roadmap rule-engine chart-answer columns; those are written by
-// roadmap decision nodes, not the account edit form.
-export type AccountFormValues = Omit<
-  Account,
-  | 'id'
-  | 'hasEmployerMatch'
-  | 'employerMatchPct'
-  | 'employerMatchLimitPct'
-  | 'allowsMegaBackdoorRollover'
-  | 'hasHighFees'
->;
+// Strip only the roadmap chart-answer column written by other surfaces
+// (hasHighFees) and id. The 401(k) plan-benefit flags ARE written here now.
+export type AccountFormValues = Omit<Account, 'id' | 'hasHighFees'>;
 
 export const DEFAULT_ACCOUNT: AccountFormValues = {
   householdId: 1,
@@ -62,6 +64,10 @@ export const DEFAULT_ACCOUNT: AccountFormValues = {
   stateOfPlan: null,
   accentColor: null,
   apyRate: null,
+  hasEmployerMatch: null,
+  employerMatchPct: null,
+  employerMatchLimitPct: null,
+  allowsMegaBackdoorRollover: null,
 };
 
 export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
@@ -101,13 +107,19 @@ export default function AccountForm({
   onCancel,
   submitLabel = 'Save',
 }: AccountFormProps) {
-  // Translate storage shape → internal form shape: drop apyRate, synthesize
-  // apyRatePercent (0..15). Reverse on submit below.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { apyRate: _initialApyFraction, ...initialRest } = initial;
+  // Translate storage shape → internal form shape: drop the fraction-stored
+  // rate fields, synthesize their whole-percent twins. Reverse on submit.
+  const {
+    apyRate: _initialApyFraction,
+    employerMatchPct: _initialMatchFraction,
+    employerMatchLimitPct: _initialLimitFraction,
+    ...initialRest
+  } = initial;
   const internalInitial: InternalFormValues = {
     ...initialRest,
     apyRatePercent: _initialApyFraction != null ? fractionToPercent(_initialApyFraction) : null,
+    employerMatchPctPercent: _initialMatchFraction != null ? fractionToPercent(_initialMatchFraction) : null,
+    employerMatchLimitPctPercent: _initialLimitFraction != null ? fractionToPercent(_initialLimitFraction) : null,
   };
 
   const form = useForm<InternalFormValues>({
@@ -115,18 +127,25 @@ export default function AccountForm({
     defaultValues: internalInitial,
   });
 
-  // Callers still receive storage-shaped AccountFormValues (apyRate fraction).
+  // Callers still receive storage-shaped AccountFormValues (fraction rates).
   const wrappedSubmit = (values: InternalFormValues): Promise<void> => {
-    const { apyRatePercent, ...rest } = values;
+    const { apyRatePercent, employerMatchPctPercent, employerMatchLimitPctPercent, ...rest } = values;
     return onSubmit({
       ...rest,
       apyRate: apyRatePercent != null ? percentToFraction(apyRatePercent) : null,
+      employerMatchPct: employerMatchPctPercent != null ? percentToFraction(employerMatchPctPercent) : null,
+      employerMatchLimitPct: employerMatchLimitPctPercent != null ? percentToFraction(employerMatchLimitPctPercent) : null,
     });
   };
+
+  // W10 M44: a rejected save used to escape as an unhandled rejection.
+  const { onValid, submitting, submitError } = useFormSubmit(wrappedSubmit);
 
   const currentType = form.watch('type');
   const is529 = currentType === AccountType.ACCOUNT_529;
   const isCrypto = currentType === AccountType.ACCOUNT_CRYPTO;
+  const is401kFamily =
+    currentType === AccountType.ACCOUNT_401K || currentType === AccountType.ACCOUNT_ROTH_401K;
   const isCashOrSavings =
     currentType === AccountType.ACCOUNT_CASH || currentType === AccountType.ACCOUNT_SAVINGS;
   const onlyOnePerson = persons.length === 1;
@@ -140,14 +159,20 @@ export default function AccountForm({
   }, [onlyOnePerson, persons, form]);
 
   return (
-    <form onSubmit={form.handleSubmit(wrappedSubmit)} className="space-y-4">
+    <form onSubmit={form.handleSubmit(onValid)} className="space-y-4">
       <Card>
         <CardHeader><CardTitle className="text-base">Account details</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label htmlFor="name">Name</Label>
-              <Input id="name" {...form.register('name')} />
+              <Input
+                id="name"
+                {...form.register('name')}
+                aria-invalid={form.formState.errors.name ? true : undefined}
+                aria-describedby={form.formState.errors.name ? 'account-name-error' : undefined}
+              />
+              <FieldError id="account-name-error" message={form.formState.errors.name?.message} />
             </div>
             <div>
               <Label htmlFor="institution">Institution (optional)</Label>
@@ -279,6 +304,93 @@ export default function AccountForm({
             </div>
           )}
 
+          {is401kFamily && (
+            <fieldset className="space-y-3 rounded-md border p-3">
+              <legend className="px-1 text-sm font-medium">401(k) plan details</legend>
+              <p className="text-xs text-muted-foreground">
+                Powers the Roadmap's employer-match and mega-backdoor steps.
+              </p>
+              <div>
+                <Label htmlFor="hasEmployerMatch">Employer match?</Label>
+                <select
+                  id="hasEmployerMatch"
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  value={form.watch('hasEmployerMatch') === true ? 'yes' : form.watch('hasEmployerMatch') === false ? 'no' : 'unknown'}
+                  onChange={(e) =>
+                    form.setValue(
+                      'hasEmployerMatch',
+                      e.target.value === 'yes' ? true : e.target.value === 'no' ? false : null,
+                      { shouldDirty: true, shouldTouch: true },
+                    )
+                  }
+                >
+                  <option value="unknown">Unknown</option>
+                  <option value="yes">Yes</option>
+                  <option value="no">No</option>
+                </select>
+              </div>
+              {form.watch('hasEmployerMatch') === true && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <Label htmlFor="employerMatchPctPercent">Match rate (%)</Label>
+                    <Input
+                      id="employerMatchPctPercent"
+                      type="number"
+                      step="1"
+                      min="0"
+                      max="100"
+                      placeholder="50"
+                      {...form.register('employerMatchPctPercent', {
+                        setValueAs: (v) => {
+                          if (v === '' || v === null || v === undefined) return null;
+                          const n = Number(v);
+                          return Number.isFinite(n) ? n : null;
+                        },
+                      })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="employerMatchLimitPctPercent">Match limit (% of salary)</Label>
+                    <Input
+                      id="employerMatchLimitPctPercent"
+                      type="number"
+                      step="1"
+                      min="0"
+                      max="100"
+                      placeholder="6"
+                      {...form.register('employerMatchLimitPctPercent', {
+                        setValueAs: (v) => {
+                          if (v === '' || v === null || v === undefined) return null;
+                          const n = Number(v);
+                          return Number.isFinite(n) ? n : null;
+                        },
+                      })}
+                    />
+                  </div>
+                </div>
+              )}
+              <div>
+                <Label htmlFor="allowsMegaBackdoorRollover">Allows mega-backdoor Roth?</Label>
+                <select
+                  id="allowsMegaBackdoorRollover"
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  value={form.watch('allowsMegaBackdoorRollover') === true ? 'yes' : form.watch('allowsMegaBackdoorRollover') === false ? 'no' : 'unknown'}
+                  onChange={(e) =>
+                    form.setValue(
+                      'allowsMegaBackdoorRollover',
+                      e.target.value === 'yes' ? true : e.target.value === 'no' ? false : null,
+                      { shouldDirty: true, shouldTouch: true },
+                    )
+                  }
+                >
+                  <option value="unknown">Unknown</option>
+                  <option value="yes">Yes</option>
+                  <option value="no">No</option>
+                </select>
+              </div>
+            </fieldset>
+          )}
+
           <div className="space-y-2 pt-2">
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" {...form.register('autoFetchEnabled')} />
@@ -302,24 +414,12 @@ export default function AccountForm({
         </CardContent>
       </Card>
 
-      {Object.keys(form.formState.errors).length > 0 && (
-        <div role="alert" className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive-soft-foreground">
-          <div className="font-medium mb-1">Fix these before saving:</div>
-          <ul className="list-disc pl-5">
-            {Object.entries(form.formState.errors).map(([field, err]) => (
-              <li key={field}>
-                <span className="font-mono">{field}</span>:{' '}
-                {(err as { message?: string })?.message ?? 'invalid'}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <FormErrorSummary fieldErrors={form.formState.errors} submitError={submitError} />
 
       <div className="flex justify-end items-center gap-3">
         <span
           className="text-sm text-muted-foreground transition-opacity duration-200"
-          style={{ opacity: form.formState.isSubmitting ? 1 : 0 }}
+          style={{ opacity: submitting ? 1 : 0 }}
           aria-live="polite"
         >
           Saving…
@@ -328,14 +428,11 @@ export default function AccountForm({
           type="button"
           variant="ghost"
           onClick={onCancel}
-          disabled={form.formState.isSubmitting}
+          disabled={submitting}
         >
           Cancel
         </Button>
-        <Button
-          type="submit"
-          disabled={form.formState.isSubmitting || !form.formState.isDirty}
-        >
+        <Button type="submit" disabled={submitting}>
           {submitLabel}
         </Button>
       </div>

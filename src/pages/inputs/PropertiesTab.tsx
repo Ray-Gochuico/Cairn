@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useLoansStore } from '@/stores/loans-store';
@@ -6,6 +6,9 @@ import { LoanType } from '@/types/enums';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useConfirm } from '@/components/ui/confirm-dialog';
+import { useLoadGate } from '@/lib/use-load-gate';
+import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
+import { TabLoadingSkeleton } from '@/components/inputs/TabLoadingSkeleton';
 import PropertyForm, {
   DEFAULT_PROPERTY,
   PROPERTY_TYPE_LABELS,
@@ -13,17 +16,18 @@ import PropertyForm, {
 import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 
 export default function PropertiesTab() {
-  const { properties, load, create, update, remove } = usePropertiesStore();
+  const { properties, load, create, update, remove, isLoading, error } = usePropertiesStore();
   const { persons, load: loadPersons } = usePersonsStore();
   const { loans, load: loadLoans } = useLoansStore();
   const { confirm, dialog } = useConfirm();
   const [mode, setMode] = useState<'list' | 'create' | { type: 'edit'; id: number }>('list');
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     load();
     loadPersons();
     loadLoans();
   }, [load, loadPersons, loadLoans]);
+  const gate = useLoadGate([isLoading], [error], reload);
 
   useEffect(() => {
     if (typeof mode === 'object' && mode.type === 'edit') {
@@ -98,10 +102,15 @@ export default function PropertiesTab() {
         Homes, rentals, vacation properties, and land — with optional mortgage linkage.
       </p>
 
-      {properties.length === 0 ? (
-        <div className="border rounded-md p-8 text-center text-muted-foreground">
-          No properties added yet.
-        </div>
+      <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
+      {!gate.settled ? (
+        <TabLoadingSkeleton />
+      ) : properties.length === 0 ? (
+        error == null ? (
+          <div className="border rounded-md p-8 text-center text-muted-foreground">
+            No properties added yet.
+          </div>
+        ) : null
       ) : (
         <div className="space-y-2">
           {properties.map((p) => (
@@ -126,10 +135,11 @@ export default function PropertiesTab() {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => setMode({ type: 'edit', id: p.id! })}>Edit</Button>
+                  <Button size="sm" variant="outline" aria-label={`Edit ${p.name}`} onClick={() => setMode({ type: 'edit', id: p.id! })}>Edit</Button>
                   <Button
                     size="sm"
                     variant="destructive"
+                    aria-label={`Delete ${p.name}`}
                     onClick={async () => {
                       const ok = await confirm({
                         title: `Delete ${p.name}?`,

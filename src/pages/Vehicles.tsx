@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLoadGate } from '@/lib/use-load-gate';
+import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
 import { Link } from 'react-router-dom';
 import { useVehiclesStore } from '@/stores/vehicles-store';
 import { useLoansStore } from '@/stores/loans-store';
@@ -6,6 +8,9 @@ import { useTransactionsStore } from '@/stores/transactions-store';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useVehicleLeasesStore } from '@/stores/vehicle-leases-store';
+import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
+import { latestAssetValue } from '@/lib/latest-value';
+import { AssetSnapshotOwnerType } from '@/types/enums';
 import { filterByOwnerPersonId } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { resolveUtilityCategoryIds } from '@/lib/category-config';
@@ -76,6 +81,10 @@ function describeVehicle(v: Vehicle): string {
 interface VehicleAssetCardProps {
   vehicle: Vehicle;
   loanBalance: number | null;
+  /** W10 F7: snapshot-first value; null when unknown (no snapshot + no estimate). */
+  knownValue: number | null;
+  /** W10 F7: null when the value is unknown — never a fabricated negative. */
+  equity: number | null;
   isEditing: boolean;
   onEdit: () => void;
   onCancelEdit: () => void;
@@ -85,13 +94,13 @@ interface VehicleAssetCardProps {
 function VehicleAssetCard({
   vehicle,
   loanBalance,
+  knownValue,
+  equity,
   isEditing,
   onEdit,
   onCancelEdit,
   onSaveValue,
 }: VehicleAssetCardProps) {
-  const value = vehicle.currentEstimatedValue ?? 0;
-  const equity = value - (loanBalance ?? 0);
   const description = describeVehicle(vehicle);
 
   return (
@@ -115,7 +124,7 @@ function VehicleAssetCard({
             Current value
           </div>
           <div className="text-2xl font-semibold">
-            {formatCurrencyOrDash(vehicle.currentEstimatedValue)}
+            {formatCurrencyOrDash(knownValue)}
           </div>
         </div>
 
@@ -347,55 +356,53 @@ export default function Vehicles() {
   const vehicles = useVehiclesStore((s) => s.vehicles);
   const loadVehicles = useVehiclesStore((s) => s.load);
   const vehiclesError = useVehiclesStore((s) => s.error);
+  const vehiclesLoading = useVehiclesStore((s) => s.isLoading);
   const updateVehicle = useVehiclesStore((s) => s.update);
 
   const loans = useLoansStore((s) => s.loans);
   const loadLoans = useLoansStore((s) => s.load);
   const loansError = useLoansStore((s) => s.error);
+  const loansLoading = useLoansStore((s) => s.isLoading);
 
   const transactions = useTransactionsStore((s) => s.transactions);
   const loadTransactions = useTransactionsStore((s) => s.load);
   const transactionsError = useTransactionsStore((s) => s.error);
+  const transactionsLoading = useTransactionsStore((s) => s.isLoading);
 
   const categories = useCategoriesStore((s) => s.categories);
   const loadCategories = useCategoriesStore((s) => s.load);
   const categoriesError = useCategoriesStore((s) => s.error);
+  const categoriesLoading = useCategoriesStore((s) => s.isLoading);
 
   const settings = useSettingsStore((s) => s.settings);
   const loadSettings = useSettingsStore((s) => s.load);
   const settingsError = useSettingsStore((s) => s.error);
+  const settingsLoading = useSettingsStore((s) => s.isLoading);
   const updateSettings = useSettingsStore((s) => s.update);
 
   const vehicleLeases = useVehicleLeasesStore((s) => s.vehicleLeases);
   const loadVehicleLeases = useVehicleLeasesStore((s) => s.load);
   const vehicleLeasesError = useVehicleLeasesStore((s) => s.error);
+  const vehicleLeasesLoading = useVehicleLeasesStore((s) => s.isLoading);
+
+  // W10 F7: price vehicle cards latest-snapshot-first, like AssetsDonut.
+  const assetValueSnapshots = useAssetValueSnapshotsStore((s) => s.assetValueSnapshots);
+  const loadAssetValueSnapshots = useAssetValueSnapshotsStore((s) => s.load);
+  const assetValueSnapshotsError = useAssetValueSnapshotsStore((s) => s.error);
+  const assetValueSnapshotsLoading = useAssetValueSnapshotsStore((s) => s.isLoading);
   const { confirm, dialog } = useConfirm();
 
   const [editing, setEditing] = useState<EditTarget>(null);
 
-  const reload = () => {
+  const reload = useCallback(() => {
     loadVehicles();
     loadLoans();
     loadTransactions();
     loadCategories();
     loadSettings();
     loadVehicleLeases();
-  };
-  useEffect(() => {
-    loadVehicles();
-    loadLoans();
-    loadTransactions();
-    loadCategories();
-    loadSettings();
-    loadVehicleLeases();
-  }, [
-    loadVehicles,
-    loadLoans,
-    loadTransactions,
-    loadCategories,
-    loadSettings,
-    loadVehicleLeases,
-  ]);
+    loadAssetValueSnapshots();
+  }, [loadVehicles, loadLoans, loadTransactions, loadCategories, loadSettings, loadVehicleLeases, loadAssetValueSnapshots]);
 
   const storeErrors = [
     vehiclesError,
@@ -404,8 +411,18 @@ export default function Vehicles() {
     categoriesError,
     settingsError,
     vehicleLeasesError,
+    assetValueSnapshotsError,
   ];
   const hasStoreError = storeErrors.some((e) => e != null);
+
+  // W10 T1: never flash "No vehicles yet" while the loads are in flight.
+  const gate = useLoadGate(
+    [vehiclesLoading, loansLoading, transactionsLoading, categoriesLoading, settingsLoading, vehicleLeasesLoading, assetValueSnapshotsLoading],
+    storeErrors,
+    reload,
+  );
+
+  const todayIso = new Date().toISOString().slice(0, 10);
 
   const visibleVehicles = useMemo(
     () => filterByOwnerPersonId(vehicles, filter, persons),
@@ -483,6 +500,14 @@ export default function Vehicles() {
     }
   }, [editing, visibleVehicles]);
 
+  if (!gate.settled) {
+    return (
+      <PageContainer className="space-y-6">
+        <PageLoadingSpinner />
+      </PageContainer>
+    );
+  }
+
   if (vehicles.length === 0 && vehicleLeases.length === 0) {
     return (
       <PageContainer className="space-y-6">
@@ -493,7 +518,7 @@ export default function Vehicles() {
           </p>
         </div>
         {hasStoreError ? (
-          <StoreErrorBanner errors={storeErrors} onRetry={reload} />
+          <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
         ) : (
           <EmptyState
             icon={Car}
@@ -516,7 +541,7 @@ export default function Vehicles() {
 
   return (
     <PageContainer className="space-y-6">
-      <StoreErrorBanner errors={storeErrors} onRetry={reload} />
+      <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold mb-1">Vehicles</h1>
@@ -527,11 +552,33 @@ export default function Vehicles() {
         <ExportCsvButton baseName="vehicles" columns={csvColumns} rows={vehicles} />
       </div>
 
+      {visibleVehicles.length === 0 && visibleLeases.length === 0 && (
+        // W10 T7: vehicles/leases exist, but the person filter strips them all
+        // — explain instead of a silent header over an empty grid.
+        <EmptyState
+          bare
+          icon={Car}
+          title="No vehicles in this view"
+          description="Every vehicle belongs to someone else under this filter — switch to Household to see everything."
+        />
+      )}
+
       <div className="space-y-6">
         {visibleVehicles.map((v) => {
           const loanBalance = v.linkedLoanId != null
             ? autoLoanById.get(v.linkedLoanId) ?? null
             : null;
+          // W10 F7: latest-snapshot-first. No snapshot AND no manual estimate ⇒
+          // the value is UNKNOWN — never coerce to $0 and fabricate equity from
+          // a real loan.
+          const hasSnapshot = assetValueSnapshots.some(
+            (s) => s.ownerType === AssetSnapshotOwnerType.VEHICLE && s.ownerId === v.id,
+          );
+          const knownValue: number | null =
+            hasSnapshot || v.currentEstimatedValue != null
+              ? latestAssetValue(assetValueSnapshots, AssetSnapshotOwnerType.VEHICLE, v.id!, todayIso, v.currentEstimatedValue)
+              : null;
+          const equity: number | null = knownValue === null ? null : knownValue - (loanBalance ?? 0);
           const isEditing = editing?.id === v.id;
           const linkedTransactions = linkedSpendingTransactions(transactions, { vehicleId: v.id! }, 12, categories);
           const rolling12moExpense = rollingExpense(transactions, { vehicleId: v.id! }, 12, categories);
@@ -547,6 +594,8 @@ export default function Vehicles() {
                 <VehicleAssetCard
                   vehicle={v}
                   loanBalance={loanBalance}
+                  knownValue={knownValue}
+                  equity={equity}
                   isEditing={isEditing}
                   onEdit={() => setEditing({ id: v.id! })}
                   onCancelEdit={() => setEditing(null)}

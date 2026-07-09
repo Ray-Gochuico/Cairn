@@ -193,6 +193,59 @@ describe('Vehicles page', () => {
     );
   });
 
+  it('shows the loading skeleton, not "No vehicles yet", while stores load (W10 T1)', () => {
+    useVehiclesStore.setState({ vehicles: [], isLoading: true, error: null, load: async () => {} } as never);
+    renderPage();
+    expect(screen.getByRole('status', { name: /loading page/i })).toBeInTheDocument();
+    expect(screen.queryByText(/No vehicles yet/i)).not.toBeInTheDocument();
+  });
+
+  it('prices the card from the latest value snapshot, not the stale manual estimate (W10 F7)', () => {
+    useVehiclesStore.setState({
+      vehicles: [{
+        id: 7, householdId: 1, ownerPersonId: null, name: 'Car', make: 'Toyota', model: 'Camry',
+        year: 2020, purchasePrice: null, purchaseDate: '2020-01-01', currentEstimatedValue: 30000,
+        linkedLoanId: null, excludedFromNetWorth: false, notes: null,
+      }],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    useAssetValueSnapshotsStore.setState({
+      assetValueSnapshots: [
+        { id: 1, ownerType: 'VEHICLE', ownerId: 7, snapshotDate: '2020-01-02', value: 21500 },
+      ],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    renderPage();
+    // Snapshot ($21,500) wins the current-value + equity; the stale $30,000
+    // estimate is never shown.
+    expect(screen.getAllByText('$21,500').length).toBeGreaterThan(0);
+    expect(screen.queryByText('$30,000')).not.toBeInTheDocument();
+  });
+
+  it('renders "—" equity — not a fabricated negative — when the value is unknown (W10 F7)', () => {
+    useLoansStore.setState({
+      loans: [{
+        id: 99, householdId: 1, obligorPersonId: null, name: 'Auto loan', type: 'AUTO',
+        originalAmount: 25000, currentBalance: 18000, interestRate: 0.05, termMonths: 60,
+        firstPaymentDate: '2024-01-01', monthlyPayment: 400, extraPaymentDefault: 0,
+        linkedPropertyId: null, linkedVehicleId: 8,
+      }],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    useVehiclesStore.setState({
+      vehicles: [{
+        id: 8, householdId: 1, ownerPersonId: null, name: 'Truck', make: 'Ford', model: 'F150',
+        year: 2019, purchasePrice: 40000, purchaseDate: '2019-01-01', currentEstimatedValue: null,
+        linkedLoanId: 99, excludedFromNetWorth: false, notes: null,
+      }],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    renderPage();
+    const equityRow = screen.getByText('Equity').closest('div') as HTMLElement;
+    expect(within(equityRow).getByText('—')).toBeInTheDocument();
+    expect(screen.queryByText('-$18,000')).not.toBeInTheDocument();
+  });
+
   it('renders a vehicle card with name and current value', () => {
     useVehiclesStore.setState({
       vehicles: [

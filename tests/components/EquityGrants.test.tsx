@@ -337,4 +337,12 @@ describe('EquityGrants page', () => {
     createSpy.mockRestore();
     revokeSpy.mockRestore();
   });
+
+  it('shows the loading skeleton, not "No equity grants yet", while loading (W10 M18)', () => {
+    useEquityGrantsStore.setState({ equityGrants: [], isLoading: true, error: null, load: async () => {} } as any);
+    usePersonsStore.setState({ persons: [], isLoading: false, error: null, load: async () => {} } as any);
+    render(<MemoryRouter><EquityGrants /></MemoryRouter>);
+    expect(screen.getByRole('status', { name: /loading page/i })).toBeInTheDocument();
+    expect(screen.queryByText('No equity grants yet')).not.toBeInTheDocument();
+  });
 });

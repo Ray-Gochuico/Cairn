@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
@@ -6,6 +6,9 @@ import { useHouseholdStore } from '@/stores/household-store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useConfirm } from '@/components/ui/confirm-dialog';
+import { useLoadGate } from '@/lib/use-load-gate';
+import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
+import { TabLoadingSkeleton } from '@/components/inputs/TabLoadingSkeleton';
 import AccountForm, {
   ACCOUNT_TYPE_LABELS,
   DEFAULT_ACCOUNT,
@@ -33,19 +36,24 @@ const DEFAULT_529: AccountFormValues = {
  * this number into Bonus Tax projections; Phase 3 only displays it.
  */
 export default function Plan529Tab() {
-  const { accounts, load, create, update, remove } = useAccountsStore();
+  const { accounts, load, create, update, remove, isLoading: accountsLoading, error: accountsError } = useAccountsStore();
   const { confirm, dialog } = useConfirm();
   const { persons, load: loadPersons } = usePersonsStore();
-  const { dependents, load: loadDependents } = useDependentsStore();
+  const { dependents, load: loadDependents, isLoading: dependentsLoading, error: dependentsError } = useDependentsStore();
   const { household, load: loadHousehold } = useHouseholdStore();
   const [mode, setMode] = useState<'list' | 'create' | { type: 'edit'; id: number }>('list');
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     load();
     loadPersons();
     loadDependents();
     loadHousehold();
   }, [load, loadPersons, loadDependents, loadHousehold]);
+  const gate = useLoadGate(
+    [accountsLoading, dependentsLoading],
+    [accountsError, dependentsError],
+    reload,
+  );
 
   useEffect(() => {
     if (typeof mode === 'object' && mode.type === 'edit') {
@@ -126,6 +134,10 @@ export default function Plan529Tab() {
             stateOfPlan: target.stateOfPlan,
             accentColor: target.accentColor,
             apyRate: target.apyRate,
+            hasEmployerMatch: target.hasEmployerMatch,
+            employerMatchPct: target.employerMatchPct,
+            employerMatchLimitPct: target.employerMatchLimitPct,
+            allowsMegaBackdoorRollover: target.allowsMegaBackdoorRollover,
           }}
           persons={personOptions}
           dependents={dependentOptions}
@@ -145,13 +157,18 @@ export default function Plan529Tab() {
         </p>
       </div>
       {tooltipBlock}
-      {plans.length === 0 ? (
-        <Card>
-          <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            <div className="mb-3">No 529 plans added yet.</div>
-            <Button onClick={() => setMode('create')}>Add a 529 plan</Button>
-          </CardContent>
-        </Card>
+      <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
+      {!gate.settled ? (
+        <TabLoadingSkeleton />
+      ) : plans.length === 0 ? (
+        accountsError == null && dependentsError == null ? (
+          <Card>
+            <CardContent className="py-10 text-center text-sm text-muted-foreground">
+              <div className="mb-3">No 529 plans added yet.</div>
+              <Button onClick={() => setMode('create')}>Add a 529 plan</Button>
+            </CardContent>
+          </Card>
+        ) : null
       ) : (
         <>
           <div className="flex justify-end">

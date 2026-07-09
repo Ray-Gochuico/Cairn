@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -247,6 +247,16 @@ export default function TickersTab() {
     return a.ticker.localeCompare(b.ticker);
   });
 
+  // W10 design: 286 tickers is a wall — a sticky search filters by symbol or name.
+  const [query, setQuery] = useState('');
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return sorted;
+    return sorted.filter(
+      (t) => t.ticker.toLowerCase().includes(q) || (t.name ?? '').toLowerCase().includes(q),
+    );
+  }, [sorted, query]);
+
   const handleDelete = async (ticker: string) => {
     setDeleteError(null);
     const ok = await confirm({
@@ -356,8 +366,21 @@ export default function TickersTab() {
       )}
 
       {sorted.length > 0 && (
+        <div className="sticky top-0 z-10 -mx-1 bg-background px-1 py-2 mb-2">
+          <Input
+            type="search"
+            role="searchbox"
+            aria-label="Search tickers"
+            placeholder={`Search ${sorted.length} tickers…`}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+      )}
+
+      {visible.length > 0 && (
         <div className="space-y-2">
-          {sorted.map((t) => (
+          {visible.map((t) => (
             <Card key={t.ticker} data-testid="tickers-row">
               <CardContent className="flex items-center justify-between gap-3 py-3">
                 <div className="min-w-0 flex-1">
@@ -399,15 +422,18 @@ export default function TickersTab() {
                   >
                     Edit
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    disabled={!t.userAdded}
-                    title={t.userAdded ? undefined : 'System ticker — cannot delete'}
-                    onClick={() => handleDelete(t.ticker)}
-                  >
-                    Delete
-                  </Button>
+                  {/* W10 design: system rows drop the dead Delete entirely —
+                      the "· system" suffix already explains the row. */}
+                  {t.userAdded && (
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      aria-label={`Delete ${t.ticker}`}
+                      onClick={() => handleDelete(t.ticker)}
+                    >
+                      Delete
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>

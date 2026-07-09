@@ -17,7 +17,7 @@ vi.mock('@/lib/statements-archive', () => ({
   resolveArchivePath: vi.fn(),
 }));
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useHouseholdStore } from '@/stores/household-store';
@@ -122,6 +122,23 @@ describe('SetupWizard route handler', () => {
     expect(
       screen.getByRole('heading', { name: /Section 4 of 4/i }),
     ).toBeInTheDocument();
+  });
+
+  it('waits for persons to load, then honors ?section=4 for a returning household (W10 M47)', async () => {
+    resetStores({
+      household: makeHousehold({ inflationAssumption: 0.024 }),
+      appWideAccepted: DISCLOSURES.app_wide.version,
+    });
+    // Persons IN FLIGHT on first render — the old code dropped the param here.
+    usePersonsStore.setState({ persons: [], isLoading: true, error: null, load: async () => {} } as any);
+    renderAt(['/setup?section=4']);
+    expect(screen.getByRole('status', { name: /loading/i })).toBeInTheDocument();
+    // Loads resolve with an existing household:
+    act(() => {
+      usePersonsStore.setState({ persons: [{ id: 1, name: 'Alice' }], isLoading: false } as any);
+    });
+    expect(await screen.findByRole('heading', { name: /Section 4 of 4/i })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Section 1 of 4/i })).not.toBeInTheDocument();
   });
 
   it('?section=4 is IGNORED when persons-store is empty (fresh user)', () => {

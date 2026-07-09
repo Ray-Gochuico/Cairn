@@ -186,3 +186,76 @@ describe('AccountForm — zero persons (B1: no dead-end)', () => {
     expect(submitted.name).toBe('Joint Checking');
   });
 });
+
+describe('AccountForm — W10 M44 error honesty', () => {
+  it('surfaces a rejected save as a role=alert banner instead of swallowing it (W10 M44)', async () => {
+    const user = userEvent.setup();
+    render(
+      <AccountForm
+        initial={{ ...DEFAULT_ACCOUNT, name: 'Checking' }}
+        persons={persons} dependents={dependents}
+        onSubmit={vi.fn().mockRejectedValue(new Error('DB locked'))}
+        onCancel={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /save|add/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/couldn.t save.*DB locked/i);
+  });
+
+  it('renders a humanized inline error + aria-invalid on the empty name field, not raw Zod', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    render(
+      <AccountForm
+        initial={{ ...DEFAULT_ACCOUNT, name: '' }}
+        persons={persons} dependents={dependents}
+        onSubmit={onSubmit} onCancel={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /save|add/i }));
+    const name = screen.getByLabelText('Name');
+    expect(name).toHaveAttribute('aria-invalid', 'true');
+    expect(name).toHaveAccessibleDescription('Required');
+    expect(screen.queryByText(/expected string/i)).not.toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+});
+
+describe('AccountForm — W10 M24 401(k) plan-benefit fields', () => {
+  it('exposes the 401(k) plan-benefit fields for 401(k)-type accounts and submits them (W10 M24)', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn(async () => {});
+    render(
+      <AccountForm
+        initial={{ ...DEFAULT_ACCOUNT, name: 'Work 401k', type: AccountType.ACCOUNT_401K }}
+        persons={persons} dependents={dependents}
+        onSubmit={onSubmit} onCancel={vi.fn()}
+      />,
+    );
+    await user.selectOptions(screen.getByLabelText(/employer match/i), 'yes');
+    await user.type(screen.getByLabelText(/match limit/i), '6');
+    await user.selectOptions(screen.getByLabelText(/mega.backdoor/i), 'yes');
+    await user.click(screen.getByRole('button', { name: /save|add/i }));
+    // employerMatchLimitPct is STORED as a fraction (section1.ts computes
+    // salary * limitPct), so 6% is written as 0.06 — the form's whole-percent
+    // twin converts on submit.
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        hasEmployerMatch: true,
+        employerMatchLimitPct: 0.06,
+        allowsMegaBackdoorRollover: true,
+      }),
+    );
+  });
+
+  it('hides the plan-benefit fields for non-401(k) types', () => {
+    render(
+      <AccountForm
+        initial={{ ...DEFAULT_ACCOUNT, type: AccountType.ACCOUNT_BROKERAGE }}
+        persons={persons} dependents={dependents}
+        onSubmit={vi.fn()} onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.queryByLabelText(/employer match/i)).not.toBeInTheDocument();
+  });
+});

@@ -1,18 +1,22 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { usePersonsStore } from '@/stores/persons-store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useConfirm } from '@/components/ui/confirm-dialog';
+import { useLoadGate } from '@/lib/use-load-gate';
+import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
+import { TabLoadingSkeleton } from '@/components/inputs/TabLoadingSkeleton';
 import PersonForm, { DEFAULT_PERSON } from '@/components/forms/PersonForm';
 
 export default function PersonsTab() {
-  const { persons, load, create, update, remove } = usePersonsStore();
+  const { persons, load, create, update, remove, isLoading, error } = usePersonsStore();
   const { confirm, dialog } = useConfirm();
   const [mode, setMode] = useState<'list' | 'create' | { type: 'edit'; id: number }>('list');
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     load();
   }, [load]);
+  const gate = useLoadGate([isLoading], [error], reload);
 
   useEffect(() => {
     if (typeof mode === 'object' && mode.type === 'edit') {
@@ -87,10 +91,15 @@ export default function PersonsTab() {
         Add yourself and your spouse/partner (up to 2). Used for income, retirement age, and per-person calculators.
       </p>
 
-      {persons.length === 0 ? (
-        <div className="border rounded-md p-8 text-center text-muted-foreground">
-          No persons added yet.
-        </div>
+      <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
+      {!gate.settled ? (
+        <TabLoadingSkeleton />
+      ) : persons.length === 0 ? (
+        error == null ? (
+          <div className="border rounded-md p-8 text-center text-muted-foreground">
+            No persons added yet.
+          </div>
+        ) : null
       ) : (
         <div className="space-y-2">
           {persons.map((p) => (
@@ -103,10 +112,11 @@ export default function PersonsTab() {
                   </div>
                 </div>
                 <div className="flex gap-2 shrink-0">
-                  <Button size="sm" variant="outline" onClick={() => setMode({ type: 'edit', id: p.id! })}>Edit</Button>
+                  <Button size="sm" variant="outline" aria-label={`Edit ${p.name}`} onClick={() => setMode({ type: 'edit', id: p.id! })}>Edit</Button>
                   <Button
                     size="sm"
                     variant="destructive"
+                    aria-label={`Delete ${p.name}`}
                     onClick={async () => {
                       const ok = await confirm({
                         title: `Delete ${p.name}?`,

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { DisclosureBanner } from '@/components/roadmap/DisclosureBanner';
 import { DISCLOSURES } from '@/legal/disclosures';
 
@@ -24,6 +25,17 @@ describe('DisclosureBanner', () => {
     expect(
       screen.getByText(`Version ${DISCLOSURES.roadmap.version}`),
     ).toBeInTheDocument();
+  });
+
+  it('the "Read full" panel is a real dialog: Escape closes it and focus is trapped inside (W10 M27)', async () => {
+    const user = userEvent.setup();
+    render(<DisclosureBanner />);
+    await user.click(screen.getByRole('button', { name: /read full/i }));
+    const dialog = await screen.findByRole('dialog', { name: /about the roadmap/i });
+    expect(dialog).toBeInTheDocument();
+    expect(dialog.contains(document.activeElement)).toBe(true); // Radix moved focus in
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('closes the panel when the close button is clicked', () => {

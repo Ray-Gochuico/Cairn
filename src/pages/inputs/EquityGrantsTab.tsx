@@ -1,23 +1,27 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useEquityGrantsStore } from '@/stores/equity-grants-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useConfirm } from '@/components/ui/confirm-dialog';
+import { useLoadGate } from '@/lib/use-load-gate';
+import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
+import { TabLoadingSkeleton } from '@/components/inputs/TabLoadingSkeleton';
 import EquityGrantForm, { DEFAULT_EQUITY_GRANT } from '@/components/forms/EquityGrantForm';
 import { formatCurrency } from '@/lib/format';
 import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 
 export default function EquityGrantsTab() {
-  const { equityGrants, load, create, update, remove } = useEquityGrantsStore();
+  const { equityGrants, load, create, update, remove, isLoading, error } = useEquityGrantsStore();
   const { persons, load: loadPersons } = usePersonsStore();
   const { confirm, dialog } = useConfirm();
   const [mode, setMode] = useState<'list' | 'create' | { type: 'edit'; id: number }>('list');
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     load();
     loadPersons();
   }, [load, loadPersons]);
+  const gate = useLoadGate([isLoading], [error], reload);
 
   // Defer stale-edit-target reset to a separate effect so we never call
   // setMode during render. If the grant we're editing disappears (e.g. an
@@ -101,13 +105,18 @@ export default function EquityGrantsTab() {
         Grants page and net worth calculations.
       </p>
 
-      {equityGrants.length === 0 ? (
-        <Card>
-          <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            <div className="mb-3">No equity grants added yet.</div>
-            <Button onClick={() => setMode('create')}>Add a grant</Button>
-          </CardContent>
-        </Card>
+      <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
+      {!gate.settled ? (
+        <TabLoadingSkeleton />
+      ) : equityGrants.length === 0 ? (
+        error == null ? (
+          <Card>
+            <CardContent className="py-10 text-center text-sm text-muted-foreground">
+              <div className="mb-3">No equity grants added yet.</div>
+              <Button onClick={() => setMode('create')}>Add a grant</Button>
+            </CardContent>
+          </Card>
+        ) : null
       ) : (
         <>
           <div className="space-y-2">

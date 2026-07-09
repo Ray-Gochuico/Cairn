@@ -33,12 +33,22 @@ const loadAppSettingsMigration = () =>
 const loadCashApyMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0024_cash_apy.sql'), 'utf-8');
 
+// Capture the real store loads once — the W10 loading-gate test overrides
+// accounts.load with a no-op, and resetStores must restore the real loads so
+// later tests (which rely on the mount load fetching seeded DB rows) aren't
+// left with a no-op load. Merged setState would otherwise keep the no-op.
+const realAccountsLoad = useAccountsStore.getState().load;
+const realSnapshotsLoad = useSnapshotsStore.getState().load;
+const realLoansLoad = useLoansStore.getState().load;
+const realPropertiesLoad = usePropertiesStore.getState().load;
+const realVehiclesLoad = useVehiclesStore.getState().load;
+
 function resetStores() {
-  useAccountsStore.setState({ accounts: [], isLoading: false, error: null });
-  useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null });
-  useLoansStore.setState({ loans: [], isLoading: false, error: null });
-  usePropertiesStore.setState({ properties: [], isLoading: false, error: null });
-  useVehiclesStore.setState({ vehicles: [], isLoading: false, error: null });
+  useAccountsStore.setState({ accounts: [], isLoading: false, error: null, load: realAccountsLoad });
+  useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null, load: realSnapshotsLoad });
+  useLoansStore.setState({ loans: [], isLoading: false, error: null, load: realLoansLoad });
+  usePropertiesStore.setState({ properties: [], isLoading: false, error: null, load: realPropertiesLoad });
+  useVehiclesStore.setState({ vehicles: [], isLoading: false, error: null, load: realVehiclesLoad });
 }
 
 describe('MonthlyMiniWindow', () => {
@@ -73,6 +83,14 @@ describe('MonthlyMiniWindow', () => {
     expect(
       screen.getByRole('button', { name: /back to dashboard/i }),
     ).toBeInTheDocument();
+  });
+
+  it('shows loading — not "Nothing to confirm this month." — while stores load (W10 M38)', () => {
+    useAccountsStore.setState({ accounts: [], isLoading: true, error: null, load: async () => {} } as never);
+    // (remaining stores resolved-empty per the file's reset helper)
+    render(<MemoryRouter><MonthlyMiniWindow /></MemoryRouter>);
+    expect(screen.getByRole('status', { name: /loading page/i })).toBeInTheDocument();
+    expect(screen.queryByText(/nothing to confirm this month/i)).not.toBeInTheDocument();
   });
 
   it('renders a derived-value card when an AUTO_DERIVED snapshot exists for last month', async () => {
@@ -222,6 +240,13 @@ describe('MonthlyMiniWindow', () => {
     // so scope to the one that actually carries text.
     const statusTexts = screen.getAllByRole('status').map((el) => el.textContent ?? '');
     expect(statusTexts).toContain('Confirmed');
+
+    // W10 T6: confirming unmounted the Confirm button — focus must land on the
+    // card's status region, not strand on <body>.
+    await waitFor(() => {
+      expect(document.body).not.toBe(document.activeElement);
+      expect((document.activeElement as HTMLElement).getAttribute('role')).toBe('status');
+    });
   });
 
   it('announces a failed confirm via role="alert" (Wave-4: inline card errors are announced)', async () => {
@@ -429,6 +454,30 @@ describe('MonthlyMiniWindow', () => {
       });
       return accountId;
     }
+
+    it('"Confirm all" excludes explicitly Skipped cards (W10 T11)', async () => {
+      const user = userEvent.setup();
+      const alphaId = await seedDerivedAccount('Alpha', 5000, SnapshotSource.AUTO_DERIVED);
+      const betaId = await seedDerivedAccount('Beta', 7000, SnapshotSource.AUTO_DERIVED);
+      render(<MemoryRouter><MonthlyMiniWindow /></MemoryRouter>);
+      await screen.findByText('Alpha');
+      // Skip the Alpha card.
+      const alphaCard = screen.getByText('Alpha').closest('div[class*="rounded"]') as HTMLElement
+        ?? screen.getByText('Alpha').closest('div')!;
+      await user.click(within(alphaCard).getByRole('button', { name: /^skip$/i }));
+      // Confirm-all count drops to 1.
+      expect(await screen.findByRole('button', { name: /confirm all \(1\)/i })).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /confirm all/i }));
+      const close = lastMonthCloseISO();
+      await waitFor(() => {
+        const snaps = useSnapshotsStore.getState().snapshots;
+        const beta = snaps.find((s) => s.accountId === betaId && s.snapshotDate === close);
+        const alpha = snaps.find((s) => s.accountId === alphaId && s.snapshotDate === close);
+        expect(beta?.source).toBe(SnapshotSource.USER_CONFIRMED);
+        // Alpha stays AUTO_DERIVED — it was Skipped, not ratified.
+        expect(alpha?.source).toBe(SnapshotSource.AUTO_DERIVED);
+      });
+    });
 
     it('Confirm all ratifies every AUTO_DERIVED card and announces the result', async () => {
       const user = userEvent.setup();

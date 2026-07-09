@@ -1,8 +1,10 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import WhatIf from '@/pages/WhatIf';
+import { usePersonsStore } from '@/stores/persons-store';
+import { seedWhatIfRealStores } from './whatif-store-seed';
 
 vi.mock('@/components/whatif/ProjectionChart', () => ({
   default: () => <div data-testid="projection-chart-stub" />,
@@ -35,47 +37,47 @@ vi.mock('@/components/whatif/useRealState', () => ({
   }),
 }));
 
+const { setActiveSpy, removeSpy } = vi.hoisted(() => ({
+  setActiveSpy: vi.fn(async () => {}),
+  removeSpy: vi.fn(async () => {}),
+}));
+
 vi.mock('@/stores/scenarios-store', () => {
+  const leverPayload = {
+    extraLoanPayments: [],
+    lumpSums: [],
+    expensePeriods: [],
+    returns: { defaultRate: 0.07, overrides: {} },
+    income: { perPerson: [{ annualRaiseRate: 0.03, events: [] }] },
+    contributions: [],
+  };
   const baseline = {
-    id: 1,
-    name: 'Baseline',
-    isBaseline: true,
-    color: '#4f86f7',
-    lineStyle: 'solid',
-    visible: true,
-    isActive: true,
-    sortOrder: 0,
-    leverPayload: {
-      extraLoanPayments: [],
-      lumpSums: [],
-      expensePeriods: [],
-      returns: { defaultRate: 0.07, overrides: {} },
-      income: { perPerson: [{ annualRaiseRate: 0.03, events: [] }] },
-      contributions: [],
-    },
-    createdAt: '',
-    updatedAt: '',
+    id: 1, name: 'Baseline', isBaseline: true, color: '#4f86f7', lineStyle: 'solid',
+    visible: true, isActive: true, sortOrder: 0, leverPayload, createdAt: '', updatedAt: '',
   };
-  return {
-    useScenariosStore: (selector?: any) => {
-      const state = {
-        scenarios: [baseline],
-        activeScenario: () => baseline,
-        visibleScenarioIds: () => [1],
-        load: vi.fn(),
-        projectedScenarios: () => new Map(),
-        dollarMode: 'nominal',
-        inflation: 0.025,
-        toggleVisibility: vi.fn(),
-        setActive: vi.fn(),
-        duplicate: vi.fn(),
-        remove: vi.fn(),
-        rename: vi.fn(),
-        saveCurrentAsScenario: vi.fn().mockResolvedValue(2),
-      };
-      return typeof selector === 'function' ? selector(state) : state;
-    },
+  const alt = {
+    id: 5, name: 'Alt A', isBaseline: false, color: '#ef8b5a', lineStyle: 'solid',
+    visible: true, isActive: false, sortOrder: 1, leverPayload, createdAt: '', updatedAt: '',
   };
+  const state = {
+    scenarios: [baseline, alt],
+    activeScenario: () => baseline,
+    visibleScenarioIds: () => [1, 5],
+    load: vi.fn(),
+    projectedScenarios: () => new Map(),
+    dollarMode: 'nominal',
+    inflation: 0.025,
+    toggleVisibility: vi.fn(),
+    setActive: setActiveSpy,
+    duplicate: vi.fn(),
+    remove: removeSpy,
+    rename: vi.fn(),
+    saveCurrentAsScenario: vi.fn().mockResolvedValue(2),
+  };
+  const useScenariosStore = (selector?: any) =>
+    typeof selector === 'function' ? selector(state) : state;
+  useScenariosStore.getState = () => state;
+  return { useScenariosStore };
 });
 
 vi.mock('@/stores/loans-store', () => ({
@@ -86,6 +88,13 @@ vi.mock('@/stores/loans-store', () => ({
 }));
 
 describe('WhatIf page management surfaces', () => {
+  beforeEach(() => {
+    seedWhatIfRealStores();
+    // persons is a REAL store here (not mocked like the sibling files); seed
+    // it resolved so the load gate settles synchronously.
+    usePersonsStore.setState({ persons: [], isLoading: false, error: null, load: async () => {} } as never);
+  });
+
   it('renders ScenariosPanel in the chart area with Save current + Manage buttons', () => {
     render(
       <MemoryRouter>
@@ -108,5 +117,38 @@ describe('WhatIf page management surfaces', () => {
     );
     await user.click(screen.getByRole('button', { name: /manage/i }));
     expect(await screen.findByText(/manage scenarios/i)).toBeInTheDocument();
+  });
+
+  it('scenario delete asks for confirmation first (W10 T11)', async () => {
+    const user = userEvent.setup();
+    removeSpy.mockClear();
+    render(<MemoryRouter><WhatIf /></MemoryRouter>);
+    const moreButtons = screen.getAllByRole('button', { name: /more actions/i });
+    await user.click(moreButtons[moreButtons.length - 1]); // Alt A (id 5)
+    await user.click(screen.getByRole('menuitem', { name: /delete/i }));
+    // No immediate delete — a confirm dialog gates it.
+    expect(removeSpy).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /^delete$/i }));
+    await waitFor(() => expect(removeSpy).toHaveBeenCalledWith(5));
+  });
+
+  it('"Edit Levers" activates the scenario and moves focus to the lever bar (W10 M34)', async () => {
+    const user = userEvent.setup();
+    setActiveSpy.mockClear();
+    render(
+      <MemoryRouter>
+        <WhatIf />
+      </MemoryRouter>,
+    );
+    // Open the ⋯ menu for the "Alt A" scenario row (the More-actions button).
+    const moreButtons = screen.getAllByRole('button', { name: /more actions/i });
+    // Rows render in sortOrder; Alt A (id 5) is the second row.
+    await user.click(moreButtons[moreButtons.length - 1]);
+    await user.click(screen.getByRole('menuitem', { name: /edit levers/i }));
+    expect(setActiveSpy).toHaveBeenCalledWith(5);
+    await waitFor(() =>
+      expect(document.getElementById('whatif-lever-bar')).toHaveFocus(),
+    );
   });
 });

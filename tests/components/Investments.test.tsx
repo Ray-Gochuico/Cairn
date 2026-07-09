@@ -9,6 +9,7 @@ import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useContributionsStore } from '@/stores/contributions-store';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useHouseholdStore } from '@/stores/household-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useTickersStore } from '@/stores/tickers-store';
 import { useFundHoldingsStore } from '@/stores/fund-holdings-store';
@@ -71,12 +72,17 @@ const fourScenarios: GrowthScenario[] = [
 ];
 
 function resetStores() {
-  useAccountsStore.setState({ accounts: [], isLoading: false, error: null });
-  useHoldingsStore.setState({ holdings: [], isLoading: false, error: null });
-  useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null });
-  useContributionsStore.setState({ contributions: [], isLoading: false, error: null });
-  useDependentsStore.setState({ dependents: [], isLoading: false, error: null });
-  useHouseholdStore.setState({ household: null, isLoading: false, error: null });
+  // W10 T1: Investments now gates on all 7 core stores via useLoadGate; seed
+  // each with a no-op load so the mount load doesn't flip isLoading (settings
+  // in particular was never seeded, leaving the gate stuck on the skeleton).
+  const noop = async () => {};
+  useAccountsStore.setState({ accounts: [], isLoading: false, error: null, load: noop } as never);
+  useHoldingsStore.setState({ holdings: [], isLoading: false, error: null, load: noop } as never);
+  useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null, load: noop } as never);
+  useContributionsStore.setState({ contributions: [], isLoading: false, error: null, load: noop } as never);
+  useDependentsStore.setState({ dependents: [], isLoading: false, error: null, load: noop } as never);
+  useHouseholdStore.setState({ household: null, isLoading: false, error: null, load: noop } as never);
+  useSettingsStore.setState({ settings: null, isLoading: false, error: null, load: noop } as never);
   usePersonsStore.setState({ persons: [], isLoading: false, error: null });
   // The fund stores' default load() hits getDatabase().select(...). The mock
   // at the top of the file returns [], but the load() still fires set() which
@@ -194,6 +200,13 @@ describe('Investments page — 529 section', () => {
     resetStores();
     dbSelectImpl.current = async () => [];
     localStorage.clear();
+  });
+
+  it('shows the loading skeleton, not "No investment holdings yet", while stores load (W10 T1)', () => {
+    useAccountsStore.setState({ accounts: [], isLoading: true, error: null, load: async () => {} } as never);
+    render(<MemoryRouter><Investments /></MemoryRouter>);
+    expect(screen.getByRole('status', { name: /loading page/i })).toBeInTheDocument();
+    expect(screen.queryByText(/no investment holdings yet/i)).not.toBeInTheDocument();
   });
 
   it('does NOT render 529 Plans section when no 529 accounts exist', () => {

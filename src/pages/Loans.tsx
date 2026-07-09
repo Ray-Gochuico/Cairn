@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Landmark } from 'lucide-react';
+import { useLoadGate } from '@/lib/use-load-gate';
+import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
 import { useLoansStore } from '@/stores/loans-store';
 import { amortize, nextPaymentDateFrom, scheduleIsCapped, type Amortization, type ScheduleEntry } from '@/lib/amortization';
 import { filterByObligorPersonId } from '@/lib/filter-by-view';
@@ -384,8 +386,10 @@ export default function Loans() {
   const loans = useLoansStore((s) => s.loans);
   const load = useLoansStore((s) => s.load);
   const loansError = useLoansStore((s) => s.error);
+  const loansLoading = useLoansStore((s) => s.isLoading);
   const storeErrors = [loansError];
   const hasStoreError = loansError != null;
+  const gate = useLoadGate([loansLoading], storeErrors, load);
 
   const [expandedLoanIds, setExpandedLoanIds] = useState<Set<number>>(new Set());
 
@@ -398,9 +402,6 @@ export default function Loans() {
     });
   }
 
-  useEffect(() => {
-    load();
-  }, [load]);
 
   // Filter loans by the household / p1 / p2 / joint dropdown. Every
   // downstream derivation (projections, totals, debt series) reads from
@@ -504,6 +505,14 @@ export default function Loans() {
     [personNameById],
   );
 
+  if (!gate.settled) {
+    return (
+      <PageContainer className="space-y-6">
+        <PageLoadingSpinner />
+      </PageContainer>
+    );
+  }
+
   if (loans.length === 0) {
     return (
       <PageContainer className="space-y-6">
@@ -514,7 +523,7 @@ export default function Loans() {
           </p>
         </div>
         {hasStoreError ? (
-          <StoreErrorBanner errors={storeErrors} onRetry={load} />
+          <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
         ) : (
           <EmptyState
             icon={Landmark}
@@ -532,7 +541,7 @@ export default function Loans() {
 
   return (
     <PageContainer className="space-y-6">
-      <StoreErrorBanner errors={storeErrors} onRetry={load} />
+      <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold mb-1">Loans</h1>

@@ -539,6 +539,22 @@ export default function ProjectionChart({
         </div>
       )}
 
+      {/* W10 design: the TAX_BUCKET stacked bands were unexplained color — a
+          static swatch row (matching the PER_ACCOUNT idiom) names them. */}
+      {detailLevel === ProjectionDetailLevel.TAX_BUCKET && hasBucketData && (
+        <div data-testid="tax-bucket-legend" className="flex flex-wrap items-center gap-4 mt-2 text-xs text-muted-foreground">
+          {[
+            { label: 'Tax-advantaged', fill: TAX_ADVANTAGED_FILL },
+            { label: 'Taxable', fill: TAXABLE_FILL },
+          ].map(({ label, fill }) => (
+            <span key={label} className="inline-flex items-center gap-1.5">
+              <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: fill, opacity: 0.6 }} />
+              {label}
+            </span>
+          ))}
+        </div>
+      )}
+
       {showAccountToggleRow && (
         <div
           data-testid="whatif-account-toggle-row"

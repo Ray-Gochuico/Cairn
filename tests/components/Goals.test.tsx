@@ -207,6 +207,14 @@ describe('Goals page', () => {
     expect(addLink).toHaveAttribute('href', '/inputs/goals');
   });
 
+  it('shows the loading skeleton, not "No goals yet", while stores load (W10 T1)', () => {
+    primeStores();
+    useGoalsStore.setState({ goals: [], isLoading: true, error: null, load: async () => {} } as never);
+    render(<MemoryRouter><Goals /></MemoryRouter>);
+    expect(screen.getByRole('status', { name: /loading page/i })).toBeInTheDocument();
+    expect(screen.queryByText(/no goals yet/i)).not.toBeInTheDocument();
+  });
+
   it('renders one card per goal', () => {
     primeStores({
       goals: [
@@ -525,6 +533,24 @@ describe('Goals page', () => {
     expect(screen.queryByText("Bob's goal")).not.toBeInTheDocument();
     // The joint goal is filtered out too (only ?view=joint or household shows it)
     expect(screen.queryByText('Joint goal')).not.toBeInTheDocument();
+  });
+
+  it('explains a filtered-empty view instead of a silent header-over-nothing (W10 T7)', () => {
+    usePersonsStore.setState({
+      persons: [
+        { ...basePerson, id: 1, name: 'Alice' },
+        { ...basePerson, id: 2, name: 'Bob' },
+      ],
+      isLoading: false, error: null, load: async () => {},
+    });
+    primeStores({ goals: [{ name: "Bob's goal", forPersonId: 2 }] });
+    render(
+      <MemoryRouter initialEntries={['/goals?view=p1']}>
+        <Goals />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText(/no goals in this view/i)).toBeInTheDocument();
+    expect(screen.getByText(/switch to household/i)).toBeInTheDocument();
   });
 
   it('Export CSV button downloads the goals table with the type label and person resolved', async () => {

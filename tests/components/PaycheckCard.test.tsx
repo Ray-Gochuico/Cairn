@@ -111,6 +111,13 @@ describe('PaycheckCard', () => {
     resetStores();
   });
 
+  it('the headline result region is a polite live region (W10 T8)', () => {
+    primeStores();
+    render(<MemoryRouter><PaycheckCard cardId="paycheck" onHide={() => {}} /></MemoryRouter>);
+    const region = screen.getByTestId('paycheck-headline');
+    expect(region).toHaveAttribute('role', 'status');
+  });
+
   it('renders monthly take-home by default for $100k CA SINGLE', async () => {
     primeStores();
     render(

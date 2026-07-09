@@ -4,6 +4,7 @@ import { loadAllMigrations, runMigrations } from '@/db/migrations';
 import { setDatabase } from '@/db/db';
 import { useScenariosStore, _resetProjectionCacheForTest } from '@/stores/scenarios-store';
 import { emptyLeverPayload } from '@/lib/scenarios';
+import { defaultScenarioColor, BASELINE_COLOR } from '@/lib/whatif/scenario-colors';
 
 const resetStore = () => {
   _resetProjectionCacheForTest();
@@ -158,6 +159,14 @@ describe('useScenariosStore — mutators', () => {
     const id = await useScenariosStore.getState().create(variantInput({ name: 'A' }));
     const copyId = await useScenariosStore.getState().duplicate(id, 'A — variant');
     expect(useScenariosStore.getState().scenarios.find((s) => s.id === copyId)?.name).toBe('A — variant');
+  });
+
+  it('duplicate assigns a palette color by the clone sortOrder, not the source color (W10 design)', async () => {
+    const id = await useScenariosStore.getState().create(variantInput({ name: 'A', sortOrder: 0, color: BASELINE_COLOR }));
+    const copyId = await useScenariosStore.getState().duplicate(id);
+    const copy = useScenariosStore.getState().scenarios.find((s) => s.id === copyId)!;
+    expect(copy.color).toBe(defaultScenarioColor(copy.sortOrder, false));
+    expect(copy.color).not.toBe(BASELINE_COLOR);
   });
 
   it('rename() updates only the name', async () => {

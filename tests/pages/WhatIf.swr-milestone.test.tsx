@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import { seedWhatIfRealStores } from './whatif-store-seed';
 import type { Household, Person } from '@/types/schema';
 import type { Milestones, MonthlyState } from '@/lib/scenarios';
 
@@ -187,6 +188,7 @@ import WhatIf from '@/pages/WhatIf';
 
 describe('WhatIf — milestone params derive from household.withdrawalRate (was hardcoded 0.04)', () => {
   beforeEach(() => {
+    seedWhatIfRealStores();
     capturedMilestones = null;
     householdRate = 0.04;
     scenarioOverride = null;

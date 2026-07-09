@@ -10,18 +10,17 @@ import MetricCard from '@/components/cards/MetricCard';
  * overflow, never split inside a word or numeric.
  */
 describe('MetricCard text overflow', () => {
-  it('renders value with whitespace-nowrap and overflow-ellipsis (no mid-word breaks)', () => {
+  it('the value never carries truncation classes (W10 design: magnitude is the point)', () => {
     render(
       <MemoryRouter>
-        <MetricCard label="Net Worth" value="$569,946" />
+        <MetricCard label="Net worth" value="$12,345,678" />
       </MemoryRouter>,
     );
-    const value = screen.getByTestId('metric-card-value');
-    expect(value).toHaveClass('whitespace-nowrap');
-    expect(value).toHaveClass('overflow-hidden');
-    expect(value).toHaveClass('text-ellipsis');
+    const v = screen.getByTestId('metric-card-value');
+    expect(v.className).not.toMatch(/text-ellipsis|overflow-hidden/);
+    expect(v.className).toMatch(/whitespace-nowrap/);
     // break-words is the bug — it allowed "$569,94 6" splits. Must be gone.
-    expect(value).not.toHaveClass('break-words');
+    expect(v).not.toHaveClass('break-words');
   });
 
   it('renders label with line-clamp-2 so long labels wrap to 2 lines without mid-word ellipsis', () => {
@@ -86,14 +85,16 @@ describe('MetricCard text overflow', () => {
     expect(screen.queryByRole('link')).toBeNull();
   });
 
-  it('exposes the full value as a title attribute for hover discovery', () => {
+  it('renders the full value text and drops the now-pointless title mirror (W10 design)', () => {
     render(
       <MemoryRouter>
         <MetricCard label="X" value="$12,345,678" />
       </MemoryRouter>,
     );
     const value = screen.getByTestId('metric-card-value');
-    expect(value).toHaveAttribute('title', '$12,345,678');
+    // The value no longer ellipsizes, so it shows in full and needs no title.
+    expect(value).toHaveTextContent('$12,345,678');
+    expect(value).not.toHaveAttribute('title');
   });
 
   it('uses a smaller base font that scales up on larger screens', () => {
@@ -103,9 +104,10 @@ describe('MetricCard text overflow', () => {
       </MemoryRouter>,
     );
     const value = screen.getByTestId('metric-card-value');
-    // text-xl on mobile (where pills are narrowest), text-3xl on md+
-    expect(value).toHaveClass('text-xl');
-    expect(value.className).toMatch(/(sm|md):text-/);
+    // W10: stepped down one notch (text-lg base) so long values fit at 1280px
+    // without ellipsizing; scales up on larger screens.
+    expect(value).toHaveClass('text-lg');
+    expect(value.className).toMatch(/(sm|md|lg):text-/);
   });
 
   it('wraps in a link when href provided and stays a plain card otherwise', () => {

@@ -9,6 +9,7 @@ import {
 } from '@/domain/roadmap/rules/section1';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
+import { useAccountsStore } from '@/stores/accounts-store';
 import type {
   Account,
   Contribution,
@@ -228,6 +229,31 @@ describe('evaluateEmployerMatchQ', () => {
     const r = evaluateEmployerMatchQ(makeContext({ accounts: accts }));
     expect(r.status).toBe('info');
     expect(r.evidence).toMatch(/No employer match/);
+  });
+
+  it('asks the employer-match question inline when exactly one 401(k) is unanswered, and writes the flag (W10 M24)', async () => {
+    const ctx = makeContext({
+      accounts: [makeAccount(9, AccountType.ACCOUNT_401K, { name: 'Acme 401(k)', hasEmployerMatch: null })],
+    });
+    const result = evaluateEmployerMatchQ(ctx);
+    expect(result.status).toBe('unanswered');
+    expect(result.question?.prompt).toMatch(/Acme 401\(k\).*match/i);
+    const update = vi.fn(async () => {});
+    useAccountsStore.setState({ update } as never);
+    await result.question!.onAnswer('yes');
+    expect(update).toHaveBeenCalledWith(9, { hasEmployerMatch: true });
+  });
+
+  it('falls back to the Accounts CTA when several accounts are unanswered (W10 M24)', () => {
+    const ctx = makeContext({
+      accounts: [
+        makeAccount(1, AccountType.ACCOUNT_401K, { hasEmployerMatch: null }),
+        makeAccount(2, AccountType.ACCOUNT_401K, { hasEmployerMatch: null }),
+      ],
+    });
+    const result = evaluateEmployerMatchQ(ctx);
+    expect(result.question).toBeUndefined();
+    expect(result.cta?.href).toBe('/inputs/accounts');
   });
 });
 

@@ -5,6 +5,11 @@ import { MemoryRouter } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
+import { useSnapshotsStore } from '@/stores/snapshots-store';
+import { useAccountsStore } from '@/stores/accounts-store';
+import { useContributionsStore } from '@/stores/contributions-store';
+import { useLoansStore } from '@/stores/loans-store';
+import { useEquityGrantsStore } from '@/stores/equity-grants-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { FilingStatus } from '@/types/enums';
@@ -96,9 +101,19 @@ function primeSettings(calculatorCardLayout: AppSettings['calculatorCardLayout']
 type SettingsUpdate = (patch: Partial<Omit<AppSettings, 'id'>>) => Promise<void>;
 
 function resetStores() {
-  useHouseholdStore.setState({ household: null, isLoading: false, error: null });
-  usePersonsStore.setState({ persons: [], isLoading: false, error: null });
-  useDependentsStore.setState({ dependents: [], isLoading: false, error: null });
+  // W10 M63/T1: the layout now gates on all 9 hydrated stores via useLoadGate.
+  // Seed a no-op load on each so the mount load doesn't flip isLoading (which
+  // would leave the gate unsettled → skeleton in these DB-less tests). setState
+  // merges, so primeBaseline/primeSettings keep these no-op loads.
+  const noop = async () => {};
+  useHouseholdStore.setState({ household: null, isLoading: false, error: null, load: noop } as never);
+  usePersonsStore.setState({ persons: [], isLoading: false, error: null, load: noop } as never);
+  useDependentsStore.setState({ dependents: [], isLoading: false, error: null, load: noop } as never);
+  useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null, load: noop } as never);
+  useAccountsStore.setState({ accounts: [], isLoading: false, error: null, load: noop } as never);
+  useContributionsStore.setState({ contributions: [], isLoading: false, error: null, load: noop } as never);
+  useLoansStore.setState({ loans: [], isLoading: false, error: null, load: noop } as never);
+  useEquityGrantsStore.setState({ equityGrants: [], isLoading: false, error: null, load: noop } as never);
   useTaxRulesStore.setState({ year: null, items: [], isLoading: false, error: null });
 }
 
@@ -147,7 +162,7 @@ function primeBaseline() {
 describe('CalculatorsLayout', () => {
   beforeEach(() => {
     resetStores();
-    useSettingsStore.setState({ settings: null, isLoading: false, error: null });
+    useSettingsStore.setState({ settings: null, isLoading: false, error: null, load: async () => {} } as never);
     sessionStorage.clear();
     localStorage.clear();
   });
@@ -170,6 +185,21 @@ describe('CalculatorsLayout', () => {
     expect(await screen.findByText(/Paycheck/i)).toBeInTheDocument();
     expect(screen.getByText(/Bonus take-home/i)).toBeInTheDocument();
     expect(screen.getByText(/Commission take-home/i)).toBeInTheDocument();
+  });
+
+  it('loads household on mount so the FI card can ever resolve (W10 M63)', () => {
+    const load = vi.fn(async () => {});
+    primeSettings();
+    useHouseholdStore.setState({ household: null, isLoading: false, error: null, load } as never);
+    render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+    expect(load).toHaveBeenCalled();
+  });
+
+  it('keeps the skeleton up until every hydrated store settles (W10 T1)', () => {
+    primeSettings();
+    usePersonsStore.setState({ persons: [], isLoading: true, error: null, load: async () => {} } as never);
+    render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+    expect(screen.getByTestId('calculators-skeleton')).toBeInTheDocument();
   });
 
   it('renders OvertimeCard when at least one person has employment_type=HOURLY', async () => {
@@ -304,6 +334,22 @@ describe('CalculatorsLayout', () => {
       expect(patch.calculatorCardLayout.find((e) => e.id === 'compound-interest')?.hidden).toBe(true);
       expect(screen.queryByText(/Compound Interest/i)).not.toBeInTheDocument();
       expect(localStorage.getItem('calculator-hidden-cards')).toBeNull();
+    });
+
+    it('disables the Overtime visibility switch with a reason when no hourly/OT person exists (W10)', async () => {
+      const user = userEvent.setup();
+      primeBaseline();
+      primeSettings();
+      usePersonsStore.setState({
+        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
+        isLoading: false, error: null,
+      });
+      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+      await screen.findByText(/Bonus take-home/i);
+      await user.click(screen.getByRole('button', { name: /manage cards/i }));
+      const otSwitch = screen.getByRole('switch', { name: /overtime/i });
+      expect(otSwitch).toBeDisabled();
+      expect(screen.getByText(/add an hourly or salary\+ot person/i)).toBeInTheDocument();
     });
 
     it('toggling a hidden card back on (Switch) restores it via update', async () => {

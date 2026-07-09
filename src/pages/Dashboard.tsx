@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   CheckIcon,
@@ -25,6 +25,9 @@ import { useContributionsStore } from '@/stores/contributions-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
 import { useTickersStore } from '@/stores/tickers-store';
 import { useFundHoldingsStore } from '@/stores/fund-holdings-store';
+import { useRoadmapOverridesStore } from '@/stores/roadmap-overrides-store';
+import { useLoadGate } from '@/lib/use-load-gate';
+import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
 import { AccountType, GoalType } from '@/types/enums';
 import { netWorthForMonth, type NetWorthInput } from '@/lib/networth';
 import { netWorthAsOfFactory, deltaPctOrNull } from '@/lib/asset-value-chart';
@@ -38,6 +41,7 @@ import {
   filterByForPersonId,
   filterByObligorPersonId,
   filterByOwnerPersonId,
+  filterByPersonId,
 } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { formatPercent } from '@/lib/format';
@@ -411,6 +415,12 @@ export default function Dashboard() {
   const loadCategories = useCategoriesStore((s) => s.load);
   const categoriesError = useCategoriesStore((s) => s.error);
 
+  // W10 M3: NextMoveCard applies ctx.overrides from useRoadmapOverridesStore,
+  // which NOTHING on the Dashboard route loaded — so user overrides were
+  // ignored in "Suggested next step" until they visited /roadmap. Load it here.
+  const loadOverrides = useRoadmapOverridesStore((s) => s.load);
+  const overridesError = useRoadmapOverridesStore((s) => s.error);
+
   // `reload` doubles as the Retry handler for the store-error banner.
   const reload = useCallback(() => {
     loadHousehold();
@@ -427,6 +437,7 @@ export default function Dashboard() {
     loadFundHoldings();
     loadTransactions();
     loadCategories();
+    loadOverrides();
   }, [
     loadHousehold,
     loadAccounts,
@@ -442,10 +453,26 @@ export default function Dashboard() {
     loadFundHoldings,
     loadTransactions,
     loadCategories,
+    loadOverrides,
   ]);
-  useEffect(() => {
-    reload();
-  }, [reload]);
+
+  const dashboardIsLoading = [
+    useHouseholdStore((s) => s.isLoading),
+    useAccountsStore((s) => s.isLoading),
+    useLoansStore((s) => s.isLoading),
+    useSnapshotsStore((s) => s.isLoading),
+    usePropertiesStore((s) => s.isLoading),
+    useVehiclesStore((s) => s.isLoading),
+    useAssetValueSnapshotsStore((s) => s.isLoading),
+    useGoalsStore((s) => s.isLoading),
+    useContributionsStore((s) => s.isLoading),
+    useHoldingsStore((s) => s.isLoading),
+    useTickersStore((s) => s.isLoading),
+    useFundHoldingsStore((s) => s.isLoading),
+    useTransactionsStore((s) => s.isLoading),
+    useCategoriesStore((s) => s.isLoading),
+    useRoadmapOverridesStore((s) => s.isLoading),
+  ];
 
   // Errors from the core data stores the dashboard reads. Surfaced as a banner
   // above the widgets so a load failure reads as a recoverable hiccup, not as
@@ -467,14 +494,20 @@ export default function Dashboard() {
     fundHoldingsError,
     transactionsError,
     categoriesError,
+    overridesError,
   ];
+
+  // W10 S3/S4: gate the whole dashboard on load settlement — never flash "$0"
+  // pills or NextMoveCard's "Continue Setup →" while the 15 stores load.
+  const gate = useLoadGate(dashboardIsLoading, storeErrors, reload);
 
   const today = useMemo(() => new Date(), []);
   const currentMonth = useMemo(() => currentYyyymm(), []);
 
-  // Apply the view filter to every entity rendered in the headline metrics
-  // and the goals strip. ConcentrationCard intentionally stays household-wide
-  // (see the comment above its render below).
+  // Apply the view filter to the entities rendered in the headline metrics,
+  // the goals strip, and the spending pills/widget (transactions are scoped
+  // in visibleTransactions below — W10 F8). ConcentrationCard intentionally
+  // stays household-wide (see the comment above its render below).
   const visibleAccounts = useMemo(
     () => filterByOwnerPersonId(accounts, filter, persons),
     [accounts, filter, persons],
@@ -651,17 +684,25 @@ export default function Dashboard() {
     [today, pendingAccountIds, snapshotsLastMonth],
   );
 
+  // W10 F8: transactions were the ONE entity the header comment's "everything
+  // is filtered" claim missed — scope them exactly as /spending does, so the
+  // two surfaces can never disagree under the same ?view=.
+  const visibleTransactions = useMemo(
+    () => filterByPersonId(transactions, filter, persons),
+    [transactions, filter, persons],
+  );
+
   // Spending cards: awaiting reimbursement + spending vs budget
   const awaitingReimbursementTotal = useMemo(
-    () => transactions
+    () => visibleTransactions
       .filter((t) => t.reimbursable && t.reimbursedAt == null)
       .reduce((s, t) => s + t.amount, 0),
-    [transactions],
+    [visibleTransactions],
   );
 
   const spendingSummary = useMemo(
-    () => summarizeSpending(transactions, categories),
-    [transactions, categories],
+    () => summarizeSpending(visibleTransactions, categories),
+    [visibleTransactions, categories],
   );
   const currentMonthSpend = spendingSummary.currentMonthTotal;
   const monthlyBudget = household?.monthlyExpenseBaseline ?? 0;
@@ -703,6 +744,10 @@ export default function Dashboard() {
     | 'awaiting-reimbursement'
     | 'spending-vs-budget';
 
+  // W10 S1: keep the person view across pill navigation.
+  const withView = (path: string) =>
+    filter === 'household' ? path : `${path}?view=${filter}`;
+
   const pillDefs: Array<{ id: PillId; label: string; render: () => ReactElement }> = [
     {
       id: 'net-worth',
@@ -711,7 +756,7 @@ export default function Dashboard() {
         <MetricCard
           label="Net Worth"
           value={formatUSD(currentNetWorth)}
-          href="/net-worth"
+          href={withView('/net-worth')}
           delta={netWorthDeltaLabel}
           deltaTone={netWorthDeltaTone}
           subtitle={hasNetWorthBaseline ? 'vs last month' : undefined}
@@ -725,7 +770,7 @@ export default function Dashboard() {
         <MetricCard
           label="Total Debt"
           value={formatUSD(totalDebt)}
-          href="/loans"
+          href={withView('/loans')}
           subtitle={visibleLoans.length > 0
             ? `Across ${visibleLoans.length} loan${visibleLoans.length === 1 ? '' : 's'}`
             : undefined}
@@ -739,7 +784,7 @@ export default function Dashboard() {
         <MetricCard
           label="Liquid Investments"
           value={formatUSD(liquidInvestments)}
-          href="/investments"
+          href={withView('/investments')}
           subtitle="Brokerage, cash, savings, HSA"
         />
       ),
@@ -751,7 +796,7 @@ export default function Dashboard() {
         <MetricCard
           label="Awaiting Reimbursement"
           value={formatUSD(awaitingReimbursementTotal)}
-          href="/spending"
+          href={withView('/spending')}
           subtitle={awaitingReimbursementTotal > 0 ? 'Click to review' : 'None pending'}
         />
       ),
@@ -763,7 +808,7 @@ export default function Dashboard() {
         <MetricCard
           label="Spending vs Budget"
           value={formatUSD(currentMonthSpend)}
-          href="/spending"
+          href={withView('/spending')}
           delta={monthlyBudget > 0
             ? currentMonthSpend > monthlyBudget
               ? `${formatUSD(currentMonthSpend - monthlyBudget)} over`
@@ -893,7 +938,7 @@ export default function Dashboard() {
       label: 'Spending',
       render: () => (
         <SpendingWidget
-          transactions={transactions}
+          transactions={visibleTransactions}
           categories={categories}
           accounts={visibleAccounts}
         />
@@ -956,9 +1001,19 @@ export default function Dashboard() {
   const visibleWidgets = orderedWidgets.filter((w) => !w.entry.hidden);
   const hiddenWidgets = orderedWidgets.filter((w) => w.entry.hidden);
 
+  // W10 S3/S4: NextMoveCard, the $0 pills, and the widgets all mount post-settle
+  // only — never during the 15-store cold load.
+  if (!gate.settled) {
+    return (
+      <PageContainer className="space-y-6">
+        <PageLoadingSpinner />
+      </PageContainer>
+    );
+  }
+
   return (
     <PageContainer className="space-y-6">
-      <StoreErrorBanner errors={storeErrors} onRetry={reload} />
+      <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-3xl font-semibold">

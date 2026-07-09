@@ -21,6 +21,9 @@ import { useLoansStore } from '@/stores/loans-store';
 import { useEquityGrantsStore } from '@/stores/equity-grants-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { useSettingsStore } from '@/stores/settings-store';
+import { useHouseholdStore } from '@/stores/household-store';
+import { useLoadGate } from '@/lib/use-load-gate';
+import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import { getCurrentTaxYear } from '@/lib/current-tax-year';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -120,8 +123,9 @@ export default function CalculatorsLayout() {
   // a cold deep-link to /calculators would otherwise see null settings (→
   // skeleton forever) and empty cards. Load them all once for the grid
   // (accounts feed the excluded-from-net-worth filter on the portfolio
-  // prefills).
-  useEffect(() => {
+  // prefills). W10 M63: household was the one store EVERY card reads that
+  // nothing loaded — the FI card read a permanently-null household. Load it.
+  const loadAll = useCallback(() => {
     void usePersonsStore.getState().load();
     void useDependentsStore.getState().load();
     void useSnapshotsStore.getState().load();
@@ -130,7 +134,36 @@ export default function CalculatorsLayout() {
     void useLoansStore.getState().load();
     void useEquityGrantsStore.getState().load();
     void useSettingsStore.getState().load();
+    void useHouseholdStore.getState().load();
   }, []);
+
+  // W10 T1: keep the skeleton up until every hydrated store settles, so no
+  // card flashes its "add your inputs" CTA over unloaded data.
+  const gate = useLoadGate(
+    [
+      usePersonsStore((s) => s.isLoading),
+      useDependentsStore((s) => s.isLoading),
+      useSnapshotsStore((s) => s.isLoading),
+      useAccountsStore((s) => s.isLoading),
+      useContributionsStore((s) => s.isLoading),
+      useLoansStore((s) => s.isLoading),
+      useEquityGrantsStore((s) => s.isLoading),
+      useSettingsStore((s) => s.isLoading),
+      useHouseholdStore((s) => s.isLoading),
+    ],
+    [
+      usePersonsStore((s) => s.error),
+      useDependentsStore((s) => s.error),
+      useSnapshotsStore((s) => s.error),
+      useAccountsStore((s) => s.error),
+      useContributionsStore((s) => s.error),
+      useLoansStore((s) => s.error),
+      useEquityGrantsStore((s) => s.error),
+      useSettingsStore((s) => s.error),
+      useHouseholdStore((s) => s.error),
+    ],
+    loadAll,
+  );
 
   const settings = useSettingsStore((s) => s.settings);
   const updateSettings = useSettingsStore((s) => s.update);
@@ -206,13 +239,14 @@ export default function CalculatorsLayout() {
   // Render-gate: until settings resolves we cannot know which cards are hidden,
   // so show a skeleton rather than flashing all 12 in a wrong (all-visible)
   // state. settings is usually already warm via Sidebar's boot load.
-  if (settings === null) {
+  if (!gate.settled || settings === null) {
     return <CalculatorsSkeleton />;
   }
 
   return (
     <div className="space-y-4 min-w-0">
       <h1 className="text-2xl font-semibold">Calculators</h1>
+      <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
       <p className="text-sm text-muted-foreground">
         All calculators run on your current Inputs data. Edit any field on a card to explore a
         scenario; use <span className="font-medium">Reset to my data</span> to restore it. For
@@ -309,14 +343,26 @@ export default function CalculatorsLayout() {
               <ul className="space-y-0.5 max-h-80 overflow-y-auto">
                 {CALCULATOR_CARD_IDS.map((id) => {
                   const visible = !hiddenSet.has(id);
+                  // W10: the Overtime card only renders for an HOURLY/SALARY_WITH_OT
+                  // person. Without one, toggling its switch flipped a card that can
+                  // never appear — disable it with a reason instead of no-opping.
+                  const unavailable = id === CARD_IDS.OVERTIME && !showOvertime;
                   return (
                     <li
                       key={id}
                       className="flex items-center justify-between gap-2 px-2 py-1.5 rounded hover:bg-muted/40"
                     >
-                      <span className="text-sm text-foreground">{labelFor(id)}</span>
+                      <span className="text-sm text-foreground">
+                        {labelFor(id)}
+                        {unavailable && (
+                          <span className="block text-xs text-muted-foreground">
+                            Add an hourly or salary+OT person in Inputs to enable this card.
+                          </span>
+                        )}
+                      </span>
                       <Switch
-                        checked={visible}
+                        checked={visible && !unavailable}
+                        disabled={unavailable}
                         onCheckedChange={(next) => setCardHidden(id, !next)}
                         aria-label={labelFor(id)}
                       />

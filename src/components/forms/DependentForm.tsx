@@ -7,6 +7,7 @@ import DatePicker from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { FieldError, FormErrorSummary, useFormSubmit } from './form-errors';
 
 export type DependentFormValues = Omit<Dependent, 'id'>;
 
@@ -39,14 +40,22 @@ export default function DependentForm({
     defaultValues: initial,
   });
 
+  const { onValid, submitting, submitError } = useFormSubmit(onSubmit);
+
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+    <form onSubmit={form.handleSubmit(onValid)} className="space-y-4">
       <Card>
         <CardHeader><CardTitle className="text-base">Dependent details</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <div>
             <Label htmlFor="name">Name</Label>
-            <Input id="name" {...form.register('name')} />
+            <Input
+              id="name"
+              {...form.register('name')}
+              aria-invalid={form.formState.errors.name ? true : undefined}
+              aria-describedby={form.formState.errors.name ? 'dependent-name-error' : undefined}
+            />
+            <FieldError id="dependent-name-error" message={form.formState.errors.name?.message} />
           </div>
           <div>
             <Label htmlFor="dateOfBirth">Date of birth</Label>
@@ -73,10 +82,12 @@ export default function DependentForm({
         </CardContent>
       </Card>
 
+      <FormErrorSummary fieldErrors={form.formState.errors} submitError={submitError} />
+
       <div className="flex justify-end items-center gap-3">
         <span
           className="text-sm text-muted-foreground transition-opacity duration-200"
-          style={{ opacity: form.formState.isSubmitting ? 1 : 0 }}
+          style={{ opacity: submitting ? 1 : 0 }}
           aria-live="polite"
         >
           Saving…
@@ -86,15 +97,12 @@ export default function DependentForm({
             type="button"
             variant="ghost"
             onClick={onCancel}
-            disabled={form.formState.isSubmitting}
+            disabled={submitting}
           >
             Cancel
           </Button>
         )}
-        <Button
-          type="submit"
-          disabled={form.formState.isSubmitting || !form.formState.isDirty}
-        >
+        <Button type="submit" disabled={submitting}>
           {submitLabel}
         </Button>
       </div>

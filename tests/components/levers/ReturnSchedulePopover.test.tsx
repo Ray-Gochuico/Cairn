@@ -31,6 +31,17 @@ describe('ReturnSchedulePopover', () => {
     expect(within(strip).getAllByRole('button').length).toBe(30);
   });
 
+  it('the selected year chip keeps the primary variant fill (no bg-muted override) (W10 design)', async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter><ReturnSchedulePopover open onOpenChange={() => {}} /></MemoryRouter>);
+    const strip = screen.getByTestId('returns-year-strip');
+    const cells = within(strip).getAllByRole('button');
+    await user.click(cells[3]);
+    // The clicked chip is now selected: variant fill kept, no bg-muted clobber.
+    expect(cells[3].className).not.toMatch(/bg-muted/);
+    expect(cells[3].className).toMatch(/bg-primary/);
+  });
+
   it('clicking a year cell selects it and the input edits that year', async () => {
     const user = userEvent.setup();
     render(<MemoryRouter><ReturnSchedulePopover open onOpenChange={() => {}} /></MemoryRouter>);
@@ -109,15 +120,18 @@ describe('ReturnSchedulePopover', () => {
     render(<MemoryRouter><ReturnSchedulePopover open onOpenChange={() => {}} /></MemoryRouter>);
     const strip = screen.getByTestId('returns-year-strip');
     const cells = within(strip).getAllByRole('button');
-    // Set year 0 to a positive value below the default rate — must still be green.
+    // Set year 0 to a positive value below the default rate — must be green.
     await user.click(cells[0]);
     fireEvent.change(screen.getByLabelText(/selected year return/i), { target: { value: '3' } });
-    // After the 2026-05-27 semantic-token sweep, positive overrides carry
-    // the --success token tint and negatives carry --destructive.
-    expect(cells[0].className).toMatch(/bg-success/);
     // Set year 1 to a negative value — must be the destructive (red) tint.
     await user.click(cells[1]);
     fireEvent.change(screen.getByLabelText(/selected year return/i), { target: { value: '-2' } });
+    // W10: the override tint shows on a DESELECTED chip (the selected chip keeps
+    // its primary variant fill). Deselect both by selecting a third year.
+    await user.click(cells[2]);
+    // After the 2026-05-27 semantic-token sweep, positive overrides carry
+    // the --success token tint and negatives carry --destructive.
+    expect(cells[0].className).toMatch(/bg-success/);
     expect(cells[1].className).toMatch(/bg-destructive/);
   });
 

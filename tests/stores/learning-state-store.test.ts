@@ -72,6 +72,19 @@ describe('useLearningStore', () => {
     expect(useLearningStore.getState().answeredQuestionIds).toEqual(['beg-apr@v1']);
   });
 
+  it('a failed recordAnswer lands in state.error instead of an unhandled rejection (W10 chip)', async () => {
+    await useLearningStore.getState().load();
+    await db.close(); // the next repo write will throw
+    await useLearningStore.getState().recordAnswer({
+      questionId: 'beg-apr',
+      answeredIsoDate: '2026-05-28',
+      chosenIndex: 0,
+      wasCorrect: true,
+      questionVersion: 1,
+    });
+    expect(useLearningStore.getState().error).not.toBeNull();
+  });
+
   it('exposes date-partitioned answeredKeysByDay (prior-day vs today)', async () => {
     const today = '2026-07-07';
     await useLearningStore.getState().load();

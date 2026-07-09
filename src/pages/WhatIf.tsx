@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowDownUp } from 'lucide-react';
 import { GitBranch } from 'lucide-react';
@@ -6,6 +6,9 @@ import { EmptyState } from '@/components/layout/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageContainer } from '@/components/layout/PageContainer';
+import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
+import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
+import { useLoadGate } from '@/lib/use-load-gate';
 import { FreshnessBadge } from '@/components/ui/freshness-badge';
 import ChartToolbar from '@/components/whatif/ChartToolbar';
 import FiCards from '@/components/whatif/FiCards';
@@ -89,10 +92,21 @@ export default function WhatIf() {
 
   const [manageOpen, setManageOpen] = useState(false);
 
-  // S-D's lever bar will expose a programmatic open-popover hook; wire
-  // here once S-D lands. For now this is a no-op stub so the panel and
-  // modal can pass an onEditLevers callback without breaking.
-  const openLeversFor = useCallback((_scenarioId: number) => {}, []);
+  // W10 M34: "Edit Levers" was a shipped no-op stub. The LeverBar always
+  // edits the ACTIVE scenario, so editing scenario X = activate X, then put
+  // focus on the bar (rAF: after the activation re-render commits).
+  const openLeversFor = useCallback((scenarioId: number) => {
+    void useScenariosStore
+      .getState()
+      .setActive(scenarioId)
+      .then(() => {
+        requestAnimationFrame(() => {
+          const bar = document.getElementById('whatif-lever-bar');
+          bar?.scrollIntoView({ block: 'nearest' });
+          bar?.focus();
+        });
+      });
+  }, []);
 
   // Subscribe to the full settings object for the inflation display path
   // (consumed below to resolve `displayInflation`). MUST be declared above
@@ -101,7 +115,7 @@ export default function WhatIf() {
   // "Rendered more hooks than during the previous render".
   const settingsForDisplay = useSettingsStore((s) => s.settings) ?? null;
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     load();
     loadLoans();
     loadHoldings();
@@ -114,6 +128,38 @@ export default function WhatIf() {
     loadVehicles();
     loadAssetSnapshots();
   }, [load, loadLoans, loadHoldings, loadAccounts, loadSnapshots, loadTransactions, loadPersons, loadTaxYears, loadProperties, loadVehicles, loadAssetSnapshots]);
+
+  // W10 M33: the ~11-store cold load used to flash "Set up your household…"
+  // and the projection-empty CTA before any store resolved. Gate on the
+  // factory stores the page consumes (tax-rules is a parameterized
+  // non-factory store — excluded; loadTaxYears still fires in reload()).
+  const gate = useLoadGate(
+    [
+      useScenariosStore((s) => s.isLoading),
+      useLoansStore((s) => s.isLoading),
+      useHoldingsStore((s) => s.isLoading),
+      useAccountsStore((s) => s.isLoading),
+      useSnapshotsStore((s) => s.isLoading),
+      useTransactionsStore((s) => s.isLoading),
+      usePersonsStore((s) => s.isLoading),
+      usePropertiesStore((s) => s.isLoading),
+      useVehiclesStore((s) => s.isLoading),
+      useAssetValueSnapshotsStore((s) => s.isLoading),
+    ],
+    [
+      useScenariosStore((s) => s.error),
+      useLoansStore((s) => s.error),
+      useHoldingsStore((s) => s.error),
+      useAccountsStore((s) => s.error),
+      useSnapshotsStore((s) => s.error),
+      useTransactionsStore((s) => s.error),
+      usePersonsStore((s) => s.error),
+      usePropertiesStore((s) => s.error),
+      useVehiclesStore((s) => s.error),
+      useAssetValueSnapshotsStore((s) => s.error),
+    ],
+    reload,
+  );
 
   const real = useRealState();
 
@@ -173,6 +219,16 @@ export default function WhatIf() {
   // IMPORTANT: All useMemo / useState / useEffect declarations MUST be
   // above this early return. Hooks must always run in the same order
   // regardless of guard outcome. See commit 31e9f09 + Wave-7 RM-1.
+
+  // W10 M33: never show setup/empty copy while the cold load is in flight.
+  if (!gate.settled) {
+    return (
+      <PageContainer width="full" className="space-y-4 min-w-0">
+        <PageLoadingSpinner />
+      </PageContainer>
+    );
+  }
+
   if (!real) {
     return (
       <PageContainer width="full">
@@ -282,6 +338,8 @@ export default function WhatIf() {
 
   return (
     <PageContainer width="full" className="space-y-4 min-w-0" data-testid="whatif-page-wrap">
+      {/* W10 M33: WhatIf previously surfaced no store errors at all. */}
+      <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex items-center gap-3 flex-wrap">
           <h1 className="text-2xl font-semibold">What-If</h1>

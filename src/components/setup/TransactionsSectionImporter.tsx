@@ -231,11 +231,22 @@ export default function TransactionsSectionImporter({
   return (
     <div className="space-y-3">
       <div
+        role="button"
+        tabIndex={0}
+        aria-label="Import transactions: drop PDFs or CSVs here, or browse"
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onClick={() => fileInputRef.current?.click()}
-        className={`cursor-pointer border-2 border-dashed rounded-lg p-6 text-center space-y-2 transition-colors ${
+        onKeyDown={(e) => {
+          // W10 M21: the drop-zone was click-only; make Enter/Space open the
+          // file picker so keyboard users can import at all.
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            fileInputRef.current?.click();
+          }
+        }}
+        className={`cursor-pointer border-2 border-dashed rounded-lg p-6 text-center space-y-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
           dragOver
             ? 'border-primary bg-primary/5'
             : 'border-muted-foreground/30'

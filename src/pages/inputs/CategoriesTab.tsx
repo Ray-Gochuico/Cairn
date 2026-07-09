@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -10,6 +10,9 @@ import type { Category } from '@/types/schema';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useConfirm } from '@/components/ui/confirm-dialog';
+import { useLoadGate } from '@/lib/use-load-gate';
+import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
+import { TabLoadingSkeleton } from '@/components/inputs/TabLoadingSkeleton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
@@ -165,15 +168,16 @@ function CategoryForm({ initial, parents, onSubmit, onCancel }: CategoryFormProp
 }
 
 export default function CategoriesTab() {
-  const { categories, load, create, update, remove } = useCategoriesStore();
+  const { categories, load, create, update, remove, isLoading, error } = useCategoriesStore();
   const { overrides, load: loadOverrides, remove: removeOverride } = useMerchantOverridesStore();
   const { confirm, dialog } = useConfirm();
   const [mode, setMode] = useState<'list' | 'create' | { type: 'edit'; id: number }>('list');
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     load();
     loadOverrides();
   }, [load, loadOverrides]);
+  const gate = useLoadGate([isLoading], [error], reload);
 
   // Stale-edit-target reset
   useEffect(() => {
@@ -264,12 +268,17 @@ export default function CategoriesTab() {
           <Button onClick={() => setMode('create')}>Add Category</Button>
         </div>
 
-        {categories.length === 0 ? (
-          <Card>
-            <CardContent className="py-10 text-center text-sm text-muted-foreground">
-              No categories yet.
-            </CardContent>
-          </Card>
+        <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
+        {!gate.settled ? (
+          <TabLoadingSkeleton />
+        ) : categories.length === 0 ? (
+          error == null ? (
+            <Card>
+              <CardContent className="py-10 text-center text-sm text-muted-foreground">
+                No categories yet.
+              </CardContent>
+            </Card>
+          ) : null
         ) : (
           <div className="space-y-1">
             {grouped.map((cat) => {

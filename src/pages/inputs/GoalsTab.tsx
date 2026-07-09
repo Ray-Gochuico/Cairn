@@ -1,25 +1,29 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useGoalsStore } from '@/stores/goals-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useConfirm } from '@/components/ui/confirm-dialog';
+import { useLoadGate } from '@/lib/use-load-gate';
+import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
+import { TabLoadingSkeleton } from '@/components/inputs/TabLoadingSkeleton';
 import GoalForm, { DEFAULT_GOAL, GOAL_TYPE_LABELS } from '@/components/forms/GoalForm';
 import { formatCurrency } from '@/lib/format';
 
 export default function GoalsTab() {
-  const { goals, load, create, update, remove } = useGoalsStore();
+  const { goals, load, create, update, remove, isLoading, error } = useGoalsStore();
   const { persons, load: loadPersons } = usePersonsStore();
   const { accounts, load: loadAccounts } = useAccountsStore();
   const { confirm, dialog } = useConfirm();
   const [mode, setMode] = useState<'list' | 'create' | { type: 'edit'; id: number }>('list');
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     load();
     loadPersons();
     loadAccounts();
   }, [load, loadPersons, loadAccounts]);
+  const gate = useLoadGate([isLoading], [error], reload);
 
   // Defer stale-edit-target reset to a separate effect so we never call
   // setMode during render. If the goal we're editing disappears (e.g. an
@@ -99,13 +103,18 @@ export default function GoalsTab() {
         Track financial milestones and see whether you're on/off-track based on current contributions.
       </p>
 
-      {goals.length === 0 ? (
-        <Card>
-          <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            <div className="mb-3">No goals added yet.</div>
-            <Button onClick={() => setMode('create')}>Add a goal</Button>
-          </CardContent>
-        </Card>
+      <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
+      {!gate.settled ? (
+        <TabLoadingSkeleton />
+      ) : goals.length === 0 ? (
+        error == null ? (
+          <Card>
+            <CardContent className="py-10 text-center text-sm text-muted-foreground">
+              <div className="mb-3">No goals added yet.</div>
+              <Button onClick={() => setMode('create')}>Add a goal</Button>
+            </CardContent>
+          </Card>
+        ) : null
       ) : (
         <>
           <div className="space-y-2">

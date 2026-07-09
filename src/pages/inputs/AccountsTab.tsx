@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useConfirm } from '@/components/ui/confirm-dialog';
+import { useLoadGate } from '@/lib/use-load-gate';
+import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
+import { TabLoadingSkeleton } from '@/components/inputs/TabLoadingSkeleton';
 import AccountForm, {
   ACCOUNT_TYPE_LABELS,
   DEFAULT_ACCOUNT,
@@ -12,17 +15,18 @@ import AccountForm, {
 import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 
 export default function AccountsTab() {
-  const { accounts, load, create, update, remove } = useAccountsStore();
+  const { accounts, load, create, update, remove, isLoading, error } = useAccountsStore();
   const { persons, load: loadPersons } = usePersonsStore();
   const { dependents, load: loadDependents } = useDependentsStore();
   const { confirm, dialog } = useConfirm();
   const [mode, setMode] = useState<'list' | 'create' | { type: 'edit'; id: number }>('list');
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     load();
     loadPersons();
     loadDependents();
   }, [load, loadPersons, loadDependents]);
+  const gate = useLoadGate([isLoading], [error], reload);
 
   useEffect(() => {
     if (typeof mode === 'object' && mode.type === 'edit') {
@@ -78,6 +82,10 @@ export default function AccountsTab() {
             stateOfPlan: target.stateOfPlan,
             accentColor: target.accentColor,
             apyRate: target.apyRate,
+            hasEmployerMatch: target.hasEmployerMatch,
+            employerMatchPct: target.employerMatchPct,
+            employerMatchLimitPct: target.employerMatchLimitPct,
+            allowsMegaBackdoorRollover: target.allowsMegaBackdoorRollover,
           }}
           persons={personOptions}
           dependents={dependentOptions}
@@ -98,10 +106,15 @@ export default function AccountsTab() {
         Every investment, savings, cash, crypto, and 529 account you want to track.
       </p>
 
-      {accounts.length === 0 ? (
-        <div className="border rounded-md p-8 text-center text-muted-foreground">
-          No accounts added yet.
-        </div>
+      <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
+      {!gate.settled ? (
+        <TabLoadingSkeleton />
+      ) : accounts.length === 0 ? (
+        error == null ? (
+          <div className="border rounded-md p-8 text-center text-muted-foreground">
+            No accounts added yet.
+          </div>
+        ) : null
       ) : (
         <div className="space-y-2">
           {accounts.map((a) => (
@@ -127,10 +140,11 @@ export default function AccountsTab() {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => setMode({ type: 'edit', id: a.id! })}>Edit</Button>
+                  <Button size="sm" variant="outline" aria-label={`Edit ${a.name}`} onClick={() => setMode({ type: 'edit', id: a.id! })}>Edit</Button>
                   <Button
                     size="sm"
                     variant="destructive"
+                    aria-label={`Delete ${a.name}`}
                     onClick={async () => {
                       const ok = await confirm({
                         title: `Delete ${a.name}?`,

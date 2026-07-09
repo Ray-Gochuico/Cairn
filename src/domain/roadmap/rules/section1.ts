@@ -2,6 +2,7 @@ import type { NodeResult, RoadmapContext } from '@/types/roadmap';
 import { AccountType, ContributionSource } from '@/types/enums';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
+import { useAccountsStore } from '@/stores/accounts-store';
 
 /**
  * Section 1 — Employer Match & Emergency Fund.
@@ -129,6 +130,25 @@ export function evaluateEmployerMatchQ(ctx: RoadmapContext): NodeResult {
     };
   }
   if (anyUnanswered) {
+    const unanswered = retirementAccounts.filter((a) => a.hasEmployerMatch === null);
+    // W10 M24: with ONE unanswered plan the yes/no is attributable — ask
+    // inline (evaluateIps pattern) instead of dead-ending on a CTA. The
+    // match % stays on AccountForm (numbers don't fit yes-no prompts).
+    if (unanswered.length === 1) {
+      const acct = unanswered[0];
+      return {
+        status: 'unanswered',
+        evidence: `Does ${acct.name} match employee contributions? Check the plan documents.`,
+        question: {
+          prompt: `Does ${acct.name}'s employer match contributions?`,
+          answerType: 'yes-no',
+          onAnswer: async (value) => {
+            await useAccountsStore.getState().update(acct.id!, { hasEmployerMatch: value === 'yes' });
+          },
+        },
+        cta: { label: 'Open Accounts →', href: '/inputs/accounts' },
+      };
+    }
     return {
       status: 'unanswered',
       evidence: 'Mark which retirement accounts (if any) come with an employer match.',

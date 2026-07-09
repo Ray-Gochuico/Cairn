@@ -229,3 +229,36 @@ describe('EquityGrantForm — grant type select', () => {
     expect(onSubmit.mock.calls[0][0].grantType).toBe('ISO');
   }, 15000);
 });
+
+describe('EquityGrantForm — W10 M44 error honesty', () => {
+  it('surfaces a rejected save as a role=alert banner instead of swallowing it (W10 M44)', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockRejectedValue(new Error('DB locked'));
+    setupForm({ onSubmit });
+    // Fill the required base fields so validation passes and onSubmit runs.
+    await user.type(screen.getByLabelText(/^name$/i), '2024 RSU grant');
+    await user.type(screen.getByLabelText(/^company$/i), 'Acme Corp');
+    await user.click(screen.getByRole('radio', { name: /^alice$/i }));
+    await selectDate(user, 'grant-date', '2024-01-15');
+    const sharesInput = screen.getByLabelText(/total shares/i);
+    await user.clear(sharesInput);
+    await user.type(sharesInput, '1000');
+    const fmvInput = screen.getByLabelText(/current fmv/i);
+    await user.clear(fmvInput);
+    await user.type(fmvInput, '50');
+    await selectDate(user, 'vesting-row-0-date', '2027-01-15');
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/couldn.t save.*DB locked/i);
+  });
+
+  it('renders a humanized inline error + aria-invalid on the empty name field, not raw Zod', async () => {
+    const user = userEvent.setup();
+    const { onSubmit } = setupForm({ initial: { name: '' } });
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+    const name = screen.getByLabelText(/^name$/i);
+    expect(name).toHaveAttribute('aria-invalid', 'true');
+    expect(name).toHaveAccessibleDescription('Required');
+    expect(screen.queryByText(/expected string/i)).not.toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+});

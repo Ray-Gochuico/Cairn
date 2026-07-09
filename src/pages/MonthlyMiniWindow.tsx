@@ -1,5 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLoadGate } from '@/lib/use-load-gate';
+import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
+import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useLoansStore } from '@/stores/loans-store';
@@ -84,25 +87,30 @@ function monthLabel(yyyymm: string): string {
 interface DerivedValueCardProps {
   account: Account;
   snapshot: AccountSnapshot;
+  // W10 T11: skip is LIFTED to the parent so "Confirm all" can exclude Skipped
+  // cards (child-local skip left them in the ratified batch).
+  isSkipped: boolean;
+  onSkip: (accountId: number) => void;
 }
 
-function DerivedValueCard({ account, snapshot }: DerivedValueCardProps) {
+function DerivedValueCard({ account, snapshot, isSkipped, onSkip }: DerivedValueCardProps) {
   const upsertSnapshot = useSnapshotsStore((s) => s.upsert);
-  // Local state covers the optimistic in-card confirm and Skip; the PROP
-  // wins whenever the underlying snapshot is already ratified — so a
-  // parent-level "Confirm all" (or a confirmation from another session)
-  // flips this card without a remount. Reopen behavior is unchanged:
-  // sourceConfirmed reproduces the old initialMode logic on every render
-  // instead of only at mount.
+  // Local state covers the optimistic in-card confirm; the PROP wins whenever
+  // the underlying snapshot is already ratified — so a parent-level "Confirm
+  // all" (or a confirmation from another session) flips this card without a
+  // remount.
   const [localMode, setLocalMode] = useState<CardMode>('pending');
   const sourceConfirmed =
     snapshot.source === SnapshotSource.USER_CONFIRMED ||
     snapshot.source === SnapshotSource.MANUAL;
-  const mode: CardMode = sourceConfirmed ? 'confirmed' : localMode;
+  const mode: CardMode = sourceConfirmed ? 'confirmed' : isSkipped ? 'skipped' : localMode;
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState<string>(String(snapshot.totalValue));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // W10 T6: confirming unmounts the focused button; move focus to the
+  // pre-mounted status region so it never strands on <body>.
+  const statusRef = useRef<HTMLSpanElement>(null);
 
   const confirm = async (value: number) => {
     setBusy(true);
@@ -116,6 +124,7 @@ function DerivedValueCard({ account, snapshot }: DerivedValueCardProps) {
       });
       setLocalMode('confirmed');
       setEditing(false);
+      requestAnimationFrame(() => statusRef.current?.focus());
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Save failed');
     } finally {
@@ -142,11 +151,13 @@ function DerivedValueCard({ account, snapshot }: DerivedValueCardProps) {
               the node from the start and let the TEXT be the conditional
               part. */}
           <span
+            ref={statusRef}
             role="status"
+            tabIndex={-1}
             className={
               mode === 'confirmed'
-                ? 'text-sm font-medium text-success-foreground'
-                : undefined
+                ? 'text-sm font-medium text-success-foreground outline-none'
+                : 'outline-none'
             }
           >
             {mode === 'confirmed' && 'Confirmed'}
@@ -194,7 +205,7 @@ function DerivedValueCard({ account, snapshot }: DerivedValueCardProps) {
             <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
               Edit
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setLocalMode('skipped')}>
+            <Button size="sm" variant="ghost" onClick={() => account.id != null && onSkip(account.id)}>
               Skip
             </Button>
           </div>
@@ -527,28 +538,49 @@ export default function MonthlyMiniWindow() {
 
   const accounts = useAccountsStore((s) => s.accounts);
   const loadAccounts = useAccountsStore((s) => s.load);
+  const accountsError = useAccountsStore((s) => s.error);
+  const accountsLoading = useAccountsStore((s) => s.isLoading);
 
   const snapshots = useSnapshotsStore((s) => s.snapshots);
   const loadSnapshots = useSnapshotsStore((s) => s.load);
+  const snapshotsError = useSnapshotsStore((s) => s.error);
+  const snapshotsLoading = useSnapshotsStore((s) => s.isLoading);
 
   const loans = useLoansStore((s) => s.loans);
   const loadLoans = useLoansStore((s) => s.load);
+  const loansError = useLoansStore((s) => s.error);
+  const loansLoading = useLoansStore((s) => s.isLoading);
 
   const properties = usePropertiesStore((s) => s.properties);
   const loadProperties = usePropertiesStore((s) => s.load);
   const updateProperty = usePropertiesStore((s) => s.update);
+  const propertiesError = usePropertiesStore((s) => s.error);
+  const propertiesLoading = usePropertiesStore((s) => s.isLoading);
 
   const vehicles = useVehiclesStore((s) => s.vehicles);
   const loadVehicles = useVehiclesStore((s) => s.load);
   const updateVehicle = useVehiclesStore((s) => s.update);
+  const vehiclesError = useVehiclesStore((s) => s.error);
+  const vehiclesLoading = useVehiclesStore((s) => s.isLoading);
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     loadAccounts();
     loadSnapshots();
     loadLoans();
     loadProperties();
     loadVehicles();
   }, [loadAccounts, loadSnapshots, loadLoans, loadProperties, loadVehicles]);
+
+  // W10 M38: telling a user their monthly ritual is DONE ("Nothing to confirm
+  // this month.") before the five loads settle is the worst false-empty
+  // instance — gate the whole ritual on load settlement. loan-payments is a
+  // parameterized non-factory store consumed only on the write path, so it's
+  // not part of the gate.
+  const gate = useLoadGate(
+    [accountsLoading, snapshotsLoading, loansLoading, propertiesLoading, vehiclesLoading],
+    [accountsError, snapshotsError, loansError, propertiesError, vehiclesError],
+    reload,
+  );
 
   const today = useMemo(() => new Date(), []);
   const lastMonth = useMemo(() => lastMonthYyyymm(today), [today]);
@@ -587,9 +619,18 @@ export default function MonthlyMiniWindow() {
   // --- "Confirm all" batch over the derived cards -----------------------------
 
   const upsertSnapshot = useSnapshotsStore((s) => s.upsert);
+  // W10 T11: skip is parent state so "Confirm all" can EXCLUDE explicitly
+  // Skipped cards (they used to be ratified anyway).
+  const [skippedIds, setSkippedIds] = useState<ReadonlySet<number>>(new Set());
+  const onSkip = useCallback((accountId: number) => {
+    setSkippedIds((prev) => new Set(prev).add(accountId));
+  }, []);
   const pendingDerived = useMemo(
-    () => derivedCards.filter(({ snapshot }) => snapshot.source === SnapshotSource.AUTO_DERIVED),
-    [derivedCards],
+    () => derivedCards.filter(
+      ({ snapshot }) =>
+        snapshot.source === SnapshotSource.AUTO_DERIVED && !skippedIds.has(snapshot.accountId),
+    ),
+    [derivedCards, skippedIds],
   );
   const [confirmingAll, setConfirmingAll] = useState(false);
   const [confirmAllResult, setConfirmAllResult] = useState<string | null>(null);
@@ -735,8 +776,18 @@ export default function MonthlyMiniWindow() {
     cashCards.length === 0 &&
     assetCards.length === 0;
 
+  // W10 M38: never fake a completed ritual while stores load.
+  if (!gate.settled) {
+    return (
+      <PageContainer width="prose" className="space-y-6">
+        <PageLoadingSpinner />
+      </PageContainer>
+    );
+  }
+
   return (
     <PageContainer width="prose" className="space-y-6">
+      <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
       <div>
         {fromNewMonth && (
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -793,6 +844,8 @@ export default function MonthlyMiniWindow() {
                   key={account.id}
                   account={account}
                   snapshot={snapshot}
+                  isSkipped={account.id != null && skippedIds.has(account.id)}
+                  onSkip={onSkip}
                 />
               ))}
             </section>

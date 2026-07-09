@@ -24,4 +24,9 @@ describe('defaultScenarioColor', () => {
       expect(c).toMatch(/^#[0-9a-fA-F]{6}$/);
     }
   });
+
+  it('first non-baseline color is the hue-opposed orange, pale blue is last (W10 design)', () => {
+    expect(NON_BASELINE_PALETTE[0]).toBe('#ef8b5a');
+    expect(NON_BASELINE_PALETTE[NON_BASELINE_PALETTE.length - 1]).toBe('#a8c0fb');
+  });
 });

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useAccountsStore } from '@/stores/accounts-store';
@@ -157,7 +158,7 @@ describe('AssetsDonut', () => {
   });
 
   it('renders the card title', () => {
-    render(<AssetsDonut />);
+    render(<MemoryRouter><AssetsDonut /></MemoryRouter>);
     expect(screen.getByText('Assets')).toBeInTheDocument();
   });
 
@@ -190,7 +191,7 @@ describe('AssetsDonut', () => {
       error: null,
     });
 
-    render(<AssetsDonut />);
+    render(<MemoryRouter><AssetsDonut /></MemoryRouter>);
 
     // Latest snapshot for account 1 = 6000, for account 2 = 3400.
     expect(screen.getByTestId('slice-Brokerage')).toHaveAttribute('data-value', '6000');
@@ -215,7 +216,7 @@ describe('AssetsDonut', () => {
       error: null,
     });
 
-    render(<AssetsDonut />);
+    render(<MemoryRouter><AssetsDonut /></MemoryRouter>);
 
     expect(screen.getByTestId('slice-Home')).toHaveAttribute('data-value', '525000');
   });
@@ -232,7 +233,7 @@ describe('AssetsDonut', () => {
       error: null,
     });
 
-    render(<AssetsDonut />);
+    render(<MemoryRouter><AssetsDonut /></MemoryRouter>);
 
     expect(screen.getByTestId('slice-Home')).toHaveAttribute('data-value', '400000');
     expect(screen.getByTestId('slice-Camry')).toHaveAttribute('data-value', '22000');
@@ -262,7 +263,7 @@ describe('AssetsDonut', () => {
       error: null,
     });
 
-    render(<AssetsDonut />);
+    render(<MemoryRouter><AssetsDonut /></MemoryRouter>);
 
     expect(screen.queryByTestId('slice-Home')).toBeInTheDocument();
     expect(screen.queryByTestId('slice-Camry')).toBeInTheDocument();
@@ -292,7 +293,7 @@ describe('AssetsDonut', () => {
       error: null,
     });
 
-    render(<AssetsDonut />);
+    render(<MemoryRouter><AssetsDonut /></MemoryRouter>);
 
     expect(screen.queryByTestId('slice-Brokerage')).toBeInTheDocument();
     expect(screen.queryByTestId('slice-No snapshots')).not.toBeInTheDocument();
@@ -300,7 +301,7 @@ describe('AssetsDonut', () => {
   });
 
   it('shows an empty-state hint when no entities to chart', () => {
-    render(<AssetsDonut />);
+    render(<MemoryRouter><AssetsDonut /></MemoryRouter>);
     expect(screen.getByText(/no assets recorded/i)).toBeInTheDocument();
   });
 
@@ -332,7 +333,7 @@ describe('AssetsDonut', () => {
 
     it('renders an Entities picker button with the count of visible entities', () => {
       seedThreeAssets();
-      render(<AssetsDonut />);
+      render(<MemoryRouter><AssetsDonut /></MemoryRouter>);
       expect(
         screen.getByRole('button', { name: /Included · 3 of 3/ }),
       ).toBeInTheDocument();
@@ -340,7 +341,7 @@ describe('AssetsDonut', () => {
 
     it('each slice carries a resolved color (not empty)', () => {
       seedThreeAssets();
-      render(<AssetsDonut />);
+      render(<MemoryRouter><AssetsDonut /></MemoryRouter>);
       for (const name of ['Brokerage', 'Roth IRA', 'Home']) {
         expect(
           screen.getByTestId(`slice-${name}`).getAttribute('data-color'),
@@ -351,7 +352,7 @@ describe('AssetsDonut', () => {
 
     it('a kept slice keeps its color after another entity is hidden (no legend desync)', async () => {
       seedThreeAssets();
-      render(<AssetsDonut />);
+      render(<MemoryRouter><AssetsDonut /></MemoryRouter>);
       // Home is the LAST entity in insertion order; hiding the FIRST entity
       // (Brokerage) would reindex Home under the old positional fallback.
       const before = screen.getByTestId('slice-Home').getAttribute('data-color');
@@ -380,7 +381,7 @@ describe('AssetsDonut', () => {
         isLoading: false,
         error: null,
       });
-      render(<AssetsDonut />);
+      render(<MemoryRouter><AssetsDonut /></MemoryRouter>);
       expect(screen.getByTestId('slice-Brokerage').getAttribute('data-color')).toBe('#123456');
     });
 
@@ -390,7 +391,7 @@ describe('AssetsDonut', () => {
       // (6000/509400), NOT 6000/506000 ≈ 1.2%… use Home instead for a
       // discriminating number: Home stays 98.2% (500000/509400), NOT 98.8%.
       seedThreeAssets();
-      render(<AssetsDonut />);
+      render(<MemoryRouter><AssetsDonut /></MemoryRouter>);
       const user = userEvent.setup();
       await user.click(screen.getByRole('button', { name: /Included ·/ }));
       await user.click(screen.getByRole('checkbox', { name: /Roth IRA/ }));
@@ -400,14 +401,14 @@ describe('AssetsDonut', () => {
 
     it('picker lives in the card header, not an absolute overlay', () => {
       seedThreeAssets();
-      render(<AssetsDonut />);
+      render(<MemoryRouter><AssetsDonut /></MemoryRouter>);
       const trigger = screen.getByRole('button', { name: /Included ·/ });
       expect(trigger.closest('[class*="absolute"]')).toBeNull();
     });
 
     it('hiding an entity removes its slice from the donut', async () => {
       seedThreeAssets();
-      render(<AssetsDonut />);
+      render(<MemoryRouter><AssetsDonut /></MemoryRouter>);
       // All three slices present at start.
       expect(screen.getByTestId('slice-Brokerage')).toBeInTheDocument();
       expect(screen.getByTestId('slice-Roth IRA')).toBeInTheDocument();
@@ -427,14 +428,14 @@ describe('AssetsDonut', () => {
 
     it('persists hidden selection across remount', async () => {
       seedThreeAssets();
-      const { unmount } = render(<AssetsDonut />);
+      const { unmount } = render(<MemoryRouter><AssetsDonut /></MemoryRouter>);
       const user = userEvent.setup();
       await user.click(screen.getByRole('button', { name: /Included ·/ }));
       await user.click(screen.getByRole('checkbox', { name: /Roth IRA/ }));
       expect(screen.queryByTestId('slice-Roth IRA')).not.toBeInTheDocument();
       unmount();
 
-      render(<AssetsDonut />);
+      render(<MemoryRouter><AssetsDonut /></MemoryRouter>);
       expect(screen.queryByTestId('slice-Roth IRA')).not.toBeInTheDocument();
       expect(screen.getByTestId('slice-Brokerage')).toBeInTheDocument();
       expect(screen.getByTestId('slice-Home')).toBeInTheDocument();
@@ -442,7 +443,7 @@ describe('AssetsDonut', () => {
 
     it('shows the all-hidden message when every entity is hidden', async () => {
       seedThreeAssets();
-      render(<AssetsDonut />);
+      render(<MemoryRouter><AssetsDonut /></MemoryRouter>);
       const user = userEvent.setup();
       await user.click(screen.getByRole('button', { name: /Included ·/ }));
       await user.click(screen.getByRole('button', { name: /hide all/i }));

@@ -18,6 +18,11 @@ const mig = (file: string) => ({
   sql: readFileSync(resolve(__dirname, `../../src/db/migrations/${file}.sql`), 'utf-8'),
 });
 
+// The W10 loading-gate test overrides categories.load with a no-op; capture +
+// restore the real loads each beforeEach so later DB-backed tests hydrate.
+const realCategoriesLoad = useCategoriesStore.getState().load;
+const realTransactionsLoad = useTransactionsStore.getState().load;
+
 describe('Budget page', () => {
   let db: SqliteAdapter;
 
@@ -32,8 +37,8 @@ describe('Budget page', () => {
       mig('0013_add_category_budget'),
     ]);
     setDatabase(db);
-    useCategoriesStore.setState({ categories: [], isLoading: false, error: null });
-    useTransactionsStore.setState({ transactions: [], isLoading: false, error: null });
+    useCategoriesStore.setState({ categories: [], isLoading: false, error: null, load: realCategoriesLoad });
+    useTransactionsStore.setState({ transactions: [], isLoading: false, error: null, load: realTransactionsLoad });
   });
 
   afterEach(async () => { await db.close(); });
@@ -46,6 +51,13 @@ describe('Budget page', () => {
     expect(screen.getByText(/set a monthly budget/i)).toBeInTheDocument();
     // Canonical EmptyState shape: titled "No budgets set" (medium-weight line).
     expect(screen.getByText(/no budgets set/i)).toHaveClass('font-medium');
+  });
+
+  it('shows the loading skeleton, not "No budgets set", while stores load (W10 T1)', () => {
+    useCategoriesStore.setState({ categories: [], isLoading: true, error: null, load: async () => {} } as never);
+    render(<MemoryRouter><Budget /></MemoryRouter>);
+    expect(screen.getByRole('status', { name: /loading page/i })).toBeInTheDocument();
+    expect(screen.queryByText(/no budgets set/i)).not.toBeInTheDocument();
   });
 
   it('editing a budget input persists the value via the categories store', async () => {

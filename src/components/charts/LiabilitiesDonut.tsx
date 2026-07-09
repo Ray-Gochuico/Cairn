@@ -4,6 +4,7 @@ import { DonutEntityPicker, useDonutSelected, type DonutEntityPickerItem } from 
 import { useLoansStore } from '@/stores/loans-store';
 import { loanTypeLabel } from '@/lib/loan-labels';
 import { formatCurrency } from '@/lib/format';
+import { useViewFilter } from '@/lib/use-view-filter';
 import { colorForLoan } from '@/lib/chart-colors';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -21,6 +22,9 @@ const STORAGE_KEY = 'donut.liabilities.hidden';
  * Keys are loan id strings.
  */
 export default function LiabilitiesDonut() {
+  // W10 T7: household-wide by design — flag it under a person view.
+  const { filter } = useViewFilter();
+  const title = filter !== 'household' ? 'Liabilities · Household' : 'Liabilities';
   const loans = useLoansStore((s) => s.loans);
   const loadLoans = useLoansStore((s) => s.load);
 
@@ -78,7 +82,7 @@ export default function LiabilitiesDonut() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Liabilities</CardTitle>
+          <CardTitle>{title}</CardTitle>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground">
           No loans recorded yet.
@@ -96,7 +100,7 @@ export default function LiabilitiesDonut() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between gap-2">
-            <CardTitle>Liabilities</CardTitle>
+            <CardTitle>{title}</CardTitle>
             {picker}
           </div>
         </CardHeader>
@@ -111,7 +115,7 @@ export default function LiabilitiesDonut() {
 
   return (
     <DonutChartCard
-      title="Liabilities"
+      title={title}
       data={filteredSlices}
       shareTotal={fullTotal}
       valueFormatter={formatCurrency}

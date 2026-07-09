@@ -16,6 +16,7 @@ import DatePicker from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { FieldError, FormErrorSummary, useFormSubmit } from './form-errors';
 
 // EquityGrantSchema declares the three calculator fields as
 // `z.number().nullable().default(null)`. Zod treats them as optional on input
@@ -166,13 +167,10 @@ export default function EquityGrantForm({
     syncSchedule([...scheduleRows, { date: '', cumulativePct: 1.0 }]);
   }
 
-  const fieldErrors = Object.entries(form.formState.errors).map(([field, err]) => ({
-    field,
-    message: (err as { message?: string })?.message ?? 'invalid',
-  }));
+  const { onValid, submitting, submitError } = useFormSubmit(onSubmit);
 
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+    <form onSubmit={form.handleSubmit(onValid)} className="space-y-4">
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Equity grant details</CardTitle>
@@ -185,7 +183,10 @@ export default function EquityGrantForm({
                 id="grant-name"
                 {...form.register('name')}
                 placeholder="e.g., 2024 RSU grant"
+                aria-invalid={form.formState.errors.name ? true : undefined}
+                aria-describedby={form.formState.errors.name ? 'grant-name-error' : undefined}
               />
+              <FieldError id="grant-name-error" message={form.formState.errors.name?.message} />
             </div>
             <div>
               <Label htmlFor="grant-company">Company</Label>
@@ -291,7 +292,7 @@ export default function EquityGrantForm({
             <div className="mt-3 space-y-3 pl-2 border-l">
               <p className="text-xs text-muted-foreground">
                 Per-share value ={' '}
-                <span className="font-mono">(company valuation − total debt) ÷ outstanding shares</span>.
+                <span className="tabular-nums">(company valuation − total debt) ÷ outstanding shares</span>.
               </p>
               <div>
                 <Label htmlFor="company-valuation">Company valuation</Label>
@@ -332,7 +333,7 @@ export default function EquityGrantForm({
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div className="text-sm">
                   Per-share value:{' '}
-                  <span className="font-mono">
+                  <span className="tabular-nums">
                     {computedFmv == null ? '—' : `$${computedFmv.value.toFixed(2)}`}
                   </span>
                 </div>
@@ -445,23 +446,12 @@ export default function EquityGrantForm({
         </CardContent>
       </Card>
 
-      {fieldErrors.length > 0 && (
-        <div role="alert" className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive-soft-foreground">
-          <div className="font-medium mb-1">Fix these before saving:</div>
-          <ul className="list-disc pl-5">
-            {fieldErrors.map((e) => (
-              <li key={e.field}>
-                <span className="font-mono">{e.field}</span>: {e.message}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+            <FormErrorSummary fieldErrors={form.formState.errors} submitError={submitError} />
 
       <div className="flex justify-end items-center gap-3">
         <span
           className="text-sm text-muted-foreground transition-opacity duration-200"
-          style={{ opacity: form.formState.isSubmitting ? 1 : 0 }}
+          style={{ opacity: submitting ? 1 : 0 }}
           aria-live="polite"
         >
           Saving…
@@ -471,14 +461,14 @@ export default function EquityGrantForm({
             type="button"
             variant="ghost"
             onClick={onCancel}
-            disabled={form.formState.isSubmitting}
+            disabled={submitting}
           >
             Cancel
           </Button>
         )}
         <Button
           type="submit"
-          disabled={form.formState.isSubmitting || !form.formState.isDirty}
+          disabled={submitting}
         >
           {submitLabel}
         </Button>

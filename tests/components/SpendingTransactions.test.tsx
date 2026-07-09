@@ -263,6 +263,21 @@ describe('SpendingTransactions page', () => {
     expect(reloaded.find((t) => t.merchant === 'AMAZON')).toBeDefined();
   });
 
+  it('a failed delete surfaces its error at list level, outside the edit branch (W10 T5)', async () => {
+    await useCategoriesStore.getState().load();
+    const repo = new TransactionsRepo(db);
+    await repo.createMany([mkTxn({ merchant: 'AMAZON' })]);
+    await useTransactionsStore.getState().load();
+    useTransactionsStore.setState({ remove: async () => { throw new Error('locked'); } } as never);
+    renderPage();
+
+    const user = userEvent.setup();
+    await screen.findByText('AMAZON');
+    await user.click(screen.getByRole('button', { name: /delete amazon/i }));
+    await user.click(screen.getByRole('button', { name: /confirm delete amazon/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/locked/i);
+  });
+
   it('shows a validation error for empty merchant on save', async () => {
     await useCategoriesStore.getState().load();
     const repo = new TransactionsRepo(db);

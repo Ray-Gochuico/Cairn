@@ -354,10 +354,12 @@ describe('NetWorth page', () => {
 
     // The chart hero is household-scoped BY DESIGN (spec §3.1): it keeps the
     // full $250k household total ($50k + $200k) and flags the scope with a
-    // "· Household" label suffix instead of silently filtering.
+    // "· Household" label suffix instead of silently filtering. (W10 T7 added
+    // the same suffix to the Assets/Liabilities donuts, so scope specifically
+    // to the chart's own "Net worth · Household" label here.)
     const header = await screen.findByTestId('asset-chart-header-value');
     await waitFor(() => expect(header.textContent).toBe('$250,000'));
-    expect(screen.getByText(/· Household/)).toBeInTheDocument();
+    expect(screen.getByText(/net worth · Household/i)).toBeInTheDocument();
 
     // The GrowthCard IS person-filtered (fed from the visible* slices): its
     // current value shows only p1's $50k…
@@ -445,5 +447,18 @@ describe('NetWorth page', () => {
     const imported = all.find((s) => s.snapshotDate === '2023-06-30');
     expect(imported).toBeDefined();
     expect(imported?.totalValue).toBe(60_000);
+  });
+
+  it('shows the loading skeleton, not the empty state, while stores are still loading (W10 M5)', () => {
+    // Cold-mount shape: empty arrays + isLoading:true on one consumed store.
+    useSnapshotsStore.setState({ snapshots: [], isLoading: true, error: null, load: async () => {} } as any);
+    // (other stores seeded resolved-empty by the file's existing reset helper)
+    render(
+      <MemoryRouter>
+        <NetWorth />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('status', { name: /loading page/i })).toBeInTheDocument();
+    expect(screen.queryByText('No net worth snapshots yet')).not.toBeInTheDocument();
   });
 });

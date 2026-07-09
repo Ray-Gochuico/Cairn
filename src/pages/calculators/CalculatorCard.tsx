@@ -54,7 +54,15 @@ export function CalculatorCard({
       <CardHeader className="flex flex-row items-center justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-sm font-normal text-muted-foreground">{title}</h2>
-          <div className="text-xl sm:text-2xl font-semibold tabular-nums break-words min-w-0">{headline}</div>
+          {/* W10 T8: the headline recomputes as the user edits inputs — a
+              pre-mounted polite live region announces the new figure to AT. */}
+          <div
+            role="status"
+            data-testid={cardId ? `${cardId}-headline` : undefined}
+            className="text-xl sm:text-2xl font-semibold tabular-nums break-words min-w-0"
+          >
+            {headline}
+          </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Button

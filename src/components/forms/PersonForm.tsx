@@ -12,6 +12,7 @@ import DatePicker from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { FieldError, FormErrorSummary, useFormSubmit } from './form-errors';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 
 // PersonFormValues mirrors Person but drops the DB-only id and the
@@ -146,24 +147,28 @@ export default function PersonForm({
     return onSubmit(personValues);
   };
 
+  // W10 M44: a rejected save used to escape as an unhandled rejection.
+  const { onValid, submitting, submitError } = useFormSubmit(wrappedSubmit);
+
   const employmentType = form.watch('employmentType');
   const showHourlyFields = employmentType !== 'SALARY_NO_OT';
   const showAnnualSalary = employmentType !== 'HOURLY';
 
-  const fieldErrors = Object.entries(form.formState.errors).map(([field, err]) => ({
-    field,
-    message: (err as { message?: string })?.message ?? 'invalid',
-  }));
-
   return (
-    <form onSubmit={form.handleSubmit(wrappedSubmit)} className="space-y-4">
+    <form onSubmit={form.handleSubmit(onValid)} className="space-y-4">
       <Card>
         <CardHeader><CardTitle className="text-base">Person details</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label htmlFor="name">Name</Label>
-              <Input id="name" {...form.register('name')} />
+              <Input
+                id="name"
+                {...form.register('name')}
+                aria-invalid={form.formState.errors.name ? true : undefined}
+                aria-describedby={form.formState.errors.name ? 'person-name-error' : undefined}
+              />
+              <FieldError id="person-name-error" message={form.formState.errors.name?.message} />
             </div>
             <div>
               <Label htmlFor="dateOfBirth">Date of birth</Label>
@@ -372,26 +377,12 @@ export default function PersonForm({
         </CardContent>
       </Card>
 
-      {fieldErrors.length > 0 && (
-        <div
-          role="alert"
-          className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive-soft-foreground"
-        >
-          <div className="font-medium mb-1">Fix these before saving:</div>
-          <ul className="list-disc pl-5">
-            {fieldErrors.map((e) => (
-              <li key={e.field}>
-                <span className="font-mono">{e.field}</span>: {e.message}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <FormErrorSummary fieldErrors={form.formState.errors} submitError={submitError} />
 
       <div className="flex justify-end items-center gap-3">
         <span
           className="text-sm text-muted-foreground transition-opacity duration-200"
-          style={{ opacity: form.formState.isSubmitting ? 1 : 0 }}
+          style={{ opacity: submitting ? 1 : 0 }}
           aria-live="polite"
         >
           Saving…
@@ -401,15 +392,12 @@ export default function PersonForm({
             type="button"
             variant="ghost"
             onClick={onCancel}
-            disabled={form.formState.isSubmitting}
+            disabled={submitting}
           >
             Cancel
           </Button>
         )}
-        <Button
-          type="submit"
-          disabled={form.formState.isSubmitting}
-        >
+        <Button type="submit" disabled={submitting}>
           {submitLabel}
         </Button>
       </div>

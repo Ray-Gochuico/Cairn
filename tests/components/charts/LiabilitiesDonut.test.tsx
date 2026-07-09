@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useLoansStore } from '@/stores/loans-store';
@@ -76,7 +77,7 @@ describe('LiabilitiesDonut', () => {
   });
 
   it('renders the card title', () => {
-    render(<LiabilitiesDonut />);
+    render(<MemoryRouter><LiabilitiesDonut /></MemoryRouter>);
     expect(screen.getByText('Liabilities')).toBeInTheDocument();
   });
 
@@ -91,7 +92,7 @@ describe('LiabilitiesDonut', () => {
       error: null,
     });
 
-    render(<LiabilitiesDonut />);
+    render(<MemoryRouter><LiabilitiesDonut /></MemoryRouter>);
 
     expect(screen.getByTestId('slice-Home mortgage')).toHaveAttribute(
       'data-value',
@@ -117,7 +118,7 @@ describe('LiabilitiesDonut', () => {
       error: null,
     });
 
-    render(<LiabilitiesDonut />);
+    render(<MemoryRouter><LiabilitiesDonut /></MemoryRouter>);
 
     expect(screen.getByTestId('slice-Home mortgage')).toBeInTheDocument();
     expect(screen.queryByTestId('slice-Paid off')).not.toBeInTheDocument();
@@ -136,7 +137,7 @@ describe('LiabilitiesDonut', () => {
       error: null,
     });
 
-    render(<LiabilitiesDonut />);
+    render(<MemoryRouter><LiabilitiesDonut /></MemoryRouter>);
 
     expect(screen.getByTestId('slice-Mortgage')).toHaveAttribute(
       'data-value',
@@ -149,7 +150,7 @@ describe('LiabilitiesDonut', () => {
   });
 
   it('shows an empty-state hint when no loans are recorded', () => {
-    render(<LiabilitiesDonut />);
+    render(<MemoryRouter><LiabilitiesDonut /></MemoryRouter>);
     expect(screen.getByText(/no loans recorded/i)).toBeInTheDocument();
   });
 
@@ -172,7 +173,7 @@ describe('LiabilitiesDonut', () => {
 
     it('renders an Entities picker button with the count of visible entities', () => {
       seedThreeLoans();
-      render(<LiabilitiesDonut />);
+      render(<MemoryRouter><LiabilitiesDonut /></MemoryRouter>);
       expect(
         screen.getByRole('button', { name: /Included · 3 of 3/ }),
       ).toBeInTheDocument();
@@ -180,7 +181,7 @@ describe('LiabilitiesDonut', () => {
 
     it('each slice carries a resolved color (not empty)', () => {
       seedThreeLoans();
-      render(<LiabilitiesDonut />);
+      render(<MemoryRouter><LiabilitiesDonut /></MemoryRouter>);
       for (const name of ['Home mortgage', 'Car loan', 'Student debt']) {
         expect(
           screen.getByTestId(`slice-${name}`).getAttribute('data-color'),
@@ -191,7 +192,7 @@ describe('LiabilitiesDonut', () => {
 
     it('a kept slice keeps its color after another loan is hidden (no legend desync)', async () => {
       seedThreeLoans();
-      render(<LiabilitiesDonut />);
+      render(<MemoryRouter><LiabilitiesDonut /></MemoryRouter>);
       // Student debt is last in insertion order; hiding the FIRST loan (Home
       // mortgage) would reindex it under the old positional fallback.
       const before = screen.getByTestId('slice-Student debt').getAttribute('data-color');
@@ -208,7 +209,7 @@ describe('LiabilitiesDonut', () => {
       // the mortgage: Car loan's legend share must still read 3.9%
       // (15000/387000), NOT 40.5% (15000/37000).
       seedThreeLoans();
-      render(<LiabilitiesDonut />);
+      render(<MemoryRouter><LiabilitiesDonut /></MemoryRouter>);
       const user = userEvent.setup();
       await user.click(screen.getByRole('button', { name: /Included ·/ }));
       await user.click(screen.getByRole('checkbox', { name: /Home mortgage/ }));
@@ -218,14 +219,14 @@ describe('LiabilitiesDonut', () => {
 
     it('picker lives in the card header, not an absolute overlay', () => {
       seedThreeLoans();
-      render(<LiabilitiesDonut />);
+      render(<MemoryRouter><LiabilitiesDonut /></MemoryRouter>);
       const trigger = screen.getByRole('button', { name: /Included ·/ });
       expect(trigger.closest('[class*="absolute"]')).toBeNull();
     });
 
     it('hiding a loan removes its slice from the donut', async () => {
       seedThreeLoans();
-      render(<LiabilitiesDonut />);
+      render(<MemoryRouter><LiabilitiesDonut /></MemoryRouter>);
       expect(screen.getByTestId('slice-Car loan')).toBeInTheDocument();
 
       const user = userEvent.setup();
@@ -242,21 +243,21 @@ describe('LiabilitiesDonut', () => {
 
     it('persists hidden selection across remount', async () => {
       seedThreeLoans();
-      const { unmount } = render(<LiabilitiesDonut />);
+      const { unmount } = render(<MemoryRouter><LiabilitiesDonut /></MemoryRouter>);
       const user = userEvent.setup();
       await user.click(screen.getByRole('button', { name: /Included ·/ }));
       await user.click(screen.getByRole('checkbox', { name: /Car loan/ }));
       expect(screen.queryByTestId('slice-Car loan')).not.toBeInTheDocument();
       unmount();
 
-      render(<LiabilitiesDonut />);
+      render(<MemoryRouter><LiabilitiesDonut /></MemoryRouter>);
       expect(screen.queryByTestId('slice-Car loan')).not.toBeInTheDocument();
       expect(screen.getByTestId('slice-Home mortgage')).toBeInTheDocument();
     });
 
     it('shows the all-hidden message when every loan is hidden', async () => {
       seedThreeLoans();
-      render(<LiabilitiesDonut />);
+      render(<MemoryRouter><LiabilitiesDonut /></MemoryRouter>);
       const user = userEvent.setup();
       await user.click(screen.getByRole('button', { name: /Included ·/ }));
       await user.click(screen.getByRole('button', { name: /hide all/i }));

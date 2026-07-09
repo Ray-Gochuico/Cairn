@@ -193,6 +193,57 @@ describe('Property page', () => {
     );
   });
 
+  it('shows the loading skeleton, not "No properties yet", while stores load (W10 T1)', () => {
+    usePropertiesStore.setState({ properties: [], isLoading: true, error: null, load: async () => {} } as never);
+    renderPage();
+    expect(screen.getByRole('status', { name: /loading page/i })).toBeInTheDocument();
+    expect(screen.queryByText(/No properties yet/i)).not.toBeInTheDocument();
+  });
+
+  it('prices the card from the latest value snapshot, not the stale manual estimate (W10 F7)', () => {
+    usePropertiesStore.setState({
+      properties: [{
+        id: 7, householdId: 1, ownerPersonId: null, name: 'Main Home', type: PropertyType.PRIMARY_RESIDENCE,
+        address: null, purchasePrice: null, purchaseDate: '2020-01-01', currentEstimatedValue: 500000,
+        linkedLoanId: null, excludedFromNetWorth: false, notes: null,
+      }],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    useAssetValueSnapshotsStore.setState({
+      assetValueSnapshots: [
+        { id: 1, ownerType: 'PROPERTY', ownerId: 7, snapshotDate: '2020-01-02', value: 615000 },
+      ],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    renderPage();
+    expect(screen.getAllByText('$615,000').length).toBeGreaterThan(0);
+    expect(screen.queryByText('$500,000')).not.toBeInTheDocument();
+  });
+
+  it('renders "—" equity — not a fabricated negative — when the value is unknown (W10 F7)', () => {
+    useLoansStore.setState({
+      loans: [{
+        id: 99, householdId: 1, obligorPersonId: null, name: 'Mortgage', type: 'MORTGAGE',
+        originalAmount: 400000, currentBalance: 300000, interestRate: 0.05, termMonths: 360,
+        firstPaymentDate: '2024-01-01', monthlyPayment: 1800, extraPaymentDefault: 0,
+        linkedPropertyId: 8, linkedVehicleId: null,
+      }],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    usePropertiesStore.setState({
+      properties: [{
+        id: 8, householdId: 1, ownerPersonId: null, name: 'Rental', type: PropertyType.PRIMARY_RESIDENCE,
+        address: null, purchasePrice: null, purchaseDate: '2019-01-01', currentEstimatedValue: null,
+        linkedLoanId: 99, excludedFromNetWorth: false, notes: null,
+      }],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    renderPage();
+    const equityRow = screen.getByText('Equity').closest('div') as HTMLElement;
+    expect(within(equityRow).getByText('—')).toBeInTheDocument();
+    expect(screen.queryByText('-$300,000')).not.toBeInTheDocument();
+  });
+
   it('renders a property card with name and current value', () => {
     usePropertiesStore.setState({
       properties: [

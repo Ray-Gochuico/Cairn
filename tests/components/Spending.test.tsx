@@ -60,6 +60,10 @@ function renderPage() {
   );
 }
 
+// The W10 loading-gate test overrides transactions.load with a no-op; capture
+// + restore the real load each beforeEach so later DB-backed tests hydrate.
+const realTransactionsLoad = useTransactionsStore.getState().load;
+
 describe('Spending page', () => {
   let db: SqliteAdapter;
 
@@ -82,7 +86,7 @@ describe('Spending page', () => {
     ]);
     setDatabase(db);
     useCategoriesStore.setState({ categories: [], isLoading: false, error: null });
-    useTransactionsStore.setState({ transactions: [], isLoading: false, error: null });
+    useTransactionsStore.setState({ transactions: [], isLoading: false, error: null, load: realTransactionsLoad });
     usePersonsStore.setState({ persons: [], isLoading: false, error: null });
     useAccountsStore.setState({ accounts: [], isLoading: false, error: null });
     useSettingsStore.setState({ settings: null, isLoading: false, error: null });
@@ -123,6 +127,15 @@ describe('Spending page', () => {
     });
     // Canonical EmptyState shape: the title is the medium-weight line.
     expect(screen.getByText(/no transactions yet/i)).toHaveClass('font-medium');
+  });
+
+  it('gates "No transactions yet" behind load settlement, keeping the drop zone visible (W10 T1)', () => {
+    useTransactionsStore.setState({ transactions: [], isLoading: true, error: null, load: async () => {} } as never);
+    renderPage();
+    // Drop zone stays available even while loading — importing is never blocked.
+    expect(screen.getByText(/drop pdfs or csvs here/i)).toBeInTheDocument();
+    // But the false-empty copy is suppressed until settled.
+    expect(screen.queryByText(/no transactions yet/i)).not.toBeInTheDocument();
   });
 
   it('(a2) does not render the legacy standalone "Import CSV" button in the header', () => {

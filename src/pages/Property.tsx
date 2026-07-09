@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLoadGate } from '@/lib/use-load-gate';
+import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
 import { Link } from 'react-router-dom';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useLoansStore } from '@/stores/loans-store';
@@ -6,6 +8,9 @@ import { useTransactionsStore } from '@/stores/transactions-store';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useHousingPaymentsStore } from '@/stores/housing-payments-store';
+import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
+import { latestAssetValue } from '@/lib/latest-value';
+import { AssetSnapshotOwnerType } from '@/types/enums';
 import { filterByOwnerPersonId } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { resolveUtilityCategoryIds } from '@/lib/category-config';
@@ -67,6 +72,10 @@ function formatCurrencyOrDash(value: number | null | undefined): string {
 interface PropertyAssetCardProps {
   property: Property;
   mortgageBalance: number | null;
+  /** W10 F7: snapshot-first value; null when unknown (no snapshot + no estimate). */
+  knownValue: number | null;
+  /** W10 F7: null when the value is unknown — never a fabricated negative. */
+  equity: number | null;
   costBasis: number;
   isEditing: boolean;
   onEdit: () => void;
@@ -77,15 +86,14 @@ interface PropertyAssetCardProps {
 function PropertyAssetCard({
   property,
   mortgageBalance,
+  knownValue,
+  equity,
   costBasis,
   isEditing,
   onEdit,
   onCancelEdit,
   onSaveValue,
 }: PropertyAssetCardProps) {
-  const value = property.currentEstimatedValue ?? 0;
-  const equity = value - (mortgageBalance ?? 0);
-
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -112,7 +120,7 @@ function PropertyAssetCard({
             Current value
           </div>
           <div className="text-2xl font-semibold">
-            {formatCurrencyOrDash(property.currentEstimatedValue)}
+            {formatCurrencyOrDash(knownValue)}
           </div>
         </div>
 
@@ -355,55 +363,53 @@ export default function Property() {
   const properties = usePropertiesStore((s) => s.properties);
   const loadProperties = usePropertiesStore((s) => s.load);
   const propertiesError = usePropertiesStore((s) => s.error);
+  const propertiesLoading = usePropertiesStore((s) => s.isLoading);
   const updateProperty = usePropertiesStore((s) => s.update);
 
   const loans = useLoansStore((s) => s.loans);
   const loadLoans = useLoansStore((s) => s.load);
   const loansError = useLoansStore((s) => s.error);
+  const loansLoading = useLoansStore((s) => s.isLoading);
 
   const transactions = useTransactionsStore((s) => s.transactions);
   const loadTransactions = useTransactionsStore((s) => s.load);
   const transactionsError = useTransactionsStore((s) => s.error);
+  const transactionsLoading = useTransactionsStore((s) => s.isLoading);
 
   const categories = useCategoriesStore((s) => s.categories);
   const loadCategories = useCategoriesStore((s) => s.load);
   const categoriesError = useCategoriesStore((s) => s.error);
+  const categoriesLoading = useCategoriesStore((s) => s.isLoading);
 
   const settings = useSettingsStore((s) => s.settings);
   const loadSettings = useSettingsStore((s) => s.load);
   const settingsError = useSettingsStore((s) => s.error);
+  const settingsLoading = useSettingsStore((s) => s.isLoading);
   const updateSettings = useSettingsStore((s) => s.update);
 
   const housingPayments = useHousingPaymentsStore((s) => s.housingPayments);
   const loadHousingPayments = useHousingPaymentsStore((s) => s.load);
   const housingPaymentsError = useHousingPaymentsStore((s) => s.error);
+  const housingPaymentsLoading = useHousingPaymentsStore((s) => s.isLoading);
+
+  // W10 F7: price property cards latest-snapshot-first, like AssetsDonut.
+  const assetValueSnapshots = useAssetValueSnapshotsStore((s) => s.assetValueSnapshots);
+  const loadAssetValueSnapshots = useAssetValueSnapshotsStore((s) => s.load);
+  const assetValueSnapshotsError = useAssetValueSnapshotsStore((s) => s.error);
+  const assetValueSnapshotsLoading = useAssetValueSnapshotsStore((s) => s.isLoading);
   const { confirm, dialog } = useConfirm();
 
   const [editing, setEditing] = useState<EditTarget>(null);
 
-  const reload = () => {
+  const reload = useCallback(() => {
     loadProperties();
     loadLoans();
     loadTransactions();
     loadCategories();
     loadSettings();
     loadHousingPayments();
-  };
-  useEffect(() => {
-    loadProperties();
-    loadLoans();
-    loadTransactions();
-    loadCategories();
-    loadSettings();
-    loadHousingPayments();
-  }, [
-    loadProperties,
-    loadLoans,
-    loadTransactions,
-    loadCategories,
-    loadSettings,
-    loadHousingPayments,
-  ]);
+    loadAssetValueSnapshots();
+  }, [loadProperties, loadLoans, loadTransactions, loadCategories, loadSettings, loadHousingPayments, loadAssetValueSnapshots]);
 
   const storeErrors = [
     propertiesError,
@@ -412,8 +418,18 @@ export default function Property() {
     categoriesError,
     settingsError,
     housingPaymentsError,
+    assetValueSnapshotsError,
   ];
   const hasStoreError = storeErrors.some((e) => e != null);
+
+  // W10 T1: never flash "No properties yet" while the loads are in flight.
+  const gate = useLoadGate(
+    [propertiesLoading, loansLoading, transactionsLoading, categoriesLoading, settingsLoading, housingPaymentsLoading, assetValueSnapshotsLoading],
+    storeErrors,
+    reload,
+  );
+
+  const todayIso = new Date().toISOString().slice(0, 10);
 
   const visibleProperties = useMemo(
     () => filterByOwnerPersonId(properties, filter, persons),
@@ -506,6 +522,14 @@ export default function Property() {
     }
   }, [editing, visibleProperties]);
 
+  if (!gate.settled) {
+    return (
+      <PageContainer className="space-y-6">
+        <PageLoadingSpinner />
+      </PageContainer>
+    );
+  }
+
   if (properties.length === 0 && housingPayments.length === 0) {
     return (
       <PageContainer className="space-y-6">
@@ -516,7 +540,7 @@ export default function Property() {
           </p>
         </div>
         {hasStoreError ? (
-          <StoreErrorBanner errors={storeErrors} onRetry={reload} />
+          <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
         ) : (
           <EmptyState
             icon={Home}
@@ -539,7 +563,7 @@ export default function Property() {
 
   return (
     <PageContainer className="space-y-6">
-      <StoreErrorBanner errors={storeErrors} onRetry={reload} />
+      <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold mb-1">Property</h1>
@@ -554,6 +578,16 @@ export default function Property() {
         {visibleProperties.map((p) => {
           const mortgageBalance =
             p.id != null ? linkedLoanBalanceByPropertyId.get(p.id) ?? null : null;
+          // W10 F7: latest-snapshot-first, like AssetsDonut. No snapshot AND no
+          // manual estimate ⇒ UNKNOWN value — never coerce to $0 + fabricate equity.
+          const hasSnapshot = assetValueSnapshots.some(
+            (s) => s.ownerType === AssetSnapshotOwnerType.PROPERTY && s.ownerId === p.id,
+          );
+          const knownValue: number | null =
+            hasSnapshot || p.currentEstimatedValue != null
+              ? latestAssetValue(assetValueSnapshots, AssetSnapshotOwnerType.PROPERTY, p.id!, todayIso, p.currentEstimatedValue)
+              : null;
+          const equity: number | null = knownValue === null ? null : knownValue - (mortgageBalance ?? 0);
           const isEditing = editing?.id === p.id;
           const costBasis = propertyCostBasis(p.purchasePrice, p.id!, transactions, categories);
           const linkedTransactions = linkedSpendingTransactions(transactions, { propertyId: p.id! }, 12, categories);
@@ -570,6 +604,8 @@ export default function Property() {
                 <PropertyAssetCard
                   property={p}
                   mortgageBalance={mortgageBalance}
+                  knownValue={knownValue}
+                  equity={equity}
                   costBasis={costBasis}
                   isEditing={isEditing}
                   onEdit={() => setEditing({ id: p.id! })}

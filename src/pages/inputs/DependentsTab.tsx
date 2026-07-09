@@ -1,19 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { DependentType } from '@/types/enums';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useConfirm } from '@/components/ui/confirm-dialog';
+import { useLoadGate } from '@/lib/use-load-gate';
+import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
+import { TabLoadingSkeleton } from '@/components/inputs/TabLoadingSkeleton';
 import DependentForm, { DEFAULT_DEPENDENT } from '@/components/forms/DependentForm';
 
 export default function DependentsTab() {
-  const { dependents, load, create, update, remove } = useDependentsStore();
+  const { dependents, load, create, update, remove, isLoading, error } = useDependentsStore();
   const { confirm, dialog } = useConfirm();
   const [mode, setMode] = useState<'list' | 'create' | { type: 'edit'; id: number }>('list');
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     load();
   }, [load]);
+  const gate = useLoadGate([isLoading], [error], reload);
 
   useEffect(() => {
     if (typeof mode === 'object' && mode.type === 'edit') {
@@ -66,10 +70,15 @@ export default function DependentsTab() {
         Add children or other dependents. Used for 529 plans, childcare expense tracking, and dependent-care tax credits.
       </p>
 
-      {dependents.length === 0 ? (
-        <div className="border rounded-md p-8 text-center text-muted-foreground">
-          No dependents added yet.
-        </div>
+      <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
+      {!gate.settled ? (
+        <TabLoadingSkeleton />
+      ) : dependents.length === 0 ? (
+        error == null ? (
+          <div className="border rounded-md p-8 text-center text-muted-foreground">
+            No dependents added yet.
+          </div>
+        ) : null
       ) : (
         <div className="space-y-2">
           {dependents.map((d) => (
@@ -82,10 +91,11 @@ export default function DependentsTab() {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => setMode({ type: 'edit', id: d.id! })}>Edit</Button>
+                  <Button size="sm" variant="outline" aria-label={`Edit ${d.name}`} onClick={() => setMode({ type: 'edit', id: d.id! })}>Edit</Button>
                   <Button
                     size="sm"
                     variant="destructive"
+                    aria-label={`Delete ${d.name}`}
                     onClick={async () => {
                       const ok = await confirm({
                         title: `Delete ${d.name}?`,

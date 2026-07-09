@@ -1,9 +1,12 @@
-import { useEffect, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import { Compass } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/layout/EmptyState';
+import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
+import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
+import { useLoadGate } from '@/lib/use-load-gate';
 import { useDisclosureGate } from '@/legal/useDisclosureGate';
 import { DisclosureModal } from '@/legal/DisclosureModal';
 import { useHouseholdStore } from '@/stores/household-store';
@@ -75,7 +78,7 @@ export default function Roadmap() {
   const loadCategories = useCategoriesStore((s) => s.load);
   const loadOverrides = useRoadmapOverridesStore((s) => s.load);
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     void loadHousehold();
     void loadPersons();
     void loadAccounts();
@@ -97,12 +100,52 @@ export default function Roadmap() {
     loadOverrides,
   ]);
 
+  // W10 M28: the engine (evaluate) renders authoritative-looking evidence
+  // strings from whatever the 9 input stores currently hold. Deciding
+  // before they settle = wrong "$0" evidence + wrongly-latched sections.
+  // Gate the whole page (skeleton/error) until every input store settles.
+  const loadGate = useLoadGate(
+    [
+      useHouseholdStore((s) => s.isLoading),
+      usePersonsStore((s) => s.isLoading),
+      useAccountsStore((s) => s.isLoading),
+      useLoansStore((s) => s.isLoading),
+      useContributionsStore((s) => s.isLoading),
+      useSnapshotsStore((s) => s.isLoading),
+      useTransactionsStore((s) => s.isLoading),
+      useCategoriesStore((s) => s.isLoading),
+      useRoadmapOverridesStore((s) => s.isLoading),
+    ],
+    [
+      useHouseholdStore((s) => s.error),
+      usePersonsStore((s) => s.error),
+      useAccountsStore((s) => s.error),
+      useLoansStore((s) => s.error),
+      useContributionsStore((s) => s.error),
+      useSnapshotsStore((s) => s.error),
+      useTransactionsStore((s) => s.error),
+      useCategoriesStore((s) => s.error),
+      useRoadmapOverridesStore((s) => s.error),
+    ],
+    reload,
+  );
+
   const ctx = useRoadmap();
   const household = useHouseholdStore((s) => s.household);
   const results = useMemo(
     () => (ctx ? evaluate(ctx) : new Map()),
     [ctx],
   );
+
+  // W10 M28: nothing renders until every input store settles — no partial
+  // engine output, no premature setup copy.
+  if (!loadGate.settled) {
+    return (
+      <PageContainer className="space-y-4">
+        <PageLoadingSpinner />
+      </PageContainer>
+    );
+  }
 
   // If the household hasn't loaded yet, surface a setup prompt — the
   // disclosure gate would otherwise fire on a fresh user (because the
@@ -148,6 +191,9 @@ export default function Roadmap() {
     <PageContainer className="space-y-4">
       {/* Wave-4 a11y: Roadmap was the only routed page without an h1. */}
       <h1 className="text-2xl font-semibold">Roadmap</h1>
+      {/* W10 M28: the roadmap previously had NO store-error surface — a failed
+          input load fell through to authoritative-looking engine output. */}
+      <StoreErrorBanner errors={loadGate.errors} onRetry={loadGate.retry} />
       <DisclosureBanner />
       <NextMoveHero results={results} />
       {/* Status legend explains the six possible node-status icons. Lives

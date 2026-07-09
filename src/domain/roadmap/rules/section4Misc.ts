@@ -1,6 +1,7 @@
 import type { NodeResult, RoadmapContext } from '@/types/roadmap';
 import { AccountType } from '@/types/enums';
 import { usePersonsStore } from '@/stores/persons-store';
+import { useAccountsStore } from '@/stores/accounts-store';
 
 /**
  * Section 4 stragglers — the IRA top + future-income decision + solo
@@ -96,6 +97,23 @@ export function evaluateAfterTax401kQ(ctx: RoadmapContext): NodeResult {
     return { status: 'done', evidence: 'At least one 401(k) allows after-tax + in-plan Roth rollover.' };
   }
   if (anyUnanswered) {
+    const unanswered = accts.filter((a) => a.allowsMegaBackdoorRollover === null);
+    // W10 M24: one unanswered 401(k) ⇒ the yes/no is attributable — ask inline.
+    if (unanswered.length === 1) {
+      const acct = unanswered[0];
+      return {
+        status: 'unanswered',
+        evidence: `Does ${acct.name} allow after-tax + in-plan Roth rollover? Check the plan documents.`,
+        question: {
+          prompt: `Does ${acct.name} allow the mega-backdoor Roth (after-tax + in-plan rollover)?`,
+          answerType: 'yes-no',
+          onAnswer: async (value) => {
+            await useAccountsStore.getState().update(acct.id!, { allowsMegaBackdoorRollover: value === 'yes' });
+          },
+        },
+        cta: { label: 'Open Accounts →', href: '/inputs/accounts' },
+      };
+    }
     return {
       status: 'unanswered',
       evidence: 'Check your 401(k) plan documents and mark whether after-tax + in-plan Roth rollover is allowed.',
