@@ -92,10 +92,21 @@ export default function WhatIf() {
 
   const [manageOpen, setManageOpen] = useState(false);
 
-  // S-D's lever bar will expose a programmatic open-popover hook; wire
-  // here once S-D lands. For now this is a no-op stub so the panel and
-  // modal can pass an onEditLevers callback without breaking.
-  const openLeversFor = useCallback((_scenarioId: number) => {}, []);
+  // W10 M34: "Edit Levers" was a shipped no-op stub. The LeverBar always
+  // edits the ACTIVE scenario, so editing scenario X = activate X, then put
+  // focus on the bar (rAF: after the activation re-render commits).
+  const openLeversFor = useCallback((scenarioId: number) => {
+    void useScenariosStore
+      .getState()
+      .setActive(scenarioId)
+      .then(() => {
+        requestAnimationFrame(() => {
+          const bar = document.getElementById('whatif-lever-bar');
+          bar?.scrollIntoView({ block: 'nearest' });
+          bar?.focus();
+        });
+      });
+  }, []);
 
   // Subscribe to the full settings object for the inflation display path
   // (consumed below to resolve `displayInflation`). MUST be declared above

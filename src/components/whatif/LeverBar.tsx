@@ -32,7 +32,11 @@ export default function LeverBar() {
 
   if (!active) {
     return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <div
+        id="whatif-lever-bar"
+        tabIndex={-1}
+        className="flex items-center gap-2 text-sm text-muted-foreground"
+      >
         No active scenario. Create a scenario to start tuning levers.
       </div>
     );
@@ -69,7 +73,9 @@ export default function LeverBar() {
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-2">
+      {/* W10 M34: id + tabIndex make the bar a programmatic focus target for
+          "Edit Levers" (activate the scenario, then focus here). */}
+      <div id="whatif-lever-bar" tabIndex={-1} className="flex flex-wrap items-center gap-2">
         <Pill k="loans"         label="Loans" />
         <Pill k="lumpSums"      label="Lump sums" />
         <Pill k="expenses"      label="Expenses" />
