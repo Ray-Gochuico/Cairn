@@ -15,6 +15,9 @@ export default {
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
+        /* Wave-12 Trailhead Stone: fill/stroke-only trail-blaze accent —
+         * never text (text uses `primary`); single-role, no foreground pair. */
+        blaze: 'hsl(var(--blaze))',
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',
         primary: { DEFAULT: 'hsl(var(--primary))', foreground: 'hsl(var(--primary-foreground))' },
