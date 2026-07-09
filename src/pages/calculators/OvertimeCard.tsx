@@ -31,6 +31,7 @@ import {
   periodsPerYear as paycheckPeriodsPerYear,
   type PaycheckPeriod,
 } from '@/lib/paycheck-periods';
+import { FilingStatus } from '@/types/enums';
 import type { Person } from '@/types/schema';
 
 const STARTER_ROW: OvertimeRow = {
@@ -251,8 +252,10 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
   const overtimeTakeHome = taxResult.bonusTakeHome;
   // Annualize the premium before applying the annual cap so the deduction and
   // tax-saved figures reflect a full-year estimate, not just one pay period.
+  // Wave-9 M62: only the QUALIFIED (FLSA half-time) premium feeds OBBBA —
+  // totalPremium stays for pay display.
   const ppy = paycheckPeriodsPerYear(period);
-  const annualPremium = (overtime?.totalPremium ?? 0) * ppy;
+  const annualPremium = (overtime?.totalQualifiedPremium ?? 0) * ppy;
   const obbbaDeduction = obbbaOvertimeDeduction(annualPremium, household.filingStatus);
   const federalMarginalOnOt = totalGross > 0 ? taxResult.bonusBreakdown.federal / totalGross : 0;
   // federalMarginalOnOt is a rate (fraction); multiply by annual premium for the annual saving.
@@ -307,7 +310,17 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
             Does not model the $150k/$300k MAGI phase-out; the deduction sunsets after 2028; FICA and most state
             income taxes still apply.
           </p>
+          {overtime && overtime.totalPremium > overtime.totalQualifiedPremium && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Only the FLSA half-time portion of your premium qualifies — pay above 1.5× is excluded.
+            </p>
+          )}
         </div>
+      )}
+      {household.filingStatus === FilingStatus.MFS && (
+        <p className="text-xs text-muted-foreground mt-3">
+          Married filing separately doesn&#39;t qualify for the OBBBA overtime deduction.
+        </p>
       )}
 
       <p className="text-xs text-muted-foreground mt-3">

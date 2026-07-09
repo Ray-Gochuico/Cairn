@@ -505,4 +505,50 @@ describe('OvertimeCard', () => {
     expect(label).not.toBeNull();
     expect(label!.textContent).toMatch(/Multiplier/i);
   });
+
+  it('OBBBA deduction uses only the QUALIFIED half-time premium for a double-time row (wave-9 M62)', async () => {
+    const user = userEvent.setup();
+    primeStores();
+    render(<MemoryRouter><OvertimeCard /></MemoryRouter>);
+    await screen.findByTestId('ot-takehome');
+
+    // Switch row 0 from 1.5x to 2x: full premium/period = 8 × 25 × 1.0 = $200,
+    // qualified = 8 × 25 × 0.5 = $100. Annual (BI_WEEKLY, 26): full $5,200 vs
+    // qualified $2,600 — the deduction row must show $2,600.
+    const row0 = screen.getByTestId('ot-row-0');
+    await user.click(within(row0).getByRole('combobox', { name: /multiplier/i }));
+    await user.click(await screen.findByRole('option', { name: /2x/i }));
+
+    expect(await screen.findByText('$2,600')).toBeInTheDocument();
+    expect(screen.queryByText('$5,200')).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/only the FLSA half-time portion of your premium qualifies/i),
+    ).toBeInTheDocument();
+  });
+
+  it('MFS household gets NO OBBBA deduction and sees the caveat (wave-9 M60)', async () => {
+    primeStores();
+    useHouseholdStore.setState({
+      household: {
+        ...useHouseholdStore.getState().household!,
+        filingStatus: FilingStatus.MFS,
+      },
+      isLoading: false,
+      error: null,
+    });
+    const items = useTaxRulesStore.getState().items.map((i) => ({
+      ...i,
+      filingStatus: FilingStatus.MFS,
+    }));
+    useTaxRulesStore.setState({ year: 2026, items, isLoading: false, error: null });
+
+    render(<MemoryRouter><OvertimeCard /></MemoryRouter>);
+    await screen.findByTestId('ot-takehome');
+    // Deduction is $0 → the OBBBA block does not render at all…
+    expect(screen.queryByTestId('ot-obbba-deduction')).not.toBeInTheDocument();
+    // …and the MFS caveat explains why.
+    expect(
+      screen.getByText(/married filing separately doesn't qualify for the OBBBA overtime deduction/i),
+    ).toBeInTheDocument();
+  });
 });

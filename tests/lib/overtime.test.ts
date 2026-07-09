@@ -133,3 +133,25 @@ describe('impliedHourlyRate', () => {
     expect(() => impliedHourlyRate(80000, -10)).toThrow();
   });
 });
+
+describe('wave-9 M60/M62 — OBBBA qualification', () => {
+  it('MFS gets NO overtime deduction (OBBBA denies married-filing-separately)', () => {
+    expect(obbbaOvertimeDeduction(10_000, FilingStatus.MFS)).toBe(0);
+    expect(obbbaOvertimeDeduction(10_000, FilingStatus.SINGLE)).toBe(10_000);
+    expect(obbbaOvertimeDeduction(30_000, FilingStatus.MFJ)).toBe(25_000);
+  });
+
+  it('totalQualifiedPremium caps the per-hour premium at 0.5× the regular rate', () => {
+    const r = evaluateOvertimeLineItems(
+      [
+        { hours: 10, baseMultiplier: 1.5, holidayMultiplier: null, stackMultipliers: false }, // premium 0.5×
+        { hours: 4, baseMultiplier: 2.0, holidayMultiplier: null, stackMultipliers: false },  // premium 1.0×, qualified 0.5×
+      ],
+      20,
+    );
+    // Full premium: 10×20×0.5 + 4×20×1.0 = 100 + 80 = 180.
+    expect(r.totalPremium).toBeCloseTo(180, 10);
+    // Qualified: 10×20×0.5 + 4×20×0.5 = 100 + 40 = 140.
+    expect(r.totalQualifiedPremium).toBeCloseTo(140, 10);
+  });
+});

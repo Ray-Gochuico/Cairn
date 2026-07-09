@@ -35,6 +35,13 @@ export interface OvertimeResult {
   lineItems: OvertimeLineItemResult[];
   totalGross: number;
   totalPremium: number;
+  /**
+   * Wave-9 M62: the FLSA half-time premium only — per hour, pay above the
+   * regular rate capped at 0.5×. OBBBA's "qualified overtime compensation"
+   * is this portion; double-time / stacked-holiday pay above 1.5× is
+   * contractual (or state-daily), not FLSA-required, and does not qualify.
+   */
+  totalQualifiedPremium: number;
 }
 
 /** Evaluate a list of OT line items against a base hourly rate. */
@@ -60,13 +67,23 @@ export function evaluateOvertimeLineItems(
     (sum, r) => sum + r.hours * r.effectiveBaseRate * (r.effectiveMultiplier - 1),
     0,
   );
-  return { lineItems, totalGross, totalPremium };
+  const totalQualifiedPremium = lineItems.reduce(
+    (sum, r) =>
+      sum + r.hours * r.effectiveBaseRate * Math.min(Math.max(0, r.effectiveMultiplier - 1), 0.5),
+    0,
+  );
+  return { lineItems, totalGross, totalPremium, totalQualifiedPremium };
 }
 
-/** OBBBA (2025-2028) federal deduction for the overtime PREMIUM (pay above the
- *  regular rate), capped at $12,500 (single/HOH/MFS) / $25,000 (MFJ). Estimate:
+/** OBBBA (2025-2028) federal deduction for QUALIFIED overtime compensation
+ *  (the FLSA half-time premium — see totalQualifiedPremium), capped at
+ *  $12,500 (single/HOH) / $25,000 (MFJ). MFS is statutorily DENIED the
+ *  deduction (a joint return is required for married taxpayers). Estimate:
  *  does NOT model the $150k/$300k MAGI phase-out. */
 export function obbbaOvertimeDeduction(premium: number, filingStatus: FilingStatus): number {
+  // Wave-9 M60: OBBBA requires a JOINT return for married taxpayers — MFS
+  // filers are statutorily denied the overtime deduction.
+  if (filingStatus === FilingStatus.MFS) return 0;
   const cap = filingStatus === FilingStatus.MFJ ? 25_000 : 12_500;
   return Math.min(Math.max(0, premium), cap);
 }
