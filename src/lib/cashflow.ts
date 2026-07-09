@@ -9,13 +9,14 @@ export interface CashflowWindow {
 }
 
 /**
- * Rolling-window money in vs out. `inflow` is supplied by the caller
- * (paycheck-derived — the Spending page computes it from `persons` salary
- * via `paycheck-periods.ts`). `outflow` is the real-spending total for
- * transactions whose date falls within the trailing `windowDays`. Uses
- * `isRealSpending` (excludes pending reimbursables and INCOME/TRANSFER-
- * category rows) and `effectiveSpendingAmount` (nets out reimbursements) to
- * stay consistent with the Dashboard's "Spending vs Budget" card.
+ * Rolling-window money in vs out. `inflow` is supplied by the caller — the
+ * Spending page passes GROSS pre-tax salary / 12 (wave-9 F12: labeled as
+ * gross in the UI; no surplus verdict is derived from it because outflow is
+ * post-tax). `outflow` is the real-spending total for transactions whose
+ * date falls within the trailing `windowDays`, using `isRealSpending`
+ * (positive amounts only; excludes pending reimbursables and INCOME/TRANSFER
+ * rows — account type is deliberately NOT consulted) and
+ * `effectiveSpendingAmount` (nets settled reimbursements).
  */
 export function cashflowWindow(
   transactions: Transaction[],

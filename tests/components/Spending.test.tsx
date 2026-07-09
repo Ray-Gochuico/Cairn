@@ -446,9 +446,10 @@ describe('Spending page', () => {
 
     // Inflow label and outflow label
     await waitFor(() => {
-      expect(screen.getAllByText(/money in/i).length).toBeGreaterThan(0);
+      // Wave-9 F12 relabel: gross-labeled tiles, no bare "Net" verdict tile.
+      expect(screen.getAllByText(/gross income \(est\.\)/i).length).toBeGreaterThan(0);
       expect(screen.getAllByText(/money out/i).length).toBeGreaterThan(0);
-      expect(screen.getAllByText(/^net$/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/gross minus spending/i).length).toBeGreaterThan(0);
     });
   });
 
@@ -503,8 +504,32 @@ describe('Spending page', () => {
     expect(grid.className).toContain('sm:grid-cols-3');
     // …and the tiles are now the shared primitive.
     expect(within(grid).getAllByTestId('metric-card')).toHaveLength(3);
-    expect(within(grid).getByText('Estimated from salary')).toBeInTheDocument();
-    expect(within(grid).getByText(/surplus|deficit/i)).toBeInTheDocument();
+    // Wave-9 F12 relabel: inflow reads as gross; no surplus/deficit verdict.
+    expect(within(grid).getByText(/pre-tax salary — taxes not deducted/i)).toBeInTheDocument();
+    expect(within(grid).queryByText('Surplus')).not.toBeInTheDocument();
+    expect(within(grid).queryByText('Deficit')).not.toBeInTheDocument();
+  });
+
+  it('labels inflow as gross and renders NO surplus/deficit verdict (wave-9 F12)', async () => {
+    // Gross-vs-post-tax netting can't honestly stamp "Surplus"/"Deficit" —
+    // a household ~$1.3k/mo in deficit read "+$3,667 Surplus" pre-fix.
+    await useCategoriesStore.getState().load();
+    const recentDate = new Date(Date.now() - 5 * 86_400_000).toISOString().slice(0, 10);
+    const txn: Omit<Transaction, 'id'> = {
+      householdId: 1, date: recentDate, merchant: 'GROCERY', merchantRaw: 'GROCERY',
+      amount: 200, categoryId: null, sourceAccountId: null, propertyId: null,
+      vehicleId: null, personId: null, sourcePdfFilename: 'test.pdf', reimbursable: false,
+      reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
+    };
+    await useTransactionsStore.getState().createMany([txn]);
+
+    renderPage();
+
+    expect(await screen.findByText('Gross income (est.)')).toBeInTheDocument();
+    expect(screen.getByText(/pre-tax salary — taxes not deducted/i)).toBeInTheDocument();
+    expect(screen.queryByText('Surplus')).not.toBeInTheDocument();
+    expect(screen.queryByText('Deficit')).not.toBeInTheDocument();
+    expect(screen.getByText('Gross minus spending')).toBeInTheDocument();
   });
 
   it('(e) imports a transaction CSV end-to-end via the unified import surface', async () => {

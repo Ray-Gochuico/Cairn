@@ -214,9 +214,9 @@ export default function Spending() {
   );
 
   // Rolling 30-day cashflow
-  // Inflow = sum of each person's estimated monthly net income.
-  // A simple approximation: annualSalaryPretax / 12 (gross); the plan notes
-  // exact proration/tax is the implementer's call (design spec § Open questions).
+  // Inflow = GROSS pre-tax salary / 12 per visible person (wave-9 F12:
+  // labeled as gross in the UI; no surplus verdict is derived from it
+  // because outflow is post-tax).
   const visiblePersons = useMemo(
     () => (filter === 'p1' ? persons.slice(0, 1)
       : filter === 'p2' ? persons.slice(1, 2)
@@ -337,11 +337,15 @@ export default function Spending() {
           <section>
             <h2 className="text-lg font-medium mb-3">Money in vs out (last 30 days)</h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Wave-9 F12: the inflow is GROSS pre-tax salary while outflow
+                  is post-tax spending — labeling the difference "Surplus"/
+                  "Deficit" (with a green +) was the lie. Label the numbers as
+                  what they are; no verdict. wave-11 handoff: a real take-home
+                  inflow could restore a verdict. */}
               <MetricCard
-                label="Money in"
+                label="Gross income (est.)"
                 value={`$${cashflow.inflow.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                valueTone="positive"
-                subtitle="Estimated from salary"
+                subtitle="Pre-tax salary — taxes not deducted"
               />
               <MetricCard
                 label="Money out"
@@ -349,10 +353,9 @@ export default function Spending() {
                 subtitle="Transactions in window"
               />
               <MetricCard
-                label="Net"
+                label="Gross minus spending"
                 value={`${cashflow.net >= 0 ? '+' : ''}$${cashflow.net.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                valueTone={cashflow.net >= 0 ? 'positive' : 'negative'}
-                subtitle={cashflow.net >= 0 ? 'Surplus' : 'Deficit'}
+                subtitle="Not take-home surplus — taxes aren't deducted"
               />
             </div>
             {cashflow.outflowByCategory.length > 0 && (
