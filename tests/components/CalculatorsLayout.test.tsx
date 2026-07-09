@@ -336,6 +336,22 @@ describe('CalculatorsLayout', () => {
       expect(localStorage.getItem('calculator-hidden-cards')).toBeNull();
     });
 
+    it('disables the Overtime visibility switch with a reason when no hourly/OT person exists (W10)', async () => {
+      const user = userEvent.setup();
+      primeBaseline();
+      primeSettings();
+      usePersonsStore.setState({
+        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
+        isLoading: false, error: null,
+      });
+      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+      await screen.findByText(/Bonus take-home/i);
+      await user.click(screen.getByRole('button', { name: /manage cards/i }));
+      const otSwitch = screen.getByRole('switch', { name: /overtime/i });
+      expect(otSwitch).toBeDisabled();
+      expect(screen.getByText(/add an hourly or salary\+ot person/i)).toBeInTheDocument();
+    });
+
     it('toggling a hidden card back on (Switch) restores it via update', async () => {
       primeBaseline();
       const update = primeSettings([{ id: 'bonus-tax', hidden: true }]);

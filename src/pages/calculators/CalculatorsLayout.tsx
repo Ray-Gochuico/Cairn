@@ -343,14 +343,26 @@ export default function CalculatorsLayout() {
               <ul className="space-y-0.5 max-h-80 overflow-y-auto">
                 {CALCULATOR_CARD_IDS.map((id) => {
                   const visible = !hiddenSet.has(id);
+                  // W10: the Overtime card only renders for an HOURLY/SALARY_WITH_OT
+                  // person. Without one, toggling its switch flipped a card that can
+                  // never appear — disable it with a reason instead of no-opping.
+                  const unavailable = id === CARD_IDS.OVERTIME && !showOvertime;
                   return (
                     <li
                       key={id}
                       className="flex items-center justify-between gap-2 px-2 py-1.5 rounded hover:bg-muted/40"
                     >
-                      <span className="text-sm text-foreground">{labelFor(id)}</span>
+                      <span className="text-sm text-foreground">
+                        {labelFor(id)}
+                        {unavailable && (
+                          <span className="block text-xs text-muted-foreground">
+                            Add an hourly or salary+OT person in Inputs to enable this card.
+                          </span>
+                        )}
+                      </span>
                       <Switch
-                        checked={visible}
+                        checked={visible && !unavailable}
+                        disabled={unavailable}
                         onCheckedChange={(next) => setCardHidden(id, !next)}
                         aria-label={labelFor(id)}
                       />
