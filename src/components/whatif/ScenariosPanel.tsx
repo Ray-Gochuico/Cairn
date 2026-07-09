@@ -132,6 +132,9 @@ export function ScenariosPanel({
                   <button
                     type="button"
                     onClick={() => s.id != null && void setActive(s.id)}
+                    // Round-3 cleanup: the active state was visual-only (the
+                    // "active" span) — expose it as a toggle state for AT.
+                    aria-pressed={isActive}
                     className="flex-1 text-left text-sm leading-tight truncate"
                     title={s.name}
                   >

@@ -216,3 +216,16 @@ describe('ScenariosPanel — humanized milestone dates (round-3 S9)', () => {
     expect(screen.getByText(/Debt-free Jun 2029/)).toBeInTheDocument();
   });
 });
+
+describe('scenario selector aria-pressed (round-3 cleanup)', () => {
+  it('exposes aria-pressed on the select buttons — true only for the active scenario', () => {
+    render(
+      <MemoryRouter>
+        <ScenariosPanel milestones={makeMilestones()} onOpenManage={vi.fn()} onEditLevers={vi.fn()} />
+      </MemoryRouter>,
+    );
+    // Baseline is active (activeScenario() → baseline in the store mock).
+    expect(screen.getByRole('button', { name: /Baseline/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /Aggressive payoff/ })).toHaveAttribute('aria-pressed', 'false');
+  });
+});
