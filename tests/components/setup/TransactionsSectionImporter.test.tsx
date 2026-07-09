@@ -29,6 +29,7 @@ vi.mock('@/lib/statements-archive', () => ({
 }));
 
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -305,5 +306,18 @@ describe('TransactionsSectionImporter', () => {
     await waitFor(() => {
       expect(screen.getByText(/bad\.csv/)).toBeInTheDocument();
     });
+  });
+
+  it('the drop-zone is a real button: focusable, Enter/Space open the file picker (W10 M21)', async () => {
+    const user = userEvent.setup();
+    renderImporter();
+    const zone = screen.getByRole('button', { name: /import transactions/i });
+    const input = screen.getByLabelText(/transactions pdf or csv/i) as HTMLInputElement;
+    const click = vi.spyOn(input, 'click').mockImplementation(() => {});
+    zone.focus();
+    expect(zone).toHaveFocus();
+    await user.keyboard('{Enter}');
+    await user.keyboard(' ');
+    expect(click).toHaveBeenCalledTimes(2);
   });
 });
