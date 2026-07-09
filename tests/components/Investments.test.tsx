@@ -926,9 +926,10 @@ describe('Investments page — 529 section', () => {
       return el!;
     });
     // Chart universe = accounts 1 + 2 (cash counts, excluded doesn't) = $3,000.
-    expect(within(growth).getByText('$3,000')).toBeInTheDocument();
-    expect(within(growth).queryByText('$2,000')).not.toBeInTheDocument(); // old universe
-    expect(within(growth).queryByText('$8,000')).not.toBeInTheDocument(); // excluded leaked
+    // Round-3 S10: the level lives on the context line ("Now $3,000 · …").
+    expect(within(growth).getByTestId('growth-context')).toHaveTextContent('Now $3,000');
+    expect(growth.textContent).not.toContain('$2,000'); // old universe
+    expect(growth.textContent).not.toContain('$8,000'); // excluded leaked
   });
 
   it('class-targets renders as a wide card (own row), not a one-third orphan (round-2 D1)', async () => {
