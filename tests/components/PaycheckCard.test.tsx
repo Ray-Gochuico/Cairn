@@ -128,12 +128,22 @@ describe('PaycheckCard', () => {
     );
 
     const headline = await screen.findByTestId('paycheck-takehome');
-    // $100k salary CA SINGLE: federal ~$13,841, CA ~$5,400, FICA $7,650, total ~$26,900
-    // Take-home ~$73,100 annually → ~$6,092 monthly
-    const monthlyText = headline.textContent!;
-    const monthlyValue = parseFloat(monthlyText.replace(/[$,]/g, ''));
-    expect(monthlyValue).toBeGreaterThan(5500);
-    expect(monthlyValue).toBeLessThan(7000);
+    // T21: pin the EXACT monthly take-home AND the FICA + state rows so a
+    // mutation to either withholding leg (or deleting a row) breaks the test —
+    // the range assertion let those regress silently. Figures are the engine's
+    // own output for this $100k CA SINGLE fixture.
+    const monthlyValue = parseFloat(headline.textContent!.replace(/[$,]/g, ''));
+    expect(monthlyValue).toBeCloseTo(6065, 0);
+
+    // FICA is 7.65% of $100k = $7,650/yr → $638/mo. Deleting the FICA row (the
+    // "stays green" mutation) removes this exact value from the breakdown.
+    expect(screen.getByText('$638')).toBeInTheDocument();
+    // The state-tax row value (CA on $100k) must be present too — pin it exact
+    // so deleting/zeroing the state leg fails the test.
+    const stateValue = parseFloat(
+      (screen.getByText('Estimated state tax').nextElementSibling?.textContent ?? '').replace(/[$,]/g, ''),
+    );
+    expect(stateValue).toBeCloseTo(496, 0);
   });
 
   it('switches to bi-weekly when the period selector changes', async () => {
@@ -148,9 +158,8 @@ describe('PaycheckCard', () => {
     await user.selectOptions(screen.getByLabelText(/Period:/i), 'BI_WEEKLY');
     const headline = screen.getByTestId('paycheck-takehome');
     const value = parseFloat(headline.textContent!.replace(/[$,]/g, ''));
-    // Annual ~$73,100 / 26 ≈ $2,812
-    expect(value).toBeGreaterThan(2500);
-    expect(value).toBeLessThan(3100);
+    // T21: exact — same annual take-home spread over 26 pay periods.
+    expect(value).toBeCloseTo(2799, 0);
   });
 
   it('still renders with stale (non-current) tax-rule year via getCurrentTaxYear fallback', async () => {
