@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { loadAllMigrations, runMigrations } from '@/db/migrations';
 import { VehiclesRepo } from '@/domain/vehicles';
@@ -129,5 +129,27 @@ describe('commitVehicleImport', () => {
       const snaps = await snapshotRows(existingId);
       expect(snaps).toEqual([{ snapshot_date: TODAY_ISO, value: 18250 }]);
     });
+  });
+
+  it('two same-name rows resolving to one entity commit ONE update + ONE snapshot (wave-9 chip)', async () => {
+    const base = baseResolved('Daily');
+    base.currentEstimatedValue = 30000;
+    const existingId = await repo.create(base);
+    const first = baseResolved('Daily');
+    first.currentEstimatedValue = 28000;
+    const second = baseResolved('Daily');
+    second.currentEstimatedValue = 27000; // last row wins
+    const d = deps();
+    const batchSpy = vi.spyOn(d.db, 'executeBatch');
+    const res = await commitVehicleImport(
+      [makeRow(0, 'update', first, existingId), makeRow(1, 'update', second, existingId)],
+      d,
+    );
+    expect(res.updated).toBe(1);
+    const statements = batchSpy.mock.calls[0][0];
+    expect(statements.filter((st) => /UPDATE vehicles/i.test(st.sql))).toHaveLength(1);
+    expect(statements.filter((st) => /asset_value_snapshots/i.test(st.sql))).toHaveLength(1);
+    const found = await repo.findById(existingId);
+    expect(found?.currentEstimatedValue).toBe(27000);
   });
 });

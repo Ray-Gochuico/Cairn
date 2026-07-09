@@ -39,6 +39,19 @@ export async function commitVehicleImport(
   // builder (the READ stays outside the atomic write set); only the resulting
   // write statement is batched. A failing row throws during collection, before
   // any write — preserving "fails on row N ⇒ 0 rows committed, error surfaced".
+  // Wave-9 import chip: the validators do no in-file dedupe, so duplicate-name
+  // rows resolve to the SAME existingId and each minted an update + a
+  // same-date snapshot upsert against the same pre-import `before` (reads run
+  // at collection time). Collapse to ONE update per existing entity — the
+  // LAST row in the file wins, matching what sequential application would
+  // have left behind.
+  const lastRowByExistingId = new Map<number, (typeof rows)[number]>();
+  for (const row of rows) {
+    if (row.status === 'update' && row.existingId != null) {
+      lastRowByExistingId.set(row.existingId, row);
+    }
+  }
+
   const statements: BatchStatement[] = [];
   for (const row of rows) {
     if (row.status === 'error' || row.status === 'duplicate') {
@@ -47,6 +60,7 @@ export async function commitVehicleImport(
     }
     const payload = { ...row.resolved, householdId: deps.householdId };
     if (row.status === 'update' && row.existingId != null) {
+      if (lastRowByExistingId.get(row.existingId) !== row) continue; // dupe: only the last row commits
       statements.push(await deps.vehicles.buildUpdateStatement(row.existingId, payload));
       // Wave-7 W2: mirror the vehicles-store estimate→snapshot seam. A CSV
       // value CHANGE is a value observation exactly like a form edit — the
