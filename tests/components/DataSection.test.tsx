@@ -176,6 +176,17 @@ describe('DataSection — desktop (Tauri) path', () => {
     expect(screen.queryByText(/no backups yet/i)).not.toBeInTheDocument();
   });
 
+  it('does not claim "No backups yet" before the backup list resolves (round-3 S7)', async () => {
+    let resolveList!: (v: BackupEntry[]) => void;
+    mList.mockReturnValue(new Promise<BackupEntry[]>((r) => { resolveList = r; }));
+    renderSection();
+    // Still loading: the empty state must NOT render over the unresolved list.
+    expect(screen.queryByText('No backups yet')).not.toBeInTheDocument();
+    resolveList([]);
+    // Settled-empty: NOW the empty state is honest.
+    expect(await screen.findByText('No backups yet')).toBeInTheDocument();
+  });
+
   it('shows an empty state when there are no backups', async () => {
     mList.mockResolvedValue([]);
     renderSection();
