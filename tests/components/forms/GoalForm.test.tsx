@@ -19,18 +19,39 @@ describe('GoalForm — inline per-field errors (round-3 S6)', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
-  it('a negative target amount gets its own inline error', async () => {
+  it('an invalid target amount gets its own inline error', async () => {
+    // MoneyInput strips a typed '-' (round-3 E6), so drive the invalid value
+    // through the initial payload — the trio must still wire through
+    // MoneyInput's ...rest spread.
     const user = userEvent.setup();
     const onSubmit = vi.fn();
     render(
-      <GoalForm initial={{ ...DEFAULT_GOAL, name: 'Fund' }} persons={persons} accounts={[]} onSubmit={onSubmit} />,
+      <GoalForm
+        initial={{ ...DEFAULT_GOAL, name: 'Fund', targetAmount: -5 }}
+        persons={persons}
+        accounts={[]}
+        onSubmit={onSubmit}
+      />,
     );
-    const amount = screen.getByLabelText(/target amount/i);
-    await user.clear(amount);
-    await user.type(amount, '-5');
     await user.click(screen.getByRole('button', { name: /save|add/i }));
+    const amount = screen.getByLabelText(/target amount/i);
     expect(amount).toHaveAttribute('aria-invalid', 'true');
     expect(amount).toHaveAccessibleDescription('Must be at least 0');
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+});
+
+describe('GoalForm — MoneyInput adoption (round-3 E6)', () => {
+  it('the target amount formats with the house MoneyInput', async () => {
+    const user = userEvent.setup();
+    render(
+      <GoalForm initial={{ ...DEFAULT_GOAL, name: 'Fund' }} persons={persons} accounts={[]} onSubmit={vi.fn()} />,
+    );
+    const input = screen.getByLabelText(/target amount/i);
+    await user.clear(input);
+    await user.type(input, '25000');
+    await user.tab();
+    expect(input).toHaveValue('25,000');
+    expect(input).toHaveAttribute('inputmode', 'decimal');
   });
 });

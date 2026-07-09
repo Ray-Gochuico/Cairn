@@ -1,10 +1,11 @@
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { GoalSchema, type Goal } from '@/types/schema';
 import { GoalType } from '@/types/enums';
 import { Button } from '@/components/ui/button';
 import DatePicker from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/input';
+import { MoneyInput } from '@/components/ui/money-input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FieldError, FormErrorSummary, useFormSubmit } from './form-errors';
@@ -110,13 +111,21 @@ export default function GoalForm({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label htmlFor="targetAmount">Target amount ($)</Label>
-              <Input
-                id="targetAmount"
-                type="number"
-                step="any"
-                {...form.register('targetAmount', { valueAsNumber: true })}
-                aria-invalid={form.formState.errors.targetAmount ? true : undefined}
-                aria-describedby={form.formState.errors.targetAmount ? 'goal-target-amount-error' : undefined}
+              {/* Round-3 E6: house MoneyInput (LoanForm idiom); the S6 aria
+                  wiring passes through MoneyInput's ...rest spread. */}
+              <Controller
+                control={form.control}
+                name="targetAmount"
+                render={({ field }) => (
+                  <MoneyInput
+                    id="targetAmount"
+                    value={field.value ?? null}
+                    onValueChange={(v) => field.onChange(v ?? 0)}
+                    onBlur={field.onBlur}
+                    aria-invalid={form.formState.errors.targetAmount ? true : undefined}
+                    aria-describedby={form.formState.errors.targetAmount ? 'goal-target-amount-error' : undefined}
+                  />
+                )}
               />
               <FieldError id="goal-target-amount-error" message={form.formState.errors.targetAmount?.message} />
             </div>

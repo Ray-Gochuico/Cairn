@@ -45,3 +45,24 @@ describe('VehicleForm — inline per-field errors (round-3 S6)', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 });
+
+describe('VehicleForm — MoneyInput adoption (round-3 E6)', () => {
+  it('money fields format with the house MoneyInput', async () => {
+    const user = userEvent.setup();
+    render(
+      <VehicleForm
+        initial={{ ...DEFAULT_VEHICLE, name: 'Car' }}
+        persons={persons}
+        autoLoans={[]}
+        onSubmit={vi.fn(async () => {})}
+        onCancel={vi.fn()}
+      />,
+    );
+    const input = screen.getByLabelText(/purchase price/i);
+    await user.type(input, '42000');
+    await user.tab();
+    expect(input).toHaveValue('42,000');
+    expect(input).toHaveAttribute('inputmode', 'decimal');
+    expect(screen.getByLabelText(/current estimated value/i)).toHaveAttribute('inputmode', 'decimal');
+  });
+});
