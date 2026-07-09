@@ -29,6 +29,26 @@ describe('seedDemoData', () => {
     expect(accts[0].n).toBe(DEMO_SEED.accountCount);
   });
 
+  it('backfills the migration-default $0 expense baseline (round-3 M2 fallout)', async () => {
+    // The 0001 migration inserts the household singleton with baseline 0
+    // BEFORE the seed's INSERT OR IGNORE — the demo household kept a $0
+    // baseline, which What-If now honestly reports as a missing input.
+    await seedDemoData(db);
+    const rows = await db.select<{ b: number }>(
+      'SELECT monthly_expense_baseline AS b FROM household WHERE id = 1',
+    );
+    expect(rows[0].b).toBe(6000);
+  });
+
+  it('never clobbers a user-set expense baseline', async () => {
+    await db.execute('UPDATE household SET monthly_expense_baseline = 4321 WHERE id = 1');
+    await seedDemoData(db);
+    const rows = await db.select<{ b: number }>(
+      'SELECT monthly_expense_baseline AS b FROM household WHERE id = 1',
+    );
+    expect(rows[0].b).toBe(4321);
+  });
+
   it('writes a positive account_snapshot for every seeded account (drives all value donuts)', async () => {
     await seedDemoData(db);
     const rows = await db.select<{ account_id: number; total_value: number; snapshot_date: string }>(

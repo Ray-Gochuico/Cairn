@@ -70,6 +70,16 @@ export async function seedDemoData(
     `INSERT OR IGNORE INTO household (id, name, filing_status, state, city, monthly_expense_baseline)
      VALUES (1, 'Demo Household', 'MFJ', 'CA', 'San Francisco', 6000)`,
   );
+  // Round-3 M2 fallout: the 0001 migration inserts the household singleton
+  // (baseline 0) BEFORE this seed runs, so the OR IGNORE above never lands
+  // and the demo household kept a $0 expense baseline — which the What-If
+  // page now honestly reports as a missing input instead of rendering
+  // $0-target FI cards. Fill in the intended demo baseline, but only over
+  // the migration default — never clobber a user-set value.
+  await db.execute(
+    `UPDATE household SET monthly_expense_baseline = 6000
+     WHERE id = 1 AND monthly_expense_baseline = 0`,
+  );
 
   // 2. Person. Only NOT-NULL/no-default columns are named; ALTER-added
   //    columns (commission, employment) carry table DEFAULTs.
