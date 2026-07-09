@@ -107,7 +107,7 @@ describe('AdvancedSection', () => {
   });
 
   it('starts collapsed and expands when the header is clicked', () => {
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     expect(screen.queryByText(/interest-rate thresholds/i)).toBeNull();
     fireEvent.click(screen.getByText('Advanced'));
     expect(screen.getByText(/interest-rate thresholds/i)).toBeInTheDocument();
@@ -117,7 +117,7 @@ describe('AdvancedSection', () => {
     resetStore(
       makeHousehold({ interestThresholdLowPct: 4, interestThresholdHighPct: 10 }),
     );
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     fireEvent.click(screen.getByText('Advanced'));
     const low = screen.getByLabelText(/low cutoff/i) as HTMLInputElement;
     const high = screen.getByLabelText(/high cutoff/i) as HTMLInputElement;
@@ -128,7 +128,7 @@ describe('AdvancedSection', () => {
   it('saves numeric values through the household store', async () => {
     const update = vi.fn().mockResolvedValue(undefined);
     resetStore(makeHousehold(), update);
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     fireEvent.click(screen.getByText('Advanced'));
     fireEvent.change(screen.getByLabelText(/low cutoff/i), { target: { value: '4' } });
     fireEvent.change(screen.getByLabelText(/high cutoff/i), { target: { value: '9.5' } });
@@ -144,7 +144,7 @@ describe('AdvancedSection', () => {
   it('persists blank inputs as null so defaults apply', async () => {
     const update = vi.fn().mockResolvedValue(undefined);
     resetStore(makeHousehold(), update);
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     fireEvent.click(screen.getByText('Advanced'));
     // Inputs start blank; click save directly.
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
@@ -156,7 +156,7 @@ describe('AdvancedSection', () => {
   });
 
   it('disables save and shows the order-error when low >= high', () => {
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     fireEvent.click(screen.getByText('Advanced'));
     fireEvent.change(screen.getByLabelText(/low cutoff/i), { target: { value: '8' } });
     fireEvent.change(screen.getByLabelText(/high cutoff/i), { target: { value: '5' } });
@@ -166,7 +166,7 @@ describe('AdvancedSection', () => {
   });
 
   it('disables save and shows the range-error when values exceed 0..100', () => {
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     fireEvent.click(screen.getByText('Advanced'));
     fireEvent.change(screen.getByLabelText(/low cutoff/i), { target: { value: '-1' } });
     expect(screen.getByRole('button', { name: /^save$/i })).toBeDisabled();
@@ -175,7 +175,7 @@ describe('AdvancedSection', () => {
   });
 
   it('opens the Reset disclaimers dialog from the section', () => {
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     fireEvent.click(screen.getByText('Advanced'));
     fireEvent.click(screen.getByRole('button', { name: /reset disclaimers/i }));
     expect(
@@ -185,7 +185,7 @@ describe('AdvancedSection', () => {
 
   it('renders the What-If projection default inputs prefilled from settings (as whole percent)', () => {
     resetSettingsStore(makeSettings({ defaultInflation: 0.025, defaultReturnRate: 0.07 }));
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     fireEvent.click(screen.getByText('Advanced'));
     const inflationInput = screen.getByLabelText(/default inflation rate/i) as HTMLInputElement;
     const returnInput = screen.getByLabelText(/default investment return rate/i) as HTMLInputElement;
@@ -198,7 +198,7 @@ describe('AdvancedSection', () => {
     const settingsUpdate = vi.fn().mockResolvedValue(undefined);
     resetStore(makeHousehold(), householdUpdate);
     resetSettingsStore(makeSettings(), settingsUpdate);
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     fireEvent.click(screen.getByText('Advanced'));
     fireEvent.change(screen.getByLabelText(/default inflation rate/i), {
       target: { value: '3' },
@@ -226,7 +226,7 @@ describe('AdvancedSection', () => {
       makeSettings({ defaultInflation: 0.025, defaultReturnRate: 0.07 }),
       settingsUpdate,
     );
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     fireEvent.click(screen.getByText('Advanced'));
     fireEvent.change(screen.getByLabelText(/default inflation rate/i), { target: { value: '' } });
     fireEvent.change(screen.getByLabelText(/default investment return rate/i), {
@@ -247,7 +247,7 @@ describe('AdvancedSection', () => {
   });
 
   it('disables Save when What-If default inflation is out of range (e.g. 25%)', () => {
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     fireEvent.click(screen.getByText('Advanced'));
     fireEvent.change(screen.getByLabelText(/default inflation rate/i), {
       target: { value: '25' },
@@ -256,7 +256,7 @@ describe('AdvancedSection', () => {
   });
 
   it('renders the FI / Coast FI pills position select inside the What-If section', () => {
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     fireEvent.click(screen.getByText('Advanced'));
     const select = screen.getByLabelText(/FI \/ Coast FI pills position/i) as HTMLSelectElement;
     expect(select).toBeInTheDocument();
@@ -265,7 +265,7 @@ describe('AdvancedSection', () => {
 
   it('prefills the FI pills position select from settings when "below"', () => {
     resetSettingsStore(makeSettings({ defaultFiPillsPosition: FiPillsPosition.BELOW }));
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     fireEvent.click(screen.getByText('Advanced'));
     const select = screen.getByLabelText(/FI \/ Coast FI pills position/i) as HTMLSelectElement;
     expect(select.value).toBe('below');
@@ -274,7 +274,7 @@ describe('AdvancedSection', () => {
   it('persists the FI pills position selection through useSettingsStore.update', async () => {
     const settingsUpdate = vi.fn().mockResolvedValue(undefined);
     resetSettingsStore(makeSettings(), settingsUpdate);
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     fireEvent.click(screen.getByText('Advanced'));
     fireEvent.change(screen.getByLabelText(/FI \/ Coast FI pills position/i), {
       target: { value: 'below' },
@@ -329,7 +329,7 @@ describe('ResetDisclaimersDialog (table-driven — clears disclosure_acceptances
       error: null,
       load: loadAcceptances,
     } as any);
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     fireEvent.click(screen.getByText('Advanced'));
     fireEvent.click(screen.getByRole('button', { name: /reset disclaimers/i }));
     fireEvent.click(screen.getByRole('button', { name: /^reset$/i }));
@@ -347,7 +347,7 @@ describe('ResetDisclaimersDialog (table-driven — clears disclosure_acceptances
       .spyOn(DisclosureAcceptancesRepo.prototype, 'clearForHousehold')
       .mockResolvedValue(undefined);
     resetStore(makeHousehold());
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     fireEvent.click(screen.getByText('Advanced'));
     fireEvent.click(screen.getByRole('button', { name: /reset disclaimers/i }));
     fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
@@ -360,7 +360,7 @@ describe('AdvancedSection — Projection detail level select', () => {
   it('renders a "Projection detail level" select inside the What-If projection defaults section', () => {
     resetStore(makeHousehold());
     resetSettingsStore(makeSettings());
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: /expand advanced/i }));
     expect(screen.getByLabelText(/projection detail level/i)).toBeInTheDocument();
   });
@@ -368,7 +368,7 @@ describe('AdvancedSection — Projection detail level select', () => {
   it('has three options: single, tax_bucket, per_account', () => {
     resetStore(makeHousehold());
     resetSettingsStore(makeSettings());
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: /expand advanced/i }));
     const select = screen.getByLabelText(/projection detail level/i) as HTMLSelectElement;
     const opts = Array.from(select.options).map((o) => o.value);
@@ -380,7 +380,7 @@ describe('AdvancedSection — Projection detail level select', () => {
   it('reflects the seeded default (tax_bucket) on first render', () => {
     resetStore(makeHousehold());
     resetSettingsStore(makeSettings());
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: /expand advanced/i }));
     const select = screen.getByLabelText(/projection detail level/i) as HTMLSelectElement;
     expect(select.value).toBe('tax_bucket');
@@ -390,7 +390,7 @@ describe('AdvancedSection — Projection detail level select', () => {
     const updateSettings = vi.fn().mockResolvedValue(undefined);
     resetStore(makeHousehold());
     resetSettingsStore(makeSettings(), updateSettings);
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: /expand advanced/i }));
     const select = screen.getByLabelText(/projection detail level/i) as HTMLSelectElement;
     fireEvent.change(select, { target: { value: 'per_account' } });
@@ -412,7 +412,7 @@ describe('AdvancedSection — Property & Vehicle stat categories', () => {
 
   it('renders the "Property & Vehicle stat categories" heading with two pickers', () => {
     resetSettingsStore(makeSettings());
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: /expand advanced/i }));
     expect(screen.getByText(/property & vehicle stat categories/i)).toBeInTheDocument();
     // Two picker buttons (one per bucket).
@@ -425,7 +425,7 @@ describe('AdvancedSection — Property & Vehicle stat categories', () => {
   it('saves a property-utilities selection to the settings store', async () => {
     const update = vi.fn().mockResolvedValue(undefined);
     resetSettingsStore(makeSettings(), update);
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: /expand advanced/i }));
     await userEvent.click(
       screen.getByRole('button', { name: /utilities categories \(/i }),
@@ -437,7 +437,7 @@ describe('AdvancedSection — Property & Vehicle stat categories', () => {
   it('saves a vehicle-gas selection to the settings store', async () => {
     const update = vi.fn().mockResolvedValue(undefined);
     resetSettingsStore(makeSettings(), update);
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: /expand advanced/i }));
     await userEvent.click(screen.getByRole('button', { name: /gas categories \(/i }));
     await userEvent.click(screen.getByLabelText(/^Gas\/Fuel$/));
@@ -459,7 +459,7 @@ describe('AdvancedSection — Property & Vehicle stat categories', () => {
       makeSettings({ propertyUtilitiesCategoryIds: [10] }),
       update,
     );
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: /expand advanced/i }));
     await userEvent.click(
       screen.getByRole('button', { name: /utilities categories \(/i }),
@@ -478,7 +478,7 @@ describe('AdvancedSection — Default cash APY input', () => {
 
   it('renders a "Default cash APY" input in the What-If section', () => {
     resetSettingsStore(makeSettings({ defaultCashApy: null }));
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     const header = screen.getByRole('button', { name: /expand advanced/i });
     fireEvent.click(header);
     expect(screen.getByLabelText(/default cash apy/i)).toBeInTheDocument();
@@ -486,7 +486,7 @@ describe('AdvancedSection — Default cash APY input', () => {
 
   it('shows defaultCashApy as a percentage value when pre-filled (0.045 → "4.5")', () => {
     resetSettingsStore(makeSettings({ defaultCashApy: 0.045 }));
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: /expand advanced/i }));
     const input = screen.getByLabelText(/default cash apy/i) as HTMLInputElement;
     expect(input.value).toBe('4.5');
@@ -494,7 +494,7 @@ describe('AdvancedSection — Default cash APY input', () => {
 
   it('calls updateSettings with defaultCashApy as fraction on save', async () => {
     const update = resetSettingsStore(makeSettings({ defaultCashApy: null }));
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: /expand advanced/i }));
     fireEvent.change(screen.getByLabelText(/default cash apy/i), { target: { value: '3.5' } });
     await userEvent.click(screen.getByRole('button', { name: /save/i }));
@@ -505,7 +505,7 @@ describe('AdvancedSection — Default cash APY input', () => {
 
   it('persists null when the Default cash APY field is cleared', async () => {
     const update = resetSettingsStore(makeSettings({ defaultCashApy: 0.04 }));
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     fireEvent.click(screen.getByRole('button', { name: /expand advanced/i }));
     fireEvent.change(screen.getByLabelText(/default cash apy/i), { target: { value: '' } });
     await userEvent.click(screen.getByRole('button', { name: /save/i }));
@@ -545,7 +545,7 @@ describe('AdvancedSection — Auto-invest salary surplus toggle removed (2026-05
   });
 
   it('does NOT render the legacy "Auto-invest salary surplus" toggle', () => {
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     fireEvent.click(screen.getByText('Advanced'));
     expect(screen.queryByLabelText(/auto-invest salary surplus/i)).toBeNull();
   });

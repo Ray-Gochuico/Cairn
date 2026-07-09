@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -500,7 +501,8 @@ export function AdvancedSection() {
               transactions.
             </p>
             <Button variant="outline" size="sm" asChild>
-              <a href="/setup?section=4">Open import wizard →</a>
+              {/* W10 M47: SPA nav keeps stores warm — a raw <a> cold-reloaded. */}
+              <Link to="/setup?section=4">Open import wizard →</Link>
             </Button>
           </section>
 

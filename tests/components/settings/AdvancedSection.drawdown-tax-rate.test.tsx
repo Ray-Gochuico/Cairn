@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AdvancedSection } from '@/components/settings/AdvancedSection';
@@ -91,7 +92,7 @@ describe('AdvancedSection — Default drawdown tax rate input', () => {
 
   it('renders a "Default effective tax rate on retirement withdrawals" input in the What-If section', () => {
     resetSettingsStore(makeSettings({ defaultDrawdownTaxRate: null }));
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     expandSection();
     expect(
       screen.getByLabelText(/default effective tax rate on retirement withdrawals/i),
@@ -100,7 +101,7 @@ describe('AdvancedSection — Default drawdown tax rate input', () => {
 
   it('shows the value as whole-percent when defaultDrawdownTaxRate is pre-filled (0.22 → "22")', () => {
     resetSettingsStore(makeSettings({ defaultDrawdownTaxRate: 0.22 }));
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     expandSection();
     const input = screen.getByLabelText(
       /default effective tax rate on retirement withdrawals/i,
@@ -110,7 +111,7 @@ describe('AdvancedSection — Default drawdown tax rate input', () => {
 
   it('renders the placeholder "22" when no household default is set', () => {
     resetSettingsStore(makeSettings({ defaultDrawdownTaxRate: null }));
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     expandSection();
     const input = screen.getByLabelText(
       /default effective tax rate on retirement withdrawals/i,
@@ -121,7 +122,7 @@ describe('AdvancedSection — Default drawdown tax rate input', () => {
 
   it('round-trips a non-trivial fraction (0.185 → "18.5")', () => {
     resetSettingsStore(makeSettings({ defaultDrawdownTaxRate: 0.185 }));
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     expandSection();
     const input = screen.getByLabelText(
       /default effective tax rate on retirement withdrawals/i,
@@ -131,7 +132,7 @@ describe('AdvancedSection — Default drawdown tax rate input', () => {
 
   it('persists the rate as a fraction on save (user enters 22 → store gets 0.22)', async () => {
     const update = resetSettingsStore(makeSettings({ defaultDrawdownTaxRate: null }));
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     expandSection();
     fireEvent.change(
       screen.getByLabelText(/default effective tax rate on retirement withdrawals/i),
@@ -147,7 +148,7 @@ describe('AdvancedSection — Default drawdown tax rate input', () => {
     const update = resetSettingsStore(
       makeSettings({ defaultDrawdownTaxRate: 0.22 }),
     );
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     expandSection();
     fireEvent.change(
       screen.getByLabelText(/default effective tax rate on retirement withdrawals/i),
@@ -161,7 +162,7 @@ describe('AdvancedSection — Default drawdown tax rate input', () => {
 
   it('disables Save and shows the range error when rate > 50%', () => {
     resetSettingsStore(makeSettings({ defaultDrawdownTaxRate: null }));
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     expandSection();
     fireEvent.change(
       screen.getByLabelText(/default effective tax rate on retirement withdrawals/i),
@@ -173,7 +174,7 @@ describe('AdvancedSection — Default drawdown tax rate input', () => {
 
   it('disables Save when rate is negative', () => {
     resetSettingsStore(makeSettings({ defaultDrawdownTaxRate: null }));
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     expandSection();
     fireEvent.change(
       screen.getByLabelText(/default effective tax rate on retirement withdrawals/i),
@@ -184,7 +185,7 @@ describe('AdvancedSection — Default drawdown tax rate input', () => {
 
   it('accepts the exact boundaries 0 and 50', async () => {
     const update = resetSettingsStore(makeSettings({ defaultDrawdownTaxRate: null }));
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     expandSection();
     const input = screen.getByLabelText(
       /default effective tax rate on retirement withdrawals/i,
@@ -203,7 +204,7 @@ describe('AdvancedSection — Default drawdown tax rate input', () => {
 
   it('surfaces the explanatory copy + 22% reference value in the sub-paragraph', () => {
     resetSettingsStore(makeSettings({ defaultDrawdownTaxRate: null }));
-    render(<AdvancedSection />);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
     expandSection();
     // The copy below the input names the default + when it applies.
     expect(screen.getByText(/sequential/i)).toBeInTheDocument();

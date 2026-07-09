@@ -6,6 +6,9 @@ import { DISCLOSURES } from '@/legal/disclosures';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import { usePersonsStore } from '@/stores/persons-store';
+import { useLoadGate } from '@/lib/use-load-gate';
+import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
+import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import type { SectionIndex } from './sections';
 import { documentTitleFor } from '@/lib/route-titles';
 
@@ -32,7 +35,14 @@ export default function SetupWizard() {
   const loadAcceptances = useAcceptancesStore((s) => s.load);
   const persons = usePersonsStore((s) => s.persons);
   const loadPersons = usePersonsStore((s) => s.load);
+  const personsLoading = usePersonsStore((s) => s.isLoading);
+  const personsError = usePersonsStore((s) => s.error);
   const [stepZeroAccepted, setStepZeroAccepted] = useState(false);
+
+  // W10 M47: showDisclaimer/initialSection read persons.length — deciding
+  // before the load resolves dropped ?section= and flashed the disclaimer at
+  // returning users. Nothing renders until we KNOW whether a household exists.
+  const gate = useLoadGate([personsLoading], [personsError], loadPersons);
 
   // Wave-4 a11y: /setup renders outside PageShell, so it sets its own tab
   // title (PageShell's route-title effect never runs here).
@@ -44,9 +54,8 @@ export default function SetupWizard() {
   useEffect(() => {
     void loadAcceptances();
   }, [loadAcceptances]);
-  useEffect(() => {
-    void loadPersons();
-  }, [loadPersons]);
+
+  if (!gate.settled) return <PageLoadingSpinner />;
 
   const queryParamSection = (() => {
     const raw = searchParams.get('section');
@@ -70,7 +79,10 @@ export default function SetupWizard() {
 
   if (showDisclaimer) {
     return (
-      <Step0Disclaimer onComplete={() => setStepZeroAccepted(true)} />
+      <>
+        <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
+        <Step0Disclaimer onComplete={() => setStepZeroAccepted(true)} />
+      </>
     );
   }
 
@@ -81,5 +93,10 @@ export default function SetupWizard() {
       ? queryParamSection
       : undefined;
 
-  return <SectionLayout initialSection={initialSection} />;
+  return (
+    <>
+      <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
+      <SectionLayout initialSection={initialSection} />
+    </>
+  );
 }
