@@ -309,6 +309,24 @@ export function Retirement401kWithdrawalCard({
               {formatPercent(view!.effectiveRate)}
             </span>
           </div>
+          {/* Round-3 E3: the zeroed Roth breakdown SILENTLY assumed a
+              qualified distribution at any age — make the assumption visible,
+              escalating to the warning tone when the age makes it wrong. */}
+          {planType === 'ROTH' && !earlyPenaltyApplies && (
+            <p className="text-xs text-muted-foreground mt-2">
+              Assumes a qualified distribution (59½+ and the 5-year rule met).
+            </p>
+          )}
+          {planType === 'ROTH' && earlyPenaltyApplies && (
+            <p
+              role="note"
+              className="mt-2 rounded-md border border-warning/40 bg-warning-soft px-3 py-2 text-xs text-warning-foreground"
+            >
+              Withdrawing before 59½: Roth earnings may be taxed and penalized —
+              this card doesn't model that split. Figures assume a qualified
+              distribution.
+            </p>
+          )}
           {/* Wave-3 Task 6 — calculator framing. The headline numbers are
               labelled "Estimated" because this calculator deliberately
               omits several tax items that materially shift the real-world

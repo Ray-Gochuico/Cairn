@@ -411,3 +411,27 @@ describe('Retirement401kWithdrawalCard', () => {
     expect(screen.queryByText('401k withdrawal tax')).not.toBeInTheDocument();
   });
 });
+
+describe('Roth assumption honesty (round-3 E3)', () => {
+  it('ROTH at 59.5+ shows the qualified-distribution caveat', () => {
+    primeStores();
+    render(<MemoryRouter><Retirement401kWithdrawalCard /></MemoryRouter>);
+    fireEvent.change(screen.getByLabelText(/Withdrawal amount/i), { target: { value: '40000' } });
+    fireEvent.change(screen.getByLabelText(/Age at withdrawal/i), { target: { value: '65' } });
+    fireEvent.click(screen.getByRole('radio', { name: /^Roth 401k$/i }));
+    expect(screen.getByText(/assumes a qualified distribution/i)).toBeInTheDocument();
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+  });
+
+  it('ROTH under 59.5 escalates to the warning banner', () => {
+    primeStores();
+    render(<MemoryRouter><Retirement401kWithdrawalCard /></MemoryRouter>);
+    fireEvent.change(screen.getByLabelText(/Withdrawal amount/i), { target: { value: '40000' } });
+    fireEvent.change(screen.getByLabelText(/Age at withdrawal/i), { target: { value: '50' } });
+    fireEvent.click(screen.getByRole('radio', { name: /^Roth 401k$/i }));
+    const note = screen.getByRole('note');
+    expect(note).toHaveTextContent(/before 59½/i);
+    expect(note).toHaveTextContent(/earnings may be taxed and penalized/i);
+    expect(note).toHaveTextContent(/doesn't model/i);
+  });
+});

@@ -977,3 +977,18 @@ describe('Investments page — 529 section', () => {
     expect(wrapper.querySelector('.grid')!.className).toContain('lg:grid-cols-4');
   });
 });
+
+describe('529 projection caveat (round-3 E3)', () => {
+  it('the 529 card states that the projection stops at the 18th birthday', async () => {
+    // Same seeding as the 529 render tests: one 529 plan with a beneficiary.
+    primeStores({
+      accounts: [
+        { id: 1, name: 'Kid 529', type: AccountType.ACCOUNT_529, beneficiaryDependentId: 1 },
+      ],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-01-02', totalValue: 5000 }],
+    });
+    render(<MemoryRouter><Investments /></MemoryRouter>);
+    const section = await screen.findByTestId('529-section');
+    expect(within(section).getByText(/stops at the 18th birthday/i)).toBeInTheDocument();
+  });
+});
