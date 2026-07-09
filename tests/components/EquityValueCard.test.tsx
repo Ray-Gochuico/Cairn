@@ -291,7 +291,9 @@ describe('EquityValueCard', () => {
     // upcoming vests block must be present and contain the realistic near-term date
     const upcomingBlock = screen.getByTestId('equity-upcoming-vests');
     expect(upcomingBlock).toBeInTheDocument();
-    expect(upcomingBlock.textContent).toMatch(/2027/);
+    // Humanized vest date (Wave 11 T4), not raw ISO.
+    expect(upcomingBlock.textContent).toMatch(/Jan 15, 2027/);
+    expect(upcomingBlock.textContent).not.toMatch(/2027-01-15/);
 
     // grant-type badge must show 'ISO'
     expect(screen.getByText('ISO')).toBeInTheDocument();

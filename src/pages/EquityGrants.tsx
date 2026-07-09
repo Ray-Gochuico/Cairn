@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import AddEquityGrantDialog from '@/components/equity-grants/AddEquityGrantDialog';
 import type { CsvColumn } from '@/lib/csv';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, formatDate } from '@/lib/format';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import { EmptyState } from '@/components/layout/EmptyState';
@@ -151,7 +151,7 @@ function EquityGrantCard({ projection }: EquityGrantCardProps) {
             <ul className="text-sm space-y-1">
               {upcomingVestDates.map((d) => (
                 <li key={d} className="tabular-nums">
-                  {d}
+                  {formatDate(d)}
                 </li>
               ))}
             </ul>

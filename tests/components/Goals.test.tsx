@@ -258,6 +258,9 @@ describe('Goals page', () => {
       </MemoryRouter>,
     );
     expect(screen.getByText(/^on track$/i)).toBeInTheDocument();
+    // Target date renders humanized (Wave 11 T4), not the raw ISO string.
+    expect(screen.getByText(/by Jan 1, 2030/)).toBeInTheDocument();
+    expect(screen.queryByText(/2030-01-01/)).not.toBeInTheDocument();
   });
 
   it('shows off-track badge for a goal that cannot meet the target', () => {
@@ -497,8 +500,8 @@ describe('Goals page', () => {
     // Brokerage row → muted "auto from prices" copy, no Update button.
     expect(screen.getByText(/auto from prices/i)).toBeInTheDocument();
     // Last-updated date is surfaced for each account.
-    expect(screen.getByText(/updated 2026-04-15/i)).toBeInTheDocument();
-    expect(screen.getByText(/updated 2026-05-01/i)).toBeInTheDocument();
+    expect(screen.getByText(/updated Apr 15, 2026/i)).toBeInTheDocument();
+    expect(screen.getByText(/updated May 1, 2026/i)).toBeInTheDocument();
   });
 
   it('view filter ?view=p1 hides p2 goals and keeps p1 goals visible', () => {

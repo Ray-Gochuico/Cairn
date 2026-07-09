@@ -4,7 +4,7 @@ import { useEquityGrantsStore } from '@/stores/equity-grants-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { CalculatorCard } from './CalculatorCard';
 import { computeEquityValue, vestingChartData, grantOrdinaryIncomeOnVest, isIsoAmtPreference } from '@/lib/equity-value';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, formatDate } from '@/lib/format';
 import { FreshnessBadge } from '@/components/ui/freshness-badge';
 import { ResultRow } from '@/components/calculators/ResultRow';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
@@ -150,7 +150,7 @@ export function EquityValueCard({ cardId, onHide }: EquityValueCardProps = {}) {
           data-testid="equity-upcoming-vests"
           className="text-xs text-muted-foreground mt-1"
         >
-          Next vests: {upcomingVests.join(', ')}
+          Next vests: {upcomingVests.map(formatDate).join(', ')}
         </div>
       )}
       <ResultRow

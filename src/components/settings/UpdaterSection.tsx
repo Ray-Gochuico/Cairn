@@ -58,7 +58,7 @@ function formatLastChecked(iso: string | null): string {
   if (iso === null) return 'never';
   const parsed = new Date(iso);
   if (Number.isNaN(parsed.getTime())) return 'never';
-  return parsed.toLocaleString();
+  return parsed.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 export function UpdaterSection() {

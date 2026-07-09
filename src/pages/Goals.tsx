@@ -38,7 +38,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { formatCurrency, formatPercent } from '@/lib/format';
+import { formatCurrency, formatPercent, formatDate } from '@/lib/format';
 import { UpdateAccountBalanceDialog } from '@/components/dialogs/UpdateAccountBalanceDialog';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import type { CsvColumn } from '@/lib/csv';
@@ -195,7 +195,7 @@ function GoalProgressCard({
           <div className="text-xs text-muted-foreground mt-1">
             {GOAL_TYPE_LABELS[goal.type]} · target{' '}
             <span className="tabular-nums">{formatCurrency(goal.targetAmount)}</span>{' '}
-            by {goal.targetDate}
+            by {formatDate(goal.targetDate)}
           </div>
         </div>
         {onTrackBadge}
@@ -270,7 +270,7 @@ function GoalProgressCard({
                       <span className="font-medium">{info.name}</span>
                       <span className="text-muted-foreground ml-2">
                         {info.lastUpdated
-                          ? `updated ${info.lastUpdated}`
+                          ? `updated ${formatDate(info.lastUpdated)}`
                           : 'never updated'}
                       </span>
                     </span>

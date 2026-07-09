@@ -222,8 +222,10 @@ describe('EquityGrants page', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText(/2099-06-15/)).toBeInTheDocument();
-    expect(screen.getByText(/2099-12-15/)).toBeInTheDocument();
+    // Humanized vest dates (Wave 11 T4), not raw ISO.
+    expect(screen.getByText(/Jun 15, 2099/)).toBeInTheDocument();
+    expect(screen.getByText(/Dec 15, 2099/)).toBeInTheDocument();
+    expect(screen.queryByText(/2099-06-15/)).not.toBeInTheDocument();
   });
 
   it('grant past final vest date shows 100% vested (no upcoming dates)', () => {

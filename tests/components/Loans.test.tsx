@@ -173,8 +173,10 @@ describe('Loans page', () => {
     });
 
     // First row = next payment date from the pinned today
-    // (nextPaymentDateFrom('2026-01-01', '2026-06-20') = 2026-07-01).
-    expect(screen.getByText('2026-07-01')).toBeInTheDocument();
+    // (nextPaymentDateFrom('2026-01-01', '2026-06-20') = 2026-07-01), rendered
+    // as a humanized month via formatMonth (Wave 11 T4).
+    expect(screen.getByText('Jul 2026')).toBeInTheDocument();
+    expect(screen.queryByText('2026-07-01')).not.toBeInTheDocument();
 
     // "Show first/last 12" button appears after expanding all
     expect(screen.getByRole('button', { name: /show first\/last 12/i })).toBeInTheDocument();

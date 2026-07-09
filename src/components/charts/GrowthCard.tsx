@@ -7,7 +7,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { HorizonGrowth } from '@/lib/growth-horizons';
 
@@ -110,7 +110,7 @@ export default function GrowthCard({
             {active.label}
           </div>
           <div className="text-xs text-muted-foreground">
-            vs {active.baselineDate}
+            vs {formatDate(active.baselineDate)}
           </div>
         </div>
 

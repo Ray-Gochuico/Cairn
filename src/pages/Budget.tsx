@@ -25,6 +25,7 @@ import BudgetCategoryPicker from '@/components/budget/BudgetCategoryPicker';
 import type { AddCategoryPayload } from '@/components/budget/AddCategoryDialog';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
+import { formatMonth } from '@/lib/format';
 
 const currency = (n: number) =>
   `$${Math.abs(n).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
@@ -197,7 +198,7 @@ export default function Budget() {
           value={month}
           onChange={(e) => setMonth(e.target.value)}
         >
-          {months.map((m) => <option key={m} value={m}>{m}</option>)}
+          {months.map((m) => <option key={m} value={m}>{formatMonth(m)}</option>)}
         </select>
       </div>
 

@@ -41,6 +41,9 @@ describe('GrowthCard — horizon chips', () => {
     expect(screen.getByText('$95,000')).toBeInTheDocument();
     expect(screen.getByText(/-\$5,000|−\$5,000/)).toBeInTheDocument();
     expect(screen.getByText('Past 3 months')).toBeInTheDocument();
+    // Baseline date renders humanized (Wave 11 T4), not raw ISO.
+    expect(screen.getByText(/vs Jun 1, 2026/)).toBeInTheDocument();
+    expect(screen.queryByText(/2026-06-01/)).not.toBeInTheDocument();
   });
 
   it('unavailable horizon shows "Not enough history yet"', async () => {

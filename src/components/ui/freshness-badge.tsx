@@ -142,7 +142,10 @@ export function FreshnessBadge({
   const now = new Date();
   const stale = isStale(lastRefreshAt, cadence, now);
   const distance = formatDistanceToNow(refreshDate, { addSuffix: false });
-  const exactTimestamp = refreshDate.toLocaleString();
+  const exactTimestamp = refreshDate.toLocaleString(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
   const isoTimestamp = refreshDate.toISOString();
   const cadenceLabel = CADENCE_LABEL[cadence];
 

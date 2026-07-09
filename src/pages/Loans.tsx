@@ -17,6 +17,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import BarChartCard, { type BarChartSeries } from '@/components/charts/BarChartCard';
+import { formatCurrency, formatMonth } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import type { CsvColumn } from '@/lib/csv';
@@ -38,16 +39,6 @@ import { EmptyState } from '@/components/layout/EmptyState';
  *
  * Recharts only enters via the chart card wrapper (no Recharts import).
  */
-
-const currencyFormatter = new Intl.NumberFormat('en-US', {
-  style: 'currency',
-  currency: 'USD',
-  maximumFractionDigits: 0,
-});
-
-function formatCurrency(value: number): string {
-  return currencyFormatter.format(value);
-}
 
 const LOAN_TYPE_LABEL: Record<LoanType, string> = {
   MORTGAGE: 'Mortgage',
@@ -90,15 +81,6 @@ function projectLoan(loan: Loan, todayIso: string): LoanProjection {
     ? amortize({ ...base, extraPayment: 0 })
     : withDefault;
   return { loan, withDefault, withoutExtra };
-}
-
-function formatPaymentMonth(isoDate: string): string {
-  const d = new Date(isoDate + 'T00:00:00Z');
-  return d.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-  });
 }
 
 /**
@@ -198,7 +180,7 @@ function AmortizationTable({ schedule }: { schedule: ScheduleEntry[] }) {
         <tbody>
           {head.map((row, i) => (
             <tr key={`h-${i}`} className="border-b last:border-b-0">
-              <td className="py-1.5">{row.paymentDate}</td>
+              <td className="py-1.5">{formatMonth(row.paymentDate)}</td>
               <td className="py-1.5 text-right tabular-nums">{formatCurrency(row.principal)}</td>
               <td className="py-1.5 text-right tabular-nums">{formatCurrency(row.interest)}</td>
               <td className="py-1.5 text-right tabular-nums">{formatCurrency(row.balance)}</td>
@@ -213,7 +195,7 @@ function AmortizationTable({ schedule }: { schedule: ScheduleEntry[] }) {
           )}
           {tail.map((row, i) => (
             <tr key={`t-${i}`} className="border-b last:border-b-0">
-              <td className="py-1.5">{row.paymentDate}</td>
+              <td className="py-1.5">{formatMonth(row.paymentDate)}</td>
               <td className="py-1.5 text-right tabular-nums">{formatCurrency(row.principal)}</td>
               <td className="py-1.5 text-right tabular-nums">{formatCurrency(row.interest)}</td>
               <td className="py-1.5 text-right tabular-nums">{formatCurrency(row.balance)}</td>
@@ -255,7 +237,7 @@ function LoanCard({ projection, expanded, onToggleExpand, schedule }: LoanCardPr
     ? Math.min(100, Math.max(0, (paid / loan.originalAmount) * 100))
     : 0;
   const lastEntry = withDefault.schedule[withDefault.schedule.length - 1];
-  const payoffDate = lastEntry ? formatPaymentMonth(lastEntry.paymentDate) : '—';
+  const payoffDate = lastEntry ? formatMonth(lastEntry.paymentDate) : '—';
 
   const hasExtra = loan.extraPaymentDefault > 0;
   const interestSavings = hasExtra
@@ -265,7 +247,7 @@ function LoanCard({ projection, expanded, onToggleExpand, schedule }: LoanCardPr
     ? withoutExtra.schedule[withoutExtra.schedule.length - 1]
     : null;
   const payoffDateNoExtra = lastNoExtraEntry
-    ? formatPaymentMonth(lastNoExtraEntry.paymentDate)
+    ? formatMonth(lastNoExtraEntry.paymentDate)
     : '—';
 
   // Round-2 A1 (same class as DebtPayoffCard): a capped schedule's tail is
