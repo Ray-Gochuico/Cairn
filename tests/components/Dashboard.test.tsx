@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { useGoalsStore } from '@/stores/goals-store';
 import { useAccountsStore } from '@/stores/accounts-store';
@@ -78,6 +78,10 @@ function resetStores() {
     load: async () => {},
     update: async () => {},
   } as never);
+  // W13: pills + widgets live inside the Details disclosure — seed it open so
+  // the pre-W13 assertions keep meaning what they meant. The collapsed
+  // default has its own dedicated tests (which clear this key).
+  try { window.localStorage.setItem('dashboardDetailsOpen.v1', 'true'); } catch { /* ignore */ }
 }
 
 /** Minimal AppSettings slice the Dashboard/FreshnessBadge/briefing read. */
@@ -278,12 +282,12 @@ describe('Dashboard goals strip', () => {
   });
 });
 
-describe('Dashboard asset value chart widget', () => {
+describe('Dashboard asset value chart hero', () => {
   beforeEach(() => {
     resetStores();
   });
 
-  it('renders the Asset value chart widget', async () => {
+  it('renders the Total Assets chart as the fixed hero', async () => {
     render(
       <MemoryRouter>
         <Dashboard />
@@ -291,15 +295,16 @@ describe('Dashboard asset value chart widget', () => {
     );
     // The chart card's header value renders unconditionally (recharts'
     // ResponsiveContainer draws nothing in jsdom, but the header is plain
-    // DOM), so this testid is a stable presence marker for the widget.
-    const widget = screen.getByTestId('widget-asset-value-chart');
+    // DOM), so this testid is a stable presence marker. W13: the chart is
+    // the FIXED secondary hero, no longer a re-orderable widget.
     expect(await screen.findByTestId('asset-chart-header-value')).toBeInTheDocument();
+    expect(screen.queryByTestId('widget-asset-value-chart')).toBeNull();
     // resetStores() seeds NO accounts/loans → zero eligible entities, so the
     // header shows the dashboard surface's default-scope label. The dashboard
     // surface defaults to assets-only (defaultIncludeLoans: false), hence
     // 'Total assets' — NOT 'Net worth', which is the no-loans/full-set label
     // when eligible entities exist.
-    expect(within(widget).getByText('Total assets')).toBeInTheDocument();
+    expect(screen.getByText('Total assets')).toBeInTheDocument();
   });
 });
 
@@ -678,5 +683,49 @@ describe('W13 briefing hero', () => {
     renderDashboard(['/?view=p1']);
     const row = screen.getByTestId('briefing-row-concentration');
     expect(row).toHaveTextContent('· Household');
+  });
+});
+
+describe('W13 Details region + fixed hero chart', () => {
+  beforeEach(() => {
+    resetStores();
+  });
+
+  it('Details is collapsed by default: pill grid hidden until the toggle is clicked, then persisted', () => {
+    window.localStorage.removeItem('dashboardDetailsOpen.v1');
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByTestId('dashboard-pill-grid')).toBeNull();
+    const toggle = screen.getByTestId('dashboard-details-toggle');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(toggle);
+    expect(screen.getByTestId('dashboard-pill-grid')).toBeInTheDocument();
+    expect(window.localStorage.getItem('dashboardDetailsOpen.v1')).toBe('true');
+  });
+
+  it('the Total Assets chart renders as a FIXED hero even while Details is collapsed', async () => {
+    window.localStorage.removeItem('dashboardDetailsOpen.v1');
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByTestId('asset-chart-header-value')).toBeInTheDocument();
+    // …and it is no longer a re-orderable widget:
+    expect(screen.queryByTestId('widget-asset-value-chart')).toBeNull();
+  });
+
+  it('Customize forces the Details region open so pills/widgets stay editable', () => {
+    window.localStorage.removeItem('dashboardDetailsOpen.v1');
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByTestId('dashboard-edit-toggle'));
+    expect(screen.getByTestId('dashboard-pill-grid')).toBeInTheDocument();
   });
 });

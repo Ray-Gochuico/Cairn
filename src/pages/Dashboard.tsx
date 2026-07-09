@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactElement, type Reac
 import { Link } from 'react-router-dom';
 import {
   CheckIcon,
+  ChevronRight,
   CreditCard,
   GraduationCap,
   Home,
@@ -125,6 +126,12 @@ const MANUAL_BALANCE_TYPES = new Set<AccountType>([
   AccountType.ACCOUNT_SAVINGS,
   AccountType.ACCOUNT_CRYPTO,
 ]);
+
+/**
+ * W13 Details disclosure persistence (per-device UI pref, the same
+ * localStorage class as the pill/widget layout keys).
+ */
+const DETAILS_KEY = 'dashboardDetailsOpen.v1';
 
 const currencyFormatter = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -943,6 +950,28 @@ export default function Dashboard() {
   const pillById = new Map(pillDefs.map((p) => [p.id, p]));
   const [editing, setEditing] = useState(false);
 
+  // W13 Details region: per-device UI pref, same storage class as the layout
+  // hooks. Customize forces it open — the things being customized live inside.
+  const [detailsOpen, setDetailsOpen] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem(DETAILS_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const toggleDetails = () => {
+    setDetailsOpen((v) => {
+      const next = !v;
+      try {
+        window.localStorage.setItem(DETAILS_KEY, String(next));
+      } catch {
+        /* localStorage unavailable — session-only toggle */
+      }
+      return next;
+    });
+  };
+  const detailsVisible = detailsOpen || editing;
+
   const orderedPills = pillLayout.layout
     .map((e) => ({ entry: e, def: pillById.get(e.id as PillId) }))
     .filter((row): row is { entry: typeof pillLayout.layout[number]; def: (typeof pillDefs)[number] } => row.def !== undefined);
@@ -955,9 +984,13 @@ export default function Dashboard() {
   // would risk burying calls to action. Trivia is a widget (default LAST):
   // a daily game should not outrank money data, and widget-hood finally
   // lets users hide it.
-  type WidgetId = 'pills-section' | 'asset-value-chart' | 'spending' | 'concentration' | 'goals' | 'trivia';
+  // W13: the Total Assets chart is the FIXED secondary hero (Direction 1);
+  // it left the re-orderable set. useLayoutStore.reconcile() drops the stale
+  // stored id for previously-customized layouts; pristine layouts are
+  // rebuilt via PRISTINE_DEFAULTS generation 3.
+  type WidgetId = 'pills-section' | 'spending' | 'concentration' | 'goals' | 'trivia';
   const widgetIds = useMemo<readonly WidgetId[]>(
-    () => ['pills-section', 'asset-value-chart', 'spending', 'concentration', 'goals', 'trivia'],
+    () => ['pills-section', 'spending', 'concentration', 'goals', 'trivia'],
     [],
   );
   const widgetLayout = useWidgetLayout(widgetIds);
@@ -1036,11 +1069,6 @@ export default function Dashboard() {
       id: 'pills-section',
       label: 'Metric pills',
       render: () => pillsSectionContent,
-    },
-    {
-      id: 'asset-value-chart',
-      label: 'Asset value',
-      render: () => <AssetValueChart surface="dashboard" />,
     },
     {
       id: 'spending',
@@ -1168,46 +1196,72 @@ export default function Dashboard() {
 
       <ExistingUserTourPrompt />
 
-      {visibleWidgets.map((w, index) => (
-        <EditableWidget
-          key={w.def.id}
-          id={w.def.id}
-          label={w.def.label}
-          editing={editing}
-          canMoveUp={index > 0}
-          canMoveDown={index < visibleWidgets.length - 1}
-          onMoveUp={() => widgetLayout.move(w.def.id, -1)}
-          onMoveDown={() => widgetLayout.move(w.def.id, 1)}
-          onRemove={() => widgetLayout.hide(w.def.id)}
-        >
-          {w.def.render()}
-        </EditableWidget>
-      ))}
+      {/* W13 secondary hero — fixed position, no longer a widget. */}
+      <AssetValueChart surface="dashboard" />
 
-      {editing && hiddenWidgets.length > 0 ? (
-        <div
-          className="rounded-md border bg-muted/40 p-3"
-          data-testid="dashboard-hidden-widgets"
+      {/* W13 on-demand Details: the preserved pill row + widget grid. The
+          chevron rotates with no transition — nothing animates (motion-safe
+          stance intact). */}
+      <section aria-label="Details" className="space-y-6">
+        <button
+          type="button"
+          onClick={toggleDetails}
+          aria-expanded={detailsVisible}
+          aria-controls="dashboard-details-region"
+          data-testid="dashboard-details-toggle"
+          className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-md"
         >
-          <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
-            Hidden widgets
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {hiddenWidgets.map((w) => (
-              <button
+          <ChevronRight
+            className={detailsVisible ? 'h-4 w-4 rotate-90' : 'h-4 w-4'}
+            aria-hidden="true"
+          />
+          <span className="uppercase tracking-wider text-xs">Details</span>
+        </button>
+        {detailsVisible ? (
+          <div id="dashboard-details-region" className="space-y-6">
+            {visibleWidgets.map((w, index) => (
+              <EditableWidget
                 key={w.def.id}
-                type="button"
-                onClick={() => widgetLayout.show(w.def.id)}
-                className="inline-flex items-center gap-1.5 rounded-full border bg-background px-3 py-1 text-sm hover:bg-accent"
-                data-testid={`widget-add-${w.def.id}`}
+                id={w.def.id}
+                label={w.def.label}
+                editing={editing}
+                canMoveUp={index > 0}
+                canMoveDown={index < visibleWidgets.length - 1}
+                onMoveUp={() => widgetLayout.move(w.def.id, -1)}
+                onMoveDown={() => widgetLayout.move(w.def.id, 1)}
+                onRemove={() => widgetLayout.hide(w.def.id)}
               >
-                <PlusIcon className="h-3.5 w-3.5" />
-                {w.def.label}
-              </button>
+                {w.def.render()}
+              </EditableWidget>
             ))}
+
+            {editing && hiddenWidgets.length > 0 ? (
+              <div
+                className="rounded-md border bg-muted/40 p-3"
+                data-testid="dashboard-hidden-widgets"
+              >
+                <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
+                  Hidden widgets
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {hiddenWidgets.map((w) => (
+                    <button
+                      key={w.def.id}
+                      type="button"
+                      onClick={() => widgetLayout.show(w.def.id)}
+                      className="inline-flex items-center gap-1.5 rounded-full border bg-background px-3 py-1 text-sm hover:bg-accent"
+                      data-testid={`widget-add-${w.def.id}`}
+                    >
+                      <PlusIcon className="h-3.5 w-3.5" />
+                      {w.def.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
-        </div>
-      ) : null}
+        ) : null}
+      </section>
     </PageContainer>
   );
 }

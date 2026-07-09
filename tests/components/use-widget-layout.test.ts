@@ -143,8 +143,10 @@ describe('one-time migration for never-customized layouts', () => {
   });
 });
 
-describe('migrateUncustomizedLayout — either pristine generation', () => {
-  const NEW_DEFAULTS = ['pills-section', 'asset-value-chart', 'spending', 'concentration', 'goals', 'trivia'];
+describe('migrateUncustomizedLayout — any pristine generation', () => {
+  // W13: the asset chart left the widget set (fixed secondary hero) — the
+  // current default is the 5-id list below.
+  const NEW_DEFAULTS = ['pills-section', 'spending', 'concentration', 'goals', 'trivia'];
 
   beforeEach(() => localStorage.clear());
 
@@ -168,6 +170,16 @@ describe('migrateUncustomizedLayout — either pristine generation', () => {
     );
   });
 
+  it('rebuilds the 6-id post-trivia pristine layout (generation 3, W13) to the new defaults', () => {
+    localStorage.setItem('dashboardWidgetLayout.v1', JSON.stringify(
+      ['pills-section', 'asset-value-chart', 'spending', 'concentration', 'goals', 'trivia'].map((id) => ({ id, hidden: false })),
+    ));
+    migrateUncustomizedLayout(NEW_DEFAULTS);
+    expect(JSON.parse(localStorage.getItem('dashboardWidgetLayout.v1')!)).toEqual(
+      NEW_DEFAULTS.map((id) => ({ id, hidden: false })),
+    );
+  });
+
   it('leaves ANY customized layout alone (order changed / something hidden)', () => {
     const custom = [
       { id: 'spending', hidden: false },
@@ -179,5 +191,23 @@ describe('migrateUncustomizedLayout — either pristine generation', () => {
     localStorage.setItem('dashboardWidgetLayout.v1', JSON.stringify(custom));
     migrateUncustomizedLayout(NEW_DEFAULTS);
     expect(JSON.parse(localStorage.getItem('dashboardWidgetLayout.v1')!)).toEqual(custom);
+  });
+
+  it('customized layout with the stale asset-value-chart id: the hook drops it via reconcile', () => {
+    // A user who reordered pre-W13 keeps their order; the retired chart id
+    // is dropped (not resurrected) and new ids append at the end.
+    localStorage.setItem('dashboardWidgetLayout.v1', JSON.stringify([
+      { id: 'spending', hidden: false },
+      { id: 'asset-value-chart', hidden: false },
+      { id: 'pills-section', hidden: false },
+      { id: 'concentration', hidden: true },
+      { id: 'goals', hidden: false },
+      { id: 'trivia', hidden: false },
+    ]));
+    const { result } = renderHook(() => useWidgetLayout(NEW_DEFAULTS));
+    expect(result.current.layout.map((e) => e.id)).toEqual([
+      'spending', 'pills-section', 'concentration', 'goals', 'trivia',
+    ]);
+    expect(result.current.hidden('concentration')).toBe(true);
   });
 });

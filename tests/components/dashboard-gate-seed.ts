@@ -47,4 +47,13 @@ export function seedDashboardGateStores(): void {
     load: async () => {},
     update: async () => {},
   } as never);
+
+  // W13: pills + widgets live inside the collapsed-by-default Details region.
+  // Suites that assert widget/pill behavior seed it open; the collapsed
+  // default is covered by dedicated tests that clear this key.
+  try {
+    window.localStorage.setItem('dashboardDetailsOpen.v1', 'true');
+  } catch {
+    /* localStorage unavailable in this environment */
+  }
 }
