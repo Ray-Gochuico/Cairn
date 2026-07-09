@@ -16,6 +16,7 @@ import { LoansRepo } from '@/domain/loans';
 import { LoanPaymentsRepo } from '@/domain/loan-payments';
 import { AccountType, LoanType, SnapshotSource } from '@/types/enums';
 import MonthlyMiniWindow from '@/pages/MonthlyMiniWindow';
+import { formatDate } from '@/lib/format';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -383,7 +384,12 @@ describe('MonthlyMiniWindow', () => {
     await waitFor(() => {
       expect(screen.getByText('Test Mortgage')).toBeInTheDocument();
     });
-    expect(screen.getByText(/next scheduled payment/i)).toBeInTheDocument();
+    const line = screen.getByText(/next scheduled payment/i);
+    expect(line).toBeInTheDocument();
+    // Wave-11 date-humanization miss: the payment date renders as
+    // 'Aug 1, 2026', not the raw ISO 'YYYY-MM-01'.
+    expect(line.textContent).toContain(formatDate(firstPayment));
+    expect(screen.queryByText(firstPayment)).toBeNull();
   });
 
   it("renders a loan card as already recorded when this month's AMORTIZATION row exists (wave-9 M37)", async () => {
@@ -428,7 +434,12 @@ describe('MonthlyMiniWindow', () => {
 
     const card = await screen.findByText('Seasoned mortgage');
     const scope = card.closest('[class*="rounded"]') as HTMLElement;
-    expect(await within(scope).findByText(/already recorded/i)).toBeInTheDocument();
+    const recorded = await within(scope).findByText(/already recorded/i);
+    expect(recorded).toBeInTheDocument();
+    // Wave-11 date-humanization miss: 'Already recorded for Aug 1, 2026',
+    // not the raw ISO.
+    expect(recorded.textContent).toContain(formatDate(firstPayment));
+    expect(within(scope).queryByText(firstPayment)).toBeNull();
     expect(
       within(scope).queryByRole('button', { name: /^confirm$/i }),
     ).not.toBeInTheDocument();

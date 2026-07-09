@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { formatCurrencyCents } from '@/lib/format';
+import { formatCurrencyCents, formatDate, formatMonth } from '@/lib/format';
 import { useLocalToday } from '@/lib/use-local-today';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { EmptyState } from '@/components/layout/EmptyState';
@@ -371,6 +371,7 @@ export default function Spending() {
                 xKey="month"
                 series={categorySeries}
                 yFormatter={(v) => `$${v.toLocaleString()}`}
+                xTickFormatter={(v) => formatMonth(String(v))}
               />
             </section>
           )}
@@ -485,7 +486,7 @@ export default function Spending() {
                       >
                         <div>
                           <span className="font-medium">{t.merchant}</span>
-                          <span className="ml-2 text-muted-foreground">{t.date}</span>
+                          <span className="ml-2 text-muted-foreground">{formatDate(t.date)}</span>
                         </div>
                         <div className="flex items-center gap-4">
                           <span>{formatCurrencyCents(t.amount)}</span>
@@ -553,7 +554,7 @@ export default function Spending() {
                 .slice(0, 10)
                 .map((t) => (
                   <tr key={t.id} className="border-b">
-                    <td className="py-2 pr-4">{t.date}</td>
+                    <td className="py-2 pr-4">{formatDate(t.date)}</td>
                     <td className="py-2 pr-4">{t.merchant}</td>
                     <td className="py-2 pr-4 text-muted-foreground">
                       {t.categoryId != null

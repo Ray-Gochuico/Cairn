@@ -42,6 +42,7 @@ import { useVehicleLeasesStore } from '@/stores/vehicle-leases-store';
 import { HousingPaymentsRepo } from '@/domain/housing-payments';
 import { VehicleLeasesRepo } from '@/domain/vehicle-leases';
 import Spending from '@/pages/Spending';
+import { formatDate } from '@/lib/format';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { PersonsRepo } from '@/domain/persons';
@@ -271,6 +272,35 @@ describe('Spending page', () => {
         screen.getByRole('button', { name: /mark reimbursed/i }),
       ).toBeInTheDocument();
     });
+  });
+
+  it('humanizes dates in the Recent transactions list and awaiting-reimbursement row (Wave-11 T4 miss)', async () => {
+    await useCategoriesStore.getState().load();
+    const recent: Omit<Transaction, 'id'> = {
+      householdId: 1, date: '2026-06-18', merchant: 'AMAZON', merchantRaw: 'AMAZON.COM',
+      amount: 54.23, categoryId: 37, sourceAccountId: null, propertyId: null,
+      vehicleId: null, personId: null, sourcePdfFilename: null, reimbursable: false,
+      reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
+    };
+    const pending: Omit<Transaction, 'id'> = {
+      householdId: 1, date: '2026-05-02', merchant: 'ACME EXPENSE', merchantRaw: 'ACME',
+      amount: 200, categoryId: 37, sourceAccountId: null, propertyId: null,
+      vehicleId: null, personId: null, sourcePdfFilename: null, reimbursable: true,
+      reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
+    };
+    await useTransactionsStore.getState().createMany([recent, pending]);
+    renderPage();
+
+    await screen.findByRole('heading', { name: /recent transactions/i });
+    // Recent-transactions Date column humanizes; raw ISO never renders.
+    expect(screen.getByText('Jun 18, 2026')).toBeInTheDocument();
+    expect(screen.getByText(formatDate('2026-06-18'))).toBeInTheDocument();
+    expect(screen.queryByText('2026-06-18')).toBeNull();
+    // Awaiting-reimbursement row date humanizes too (the reimbursable txn
+    // also appears in the recent list, so it renders more than once).
+    expect(screen.getAllByText('May 2, 2026').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(formatDate('2026-05-02')).length).toBeGreaterThan(0);
+    expect(screen.queryByText('2026-05-02')).toBeNull();
   });
 
   it('(open-all) shows an "Open all transactions" link to the sub-route when transactions exist', async () => {

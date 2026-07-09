@@ -291,7 +291,7 @@ function LoanPaymentCard({ loan, nextEntry, alreadyRecorded }: LoanPaymentCardPr
       // update, so a rejected duplicate never decrements the balance.
       setError(
         /unique/i.test(msg)
-          ? `A payment for ${nextEntry.paymentDate} is already recorded — duplicate skipped, balance unchanged.`
+          ? `A payment for ${formatDate(nextEntry.paymentDate)} is already recorded — duplicate skipped, balance unchanged.`
           : msg,
       );
     } finally {
@@ -307,7 +307,7 @@ function LoanPaymentCard({ loan, nextEntry, alreadyRecorded }: LoanPaymentCardPr
             <div className="font-medium">{loan.name}</div>
             <div className="text-sm text-muted-foreground">
               Next scheduled payment: {formatUSD(totalPaid)} on{' '}
-              {nextEntry.paymentDate}
+              {formatDate(nextEntry.paymentDate)}
             </div>
             <div className="text-xs text-muted-foreground mt-0.5">
               Principal {formatUSD(nextEntry.principal)} · Interest{' '}
@@ -333,7 +333,7 @@ function LoanPaymentCard({ loan, nextEntry, alreadyRecorded }: LoanPaymentCardPr
 
         {mode === 'confirmed' && alreadyRecorded && (
           <div className="text-sm text-muted-foreground">
-            Already recorded for {nextEntry.paymentDate}.
+            Already recorded for {formatDate(nextEntry.paymentDate)}.
           </div>
         )}
 
