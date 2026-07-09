@@ -32,7 +32,9 @@ export function AppearanceSection() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Appearance</CardTitle>
+        <CardTitle>
+          <h2 className="font-semibold leading-none tracking-tight">Appearance</h2>
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <p className="text-sm text-muted-foreground mb-3">

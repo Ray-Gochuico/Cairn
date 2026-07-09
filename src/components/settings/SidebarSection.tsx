@@ -98,7 +98,9 @@ export function SidebarSection() {
   return (
     <Card id="sidebar-settings">
       <CardHeader>
-        <CardTitle>Sidebar</CardTitle>
+        <CardTitle>
+          <h2 className="font-semibold leading-none tracking-tight">Sidebar</h2>
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <p className="text-sm text-muted-foreground mb-3">

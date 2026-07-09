@@ -30,7 +30,7 @@ export function GettingStartedSection() {
     <Card>
       <CardHeader>
         <CardTitle>
-          <h3 className="font-semibold leading-none tracking-tight">Getting started</h3>
+          <h2 className="font-semibold leading-none tracking-tight">Getting started</h2>
         </CardTitle>
       </CardHeader>
       <CardContent>

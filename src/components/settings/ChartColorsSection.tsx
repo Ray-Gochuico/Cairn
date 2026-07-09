@@ -51,7 +51,9 @@ export function ChartColorsSection() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Chart colors</CardTitle>
+        <CardTitle>
+          <h2 className="font-semibold leading-none tracking-tight">Chart colors</h2>
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-2">

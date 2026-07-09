@@ -49,7 +49,9 @@ export function StatementsSection() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Statements</CardTitle>
+        <CardTitle>
+          <h2 className="font-semibold leading-none tracking-tight">Statements</h2>
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm text-muted-foreground">

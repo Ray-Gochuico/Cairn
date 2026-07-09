@@ -136,13 +136,20 @@ export function UpdaterSection() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Updates</CardTitle>
+          <CardTitle>
+            <h2 className="font-semibold leading-none tracking-tight">Updates</h2>
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground mb-3">
-            Automatic updates aren't available on Windows yet &mdash; download
-            new versions from the Releases page.
-          </p>
+          <details className="mb-3 rounded-md border px-4 py-3 text-sm">
+            <summary className="cursor-pointer font-medium">About updates</summary>
+            <div className="pt-2 space-y-2">
+              <p className="text-muted-foreground">
+                Automatic updates aren't available on Windows yet &mdash; download
+                new versions from the Releases page.
+              </p>
+            </div>
+          </details>
           <div className="space-y-3">
             <div className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-sm">
               <span className="text-muted-foreground">Current version</span>
@@ -167,13 +174,20 @@ export function UpdaterSection() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Updates</CardTitle>
+        <CardTitle>
+          <h2 className="font-semibold leading-none tracking-tight">Updates</h2>
+        </CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="text-sm text-muted-foreground mb-3">
-          Cairn only checks for updates when you click this button. No
-          automatic background checks. Your data never leaves your device.
-        </p>
+        <details className="mb-3 rounded-md border px-4 py-3 text-sm">
+          <summary className="cursor-pointer font-medium">About updates</summary>
+          <div className="pt-2 space-y-2">
+            <p className="text-muted-foreground">
+              Cairn only checks for updates when you click this button. No
+              automatic background checks. Your data never leaves your device.
+            </p>
+          </div>
+        </details>
         <div className="space-y-3">
           <div className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 text-sm">
             <span className="text-muted-foreground">Current version</span>
