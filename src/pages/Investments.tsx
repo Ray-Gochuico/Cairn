@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useLoadGate } from '@/lib/use-load-gate';
+import { pickModerateRate } from '@/lib/growth-scenario';
 import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
@@ -48,7 +49,7 @@ import { dateFromLocalISO } from '@/lib/dates';
 import { useConcentration } from '@/lib/use-concentration';
 import { valueHoldings, type HoldingValuation } from '@/lib/holdings-value';
 import { classTargetVsActual, holdingTargetVsActual } from '@/lib/allocation-hierarchy';
-import type { Dependent, AccountSnapshot, Household, Holding } from '@/types/schema';
+import type { Dependent, AccountSnapshot, Holding } from '@/types/schema';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import { FreshnessBadge } from '@/components/ui/freshness-badge';
@@ -143,21 +144,6 @@ function aggregateByAssetClass(
     .map((b, idx) => ({ ...b, color: paletteColorAt(idx) }));
 }
 
-/**
- * Pick the growth rate to project against. Prefers the entry labelled
- * "Moderate", then the second entry, then the first, then 6%. Defensive
- * defaults matter because the page renders before household.load() resolves.
- * Mirrors the helper in Goals.tsx so projections feel consistent.
- */
-function pickModerateRate(household: Household | null): number {
-  const FALLBACK = 0.06;
-  if (!household || household.growthScenarios.length === 0) return FALLBACK;
-  const moderate = household.growthScenarios.find((s) => s.label === 'Moderate');
-  if (moderate) return moderate.rate;
-  const second = household.growthScenarios[1];
-  if (second) return second.rate;
-  return household.growthScenarios[0]?.rate ?? FALLBACK;
-}
 
 function renderCardFlow(cards: InvestmentsCardEntry[]): ReactNode[] {
   // Group consecutive `compact` cards into the existing 3-up donut grid; render

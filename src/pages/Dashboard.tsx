@@ -33,7 +33,8 @@ import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
 import { AccountType, GoalType } from '@/types/enums';
 import { netWorthForMonth, type NetWorthInput } from '@/lib/networth';
 import { netWorthAsOfFactory, deltaPctOrNull } from '@/lib/asset-value-chart';
-import { GROWTH_HORIZONS, minusMonths } from '@/lib/growth-horizons';
+import { GROWTH_HORIZONS } from '@/lib/growth-horizons';
+import { monthlyContributionAvg, pickModerateRate } from '@/lib/growth-scenario';
 import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
 import { includedAccountIds, filterSnapshotsForNetWorth } from '@/lib/account-inclusion';
 import { summarizeSpending } from '@/lib/spending-analysis';
@@ -69,9 +70,7 @@ import { isTourDone, markTourDone } from '@/lib/onboarding-state';
 import type {
   Account,
   AccountSnapshot,
-  Contribution,
   Goal,
-  Household,
 } from '@/types/schema';
 
 /**
@@ -159,20 +158,6 @@ const GOAL_TYPE_ICONS: Record<GoalType, LucideIcon> = {
   [GoalType.GENERIC]: Target,
 };
 
-/**
- * Pick the moderate growth rate for goal projections. Mirrors Goals.tsx /
- * FinancialIndependenceCard so all surfaces agree on which scenario drives projections.
- * Falls back to 6% when household has no scenarios.
- */
-function pickModerateRate(household: Household | null): number {
-  const FALLBACK = 0.06;
-  if (!household || household.growthScenarios.length === 0) return FALLBACK;
-  const moderate = household.growthScenarios.find((s) => s.label === 'Moderate');
-  if (moderate) return moderate.rate;
-  const second = household.growthScenarios[1];
-  if (second) return second.rate;
-  return household.growthScenarios[0]?.rate ?? FALLBACK;
-}
 
 /**
  * Build a map of accountId → latest snapshot total. ISO date strings sort
@@ -189,24 +174,6 @@ function latestSnapshotPerAccount(snapshots: AccountSnapshot[]): Map<number, num
   return new Map([...winner.entries()].map(([k, v]) => [k, v.value]));
 }
 
-/**
- * 6-month rolling average contribution to a set of accounts. Mirrors
- * Goals.tsx — months with zero contributions still divide the total down.
- */
-function monthlyContributionAvg(
-  contributions: Contribution[],
-  linkedIds: number[],
-  today: Date,
-  monthsBack = 6,
-): number {
-  if (linkedIds.length === 0 || monthsBack <= 0) return 0;
-  const cutoffIso = minusMonths(today, monthsBack);
-  const linkedSet = new Set(linkedIds);
-  const total = contributions
-    .filter((c) => linkedSet.has(c.accountId) && c.date >= cutoffIso)
-    .reduce((sum, c) => sum + c.amount, 0);
-  return total / monthsBack;
-}
 
 interface GoalProjection extends GoalProgressResult {
   goal: Goal;
