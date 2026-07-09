@@ -72,7 +72,7 @@ describe('validateSnapshotRow', () => {
     const row = { account: 'Fidelity 401k', snapshot_date: '2023-06-30', total_value: 'N/A' };
     const r = validateSnapshotRow(row, 7, baseCtx);
     expect(r.status).toBe('error');
-    expect(r.errors).toContainEqual({ field: 'total_value', message: expect.stringMatching(/numeric/i) });
+    expect(r.errors).toContainEqual({ field: 'total_value', message: expect.stringMatching(/unparseable/i) });
   });
 
   it('accepts negative total_value (e.g. negative cash)', () => {
@@ -107,5 +107,14 @@ describe('validateSnapshotRow', () => {
     const r = validateSnapshotRow(row, 42, baseCtx);
     expect(r.rowId).toBe(42);
     expect(r.raw).toEqual(row);
+  });
+});
+
+describe('locale-aware values (wave-9 S78)', () => {
+  it('a European "60.000,50" value resolves to 60000.5 with no error', () => {
+    const row = { account: 'Fidelity 401k', snapshot_date: '2023-06-30', total_value: '60.000,50' };
+    const r = validateSnapshotRow(row, 9, baseCtx);
+    expect(r.errors).toEqual([]);
+    expect(r.resolved.totalValue).toBeCloseTo(60000.5, 10);
   });
 });

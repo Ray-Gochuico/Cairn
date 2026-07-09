@@ -110,3 +110,25 @@ describe('validateTransactionRow', () => {
     expect(r.errors).toContainEqual({ field: 'person', message: expect.stringMatching(/no.*person/i) });
   });
 });
+
+describe('locale-aware amounts (wave-9 S78)', () => {
+  it('a European "1.234,56" amount resolves to 1234.56 with no error', () => {
+    const row = {
+      date: '2024-02-01', account: 'Chase Checking', amount: '1.234,56',
+      merchant: 'EU Store',
+    };
+    const r = validateTransactionRow(row, 9, ctx);
+    expect(r.errors).toEqual([]);
+    expect(r.resolved.amount).toBeCloseTo(1234.56, 10);
+  });
+
+  it('an unparseable amount becomes a row error, not a silently-wrong number', () => {
+    const row = {
+      date: '2024-02-01', account: 'Chase Checking', amount: '1,23,45',
+      merchant: 'Weird',
+    };
+    const r = validateTransactionRow(row, 10, ctx);
+    expect(r.status).toBe('error');
+    expect(r.errors.some((e) => e.field === 'amount')).toBe(true);
+  });
+});

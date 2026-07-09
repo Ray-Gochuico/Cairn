@@ -1,6 +1,7 @@
 // src/lib/import/validators/transaction-validator.ts
 import type { CellError, PreviewRow, RawRow, RowId, ValidationContext } from '@/lib/import/types';
 import { resolveAccount, resolvePerson } from '@/lib/import/resolver';
+import { parseImportAmount } from '@/lib/import/amount';
 
 export interface TransactionResolved {
   accountId?: number;
@@ -60,9 +61,11 @@ export function validateTransactionRow(
   if (!amountRaw) {
     errors.push({ field: 'amount', message: 'Amount is required' });
   } else {
-    const n = Number(stripCurrencyDecoration(amountRaw));
-    if (!Number.isFinite(n)) {
-      errors.push({ field: 'amount', message: 'Amount must be numeric' });
+    // Wave-9 S78: locale-aware parsing (EU "1.234,56" / "1 234,56" no longer
+    // corrupt silently); null → row error instead of a silently-wrong number.
+    const n = parseImportAmount(amountRaw);
+    if (n == null) {
+      errors.push({ field: 'amount', message: `Unparseable amount "${amountRaw}"` });
     } else {
       resolved.amount = n;
     }
@@ -132,13 +135,6 @@ function parseExplicitId(s: string): number | null {
   if (!trimmed) return null;
   const n = Number(trimmed);
   return Number.isInteger(n) ? n : null;
-}
-
-function stripCurrencyDecoration(s: string): string {
-  let v = s.trim();
-  const parens = v.startsWith('(') && v.endsWith(')');
-  if (parens) v = `-${v.slice(1, -1)}`;
-  return v.replace(/[$,\s]/g, '');
 }
 
 function isRealCalendarDate(iso: string): boolean {
