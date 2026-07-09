@@ -186,3 +186,37 @@ describe('AccountForm — zero persons (B1: no dead-end)', () => {
     expect(submitted.name).toBe('Joint Checking');
   });
 });
+
+describe('AccountForm — W10 M44 error honesty', () => {
+  it('surfaces a rejected save as a role=alert banner instead of swallowing it (W10 M44)', async () => {
+    const user = userEvent.setup();
+    render(
+      <AccountForm
+        initial={{ ...DEFAULT_ACCOUNT, name: 'Checking' }}
+        persons={persons} dependents={dependents}
+        onSubmit={vi.fn().mockRejectedValue(new Error('DB locked'))}
+        onCancel={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /save|add/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/couldn.t save.*DB locked/i);
+  });
+
+  it('renders a humanized inline error + aria-invalid on the empty name field, not raw Zod', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+    render(
+      <AccountForm
+        initial={{ ...DEFAULT_ACCOUNT, name: '' }}
+        persons={persons} dependents={dependents}
+        onSubmit={onSubmit} onCancel={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /save|add/i }));
+    const name = screen.getByLabelText('Name');
+    expect(name).toHaveAttribute('aria-invalid', 'true');
+    expect(name).toHaveAccessibleDescription('Required');
+    expect(screen.queryByText(/expected string/i)).not.toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+});
