@@ -202,6 +202,71 @@ describe('TransactionsSectionImporter', () => {
     expect(screen.queryByText(/review transactions/i)).toBeNull();
   });
 
+  it('skipping the first of two queued CSVs advances to the second, not drop the batch (wave-9 S80)', async () => {
+    await useCategoriesStore.getState().load();
+    const accountsRepo = new AccountsRepo(db);
+    const accountId = await accountsRepo.create({
+      householdId: 1,
+      ownerPersonId: null,
+      beneficiaryDependentId: null,
+      name: 'Chase Checking',
+      institution: null,
+      type: AccountType.ACCOUNT_CASH,
+      cryptoWalletAddress: null,
+      autoFetchEnabled: false,
+      excludedFromNetWorth: false,
+      stateOfPlan: null,
+      accentColor: null,
+    });
+    useAccountsStore.setState({
+      accounts: [
+        {
+          id: accountId,
+          householdId: 1,
+          ownerPersonId: null,
+          beneficiaryDependentId: null,
+          name: 'Chase Checking',
+          institution: null,
+          type: AccountType.ACCOUNT_CASH,
+          cryptoWalletAddress: null,
+          autoFetchEnabled: false,
+          excludedFromNetWorth: false,
+          stateOfPlan: null,
+          accentColor: null,
+        },
+      ],
+      isLoading: false,
+      error: null,
+    });
+
+    renderImporter();
+
+    const fileOne = new File(
+      ['date,account,amount,merchant,category,reimbursable\n2024-03-15,Chase Checking,20.00,STARBUCKS,,no\n'],
+      'one.csv',
+      { type: 'text/csv' },
+    );
+    const fileTwo = new File(
+      ['date,account,amount,merchant,category,reimbursable\n2024-03-16,Chase Checking,30.00,WHOLEFOODS,,no\n'],
+      'two.csv',
+      { type: 'text/csv' },
+    );
+    const input = screen.getByLabelText(/transactions pdf or csv/i) as HTMLInputElement;
+    Object.defineProperty(input, 'files', { value: [fileOne, fileTwo], configurable: true });
+    fireEvent.change(input);
+
+    // File 1 of 2 is previewing, with an explicit batch-cancel affordance.
+    await screen.findByRole('dialog');
+    expect(await screen.findByText('STARBUCKS')).toBeInTheDocument();
+    expect(screen.getByText(/File 1 of 2/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /cancel all 2 files/i })).toBeInTheDocument();
+
+    // Skip just this file → the SECOND file's preview appears (batch survives).
+    fireEvent.click(screen.getByRole('button', { name: /skip this file/i }));
+    expect(await screen.findByText('WHOLEFOODS')).toBeInTheDocument();
+    expect(screen.getByText(/File 2 of 2/i)).toBeInTheDocument();
+  });
+
   it('silently skips an unsupported .txt file dropped onto the zone', async () => {
     await useCategoriesStore.getState().load();
     renderImporter();
