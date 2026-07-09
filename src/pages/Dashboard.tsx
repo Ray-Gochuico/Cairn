@@ -924,7 +924,9 @@ export default function Dashboard() {
         <MetricCard
           label="Spending vs Budget"
           value={formatUSD(currentMonthSpend)}
-          href={withView('/spending')}
+          // W14: with no budget set, the tile IS the affordance — it goes to
+          // the Budget editor (where budgets are actually set), not Inputs.
+          href={monthlyBudget > 0 ? withView('/spending') : '/budget'}
           delta={monthlyBudget > 0
             ? currentMonthSpend > monthlyBudget
               ? `${formatUSD(currentMonthSpend - monthlyBudget)} over`
@@ -937,7 +939,7 @@ export default function Dashboard() {
             : 'neutral'}
           subtitle={monthlyBudget > 0
             ? `Budget: ${formatUSD(monthlyBudget)}`
-            : 'Set a budget in Inputs'}
+            : 'Set a budget'}
         />
       ),
     },

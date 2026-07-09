@@ -440,6 +440,35 @@ describe('Dashboard spending cards', () => {
     // $500 spend, $3,000 budget → $2,500 under
     expect(screen.getByText(/\$2,500 under/i)).toBeInTheDocument();
   });
+
+  it('no-budget state links the tile to the Budget editor, not Inputs (W14)', () => {
+    // Zero the expense baseline → monthlyBudget = 0 → the no-budget subtitle shows.
+    useHouseholdStore.setState({
+      household: {
+        filingStatus: FilingStatus.SINGLE,
+        state: 'CA',
+        city: null,
+        monthlyExpenseBaseline: 0,
+        withdrawalRate: 0.04,
+        inflationAssumption: 0.03,
+        growthScenarios: moderateScenarios,
+      },
+      isLoading: false,
+      error: null,
+    });
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+
+    const subtitle = screen.getByText(/^set a budget$/i);
+    expect(subtitle).toBeInTheDocument();
+    // The tile itself navigates to /budget — where budgets are actually set.
+    expect(subtitle.closest('a')).toHaveAttribute('href', '/budget');
+    // The dead-end nag is gone everywhere.
+    expect(screen.queryByText(/set a budget in inputs/i)).toBeNull();
+  });
 });
 
 describe('Dashboard pills — excluded accounts', () => {
