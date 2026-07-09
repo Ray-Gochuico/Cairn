@@ -79,7 +79,7 @@ describe('PropertiesTab', () => {
     const user = userEvent.setup();
     await seedLinkedPair(true);
     render(<MemoryRouter><PropertiesTab /></MemoryRouter>);
-    await user.click(await screen.findByRole('button', { name: 'Edit' }));
+    await user.click(await screen.findByRole('button', { name: 'Edit House' }));
 
     expect(await screen.findByTestId('excluded-linked-loan-note')).toHaveTextContent(
       /linked mortgage still counts toward net worth/i,
@@ -96,7 +96,7 @@ describe('PropertiesTab', () => {
     const user = userEvent.setup();
     await seedLinkedPair(false);
     render(<MemoryRouter><PropertiesTab /></MemoryRouter>);
-    await user.click(await screen.findByRole('button', { name: 'Edit' }));
+    await user.click(await screen.findByRole('button', { name: 'Edit House' }));
 
     expect(await screen.findByLabelText(/exclude from net worth/i)).not.toBeChecked();
     expect(screen.queryByTestId('excluded-linked-loan-note')).not.toBeInTheDocument();

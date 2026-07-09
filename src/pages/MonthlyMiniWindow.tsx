@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLoadGate } from '@/lib/use-load-gate';
 import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
@@ -106,6 +106,9 @@ function DerivedValueCard({ account, snapshot }: DerivedValueCardProps) {
   const [editValue, setEditValue] = useState<string>(String(snapshot.totalValue));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // W10 T6: confirming unmounts the focused button; move focus to the
+  // pre-mounted status region so it never strands on <body>.
+  const statusRef = useRef<HTMLSpanElement>(null);
 
   const confirm = async (value: number) => {
     setBusy(true);
@@ -119,6 +122,7 @@ function DerivedValueCard({ account, snapshot }: DerivedValueCardProps) {
       });
       setLocalMode('confirmed');
       setEditing(false);
+      requestAnimationFrame(() => statusRef.current?.focus());
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Save failed');
     } finally {
@@ -145,11 +149,13 @@ function DerivedValueCard({ account, snapshot }: DerivedValueCardProps) {
               the node from the start and let the TEXT be the conditional
               part. */}
           <span
+            ref={statusRef}
             role="status"
+            tabIndex={-1}
             className={
               mode === 'confirmed'
-                ? 'text-sm font-medium text-success-foreground'
-                : undefined
+                ? 'text-sm font-medium text-success-foreground outline-none'
+                : 'outline-none'
             }
           >
             {mode === 'confirmed' && 'Confirmed'}

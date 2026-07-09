@@ -145,10 +145,11 @@ export default function LoansTab() {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => setMode({ type: 'edit', id: l.id! })}>Edit</Button>
+                  <Button size="sm" variant="outline" aria-label={`Edit ${l.name}`} onClick={() => setMode({ type: 'edit', id: l.id! })}>Edit</Button>
                   <Button
                     size="sm"
                     variant="destructive"
+                    aria-label={`Delete ${l.name}`}
                     onClick={async () => {
                       const ok = await confirm({
                         title: `Delete ${l.name}?`,

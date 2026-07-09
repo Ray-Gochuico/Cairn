@@ -53,6 +53,9 @@ export function DataSection() {
   const { confirm, dialog } = useConfirm();
 
   const [busy, setBusy] = useState<null | 'backup' | 'save' | 'restore'>(null);
+  // W10 T6: track WHICH backup path is restoring so only its row reads
+  // "Restoring…" (the boolean 'restore' sentinel flipped every row's label).
+  const [busyPath, setBusyPath] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [backups, setBackups] = useState<BackupEntry[]>([]);
@@ -163,12 +166,14 @@ export function DataSection() {
     if (!ok) return;
 
     setBusy('restore');
+    setBusyPath(source);
     try {
       // On success this reloads the webview, so code after it won't run.
       await restoreFromBackup(source);
     } catch (e) {
       setError(`Restore failed: ${e instanceof Error ? e.message : String(e)}`);
       setBusy(null);
+      setBusyPath(null);
     }
   }
 
@@ -264,10 +269,11 @@ export function DataSection() {
                     <Button
                       variant="outline"
                       size="sm"
+                      aria-label={`Restore backup from ${formatTakenAt(b.takenAt)}`}
                       onClick={() => handleRestoreEntry(b)}
                       disabled={!tauri || busy !== null}
                     >
-                      {busy === 'restore' ? 'Restoring…' : 'Restore'}
+                      {busyPath === b.path ? 'Restoring…' : 'Restore'}
                     </Button>
                   </li>
                 ))}

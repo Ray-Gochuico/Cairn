@@ -101,6 +101,15 @@ describe('PersonsTab', () => {
     });
   });
 
+  it('row actions carry the entity name (W10 T6)', async () => {
+    await seedPerson(db, 'Alice');
+    await seedPerson(db, 'Bob');
+    render(<MemoryRouter><PersonsTab /></MemoryRouter>);
+    await screen.findByText('Alice');
+    expect(screen.getByRole('button', { name: 'Edit Alice' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete Bob' })).toBeInTheDocument();
+  });
+
   describe('delete confirmation (high-cascade)', () => {
     it('clicking Delete opens a confirm dialog naming the collateral and does NOT remove yet', async () => {
       await seedPerson(db, 'Alex');
@@ -108,7 +117,7 @@ describe('PersonsTab', () => {
       render(<MemoryRouter><PersonsTab /></MemoryRouter>);
 
       await screen.findByText('Alex');
-      await user.click(screen.getByRole('button', { name: /^delete$/i }));
+      await user.click(screen.getByRole("button", { name: /^delete alex$/i }));
 
       expect(usePersonsStore.getState().persons).toHaveLength(1);
       expect(await screen.findByText(/delete alex\?/i)).toBeInTheDocument();
@@ -122,7 +131,7 @@ describe('PersonsTab', () => {
 
       await screen.findByText('Alex');
       // Cancel path
-      await user.click(screen.getByRole('button', { name: /^delete$/i }));
+      await user.click(screen.getByRole("button", { name: /^delete alex$/i }));
       await screen.findByText(/delete alex\?/i);
       await user.click(screen.getByRole('button', { name: /cancel/i }));
       await waitFor(() =>
@@ -131,7 +140,7 @@ describe('PersonsTab', () => {
       expect(usePersonsStore.getState().persons).toHaveLength(1);
 
       // Confirm path
-      await user.click(screen.getByRole('button', { name: /^delete$/i }));
+      await user.click(screen.getByRole("button", { name: /^delete alex$/i }));
       const dialog = await screen.findByRole('dialog');
       await user.click(within(dialog).getByRole('button', { name: /^delete$/i }));
       await waitFor(() =>

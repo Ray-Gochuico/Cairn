@@ -126,6 +126,17 @@ describe('DataSection — desktop (Tauri) path', () => {
     await waitFor(() => expect(screen.getAllByTestId('backup-row')).toHaveLength(2));
   });
 
+  it('each Restore names its backup and only the busy row flips (W10 T6)', async () => {
+    mList.mockResolvedValue([
+      entry('cairn-20260701-100000.db', new Date(2026, 6, 1, 10, 0, 0)),
+      entry('cairn-20260601-100000.db', new Date(2026, 5, 1, 10, 0, 0)),
+    ]);
+    renderSection();
+    await waitFor(() => expect(screen.getAllByTestId('backup-row')).toHaveLength(2));
+    const restores = screen.getAllByRole('button', { name: /^restore backup from/i });
+    expect(new Set(restores.map((b) => b.getAttribute('aria-label'))).size).toBe(2);
+  });
+
   it('Save a copy invokes saveBackupCopy and reports the path', async () => {
     renderSection();
     await userEvent.click(screen.getByRole('button', { name: /save a copy/i }));

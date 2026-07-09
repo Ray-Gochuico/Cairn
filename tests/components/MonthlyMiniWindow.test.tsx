@@ -240,6 +240,13 @@ describe('MonthlyMiniWindow', () => {
     // so scope to the one that actually carries text.
     const statusTexts = screen.getAllByRole('status').map((el) => el.textContent ?? '');
     expect(statusTexts).toContain('Confirmed');
+
+    // W10 T6: confirming unmounted the Confirm button — focus must land on the
+    // card's status region, not strand on <body>.
+    await waitFor(() => {
+      expect(document.body).not.toBe(document.activeElement);
+      expect((document.activeElement as HTMLElement).getAttribute('role')).toBe('status');
+    });
   });
 
   it('announces a failed confirm via role="alert" (Wave-4: inline card errors are announced)', async () => {

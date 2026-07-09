@@ -208,7 +208,7 @@ describe('AccountsTab', () => {
       render(<MemoryRouter><AccountsTab /></MemoryRouter>);
 
       await screen.findByText('Schwab Brokerage');
-      await user.click(screen.getByRole('button', { name: /^delete$/i }));
+      await user.click(screen.getByRole('button', { name: /^delete schwab brokerage$/i }));
 
       // The store still has the account — no synchronous cascade delete.
       expect(useAccountsStore.getState().accounts).toHaveLength(1);
@@ -228,7 +228,7 @@ describe('AccountsTab', () => {
       render(<MemoryRouter><AccountsTab /></MemoryRouter>);
 
       await screen.findByText('Schwab Brokerage');
-      await user.click(screen.getByRole('button', { name: /^delete$/i }));
+      await user.click(screen.getByRole('button', { name: /^delete schwab brokerage$/i }));
       await screen.findByText(/delete schwab brokerage\?/i);
       await user.click(screen.getByRole('button', { name: /cancel/i }));
 
@@ -245,7 +245,7 @@ describe('AccountsTab', () => {
       render(<MemoryRouter><AccountsTab /></MemoryRouter>);
 
       await screen.findByText('Schwab Brokerage');
-      await user.click(screen.getByRole('button', { name: /^delete$/i }));
+      await user.click(screen.getByRole('button', { name: /^delete schwab brokerage$/i }));
       await screen.findByText(/delete schwab brokerage\?/i);
       // The dialog's destructive button is also labelled "Delete"; scope to it.
       const dialog = await screen.findByRole('dialog');

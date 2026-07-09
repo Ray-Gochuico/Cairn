@@ -135,10 +135,11 @@ export default function PropertiesTab() {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => setMode({ type: 'edit', id: p.id! })}>Edit</Button>
+                  <Button size="sm" variant="outline" aria-label={`Edit ${p.name}`} onClick={() => setMode({ type: 'edit', id: p.id! })}>Edit</Button>
                   <Button
                     size="sm"
                     variant="destructive"
+                    aria-label={`Delete ${p.name}`}
                     onClick={async () => {
                       const ok = await confirm({
                         title: `Delete ${p.name}?`,
