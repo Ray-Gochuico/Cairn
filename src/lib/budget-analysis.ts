@@ -14,7 +14,12 @@ export interface BudgetRow {
 
 export interface BudgetSummary {
   month: string;             // YYYY-MM
-  rows: BudgetRow[];         // one per budgetable category
+  /**
+   * One per budgetable (leaf) category + synthesized rows for parent
+   * categories with in-month actuals (wave-9 M6 — parent-categorized
+   * spending previously vanished from rows/Misc/totalActual).
+   */
+  rows: BudgetRow[];
   totalBudget: number;       // sum of set budgets
   totalActual: number;       // sum of actuals across budgetable categories
 }
@@ -129,6 +134,32 @@ export function summarizeBudget(
       overBudget: budget != null && actual > budget,
     };
   });
+
+  // Wave-9 M6: spending categorized directly to a PARENT id has no leaf row —
+  // it silently vanished from every row, the Misc bucket, and totalActual.
+  // Synthesize a row per parent that actually has in-month spend (budget from
+  // the parent's own monthlyBudget when set); partitionTrackedRows rolls
+  // untracked ones into Misc like any other row.
+  const leafIds = new Set(rows.map((r) => r.categoryId));
+  const parentIds = new Set(
+    categories.map((c) => c.parentCategoryId).filter((p): p is number => p != null),
+  );
+  for (const [catId, actual] of actualByCat) {
+    if (leafIds.has(catId) || !parentIds.has(catId)) continue;
+    const cat = byId.get(catId);
+    if (!cat) continue;
+    const budget = cat.monthlyBudget;
+    rows.push({
+      categoryId: catId,
+      categoryName: cat.name,
+      parentCategoryId: cat.parentCategoryId,
+      budget,
+      actual,
+      remaining: budget != null ? budget - actual : null,
+      pct: budget != null && budget > 0 ? actual / budget : null,
+      overBudget: budget != null && actual > budget,
+    });
+  }
 
   return {
     month,
