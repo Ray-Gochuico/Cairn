@@ -7,7 +7,7 @@ import DatePicker from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { FormErrorSummary, useFormSubmit } from './form-errors';
+import { FieldError, FormErrorSummary, useFormSubmit } from './form-errors';
 
 export type GoalFormValues = Omit<Goal, 'id'>;
 
@@ -79,7 +79,16 @@ export default function GoalForm({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label htmlFor="name">Name</Label>
-              <Input id="name" {...form.register('name')} placeholder="e.g., Emergency fund" />
+              {/* Round-3 S6: the house trio — aria-invalid + aria-describedby
+                  + FieldError — on every field (AccountForm pattern). */}
+              <Input
+                id="name"
+                {...form.register('name')}
+                placeholder="e.g., Emergency fund"
+                aria-invalid={form.formState.errors.name ? true : undefined}
+                aria-describedby={form.formState.errors.name ? 'goal-name-error' : undefined}
+              />
+              <FieldError id="goal-name-error" message={form.formState.errors.name?.message} />
             </div>
             <div>
               <Label htmlFor="type">Type</Label>
@@ -87,11 +96,14 @@ export default function GoalForm({
                 id="type"
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 {...form.register('type')}
+                aria-invalid={form.formState.errors.type ? true : undefined}
+                aria-describedby={form.formState.errors.type ? 'goal-type-error' : undefined}
               >
                 {Object.entries(GOAL_TYPE_LABELS).map(([value, label]) => (
                   <option key={value} value={value}>{label}</option>
                 ))}
               </select>
+              <FieldError id="goal-type-error" message={form.formState.errors.type?.message} />
             </div>
           </div>
 
@@ -103,9 +115,14 @@ export default function GoalForm({
                 type="number"
                 step="any"
                 {...form.register('targetAmount', { valueAsNumber: true })}
+                aria-invalid={form.formState.errors.targetAmount ? true : undefined}
+                aria-describedby={form.formState.errors.targetAmount ? 'goal-target-amount-error' : undefined}
               />
+              <FieldError id="goal-target-amount-error" message={form.formState.errors.targetAmount?.message} />
             </div>
-            <div>
+            <div
+              aria-describedby={form.formState.errors.targetDate ? 'goal-target-date-error' : undefined}
+            >
               <Label htmlFor="targetDate">Target date</Label>
               <DatePicker
                 id="targetDate"
@@ -116,10 +133,13 @@ export default function GoalForm({
                 }
                 maxYear={new Date().getUTCFullYear() + 60}
               />
+              <FieldError id="goal-target-date-error" message={form.formState.errors.targetDate?.message} />
             </div>
           </div>
 
-          <fieldset>
+          <fieldset
+            aria-describedby={form.formState.errors.forPersonId ? 'goal-for-person-error' : undefined}
+          >
             <legend className="text-sm font-medium mb-2">For</legend>
             <div className="flex flex-wrap gap-4">
               <label className="flex items-center gap-2 text-sm">
@@ -149,10 +169,13 @@ export default function GoalForm({
                 </label>
               ))}
             </div>
+            <FieldError id="goal-for-person-error" message={form.formState.errors.forPersonId?.message} />
           </fieldset>
 
           {accounts.length > 0 && (
-            <fieldset>
+            <fieldset
+              aria-describedby={form.formState.errors.linkedAccountIds ? 'goal-linked-accounts-error' : undefined}
+            >
               <legend className="text-sm font-medium mb-2">Linked accounts</legend>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
                 {accounts.map((a) => (
@@ -171,6 +194,10 @@ export default function GoalForm({
                   </label>
                 ))}
               </div>
+              <FieldError
+                id="goal-linked-accounts-error"
+                message={form.formState.errors.linkedAccountIds?.message}
+              />
             </fieldset>
           )}
         </CardContent>
