@@ -11,7 +11,7 @@ import DatePicker from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { FormErrorSummary, useFormSubmit } from './form-errors';
+import { FieldError, FormErrorSummary, useFormSubmit } from './form-errors';
 import { fractionToPercent, percentToFraction } from '@/lib/percent-fields';
 
 export type LoanFormValues = Omit<Loan, 'id'>;
@@ -173,7 +173,15 @@ export default function LoanForm({
         <CardContent className="space-y-3">
           <div>
             <Label htmlFor="name">Name</Label>
-            <Input id="name" {...form.register('name')} />
+            {/* Round-3 S6: the house trio — aria-invalid + aria-describedby
+                + FieldError — on every field (AccountForm pattern). */}
+            <Input
+              id="name"
+              {...form.register('name')}
+              aria-invalid={form.formState.errors.name ? true : undefined}
+              aria-describedby={form.formState.errors.name ? 'loan-name-error' : undefined}
+            />
+            <FieldError id="loan-name-error" message={form.formState.errors.name?.message} />
           </div>
 
           <div>
@@ -182,15 +190,20 @@ export default function LoanForm({
               id="type"
               className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               {...form.register('type')}
+              aria-invalid={form.formState.errors.type ? true : undefined}
+              aria-describedby={form.formState.errors.type ? 'loan-type-error' : undefined}
             >
               {Object.entries(LOAN_TYPE_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>{label}</option>
               ))}
             </select>
+            <FieldError id="loan-type-error" message={form.formState.errors.type?.message} />
           </div>
 
           {!onlyOnePerson && (
-            <fieldset>
+            <fieldset
+              aria-describedby={form.formState.errors.obligorPersonId ? 'loan-obligor-error' : undefined}
+            >
               <legend className="text-sm font-medium mb-2">Obligor</legend>
               <div className="flex flex-wrap gap-4">
                 {persons.map((p) => (
@@ -220,6 +233,7 @@ export default function LoanForm({
                   Joint
                 </label>
               </div>
+              <FieldError id="loan-obligor-error" message={form.formState.errors.obligorPersonId?.message} />
             </fieldset>
           )}
 
@@ -238,9 +252,12 @@ export default function LoanForm({
                       field.onBlur();
                       tryAutoFillMonthlyPayment();
                     }}
+                    aria-invalid={form.formState.errors.originalAmount ? true : undefined}
+                    aria-describedby={form.formState.errors.originalAmount ? 'loan-original-amount-error' : undefined}
                   />
                 )}
               />
+              <FieldError id="loan-original-amount-error" message={form.formState.errors.originalAmount?.message} />
             </div>
             <div>
               <Label htmlFor="currentBalance">Current balance ($)</Label>
@@ -256,9 +273,12 @@ export default function LoanForm({
                       field.onBlur();
                       tryAutoFillMonthlyPayment();
                     }}
+                    aria-invalid={form.formState.errors.currentBalance ? true : undefined}
+                    aria-describedby={form.formState.errors.currentBalance ? 'loan-current-balance-error' : undefined}
                   />
                 )}
               />
+              <FieldError id="loan-current-balance-error" message={form.formState.errors.currentBalance?.message} />
             </div>
           </div>
 
@@ -273,6 +293,8 @@ export default function LoanForm({
                   className="pr-7 text-right tabular-nums"
                   {...form.register('interestRatePercent', { valueAsNumber: true })}
                   onBlur={tryAutoFillMonthlyPayment}
+                  aria-invalid={form.formState.errors.interestRatePercent ? true : undefined}
+                  aria-describedby={form.formState.errors.interestRatePercent ? 'loan-interest-rate-error' : undefined}
                 />
                 <span
                   aria-hidden
@@ -281,6 +303,7 @@ export default function LoanForm({
                   %
                 </span>
               </div>
+              <FieldError id="loan-interest-rate-error" message={form.formState.errors.interestRatePercent?.message} />
             </div>
             <div>
               <Label htmlFor="termMonths">Term (months)</Label>
@@ -289,12 +312,17 @@ export default function LoanForm({
                 type="number"
                 {...form.register('termMonths', { valueAsNumber: true })}
                 onBlur={tryAutoFillMonthlyPayment}
+                aria-invalid={form.formState.errors.termMonths ? true : undefined}
+                aria-describedby={form.formState.errors.termMonths ? 'loan-term-months-error' : undefined}
               />
+              <FieldError id="loan-term-months-error" message={form.formState.errors.termMonths?.message} />
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
+            <div
+              aria-describedby={form.formState.errors.firstPaymentDate ? 'loan-first-payment-date-error' : undefined}
+            >
               <Label htmlFor="firstPaymentDate">First payment date</Label>
               <DatePicker
                 id="firstPaymentDate"
@@ -305,6 +333,7 @@ export default function LoanForm({
                   tryAutoFillMonthlyPayment();
                 }}
               />
+              <FieldError id="loan-first-payment-date-error" message={form.formState.errors.firstPaymentDate?.message} />
             </div>
             <div>
               <Label htmlFor="monthlyPayment">Monthly payment ($)</Label>
@@ -320,9 +349,12 @@ export default function LoanForm({
                       field.onChange(v ?? 0);
                     }}
                     onBlur={field.onBlur}
+                    aria-invalid={form.formState.errors.monthlyPayment ? true : undefined}
+                    aria-describedby={form.formState.errors.monthlyPayment ? 'loan-monthly-payment-error' : undefined}
                   />
                 )}
               />
+              <FieldError id="loan-monthly-payment-error" message={form.formState.errors.monthlyPayment?.message} />
             </div>
           </div>
 
@@ -337,9 +369,12 @@ export default function LoanForm({
                   value={field.value ?? null}
                   onValueChange={(v) => field.onChange(v ?? 0)}
                   onBlur={field.onBlur}
+                  aria-invalid={form.formState.errors.extraPaymentDefault ? true : undefined}
+                  aria-describedby={form.formState.errors.extraPaymentDefault ? 'loan-extra-payment-error' : undefined}
                 />
               )}
             />
+            <FieldError id="loan-extra-payment-error" message={form.formState.errors.extraPaymentDefault?.message} />
           </div>
 
           {isMortgage && (
@@ -351,12 +386,15 @@ export default function LoanForm({
                 {...form.register('linkedPropertyId', {
                   setValueAs: (v) => (v === '' || v === null ? null : Number(v)),
                 })}
+                aria-invalid={form.formState.errors.linkedPropertyId ? true : undefined}
+                aria-describedby={form.formState.errors.linkedPropertyId ? 'loan-linked-property-error' : undefined}
               >
                 <option value="">None</option>
                 {properties.map((p) => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>
+              <FieldError id="loan-linked-property-error" message={form.formState.errors.linkedPropertyId?.message} />
             </div>
           )}
 
@@ -369,18 +407,36 @@ export default function LoanForm({
                 {...form.register('linkedVehicleId', {
                   setValueAs: (v) => (v === '' || v === null ? null : Number(v)),
                 })}
+                aria-invalid={form.formState.errors.linkedVehicleId ? true : undefined}
+                aria-describedby={form.formState.errors.linkedVehicleId ? 'loan-linked-vehicle-error' : undefined}
               >
                 <option value="">None</option>
                 {vehicles.map((v) => (
                   <option key={v.id} value={v.id}>{v.name}</option>
                 ))}
               </select>
+              <FieldError id="loan-linked-vehicle-error" message={form.formState.errors.linkedVehicleId?.message} />
             </div>
           )}
         </CardContent>
       </Card>
 
-            <FormErrorSummary fieldErrors={form.formState.errors} submitError={submitError} />
+            <FormErrorSummary
+        fieldErrors={form.formState.errors}
+        submitError={submitError}
+        labels={{
+          interestRatePercent: 'Interest rate',
+          termMonths: 'Term (months)',
+          firstPaymentDate: 'First payment date',
+          originalAmount: 'Original amount',
+          currentBalance: 'Current balance',
+          monthlyPayment: 'Monthly payment',
+          extraPaymentDefault: 'Extra payment default',
+          obligorPersonId: 'Obligor',
+          linkedPropertyId: 'Linked property',
+          linkedVehicleId: 'Linked vehicle',
+        }}
+      />
 
       <div className="flex justify-end items-center gap-3">
         <span

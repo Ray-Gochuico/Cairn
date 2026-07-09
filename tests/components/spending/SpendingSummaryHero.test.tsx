@@ -112,3 +112,25 @@ describe('SpendingSummaryHero', () => {
     expect(screen.getByTestId('spending-hero-center')).toHaveTextContent('Total spending');
   });
 });
+
+describe('data-anchored default range (round-3 S12)', () => {
+  it('previous-month-only data opens on Last month', () => {
+    const mayOnly = [
+      txn({ id: 1, date: '2026-05-08', categoryId: 1, amount: 500 }),
+      txn({ id: 2, date: '2026-05-20', categoryId: 1, amount: 300 }),
+    ];
+    render(<SpendingSummaryHero transactions={mayOnly} categories={cats} monthlyBudget={0} asOf={JUNE_15} />);
+    expect(screen.getByRole('tab', { name: 'Last month' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('older-history data widens to Last 12 months', () => {
+    const old = [txn({ id: 1, date: '2025-09-08', categoryId: 1, amount: 500 })];
+    render(<SpendingSummaryHero transactions={old} categories={cats} monthlyBudget={0} asOf={JUNE_15} />);
+    expect(screen.getByRole('tab', { name: 'Last 12 months' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('current-month data keeps This month', () => {
+    render(<SpendingSummaryHero transactions={txns} categories={cats} monthlyBudget={0} asOf={JUNE_15} />);
+    expect(screen.getByRole('tab', { name: 'This month' })).toHaveAttribute('aria-selected', 'true');
+  });
+});

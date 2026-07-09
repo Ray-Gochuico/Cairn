@@ -99,17 +99,20 @@ describe('SpendingWidget', () => {
     expect(screen.getByTestId('spending-widget-range-tabs')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'This month' })).toHaveAttribute('aria-selected', 'true');
     const bounds = screen.getByTestId('spending-widget-date-bounds');
-    expect(bounds).toHaveTextContent('2026-05-01');
-    expect(bounds).toHaveTextContent('2026-05-31');
+    // Round-3 S9: bounds are humanized, never raw ISO.
+    expect(bounds).toHaveTextContent('May 1, 2026');
+    expect(bounds).toHaveTextContent('May 31, 2026');
+    expect(bounds).not.toHaveTextContent('2026-05-01');
   });
 
   it('switching the range tab recomputes the date bounds', async () => {
     renderWidget([], []);
     await userEvent.click(screen.getByRole('tab', { name: 'Last 30 days' }));
     const bounds = screen.getByTestId('spending-widget-date-bounds');
-    // asOf 2026-05-25 → last 30 days = 2026-04-26 .. 2026-05-25.
-    expect(bounds).toHaveTextContent('2026-04-26');
-    expect(bounds).toHaveTextContent('2026-05-25');
+    // asOf 2026-05-25 → last 30 days = 2026-04-26 .. 2026-05-25 (humanized).
+    expect(bounds).toHaveTextContent('Apr 26, 2026');
+    expect(bounds).toHaveTextContent('May 25, 2026');
+    expect(bounds).not.toHaveTextContent('2026-04-26');
   });
 
   it('shows the empty state when no transactions match', () => {

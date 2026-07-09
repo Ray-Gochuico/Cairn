@@ -200,3 +200,32 @@ describe('ScenariosPanel', () => {
     expect(screen.queryByRole('button', { name: /save current/i })).not.toBeInTheDocument();
   });
 });
+
+describe('ScenariosPanel — humanized milestone dates (round-3 S9)', () => {
+  it('milestone chips render "FI Jan 2046", never the raw "2046/01"', () => {
+    const m = new Map<number, Milestones>();
+    m.set(1, { debtFreeISO: '2029-06', financialIndependenceISO: '2046-01' });
+    m.set(2, {});
+    render(
+      <MemoryRouter>
+        <ScenariosPanel milestones={m} onOpenManage={vi.fn()} onEditLevers={vi.fn()} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText(/FI Jan 2046/)).toBeInTheDocument();
+    expect(screen.queryByText(/2046\/01/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Debt-free Jun 2029/)).toBeInTheDocument();
+  });
+});
+
+describe('scenario selector aria-pressed (round-3 cleanup)', () => {
+  it('exposes aria-pressed on the select buttons — true only for the active scenario', () => {
+    render(
+      <MemoryRouter>
+        <ScenariosPanel milestones={makeMilestones()} onOpenManage={vi.fn()} onEditLevers={vi.fn()} />
+      </MemoryRouter>,
+    );
+    // Baseline is active (activeScenario() → baseline in the store mock).
+    expect(screen.getByRole('button', { name: /Baseline/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /Aggressive payoff/ })).toHaveAttribute('aria-pressed', 'false');
+  });
+});

@@ -362,10 +362,11 @@ describe('NetWorth page', () => {
     expect(screen.getByText(/net worth · Household/i)).toBeInTheDocument();
 
     // The GrowthCard IS person-filtered (fed from the visible* slices): its
-    // current value shows only p1's $50k…
-    const hits = await screen.findAllByText('$50,000');
-    expect(hits.length).toBeGreaterThanOrEqual(1);
+    // current value shows only p1's $50k (round-3 S10: on the context line).
+    const context = await screen.findByTestId('growth-context');
+    expect(context).toHaveTextContent('Now $50,000');
     // …and p2's $200k never appears outside the household-labeled chart.
+    expect(context).not.toHaveTextContent('$200,000');
     expect(screen.queryByText('$200,000')).not.toBeInTheDocument();
   });
 

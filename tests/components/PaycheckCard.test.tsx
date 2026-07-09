@@ -9,6 +9,7 @@ import { useDependentsStore } from '@/stores/dependents-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { FilingStatus } from '@/types/enums';
 import { CONTRIBUTION_LIMITS_2026 } from '@/lib/contribution-limits';
+import { aggregateHouseholdPretax } from '@/lib/calculators/supplemental-wage';
 
 // Federal SINGLE brackets (2026 approximate) — same as BonusTaxCard.test.tsx
 const federalSingleBrackets = [
@@ -287,6 +288,55 @@ describe('PaycheckCard', () => {
     await user.selectOptions(screen.getByLabelText(/Period:/i), 'ANNUAL');
     expect(screen.getByText('$23,400')).toBeInTheDocument();
     expect(screen.queryByText('$16,239')).not.toBeInTheDocument();
+  });
+
+  it('dual-earner DCFSA/HSA cap once per return on the paycheck card (round-3 M1)', async () => {
+    // Two MFJ earners, each electing $400/mo DCFSA + $500/mo HSA (eligible).
+    // Household pretax must carry DCFSA $7,500 (not $9,600) and HSA $8,750
+    // (not $12,000). Assert via the lib oracle so the caps stay exact.
+    const user = userEvent.setup();
+    primeStores();
+    useHouseholdStore.setState({
+      household: {
+        ...useHouseholdStore.getState().household!,
+        filingStatus: FilingStatus.MFJ,
+      },
+      isLoading: false,
+      error: null,
+    });
+    const alice = usePersonsStore.getState().persons[0];
+    const personsFixture = [
+      { ...alice, id: 1, name: 'Alice', dependentCareFsaMonthly: 400, hsaMonthlyContribution: 500, hsaEligible: true },
+      { ...alice, id: 2, name: 'Bob', dependentCareFsaMonthly: 400, hsaMonthlyContribution: 500, hsaEligible: true },
+    ];
+    usePersonsStore.setState({ persons: personsFixture, isLoading: false, error: null });
+    useDependentsStore.setState({
+      dependents: [{ id: 1, householdId: 1, name: 'Kid', dateOfBirth: '2020-01-01' }] as never,
+      isLoading: false,
+      error: null,
+    });
+    const items = useTaxRulesStore.getState().items.map((i) => ({
+      ...i,
+      filingStatus: FilingStatus.MFJ,
+    }));
+    useTaxRulesStore.setState({ year: 2026, items, isLoading: false, error: null });
+
+    const expected = aggregateHouseholdPretax(personsFixture as never, {
+      filingStatus: FilingStatus.MFJ,
+      personCount: 2,
+      dependentCount: 1,
+    });
+    expect(expected.pretax.pretaxDcfsa).toBe(7_500); // sanity: the fixture bites
+    expect(expected.pretax.pretaxHsa).toBe(8_750);
+
+    render(<MemoryRouter><PaycheckCard /></MemoryRouter>);
+    await screen.findByTestId('paycheck-takehome');
+    // Annual period so the pretax rows show the yearly caps verbatim.
+    await user.selectOptions(screen.getByLabelText(/Period:/i), 'ANNUAL');
+    expect(screen.getByText('$7,500')).toBeInTheDocument();
+    expect(screen.getByText('$8,750')).toBeInTheDocument();
+    expect(screen.queryByText('$9,600')).not.toBeInTheDocument();
+    expect(screen.queryByText('$12,000')).not.toBeInTheDocument();
   });
 
   it('disclosure copy cites the live SS wage base, not the stale $168,600, and does not falsely disclaim Additional Medicare', async () => {

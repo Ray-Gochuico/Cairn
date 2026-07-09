@@ -461,6 +461,50 @@ describe('DebtPayoffCard', () => {
 
 // ── Unit tests for the exported helper functions ────────────────────────────
 
+describe('extra-payment savings pin (round-3 T21)', () => {
+  beforeEach(() => {
+    useLoansStore.setState({ loans: [], isLoading: false, error: null });
+    sessionStorage.clear();
+  });
+
+  it('a loan with extraPaymentDefault > 0 shows a POSITIVE savings figure', async () => {
+    // Every existing debt-savings assertion pins the suppressed '—'; this one
+    // pins the happy path. Oracle = amortize() with/without the extra, using
+    // the SAME remaining-schedule anchor the card uses (clock-free: the
+    // anchor comes from localTodayISO(), not a bare new Date() here).
+    const { amortize, nextPaymentDateFrom } = await import('@/lib/amortization');
+    const { localTodayISO } = await import('@/lib/dates');
+    const { formatCurrency } = await import('@/lib/format');
+    const loan = makeLoan({
+      id: 1,
+      name: 'Car',
+      currentBalance: 10000,
+      interestRate: 0.06,
+      termMonths: 60,
+      extraPaymentDefault: 200,
+    });
+    useLoansStore.setState({ loans: [loan], isLoading: false, error: null });
+    render(<MemoryRouter><DebtPayoffCard /></MemoryRouter>);
+
+    const anchor = nextPaymentDateFrom(loan.firstPaymentDate, localTodayISO());
+    const base = {
+      principal: loan.currentBalance,
+      annualRatePct: loan.interestRate,
+      termMonths: loan.termMonths,
+      firstPaymentDate: anchor,
+      monthlyPayment: loan.monthlyPayment,
+    };
+    const withoutExtra = amortize({ ...base, extraPayment: 0 });
+    const withExtra = amortize({ ...base, extraPayment: 200 });
+    const expected = withoutExtra.totalInterest - withExtra.totalInterest;
+    expect(expected).toBeGreaterThan(0); // sanity: the fixture bites
+
+    const savings = screen.getByTestId('debt-savings');
+    expect(savings).toHaveTextContent(formatCurrency(expected));
+    expect(savings).not.toHaveTextContent('—');
+  });
+});
+
 describe('pickStrategyTargetIndex', () => {
   const loans: Loan[] = [
     makeLoan({ id: 1, currentBalance: 5000, interestRate: 0.05 }),

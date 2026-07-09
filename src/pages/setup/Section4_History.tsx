@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -183,6 +184,9 @@ export default function Section4_History({ status, onSetStatus }: Props) {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add account snapshot</DialogTitle>
+            <DialogDescription className="sr-only">
+              Record an account balance as of a past date.
+            </DialogDescription>
           </DialogHeader>
           <AccountSnapshotInlineForm
             accounts={accounts}
@@ -201,6 +205,9 @@ export default function Section4_History({ status, onSetStatus }: Props) {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add property / vehicle value snapshot</DialogTitle>
+            <DialogDescription className="sr-only">
+              Record a property or vehicle value as of a past date.
+            </DialogDescription>
           </DialogHeader>
           <AssetSnapshotsInlineForm
             properties={properties}
@@ -216,6 +223,9 @@ export default function Section4_History({ status, onSetStatus }: Props) {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add contribution</DialogTitle>
+            <DialogDescription className="sr-only">
+              Record a past contribution into one of your accounts.
+            </DialogDescription>
           </DialogHeader>
           <ContributionInlineForm
             accounts={accounts}
@@ -234,6 +244,9 @@ export default function Section4_History({ status, onSetStatus }: Props) {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add a goal</DialogTitle>
+            <DialogDescription className="sr-only">
+              Add a savings goal with its target amount and date.
+            </DialogDescription>
           </DialogHeader>
           <GoalForm onSaved={() => setDialog(null)} />
         </DialogContent>

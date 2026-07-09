@@ -11,6 +11,8 @@ import { UpdaterSection } from '@/components/settings/UpdaterSection';
 import { AdvancedSection } from '@/components/settings/AdvancedSection';
 import { DisclosuresSection } from '@/components/settings/DisclosuresSection';
 import { PageContainer } from '@/components/layout/PageContainer';
+import { useEffect, useState } from 'react';
+import { cn } from '@/lib/utils';
 
 // Anchor manifest for the sticky mini-TOC. Labels match the REAL section
 // titles (the h2 rendered in each card); ids are the scroll targets on the
@@ -32,6 +34,29 @@ const SECTIONS = [
 ] as const;
 
 export default function Settings() {
+  // Round-3 cleanup: scroll-spy — one IntersectionObserver marks the TOC
+  // link of the topmost intersecting section with aria-current="location".
+  const [activeId, setActiveId] = useState<string | null>(null);
+  useEffect(() => {
+    if (typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((e) => e.isIntersecting);
+        if (visible.length === 0) return;
+        const top = visible.reduce((a, b) =>
+          a.boundingClientRect.top <= b.boundingClientRect.top ? a : b,
+        );
+        setActiveId(top.target.id);
+      },
+      { rootMargin: '-10% 0px -70% 0px' },
+    );
+    for (const { id } of SECTIONS) {
+      const el = document.getElementById(id);
+      if (el) observer.observe(el);
+    }
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <PageContainer width="prose" className="space-y-6">
       <div>
@@ -47,7 +72,18 @@ export default function Settings() {
             <a
               key={id}
               href={`#${id}`}
-              className="block rounded px-2 py-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+              aria-current={activeId === id ? 'location' : undefined}
+              // Focus handoff: let the native jump happen, then move focus to
+              // the target section so keyboard users don't tab from the top.
+              onClick={() => {
+                requestAnimationFrame(() =>
+                  document.getElementById(id)?.focus({ preventScroll: true }),
+                );
+              }}
+              className={cn(
+                'block rounded px-2 py-1 text-muted-foreground hover:bg-accent hover:text-foreground',
+                activeId === id && 'bg-accent font-medium text-foreground',
+              )}
             >
               {label}
             </a>
@@ -55,7 +91,7 @@ export default function Settings() {
         </nav>
         <div className="space-y-6">
           {SECTIONS.map(({ id, Component }) => (
-            <section key={id} id={id} className="scroll-mt-6">
+            <section key={id} id={id} tabIndex={-1} className="scroll-mt-6 outline-none">
               <Component />
             </section>
           ))}

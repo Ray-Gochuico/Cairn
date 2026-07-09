@@ -513,8 +513,12 @@ describe('Investments page — 529 section', () => {
       await user.click(within(allocCard).getByRole('checkbox', { name: /US Bonds/ }));
 
       const legend = within(allocCard).getByLabelText('Chart legend');
-      expect(within(legend).getByText(/^US Total Market — \$18,750 · 62\.5%$/)).toBeInTheDocument();
-      expect(within(legend).getByText(/^Crypto — \$1,875 · 6\.3%$/)).toBeInTheDocument();
+      // Round-3 S11: the name is a title-carrying truncate span, the readouts
+      // a sibling span — assert on the whole row's text.
+      expect(within(legend).getByTitle('US Total Market').closest('li')!)
+        .toHaveTextContent('US Total Market — $18,750 · 62.5%');
+      expect(within(legend).getByTitle('Crypto').closest('li')!)
+        .toHaveTextContent('Crypto — $1,875 · 6.3%');
       expect(within(legend).queryByText(/90\.9%|9\.1%/)).toBeNull();
     });
 
@@ -552,10 +556,11 @@ describe('Investments page — 529 section', () => {
 
       // All three asset classes visible in the legend initially.
       const legend = within(allocCard).getByLabelText('Chart legend');
-      // Legend rows read "<name> — $value · pct%" since the Wave-3 upgrade.
-      expect(within(legend).getByText(/^US Bonds —/)).toBeInTheDocument();
-      expect(within(legend).getByText(/^Crypto —/)).toBeInTheDocument();
-      expect(within(legend).getByText(/^US Total Market —/)).toBeInTheDocument();
+      // Legend rows read "<name> — $value · pct%"; the name carries a title
+      // attribute since the round-3 S11 truncation split.
+      expect(within(legend).getByTitle('US Bonds')).toBeInTheDocument();
+      expect(within(legend).getByTitle('Crypto')).toBeInTheDocument();
+      expect(within(legend).getByTitle('US Total Market')).toBeInTheDocument();
 
       const user = userEvent.setup();
       await user.click(
@@ -565,9 +570,9 @@ describe('Investments page — 529 section', () => {
 
       // US Bonds slice gone from the legend; the other two remain.
       const legend2 = within(allocCard).getByLabelText('Chart legend');
-      expect(within(legend2).queryByText(/^US Bonds —/)).toBeNull();
-      expect(within(legend2).getByText(/^Crypto —/)).toBeInTheDocument();
-      expect(within(legend2).getByText(/^US Total Market —/)).toBeInTheDocument();
+      expect(within(legend2).queryByTitle('US Bonds')).toBeNull();
+      expect(within(legend2).getByTitle('Crypto')).toBeInTheDocument();
+      expect(within(legend2).getByTitle('US Total Market')).toBeInTheDocument();
       expect(
         within(allocCard).getByRole('button', { name: /Included · 2 of 3/ }),
       ).toBeInTheDocument();
@@ -613,7 +618,7 @@ describe('Investments page — 529 section', () => {
       };
       const legendSwatch = (label: string) => {
         const li = within(within(allocCard).getByLabelText('Chart legend'))
-          .getByText(new RegExp(`^${label} \u2014`))
+          .getByTitle(label)
           .closest('li')!;
         return (li.querySelector('span[aria-hidden]') as HTMLElement).style.backgroundColor;
       };
@@ -926,9 +931,10 @@ describe('Investments page — 529 section', () => {
       return el!;
     });
     // Chart universe = accounts 1 + 2 (cash counts, excluded doesn't) = $3,000.
-    expect(within(growth).getByText('$3,000')).toBeInTheDocument();
-    expect(within(growth).queryByText('$2,000')).not.toBeInTheDocument(); // old universe
-    expect(within(growth).queryByText('$8,000')).not.toBeInTheDocument(); // excluded leaked
+    // Round-3 S10: the level lives on the context line ("Now $3,000 · …").
+    expect(within(growth).getByTestId('growth-context')).toHaveTextContent('Now $3,000');
+    expect(growth.textContent).not.toContain('$2,000'); // old universe
+    expect(growth.textContent).not.toContain('$8,000'); // excluded leaked
   });
 
   it('class-targets renders as a wide card (own row), not a one-third orphan (round-2 D1)', async () => {
@@ -969,5 +975,20 @@ describe('Investments page — 529 section', () => {
     expect(wrapper.parentElement!.className).not.toContain('lg:grid-cols-3');
     // The form's field grid spreads at lg so the wide card isn't two skinny columns.
     expect(wrapper.querySelector('.grid')!.className).toContain('lg:grid-cols-4');
+  });
+});
+
+describe('529 projection caveat (round-3 E3)', () => {
+  it('the 529 card states that the projection stops at the 18th birthday', async () => {
+    // Same seeding as the 529 render tests: one 529 plan with a beneficiary.
+    primeStores({
+      accounts: [
+        { id: 1, name: 'Kid 529', type: AccountType.ACCOUNT_529, beneficiaryDependentId: 1 },
+      ],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-01-02', totalValue: 5000 }],
+    });
+    render(<MemoryRouter><Investments /></MemoryRouter>);
+    const section = await screen.findByTestId('529-section');
+    expect(within(section).getByText(/stops at the 18th birthday/i)).toBeInTheDocument();
   });
 });

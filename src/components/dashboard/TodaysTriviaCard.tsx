@@ -24,7 +24,6 @@ import type { TriviaQuestion } from '@/lib/trivia/bank-schema';
  */
 export function TodaysTriviaCard() {
   const household = useHouseholdStore((s) => s.household);
-  const loadHousehold = useHouseholdStore((s) => s.load);
   // The gate reads the acceptances store, which AppDisclaimerGate boot-loads
   // for the whole app. This widget MUST NOT call load() itself: it renders
   // below the gate, and re-loading the shared store flips it to 'loading',
@@ -39,14 +38,16 @@ export function TodaysTriviaCard() {
   const todayISO = useLocalToday();
 
   useEffect(() => {
-    void loadHousehold();
+    // Round-3 cleanup: the household store is boot-loaded app-wide — this
+    // widget must NOT re-load it (the shared-store gate boot-loop class the
+    // comment above warns about applied to acceptances AND household).
     void loadLearning();
     // SEC-1: loadTriviaBank rejects on a malformed/duplicate-id bank. Swallow
     // it so the widget degrades to its calm aria-busy placeholder (bank stays
     // null → the !bank guard) instead of an unhandled rejection. The /learn
     // page owns the explicit "couldn't load" error state.
     void loadTriviaBank().then(setBank, () => {});
-  }, [loadHousehold, loadLearning]);
+  }, [loadLearning]);
 
   // Midnight rollover (Wave 8 SHOULD-5): on a day flip, re-partition the
   // store's answered keys so the card shows the fresh set.

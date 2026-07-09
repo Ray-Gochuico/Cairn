@@ -62,6 +62,15 @@ describe('toCsv — formula-injection guard', () => {
     expect(cell('\r=1+1')).toBe("'\r=1+1");
   });
 
+  it('neutralizes LF, VT, and FF leads too (round-3 cleanup)', () => {
+    // Spreadsheet engines strip these whitespace leads before formula
+    // detection, same as TAB/CR. \v and \f pass through unquoted; a \n
+    // cell gets CSV-quoted, so assert on the full output there.
+    expect(cell('\v=SUM(A1)')).toBe("'\v=SUM(A1)");
+    expect(cell('\f=SUM(A1)')).toBe("'\f=SUM(A1)");
+    expect(toCsv([{ v: '\n=SUM(A1)' }], cols)).toContain("'\n=SUM(A1)");
+  });
+
   it('guards minus-led TEXT (not a number)', () => {
     expect(cell('-not a number')).toBe("'-not a number");
   });

@@ -5,7 +5,8 @@ import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { CalculatorCard } from './CalculatorCard';
-import { computePretaxDeductions, computeBonusTax } from '@/lib/tax';
+import { computeBonusTax } from '@/lib/tax';
+import { aggregateHouseholdPretax } from '@/lib/calculators/supplemental-wage';
 import { formatCurrency } from '@/lib/format';
 import { CONTRIBUTION_LIMITS_2026 } from '@/lib/contribution-limits';
 import { PAYCHECK_PERIODS, periodsPerYear, type PaycheckPeriod } from '@/lib/paycheck-periods';
@@ -57,27 +58,15 @@ export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
     const city = household.city ? lookup('CITY', household.city, household.filingStatus) : null;
     if (!federal || !state) return null;
 
-    let totalGross = 0;
-    const totalPretax = { pretax401k: 0, pretaxHealth: 0, pretaxDcfsa: 0, pretaxHsa: 0 };
-
-    for (const p of persons) {
-      totalGross += p.annualSalaryPretax; // SALARY ONLY — no bonus
-      const pretax = computePretaxDeductions({
-        salary: p.annualSalaryPretax,
-        pretax401kPct: p.pretax401kPct,
-        healthInsuranceMonthlyPremium: p.healthInsuranceMonthlyPremium,
-        dcfsaMonthly: p.dependentCareFsaMonthly,
-        hsaMonthly: p.hsaMonthlyContribution,
-        hsaEligible: p.hsaEligible,
-        filingStatus: household.filingStatus,
-        personCount: persons.length,
-        dependentCount: dependents.length,
-      });
-      totalPretax.pretax401k += pretax.pretax401k;
-      totalPretax.pretaxHealth += pretax.pretaxHealth;
-      totalPretax.pretaxDcfsa += pretax.pretaxDcfsa;
-      totalPretax.pretaxHsa += pretax.pretaxHsa;
-    }
+    // Round-3 M1: one cap implementation — aggregateHouseholdPretax caps
+    // DCFSA/HSA once per return and 401(k) per employee (Task 1). The card
+    // previously duplicated the per-person loop and inherited the 2×-cap bug.
+    // totalGross is SALARY ONLY — no bonus.
+    const { totalSalary: totalGross, pretax: totalPretax } = aggregateHouseholdPretax(persons, {
+      filingStatus: household.filingStatus,
+      personCount: persons.length,
+      dependentCount: dependents.length,
+    });
 
     const tax = computeBonusTax({
       personGross: totalGross,

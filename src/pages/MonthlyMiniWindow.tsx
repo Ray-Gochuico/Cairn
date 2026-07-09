@@ -202,9 +202,12 @@ function DerivedValueCard({ account, snapshot, isSkipped, onSkip, priorValue }: 
               onChange={(e) => setEditValue(e.target.value)}
               className="max-w-[200px]"
             />
+            {/* Round-3 M3: entity names ride on aria-label so an AT button
+                list isn't "Save, Save, Save…" — visible labels stay terse. */}
             <Button
               size="sm"
               disabled={busy}
+              aria-label={`Save ${account.name}`}
               onClick={() => {
                 const n = Number(editValue);
                 if (Number.isNaN(n)) {
@@ -216,7 +219,12 @@ function DerivedValueCard({ account, snapshot, isSkipped, onSkip, priorValue }: 
             >
               Save
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-label={`Cancel editing ${account.name}`}
+              onClick={() => setEditing(false)}
+            >
               Cancel
             </Button>
           </div>
@@ -224,13 +232,29 @@ function DerivedValueCard({ account, snapshot, isSkipped, onSkip, priorValue }: 
 
         {mode === 'pending' && !editing && (
           <div className="flex gap-2">
-            <Button size="sm" disabled={busy} onClick={() => confirm(snapshot.totalValue)}>
+            {/* Round-3 M3: entity on aria-label (see edit-mode note above). */}
+            <Button
+              size="sm"
+              disabled={busy}
+              aria-label={`Confirm ${account.name}`}
+              onClick={() => confirm(snapshot.totalValue)}
+            >
               Confirm
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+            <Button
+              size="sm"
+              variant="outline"
+              aria-label={`Edit ${account.name}`}
+              onClick={() => setEditing(true)}
+            >
               Edit
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => account.id != null && onSkip(account.id)}>
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-label={`Skip ${account.name}`}
+              onClick={() => account.id != null && onSkip(account.id)}
+            >
               Skip
             </Button>
           </div>
@@ -339,10 +363,16 @@ function LoanPaymentCard({ loan, nextEntry, alreadyRecorded }: LoanPaymentCardPr
 
         {mode === 'pending' && (
           <div className="flex gap-2">
-            <Button size="sm" disabled={busy} onClick={confirm}>
+            {/* Round-3 M3: entity on aria-label — "Confirm Car loan payment". */}
+            <Button size="sm" disabled={busy} aria-label={`Confirm ${loan.name} payment`} onClick={confirm}>
               Confirm
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setMode('skipped')}>
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-label={`Skip ${loan.name} payment`}
+              onClick={() => setMode('skipped')}
+            >
               Skip
             </Button>
           </div>
@@ -440,10 +470,16 @@ function CashBalanceCard({ account, latestBalance }: CashBalanceCardProps) {
               placeholder="0.00"
               className="max-w-[200px]"
             />
-            <Button size="sm" disabled={busy} onClick={save}>
+            {/* Round-3 M3: entity on aria-label — "Save Checking balance". */}
+            <Button size="sm" disabled={busy} aria-label={`Save ${account.name} balance`} onClick={save}>
               Save
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setMode('skipped')}>
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-label={`Skip ${account.name} balance`}
+              onClick={() => setMode('skipped')}
+            >
               Skip
             </Button>
           </div>
@@ -769,7 +805,11 @@ export default function MonthlyMiniWindow() {
       .filter(
         (a) =>
           a.type === AccountType.ACCOUNT_CASH ||
-          a.type === AccountType.ACCOUNT_SAVINGS,
+          a.type === AccountType.ACCOUNT_SAVINGS ||
+          // Round-3 E1: crypto is a MANUAL_BALANCE_TYPES member (wallets are
+          // user-entered, Yahoo stays observe-only) — it gets the same
+          // monthly balance check-in as cash/savings.
+          a.type === AccountType.ACCOUNT_CRYPTO,
       )
       .filter((a) => !a.excludedFromNetWorth)
       .map((account) => {
@@ -851,7 +891,7 @@ export default function MonthlyMiniWindow() {
               <div className="flex flex-wrap items-end justify-between gap-2">
                 <SectionTitle
                   title="Confirm last month's values"
-                  description="Review the auto-derived end-of-month total for each account. Edit if Yahoo's number looks off."
+                  description="Review the auto-derived end-of-month total for each account. Edit if the derived number looks off."
                 />
                 {pendingDerived.length > 0 && (
                   <Button size="sm" variant="outline" disabled={confirmingAll} onClick={confirmAll}>
@@ -903,8 +943,8 @@ export default function MonthlyMiniWindow() {
           {cashCards.length > 0 && (
             <section className="space-y-2">
               <SectionTitle
-                title="Update cash balances"
-                description="Cash and savings balances are entered by hand — there's no ticker to derive from."
+                title="Update cash & manual balances"
+                description="Cash, savings, and crypto-wallet balances are entered by hand — there's no ticker to derive from."
               />
               {cashCards.map(({ account, latestBalance }) => (
                 <CashBalanceCard

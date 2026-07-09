@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -51,6 +52,9 @@ export function SaveCurrentDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Save current as scenario</DialogTitle>
+          <DialogDescription className="sr-only">
+            Save the current lever settings as a named scenario you can compare later.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-2 py-2">
           <Label htmlFor="save-current-name">Scenario name</Label>

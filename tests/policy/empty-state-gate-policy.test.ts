@@ -11,7 +11,12 @@ import { collectSourceFiles } from './source-walker';
 // (TickersTab/HouseholdTab style). New empty states without either fail here.
 // Escape hatch: `// empty-state-policy: allow — <reason>` in the first 5 lines.
 
-const PAGES_DIR = path.resolve(__dirname, '..', '..', 'src', 'pages');
+const SCAN_DIRS = [
+  path.resolve(__dirname, '..', '..', 'src', 'pages'),
+  // Round-3 S7: components render EmptyState too — DataSection escaped the
+  // pages-only scan for a full wave ("No backups yet" on first paint).
+  path.resolve(__dirname, '..', '..', 'src', 'components'),
+];
 const ALLOW = '// empty-state-policy: allow';
 
 function violates(source: string): boolean {
@@ -21,11 +26,13 @@ function violates(source: string): boolean {
 }
 
 describe('empty-state gate policy (W10 F6/T1)', () => {
-  it('every src/pages file rendering <EmptyState reads useLoadGate or isLoading', async () => {
+  it('every src/pages + src/components file rendering <EmptyState reads useLoadGate or isLoading', async () => {
     const offenders: string[] = [];
-    for (const file of await collectSourceFiles(PAGES_DIR, ['.tsx'])) {
-      const source = await readFile(file, 'utf8');
-      if (violates(source)) offenders.push(path.relative(process.cwd(), file));
+    for (const dir of SCAN_DIRS) {
+      for (const file of await collectSourceFiles(dir, ['.tsx'])) {
+        const source = await readFile(file, 'utf8');
+        if (violates(source)) offenders.push(path.relative(process.cwd(), file));
+      }
     }
     expect(
       offenders,
@@ -40,6 +47,13 @@ describe('empty-state gate policy (W10 F6/T1)', () => {
     it('accepts useLoadGate consumers and isLoading readers', () => {
       expect(violates('const g = useLoadGate([a],[b],c); <EmptyState/>')).toBe(false);
       expect(violates('const { isLoading } = useX(); <EmptyState/>')).toBe(false);
+    });
+    it('a local settled flag named isLoadingX satisfies the gate (round-3 S7)', () => {
+      // The isLoading substring token matches local flags like
+      // isLoadingBackups — the sanctioned pattern for component-local loads.
+      expect(
+        violates('const [isLoadingBackups, setIsLoadingBackups] = useState(true); <EmptyState/>'),
+      ).toBe(false);
     });
     it('honors the top-of-file allow marker', () => {
       expect(violates('// empty-state-policy: allow — presentational\n<EmptyState/>')).toBe(false);

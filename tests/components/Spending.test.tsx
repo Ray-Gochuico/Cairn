@@ -219,7 +219,10 @@ describe('Spending page', () => {
     renderPage();
     const hero = await screen.findByTestId('spending-hero');
     expect(within(hero).getByRole('tablist')).toBeInTheDocument();
-    expect(within(hero).getByRole('tab', { name: 'This month' })).toHaveAttribute('aria-selected', 'true');
+    // Round-3 S12: the default range is data-anchored. This file runs on the
+    // REAL clock and the seeded history is fixed at 2026-03 (always older than
+    // the current month), so the hero opens on Last 12 months.
+    expect(within(hero).getByRole('tab', { name: 'Last 12 months' })).toHaveAttribute('aria-selected', 'true');
   });
 
   it('(c) shows top merchants, subscription count, and awaiting-reimbursement row', async () => {
@@ -376,6 +379,46 @@ describe('Spending page', () => {
       expect(screen.getAllByText('ALEXMART').length).toBeGreaterThan(0);
       expect(screen.queryByText('SAMSHOP')).not.toBeInTheDocument();
     });
+  });
+
+  it("(f2) ?view=p1 scopes the Money-in inflow tile to person 1's salary (round-3 T21)", async () => {
+    await useCategoriesStore.getState().load();
+    // Persons must be in the DB — the page's mount effect calls loadPersons().
+    const mkPerson = (name: string, salary: number): Omit<Person, 'id'> => ({
+      householdId: 1, name, dateOfBirth: '1990-01-01', targetRetirementAge: 65,
+      annualSalaryPretax: salary, expectedBonus: 0, expectedBonusFrequency: 'ANNUAL',
+      bonusIsConsistent: true, expectedCommission: 0,
+      expectedCommissionFrequency: 'MONTHLY', employmentType: 'SALARY_NO_OT',
+      hourlyRate: null, regularHoursPerWeek: 40, otThresholdHoursPerWeek: null,
+      pretax401kPct: 0, healthInsuranceMonthlyPremium: 0, dependentCareFsaMonthly: 0,
+      hsaMonthlyContribution: 0, hsaEligible: false,
+    });
+    const personsRepo = new PersonsRepo(db);
+    await personsRepo.create(mkPerson('Alex', 120000)); // id 1 → $10,000/mo
+    await personsRepo.create(mkPerson('Sam', 60000));   // id 2 → $5,000/mo
+
+    // One transaction so the cashflow section renders.
+    await useTransactionsStore.getState().createMany([
+      {
+        householdId: 1, date: '2026-03-05', merchant: 'X', merchantRaw: 'X', amount: 10,
+        categoryId: 37, sourceAccountId: null, propertyId: null, vehicleId: null,
+        personId: 1, sourcePdfFilename: 'm.pdf', reimbursable: false, reimbursedAt: null,
+        reimbursedAmount: null, isRecurring: false, notes: null,
+      },
+    ]);
+
+    render(
+      <MemoryRouter initialEntries={['/spending?view=p1']}>
+        <Spending />
+      </MemoryRouter>,
+    );
+
+    // Inflow = ONLY person 1's 120,000 / 12 = $10,000.00; the household
+    // figure ($15,000.00) must not appear anywhere.
+    await waitFor(() => {
+      expect(screen.getByText('$10,000.00')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('$15,000.00')).not.toBeInTheDocument();
   });
 
   it('(g) Export CSV downloads the transactions table with FK names resolved', async () => {

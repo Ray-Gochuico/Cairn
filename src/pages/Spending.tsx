@@ -331,7 +331,7 @@ export default function Spending() {
               <CardDescription>Active rent + vehicle leases.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-semibold font-mono">
+              <div className="text-2xl font-semibold tabular-nums">
                 {obligationCurrencyFormatter.format(recurringObligation)}/mo
               </div>
               <div className="mt-3 flex gap-6 border-t pt-3">
@@ -366,7 +366,7 @@ export default function Spending() {
           {monthlyBarData.length > 0 && categorySeries.length > 0 && (
             <section aria-label="Monthly spending by category">
               <BarChartCard
-                title="Monthly Spending by Category"
+                title="Monthly Spending by Category (all history)"
                 data={monthlyBarData}
                 xKey="month"
                 series={categorySeries}
@@ -511,7 +511,10 @@ export default function Spending() {
       {/* Recent transactions list */}
       <section>
         <div className="flex items-baseline justify-between mb-3">
-          <h2 className="text-lg font-medium">Recent transactions</h2>
+          <h2 className="text-lg font-medium">
+            Recent transactions{' '}
+            <span className="text-sm font-normal text-muted-foreground">Latest 10</span>
+          </h2>
           {transactions.length > 0 && (
             <Link
               to="/spending/transactions"

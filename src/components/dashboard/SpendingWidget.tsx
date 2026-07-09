@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useLocalToday } from '@/lib/use-local-today';
+import { formatDate } from '@/lib/format';
 import { dateFromLocalISO } from '@/lib/dates';
 import { PieChartIcon, BarChart3Icon } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -190,9 +191,10 @@ export function SpendingWidget({
             className="flex items-center gap-1 text-xs text-muted-foreground tabular-nums"
             data-testid="spending-widget-date-bounds"
           >
-            <span>{bounds.startInclusive}</span>
+            {/* Round-3 S9: humanized bounds, not raw ISO. */}
+            <span>{formatDate(bounds.startInclusive)}</span>
             <span>→</span>
-            <span>{bounds.endInclusive}</span>
+            <span>{formatDate(bounds.endInclusive)}</span>
           </div>
         </div>
       </CardHeader>

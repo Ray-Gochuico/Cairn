@@ -1,18 +1,20 @@
 import type { Scenario } from '@/types/scenario';
 import type { Milestones } from '@/lib/scenarios';
+import { formatMonth } from '@/lib/format';
 
 interface MilestoneStripProps {
   scenarios: Scenario[];
   milestones: Map<number, Milestones>;
 }
 
-const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
+// Round-3 S9: delegate to the shared formatter (this file hand-rolled its own
+// month names while ScenariosPanel on the SAME page rendered '2046/01').
+// Invalid inputs keep the existing em-dash guards.
 function fmtMonth(monthISO?: string): string {
   if (!monthISO) return '—';
   const [y, m] = monthISO.split('-').map(Number);
   if (!y || !m || m < 1 || m > 12) return '—';
-  return `${MONTH_NAMES[m - 1]} ${y}`;
+  return formatMonth(monthISO);
 }
 
 export default function MilestoneStrip({ scenarios, milestones }: MilestoneStripProps) {

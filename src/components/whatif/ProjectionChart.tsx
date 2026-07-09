@@ -17,7 +17,7 @@ import type { MonthlyState, Milestones } from '@/lib/scenarios';
 import { toReal, totalInvestments, aggregateByTaxBucket } from '@/lib/scenarios';
 import { taxBucketForAccount } from '@/lib/account-tax-classification';
 import { ProjectionDetailLevel } from '@/types/enums';
-import { formatCompactCurrency } from '@/lib/format';
+import { formatCompactCurrency, formatMonth } from '@/lib/format';
 import { DecomposedTooltipContent } from './ProjectionTooltip';
 import { CHART_TOOLTIP_PROPS } from '@/components/charts/ChartTooltip';
 import { CHART_PALETTE } from '@/components/charts/palette';
@@ -45,6 +45,37 @@ const CASH_FILL           = CHART_PALETTE[5]; // yellow
 const TAX_ADVANTAGED_FILL = CHART_PALETTE[6]; // purple
 const TAXABLE_FILL        = CHART_PALETTE[0]; // blue
 const paletteAt = (i: number) => CHART_PALETTE[i % CHART_PALETTE.length];
+
+/**
+ * Round-3 M4: single source of truth for the stacked composition bands.
+ * The <Area> JSX and the legend BOTH read from here, so a band can never
+ * again render anonymously (the old legend hardcoded 2 of the 4 tax-bucket
+ * bands — "Property & vehicles", usually the dominant band, was unnamed).
+ */
+const COMPOSITION_BANDS = {
+  investments: { label: 'Investments', fill: INVESTMENTS_FILL },
+  taxAdvantaged: { label: 'Tax-advantaged', fill: TAX_ADVANTAGED_FILL },
+  taxable: { label: 'Taxable', fill: TAXABLE_FILL },
+  homeEquity: { label: 'Property & vehicles', fill: HOME_EQUITY_FILL },
+  cash: { label: 'Cash', fill: CASH_FILL },
+} as const;
+
+/**
+ * The bands actually mounted for the given composition mode, in stack order.
+ * Mirrors the <Area> mount conditions exactly: SINGLE stacks investments;
+ * TAX_BUCKET (with bucket data) stacks the two buckets; TAX_BUCKET without
+ * bucket data falls back to cash + home equity only. PER_ACCOUNT is excluded
+ * by the caller (its checkbox toggle row is the naming idiom there).
+ */
+function legendBandsFor(detailLevel: ProjectionDetailLevel, hasBucketData: boolean) {
+  const base =
+    detailLevel === ProjectionDetailLevel.TAX_BUCKET && hasBucketData
+      ? [COMPOSITION_BANDS.taxAdvantaged, COMPOSITION_BANDS.taxable]
+      : detailLevel === ProjectionDetailLevel.SINGLE
+        ? [COMPOSITION_BANDS.investments]
+        : [];
+  return [...base, COMPOSITION_BANDS.homeEquity, COMPOSITION_BANDS.cash];
+}
 
 export interface ProjectionChartProps {
   scenarios: Scenario[];
@@ -262,6 +293,14 @@ export default function ProjectionChart({
     investmentAccounts.length > 0 &&
     investmentAccounts.every((a) => a.id != null && hiddenAccountIds.has(a.id));
 
+  // Round-3 M4: the legend renders exactly when composition Areas mount
+  // (single visible scenario) and the mode isn't PER_ACCOUNT (which names
+  // its bands via the checkbox toggle row instead).
+  const compositionLegendVisible =
+    mode === 'composition' &&
+    visible[0]?.id != null &&
+    detailLevel !== ProjectionDetailLevel.PER_ACCOUNT;
+
   const milestoneRefLines = scenarios
     .filter((sc) => sc.visible && sc.id != null)
     .flatMap((sc) => {
@@ -351,7 +390,7 @@ export default function ProjectionChart({
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={upperRows} margin={{ top: 16, right: 16, bottom: 4, left: 4 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-            <XAxis dataKey="monthISO" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} minTickGap={32} />
+            <XAxis dataKey="monthISO" tickFormatter={formatMonth} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} minTickGap={32} />
             <YAxis
               tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
               tickFormatter={formatCompactCurrency}
@@ -386,10 +425,10 @@ export default function ProjectionChart({
                     <Area
                       type="monotone"
                       dataKey={`investments_${scId}`}
-                      name="Investments"
+                      name={COMPOSITION_BANDS.investments.label}
                       stackId="composition"
                       stroke="none"
-                      fill={INVESTMENTS_FILL}
+                      fill={COMPOSITION_BANDS.investments.fill}
                       fillOpacity={0.25}
                       isAnimationActive={false}
                     />
@@ -399,20 +438,20 @@ export default function ProjectionChart({
                       <Area
                         type="monotone"
                         dataKey={`taxAdvantaged_${scId}`}
-                        name="Tax-advantaged"
+                        name={COMPOSITION_BANDS.taxAdvantaged.label}
                         stackId="composition"
                         stroke="none"
-                        fill={TAX_ADVANTAGED_FILL}
+                        fill={COMPOSITION_BANDS.taxAdvantaged.fill}
                         fillOpacity={0.25}
                         isAnimationActive={false}
                       />
                       <Area
                         type="monotone"
                         dataKey={`taxable_${scId}`}
-                        name="Taxable"
+                        name={COMPOSITION_BANDS.taxable.label}
                         stackId="composition"
                         stroke="none"
-                        fill={TAXABLE_FILL}
+                        fill={COMPOSITION_BANDS.taxable.fill}
                         fillOpacity={0.25}
                         isAnimationActive={false}
                       />
@@ -438,20 +477,20 @@ export default function ProjectionChart({
                   <Area
                     type="monotone"
                     dataKey={`homeEquity_${scId}`}
-                    name="Property & vehicles"
+                    name={COMPOSITION_BANDS.homeEquity.label}
                     stackId="composition"
                     stroke="none"
-                    fill={HOME_EQUITY_FILL}
+                    fill={COMPOSITION_BANDS.homeEquity.fill}
                     fillOpacity={0.25}
                     isAnimationActive={false}
                   />
                   <Area
                     type="monotone"
                     dataKey={`cash_${scId}`}
-                    name="Cash"
+                    name={COMPOSITION_BANDS.cash.label}
                     stackId="composition"
                     stroke="none"
-                    fill={CASH_FILL}
+                    fill={COMPOSITION_BANDS.cash.fill}
                     fillOpacity={0.25}
                     isAnimationActive={false}
                   />
@@ -499,7 +538,7 @@ export default function ProjectionChart({
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={lowerRows} margin={{ top: 4, right: 16, bottom: 16, left: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-              <XAxis dataKey="monthISO" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} minTickGap={32} />
+              <XAxis dataKey="monthISO" tickFormatter={formatMonth} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} minTickGap={32} />
               <YAxis
                 tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
                 tickFormatter={formatCompactCurrency}
@@ -509,7 +548,7 @@ export default function ProjectionChart({
               <Tooltip
                 {...CHART_TOOLTIP_PROPS}
                 formatter={(value, name) => [formatCompactCurrency(Number(value)), String(name)]}
-                labelFormatter={(label) => String(label ?? '')}
+                labelFormatter={(label) => formatMonth(String(label ?? ''))}
                 cursor={{ strokeDasharray: '3 3' }}
               />
               {visible.map((sc) => (
@@ -539,14 +578,13 @@ export default function ProjectionChart({
         </div>
       )}
 
-      {/* W10 design: the TAX_BUCKET stacked bands were unexplained color — a
-          static swatch row (matching the PER_ACCOUNT idiom) names them. */}
-      {detailLevel === ProjectionDetailLevel.TAX_BUCKET && hasBucketData && (
-        <div data-testid="tax-bucket-legend" className="flex flex-wrap items-center gap-4 mt-2 text-xs text-muted-foreground">
-          {[
-            { label: 'Tax-advantaged', fill: TAX_ADVANTAGED_FILL },
-            { label: 'Taxable', fill: TAXABLE_FILL },
-          ].map(({ label, fill }) => (
+      {/* Round-3 M4 (extends W10 design): the legend derives from the SAME
+          registry the <Area> JSX reads, filtered to the bands actually
+          mounted — every stacked band is named in BOTH composition modes.
+          PER_ACCOUNT keeps its own checkbox toggle-row idiom below. */}
+      {compositionLegendVisible && (
+        <div data-testid="composition-legend" className="flex flex-wrap items-center gap-4 mt-2 text-xs text-muted-foreground">
+          {legendBandsFor(detailLevel, hasBucketData).map(({ label, fill }) => (
             <span key={label} className="inline-flex items-center gap-1.5">
               <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: fill, opacity: 0.6 }} />
               {label}

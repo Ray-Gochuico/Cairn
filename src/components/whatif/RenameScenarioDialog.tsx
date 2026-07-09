@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -50,6 +51,9 @@ export function RenameScenarioDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Rename scenario</DialogTitle>
+          <DialogDescription className="sr-only">
+            Type a new name for this scenario.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-2 py-2">
           <Label htmlFor="rename-scenario-name">Scenario name</Label>

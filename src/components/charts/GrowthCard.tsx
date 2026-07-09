@@ -109,23 +109,20 @@ export default function GrowthCard({
           <div className="text-sm font-medium text-foreground">
             {active.label}
           </div>
-          <div className="text-xs text-muted-foreground">
-            vs {formatDate(active.baselineDate)}
-          </div>
         </div>
 
         {active.available ? (
           <div className="space-y-1">
-            <div className="text-3xl font-semibold tabular-nums">
-              {active.current != null ? valueFormatter(active.current) : '—'}
-            </div>
+            {/* Round-3 S10: the DELTA is this card's answer — it leads as the
+                headline; the level demotes to the context line below. */}
             <div
+              data-testid="growth-headline"
               className={cn(
-                'flex items-center gap-1 text-sm font-medium tabular-nums',
+                'flex items-center gap-1 text-3xl font-semibold tabular-nums',
                 deltaColor,
               )}
             >
-              <DeltaArrow className="h-4 w-4" aria-hidden />
+              <DeltaArrow className="h-6 w-6" aria-hidden />
               <span>
                 {/* deltaAbs is signed via the formatter's value, but we force
                     a leading + for non-negative so the direction reads clearly
@@ -134,8 +131,16 @@ export default function GrowthCard({
                 {active.deltaAbs != null ? valueFormatter(active.deltaAbs) : '—'}
               </span>
               {active.deltaPct != null && (
-                <span>({formatPct(active.deltaPct)})</span>
+                <span className="text-xl font-medium">({formatPct(active.deltaPct)})</span>
               )}
+            </div>
+            <div
+              data-testid="growth-context"
+              className="mt-1 text-sm text-muted-foreground tabular-nums"
+            >
+              Now {active.current != null ? valueFormatter(active.current) : '—'} · vs{' '}
+              {active.baseline != null ? valueFormatter(active.baseline) : '—'} on{' '}
+              {formatDate(active.baselineDate)}
             </div>
           </div>
         ) : (

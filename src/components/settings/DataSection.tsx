@@ -59,15 +59,23 @@ export function DataSection() {
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [backups, setBackups] = useState<BackupEntry[]>([]);
+  // Round-3 S7: settled flag so the empty state can't render over a
+  // not-yet-loaded list (the empty-state ratchet's isLoading token matches).
+  const [isLoadingBackups, setIsLoadingBackups] = useState(true);
 
   // Load (and reload) the rotating backups list. Best-effort: a failure leaves
   // the list as-is and surfaces a soft note rather than blocking the section.
   const refreshBackups = useCallback(async () => {
-    if (!isTauriRuntime()) return;
+    if (!isTauriRuntime()) {
+      setIsLoadingBackups(false);
+      return;
+    }
     try {
       setBackups(await listBackups());
     } catch (e) {
       setError(`Could not read your backups: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setIsLoadingBackups(false);
     }
   }, []);
 
@@ -286,7 +294,8 @@ export function DataSection() {
                 ))}
               </ul>
             ) : (
-              tauri && (
+              tauri &&
+              !isLoadingBackups && (
                 <EmptyState
                   bare
                   icon={History}

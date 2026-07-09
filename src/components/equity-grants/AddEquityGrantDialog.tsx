@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -86,6 +87,9 @@ export default function AddEquityGrantDialog({
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add equity grant</DialogTitle>
+          <DialogDescription className="sr-only">
+            Enter the grant's shares, strike price, and vesting schedule to track its value.
+          </DialogDescription>
         </DialogHeader>
         {savedName ? (
           <p

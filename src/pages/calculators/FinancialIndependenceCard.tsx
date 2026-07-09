@@ -5,6 +5,7 @@ import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useContributionsStore } from '@/stores/contributions-store';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { fiEligiblePortfolioValue } from '@/lib/fi-portfolio';
+import { pickModerateEntry } from '@/lib/growth-scenario';
 import { CalculatorCard } from './CalculatorCard';
 import { financialIndependenceSeries } from '@/lib/financial-independence';
 import { formatCurrency, formatPercent } from '@/lib/format';
@@ -224,10 +225,8 @@ export function FinancialIndependenceCard({
   // Pick a "primary" scenario for the headline. Prefer one labelled "Moderate"
   // so the user always sees a stable reference; otherwise fall back to the
   // middle of the list.
-  const moderate =
-    series.find((s) => s.label === 'Moderate') ??
-    series[Math.min(1, series.length - 1)] ??
-    series[0];
+  // Round-3 E7: same Moderate-selection rule as every other surface.
+  const moderate = pickModerateEntry(series);
   // T17: a non-finite years value means the scenario's REAL rate is ≤ 0, so it
   // never reaches the today's-dollars target — render "—", not "∞", and surface
   // the explanatory note below the table.

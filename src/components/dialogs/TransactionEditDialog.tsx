@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent,
+  DialogDescription, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -95,6 +96,9 @@ export function TransactionEditDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Edit transaction</DialogTitle>
+          <DialogDescription className="sr-only">
+            Edit the transaction's date, amount, category, and notes.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 py-2">
           <div>

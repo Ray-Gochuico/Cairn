@@ -21,7 +21,14 @@ export function yearsToFi(input: YearsToFiInput): number {
   //              t = ln(...) / ln(1+r)
   const numerator = input.targetFv + input.pmt / r;
   const denominator = input.pv + input.pmt / r;
-  if (denominator <= 0 || numerator / denominator <= 0) return Infinity;
+  // Round-3 chip B: a reachable target under a NEGATIVE rate has BOTH
+  // numerator and denominator negative (target below the asymptote -pmt/r):
+  // the ratio is in (0,1) and the log root is finite/positive. The old
+  // `denominator <= 0` short-circuit wrongly reported Infinity for exactly
+  // that sub-case (table "∞" vs a chart that visibly crosses). Guard only
+  // division-by-zero and a non-positive ratio; the trailing `t > 0` check
+  // already maps every wrong-sign combination to Infinity.
+  if (denominator === 0 || numerator / denominator <= 0) return Infinity;
   const base = 1 + r;
   if (base <= 0) return Infinity;
   const t = Math.log(numerator / denominator) / Math.log(base);

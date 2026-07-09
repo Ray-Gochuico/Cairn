@@ -26,7 +26,8 @@ export interface CsvColumn<T> {
  * re-import and spreadsheet arithmetic. Exponent forms are included because
  * String(-1e21) is "-1e+21".
  */
-const FORMULA_LEAD = /^[=+\-@\t\r]/;
+// \n \v \f: spreadsheet engines strip these too before formula detection (round-3).
+const FORMULA_LEAD = /^[=+\-@\t\r\n\v\f]/;
 const PLAIN_NUMBER = /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/;
 
 function guardFormulaInjection(value: string): string {

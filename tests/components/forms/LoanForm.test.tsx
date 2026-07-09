@@ -100,3 +100,63 @@ describe('LoanForm percent-entry rate field (Wave 11 T6)', () => {
     expect(onSubmit.mock.calls[0][0].originalAmount).toBe(300000);
   });
 });
+
+describe('LoanForm — inline per-field errors (round-3 S6)', () => {
+  function renderInvalid(onSubmit = vi.fn()) {
+    render(
+      <LoanForm
+        initial={{
+          ...DEFAULT_LOAN,
+          name: '',
+          originalAmount: 300000,
+          currentBalance: 250000,
+          interestRate: 0.0625,
+          termMonths: 360,
+          firstPaymentDate: '2024-01-01',
+          monthlyPayment: 1800,
+        }}
+        persons={[{ id: 1, name: 'Alice' }]}
+        properties={[]}
+        vehicles={[]}
+        initialMonthlyPaymentIsUserSet
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />,
+    );
+    return onSubmit;
+  }
+
+  it('empty name shows an inline humanized error with aria-invalid', async () => {
+    const user = userEvent.setup();
+    const onSubmit = renderInvalid();
+    await user.click(screen.getByRole('button', { name: /save/i }));
+    const name = screen.getByLabelText('Name');
+    expect(name).toHaveAttribute('aria-invalid', 'true');
+    expect(name).toHaveAccessibleDescription('Required');
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('an out-of-range interest rate gets its own inline error', async () => {
+    const user = userEvent.setup();
+    const onSubmit = renderInvalid();
+    const rate = screen.getByLabelText(/interest rate/i);
+    await user.clear(rate);
+    await user.type(rate, '150');
+    await user.click(screen.getByRole('button', { name: /save/i }));
+    expect(rate).toHaveAttribute('aria-invalid', 'true');
+    expect(rate).toHaveAccessibleDescription('Must be at most 100');
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('the error summary names the rate/term fields by their visible labels', async () => {
+    const user = userEvent.setup();
+    renderInvalid();
+    const rate = screen.getByLabelText(/interest rate/i);
+    await user.clear(rate);
+    await user.type(rate, '150');
+    await user.click(screen.getByRole('button', { name: /save/i }));
+    const summary = await screen.findByRole('alert');
+    expect(summary).toHaveTextContent('Interest rate');
+    expect(summary).not.toHaveTextContent('Interest rate percent');
+  });
+});

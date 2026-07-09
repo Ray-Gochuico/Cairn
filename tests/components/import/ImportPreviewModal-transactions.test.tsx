@@ -188,5 +188,28 @@ describe('ImportPreviewModal — transaction mode', () => {
         .calls[0][0] as Array<{ resolved: { amount: number } }>;
       expect(rows.map((r) => r.resolved.amount)).toEqual([12, 8.5, 3.25]);
     });
+
+    it('AMOUNT column echoes the resolved (flipped) amount while FLIP is on (round-3 chip A)', async () => {
+      render(
+        <ImportPreviewModal
+          entity="transaction"
+          parsed={negativeParsed}
+          ctx={ctx}
+          open
+          onOpenChange={vi.fn()}
+        />,
+      );
+      // Before the flip: raw editable values (click-to-edit spans), no echo.
+      expect(screen.getByText('-12.00')).toBeInTheDocument();
+      expect(screen.queryByText(/^→ /)).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByLabelText(/flip signs/i));
+
+      // Raw stays editable; a muted resolved echo appears beside it.
+      expect(await screen.findByText('→ 12.00')).toBeInTheDocument();
+      expect(screen.getByText('-12.00')).toBeInTheDocument();
+      expect(screen.getByText('→ 8.50')).toBeInTheDocument();
+      expect(screen.getByText('→ 3.25')).toBeInTheDocument();
+    });
   });
 });

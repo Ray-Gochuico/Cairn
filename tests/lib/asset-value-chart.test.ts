@@ -215,13 +215,13 @@ describe('buildAssetValueView', () => {
 });
 
 describe('x ticks', () => {
-  it('≤1Y windows: first bucket of each month, labeled MMM', () => {
+  it('≤1Y windows: first bucket of each month, labeled MMM YYYY (round-3 M5)', () => {
     const rows = [
       row('2026-04-04', 1), row('2026-04-11', 1), row('2026-05-02', 1),
       row('2026-05-09', 1), row('2026-06-06', 1),
     ];
     expect(xTicksFor(rows, '3M', TODAY)).toEqual(['2026-04-04', '2026-05-02', '2026-06-06']);
-    expect(xTickLabel('2026-04-04', '3M')).toBe('Apr');
+    expect(xTickLabel('2026-04-04', '3M')).toBe('Apr 2026');
   });
   it('5Y/ALL: first bucket of each year, labeled YYYY', () => {
     const rows = [

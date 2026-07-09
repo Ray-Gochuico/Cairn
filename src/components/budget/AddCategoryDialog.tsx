@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -120,6 +121,9 @@ export default function AddCategoryDialog({
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle>Add category</DialogTitle>
+          <DialogDescription>
+            Name a new spending category; it becomes available for transactions and budgets right away.
+          </DialogDescription>
         </DialogHeader>
 
         {noParents ? (

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -27,6 +28,9 @@ export default function LeverPopoverShell({
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
+          <DialogDescription className="sr-only">
+            Adjust this lever’s assumptions; changes apply to the active scenario.
+          </DialogDescription>
         </DialogHeader>
         <div className="py-2">{children}</div>
         <DialogFooter className="flex items-center gap-2">

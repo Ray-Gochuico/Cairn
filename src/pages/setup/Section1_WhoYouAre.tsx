@@ -3,6 +3,7 @@ import { Pencil, X } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -137,6 +138,9 @@ export default function Section1_WhoYouAre({ status, onSetStatus }: Props) {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Household</DialogTitle>
+            <DialogDescription className="sr-only">
+              Set your filing status, state, and household-wide assumptions.
+            </DialogDescription>
           </DialogHeader>
           <HouseholdForm onSaved={() => setDialog(null)} />
         </DialogContent>
@@ -148,6 +152,9 @@ export default function Section1_WhoYouAre({ status, onSetStatus }: Props) {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add a person</DialogTitle>
+            <DialogDescription className="sr-only">
+              Add an earner with their salary and retirement inputs.
+            </DialogDescription>
           </DialogHeader>
           <PersonForm onSaved={() => setDialog(null)} />
         </DialogContent>
@@ -159,6 +166,9 @@ export default function Section1_WhoYouAre({ status, onSetStatus }: Props) {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit person</DialogTitle>
+            <DialogDescription className="sr-only">
+              Update this person’s salary and retirement inputs.
+            </DialogDescription>
           </DialogHeader>
           {editingPerson && (
             <PersonFormImpl
@@ -180,6 +190,9 @@ export default function Section1_WhoYouAre({ status, onSetStatus }: Props) {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Employment</DialogTitle>
+            <DialogDescription className="sr-only">
+              Set this person’s employment type and pay details.
+            </DialogDescription>
           </DialogHeader>
           <EmploymentSection onSaved={() => setDialog(null)} />
         </DialogContent>
@@ -191,6 +204,9 @@ export default function Section1_WhoYouAre({ status, onSetStatus }: Props) {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add a dependent</DialogTitle>
+            <DialogDescription className="sr-only">
+              Add a dependent; dependents drive the household HSA limit.
+            </DialogDescription>
           </DialogHeader>
           <DependentForm onSaved={() => setDialog(null)} />
         </DialogContent>

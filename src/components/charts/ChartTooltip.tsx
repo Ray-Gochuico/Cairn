@@ -30,7 +30,7 @@ import type { CSSProperties } from 'react';
  * line or wrapper. The two are intentionally orthogonal.
  */
 
-export const CHART_TOOLTIP_CONTENT_STYLE: CSSProperties = {
+const CHART_TOOLTIP_CONTENT_STYLE: CSSProperties = {
   background: 'hsl(var(--popover))',
   border: '1px solid hsl(var(--border))',
   color: 'hsl(var(--popover-foreground))',
@@ -39,17 +39,17 @@ export const CHART_TOOLTIP_CONTENT_STYLE: CSSProperties = {
   boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
 };
 
-export const CHART_TOOLTIP_LABEL_STYLE: CSSProperties = {
+const CHART_TOOLTIP_LABEL_STYLE: CSSProperties = {
   color: 'hsl(var(--popover-foreground))',
   fontWeight: 500,
   marginBottom: 4,
 };
 
-export const CHART_TOOLTIP_ITEM_STYLE: CSSProperties = {
+const CHART_TOOLTIP_ITEM_STYLE: CSSProperties = {
   color: 'hsl(var(--popover-foreground))',
 };
 
-export const CHART_TOOLTIP_CURSOR = {
+const CHART_TOOLTIP_CURSOR = {
   // Recharts paints this rectangle / vertical line behind the hover —
   // muted token keeps it visible in both light and dark modes (default
   // is a hardcoded `#ccc` which disappears on dark).

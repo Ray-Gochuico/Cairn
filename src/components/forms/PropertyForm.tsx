@@ -1,14 +1,15 @@
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { PropertySchema, type Property } from '@/types/schema';
 import { PropertyType } from '@/types/enums';
 import { Button } from '@/components/ui/button';
 import DatePicker from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/input';
+import { MoneyInput } from '@/components/ui/money-input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { FormErrorSummary, useFormSubmit } from './form-errors';
+import { FieldError, FormErrorSummary, useFormSubmit } from './form-errors';
 
 export type PropertyFormValues = Omit<Property, 'id'>;
 
@@ -94,7 +95,15 @@ export default function PropertyForm({
         <CardContent className="space-y-3">
           <div>
             <Label htmlFor="name">Name</Label>
-            <Input id="name" {...form.register('name')} />
+            {/* Round-3 S6: the house trio — aria-invalid + aria-describedby
+                + FieldError — on every field (AccountForm pattern). */}
+            <Input
+              id="name"
+              {...form.register('name')}
+              aria-invalid={form.formState.errors.name ? true : undefined}
+              aria-describedby={form.formState.errors.name ? 'property-name-error' : undefined}
+            />
+            <FieldError id="property-name-error" message={form.formState.errors.name?.message} />
           </div>
 
           <div>
@@ -103,15 +112,20 @@ export default function PropertyForm({
               id="type"
               className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               {...form.register('type')}
+              aria-invalid={form.formState.errors.type ? true : undefined}
+              aria-describedby={form.formState.errors.type ? 'property-type-error' : undefined}
             >
               {Object.entries(PROPERTY_TYPE_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>{label}</option>
               ))}
             </select>
+            <FieldError id="property-type-error" message={form.formState.errors.type?.message} />
           </div>
 
           {!onlyOnePerson && (
-            <fieldset>
+            <fieldset
+              aria-describedby={form.formState.errors.ownerPersonId ? 'property-owner-error' : undefined}
+            >
               <legend className="text-sm font-medium mb-2">Owner</legend>
               <div className="flex flex-wrap gap-4">
                 {persons.map((p) => (
@@ -141,6 +155,7 @@ export default function PropertyForm({
                   Joint
                 </label>
               </div>
+              <FieldError id="property-owner-error" message={form.formState.errors.ownerPersonId?.message} />
             </fieldset>
           )}
 
@@ -150,11 +165,16 @@ export default function PropertyForm({
               id="address"
               maxLength={200}
               {...form.register('address', { setValueAs: (v) => (v === '' ? null : v) })}
+              aria-invalid={form.formState.errors.address ? true : undefined}
+              aria-describedby={form.formState.errors.address ? 'property-address-error' : undefined}
             />
+            <FieldError id="property-address-error" message={form.formState.errors.address?.message} />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
+            <div
+              aria-describedby={form.formState.errors.purchaseDate ? 'property-purchase-date-error' : undefined}
+            >
               <Label htmlFor="purchaseDate">Purchase date (optional)</Label>
               <DatePicker
                 id="purchaseDate"
@@ -167,26 +187,47 @@ export default function PropertyForm({
                   })
                 }
               />
+              <FieldError id="property-purchase-date-error" message={form.formState.errors.purchaseDate?.message} />
             </div>
             <div>
               <Label htmlFor="purchasePrice">Purchase price ($, optional)</Label>
-              <Input
-                id="purchasePrice"
-                type="number"
-                step="any"
-                {...form.register('purchasePrice', { setValueAs: (v) => (v === '' ? null : Number(v)) })}
+              {/* Round-3 E6: house MoneyInput (LoanForm idiom); the S6 aria
+                  wiring passes through MoneyInput's ...rest spread. */}
+              <Controller
+                control={form.control}
+                name="purchasePrice"
+                render={({ field }) => (
+                  <MoneyInput
+                    id="purchasePrice"
+                    value={field.value ?? null}
+                    onValueChange={(v) => field.onChange(v)}
+                    onBlur={field.onBlur}
+                    aria-invalid={form.formState.errors.purchasePrice ? true : undefined}
+                    aria-describedby={form.formState.errors.purchasePrice ? 'property-purchase-price-error' : undefined}
+                  />
+                )}
               />
+              <FieldError id="property-purchase-price-error" message={form.formState.errors.purchasePrice?.message} />
             </div>
           </div>
 
           <div>
             <Label htmlFor="currentEstimatedValue">Current estimated value ($, optional)</Label>
-            <Input
-              id="currentEstimatedValue"
-              type="number"
-              step="any"
-              {...form.register('currentEstimatedValue', { setValueAs: (v) => (v === '' ? null : Number(v)) })}
+            <Controller
+              control={form.control}
+              name="currentEstimatedValue"
+              render={({ field }) => (
+                <MoneyInput
+                  id="currentEstimatedValue"
+                  value={field.value ?? null}
+                  onValueChange={(v) => field.onChange(v)}
+                  onBlur={field.onBlur}
+                  aria-invalid={form.formState.errors.currentEstimatedValue ? true : undefined}
+                  aria-describedby={form.formState.errors.currentEstimatedValue ? 'property-current-value-error' : undefined}
+                />
+              )}
             />
+            <FieldError id="property-current-value-error" message={form.formState.errors.currentEstimatedValue?.message} />
           </div>
 
           <div>
@@ -197,12 +238,15 @@ export default function PropertyForm({
               {...form.register('linkedLoanId', {
                 setValueAs: (v) => (v === '' || v === null ? null : Number(v)),
               })}
+              aria-invalid={form.formState.errors.linkedLoanId ? true : undefined}
+              aria-describedby={form.formState.errors.linkedLoanId ? 'property-linked-loan-error' : undefined}
             >
               <option value="">None</option>
               {mortgageLoans.map((l) => (
                 <option key={l.id} value={l.id}>{l.name}</option>
               ))}
             </select>
+            <FieldError id="property-linked-loan-error" message={form.formState.errors.linkedLoanId?.message} />
           </div>
 
           <div>
@@ -228,7 +272,14 @@ export default function PropertyForm({
         </CardContent>
       </Card>
 
-            <FormErrorSummary fieldErrors={form.formState.errors} submitError={submitError} />
+            <FormErrorSummary
+        fieldErrors={form.formState.errors}
+        submitError={submitError}
+        labels={{
+          ownerPersonId: 'Owner',
+          linkedLoanId: 'Linked mortgage',
+        }}
+      />
 
       <div className="flex justify-end items-center gap-3">
         <span

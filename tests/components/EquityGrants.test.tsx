@@ -348,3 +348,47 @@ describe('EquityGrants page', () => {
     expect(screen.queryByText('No equity grants yet')).not.toBeInTheDocument();
   });
 });
+
+describe('person-view filter (round-3 T21)', () => {
+  beforeEach(() => {
+    resetStores();
+  });
+
+  function primeTwoOwners() {
+    primeStores({
+      persons: [
+        { id: 1, name: 'Alice' },
+        { id: 2, name: 'Bob' },
+      ],
+      grants: [
+        { id: 1, ownerPersonId: 1, name: 'Alice Grant' },
+        { id: 2, ownerPersonId: 2, name: 'Bob Grant' },
+      ],
+    });
+  }
+
+  it("?view=p2 shows only person 2's grant", () => {
+    primeTwoOwners();
+    render(
+      <MemoryRouter initialEntries={['/equity-grants?view=p2']}>
+        <EquityGrants />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Bob Grant')).toBeInTheDocument();
+    expect(screen.queryByText('Alice Grant')).not.toBeInTheDocument();
+  });
+
+  it('?view=joint shows no grant cards (grants are individual)', () => {
+    primeTwoOwners();
+    render(
+      <MemoryRouter initialEntries={['/equity-grants?view=joint']}>
+        <EquityGrants />
+      </MemoryRouter>,
+    );
+    // filterGrantsByView returns [] for joint — no grant card renders and the
+    // summary strip totals $0 (grants have no joint-ownership concept).
+    expect(screen.queryByText('Alice Grant')).not.toBeInTheDocument();
+    expect(screen.queryByText('Bob Grant')).not.toBeInTheDocument();
+    expect(screen.getByTestId('equity-summary')).toHaveTextContent('$0');
+  });
+});

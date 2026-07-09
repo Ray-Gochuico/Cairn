@@ -44,8 +44,12 @@ vi.mock('recharts', () => ({
     <div data-testid={`area-${dataKey}`} data-stroke={stroke ?? ''} data-fill={fill ?? ''} />
   ),
   CartesianGrid: () => null,
-  XAxis: ({ ticks }: { ticks?: string[] }) => (
-    <div data-testid="x-axis" data-ticks={JSON.stringify(ticks ?? [])} />
+  XAxis: ({ ticks, tickFormatter }: { ticks?: string[]; tickFormatter?: (v: string) => string }) => (
+    <div
+      data-testid="x-axis"
+      data-ticks={JSON.stringify(ticks ?? [])}
+      data-labels={JSON.stringify((ticks ?? []).map((t) => (tickFormatter ? tickFormatter(t) : t)))}
+    />
   ),
   YAxis: () => null,
   Tooltip: () => null,
@@ -355,6 +359,12 @@ describe('canvas polish', () => {
     const ticks = JSON.parse(screen.getByTestId('x-axis').getAttribute('data-ticks')!);
     expect(ticks.length).toBeGreaterThan(2);
     expect(ticks[0]).toBe(captured.data[0].bucketEnd);
+    // Round-3 M5: ≤5 sparse ticks, each label year-anchored ('Jan 2026') or
+    // year-only ('2026' on 5Y/ALL).
+    const labels = JSON.parse(screen.getByTestId('x-axis').getAttribute('data-labels')!);
+    expect(labels.length).toBeGreaterThanOrEqual(2);
+    expect(labels.length).toBeLessThanOrEqual(5);
+    for (const l of labels) expect(l).toMatch(/^[A-Z][a-z]{2} \d{4}$|^\d{4}$/);
   });
 
   it('scrub re-renders bail at the ChartCanvas memo boundary (recharts untouched)', () => {

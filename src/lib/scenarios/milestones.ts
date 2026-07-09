@@ -4,6 +4,14 @@ import { totalInvestments } from './aggregate-investments';
 export interface FinancialIndependenceParams {
   /** Safe withdrawal rate, e.g. 0.04 for the 4% rule. */
   withdrawalRate: number;
+  /**
+   * Round-3 M2 (sibling of the FiCards gate): the household's monthly
+   * expense baseline. A zero baseline makes the FI target $0 and every
+   * month "crosses" it (engine expenses can still be >0 via loan payments),
+   * so chips would claim instant FI. `<= 0` → no FI milestone. Omitted →
+   * legacy expenses-only behavior (callers without household context).
+   */
+  monthlyExpenseBaseline?: number;
 }
 
 export interface Milestones {
@@ -53,13 +61,18 @@ export function detectMilestones(
   let financialIndependenceISO: string | undefined;
   let retirementISO: string | undefined;
 
+  // Round-3 M2: a zero baseline means "no FI target", not "instant FI" —
+  // skip the crossing scan entirely so every consumer renders "FI —".
+  const fiScanEnabled =
+    params.monthlyExpenseBaseline === undefined || params.monthlyExpenseBaseline > 0;
+
   for (let i = 0; i < states.length; i++) {
     const s = states[i];
     const totalDebt = Object.values(s.debtByLoan).reduce((acc, v) => acc + v, 0);
     if (!debtFreeISO && totalDebt === 0) {
       debtFreeISO = s.monthISO;
     }
-    if (!financialIndependenceISO) {
+    if (fiScanEnabled && !financialIndependenceISO) {
       // Use LIQUID (investments + cash), not netWorth. Home equity does not
       // sustain a 4% SWR. The previous calculation inflated FI estimates by
       // years for homeowners.

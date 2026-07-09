@@ -453,6 +453,89 @@ describe('Loans page', () => {
   });
 });
 
+describe('person-view filter + extra-savings box (round-3 T21)', () => {
+  beforeEach(() => {
+    resetStores();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-06-20T12:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const alice = {
+    id: 1, householdId: 1, name: 'Alice', dateOfBirth: '1990-01-01',
+    targetRetirementAge: 65, annualSalaryPretax: 100000,
+  };
+  const bob = { ...alice, id: 2, name: 'Bob' };
+
+  it("?view=p2 shows only person 2's loan and scopes the totals to it", async () => {
+    const { formatCurrency } = await import('@/lib/format');
+    usePersonsStore.setState({
+      persons: [alice, bob] as never,
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+    useLoansStore.setState({
+      loans: [
+        makeLoan({ id: 1, name: 'Alice Loan', obligorPersonId: 1, currentBalance: 111000 }),
+        makeLoan({ id: 2, name: 'Bob Loan', obligorPersonId: 2, currentBalance: 222000 }),
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+    render(
+      <MemoryRouter initialEntries={['/loans?view=p2']}>
+        <Loans />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Bob Loan')).toBeInTheDocument();
+    expect(screen.queryByText('Alice Loan')).not.toBeInTheDocument();
+    // The summary tile reflects ONLY Bob's balance — never the $333k household sum.
+    expect(screen.getAllByText(formatCurrency(222000)).length).toBeGreaterThan(0);
+    expect(screen.queryByText(formatCurrency(333000))).not.toBeInTheDocument();
+  });
+
+  it('a loan with extraPaymentDefault > 0 renders a positive savings box', async () => {
+    const { amortize, nextPaymentDateFrom } = await import('@/lib/amortization');
+    const { localTodayISO } = await import('@/lib/dates');
+    const { formatCurrency } = await import('@/lib/format');
+    const loan = makeLoan({
+      id: 1,
+      name: 'Car',
+      type: LoanType.AUTO,
+      currentBalance: 10000,
+      interestRate: 0.06,
+      termMonths: 60,
+      monthlyPayment: 0, // derive the contract payment from the term
+      extraPaymentDefault: 200,
+    });
+    useLoansStore.setState({ loans: [loan], isLoading: false, error: null, load: async () => {} } as never);
+    render(<MemoryRouter><Loans /></MemoryRouter>);
+
+    // Oracle: the page's own projectLoan parameters (remaining schedule
+    // anchored at nextPaymentDateFrom(first, today); clock pinned above).
+    const base = {
+      principal: loan.currentBalance,
+      annualRatePct: loan.interestRate,
+      termMonths: loan.termMonths,
+      firstPaymentDate: nextPaymentDateFrom(loan.firstPaymentDate, localTodayISO()),
+      monthlyPayment: loan.monthlyPayment,
+    };
+    const expected =
+      amortize({ ...base, extraPayment: 0 }).totalInterest -
+      amortize({ ...base, extraPayment: 200 }).totalInterest;
+    expect(expected).toBeGreaterThan(0); // sanity: the fixture bites
+
+    expect(screen.getByText(/With \$200\/mo extra/)).toBeInTheDocument();
+    const savingsLine = screen.getByText(formatCurrency(expected));
+    expect(savingsLine).toBeInTheDocument();
+  });
+});
+
 describe('buildDebtSeries current-month seeding (wave-9 M10)', () => {
   it('a loan whose next payment falls next month still contributes currentBalance to the current bar', async () => {
     const { buildDebtSeries } = await import('@/pages/Loans');

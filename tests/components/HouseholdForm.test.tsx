@@ -152,3 +152,40 @@ describe('HouseholdForm city dropdown', () => {
     expect((options[0] as HTMLOptionElement).value).toBe('');
   });
 });
+
+describe('HouseholdForm — inline per-field errors + summary labels (round-3 S6)', () => {
+  beforeEach(() => {
+    resetStores();
+  });
+
+  it('an out-of-range withdrawal rate gets an inline error with aria-invalid', async () => {
+    const onSubmit = async () => {
+      throw new Error('should not submit');
+    };
+    render(
+      <MemoryRouter>
+        <HouseholdForm values={{ ...HOUSEHOLD_DEFAULT_VALUES }} onSubmit={onSubmit} />
+      </MemoryRouter>,
+    );
+    const rate = screen.getByLabelText(/withdrawal rate/i);
+    fireEvent.change(rate, { target: { value: '150' } });
+    fireEvent.click(screen.getByRole('button', { name: /save/i }));
+    await waitFor(() => {
+      expect(rate).toHaveAttribute('aria-invalid', 'true');
+    });
+    expect(rate).toHaveAccessibleDescription('Must be at most 100');
+  });
+
+  it('the error summary names fields by their visible labels (round-3 S6)', async () => {
+    render(
+      <MemoryRouter>
+        <HouseholdForm values={{ ...HOUSEHOLD_DEFAULT_VALUES }} onSubmit={async () => {}} />
+      </MemoryRouter>,
+    );
+    fireEvent.change(screen.getByLabelText(/withdrawal rate/i), { target: { value: '150' } });
+    fireEvent.click(screen.getByRole('button', { name: /save/i }));
+    const summary = await screen.findByRole('alert');
+    expect(summary).toHaveTextContent('Withdrawal rate');
+    expect(summary).not.toHaveTextContent('Withdrawal rate percent');
+  });
+});

@@ -35,7 +35,7 @@ describe('DonutChartCard legend collapse (B1)', () => {
     render(<DonutChartCard title="t" data={slices(6)} />);
     const legend = screen.getByLabelText('Chart legend');
     expect(within(legend).getAllByRole('listitem')).toHaveLength(6);
-    expect(within(legend).getByText(/^S5 —/)).toBeTruthy();
+    expect(within(legend).getByTitle('S5')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /show all/i })).toBeNull();
   });
 
@@ -43,8 +43,8 @@ describe('DonutChartCard legend collapse (B1)', () => {
     render(<DonutChartCard title="t" data={slices(7)} />);
     const legend = screen.getByLabelText('Chart legend');
     expect(within(legend).getAllByRole('listitem')).toHaveLength(5);
-    expect(within(legend).getByText(/^S4 —/)).toBeTruthy();
-    expect(within(legend).queryByText(/^S5 —/)).toBeNull();
+    expect(within(legend).getByTitle('S4')).toBeTruthy();
+    expect(within(legend).queryByTitle('S5')).toBeNull();
     const toggle = screen.getByRole('button', { name: 'Show all (7)' });
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
   });
@@ -55,7 +55,7 @@ describe('DonutChartCard legend collapse (B1)', () => {
     await user.click(screen.getByRole('button', { name: 'Show all (7)' }));
     const legend = screen.getByLabelText('Chart legend');
     expect(within(legend).getAllByRole('listitem')).toHaveLength(7);
-    expect(within(legend).getByText(/^S6 —/)).toBeTruthy();
+    expect(within(legend).getByTitle('S6')).toBeTruthy();
     const toggle = screen.getByRole('button', { name: 'Show less' });
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
   });
@@ -126,5 +126,28 @@ describe('legend value + share % (protected-views upgrade)', () => {
     unmount();
     render(<DonutChartCard title="T" data={valueSlices} />);
     expect(screen.queryByRole('button', { name: /AAPL/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('legend name truncation (round-3 S11 — protected readouts never clip)', () => {
+  it('legend rows truncate the NAME but never the value/share readouts', () => {
+    render(
+      <DonutChartCard
+        title="T"
+        data={[
+          { name: 'Extremely Long Corporation Name Holdings Inc (XLCNH)', value: 400 },
+          { name: 'MSFT', value: 100 },
+        ]}
+        valueFormatter={(v) => `$${v}`}
+      />,
+    );
+    const nameSpan = screen.getByTitle('Extremely Long Corporation Name Holdings Inc (XLCNH)');
+    expect(nameSpan).toHaveClass('truncate');
+    const li = nameSpan.closest('li')!;
+    expect(li.className).toContain('min-w-0');
+    expect(li.className).not.toContain('whitespace-nowrap');
+    // The protected readouts live OUTSIDE the truncating span, never clipped:
+    expect(within(li).getByText(/\$400 · 80\.0%/)).toBeInTheDocument();
+    expect(within(li).getByText(/\$400 · 80\.0%/).className).toContain('shrink-0');
   });
 });

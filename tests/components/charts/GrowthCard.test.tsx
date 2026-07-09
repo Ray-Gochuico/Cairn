@@ -35,15 +35,28 @@ describe('GrowthCard — horizon chips', () => {
     }
   });
 
-  it('clicking a chip drives the big number + delta', async () => {
+  it('clicking a chip drives the headline delta + context level (round-3 S10 order)', async () => {
     render(<GrowthCard title="Investments growth" horizons={HORIZONS} />);
     await userEvent.click(screen.getByRole('tab', { name: '3M — past 3 months' }));
-    expect(screen.getByText('$95,000')).toBeInTheDocument();
+    expect(screen.getByTestId('growth-context')).toHaveTextContent('Now $95,000');
     expect(screen.getByText(/-\$5,000|−\$5,000/)).toBeInTheDocument();
     expect(screen.getByText('Past 3 months')).toBeInTheDocument();
     // Baseline date renders humanized (Wave 11 T4), not raw ISO.
-    expect(screen.getByText(/vs Jun 1, 2026/)).toBeInTheDocument();
+    expect(screen.getByTestId('growth-context')).toHaveTextContent(/on Jun 1, 2026/);
     expect(screen.queryByText(/2026-06-01/)).not.toBeInTheDocument();
+  });
+
+  it('the DELTA is the headline; the level demotes to the sub-line (round-3 S10)', async () => {
+    render(<GrowthCard title="Investments growth" horizons={HORIZONS} />);
+    await userEvent.click(screen.getByRole('tab', { name: '3M — past 3 months' }));
+    const headline = screen.getByTestId('growth-headline');
+    expect(headline).toHaveTextContent(/-\$5,000|−\$5,000/);
+    expect(headline).toHaveTextContent('(-5.0%)');
+    expect(headline).toHaveClass('text-3xl');
+    const context = screen.getByTestId('growth-context');
+    expect(context).toHaveTextContent('Now $95,000');
+    expect(context).toHaveTextContent('vs $100,000 on Jun 1, 2026');
+    expect(context).not.toHaveTextContent('2026-06-01'); // Wave 11 stays honored
   });
 
   it('unavailable horizon shows "Not enough history yet"', async () => {

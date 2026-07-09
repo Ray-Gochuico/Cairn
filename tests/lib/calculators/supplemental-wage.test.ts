@@ -89,6 +89,65 @@ describe('aggregateHouseholdPretax', () => {
   });
 });
 
+describe('aggregateHouseholdPretax — per-RETURN caps (round-3 M1)', () => {
+  const opts = { filingStatus: FilingStatus.MFJ, personCount: 2, dependentCount: 1 };
+
+  it('DCFSA caps ONCE per return, not per earner: 2 × $400/mo → $7,500, not $9,600', () => {
+    // Each earner elects $4,800/yr — individually under the $7,500 §129 cap,
+    // so the pre-fix per-person-then-sum path passed $9,600 through. The
+    // limit is per TAX RETURN: min(9,600, 7,500) = $7,500.
+    const agg = aggregateHouseholdPretax(
+      [person({ id: 1, dependentCareFsaMonthly: 400 }), person({ id: 2, dependentCareFsaMonthly: 400 })],
+      opts,
+    );
+    expect(agg.pretax.pretaxDcfsa).toBe(7_500);
+  });
+
+  it('MFS uses the $3,750 DCFSA cap', () => {
+    const agg = aggregateHouseholdPretax(
+      [person({ id: 1, dependentCareFsaMonthly: 400 })],
+      { ...opts, filingStatus: FilingStatus.MFS, personCount: 1, dependentCount: 1 },
+    );
+    expect(agg.pretax.pretaxDcfsa).toBe(3_750);
+  });
+
+  it('HSA caps ONCE at the household (family) limit: 2 × $500/mo eligible → $8,750, not $12,000', () => {
+    // Pre-fix: each earner got the FULL family cap (hsaLimitForHousehold
+    // returns 8,750 whenever personCount > 1), so 2 × min(6,000, 8,750)
+    // = $12,000 flowed through. The family limit is a single shared cap.
+    const agg = aggregateHouseholdPretax(
+      [
+        person({ id: 1, hsaMonthlyContribution: 500, hsaEligible: true }),
+        person({ id: 2, hsaMonthlyContribution: 500, hsaEligible: true }),
+      ],
+      opts,
+    );
+    expect(agg.pretax.pretaxHsa).toBe(8_750);
+  });
+
+  it('an hsaEligible:false earner contributes nothing to the HSA leg', () => {
+    const agg = aggregateHouseholdPretax(
+      [
+        person({ id: 1, hsaMonthlyContribution: 500, hsaEligible: true }),
+        person({ id: 2, hsaMonthlyContribution: 500, hsaEligible: false }),
+      ],
+      opts,
+    );
+    expect(agg.pretax.pretaxHsa).toBe(6_000); // only earner 1's $6,000, under the cap
+  });
+
+  it('401(k) stays PER EMPLOYEE: two $200k earners at 15% → 2 × $24,500 = $49,000', () => {
+    const agg = aggregateHouseholdPretax(
+      [
+        person({ id: 1, annualSalaryPretax: 200_000, pretax401kPct: 0.15 }),
+        person({ id: 2, annualSalaryPretax: 200_000, pretax401kPct: 0.15 }),
+      ],
+      opts,
+    );
+    expect(agg.pretax.pretax401k).toBe(49_000);
+  });
+});
+
 describe('computeSupplementalWageTax — golden parity with computeBonusTax', () => {
   // GOLDEN GATE: computeSupplementalWageTax is a thin wrapper; it MUST produce
   // byte-identical output to the proven computeBonusTax for the same scenario.

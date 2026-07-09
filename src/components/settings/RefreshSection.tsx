@@ -29,6 +29,9 @@ export function RefreshSection() {
   const load = useSettingsStore((s) => s.load);
   const update = useSettingsStore((s) => s.update);
   const [refreshing, setRefreshing] = useState(false);
+  // Round-3 E5: a failed refresh surfaces here instead of silently reading
+  // as fresh via a premature stamp.
+  const [refreshError, setRefreshError] = useState<string | null>(null);
 
   useEffect(() => {
     void load();
@@ -36,15 +39,17 @@ export function RefreshSection() {
 
   const cadence = settings?.refreshCadence ?? RefreshCadence.DAILY;
 
-  // "Refresh now" stamps last_refresh_at at initiation and kicks off the
-  // same background derivations init.ts runs. The derivations swallow their
-  // own errors, so the stamp — not their completion — marks "last
-  // refreshed". update() re-loads the store, so the line below refreshes.
+  // Round-3 E5: the stamp means "a refresh COMPLETED", so await the refresh
+  // and stamp after — a rejected refresh must not read as fresh. update()
+  // re-loads the store, so the "Last refreshed" line refreshes.
   const handleRefreshNow = async () => {
     setRefreshing(true);
+    setRefreshError(null);
     try {
+      await runMarketDataRefresh(getDatabase());
       await update({ lastRefreshAt: new Date().toISOString() });
-      runMarketDataRefresh(getDatabase());
+    } catch (e) {
+      setRefreshError(e instanceof Error ? e.message : 'Refresh failed');
     } finally {
       setRefreshing(false);
     }
@@ -95,6 +100,11 @@ export function RefreshSection() {
               Last refreshed: {formatLastRefreshed(settings?.lastRefreshAt ?? null)}
             </span>
           </div>
+          {refreshError && (
+            <p role="alert" className="text-sm text-destructive-soft-foreground">
+              Refresh failed: {refreshError}. The last-refreshed time was not updated.
+            </p>
+          )}
         </div>
       </CardContent>
     </Card>

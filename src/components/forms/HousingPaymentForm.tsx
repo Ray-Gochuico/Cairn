@@ -11,7 +11,7 @@ import DatePicker from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { FormErrorSummary, useFormSubmit } from './form-errors';
+import { FieldError, FormErrorSummary, useFormSubmit } from './form-errors';
 
 export type HousingPaymentFormValues = Omit<HousingPayment, 'id'>;
 
@@ -82,7 +82,16 @@ export default function HousingPaymentForm({
         <CardContent className="space-y-3">
           <div>
             <Label htmlFor="name">Label</Label>
-            <Input id="name" placeholder="e.g. Apt rent" {...form.register('name')} />
+            {/* Round-3 S6: the house trio — aria-invalid + aria-describedby
+                + FieldError — on every field (AccountForm pattern). */}
+            <Input
+              id="name"
+              placeholder="e.g. Apt rent"
+              {...form.register('name')}
+              aria-invalid={form.formState.errors.name ? true : undefined}
+              aria-describedby={form.formState.errors.name ? 'housing-name-error' : undefined}
+            />
+            <FieldError id="housing-name-error" message={form.formState.errors.name?.message} />
           </div>
 
           <div>
@@ -94,11 +103,16 @@ export default function HousingPaymentForm({
               {...form.register('monthlyAmount', {
                 setValueAs: (v) => (v === '' ? 0 : Number(v)),
               })}
+              aria-invalid={form.formState.errors.monthlyAmount ? true : undefined}
+              aria-describedby={form.formState.errors.monthlyAmount ? 'housing-monthly-amount-error' : undefined}
             />
+            <FieldError id="housing-monthly-amount-error" message={form.formState.errors.monthlyAmount?.message} />
           </div>
 
           {!onlyOnePerson && persons.length > 0 && (
-            <fieldset>
+            <fieldset
+              aria-describedby={form.formState.errors.ownerPersonId ? 'housing-owner-error' : undefined}
+            >
               <legend className="text-sm font-medium mb-2">Who pays this?</legend>
               <div className="flex flex-wrap gap-4">
                 {persons.map((p) => (
@@ -134,11 +148,14 @@ export default function HousingPaymentForm({
                   Joint
                 </label>
               </div>
+              <FieldError id="housing-owner-error" message={form.formState.errors.ownerPersonId?.message} />
             </fieldset>
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
+            <div
+              aria-describedby={form.formState.errors.startDate ? 'housing-start-date-error' : undefined}
+            >
               <Label htmlFor="startDate">Start date</Label>
               <DatePicker
                 id="startDate"
@@ -151,8 +168,11 @@ export default function HousingPaymentForm({
                   })
                 }
               />
+              <FieldError id="housing-start-date-error" message={form.formState.errors.startDate?.message} />
             </div>
-            <div>
+            <div
+              aria-describedby={form.formState.errors.endDate ? 'housing-end-date-error' : undefined}
+            >
               <Label htmlFor="endDate">End date (optional)</Label>
               <DatePicker
                 id="endDate"
@@ -166,12 +186,21 @@ export default function HousingPaymentForm({
                 }
                 maxYear={new Date().getFullYear() + 30}
               />
+              {/* The end>=start refine lands here via path: ['endDate']. */}
+              <FieldError id="housing-end-date-error" message={form.formState.errors.endDate?.message} />
             </div>
           </div>
         </CardContent>
       </Card>
 
-            <FormErrorSummary fieldErrors={form.formState.errors} submitError={submitError} />
+            <FormErrorSummary
+        fieldErrors={form.formState.errors}
+        submitError={submitError}
+        labels={{
+          name: 'Label',
+          ownerPersonId: 'Who pays this',
+        }}
+      />
 
       <div className="flex justify-end items-center gap-3">
         <span

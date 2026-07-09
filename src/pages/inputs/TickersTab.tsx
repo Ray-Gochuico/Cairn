@@ -375,7 +375,25 @@ export default function TickersTab() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
+          {/* Round-3 S8: a polite live count so AT users hear the filter work. */}
+          <p
+            data-testid="tickers-visible-count"
+            aria-live="polite"
+            className="mt-1 text-xs text-muted-foreground"
+          >
+            {visible.length} of {sorted.length} tickers
+          </p>
         </div>
+      )}
+
+      {/* Round-3 S8: a search that matches nothing used to render NOTHING
+          below the box — name the dead end. */}
+      {!isLoading && sorted.length > 0 && visible.length === 0 && (
+        <Card>
+          <CardContent className="py-10 text-center text-sm text-muted-foreground">
+            No tickers match &ldquo;{query.trim()}&rdquo;. Try a different symbol or name.
+          </CardContent>
+        </Card>
       )}
 
       {visible.length > 0 && (

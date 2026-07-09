@@ -139,7 +139,8 @@ describe('MonthlyMiniWindow', () => {
     await waitFor(() => {
       expect(screen.getByText(/Brokerage One/)).toBeInTheDocument();
     });
-    expect(screen.getByRole('button', { name: /^confirm$/i })).toBeInTheDocument();
+    // Round-3 M3: the accessible name carries the entity.
+    expect(screen.getByRole('button', { name: 'Confirm Brokerage One' })).toBeInTheDocument();
     expect(screen.getByText(/\$12,345\.67/)).toBeInTheDocument();
   });
 
@@ -264,7 +265,7 @@ describe('MonthlyMiniWindow', () => {
 
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: /^confirm$/i }),
+        screen.getByRole('button', { name: 'Confirm Brokerage One' }),
       ).toBeInTheDocument(),
     );
     // Wave-5 a11y fix: the status live region is pre-mounted EMPTY from the
@@ -276,7 +277,7 @@ describe('MonthlyMiniWindow', () => {
     for (const el of screen.getAllByRole('status')) {
       expect(el).toHaveTextContent('');
     }
-    await user.click(screen.getByRole('button', { name: /^confirm$/i }));
+    await user.click(screen.getByRole('button', { name: 'Confirm Brokerage One' }));
 
     await waitFor(() => {
       const all = useSnapshotsStore.getState().snapshots;
@@ -337,7 +338,7 @@ describe('MonthlyMiniWindow', () => {
         <MonthlyMiniWindow />
       </MemoryRouter>,
     );
-    const confirmBtn = await screen.findByRole('button', { name: /^confirm$/i });
+    const confirmBtn = await screen.findByRole('button', { name: 'Confirm Brokerage One' });
 
     // Same store-stubbing idiom as the Confirm-all in-flight test.
     const orig = useSnapshotsStore.getState().upsert;
@@ -441,7 +442,7 @@ describe('MonthlyMiniWindow', () => {
     expect(recorded.textContent).toContain(formatDate(firstPayment));
     expect(within(scope).queryByText(firstPayment)).toBeNull();
     expect(
-      within(scope).queryByRole('button', { name: /^confirm$/i }),
+      within(scope).queryByRole('button', { name: /^confirm (?!all)/i }),
     ).not.toBeInTheDocument();
   });
 
@@ -455,6 +456,101 @@ describe('MonthlyMiniWindow', () => {
     // (see plan D3). Fail here LOUDLY rather than as "no such column" mid-render.
     expect(src).not.toMatch(/last_seen_month/);
     expect(src).not.toMatch(/SettingsRepo/);
+  });
+
+  it('ritual buttons carry the entity in their accessible name (round-3 M3)', async () => {
+    // One derived account 'Brokerage One', one loan 'Car loan' with a due
+    // schedule entry, one cash account 'Checking'.
+    const accountsRepo = new AccountsRepo(db);
+    const accountId = await accountsRepo.create({
+      householdId: 1,
+      ownerPersonId: null,
+      beneficiaryDependentId: null,
+      name: 'Brokerage One',
+      institution: null,
+      type: AccountType.ACCOUNT_BROKERAGE,
+      cryptoWalletAddress: null,
+      autoFetchEnabled: false,
+      excludedFromNetWorth: false,
+      stateOfPlan: null,
+      accentColor: null,
+    });
+    const today = new Date();
+    const prev = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const lastBizDayUtc = new Date(Date.UTC(prev.getFullYear(), prev.getMonth() + 1, 0));
+    while (lastBizDayUtc.getUTCDay() === 0 || lastBizDayUtc.getUTCDay() === 6) {
+      lastBizDayUtc.setUTCDate(lastBizDayUtc.getUTCDate() - 1);
+    }
+    await new AccountSnapshotsRepo(db).upsert({
+      accountId,
+      snapshotDate: lastBizDayUtc.toISOString().slice(0, 10),
+      totalValue: 5000,
+      source: SnapshotSource.AUTO_DERIVED,
+    });
+    const future = new Date();
+    future.setDate(1);
+    future.setMonth(future.getMonth() + 1);
+    const firstPayment = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, '0')}-01`;
+    await new LoansRepo(db).create({
+      householdId: 1,
+      obligorPersonId: null,
+      name: 'Car loan',
+      type: LoanType.AUTO,
+      originalAmount: 30000,
+      currentBalance: 20000,
+      interestRate: 0.05,
+      termMonths: 60,
+      firstPaymentDate: firstPayment,
+      monthlyPayment: 566.14,
+      extraPaymentDefault: 0,
+      linkedPropertyId: null,
+      linkedVehicleId: null,
+    });
+    await accountsRepo.create({
+      householdId: 1,
+      ownerPersonId: null,
+      beneficiaryDependentId: null,
+      name: 'Checking',
+      institution: null,
+      type: AccountType.ACCOUNT_CASH,
+      cryptoWalletAddress: null,
+      autoFetchEnabled: false,
+      excludedFromNetWorth: false,
+      stateOfPlan: null,
+      accentColor: null,
+    });
+
+    render(<MemoryRouter><MonthlyMiniWindow /></MemoryRouter>);
+    expect(await screen.findByRole('button', { name: 'Confirm Brokerage One' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit Brokerage One' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Skip Brokerage One' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Confirm Car loan payment' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Skip Car loan payment' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save Checking balance' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Skip Checking balance' })).toBeInTheDocument();
+    // Visible labels are unchanged — terse for sighted users.
+    expect(screen.getByRole('button', { name: 'Confirm Brokerage One' })).toHaveTextContent(/^Confirm$/);
+  });
+
+  it('a crypto account gets a manual-balance card in the ritual (round-3 E1)', async () => {
+    // Crypto is a MANUAL_BALANCE_TYPES member (wallets are user-entered,
+    // Yahoo stays observe-only) but Section 3 re-admitted only cash+savings.
+    await new AccountsRepo(db).create({
+      householdId: 1,
+      ownerPersonId: null,
+      beneficiaryDependentId: null,
+      name: 'Cold wallet',
+      institution: null,
+      type: AccountType.ACCOUNT_CRYPTO,
+      cryptoWalletAddress: null,
+      autoFetchEnabled: false,
+      excludedFromNetWorth: false,
+      stateOfPlan: null,
+      accentColor: null,
+    });
+    render(<MemoryRouter><MonthlyMiniWindow /></MemoryRouter>);
+    expect(await screen.findByText('Cold wallet')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save Cold wallet balance' })).toBeInTheDocument(); // Task 5 aria names
   });
 
   it('shows the "new month" eyebrow only when navigated with ?from=new-month', async () => {
@@ -525,7 +621,7 @@ describe('MonthlyMiniWindow', () => {
       // Skip the Alpha card.
       const alphaCard = screen.getByText(/Alpha/).closest('div[class*="rounded"]') as HTMLElement
         ?? screen.getByText(/Alpha/).closest('div')!;
-      await user.click(within(alphaCard).getByRole('button', { name: /^skip$/i }));
+      await user.click(within(alphaCard).getByRole('button', { name: 'Skip Alpha' }));
       // Confirm-all count drops to 1.
       expect(await screen.findByRole('button', { name: /confirm all \(1\)/i })).toBeInTheDocument();
       await user.click(screen.getByRole('button', { name: /confirm all/i }));
@@ -625,7 +721,7 @@ describe('MonthlyMiniWindow', () => {
       );
       await screen.findByText(/Brokerage One/);
       // Confirm ONLY the first card via its own button.
-      const confirms = screen.getAllByRole('button', { name: /^confirm$/i });
+      const confirms = screen.getAllByRole('button', { name: /^confirm (?!all)/i });
       await user.click(confirms[0]);
       const close = lastMonthCloseISO();
       await waitFor(() => {
@@ -641,7 +737,7 @@ describe('MonthlyMiniWindow', () => {
       expect(screen.getAllByText(/Confirmed/)).toHaveLength(1);
       const statusTexts = screen.getAllByRole('status').map((el) => el.textContent ?? '');
       expect(statusTexts.filter((t) => t.includes('Confirmed'))).toHaveLength(1);
-      expect(screen.getAllByRole('button', { name: /^confirm$/i })).toHaveLength(1);
+      expect(screen.getAllByRole('button', { name: /^confirm (?!all)/i })).toHaveLength(1);
     });
   });
 });

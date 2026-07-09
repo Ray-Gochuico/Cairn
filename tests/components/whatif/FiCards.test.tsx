@@ -488,6 +488,39 @@ describe('FiCards', () => {
     });
   });
 
+  describe('zero expense baseline (round-3 M2)', () => {
+    it('renders the baseline CTA instead of $0-target cards', () => {
+      renderWithRouter(
+        <FiCards
+          scenarios={[makeScenario()]}
+          projections={new Map([[1, seedState(787_000, 0)]])}
+          household={makeHousehold({ monthlyExpenseBaseline: 0 })}
+          persons={[makePerson()]}
+        />,
+      );
+      const empty = screen.getByTestId('whatif-fi-cards-baseline-empty');
+      expect(empty).toHaveTextContent(/monthly expense baseline/i);
+      const cta = screen.getByTestId('whatif-fi-cards-baseline-link');
+      expect(cta).toHaveAttribute('href', '/inputs/household');
+      // The nonsense readout is gone entirely.
+      expect(screen.queryByText(/\$787,000 \/ \$0/)).not.toBeInTheDocument();
+      expect(screen.queryByTestId('whatif-fi-number')).not.toBeInTheDocument();
+    });
+
+    it('the generic setup state still owns the no-persons case', () => {
+      renderWithRouter(
+        <FiCards
+          scenarios={[makeScenario()]}
+          projections={new Map()}
+          household={makeHousehold({ monthlyExpenseBaseline: 0 })}
+          persons={[]}
+        />,
+      );
+      expect(screen.getByTestId('whatif-fi-cards-empty')).toBeInTheDocument();
+      expect(screen.queryByTestId('whatif-fi-cards-baseline-empty')).not.toBeInTheDocument();
+    });
+  });
+
   it('prefers active scenario over baseline when both are present', () => {
     // Active scenario has different liquid NW than baseline. Card should
     // display the active one's liquid NW in the progress row.

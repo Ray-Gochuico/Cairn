@@ -174,7 +174,11 @@ export default function WhatIf() {
     const ms = new Map<number, Milestones>();
     for (const [id, states] of projs) {
       const scenario = scenarios.find((s) => s.id === id) ?? null;
-      const params = { withdrawalRate: effectiveSwr(scenario, household) };
+      const params = {
+        withdrawalRate: effectiveSwr(scenario, household),
+        // Round-3 M2: zero baseline → no FI milestone (chips render "FI —").
+        monthlyExpenseBaseline: household?.monthlyExpenseBaseline,
+      };
       ms.set(id, detectMilestones(states, params));
     }
     return { projections: projs, milestones: ms };

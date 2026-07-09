@@ -33,11 +33,14 @@ const DialogContent = React.forwardRef<
 >(({ className, children, ...props }, ref) => {
   // W6-Design (Wave-6 follow-up): the prior implementation forced
   // `aria-describedby={undefined}` to silence Radix's "Missing
-  // Description" dev warning for the 17/19 confirm-style dialogs that
-  // have no separate description body. The side effect was that even
+  // Description" dev warning for the many confirm-style dialogs that
+  // had no separate description body. The side effect was that even
   // when a caller *did* render `<DialogDescription>`, Radix's
   // context-based auto-wiring of `aria-describedby` was overwritten by
   // `undefined` — so screen readers never announced the description.
+  // Round-3 chip D: EVERY consumer now carries a description (sr-only
+  // where visible helper text would be noise), enforced by
+  // tests/policy/dialog-description-policy.test.ts.
   //
   // We now let Radix manage `aria-describedby`:
   //   • If the caller renders `<DialogDescription>`, Radix wires it via
@@ -45,8 +48,8 @@ const DialogContent = React.forwardRef<
   //   • If the caller passes their own `aria-describedby`, it flows
   //     through `{...props}` and wins.
   //   • If neither is present, Radix logs the dev-mode warning, which
-  //     is the right developer-facing signal — those 17 dialogs need a
-  //     description (or an explicit `aria-describedby`) follow-up.
+  //     is the right developer-facing signal (and the policy ratchet
+  //     fails CI before it gets that far).
   return (
     <DialogPortal>
       <DialogOverlay />

@@ -64,6 +64,10 @@ function Plans529CardImpl({
           College savings — current value, contributions YTD, and
           projected value at the beneficiary's 18th birthday using the
           Moderate growth scenario ({(moderateRate * 100).toFixed(1)}%).
+          {/* Round-3 E3: state the truncation instead of implying a total. */}
+          {' '}Projection stops at the 18th birthday — real 529s keep
+          compounding (and can keep receiving contributions) through the
+          college years, so this is a floor.
         </CardDescription>
       </CardHeader>
       <CardContent>

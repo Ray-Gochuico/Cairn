@@ -11,7 +11,7 @@ import DatePicker from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { FormErrorSummary, useFormSubmit } from './form-errors';
+import { FieldError, FormErrorSummary, useFormSubmit } from './form-errors';
 
 export type VehicleLeaseFormValues = Omit<VehicleLease, 'id'>;
 
@@ -82,7 +82,16 @@ export default function VehicleLeaseForm({
         <CardContent className="space-y-3">
           <div>
             <Label htmlFor="name">Label</Label>
-            <Input id="name" placeholder="e.g. Tesla Model 3 lease" {...form.register('name')} />
+            {/* Round-3 S6: the house trio — aria-invalid + aria-describedby
+                + FieldError — on every field (AccountForm pattern). */}
+            <Input
+              id="name"
+              placeholder="e.g. Tesla Model 3 lease"
+              {...form.register('name')}
+              aria-invalid={form.formState.errors.name ? true : undefined}
+              aria-describedby={form.formState.errors.name ? 'lease-name-error' : undefined}
+            />
+            <FieldError id="lease-name-error" message={form.formState.errors.name?.message} />
           </div>
 
           <div>
@@ -94,11 +103,16 @@ export default function VehicleLeaseForm({
               {...form.register('monthlyAmount', {
                 setValueAs: (v) => (v === '' ? 0 : Number(v)),
               })}
+              aria-invalid={form.formState.errors.monthlyAmount ? true : undefined}
+              aria-describedby={form.formState.errors.monthlyAmount ? 'lease-monthly-amount-error' : undefined}
             />
+            <FieldError id="lease-monthly-amount-error" message={form.formState.errors.monthlyAmount?.message} />
           </div>
 
           {!onlyOnePerson && persons.length > 0 && (
-            <fieldset>
+            <fieldset
+              aria-describedby={form.formState.errors.ownerPersonId ? 'lease-owner-error' : undefined}
+            >
               <legend className="text-sm font-medium mb-2">Who pays this?</legend>
               <div className="flex flex-wrap gap-4">
                 {persons.map((p) => (
@@ -134,11 +148,14 @@ export default function VehicleLeaseForm({
                   Joint
                 </label>
               </div>
+              <FieldError id="lease-owner-error" message={form.formState.errors.ownerPersonId?.message} />
             </fieldset>
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
+            <div
+              aria-describedby={form.formState.errors.startDate ? 'lease-start-date-error' : undefined}
+            >
               <Label htmlFor="startDate">Start date</Label>
               <DatePicker
                 id="startDate"
@@ -151,8 +168,11 @@ export default function VehicleLeaseForm({
                   })
                 }
               />
+              <FieldError id="lease-start-date-error" message={form.formState.errors.startDate?.message} />
             </div>
-            <div>
+            <div
+              aria-describedby={form.formState.errors.endDate ? 'lease-end-date-error' : undefined}
+            >
               <Label htmlFor="endDate">End date (optional)</Label>
               <DatePicker
                 id="endDate"
@@ -166,12 +186,21 @@ export default function VehicleLeaseForm({
                 }
                 maxYear={new Date().getFullYear() + 30}
               />
+              {/* The end>=start refine lands here via path: ['endDate']. */}
+              <FieldError id="lease-end-date-error" message={form.formState.errors.endDate?.message} />
             </div>
           </div>
         </CardContent>
       </Card>
 
-            <FormErrorSummary fieldErrors={form.formState.errors} submitError={submitError} />
+            <FormErrorSummary
+        fieldErrors={form.formState.errors}
+        submitError={submitError}
+        labels={{
+          name: 'Label',
+          ownerPersonId: 'Who pays this',
+        }}
+      />
 
       <div className="flex justify-end items-center gap-3">
         <span

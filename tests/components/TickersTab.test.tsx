@@ -112,3 +112,44 @@ describe('TickersTab — delete confirmation', () => {
     expect(screen.getAllByRole('button', { name: /^delete/i })).toHaveLength(1);
   });
 });
+
+describe('TickersTab — no-match state + polite count (round-3 S8)', () => {
+  let db: SqliteAdapter;
+
+  beforeEach(async () => {
+    db = new SqliteAdapter(':memory:');
+    await runMigrations(db, await loadAllMigrations());
+    setDatabase(db);
+    useTickersStore.setState({ tickers: [], isLoading: false, error: null });
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  it('a search matching nothing renders a no-results card', async () => {
+    const user = userEvent.setup();
+    await seedUserTicker('VTI');
+    await useTickersStore.getState().load();
+    render(<MemoryRouter><TickersTab /></MemoryRouter>);
+    await screen.findByText('VTI');
+    await user.type(screen.getByRole('searchbox', { name: /search tickers/i }), 'zzz-nope');
+    const card = await screen.findByText(/no tickers match/i);
+    expect(card).toHaveTextContent('zzz-nope');
+    expect(screen.queryAllByTestId('tickers-row')).toHaveLength(0);
+  });
+
+  it('announces the visible count politely', async () => {
+    const user = userEvent.setup();
+    // ZQXY is unique — VTI would collide with the seeded system ticker.
+    await seedUserTicker('ZQXY');
+    await useTickersStore.getState().load();
+    const total = useTickersStore.getState().tickers.length; // system + user rows
+    render(<MemoryRouter><TickersTab /></MemoryRouter>);
+    const status = await screen.findByTestId('tickers-visible-count');
+    expect(status).toHaveAttribute('aria-live', 'polite');
+    expect(status).toHaveTextContent(`${total} of ${total} tickers`);
+    await user.type(screen.getByRole('searchbox', { name: /search tickers/i }), 'ZQXY');
+    expect(status).toHaveTextContent(`1 of ${total} tickers`);
+  });
+});

@@ -27,9 +27,7 @@ import { GOAL_TYPE_LABELS } from '@/components/forms/GoalForm';
 import { GoalType } from '@/types/enums';
 import type {
   AccountSnapshot,
-  Contribution,
   Goal,
-  Household,
 } from '@/types/schema';
 import {
   Card,
@@ -39,7 +37,7 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { formatCurrency, formatPercent, formatDate } from '@/lib/format';
-import { minusMonths } from '@/lib/growth-horizons';
+import { monthlyContributionAvg, pickModerateRate } from '@/lib/growth-scenario';
 import { useLocalToday } from '@/lib/use-local-today';
 import { dateFromLocalISO } from '@/lib/dates';
 import { UpdateAccountBalanceDialog } from '@/components/dialogs/UpdateAccountBalanceDialog';
@@ -97,42 +95,7 @@ function latestSnapshotPerAccount(snapshots: AccountSnapshot[]): Map<number, num
   return new Map([...winner.entries()].map(([k, v]) => [k, v.value]));
 }
 
-/**
- * Average monthly contribution to a set of accounts over the last `monthsBack`
- * months. We sum contributions whose date falls within the window and divide
- * by `monthsBack` — months with no contributions still count as 0, so a one-
- * off $6k deposit averages to $1k/mo over 6 months.
- */
-function monthlyContributionAvg(
-  contributions: Contribution[],
-  linkedIds: number[],
-  today: Date,
-  monthsBack = 6,
-): number {
-  if (linkedIds.length === 0 || monthsBack <= 0) return 0;
-  const cutoffIso = minusMonths(today, monthsBack);
-  const linkedSet = new Set(linkedIds);
-  const total = contributions
-    .filter((c) => linkedSet.has(c.accountId) && c.date >= cutoffIso)
-    .reduce((sum, c) => sum + c.amount, 0);
-  return total / monthsBack;
-}
 
-/**
- * Pick the growth rate to project against. Prefers an entry labelled
- * "Moderate" (matches FinancialIndependenceCard); falls back to the 2nd entry, then the 1st,
- * then 6% if the household has no scenarios at all. Defensive defaults
- * matter here because the page renders before household.load() resolves.
- */
-function pickModerateRate(household: Household | null): number {
-  const FALLBACK = 0.06;
-  if (!household || household.growthScenarios.length === 0) return FALLBACK;
-  const moderate = household.growthScenarios.find((s) => s.label === 'Moderate');
-  if (moderate) return moderate.rate;
-  const second = household.growthScenarios[1];
-  if (second) return second.rate;
-  return household.growthScenarios[0]?.rate ?? FALLBACK;
-}
 
 interface GoalProjection extends GoalProgressResult {
   goal: Goal;

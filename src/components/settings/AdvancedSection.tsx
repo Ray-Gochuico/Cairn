@@ -1,3 +1,4 @@
+import { useExpandOnAnchor } from '@/lib/use-expand-on-anchor';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronDown, ChevronUp } from 'lucide-react';
@@ -46,6 +47,12 @@ export function AdvancedSection() {
   }, [loadCategories]);
 
   const [open, setOpen] = useState(false);
+  // Round-3 cleanup: a TOC/deep-link jump to #advanced must not land on a
+  // collapsed card. The user can still collapse it afterwards.
+  const anchored = useExpandOnAnchor('advanced');
+  useEffect(() => {
+    if (anchored) setOpen(true);
+  }, [anchored]);
   const [low, setLow] = useState<string>('');
   const [high, setHigh] = useState<string>('');
   const [inflation, setInflation] = useState<string>('');
@@ -248,6 +255,9 @@ export function AdvancedSection() {
                   id="advanced-low"
                   type="number"
                   step="0.1"
+                  min="0"
+                  max="100"
+                  placeholder="5"
                   value={low}
                   onChange={(e) => setLow(e.target.value)}
                   className="w-24"
@@ -260,6 +270,9 @@ export function AdvancedSection() {
                   id="advanced-high"
                   type="number"
                   step="0.1"
+                  min="0"
+                  max="100"
+                  placeholder="8"
                   value={high}
                   onChange={(e) => setHigh(e.target.value)}
                   className="w-24"
@@ -423,15 +436,17 @@ export function AdvancedSection() {
                 max="50"
                 value={drawdownTaxRate}
                 onChange={(e) => setDrawdownTaxRate(e.target.value)}
-                placeholder="22"
                 aria-invalid={drawdownTaxRateInvalid}
                 className="w-32"
               />
+              {/* Round-3 E5: blank persists null → the engine applies NO
+                  gross-up; the old "22" placeholder implied a default that
+                  never fired. Say what blank actually does. */}
               <p className="text-xs text-muted-foreground mt-1">
                 Applied when What-If scenarios use the &quot;sequential&quot;
-                withdrawal strategy. Default 22% (covers federal + average
-                state for a $60k/yr drawdown). Leave blank to model
-                net-of-tax withdrawals manually.
+                withdrawal strategy (22% covers federal + average state for a
+                $60k/yr drawdown). Blank = no tax gross-up — you&apos;re
+                modeling net-of-tax withdrawals yourself.
               </p>
             </div>
             {drawdownTaxRateInvalid && (
