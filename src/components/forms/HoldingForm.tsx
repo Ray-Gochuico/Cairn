@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { HoldingSchema, type Holding } from '@/types/schema';
 import { Button } from '@/components/ui/button';
+import { humanizeZodMessage, useFormSubmit } from './form-errors';
 import { Input } from '@/components/ui/input';
 
 export type HoldingFormValues = Omit<Holding, 'id'>;
@@ -93,20 +94,25 @@ export default function HoldingForm({
     values: memoValues,
   });
 
+  // W10 M44: a rejected onSave used to escape as an unhandled rejection.
+  const { onValid, submitting, submitError } = useFormSubmit(
+    async (values: HoldingRowFormValues) => {
+      const dbValues = fromForm(values);
+      if (onValidateSubmit) {
+        const err = onValidateSubmit(dbValues);
+        if (err) {
+          form.setError('targetAllocationPctPercent', { type: 'manual', message: err });
+          return;
+        }
+      }
+      await onSave(dbValues);
+      form.reset(values);
+    },
+  );
+
   return (
     <form
-      onSubmit={form.handleSubmit(async (values) => {
-        const dbValues = fromForm(values);
-        if (onValidateSubmit) {
-          const err = onValidateSubmit(dbValues);
-          if (err) {
-            form.setError('targetAllocationPctPercent', { type: 'manual', message: err });
-            return;
-          }
-        }
-        await onSave(dbValues);
-        form.reset(values);
-      })}
+      onSubmit={form.handleSubmit(onValid)}
       className="grid grid-cols-12 gap-2 items-center py-2 border-b last:border-b-0"
     >
       <div className="col-span-2">
@@ -153,7 +159,7 @@ export default function HoldingForm({
         <Button
           type="submit"
           size="sm"
-          disabled={form.formState.isSubmitting || !form.formState.isDirty}
+          disabled={submitting || !form.formState.isDirty}
         >
           {saveLabel}
         </Button>
@@ -163,19 +169,24 @@ export default function HoldingForm({
           </Button>
         )}
       </div>
-      {Object.keys(form.formState.errors).length > 0 && (
+      {(Object.keys(form.formState.errors).length > 0 || submitError) && (
         <div
           role="alert"
           className="col-span-12 mt-1 rounded-md border border-destructive/50 bg-destructive/10 p-2 text-xs text-destructive-soft-foreground"
         >
-          <ul className="list-disc pl-5">
-            {Object.entries(form.formState.errors).map(([field, err]) => (
-              <li key={field}>
-                <span className="font-mono">{field}</span>:{' '}
-                {(err as { message?: string })?.message ?? 'invalid'}
-              </li>
-            ))}
-          </ul>
+          {submitError ? (
+            <div>Couldn’t save — {submitError}. Your changes are still on this row; try again.</div>
+          ) : (
+            // W10 M44: humanized messages (custom ones — like the >100% margin
+            // guard — pass through), no raw RHF keys in a monospace pane.
+            <ul className="list-disc pl-5">
+              {Object.entries(form.formState.errors).map(([field, err]) => (
+                <li key={field}>
+                  {humanizeZodMessage((err as { message?: string })?.message)}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
     </form>

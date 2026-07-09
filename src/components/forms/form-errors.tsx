@@ -4,7 +4,7 @@ import { useCallback, useState } from 'react';
  * Wave-10 form-honesty primitives (M44 + design panel). Three problems, one
  * module: (1) every form but HouseholdForm let a rejected save escape as an
  * unhandled rejection — useFormSubmit catches it into submitError; (2) the
- * copy-pasted banner printed raw RHF keys in font-mono plus raw Zod output —
+ * copy-pasted banner printed raw RHF keys in a monospace pane plus raw Zod —
  * FormErrorSummary names humanized fields and defers details to (3)
  * FieldError, the inline per-field message reached via aria-describedby.
  * The summary keeps the destructive-soft pane idiom (see its className) with

@@ -7,6 +7,7 @@ import DatePicker from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { FormErrorSummary, useFormSubmit } from './form-errors';
 
 export type GoalFormValues = Omit<Goal, 'id'>;
 
@@ -68,13 +69,10 @@ export default function GoalForm({
     form.setValue('linkedAccountIds', [...next], { shouldDirty: true, shouldTouch: true });
   };
 
-  const fieldErrors = Object.entries(form.formState.errors).map(([field, err]) => ({
-    field,
-    message: (err as { message?: string })?.message ?? 'invalid',
-  }));
+  const { onValid, submitting, submitError } = useFormSubmit(onSubmit);
 
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+    <form onSubmit={form.handleSubmit(onValid)} className="space-y-4">
       <Card>
         <CardHeader><CardTitle className="text-base">Goal details</CardTitle></CardHeader>
         <CardContent className="space-y-3">
@@ -178,23 +176,12 @@ export default function GoalForm({
         </CardContent>
       </Card>
 
-      {fieldErrors.length > 0 && (
-        <div role="alert" className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive-soft-foreground">
-          <div className="font-medium mb-1">Fix these before saving:</div>
-          <ul className="list-disc pl-5">
-            {fieldErrors.map((e) => (
-              <li key={e.field}>
-                <span className="font-mono">{e.field}</span>: {e.message}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+            <FormErrorSummary fieldErrors={form.formState.errors} submitError={submitError} />
 
       <div className="flex justify-end items-center gap-3">
         <span
           className="text-sm text-muted-foreground transition-opacity duration-200"
-          style={{ opacity: form.formState.isSubmitting ? 1 : 0 }}
+          style={{ opacity: submitting ? 1 : 0 }}
           aria-live="polite"
         >
           Saving…
@@ -204,14 +191,14 @@ export default function GoalForm({
             type="button"
             variant="ghost"
             onClick={onCancel}
-            disabled={form.formState.isSubmitting}
+            disabled={submitting}
           >
             Cancel
           </Button>
         )}
         <Button
           type="submit"
-          disabled={form.formState.isSubmitting || !form.formState.isDirty}
+          disabled={submitting}
         >
           {submitLabel}
         </Button>

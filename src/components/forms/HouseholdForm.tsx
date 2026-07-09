@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { FormErrorSummary, useFormSubmit } from './form-errors';
 
 const CITY_TAX_YEAR = 2026;
 
@@ -133,26 +134,19 @@ export default function HouseholdForm({
     return () => clearTimeout(t);
   }, [justSaved]);
 
-  const handleSubmit = async (next: HouseholdFormValues) => {
-    try {
-      await onSubmit(next);
-      if (showSavedConfirmation) {
-        setJustSaved(true);
-      }
-    } catch {
-      // Errors propagate via `error` prop from the store; nothing else to do.
+  // W10 M44: useFormSubmit catches a rejected save into submitError; the
+  // justSaved confirmation only fires when the save resolved.
+  const { onValid, submitError } = useFormSubmit(async (next: HouseholdFormValues) => {
+    await onSubmit(next);
+    if (showSavedConfirmation) {
+      setJustSaved(true);
     }
-  };
-
-  const fieldErrors = Object.entries(form.formState.errors).map(([field, err]) => ({
-    field,
-    message: (err as { message?: string })?.message ?? 'invalid',
-  }));
+  });
 
   const dirty = form.formState.isDirty;
 
   return (
-    <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+    <form onSubmit={form.handleSubmit(onValid)} className="space-y-4">
       <Card>
         <CardHeader><CardTitle className="text-base">Identity &amp; tax</CardTitle></CardHeader>
         <CardContent className="space-y-3">
@@ -275,22 +269,8 @@ export default function HouseholdForm({
         </CardContent>
       </Card>
 
-      {fieldErrors.length > 0 && (
-        <div role="alert" className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive-soft-foreground">
-          <div className="font-medium mb-1">Fix these before saving:</div>
-          <ul className="list-disc pl-5">
-            {fieldErrors.map((e) => (
-              <li key={e.field}>
-                <span className="font-mono">{e.field}</span>: {e.message}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {error && (
-        <div role="alert" className="text-sm text-destructive-soft-foreground">{error}</div>
-      )}
+      {/* W10 M44: humanized field summary + submit/store failures in one pane. */}
+      <FormErrorSummary fieldErrors={form.formState.errors} submitError={submitError ?? error} />
 
       <div className="flex justify-end items-center gap-3">
         <span
