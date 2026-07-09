@@ -9,6 +9,7 @@ import { useLoansStore } from '@/stores/loans-store';
 import { useContributionsStore } from '@/stores/contributions-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
+import { useCategoriesStore } from '@/stores/categories-store';
 import { useRoadmapOverridesStore } from '@/stores/roadmap-overrides-store';
 import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import type { Household } from '@/types/schema';
@@ -48,6 +49,7 @@ function resetStores(household: Household | null, roadmapAccepted?: string) {
   useContributionsStore.setState({ contributions: [], isLoading: false, error: null, load: async () => {} } as any);
   useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null, load: async () => {} } as any);
   useTransactionsStore.setState({ transactions: [], isLoading: false, error: null, load: async () => {} } as any);
+  useCategoriesStore.setState({ categories: [], isLoading: false, error: null, load: async () => {} } as any);
   useRoadmapOverridesStore.setState({
     overridesByNodeId: new Map(),
     isLoading: false,
@@ -121,5 +123,23 @@ describe('Roadmap page', () => {
       screen.getByText(/set up your household to see your roadmap/i),
     ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /set up household/i })).toHaveAttribute('href', '/inputs/household');
+  });
+
+  it('renders the loading skeleton — not engine output or setup copy — while stores load (W10 M28)', () => {
+    resetStores(makeHousehold());
+    // Household resolved, but accounts still in flight: the engine must NOT
+    // evaluate partial stores as authoritative.
+    useAccountsStore.setState({ accounts: [], isLoading: true, error: null, load: async () => {} } as any);
+    render(<MemoryRouter><Roadmap /></MemoryRouter>);
+    expect(screen.getByRole('status', { name: /loading page/i })).toBeInTheDocument();
+    // No section cards, no evidence strings, no setup empty-state:
+    expect(screen.queryByText(/set up your household/i)).not.toBeInTheDocument();
+  });
+
+  it('shows StoreErrorBanner with retry when a roadmap input store failed (W10 M28)', () => {
+    resetStores(makeHousehold(), ACCEPTED_VERSION);
+    useAccountsStore.setState({ accounts: [], isLoading: false, error: 'DB gone', load: async () => {} } as any);
+    render(<MemoryRouter><Roadmap /></MemoryRouter>);
+    expect(screen.getByRole('alert')).toHaveTextContent(/couldn.t load or save/i);
   });
 });
