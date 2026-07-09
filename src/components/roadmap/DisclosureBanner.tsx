@@ -31,7 +31,7 @@ export function DisclosureBanner() {
           Read full →
         </button>
       </div>
-      {/* W10 M27: was a hand-rolled aria-modal div (no focus trap, no Escape,
+      {/* W10 M27: was a hand-rolled fake-modal div (no focus trap, no Escape,
           no scroll lock). Radix Sheet supplies all three + a Close button. */}
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto">

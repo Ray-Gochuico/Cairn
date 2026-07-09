@@ -75,8 +75,8 @@ function MetricCardImpl({
       <CardHeader className="pb-2">
         {/*
          * Label readability across viewport widths is the headline contract
-         * here. A prior iteration used Tailwind's `truncate` (overflow-hidden +
-         * text-ellipsis + nowrap) which produced mid-word ellipses at <1280px
+         * here. A prior iteration used Tailwind's `truncate` (which ellipsizes
+         * on overflow) which produced mid-word ellipses at <1280px
          * — "AWAITING REIMBU…" / "SPENDING VS BU…" — for our default
          * Dashboard pills. We now line-clamp to 2 lines instead: the label
          * wraps on whitespace (no mid-word splits) and falls back to a single
@@ -98,9 +98,10 @@ function MetricCardImpl({
           <div
             className={cn(
               // W10 design: a KPI exists to show magnitude — currency must never
-              // ellipsize. Drop overflow-hidden/text-ellipsis (and the title
+              // ellipsize. Drop the overflow/ellipsis clip (and the title
               // mirror), keep whitespace-nowrap, and step the font down one
               // notch earlier so long values fit the same pills at 1280px.
+              // (The delta below MAY still clip — it is secondary info.)
               'text-lg sm:text-xl md:text-2xl lg:text-3xl font-semibold leading-tight tabular-nums whitespace-nowrap min-w-0 max-w-full',
               valueClass(valueTone),
             )}
