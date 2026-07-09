@@ -118,11 +118,10 @@ interface SurfaceConfig {
   /** Body copy for the zero-eligible empty state. */
   emptyCopy: string;
   /**
-   * Per-direction gradient fill ids — unique per surface so the dashboard
-   * and net-worth charts can mount on one page without <defs> collisions.
+   * Gradient fill id — unique per surface so the dashboard and net-worth
+   * charts can mount on one page without <defs> collisions.
    */
-  gradientUpId: string;
-  gradientDownId: string;
+  gradientId: string;
 }
 
 const SURFACES: Record<AssetValueChartSurface, SurfaceConfig> = {
@@ -138,8 +137,7 @@ const SURFACES: Record<AssetValueChartSurface, SurfaceConfig> = {
     respectViewFilter: false,
     emptyCopy:
       'Add an account, property, vehicle, or loan in Inputs to see your wealth over time.',
-    gradientUpId: 'avc-fill-netWorth-up',
-    gradientDownId: 'avc-fill-netWorth-down',
+    gradientId: 'avc-fill-netWorth',
   },
   dashboard: {
     height: 200,
@@ -153,8 +151,7 @@ const SURFACES: Record<AssetValueChartSurface, SurfaceConfig> = {
     respectViewFilter: false,
     emptyCopy:
       'Add an account, property, vehicle, or loan in Inputs to see your wealth over time.',
-    gradientUpId: 'avc-fill-dashboard-up',
-    gradientDownId: 'avc-fill-dashboard-down',
+    gradientId: 'avc-fill-dashboard',
   },
   investments: {
     height: 320,
@@ -173,8 +170,7 @@ const SURFACES: Record<AssetValueChartSurface, SurfaceConfig> = {
     },
     emptyCopy:
       'Add an account with balance snapshots in Inputs to see your investments over time.',
-    gradientUpId: 'avc-fill-investments-up',
-    gradientDownId: 'avc-fill-investments-down',
+    gradientId: 'avc-fill-investments',
   },
 };
 
@@ -185,14 +181,13 @@ const SURFACES: Record<AssetValueChartSurface, SurfaceConfig> = {
 const CHART_MARGIN = { top: 8, right: 16, bottom: 8, left: 8 } as const;
 const GRID_STROKE = 'hsl(var(--border))' as const;
 const AXIS_STROKE = 'hsl(var(--muted-foreground))' as const;
-// Trend strokes bind the *-stroke tokens, NOT the fill tokens: light
-// --success is 2.30:1 and dark --destructive 2.00:1 as thin lines (round-2
-// B1; see --chart-success/--chart-danger in globals.css, ≥3:1 both themes).
-// The gradients + end/pin dots deliberately ride the SAME constants so the
-// fill wash, dots, and line stay one hue family — swapping only the stroke
-// would pair a compliant line with an off-hue wash.
-const SUCCESS = 'hsl(var(--chart-success))' as const;
-const DESTRUCTIVE = 'hsl(var(--chart-danger))' as const;
+// Wave-12 Trailhead Stone (D8): the hero line is the blaze identity stroke,
+// always — direction (gain/loss) stays fully encoded in the ▲/▼ delta row
+// (success/destructive-soft TEXT tokens) and the signed breakdown deltas.
+// --blaze is a stroke/fill token >=3:1 on both canvases (stone token test).
+// The gradient wash + end/pin dots deliberately ride the SAME constant so
+// the fill wash, dots, and line stay one hue family.
+const HERO = 'hsl(var(--blaze))' as const;
 // Tooltip cursor — the vertical dashed scrub line.
 const CURSOR = {
   stroke: AXIS_STROKE,
@@ -207,44 +202,41 @@ const CHART_WRAPPER_STYLE = { cursor: 'crosshair' } as const;
 const ACTIVE_DOT = { r: 4 } as const;
 const EMPTY_CHART_DATA: NetWorthChartRow[] = [];
 
-// End-of-series dot (spec §3.3): solid core + soft halo, tinted by trend
-// direction. Prebuilt per direction so the ReferenceDot `shape` prop keeps
-// a stable identity across renders.
-function endDotShape(color: string) {
-  return function EndDot(props: { cx?: number; cy?: number }) {
-    const { cx = 0, cy = 0 } = props;
-    return (
-      <g>
-        <circle cx={cx} cy={cy} r={8} fill={color} fillOpacity={0.15} />
-        <circle cx={cx} cy={cy} r={4} fill={color} />
-      </g>
-    );
-  };
-}
-const END_DOT_UP = endDotShape(SUCCESS);
-const END_DOT_DOWN = endDotShape(DESTRUCTIVE);
+// End-of-series marker (Wave-12): a small stacked-stone cairn in the soft
+// halo — the Trailhead Stone signature. Sub-pixel geometry is fine in SVG.
+// The motion-safe 180ms fade is the ONLY motion in the identity wave: the
+// marker re-enters when the range toggles (parent keys the ReferenceDot on
+// the window), and prefers-reduced-motion users see it appear instantly.
+// Module constant so the ReferenceDot `shape` prop keeps a stable identity.
+const CAIRN_END_DOT = function CairnEndDot(props: { cx?: number; cy?: number }) {
+  const { cx = 0, cy = 0 } = props;
+  return (
+    <g className="motion-safe:animate-in fade-in ease-out duration-[180ms]">
+      <circle cx={cx} cy={cy} r={8} fill={HERO} fillOpacity={0.15} />
+      <rect x={cx - 1.75} y={cy - 4.6} width={3.5} height={2.4} rx={1.2} fill={HERO} />
+      <rect x={cx - 2.75} y={cy - 1.7} width={5.5} height={2.7} rx={1.35} fill={HERO} />
+      <rect x={cx - 3.5} y={cy + 1.5} width={7} height={3} rx={1.5} fill={HERO} />
+    </g>
+  );
+};
 
-// Pin marker (§3.5, CF4): a RING — background-filled core, color-stroked —
-// so it reads as a distinct marker from the end dot (halo+core) and never
-// stacks a second halo when a pin lands on the latest bucket. Prebuilt per
-// direction for stable `shape` identity.
-function pinDotShape(color: string) {
-  return function PinDot(props: { cx?: number; cy?: number }) {
-    const { cx = 0, cy = 0 } = props;
-    return (
-      <circle
-        cx={cx}
-        cy={cy}
-        r={4.5}
-        fill="hsl(var(--background))"
-        stroke={color}
-        strokeWidth={2}
-      />
-    );
-  };
-}
-const PIN_DOT_UP = pinDotShape(SUCCESS);
-const PIN_DOT_DOWN = pinDotShape(DESTRUCTIVE);
+// Pin marker (§3.5, CF4): a RING — background-filled core, blaze-stroked —
+// so it reads as a distinct marker from the end dot (halo+cairn) and never
+// stacks a second halo when a pin lands on the latest bucket. Module
+// constant for stable `shape` identity.
+const PIN_DOT = function PinDot(props: { cx?: number; cy?: number }) {
+  const { cx = 0, cy = 0 } = props;
+  return (
+    <circle
+      cx={cx}
+      cy={cy}
+      r={4.5}
+      fill="hsl(var(--background))"
+      stroke={HERO}
+      strokeWidth={2}
+    />
+  );
+};
 
 // Whole-domain function form (spec §3.3) — the tuple-of-functions form
 // can't see the span, so padding must be computed from both ends at once.
@@ -344,9 +336,10 @@ interface ChartCanvasProps {
   data: NetWorthChartRow[];
   height: number;
   strokeWidth: number;
-  trendDown: boolean;
-  gradientUpId: string;
-  gradientDownId: string;
+  gradientId: string;
+  /** Current range window — keys the end-dot ReferenceDot so a range toggle
+   *  remounts the cairn marker and replays its motion-safe 180ms fade. */
+  windowKey: TimeWindow;
   ticks: string[];
   tickFormatter: (v: string) => string;
   tooltipElement: ReactElement;
@@ -367,8 +360,10 @@ interface ChartCanvasProps {
  *     same memoized map + same key → same row object; latestPoint is
  *     view.latest off the view memo;
  *   - onMouseMove / onMouseLeave / onClick are useCallbacks;
- *   - height / strokeWidth / trendDown / gradient ids are primitives and
- *     tickFormatter is a module constant (X_TICK_FORMATTERS[window_]).
+ *   - height / strokeWidth / gradientId / windowKey are primitives (the
+ *     windowKey string only changes on a range toggle — exactly when the
+ *     end-dot remount is wanted) and tickFormatter is a module constant
+ *     (X_TICK_FORMATTERS[window_]).
  * Adding a prop? Keep it identity-stable across scrub re-renders or this
  * boundary leaks per-mousemove renders into recharts (3.x discipline above).
  *
@@ -381,9 +376,8 @@ const ChartCanvas = memo(function ChartCanvas({
   data,
   height,
   strokeWidth,
-  trendDown,
-  gradientUpId,
-  gradientDownId,
+  gradientId,
+  windowKey,
   ticks,
   tickFormatter,
   tooltipElement,
@@ -393,8 +387,6 @@ const ChartCanvas = memo(function ChartCanvas({
   onMouseLeave,
   onClick,
 }: ChartCanvasProps) {
-  // Sign-aware trend color (spec §2 locked decision) — line, fill, dots.
-  const lineColor = trendDown ? DESTRUCTIVE : SUCCESS;
   return (
     <ResponsiveContainer width="100%" height={height}>
       <AreaChart
@@ -409,13 +401,9 @@ const ChartCanvas = memo(function ChartCanvas({
             resolves against the PADDED domain in recharts 3.8.1, so the
             vertical gradient reaches the plot bottom (design review). */}
         <defs>
-          <linearGradient id={gradientUpId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={SUCCESS} stopOpacity={0.22} />
-            <stop offset="100%" stopColor={SUCCESS} stopOpacity={0} />
-          </linearGradient>
-          <linearGradient id={gradientDownId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={DESTRUCTIVE} stopOpacity={0.22} />
-            <stop offset="100%" stopColor={DESTRUCTIVE} stopOpacity={0} />
+          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={HERO} stopOpacity={0.22} />
+            <stop offset="100%" stopColor={HERO} stopOpacity={0} />
           </linearGradient>
         </defs>
         <CartesianGrid vertical={false} stroke={GRID_STROKE} />
@@ -442,9 +430,9 @@ const ChartCanvas = memo(function ChartCanvas({
         <Area
           type="monotone"
           dataKey="netWorth"
-          stroke={lineColor}
+          stroke={HERO}
           strokeWidth={strokeWidth}
-          fill={trendDown ? `url(#${gradientDownId})` : `url(#${gradientUpId})`}
+          fill={`url(#${gradientId})`}
           baseValue="dataMin"
           dot={false}
           activeDot={ACTIVE_DOT}
@@ -461,14 +449,15 @@ const ChartCanvas = memo(function ChartCanvas({
           <ReferenceDot
             x={pinRow.bucketEnd}
             y={pinRow.netWorth}
-            shape={trendDown ? PIN_DOT_DOWN : PIN_DOT_UP}
+            shape={PIN_DOT}
           />
         )}
         {latestPoint && (
           <ReferenceDot
+            key={`end-${windowKey}`}
             x={latestPoint.bucketEnd}
             y={latestPoint.value}
-            shape={trendDown ? END_DOT_DOWN : END_DOT_UP}
+            shape={CAIRN_END_DOT}
           />
         )}
       </AreaChart>
@@ -893,10 +882,8 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
     ? label
     : cfg.labels?.fullSet ?? (cfg.defaultIncludeLoans ? 'Net worth' : 'Total assets');
 
-  // Sign-aware trend direction (spec §2 locked decision) — drives the line
-  // color, gradient fill, and end dot inside ChartCanvas. Keyed on the
-  // FULL-RANGE delta, never on the scrub/pin position (§3.5).
-  const trendDown = view.delta !== null && view.delta < 0;
+  // Wave-12 D8: the canvas is direction-agnostic (blaze identity stroke);
+  // direction lives in the delta row below (activeDown) and the breakdown.
 
   // Header precedence: scrub > pin > latest (spec §3.5), resolved ROW-wise:
   // a scrub/pin id missing from chartData (range change while hovering,
@@ -923,7 +910,7 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
 
   // Delta row pieces, kept as small string consts. The ROW's direction
   // follows the active delta (a scrubbed loss reads as a loss even on an
-  // up range); only the canvas stays keyed on trendDown.
+  // up range); the canvas itself is direction-agnostic (Wave-12 D8).
   const activeDown = activeDelta !== null && activeDelta < 0;
   const deltaSign = activeDown ? '−' : '+';
   const deltaDollar = activeDelta !== null ? formatCurrency(Math.abs(activeDelta)) : null;
@@ -1164,9 +1151,8 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
               data={chartData}
               height={cfg.height}
               strokeWidth={cfg.strokeWidth}
-              trendDown={trendDown}
-              gradientUpId={cfg.gradientUpId}
-              gradientDownId={cfg.gradientDownId}
+              gradientId={cfg.gradientId}
+              windowKey={window_}
               ticks={xTicks}
               tickFormatter={X_TICK_FORMATTERS[window_]}
               tooltipElement={tooltipElement}
