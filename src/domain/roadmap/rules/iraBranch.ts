@@ -1,5 +1,5 @@
 import type { NodeResult, RoadmapContext } from '@/types/roadmap';
-import { AccountType } from '@/types/enums';
+import { AccountType, ContributionSource } from '@/types/enums';
 import { TAX_YEAR_2026 } from '../taxYear2026';
 
 /**
@@ -59,16 +59,23 @@ function classifyMagi(magi: number, bands: Bands): FilingBand {
   return 'low';                                       // Trad-deductibility still possible
 }
 
-function isPretaxRetirementContribution(
-  contribution: { accountId: number },
+/**
+ * Wave-9 F10: MAGI per Pub 590-A ADDS BACK the traditional-IRA deduction for
+ * both the Roth and trad-deduction phase-outs — subtracting it here made the
+ * check self-referential (contributing lowered app-MAGI into the band).
+ * Only elective 401(k) SALARY DEFERRALS reduce W-2 box-1 wages; employer
+ * match was never in wages and cannot reduce MAGI either.
+ * (ACCOUNT_ROTH_401K / Roth IRA are post-tax and stay excluded — Feature A
+ * product decision, see Task 3 of what-if Feature A plan.)
+ */
+function isMagiReducingContribution(
+  contribution: { accountId: number; source: string },
   accounts: { id?: number; type: string }[],
 ): boolean {
+  if (contribution.source === ContributionSource.EMPLOYER_MATCH) return false;
   const account = accounts.find((a) => a.id === contribution.accountId);
   if (!account) return false;
-  // 401(k) (ACCOUNT_401K) and traditional IRA both reduce MAGI; Roth IRAs do not.
-  // ACCOUNT_ROTH_401K is post-tax too — deliberately excluded so it does NOT
-  // reduce MAGI (Feature A product decision, see Task 3 of what-if Feature A plan).
-  return account.type === AccountType.ACCOUNT_401K || account.type === AccountType.ACCOUNT_TRAD_IRA;
+  return account.type === AccountType.ACCOUNT_401K;
 }
 
 export function computeMagi(ctx: RoadmapContext): number {
@@ -77,7 +84,7 @@ export function computeMagi(ctx: RoadmapContext): number {
   const yearPrefix = `${year}-`;
   const ytdPretax = ctx.contributions
     .filter((c) => c.date.startsWith(yearPrefix))
-    .filter((c) => isPretaxRetirementContribution(c, ctx.accounts))
+    .filter((c) => isMagiReducingContribution(c, ctx.accounts))
     .reduce((s, c) => s + c.amount, 0);
   return Math.max(0, salary - ytdPretax);
 }

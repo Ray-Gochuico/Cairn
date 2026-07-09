@@ -131,13 +131,25 @@ describe('computeMagi', () => {
     expect(computeMagi(ctx)).toBe(85_000);
   });
 
-  it('subtracts traditional IRA contributions too', () => {
+  it('does NOT subtract traditional IRA contributions (Pub 590-A adds the deduction back) (wave-9 F10)', () => {
     const ctx = makeContext({
       persons: [makePerson({ salary: 100_000 })],
       accounts: [makeAccount(8, AccountType.ACCOUNT_TRAD_IRA)],
       contributions: [makeContribution({ accountId: 8, amount: 7_000, date: '2026-02-01' })],
     });
-    expect(computeMagi(ctx)).toBe(93_000);
+    expect(computeMagi(ctx)).toBe(100_000);
+  });
+
+  it('does NOT subtract employer-match rows (never in wages) (wave-9 F10)', () => {
+    const ctx = makeContext({
+      persons: [makePerson({ salary: 100_000 })],
+      accounts: [makeAccount(7, AccountType.ACCOUNT_401K)],
+      contributions: [
+        makeContribution({ accountId: 7, amount: 10_000, date: '2026-01-15' }), // employee deferral
+        makeContribution({ accountId: 7, amount: 5_000, date: '2026-01-15', source: ContributionSource.EMPLOYER_MATCH }),
+      ],
+    });
+    expect(computeMagi(ctx)).toBe(90_000);
   });
 
   it('ignores Roth IRA contributions (post-tax, do not reduce MAGI)', () => {
