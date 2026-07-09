@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
-import DonutChartCard, { type DonutSlice } from './DonutChartCard';
+import DonutChartCard from './DonutChartCard';
 import { DonutEntityPicker, useDonutSelected, type DonutEntityPickerItem } from './DonutEntityPicker';
 import { colorForSector, shadedColorForIndustry } from './palette';
 import { useConcentration } from '@/lib/use-concentration';
@@ -14,14 +14,8 @@ import {
 } from '@/lib/sector-classification';
 import { formatCurrency } from '@/lib/format';
 import { useViewFilter } from '@/lib/use-view-filter';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
-// Module-level empty-data sentinel for the empty-state donut. Hoisted so the
-// `data` prop keeps a stable reference across renders — recharts' Pie keys
-// its <JavascriptAnimate> off `useAnimationId(props)`, which uses reference
-// equality on the entire props object, and a fresh `[]` each render churns
-// the animation lifecycle.
-const EMPTY_DONUT_DATA: DonutSlice[] = [];
 const STORAGE_KEY = 'donut.sector.hidden';
 
 /**
@@ -183,12 +177,19 @@ export function SectorDonut() {
 
   const hasData = sectorSlices.some((s) => s.value > 0);
   if (!hasData) {
+    // Keep the titled card but guide the user to the action that fills it,
+    // rather than mounting an empty pie. Mirrors AllocationCard's empty
+    // pattern so the 3-up grid keeps a consistent block.
     return (
-      <DonutChartCard
-        title={sectorBaseTitle}
-        subtitle="After fund look-through"
-        data={EMPTY_DONUT_DATA}
-      />
+      <Card>
+        <CardHeader>
+          <CardTitle>{sectorBaseTitle}</CardTitle>
+          <CardDescription>After fund look-through</CardDescription>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground">
+          No holding values yet — confirm an account snapshot (Monthly ritual) to see exposure.
+        </CardContent>
+      </Card>
     );
   }
 

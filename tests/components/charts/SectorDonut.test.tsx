@@ -128,6 +128,32 @@ describe('SectorDonut — sector view (default)', () => {
     expect(screen.getByText('After fund look-through')).toBeTruthy();
   });
 
+  it('shows Monthly-ritual guidance copy and mounts no empty pie when there are no holdings', () => {
+    render(<MemoryRouter><SectorDonut /></MemoryRouter>);
+    expect(
+      screen.getByText(
+        /No holding values yet — confirm an account snapshot \(Monthly ritual\) to see exposure\./,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('rc-pie')).toBeNull();
+  });
+
+  it('still renders the share-% legend on a populated portfolio (protected view)', () => {
+    setTickers([
+      makeTicker({ ticker: 'AAPL', sector: 'Technology', industry: 'Consumer Electronics' }),
+      makeTicker({ ticker: 'MSFT', sector: 'Technology', industry: 'Software—Infrastructure' }),
+      makeTicker({ ticker: 'JPM', sector: 'Financials', industry: 'Banks—Diversified' }),
+    ]);
+    setReport([
+      { ticker: 'AAPL', effectiveExposure: 1000 },
+      { ticker: 'MSFT', effectiveExposure: 500 },
+      { ticker: 'JPM', effectiveExposure: 750 },
+    ]);
+    render(<MemoryRouter><SectorDonut /></MemoryRouter>);
+    // Technology 1500 of 2250 → 66.7% share readout in the legend.
+    expect(screen.getByText(/66\.7%/)).toBeInTheDocument();
+  });
+
   it('renders one wedge per resolved sector', () => {
     setTickers([
       makeTicker({ ticker: 'AAPL', sector: 'Technology', industry: 'Consumer Electronics' }),

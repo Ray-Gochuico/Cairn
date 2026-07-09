@@ -16,7 +16,6 @@ import { entityKey } from '@/lib/entity-key';
 import { colorForAccount, colorForEntityKey } from '@/lib/chart-colors';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-const EMPTY_SLICES: DonutSlice[] = [];
 const STORAGE_KEY = 'donut.assets.hidden';
 
 /**
@@ -71,15 +70,13 @@ export default function AssetsDonut() {
   // uses `entityKey(kind, id)` because account/property/vehicle ids can
   // collide (`account:1` vs `property:1`); the slice name keeps the
   // user-facing label.
-  const { slices, pickerItems, keyByName } = useMemo<{
+  const { slices, pickerItems } = useMemo<{
     slices: DonutSlice[];
     pickerItems: DonutEntityPickerItem[];
-    keyByName: Map<string, string>;
   }>(() => {
     const today = new Date().toISOString().slice(0, 10);
     const sl: DonutSlice[] = [];
     const pi: DonutEntityPickerItem[] = [];
-    const kbn = new Map<string, string>();
 
     // Attach a deterministic, ENTITY-keyed color to BOTH the slice and the
     // picker item from one source. Keying on the entity (account id /
@@ -87,11 +84,12 @@ export default function AssetsDonut() {
     // color never shifts when another entity is hidden and the list reindexes
     // — so wedge == legend == picker swatch by construction (the I9 desync
     // fix). Accounts also honor the user's per-account accent override here,
-    // which the old positional path silently dropped on the donut.
+    // which the old positional path silently dropped on the donut. The slice
+    // carries `entityKey` so the picker filter can hide entities that share a
+    // display label independently.
     function push(name: string, value: number, key: string, color: string) {
-      sl.push({ name, value, color });
+      sl.push({ name, value, color, entityKey: key });
       pi.push({ key, label: name, color });
-      kbn.set(name, key);
     }
 
     for (const acc of accounts) {
@@ -137,7 +135,7 @@ export default function AssetsDonut() {
         push(v.name, value, key, colorForEntityKey(key));
       }
     }
-    return { slices: sl, pickerItems: pi, keyByName: kbn };
+    return { slices: sl, pickerItems: pi };
   }, [accounts, snapshots, properties, vehicles, assetValueSnapshots]);
 
   const allKeys = useMemo(() => pickerItems.map((i) => i.key), [pickerItems]);
@@ -145,11 +143,8 @@ export default function AssetsDonut() {
 
   const filteredSlices = useMemo(
     () =>
-      slices.filter((s) => {
-        const k = keyByName.get(s.name);
-        return k !== undefined && selected.has(k);
-      }),
-    [slices, keyByName, selected],
+      slices.filter((s) => s.entityKey !== undefined && selected.has(s.entityKey)),
+    [slices, selected],
   );
 
   // Full-universe denominator (hidden entities included) so hiding one
@@ -198,7 +193,7 @@ export default function AssetsDonut() {
   return (
     <DonutChartCard
       title={title}
-      data={filteredSlices.length === 0 ? EMPTY_SLICES : filteredSlices}
+      data={filteredSlices}
       shareTotal={fullTotal}
       valueFormatter={formatCurrency}
       headerRight={picker}

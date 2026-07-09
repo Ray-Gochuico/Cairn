@@ -36,14 +36,12 @@ export default function LiabilitiesDonut() {
   // slice name and the picker key stay perfectly aligned. Loan name is the
   // user-facing display label; loan id is the stable picker key (loan
   // names can be edited; ids cannot).
-  const { slices, pickerItems, keyByName } = useMemo<{
+  const { slices, pickerItems } = useMemo<{
     slices: DonutSlice[];
     pickerItems: DonutEntityPickerItem[];
-    keyByName: Map<string, string>;
   }>(() => {
     const sl: DonutSlice[] = [];
     const pi: DonutEntityPickerItem[] = [];
-    const kbn = new Map<string, string>();
     for (const l of loans) {
       if (l.id == null) continue;
       if (l.currentBalance <= 0) continue;
@@ -52,14 +50,15 @@ export default function LiabilitiesDonut() {
       // Color keyed on the loan ID (not the running insertion index) and
       // attached to BOTH the slice and the picker item from one source, so a
       // kept wedge never re-colors when another loan is hidden — wedge ==
-      // legend == picker swatch by construction (the I9 desync fix).
+      // legend == picker swatch by construction (the I9 desync fix). The slice
+      // carries `entityKey` (the loan id) so two loans sharing a display label
+      // stay independently toggleable.
       const color = colorForLoan(l.id);
       const key = l.id.toString();
-      sl.push({ name: label, value: l.currentBalance, color });
+      sl.push({ name: label, value: l.currentBalance, color, entityKey: key });
       pi.push({ key, label, color });
-      kbn.set(label, key);
     }
-    return { slices: sl, pickerItems: pi, keyByName: kbn };
+    return { slices: sl, pickerItems: pi };
   }, [loans]);
 
   const allKeys = useMemo(() => pickerItems.map((i) => i.key), [pickerItems]);
@@ -67,11 +66,8 @@ export default function LiabilitiesDonut() {
 
   const filteredSlices = useMemo(
     () =>
-      slices.filter((s) => {
-        const k = keyByName.get(s.name);
-        return k !== undefined && selected.has(k);
-      }),
-    [slices, keyByName, selected],
+      slices.filter((s) => s.entityKey !== undefined && selected.has(s.entityKey)),
+    [slices, selected],
   );
 
   // Full-universe denominator (hidden loans included) so hiding one never

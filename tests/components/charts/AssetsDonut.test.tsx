@@ -441,6 +441,44 @@ describe('AssetsDonut', () => {
       expect(screen.getByTestId('slice-Home')).toBeInTheDocument();
     });
 
+    it('hides exactly one wedge when two entities share a display label', async () => {
+      // Same label "Nest Egg" on an account AND a property. Their picker keys
+      // are entity-keyed (account:1 vs property:1), so they must be
+      // independently toggleable — the old name-keyed filter collapsed both
+      // under one key and removed/kept them together.
+      useAccountsStore.setState({
+        accounts: [mkAccount(1, 'Nest Egg')],
+        isLoading: false,
+        error: null,
+      });
+      useSnapshotsStore.setState({
+        snapshots: [mkSnapshot(1, 1, '2026-04-01', 6000)],
+        isLoading: false,
+        error: null,
+      });
+      usePropertiesStore.setState({
+        properties: [mkProperty(1, 'Nest Egg', { currentEstimatedValue: 500000 })],
+        isLoading: false,
+        error: null,
+      });
+
+      render(<MemoryRouter><AssetsDonut /></MemoryRouter>);
+      // Both wedges render under the shared label.
+      expect(screen.getAllByTestId('slice-Nest Egg')).toHaveLength(2);
+
+      const user = userEvent.setup();
+      await user.click(screen.getByRole('button', { name: /Included ·/ }));
+      // Two checkboxes, both labelled "Nest Egg"; hide the FIRST (the account).
+      const boxes = screen.getAllByRole('checkbox', { name: /Nest Egg/ });
+      expect(boxes).toHaveLength(2);
+      await user.click(boxes[0]);
+
+      // Exactly one wedge remains — the property (500000), not both.
+      const remaining = screen.getAllByTestId('slice-Nest Egg');
+      expect(remaining).toHaveLength(1);
+      expect(remaining[0]).toHaveAttribute('data-value', '500000');
+    });
+
     it('shows the all-hidden message when every entity is hidden', async () => {
       seedThreeAssets();
       render(<MemoryRouter><AssetsDonut /></MemoryRouter>);
