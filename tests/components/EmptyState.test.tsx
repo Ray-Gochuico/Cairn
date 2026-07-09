@@ -23,11 +23,17 @@ describe('EmptyState', () => {
     expect(screen.getByText('Add one in Inputs to start tracking.')).toBeInTheDocument();
   });
 
-  it('renders an icon marked aria-hidden (decorative)', () => {
+  it('renders the shared cairn glyph marked aria-hidden (decorative, Wave 12)', () => {
     const { container } = render(<EmptyState icon={Target} title="No goals yet" />);
-    const svg = container.querySelector('svg');
-    expect(svg).not.toBeNull();
-    expect(svg).toHaveAttribute('aria-hidden', 'true');
+    const glyph = container.querySelector('[data-testid="cairn-glyph"]');
+    expect(glyph).not.toBeNull();
+    expect(glyph).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('renders the cairn glyph even when the deprecated icon prop is omitted (Wave 12)', () => {
+    const { container } = render(<EmptyState title="No goals yet" />);
+    expect(container.querySelector('[data-testid="cairn-glyph"]')).not.toBeNull();
+    expect(screen.getByText('No goals yet')).toBeInTheDocument();
   });
 
   it('renders a CTA passed via children', () => {
