@@ -60,13 +60,23 @@ function pickRate(household: Household): { rate: number; label: string } | null 
  * stub with a setup CTA only for this branch.
  */
 const SETUP_REQUIRED = 'setup-required' as const;
-type ComputeResult = ComputedRow | null | typeof SETUP_REQUIRED;
+/**
+ * Round-3 M2: a household with `monthlyExpenseBaseline: 0` is a valid
+ * persisted row but makes every FI target $0 — a missing INPUT, not a
+ * result. Callers render a dedicated set-your-baseline CTA for this branch.
+ */
+const BASELINE_REQUIRED = 'baseline-required' as const;
+type ComputeResult = ComputedRow | null | typeof SETUP_REQUIRED | typeof BASELINE_REQUIRED;
 
 function computeCards(props: FiCardsProps, settings: AppSettings | null): ComputeResult {
   const { scenarios, projections, household, persons } = props;
   // Cold-start: no household yet, or zero persons → caller renders the
   // setup-CTA empty state (W7-UX MF-8).
   if (!household || persons.length === 0) return SETUP_REQUIRED;
+  // Round-3 M2: a zero expense baseline makes every FI target $0 — the cards
+  // would render "already FI" ($X / $0 · 0%). That's a missing INPUT, not a
+  // result; route to a CTA that names the field.
+  if (household.monthlyExpenseBaseline <= 0) return BASELINE_REQUIRED;
   const rate = pickRate(household);
   if (!rate) return null;
 
@@ -387,6 +397,32 @@ function FiCardsEmptyState() {
   );
 }
 
+/**
+ * Round-3 M2: sibling of FiCardsEmptyState for the zero-expense-baseline
+ * case — household + persons exist, but the FI target can't be computed
+ * without a monthly expense baseline. Names the missing field and deep-links
+ * to where it's edited.
+ */
+function FiCardsBaselineEmptyState() {
+  return (
+    <Card data-testid="whatif-fi-cards-baseline-empty">
+      <CardContent className="py-6 text-center text-sm text-muted-foreground space-y-2">
+        <p>
+          Set your monthly expense baseline to compute FI targets — the target
+          is your annual spending divided by your withdrawal rate.
+        </p>
+        <Link
+          to="/inputs/household"
+          className="text-xs underline hover:text-foreground"
+          data-testid="whatif-fi-cards-baseline-link"
+        >
+          Set monthly expenses
+        </Link>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function FiCards(props: FiCardsProps) {
   // N1: feed the canonical inflation resolver the app settings so the Coast FI
   // figure matches the dashboard cards exactly (household.inflationAssumption
@@ -395,6 +431,9 @@ export default function FiCards(props: FiCardsProps) {
   const computed = computeCards(props, settings);
   if (computed === SETUP_REQUIRED) {
     return <FiCardsEmptyState />;
+  }
+  if (computed === BASELINE_REQUIRED) {
+    return <FiCardsBaselineEmptyState />;
   }
   if (!computed) return null;
 
