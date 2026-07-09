@@ -97,9 +97,20 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
 
   const taxResult = useMemo(() => {
     if (!tax.ready || !household || !eligiblePerson || !tax.federal || !tax.state) return null;
-    const agg = aggregateHouseholdPretax([eligiblePerson], {
+    // Wave-9 F13: HOURLY persons persist annualSalaryPretax = 0 — their wage
+    // base lives in the hourly rate. Patch the eligible person's salary with
+    // the annualized base (card's possibly-overridden rate × regular hours ×
+    // 52) so OT stacks on a real base. A nonzero stored salary still wins.
+    const effectivePersons = persons.map((p) =>
+      p.id === eligiblePerson.id && p.employmentType === 'HOURLY' && p.annualSalaryPretax <= 0
+        ? { ...p, annualSalaryPretax: baseHourlyRate * p.regularHoursPerWeek * 52 }
+        : p,
+    );
+    // Wave-9 M59: household-wide aggregation (parity with Bonus/Commission)
+    // so the marginal bracket reflects the whole return.
+    const agg = aggregateHouseholdPretax(effectivePersons, {
       filingStatus: household.filingStatus,
-      personCount: persons.length,      // household-wide caps still count everyone
+      personCount: persons.length,
       dependentCount: dependents.length,
     });
     return computeSupplementalWageTax({
@@ -115,8 +126,11 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
         state: tax.state.standardDeduction,
         city: tax.city?.standardDeduction ?? 0,
       },
+      // Wave-9 F1: OT belongs to the eligible earner.
+      perPersonBaseSalary: effectivePersons.map((p) => p.annualSalaryPretax),
+      recipientIndex: Math.max(0, effectivePersons.findIndex((p) => p.id === eligiblePerson.id)),
     });
-  }, [tax.ready, tax.federal, tax.state, tax.city, household, eligiblePerson, persons, dependents, totalGross]);
+  }, [tax.ready, tax.federal, tax.state, tax.city, household, eligiblePerson, persons, dependents, totalGross, baseHourlyRate]);
 
   // ---- early returns ----
 
