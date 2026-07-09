@@ -430,7 +430,7 @@ describe('Goals page', () => {
     );
 
     // Confirm we got a card and an Off-track badge.
-    const card1 = screen.getByText('Sensitive Goal').closest('[class*="rounded-xl"]');
+    const card1 = screen.getByText('Sensitive Goal').closest('[class*="rounded-lg"]');
     expect(card1).not.toBeNull();
     expect(within(card1 as HTMLElement).getByText(/off track/i)).toBeInTheDocument();
     unmount();
@@ -449,7 +449,7 @@ describe('Goals page', () => {
       </MemoryRouter>,
     );
 
-    const card2 = screen.getByText('Sensitive Goal').closest('[class*="rounded-xl"]');
+    const card2 = screen.getByText('Sensitive Goal').closest('[class*="rounded-lg"]');
     expect(card2).not.toBeNull();
     expect(within(card2 as HTMLElement).getByText(/on track/i)).toBeInTheDocument();
   });

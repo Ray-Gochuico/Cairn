@@ -50,7 +50,7 @@ export function EditableWidget({
     <div
       className={cn(
         'relative min-w-0',
-        editing && 'rounded-xl ring-2 ring-primary/40 ring-offset-2 ring-offset-background',
+        editing && 'rounded-lg ring-2 ring-primary/40 ring-offset-2 ring-offset-background',
       )}
       data-widget-id={id}
       data-testid={`widget-${id}`}
