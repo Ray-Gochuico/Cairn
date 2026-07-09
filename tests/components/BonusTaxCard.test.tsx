@@ -430,6 +430,40 @@ describe('BonusTaxCard', () => {
     expect(sessionStorage.getItem('calc-suppl-method:bonus-tax')).toBe('FLAT');
   });
 
+  it('FLAT headline equals flat withholding + the engine FICA/state legs exactly (round-3 T21)', async () => {
+    // Mirror of the AGGREGATE parity gate: in FLAT mode the card composes
+    // total tax = flatSupplementalWithholding(bonus) + the engine's
+    // FICA/state/city legs (federal is the only leg the method swaps).
+    const { computeSupplementalWageTax, flatSupplementalWithholding } = await import(
+      '@/lib/calculators/supplemental-wage'
+    );
+    const { formatCurrency } = await import('@/lib/format');
+    primeStores();
+    render(<MemoryRouter><BonusTaxCard /></MemoryRouter>);
+    fireEvent.change(screen.getByLabelText(/Bonus amount/i), { target: { value: '10000' } });
+    const headline = await screen.findByTestId('bonus-takehome');
+    fireEvent.click(screen.getByRole('button', { name: /flat/i }));
+
+    const engine = computeSupplementalWageTax({
+      baseSalary: 100000,
+      supplementalWages: 10000,
+      pretax: { pretax401k: 0, pretaxHealth: 0, pretaxDcfsa: 0, pretaxHsa: 0 },
+      filingStatus: FilingStatus.SINGLE,
+      federalBrackets: federalSingleBrackets,
+      stateBrackets: caSingleBrackets,
+      cityBrackets: null,
+      standardDeduction: { federal: 15000, state: 0, city: 0 },
+    });
+    const expected =
+      10000 -
+      (flatSupplementalWithholding(10000) +
+        engine.bonusBreakdown.fica +
+        engine.bonusBreakdown.state +
+        engine.bonusBreakdown.city);
+    // ANNUAL frequency → bonusesPerYear = 1, so per-bonus take-home == annual.
+    expect(headline.textContent).toBe(formatCurrency(expected));
+  });
+
   it('defaults to Aggregate (toggle pressed) so existing math is unchanged', async () => {
     primeStores();
     render(<MemoryRouter><BonusTaxCard /></MemoryRouter>);

@@ -440,6 +440,51 @@ describe('CommissionTaxCard', () => {
     expect(screen.getByText(formatCurrency(expected.bonusBreakdown.fica / 12))).toBeInTheDocument();
   });
 
+  // ── Round-3 T21 remainder: exact pins (chip task_0f86067f part 1) ─────────
+
+  it("base fixture's commission 401(k) deferral pins at $200 per check (T21)", async () => {
+    // primeStores: $100k salary at 5% → salary deferral $5,000; headroom
+    // 24,500 − 5,000 = 19,500. Commission $48k at 5% = $2,400 ≤ headroom →
+    // full $2,400/yr defers; MONTHLY → 2,400 / 12 = $200 per check. The :124
+    // comment claimed this figure but nothing asserted it.
+    const { formatCurrency } = await import('@/lib/format');
+    primeStores();
+    render(<MemoryRouter><CommissionTaxCard /></MemoryRouter>);
+    await screen.findByTestId('commission-takehome');
+    const row = screen.getByText('401(k) from this check').parentElement!;
+    expect(row.querySelector('.tabular-nums')!.textContent).toBe(formatCurrency(2400 / 12));
+  });
+
+  it('cap-exhausted recipient defers $0 from the commission (T21)', async () => {
+    // $245,000 salary at 10% = $24,500 — exactly the §402(g) cap, so the
+    // commission headroom is zero and the per-check deferral must render $0.
+    const { formatCurrency } = await import('@/lib/format');
+    primeStores();
+    usePersonsStore.setState((s) => ({
+      persons: s.persons.map((p) => ({ ...p, annualSalaryPretax: 245000, pretax401kPct: 0.10 })),
+    }));
+    render(<MemoryRouter><CommissionTaxCard /></MemoryRouter>);
+    await screen.findByTestId('commission-takehome');
+    const row = screen.getByText('401(k) from this check').parentElement!;
+    expect(row.querySelector('.tabular-nums')!.textContent).toBe(formatCurrency(0));
+  });
+
+  it('FLAT mode pins the exact per-check federal figure (T21)', async () => {
+    // $200,000 commission, MONTHLY: flat federal = 200,000 × 22% / 12
+    // = $3,666.67 per check (mirrors BonusTaxCard's exact-flat idiom).
+    const { formatCurrency } = await import('@/lib/format');
+    primeStores();
+    usePersonsStore.setState((s) => ({
+      persons: s.persons.map((p) => ({ ...p, expectedCommission: 0 })),
+    }));
+    render(<MemoryRouter><CommissionTaxCard /></MemoryRouter>);
+    fireEvent.change(screen.getByLabelText(/Annual commission/i), { target: { value: '200000' } });
+    await screen.findByTestId('commission-takehome');
+    fireEvent.click(screen.getByRole('button', { name: /flat/i }));
+    const row = screen.getByText('Estimated federal tax').parentElement!;
+    expect(row.querySelector('.tabular-nums')!.textContent).toBe(formatCurrency((200_000 * 0.22) / 12));
+  });
+
   it('discloses the mandatory 37% flat tier above $1M, drops dev jargon, and does not falsely disclaim Additional Medicare', () => {
     primeStores();
     render(<MemoryRouter><CommissionTaxCard /></MemoryRouter>);
