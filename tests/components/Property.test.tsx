@@ -193,6 +193,13 @@ describe('Property page', () => {
     );
   });
 
+  it('shows the loading skeleton, not "No properties yet", while stores load (W10 T1)', () => {
+    usePropertiesStore.setState({ properties: [], isLoading: true, error: null, load: async () => {} } as never);
+    renderPage();
+    expect(screen.getByRole('status', { name: /loading page/i })).toBeInTheDocument();
+    expect(screen.queryByText(/No properties yet/i)).not.toBeInTheDocument();
+  });
+
   it('renders a property card with name and current value', () => {
     usePropertiesStore.setState({
       properties: [

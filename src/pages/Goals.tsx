@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useLoadGate } from '@/lib/use-load-gate';
+import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
 import {
   CreditCard,
   GraduationCap,
@@ -301,21 +303,27 @@ export default function Goals() {
   const goals = useGoalsStore((s) => s.goals);
   const loadGoals = useGoalsStore((s) => s.load);
   const goalsError = useGoalsStore((s) => s.error);
+  const goalsLoading = useGoalsStore((s) => s.isLoading);
   const accounts = useAccountsStore((s) => s.accounts);
   const loadAccounts = useAccountsStore((s) => s.load);
   const accountsError = useAccountsStore((s) => s.error);
+  const accountsLoading = useAccountsStore((s) => s.isLoading);
   const snapshots = useSnapshotsStore((s) => s.snapshots);
   const loadSnapshots = useSnapshotsStore((s) => s.load);
   const snapshotsError = useSnapshotsStore((s) => s.error);
+  const snapshotsLoading = useSnapshotsStore((s) => s.isLoading);
   const contributions = useContributionsStore((s) => s.contributions);
   const loadContributions = useContributionsStore((s) => s.load);
   const contributionsError = useContributionsStore((s) => s.error);
+  const contributionsLoading = useContributionsStore((s) => s.isLoading);
   const household = useHouseholdStore((s) => s.household);
   const loadHousehold = useHouseholdStore((s) => s.load);
   const householdError = useHouseholdStore((s) => s.error);
+  const householdLoading = useHouseholdStore((s) => s.isLoading);
   const holdings = useHoldingsStore((s) => s.holdings);
   const loadHoldings = useHoldingsStore((s) => s.load);
   const holdingsError = useHoldingsStore((s) => s.error);
+  const holdingsLoading = useHoldingsStore((s) => s.isLoading);
 
   // Tracks which account the UpdateAccountBalanceDialog is currently editing;
   // null means the dialog is closed. We keep both the id and the name in
@@ -353,9 +361,6 @@ export default function Goals() {
     loadHousehold,
     loadHoldings,
   ]);
-  useEffect(() => {
-    reload();
-  }, [reload]);
 
   // Any consumed store that failed to load. Surfaced as a banner above the
   // page body so a load failure reads as a recoverable hiccup, not vanished
@@ -369,6 +374,13 @@ export default function Goals() {
     holdingsError,
   ];
   const hasStoreError = storeErrors.some((e) => e != null);
+
+  // W10 T1: never flash "No goals yet" while the loads are in flight.
+  const gate = useLoadGate(
+    [goalsLoading, accountsLoading, snapshotsLoading, contributionsLoading, householdLoading, holdingsLoading],
+    storeErrors,
+    reload,
+  );
 
   // Stable "today" per render cycle — passed into computeGoalProgress so the
   // helper isn't recomputed twice from new Date() drift inside a single
@@ -453,6 +465,14 @@ export default function Goals() {
     });
   }, [visibleGoals, snapshots, contributions, today, annualRate]);
 
+  if (!gate.settled) {
+    return (
+      <PageContainer className="space-y-6">
+        <PageLoadingSpinner />
+      </PageContainer>
+    );
+  }
+
   if (goals.length === 0) {
     return (
       <PageContainer className="space-y-6">
@@ -469,7 +489,7 @@ export default function Goals() {
          * no goals when their data merely failed to load).
          */}
         {hasStoreError ? (
-          <StoreErrorBanner errors={storeErrors} onRetry={reload} />
+          <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
         ) : (
           <EmptyState icon={Target} title="No goals yet" description="Add one in Inputs to start tracking your financial milestones.">
             <Button asChild>
@@ -483,7 +503,7 @@ export default function Goals() {
 
   return (
     <PageContainer className="space-y-6">
-      <StoreErrorBanner errors={storeErrors} onRetry={reload} />
+      <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold mb-1">Goals</h1>

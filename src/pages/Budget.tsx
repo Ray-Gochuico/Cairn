@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ClipboardList } from 'lucide-react';
 import { EmptyState } from '@/components/layout/EmptyState';
+import { useLoadGate } from '@/lib/use-load-gate';
+import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import {
@@ -31,22 +33,21 @@ export default function Budget() {
   const categories = useCategoriesStore((s) => s.categories);
   const loadCategories = useCategoriesStore((s) => s.load);
   const categoriesError = useCategoriesStore((s) => s.error);
+  const categoriesLoading = useCategoriesStore((s) => s.isLoading);
   const updateCategory = useCategoriesStore((s) => s.update);
   const createCategory = useCategoriesStore((s) => s.create);
   const transactions = useTransactionsStore((s) => s.transactions);
   const loadTransactions = useTransactionsStore((s) => s.load);
   const transactionsError = useTransactionsStore((s) => s.error);
+  const transactionsLoading = useTransactionsStore((s) => s.isLoading);
 
-  const reload = () => {
-    loadCategories();
-    loadTransactions();
-  };
-  useEffect(() => {
+  const reload = useCallback(() => {
     loadCategories();
     loadTransactions();
   }, [loadCategories, loadTransactions]);
 
   const storeErrors = [categoriesError, transactionsError];
+  const gate = useLoadGate([categoriesLoading, transactionsLoading], storeErrors, reload);
 
   const months = useMemo(() => {
     const set = new Set(transactions.map((t) => t.date.slice(0, 7)));
@@ -168,9 +169,17 @@ export default function Budget() {
     setTrackedIds((current) => (current.includes(newId) ? current : [...current, newId]));
   };
 
+  if (!gate.settled) {
+    return (
+      <PageContainer className="space-y-6">
+        <PageLoadingSpinner />
+      </PageContainer>
+    );
+  }
+
   return (
     <PageContainer className="space-y-6">
-      <StoreErrorBanner errors={storeErrors} onRetry={reload} />
+      <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold mb-1">Budget</h1>

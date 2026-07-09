@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLoadGate } from '@/lib/use-load-gate';
+import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
 import { Link } from 'react-router-dom';
 import { useVehiclesStore } from '@/stores/vehicles-store';
 import { useLoansStore } from '@/stores/loans-store';
@@ -347,55 +349,46 @@ export default function Vehicles() {
   const vehicles = useVehiclesStore((s) => s.vehicles);
   const loadVehicles = useVehiclesStore((s) => s.load);
   const vehiclesError = useVehiclesStore((s) => s.error);
+  const vehiclesLoading = useVehiclesStore((s) => s.isLoading);
   const updateVehicle = useVehiclesStore((s) => s.update);
 
   const loans = useLoansStore((s) => s.loans);
   const loadLoans = useLoansStore((s) => s.load);
   const loansError = useLoansStore((s) => s.error);
+  const loansLoading = useLoansStore((s) => s.isLoading);
 
   const transactions = useTransactionsStore((s) => s.transactions);
   const loadTransactions = useTransactionsStore((s) => s.load);
   const transactionsError = useTransactionsStore((s) => s.error);
+  const transactionsLoading = useTransactionsStore((s) => s.isLoading);
 
   const categories = useCategoriesStore((s) => s.categories);
   const loadCategories = useCategoriesStore((s) => s.load);
   const categoriesError = useCategoriesStore((s) => s.error);
+  const categoriesLoading = useCategoriesStore((s) => s.isLoading);
 
   const settings = useSettingsStore((s) => s.settings);
   const loadSettings = useSettingsStore((s) => s.load);
   const settingsError = useSettingsStore((s) => s.error);
+  const settingsLoading = useSettingsStore((s) => s.isLoading);
   const updateSettings = useSettingsStore((s) => s.update);
 
   const vehicleLeases = useVehicleLeasesStore((s) => s.vehicleLeases);
   const loadVehicleLeases = useVehicleLeasesStore((s) => s.load);
   const vehicleLeasesError = useVehicleLeasesStore((s) => s.error);
+  const vehicleLeasesLoading = useVehicleLeasesStore((s) => s.isLoading);
   const { confirm, dialog } = useConfirm();
 
   const [editing, setEditing] = useState<EditTarget>(null);
 
-  const reload = () => {
+  const reload = useCallback(() => {
     loadVehicles();
     loadLoans();
     loadTransactions();
     loadCategories();
     loadSettings();
     loadVehicleLeases();
-  };
-  useEffect(() => {
-    loadVehicles();
-    loadLoans();
-    loadTransactions();
-    loadCategories();
-    loadSettings();
-    loadVehicleLeases();
-  }, [
-    loadVehicles,
-    loadLoans,
-    loadTransactions,
-    loadCategories,
-    loadSettings,
-    loadVehicleLeases,
-  ]);
+  }, [loadVehicles, loadLoans, loadTransactions, loadCategories, loadSettings, loadVehicleLeases]);
 
   const storeErrors = [
     vehiclesError,
@@ -406,6 +399,13 @@ export default function Vehicles() {
     vehicleLeasesError,
   ];
   const hasStoreError = storeErrors.some((e) => e != null);
+
+  // W10 T1: never flash "No vehicles yet" while the loads are in flight.
+  const gate = useLoadGate(
+    [vehiclesLoading, loansLoading, transactionsLoading, categoriesLoading, settingsLoading, vehicleLeasesLoading],
+    storeErrors,
+    reload,
+  );
 
   const visibleVehicles = useMemo(
     () => filterByOwnerPersonId(vehicles, filter, persons),
@@ -483,6 +483,14 @@ export default function Vehicles() {
     }
   }, [editing, visibleVehicles]);
 
+  if (!gate.settled) {
+    return (
+      <PageContainer className="space-y-6">
+        <PageLoadingSpinner />
+      </PageContainer>
+    );
+  }
+
   if (vehicles.length === 0 && vehicleLeases.length === 0) {
     return (
       <PageContainer className="space-y-6">
@@ -493,7 +501,7 @@ export default function Vehicles() {
           </p>
         </div>
         {hasStoreError ? (
-          <StoreErrorBanner errors={storeErrors} onRetry={reload} />
+          <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
         ) : (
           <EmptyState
             icon={Car}
@@ -516,7 +524,7 @@ export default function Vehicles() {
 
   return (
     <PageContainer className="space-y-6">
-      <StoreErrorBanner errors={storeErrors} onRetry={reload} />
+      <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold mb-1">Vehicles</h1>

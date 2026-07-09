@@ -193,6 +193,13 @@ describe('Vehicles page', () => {
     );
   });
 
+  it('shows the loading skeleton, not "No vehicles yet", while stores load (W10 T1)', () => {
+    useVehiclesStore.setState({ vehicles: [], isLoading: true, error: null, load: async () => {} } as never);
+    renderPage();
+    expect(screen.getByRole('status', { name: /loading page/i })).toBeInTheDocument();
+    expect(screen.queryByText(/No vehicles yet/i)).not.toBeInTheDocument();
+  });
+
   it('renders a vehicle card with name and current value', () => {
     useVehiclesStore.setState({
       vehicles: [

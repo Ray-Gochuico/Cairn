@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useLoadGate } from '@/lib/use-load-gate';
+import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
@@ -189,26 +191,33 @@ export default function Investments() {
   const accounts = useAccountsStore((s) => s.accounts);
   const loadAccounts = useAccountsStore((s) => s.load);
   const accountsError = useAccountsStore((s) => s.error);
+  const accountsLoading = useAccountsStore((s) => s.isLoading);
   const holdings = useHoldingsStore((s) => s.holdings);
   const loadHoldings = useHoldingsStore((s) => s.load);
   const holdingsError = useHoldingsStore((s) => s.error);
+  const holdingsLoading = useHoldingsStore((s) => s.isLoading);
   const snapshots = useSnapshotsStore((s) => s.snapshots);
   const loadSnapshots = useSnapshotsStore((s) => s.load);
   const snapshotsError = useSnapshotsStore((s) => s.error);
+  const snapshotsLoading = useSnapshotsStore((s) => s.isLoading);
   const contributions = useContributionsStore((s) => s.contributions);
   const loadContributions = useContributionsStore((s) => s.load);
   const contributionsError = useContributionsStore((s) => s.error);
+  const contributionsLoading = useContributionsStore((s) => s.isLoading);
   const dependents = useDependentsStore((s) => s.dependents);
   const loadDependents = useDependentsStore((s) => s.load);
   const dependentsError = useDependentsStore((s) => s.error);
+  const dependentsLoading = useDependentsStore((s) => s.isLoading);
   const household = useHouseholdStore((s) => s.household);
   const loadHousehold = useHouseholdStore((s) => s.load);
   const householdError = useHouseholdStore((s) => s.error);
+  const householdLoading = useHouseholdStore((s) => s.isLoading);
   // Settings drives the Investments card-layout overlay (id order + hidden
   // flags). null === default flow; see applyCardLayout() for semantics.
   const settings = useSettingsStore((s) => s.settings);
   const loadSettings = useSettingsStore((s) => s.load);
   const settingsError = useSettingsStore((s) => s.error);
+  const settingsLoading = useSettingsStore((s) => s.isLoading);
   const updateSettings = useSettingsStore((s) => s.update);
   // Tickers + fund holdings power the Concentration Health section below.
   // Loaded here so useConcentration() sees populated stores on first paint.
@@ -240,10 +249,6 @@ export default function Investments() {
     loadFundHoldings,
     loadFundSectors,
   ]);
-  useEffect(() => {
-    reload();
-  }, [reload]);
-
   // Errors from the core investment data stores (page-level only — does NOT
   // touch the concentration/donut data flow). Surfaced as a banner so a load
   // failure reads as recoverable, and the empty-state copy below is suppressed
@@ -258,6 +263,13 @@ export default function Investments() {
     settingsError,
   ];
   const hasStoreError = storeErrors.some((e) => e != null);
+
+  // W10 T1: never flash "No investment holdings yet" while loads are in flight.
+  const gate = useLoadGate(
+    [accountsLoading, holdingsLoading, snapshotsLoading, contributionsLoading, dependentsLoading, householdLoading, settingsLoading],
+    storeErrors,
+    reload,
+  );
 
   // Filter accounts by the household / p1 / p2 / joint dropdown. Holdings,
   // snapshots, and contributions all scope to "visible accounts" — they
@@ -866,6 +878,14 @@ export default function Investments() {
   // A user with a 529-only setup (no holdings, no snapshots elsewhere) still
   // wants to see their 529 card, so the empty state only fires when there
   // are also no 529 plans to surface.
+  if (!gate.settled) {
+    return (
+      <PageContainer className="space-y-6">
+        <PageLoadingSpinner />
+      </PageContainer>
+    );
+  }
+
   if (!hasAnyHolding && !hasAnySnapshot && plans529.length === 0) {
     return (
       <PageContainer className="space-y-6">
@@ -883,7 +903,7 @@ export default function Investments() {
          * parent of both. (529 plans also live under /inputs/accounts.)
          */}
         {hasStoreError ? (
-          <StoreErrorBanner errors={storeErrors} onRetry={reload} />
+          <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
         ) : (
           <EmptyState
             icon={PieChart}
@@ -901,7 +921,7 @@ export default function Investments() {
 
   return (
     <PageContainer className="space-y-6">
-      <StoreErrorBanner errors={storeErrors} onRetry={reload} />
+      <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1 flex-wrap">

@@ -1,7 +1,9 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { EmptyState } from '@/components/layout/EmptyState';
+import { useLoadGate } from '@/lib/use-load-gate';
+import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
 import { Pencil, Wallet } from 'lucide-react';
 import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import { MarkReimbursedDialog } from '@/components/dialogs/MarkReimbursedDialog';
@@ -48,31 +50,40 @@ export default function Spending() {
   const transactions = useTransactionsStore((s) => s.transactions);
   const loadTransactions = useTransactionsStore((s) => s.load);
   const transactionsError = useTransactionsStore((s) => s.error);
+  const transactionsLoading = useTransactionsStore((s) => s.isLoading);
   const syncRecurring = useTransactionsStore((s) => s.syncRecurring);
   const categories = useCategoriesStore((s) => s.categories);
   const loadCategories = useCategoriesStore((s) => s.load);
   const categoriesError = useCategoriesStore((s) => s.error);
+  const categoriesLoading = useCategoriesStore((s) => s.isLoading);
   const household = useHouseholdStore((s) => s.household);
   const loadHousehold = useHouseholdStore((s) => s.load);
   const householdError = useHouseholdStore((s) => s.error);
+  const householdLoading = useHouseholdStore((s) => s.isLoading);
   const persons = usePersonsStore((s) => s.persons);
   const loadPersons = usePersonsStore((s) => s.load);
   const personsError = usePersonsStore((s) => s.error);
+  const personsLoading = usePersonsStore((s) => s.isLoading);
   const properties = usePropertiesStore((s) => s.properties);
   const loadProperties = usePropertiesStore((s) => s.load);
   const propertiesError = usePropertiesStore((s) => s.error);
+  const propertiesLoading = usePropertiesStore((s) => s.isLoading);
   const vehicles = useVehiclesStore((s) => s.vehicles);
   const loadVehicles = useVehiclesStore((s) => s.load);
   const vehiclesError = useVehiclesStore((s) => s.error);
+  const vehiclesLoading = useVehiclesStore((s) => s.isLoading);
   const accounts = useAccountsStore((s) => s.accounts);
   const loadAccounts = useAccountsStore((s) => s.load);
   const accountsError = useAccountsStore((s) => s.error);
+  const accountsLoading = useAccountsStore((s) => s.isLoading);
   const housingPayments = useHousingPaymentsStore((s) => s.housingPayments);
   const loadHousingPayments = useHousingPaymentsStore((s) => s.load);
   const housingPaymentsError = useHousingPaymentsStore((s) => s.error);
+  const housingPaymentsLoading = useHousingPaymentsStore((s) => s.isLoading);
   const vehicleLeases = useVehicleLeasesStore((s) => s.vehicleLeases);
   const loadVehicleLeases = useVehicleLeasesStore((s) => s.load);
   const vehicleLeasesError = useVehicleLeasesStore((s) => s.error);
+  const vehicleLeasesLoading = useVehicleLeasesStore((s) => s.isLoading);
 
   const { filter } = useViewFilter();
 
@@ -107,9 +118,6 @@ export default function Spending() {
     loadVehicleLeases,
     syncRecurring,
   ]);
-  useEffect(() => {
-    reload();
-  }, [reload]);
 
   const storeErrors = [
     transactionsError,
@@ -122,6 +130,23 @@ export default function Spending() {
     housingPaymentsError,
     vehicleLeasesError,
   ];
+
+  // W10 T1: never flash "No transactions yet" while the loads are in flight.
+  const gate = useLoadGate(
+    [
+      transactionsLoading,
+      categoriesLoading,
+      householdLoading,
+      personsLoading,
+      propertiesLoading,
+      vehiclesLoading,
+      accountsLoading,
+      housingPaymentsLoading,
+      vehicleLeasesLoading,
+    ],
+    storeErrors,
+    reload,
+  );
 
   // Filtered slice — honours the ?view=p1|p2|joint|household query param
   const visibleTransactions = useMemo(
@@ -256,7 +281,7 @@ export default function Spending() {
 
   return (
     <PageContainer width="full" className="space-y-8">
-      <StoreErrorBanner errors={storeErrors} onRetry={reload} />
+      <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
       <div className="flex items-start justify-between gap-4">
         <h1 className="text-2xl font-semibold">Spending</h1>
         <div className="flex items-center gap-2">
@@ -482,7 +507,11 @@ export default function Spending() {
             </Link>
           )}
         </div>
-        {transactions.length === 0 ? (
+        {!gate.settled ? (
+          // W10 T1: never flash "No transactions yet" while stores load — the
+          // drop zone above stays visible so importing is always available.
+          <PageLoadingSpinner />
+        ) : transactions.length === 0 ? (
           // Data-empty (≠ filter-empty below): canonical EmptyState; no CTA —
           // the importer drop-zone is ON this page, directly above.
           <EmptyState

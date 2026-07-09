@@ -207,6 +207,14 @@ describe('Goals page', () => {
     expect(addLink).toHaveAttribute('href', '/inputs/goals');
   });
 
+  it('shows the loading skeleton, not "No goals yet", while stores load (W10 T1)', () => {
+    primeStores();
+    useGoalsStore.setState({ goals: [], isLoading: true, error: null, load: async () => {} } as never);
+    render(<MemoryRouter><Goals /></MemoryRouter>);
+    expect(screen.getByRole('status', { name: /loading page/i })).toBeInTheDocument();
+    expect(screen.queryByText(/no goals yet/i)).not.toBeInTheDocument();
+  });
+
   it('renders one card per goal', () => {
     primeStores({
       goals: [

@@ -101,6 +101,13 @@ describe('Loans page', () => {
     expect(screen.getByText(/no loans yet/i)).toBeInTheDocument();
   });
 
+  it('shows the loading skeleton, not "No loans yet", while the store loads (W10 T1)', () => {
+    useLoansStore.setState({ loans: [], isLoading: true, error: null, load: async () => {} } as never);
+    renderLoans();
+    expect(screen.getByRole('status', { name: /loading page/i })).toBeInTheDocument();
+    expect(screen.queryByText(/no loans yet/i)).not.toBeInTheDocument();
+  });
+
   it('renders a loan card with summary info', () => {
     useLoansStore.setState({
       loans: [makeLoan({ name: 'Primary Mortgage' })],
