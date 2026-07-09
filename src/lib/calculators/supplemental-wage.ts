@@ -1,4 +1,5 @@
-import { computePretaxDeductions, computeBonusTax, type Bracket, type BonusTaxOutput } from '@/lib/tax';
+import { computeBonusTax, type Bracket, type BonusTaxOutput } from '@/lib/tax';
+import { CONTRIBUTION_LIMITS_2026, dcfsaLimit, hsaLimitForHousehold } from '@/lib/contribution-limits';
 import type { Person } from '@/types/schema';
 import type { FilingStatus } from '@/types/enums';
 
@@ -25,27 +26,38 @@ export function aggregateHouseholdPretax(
   personsToSum: Person[],
   opts: { filingStatus: FilingStatus; personCount: number; dependentCount: number },
 ): AggregatedHousehold {
+  // Round-3 M1: DCFSA (§129) and the HSA family limit are PER-RETURN caps —
+  // the old per-person computePretaxDeductions loop capped each earner
+  // individually and SUMMED the results, letting a dual-earner household
+  // shelter up to 2× the statutory limits (and hsaLimitForHousehold handed
+  // every earner the full family cap). Mirror PaycheckCalculator's
+  // aggregate-then-cap: sum the RAW elections across earners, apply each
+  // per-return cap exactly once. 401(k) (§402(g)) is genuinely per-employee
+  // and keeps its per-person cap.
   let totalSalary = 0;
-  const pretax: HouseholdPretax = { pretax401k: 0, pretaxHealth: 0, pretaxDcfsa: 0, pretaxHsa: 0 };
+  let pretax401k = 0;
+  let healthMonthly = 0;
+  let dcfsaMonthly = 0;
+  let hsaMonthlyEligible = 0;
   for (const p of personsToSum) {
     totalSalary += p.annualSalaryPretax;
-    const d = computePretaxDeductions({
-      salary: p.annualSalaryPretax,
-      pretax401kPct: p.pretax401kPct,
-      healthInsuranceMonthlyPremium: p.healthInsuranceMonthlyPremium,
-      dcfsaMonthly: p.dependentCareFsaMonthly,
-      hsaMonthly: p.hsaMonthlyContribution,
-      hsaEligible: p.hsaEligible,
-      filingStatus: opts.filingStatus,
-      personCount: opts.personCount,
-      dependentCount: opts.dependentCount,
-    });
-    pretax.pretax401k += d.pretax401k;
-    pretax.pretaxHealth += d.pretaxHealth;
-    pretax.pretaxDcfsa += d.pretaxDcfsa;
-    pretax.pretaxHsa += d.pretaxHsa;
+    pretax401k += Math.min(
+      p.annualSalaryPretax * p.pretax401kPct,
+      CONTRIBUTION_LIMITS_2026.EMPLOYEE_401K,
+    );
+    healthMonthly += p.healthInsuranceMonthlyPremium;
+    dcfsaMonthly += p.dependentCareFsaMonthly;
+    if (p.hsaEligible) hsaMonthlyEligible += p.hsaMonthlyContribution;
   }
-  return { totalSalary, pretax };
+  const pretaxDcfsa = Math.min(dcfsaMonthly * 12, dcfsaLimit(opts.filingStatus));
+  const pretaxHsa = Math.min(
+    hsaMonthlyEligible * 12,
+    hsaLimitForHousehold({ personCount: opts.personCount, dependentCount: opts.dependentCount }),
+  );
+  return {
+    totalSalary,
+    pretax: { pretax401k, pretaxHealth: healthMonthly * 12, pretaxDcfsa, pretaxHsa },
+  };
 }
 
 export interface SupplementalWageTaxInput {
