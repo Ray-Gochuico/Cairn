@@ -9,6 +9,9 @@ import { useHouseholdStore } from '@/stores/household-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { useLoansStore } from '@/stores/loans-store';
 import { useAccountsStore } from '@/stores/accounts-store';
+import { useHousingPaymentsStore } from '@/stores/housing-payments-store';
+import { useVehicleLeasesStore } from '@/stores/vehicle-leases-store';
+import { monthlyRecurringObligation } from '@/lib/recurring-obligations';
 import { incomeTrajectory } from '@/lib/whatif/income-trajectory';
 import { formatCurrency } from '@/lib/format';
 import { computeTotalTax } from '@/lib/tax';
@@ -163,7 +166,22 @@ export default function IncomePopover({ open, onOpenChange }: Props) {
     [loans],
   );
 
-  const rawGap = householdAfterTaxMonthly - currentExpensesMonthly - currentLoansMonthly;
+  // Wave-9 M32: the engine subtracts recurring housing/lease obligations
+  // (engine.ts obligationDelta) — the popover's surplus must match or the
+  // allocation editor divides money the engine won't have.
+  // wave-10 handoff: if this popover can mount before the two stores hydrate,
+  // the obligations read 0 until they load — a loading-state concern, not a
+  // math one; do not gate here.
+  const housingPayments = useHousingPaymentsStore((s) => s.housingPayments);
+  const vehicleLeases = useVehicleLeasesStore((s) => s.vehicleLeases);
+  const todayISO = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const currentObligationsMonthly = useMemo(
+    () => monthlyRecurringObligation(housingPayments, vehicleLeases, todayISO),
+    [housingPayments, vehicleLeases, todayISO],
+  );
+
+  const rawGap =
+    householdAfterTaxMonthly - currentExpensesMonthly - currentLoansMonthly - currentObligationsMonthly;
   const gap = Math.max(0, rawGap);
   const isShortfall = rawGap < 0;
 
@@ -301,6 +319,7 @@ export default function IncomePopover({ open, onOpenChange }: Props) {
             <span>After-tax income:</span><span>{formatCurrency(householdAfterTaxMonthly)}</span>
             <span>Expenses:</span><span>−{formatCurrency(currentExpensesMonthly)}</span>
             <span>Loan payments:</span><span>−{formatCurrency(currentLoansMonthly)}</span>
+            <span>Housing &amp; leases:</span><span>−{formatCurrency(currentObligationsMonthly)}</span>
             <span className="font-medium border-t pt-1">
               {isShortfall ? (
                 'Shortfall:'

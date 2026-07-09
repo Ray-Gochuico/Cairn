@@ -9,6 +9,8 @@ import { usePersonsStore } from '@/stores/persons-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { useLoansStore } from '@/stores/loans-store';
 import { useAccountsStore } from '@/stores/accounts-store';
+import { useHousingPaymentsStore } from '@/stores/housing-payments-store';
+import { useVehicleLeasesStore } from '@/stores/vehicle-leases-store';
 import { emptyLeverPayload } from '@/lib/scenarios';
 import { FilingStatus } from '@/types/enums';
 import type { Scenario } from '@/types/scenario';
@@ -18,6 +20,8 @@ interface ResetStoresOpts {
   twoPersons?: boolean;
   payload?: Partial<LeverPayload>;
   loans?: { currentBalance: number; monthlyPayment: number }[];
+  housingPayments?: { monthlyAmount: number; startDate: string; endDate: string | null }[];
+  vehicleLeases?: { monthlyAmount: number; startDate: string; endDate: string | null }[];
 }
 
 function resetStores(opts: ResetStoresOpts | boolean = false) {
@@ -74,6 +78,14 @@ function resetStores(opts: ResetStoresOpts | boolean = false) {
   } as any);
   useAccountsStore.setState({
     accounts: [],
+    isLoading: false, error: null,
+  } as any);
+  useHousingPaymentsStore.setState({
+    housingPayments: (o.housingPayments ?? []) as any,
+    isLoading: false, error: null,
+  } as any);
+  useVehicleLeasesStore.setState({
+    vehicleLeases: (o.vehicleLeases ?? []) as any,
     isLoading: false, error: null,
   } as any);
 }
@@ -311,5 +323,27 @@ describe('IncomePopover — per-person + household + gap summary (revamp 2026-05
         }),
       );
     });
+  });
+});
+
+describe('IncomePopover — housing/lease obligations in the gap (wave-9 M32)', () => {
+  it('subtracts recurring housing + lease obligations and shows the line item', () => {
+    // Engine parity: apply-real subtracts monthlyRecurringObligation, so the
+    // popover's surplus must too — pre-fix it overstated cash flow and the
+    // allocation editor divided money the engine won't have.
+    resetStores({
+      housingPayments: [{ monthlyAmount: 2000, startDate: '2020-01-01', endDate: null }],
+      vehicleLeases: [{ monthlyAmount: 500, startDate: '2020-01-01', endDate: null }],
+    });
+    render(<MemoryRouter><IncomePopover open onOpenChange={() => {}} /></MemoryRouter>);
+    expect(screen.getByText(/housing & leases/i)).toBeInTheDocument();
+    // gap = after-tax − expenses(0) − loans(0) − obligations(2,500)
+    const afterTax = Number(
+      (screen.getByTestId('income-after-tax-monthly-0').textContent ?? '').replace(/[^0-9.-]/g, ''),
+    );
+    const gap = Number(
+      (screen.getByTestId('income-monthly-gap').textContent ?? '').replace(/[^0-9.-]/g, ''),
+    );
+    expect(gap).toBeCloseTo(afterTax - 2500, 0);
   });
 });
