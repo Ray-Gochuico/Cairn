@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import WhatIf from '@/pages/WhatIf';
@@ -37,7 +37,10 @@ vi.mock('@/components/whatif/useRealState', () => ({
   }),
 }));
 
-const { setActiveSpy } = vi.hoisted(() => ({ setActiveSpy: vi.fn(async () => {}) }));
+const { setActiveSpy, removeSpy } = vi.hoisted(() => ({
+  setActiveSpy: vi.fn(async () => {}),
+  removeSpy: vi.fn(async () => {}),
+}));
 
 vi.mock('@/stores/scenarios-store', () => {
   const leverPayload = {
@@ -67,7 +70,7 @@ vi.mock('@/stores/scenarios-store', () => {
     toggleVisibility: vi.fn(),
     setActive: setActiveSpy,
     duplicate: vi.fn(),
-    remove: vi.fn(),
+    remove: removeSpy,
     rename: vi.fn(),
     saveCurrentAsScenario: vi.fn().mockResolvedValue(2),
   };
@@ -114,6 +117,20 @@ describe('WhatIf page management surfaces', () => {
     );
     await user.click(screen.getByRole('button', { name: /manage/i }));
     expect(await screen.findByText(/manage scenarios/i)).toBeInTheDocument();
+  });
+
+  it('scenario delete asks for confirmation first (W10 T11)', async () => {
+    const user = userEvent.setup();
+    removeSpy.mockClear();
+    render(<MemoryRouter><WhatIf /></MemoryRouter>);
+    const moreButtons = screen.getAllByRole('button', { name: /more actions/i });
+    await user.click(moreButtons[moreButtons.length - 1]); // Alt A (id 5)
+    await user.click(screen.getByRole('menuitem', { name: /delete/i }));
+    // No immediate delete — a confirm dialog gates it.
+    expect(removeSpy).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /^delete$/i }));
+    await waitFor(() => expect(removeSpy).toHaveBeenCalledWith(5));
   });
 
   it('"Edit Levers" activates the scenario and moves focus to the lever bar (W10 M34)', async () => {

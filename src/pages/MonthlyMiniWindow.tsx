@@ -87,21 +87,23 @@ function monthLabel(yyyymm: string): string {
 interface DerivedValueCardProps {
   account: Account;
   snapshot: AccountSnapshot;
+  // W10 T11: skip is LIFTED to the parent so "Confirm all" can exclude Skipped
+  // cards (child-local skip left them in the ratified batch).
+  isSkipped: boolean;
+  onSkip: (accountId: number) => void;
 }
 
-function DerivedValueCard({ account, snapshot }: DerivedValueCardProps) {
+function DerivedValueCard({ account, snapshot, isSkipped, onSkip }: DerivedValueCardProps) {
   const upsertSnapshot = useSnapshotsStore((s) => s.upsert);
-  // Local state covers the optimistic in-card confirm and Skip; the PROP
-  // wins whenever the underlying snapshot is already ratified — so a
-  // parent-level "Confirm all" (or a confirmation from another session)
-  // flips this card without a remount. Reopen behavior is unchanged:
-  // sourceConfirmed reproduces the old initialMode logic on every render
-  // instead of only at mount.
+  // Local state covers the optimistic in-card confirm; the PROP wins whenever
+  // the underlying snapshot is already ratified — so a parent-level "Confirm
+  // all" (or a confirmation from another session) flips this card without a
+  // remount.
   const [localMode, setLocalMode] = useState<CardMode>('pending');
   const sourceConfirmed =
     snapshot.source === SnapshotSource.USER_CONFIRMED ||
     snapshot.source === SnapshotSource.MANUAL;
-  const mode: CardMode = sourceConfirmed ? 'confirmed' : localMode;
+  const mode: CardMode = sourceConfirmed ? 'confirmed' : isSkipped ? 'skipped' : localMode;
   const [editing, setEditing] = useState(false);
   const [editValue, setEditValue] = useState<string>(String(snapshot.totalValue));
   const [error, setError] = useState<string | null>(null);
@@ -203,7 +205,7 @@ function DerivedValueCard({ account, snapshot }: DerivedValueCardProps) {
             <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
               Edit
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setLocalMode('skipped')}>
+            <Button size="sm" variant="ghost" onClick={() => account.id != null && onSkip(account.id)}>
               Skip
             </Button>
           </div>
@@ -617,9 +619,18 @@ export default function MonthlyMiniWindow() {
   // --- "Confirm all" batch over the derived cards -----------------------------
 
   const upsertSnapshot = useSnapshotsStore((s) => s.upsert);
+  // W10 T11: skip is parent state so "Confirm all" can EXCLUDE explicitly
+  // Skipped cards (they used to be ratified anyway).
+  const [skippedIds, setSkippedIds] = useState<ReadonlySet<number>>(new Set());
+  const onSkip = useCallback((accountId: number) => {
+    setSkippedIds((prev) => new Set(prev).add(accountId));
+  }, []);
   const pendingDerived = useMemo(
-    () => derivedCards.filter(({ snapshot }) => snapshot.source === SnapshotSource.AUTO_DERIVED),
-    [derivedCards],
+    () => derivedCards.filter(
+      ({ snapshot }) =>
+        snapshot.source === SnapshotSource.AUTO_DERIVED && !skippedIds.has(snapshot.accountId),
+    ),
+    [derivedCards, skippedIds],
   );
   const [confirmingAll, setConfirmingAll] = useState(false);
   const [confirmAllResult, setConfirmAllResult] = useState<string | null>(null);
@@ -833,6 +844,8 @@ export default function MonthlyMiniWindow() {
                   key={account.id}
                   account={account}
                   snapshot={snapshot}
+                  isSkipped={account.id != null && skippedIds.has(account.id)}
+                  onSkip={onSkip}
                 />
               ))}
             </section>

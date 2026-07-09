@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { useScenariosStore } from '@/stores/scenarios-store';
 import { SaveCurrentDialog } from './SaveCurrentDialog';
 import { RenameScenarioDialog } from './RenameScenarioDialog';
@@ -25,6 +26,7 @@ export function ScenariosPanel({
 }: ScenariosPanelProps) {
   const store = useScenariosStore();
   const { scenarios, toggleVisibility, setActive, duplicate, remove } = store;
+  const { confirm, dialog } = useConfirm();
   const active = store.activeScenario();
   const visibleIds = store.visibleScenarioIds();
 
@@ -197,10 +199,19 @@ export function ScenariosPanel({
                         aria-disabled={s.isBaseline}
                         disabled={s.isBaseline}
                         className="block w-full text-left px-3 py-1.5 text-xs text-destructive-soft-foreground hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
-                        onClick={() => {
+                        onClick={async () => {
                           if (s.isBaseline) return;
-                          if (s.id != null) void remove(s.id);
                           setOpenMenuId(null);
+                          // W10 T11: confirm before the unconfirmed destructive delete.
+                          if (
+                            s.id != null &&
+                            (await confirm({
+                              title: `Delete "${s.name}"?`,
+                              description: 'This scenario and its levers are removed permanently.',
+                            }))
+                          ) {
+                            void remove(s.id);
+                          }
                         }}
                       >
                         Delete
@@ -241,6 +252,7 @@ export function ScenariosPanel({
           onClose={() => setRenameTarget(null)}
         />
       )}
+      {dialog}
     </div>
   );
 }

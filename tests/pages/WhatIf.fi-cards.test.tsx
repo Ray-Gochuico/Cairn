@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import userEvent from '@testing-library/user-event';
 import WhatIf from '@/pages/WhatIf';
 import { seedWhatIfRealStores } from './whatif-store-seed';
 import type { Household, Person } from '@/types/schema';
@@ -71,6 +72,8 @@ vi.mock('@/components/whatif/useRealState', () => ({
   }),
 }));
 
+const { updateLeverSpy } = vi.hoisted(() => ({ updateLeverSpy: vi.fn(async () => {}) }));
+
 vi.mock('@/stores/scenarios-store', () => {
   const baseline = {
     id: 1,
@@ -104,27 +107,27 @@ vi.mock('@/stores/scenarios-store', () => {
     savings: 0,
     events: [],
   };
-  return {
-    useScenariosStore: (selector?: any) => {
-      const state = {
-        scenarios: [baseline],
-        activeScenario: () => baseline,
-        visibleScenarioIds: () => [1],
-        load: vi.fn(),
-        projectedScenarios: () => new Map([[1, [seedState]]]),
-        dollarMode: 'nominal',
-        inflation: 0.025,
-        horizonMonths: 360,
-        toggleVisibility: vi.fn(),
-        setActive: vi.fn(),
-        duplicate: vi.fn(),
-        remove: vi.fn(),
-        rename: vi.fn(),
-        saveCurrentAsScenario: vi.fn().mockResolvedValue(2),
-      };
-      return typeof selector === 'function' ? selector(state) : state;
-    },
+  const state = {
+    scenarios: [baseline],
+    activeScenario: () => baseline,
+    visibleScenarioIds: () => [1],
+    load: vi.fn(),
+    projectedScenarios: () => new Map([[1, [seedState]]]),
+    dollarMode: 'nominal',
+    inflation: 0.025,
+    horizonMonths: 360,
+    toggleVisibility: vi.fn(),
+    setActive: vi.fn(),
+    duplicate: vi.fn(),
+    remove: vi.fn(),
+    rename: vi.fn(),
+    updateLever: updateLeverSpy,
+    saveCurrentAsScenario: vi.fn().mockResolvedValue(2),
   };
+  const useScenariosStore = (selector?: any) =>
+    typeof selector === 'function' ? selector(state) : state;
+  useScenariosStore.getState = () => state;
+  return { useScenariosStore };
 });
 
 vi.mock('@/stores/loans-store', () => ({
@@ -151,6 +154,20 @@ vi.mock('@/stores/persons-store', () => ({
 describe('WhatIf page — FI cards integration', () => {
   beforeEach(() => {
     seedWhatIfRealStores();
+    updateLeverSpy.mockClear();
+  });
+
+  it('retirement age commits on blur, never per keystroke (W10 T11)', async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter><WhatIf /></MemoryRouter>);
+    const input = screen.getByLabelText(/retirement age/i);
+    await user.clear(input);
+    await user.type(input, '65');
+    // '6' must NOT persist a clamped 30 mid-type.
+    expect(updateLeverSpy).not.toHaveBeenCalled();
+    await user.tab();
+    expect(updateLeverSpy).toHaveBeenCalledTimes(1);
+    expect(updateLeverSpy).toHaveBeenCalledWith(expect.anything(), { retirementAgeOverride: 65 });
   });
 
   it('renders the Financial Independence number + Coast FI cards above the chart', () => {

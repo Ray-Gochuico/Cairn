@@ -455,6 +455,30 @@ describe('MonthlyMiniWindow', () => {
       return accountId;
     }
 
+    it('"Confirm all" excludes explicitly Skipped cards (W10 T11)', async () => {
+      const user = userEvent.setup();
+      const alphaId = await seedDerivedAccount('Alpha', 5000, SnapshotSource.AUTO_DERIVED);
+      const betaId = await seedDerivedAccount('Beta', 7000, SnapshotSource.AUTO_DERIVED);
+      render(<MemoryRouter><MonthlyMiniWindow /></MemoryRouter>);
+      await screen.findByText('Alpha');
+      // Skip the Alpha card.
+      const alphaCard = screen.getByText('Alpha').closest('div[class*="rounded"]') as HTMLElement
+        ?? screen.getByText('Alpha').closest('div')!;
+      await user.click(within(alphaCard).getByRole('button', { name: /^skip$/i }));
+      // Confirm-all count drops to 1.
+      expect(await screen.findByRole('button', { name: /confirm all \(1\)/i })).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /confirm all/i }));
+      const close = lastMonthCloseISO();
+      await waitFor(() => {
+        const snaps = useSnapshotsStore.getState().snapshots;
+        const beta = snaps.find((s) => s.accountId === betaId && s.snapshotDate === close);
+        const alpha = snaps.find((s) => s.accountId === alphaId && s.snapshotDate === close);
+        expect(beta?.source).toBe(SnapshotSource.USER_CONFIRMED);
+        // Alpha stays AUTO_DERIVED — it was Skipped, not ratified.
+        expect(alpha?.source).toBe(SnapshotSource.AUTO_DERIVED);
+      });
+    });
+
     it('Confirm all ratifies every AUTO_DERIVED card and announces the result', async () => {
       const user = userEvent.setup();
       await seedDerivedAccount('Brokerage One', 5000, SnapshotSource.AUTO_DERIVED);
