@@ -162,3 +162,32 @@ describe('financialIndependenceSeries', () => {
     });
   });
 });
+
+describe('yearsToFi — reachable target under a negative real rate (round-3 chip B)', () => {
+  it('finite root when pv < target < asymptote (-pmt/r)', () => {
+    // r = -2%: balance converges upward to -pmt/r = 30,000/0.02 = $1.5M.
+    // pv $500k → target $1M is BELOW the asymptote and reachable:
+    // t = ln((1,000,000−1,500,000)/(500,000−1,500,000)) / ln(0.98)
+    //   = ln(0.5)/ln(0.98) ≈ 34.31 years. The old denominator<=0 guard
+    //   returned Infinity — the table said "never" while the chart crossed.
+    const years = yearsToFi({ pv: 500_000, pmt: 30_000, annualRate: -0.02, targetFv: 1_000_000 });
+    expect(years).toBeCloseTo(34.31, 2);
+  });
+
+  it('still Infinity when the target sits ABOVE the asymptote', () => {
+    const years = yearsToFi({ pv: 500_000, pmt: 30_000, annualRate: -0.02, targetFv: 2_000_000 });
+    expect(years).toBe(Infinity);
+  });
+
+  it('still Infinity exactly AT the asymptote', () => {
+    const years = yearsToFi({ pv: 500_000, pmt: 30_000, annualRate: -0.02, targetFv: 1_500_000 });
+    expect(years).toBe(Infinity);
+  });
+
+  it('positive-rate behavior is untouched (regression pin)', () => {
+    // 100k → 1M at 7% with 20k/yr: sanity anchor for the guard rewrite.
+    const years = yearsToFi({ pv: 100_000, pmt: 20_000, annualRate: 0.07, targetFv: 1_000_000 });
+    expect(years).toBeGreaterThan(15);
+    expect(years).toBeLessThan(20);
+  });
+});
