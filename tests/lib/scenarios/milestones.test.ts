@@ -108,6 +108,28 @@ describe('detectMilestones', () => {
     expect(detectMilestones(states, fiParams).retirementISO).toBeUndefined();
   });
 
+  // ----- Round-3 M2 — zero expense baseline yields NO FI milestone ----------
+  describe('zero expense baseline (round-3 M2)', () => {
+    // High liquid vs tiny per-month expenses (e.g. loan payments with a $0
+    // baseline): the crossing scan fires on month one, claiming instant FI.
+    const states = buildStates([
+      { month: '2026-01', netWorth: 500_000, debt: 0, expenses: 500, liquid: 500_000 },
+      { month: '2026-02', netWorth: 505_000, debt: 0, expenses: 500, liquid: 505_000 },
+    ]);
+
+    it('FI milestone is undefined when the expense baseline is zero', () => {
+      // A $0 target is trivially "reached" at month 0 — that's a missing input,
+      // not an achievement. The milestone must be absent so chips render "FI —".
+      const m = detectMilestones(states, { withdrawalRate: 0.04, monthlyExpenseBaseline: 0 });
+      expect(m.financialIndependenceISO).toBeUndefined();
+    });
+
+    it('a positive baseline keeps the existing crossing behavior', () => {
+      const m = detectMilestones(states, { withdrawalRate: 0.04, monthlyExpenseBaseline: 4000 });
+      expect(m.financialIndependenceISO).toBe('2026-01'); // 500k × 4% / 12 ≈ $1,667 ≥ $500
+    });
+  });
+
   // ----- Wave-3 Task 4 — FI milestone uses LIQUID, not net worth ------------
   describe('FI milestone uses liquid (investments + cash), excludes home equity', () => {
     it('a $1M home owner with $0 investments NEVER reaches FI by the 4% rule', () => {
