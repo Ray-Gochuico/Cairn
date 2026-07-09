@@ -104,6 +104,17 @@ describe('SectionCard', () => {
     expect(screen.getByLabelText('progress').textContent).toContain('✓');
   });
 
+  it('shows no dangling dot in the neutral (not-active, not-complete) state (Wave 11 T24)', () => {
+    const results = new Map<NodeId, NodeResult>([
+      ['a', { status: 'todo' }],
+      ['b', { status: 'todo' }],
+    ]);
+    renderSection({ nodes: ['a', 'b'].map((id) => makeNode(id)), results });
+    const text = screen.getByLabelText('progress').textContent ?? '';
+    expect(text).toMatch(/0\/2/);
+    expect(text).not.toContain('·');
+  });
+
   it('auto-expands when a node is active and renders its title', () => {
     const results = new Map<NodeId, NodeResult>([
       ['a', { status: 'active', evidence: 'do this now' }],

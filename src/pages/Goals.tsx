@@ -162,8 +162,15 @@ function GoalProgressCard({
   // on-track, but the bar can't visually overflow).
   const pct = Math.min(1, Math.max(0, projection.percentComplete));
   const valuenow = Math.round(pct * 100);
+  // Wave 11 T24: a fully-funded goal reads "Funded ✓" at a capped 100%, not
+  // an "on track" badge with a 475%-style percent.
+  const funded = projection.percentComplete >= 1;
 
-  const onTrackBadge = projection.onTrack ? (
+  const onTrackBadge = funded ? (
+    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-success-soft text-success-foreground">
+      Funded ✓
+    </span>
+  ) : projection.onTrack ? (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-success-soft text-success-foreground">
       On track
     </span>
@@ -207,7 +214,7 @@ function GoalProgressCard({
             <span>
               <span className="tabular-nums">{formatCurrency(projection.currentSaved)}</span> saved
             </span>
-            <span className="tabular-nums">{formatPercent(projection.percentComplete)}</span>
+            <span className="tabular-nums">{formatPercent(Math.min(1, projection.percentComplete))}</span>
           </div>
           <div
             className="h-2 w-full overflow-hidden rounded-full bg-muted"

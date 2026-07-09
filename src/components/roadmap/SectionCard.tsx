@@ -53,11 +53,13 @@ export function SectionCard({ section, title, glossaryTerm, nodes, results, ctx 
     if (hasActive) setOpen(true);
   }, [hasActive]);
 
+  // Wave 11 T24: no dangling dot in the neutral state — a section at 0/5
+  // reads '0/5', not '0/5 ·'. Active (→) and complete (✓) keep their glyphs.
   const progressIndicator = hasActive
     ? ' →'
     : counts.total > 0 && counts.done === counts.total
     ? ' ✓'
-    : ' ·';
+    : '';
 
   return (
     <Card>
@@ -74,11 +76,9 @@ export function SectionCard({ section, title, glossaryTerm, nodes, results, ctx 
             Section {section}
           </span>
           <span className="font-semibold">{title}</span>
-          {glossaryEntry && (
-            <span aria-hidden className="text-xs text-muted-foreground">
-              &#9432;
-            </span>
-          )}
+          {/* Wave 11 T24: the decorative header ⓘ glyph is removed — the
+              per-node lucide Info button is the single info affordance; the
+              header keeps its title={shortDefinition} hover hint. */}
         </div>
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <span aria-label="progress">
