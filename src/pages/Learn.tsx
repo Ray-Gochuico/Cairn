@@ -1,3 +1,7 @@
+// empty-state-policy: allow — Learn gates its EmptyStates on the bespoke
+// Wave-8 loading idiom (acceptancesStatus === 'loading' + learningState ===
+// null), not a store isLoading flag or useLoadGate; the empty copy never
+// paints before those settle.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { GraduationCap } from 'lucide-react';

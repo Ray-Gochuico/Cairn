@@ -1,4 +1,6 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useMemo, useRef, useState } from 'react';
+import { useLoadGate } from '@/lib/use-load-gate';
+import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
 import { Link } from 'react-router-dom';
 import { useVirtualizer, observeElementRect, observeElementOffset } from '@tanstack/react-virtual';
 import { ChevronLeftIcon, PencilIcon, XIcon, CheckIcon } from 'lucide-react';
@@ -148,17 +150,21 @@ export default function SpendingTransactions() {
   const transactions = useTransactionsStore((s) => s.transactions);
   const loadTransactions = useTransactionsStore((s) => s.load);
   const transactionsError = useTransactionsStore((s) => s.error);
+  const transactionsLoading = useTransactionsStore((s) => s.isLoading);
   const update = useTransactionsStore((s) => s.update);
   const remove = useTransactionsStore((s) => s.remove);
   const categories = useCategoriesStore((s) => s.categories);
   const loadCategories = useCategoriesStore((s) => s.load);
   const categoriesError = useCategoriesStore((s) => s.error);
+  const categoriesLoading = useCategoriesStore((s) => s.isLoading);
   const accounts = useAccountsStore((s) => s.accounts);
   const loadAccounts = useAccountsStore((s) => s.load);
   const accountsError = useAccountsStore((s) => s.error);
+  const accountsLoading = useAccountsStore((s) => s.isLoading);
   const persons = usePersonsStore((s) => s.persons);
   const loadPersons = usePersonsStore((s) => s.load);
   const personsError = usePersonsStore((s) => s.error);
+  const personsLoading = usePersonsStore((s) => s.isLoading);
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draft, setDraft] = useState<RowEditState | null>(null);
@@ -171,12 +177,16 @@ export default function SpendingTransactions() {
   const reload = useCallback(() => {
     void Promise.all([loadTransactions(), loadCategories(), loadAccounts(), loadPersons()]);
   }, [loadTransactions, loadCategories, loadAccounts, loadPersons]);
-  useEffect(() => {
-    reload();
-  }, [reload]);
 
   const storeErrors = [transactionsError, categoriesError, accountsError, personsError];
   const hasStoreError = storeErrors.some((e) => e != null);
+
+  // W10 T1: never flash "No transactions yet" while the loads are in flight.
+  const gate = useLoadGate(
+    [transactionsLoading, categoriesLoading, accountsLoading, personsLoading],
+    storeErrors,
+    reload,
+  );
 
   const visibleTransactions = useMemo(
     () => filterByPersonId(transactions, filter, persons),
@@ -334,7 +344,7 @@ export default function SpendingTransactions() {
         </p>
       </div>
 
-      <StoreErrorBanner errors={storeErrors} onRetry={reload} />
+      <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
 
       {/*
        * Suppress the "No transactions yet" empty copy when a load failed
@@ -343,7 +353,9 @@ export default function SpendingTransactions() {
        * the user simply has no data. The banner above explains the failure;
        * here we just render nothing extra until the retry succeeds.
        */}
-      {hasStoreError ? null : transactions.length === 0 ? (
+      {!gate.settled ? (
+        <PageLoadingSpinner />
+      ) : hasStoreError ? null : transactions.length === 0 ? (
         // Import lives on /spending (there is no /inputs/transactions tab),
         // so the CTA routes there.
         <EmptyState
