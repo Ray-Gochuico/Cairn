@@ -15,6 +15,7 @@ import { TransactionsRepo } from '@/domain/transactions';
 import { AccountsRepo } from '@/domain/accounts';
 import { AccountType } from '@/types/enums';
 import SpendingTransactions from '@/pages/SpendingTransactions';
+import { formatDate } from '@/lib/format';
 import type { Transaction } from '@/types/schema';
 
 const mig = (file: string) => ({
@@ -316,5 +317,19 @@ describe('SpendingTransactions page', () => {
     expect(cellsByRow[0][1]).toBe('NEWEST');
     expect(cellsByRow[1][1]).toBe('MIDDLE');
     expect(cellsByRow[2][1]).toBe('OLD');
+  });
+
+  it('humanizes the Date column and never renders the raw ISO date (Wave-11 T4 miss)', async () => {
+    await useCategoriesStore.getState().load();
+    await useTransactionsStore.getState().createMany([
+      mkTxn({ merchant: 'AMAZON', date: '2026-06-18' }),
+    ]);
+    renderPage();
+
+    await screen.findByText('AMAZON');
+    // Humanized 'Jun 18, 2026' shows; the raw ISO '2026-06-18' does not.
+    expect(screen.getByText(formatDate('2026-06-18'))).toBeInTheDocument();
+    expect(screen.getByText('Jun 18, 2026')).toBeInTheDocument();
+    expect(screen.queryByText('2026-06-18')).toBeNull();
   });
 });

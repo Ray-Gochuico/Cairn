@@ -6,7 +6,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { CHART_NEUTRAL } from '@/components/charts/palette';
 import type {
@@ -137,7 +137,7 @@ export default function AccountBreakdownCard({
           <div className="space-y-1">
             <CardTitle>Portfolio by account</CardTitle>
             {asOfDate && (
-              <div className="text-xs text-muted-foreground">as of {asOfDate}</div>
+              <div className="text-xs text-muted-foreground">as of {formatDate(asOfDate)}</div>
             )}
           </div>
           <div className="flex shrink-0 items-center gap-4">

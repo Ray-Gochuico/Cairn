@@ -1,5 +1,5 @@
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
-import { formatCurrencyCents } from '@/lib/format';
+import { formatCurrencyCents, formatDate } from '@/lib/format';
 import { useLoadGate } from '@/lib/use-load-gate';
 import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
 import { Link } from 'react-router-dom';
@@ -73,7 +73,7 @@ const TransactionRow = memo(function TransactionRow({
 }: TransactionRowProps) {
   return (
     <tr className="border-b">
-      <td className="py-2 pr-3">{t.date}</td>
+      <td className="py-2 pr-3">{formatDate(t.date)}</td>
       <td className="py-2 pr-3">{t.merchant}</td>
       <td className="py-2 pr-3 text-muted-foreground">
         {t.categoryId != null
