@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, beforeAll, afterAll, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -21,6 +21,20 @@ import {
 } from '@/types/enums';
 import type { AppSettings, Category, Transaction } from '@/types/schema';
 import Vehicles from '@/pages/Vehicles';
+
+// Round-3 T21 (chip task_0f86067f part 4): the page computes its 12-mo rolling
+// windows against the clock, so the fixed expense fixtures below silently age
+// OUT of the window as the calendar advances. Freeze time file-wide; every
+// fixture date is a literal inside the frozen window. shouldAdvanceTime keeps
+// userEvent's internal timers alive (EquityValueCard.test.tsx pattern).
+beforeAll(() => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  vi.setSystemTime(new Date('2026-07-08T12:00:00Z'));
+});
+afterAll(() => {
+  vi.useRealTimers();
+});
+
 
 function makeSettings(patch: Partial<AppSettings> = {}): AppSettings {
   return {
@@ -366,9 +380,11 @@ describe('Vehicles page', () => {
     // The Expenses card surfaces both the rolling-12mo and annual-average
     // stats. The label was renamed from "12-mo expense" to "12-mo rolling"
     // when the Vehicle card was split into Asset / Expenses / Gas.
-    expect(screen.getByText(/12-mo rolling/i)).toBeInTheDocument();
-    // $350 linked to vehicle 5 is within 12 months
-    expect(screen.getAllByText('$350').length).toBeGreaterThan(0);
+    // Scope to the 12-mo rolling stat's own value cell — the unscoped
+    // getAllByText idiom could match a stray $350 anywhere on the page.
+    const label = screen.getByText(/12-mo rolling/i);
+    // $350 linked to vehicle 5, dated inside the frozen 12-month window.
+    expect(label.nextElementSibling).toHaveTextContent('$350');
   });
 
   it('renders the Value history section per vehicle', () => {
