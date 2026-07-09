@@ -60,14 +60,16 @@ describe('CompoundInterestCard', () => {
     expect(headline.textContent).not.toMatch(/^\$1[89],\d{3}/);
   });
 
-  it('switches frequency to ANNUALLY and updates outputs', async () => {
+  it('switches frequency to ANNUALLY and the headline actually changes', async () => {
     const user = userEvent.setup();
     render(<CompoundInterestCard />);
+    const headline = screen.getByTestId('compound-headline');
+    const before = headline.textContent;
     await user.click(screen.getByRole('combobox', { name: /compound frequency/i }));
     await user.click(await screen.findByRole('option', { name: /annually/i }));
-    const headline = screen.getByTestId('compound-headline');
-    // Annual compounding is slightly less than monthly at the same rate.
-    expect(headline.textContent).toMatch(/\$/);
+    // Annual compounding is less than monthly at the same APY-derived APR —
+    // the value must move, not merely stay a dollar string.
+    expect(headline.textContent).not.toBe(before);
   });
 
   it('shows placeholder when years is 0 or empty', async () => {
@@ -175,5 +177,25 @@ describe('CompoundInterestCard', () => {
     render(<CompoundInterestCard />);
     await user.click(screen.getByRole('button', { name: /^real$/i }));
     expect(sessionStorage.getItem('calc-display-mode:compound-interest')).toBe('REAL');
+  });
+
+  it('Real mode deflates the WHOLE card — headline + tiles + title in today\'s dollars', async () => {
+    const user = userEvent.setup();
+    render(<CompoundInterestCard />); // defaults: pv 1000, pmt 100, 7% APY, 10y monthly, 2.5% inflation
+    const headline = screen.getByTestId('compound-headline');
+    // Nominal first (byte-identical to prior behaviour).
+    expect(headline.textContent).toBe('$19,072');
+    expect(screen.getByTestId('compound-total-contributed').textContent).toContain('Total contributed');
+    expect(screen.getByText('Balance over time')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /^real$/i }));
+
+    // Headline + tiles now read the deflated (today's-dollars) figures.
+    expect(headline.textContent).toBe('$14,899');
+    expect(screen.getByTestId('compound-total-contributed').textContent).toContain("Total contributed (today's $)");
+    expect(screen.getByTestId('compound-total-contributed').textContent).toContain('$11,622');
+    // Chart title names the basis.
+    expect(screen.getByText("Balance over time (today's dollars)")).toBeInTheDocument();
+    expect(screen.queryByText('Balance over time')).not.toBeInTheDocument();
   });
 });

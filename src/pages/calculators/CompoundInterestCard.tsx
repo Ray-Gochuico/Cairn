@@ -12,6 +12,8 @@ import LineChartCard from '@/components/charts/LineChartCard';
 import {
   compoundInterestSeries,
   apyToApr,
+  toRealSummary,
+  PERIODS_PER_YEAR,
   type CompoundFrequency,
 } from '@/lib/compound-interest';
 import { formatCurrency } from '@/lib/format';
@@ -40,14 +42,6 @@ const FREQUENCY_OPTIONS: Array<{ value: CompoundFrequency; label: string }> = [
   { value: 'QUARTERLY', label: 'Quarterly' },
   { value: 'ANNUALLY', label: 'Annually' },
 ];
-
-const PERIODS_PER_YEAR: Record<CompoundFrequency, number> = {
-  DAILY: 365,
-  WEEKLY: 52,
-  MONTHLY: 12,
-  QUARTERLY: 4,
-  ANNUALLY: 1,
-};
 
 export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardProps = {}) {
   const { snapshots } = useSnapshotsStore();
@@ -108,7 +102,31 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
     });
   }, [values]);
 
-  const headline = series ? formatCurrency(series.finalMid) : '—';
+  const [displayMode, setDisplayMode] = useChartDisplayMode(cardId ?? 'compound-interest');
+  const inflation = useSettingsStore((s) => s.settings?.defaultInflation) ?? 0.025;
+
+  // Real mode deflates the WHOLE card (headline + all three tiles), not just
+  // the chart — a real chart beside nominal tiles is the nominal-on-real bug
+  // class this app has shipped before. toRealSummary uses the horizon deflator
+  // for balances and a per-period sum for contributions.
+  const summary = useMemo(() => {
+    if (!series) return null;
+    if (displayMode === 'NOMINAL') return series;
+    return toRealSummary(
+      {
+        pv: values.pv ?? 0,
+        monthlyContribution: values.monthlyContribution ?? 0,
+        annualRate: 0, // unused by toRealSummary — final balances come from `series`
+        years: Math.max(0, Math.floor(values.years ?? 0)),
+        frequency: values.frequency,
+      },
+      series,
+      inflation,
+    );
+  }, [series, displayMode, inflation, values]);
+
+  const headline = summary ? formatCurrency(summary.finalMid) : '—';
+  const realSuffix = displayMode === 'REAL' ? " (today's $)" : '';
 
   const chartData = useMemo(() => {
     if (!series) return [];
@@ -122,19 +140,17 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
   }, [series]);
 
   const hasVariance = values.variancePercent != null && (values.variancePercent ?? 0) > 0;
-  // Red = pessimistic (rate - variance), blue = expected (mid),
-  // green = optimistic (rate + variance). Single-line view uses blue.
-  // WCAG 1.4.1 opt-in: multi-series uses dash patterns in addition to colour.
+  // Expected (mid) leads and is emphasized (2.5px, solid, blue); Low/High are
+  // thinner dashed/dotted bands (red/green). WCAG 1.4.1 opt-in: dash patterns
+  // in addition to colour.
   const chartSeries = hasVariance
     ? [
-        { dataKey: 'low',  label: 'Low',  color: CHART_PALETTE[2], strokeDasharray: '5 5' }, // red  / dashed
-        { dataKey: 'mid',  label: 'Mid',  color: CHART_PALETTE[0] },                          // blue / solid
-        { dataKey: 'high', label: 'High', color: CHART_PALETTE[4], strokeDasharray: '2 2' }, // green / dotted
+        { dataKey: 'mid',  label: 'Expected (mid)', color: CHART_PALETTE[0], strokeWidth: 2.5 }, // blue / solid / emphasized
+        { dataKey: 'low',  label: 'Low',  color: CHART_PALETTE[2], strokeDasharray: '5 5', strokeWidth: 1.5 }, // red / dashed
+        { dataKey: 'high', label: 'High', color: CHART_PALETTE[4], strokeDasharray: '2 2', strokeWidth: 1.5 }, // green / dotted
       ]
     : [{ dataKey: 'mid', label: 'Balance', color: CHART_PALETTE[0] }];
 
-  const [displayMode, setDisplayMode] = useChartDisplayMode(cardId ?? 'compound-interest');
-  const inflation = useSettingsStore((s) => s.settings?.defaultInflation) ?? 0.025;
   const displayData = useMemo(() => {
     if (displayMode === 'NOMINAL') return chartData;
     const keys = hasVariance ? ['low', 'mid', 'high'] : ['mid'];
@@ -218,29 +234,29 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
         </button>
       )}
 
-      {series ? (
+      {series && summary ? (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4 text-sm">
             <StatTile
-              label="Total contributed"
-              value={formatCurrency(series.totalContributed)}
+              label={`Total contributed${realSuffix}`}
+              value={formatCurrency(summary.totalContributed)}
               testId="compound-total-contributed"
             />
             <StatTile
-              label="Total interest (mid)"
-              value={formatCurrency(series.totalInterestMid)}
+              label={`Total interest (mid)${realSuffix}`}
+              value={formatCurrency(summary.totalInterestMid)}
               testId="compound-total-interest"
             />
             <StatTile
-              label="Final balance (mid)"
-              value={formatCurrency(series.finalMid)}
+              label={`Final balance (mid)${realSuffix}`}
+              value={formatCurrency(summary.finalMid)}
             />
           </div>
           <div className="flex justify-end mb-2">
             <RealNominalToggle mode={displayMode} onChange={setDisplayMode} />
           </div>
           <LineChartCard
-            title="Balance over time"
+            title={`Balance over time${displayMode === 'REAL' ? " (today's dollars)" : ''}`}
             data={displayData}
             xKey="year"
             series={chartSeries}

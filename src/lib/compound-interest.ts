@@ -12,7 +12,7 @@ export function apyToApr(apy: number, ppy: number): number {
   return ppy * (Math.pow(1 + apy, 1 / ppy) - 1);
 }
 
-const PERIODS_PER_YEAR: Record<CompoundFrequency, number> = {
+export const PERIODS_PER_YEAR: Record<CompoundFrequency, number> = {
   DAILY: 365,
   WEEKLY: 52,
   MONTHLY: 12,
@@ -36,6 +36,63 @@ export interface CompoundInterestSeries {
   finalLow: number;
   finalMid: number;
   finalHigh: number;
+}
+
+/** All figures a Real-mode CompoundInterest card displays, in today's dollars. */
+export interface RealSummary {
+  finalLow: number;
+  finalMid: number;
+  finalHigh: number;
+  totalContributed: number;
+  totalInterestMid: number;
+}
+
+/**
+ * Deflate a nominal {@link CompoundInterestSeries} to today's dollars for the
+ * whole card (headline + all three stat tiles), so a Real-mode card never
+ * shows a real chart next to nominal tiles (the nominal-on-real bug class this
+ * app has shipped before). Two DIFFERENT deflators, on purpose:
+ *
+ *  - Final balances deflate by the HORIZON deflator `(1+i)^years` — they are a
+ *    single lump sum landing at the end of the projection.
+ *  - Total contributed deflates EACH period's contribution by ITS OWN elapsed
+ *    time (`(1+i)^(p/ppy)`), mirroring compoundInterestSeries exactly. Deflating
+ *    the whole contributed sum by the horizon deflator would understate
+ *    contributions and overstate interest — the precise mistake to avoid.
+ *
+ * `totalInterestMid` is derived as `finalMid − totalContributed` so the
+ * identity `finalMid = totalContributed + totalInterestMid` can never drift.
+ * Zero inflation returns the nominal summary unchanged.
+ */
+export function toRealSummary(
+  input: CompoundInterestInput,
+  series: CompoundInterestSeries,
+  annualInflation: number,
+): RealSummary {
+  if (annualInflation === 0) {
+    return {
+      finalLow: series.finalLow,
+      finalMid: series.finalMid,
+      finalHigh: series.finalHigh,
+      totalContributed: series.totalContributed,
+      totalInterestMid: series.totalInterestMid,
+    };
+  }
+
+  const horizonDeflator = Math.pow(1 + annualInflation, input.years);
+  const finalLow = series.finalLow / horizonDeflator;
+  const finalMid = series.finalMid / horizonDeflator;
+  const finalHigh = series.finalHigh / horizonDeflator;
+
+  const ppy = PERIODS_PER_YEAR[input.frequency];
+  const pmtPerPeriod = (input.monthlyContribution * 12) / ppy;
+  let totalContributed = input.pv;
+  for (let p = 1; p <= input.years * ppy; p++) {
+    totalContributed += pmtPerPeriod / Math.pow(1 + annualInflation, p / ppy);
+  }
+
+  const totalInterestMid = finalMid - totalContributed;
+  return { finalLow, finalMid, finalHigh, totalContributed, totalInterestMid };
 }
 
 function fvAt(pv: number, pmtPerPeriod: number, r: number, n: number): number {
