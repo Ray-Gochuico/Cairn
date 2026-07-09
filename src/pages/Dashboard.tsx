@@ -296,7 +296,7 @@ function computeLiquidInvestments(
 /**
  * Slim, low-contrast re-entry nudge for existing/returning users who never
  * saw the first-run tour (e.g. they predate it, or bailed mid-flow). NOT a
- * Card — a one-line row below NextMoveCard. Shown only while setup is
+ * Card — a one-line row below the briefing hero. Shown only while setup is
  * dismissed and the tour-done marker is unset; "Take a quick tour" starts
  * the in-place TourOverlay (mounted in PageShell, already on this route),
  * dismiss records the marker so it never nags again. Never force-redirects.
