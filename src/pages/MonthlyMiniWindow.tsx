@@ -202,9 +202,12 @@ function DerivedValueCard({ account, snapshot, isSkipped, onSkip, priorValue }: 
               onChange={(e) => setEditValue(e.target.value)}
               className="max-w-[200px]"
             />
+            {/* Round-3 M3: entity names ride on aria-label so an AT button
+                list isn't "Save, Save, Save…" — visible labels stay terse. */}
             <Button
               size="sm"
               disabled={busy}
+              aria-label={`Save ${account.name}`}
               onClick={() => {
                 const n = Number(editValue);
                 if (Number.isNaN(n)) {
@@ -216,7 +219,12 @@ function DerivedValueCard({ account, snapshot, isSkipped, onSkip, priorValue }: 
             >
               Save
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-label={`Cancel editing ${account.name}`}
+              onClick={() => setEditing(false)}
+            >
               Cancel
             </Button>
           </div>
@@ -224,13 +232,29 @@ function DerivedValueCard({ account, snapshot, isSkipped, onSkip, priorValue }: 
 
         {mode === 'pending' && !editing && (
           <div className="flex gap-2">
-            <Button size="sm" disabled={busy} onClick={() => confirm(snapshot.totalValue)}>
+            {/* Round-3 M3: entity on aria-label (see edit-mode note above). */}
+            <Button
+              size="sm"
+              disabled={busy}
+              aria-label={`Confirm ${account.name}`}
+              onClick={() => confirm(snapshot.totalValue)}
+            >
               Confirm
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+            <Button
+              size="sm"
+              variant="outline"
+              aria-label={`Edit ${account.name}`}
+              onClick={() => setEditing(true)}
+            >
               Edit
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => account.id != null && onSkip(account.id)}>
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-label={`Skip ${account.name}`}
+              onClick={() => account.id != null && onSkip(account.id)}
+            >
               Skip
             </Button>
           </div>
@@ -339,10 +363,16 @@ function LoanPaymentCard({ loan, nextEntry, alreadyRecorded }: LoanPaymentCardPr
 
         {mode === 'pending' && (
           <div className="flex gap-2">
-            <Button size="sm" disabled={busy} onClick={confirm}>
+            {/* Round-3 M3: entity on aria-label — "Confirm Car loan payment". */}
+            <Button size="sm" disabled={busy} aria-label={`Confirm ${loan.name} payment`} onClick={confirm}>
               Confirm
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setMode('skipped')}>
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-label={`Skip ${loan.name} payment`}
+              onClick={() => setMode('skipped')}
+            >
               Skip
             </Button>
           </div>
@@ -440,10 +470,16 @@ function CashBalanceCard({ account, latestBalance }: CashBalanceCardProps) {
               placeholder="0.00"
               className="max-w-[200px]"
             />
-            <Button size="sm" disabled={busy} onClick={save}>
+            {/* Round-3 M3: entity on aria-label — "Save Checking balance". */}
+            <Button size="sm" disabled={busy} aria-label={`Save ${account.name} balance`} onClick={save}>
               Save
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setMode('skipped')}>
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-label={`Skip ${account.name} balance`}
+              onClick={() => setMode('skipped')}
+            >
               Skip
             </Button>
           </div>
