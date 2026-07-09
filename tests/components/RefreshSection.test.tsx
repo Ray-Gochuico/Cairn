@@ -7,7 +7,16 @@ import { runMigrations, loadAllMigrations } from '@/db/migrations';
 import { setDatabase } from '@/db/db';
 import { SettingsRepo } from '@/domain/app-settings';
 import { useSettingsStore } from '@/stores/settings-store';
+import { vi } from 'vitest';
+import { runMarketDataRefresh } from '@/market/run-market-data-refresh';
 import { RefreshSection } from '@/components/settings/RefreshSection';
+
+// Round-3 E5: 'Last refreshed' stamps only AFTER an awaited successful
+// refresh — mock the refresh so tests can drive success/failure.
+vi.mock('@/market/run-market-data-refresh', () => ({
+  runMarketDataRefresh: vi.fn().mockResolvedValue(undefined),
+}));
+const mRefresh = runMarketDataRefresh as unknown as ReturnType<typeof vi.fn>;
 
 describe('RefreshSection', () => {
   let db: SqliteAdapter;
@@ -57,5 +66,20 @@ describe('RefreshSection', () => {
       const settings = await new SettingsRepo(db).get();
       expect(settings.lastRefreshAt).not.toBeNull();
     });
+  });
+
+  it('does not stamp Last refreshed when the refresh fails (round-3 E5)', async () => {
+    mRefresh.mockRejectedValueOnce(new Error('quota exceeded'));
+    render(<MemoryRouter><RefreshSection /></MemoryRouter>);
+    const user = userEvent.setup();
+    const button = await screen.findByRole('button', { name: /refresh now/i });
+    await user.click(button);
+
+    // Failure surfaces; the stamp never lands (a failed refresh must not
+    // read as fresh).
+    expect(await screen.findByText(/quota exceeded|refresh failed/i)).toBeInTheDocument();
+    const settings = await new SettingsRepo(db).get();
+    expect(settings.lastRefreshAt).toBeNull();
+    expect(screen.getByText(/last refreshed:/i)).toHaveTextContent(/never/i);
   });
 });
