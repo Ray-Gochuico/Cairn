@@ -12,9 +12,20 @@ test('boot completes into the app shell; dashboard renders with a clean console'
   // date-INDEPENDENT boot landmark is PageShell's primary nav…
   await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible({ timeout: 30_000 });
   // …and an in-app navigation then reaches the dashboard deterministically
-  // (SPA navigation does not re-run the boot seam). The pill grid is the
-  // dashboard's stable landmark (src/pages/Dashboard.tsx data-testid).
+  // (SPA navigation does not re-run the boot seam).
   await page.getByRole('link', { name: 'Dashboard' }).click();
+  // W13: the briefing hero is the dashboard landmark now.
+  const briefing = page.getByTestId('briefing-card');
+  await expect(briefing).toBeVisible({ timeout: 30_000 });
+  // Seeded household: month-close snapshots exist → a material positive row
+  // (assets rose over the close; exact cents drift with the loan back-walk,
+  // so assert shape, not the figure).
+  await expect(briefing).toContainText(/Net worth is up \+\$[\d,]+/);
+  // Seeded concentration: a >15% top effective exposure → the calm note,
+  // spec copy verbatim.
+  await expect(briefing).toContainText('Note — not a warning.');
+  // The preserved pill row lives behind the Details disclosure:
+  await page.getByTestId('dashboard-details-toggle').click();
   await expect(page.getByTestId('dashboard-pill-grid')).toBeVisible({ timeout: 30_000 });
   expect(errors.join('\n')).not.toContain('Maximum update depth');
   expect(errors).toEqual([]);

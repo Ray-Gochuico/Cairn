@@ -20,7 +20,7 @@ export interface Migration {
  * `tests/db/schema-version-guard.test.ts` asserts this equals the migration
  * count AND pins the literal so a one-sided bump fails a test.
  */
-export const MAX_SCHEMA_VERSION = 49;
+export const MAX_SCHEMA_VERSION = 50;
 
 /**
  * Thrown by `runMigrations` when the database's stamped `user_version` is
@@ -268,6 +268,11 @@ const MIGRATION_REGISTRY: ReadonlyArray<
   // (loan_id, payment_date) WHERE source='AMORTIZATION' — same-day
   // MANUAL/IMPORTED rows stay legal.
   ['0049_loan_payments_unique_amortization', () => import('./migrations/0049_loan_payments_unique_amortization.sql?raw')],
+  // 0050 adds the "Since your last visit" briefing stamps to app_settings
+  // (Wave 13 / Direction 1): last_visit_date + briefing_baseline_date, two
+  // nullable local-calendar-day TEXT columns. Two columns so a same-day
+  // re-open keeps a stable baseline. Peers to last_seen_month (0046).
+  ['0050_app_settings_briefing_stamps', () => import('./migrations/0050_app_settings_briefing_stamps.sql?raw')],
 ];
 
 export async function loadAllMigrations(): Promise<Migration[]> {

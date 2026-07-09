@@ -3,17 +3,22 @@ import { useLayoutStore, type LayoutEntry, type LayoutHook } from './use-layout-
 const STORAGE_KEY = 'dashboardWidgetLayout.v1';
 
 /**
- * Widget orders that mean "the user never customized". Two generations:
- * the pre-asset-chart default (2026-06 migration target) and the 5-id
- * default users held between the chart shipping and the trivia widget
- * (2026-07). A saved layout exactly equal to EITHER (order intact,
- * nothing hidden) is rebuilt to the current defaults so new widgets land
- * in their designed slots. Anything else is customized and respected —
- * reconcile() appends unknown ids at the end.
+ * Widget orders that mean "the user never customized". Three generations:
+ * the pre-asset-chart default (2026-06 migration target), the 5-id default
+ * users held between the chart shipping and the trivia widget (2026-07),
+ * and the 6-id default held between trivia shipping and the asset chart's
+ * promotion to fixed hero (2026-07, W13). A saved layout exactly equal to
+ * ANY of these (order intact, nothing hidden) is rebuilt to the current
+ * defaults so new widgets land in their designed slots. Anything else is
+ * customized and respected — reconcile() appends unknown ids at the end
+ * and drops stale ones (e.g. asset-value-chart post-W13).
  */
 const PRISTINE_DEFAULTS: readonly (readonly string[])[] = [
   ['pills-section', 'spending', 'concentration', 'goals'],
   ['pills-section', 'asset-value-chart', 'spending', 'concentration', 'goals'],
+  // 2026-07 (W13): the 6-id default held between trivia shipping and the
+  // asset chart's promotion to fixed hero.
+  ['pills-section', 'asset-value-chart', 'spending', 'concentration', 'goals', 'trivia'],
 ];
 
 export function migrateUncustomizedLayout(defaultIds: readonly string[]): void {

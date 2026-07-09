@@ -1,7 +1,8 @@
-import { useCallback, useMemo, useState, type ReactElement, type ReactNode } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import {
   CheckIcon,
+  ChevronRight,
   CreditCard,
   GraduationCap,
   Home,
@@ -26,11 +27,12 @@ import { useHoldingsStore } from '@/stores/holdings-store';
 import { useTickersStore } from '@/stores/tickers-store';
 import { useFundHoldingsStore } from '@/stores/fund-holdings-store';
 import { useRoadmapOverridesStore } from '@/stores/roadmap-overrides-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import { useLoadGate } from '@/lib/use-load-gate';
 import { useLocalToday } from '@/lib/use-local-today';
 import { dateFromLocalISO } from '@/lib/dates';
 import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
-import { AccountType, GoalType } from '@/types/enums';
+import { AccountType, GoalType, SnapshotSource } from '@/types/enums';
 import { netWorthForMonth, type NetWorthInput } from '@/lib/networth';
 import { netWorthAsOfFactory, deltaPctOrNull } from '@/lib/asset-value-chart';
 import { GROWTH_HORIZONS } from '@/lib/growth-horizons';
@@ -57,13 +59,25 @@ import MetricCard from '@/components/cards/MetricCard';
 import { ConcentrationCard } from '@/components/cards/ConcentrationCard';
 import AssetValueChart from '@/components/charts/AssetValueChart';
 import { FreshnessBadge } from '@/components/ui/freshness-badge';
-import { NextMoveCard } from '@/components/dashboard/NextMoveCard';
 import { TodaysTriviaCard } from '@/components/dashboard/TodaysTriviaCard';
 import { EditablePill } from '@/components/dashboard/EditablePill';
 import { EditableWidget } from '@/components/dashboard/EditableWidget';
 import { usePillLayout } from '@/components/dashboard/use-pill-layout';
 import { useWidgetLayout } from '@/components/dashboard/use-widget-layout';
 import { SpendingWidget } from '@/components/dashboard/SpendingWidget';
+import { useDisclosureGate } from '@/legal/useDisclosureGate';
+import { useRoadmap } from '@/domain/roadmap/context';
+import { evaluate } from '@/domain/roadmap/evaluate';
+import { NODES } from '@/domain/roadmap/nodes';
+import { useConcentration } from '@/lib/use-concentration';
+import { topEffectiveExposures } from '@/lib/concentration';
+import {
+  briefingHeading,
+  buildBriefing,
+  endOfLastMonthIso,
+  rollVisitStamps,
+} from '@/lib/briefing';
+import { BriefingCard } from '@/components/dashboard/BriefingCard';
 import { useTourStore } from '@/stores/tour-store';
 import { isSetupDismissed } from '@/lib/setup-dismissal';
 import { isTourDone, markTourDone } from '@/lib/onboarding-state';
@@ -112,6 +126,12 @@ const MANUAL_BALANCE_TYPES = new Set<AccountType>([
   AccountType.ACCOUNT_SAVINGS,
   AccountType.ACCOUNT_CRYPTO,
 ]);
+
+/**
+ * W13 Details disclosure persistence (per-device UI pref, the same
+ * localStorage class as the pill/widget layout keys).
+ */
+const DETAILS_KEY = 'dashboardDetailsOpen.v1';
 
 const currencyFormatter = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -276,7 +296,7 @@ function computeLiquidInvestments(
 /**
  * Slim, low-contrast re-entry nudge for existing/returning users who never
  * saw the first-run tour (e.g. they predate it, or bailed mid-flow). NOT a
- * Card — a one-line row below NextMoveCard. Shown only while setup is
+ * Card — a one-line row below the briefing hero. Shown only while setup is
  * dismissed and the tour-done marker is unset; "Take a quick tour" starts
  * the in-place TourOverlay (mounted in PageShell, already on this route),
  * dismiss records the marker so it never nags again. Never force-redirects.
@@ -322,7 +342,6 @@ export function ExistingUserTourPrompt() {
 }
 
 export default function Dashboard() {
-  const navigate = useNavigate();
   const { filter, persons } = useViewFilter();
 
   const household = useHouseholdStore((s) => s.household);
@@ -379,11 +398,20 @@ export default function Dashboard() {
   const loadCategories = useCategoriesStore((s) => s.load);
   const categoriesError = useCategoriesStore((s) => s.error);
 
-  // W10 M3: NextMoveCard applies ctx.overrides from useRoadmapOverridesStore,
-  // which NOTHING on the Dashboard route loaded — so user overrides were
-  // ignored in "Suggested next step" until they visited /roadmap. Load it here.
+  // W10 M3: the briefing's next-move row applies ctx.overrides from
+  // useRoadmapOverridesStore, which NOTHING on the Dashboard route loaded — so
+  // user overrides were ignored in "Suggested next step" until they visited
+  // /roadmap. Load it here.
   const loadOverrides = useRoadmapOverridesStore((s) => s.load);
   const overridesError = useRoadmapOverridesStore((s) => s.error);
+
+  // W13: settings joins the gate — the briefing's visit stamps persist in
+  // app_settings (migration 0050) so they travel with the data they
+  // contextualize across backup/restore.
+  const settings = useSettingsStore((s) => s.settings);
+  const loadSettings = useSettingsStore((s) => s.load);
+  const settingsError = useSettingsStore((s) => s.error);
+  const updateSettings = useSettingsStore((s) => s.update);
 
   // `reload` doubles as the Retry handler for the store-error banner.
   const reload = useCallback(() => {
@@ -402,6 +430,7 @@ export default function Dashboard() {
     loadTransactions();
     loadCategories();
     loadOverrides();
+    loadSettings();
   }, [
     loadHousehold,
     loadAccounts,
@@ -418,6 +447,7 @@ export default function Dashboard() {
     loadTransactions,
     loadCategories,
     loadOverrides,
+    loadSettings,
   ]);
 
   const dashboardIsLoading = [
@@ -436,6 +466,7 @@ export default function Dashboard() {
     useTransactionsStore((s) => s.isLoading),
     useCategoriesStore((s) => s.isLoading),
     useRoadmapOverridesStore((s) => s.isLoading),
+    useSettingsStore((s) => s.isLoading),
   ];
 
   // Errors from the core data stores the dashboard reads. Surfaced as a banner
@@ -459,15 +490,38 @@ export default function Dashboard() {
     transactionsError,
     categoriesError,
     overridesError,
+    settingsError,
   ];
 
   // W10 S3/S4: gate the whole dashboard on load settlement — never flash "$0"
-  // pills or NextMoveCard's "Continue Setup →" while the 15 stores load.
+  // pills or a premature briefing while the 16 stores load.
   const gate = useLoadGate(dashboardIsLoading, storeErrors, reload);
 
   const todayISO = useLocalToday();
   const today = useMemo(() => dateFromLocalISO(todayISO), [todayISO]);
   const currentMonth = todayISO.slice(0, 7);
+
+  // W13 briefing: roll the last-visit stamps once per local day. The roll is
+  // idempotent — after stamping, lastVisitDate === today and the baseline is
+  // the previous visit day, so re-computation lands on the same baseline.
+  const visitRoll = useMemo(
+    () =>
+      rollVisitStamps(
+        {
+          lastVisitDate: settings?.lastVisitDate ?? null,
+          briefingBaselineDate: settings?.briefingBaselineDate ?? null,
+        },
+        todayISO,
+      ),
+    [settings, todayISO],
+  );
+
+  useEffect(() => {
+    if (!gate.settled || settings === null || !visitRoll.changed) return;
+    // Store mutations rethrow by contract; a failed stamp must never take the
+    // dashboard down — the briefing just measures from the older baseline.
+    void updateSettings(visitRoll.stamps).catch(() => {});
+  }, [gate.settled, settings, visitRoll, updateSettings]);
 
   // Apply the view filter to the entities rendered in the headline metrics,
   // the goals strip, and the spending pills/widget (transactions are scoped
@@ -672,6 +726,107 @@ export default function Dashboard() {
   const currentMonthSpend = spendingSummary.currentMonthTotal;
   const monthlyBudget = household?.monthlyExpenseBaseline ?? 0;
 
+  // W10 S1: keep the person view across pill/briefing navigation.
+  const withView = useCallback(
+    (path: string) => (filter === 'household' ? path : `${path}?view=${filter}`),
+    [filter],
+  );
+
+  // W13: the briefing's net-worth baseline — the previous visit day, or the
+  // last calendar day of the previous month (where month-close snapshot
+  // history actually exists) on first run / same-day fallback.
+  const briefingBaselineIso =
+    visitRoll.mode === 'last-visit' ? visitRoll.baselineIso! : endOfLastMonthIso(today);
+  const briefingBaselineValue = useMemo(
+    () => netWorthValueAsOf(briefingBaselineIso),
+    [netWorthValueAsOf, briefingBaselineIso],
+  );
+
+  // Concentration: household-wide by decision (risk exposure doesn't change
+  // when you focus on one owner) — the briefing ROW carries the "· Household"
+  // suffix instead of pretending to filter.
+  const concentrationReport = useConcentration();
+  const topExposure = topEffectiveExposures(concentrationReport.perTicker, 1)[0] ?? null;
+
+  // Cadence-row counts. N mirrors isMonthlyInputPending's per-account rule
+  // exactly (an account clears on a USER_CONFIRMED or MANUAL row); M counts
+  // active loans — candidates, reconciled precisely on /monthly.
+  const balancesToConfirm = useMemo(
+    () =>
+      pendingAccountIds.filter(
+        (id) =>
+          !snapshotsLastMonth.some(
+            (s) =>
+              s.accountId === id &&
+              (s.source === SnapshotSource.USER_CONFIRMED || s.source === SnapshotSource.MANUAL),
+          ),
+      ).length,
+    [pendingAccountIds, snapshotsLastMonth],
+  );
+  const loanPaymentsToRecord = useMemo(
+    () => visibleLoans.filter((l) => l.currentBalance > 0).length,
+    [visibleLoans],
+  );
+
+  // Next move (the demoted NextMoveCard states — same pipeline, same order).
+  const roadmapCtx = useRoadmap();
+  const disclosureGate = useDisclosureGate('roadmap');
+  const nextMove = useMemo(() => {
+    if (!household) return { kind: 'setup' as const };
+    if (disclosureGate.state === 'needs-acceptance') return { kind: 'disclosure' as const };
+    if (!roadmapCtx) return null;
+    const results = evaluate(roadmapCtx);
+    const active = [...NODES]
+      .sort((a, b) => a.section - b.section)
+      .find((n) => results.get(n.id)?.status === 'active');
+    if (!active) return null; // caught up → the empty state is the celebration
+    const r = results.get(active.id)!;
+    return {
+      kind: 'active' as const,
+      title: active.title,
+      href: r.cta?.href ?? '/roadmap',
+      ctaLabel: r.cta?.label,
+    };
+  }, [household, disclosureGate.state, roadmapCtx]);
+
+  const briefing = useMemo(
+    () =>
+      buildBriefing({
+        netWorth: { current: netWorthNow, baseline: briefingBaselineValue },
+        concentration: topExposure
+          ? { ticker: topExposure.ticker, pctOfPortfolio: topExposure.pctOfPortfolio }
+          : null,
+        spending: {
+          currentMonthTotal: spendingSummary.currentMonthTotal,
+          previousMonthTotal: spendingSummary.previousMonthTotal,
+        },
+        monthly: {
+          pending: isInputPending,
+          monthToClose: lastMonth,
+          balancesToConfirm,
+          loanPaymentsToRecord,
+        },
+        goals: goalProjections
+          .filter((p) => p.goal.id != null)
+          .map((p) => ({ id: p.goal.id as number, name: p.goal.name, percentComplete: p.percentComplete })),
+        nextMove,
+        withView,
+      }),
+    [
+      netWorthNow,
+      briefingBaselineValue,
+      topExposure,
+      spendingSummary,
+      isInputPending,
+      lastMonth,
+      balancesToConfirm,
+      loanPaymentsToRecord,
+      goalProjections,
+      nextMove,
+      withView,
+    ],
+  );
+
   const hasNetWorthBaseline = netWorthNow !== null && netWorthMonthAgo !== null;
   const netWorthDelta = hasNetWorthBaseline ? netWorthNow - netWorthMonthAgo : 0;
   // Percent via the chart's shared deltaPctOrNull: null on a ≤0 baseline
@@ -708,10 +863,6 @@ export default function Dashboard() {
     | 'liquid-investments'
     | 'awaiting-reimbursement'
     | 'spending-vs-budget';
-
-  // W10 S1: keep the person view across pill navigation.
-  const withView = (path: string) =>
-    filter === 'household' ? path : `${path}?view=${filter}`;
 
   const pillDefs: Array<{ id: PillId; label: string; render: () => ReactElement }> = [
     {
@@ -799,6 +950,28 @@ export default function Dashboard() {
   const pillById = new Map(pillDefs.map((p) => [p.id, p]));
   const [editing, setEditing] = useState(false);
 
+  // W13 Details region: per-device UI pref, same storage class as the layout
+  // hooks. Customize forces it open — the things being customized live inside.
+  const [detailsOpen, setDetailsOpen] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem(DETAILS_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const toggleDetails = () => {
+    setDetailsOpen((v) => {
+      const next = !v;
+      try {
+        window.localStorage.setItem(DETAILS_KEY, String(next));
+      } catch {
+        /* localStorage unavailable — session-only toggle */
+      }
+      return next;
+    });
+  };
+  const detailsVisible = detailsOpen || editing;
+
   const orderedPills = pillLayout.layout
     .map((e) => ({ entry: e, def: pillById.get(e.id as PillId) }))
     .filter((row): row is { entry: typeof pillLayout.layout[number]; def: (typeof pillDefs)[number] } => row.def !== undefined);
@@ -806,14 +979,18 @@ export default function Dashboard() {
   const hiddenPills = orderedPills.filter((p) => p.entry.hidden);
 
   // Widget layout (whole-row blocks the user can re-order or hide).
-  // NextMoveCard and the monthly-input nudge intentionally stay anchored at
-  // the top — they're action prompts, not informational widgets, so making
-  // them rearrangeable would risk burying calls to action. Trivia is a
-  // widget (default LAST): a daily game should not outrank money data, and
-  // widget-hood finally lets users hide it.
-  type WidgetId = 'pills-section' | 'asset-value-chart' | 'spending' | 'concentration' | 'goals' | 'trivia';
+  // The briefing hero intentionally stays anchored at the top — it carries
+  // the action rows (monthly close / next move), so making it rearrangeable
+  // would risk burying calls to action. Trivia is a widget (default LAST):
+  // a daily game should not outrank money data, and widget-hood finally
+  // lets users hide it.
+  // W13: the Total Assets chart is the FIXED secondary hero (Direction 1);
+  // it left the re-orderable set. useLayoutStore.reconcile() drops the stale
+  // stored id for previously-customized layouts; pristine layouts are
+  // rebuilt via PRISTINE_DEFAULTS generation 3.
+  type WidgetId = 'pills-section' | 'spending' | 'concentration' | 'goals' | 'trivia';
   const widgetIds = useMemo<readonly WidgetId[]>(
-    () => ['pills-section', 'asset-value-chart', 'spending', 'concentration', 'goals', 'trivia'],
+    () => ['pills-section', 'spending', 'concentration', 'goals', 'trivia'],
     [],
   );
   const widgetLayout = useWidgetLayout(widgetIds);
@@ -894,11 +1071,6 @@ export default function Dashboard() {
       render: () => pillsSectionContent,
     },
     {
-      id: 'asset-value-chart',
-      label: 'Asset value',
-      render: () => <AssetValueChart surface="dashboard" />,
-    },
-    {
       id: 'spending',
       label: 'Spending',
       render: () => (
@@ -966,8 +1138,9 @@ export default function Dashboard() {
   const visibleWidgets = orderedWidgets.filter((w) => !w.entry.hidden);
   const hiddenWidgets = orderedWidgets.filter((w) => w.entry.hidden);
 
-  // W10 S3/S4: NextMoveCard, the $0 pills, and the widgets all mount post-settle
-  // only — never during the 15-store cold load.
+  // W10 S3/S4 (+W13): the briefing, the $0 pills, and the widgets all mount
+  // post-settle only — never during the 16-store cold load. The briefing's
+  // "Nothing needs your attention." is honest BECAUSE it renders post-gate.
   if (!gate.settled) {
     return (
       <PageContainer className="space-y-6">
@@ -1012,65 +1185,83 @@ export default function Dashboard() {
         </Button>
       </div>
 
-      {/* Action prompt stays anchored at the top, now full width — the
-          trivia card is widget 'trivia' (re-orderable/hideable, default
-          last) instead of a permanent co-tenant of this row. */}
-      <NextMoveCard />
+      {/* W13 hero: the ranked briefing (Direction 1). NextMoveCard's four
+          states live on as the feed's next-move row; the Monthly banner's
+          job moved to the cadence row. */}
+      <BriefingCard
+        heading={briefingHeading(visitRoll.mode, lastMonth)}
+        briefing={briefing}
+        viewFiltered={filter !== 'household'}
+      />
 
       <ExistingUserTourPrompt />
 
-      {isInputPending && (
-        <div className="rounded-md border border-warning/40 bg-warning-soft p-4 flex flex-wrap items-center justify-between gap-4">
-          <div className="min-w-0">
-            <div className="font-medium text-warning-foreground">Monthly input pending</div>
-            <div className="text-sm text-warning-foreground/80">
-              Confirm this month's account balances and loan payments.
-            </div>
-          </div>
-          <Button onClick={() => navigate('/monthly')}>Open</Button>
-        </div>
-      )}
+      {/* W13 secondary hero — fixed position, no longer a widget. */}
+      <AssetValueChart surface="dashboard" />
 
-      {visibleWidgets.map((w, index) => (
-        <EditableWidget
-          key={w.def.id}
-          id={w.def.id}
-          label={w.def.label}
-          editing={editing}
-          canMoveUp={index > 0}
-          canMoveDown={index < visibleWidgets.length - 1}
-          onMoveUp={() => widgetLayout.move(w.def.id, -1)}
-          onMoveDown={() => widgetLayout.move(w.def.id, 1)}
-          onRemove={() => widgetLayout.hide(w.def.id)}
+      {/* W13 on-demand Details: the preserved pill row + widget grid. The
+          chevron rotates with no transition — nothing animates (motion-safe
+          stance intact). */}
+      <section aria-label="Details" className="space-y-6">
+        <button
+          type="button"
+          onClick={toggleDetails}
+          aria-expanded={detailsVisible}
+          aria-controls="dashboard-details-region"
+          data-testid="dashboard-details-toggle"
+          className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded-md"
         >
-          {w.def.render()}
-        </EditableWidget>
-      ))}
-
-      {editing && hiddenWidgets.length > 0 ? (
-        <div
-          className="rounded-md border bg-muted/40 p-3"
-          data-testid="dashboard-hidden-widgets"
-        >
-          <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
-            Hidden widgets
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {hiddenWidgets.map((w) => (
-              <button
+          <ChevronRight
+            className={detailsVisible ? 'h-4 w-4 rotate-90' : 'h-4 w-4'}
+            aria-hidden="true"
+          />
+          <span className="uppercase tracking-wider text-xs">Details</span>
+        </button>
+        {detailsVisible ? (
+          <div id="dashboard-details-region" className="space-y-6">
+            {visibleWidgets.map((w, index) => (
+              <EditableWidget
                 key={w.def.id}
-                type="button"
-                onClick={() => widgetLayout.show(w.def.id)}
-                className="inline-flex items-center gap-1.5 rounded-full border bg-background px-3 py-1 text-sm hover:bg-accent"
-                data-testid={`widget-add-${w.def.id}`}
+                id={w.def.id}
+                label={w.def.label}
+                editing={editing}
+                canMoveUp={index > 0}
+                canMoveDown={index < visibleWidgets.length - 1}
+                onMoveUp={() => widgetLayout.move(w.def.id, -1)}
+                onMoveDown={() => widgetLayout.move(w.def.id, 1)}
+                onRemove={() => widgetLayout.hide(w.def.id)}
               >
-                <PlusIcon className="h-3.5 w-3.5" />
-                {w.def.label}
-              </button>
+                {w.def.render()}
+              </EditableWidget>
             ))}
+
+            {editing && hiddenWidgets.length > 0 ? (
+              <div
+                className="rounded-md border bg-muted/40 p-3"
+                data-testid="dashboard-hidden-widgets"
+              >
+                <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
+                  Hidden widgets
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {hiddenWidgets.map((w) => (
+                    <button
+                      key={w.def.id}
+                      type="button"
+                      onClick={() => widgetLayout.show(w.def.id)}
+                      className="inline-flex items-center gap-1.5 rounded-full border bg-background px-3 py-1 text-sm hover:bg-accent"
+                      data-testid={`widget-add-${w.def.id}`}
+                    >
+                      <PlusIcon className="h-3.5 w-3.5" />
+                      {w.def.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
-        </div>
-      ) : null}
+        ) : null}
+      </section>
     </PageContainer>
   );
 }

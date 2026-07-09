@@ -493,6 +493,14 @@ export const AppSettingsSchema = z.object({
   // auto-route to /monthly (Wave 3). null = never prompted (first-ever open).
   // Peer to lastRefreshAt — app/UI state, not household financial data.
   lastSeenMonth: z.string().nullable(),
+  // Migration 0050: "Since your last visit" briefing stamps (Wave 13). Local
+  // calendar days (YYYY-MM-DD). lastVisitDate = the most recent day the app
+  // was opened; briefingBaselineDate = the visit-day before that — the
+  // briefing's net-worth baseline for the whole of today (two columns so a
+  // same-day re-open keeps a stable baseline). Peers to lastSeenMonth —
+  // app/UI state, not household financial data. null = first-ever open.
+  lastVisitDate: z.string().nullable(),
+  briefingBaselineDate: z.string().nullable(),
   // NOTE: autoInvestSalarySurplus field removed 2026-05-26 (What-If revamp).
   // The migration 0029 column auto_invest_salary_surplus stays in SQL as a
   // zombie (SQLite forward-only convention); SettingsRepo no longer reads or
