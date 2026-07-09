@@ -16,7 +16,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import BarChartCard, { type BarChartSeries } from '@/components/charts/BarChartCard';
+import StackedAreaChartCard, { type StackedAreaSeries } from '@/components/charts/StackedAreaChartCard';
+import { CHART_PALETTE } from '@/components/charts/palette';
 import { formatCurrency, formatMonth } from '@/lib/format';
 import { useLocalToday } from '@/lib/use-local-today';
 import { Button } from '@/components/ui/button';
@@ -451,12 +452,12 @@ export default function Loans() {
     [projections, todayIso],
   );
 
-  const debtChartSeries = useMemo<BarChartSeries[]>(
+  const debtChartSeries = useMemo<StackedAreaSeries[]>(
     () =>
-      debtTypes.map((t) => ({
+      debtTypes.map((t, i) => ({
         dataKey: t,
         label: LOAN_TYPE_LABEL[t],
-        stackId: 'debt',
+        color: CHART_PALETTE[i % CHART_PALETTE.length],
       })),
     [debtTypes],
   );
@@ -595,7 +596,7 @@ export default function Loans() {
       </div>
 
       {debtRows.length > 0 ? (
-        <BarChartCard
+        <StackedAreaChartCard
           title="Total debt over time"
           subtitle={
             debtTypes.length > 1
@@ -606,6 +607,11 @@ export default function Loans() {
           xKey="month"
           series={debtChartSeries}
           yFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+          xTickFormatter={
+            debtRows.length > 36
+              ? (m) => (String(m).endsWith('-01') ? String(m).slice(0, 4) : '')
+              : (m) => formatMonth(String(m))
+          }
         />
       ) : null}
     </PageContainer>

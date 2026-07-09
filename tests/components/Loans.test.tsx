@@ -26,6 +26,16 @@ vi.mock('recharts', () => {
         'data-stack-id': props.stackId ?? '',
         'data-name': props.name ?? '',
       }),
+    AreaChart: ({ children }: { children: React.ReactNode }) => (
+      <div data-testid="rc-areachart">{children}</div>
+    ),
+    Area: (props: { dataKey: string; stackId?: string; name?: string }) =>
+      React.createElement('div', {
+        'data-testid': `rc-area-${props.dataKey}`,
+        'data-key': props.dataKey,
+        'data-stack-id': props.stackId ?? '',
+        'data-name': props.name ?? '',
+      }),
     LineChart: ({ children }: { children: React.ReactNode }) => (
       <div data-testid="rc-linechart">{children}</div>
     ),
@@ -266,7 +276,7 @@ describe('Loans page', () => {
 
     // One stacked segment when there's a single loan type. Every Bar
     // belonging to the debt stack must share one stackId.
-    const bars = container.querySelectorAll('[data-testid^="rc-bar-"]');
+    const bars = container.querySelectorAll('[data-testid^="rc-area-"]');
     expect(bars.length).toBe(1);
     expect(bars[0].getAttribute('data-stack-id')).toBeTruthy();
     // The segment is named after the loan type label so the legend reads
@@ -305,7 +315,7 @@ describe('Loans page', () => {
     const { container } = renderLoans();
 
     // Two distinct loan types -> two segments in the stack.
-    const bars = container.querySelectorAll('[data-testid^="rc-bar-"]');
+    const bars = container.querySelectorAll('[data-testid^="rc-area-"]');
     expect(bars.length).toBe(2);
 
     // All segments share a single stackId (so they actually stack).
@@ -352,7 +362,7 @@ describe('Loans page', () => {
 
     const { container } = renderLoans();
 
-    const bars = container.querySelectorAll('[data-testid^="rc-bar-"]');
+    const bars = container.querySelectorAll('[data-testid^="rc-area-"]');
     expect(bars.length).toBe(1);
     expect(bars[0].getAttribute('data-name')).toBe('Mortgage');
   });
