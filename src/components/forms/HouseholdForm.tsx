@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { HouseholdSchema, type Household } from '@/types/schema';
+import { fractionToPercent, percentToFraction } from '@/lib/percent-fields';
 import { FilingStatus } from '@/types/enums';
 import { prettifyCityCode, US_STATES } from '@/lib/jurisdiction-format';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
@@ -54,6 +56,44 @@ export const HOUSEHOLD_DEFAULT_VALUES: HouseholdFormValues = {
   ],
 };
 
+// Form-shaped schema (Wave 11 T6): the STORAGE fractions withdrawalRate /
+// inflationAssumption (0..1) become friendly percent-entry fields (0..100),
+// translated at the load/submit boundary. Storage stays the fraction.
+const HouseholdFormSchema = HouseholdSchema.omit({
+  id: true,
+  interestThresholdLowPct: true,
+  interestThresholdHighPct: true,
+  hasWrittenIps: true,
+  hasHsaQualifiedHdhp: true,
+  makesCharitableGifts: true,
+  upcomingLargePurchase: true,
+  upcomingPurchaseAmount: true,
+  upcomingPurchaseMonths: true,
+  withdrawalRate: true,
+  inflationAssumption: true,
+}).extend({
+  withdrawalRatePercent: z.number().min(0).max(100),
+  inflationAssumptionPercent: z.number().min(0).max(100),
+});
+type HouseholdFormShape = z.infer<typeof HouseholdFormSchema>;
+
+const toFormShape = (v: HouseholdFormValues): HouseholdFormShape => {
+  const { withdrawalRate, inflationAssumption, ...rest } = v;
+  return {
+    ...rest,
+    withdrawalRatePercent: fractionToPercent(withdrawalRate),
+    inflationAssumptionPercent: fractionToPercent(inflationAssumption),
+  };
+};
+const fromFormShape = (v: HouseholdFormShape): HouseholdFormValues => {
+  const { withdrawalRatePercent, inflationAssumptionPercent, ...rest } = v;
+  return {
+    ...rest,
+    withdrawalRate: percentToFraction(withdrawalRatePercent),
+    inflationAssumption: percentToFraction(inflationAssumptionPercent),
+  };
+};
+
 export interface HouseholdFormProps {
   /** Mapped from the store; when defined, RHF will reset to match it. */
   values: HouseholdFormValues | undefined;
@@ -85,22 +125,11 @@ export default function HouseholdForm({
   submitLabel = 'Save',
   showSavedConfirmation = false,
 }: HouseholdFormProps) {
-  const form = useForm<HouseholdFormValues>({
-    resolver: zodResolver(
-      HouseholdSchema.omit({
-        id: true,
-        interestThresholdLowPct: true,
-        interestThresholdHighPct: true,
-        hasWrittenIps: true,
-        hasHsaQualifiedHdhp: true,
-        makesCharitableGifts: true,
-        upcomingLargePurchase: true,
-        upcomingPurchaseAmount: true,
-        upcomingPurchaseMonths: true,
-      }),
-    ),
-    defaultValues: HOUSEHOLD_DEFAULT_VALUES,
-    values,
+  const formValues = useMemo(() => (values ? toFormShape(values) : undefined), [values]);
+  const form = useForm<HouseholdFormShape>({
+    resolver: zodResolver(HouseholdFormSchema),
+    defaultValues: toFormShape(HOUSEHOLD_DEFAULT_VALUES),
+    values: formValues,
   });
 
   // Load tax rules for 2026 on mount so city dropdown is populated.
@@ -138,6 +167,7 @@ export default function HouseholdForm({
   // justSaved confirmation only fires when the save resolved.
   const { onValid, submitError } = useFormSubmit(async (next: HouseholdFormValues) => {
     await onSubmit(next);
+
     if (showSavedConfirmation) {
       setJustSaved(true);
     }
@@ -146,7 +176,10 @@ export default function HouseholdForm({
   const dirty = form.formState.isDirty;
 
   return (
-    <form onSubmit={form.handleSubmit(onValid)} className="space-y-4">
+    <form
+      onSubmit={form.handleSubmit((shape) => onValid(fromFormShape(shape)))}
+      className="space-y-4"
+    >
       <Card>
         <CardHeader><CardTitle className="text-base">Identity &amp; tax</CardTitle></CardHeader>
         <CardContent className="space-y-3">
@@ -244,26 +277,45 @@ export default function HouseholdForm({
           */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="min-w-0">
-              <Label htmlFor="withdrawalRate" className="break-words">
-                Withdrawal rate (e.g. 0.04 = 4% rule)
+              <Label htmlFor="withdrawalRatePercent" className="break-words">
+                Withdrawal rate (%)
               </Label>
-              <Input
-                id="withdrawalRate"
-                type="number"
-                step="0.001"
-                {...form.register('withdrawalRate', { valueAsNumber: true })}
-              />
+              <div className="relative">
+                <Input
+                  id="withdrawalRatePercent"
+                  type="number"
+                  step="0.1"
+                  className="pr-7 text-right tabular-nums"
+                  {...form.register('withdrawalRatePercent', { valueAsNumber: true })}
+                />
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground"
+                >
+                  %
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">4 = the classic 4% rule</p>
             </div>
             <div className="min-w-0">
-              <Label htmlFor="inflationAssumption" className="break-words">
-                Inflation assumption
+              <Label htmlFor="inflationAssumptionPercent" className="break-words">
+                Inflation assumption (%)
               </Label>
-              <Input
-                id="inflationAssumption"
-                type="number"
-                step="0.001"
-                {...form.register('inflationAssumption', { valueAsNumber: true })}
-              />
+              <div className="relative">
+                <Input
+                  id="inflationAssumptionPercent"
+                  type="number"
+                  step="0.1"
+                  className="pr-7 text-right tabular-nums"
+                  {...form.register('inflationAssumptionPercent', { valueAsNumber: true })}
+                />
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground"
+                >
+                  %
+                </span>
+              </div>
             </div>
           </div>
         </CardContent>

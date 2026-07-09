@@ -113,7 +113,7 @@ describe('LoansTab', () => {
 
     await user.type(original, '400000');
     await user.type(balance, '400000');
-    await user.type(rate, '0.06');
+    await user.type(rate, '6');
     await selectDate(user, 'firstPaymentDate', '2024-06-01');
     // term already defaults to 360; clear and re-type to trigger blur
     await user.clear(term);
@@ -136,7 +136,7 @@ describe('LoansTab', () => {
     await user.type(screen.getByLabelText(/^name$/i), 'Primary Mortgage');
     await user.type(screen.getByLabelText(/original amount/i), '400000');
     await user.type(screen.getByLabelText(/current balance/i), '400000');
-    await user.type(screen.getByLabelText(/interest rate/i), '0.06');
+    await user.type(screen.getByLabelText(/interest rate/i), '6');
     await selectDate(user, 'firstPaymentDate', '2024-06-01');
     // Pick Alex as obligor via the radio
     await user.click(screen.getByRole('radio', { name: /alex/i }));
@@ -167,7 +167,7 @@ describe('LoansTab', () => {
     await user.type(screen.getByLabelText(/^name$/i), 'OldName');
     await user.type(screen.getByLabelText(/original amount/i), '100000');
     await user.type(screen.getByLabelText(/current balance/i), '100000');
-    await user.type(screen.getByLabelText(/interest rate/i), '0.05');
+    await user.type(screen.getByLabelText(/interest rate/i), '5');
     await selectDate(user, 'firstPaymentDate', '2023-01-01');
     await user.click(screen.getByRole('radio', { name: /alex/i }));
     await user.tab();

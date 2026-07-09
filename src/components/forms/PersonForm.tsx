@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FieldError, FormErrorSummary, useFormSubmit } from './form-errors';
+import { fractionToPercent, percentToFraction } from '@/lib/percent-fields';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 
 // PersonFormValues mirrors Person but drops the DB-only id and the
@@ -65,14 +66,8 @@ const emptyToNullNumber = (v: unknown): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-// Convert the storage fraction (0..1) to a friendly percent (0..100)
-// without floating-point trailing noise (0.10 * 100 → 10.000000000000002
-// in JS; toFixed + parseFloat strips that).
-const fractionToPercent = (fraction: number): number =>
-  parseFloat((fraction * 100).toFixed(10));
-
-const percentToFraction = (percent: number): number =>
-  parseFloat((percent / 100).toFixed(10));
+// Shared percent↔fraction pair (Wave 11 T6) — the storage fraction (0..1)
+// ⇄ friendly percent (0..100) conversion, float-noise-stripped.
 
 // Form-shaped schema. PersonSchema has `.default(...)` on several
 // fields, which makes Zod's *input* type partial (those keys become

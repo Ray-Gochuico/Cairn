@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 import { LoanSchema, type Loan } from '@/types/schema';
 import { LoanType } from '@/types/enums';
 import { amortize } from '@/lib/amortization';
@@ -10,8 +11,26 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FormErrorSummary, useFormSubmit } from './form-errors';
+import { fractionToPercent, percentToFraction } from '@/lib/percent-fields';
 
 export type LoanFormValues = Omit<Loan, 'id'>;
+
+// Form-shaped schema (Wave 11 T6): the STORAGE fraction interestRate (0..1) is
+// swapped for a friendly percent-entry field interestRatePercent (0..100),
+// translated at the load/submit boundary. Storage is always the fraction.
+const LoanFormSchema = LoanSchema.omit({ id: true, interestRate: true }).extend({
+  interestRatePercent: z.number().min(0).max(100),
+});
+type LoanFormShape = z.infer<typeof LoanFormSchema>;
+
+const toFormShape = (v: LoanFormValues): LoanFormShape => {
+  const { interestRate, ...rest } = v;
+  return { ...rest, interestRatePercent: fractionToPercent(interestRate) };
+};
+const fromFormShape = (v: LoanFormShape): LoanFormValues => {
+  const { interestRatePercent, ...rest } = v;
+  return { ...rest, interestRate: percentToFraction(interestRatePercent) };
+};
 
 export const DEFAULT_LOAN: LoanFormValues = {
   householdId: 1,
@@ -66,9 +85,9 @@ export default function LoanForm({
   onCancel,
   submitLabel = 'Save',
 }: LoanFormProps) {
-  const form = useForm<LoanFormValues>({
-    resolver: zodResolver(LoanSchema.omit({ id: true })),
-    defaultValues: initial,
+  const form = useForm<LoanFormShape>({
+    resolver: zodResolver(LoanFormSchema),
+    defaultValues: toFormShape(initial),
   });
 
   const [monthlyPaymentEditedManually, setMonthlyPaymentEditedManually] = useState(
@@ -107,11 +126,12 @@ export default function LoanForm({
     // seasoned loan's payment (the balance has less time left, not more).
     // Balance-only fallback covers rows where original wasn't provided.
     const principal = v.originalAmount > 0 ? v.originalAmount : v.currentBalance;
-    if (principal > 0 && v.interestRate >= 0 && v.termMonths > 0 && v.firstPaymentDate) {
+    const interestRate = percentToFraction(v.interestRatePercent);
+    if (principal > 0 && interestRate >= 0 && v.termMonths > 0 && v.firstPaymentDate) {
       try {
         const result = amortize({
           principal,
-          annualRatePct: v.interestRate,
+          annualRatePct: interestRate,
           termMonths: v.termMonths,
           firstPaymentDate: v.firstPaymentDate,
           extraPayment: 0,
@@ -143,7 +163,10 @@ export default function LoanForm({
   const { onValid, submitting, submitError } = useFormSubmit(onSubmit);
 
   return (
-    <form onSubmit={form.handleSubmit(onValid)} className="space-y-4">
+    <form
+      onSubmit={form.handleSubmit((shape) => onValid(fromFormShape(shape)))}
+      className="space-y-4"
+    >
       <Card>
         <CardHeader><CardTitle className="text-base">Loan details</CardTitle></CardHeader>
         <CardContent className="space-y-3">
@@ -224,14 +247,23 @@ export default function LoanForm({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <Label htmlFor="interestRate">Interest rate (e.g. 0.06 = 6%)</Label>
-              <Input
-                id="interestRate"
-                type="number"
-                step="0.001"
-                {...form.register('interestRate', { valueAsNumber: true })}
-                onBlur={tryAutoFillMonthlyPayment}
-              />
+              <Label htmlFor="interestRatePercent">Interest rate (%)</Label>
+              <div className="relative">
+                <Input
+                  id="interestRatePercent"
+                  type="number"
+                  step="0.01"
+                  className="pr-7 text-right tabular-nums"
+                  {...form.register('interestRatePercent', { valueAsNumber: true })}
+                  onBlur={tryAutoFillMonthlyPayment}
+                />
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground"
+                >
+                  %
+                </span>
+              </div>
             </div>
             <div>
               <Label htmlFor="termMonths">Term (months)</Label>
