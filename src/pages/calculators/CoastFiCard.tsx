@@ -260,6 +260,7 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
             Nominal view grows the target line with inflation; the Real view
             holds it flat in today's dollars.
           </p>
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-muted-foreground">
@@ -290,6 +291,7 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
               })}
             </tbody>
           </table>
+          </div>
           {chartData.length > 1 && (
             <div className="mt-4">
               <div className="flex justify-end mb-2">

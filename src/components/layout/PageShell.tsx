@@ -7,6 +7,15 @@ import { ViewFilter } from './ViewFilter';
 import { usePersonsStore } from '@/stores/persons-store';
 import { documentTitleFor } from '@/lib/route-titles';
 
+/*
+ * Layout floor (Wave 11 T19): the desktop window enforces 1024×700
+ * (tauri.conf.json windows[0].minWidth/minHeight). The permanent w-56 sidebar
+ * is a deliberate consequence — do NOT add responsive collapse for the app
+ * shell. Narrower viewports exist only in the browser-shim dev/e2e build, which
+ * must degrade without horizontal BODY scroll (wide tables scroll inside
+ * overflow-x-auto).
+ */
+
 export default function PageShell() {
   // Load persons ONCE at the shell level so the per-person view filter is
   // reliably available app-wide (Frontend M3). PageShell wraps every routed

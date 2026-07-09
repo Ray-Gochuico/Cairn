@@ -241,6 +241,7 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
       )}
 
       {/* Per-loan rows */}
+      <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-muted-foreground">
@@ -287,6 +288,7 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
           })}
         </tbody>
       </table>
+      </div>
     </CalculatorCard>
   );
 }

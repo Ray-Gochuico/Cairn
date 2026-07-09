@@ -100,6 +100,9 @@ describe('DebtPayoffCard', () => {
 
     // And we should have a per-loan row container for each.
     expect(screen.getAllByTestId(/^debt-loan-row-/)).toHaveLength(3);
+
+    // Wave 11 T19: the per-loan table scrolls inside an overflow-x-auto wrapper.
+    expect(screen.getByRole('table').closest('div')).toHaveClass('overflow-x-auto');
   });
 
   it('strategy picker has 3 options (None / Snowball / Avalanche)', async () => {

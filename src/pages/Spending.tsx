@@ -295,7 +295,7 @@ export default function Spending() {
   return (
     <PageContainer width="full" className="space-y-8">
       <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <h1 className="text-2xl font-semibold">Spending</h1>
         <div className="flex items-center gap-2">
           <ExportCsvButton baseName="transactions" columns={csvColumns} rows={transactions} />
