@@ -1,19 +1,16 @@
 import type { TriviaQuestion } from '@/lib/trivia/bank-schema';
 import type { LearningDifficulty } from '@/types/enums';
 import { answeredKey } from '@/lib/trivia/answered-key';
+import { localTodayISO } from '@/lib/dates';
 
 /**
  * Pure daily-selection + streak logic. No Date.now() inside the pure
  * functions — callers pass today's LOCAL ISO date. See spec §8.
  */
 
-/** Local calendar day as YYYY-MM-DD (NOT toISOString, which is UTC). */
-export function localTodayISO(now: Date = new Date()): string {
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
+// localTodayISO now lives in @/lib/dates (Wave 11 T8) — re-exported here so
+// no trivia call site churns.
+export { localTodayISO };
 
 /** The ISO date one day before `iso` (handles month/year boundaries). */
 export function yesterday(iso: string): string {

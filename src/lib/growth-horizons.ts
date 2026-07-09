@@ -34,7 +34,9 @@ function minusDays(now: Date, days: number): string {
   return toIsoDay(new Date(now.getTime() - days * 24 * 60 * 60 * 1000));
 }
 
-function minusMonths(now: Date, months: number): string {
+/** House month-subtraction (Wave 11 T8): UTC-safe, day-clamped (no forward
+ * overflow). The single month-cutoff helper — Dashboard/Goals adopt it. */
+export function minusMonths(now: Date, months: number): string {
   // Anchor on the UTC Y/M/D so we don't reintroduce TZ drift via local
   // getters. Clamp the day to the target month's last day: the previous
   // setUTCMonth() approach let Date normalize overflow FORWARD (Mar 31 −

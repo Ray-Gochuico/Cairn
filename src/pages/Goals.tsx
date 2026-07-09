@@ -39,6 +39,7 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { formatCurrency, formatPercent, formatDate } from '@/lib/format';
+import { minusMonths } from '@/lib/growth-horizons';
 import { UpdateAccountBalanceDialog } from '@/components/dialogs/UpdateAccountBalanceDialog';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import type { CsvColumn } from '@/lib/csv';
@@ -107,9 +108,7 @@ function monthlyContributionAvg(
   monthsBack = 6,
 ): number {
   if (linkedIds.length === 0 || monthsBack <= 0) return 0;
-  const cutoff = new Date(today);
-  cutoff.setMonth(cutoff.getMonth() - monthsBack);
-  const cutoffIso = cutoff.toISOString().slice(0, 10);
+  const cutoffIso = minusMonths(today, monthsBack);
   const linkedSet = new Set(linkedIds);
   const total = contributions
     .filter((c) => linkedSet.has(c.accountId) && c.date >= cutoffIso)

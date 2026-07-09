@@ -31,7 +31,7 @@ import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
 import { AccountType, GoalType } from '@/types/enums';
 import { netWorthForMonth, type NetWorthInput } from '@/lib/networth';
 import { netWorthAsOfFactory, deltaPctOrNull } from '@/lib/asset-value-chart';
-import { GROWTH_HORIZONS } from '@/lib/growth-horizons';
+import { GROWTH_HORIZONS, minusMonths } from '@/lib/growth-horizons';
 import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
 import { includedAccountIds, filterSnapshotsForNetWorth } from '@/lib/account-inclusion';
 import { summarizeSpending } from '@/lib/spending-analysis';
@@ -201,9 +201,7 @@ function monthlyContributionAvg(
   monthsBack = 6,
 ): number {
   if (linkedIds.length === 0 || monthsBack <= 0) return 0;
-  const cutoff = new Date(today);
-  cutoff.setMonth(cutoff.getMonth() - monthsBack);
-  const cutoffIso = cutoff.toISOString().slice(0, 10);
+  const cutoffIso = minusMonths(today, monthsBack);
   const linkedSet = new Set(linkedIds);
   const total = contributions
     .filter((c) => linkedSet.has(c.accountId) && c.date >= cutoffIso)
