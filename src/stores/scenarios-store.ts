@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { ScenariosRepo } from '@/domain/scenarios';
 import { createDedupedLoad } from '@/stores/create-entity-store';
 import { getDatabase } from '@/db/db';
+import { defaultScenarioColor } from '@/lib/whatif/scenario-colors';
 import {
   emptyLeverPayload,
   projectScenario,
@@ -147,7 +148,9 @@ export const useScenariosStore = create<ScenariosState>((set, get) => ({
       name: newName ?? `${source.name} (copy)`,
       isBaseline: false,
       isActive: false,
-      color: source.color,
+      // W10 design: clone takes the NEXT palette color, not the source's
+      // (which plotted two identical blue lines).
+      color: defaultScenarioColor(source.sortOrder + 1, false),
       lineStyle: source.lineStyle,
       visible: source.visible,
       sortOrder: source.sortOrder + 1,
@@ -192,7 +195,8 @@ export const useScenariosStore = create<ScenariosState>((set, get) => ({
       name: newName,
       isBaseline: false,
       isActive: false,
-      color: active.color,
+      // W10 design: a saved snapshot gets a distinct palette color.
+      color: defaultScenarioColor(maxSort + 1, false),
       lineStyle: active.lineStyle,
       visible: true,
       sortOrder: maxSort + 1,
