@@ -23,6 +23,7 @@ import {
 } from '@/domain/roadmap/rules/section4Misc';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
+import { useAccountsStore } from '@/stores/accounts-store';
 import type { Account, Person } from '@/types/schema';
 import type { RoadmapContext } from '@/types/roadmap';
 import { AccountType } from '@/types/enums';
@@ -175,6 +176,27 @@ describe('Section 4 stragglers', () => {
     it('info when all 401(k)s answered false', () => {
       const accts = [makeAccount(1, AccountType.ACCOUNT_401K, { allowsMegaBackdoorRollover: false })];
       expect(evaluateAfterTax401kQ(makeContext({ accounts: accts })).status).toBe('info');
+    });
+
+    it('asks inline when exactly one 401(k) is unanswered, and writes the flag (W10 M24)', async () => {
+      const accts = [makeAccount(9, AccountType.ACCOUNT_401K, { name: 'Acme 401(k)', allowsMegaBackdoorRollover: null })];
+      const result = evaluateAfterTax401kQ(makeContext({ accounts: accts }));
+      expect(result.status).toBe('unanswered');
+      expect(result.question?.prompt).toMatch(/Acme 401\(k\).*mega.backdoor/i);
+      const update = vi.fn(async () => {});
+      useAccountsStore.setState({ update } as never);
+      await result.question!.onAnswer('yes');
+      expect(update).toHaveBeenCalledWith(9, { allowsMegaBackdoorRollover: true });
+    });
+
+    it('falls back to the Accounts CTA when several 401(k)s are unanswered (W10 M24)', () => {
+      const accts = [
+        makeAccount(1, AccountType.ACCOUNT_401K, { allowsMegaBackdoorRollover: null }),
+        makeAccount(2, AccountType.ACCOUNT_401K, { allowsMegaBackdoorRollover: null }),
+      ];
+      const result = evaluateAfterTax401kQ(makeContext({ accounts: accts }));
+      expect(result.question).toBeUndefined();
+      expect(result.cta?.href).toBe('/inputs/accounts');
     });
   });
 
