@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/card';
 import { CHART_PALETTE } from './palette';
 import { CHART_TOOLTIP_PROPS } from './ChartTooltip';
+import { ChartLegend } from './ChartLegend';
 
 // CSS-variable references so axes / grid flip with the theme (Wave-3
 // Design must-have #2). ProjectionChart established the pattern; chart
@@ -60,6 +61,12 @@ export interface BarChartCardProps {
    * Omit to display the raw x-axis value.
    */
   xTickFormatter?: (value: unknown) => string;
+  /**
+   * Centered guidance copy shown INSTEAD of the chart when there is no data
+   * (or every series value is 0) — a bar chart of all-zero rows reads as a
+   * blank grid otherwise (Wave 11 T11).
+   */
+  emptyMessage?: string;
 }
 
 // Long PDF-extracted merchant strings, category names, etc. overflow the
@@ -90,11 +97,32 @@ export default function BarChartCard({
   layout = 'horizontal',
   xAxisInterval,
   xTickFormatter,
+  emptyMessage,
 }: BarChartCardProps) {
   const isVertical = layout === 'vertical';
   const effectiveHeight = isVertical
     ? Math.max(height, data.length * ROW_HEIGHT_PX + VERTICAL_HEIGHT_PADDING_PX)
     : height;
+  const hasAnyValue =
+    data.length > 0 && data.some((row) => series.some((s) => Number(row[s.dataKey]) !== 0));
+  if (!hasAnyValue && emptyMessage) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>{title}</CardTitle>
+          {subtitle ? <CardDescription>{subtitle}</CardDescription> : null}
+        </CardHeader>
+        <CardContent>
+          <div
+            className="flex items-center justify-center px-6 text-center text-sm text-muted-foreground"
+            style={{ height: effectiveHeight }}
+          >
+            {emptyMessage}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
   return (
     <Card>
       <CardHeader>
@@ -108,7 +136,7 @@ export default function BarChartCard({
             layout={layout}
             margin={{ top: 8, right: 16, bottom: 8, left: 8 }}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+            <CartesianGrid vertical={false} stroke={GRID_STROKE} />
             {isVertical ? (
               <>
                 <XAxis
@@ -157,7 +185,7 @@ export default function BarChartCard({
                   : undefined
               }
             />
-            <Legend />
+            <Legend content={<ChartLegend />} />
             {series.map((s, idx) => (
               <Bar
                 key={s.dataKey}

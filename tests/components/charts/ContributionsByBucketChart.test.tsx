@@ -95,6 +95,11 @@ function makeContribution(
   return { id, accountId, personId: null, date, amount, source };
 }
 
+// Minimal non-zero data so the chart renders (all-zero shows the empty
+// message now — Wave 11 T11); axis/formatter wiring tests need the chart.
+const SEED_ACCOUNTS = [makeAccount(1, AccountType.ACCOUNT_BROKERAGE)];
+const SEED_CONTRIBS = [makeContribution(1, 1, '2026-01-15', 500)];
+
 describe('ContributionsByBucketChart', () => {
   it('renders the card title and subtitle', () => {
     render(
@@ -111,11 +116,26 @@ describe('ContributionsByBucketChart', () => {
     ).toBeTruthy();
   });
 
-  it('renders one stacked bar per bucket, all sharing the same stackId', () => {
+  it('shows guidance copy and no chart when there are no contributions (Wave 11 T11)', () => {
     render(
       <ContributionsByBucketChart
         accounts={[]}
         contributions={[]}
+        fromYyyymm="2026-01"
+        toYyyymm="2026-03"
+      />,
+    );
+    expect(
+      screen.getByText(/No contributions recorded in this window yet/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('rc-barchart')).not.toBeInTheDocument();
+  });
+
+  it('renders one stacked bar per bucket, all sharing the same stackId', () => {
+    render(
+      <ContributionsByBucketChart
+        accounts={SEED_ACCOUNTS}
+        contributions={SEED_CONTRIBS}
         fromYyyymm="2026-01"
         toYyyymm="2026-01"
       />,
@@ -163,8 +183,8 @@ describe('ContributionsByBucketChart', () => {
     it('formats sub-$1k values as dollars (e.g. $500) not as "$0.5k"', () => {
       render(
         <ContributionsByBucketChart
-          accounts={[]}
-          contributions={[]}
+          accounts={SEED_ACCOUNTS}
+          contributions={SEED_CONTRIBS}
           fromYyyymm="2026-01"
           toYyyymm="2026-01"
         />,
@@ -180,8 +200,8 @@ describe('ContributionsByBucketChart', () => {
     it('formats $0 as "$0" not "$0.0k"', () => {
       render(
         <ContributionsByBucketChart
-          accounts={[]}
-          contributions={[]}
+          accounts={SEED_ACCOUNTS}
+          contributions={SEED_CONTRIBS}
           fromYyyymm="2026-01"
           toYyyymm="2026-01"
         />,
@@ -195,8 +215,8 @@ describe('ContributionsByBucketChart', () => {
     it('formats $1000 as "$1.0k"', () => {
       render(
         <ContributionsByBucketChart
-          accounts={[]}
-          contributions={[]}
+          accounts={SEED_ACCOUNTS}
+          contributions={SEED_CONTRIBS}
           fromYyyymm="2026-01"
           toYyyymm="2026-01"
         />,
@@ -208,8 +228,8 @@ describe('ContributionsByBucketChart', () => {
     it('formats $2500 as "$2.5k"', () => {
       render(
         <ContributionsByBucketChart
-          accounts={[]}
-          contributions={[]}
+          accounts={SEED_ACCOUNTS}
+          contributions={SEED_CONTRIBS}
           fromYyyymm="2026-01"
           toYyyymm="2026-01"
         />,
@@ -223,8 +243,8 @@ describe('ContributionsByBucketChart', () => {
     it('sets xAxisInterval=0 so all month ticks are shown, not recharts default', () => {
       render(
         <ContributionsByBucketChart
-          accounts={[]}
-          contributions={[]}
+          accounts={SEED_ACCOUNTS}
+          contributions={SEED_CONTRIBS}
           fromYyyymm="2026-01"
           toYyyymm="2026-12"
         />,
@@ -238,8 +258,8 @@ describe('ContributionsByBucketChart', () => {
     it('uses a tick formatter that abbreviates YYYY-MM to short month name', () => {
       render(
         <ContributionsByBucketChart
-          accounts={[]}
-          contributions={[]}
+          accounts={SEED_ACCOUNTS}
+          contributions={SEED_CONTRIBS}
           fromYyyymm="2026-01"
           toYyyymm="2026-01"
         />,

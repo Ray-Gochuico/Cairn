@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/card';
 import { CHART_PALETTE } from './palette';
 import { CHART_TOOLTIP_PROPS } from './ChartTooltip';
+import { ChartLegend } from './ChartLegend';
 
 // CSS-variable references so axes / grid flip with the theme (Wave-3
 // Design must-have #2).
@@ -69,7 +70,7 @@ export default function LineChartCard({
       <CardContent>
         <ResponsiveContainer width="100%" height={height}>
           <LineChart data={data} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} />
+            <CartesianGrid vertical={false} stroke={GRID_STROKE} />
             <XAxis dataKey={xKey} stroke={AXIS_STROKE} fontSize={12} tick={AXIS_TICK} />
             <YAxis
               stroke={AXIS_STROKE}
@@ -87,7 +88,7 @@ export default function LineChartCard({
                   : undefined
               }
             />
-            <Legend />
+            <Legend content={<ChartLegend />} />
             {series.map((s, idx) => (
               <Line
                 key={s.dataKey}
