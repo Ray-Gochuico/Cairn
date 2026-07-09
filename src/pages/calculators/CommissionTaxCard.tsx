@@ -37,6 +37,9 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
   const tax = useHouseholdTaxContext();
 
   const seed = persons[0] ?? null;
+  // Wave-9 F1/F2: commission belongs to ONE earner — attribution drives both
+  // the SS wage base and the 401(k) headroom.
+  const recipient = persons.find((p) => (p.expectedCommission ?? 0) > 0) ?? persons[0] ?? null;
   const defaults = useMemo(
     () => ({
       annualCommission: seed?.expectedCommission ?? 0,
@@ -68,26 +71,25 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
         state: tax.state.standardDeduction,
         city: tax.city?.standardDeduction ?? 0,
       },
+      // Wave-9 F1: per-earner SS wage bases; the commission rides on the recipient.
+      perPersonBaseSalary: persons.map((p) => p.annualSalaryPretax),
+      recipientIndex: Math.max(0, persons.findIndex((p) => p === recipient)),
     });
 
-    // 401(k) from commission: weighted-average pct across persons by salary share
-    // (unchanged from the prior implementation).
-    const totalSalaryAll = persons.reduce((a, p) => a + p.annualSalaryPretax, 0);
-    const totalCommissionPct = persons.reduce(
-      (a, p) =>
-        a +
-        (totalSalaryAll > 0
-          ? (p.pretax401kPct * p.annualSalaryPretax) / totalSalaryAll
-          : 0),
-      0,
-    );
+    // Wave-9 F2: the $24,500 §402(g) limit is PER EMPLOYEE. The commission
+    // earner's headroom is their own cap minus their own salary deferral —
+    // the household aggregate (legitimately up to 2×) is irrelevant here.
+    const recipientPct = recipient?.pretax401kPct ?? 0;
+    const recipientOwn401k = recipient
+      ? Math.min(recipient.annualSalaryPretax * recipientPct, CONTRIBUTION_LIMITS_2026.EMPLOYEE_401K)
+      : 0;
     const remainingAnnualCap = Math.max(
       0,
-      CONTRIBUTION_LIMITS_2026.EMPLOYEE_401K - tax.aggregatedPretax.pretax401k,
+      CONTRIBUTION_LIMITS_2026.EMPLOYEE_401K - recipientOwn401k,
     );
-    const annualCommission401k = Math.min(annualCommission * totalCommissionPct, remainingAnnualCap);
+    const annualCommission401k = Math.min(annualCommission * recipientPct, remainingAnnualCap);
     return { result: taxResult, commission401kPerCheck: annualCommission401k / periods };
-  }, [tax.ready, tax.federal, tax.state, tax.city, tax.totalSalary, tax.aggregatedPretax, household, persons, annualCommission, periods]);
+  }, [tax.ready, tax.federal, tax.state, tax.city, tax.totalSalary, tax.aggregatedPretax, household, persons, recipient, annualCommission, periods]);
 
   const commissionInputs = (
     <div className="space-y-3 mb-4">
@@ -198,7 +200,8 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
             <>
               {formatCurrency(annualCommission401k)}
               <span className="text-xs text-muted-foreground ml-1">
-                of {formatCurrency(CONTRIBUTION_LIMITS_2026.EMPLOYEE_401K)} cap
+                of {persons.length > 1 && recipient ? `${recipient.name}'s ` : 'your '}
+                {formatCurrency(CONTRIBUTION_LIMITS_2026.EMPLOYEE_401K)} cap
               </span>
             </>
           }
