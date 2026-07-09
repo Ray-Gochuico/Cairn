@@ -104,6 +104,14 @@ function neutralizeSeed(seed: RealState, config: BacktestConfig): RealState {
     // (= config.initialPortfolio) equals the engine's actual starting balance.
     initialInvestmentsByAccount: { [BACKTEST_ACCOUNT_ID]: config.initialPortfolio },
     initialCash: 0,
+    // Wave-9 M66: the replay is a PURE drawdown of config.initialPortfolio —
+    // the seed's real debts/housing/leases belong to present-day cash flow,
+    // not the historical replay, and were draining the (debt-excluding)
+    // tracked portfolio (probe: success 121/123 → 76/123).
+    loans: [],
+    loanPayments: [],
+    housingPayments: [],
+    vehicleLeases: [],
   };
 }
 
