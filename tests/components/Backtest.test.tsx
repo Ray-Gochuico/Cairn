@@ -124,6 +124,34 @@ describe('Backtest page', () => {
     expect(screen.getByText(/before withdrawal tax/i)).toBeInTheDocument();
   });
 
+  it('renders the outcome answer ABOVE the chart card in document order (Task 15)', async () => {
+    vi.useRealTimers();
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole('button', { name: /run backtest/i }));
+    const summary = await screen.findByTestId('backtest-summary');
+    const chartTitle = screen.getByText('Portfolio value over retirement');
+    // DOCUMENT_POSITION_FOLLOWING set ⇒ chartTitle comes AFTER summary ⇒ the
+    // answer is above the fold, before the chart.
+    expect(
+      summary.compareDocumentPosition(chartTitle) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('announces the headline verdict through a live region (Task 15)', async () => {
+    vi.useRealTimers();
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole('button', { name: /run backtest/i }));
+    await screen.findByTestId('backtest-summary');
+    const statuses = screen.getAllByRole('status');
+    expect(
+      statuses.some((s) =>
+        /^\d+% of \d+ historical periods met your goal/.test(s.textContent ?? ''),
+      ),
+    ).toBe(true);
+  });
+
   it('toggles the chart between Lines and Bands', async () => {
     vi.useRealTimers();
     const user = userEvent.setup();

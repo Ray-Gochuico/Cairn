@@ -63,10 +63,13 @@ describe('OutcomeSummary', () => {
     expect(screen.getByText(/2 of 3/)).toBeInTheDocument();
   });
 
-  it('announces the results-ready run-meta line', () => {
+  it('leads the live region with the answer (Task 15)', () => {
+    // The role="status" line must front-load the verdict so a screen reader
+    // hears the success rate FIRST, not the period count. 1 of 3 = 33%.
     render(<OutcomeSummary result={makeResult()} goalAmount={1_000_000} />);
-    expect(screen.getByRole('status')).toHaveTextContent(/historical periods/);
-  });
+    expect(screen.getByRole('status').textContent).toMatch(
+      /^33% of 3 historical periods met your goal/,
+    );  });
 
   it('shows the run-meta caption', () => {
     render(<OutcomeSummary result={makeResult()} goalAmount={1_000_000} />);

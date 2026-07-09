@@ -25,7 +25,13 @@ export interface BacktestChartProps {
 // ── Tier stroke constants (B1a/B1b) ──────────────────────────────────────────
 // Solid stroke + strokeOpacity (NO alpha-channel CSS var).
 // Colors are palette/semantic tokens — NOT raw hex.
-const TIER_BLUE = CHART_PALETTE[0]; // #4c78a8 — same blue as bands + histogram
+const TIER_BLUE = CHART_PALETTE[0]; // #4c78a8 — met-tier line stroke + histogram
+
+// BT-15: the percentile-band FILLS ride a dark-aware token, not the raw
+// CHART_PALETTE[0] hex. At 48% L on the near-black dark canvas the 0.12/0.28-
+// opacity washes vanish; --chart-band lightens in dark so they stay visible.
+// (Line-tier STROKES keep TIER_BLUE / --chart-danger / --chart-warning.)
+const BAND_FILL = 'hsl(var(--chart-band))';
 
 // BT-5: depleted/worst LINE uses --chart-danger (NOT --destructive).
 // dark --destructive is a desaturated maroon fill token that drops to ~2:1 as a
@@ -258,14 +264,14 @@ function BacktestChartInner({
       <span className="flex items-center gap-1">
         <span
           className="inline-block w-6 h-3 rounded-sm"
-          style={{ background: TIER_BLUE, opacity: 0.28 }}
+          style={{ background: BAND_FILL, opacity: 0.28 }}
         />
         25th–75th percentile
       </span>
       <span className="flex items-center gap-1">
         <span
           className="inline-block w-6 h-3 rounded-sm"
-          style={{ background: TIER_BLUE, opacity: 0.12 }}
+          style={{ background: BAND_FILL, opacity: 0.12 }}
         />
         10th–25th / 75th–90th
       </span>
@@ -376,7 +382,7 @@ function BacktestChartInner({
             <Area
               type="monotone"
               dataKey="band1025"
-              fill={TIER_BLUE}
+              fill={BAND_FILL}
               fillOpacity={0.12}
               stroke="none"
               stackId="fan"
@@ -387,7 +393,7 @@ function BacktestChartInner({
             <Area
               type="monotone"
               dataKey="band2575"
-              fill={TIER_BLUE}
+              fill={BAND_FILL}
               fillOpacity={0.28}
               stroke="none"
               stackId="fan"
@@ -398,7 +404,7 @@ function BacktestChartInner({
             <Area
               type="monotone"
               dataKey="band7590"
-              fill={TIER_BLUE}
+              fill={BAND_FILL}
               fillOpacity={0.12}
               stroke="none"
               stackId="fan"
