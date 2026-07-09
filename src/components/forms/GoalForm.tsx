@@ -203,7 +203,15 @@ export default function GoalForm({
         </CardContent>
       </Card>
 
-            <FormErrorSummary fieldErrors={form.formState.errors} submitError={submitError} />
+            <FormErrorSummary
+        fieldErrors={form.formState.errors}
+        submitError={submitError}
+        labels={{
+          forPersonId: 'For',
+          linkedAccountIds: 'Linked accounts',
+          targetAmount: 'Target amount',
+        }}
+      />
 
       <div className="flex justify-end items-center gap-3">
         <span

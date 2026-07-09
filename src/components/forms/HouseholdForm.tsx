@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { FormErrorSummary, useFormSubmit } from './form-errors';
+import { FieldError, FormErrorSummary, useFormSubmit } from './form-errors';
 
 const CITY_TAX_YEAR = 2026;
 
@@ -185,10 +185,15 @@ export default function HouseholdForm({
         <CardContent className="space-y-3">
           <div>
             <Label htmlFor="name">Household name (optional)</Label>
+            {/* Round-3 S6: the house trio — aria-invalid + aria-describedby
+                + FieldError — on every field (AccountForm pattern). */}
             <Input
               id="name"
               {...form.register('name', { setValueAs: (v) => (v === '' ? null : v) })}
+              aria-invalid={form.formState.errors.name ? true : undefined}
+              aria-describedby={form.formState.errors.name ? 'household-name-error' : undefined}
             />
+            <FieldError id="household-name-error" message={form.formState.errors.name?.message} />
           </div>
 
           <div>
@@ -202,7 +207,11 @@ export default function HouseholdForm({
                 })
               }
             >
-              <SelectTrigger id="filingStatus"><SelectValue /></SelectTrigger>
+              <SelectTrigger
+                id="filingStatus"
+                aria-invalid={form.formState.errors.filingStatus ? true : undefined}
+                aria-describedby={form.formState.errors.filingStatus ? 'household-filing-status-error' : undefined}
+              ><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value={FilingStatus.SINGLE}>Single</SelectItem>
                 <SelectItem value={FilingStatus.MFJ}>Married Filing Jointly</SelectItem>
@@ -210,6 +219,7 @@ export default function HouseholdForm({
                 <SelectItem value={FilingStatus.HOH}>Head of Household</SelectItem>
               </SelectContent>
             </Select>
+            <FieldError id="household-filing-status-error" message={form.formState.errors.filingStatus?.message} />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -223,7 +233,10 @@ export default function HouseholdForm({
                   setValueAs: (v) => (typeof v === 'string' ? v.toUpperCase() : v),
                 })}
                 placeholder="CA"
+                aria-invalid={form.formState.errors.state ? true : undefined}
+                aria-describedby={form.formState.errors.state ? 'household-state-error' : undefined}
               />
+              <FieldError id="household-state-error" message={form.formState.errors.state?.message} />
               <datalist id="us-states">
                 {US_STATES.map((s) => (
                   <option key={s} value={s} />
@@ -264,7 +277,10 @@ export default function HouseholdForm({
               type="number"
               step="any"
               {...form.register('monthlyExpenseBaseline', { valueAsNumber: true })}
+              aria-invalid={form.formState.errors.monthlyExpenseBaseline ? true : undefined}
+              aria-describedby={form.formState.errors.monthlyExpenseBaseline ? 'household-expense-baseline-error' : undefined}
             />
+            <FieldError id="household-expense-baseline-error" message={form.formState.errors.monthlyExpenseBaseline?.message} />
           </div>
 
           {/*
@@ -287,6 +303,8 @@ export default function HouseholdForm({
                   step="0.1"
                   className="pr-7 text-right tabular-nums"
                   {...form.register('withdrawalRatePercent', { valueAsNumber: true })}
+                  aria-invalid={form.formState.errors.withdrawalRatePercent ? true : undefined}
+                  aria-describedby={form.formState.errors.withdrawalRatePercent ? 'household-withdrawal-rate-error' : undefined}
                 />
                 <span
                   aria-hidden
@@ -295,6 +313,7 @@ export default function HouseholdForm({
                   %
                 </span>
               </div>
+              <FieldError id="household-withdrawal-rate-error" message={form.formState.errors.withdrawalRatePercent?.message} />
               <p className="mt-1 text-xs text-muted-foreground">4 = the classic 4% rule</p>
             </div>
             <div className="min-w-0">
@@ -308,6 +327,8 @@ export default function HouseholdForm({
                   step="0.1"
                   className="pr-7 text-right tabular-nums"
                   {...form.register('inflationAssumptionPercent', { valueAsNumber: true })}
+                  aria-invalid={form.formState.errors.inflationAssumptionPercent ? true : undefined}
+                  aria-describedby={form.formState.errors.inflationAssumptionPercent ? 'household-inflation-error' : undefined}
                 />
                 <span
                   aria-hidden
@@ -316,13 +337,25 @@ export default function HouseholdForm({
                   %
                 </span>
               </div>
+              <FieldError id="household-inflation-error" message={form.formState.errors.inflationAssumptionPercent?.message} />
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* W10 M44: humanized field summary + submit/store failures in one pane. */}
-      <FormErrorSummary fieldErrors={form.formState.errors} submitError={submitError ?? error} />
+      {/* W10 M44: humanized field summary + submit/store failures in one pane.
+          Round-3 S6: labels map the percent-suffixed identifiers back to
+          their visible labels ("Withdrawal rate", not "Withdrawal rate percent"). */}
+      <FormErrorSummary
+        fieldErrors={form.formState.errors}
+        submitError={submitError ?? error}
+        labels={{
+          withdrawalRatePercent: 'Withdrawal rate',
+          inflationAssumptionPercent: 'Inflation assumption',
+          monthlyExpenseBaseline: 'Monthly expenses',
+          filingStatus: 'Filing status',
+        }}
+      />
 
       <div className="flex justify-end items-center gap-3">
         <span

@@ -257,7 +257,14 @@ export default function PropertyForm({
         </CardContent>
       </Card>
 
-            <FormErrorSummary fieldErrors={form.formState.errors} submitError={submitError} />
+            <FormErrorSummary
+        fieldErrors={form.formState.errors}
+        submitError={submitError}
+        labels={{
+          ownerPersonId: 'Owner',
+          linkedLoanId: 'Linked mortgage',
+        }}
+      />
 
       <div className="flex justify-end items-center gap-3">
         <span

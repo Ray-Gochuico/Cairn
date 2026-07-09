@@ -414,7 +414,19 @@ export default function AccountForm({
         </CardContent>
       </Card>
 
-      <FormErrorSummary fieldErrors={form.formState.errors} submitError={submitError} />
+      <FormErrorSummary
+        fieldErrors={form.formState.errors}
+        submitError={submitError}
+        labels={{
+          ownerPersonId: 'Owner',
+          beneficiaryDependentId: 'Beneficiary',
+          apyRatePercent: 'Annual percent yield',
+          employerMatchPctPercent: 'Match rate',
+          employerMatchLimitPctPercent: 'Match limit',
+          stateOfPlan: 'State of plan',
+          cryptoWalletAddress: 'Crypto wallet address',
+        }}
+      />
 
       <div className="flex justify-end items-center gap-3">
         <span

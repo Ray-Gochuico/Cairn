@@ -193,7 +193,14 @@ export default function HousingPaymentForm({
         </CardContent>
       </Card>
 
-            <FormErrorSummary fieldErrors={form.formState.errors} submitError={submitError} />
+            <FormErrorSummary
+        fieldErrors={form.formState.errors}
+        submitError={submitError}
+        labels={{
+          name: 'Label',
+          ownerPersonId: 'Who pays this',
+        }}
+      />
 
       <div className="flex justify-end items-center gap-3">
         <span
