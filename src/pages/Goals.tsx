@@ -170,10 +170,12 @@ function GoalProgressCard({
     </span>
   );
 
-  // linearMonthlyNeeded can be Infinity when target_date <= today and the
-  // goal isn't met. Show "—" in that case so the card stays readable.
-  const linearMonthlyDisplay = Number.isFinite(projection.linearMonthlyNeeded)
-    ? formatCurrency(projection.linearMonthlyNeeded)
+  // Wave-9 M23: display the growth-aware figure — the same r/n basis the
+  // on-track badge compounds at (the flat linear figure contradicted it).
+  // Can be Infinity when target_date <= today and the goal isn't met; show
+  // "—" in that case so the card stays readable.
+  const monthlyNeededDisplay = Number.isFinite(projection.monthlyNeededWithGrowth)
+    ? formatCurrency(projection.monthlyNeededWithGrowth)
     : '—';
 
   // Resolve the lucide icon for this goal type; default to the generic
@@ -228,9 +230,9 @@ function GoalProgressCard({
             <dt className="text-xs uppercase tracking-wider text-muted-foreground">
               Monthly needed
             </dt>
-            <dd className="tabular-nums font-medium">{linearMonthlyDisplay}</dd>
+            <dd className="tabular-nums font-medium">{monthlyNeededDisplay}</dd>
             <dd className="text-xs text-muted-foreground mt-0.5">
-              vs <span className="tabular-nums">{formatCurrency(projection.recentMonthlyContribution)}</span> recent
+              at your growth scenario · vs <span className="tabular-nums">{formatCurrency(projection.recentMonthlyContribution)}</span> recent
             </dd>
           </div>
           <div>
