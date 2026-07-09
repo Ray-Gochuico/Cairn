@@ -67,7 +67,10 @@ export function validateTransactionRow(
     if (n == null) {
       errors.push({ field: 'amount', message: `Unparseable amount "${amountRaw}"` });
     } else {
-      resolved.amount = n;
+      // Wave-9 chip b: negative-debit bank CSVs opt into a whole-file sign flip
+      // (the preview modal offers it) so their spending isn't ignored by
+      // isRealSpending's positive-only convention.
+      resolved.amount = ctx.transactionAmountSign === 'FLIP' ? -n : n;
     }
   }
 

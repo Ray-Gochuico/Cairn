@@ -141,4 +141,52 @@ describe('ImportPreviewModal — transaction mode', () => {
     );
     expect(screen.getByRole('button', { name: /^commit/i })).toBeDisabled();
   });
+
+  describe('negative-sign detection (wave-9 chip b)', () => {
+    const negativeParsed: ParseResultLite = {
+      headers: ['date', 'account', 'amount', 'merchant'],
+      rows: [
+        { date: '2024-04-01', account: 'Checking', amount: '-12.00', merchant: 'A' },
+        { date: '2024-04-02', account: 'Checking', amount: '-8.50', merchant: 'B' },
+        { date: '2024-04-03', account: 'Checking', amount: '-3.25', merchant: 'C' },
+      ],
+      errors: [],
+    };
+
+    it('does NOT show the flip prompt for a positive-majority file', () => {
+      render(
+        <ImportPreviewModal
+          entity="transaction"
+          parsed={cleanParsed}
+          ctx={ctx}
+          open
+          onOpenChange={vi.fn()}
+        />,
+      );
+      expect(screen.queryByLabelText(/flip signs/i)).not.toBeInTheDocument();
+    });
+
+    it('shows the flip prompt for a majority-negative file and flips amounts on commit', async () => {
+      render(
+        <ImportPreviewModal
+          entity="transaction"
+          parsed={negativeParsed}
+          ctx={ctx}
+          open
+          onOpenChange={vi.fn()}
+        />,
+      );
+      const checkbox = screen.getByLabelText(/flip signs/i);
+      expect(checkbox).toBeInTheDocument();
+
+      fireEvent.click(checkbox);
+      fireEvent.click(screen.getByRole('button', { name: /^commit/i }));
+
+      const { commitTransactionImport } = await import('@/lib/import/commit');
+      await waitFor(() => expect(commitTransactionImport).toHaveBeenCalled());
+      const rows = (commitTransactionImport as unknown as { mock: { calls: unknown[][] } }).mock
+        .calls[0][0] as Array<{ resolved: { amount: number } }>;
+      expect(rows.map((r) => r.resolved.amount)).toEqual([12, 8.5, 3.25]);
+    });
+  });
 });

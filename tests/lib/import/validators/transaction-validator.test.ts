@@ -132,3 +132,23 @@ describe('locale-aware amounts (wave-9 S78)', () => {
     expect(r.errors.some((e) => e.field === 'amount')).toBe(true);
   });
 });
+
+describe('transactionAmountSign (wave-9 chip b)', () => {
+  it('FLIP negates parsed amounts so negative-debit CSVs count as spending', () => {
+    const row = {
+      date: '2024-02-01', account: 'Chase Checking', amount: '-42.50',
+      merchant: 'Coffee',
+    };
+    const r = validateTransactionRow(row, 11, { ...ctx, transactionAmountSign: 'FLIP' });
+    expect(r.resolved.amount).toBe(42.5);
+  });
+
+  it('AS_IS (default) leaves the sign untouched', () => {
+    const row = {
+      date: '2024-02-01', account: 'Chase Checking', amount: '-42.50',
+      merchant: 'Coffee',
+    };
+    const r = validateTransactionRow(row, 12, ctx);
+    expect(r.resolved.amount).toBe(-42.5);
+  });
+});
