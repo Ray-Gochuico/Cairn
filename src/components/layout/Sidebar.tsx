@@ -118,10 +118,15 @@ const SidebarLink = memo(function SidebarLink({
       title={entry ? entry.shortDefinition : undefined}
       className={({ isActive }) =>
         cn(
-          'flex items-center gap-2 px-3 py-2 rounded-md text-sm transition',
+          // Wave-12 Trailhead Stone: the active mark is a 2px blaze left
+          // edge (a trail blaze), not a filled pill. Every link reserves
+          // the 2px edge (transparent when inactive) so activation never
+          // shifts layout. Left corners stay square so the blaze reads as
+          // a carved edge; the right side keeps the soft radius.
+          'flex items-center gap-2 px-3 py-2 rounded-r-md border-l-2 text-sm transition',
           isActive
-            ? 'bg-primary/10 text-primary font-medium'
-            : 'hover:bg-accent text-foreground'
+            ? 'border-blaze bg-accent font-medium text-foreground'
+            : 'border-transparent hover:bg-accent text-foreground'
         )
       }
     >

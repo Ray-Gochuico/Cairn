@@ -62,6 +62,20 @@ describe('Sidebar', () => {
     expect(link).toHaveAttribute('href', '/budget');
   });
 
+  it('active route carries the 2px blaze left-edge mark, not the filled pill (Wave 12)', () => {
+    render(<MemoryRouter initialEntries={['/']}><Sidebar /></MemoryRouter>);
+    const link = screen.getByRole('link', { name: /dashboard/i });
+    expect(link).toHaveAttribute('aria-current', 'page'); // NavLink built-in — state is not color-only
+    expect(link.className).toContain('border-blaze');
+    expect(link.className).not.toContain('bg-primary/10');
+  });
+
+  it('inactive routes reserve the edge (transparent border — no layout shift on activation)', () => {
+    render(<MemoryRouter initialEntries={['/']}><Sidebar /></MemoryRouter>);
+    const link = screen.getByRole('link', { name: /settings/i });
+    expect(link.className).toContain('border-transparent');
+  });
+
   it('has a Settings link pointing at /settings and no Profile link', () => {
     render(<MemoryRouter><Sidebar /></MemoryRouter>);
     const link = screen.getByRole('link', { name: /settings/i });
