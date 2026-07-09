@@ -55,6 +55,7 @@
     "zustand": "^5.0.13"
   },
   "devDependencies": {
+    "@fontsource-variable/inter-tight": "^5.2.7",
     "@playwright/test": "^1.61.1",
     "@tauri-apps/cli": "^2",
     "@testing-library/jest-dom": "^6.9.1",

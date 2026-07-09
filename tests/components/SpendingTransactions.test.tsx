@@ -106,6 +106,11 @@ describe('SpendingTransactions page', () => {
       '/spending',
     );
     expect(screen.getByText(/3 transactions/i)).toBeInTheDocument();
+
+    // Wave-12 T4: right-aligned money column — tabular numerals so amounts
+    // align digit-for-digit down the table under Inter Tight.
+    const amountCell = screen.getAllByText('$54.23')[0].closest('td') as HTMLElement;
+    expect(amountCell.className).toContain('tabular-nums');
   });
 
   it('shows empty state when there are no transactions', async () => {

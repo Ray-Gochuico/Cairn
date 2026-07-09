@@ -325,18 +325,18 @@ describe('AssetValueTooltipContent', () => {
 });
 
 describe('canvas polish', () => {
-  it('end dot sits on the last bucket; line + gradient are success-toned on an up range', () => {
+  it('hero line is the blaze identity stroke; direction lives in the delta row', () => {
     seedStores();
     renderChart('netWorth');
     const dots = screen.getAllByTestId('ref-dot');
     expect(dots).toHaveLength(1); // end dot only — no pin active
     expect(dots.some((d) => d.getAttribute('data-x') === String(captured.data[captured.data.length - 1].bucketEnd))).toBe(true);
     const area = screen.getByTestId('area-netWorth');
-    expect(area.getAttribute('data-stroke')).toBe('hsl(var(--chart-success))');
-    expect(area.getAttribute('data-fill')).toMatch(/^url\(#avc-fill-netWorth-up\)$/);
+    expect(area.getAttribute('data-stroke')).toBe('hsl(var(--blaze))');
+    expect(area.getAttribute('data-fill')).toMatch(/^url\(#avc-fill-netWorth\)$/);
   });
 
-  it('line + gradient turn destructive on a down range', () => {
+  it('down ranges keep the blaze stroke (direction is NOT re-encoded in the line)', () => {
     seedStores();
     useSnapshotsStore.setState({
       snapshots: [
@@ -349,8 +349,12 @@ describe('canvas polish', () => {
     } as never);
     renderChart('netWorth');
     const area = screen.getByTestId('area-netWorth');
-    expect(area.getAttribute('data-stroke')).toBe('hsl(var(--chart-danger))');
-    expect(area.getAttribute('data-fill')).toMatch(/^url\(#avc-fill-netWorth-down\)$/);
+    expect(area.getAttribute('data-stroke')).toBe('hsl(var(--blaze))');
+    expect(area.getAttribute('data-fill')).toMatch(/^url\(#avc-fill-netWorth\)$/);
+    // D8 guard: direction stays fully encoded in the delta row — the
+    // down-range ▼ text keeps the locked destructive-soft text token.
+    const deltaEl = screen.getByText(/▼/);
+    expect(deltaEl.className).toContain('text-destructive-soft-foreground');
   });
 
   it('x-axis receives the explicit month-first tick array', () => {

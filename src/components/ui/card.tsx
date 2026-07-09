@@ -9,7 +9,9 @@ const Card = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "rounded-xl border bg-card text-card-foreground shadow",
+      // Wave-12: border-defined elevation — resting cards carry no shadow;
+      // overlays (dialog/popover/sheet) keep theirs. System radius (--radius).
+      "rounded-lg border bg-card text-card-foreground",
       className
     )}
     {...props}

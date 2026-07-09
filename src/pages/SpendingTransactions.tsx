@@ -92,7 +92,8 @@ const TransactionRow = memo(function TransactionRow({
             : 'Joint'}
         </td>
       )}
-      <td className="py-2 pr-3 text-right">
+      {/* Wave-12 T4: tabular numerals so amounts align down the column. */}
+      <td className="py-2 pr-3 text-right tabular-nums">
         {t.amount < 0 ? (
           <span className="text-success-foreground">{formatCurrencyCents(t.amount)}</span>
         ) : (

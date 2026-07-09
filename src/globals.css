@@ -1,3 +1,19 @@
+/* Trailhead Stone (Wave 12): committed self-hosted face. Inter Tight
+ * variable, latin subset, vendored from @fontsource-variable/inter-tight
+ * (SIL OFL 1.1 — see src/assets/fonts/OFL.txt). Single wght-axis file
+ * (~44KB) covers 100-900: font-medium/semibold/bold are all real weights.
+ * True tabular figures via the tnum feature — Tailwind's `tabular-nums`
+ * activates it (the numeric-surface guarantee, see Wave-12 Task 4). No
+ * italic file shipped: the few `italic` captions render a synthesized
+ * oblique (D1). */
+@font-face {
+  font-family: 'InterTightVariable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url('./assets/fonts/inter-tight-latin-wght-normal.woff2') format('woff2-variations');
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -17,23 +33,30 @@
   }
 
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    /* Wave-4 a11y: 46.9% → 45% L so muted text clears 4.5:1 on bg-muted
-     * surfaces (TabsList inactive labels were 4.34:1). On white it goes
-     * 4.75 → ~5.1:1. Visually a hair darker everywhere muted text is used. */
-    --muted-foreground: 215.4 16.3% 45%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    /* Trailhead Stone (Wave 12): warm stone neutrals — ground #F7F5F1,
+     * card #FCFBF8, ink #1C1A17. Ink on ground 15.95:1, on card 16.77:1.
+     * The whole neutral family sits in the hue band [30,48] with RGB
+     * channel spread <= 18/255 (sepia guard) — locked by
+     * tests/styles/stone-token-contrast.test.ts. */
+    --background: 40 27.3% 95.7%;
+    --foreground: 36 9.8% 10%;
+    --card: 45 40% 98%;
+    --card-foreground: 36 9.8% 10%;
+    --popover: 45 40% 98%;
+    --popover-foreground: 36 9.8% 10%;
+    /* Text-safe blaze (#A8481A); the fill blaze lives in --blaze (D3).
+     * As text: 5.36:1 on ground, 5.63:1 on card, 4.95:1 on the muted wash.
+     * --primary-foreground (near-white card tone) is 5.63:1 on the fill. */
+    --primary: 19.4 73.2% 38%;
+    --primary-foreground: 45 40% 98%;
+    --secondary: 38.2 26.8% 92%;
+    --secondary-foreground: 36 9.8% 10%;
+    --muted: 38.2 26.8% 92%;
+    /* Trailhead Stone: warm stone muted ink. 5.30:1 on ground, 4.91:1 on
+     * bg-muted (TabsList inactive labels), 5.57:1 on card. */
+    --muted-foreground: 36 7.5% 39%;
+    --accent: 38.2 26.8% 92%;
+    --accent-foreground: 36 9.8% 10%;
     /* Wave-4 a11y: red-600-ish. The old 0 84.2% 60.2% put the near-white
      * --destructive-foreground at ~3.7:1 on solid destructive buttons (AA
      * fail at 14px across 21 variant="destructive" call sites). 45% L
@@ -45,11 +68,23 @@
      * verified deliberately in this wave's visual pass. */
     --destructive: 0 72% 45%;
     --destructive-foreground: 210 40% 98%;       /* near-white (text on SOLID destructive fill) */
-    --destructive-soft-foreground: 0 72% 41%;    /* red-700 (text on destructive soft tint, e.g. bg-destructive/10) */
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-    --radius: 0.5rem;
+    /* 39% L (was 41%): the stone ground darkens the /20 tint composite;
+     * 39% keeps >=4.5 at all tint stops (5.64/5.20/4.78) and improves bare
+     * text to 6.62. See Wave-12 D7. */
+    --destructive-soft-foreground: 0 72% 39%;    /* red-700-ish (text on destructive soft tint, e.g. bg-destructive/10) */
+    --border: 38.6 22.6% 87.8%;
+    --input: 38.6 22.6% 87.8%;
+    /* Focus ring moves to the blaze fill (D4): 4.59:1 on the light ground —
+     * well over the 3:1 non-text indicator floor. */
+    --ring: 20.9 70.6% 41.4%;
+    --radius: 0.375rem;
+
+    /* Trail-blaze ochre — FILL/STROKE ONLY, never text (same discipline as
+     * the --chart-* family). Text uses --primary, which is the deeper
+     * text-safe blaze (#A8481A light). Consumers: active-nav mark, hero
+     * line + cairn markers, focus ring. 4.59:1 on the light ground /
+     * 6.29:1 on the dark — both clear the 3:1 graphical floor. */
+    --blaze: 20.9 70.6% 41.4%;
 
     /* Semantic status tokens. These hold the "success / warning / info"
      * palette that 30+ banners, pills, and alerts had been picking
@@ -71,43 +106,58 @@
 
     /* Chart-stroke red — legible as a thin LINE on the light canvas (≈ #dc2626).
        Distinct from --destructive (a button-FILL token); see BT-5.
-       Contrast as a thin stroke on the light canvas: 4.80:1. */
+       Contrast as a thin stroke: 4.41:1 on the stone canvas. */
     --chart-danger: 0 72% 51%;
     /* Chart-stroke amber — a deeper amber (≈ amber-700, #c2730a) so a thin LINE
        clears the 3:1 stroke floor on the light canvas; raw --warning (amber-500)
        is only 2.14:1 here. Distinct from --warning (a FILL token); see BT-5.
-       Contrast as a thin stroke on the light canvas: 3.73:1. */
+       Contrast as a thin stroke on the stone canvas: 3.43:1. */
     --chart-warning: 36 95% 38%;
     /* Chart-stroke green — a deeper emerald so a thin LINE clears the 3:1
        stroke floor on the light canvas; raw --success (emerald-500) is only
        2.30:1 here. Distinct from --success (a FILL token); same shape as
        --chart-danger/--chart-warning above. Contrast as a thin stroke on
-       the light canvas: 3.70:1. */
+       the stone canvas: 3.40:1. */
     --chart-success: 142 71% 35%;
     --chart-band: 213 38% 48%;   /* percentile-band fill base (TIER_BLUE parity) */
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    /* Trailhead Stone (Wave 12): warm dark stone — ground #16130F,
+     * card #201C17, near-white warm ink #F2EEE7 (15.98:1 on ground,
+     * 14.63:1 on card). Same hue-band + spread discipline as light. */
+    --background: 34.3 18.9% 7.3%;
+    --foreground: 38.2 29.7% 92.7%;
+    --card: 33.3 16.4% 10.8%;
+    --card-foreground: 38.2 29.7% 92.7%;
+    --popover: 33.3 16.4% 10.8%;
+    --popover-foreground: 38.2 29.7% 92.7%;
+    /* Text-safe blaze; dark needs no split — one hex (#E27B3E) is 6.29:1 as
+     * text on ground and 5.76:1 on card, so --primary and --blaze share it
+     * (D3). --primary-foreground flips to ink: 5.90:1 on the blaze fill. */
+    --primary: 22.3 73.9% 56.5%;
+    --primary-foreground: 36 9.8% 10%;
+    --secondary: 36.9 16.5% 15.5%;
+    --secondary-foreground: 38.2 29.7% 92.7%;
+    --muted: 36.9 16.5% 15.5%;
+    /* Warm stone muted ink: 6.64:1 on ground, 5.18:1 on bg-muted, 6.07:1 on card. */
+    --muted-foreground: 38.2 10.6% 59.2%;
+    --accent: 36.9 16.5% 15.5%;
+    --accent-foreground: 38.2 29.7% 92.7%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;       /* near-white (text on SOLID destructive fill) */
     --destructive-soft-foreground: 0 84% 72%;    /* red-300 (text on destructive soft tint, e.g. bg-destructive/10) */
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    /* D6: #3A332A, not the spec's #2A251E — that hex is 1.11:1 against the
+     * new dark card (#201C17), visibly fainter than the old 1.37:1 and
+     * effectively invisible as a card edge. #3A332A restores 1.36:1 on card
+     * / 1.49:1 on ground while staying in the stone band. */
+    --border: 33.8 16% 19.6%;
+    --input: 33.8 16% 19.6%;
+    /* Focus ring on the blaze fill (D4): 6.29:1 on the dark ground. */
+    --ring: 22.3 73.9% 56.5%;
+
+    /* Trail-blaze ochre (dark) — FILL/STROKE ONLY, never text; see :root. */
+    --blaze: 22.3 73.9% 56.5%;
 
     /* Dark-mode tints: drop the soft background to a muted dark wash and
      * push the foreground to a near-white tinted with the hue, so banners
@@ -125,14 +175,14 @@
 
     /* Brighter so a 1.25–2px stroke still clears ~3:1 on the dark canvas
        (≈ #ef4444); dark --destructive (0 62.8% 30.6%) is a fill token and reads
-       ~2:1 as a thin stroke. See BT-5. Contrast on the dark canvas: 5.72:1. */
+       ~2:1 as a thin stroke. See BT-5. Contrast on the dark stone canvas: 5.29:1. */
     --chart-danger: 0 84% 63%;
     /* Brighter amber on the dark canvas (≈ #fbbf24), mirroring --chart-danger's
        brighter-on-dark approach so the below-tier line stays vivid. Distinct
-       from --warning (a fill token). Contrast on the dark canvas: 11.67:1. */
+       from --warning (a fill token). Contrast on the dark stone canvas: 10.80:1. */
     --chart-warning: 42 96% 57%;
-    /* Same value as dark --success — emerald-500 is already vivid AND 8.70:1
-       as a stroke on the dark canvas, so no retune is needed; the token
+    /* Same value as dark --success — emerald-500 is already vivid AND 8.05:1
+       as a stroke on the dark stone canvas, so no retune is needed; the token
        exists so chart code binds ONE stroke-safe pair across themes. */
     --chart-success: 142 71% 45%;
     --chart-band: 213 45% 62%;   /* lighter in dark — 0.12/0.28-opacity fills vanish at 48% L on near-black */

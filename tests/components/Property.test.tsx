@@ -232,6 +232,10 @@ describe('Property page', () => {
     renderPage();
     expect(screen.getAllByText('$615,000').length).toBeGreaterThan(0);
     expect(screen.queryByText('$500,000')).not.toBeInTheDocument();
+    // Wave-12 T4: the EquityRow value is a KPI-style money figure — it must
+    // ask for tabular numerals so figures align under Inter Tight.
+    const equityRow = screen.getByText('Equity').closest('div') as HTMLElement;
+    expect(within(equityRow).getByText('$615,000').className).toContain('tabular-nums');
   });
 
   it('renders "—" equity — not a fabricated negative — when the value is unknown (W10 F7)', () => {

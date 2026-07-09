@@ -49,10 +49,13 @@ export default function InputsLayout() {
               title={entry ? entry.shortDefinition : undefined}
               className={({ isActive }) =>
                 cn(
-                  'px-3 py-1.5 rounded-md text-sm transition',
+                  // Wave-12 Trailhead Stone: same 2px blaze left-edge active
+                  // mark as the Sidebar (one nav system, one mark); every
+                  // link reserves the edge so activation never shifts layout.
+                  'px-3 py-1.5 rounded-r-md border-l-2 text-sm transition',
                   isActive
-                    ? 'bg-primary/10 text-primary font-medium'
-                    : 'hover:bg-accent text-foreground'
+                    ? 'border-blaze bg-accent font-medium text-foreground'
+                    : 'border-transparent hover:bg-accent text-foreground'
                 )
               }
             >

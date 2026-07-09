@@ -192,10 +192,10 @@ describe('EquityGrants page', () => {
 
     const aliceCard = screen
       .getByText('ISO 2024')
-      .closest('[class*="rounded-xl"]') as HTMLElement;
+      .closest('[class*="rounded-lg"]') as HTMLElement;
     const bobCard = screen
       .getByText('NQSO 2025')
-      .closest('[class*="rounded-xl"]') as HTMLElement;
+      .closest('[class*="rounded-lg"]') as HTMLElement;
 
     expect(within(aliceCard).getByText(/alice/i)).toBeInTheDocument();
     expect(within(bobCard).getByText(/bob/i)).toBeInTheDocument();
@@ -253,7 +253,7 @@ describe('EquityGrants page', () => {
     // Vested value = 100 × 10 = $1,000; unvested = $0.
     const card = screen
       .getByText('Fully Vested')
-      .closest('[class*="rounded-xl"]') as HTMLElement;
+      .closest('[class*="rounded-lg"]') as HTMLElement;
     expect(within(card).getByText(/\$1,000/)).toBeInTheDocument();
     // No "Upcoming vest" entries because none are after today.
     expect(within(card).queryByText(/2099-/)).not.toBeInTheDocument();
