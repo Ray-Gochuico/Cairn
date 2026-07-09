@@ -179,3 +179,25 @@ export function summarizeSpendingForRange(
     topByCount: topByCount ? { name: topByCount.name, count: topByCount.count } : null,
   };
 }
+
+/**
+ * Round-3 S12: pick the hero's initial range from WHERE THE DATA IS. A
+ * calendar-anchored 'this-month' default shows an empty donut for imported
+ * or backfilled histories; anchoring to the latest transaction month keeps
+ * the first paint meaningful. Pure + injected today (clock policy).
+ */
+export function defaultSpendingRange(
+  transactions: ReadonlyArray<{ date: string }>,
+  todayISO: string,
+): SpendingRange {
+  let latest = '';
+  for (const t of transactions) if (t.date > latest) latest = t.date;
+  if (!latest) return 'last-12';
+  const latestMonth = latest.slice(0, 7);
+  const thisMonth = todayISO.slice(0, 7);
+  if (latestMonth === thisMonth) return 'this-month';
+  const d = new Date(`${thisMonth}-01T00:00:00Z`);
+  d.setUTCMonth(d.getUTCMonth() - 1);
+  if (latestMonth === d.toISOString().slice(0, 7)) return 'last-month';
+  return 'last-12';
+}

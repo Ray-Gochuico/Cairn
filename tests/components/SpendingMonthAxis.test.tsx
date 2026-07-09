@@ -103,9 +103,9 @@ describe('Spending — Monthly-by-category x-axis date humanization (Wave-11 T4 
     );
 
     await waitFor(() => {
-      expect(chartProps.some((c) => c.title === 'Monthly Spending by Category')).toBe(true);
+      expect(chartProps.some((c) => c.title === 'Monthly Spending by Category (all history)')).toBe(true);
     });
-    const monthly = chartProps.find((c) => c.title === 'Monthly Spending by Category');
+    const monthly = chartProps.find((c) => c.title === 'Monthly Spending by Category (all history)');
     expect(monthly?.xTickFormatter).toBeTypeOf('function');
     // Humanized 'Jun 2026', never the raw ISO month key.
     expect(monthly!.xTickFormatter!('2026-06')).toBe('Jun 2026');

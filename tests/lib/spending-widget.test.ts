@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rangeBounds, summarizeSpendingForRange } from '@/lib/spending-widget';
+import { defaultSpendingRange, rangeBounds, summarizeSpendingForRange } from '@/lib/spending-widget';
 import { CategoryType } from '@/types/enums';
 import type { Category, Transaction } from '@/types/schema';
 
@@ -246,5 +246,29 @@ describe('summarizeSpendingForRange', () => {
     expect(result.totalCount).toBe(0);
     expect(result.byCategory).toEqual([]);
     expect(result.topByCount).toBeNull();
+  });
+});
+
+describe('defaultSpendingRange (round-3 S12)', () => {
+  const tx = (date: string) => ({ date }) as Transaction;
+  it('current-month data keeps this-month', () => {
+    expect(defaultSpendingRange([tx('2026-07-03')], '2026-07-08')).toBe('this-month');
+  });
+  it('previous-month data lands on last-month', () => {
+    expect(defaultSpendingRange([tx('2026-06-20')], '2026-07-08')).toBe('last-month');
+  });
+  it('older data widens to last-12', () => {
+    expect(defaultSpendingRange([tx('2025-11-02')], '2026-07-08')).toBe('last-12');
+  });
+  it('no transactions defaults to last-12', () => {
+    expect(defaultSpendingRange([], '2026-07-08')).toBe('last-12');
+  });
+  it('the LATEST transaction wins across a mixed history', () => {
+    expect(
+      defaultSpendingRange([tx('2024-01-01'), tx('2026-07-01'), tx('2026-06-15')], '2026-07-08'),
+    ).toBe('this-month');
+  });
+  it('a January today maps last-month across the year boundary', () => {
+    expect(defaultSpendingRange([tx('2025-12-28')], '2026-01-05')).toBe('last-month');
   });
 });

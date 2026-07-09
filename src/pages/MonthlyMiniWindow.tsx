@@ -887,7 +887,7 @@ export default function MonthlyMiniWindow() {
               <div className="flex flex-wrap items-end justify-between gap-2">
                 <SectionTitle
                   title="Confirm last month's values"
-                  description="Review the auto-derived end-of-month total for each account. Edit if Yahoo's number looks off."
+                  description="Review the auto-derived end-of-month total for each account. Edit if the derived number looks off."
                 />
                 {pendingDerived.length > 0 && (
                   <Button size="sm" variant="outline" disabled={confirmingAll} onClick={confirmAll}>

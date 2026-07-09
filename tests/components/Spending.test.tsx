@@ -219,7 +219,10 @@ describe('Spending page', () => {
     renderPage();
     const hero = await screen.findByTestId('spending-hero');
     expect(within(hero).getByRole('tablist')).toBeInTheDocument();
-    expect(within(hero).getByRole('tab', { name: 'This month' })).toHaveAttribute('aria-selected', 'true');
+    // Round-3 S12: the default range is data-anchored. This file runs on the
+    // REAL clock and the seeded history is fixed at 2026-03 (always older than
+    // the current month), so the hero opens on Last 12 months.
+    expect(within(hero).getByRole('tab', { name: 'Last 12 months' })).toHaveAttribute('aria-selected', 'true');
   });
 
   it('(c) shows top merchants, subscription count, and awaiting-reimbursement row', async () => {

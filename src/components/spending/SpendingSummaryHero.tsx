@@ -5,12 +5,10 @@ import { dateFromLocalISO } from '@/lib/dates';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CategoryDonut, withCategoryColors } from '@/components/spending/CategoryDonut';
-import {
-  RANGE_OPTIONS,
+import { defaultSpendingRange, RANGE_OPTIONS,
   rangeBounds,
   summarizeSpendingForRange,
-  type SpendingRange,
-} from '@/lib/spending-widget';
+  type SpendingRange } from '@/lib/spending-widget';
 import type { Category, Transaction } from '@/types/schema';
 
 /**
@@ -52,7 +50,10 @@ export function SpendingSummaryHero({
 }: SpendingSummaryHeroProps) {
   const localToday = useLocalToday();
   const today = useMemo(() => asOf ?? dateFromLocalISO(localToday), [asOf, localToday]);
-  const [range, setRange] = useState<SpendingRange>('this-month');
+  // Round-3 S12: data-anchored initial range (lazy — runs once at mount).
+  const [range, setRange] = useState<SpendingRange>(() =>
+    defaultSpendingRange(transactions, today.toISOString().slice(0, 10)),
+  );
 
   const bounds = useMemo(() => rangeBounds(range, today), [range, today]);
   const summary = useMemo(
