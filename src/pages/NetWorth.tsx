@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Wallet } from 'lucide-react';
+import { useLoadGate } from '@/lib/use-load-gate';
+import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
@@ -45,21 +47,26 @@ export default function NetWorth() {
   const snapshots = useSnapshotsStore((s) => s.snapshots);
   const loadSnapshots = useSnapshotsStore((s) => s.load);
   const snapshotsError = useSnapshotsStore((s) => s.error);
+  const snapshotsLoading = useSnapshotsStore((s) => s.isLoading);
   const properties = usePropertiesStore((s) => s.properties);
   const loadProperties = usePropertiesStore((s) => s.load);
   const propertiesError = usePropertiesStore((s) => s.error);
+  const propertiesLoading = usePropertiesStore((s) => s.isLoading);
   const vehicles = useVehiclesStore((s) => s.vehicles);
   const loadVehicles = useVehiclesStore((s) => s.load);
   const vehiclesError = useVehiclesStore((s) => s.error);
+  const vehiclesLoading = useVehiclesStore((s) => s.isLoading);
   const loans = useLoansStore((s) => s.loans);
   const loadLoans = useLoansStore((s) => s.load);
   const loansError = useLoansStore((s) => s.error);
+  const loansLoading = useLoansStore((s) => s.isLoading);
   // Accounts are loaded so the view filter can scope snapshots to accounts
   // owned by the selected person (snapshots themselves carry no owner field;
   // they inherit ownership from their parent account).
   const accounts = useAccountsStore((s) => s.accounts);
   const loadAccounts = useAccountsStore((s) => s.load);
   const accountsError = useAccountsStore((s) => s.error);
+  const accountsLoading = useAccountsStore((s) => s.isLoading);
   // Asset value snapshots feed the GrowthCard's as-of factory (property /
   // vehicle histories with purchase anchoring — same inputs as the chart).
   const assetValueSnapshots = useAssetValueSnapshotsStore(
@@ -67,6 +74,9 @@ export default function NetWorth() {
   );
   const loadAssetValueSnapshots = useAssetValueSnapshotsStore((s) => s.load);
   const assetValueSnapshotsError = useAssetValueSnapshotsStore((s) => s.error);
+  const assetValueSnapshotsLoading = useAssetValueSnapshotsStore(
+    (s) => s.isLoading,
+  );
 
   const reload = useCallback(() => {
     loadSnapshots();
@@ -83,9 +93,6 @@ export default function NetWorth() {
     loadAccounts,
     loadAssetValueSnapshots,
   ]);
-  useEffect(() => {
-    reload();
-  }, [reload]);
 
   const storeErrors = [
     snapshotsError,
@@ -96,6 +103,21 @@ export default function NetWorth() {
     assetValueSnapshotsError,
   ];
   const hasStoreError = storeErrors.some((e) => e != null);
+
+  // W10 M5: the hook owns the mount load and defines "settled" so we never
+  // show "No net worth snapshots yet" while the six loads are in flight.
+  const gate = useLoadGate(
+    [
+      snapshotsLoading,
+      accountsLoading,
+      propertiesLoading,
+      vehiclesLoading,
+      loansLoading,
+      assetValueSnapshotsLoading,
+    ],
+    storeErrors,
+    reload,
+  );
 
   // Apply the view filter as the data-prep step — every derivation below
   // reads from these filtered slices and stays oblivious to the dropdown.
@@ -160,6 +182,16 @@ export default function NetWorth() {
     return computeHorizonGrowth(valueAsOf, new Date());
   }, [visibleSnapshots, accounts, visibleProperties, visibleVehicles, visibleLoans, assetValueSnapshots]);
 
+  // W10 M5: never show "No net worth snapshots yet" while loads are in
+  // flight — the empty copy is only honest once every consumed store settled.
+  if (!gate.settled) {
+    return (
+      <PageContainer className="space-y-6">
+        <PageLoadingSpinner />
+      </PageContainer>
+    );
+  }
+
   if (!hasAnyData) {
     return (
       <PageContainer className="space-y-6">
@@ -181,7 +213,7 @@ export default function NetWorth() {
          * and accounts is where most users start.
          */}
         {hasStoreError ? (
-          <StoreErrorBanner errors={storeErrors} onRetry={reload} />
+          <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
         ) : (
           <EmptyState
             icon={Wallet}
@@ -199,7 +231,7 @@ export default function NetWorth() {
 
   return (
     <PageContainer className="space-y-6">
-      <StoreErrorBanner errors={storeErrors} onRetry={reload} />
+      <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-3 mb-1 flex-wrap">

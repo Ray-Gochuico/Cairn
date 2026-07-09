@@ -446,4 +446,17 @@ describe('NetWorth page', () => {
     expect(imported).toBeDefined();
     expect(imported?.totalValue).toBe(60_000);
   });
+
+  it('shows the loading skeleton, not the empty state, while stores are still loading (W10 M5)', () => {
+    // Cold-mount shape: empty arrays + isLoading:true on one consumed store.
+    useSnapshotsStore.setState({ snapshots: [], isLoading: true, error: null, load: async () => {} } as any);
+    // (other stores seeded resolved-empty by the file's existing reset helper)
+    render(
+      <MemoryRouter>
+        <NetWorth />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('status', { name: /loading page/i })).toBeInTheDocument();
+    expect(screen.queryByText('No net worth snapshots yet')).not.toBeInTheDocument();
+  });
 });

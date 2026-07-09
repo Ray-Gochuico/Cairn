@@ -30,8 +30,9 @@ import { cn } from '@/lib/utils';
  * user their data is intact.
  */
 export interface StoreErrorBannerProps {
-  /** The `error` field from each consumed store. Nulls/undefineds are ignored. */
-  errors: Array<string | null | undefined>;
+  /** The `error` field from each consumed store. Nulls/undefineds are ignored.
+   *  Readonly so a useLoadGate `errors` array (Wave-10) slots in directly. */
+  errors: ReadonlyArray<string | null | undefined>;
   /** Re-run the page's loads. Omit to render an info-only banner. */
   onRetry?: () => void;
   className?: string;
