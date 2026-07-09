@@ -49,10 +49,19 @@ function loadProgress(): Progress {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw === null) return defaultProgress();
     const parsed = JSON.parse(raw);
+    // W10 T5: currentSection was validated but sectionStatus was cast
+    // unchecked — a corrupt entry (e.g. sectionStatus: "garbage") crashed the
+    // wizard grid. Validate the shape before trusting it.
+    const validStatus = (v: unknown): v is SectionStatus =>
+      v === 'pending' || v === 'in_progress' || v === 'completed' || v === 'skipped';
+    const statuses = parsed?.sectionStatus;
     if (
       typeof parsed !== 'object' ||
       parsed === null ||
-      ![1, 2, 3, 4].includes(parsed.currentSection)
+      ![1, 2, 3, 4].includes(parsed.currentSection) ||
+      typeof statuses !== 'object' ||
+      statuses === null ||
+      ![1, 2, 3, 4].every((i) => validStatus((statuses as Record<number, unknown>)[i]))
     ) {
       return defaultProgress();
     }

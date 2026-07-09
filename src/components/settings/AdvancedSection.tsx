@@ -70,6 +70,9 @@ export function AdvancedSection() {
   const [resetOpen, setResetOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  // W10 T5: a failed Advanced save used to be console-only, leaving a stale
+  // "Saved" badge. Capture it so the failure is legible and the badge clears.
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     void load();
@@ -187,6 +190,7 @@ export function AdvancedSection() {
   const handleSave = async () => {
     if (invalid || submitting) return;
     setSubmitting(true);
+    setSaveError(null);
     try {
       await update({
         interestThresholdLowPct: lowNum,
@@ -203,6 +207,9 @@ export function AdvancedSection() {
           drawdownTaxRateNum === null ? null : drawdownTaxRateNum / 100,
       });
       setSavedAt(Date.now());
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : 'Could not save.');
+      setSavedAt(null);
     } finally {
       setSubmitting(false);
     }
@@ -442,10 +449,18 @@ export function AdvancedSection() {
             <Button onClick={handleSave} disabled={invalid || submitting}>
               Save
             </Button>
-            {savedAt && !invalid && (
+            {savedAt && !invalid && !saveError && (
               <span className="text-xs text-success-foreground">Saved</span>
             )}
           </div>
+          {saveError && (
+            <div
+              role="alert"
+              className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive-soft-foreground"
+            >
+              Couldn’t save — {saveError}. Try again.
+            </div>
+          )}
 
           <section className="space-y-3">
             <h4 className="text-sm font-medium mb-1">Property &amp; Vehicle stat categories</h4>

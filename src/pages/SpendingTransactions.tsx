@@ -346,6 +346,15 @@ export default function SpendingTransactions() {
 
       <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
 
+      {/* W10 T5: a failed delete set rowError, but it only rendered inside the
+          (unmounted) edit branch — surface it at the list level so a delete
+          failure is legible. */}
+      {rowError && (
+        <div role="alert" className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive-soft-foreground">
+          {rowError}
+        </div>
+      )}
+
       {/*
        * Suppress the "No transactions yet" empty copy when a load failed
        * (Frontend H1): an errored load also leaves `transactions` empty, and
@@ -495,9 +504,9 @@ export default function SpendingTransactions() {
                             <XIcon className="h-3.5 w-3.5" />
                           </button>
                         </div>
-                        {rowError && (
-                          <p className="text-xs text-destructive-soft-foreground mt-1" role="alert">{rowError}</p>
-                        )}
+                        {/* W10 T5: rowError now renders at list level (above) so
+                            delete failures — which happen outside this edit row
+                            — are visible too. */}
                       </td>
                     </tr>
                   );

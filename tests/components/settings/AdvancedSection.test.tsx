@@ -125,6 +125,16 @@ describe('AdvancedSection', () => {
     expect(high.value).toBe('10');
   });
 
+  it('a failed Advanced save shows a role=alert and clears the Saved badge (W10 T5)', async () => {
+    const user = userEvent.setup();
+    resetStore(makeHousehold(), vi.fn().mockRejectedValue(new Error('DB locked')));
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
+    fireEvent.click(screen.getByText('Advanced'));
+    await user.click(screen.getByRole('button', { name: /^save/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/couldn.t save.*DB locked/i);
+    expect(screen.queryByText(/^saved$/i)).not.toBeInTheDocument();
+  });
+
   it('saves numeric values through the household store', async () => {
     const update = vi.fn().mockResolvedValue(undefined);
     resetStore(makeHousehold(), update);
