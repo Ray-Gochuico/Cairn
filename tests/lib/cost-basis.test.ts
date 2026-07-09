@@ -32,6 +32,21 @@ describe('propertyCostBasis', () => {
   it('treats a null purchase price as 0', () => {
     expect(propertyCostBasis(null, 7, [], cats)).toBe(0);
   });
+
+  it('nets settled reimbursements out of capital improvements (wave-9 M13)', () => {
+    // $10k roof, $4k reimbursed → basis contribution $6k, not $10k.
+    const basis = propertyCostBasis(200_000, 7, [
+      txn({ amount: 10_000, reimbursable: true, reimbursedAt: '2026-05-01', reimbursedAmount: 4_000 }),
+    ], cats);
+    expect(basis).toBe(206_000);
+  });
+
+  it('skips PENDING reimbursables entirely (wave-9 M13)', () => {
+    const basis = propertyCostBasis(200_000, 7, [
+      txn({ amount: 10_000, reimbursable: true, reimbursedAt: null, reimbursedAmount: null }),
+    ], cats);
+    expect(basis).toBe(200_000);
+  });
 });
 
 describe('rollingExpense', () => {

@@ -19,9 +19,14 @@ export function propertyCostBasis(
       (t) =>
         t.propertyId === propertyId &&
         t.categoryId != null &&
-        capitalIds.has(t.categoryId),
+        capitalIds.has(t.categoryId) &&
+        // Wave-9 M13: a pending reimbursable isn't (yet) the owner's money —
+        // same contract as every spending surface (isRealSpending).
+        !(t.reimbursable && t.reimbursedAt == null),
     )
-    .reduce((s, t) => s + t.amount, 0);
+    // Settled reimbursements net out (effectiveSpendingAmount), matching
+    // rollingExpense/allLinkedSpending in this same file.
+    .reduce((s, t) => s + effectiveSpendingAmount(t), 0);
   return (purchasePrice ?? 0) + improvements;
 }
 
