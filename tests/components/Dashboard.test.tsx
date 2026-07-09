@@ -16,6 +16,7 @@ import { useHoldingsStore } from '@/stores/holdings-store';
 import { useTickersStore } from '@/stores/tickers-store';
 import { useFundHoldingsStore } from '@/stores/fund-holdings-store';
 import { useRoadmapOverridesStore } from '@/stores/roadmap-overrides-store';
+import { usePersonsStore } from '@/stores/persons-store';
 import {
   AccountType,
   ContributionSource,
@@ -278,6 +279,40 @@ describe('Dashboard asset value chart widget', () => {
 describe('Dashboard spending cards', () => {
   beforeEach(() => {
     resetStores();
+  });
+
+  it('spending pills + widget scope to ?view=p1 and pill hrefs keep the view (W10 F8/S1)', async () => {
+    usePersonsStore.setState({
+      persons: [
+        { id: 1, name: 'Alex' } as never,
+        { id: 2, name: 'Sam' } as never,
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+    const makeTxn = (over: Record<string, unknown>) => ({
+      id: 0, householdId: 1, date: '2026-05-10', merchant: 'M', merchantRaw: 'M',
+      amount: 0, categoryId: null, sourceAccountId: null, propertyId: null, vehicleId: null,
+      personId: null, sourcePdfFilename: null, reimbursable: false, reimbursedAt: null,
+      reimbursedAmount: null, isRecurring: false, notes: null, ...over,
+    });
+    useTransactionsStore.setState({
+      transactions: [
+        makeTxn({ id: 1, personId: 1, amount: 40, reimbursable: true, reimbursedAt: null }),
+        makeTxn({ id: 2, personId: 2, amount: 60, reimbursable: true, reimbursedAt: null }),
+      ],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    render(
+      <MemoryRouter initialEntries={['/?view=p1']}>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+    // p1's $40 only — not the household $100.
+    const pill = await screen.findByRole('link', { name: /awaiting reimbursement.*\$40/i });
+    expect(pill).toHaveAttribute('href', '/spending?view=p1');
+    expect(screen.queryByText('$100')).not.toBeInTheDocument();
   });
 
   it('shows Awaiting Reimbursement card with the pending total', () => {

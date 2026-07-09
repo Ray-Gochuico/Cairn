@@ -41,6 +41,7 @@ import {
   filterByForPersonId,
   filterByObligorPersonId,
   filterByOwnerPersonId,
+  filterByPersonId,
 } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { formatPercent } from '@/lib/format';
@@ -503,9 +504,10 @@ export default function Dashboard() {
   const today = useMemo(() => new Date(), []);
   const currentMonth = useMemo(() => currentYyyymm(), []);
 
-  // Apply the view filter to every entity rendered in the headline metrics
-  // and the goals strip. ConcentrationCard intentionally stays household-wide
-  // (see the comment above its render below).
+  // Apply the view filter to the entities rendered in the headline metrics,
+  // the goals strip, and the spending pills/widget (transactions are scoped
+  // in visibleTransactions below — W10 F8). ConcentrationCard intentionally
+  // stays household-wide (see the comment above its render below).
   const visibleAccounts = useMemo(
     () => filterByOwnerPersonId(accounts, filter, persons),
     [accounts, filter, persons],
@@ -682,17 +684,25 @@ export default function Dashboard() {
     [today, pendingAccountIds, snapshotsLastMonth],
   );
 
+  // W10 F8: transactions were the ONE entity the header comment's "everything
+  // is filtered" claim missed — scope them exactly as /spending does, so the
+  // two surfaces can never disagree under the same ?view=.
+  const visibleTransactions = useMemo(
+    () => filterByPersonId(transactions, filter, persons),
+    [transactions, filter, persons],
+  );
+
   // Spending cards: awaiting reimbursement + spending vs budget
   const awaitingReimbursementTotal = useMemo(
-    () => transactions
+    () => visibleTransactions
       .filter((t) => t.reimbursable && t.reimbursedAt == null)
       .reduce((s, t) => s + t.amount, 0),
-    [transactions],
+    [visibleTransactions],
   );
 
   const spendingSummary = useMemo(
-    () => summarizeSpending(transactions, categories),
-    [transactions, categories],
+    () => summarizeSpending(visibleTransactions, categories),
+    [visibleTransactions, categories],
   );
   const currentMonthSpend = spendingSummary.currentMonthTotal;
   const monthlyBudget = household?.monthlyExpenseBaseline ?? 0;
@@ -734,6 +744,10 @@ export default function Dashboard() {
     | 'awaiting-reimbursement'
     | 'spending-vs-budget';
 
+  // W10 S1: keep the person view across pill navigation.
+  const withView = (path: string) =>
+    filter === 'household' ? path : `${path}?view=${filter}`;
+
   const pillDefs: Array<{ id: PillId; label: string; render: () => ReactElement }> = [
     {
       id: 'net-worth',
@@ -742,7 +756,7 @@ export default function Dashboard() {
         <MetricCard
           label="Net Worth"
           value={formatUSD(currentNetWorth)}
-          href="/net-worth"
+          href={withView('/net-worth')}
           delta={netWorthDeltaLabel}
           deltaTone={netWorthDeltaTone}
           subtitle={hasNetWorthBaseline ? 'vs last month' : undefined}
@@ -756,7 +770,7 @@ export default function Dashboard() {
         <MetricCard
           label="Total Debt"
           value={formatUSD(totalDebt)}
-          href="/loans"
+          href={withView('/loans')}
           subtitle={visibleLoans.length > 0
             ? `Across ${visibleLoans.length} loan${visibleLoans.length === 1 ? '' : 's'}`
             : undefined}
@@ -770,7 +784,7 @@ export default function Dashboard() {
         <MetricCard
           label="Liquid Investments"
           value={formatUSD(liquidInvestments)}
-          href="/investments"
+          href={withView('/investments')}
           subtitle="Brokerage, cash, savings, HSA"
         />
       ),
@@ -782,7 +796,7 @@ export default function Dashboard() {
         <MetricCard
           label="Awaiting Reimbursement"
           value={formatUSD(awaitingReimbursementTotal)}
-          href="/spending"
+          href={withView('/spending')}
           subtitle={awaitingReimbursementTotal > 0 ? 'Click to review' : 'None pending'}
         />
       ),
@@ -794,7 +808,7 @@ export default function Dashboard() {
         <MetricCard
           label="Spending vs Budget"
           value={formatUSD(currentMonthSpend)}
-          href="/spending"
+          href={withView('/spending')}
           delta={monthlyBudget > 0
             ? currentMonthSpend > monthlyBudget
               ? `${formatUSD(currentMonthSpend - monthlyBudget)} over`
@@ -924,7 +938,7 @@ export default function Dashboard() {
       label: 'Spending',
       render: () => (
         <SpendingWidget
-          transactions={transactions}
+          transactions={visibleTransactions}
           categories={categories}
           accounts={visibleAccounts}
         />
