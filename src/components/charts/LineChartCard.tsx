@@ -3,6 +3,7 @@ import {
   Legend,
   Line,
   LineChart,
+  ReferenceDot,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -40,6 +41,16 @@ export interface LineChartSeries {
    * behaviour (WCAG 1.4.1 additive fix; Charts Fence: additive/opt-in).
    */
   strokeDasharray?: string;
+  /** Optional emphasis width (default 2). The FI card drives the headline
+   * Moderate line at 2.5 (Wave 11 T13). */
+  strokeWidth?: number;
+}
+
+/** A target-crossing marker rendered as a ReferenceDot (Wave 11 T13). */
+export interface LineChartMarker {
+  x: string | number;
+  y: number;
+  color: string;
 }
 
 export interface LineChartCardProps {
@@ -50,6 +61,7 @@ export interface LineChartCardProps {
   xKey: string;
   series: LineChartSeries[];
   yFormatter?: (value: number) => string;
+  markers?: LineChartMarker[];
 }
 
 export default function LineChartCard({
@@ -60,6 +72,7 @@ export default function LineChartCard({
   xKey,
   series,
   yFormatter,
+  markers,
 }: LineChartCardProps) {
   return (
     <Card>
@@ -96,11 +109,22 @@ export default function LineChartCard({
                 dataKey={s.dataKey}
                 name={s.label}
                 stroke={s.color ?? CHART_PALETTE[idx % CHART_PALETTE.length]}
-                strokeWidth={2}
+                strokeWidth={s.strokeWidth ?? 2}
                 strokeDasharray={s.strokeDasharray}
                 dot={false}
                 activeDot={{ r: 4 }}
                 isAnimationActive={false}
+              />
+            ))}
+            {markers?.map((m, i) => (
+              <ReferenceDot
+                key={`marker-${i}`}
+                x={m.x}
+                y={m.y}
+                r={4}
+                fill={m.color}
+                stroke="hsl(var(--background))"
+                strokeWidth={1.5}
               />
             ))}
           </LineChart>
