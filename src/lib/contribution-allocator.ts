@@ -26,6 +26,12 @@ export interface AllocationResult {
   unreachableWithoutSelling: boolean;
   /** Names of the overweight CLASSES, for the primary callout (UX M3). */
   overweightClasses: AssetClass[];
+  /**
+   * Wave-9: targeted classes with NO held ticker — the allocator has no buy
+   * vehicle for them, so their budget stays in cash. Surfaced so the card
+   * can explain the leftover instead of rendering a silent $0/empty table.
+   */
+  unallocatableClasses: { assetClass: AssetClass; need: number }[];
 }
 
 /** Distribute `cash` across shortfalls, no-sell, pro-rata to need; full-fund when cash covers all. */
@@ -102,9 +108,15 @@ export function allocateContribution(input: AllocationInput): AllocationResult {
 
   // ── Layer 2: within-class split (DOLLARS — no share rounding) ─────────────
   const buyDollars = new Map<string, number>();
+  const unallocatableClasses: AllocationResult['unallocatableClasses'] = [];
   for (const [cls, budget] of classBuy) {
     const tickers = tickersByClass.get(cls) ?? [];
-    if (tickers.length === 0) continue; // need exists but nothing to buy ⇒ leftover cash
+    if (tickers.length === 0) {
+      // Need exists but nothing to buy ⇒ leftover cash. Surface it so the card
+      // explains the dead-end instead of a silent $0/empty table.
+      unallocatableClasses.push({ assetClass: cls, need: budget });
+      continue;
+    }
     const anyTargeted = tickers.some((t) => wcShares.has(t));
     if (anyTargeted) {
       // Per-ticker target$ within the class budget, distribute to each ticker's shortfall.
@@ -145,5 +157,6 @@ export function allocateContribution(input: AllocationInput): AllocationResult {
     cashLeftOver: cash - totalAllocated,
     unreachableWithoutSelling: unreachable,
     overweightClasses,
+    unallocatableClasses,
   };
 }
