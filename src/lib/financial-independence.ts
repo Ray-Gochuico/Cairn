@@ -1,4 +1,4 @@
-import { realRateOf } from './calculators/real-rate';
+import { realRateOfUnfloored } from './calculators/real-rate';
 
 export interface YearsToFiInput {
   pv: number;            // present value (current portfolio)
@@ -56,8 +56,13 @@ export function financialIndependenceSeries(input: {
   inflation?: number;
 }): FinancialIndependenceSeriesResult[] {
   return input.scenarios.map((s) => {
+    // T17: solve at the UNFLOORED Fisher real rate so the table agrees with the
+    // projection chart (which compounds unfloored). A nominal rate at/below
+    // inflation yields a negative real rate → the solve returns Infinity, which
+    // the FI card renders as "—" (unreachable in real terms). Coast-FI keeps
+    // the floored realRateOf for its own framing.
     const solveRate =
-      input.inflation === undefined ? s.rate : realRateOf(s.rate, input.inflation);
+      input.inflation === undefined ? s.rate : realRateOfUnfloored(s.rate, input.inflation);
     return {
       label: s.label,
       rate: s.rate,

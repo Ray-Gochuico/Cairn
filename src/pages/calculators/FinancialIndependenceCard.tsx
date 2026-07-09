@@ -228,10 +228,14 @@ export function FinancialIndependenceCard({
     series.find((s) => s.label === 'Moderate') ??
     series[Math.min(1, series.length - 1)] ??
     series[0];
+  // T17: a non-finite years value means the scenario's REAL rate is ≤ 0, so it
+  // never reaches the today's-dollars target — render "—", not "∞", and surface
+  // the explanatory note below the table.
   const yearsLabel =
     moderate && Number.isFinite(moderate.years)
       ? `${moderate.years.toFixed(1)} years`
-      : '∞';
+      : '—';
+  const anyUnreachable = series.some((s) => !Number.isFinite(s.years));
 
   return (
     <CalculatorCard
@@ -272,12 +276,18 @@ export function FinancialIndependenceCard({
               <td className="py-2">{s.label}</td>
               <td className="py-2 tabular-nums">{formatPercent(s.rate)}</td>
               <td className="py-2 tabular-nums">
-                {Number.isFinite(s.years) ? s.years.toFixed(1) : '∞'}
+                {Number.isFinite(s.years) ? s.years.toFixed(1) : '—'}
               </td>
             </tr>
           ))}
         </tbody>
       </table>
+      {anyUnreachable && (
+        <p role="note" className="text-xs text-muted-foreground mt-2">
+          Returns at or below inflation — this scenario never reaches the target
+          in real terms.
+        </p>
+      )}
       {chartData.length > 1 && (
         <div className="mt-4">
           <div className="flex justify-end mb-2">

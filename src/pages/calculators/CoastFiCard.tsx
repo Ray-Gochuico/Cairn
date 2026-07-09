@@ -6,7 +6,7 @@ import { useAccountsStore } from '@/stores/accounts-store';
 import { fiEligiblePortfolioValue } from '@/lib/fi-portfolio';
 import { CalculatorCard } from './CalculatorCard';
 import { coastFi } from '@/lib/coast-fi';
-import { realRateOf } from '@/lib/calculators/real-rate';
+import { realRateOf, realRateOfUnfloored } from '@/lib/calculators/real-rate';
 import { currentAge } from '@/lib/dates';
 import { formatCurrency, formatPercent } from '@/lib/format';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
@@ -117,6 +117,14 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
       yearsUntilRetirement: values.yearsUntilRetirement,
     }),
   }));
+
+  // T17: Coast-FI deliberately keeps the FLOORED real rate (a 0 real rate makes
+  // "coast today" degenerate to the full FI target — the meaningful edge here,
+  // unlike the FI years-to solve which uses the unfloored rate). Surface a note
+  // when the floor actually bites for any scenario.
+  const coastFloored = (household?.growthScenarios ?? []).some(
+    (s) => realRateOfUnfloored(s.rate, inflation) < 0,
+  );
 
   const { chartData, chartSeries } = useMemo(() => {
     const horizon = Math.max(0, Math.round(values.yearsUntilRetirement));
@@ -260,6 +268,12 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
             Nominal view grows the target line with inflation; the Real view
             holds it flat in today's dollars.
           </p>
+          {coastFloored && (
+            <p role="note" className="text-xs text-muted-foreground mb-3">
+              A scenario's return is at or below inflation — its real rate is
+              floored at 0, so its coast target equals the full FI number.
+            </p>
+          )}
           <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

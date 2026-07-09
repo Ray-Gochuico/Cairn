@@ -131,7 +131,8 @@ describe('FiCards', () => {
     const coast = screen.getByTestId('whatif-coastfi-number');
     expect(coast).toHaveTextContent(/Coast FI/);
     expect(coast).toHaveTextContent(/target today/);
-    expect(coast).toHaveTextContent('Moderate 6.0% growth');
+    // T17: the explainer now states BOTH bases (nominal + Fisher real rate).
+    expect(coast).toHaveTextContent('Moderate 6.0% nominal (≈3.4% real after 2.5% inflation)');
     expect(coast).toHaveTextContent('$');
   });
 

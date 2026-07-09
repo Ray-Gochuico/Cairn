@@ -1,5 +1,27 @@
 import { describe, it, expect } from 'vitest';
-import { realRateOf } from '@/lib/calculators/real-rate';
+import { realRateOf, realRateOfUnfloored } from '@/lib/calculators/real-rate';
+
+/**
+ * realRateOfUnfloored is the EXACT Fisher rate with NO 0-floor — the FI
+ * years-to-solve uses it so the table agrees with the chart (which compounds
+ * unfloored). realRateOf keeps the floor for Coast-FI framing only.
+ */
+describe('realRateOfUnfloored', () => {
+  it('returns the exact Fisher rate, negative allowed (no floor)', () => {
+    // (1.03 / 1.04) - 1 = 0.9903846153... - 1 = -0.0096153846...
+    expect(realRateOfUnfloored(0.03, 0.04)).toBeCloseTo(-0.00961538, 8);
+  });
+
+  it('agrees with realRateOf whenever the real rate is positive', () => {
+    expect(realRateOfUnfloored(0.07, 0.025)).toBeCloseTo(realRateOf(0.07, 0.025), 12);
+    expect(realRateOfUnfloored(0.05, 0.025)).toBeCloseTo(realRateOf(0.05, 0.025), 12);
+  });
+
+  it('diverges from realRateOf on the negative-real edge: unfloored < 0, floored = 0', () => {
+    expect(realRateOfUnfloored(0.02, 0.05)).toBeLessThan(0);
+    expect(realRateOf(0.02, 0.05)).toBe(0);
+  });
+});
 
 /**
  * Fisher equation: (1 + r_real) = (1 + r_nominal) / (1 + inflation).

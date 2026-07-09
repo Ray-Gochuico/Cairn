@@ -36,5 +36,25 @@
  * @param inflation   annual inflation as a fraction (0.025 = 2.5%)
  */
 export function realRateOf(nominalRate: number, inflation: number): number {
-  return Math.max(0, (1 + nominalRate) / (1 + inflation) - 1);
+  return Math.max(0, realRateOfUnfloored(nominalRate, inflation));
+}
+
+/**
+ * The EXACT Fisher real rate with NO 0-floor — negative results are returned
+ * as-is (inflation exceeding the nominal return ⇒ a negative real return).
+ *
+ * Which caller uses which, and WHY:
+ *   - `financialIndependenceSeries`'s years-to-FI solve uses THIS (unfloored)
+ *     rate, so the table agrees with the projection chart, which compounds the
+ *     unfloored real rate (Wave 6 contribution-basis fix). A negative real rate
+ *     makes the solve return Infinity — the scenario genuinely never reaches a
+ *     real target in real terms, which the table renders as "—".
+ *   - Coast-FI framing (`CoastFiCard`, What-If `FiCards`) keeps the FLOORED
+ *     {@link realRateOf}: "coast needed today" degenerates to the full target
+ *     at a 0 real rate, which is the meaningful edge answer there (telling a
+ *     user to save MORE than the FI target to "coast" is nonsensical). Those
+ *     surfaces show an explanatory note when the floor bites.
+ */
+export function realRateOfUnfloored(nominalRate: number, inflation: number): number {
+  return (1 + nominalRate) / (1 + inflation) - 1;
 }

@@ -433,6 +433,8 @@ export default function WhatIf() {
           milestones={milestones}
           onClose={() => setManageOpen(false)}
           onEditLevers={openLeversFor}
+          dollarMode={dollarMode}
+          inflation={displayInflation}
         />
       )}
     </PageContainer>
