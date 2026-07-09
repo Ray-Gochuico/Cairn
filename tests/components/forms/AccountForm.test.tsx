@@ -220,3 +220,42 @@ describe('AccountForm — W10 M44 error honesty', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 });
+
+describe('AccountForm — W10 M24 401(k) plan-benefit fields', () => {
+  it('exposes the 401(k) plan-benefit fields for 401(k)-type accounts and submits them (W10 M24)', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn(async () => {});
+    render(
+      <AccountForm
+        initial={{ ...DEFAULT_ACCOUNT, name: 'Work 401k', type: AccountType.ACCOUNT_401K }}
+        persons={persons} dependents={dependents}
+        onSubmit={onSubmit} onCancel={vi.fn()}
+      />,
+    );
+    await user.selectOptions(screen.getByLabelText(/employer match/i), 'yes');
+    await user.type(screen.getByLabelText(/match limit/i), '6');
+    await user.selectOptions(screen.getByLabelText(/mega.backdoor/i), 'yes');
+    await user.click(screen.getByRole('button', { name: /save|add/i }));
+    // employerMatchLimitPct is STORED as a fraction (section1.ts computes
+    // salary * limitPct), so 6% is written as 0.06 — the form's whole-percent
+    // twin converts on submit.
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        hasEmployerMatch: true,
+        employerMatchLimitPct: 0.06,
+        allowsMegaBackdoorRollover: true,
+      }),
+    );
+  });
+
+  it('hides the plan-benefit fields for non-401(k) types', () => {
+    render(
+      <AccountForm
+        initial={{ ...DEFAULT_ACCOUNT, type: AccountType.ACCOUNT_BROKERAGE }}
+        persons={persons} dependents={dependents}
+        onSubmit={vi.fn()} onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.queryByLabelText(/employer match/i)).not.toBeInTheDocument();
+  });
+});

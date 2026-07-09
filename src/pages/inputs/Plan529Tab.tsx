@@ -134,6 +134,10 @@ export default function Plan529Tab() {
             stateOfPlan: target.stateOfPlan,
             accentColor: target.accentColor,
             apyRate: target.apyRate,
+            hasEmployerMatch: target.hasEmployerMatch,
+            employerMatchPct: target.employerMatchPct,
+            employerMatchLimitPct: target.employerMatchLimitPct,
+            allowsMegaBackdoorRollover: target.allowsMegaBackdoorRollover,
           }}
           persons={personOptions}
           dependents={dependentOptions}
