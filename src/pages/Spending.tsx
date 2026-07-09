@@ -33,6 +33,7 @@ import {
   monthlyRecurringObligation,
   monthlyHousingObligation,
   monthlyLeaseObligation,
+  isActiveOn,
 } from '@/lib/recurring-obligations';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { filterByPersonId } from '@/lib/filter-by-view';
@@ -280,6 +281,16 @@ export default function Spending() {
     () => monthlyLeaseObligation(vehicleLeases, todayISO),
     [vehicleLeases, todayISO],
   );
+  // Wave 11 T18: counts + card mount use the same active predicate as the
+  // dollar totals — an ended rent/lease no longer inflates the count.
+  const activeHousing = useMemo(
+    () => housingPayments.filter((h) => isActiveOn(h, todayISO)),
+    [housingPayments, todayISO],
+  );
+  const activeLeases = useMemo(
+    () => vehicleLeases.filter((l) => isActiveOn(l, todayISO)),
+    [vehicleLeases, todayISO],
+  );
 
   return (
     <PageContainer width="full" className="space-y-8">
@@ -312,7 +323,7 @@ export default function Spending() {
         </p>
       )}
 
-      {(housingPayments.length > 0 || vehicleLeases.length > 0) && (
+      {(activeHousing.length > 0 || activeLeases.length > 0) && (
         <section aria-label="Recurring obligations">
           <Card data-testid="spending-recurring-card">
             <CardHeader className="pb-2">
@@ -329,8 +340,8 @@ export default function Spending() {
                     {obligationCurrencyFormatter.format(housingObligation)}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    Rent · {housingPayments.length} rental
-                    {housingPayments.length === 1 ? '' : 's'}
+                    Rent · {activeHousing.length} rental
+                    {activeHousing.length === 1 ? '' : 's'}
                   </div>
                 </div>
                 <div>
@@ -338,8 +349,8 @@ export default function Spending() {
                     {obligationCurrencyFormatter.format(leaseObligation)}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    Leases · {vehicleLeases.length} lease
-                    {vehicleLeases.length === 1 ? '' : 's'}
+                    Leases · {activeLeases.length} lease
+                    {activeLeases.length === 1 ? '' : 's'}
                   </div>
                 </div>
               </div>
