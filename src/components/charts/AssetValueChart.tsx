@@ -136,7 +136,7 @@ const SURFACES: Record<AssetValueChartSurface, SurfaceConfig> = {
     entityScope: 'all',
     respectViewFilter: false,
     emptyCopy:
-      'Add an account, property, vehicle, or loan in Inputs to see your wealth over time.',
+      'Add an account, property, vehicle, or loan to see your wealth over time.',
     gradientId: 'avc-fill-netWorth',
   },
   dashboard: {
@@ -150,7 +150,7 @@ const SURFACES: Record<AssetValueChartSurface, SurfaceConfig> = {
     entityScope: 'all',
     respectViewFilter: false,
     emptyCopy:
-      'Add an account, property, vehicle, or loan in Inputs to see your wealth over time.',
+      'Add an account, property, vehicle, or loan to see your wealth over time.',
     gradientId: 'avc-fill-dashboard',
   },
   investments: {
@@ -169,7 +169,7 @@ const SURFACES: Record<AssetValueChartSurface, SurfaceConfig> = {
       partialAssets: 'Included accounts',
     },
     emptyCopy:
-      'Add an account with balance snapshots in Inputs to see your investments over time.',
+      'Add an account with balance snapshots to see your investments over time.',
     gradientId: 'avc-fill-investments',
   },
 };
@@ -1144,7 +1144,7 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
             <div className="py-8 text-center space-y-3">
               <p className="text-sm text-muted-foreground">{cfg.emptyCopy}</p>
               <Button asChild size="sm" variant="outline">
-                <Link to="/inputs/accounts">Add an account</Link>
+                <Link to="/investments?manage=accounts">Add an account</Link>
               </Button>
             </div>
           ) : !hasSelection ? (

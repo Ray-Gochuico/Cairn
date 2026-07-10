@@ -217,7 +217,7 @@ describe('WhatIf — empty-state guard rejects sentinel zero-data projections (W
     expect(screen.queryByTestId('projection-chart-stub')).not.toBeInTheDocument();
     // Canonical EmptyState keeps BOTH existing links as buttons.
     expect(within(empty).getByRole('link', { name: /set up persons/i })).toHaveAttribute('href', '/inputs/persons');
-    expect(within(empty).getByRole('link', { name: /set up accounts/i })).toHaveAttribute('href', '/inputs/accounts');
+    expect(within(empty).getByRole('link', { name: /set up accounts/i })).toHaveAttribute('href', '/investments?manage=accounts');
     expect(within(empty).getByText(/add a person and at least one account/i)).toHaveClass('font-medium');
   });
 

@@ -847,3 +847,32 @@ describe('Vehicles page — gas card with configurable category set', () => {
     expect(update).toHaveBeenCalledWith({ vehicleGasCategoryIds: [18] });
   });
 });
+
+describe('Vehicles page — drawer create submits (W14 page-level create coverage)', () => {
+  beforeEach(() => {
+    resetStores();
+  });
+
+  it('filling the create drawer calls create and closes', async () => {
+    const create = vi.fn(async () => 1);
+    useVehiclesStore.setState({ create } as never);
+    usePersonsStore.setState({
+      persons: [{ id: 1, householdId: 1, name: 'Alex' }],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole('button', { name: /add a vehicle/i }));
+    const dialog = await screen.findByRole('dialog', { name: /add vehicle/i });
+    await user.type(within(dialog).getByLabelText(/^name$/i), 'Family SUV');
+    // Year is filled because the untouched-null year currently trips the
+    // form's setValueAs (Number(null) === 0 < 1900) — tracked separately.
+    await user.type(within(dialog).getByLabelText(/^year \(optional\)$/i), '2022');
+    await user.click(within(dialog).getByRole('button', { name: /^save$/i }));
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ name: 'Family SUV' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+});

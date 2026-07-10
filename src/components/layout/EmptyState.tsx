@@ -8,8 +8,8 @@ import { cn } from '@/lib/utils';
  * One canonical empty state (Design M-1).
  *
  * Pages previously hand-rolled their "you haven't entered anything yet" cards
- * with drifting copy ("set one up in Inputs" / "add one in Inputs" / "add one
- * from Inputs") and slightly different spacing. EmptyState normalizes the
+ * with drifting deflection copy (three phrasings of "go add one somewhere
+ * else") and slightly different spacing. EmptyState normalizes the
  * shape: a centered muted decorative mark, a one-line title, an optional
  * description, and an optional CTA passed as children (typically a
  * `<Button asChild><Link…/></Button>`).

@@ -45,8 +45,8 @@ export interface HousingPaymentFormProps {
 }
 
 /**
- * Canonical rent / housing-payment form. Shared by PropertiesTab's
- * sibling input tab (HousingPaymentsTab) and the Setup Wizard.
+ * Canonical rent / housing-payment form. Shared by the Property page
+ * drawer and the Setup Wizard.
  */
 export default function HousingPaymentForm({
   initial,

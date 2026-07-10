@@ -93,7 +93,7 @@ export interface AccountFormProps {
 }
 
 /**
- * Standalone account form. Used by both AccountsTab and the SetupWizard
+ * Standalone account form. Used by the Investments Manage surface (AccountsPanel), the Goals 529 section, and the SetupWizard
  * Step 4 onboarding flow. The caller owns persons / dependents loading
  * and the submit handler; this component owns RHF state, validation,
  * type-dependent fields (529 beneficiary, crypto wallet), and the

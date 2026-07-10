@@ -330,7 +330,7 @@ export default function WhatIf() {
                   <Link to="/inputs/persons">Set up persons</Link>
                 </Button>
                 <Button asChild variant="outline" size="sm">
-                  <Link to="/inputs/accounts">Set up accounts</Link>
+                  <Link to="/investments?manage=accounts">Set up accounts</Link>
                 </Button>
               </div>
             </EmptyState>

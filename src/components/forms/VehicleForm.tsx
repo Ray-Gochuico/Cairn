@@ -36,7 +36,7 @@ export interface VehicleFormProps {
 }
 
 /**
- * Standalone vehicle form. Used by both VehiclesTab and the SetupWizard
+ * Standalone vehicle form. Used by the Vehicles page drawer and the SetupWizard
  * Step 7 onboarding flow.
  */
 export default function VehicleForm({

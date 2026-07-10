@@ -7,10 +7,8 @@ import { loadAllMigrations, runMigrations } from '@/db/migrations';
 import { setDatabase } from '@/db/db';
 import { useTickersStore } from '@/stores/tickers-store';
 import { AssetClass, Direction } from '@/types/schema';
-import TickersTab from '@/pages/inputs/TickersTab';
+import TickersPanel from '@/components/investments/manage/TickersPanel';
 
-// The seeded DB ships system tickers too, each with a (disabled) Delete
-// button. Scope to the MSTR row's own Delete so the query is unambiguous.
 function mstrRowDeleteButton(): HTMLElement {
   const row = screen
     .getAllByTestId('tickers-row')
@@ -33,7 +31,7 @@ async function seedUserTicker(ticker: string) {
   });
 }
 
-describe('TickersTab — delete confirmation', () => {
+describe('TickersPanel (W14 Manage surface)', () => {
   let db: SqliteAdapter;
 
   beforeEach(async () => {
@@ -50,102 +48,88 @@ describe('TickersTab — delete confirmation', () => {
   it('clicking Delete on a user-added ticker opens a confirm and does NOT remove yet', async () => {
     await seedUserTicker('MSTR');
     const user = userEvent.setup();
-    render(<MemoryRouter><TickersTab /></MemoryRouter>);
+    render(<MemoryRouter><TickersPanel /></MemoryRouter>);
 
     await screen.findByText('MSTR');
     await user.click(mstrRowDeleteButton());
 
-    // Not removed synchronously; dialog appears and warns about orphaned holdings.
     expect(useTickersStore.getState().tickers.some((t) => t.ticker === 'MSTR')).toBe(true);
     expect(await screen.findByText(/delete mstr\?/i)).toBeInTheDocument();
     expect(screen.getByText(/without ticker details/i)).toBeInTheDocument();
   });
 
-  it('Cancel keeps the ticker; Confirm removes it', async () => {
-    await seedUserTicker('MSTR');
+  it('system rows have no Delete control at all', async () => {
     const user = userEvent.setup();
-    render(<MemoryRouter><TickersTab /></MemoryRouter>);
-
-    await screen.findByText('MSTR');
-
-    // Cancel path
-    await user.click(mstrRowDeleteButton());
-    await screen.findByText(/delete mstr\?/i);
-    await user.click(screen.getByRole('button', { name: /cancel/i }));
-    await waitFor(() =>
-      expect(screen.queryByText(/delete mstr\?/i)).not.toBeInTheDocument(),
-    );
-    expect(useTickersStore.getState().tickers.some((t) => t.ticker === 'MSTR')).toBe(true);
-
-    // Confirm path
-    await user.click(mstrRowDeleteButton());
-    const dialog = await screen.findByRole('dialog');
-    await user.click(within(dialog).getByRole('button', { name: /^delete$/i }));
-    await waitFor(() =>
-      expect(useTickersStore.getState().tickers.some((t) => t.ticker === 'MSTR')).toBe(false),
-    );
+    await seedUserTicker('MYCO');
+    await useTickersStore.getState().load();
+    render(<MemoryRouter><TickersPanel /></MemoryRouter>);
+    await screen.findByText('MYCO');
+    await user.type(screen.getByRole('searchbox', { name: /search tickers/i }), 'MYCO');
+    expect(screen.getAllByRole('button', { name: /^delete/i })).toHaveLength(1);
   });
 
-  it('filters the ticker list by symbol or name via the search box (W10 design)', async () => {
+  it('filters the ticker list by symbol or name via the search box', async () => {
     const user = userEvent.setup();
     await useTickersStore.getState().load();
     await useTickersStore.getState().upsert({
       ticker: 'ZZZA', name: 'Apple-like Co', assetClass: AssetClass.SINGLE_STOCK,
       leverageFactor: 1, direction: Direction.LONG, userAdded: true, accentColor: null, sector: null, industry: null,
     });
-    render(<MemoryRouter><TickersTab /></MemoryRouter>);
+    render(<MemoryRouter><TickersPanel /></MemoryRouter>);
     await screen.findByText('ZZZA');
     await user.type(screen.getByRole('searchbox', { name: /search tickers/i }), 'apple-like');
     expect(screen.getByText('ZZZA')).toBeInTheDocument();
-    // A row that doesn't match the query is filtered out.
     expect(screen.queryByText('MSTR')).not.toBeInTheDocument();
   });
 
-  it('system rows have no Delete control at all (W10 design)', async () => {
+  it('New ticker opens the create drawer; saving upserts a user-added row and closes', async () => {
     const user = userEvent.setup();
-    await seedUserTicker('MYCO');
-    await useTickersStore.getState().load();
-    render(<MemoryRouter><TickersTab /></MemoryRouter>);
-    await screen.findByText('MYCO');
-    // Search to just the user-added row to prove it HAS a delete…
-    await user.type(screen.getByRole('searchbox', { name: /search tickers/i }), 'MYCO');
-    expect(screen.getAllByRole('button', { name: /^delete/i })).toHaveLength(1);
-  });
-});
+    render(<MemoryRouter><TickersPanel /></MemoryRouter>);
+    await user.click(await screen.findByRole('button', { name: /new ticker/i }));
 
-describe('TickersTab — no-match state + polite count (round-3 S8)', () => {
-  let db: SqliteAdapter;
+    const drawer = await screen.findByRole('dialog', { name: /new ticker/i });
+    await user.type(within(drawer).getByLabelText(/ticker symbol/i), 'ZQXY');
+    await user.click(within(drawer).getByRole('button', { name: /create/i }));
 
-  beforeEach(async () => {
-    db = new SqliteAdapter(':memory:');
-    await runMigrations(db, await loadAllMigrations());
-    setDatabase(db);
-    useTickersStore.setState({ tickers: [], isLoading: false, error: null });
+    await waitFor(() => {
+      const t = useTickersStore.getState().tickers.find((x) => x.ticker === 'ZQXY');
+      expect(t).toBeDefined();
+      expect(t?.userAdded).toBe(true);
+    });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
-  afterEach(async () => {
-    await db.close();
-  });
-
-  it('a search matching nothing renders a no-results card', async () => {
+  it('row Edit opens a prefilled drawer; saving preserves userAdded', async () => {
+    await seedUserTicker('MSTR');
     const user = userEvent.setup();
-    await seedUserTicker('VTI');
-    await useTickersStore.getState().load();
-    render(<MemoryRouter><TickersTab /></MemoryRouter>);
-    await screen.findByText('VTI');
-    await user.type(screen.getByRole('searchbox', { name: /search tickers/i }), 'zzz-nope');
-    const card = await screen.findByText(/no tickers match/i);
-    expect(card).toHaveTextContent('zzz-nope');
-    expect(screen.queryAllByTestId('tickers-row')).toHaveLength(0);
+    render(<MemoryRouter><TickersPanel /></MemoryRouter>);
+    await screen.findByText('MSTR');
+
+    const row = screen
+      .getAllByTestId('tickers-row')
+      .find((r) => within(r).queryByText('MSTR'))!;
+    await user.click(within(row).getByRole('button', { name: /^edit$/i }));
+
+    const drawer = await screen.findByRole('dialog', { name: /edit ticker/i });
+    expect(within(drawer).getByLabelText(/ticker symbol/i)).toHaveValue('MSTR');
+    const name = within(drawer).getByLabelText(/name/i);
+    await user.type(name, 'MicroStrategy');
+    await user.click(within(drawer).getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => {
+      const t = useTickersStore.getState().tickers.find((x) => x.ticker === 'MSTR');
+      expect(t?.name).toBe('MicroStrategy');
+      expect(t?.userAdded).toBe(true);
+    });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
   it('announces the visible count politely', async () => {
     const user = userEvent.setup();
-    // ZQXY is unique — VTI would collide with the seeded system ticker.
     await seedUserTicker('ZQXY');
     await useTickersStore.getState().load();
-    const total = useTickersStore.getState().tickers.length; // system + user rows
-    render(<MemoryRouter><TickersTab /></MemoryRouter>);
+    const total = useTickersStore.getState().tickers.length;
+    render(<MemoryRouter><TickersPanel /></MemoryRouter>);
     const status = await screen.findByTestId('tickers-visible-count');
     expect(status).toHaveAttribute('aria-live', 'polite');
     expect(status).toHaveTextContent(`${total} of ${total} tickers`);

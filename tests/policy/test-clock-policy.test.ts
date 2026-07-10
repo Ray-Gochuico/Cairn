@@ -23,9 +23,9 @@ const TESTS_DIR = path.join(ROOT, 'tests');
 // ---------------------------------------------------------------------------
 const REAL_CLOCK_ALLOWLIST: ReadonlySet<string> = new Set([
   'tests/components/Budget.test.tsx',
-  // Dashboard.test.tsx pruned 2026-07-09 (W13): its new briefing describes
-  // pin the clock via vi.useFakeTimers({ toFake: ['Date'] }), which the
-  // detector counts as fake-timer usage.
+  // Dashboard.test.tsx was pruned from this allowlist 2026-07-09 (W13): its
+  // briefing tests pin the clock via vi.useFakeTimers({ toFake: ['Date'] }),
+  // which the detector counts as fake-timer usage.
   'tests/components/Goals.test.tsx',
   'tests/components/Investments.test.tsx',
   'tests/components/MonthlyMiniWindow.test.tsx',

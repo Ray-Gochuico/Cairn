@@ -476,7 +476,7 @@
       "A workplace retirement plan you contribute to from your paycheck.",
       "Net Investment Income Tax — an extra 3.8% tax on investment income above ~$200k (single) / $250k (MFJ).",
       "Alternative Minimum Tax — a parallel tax calculation that ensures high-income filers pay at least a minimum amount.",
-      "The Inputs page where you tune assumptions about long-term growth rates."
+      "The Setup page where you tune assumptions about long-term growth rates."
     ],
     "answerIndex": 1,
     "explanation": "Net Investment Income Tax — an extra 3.8% tax on investment income (interest, dividends, capital gains, rental income) once your MAGI exceeds $200k (single) or $250k (married filing jointly). It applies in addition to regular income tax.",

@@ -627,3 +627,42 @@ describe('buildDebtSeries current-month seeding (wave-9 M10)', () => {
     expect(july![LoanType.MORTGAGE]).toBe(250000);
   });
 });
+
+describe('Loans page — drawer create submits (W14 page-level create coverage)', () => {
+  beforeEach(() => {
+    resetStores();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-06-20T12:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('filling the create drawer calls create and closes', async () => {
+    const create = vi.fn(async () => 1);
+    useLoansStore.setState({ create } as never);
+    usePersonsStore.setState({
+      persons: [{ id: 1, householdId: 1, name: 'Alex' }],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+    renderLoans();
+    fireEvent.click(screen.getByRole('button', { name: /add a loan/i }));
+    const dialog = await screen.findByRole('dialog', { name: /add loan/i });
+    fireEvent.change(within(dialog).getByLabelText(/^name$/i), {
+      target: { value: 'Primary Mortgage' },
+    });
+    const picker = within(dialog).getByTestId('firstPaymentDate-picker');
+    fireEvent.change(within(picker).getByLabelText(/year$/i), { target: { value: '2024' } });
+    fireEvent.change(within(picker).getByLabelText(/month$/i), { target: { value: '06' } });
+    fireEvent.change(within(picker).getByLabelText(/day$/i), { target: { value: '01' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: /^save$/i }));
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Primary Mortgage', firstPaymentDate: '2024-06-01' }),
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+});

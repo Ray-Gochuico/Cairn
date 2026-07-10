@@ -144,7 +144,7 @@ export function evaluateBackdoorRoth(ctx: RoadmapContext): NodeResult {
     return {
       status: 'active',
       evidence: `MAGI ${formatUSD(magi)} ≥ ${formatUSD(bands.rothStart)} (Roth phase-out start) — direct Roth contribution restricted. Be aware of the IRS pro-rata rule on any pre-tax IRA balance.`,
-      cta: { label: 'Open Accounts →', href: '/inputs/accounts' },
+      cta: { label: 'Open Accounts →', href: '/investments?manage=accounts' },
     };
   }
   return {
@@ -165,7 +165,7 @@ export function evaluateRothIra(ctx: RoadmapContext): NodeResult {
     return {
       status: 'active',
       evidence: `MAGI ${formatUSD(magi)} in direct-Roth band (${formatUSD(bands.tradDeductStart)}–${formatUSD(bands.rothStart)}).`,
-      cta: { label: 'Open Accounts →', href: '/inputs/accounts' },
+      cta: { label: 'Open Accounts →', href: '/investments?manage=accounts' },
     };
   }
   if (band === 'high') {
@@ -212,6 +212,6 @@ export function evaluateTraditionalIra(ctx: RoadmapContext): NodeResult {
   return {
     status: 'active',
     evidence: `MAGI ${formatUSD(magi)} below ${formatUSD(bands.tradDeductStart)} and you do not expect higher future income — traditional IRA deduction available.`,
-    cta: { label: 'Open Accounts →', href: '/inputs/accounts' },
+    cta: { label: 'Open Accounts →', href: '/investments?manage=accounts' },
   };
 }

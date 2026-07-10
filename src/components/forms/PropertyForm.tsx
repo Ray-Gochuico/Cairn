@@ -43,7 +43,7 @@ export interface PropertyFormProps {
 }
 
 /**
- * Standalone property form. Used by both PropertiesTab and the SetupWizard
+ * Standalone property form. Used by the Property page drawer and the SetupWizard
  * Step 7 onboarding flow.
  */
 export default function PropertyForm({

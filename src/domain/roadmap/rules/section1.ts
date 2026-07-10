@@ -118,7 +118,7 @@ export function evaluateEmployerMatchQ(ctx: RoadmapContext): NodeResult {
     return {
       status: 'info',
       evidence: 'No retirement accounts on file — add a 401(k)/IRA in Accounts to evaluate the match.',
-      cta: { label: 'Open Accounts →', href: '/inputs/accounts' },
+      cta: { label: 'Open Accounts →', href: '/investments?manage=accounts' },
     };
   }
   const anyMatch = retirementAccounts.some((a) => a.hasEmployerMatch === true);
@@ -146,13 +146,13 @@ export function evaluateEmployerMatchQ(ctx: RoadmapContext): NodeResult {
             await useAccountsStore.getState().update(acct.id!, { hasEmployerMatch: value === 'yes' });
           },
         },
-        cta: { label: 'Open Accounts →', href: '/inputs/accounts' },
+        cta: { label: 'Open Accounts →', href: '/investments?manage=accounts' },
       };
     }
     return {
       status: 'unanswered',
       evidence: 'Mark which retirement accounts (if any) come with an employer match.',
-      cta: { label: 'Open Accounts →', href: '/inputs/accounts' },
+      cta: { label: 'Open Accounts →', href: '/investments?manage=accounts' },
     };
   }
   return {
@@ -172,7 +172,7 @@ export function evaluateEmployerMatch(ctx: RoadmapContext): NodeResult {
       return {
         status: 'unanswered',
         evidence: 'Confirm whether each retirement account has an employer match in Accounts.',
-        cta: { label: 'Open Accounts →', href: '/inputs/accounts' },
+        cta: { label: 'Open Accounts →', href: '/investments?manage=accounts' },
       };
     }
     return {
@@ -196,7 +196,7 @@ export function evaluateEmployerMatch(ctx: RoadmapContext): NodeResult {
       return {
         status: 'unanswered',
         evidence: `Set the salary and match-limit-pct for ${acct.name} before evaluating.`,
-        cta: { label: 'Open Accounts →', href: '/inputs/accounts' },
+        cta: { label: 'Open Accounts →', href: '/investments?manage=accounts' },
       };
     }
     const target = salary * limitPct;
@@ -219,7 +219,7 @@ export function evaluateEmployerMatch(ctx: RoadmapContext): NodeResult {
   return {
     status: 'active',
     evidence: `${formatUSD(totalYtd)} / ${formatUSD(totalTarget)} contributed YTD — ${breakdown.join('; ')}`,
-    cta: { label: 'Open Contributions →', href: '/inputs/contributions' },
+    cta: { label: 'Open Contributions →', href: '/investments?manage=contributions' },
   };
 }
 

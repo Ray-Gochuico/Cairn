@@ -16,15 +16,12 @@ import { getDatabase } from '@/db/db';
 import { validateAccountTargetPct } from '@/lib/holdings-validation';
 
 /**
- * HoldingsTab — pick an account, see its holdings.
- *
- * Editing is per-row with an explicit Save button (cleaner to test than
- * onBlur, and gives the user a calm dirty-aware Save UX matching the
- * rest of Phase 1's input tabs). The "Add holding" affordance is an
- * inline row at the bottom of the table.
+ * W14 Manage surface: holdings CRUD on the Investments page. A verbatim port
+ * of the retired HoldingsTab — pick an account, see its holdings. Editing is
+ * per-row with an explicit Save button (HoldingForm owns save/delete per row;
+ * no drawer needed — there was never a full-page mode swap here).
  */
-
-export default function HoldingsTab() {
+export default function HoldingsPanel() {
   const { accounts, load: loadAccounts, isLoading: accountsLoading, error: accountsError } = useAccountsStore();
   const { holdings, load: loadHoldings, create, update, remove, isLoading: holdingsLoading, error: holdingsError } = useHoldingsStore();
   const loadTickers = useTickersStore((s) => s.load);
@@ -68,9 +65,7 @@ export default function HoldingsTab() {
   /**
    * Validate that the about-to-be-persisted holding (combined with all
    * other holdings on the same account) does not exceed 100% target
-   * allocation, unless the account opts into margin. Pass `editingId =
-   * null` for new-row submits, or the existing holding id for edits so
-   * the existing row is excluded from the "others" pool.
+   * allocation, unless the account opts into margin.
    */
   const buildValidator = (editingId: number | null) =>
     (next: HoldingFormValues): string | null => {
@@ -87,19 +82,17 @@ export default function HoldingsTab() {
       return result.ok ? null : result.message;
     };
 
-  // W10 M43: gate the "Add accounts first." / holdings copy on load
-  // settlement so neither flashes over unloaded accounts/holdings.
+  // Gate the "Add accounts first." copy on load settlement (W10 M43).
   if (!gate.settled || accounts.length === 0) {
     return (
-      <div className="p-6 max-w-3xl">
-        <div className="flex items-start justify-between mb-1">
-          <h2 className="text-2xl font-semibold">Holdings</h2>
+      <div className="max-w-3xl">
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <p className="text-sm text-muted-foreground">
+            Per-account tickers and share counts. Used by the analysis cards above and the
+            Net Worth chart.
+          </p>
           <ImportCsvButton entity="holding" />
         </div>
-        <p className="text-sm text-muted-foreground mb-6">
-          Per-account tickers and share counts. Used by the Investments page and the
-          Net Worth chart.
-        </p>
         <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
         {!gate.settled ? (
           <TabLoadingSkeleton />
@@ -121,15 +114,14 @@ export default function HoldingsTab() {
   };
 
   return (
-    <div className="p-6 max-w-4xl">
-      <div className="flex items-start justify-between mb-1">
-        <h2 className="text-2xl font-semibold">Holdings</h2>
+    <div className="max-w-4xl">
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <p className="text-sm text-muted-foreground">
+          Per-account tickers and share counts. Used by the analysis cards above and the
+          Net Worth chart.
+        </p>
         <ImportCsvButton entity="holding" />
       </div>
-      <p className="text-sm text-muted-foreground mb-6">
-        Per-account tickers and share counts. Used by the Investments page and the
-        Net Worth chart.
-      </p>
 
       <div className="mb-4">
         <label htmlFor="accountPicker" className="text-sm font-medium mr-2">

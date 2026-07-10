@@ -63,7 +63,8 @@ export interface HoldingFormProps {
 }
 
 /**
- * Standalone single-row holding form. Used by HoldingsTab and the
+ * Standalone single-row holding form. Used by the Investments Manage
+ * surface (HoldingsPanel) and the
  * SetupWizard Step 5 onboarding flow. Renders as a 12-col grid row;
  * the caller supplies a column header row if it wants one.
  */

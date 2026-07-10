@@ -859,8 +859,14 @@ describe('Investments page — 529 section', () => {
     // p1's brokerage is visible (Accounts list; the view-filtered
     // AssetValueChart header also shows the lone account's name — ≥1 match).
     expect(screen.getAllByText("Alice's Brokerage").length).toBeGreaterThanOrEqual(1);
-    // p2's brokerage is filtered out
-    expect(screen.queryByText("Bob's Brokerage")).not.toBeInTheDocument();
+    // p2's brokerage is filtered out of the ANALYSIS region. The W14 Manage
+    // region below is deliberately person-filter-agnostic (a CRUD list must
+    // never hide data), so scope the assertion outside it.
+    const manageRegion = document.getElementById('investments-manage-heading')!.closest('section')!;
+    const bobMatches = screen
+      .queryAllByText("Bob's Brokerage")
+      .filter((el) => !manageRegion.contains(el));
+    expect(bobMatches).toHaveLength(0);
   });
 
   it('By-holding table aggregates the same household across multiple accounts', async () => {
@@ -990,5 +996,89 @@ describe('529 projection caveat (round-3 E3)', () => {
     render(<MemoryRouter><Investments /></MemoryRouter>);
     const section = await screen.findByTestId('529-section');
     expect(within(section).getByText(/stops at the 18th birthday/i)).toBeInTheDocument();
+  });
+});
+
+describe('Investments page — W14 in-place Manage deflections', () => {
+  beforeEach(() => {
+    resetStores();
+    dbSelectImpl.current = async () => [];
+    localStorage.clear();
+  });
+
+  it('empty state offers an in-place "Add an account" BUTTON, not an /inputs link', async () => {
+    primeStores(); // resolved-empty
+    render(
+      <MemoryRouter initialEntries={['/investments']}>
+        <Investments />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText(/no investment holdings yet/i)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /add an account/i })).toBeNull();
+    // No copy deflects to Inputs anymore.
+    expect(screen.queryByText(/in inputs/i)).toBeNull();
+    // The Manage region is reachable right on the (empty) page…
+    expect(screen.getByRole('heading', { name: /^manage$/i })).toBeInTheDocument();
+    // …and the CTA is a button that reveals the Accounts panel in place.
+    await userEvent.click(screen.getByRole('button', { name: /add an account/i }));
+    expect(screen.getByRole('tab', { name: 'Accounts' })).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByText(/no accounts added yet/i)).toBeInTheDocument();
+  });
+
+  it('unclassified-tickers banner points at Manage → Tickers below, not Inputs', async () => {
+    primeStores({
+      accounts: [{ id: 1, name: 'Brokerage' }],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 50_000 }],
+      holdings: [{ accountId: 1, ticker: 'MYSTERY', shareCount: 1 }],
+    });
+    render(
+      <MemoryRouter initialEntries={['/investments']}>
+        <Investments />
+      </MemoryRouter>,
+    );
+    const banner = await screen.findByTestId('unclassified-tickers-banner');
+    expect(banner).toHaveTextContent(/set their asset class manually in/i);
+    expect(within(banner).queryByRole('link')).toBeNull();
+    await userEvent.click(within(banner).getByRole('button', { name: /manage → tickers/i }));
+    expect(screen.getByRole('tab', { name: 'Tickers' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('the by-account card "View holdings" link targets the Manage surface', async () => {
+    primeStores({
+      accounts: [{ id: 1, name: 'Brokerage' }],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 50_000 }],
+    });
+    render(
+      <MemoryRouter initialEntries={['/investments']}>
+        <Investments />
+      </MemoryRouter>,
+    );
+    const link = await screen.findByRole('link', { name: /view holdings/i });
+    expect(link).toHaveAttribute('href', '/investments?manage=holdings');
+  });
+});
+
+describe('Investments page — W14 chart-hero retirement (merge into Net Worth)', () => {
+  beforeEach(() => {
+    resetStores();
+    dbSelectImpl.current = async () => [];
+    localStorage.clear();
+  });
+
+  it('the time-series hero is gone; a header link points at the Net Worth tab', async () => {
+    primeStores({
+      accounts: [{ id: 1, name: 'Brokerage' }],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 50_000 }],
+    });
+    render(
+      <MemoryRouter initialEntries={['/investments']}>
+        <Investments />
+      </MemoryRouter>,
+    );
+    await screen.findByText(/investments growth/i);
+    // The investments-surface chart header no longer renders on this page.
+    expect(screen.queryByText('Total investments')).toBeNull();
+    const link = screen.getByRole('link', { name: /balance history/i });
+    expect(link).toHaveAttribute('href', '/net-worth?chart=investments');
   });
 });

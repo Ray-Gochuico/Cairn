@@ -17,7 +17,7 @@ import type { Category } from '@/types/schema';
 /**
  * Payload shape passed to onSave. Mirrors the subset of CategorySchema fields
  * needed to create a budgetable leaf category — color/icon/isCapital/budget
- * are deferred to Inputs → Categories (see spec).
+ * are deferred to Setup → Categories (see spec).
  */
 export interface AddCategoryPayload {
   name: string;
@@ -130,7 +130,7 @@ export default function AddCategoryDialog({
           <p className="text-sm text-muted-foreground">
             Add a parent category in{' '}
             <Link to="/inputs/categories" className="underline">
-              Inputs → Categories
+              Setup → Categories
             </Link>{' '}
             first.
           </p>
