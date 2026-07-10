@@ -344,8 +344,9 @@ describe('OvertimeCard', () => {
     const obbbaRow = await screen.findByTestId('ot-obbba-deduction');
     expect(obbbaRow).toBeInTheDocument();
 
-    // The caveat paragraph must mention phase-out, sunsets, or FICA.
-    expect(screen.getByText(/phase-out|sunsets|FICA/i)).toBeInTheDocument();
+    // The caveat paragraph must mention phase-out, sunsets, or FICA. (Wave 15
+    // T3: the NOT-modeled disclosure legitimately matches too — getAllByText.)
+    expect(screen.getAllByText(/phase-out|sunsets|FICA/i).length).toBeGreaterThanOrEqual(1);
   });
 
   it('T6 Fix-6: OBBBA deduction/tax-saved are labeled as annual', async () => {
@@ -371,35 +372,64 @@ describe('OvertimeCard', () => {
     expect(screen.getByText(/est\. annual federal tax saved/i)).toBeInTheDocument();
   });
 
-  it('T21: switching Bi-weekly → Weekly DOUBLES the annualized OBBBA figure (kills the hardcoded-26)', async () => {
-    // Same 8h premium row; annualization multiplies by periods/year. Bi-weekly
-    // uses 26, Weekly 52 — so the annual tax-saved figure must exactly double.
-    // A mutation that hardcodes 26 instead of periodsPerYear(period) would leave
-    // the two equal and this test would catch it.
+  it('T21: switching Bi-weekly → Weekly re-annualizes the OBBBA figure across 52 periods (kills the hardcoded-26)', async () => {
+    // Same 8h premium row; annualization multiplies by periods/year (26 vs 52).
+    // Wave 15 T3: the tax stack now annualizes WITH the OBBBA stack, so the
+    // federal marginal rate on OT is measured on the ANNUAL OT gross (300 ×
+    // ppy). Weekly is no longer exactly 2× bi-weekly — $15,600 of annual OT
+    // crosses into the 22% bracket — so pin the exact re-derived oracle
+    // figures instead of the old constant-rate doubling. A mutation that
+    // hardcodes 26 instead of periodsPerYear(period) would leave the weekly
+    // figure at the bi-weekly value and fail the second assertion.
+    const { aggregateHouseholdPretax, computeSupplementalWageTax } = await import(
+      '@/lib/calculators/supplemental-wage'
+    );
+    const { formatCurrency } = await import('@/lib/format');
+    const expectedSavedFor = (ppy: number) => {
+      const effective = { ...baseHourlyPerson, annualSalaryPretax: 25 * 40 * 52 };
+      const agg = aggregateHouseholdPretax([effective], {
+        filingStatus: FilingStatus.SINGLE, personCount: 1, dependentCount: 0,
+      });
+      const res = computeSupplementalWageTax({
+        baseSalary: agg.totalSalary,
+        supplementalWages: 300 * ppy,
+        pretax: agg.pretax,
+        filingStatus: FilingStatus.SINGLE,
+        federalBrackets: federalSingleBrackets,
+        stateBrackets: caSingleBrackets,
+        cityBrackets: null,
+        standardDeduction: { federal: 15000, state: 0, city: 0 },
+        perPersonBaseSalary: [52_000],
+        recipientIndex: 0,
+      });
+      // Qualified half-time premium: 8h × $25 × 0.5 = $100/period, ×ppy, capped.
+      const deduction = Math.min(100 * ppy, 12_500);
+      return formatCurrency(deduction * (res.bonusBreakdown.federal / (300 * ppy)));
+    };
+
     const user = userEvent.setup();
     primeStores();
     render(<MemoryRouter><OvertimeCard /></MemoryRouter>);
     await screen.findByTestId('ot-takehome');
 
-    const biweekly = parseFloat(
-      (await screen.findByTestId('ot-obbba-deduction')).textContent!.replace(/[$,]/g, ''),
+    expect((await screen.findByTestId('ot-obbba-deduction')).textContent).toBe(
+      expectedSavedFor(26),
     );
 
     await user.click(screen.getByRole('combobox', { name: /pay period/i }));
     await user.click(await screen.findByRole('option', { name: /^weekly$/i }));
 
-    const weekly = parseFloat(
-      screen.getByTestId('ot-obbba-deduction').textContent!.replace(/[$,]/g, ''),
-    );
-    expect(weekly).toBeCloseTo(biweekly * 2, 0);
+    expect(screen.getByTestId('ot-obbba-deduction').textContent).toBe(expectedSavedFor(52));
+    // Sanity: the two oracle figures differ, so a hardcoded-26 mutation can't pass both.
+    expect(expectedSavedFor(52)).not.toBe(expectedSavedFor(26));
   });
 
-  it('headline equals computeSupplementalWageTax wiring exactly (parity, single eligible person)', async () => {
+  it('headline equals computeSupplementalWageTax wiring exactly on the ANNUALIZED stack (parity, single eligible person; REPEATS default)', async () => {
     const { aggregateHouseholdPretax, computeSupplementalWageTax } = await import(
       '@/lib/calculators/supplemental-wage'
     );
     const { formatCurrency } = await import('@/lib/format');
-    primeStores(); // HOURLY @ $25/hr, $100k salary, all pretax 0; default row 8h @ 1.5x = $300 gross
+    primeStores(); // HOURLY @ $25/hr, all pretax 0; default row 8h @ 1.5x = $300 gross, BI_WEEKLY
     render(<MemoryRouter><OvertimeCard /></MemoryRouter>);
 
     const headline = await screen.findByTestId('ot-takehome');
@@ -414,7 +444,7 @@ describe('OvertimeCard', () => {
     );
     const expected = computeSupplementalWageTax({
       baseSalary: agg.totalSalary,           // 52000 (derived)
-      supplementalWages: 300,                // 8 hrs × $25 × 1.5
+      supplementalWages: 300 * 26,           // Wave 15 T3: the YEAR's OT (REPEATS default), not one period's
       pretax: agg.pretax,
       filingStatus: FilingStatus.SINGLE,
       federalBrackets: federalSingleBrackets,
@@ -425,7 +455,63 @@ describe('OvertimeCard', () => {
       recipientIndex: 0,
     });
 
+    // Headline stays "take-home from this period's entered OT": annual ÷ ppy.
+    expect(headline.textContent).toBe(formatCurrency(expected.bonusTakeHome / 26));
+  });
+
+  it('the false "Display only" caption is gone; a recurrence control exists', async () => {
+    primeStores();
+    render(<MemoryRouter><OvertimeCard /></MemoryRouter>);
+    await screen.findByTestId('ot-takehome');
+    expect(screen.queryByText(/display only/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: /recurrence/i })).toBeInTheDocument();
+  });
+
+  it('ONE_OFF: neither the tax stack nor OBBBA annualizes', async () => {
+    const { aggregateHouseholdPretax, computeSupplementalWageTax } = await import(
+      '@/lib/calculators/supplemental-wage'
+    );
+    const { formatCurrency } = await import('@/lib/format');
+    const user = userEvent.setup();
+    primeStores();
+    render(<MemoryRouter><OvertimeCard /></MemoryRouter>);
+    await screen.findByTestId('ot-takehome');
+
+    await user.click(screen.getByRole('combobox', { name: /recurrence/i }));
+    await user.click(await screen.findByRole('option', { name: /one-off/i }));
+
+    const headline = screen.getByTestId('ot-takehome');
+    const effective = { ...baseHourlyPerson, annualSalaryPretax: 25 * 40 * 52 };
+    const agg = aggregateHouseholdPretax([effective], {
+      filingStatus: FilingStatus.SINGLE, personCount: 1, dependentCount: 0,
+    });
+    const expected = computeSupplementalWageTax({
+      baseSalary: agg.totalSalary,
+      supplementalWages: 300, // ONE_OFF: just these hours, no ×ppy
+      pretax: agg.pretax,
+      filingStatus: FilingStatus.SINGLE,
+      federalBrackets: federalSingleBrackets,
+      stateBrackets: caSingleBrackets,
+      cityBrackets: null,
+      standardDeduction: { federal: 15000, state: 0, city: 0 },
+      perPersonBaseSalary: [52_000],
+      recipientIndex: 0,
+    });
     expect(headline.textContent).toBe(formatCurrency(expected.bonusTakeHome));
+  });
+
+  it('exposes a "What this calculator does NOT model" disclosure (family idiom)', async () => {
+    primeStores();
+    render(<MemoryRouter><OvertimeCard /></MemoryRouter>);
+    await screen.findByTestId('ot-takehome');
+    const summary = screen.getByText(/What this calculator does NOT model/i);
+    fireEvent.click(summary);
+    expect(screen.getByText(/daily-overtime rules/i)).toBeInTheDocument();
+    // "exempt" appears in both the bullet's <strong> heading and its body text,
+    // and "sunsets after 2028" also lives in the OBBBA caveat paragraph — use
+    // getAllByText for those (Retirement401kWithdrawalCard disclosure-test idiom).
+    expect(screen.getAllByText(/exempt/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/sunsets after 2028/i).length).toBeGreaterThanOrEqual(2);
   });
 
   it("derives an HOURLY earner's wage base from rate × hours × 52 (wave-9 F13)", async () => {
