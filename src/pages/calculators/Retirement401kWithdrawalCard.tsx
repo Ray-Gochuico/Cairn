@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { CalculatorCard } from './CalculatorCard';
@@ -241,8 +242,10 @@ export function Retirement401kWithdrawalCard({
       {controls}
       {!breakdown && (
         <p className="text-sm text-muted-foreground">
-          Set up your household profile + tax rules to see the 401k
-          withdrawal breakdown.
+          <Link to="/inputs/household" className="text-primary hover:underline">
+            Set up your household profile
+          </Link>{' '}
+          + tax rules to see the 401k withdrawal breakdown.
         </p>
       )}
       {breakdown && !hasAmount && (

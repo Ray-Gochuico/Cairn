@@ -149,6 +149,18 @@ describe('BonusTaxCard', () => {
     expect(screen.getByText(/Set up your household profile/i)).toBeInTheDocument();
   });
 
+  it('empty-state CTA links to the destination it names (Wave 15 T10)', () => {
+    // stores already reset — no household, no persons ⇒ empty state
+    render(
+      <MemoryRouter>
+        <BonusTaxCard />
+      </MemoryRouter>,
+    );
+    expect(
+      screen.getByRole('link', { name: /set up your household profile/i }),
+    ).toHaveAttribute('href', '/inputs/household');
+  });
+
   it('changing the override bonus amount updates the headline', async () => {
     // Prime stores with $100k SINGLE CA. Bonus starts at 0 (no person default).
     primeStores();

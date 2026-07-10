@@ -96,7 +96,10 @@ export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
         onHide={onHide}
       >
         <p className="text-sm text-muted-foreground">
-          Set up your household profile + tax rules to see take-home.
+          <Link to="/inputs/household" className="text-primary hover:underline">
+            Set up your household profile
+          </Link>{' '}
+          + tax rules to see take-home.
         </p>
       </CalculatorCard>
     );

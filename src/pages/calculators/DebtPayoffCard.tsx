@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useLoansStore } from '@/stores/loans-store';
 import { useLocalToday } from '@/lib/use-local-today';
 import { amortize, nextPaymentDateFrom, scheduleIsCapped } from '@/lib/amortization';
@@ -95,7 +96,10 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
         headline="—"
       >
         <p className="text-sm text-muted-foreground">
-          Add loans on the Inputs page to see payoff projections.
+          <Link to="/inputs/loans" className="text-primary hover:underline">
+            Add loans
+          </Link>{' '}
+          on the Inputs page to see payoff projections.
         </p>
       </CalculatorCard>
     );

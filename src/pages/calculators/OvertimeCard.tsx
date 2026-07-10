@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
@@ -154,7 +155,11 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
     return (
       <CalculatorCard title="Overtime" headline="—" cardId={cardId} onHide={onHide}>
         <p className="text-sm text-muted-foreground">
-          No eligible person — set Employment type to Hourly or Salaried with overtime to enable this card.
+          No eligible person —{' '}
+          <Link to="/inputs/persons" className="text-primary hover:underline">
+            set Employment type to Hourly or Salaried with overtime
+          </Link>{' '}
+          to enable this card.
         </p>
       </CalculatorCard>
     );

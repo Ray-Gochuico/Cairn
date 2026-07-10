@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { CalculatorCard } from './CalculatorCard';
@@ -122,7 +123,10 @@ export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
       <CalculatorCard title="Estimated bonus take-home" headline="—" cardId={cardId} onHide={onHide}>
         {controls}
         <p className="text-sm text-muted-foreground">
-          Set up your household profile + tax rules to see bonus tax.
+          <Link to="/inputs/household" className="text-primary hover:underline">
+            Set up your household profile
+          </Link>{' '}
+          + tax rules to see bonus tax.
         </p>
       </CalculatorCard>
     );

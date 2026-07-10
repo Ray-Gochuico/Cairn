@@ -111,7 +111,10 @@ export function EquityValueCard({ cardId, onHide }: EquityValueCardProps = {}) {
         headline="—"
       >
         <p className="text-sm text-muted-foreground">
-          Add equity grants to see vested value across your household.
+          <Link to="/inputs/equity-grants" className="text-primary hover:underline">
+            Add equity grants
+          </Link>{' '}
+          to see vested value across your household.
         </p>
       </CalculatorCard>
     );

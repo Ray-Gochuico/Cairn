@@ -263,6 +263,18 @@ describe('Retirement401kWithdrawalCard', () => {
     ).toBeInTheDocument();
   });
 
+  it('empty-state CTA links to the destination it names (Wave 15 T10)', () => {
+    // stores already reset — no household ⇒ no-breakdown empty state
+    render(
+      <MemoryRouter>
+        <Retirement401kWithdrawalCard />
+      </MemoryRouter>,
+    );
+    expect(
+      screen.getByRole('link', { name: /set up your household profile/i }),
+    ).toHaveAttribute('href', '/inputs/household');
+  });
+
   it('surfaces "Estimated total taxes" and "Estimated net to you" as the two summary lines (Wave-3 Task 6 framing)', async () => {
     primeStores();
     render(

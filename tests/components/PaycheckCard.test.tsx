@@ -274,6 +274,18 @@ describe('PaycheckCard', () => {
     expect(await screen.findByText(/Set up your household profile/i)).toBeInTheDocument();
   });
 
+  it('empty-state CTA links to the destination it names (Wave 15 T10)', async () => {
+    // Stores already reset — no household ⇒ empty state
+    render(
+      <MemoryRouter>
+        <PaycheckCard />
+      </MemoryRouter>,
+    );
+    expect(
+      await screen.findByRole('link', { name: /set up your household profile/i }),
+    ).toHaveAttribute('href', '/inputs/household');
+  });
+
   it('links to the full calculator page', async () => {
     primeStores();
     render(<MemoryRouter><PaycheckCard /></MemoryRouter>);

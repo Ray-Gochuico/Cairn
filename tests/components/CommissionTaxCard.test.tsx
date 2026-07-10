@@ -116,6 +116,18 @@ describe('CommissionTaxCard', () => {
     resetStores();
   });
 
+  it('empty-state CTA links to the destination it names (Wave 15 T10)', () => {
+    // stores already reset — no household, no persons ⇒ empty state
+    render(
+      <MemoryRouter>
+        <CommissionTaxCard />
+      </MemoryRouter>,
+    );
+    expect(
+      screen.getByRole('link', { name: /set up your household profile/i }),
+    ).toHaveAttribute('href', '/inputs/household');
+  });
+
   it('renders monthly commission take-home for $48k/yr ($4k/month) in CA SINGLE', async () => {
     // Setup: CA SINGLE household; person $100k salary, 5% 401k.
     // Default frequency: MONTHLY (12/yr)

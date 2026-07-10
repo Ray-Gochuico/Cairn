@@ -143,6 +143,15 @@ describe('OvertimeCard', () => {
     expect(screen.getByText(/No eligible person/i)).toBeInTheDocument();
   });
 
+  it('empty-state CTA links to the destination it names (Wave 15 T10)', () => {
+    // SALARY_NO_OT person — not eligible ⇒ no-eligible-person empty state.
+    primeStores({ employmentType: 'SALARY_NO_OT', hourlyRate: null });
+    render(<MemoryRouter><OvertimeCard /></MemoryRouter>);
+    expect(
+      screen.getByRole('link', { name: /set employment type/i }),
+    ).toHaveAttribute('href', '/inputs/persons');
+  });
+
   it('adding a row updates the per-row breakdown count', async () => {
     primeStores();
     render(<MemoryRouter><OvertimeCard /></MemoryRouter>);

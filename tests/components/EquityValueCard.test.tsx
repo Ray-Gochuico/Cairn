@@ -110,11 +110,27 @@ describe('EquityValueCard', () => {
         <EquityValueCard />
       </MemoryRouter>,
     );
+    // "Add equity grants" is now a link (Wave 15 T10) — pin the link phrase
+    // and the remaining tail separately since the link boundary splits the
+    // sentence.
     expect(
-      screen.getByText(/Add equity grants to see vested value/i),
-    ).toBeInTheDocument();
+      screen.getByRole('link', { name: /add equity grants/i }),
+    ).toHaveAttribute('href', '/inputs/equity-grants');
+    expect(screen.getByText(/to see vested value/i)).toBeInTheDocument();
     // Headline placeholder
     expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
+  it('empty-state CTA links to the destination it names (Wave 15 T10)', () => {
+    primeStores();
+    render(
+      <MemoryRouter>
+        <EquityValueCard />
+      </MemoryRouter>,
+    );
+    expect(
+      screen.getByRole('link', { name: /add equity grants/i }),
+    ).toHaveAttribute('href', '/inputs/equity-grants');
   });
 
   it('headline shows total vested value across all grants', () => {
