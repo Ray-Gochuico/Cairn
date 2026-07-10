@@ -24,6 +24,19 @@ export interface PaycheckInput {
   extraWithholdingAnnual?: number;
 }
 
+/**
+ * The withholding-vs-liability caveat rendered next to the federal figure on
+ * BOTH paycheck surfaces (PaycheckCard federal row, PaycheckCalculator
+ * breakdown sublabel). One exported constant so the wording cannot drift.
+ */
+export const FEDERAL_LIABILITY_CAVEAT = 'annualized estimate, not payroll withholding';
+
+/**
+ * NOTE on field naming: `federal` (bare), `stateTax`/`cityTax` (suffixed), and
+ * `ss` (abbreviated) deliberately mirror PaycheckCalculator's historical
+ * render-object contract — the page's render sites consume these names as-is.
+ * Do not "normalize" them without touching every consumer at once.
+ */
 export interface PaycheckResult {
   gross: number;
   pretax401k: number;
@@ -95,7 +108,10 @@ export function computePaycheck(input: PaycheckInput): PaycheckResult {
     ss: fica.socialSecurity,
     medicare: fica.medicare,
     additionalMedicare: fica.additionalMedicare,
-    fica: tax.fica,
+    // Structural invariant: fica === ss + medicare + additionalMedicare, taken
+    // from the SAME computeHouseholdFica result the split fields come from
+    // (tax.fica is the same value, but only incidentally).
+    fica: fica.total,
     stateTax: tax.state,
     cityTax: tax.city,
     hasStateTax: input.stateBrackets.some((b) => b.rate > 0),

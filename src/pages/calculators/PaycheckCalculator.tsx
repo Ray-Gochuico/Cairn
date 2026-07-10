@@ -11,7 +11,7 @@ import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { computePretaxDeductions } from '@/lib/tax';
 // Wave 15 T1: the shared paycheck composition engine (tax + per-earner FICA +
 // take-home) — the same one PaycheckCard summarizes.
-import { computePaycheck } from '@/lib/calculators/paycheck';
+import { computePaycheck, FEDERAL_LIABILITY_CAVEAT } from '@/lib/calculators/paycheck';
 // Finance #2: health-FSA cap, sourced from the same 2026 constants module the
 // tax engine uses for the 401(k)/HSA/SS caps. NOTE: CONTRIBUTION_LIMITS_2026
 // must gain a HEALTH_FSA member (see the FLAG in Task 6, Step 1).
@@ -717,7 +717,7 @@ export default function PaycheckCalculator() {
                       W-4 + IRS percentage-method tables determine). Label it as
                       an estimated annual tax so users don't read it as a
                       paystub withholding figure. */}
-                  <PaycheckBreakdownRow label="Estimated federal tax" sublabel="annualized estimate, not payroll withholding" amount={result.federal / div} grossForPct={result.gross / div} color={COLORS.federal} negative />
+                  <PaycheckBreakdownRow label="Estimated federal tax" sublabel={FEDERAL_LIABILITY_CAVEAT} amount={result.federal / div} grossForPct={result.gross / div} color={COLORS.federal} negative />
                   <PaycheckBreakdownRow label="Social Security" sublabel="6.2% to wage base" amount={result.ss / div} grossForPct={result.gross / div} color={COLORS.ss} negative />
                   <PaycheckBreakdownRow
                     label="Medicare"

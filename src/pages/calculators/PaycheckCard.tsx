@@ -5,7 +5,7 @@ import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { CalculatorCard } from './CalculatorCard';
-import { computePaycheck } from '@/lib/calculators/paycheck';
+import { computePaycheck, FEDERAL_LIABILITY_CAVEAT } from '@/lib/calculators/paycheck';
 import { aggregateHouseholdPretax } from '@/lib/calculators/supplemental-wage';
 import { formatCurrency } from '@/lib/format';
 import { CONTRIBUTION_LIMITS_2026 } from '@/lib/contribution-limits';
@@ -178,14 +178,14 @@ export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
           label={<TermTooltip term="Pretax HSA" />}
           value={formatCurrency(perPeriod.pretaxHsa)}
         />
-        {/* Wave 15 T1: mirrors PaycheckCalculator's withholding-vs-liability
-            sublabel VERBATIM — the two surfaces must not drift in wording. */}
+        {/* Wave 15 T1: the shared withholding-vs-liability caveat — one
+            exported constant, so the two surfaces cannot drift in wording. */}
         <ResultRow
           label={
             <span>
               Estimated federal tax
               <span className="block text-[11px] text-muted-foreground">
-                annualized estimate, not payroll withholding
+                {FEDERAL_LIABILITY_CAVEAT}
               </span>
             </span>
           }

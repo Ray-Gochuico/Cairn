@@ -86,5 +86,12 @@ describe('computePaycheck', () => {
     expect(r.pretaxHealth).toBe(3_600);
     expect(r.pretaxTotal).toBe(13_600);
     expect(r.federal).toBeLessThan(computePaycheck({ ...base }).federal);
+    // Accounting identity: take-home is gross minus every leg the result
+    // itemizes — a mutant that drops pretax (or any leg) from the take-home
+    // composition fails HERE, not just in a component pin.
+    expect(r.takeHome).toBe(
+      r.gross - r.pretaxTotal - r.federal - r.fica - r.stateTax - r.cityTax -
+        r.postTaxTotal - r.extraWithholdingTotal,
+    );
   });
 });
