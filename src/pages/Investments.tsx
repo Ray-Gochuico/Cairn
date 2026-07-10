@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { useLocation, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useLoadGate } from '@/lib/use-load-gate';
 import { pickModerateRate } from '@/lib/growth-scenario';
 import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
@@ -34,7 +34,6 @@ import type { CardLayoutEntry, AssetClassTarget } from '@/types/schema';
 import ContributionsByBucketChart from '@/components/charts/ContributionsByBucketChart';
 import { useDonutSelected, type DonutEntityPickerItem } from '@/components/charts/DonutEntityPicker';
 import { paletteColorAt } from '@/components/charts/palette';
-import AssetValueChart from '@/components/charts/AssetValueChart';
 import PerTickerDonut from '@/components/charts/PerTickerDonut';
 import SectorDonut from '@/components/charts/SectorDonut';
 import GrowthCard from '@/components/charts/GrowthCard';
@@ -635,17 +634,12 @@ export default function Investments() {
   // class-targets sits next to drift, which consumes the targets.
   const cardRegistry: InvestmentsCardEntry[] = useMemo(
     () => [
-      {
-        id: 'time-series',
-        label: 'Investments Over Time',
-        size: 'wide',
-        applicable: true,
-        // AssetValueChart 'investments' surface reads stores + the ?view
-        // filter itself (respectViewFilter) — no props to thread. Card id
-        // and label are UNCHANGED so saved investments_card_layout rows
-        // keep applying (applyCardLayout matches by id).
-        render: () => <AssetValueChart surface="investments" />,
-      },
+      // W14: the 'time-series' hero card is RETIRED — the investments balance
+      // chart now lives on Net Worth as its "Investment accounts" hero tab
+      // (/net-worth?chart=investments; header link below). Saved
+      // investments_card_layout rows still naming 'time-series' are ignored
+      // by applyCardLayout (unknown-saved-id tolerance, pinned in
+      // tests/lib/investments-card-layout.test.ts).
       {
         id: 'growth',
         label: 'Investments growth',
@@ -949,6 +943,14 @@ export default function Investments() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* W14: the balance-history hero moved to Net Worth's
+              "Investment accounts" tab — link there from its old home. */}
+          <Link
+            to="/net-worth?chart=investments"
+            className="text-sm underline text-muted-foreground hover:text-foreground"
+          >
+            Balance history → Net Worth
+          </Link>
           <button
             type="button"
             onClick={() => setEditMode((v) => !v)}

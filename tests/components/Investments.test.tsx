@@ -1057,3 +1057,28 @@ describe('Investments page — W14 in-place Manage deflections', () => {
     expect(link).toHaveAttribute('href', '/investments?manage=holdings');
   });
 });
+
+describe('Investments page — W14 chart-hero retirement (merge into Net Worth)', () => {
+  beforeEach(() => {
+    resetStores();
+    dbSelectImpl.current = async () => [];
+    localStorage.clear();
+  });
+
+  it('the time-series hero is gone; a header link points at the Net Worth tab', async () => {
+    primeStores({
+      accounts: [{ id: 1, name: 'Brokerage' }],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 50_000 }],
+    });
+    render(
+      <MemoryRouter initialEntries={['/investments']}>
+        <Investments />
+      </MemoryRouter>,
+    );
+    await screen.findByText(/investments growth/i);
+    // The investments-surface chart header no longer renders on this page.
+    expect(screen.queryByText('Total investments')).toBeNull();
+    const link = screen.getByRole('link', { name: /balance history/i });
+    expect(link).toHaveAttribute('href', '/net-worth?chart=investments');
+  });
+});

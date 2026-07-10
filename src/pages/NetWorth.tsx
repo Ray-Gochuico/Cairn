@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Wallet } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useLoadGate } from '@/lib/use-load-gate';
 import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
@@ -45,6 +46,29 @@ import { filterSnapshotsForNetWorth } from '@/lib/account-inclusion';
 
 export default function NetWorth() {
   const { filter, persons } = useViewFilter();
+
+  // W14 chart merge: the hero toggles between the whole-net-worth surface and
+  // the (former Investments-page) investment-accounts surface. ?chart=
+  // investments is the deep-link/redirect target; `replace: true` keeps the
+  // toggle out of Back-button history. Each surface's persisted prefs,
+  // Included picker, and breakdown behavior ride along unchanged (per-surface
+  // config is self-contained in AssetValueChart).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const chart = searchParams.get('chart') === 'investments' ? 'investments' : 'total';
+  const setChart = useCallback(
+    (value: string) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (value === 'investments') next.set('chart', 'investments');
+          else next.delete('chart');
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
 
   const snapshots = useSnapshotsStore((s) => s.snapshots);
   const loadSnapshots = useSnapshotsStore((s) => s.load);
@@ -250,8 +274,17 @@ export default function NetWorth() {
         <ImportCsvButton entity="snapshot" />
       </div>
 
-      {/* The hero: current value, range delta, area chart, breakdown. */}
-      <AssetValueChart surface="netWorth" />
+      {/* The hero: current value, range delta, area chart, breakdown.
+          W14: a two-option segmented control swaps the surface — "Everything"
+          (net worth) vs "Investment accounts" (the chart that used to live on
+          the Investments page). */}
+      <Tabs value={chart} onValueChange={setChart}>
+        <TabsList aria-label="Hero chart scope">
+          <TabsTrigger value="total">Everything</TabsTrigger>
+          <TabsTrigger value="investments">Investment accounts</TabsTrigger>
+        </TabsList>
+      </Tabs>
+      <AssetValueChart surface={chart === 'investments' ? 'investments' : 'netWorth'} />
 
       {/* Horizon chips (1d…1y), numerically consistent with the chart
           header in household view via the shared as-of factory above

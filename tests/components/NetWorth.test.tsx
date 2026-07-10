@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { runMigrations } from '@/db/migrations';
@@ -465,5 +466,82 @@ describe('NetWorth page', () => {
     );
     expect(screen.getByRole('status', { name: /loading page/i })).toBeInTheDocument();
     expect(screen.queryByText('No net worth snapshots yet')).not.toBeInTheDocument();
+  });
+});
+
+describe('NetWorth — hero chart toggle (W14 chart merge)', () => {
+  let db: SqliteAdapter;
+
+  beforeEach(async () => {
+    db = new SqliteAdapter(':memory:');
+    await runMigrations(db, [
+      { version: '0001_initial', sql: loadInitialMigration() },
+      { version: '0007_add_account_margin', sql: loadAccountMarginMigration() },
+      { version: '0015_add_accent_colors', sql: loadAccentColorsMigration() },
+      { version: '0014_add_app_settings', sql: loadAppSettingsMigration() },
+      { version: '0024_cash_apy', sql: loadCashApyMigration() },
+      {
+        version: '0026_asset_value_snapshots',
+        sql: loadAssetValueSnapshotsMigration(),
+      },
+    ]);
+    setDatabase(db);
+    resetStores();
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  async function seedBasic() {
+    const accountId = await seedAccount(db, 'Schwab');
+    await seedSnapshot(db, accountId, '2024-06-28', 150000);
+    await seedProperty(db, 400000);
+  }
+
+  it('defaults to the Everything hero; an Investment accounts tab is offered', async () => {
+    await seedBasic();
+    render(
+      <MemoryRouter>
+        <NetWorth />
+      </MemoryRouter>,
+    );
+    await screen.findByTestId('asset-chart-header-value');
+    expect(screen.getByRole('tab', { name: 'Everything' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Investment accounts' })).toBeInTheDocument();
+    // The investments surface's distinct header label is NOT mounted.
+    expect(screen.queryByText('Total investments')).not.toBeInTheDocument();
+  });
+
+  it('clicking "Investment accounts" swaps in the investments-surface hero; growth + donuts stay put', async () => {
+    await seedBasic();
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <NetWorth />
+      </MemoryRouter>,
+    );
+    await screen.findByTestId('asset-chart-header-value');
+    await user.click(screen.getByRole('tab', { name: 'Investment accounts' }));
+    // The investments surface's persisted header label (pinned from
+    // AssetValueChart's SURFACES config).
+    expect(await screen.findByText('Total investments')).toBeInTheDocument();
+    // GrowthCard + donuts describe net worth regardless of the hero tab.
+    expect(screen.getByText('Net worth growth')).toBeInTheDocument();
+    expect(screen.getByText('Assets')).toBeInTheDocument();
+    expect(screen.getByText('Liabilities')).toBeInTheDocument();
+  });
+
+  it('?chart=investments deep link mounts with the investments hero selected', async () => {
+    await seedBasic();
+    render(
+      <MemoryRouter initialEntries={['/net-worth?chart=investments']}>
+        <NetWorth />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText('Total investments')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Investment accounts' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('Assets')).toBeInTheDocument();
+    expect(screen.getByText('Liabilities')).toBeInTheDocument();
   });
 });
