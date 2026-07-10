@@ -211,10 +211,14 @@ describe('NetWorth page', () => {
     await waitFor(() => {
       expect(screen.getByText(/no net worth snapshots yet/i)).toBeInTheDocument();
     });
+    // W14: accounts are managed on the Investments page now.
     expect(screen.getByRole('link', { name: /add an account/i })).toHaveAttribute(
       'href',
-      '/inputs/accounts',
+      '/investments?manage=accounts',
     );
+    expect(
+      screen.getByText(/set up your accounts on investments to start tracking your wealth over time/i),
+    ).toBeInTheDocument();
     // Should NOT render the chart hero in the empty state.
     expect(
       screen.queryByTestId('asset-chart-header-value'),

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import { useLoadGate } from '@/lib/use-load-gate';
 import { pickModerateRate } from '@/lib/growth-scenario';
 import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
@@ -176,6 +176,24 @@ export default function Investments() {
   const { filter, persons } = useViewFilter();
 
   const [editMode, setEditMode] = useState(false);
+
+  // W14: in-place deflections into the Manage region below. Writing
+  // ?manage=<panel> selects the sub-tab and ManageSurface scrolls itself
+  // into view; `replace: true` keeps Back-button history calm.
+  const [, setSearchParams] = useSearchParams();
+  const openManage = useCallback(
+    (panel: 'accounts' | 'holdings' | 'contributions' | 'tickers') => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set('manage', panel);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
 
   const accounts = useAccountsStore((s) => s.accounts);
   const loadAccounts = useAccountsStore((s) => s.load);
@@ -736,7 +754,7 @@ export default function Investments() {
             investableOnly={investableOnly}
             onToggleInvestableOnly={handleToggleInvestableOnly}
             asOfDate={breakdownAsOf}
-            viewHoldingsTo="/inputs/holdings"
+            viewHoldingsTo="/investments?manage=holdings"
           />
         ),
       },
@@ -890,9 +908,9 @@ export default function Investments() {
         {/*
          * Distinguish "empty because new" from "empty because the load failed":
          * a consumed-store error shows the recoverable banner; otherwise the
-         * normalized EmptyState. The CTA routes to /inputs/accounts — Investments
-         * combines account-level holdings and snapshots, and accounts is the
-         * parent of both. (529 plans also live under /inputs/accounts.)
+         * normalized EmptyState. W14: the CTA stays ON this page — accounts
+         * are managed in the Manage region below, so the button just selects
+         * its Accounts panel (?manage=accounts) and lets it scroll into view.
          */}
         {hasStoreError ? (
           <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
@@ -900,13 +918,15 @@ export default function Investments() {
           <EmptyState
             icon={PieChart}
             title="No investment holdings yet"
-            description="Set up accounts and holdings in Inputs to see your asset allocation and drift."
+            description="Set up accounts and holdings below to see your asset allocation and drift."
           >
-            <Button asChild>
-              <Link to="/inputs/accounts">Add an account</Link>
-            </Button>
+            <Button onClick={() => openManage('accounts')}>Add an account</Button>
           </EmptyState>
         )}
+
+        {/* The Manage region stays reachable on the empty page — it IS the
+            way out of the empty state. */}
+        <ManageSurface />
       </PageContainer>
     );
   }
@@ -960,10 +980,14 @@ export default function Investments() {
         >
           {unclassifiedTickers.length} holding{unclassifiedTickers.length === 1 ? '' : 's'} couldn't be auto-classified:{' '}
           <span className="font-mono">{unclassifiedTickers.join(', ')}</span>. Set their asset class manually in{' '}
-          <Link to="/inputs/tickers" className="underline hover:no-underline">
-            Inputs → Tickers
-          </Link>
-          .
+          <button
+            type="button"
+            className="underline hover:no-underline"
+            onClick={() => openManage('tickers')}
+          >
+            Manage → Tickers
+          </button>{' '}
+          below.
         </div>
       )}
 

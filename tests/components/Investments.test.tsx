@@ -998,3 +998,62 @@ describe('529 projection caveat (round-3 E3)', () => {
     expect(within(section).getByText(/stops at the 18th birthday/i)).toBeInTheDocument();
   });
 });
+
+describe('Investments page — W14 in-place Manage deflections', () => {
+  beforeEach(() => {
+    resetStores();
+    dbSelectImpl.current = async () => [];
+    localStorage.clear();
+  });
+
+  it('empty state offers an in-place "Add an account" BUTTON, not an /inputs link', async () => {
+    primeStores(); // resolved-empty
+    render(
+      <MemoryRouter initialEntries={['/investments']}>
+        <Investments />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText(/no investment holdings yet/i)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /add an account/i })).toBeNull();
+    // No copy deflects to Inputs anymore.
+    expect(screen.queryByText(/in inputs/i)).toBeNull();
+    // The Manage region is reachable right on the (empty) page…
+    expect(screen.getByRole('heading', { name: /^manage$/i })).toBeInTheDocument();
+    // …and the CTA is a button that reveals the Accounts panel in place.
+    await userEvent.click(screen.getByRole('button', { name: /add an account/i }));
+    expect(screen.getByRole('tab', { name: 'Accounts' })).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByText(/no accounts added yet/i)).toBeInTheDocument();
+  });
+
+  it('unclassified-tickers banner points at Manage → Tickers below, not Inputs', async () => {
+    primeStores({
+      accounts: [{ id: 1, name: 'Brokerage' }],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 50_000 }],
+      holdings: [{ accountId: 1, ticker: 'MYSTERY', shareCount: 1 }],
+    });
+    render(
+      <MemoryRouter initialEntries={['/investments']}>
+        <Investments />
+      </MemoryRouter>,
+    );
+    const banner = await screen.findByTestId('unclassified-tickers-banner');
+    expect(banner).toHaveTextContent(/set their asset class manually in/i);
+    expect(within(banner).queryByRole('link')).toBeNull();
+    await userEvent.click(within(banner).getByRole('button', { name: /manage → tickers/i }));
+    expect(screen.getByRole('tab', { name: 'Tickers' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('the by-account card "View holdings" link targets the Manage surface', async () => {
+    primeStores({
+      accounts: [{ id: 1, name: 'Brokerage' }],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 50_000 }],
+    });
+    render(
+      <MemoryRouter initialEntries={['/investments']}>
+        <Investments />
+      </MemoryRouter>,
+    );
+    const link = await screen.findByRole('link', { name: /view holdings/i });
+    expect(link).toHaveAttribute('href', '/investments?manage=holdings');
+  });
+});

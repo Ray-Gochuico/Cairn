@@ -214,9 +214,8 @@ export default function NetWorth() {
         {/*
          * Distinguish "empty because new" from "empty because the load failed":
          * a consumed-store error shows the recoverable banner; otherwise the
-         * normalized EmptyState. The CTA routes to /inputs/accounts — Net Worth
-         * combines account snapshots, properties, vehicles, and loan balances,
-         * and accounts is where most users start.
+         * normalized EmptyState. W14: the CTA routes to the Investments Manage
+         * surface — accounts are managed where they're analyzed now.
          */}
         {hasStoreError ? (
           <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
@@ -224,10 +223,10 @@ export default function NetWorth() {
           <EmptyState
             icon={Wallet}
             title="No net worth snapshots yet"
-            description="Set up your accounts in Inputs to start tracking your wealth over time."
+            description="Set up your accounts on Investments to start tracking your wealth over time."
           >
             <Button asChild>
-              <Link to="/inputs/accounts">Add an account</Link>
+              <Link to="/investments?manage=accounts">Add an account</Link>
             </Button>
           </EmptyState>
         )}
