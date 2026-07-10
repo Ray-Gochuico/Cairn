@@ -37,24 +37,20 @@ import DonutChartCard, { type DonutSlice } from '@/components/charts/DonutChartC
 import PaycheckBreakdownRow from './PaycheckBreakdownRow';
 import type { FilingStatus } from '@/types/enums';
 
-// Swatch palette for the breakdown rows + donut. The slate deduction-ramp
-// (gross→federal→ss→medicare) stays raw hex — it's a legitimate sequential
-// narrative, not a duplicated token. The three SEMANTIC rows (post-tax/extra/
-// take-home) resolve to the success/warning/destructive tokens via `hsl(var(…))`
-// so they theme-track instead of duplicating those tokens as frozen hex (Design
-// F1). The take-home wedge is the green hero.
+// Swatch palette for the breakdown rows + donut — CSS-var tokens ONLY
+// (Wave 15 T8; the old slate/sky/green hex ramp is retired — two entries fell
+// under the 1.45:1 wedge floor on the stone card). The deduction ramp
+// (gross→federal→ss→medicare) binds the --paycheck-* stone ramp; the three
+// SEMANTIC rows (post-tax/extra/take-home) keep the status tokens they mean.
+// Fill-only discipline: none of these may color text.
 const COLORS = {
-  gross: '#94a3b8',
-  // Mid-slate, not near-black: '#1e293b' (slate-800) is effectively invisible
-  // on a slate-950 dark card. '#64748b'-ish reads on both themes.
-  federal: '#475569',
-  ss: '#64748b',
-  medicare: '#94a3b8',
-  state: '#0ea5e9',
-  city: '#7dd3fc',
-  pretax: '#86efac',
-  // Theme-tracked (Design F1): match the --warning/--destructive/--success
-  // tokens these rows already mean, rather than freezing them as hex.
+  gross: 'hsl(var(--paycheck-gross))',
+  federal: 'hsl(var(--paycheck-federal))',
+  ss: 'hsl(var(--paycheck-ss))',
+  medicare: 'hsl(var(--paycheck-gross))', // shares the gross step (as the old hex did)
+  state: 'hsl(var(--paycheck-state))',
+  city: 'hsl(var(--paycheck-city))',
+  pretax: 'hsl(var(--paycheck-pretax))',
   posttax: 'hsl(var(--warning))',
   extra: 'hsl(var(--destructive))',
   takehome: 'hsl(var(--success))',

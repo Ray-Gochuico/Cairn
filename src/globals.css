@@ -120,6 +120,23 @@
        the stone canvas: 3.40:1. */
     --chart-success: 142 71% 35%;
     --chart-band: 213 38% 48%;   /* percentile-band fill base (TIER_BLUE parity) */
+
+    /* Paycheck breakdown/donut swatches — FILL ONLY, never text (same
+     * discipline as the --chart-* family above). Wave 15 T8: replaces the
+     * frozen slate/sky/green hex ramp in PaycheckCalculator; #86efac fell to
+     * 1.36:1 on the stone card (under the 1.45 wedge floor). THEME-STATIC:
+     * defined once here — every value sits in the relative-luminance band
+     * that clears >=1.45:1 against BOTH theme cards (#FCFBF8 / #201C17);
+     * locked by tests/styles/paycheck-swatch-contrast.test.ts. Warm-stone
+     * deduction ramp (federal darkest → gross lightest; medicare shares
+     * gross), a slate-blue state/city pair, and a deep pine pre-tax green
+     * kept >=2:1 from the --success take-home wedge in both themes. */
+    --paycheck-gross: 34 10% 61%;    /* vs card: 2.5:1 light / 6.3:1 dark */
+    --paycheck-federal: 35 10% 30%;  /* 8.0 / 2.0 */
+    --paycheck-ss: 35 10% 44%;       /* 4.7 / 3.5 */
+    --paycheck-state: 213 40% 45%;   /* 5.1 / 3.2 */
+    --paycheck-city: 213 45% 65%;    /* 2.6 / 6.3 */
+    --paycheck-pretax: 142 45% 28%;  /* 6.5 / 2.5; 2.96:1 vs --success */
   }
 
   .dark {
