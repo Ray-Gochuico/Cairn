@@ -241,7 +241,7 @@ export function FinancialIndependenceCard({
             <Link to="/inputs/household" className="text-primary hover:underline">
               add growth scenarios in Household settings
             </Link>{' '}
-            to see Years to FI. Your inputs above are already filled.
+            to see Years to FI.
           </p>
         ) : (
           <p className="text-sm text-muted-foreground">

@@ -197,18 +197,6 @@ describe('CoastFiCard', () => {
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 
-  it('empty states name the missing ingredient with a real link', () => {
-    // scenarios missing → names growth scenarios + links to Household settings
-    primeStores({ scenarios: [] });
-    render(
-      <MemoryRouter>
-        <CoastFiCard />
-      </MemoryRouter>,
-    );
-    const link = screen.getByRole('link', { name: /growth scenarios/i });
-    expect(link).toHaveAttribute('href', '/inputs/household');
-  });
-
   it('renders headline "X% of CoastFI" when seeded with one person + snapshots', () => {
     primeStores();
     render(

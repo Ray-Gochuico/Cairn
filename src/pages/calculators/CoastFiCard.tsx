@@ -291,7 +291,7 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
               <Link to="/inputs/household" className="text-primary hover:underline">
                 set your household expense baseline
               </Link>{' '}
-              to prefill it
+              to prefill your expenses
             </>
           )}
           .
