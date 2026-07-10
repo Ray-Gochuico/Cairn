@@ -1015,3 +1015,29 @@ describe('equity linked-loan resolution (wave-9 M12)', () => {
     expect(screen.getByText('$200,000')).toBeInTheDocument();
   });
 });
+
+describe('Property page — drawer create submits (W14 page-level create coverage)', () => {
+  beforeEach(() => {
+    resetStores();
+  });
+
+  it('filling the create drawer calls create and closes', async () => {
+    const create = vi.fn(async () => 1);
+    usePropertiesStore.setState({ create } as never);
+    usePersonsStore.setState({
+      persons: [{ id: 1, householdId: 1, name: 'Alex' }],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole('button', { name: /add a property/i }));
+    const dialog = await screen.findByRole('dialog', { name: /add property/i });
+    await user.type(within(dialog).getByLabelText(/^name$/i), 'Lake house');
+    await user.click(within(dialog).getByRole('button', { name: /^save$/i }));
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ name: 'Lake house' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+});

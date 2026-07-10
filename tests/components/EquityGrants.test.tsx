@@ -426,3 +426,48 @@ describe('person-view filter (round-3 T21)', () => {
     expect(screen.getByTestId('equity-summary')).toHaveTextContent('$0');
   });
 });
+
+describe('EquityGrants page — drawer create submits (W14 page-level create coverage)', () => {
+  beforeEach(() => {
+    resetStores();
+  });
+
+  it('filling the create drawer (with template schedule) calls create and closes', async () => {
+    const create = vi.fn(async () => 1);
+    primeStores({ grants: [{ name: 'Existing Grant' }] });
+    useEquityGrantsStore.setState({ create } as never);
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <EquityGrants />
+      </MemoryRouter>,
+    );
+    await user.click(screen.getByRole('button', { name: /^add grant$/i }));
+    const dialog = await screen.findByRole('dialog', { name: /add equity grant/i });
+    await user.type(within(dialog).getByLabelText(/^name$/i), '2024 RSU grant');
+    await user.type(within(dialog).getByLabelText(/^company$/i), 'Acme Corp');
+    await user.click(within(dialog).getByRole('radio', { name: /alice/i }));
+    const picker = within(dialog).getByTestId('grant-date-picker');
+    await user.selectOptions(within(picker).getByLabelText(/year$/i), '2024');
+    await user.selectOptions(within(picker).getByLabelText(/month$/i), '01');
+    await user.selectOptions(within(picker).getByLabelText(/day$/i), '15');
+    await user.type(within(dialog).getByLabelText(/total shares/i), '4800');
+    await user.type(within(dialog).getByLabelText(/current fmv/i), '120');
+    await user.selectOptions(
+      within(dialog).getByLabelText(/vesting template/i),
+      'FOUR_YR_MONTHLY_ONE_YR_CLIFF',
+    );
+    await user.click(within(dialog).getByRole('button', { name: /^save$/i }));
+    await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: '2024 RSU grant',
+        companyName: 'Acme Corp',
+        grantDate: '2024-01-15',
+        totalShares: 4800,
+        currentFmv: 120,
+      }),
+    );
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  }, 15000);
+});

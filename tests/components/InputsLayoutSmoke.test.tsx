@@ -16,7 +16,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { runMigrations, loadAllMigrations } from '@/db/migrations';
@@ -30,7 +30,7 @@ import { PersonsRepo } from '@/domain/persons';
 import { TickersRepo } from '@/domain/tickers';
 import CategoriesTab from '@/pages/inputs/CategoriesTab';
 import PersonsTab from '@/pages/inputs/PersonsTab';
-import TickersTab from '@/pages/inputs/TickersTab';
+import TickersPanel from '@/components/investments/manage/TickersPanel';
 import HouseholdTab from '@/pages/inputs/HouseholdTab';
 import InputsLayout from '@/pages/inputs/InputsLayout';
 import { AssetClass, Direction } from '@/types/schema';
@@ -130,7 +130,7 @@ describe('Inputs layout smoke — cramped-row fix', () => {
     expect(row.querySelector('[class*="truncate"]')).not.toBeNull();
   });
 
-  it('TickersTab row has min-w-0 / shrink-0 / truncate container', async () => {
+  it('TickersPanel row has min-w-0 / shrink-0 / truncate container (W14: tab retired)', async () => {
     // Seed a ticker with a long name so we exercise the truncate path.
     const repo = new TickersRepo(getDatabase());
     await repo.upsert({
@@ -147,7 +147,7 @@ describe('Inputs layout smoke — cramped-row fix', () => {
 
     render(
       <MemoryRouter>
-        <TickersTab />
+        <TickersPanel />
       </MemoryRouter>,
     );
     await waitFor(() => {
@@ -158,13 +158,20 @@ describe('Inputs layout smoke — cramped-row fix', () => {
     expect(row.querySelector('[class*="truncate"]')).not.toBeNull();
   });
 
-  it('the tab rail is a named navigation landmark', () => {
+  it('the tab rail is a named Setup landmark with exactly the four residual tabs (W14)', () => {
     render(
       <MemoryRouter>
         <InputsLayout />
       </MemoryRouter>,
     );
-    expect(screen.getByRole('navigation', { name: 'Input categories' })).toBeInTheDocument();
+    const nav = screen.getByRole('navigation', { name: 'Setup' });
+    const links = within(nav).getAllByRole('link');
+    expect(links.map((l) => l.textContent)).toEqual([
+      'Household',
+      'Persons',
+      'Dependents',
+      'Categories',
+    ]);
   });
 
   it('HouseholdTab content wrapper carries min-w-0 so long labels can break', async () => {

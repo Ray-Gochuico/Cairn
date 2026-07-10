@@ -37,19 +37,22 @@ const TITLES: Record<string, string> = {
   '/inputs/household': 'Inputs · Household',
   '/inputs/persons': 'Inputs · Persons',
   '/inputs/dependents': 'Inputs · Dependents',
-  '/inputs/accounts': 'Inputs · Accounts',
-  '/inputs/holdings': 'Inputs · Holdings',
-  '/inputs/contributions': 'Inputs · Contributions',
-  '/inputs/loans': 'Inputs · Loans',
-  '/inputs/equity-grants': 'Inputs · Equity Grants',
-  '/inputs/properties': 'Inputs · Properties',
-  '/inputs/housing-payments': 'Inputs · Rent / Housing',
-  '/inputs/vehicles': 'Inputs · Vehicles',
-  '/inputs/vehicle-leases': 'Inputs · Vehicle Leases',
-  '/inputs/goals': 'Inputs · Goals',
-  '/inputs/plans-529': 'Inputs · 529 Plans',
   '/inputs/categories': 'Inputs · Categories',
-  '/inputs/tickers': 'Inputs · Tickers',
+  // W14 redirect stubs (App.tsx routes them via <Navigate> to each entity's
+  // new home) — titled as their destinations so the tripwire stays exact and
+  // a mid-redirect announcement never says a retired tab name.
+  '/inputs/loans': 'Loans', // W14 redirect stub
+  '/inputs/properties': 'Property', // W14 redirect stub
+  '/inputs/housing-payments': 'Property', // W14 redirect stub
+  '/inputs/vehicles': 'Vehicles', // W14 redirect stub
+  '/inputs/vehicle-leases': 'Vehicles', // W14 redirect stub
+  '/inputs/equity-grants': 'Equity Grants', // W14 redirect stub
+  '/inputs/goals': 'Goals', // W14 redirect stub
+  '/inputs/plans-529': 'Goals', // W14 redirect stub
+  '/inputs/accounts': 'Investments', // W14 redirect stub
+  '/inputs/holdings': 'Investments', // W14 redirect stub
+  '/inputs/contributions': 'Investments', // W14 redirect stub
+  '/inputs/tickers': 'Investments', // W14 redirect stub
 };
 
 /**

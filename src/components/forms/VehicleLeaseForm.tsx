@@ -44,8 +44,8 @@ export interface VehicleLeaseFormProps {
 }
 
 /**
- * Canonical vehicle lease form. Shared by VehiclesTab's sibling input
- * tab (VehicleLeasesTab) and the Setup Wizard.
+ * Canonical vehicle lease form. Shared by the Vehicles page drawer and
+ * the Setup Wizard.
  */
 export default function VehicleLeaseForm({
   initial,

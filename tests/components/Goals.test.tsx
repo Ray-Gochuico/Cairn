@@ -658,3 +658,40 @@ describe('Goals page', () => {
     revokeSpy.mockRestore();
   });
 });
+
+describe('Goals page — drawer create submits (W14 page-level create coverage)', () => {
+  beforeEach(() => {
+    resetStores();
+  });
+
+  it('filling the create drawer calls create and closes', async () => {
+    const create = vi.fn(async () => 1);
+    primeStores({ goals: [{ name: 'Existing goal' }] });
+    useGoalsStore.setState({ create } as never);
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter>
+        <Goals />
+      </MemoryRouter>,
+    );
+    await user.click(screen.getByRole('button', { name: /^add goal$/i }));
+    const dialog = await screen.findByRole('dialog', { name: /add goal/i });
+    await user.type(within(dialog).getByLabelText(/^name$/i), 'House Down Payment');
+    await user.clear(within(dialog).getByLabelText(/target amount/i));
+    await user.type(within(dialog).getByLabelText(/target amount/i), '80000');
+    const picker = within(dialog).getByTestId('targetDate-picker');
+    await user.selectOptions(within(picker).getByLabelText(/year$/i), '2032');
+    await user.selectOptions(within(picker).getByLabelText(/month$/i), '06');
+    await user.selectOptions(within(picker).getByLabelText(/day$/i), '01');
+    await user.click(within(dialog).getByRole('button', { name: /^save$/i }));
+    await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'House Down Payment',
+        targetAmount: 80000,
+        targetDate: '2032-06-01',
+      }),
+    );
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+});

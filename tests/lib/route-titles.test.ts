@@ -28,10 +28,16 @@ describe('titleForPath', () => {
     expect(titleForPath('/setup')).toBe('Setup');
     expect(titleForPath('/welcome')).toBe('Welcome');
   });
-  it('maps inputs tabs with the section prefix', () => {
-    expect(titleForPath('/inputs/accounts')).toBe('Inputs · Accounts');
-    expect(titleForPath('/inputs/vehicle-leases')).toBe('Inputs · Vehicle Leases');
+  it('maps the kept Setup tabs with the section prefix', () => {
+    expect(titleForPath('/inputs/household')).toBe('Inputs · Household');
+    expect(titleForPath('/inputs/categories')).toBe('Inputs · Categories');
     expect(titleForPath('/inputs')).toBe('Inputs');
+  });
+  it('W14 redirect stubs are titled as their destinations', () => {
+    expect(titleForPath('/inputs/accounts')).toBe('Investments');
+    expect(titleForPath('/inputs/vehicle-leases')).toBe('Vehicles');
+    expect(titleForPath('/inputs/plans-529')).toBe('Goals');
+    expect(titleForPath('/inputs/loans')).toBe('Loans');
   });
   it('falls back: unknown leaf inherits the nearest known ancestor; unknown root is null', () => {
     expect(titleForPath('/inputs/some-future-tab')).toBe('Inputs');
