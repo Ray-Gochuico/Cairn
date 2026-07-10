@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLoadGate } from '@/lib/use-load-gate';
 import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
-import { Link } from 'react-router-dom';
 import { useVehiclesStore } from '@/stores/vehicles-store';
 import { useLoansStore } from '@/stores/loans-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
@@ -48,6 +47,10 @@ import { ValueEditor, EquityRow } from '@/components/AssetCardParts';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import ValueHistorySection from '@/components/inputs/ValueHistorySection';
 import type { CsvColumn } from '@/lib/csv';
+import VehicleForm, { DEFAULT_VEHICLE } from '@/components/forms/VehicleForm';
+import VehicleLeaseForm, { DEFAULT_VEHICLE_LEASE } from '@/components/forms/VehicleLeaseForm';
+import { EditDrawer } from '@/components/layout/EditDrawer';
+import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 
 /**
  * Vehicles page — Phase 4 split of the former "Property & Vehicles" combined
@@ -91,6 +94,8 @@ interface VehicleAssetCardProps {
   onEdit: () => void;
   onCancelEdit: () => void;
   onSaveValue: (value: number | null) => Promise<void>;
+  /** W14 one-place-per-thing: opens the page's VehicleForm EditDrawer. */
+  onEditDetails: () => void;
 }
 
 function VehicleAssetCard({
@@ -102,6 +107,7 @@ function VehicleAssetCard({
   onEdit,
   onCancelEdit,
   onSaveValue,
+  onEditDetails,
 }: VehicleAssetCardProps) {
   const description = describeVehicle(vehicle);
 
@@ -115,9 +121,19 @@ function VehicleAssetCard({
               <CardDescription className="text-xs">{description}</CardDescription>
             ) : null}
           </div>
-          <Button size="sm" variant="outline" onClick={onEdit}>
-            Edit value
-          </Button>
+          <div className="flex shrink-0 gap-2">
+            <Button size="sm" variant="outline" onClick={onEdit}>
+              Edit value
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              aria-label={`Edit details for ${vehicle.name}`}
+              onClick={onEditDetails}
+            >
+              Edit details
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -294,9 +310,11 @@ interface LeaseCardProps {
   ownerLabel: string;
   today: string;
   onRemove: () => void | Promise<void>;
+  /** W14 one-place-per-thing: opens the page's VehicleLeaseForm EditDrawer. */
+  onEdit: () => void;
 }
 
-function LeaseCard({ lease, ownerLabel, today, onRemove }: LeaseCardProps) {
+function LeaseCard({ lease, ownerLabel, today, onRemove, onEdit }: LeaseCardProps) {
   const ended = !isActiveOn(lease, today);
   return (
     <Card>
@@ -314,10 +332,8 @@ function LeaseCard({ lease, ownerLabel, today, onRemove }: LeaseCardProps) {
             </CardDescription>
           </div>
           <div className="flex shrink-0 gap-2">
-            <Button asChild size="sm" variant="outline">
-              <Link to="/inputs/vehicle-leases" aria-label="Edit lease">
-                Edit
-              </Link>
+            <Button size="sm" variant="outline" aria-label="Edit lease" onClick={onEdit}>
+              Edit
             </Button>
             <Button size="sm" variant="destructive" onClick={onRemove}>
               Remove
@@ -369,6 +385,8 @@ export default function Vehicles() {
   const vehiclesError = useVehiclesStore((s) => s.error);
   const vehiclesLoading = useVehiclesStore((s) => s.isLoading);
   const updateVehicle = useVehiclesStore((s) => s.update);
+  const createVehicle = useVehiclesStore((s) => s.create);
+  const removeVehicle = useVehiclesStore((s) => s.remove);
 
   const loans = useLoansStore((s) => s.loans);
   const loadLoans = useLoansStore((s) => s.load);
@@ -395,6 +413,9 @@ export default function Vehicles() {
   const loadVehicleLeases = useVehicleLeasesStore((s) => s.load);
   const vehicleLeasesError = useVehicleLeasesStore((s) => s.error);
   const vehicleLeasesLoading = useVehicleLeasesStore((s) => s.isLoading);
+  const createVehicleLease = useVehicleLeasesStore((s) => s.create);
+  const updateVehicleLease = useVehicleLeasesStore((s) => s.update);
+  const removeVehicleLease = useVehicleLeasesStore((s) => s.remove);
 
   // W10 F7: price vehicle cards latest-snapshot-first, like AssetsDonut.
   const assetValueSnapshots = useAssetValueSnapshotsStore((s) => s.assetValueSnapshots);
@@ -404,6 +425,11 @@ export default function Vehicles() {
   const { confirm, dialog } = useConfirm();
 
   const [editing, setEditing] = useState<EditTarget>(null);
+
+  // W14 "one place per thing": entity CRUD happens here via EditDrawers —
+  // one per entity on this page (vehicle details + vehicle leases).
+  const [vehicleDrawer, setVehicleDrawer] = useState<'closed' | 'create' | { type: 'edit'; id: number }>('closed');
+  const [leaseDrawer, setLeaseDrawer] = useState<'closed' | 'create' | { type: 'edit'; id: number }>('closed');
 
   const reload = useCallback(() => {
     loadVehicles();
@@ -516,6 +542,116 @@ export default function Vehicles() {
     }
   }, [editing, visibleVehicles]);
 
+  // W14 drawer wiring — copied from VehiclesTab / VehicleLeasesTab verbatim
+  // (same DEFAULT_* presets, same initial mappings, same option lists, same
+  // delete confirm copy). `open` derives from `editing != null` so an entity
+  // deleted out from under an open drawer closes it safely.
+  const personOptions = persons.map((p) => ({ id: p.id!, name: p.name }));
+  const autoLoanOptions = loans
+    .filter((l) => l.type === LoanType.AUTO)
+    .map((l) => ({ id: l.id!, name: l.name }));
+
+  const renderDrawers = () => {
+    const editingVehicle =
+      typeof vehicleDrawer === 'object' ? vehicles.find((v) => v.id === vehicleDrawer.id) : undefined;
+    const vehicleOpen = vehicleDrawer === 'create' || editingVehicle != null;
+    const editingLease =
+      typeof leaseDrawer === 'object' ? vehicleLeases.find((l) => l.id === leaseDrawer.id) : undefined;
+    const leaseOpen = leaseDrawer === 'create' || editingLease != null;
+    return (
+      <>
+        <EditDrawer
+          open={vehicleOpen}
+          onClose={() => setVehicleDrawer('closed')}
+          title={vehicleDrawer === 'create' ? 'Add vehicle' : 'Edit vehicle'}
+          description={vehicleDrawer === 'create' ? 'Cars, trucks, motorcycles, boats — with optional auto-loan linkage.' : undefined}
+        >
+          <VehicleForm
+            initial={editingVehicle ? {
+              householdId: editingVehicle.householdId,
+              ownerPersonId: editingVehicle.ownerPersonId,
+              name: editingVehicle.name,
+              year: editingVehicle.year,
+              make: editingVehicle.make,
+              model: editingVehicle.model,
+              purchaseDate: editingVehicle.purchaseDate,
+              purchasePrice: editingVehicle.purchasePrice,
+              currentEstimatedValue: editingVehicle.currentEstimatedValue,
+              linkedLoanId: editingVehicle.linkedLoanId,
+              excludedFromNetWorth: editingVehicle.excludedFromNetWorth,
+            } : DEFAULT_VEHICLE}
+            persons={personOptions}
+            autoLoans={autoLoanOptions}
+            onSubmit={async (v) => {
+              if (editingVehicle) await updateVehicle(editingVehicle.id!, v);
+              else await createVehicle(v);
+              setVehicleDrawer('closed');
+            }}
+            onCancel={() => setVehicleDrawer('closed')}
+          />
+          {editingVehicle && (
+            <div className="mt-6 border-t pt-4">
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: `Delete ${editingVehicle.name}?`,
+                    description: 'This permanently removes this vehicle. This can’t be undone.',
+                  });
+                  if (ok) { await removeVehicle(editingVehicle.id!); setVehicleDrawer('closed'); }
+                }}
+              >
+                Delete vehicle
+              </Button>
+            </div>
+          )}
+        </EditDrawer>
+        <EditDrawer
+          open={leaseOpen}
+          onClose={() => setLeaseDrawer('closed')}
+          title={leaseDrawer === 'create' ? 'Add vehicle lease' : 'Edit vehicle lease'}
+          description={leaseDrawer === 'create' ? "Recurring monthly lease payment for a vehicle you don't own." : undefined}
+        >
+          <VehicleLeaseForm
+            initial={editingLease ? {
+              householdId: editingLease.householdId,
+              ownerPersonId: editingLease.ownerPersonId,
+              name: editingLease.name,
+              monthlyAmount: editingLease.monthlyAmount,
+              startDate: editingLease.startDate,
+              endDate: editingLease.endDate,
+            } : DEFAULT_VEHICLE_LEASE}
+            persons={personOptions}
+            onSubmit={async (v) => {
+              if (editingLease) await updateVehicleLease(editingLease.id!, v);
+              else await createVehicleLease(v);
+              setLeaseDrawer('closed');
+            }}
+            onCancel={() => setLeaseDrawer('closed')}
+          />
+          {editingLease && (
+            <div className="mt-6 border-t pt-4">
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: `Delete ${editingLease.name}?`,
+                    description: 'This permanently removes this lease. This can’t be undone.',
+                  });
+                  if (ok) { await removeVehicleLease(editingLease.id!); setLeaseDrawer('closed'); }
+                }}
+              >
+                Delete lease
+              </Button>
+            </div>
+          )}
+        </EditDrawer>
+      </>
+    );
+  };
+
   if (!gate.settled) {
     return (
       <PageContainer className="space-y-6">
@@ -539,13 +675,16 @@ export default function Vehicles() {
           <EmptyState
             icon={Car}
             title="No vehicles yet"
-            description="Add a vehicle or lease in Inputs to see equity at a glance."
+            description="Add a vehicle or lease to see equity at a glance."
           >
-            <Button asChild>
-              <Link to="/inputs/vehicles">Add a vehicle</Link>
-            </Button>
+            <div className="flex items-center justify-center gap-2">
+              <Button onClick={() => setVehicleDrawer('create')}>Add a vehicle</Button>
+              <Button variant="outline" onClick={() => setLeaseDrawer('create')}>Add a lease</Button>
+            </div>
           </EmptyState>
         )}
+        {renderDrawers()}
+        {dialog}
       </PageContainer>
     );
   }
@@ -565,7 +704,11 @@ export default function Vehicles() {
             Equity = current value − linked-loan balance.
           </p>
         </div>
-        <ExportCsvButton baseName="vehicles" columns={csvColumns} rows={vehicles} />
+        <div className="flex items-center gap-2">
+          <ExportCsvButton baseName="vehicles" columns={csvColumns} rows={vehicles} />
+          <ImportCsvButton entity="vehicle" />
+          <Button size="sm" onClick={() => setVehicleDrawer('create')}>Add vehicle</Button>
+        </div>
       </div>
 
       {visibleVehicles.length === 0 && visibleLeases.length === 0 && (
@@ -616,6 +759,7 @@ export default function Vehicles() {
                   onEdit={() => setEditing({ id: v.id! })}
                   onCancelEdit={() => setEditing(null)}
                   onSaveValue={(val) => handleSaveVehicle(v.id!, val)}
+                  onEditDetails={() => setVehicleDrawer({ type: 'edit', id: v.id! })}
                 />
                 <VehicleExpensesCard
                   vehicleName={v.name}
@@ -690,19 +834,22 @@ export default function Vehicles() {
                   });
                   if (ok) await useVehicleLeasesStore.getState().remove(l.id!);
                 }}
+                onEdit={() => setLeaseDrawer({ type: 'edit', id: l.id! })}
               />
             ))}
-            <Link
-              to="/inputs/vehicle-leases"
+            <button
+              type="button"
+              onClick={() => setLeaseDrawer('create')}
               aria-label="Add lease"
               className="flex min-h-[96px] w-full items-center justify-center gap-2 rounded-lg border border-dashed text-sm font-medium text-primary transition-colors hover:bg-accent"
             >
               <span aria-hidden="true" className="text-lg leading-none">+</span>
               Add lease
-            </Link>
+            </button>
           </div>
         </section>
       )}
+      {renderDrawers()}
       {dialog}
     </PageContainer>
   );

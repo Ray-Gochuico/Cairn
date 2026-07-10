@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useCallback, useMemo, useState } from 'react';
 import { Landmark } from 'lucide-react';
 import { useLoadGate } from '@/lib/use-load-gate';
 import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
 import { useLoansStore } from '@/stores/loans-store';
+import { usePropertiesStore } from '@/stores/properties-store';
+import { useVehiclesStore } from '@/stores/vehicles-store';
 import { amortize, nextPaymentDateFrom, scheduleIsCapped, type Amortization, type ScheduleEntry } from '@/lib/amortization';
 import { filterByObligorPersonId } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
@@ -26,6 +27,10 @@ import type { CsvColumn } from '@/lib/csv';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import { EmptyState } from '@/components/layout/EmptyState';
+import { EditDrawer } from '@/components/layout/EditDrawer';
+import LoanForm, { DEFAULT_LOAN } from '@/components/forms/LoanForm';
+import { ImportCsvButton } from '@/components/import/ImportCsvButton';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 
 /**
  * Loans page — Phase 2 visualization surface.
@@ -229,9 +234,11 @@ interface LoanCardProps {
   expanded: boolean;
   onToggleExpand: () => void;
   schedule: ScheduleEntry[];
+  /** W14 one-place-per-thing: opens the page's EditDrawer for this loan. */
+  onEdit: () => void;
 }
 
-function LoanCard({ projection, expanded, onToggleExpand, schedule }: LoanCardProps) {
+function LoanCard({ projection, expanded, onToggleExpand, schedule, onEdit }: LoanCardProps) {
   const { loan, withDefault, withoutExtra } = projection;
   const loanId = loan.id!;
   const paid = Math.max(0, loan.originalAmount - loan.currentBalance);
@@ -263,9 +270,19 @@ function LoanCard({ projection, expanded, onToggleExpand, schedule }: LoanCardPr
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
           <CardTitle className="text-base">{loan.name}</CardTitle>
-          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground bg-muted rounded px-2 py-1">
-            {LOAN_TYPE_LABEL[loan.type]}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground bg-muted rounded px-2 py-1">
+              {LOAN_TYPE_LABEL[loan.type]}
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              aria-label={`Edit terms for ${loan.name}`}
+              onClick={onEdit}
+            >
+              Edit terms
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -371,9 +388,36 @@ export default function Loans() {
   const load = useLoansStore((s) => s.load);
   const loansError = useLoansStore((s) => s.error);
   const loansLoading = useLoansStore((s) => s.isLoading);
-  const storeErrors = [loansError];
+  const createLoan = useLoansStore((s) => s.create);
+  const updateLoan = useLoansStore((s) => s.update);
+  const removeLoan = useLoansStore((s) => s.remove);
+  // W14: LoanForm's linked-collateral pickers need properties + vehicles —
+  // subscribe + gate them like every other consumed store (Wave-10 pattern).
+  const properties = usePropertiesStore((s) => s.properties);
+  const loadProperties = usePropertiesStore((s) => s.load);
+  const propertiesError = usePropertiesStore((s) => s.error);
+  const propertiesLoading = usePropertiesStore((s) => s.isLoading);
+  const vehicles = useVehiclesStore((s) => s.vehicles);
+  const loadVehicles = useVehiclesStore((s) => s.load);
+  const vehiclesError = useVehiclesStore((s) => s.error);
+  const vehiclesLoading = useVehiclesStore((s) => s.isLoading);
+  const storeErrors = [loansError, propertiesError, vehiclesError];
   const hasStoreError = loansError != null;
-  const gate = useLoadGate([loansLoading], storeErrors, load);
+  const reload = useCallback(() => {
+    load();
+    loadProperties();
+    loadVehicles();
+  }, [load, loadProperties, loadVehicles]);
+  const gate = useLoadGate(
+    [loansLoading, propertiesLoading, vehiclesLoading],
+    storeErrors,
+    reload,
+  );
+
+  // W14 "one place per thing": entity CRUD happens here via the EditDrawer
+  // (the LoansTab mode machine, renamed for a page that defaults to reading).
+  const [drawer, setDrawer] = useState<'closed' | 'create' | { type: 'edit'; id: number }>('closed');
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   const [expandedLoanIds, setExpandedLoanIds] = useState<Set<number>>(new Set());
 
@@ -490,6 +534,74 @@ export default function Loans() {
     [personNameById],
   );
 
+  // W14 drawer wiring — copied from LoansTab (same DEFAULT_LOAN, same 13-field
+  // initial mapping, same monthlyPayment user-set rule, same option lists,
+  // same delete confirm copy). `open` derives from `editing != null` so a
+  // loan deleted out from under an open drawer closes it safely.
+  const personOptions = persons.map((p) => ({ id: p.id!, name: p.name }));
+  const propertyOptions = properties.map((p) => ({ id: p.id!, name: p.name }));
+  const vehicleOptions = vehicles.map((v) => ({ id: v.id!, name: v.name }));
+
+  const renderDrawer = () => {
+    const editing = typeof drawer === 'object' ? loans.find((l) => l.id === drawer.id) : undefined;
+    const open = drawer === 'create' || editing != null;
+    return (
+      <>
+        <EditDrawer
+          open={open}
+          onClose={() => setDrawer('closed')}
+          title={drawer === 'create' ? 'Add loan' : 'Edit loan'}
+          description={drawer === 'create' ? 'Mortgages, auto loans, student loans, credit cards, and other debts.' : undefined}
+        >
+          <LoanForm
+            initial={editing ? {
+              householdId: editing.householdId,
+              obligorPersonId: editing.obligorPersonId,
+              name: editing.name,
+              type: editing.type,
+              originalAmount: editing.originalAmount,
+              currentBalance: editing.currentBalance,
+              interestRate: editing.interestRate,
+              termMonths: editing.termMonths,
+              firstPaymentDate: editing.firstPaymentDate,
+              monthlyPayment: editing.monthlyPayment,
+              extraPaymentDefault: editing.extraPaymentDefault,
+              linkedPropertyId: editing.linkedPropertyId,
+              linkedVehicleId: editing.linkedVehicleId,
+            } : DEFAULT_LOAN}
+            persons={personOptions}
+            properties={propertyOptions}
+            vehicles={vehicleOptions}
+            initialMonthlyPaymentIsUserSet={editing ? editing.monthlyPayment > 0 : false}
+            onSubmit={async (v) => {
+              if (editing) await updateLoan(editing.id!, v); else await createLoan(v);
+              setDrawer('closed');
+            }}
+            onCancel={() => setDrawer('closed')}
+          />
+          {editing && (
+            <div className="mt-6 border-t pt-4">
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: `Delete ${editing.name}?`,
+                    description: 'This also deletes its recorded payment history. This can’t be undone.',
+                  });
+                  if (ok) { await removeLoan(editing.id!); setDrawer('closed'); }
+                }}
+              >
+                Delete loan
+              </Button>
+            </div>
+          )}
+        </EditDrawer>
+        {confirmDialog}
+      </>
+    );
+  };
+
   if (!gate.settled) {
     return (
       <PageContainer className="space-y-6">
@@ -513,13 +625,12 @@ export default function Loans() {
           <EmptyState
             icon={Landmark}
             title="No loans yet"
-            description="Add one in Inputs to see its payoff curve and total interest."
+            description="Add one to see its payoff curve and total interest."
           >
-            <Button asChild>
-              <Link to="/inputs/loans">Add a loan</Link>
-            </Button>
+            <Button onClick={() => setDrawer('create')}>Add a loan</Button>
           </EmptyState>
         )}
+        {renderDrawer()}
       </PageContainer>
     );
   }
@@ -534,7 +645,11 @@ export default function Loans() {
             Per-loan amortization projected from each loan's current balance.
           </p>
         </div>
-        <ExportCsvButton baseName="loans" columns={csvColumns} rows={loans} />
+        <div className="flex items-center gap-2">
+          <ExportCsvButton baseName="loans" columns={csvColumns} rows={loans} />
+          <ImportCsvButton entity="loan" />
+          <Button size="sm" onClick={() => setDrawer('create')}>Add loan</Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -591,6 +706,7 @@ export default function Loans() {
             expanded={expandedLoanIds.has(p.loan.id!)}
             onToggleExpand={() => toggleExpanded(p.loan.id!)}
             schedule={schedulesByLoanId.get(p.loan.id!) ?? []}
+            onEdit={() => setDrawer({ type: 'edit', id: p.loan.id! })}
           />
         ))}
       </div>
@@ -614,6 +730,7 @@ export default function Loans() {
           }
         />
       ) : null}
+      {renderDrawer()}
     </PageContainer>
   );
 }

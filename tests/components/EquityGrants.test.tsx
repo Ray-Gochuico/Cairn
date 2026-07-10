@@ -91,7 +91,7 @@ describe('EquityGrants page', () => {
     resetStores();
   });
 
-  it('renders empty state with link to /inputs/equity-grants when no grants exist', () => {
+  it('empty state offers an in-place "Add your first grant" that opens the drawer (W14)', async () => {
     primeStores();
     render(
       <MemoryRouter>
@@ -102,10 +102,13 @@ describe('EquityGrants page', () => {
       screen.getByRole('heading', { name: /equity grants/i }),
     ).toBeInTheDocument();
     expect(screen.getByText(/no equity grants yet/i)).toBeInTheDocument();
-    const addLink = screen.getByRole('link', {
-      name: /add your first grant/i,
-    });
-    expect(addLink).toHaveAttribute('href', '/inputs/equity-grants');
+    // W14: the CTA opens the create drawer in place — no /inputs deflection.
+    expect(screen.queryByRole('link', { name: /add your first grant/i })).toBeNull();
+    expect(screen.queryByText(/in inputs/i)).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: /add your first grant/i }));
+    expect(
+      await screen.findByRole('dialog', { name: /add equity grant/i }),
+    ).toBeInTheDocument();
   });
 
   it('renders one card per grant', () => {
@@ -259,40 +262,71 @@ describe('EquityGrants page', () => {
     expect(within(card).queryByText(/2099-/)).not.toBeInTheDocument();
   });
 
-  it('"Manage grants" link points to /inputs/equity-grants when grants exist', () => {
-    primeStores({
-      grants: [{ name: 'Some Grant' }],
-    });
-
-    render(
-      <MemoryRouter>
-        <EquityGrants />
-      </MemoryRouter>,
-    );
-
-    const link = screen.getByRole('link', { name: /manage grants/i });
-    expect(link).toHaveAttribute('href', '/inputs/equity-grants');
-  });
-
-  it('renders a "+ Add grant" button in the page header when grants exist', () => {
+  it('no "Manage grants" deflection remains; "Add grant" opens the create drawer (W14)', async () => {
     primeStores({ grants: [{ name: 'Some Grant' }] });
     render(
       <MemoryRouter>
         <EquityGrants />
       </MemoryRouter>,
     );
-    expect(screen.getByRole('button', { name: /add grant/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /manage grants/i })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: /^add grant$/i }));
+    expect(
+      await screen.findByRole('dialog', { name: /add equity grant/i }),
+    ).toBeInTheDocument();
   });
 
-  it('clicking "+ Add grant" opens AddEquityGrantDialog', async () => {
+  it('drawer Cancel closes without calling create (W14; ported from AddEquityGrantDialog)', async () => {
+    const createSpy = vi.fn(async () => 1);
     primeStores({ grants: [{ name: 'Some Grant' }] });
+    useEquityGrantsStore.setState({ create: createSpy } as never);
     render(
       <MemoryRouter>
         <EquityGrants />
       </MemoryRouter>,
     );
-    await userEvent.click(screen.getByRole('button', { name: /add grant/i }));
-    expect(await screen.findByText(/^add equity grant$/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /^add grant$/i }));
+    const dialog = await screen.findByRole('dialog', { name: /add equity grant/i });
+    // The calculator section rides along with the shared form (dialog-test port).
+    expect(
+      within(dialog).getByText(/estimate it from company valuation/i),
+    ).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: /^cancel$/i }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(createSpy).not.toHaveBeenCalled();
+  });
+
+  it('per-grant "Edit grant" opens a prefilled drawer; saving calls update (W14)', async () => {
+    const updateSpy = vi.fn(async () => {});
+    primeStores({ grants: [{ id: 9, name: 'ISO 2024' }] });
+    useEquityGrantsStore.setState({ update: updateSpy } as never);
+    render(
+      <MemoryRouter>
+        <EquityGrants />
+      </MemoryRouter>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /edit grant iso 2024/i }));
+    const dialog = await screen.findByRole('dialog', { name: /edit equity grant/i });
+    expect(within(dialog).getByLabelText(/^name$/i)).toHaveValue('ISO 2024');
+    await userEvent.click(within(dialog).getByRole('button', { name: /^save$/i }));
+    await vi.waitFor(() => expect(updateSpy).toHaveBeenCalledTimes(1));
+    expect(updateSpy).toHaveBeenCalledWith(9, expect.objectContaining({ name: 'ISO 2024' }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('drawer delete confirms with the tab\'s exact copy (W14)', async () => {
+    primeStores({ grants: [{ id: 9, name: 'ISO 2024' }] });
+    render(
+      <MemoryRouter>
+        <EquityGrants />
+      </MemoryRouter>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /edit grant iso 2024/i }));
+    const dialog = await screen.findByRole('dialog', { name: /edit equity grant/i });
+    await userEvent.click(within(dialog).getByRole('button', { name: /delete grant/i }));
+    expect(
+      await screen.findByText(/permanently removes this equity grant and its vesting schedule/i),
+    ).toBeInTheDocument();
   });
 
   it('Export CSV button downloads the equity grants table with the owner name resolved', async () => {

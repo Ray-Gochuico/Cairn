@@ -196,15 +196,17 @@ describe('Vehicles page', () => {
     resetStores();
   });
 
-  it('shows empty-state when there are no vehicles', () => {
+  it('shows empty-state with an in-place "Add a vehicle" that opens the drawer (W14)', async () => {
+    const user = userEvent.setup();
     renderPage();
     expect(screen.getAllByText(/Vehicles/i).length).toBeGreaterThan(0);
     // Normalized EmptyState primitive (Design M-1): title + CTA.
     expect(screen.getByText(/No vehicles yet/i)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /add a vehicle/i })).toHaveAttribute(
-      'href',
-      '/inputs/vehicles',
-    );
+    // W14: the CTA opens the create drawer in place — no /inputs deflection.
+    expect(screen.queryByRole('link', { name: /add a vehicle/i })).toBeNull();
+    expect(screen.queryByText(/in inputs/i)).toBeNull();
+    await user.click(screen.getByRole('button', { name: /add a vehicle/i }));
+    expect(await screen.findByRole('dialog', { name: /add vehicle/i })).toBeInTheDocument();
   });
 
   it('shows the loading skeleton, not "No vehicles yet", while stores load (W10 T1)', () => {
@@ -521,7 +523,8 @@ describe('Vehicles page', () => {
     expect(screen.getByText('Joint')).toBeInTheDocument();
   });
 
-  it('renders an Edit link to Inputs on a lease card', async () => {
+  it('lease Edit opens a prefilled VehicleLeaseForm drawer; saving calls update (W14)', async () => {
+    const updateSpy = vi.fn(async () => {});
     useVehicleLeasesStore.setState({
       vehicleLeases: [
         {
@@ -537,13 +540,22 @@ describe('Vehicles page', () => {
       isLoading: false,
       error: null,
       load: async () => {},
+      update: updateSpy,
     } as never);
 
+    const user = userEvent.setup();
     renderPage();
 
     await screen.findByText('Commuter EV');
-    const editLink = screen.getByRole('link', { name: /edit lease/i });
-    expect(editLink).toHaveAttribute('href', '/inputs/vehicle-leases');
+    // W14: no /inputs deflection remains on the card.
+    expect(screen.queryByRole('link', { name: /edit lease/i })).toBeNull();
+    await user.click(screen.getByRole('button', { name: /edit lease/i }));
+    const dialog = await screen.findByRole('dialog', { name: /edit vehicle lease/i });
+    expect(within(dialog).getByLabelText(/^label$/i)).toHaveValue('Commuter EV');
+    await user.click(within(dialog).getByRole('button', { name: /^save$/i }));
+    await waitFor(() => expect(updateSpy).toHaveBeenCalledTimes(1));
+    expect(updateSpy).toHaveBeenCalledWith(1, expect.objectContaining({ name: 'Commuter EV' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(screen.getByRole('button', { name: /^Remove$/i })).toBeInTheDocument();
   });
 
@@ -608,7 +620,7 @@ describe('Vehicles page', () => {
     expect(screen.getAllByText(/\$450/).length).toBeGreaterThan(0);
   });
 
-  it('renders an on-page Add lease affordance linking to Inputs', async () => {
+  it('the Add lease tile opens the create drawer in place (W14)', async () => {
     useVehicleLeasesStore.setState({
       vehicleLeases: [
         {
@@ -626,11 +638,58 @@ describe('Vehicles page', () => {
       load: async () => {},
     } as never);
 
+    const user = userEvent.setup();
     renderPage();
 
     await screen.findByText('Commuter EV');
-    const addLink = screen.getByRole('link', { name: /add lease/i });
-    expect(addLink).toHaveAttribute('href', '/inputs/vehicle-leases');
+    expect(screen.queryByRole('link', { name: /add lease/i })).toBeNull();
+    await user.click(screen.getByRole('button', { name: /add lease/i }));
+    expect(await screen.findByRole('dialog', { name: /add vehicle lease/i })).toBeInTheDocument();
+  });
+
+  it('vehicle card "Edit details" opens a prefilled VehicleForm drawer; saving calls update (W14)', async () => {
+    const updateSpy = vi.fn(async () => {});
+    usePersonsStore.setState({
+      persons: [{ id: 1, name: 'Alex' }] as never,
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    });
+    seedVehicleWithGas();
+    useVehiclesStore.setState({ update: updateSpy } as never);
+
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findAllByText('My Car');
+    await user.click(screen.getByRole('button', { name: /edit details for my car/i }));
+    const dialog = await screen.findByRole('dialog', { name: /edit vehicle/i });
+    expect(within(dialog).getByLabelText(/^name$/i)).toHaveValue('My Car');
+    await user.click(within(dialog).getByRole('button', { name: /^save$/i }));
+    await waitFor(() => expect(updateSpy).toHaveBeenCalledTimes(1));
+    expect(updateSpy).toHaveBeenCalledWith(5, expect.objectContaining({ name: 'My Car' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('vehicle drawer delete confirms with the tab\'s exact copy (W14)', async () => {
+    usePersonsStore.setState({
+      persons: [{ id: 1, name: 'Alex' }] as never,
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    });
+    seedVehicleWithGas();
+
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findAllByText('My Car');
+    await user.click(screen.getByRole('button', { name: /edit details for my car/i }));
+    const dialog = await screen.findByRole('dialog', { name: /edit vehicle/i });
+    await user.click(within(dialog).getByRole('button', { name: /delete vehicle/i }));
+    expect(
+      await screen.findByText(/this permanently removes this vehicle/i),
+    ).toBeInTheDocument();
   });
 
   it('exports the full vehicles table to CSV with the owner name resolved', async () => {

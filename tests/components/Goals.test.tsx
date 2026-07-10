@@ -9,6 +9,7 @@ import { useContributionsStore } from '@/stores/contributions-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
 import { usePersonsStore } from '@/stores/persons-store';
+import { useDependentsStore } from '@/stores/dependents-store';
 import {
   AccountType,
   ContributionSource,
@@ -64,6 +65,9 @@ function resetStores() {
   useHouseholdStore.setState({ household: null, isLoading: false, error: null });
   useHoldingsStore.setState({ holdings: [], isLoading: false, error: null });
   usePersonsStore.setState({ persons: [], isLoading: false, error: null });
+  // W14 T8: the page now gates on dependents too (Plan529Section's
+  // beneficiary picker) — stub its load so the gate settles without a DB.
+  useDependentsStore.setState({ dependents: [], isLoading: false, error: null, load: async () => {} } as never);
 }
 
 interface PrimeOpts {
@@ -194,7 +198,7 @@ describe('Goals page', () => {
     resetStores();
   });
 
-  it('renders empty state with link to /inputs/goals when no goals exist', () => {
+  it('empty state offers an in-place "Add your first goal" that opens the drawer (W14)', async () => {
     primeStores();
     render(
       <MemoryRouter>
@@ -203,8 +207,11 @@ describe('Goals page', () => {
     );
     expect(screen.getByRole('heading', { name: /^goals$/i })).toBeInTheDocument();
     expect(screen.getByText(/no goals yet/i)).toBeInTheDocument();
-    const addLink = screen.getByRole('link', { name: /add your first goal/i });
-    expect(addLink).toHaveAttribute('href', '/inputs/goals');
+    // W14: the CTA opens the create drawer in place — no /inputs deflection.
+    expect(screen.queryByRole('link', { name: /add your first goal/i })).toBeNull();
+    expect(screen.queryByText(/in inputs/i)).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: /add your first goal/i }));
+    expect(await screen.findByRole('dialog', { name: /add goal/i })).toBeInTheDocument();
   });
 
   it('shows the loading skeleton, not "No goals yet", while stores load (W10 T1)', () => {
@@ -356,7 +363,7 @@ describe('Goals page', () => {
     expect(screen.queryByText(/\$999,999/)).not.toBeInTheDocument();
   });
 
-  it('"Manage goals" link points to /inputs/goals when at least one goal exists', () => {
+  it('no "Manage goals" deflection remains; header "Add goal" opens the create drawer (W14)', async () => {
     primeStores({
       goals: [{ name: 'Emergency Fund' }],
     });
@@ -365,8 +372,46 @@ describe('Goals page', () => {
         <Goals />
       </MemoryRouter>,
     );
-    const link = screen.getByRole('link', { name: /manage goals/i });
-    expect(link).toHaveAttribute('href', '/inputs/goals');
+    expect(screen.queryByRole('link', { name: /manage goals/i })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: /^add goal$/i }));
+    expect(await screen.findByRole('dialog', { name: /add goal/i })).toBeInTheDocument();
+  });
+
+  it('per-goal "Edit goal" opens a prefilled drawer; saving calls update (W14)', async () => {
+    const updateSpy = vi.fn(async () => {});
+    primeStores({
+      goals: [{ id: 9, name: 'Emergency Fund' }],
+    });
+    useGoalsStore.setState({ update: updateSpy } as never);
+    render(
+      <MemoryRouter>
+        <Goals />
+      </MemoryRouter>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /edit goal emergency fund/i }));
+    const dialog = await screen.findByRole('dialog', { name: /edit goal/i });
+    expect(within(dialog).getByLabelText(/^name$/i)).toHaveValue('Emergency Fund');
+    await userEvent.click(within(dialog).getByRole('button', { name: /^save$/i }));
+    await vi.waitFor(() => expect(updateSpy).toHaveBeenCalledTimes(1));
+    expect(updateSpy).toHaveBeenCalledWith(9, expect.objectContaining({ name: 'Emergency Fund' }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('drawer delete confirms with the tab\'s exact copy (W14)', async () => {
+    primeStores({
+      goals: [{ id: 9, name: 'Emergency Fund' }],
+    });
+    render(
+      <MemoryRouter>
+        <Goals />
+      </MemoryRouter>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /edit goal emergency fund/i }));
+    const dialog = await screen.findByRole('dialog', { name: /edit goal/i });
+    await userEvent.click(within(dialog).getByRole('button', { name: /delete goal/i }));
+    expect(
+      await screen.findByText(/this permanently removes this goal/i),
+    ).toBeInTheDocument();
   });
 
   it('uses the Moderate scenario rate from household.growthScenarios for projection', () => {
