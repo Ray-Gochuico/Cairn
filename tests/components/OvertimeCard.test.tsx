@@ -152,6 +152,19 @@ describe('OvertimeCard', () => {
     ).toHaveAttribute('href', '/inputs/persons');
   });
 
+  it('no-household empty-state CTA links to the household inputs it names (D10 completion)', () => {
+    // Eligible HOURLY person present ($25/hr seeds the base rate; the default
+    // starter row yields $300 OT gross > 0) but household absent — reaches the
+    // second arm of the totalGross ternary in the
+    // `totalGross <= 0 || !taxResult || !household` branch.
+    primeStores();
+    useHouseholdStore.setState({ household: null, isLoading: false, error: null });
+    render(<MemoryRouter><OvertimeCard /></MemoryRouter>);
+    expect(
+      screen.getByRole('link', { name: /set up your household profile/i }),
+    ).toHaveAttribute('href', '/inputs/household');
+  });
+
   it('adding a row updates the per-row breakdown count', async () => {
     primeStores();
     render(<MemoryRouter><OvertimeCard /></MemoryRouter>);

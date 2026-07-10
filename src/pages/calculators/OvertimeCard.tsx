@@ -281,9 +281,16 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
         {baseInput}
         {rowsEditor}
         <p className="text-sm text-muted-foreground">
-          {totalGross <= 0
-            ? 'Enter overtime hours above to see the take-home breakdown.'
-            : 'Set up your household profile + tax rules to see overtime tax.'}
+          {totalGross <= 0 ? (
+            'Enter overtime hours above to see the take-home breakdown.'
+          ) : (
+            <>
+              <Link to="/inputs/household" className="text-primary hover:underline">
+                Set up your household profile
+              </Link>{' '}
+              + tax rules to see overtime tax.
+            </>
+          )}
         </p>
       </CalculatorCard>
     );
