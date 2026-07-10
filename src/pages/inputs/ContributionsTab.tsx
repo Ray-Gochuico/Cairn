@@ -1,161 +1,21 @@
 import { useCallback, useEffect, useState } from 'react';
 import { localTodayISO } from '@/lib/dates';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useContributionsStore } from '@/stores/contributions-store';
 import { useLoadGate } from '@/lib/use-load-gate';
 import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import { TabLoadingSkeleton } from '@/components/inputs/TabLoadingSkeleton';
-import { ContributionSchema, type Contribution } from '@/types/schema';
 import { ContributionSource } from '@/types/enums';
 import { Button } from '@/components/ui/button';
-import DatePicker from '@/components/ui/DatePicker';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { AddAnnualTotalButton } from '@/components/contributions/AddAnnualTotalButton';
 import { ImportCsvButton } from '@/components/import/ImportCsvButton';
-
-type FormValues = Omit<Contribution, 'id'>;
-
-const SOURCE_LABELS: Record<ContributionSource, string> = {
-  [ContributionSource.PAYCHECK]: 'Paycheck',
-  [ContributionSource.BONUS]: 'Bonus',
-  [ContributionSource.EMPLOYER_MATCH]: 'Employer match',
-  [ContributionSource.MANUAL]: 'Manual',
-  [ContributionSource.ROLLOVER]: 'Rollover',
-  [ContributionSource.ANNUAL_TOTAL]: 'Annual total',
-};
-
-interface ContributionFormProps {
-  initial: FormValues;
-  accounts: Array<{ id: number; name: string }>;
-  persons: Array<{ id: number; name: string }>;
-  onSubmit: (values: FormValues) => Promise<void>;
-  onCancel: () => void;
-}
-
-function ContributionForm({ initial, accounts, persons, onSubmit, onCancel }: ContributionFormProps) {
-  const form = useForm<FormValues>({
-    resolver: zodResolver(ContributionSchema.omit({ id: true })),
-    defaultValues: initial,
-  });
-
-  return (
-    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-      <Card>
-        <CardHeader><CardTitle className="text-base">Contribution details</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          <div>
-            <Label htmlFor="accountId">Account</Label>
-            <select
-              id="accountId"
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              {...form.register('accountId', { valueAsNumber: true })}
-            >
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <Label htmlFor="personId">Person</Label>
-            <select
-              id="personId"
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              {...form.register('personId', {
-                setValueAs: (v) => (v === '' || v === null ? null : Number(v)),
-              })}
-            >
-              <option value="">None</option>
-              {persons.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <Label htmlFor="date">Date</Label>
-              <DatePicker
-                id="date"
-                label="Date"
-                value={form.watch('date')}
-                onChange={(v) =>
-                  form.setValue('date', v, { shouldDirty: true, shouldTouch: true })
-                }
-              />
-            </div>
-            <div>
-              <Label htmlFor="amount">Amount ($)</Label>
-              <Input
-                id="amount"
-                type="number"
-                step="any"
-                {...form.register('amount', { valueAsNumber: true })}
-              />
-            </div>
-          </div>
-
-          <div>
-            <Label htmlFor="source">Source</Label>
-            <select
-              id="source"
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              {...form.register('source')}
-            >
-              {Object.entries(SOURCE_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
-            </select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {Object.keys(form.formState.errors).length > 0 && (
-        <div role="alert" className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive-soft-foreground">
-          <div className="font-medium mb-1">Fix these before saving:</div>
-          <ul className="list-disc pl-5">
-            {Object.entries(form.formState.errors).map(([field, err]) => (
-              <li key={field}>
-                <span className="font-mono">{field}</span>:{' '}
-                {(err as { message?: string })?.message ?? 'invalid'}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <div className="flex justify-end items-center gap-3">
-        <span
-          className="text-sm text-muted-foreground transition-opacity duration-200"
-          style={{ opacity: form.formState.isSubmitting ? 1 : 0 }}
-          aria-live="polite"
-        >
-          Saving…
-        </span>
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={onCancel}
-          disabled={form.formState.isSubmitting}
-        >
-          Cancel
-        </Button>
-        <Button
-          type="submit"
-          disabled={form.formState.isSubmitting || !form.formState.isDirty}
-        >
-          Save
-        </Button>
-      </div>
-    </form>
-  );
-}
+import ContributionForm, {
+  CONTRIBUTION_SOURCE_LABELS,
+  type ContributionFormValues,
+} from '@/components/forms/ContributionForm';
 
 export default function ContributionsTab() {
   const { contributions, load, create, update, remove, isLoading, error } = useContributionsStore();
@@ -212,7 +72,7 @@ export default function ContributionsTab() {
   }
 
   const today = localTodayISO();
-  const defaultContribution: FormValues = {
+  const defaultContribution: ContributionFormValues = {
     accountId: accounts[0].id!,
     personId: persons[0]?.id ?? null,
     date: today,
@@ -285,7 +145,7 @@ export default function ContributionsTab() {
                     ${c.amount.toLocaleString()} · {accountById.get(c.accountId) ?? `Account #${c.accountId}`}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {c.date} · {SOURCE_LABELS[c.source]}
+                    {c.date} · {CONTRIBUTION_SOURCE_LABELS[c.source]}
                     {c.personId != null && personById.get(c.personId)
                       ? ` · ${personById.get(c.personId)}`
                       : ''}
