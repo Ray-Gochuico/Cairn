@@ -8,16 +8,14 @@ import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
-import {
-  computeTotalTax,
-  computeHouseholdFica,
-  computePretaxDeductions,
-} from '@/lib/tax';
+import { computePretaxDeductions } from '@/lib/tax';
+// Wave 15 T1: the shared paycheck composition engine (tax + per-earner FICA +
+// take-home) — the same one PaycheckCard summarizes.
+import { computePaycheck } from '@/lib/calculators/paycheck';
 // Finance #2: health-FSA cap, sourced from the same 2026 constants module the
 // tax engine uses for the 401(k)/HSA/SS caps. NOTE: CONTRIBUTION_LIMITS_2026
 // must gain a HEALTH_FSA member (see the FLAG in Task 6, Step 1).
 import { CONTRIBUTION_LIMITS_2026 } from '@/lib/contribution-limits';
-import { computeTakeHome } from '@/lib/paycheck-takehome';
 import { formatCurrency } from '@/lib/format';
 import {
   PAYCHECK_PERIODS,
@@ -335,9 +333,14 @@ export default function PaycheckCalculator() {
     const pretax401k = perPersonGross
       .map((g) => Math.min(g * (f.pretax401kPct / 100), CONTRIBUTION_LIMITS_2026.EMPLOYEE_401K))
       .reduce((a, b) => a + b, 0);
-    const pretaxTotal = pretax.total - pretax.pretax401k + pretax401k + fsaAnnual;
 
-    const tax = computeTotalTax({
+    // Wave 15 Task 1 (D1): same engine as PaycheckCard. The form owns the
+    // pretax derivation above (blended % re-capped per earner, FSA folded
+    // into the §125 bucket); the engine owns tax + per-earner FICA (Wave-9
+    // F1: per-earner SS wage bases, Medicare surtax on the combined return) +
+    // take-home. No-state-tax detection (zero-rate bracket shape, never
+    // .length) lives in the engine — see src/lib/calculators/paycheck.ts.
+    return computePaycheck({
       gross,
       perPersonGross, // wave-9 F1
       filingStatus: f.filingStatus,
@@ -355,43 +358,9 @@ export default function PaycheckCalculator() {
         pretaxDcfsa: pretax.pretaxDcfsa,
         pretaxHsa: pretax.pretaxHsa,
       },
+      postTaxAnnual: (gross * f.roth401kPct) / 100 + f.otherPostTaxMonthly * 12,
+      extraWithholdingAnnual: f.extraFederalPerPaycheck * periodsPerYear(f.payFrequency),
     });
-
-    // Wave-9 F1: per-earner SS wage bases (Medicare surtax on the combined return).
-    const fica = computeHouseholdFica(perPersonGross, f.filingStatus);
-
-    const postTaxTotal = (gross * f.roth401kPct) / 100 + f.otherPostTaxMonthly * 12;
-    const extraWithholdingTotal =
-      f.extraFederalPerPaycheck * periodsPerYear(f.payFrequency);
-
-    const takeHome = computeTakeHome({
-      gross,
-      pretaxTotal,
-      taxTotal: tax.total,
-      postTaxTotal,
-      extraWithholdingTotal,
-    });
-
-    return {
-      gross,
-      federal: tax.federal,
-      ss: fica.socialSecurity,
-      medicare: fica.medicare,
-      additionalMedicare: fica.additionalMedicare,
-      stateTax: tax.state,
-      cityTax: tax.city,
-      // No-state-tax detection: 0002_seed_tax_rules.sql stores no-income-tax
-      // states (TX/FL/NV/SD/TN/WY/AK/WA) as a single ZERO-RATE bracket, not an
-      // empty list (schema requires >=1 bracket). So detect "no state tax" by
-      // the absence of any positive rate — NOT by `brackets.length` (which is
-      // always >=1 and would wrongly show a literal "$0" for every no-tax state).
-      hasStateTax: state.brackets.some((b) => b.rate > 0),
-      hasCity: !!city,
-      pretaxTotal,
-      postTaxTotal,
-      extraWithholdingTotal,
-      takeHome,
-    };
     // Depend on the individual watched primitives (not the freshly-spread `f`
     // object, which would change every render). `persons.length` covers the
     // HSA/personCount input.

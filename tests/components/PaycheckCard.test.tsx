@@ -108,6 +108,34 @@ function primeStores() {
   });
 }
 
+// The wave-9 F1 two-earner fixture (dual $150k MFJ), extracted so the Wave-15
+// "N earners, combined" qualifier tests reuse it instead of duplicating.
+function primeStoresTwoEarners() {
+  primeStores();
+  useHouseholdStore.setState({
+    household: {
+      ...useHouseholdStore.getState().household!,
+      filingStatus: FilingStatus.MFJ,
+    },
+    isLoading: false,
+    error: null,
+  });
+  const alice = usePersonsStore.getState().persons[0];
+  usePersonsStore.setState({
+    persons: [
+      { ...alice, id: 1, name: 'Alice', annualSalaryPretax: 150000, pretax401kPct: 0 },
+      { ...alice, id: 2, name: 'Bob', annualSalaryPretax: 150000, pretax401kPct: 0 },
+    ],
+    isLoading: false,
+    error: null,
+  });
+  const items = useTaxRulesStore.getState().items.map((i) => ({
+    ...i,
+    filingStatus: FilingStatus.MFJ,
+  }));
+  useTaxRulesStore.setState({ year: 2026, items, isLoading: false, error: null });
+}
+
 describe('PaycheckCard', () => {
   beforeEach(() => {
     resetStores();
@@ -258,29 +286,7 @@ describe('PaycheckCard', () => {
     // $4,350; AddMed MFJ over 250k = $450 → FICA $23,400. The combined-base
     // bug showed min(300k, 184.5k) × 6.2% + medicare = $16,239.
     const user = userEvent.setup();
-    primeStores();
-    useHouseholdStore.setState({
-      household: {
-        ...useHouseholdStore.getState().household!,
-        filingStatus: FilingStatus.MFJ,
-      },
-      isLoading: false,
-      error: null,
-    });
-    const alice = usePersonsStore.getState().persons[0];
-    usePersonsStore.setState({
-      persons: [
-        { ...alice, id: 1, name: 'Alice', annualSalaryPretax: 150000, pretax401kPct: 0 },
-        { ...alice, id: 2, name: 'Bob', annualSalaryPretax: 150000, pretax401kPct: 0 },
-      ],
-      isLoading: false,
-      error: null,
-    });
-    const items = useTaxRulesStore.getState().items.map((i) => ({
-      ...i,
-      filingStatus: FilingStatus.MFJ,
-    }));
-    useTaxRulesStore.setState({ year: 2026, items, isLoading: false, error: null });
+    primeStoresTwoEarners();
 
     render(<MemoryRouter><PaycheckCard /></MemoryRouter>);
     await screen.findByTestId('paycheck-takehome');
@@ -350,5 +356,33 @@ describe('PaycheckCard', () => {
     expect(screen.queryByText(/168,600/)).not.toBeInTheDocument();
     // Additional Medicare IS modeled (tax.ts) — it must not appear in the "not modeled" list.
     expect(screen.queryByText(/Additional Medicare/)).not.toBeInTheDocument();
+  });
+
+  it('headline carries the display-period unit (Wave 15: never a bare number)', async () => {
+    primeStores();
+    render(<MemoryRouter><PaycheckCard /></MemoryRouter>);
+    const headline = await screen.findByTestId('paycheck-takehome');
+    expect(headline.textContent).toMatch(/\/\s*monthly/i); // default period MONTHLY
+  });
+
+  it('shows the "N earners, combined" qualifier only for multi-person households', async () => {
+    primeStoresTwoEarners(); // the wave-9 F1 two-earner fixture, extracted above
+    render(<MemoryRouter><PaycheckCard /></MemoryRouter>);
+    await screen.findByTestId('paycheck-takehome');
+    expect(screen.getByText(/2 earners, combined/i)).toBeInTheDocument();
+  });
+
+  it('single-earner household shows NO combined qualifier', async () => {
+    primeStores();
+    render(<MemoryRouter><PaycheckCard /></MemoryRouter>);
+    await screen.findByTestId('paycheck-takehome');
+    expect(screen.queryByText(/earners, combined/i)).not.toBeInTheDocument();
+  });
+
+  it('federal row carries the withholding-vs-liability caveat the full page has', async () => {
+    primeStores();
+    render(<MemoryRouter><PaycheckCard /></MemoryRouter>);
+    await screen.findByTestId('paycheck-takehome');
+    expect(screen.getByText(/annualized estimate, not payroll withholding/i)).toBeInTheDocument();
   });
 });
