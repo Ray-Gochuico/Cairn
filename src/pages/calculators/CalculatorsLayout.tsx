@@ -356,7 +356,7 @@ export default function CalculatorsLayout() {
                         {labelFor(id)}
                         {unavailable && (
                           <span className="block text-xs text-muted-foreground">
-                            Add an hourly or salary+OT person in Inputs to enable this card.
+                            Add an hourly or salary+OT person in Setup to enable this card.
                           </span>
                         )}
                       </span>

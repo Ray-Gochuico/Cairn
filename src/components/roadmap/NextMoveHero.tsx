@@ -6,8 +6,8 @@ import type { NodeId, NodeResult } from '@/types/roadmap';
 /**
  * Hero card surfacing the user's single most relevant next action. Picks
  * the first `active` node in section order; falls back to a "caught up"
- * card when nothing is active. Reused by the Dashboard's `<NextMoveCard />`
- * in Sub-Plan D.
+ * card when nothing is active. The Roadmap page's own hero — the Dashboard
+ * surfaces the same pipeline as a W13 briefing feed row.
  *
  * Label intentionally reads "Suggested next step" (not "Your next move")
  * so users see the hero as a heuristic suggestion derived from inputs,

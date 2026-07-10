@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useLoansStore } from '@/stores/loans-store';
 import { useLocalToday } from '@/lib/use-local-today';
 import { amortize, nextPaymentDateFrom, scheduleIsCapped } from '@/lib/amortization';
@@ -95,7 +96,7 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
         headline="—"
       >
         <p className="text-sm text-muted-foreground">
-          Add loans on the Inputs page to see payoff projections.
+          Add loans on the <Link to="/loans" className="underline">Loans page</Link> to see payoff projections.
         </p>
       </CalculatorCard>
     );
@@ -153,7 +154,7 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
                 {cappedProjections.map((p) => p.loan.name).join(', ')}
               </span>{' '}
               never {cappedProjections.length === 1 ? 'pays' : 'pay'} off at the current payment.
-              Payoff and interest figures are hidden; fix the payment or rate in Inputs.
+              Payoff and interest figures are hidden; fix the payment or rate on the Loans page.
             </>
           ) : (
             // Rescued case (F1): the projection amortizes thanks to extra

@@ -77,7 +77,7 @@ export const DEFAULT_SECTIONS: SidebarSectionShape[] = [
       // appends it after their ordered System items — accepted (their
       // saved order wins; the entry still shows up).
       { to: '/monthly', label: 'Monthly check-in', icon: CalendarCheck },
-      // W14: label renamed Inputs → Setup (the residual shared-config hub);
+      // W14: label renamed from Inputs to Setup (the residual shared-config hub);
       // `to` stays '/inputs' so persisted sidebarLayout entries keyed by the
       // route keep applying and old deep links still work (decision #6).
       { to: '/inputs', label: 'Setup', icon: PenSquare },

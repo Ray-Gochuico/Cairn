@@ -51,7 +51,14 @@ describe('DebtPayoffCard', () => {
 
     expect(screen.getByText(/Debt Payoff/i)).toBeInTheDocument();
     expect(
-      screen.getByText(/add loans on the inputs page/i),
+      screen.getByText(/add loans on the/i),
+    ).toBeInTheDocument();
+    // W14: the empty state deep-links the Loans page instead of naming Inputs.
+    expect(
+      screen.getByRole('link', { name: /loans page/i }),
+    ).toHaveAttribute('href', '/loans');
+    expect(
+      screen.getByText(/to see payoff projections/i),
     ).toBeInTheDocument();
   });
 

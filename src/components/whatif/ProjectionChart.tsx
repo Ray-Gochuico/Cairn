@@ -252,7 +252,8 @@ export default function ProjectionChart({
   const [hiddenAccountIds, setHiddenAccountIds] = useState<Set<number>>(() => new Set());
 
   // Reset visibility when the set of investment-account ids changes (user added
-  // / removed an account in Inputs). Identity-stable signature so we don't reset
+  // / removed an account via the Investments Manage surface). Identity-stable
+  // signature so we don't reset
   // on every render.
   const accountIdSignature = useMemo(
     () =>

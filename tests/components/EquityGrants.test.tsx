@@ -276,7 +276,7 @@ describe('EquityGrants page', () => {
     ).toBeInTheDocument();
   });
 
-  it('drawer Cancel closes without calling create (W14; ported from AddEquityGrantDialog)', async () => {
+  it('drawer Cancel closes without calling create (W14; ported from the retired add-grant dialog test)', async () => {
     const createSpy = vi.fn(async () => 1);
     primeStores({ grants: [{ name: 'Some Grant' }] });
     useEquityGrantsStore.setState({ create: createSpy } as never);
