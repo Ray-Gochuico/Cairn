@@ -73,15 +73,18 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
 
   const eligiblePerson = useMemo(() => persons.find(isEligible), [persons]);
   const derivedBase = eligiblePerson ? deriveBaseRate(eligiblePerson) : 0;
-  const { values, setValue, reset, isOverridden } = useCalculatorState(cardId ?? 'overtime', {
-    baseRate: derivedBase,
-    recurrence: 'REPEATS' as OvertimeRecurrence,
-  });
+  const { values, setValue, reset, isOverridden } = useCalculatorState(cardId ?? 'overtime', { baseRate: derivedBase });
   const baseHourlyRate = values.baseRate ?? 0;
 
   // ---- ephemeral UI state ----
   const [rows, setRows] = useState<OvertimeRow[]>([STARTER_ROW]);
   const [period, setPeriod] = useState<PaycheckPeriod>('BI_WEEKLY');
+  // T3 review I1: plain useState like its sibling annualization knob `period`,
+  // NOT useCalculatorState — 'REPEATS' is a fixed default, not "my data", so
+  // picking One-off must neither surface the Base-rate "Reset to my data"
+  // affordance nor get silently flipped back when the user resets an
+  // overridden rate.
+  const [recurrence, setRecurrence] = useState<OvertimeRecurrence>('REPEATS');
 
   const overtime = useMemo(() => {
     if (!eligiblePerson || baseHourlyRate <= 0) return null;
@@ -102,7 +105,6 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
   const totalGross = overtime?.totalGross ?? 0;
 
   const ppy = paycheckPeriodsPerYear(period);
-  const recurrence = (values.recurrence ?? 'REPEATS') as OvertimeRecurrence;
   // Wave 15 T3: ONE recurrence knob feeds BOTH annualizations. Pre-fix the
   // OBBBA line annualized (×ppy) while the tax stack treated one period's OT
   // as the whole year's supplemental wages — two different years in one card.
@@ -214,7 +216,7 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
         <Label htmlFor="ot-recurrence">Recurrence</Label>
         <Select
           value={recurrence}
-          onValueChange={(v) => setValue('recurrence', v as OvertimeRecurrence)}
+          onValueChange={(v) => setRecurrence(v as OvertimeRecurrence)}
         >
           <SelectTrigger id="ot-recurrence" aria-label="Recurrence">
             <SelectValue />
@@ -337,7 +339,11 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
         <div className="mt-3 pt-3 border-t text-sm">
           <span className="text-muted-foreground">Estimated annual OT take-home:</span>{' '}
           <span className="font-medium tabular-nums">{formatCurrency(taxResult.bonusTakeHome)}</span>
-          <span className="text-muted-foreground"> ({ppy} × {formatCurrency(overtimeTakeHome)})</span>
+          {/* T3 review M1: the annual figure is exact; the per-period one is
+              its rounded derivative — ≈ plus reversed order so the reader
+              isn't invited to hand-multiply two independently rounded
+              figures and get a mismatch. */}
+          <span className="text-muted-foreground"> (≈ {formatCurrency(overtimeTakeHome)}/period × {ppy})</span>
         </div>
       )}
 
@@ -404,7 +410,7 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
           <li>
             <strong>State-specific supplemental-wage flat rates.</strong> CA, GA,
             NY, NJ, and others withhold supplemental wages at flat statutory
-            rates; the engine applies your W-4 ordinary brackets (same treatment
+            rates; the engine applies your ordinary marginal brackets (same treatment
             as the bonus calculator).
           </li>
           <li>

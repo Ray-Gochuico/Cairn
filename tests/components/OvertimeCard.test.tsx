@@ -457,6 +457,11 @@ describe('OvertimeCard', () => {
 
     // Headline stays "take-home from this period's entered OT": annual ÷ ppy.
     expect(headline.textContent).toBe(formatCurrency(expected.bonusTakeHome / 26));
+
+    // T3 review M3: the REPEATS rollup row renders the EXACT annual figure
+    // from the same oracle — not ppy × the rounded per-period headline.
+    expect(screen.getByText(/estimated annual OT take-home/i)).toBeInTheDocument();
+    expect(screen.getByText(formatCurrency(expected.bonusTakeHome))).toBeInTheDocument();
   });
 
   it('the false "Display only" caption is gone; a recurrence control exists', async () => {
@@ -498,6 +503,12 @@ describe('OvertimeCard', () => {
       recipientIndex: 0,
     });
     expect(headline.textContent).toBe(formatCurrency(expected.bonusTakeHome));
+
+    // T3 review M3: the annual rollup row is a REPEATS-only concept.
+    expect(screen.queryByText(/estimated annual OT take-home/i)).not.toBeInTheDocument();
+    // T3 review I1: recurrence is ephemeral UI state (plain useState), not
+    // "my data" — flipping it alone must not surface the Reset affordance.
+    expect(screen.queryByText(/reset to my data/i)).not.toBeInTheDocument();
   });
 
   it('exposes a "What this calculator does NOT model" disclosure (family idiom)', async () => {
