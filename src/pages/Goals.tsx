@@ -16,6 +16,8 @@ import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useContributionsStore } from '@/stores/contributions-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
+import { useDependentsStore } from '@/stores/dependents-store';
+import { Plan529Section } from '@/components/goals/Plan529Section';
 import {
   computeGoalProgress,
   type GoalProgressResult,
@@ -309,6 +311,11 @@ export default function Goals() {
   const loadHoldings = useHoldingsStore((s) => s.load);
   const holdingsError = useHoldingsStore((s) => s.error);
   const holdingsLoading = useHoldingsStore((s) => s.isLoading);
+  // W14 T8: the Plan529Section's AccountForm needs dependents (beneficiary
+  // picker) — subscribe + gate them like every other consumed store.
+  const loadDependents = useDependentsStore((s) => s.load);
+  const dependentsError = useDependentsStore((s) => s.error);
+  const dependentsLoading = useDependentsStore((s) => s.isLoading);
 
   const createGoal = useGoalsStore((s) => s.create);
   const updateGoal = useGoalsStore((s) => s.update);
@@ -348,6 +355,7 @@ export default function Goals() {
     loadContributions();
     loadHousehold();
     loadHoldings();
+    loadDependents();
   }, [
     loadGoals,
     loadAccounts,
@@ -355,6 +363,7 @@ export default function Goals() {
     loadContributions,
     loadHousehold,
     loadHoldings,
+    loadDependents,
   ]);
 
   // Any consumed store that failed to load. Surfaced as a banner above the
@@ -367,12 +376,13 @@ export default function Goals() {
     contributionsError,
     householdError,
     holdingsError,
+    dependentsError,
   ];
   const hasStoreError = storeErrors.some((e) => e != null);
 
   // W10 T1: never flash "No goals yet" while the loads are in flight.
   const gate = useLoadGate(
-    [goalsLoading, accountsLoading, snapshotsLoading, contributionsLoading, householdLoading, holdingsLoading],
+    [goalsLoading, accountsLoading, snapshotsLoading, contributionsLoading, householdLoading, holdingsLoading, dependentsLoading],
     storeErrors,
     reload,
   );
@@ -555,6 +565,9 @@ export default function Goals() {
             <Button onClick={() => setDrawer('create')}>Add your first goal</Button>
           </EmptyState>
         )}
+        {/* W14 T8: 529 plans live here even before the first goal — the
+            section self-gates and stays calm when empty. */}
+        {!hasStoreError && <Plan529Section />}
         {renderDrawer()}
       </PageContainer>
     );
@@ -601,6 +614,10 @@ export default function Goals() {
         ))}
       </div>
       )}
+
+      {/* W14 T8 (529→Goals decision): manage 529 college savings where the
+          goal lives; the Investments plans-529 analysis card is untouched. */}
+      <Plan529Section />
 
       {dialogTarget && (
         <UpdateAccountBalanceDialog

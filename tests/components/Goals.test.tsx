@@ -9,6 +9,7 @@ import { useContributionsStore } from '@/stores/contributions-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
 import { usePersonsStore } from '@/stores/persons-store';
+import { useDependentsStore } from '@/stores/dependents-store';
 import {
   AccountType,
   ContributionSource,
@@ -64,6 +65,9 @@ function resetStores() {
   useHouseholdStore.setState({ household: null, isLoading: false, error: null });
   useHoldingsStore.setState({ holdings: [], isLoading: false, error: null });
   usePersonsStore.setState({ persons: [], isLoading: false, error: null });
+  // W14 T8: the page now gates on dependents too (Plan529Section's
+  // beneficiary picker) — stub its load so the gate settles without a DB.
+  useDependentsStore.setState({ dependents: [], isLoading: false, error: null, load: async () => {} } as never);
 }
 
 interface PrimeOpts {
