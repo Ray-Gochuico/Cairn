@@ -1,5 +1,4 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { Gift } from 'lucide-react';
 import { useLoadGate } from '@/lib/use-load-gate';
 import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
@@ -16,7 +15,10 @@ import {
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
-import AddEquityGrantDialog from '@/components/equity-grants/AddEquityGrantDialog';
+import { ImportCsvButton } from '@/components/import/ImportCsvButton';
+import EquityGrantForm, { DEFAULT_EQUITY_GRANT } from '@/components/forms/EquityGrantForm';
+import { EditDrawer } from '@/components/layout/EditDrawer';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import type { CsvColumn } from '@/lib/csv';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { useLocalToday } from '@/lib/use-local-today';
@@ -35,7 +37,8 @@ import { EmptyState } from '@/components/layout/EmptyState';
  *      strike cost) so the user gets the big picture at a glance.
  *   2. One card per grant with vesting progress, per-grant totals, and the
  *      next 3 vest dates.
- *   3. Easy access back to /inputs/equity-grants for editing.
+ *   3. In-place add/edit/delete via the shared EditDrawer (W14 — one place
+ *      per thing).
  *
  * No Recharts here — a styled `<div>` plays the role of the stacked
  * vested/unvested bar so we keep the page accessible without another dep.
@@ -68,9 +71,11 @@ function filterGrantsByView(
 
 interface EquityGrantCardProps {
   projection: GrantProjection;
+  /** W14 one-place-per-thing: opens the page's EditDrawer for this grant. */
+  onEdit: () => void;
 }
 
-function EquityGrantCard({ projection }: EquityGrantCardProps) {
+function EquityGrantCard({ projection, onEdit }: EquityGrantCardProps) {
   const { grant, ownerName, result } = projection;
   const { vestedValue, unvestedValue, monthlyCost, upcomingVestDates } = result;
 
@@ -95,6 +100,14 @@ function EquityGrantCard({ projection }: EquityGrantCardProps) {
             <span>{ownerName}</span>
           </div>
         </div>
+        <Button
+          size="sm"
+          variant="outline"
+          aria-label={`Edit grant ${grant.name}`}
+          onClick={onEdit}
+        >
+          Edit grant
+        </Button>
       </CardHeader>
       <CardContent className="space-y-4">
         <div>
@@ -173,13 +186,17 @@ export default function EquityGrants() {
   const loadGrants = useEquityGrantsStore((s) => s.load);
   const grantsError = useEquityGrantsStore((s) => s.error);
   const grantsLoading = useEquityGrantsStore((s) => s.isLoading);
+  const createGrant = useEquityGrantsStore((s) => s.create);
+  const updateGrant = useEquityGrantsStore((s) => s.update);
+  const removeGrant = useEquityGrantsStore((s) => s.remove);
   const loadPersons = usePersonsStore((s) => s.load);
   const personsError = usePersonsStore((s) => s.error);
   const personsLoading = usePersonsStore((s) => s.isLoading);
 
-  // Controls the in-page Add Equity Grant dialog. Sits on the page (not in
-  // the header div) so opening from the empty-state CTA stays trivial later.
-  const [addOpen, setAddOpen] = useState(false);
+  // W14 "one place per thing": add AND edit unify on the EditDrawer
+  // (AddEquityGrantDialog retired — one pattern per job, decision #9).
+  const [drawer, setDrawer] = useState<'closed' | 'create' | { type: 'edit'; id: number }>('closed');
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   const reload = useCallback(() => {
     loadGrants();
@@ -248,6 +265,72 @@ export default function EquityGrants() {
     );
   }, [projections]);
 
+  // W14 drawer wiring — copied from EquityGrantsTab verbatim (same
+  // DEFAULT_EQUITY_GRANT, same initial mapping, same person options, same
+  // delete confirm copy). `open` derives from `editing != null` so a grant
+  // deleted out from under an open drawer closes it safely.
+  const personOptions = persons.map((p) => ({ id: p.id!, name: p.name }));
+
+  const renderDrawer = () => {
+    const editing = typeof drawer === 'object' ? equityGrants.find((g) => g.id === drawer.id) : undefined;
+    const open = drawer === 'create' || editing != null;
+    return (
+      <>
+        <EditDrawer
+          open={open}
+          onClose={() => setDrawer('closed')}
+          title={drawer === 'create' ? 'Add equity grant' : 'Edit equity grant'}
+          description={drawer === 'create'
+            ? 'Track an equity grant with its vesting schedule. Use a template to fill the schedule in one click, or build it row-by-row.'
+            : undefined}
+        >
+          <EquityGrantForm
+            initial={editing ? {
+              householdId: editing.householdId,
+              ownerPersonId: editing.ownerPersonId,
+              name: editing.name,
+              companyName: editing.companyName,
+              grantDate: editing.grantDate,
+              strikePrice: editing.strikePrice,
+              totalShares: editing.totalShares,
+              currentFmv: editing.currentFmv,
+              grantType: editing.grantType,
+              vestingSchedule: editing.vestingSchedule,
+              companyValuation: editing.companyValuation,
+              companyOutstandingShares: editing.companyOutstandingShares,
+              companyTotalDebt: editing.companyTotalDebt,
+            } : DEFAULT_EQUITY_GRANT}
+            persons={personOptions}
+            onSubmit={async (v) => {
+              if (editing) await updateGrant(editing.id!, v); else await createGrant(v);
+              setDrawer('closed');
+            }}
+            onCancel={() => setDrawer('closed')}
+          />
+          {editing && (
+            <div className="mt-6 border-t pt-4">
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: `Delete ${editing.name}?`,
+                    description:
+                      'This permanently removes this equity grant and its vesting schedule. This can’t be undone.',
+                  });
+                  if (ok) { await removeGrant(editing.id!); setDrawer('closed'); }
+                }}
+              >
+                Delete grant
+              </Button>
+            </div>
+          )}
+        </EditDrawer>
+        {confirmDialog}
+      </>
+    );
+  };
+
   if (!gate.settled) {
     return (
       <PageContainer className="space-y-6">
@@ -272,13 +355,12 @@ export default function EquityGrants() {
           <EmptyState
             icon={Gift}
             title="No equity grants yet"
-            description="Add one in Inputs to track vesting progress and value over time."
+            description="Add one to track vesting progress and value over time."
           >
-            <Button asChild>
-              <Link to="/inputs/equity-grants">Add your first grant</Link>
-            </Button>
+            <Button onClick={() => setDrawer('create')}>Add your first grant</Button>
           </EmptyState>
         )}
+        {renderDrawer()}
       </PageContainer>
     );
   }
@@ -294,17 +376,15 @@ export default function EquityGrants() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button size="sm" onClick={() => setAddOpen(true)}>
-            + Add grant
-          </Button>
           <ExportCsvButton
             baseName="equity-grants"
             columns={csvColumns}
             rows={equityGrants}
             size="sm"
           />
-          <Button asChild variant="outline" size="sm">
-            <Link to="/inputs/equity-grants">Manage grants</Link>
+          <ImportCsvButton entity="equity_grant" />
+          <Button size="sm" onClick={() => setDrawer('create')}>
+            Add grant
           </Button>
         </div>
       </div>
@@ -341,11 +421,15 @@ export default function EquityGrants() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {projections.map((p) => (
-          <EquityGrantCard key={p.grant.id} projection={p} />
+          <EquityGrantCard
+            key={p.grant.id}
+            projection={p}
+            onEdit={() => setDrawer({ type: 'edit', id: p.grant.id! })}
+          />
         ))}
       </div>
 
-      <AddEquityGrantDialog open={addOpen} onOpenChange={setAddOpen} />
+      {renderDrawer()}
     </PageContainer>
   );
 }
