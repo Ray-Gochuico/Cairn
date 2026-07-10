@@ -131,19 +131,24 @@ describe('CoastFiCard', () => {
     vi.useRealTimers();
   });
 
-  it('renders empty state when household is not set', () => {
+  it('renders empty state when household is not set — names the cause with a setup link', () => {
     render(
       <MemoryRouter>
         <CoastFiCard />
       </MemoryRouter>,
     );
+    // Wave 15 T4: the empty state names the missing ingredient (no household)
+    // instead of the vague "Add your inputs" copy.
     expect(
-      screen.getByText(/Add your inputs to see CoastFI/i),
-    ).toBeInTheDocument();
+      screen.getByRole('link', { name: /set up your household/i }),
+    ).toHaveAttribute('href', '/inputs/household');
+    expect(
+      screen.queryByText(/Add your inputs to see CoastFI/i),
+    ).not.toBeInTheDocument();
     expect(screen.getByText('—')).toBeInTheDocument();
   });
 
-  it('renders empty state when household has no growth scenarios', () => {
+  it('renders empty state when household has no growth scenarios — names the ingredient', () => {
     primeStores({ scenarios: [] });
     render(
       <MemoryRouter>
@@ -151,11 +156,14 @@ describe('CoastFiCard', () => {
       </MemoryRouter>,
     );
     expect(
-      screen.getByText(/Add your inputs to see CoastFI/i),
-    ).toBeInTheDocument();
+      screen.getByRole('link', { name: /add growth scenarios in household settings/i }),
+    ).toHaveAttribute('href', '/inputs/household');
+    expect(
+      screen.queryByText(/Add your inputs to see CoastFI/i),
+    ).not.toBeInTheDocument();
   });
 
-  it('renders empty state when persons list is empty', () => {
+  it('renders empty state when persons list is empty — links to Persons', () => {
     primeStores({ persons: [] });
     render(
       <MemoryRouter>
@@ -163,8 +171,42 @@ describe('CoastFiCard', () => {
       </MemoryRouter>,
     );
     expect(
-      screen.getByText(/Add your inputs to see CoastFI/i),
-    ).toBeInTheDocument();
+      screen.getByRole('link', { name: /add a person/i }),
+    ).toHaveAttribute('href', '/inputs/persons');
+    expect(
+      screen.queryByText(/Add your inputs to see CoastFI/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it('zero expenses ⇒ headline "—" + ingredient-naming prompt (never "0% of $0")', async () => {
+    const user = userEvent.setup();
+    primeStores();
+    render(
+      <MemoryRouter>
+        <CoastFiCard />
+      </MemoryRouter>,
+    );
+    const expenses = screen.getByLabelText(/annual expenses/i);
+    await user.clear(expenses);
+    await user.type(expenses, '0');
+    expect(screen.getByTestId('coastfi-headline').textContent).toBe('—');
+    expect(screen.getByText(/enter your annual expenses/i)).toBeInTheDocument();
+    // Controls stay for inline correction (D11); table/chart suppressed.
+    expect(screen.getByLabelText(/annual expenses/i)).toBeInTheDocument();
+    expect(screen.queryByText('Coasting to retirement')).not.toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('empty states name the missing ingredient with a real link', () => {
+    // scenarios missing → names growth scenarios + links to Household settings
+    primeStores({ scenarios: [] });
+    render(
+      <MemoryRouter>
+        <CoastFiCard />
+      </MemoryRouter>,
+    );
+    const link = screen.getByRole('link', { name: /growth scenarios/i });
+    expect(link).toHaveAttribute('href', '/inputs/household');
   });
 
   it('renders headline "X% of CoastFI" when seeded with one person + snapshots', () => {

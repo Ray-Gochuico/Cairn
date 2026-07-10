@@ -42,4 +42,20 @@ describe('fiChartSeries (Wave 11 T13)', () => {
     // Conservative never reaches 1M in the fixture.
     expect(markers.length).toBe(2);
   });
+
+  it('opts.targetLabel renames the target reference series (CoastFI: "Required at retirement")', () => {
+    const { series } = fiChartSeries(
+      [{ label: 'Moderate' }],
+      [{ year: 0, Moderate: 0, target: 100 }],
+      100,
+      { targetLabel: 'Required at retirement' },
+    );
+    const target = series.find((s) => s.dataKey === 'target')!;
+    expect(target.label).toBe('Required at retirement');
+  });
+
+  it('defaults the target label to "Target" when opts are omitted (FI card unchanged)', () => {
+    const { series } = fiChartSeries([{ label: 'Moderate' }], [], 100);
+    expect(series.find((s) => s.dataKey === 'target')!.label).toBe('Target');
+  });
 });
