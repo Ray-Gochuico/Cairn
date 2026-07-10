@@ -105,6 +105,12 @@ export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
     );
   }
 
+  // Wave 15 review: the headline sums annualSalaryPretax, and HOURLY persons
+  // persist annualSalaryPretax = 0 (their pay isn't salary) — as do
+  // non-earning household members. Count only the people whose pay is
+  // actually in the number, or "N earners, combined" is a false sentence.
+  const salariedEarnerCount = persons.filter((p) => p.annualSalaryPretax > 0).length;
+
   const div = periodsPerYear(period);
   const perPeriod = {
     gross: annual.gross / div,
@@ -133,9 +139,10 @@ export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
           <span className="text-base font-medium">
             {' '}/ {PAYCHECK_PERIODS.find((p) => p.id === period)?.label.toLowerCase() ?? 'period'}
           </span>
-          {persons.length > 1 && (
+          {salariedEarnerCount > 1 && (
             <span className="block text-xs font-normal text-muted-foreground">
-              {persons.length} earners, combined
+              {salariedEarnerCount} earners, combined
+              {salariedEarnerCount < persons.length && ' — salary only'}
             </span>
           )}
         </span>
@@ -219,6 +226,11 @@ export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
           {`Social Security wage base — OASDI stops at $${CONTRIBUTION_LIMITS_2026.SOCIAL_SECURITY_WAGE_BASE.toLocaleString('en-US')} per person (2026); the calculator applies the cap per earner.`}
         </p>
         <ul className="mt-2 list-disc pl-5 space-y-1">
+          <li>
+            Hourly wages — this card sums annual salaries, so an hourly
+            earner's pay is not included here (see the Overtime card for
+            hourly OT take-home).
+          </li>
           <li>
             <TermTooltip term="NIIT">NIIT</TermTooltip> (3.8% net investment
             income tax) — applies to investment income, not wages, so it&#39;s

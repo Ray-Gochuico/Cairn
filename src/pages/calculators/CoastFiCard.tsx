@@ -287,19 +287,13 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
 
       {/* ── Zero-target inline prompt (D11) + at/past retirement guard ──── */}
       {noTarget ? (
+        // Wave 15 review: no baseline-prefill promise here — a typed 0 is an
+        // OVERRIDE that wins over recomputed defaults (useCalculatorState),
+        // so "set your baseline to prefill" would be false in the very state
+        // that shows this prompt. FI's equivalent arm makes no such claim.
         <p className="text-sm text-muted-foreground">
           Enter your annual expenses and withdrawal rate above to see your
-          CoastFI target
-          {(household?.monthlyExpenseBaseline ?? 0) <= 0 && (
-            <>
-              {' '}— or{' '}
-              <Link to="/inputs/household" className="text-primary hover:underline">
-                set your household expense baseline
-              </Link>{' '}
-              to prefill your expenses
-            </>
-          )}
-          .
+          CoastFI target.
         </p>
       ) : atOrPastRetirement ? (
         <p className="text-sm text-muted-foreground">

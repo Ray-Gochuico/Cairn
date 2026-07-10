@@ -180,7 +180,11 @@ describe('CoastFiCard', () => {
 
   it('zero expenses ⇒ headline "—" + ingredient-naming prompt (never "0% of $0")', async () => {
     const user = userEvent.setup();
-    primeStores();
+    // Baseline 0 so the OLD branch would have rendered its "set your household
+    // expense baseline to prefill" link — a promise the typed-0 override
+    // defeats (overrides win over recomputed defaults), so the clause is gone
+    // (Wave 15 adversarial review).
+    primeStores({ monthlyExpenseBaseline: 0 });
     render(
       <MemoryRouter>
         <CoastFiCard />
@@ -190,7 +194,15 @@ describe('CoastFiCard', () => {
     await user.clear(expenses);
     await user.type(expenses, '0');
     expect(screen.getByTestId('coastfi-headline').textContent).toBe('—');
-    expect(screen.getByText(/enter your annual expenses/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /enter your annual expenses and withdrawal rate above to see your coastfi target\./i,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/prefill/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: /set your household expense baseline/i }),
+    ).not.toBeInTheDocument();
     // Controls stay for inline correction (D11); table/chart suppressed.
     expect(screen.getByLabelText(/annual expenses/i)).toBeInTheDocument();
     expect(screen.queryByText('Coasting to retirement')).not.toBeInTheDocument();

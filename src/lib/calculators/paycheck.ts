@@ -89,6 +89,11 @@ export function computePaycheck(input: PaycheckInput): PaycheckResult {
 
   const postTaxTotal = input.postTaxAnnual ?? 0;
   const extraWithholdingTotal = input.extraWithholdingAnnual ?? 0;
+  // NIIT: computeTotalTax.total carries a NIIT leg. PaycheckInput exposes no
+  // investment-income fields, so that leg is structurally $0 here — if a
+  // future wave threads investment income through, itemize NIIT in
+  // PaycheckResult before shipping, or takeHome silently absorbs an
+  // un-displayed tax.
   const takeHome = computeTakeHome({
     gross: input.gross,
     pretaxTotal,
