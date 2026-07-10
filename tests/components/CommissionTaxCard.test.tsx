@@ -485,6 +485,24 @@ describe('CommissionTaxCard', () => {
     expect(row.querySelector('.tabular-nums')!.textContent).toBe(formatCurrency((200_000 * 0.22) / 12));
   });
 
+  it('seeds the commission default from the RECIPIENT (first person WITH commission), not persons[0]', async () => {
+    primeStores();
+    const alice = usePersonsStore.getState().persons[0];
+    usePersonsStore.setState({
+      persons: [
+        { ...alice, id: 1, name: 'Alice', expectedCommission: 0 },
+        { ...alice, id: 2, name: 'Bob', expectedCommission: 36000, expectedCommissionFrequency: 'QUARTERLY' as const },
+      ],
+      isLoading: false,
+      error: null,
+    });
+    render(<MemoryRouter><CommissionTaxCard /></MemoryRouter>);
+    const annual = (await screen.findByLabelText(/Annual commission/i)) as HTMLInputElement;
+    expect(Number(annual.value)).toBe(36000); // pre-fix: 0, seeded from Alice
+    // Frequency seeds from the recipient too: QUARTERLY ⇒ per check = 9,000.
+    expect(screen.getAllByText(/\$9,000/).length).toBeGreaterThan(0);
+  });
+
   it('discloses the mandatory 37% flat tier above $1M, drops dev jargon, and does not falsely disclaim Additional Medicare', () => {
     primeStores();
     render(<MemoryRouter><CommissionTaxCard /></MemoryRouter>);

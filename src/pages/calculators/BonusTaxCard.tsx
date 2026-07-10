@@ -33,16 +33,18 @@ export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
 
   const seedPerson = persons.find((p) => (p.expectedBonus ?? 0) > 0) ?? persons[0] ?? null;
 
-  // Editable assumptions (prefill from the seed person; bonus default stays 0 —
-  // prefill-from-expectedBonus is a Wave-3 enhancement, out of scope here).
-  const defaults = useMemo(
-    () => ({
-      bonus: 0,
-      frequency: (seedPerson?.expectedBonusFrequency ?? 'ANNUAL') as BonusFrequency,
+  // Wave 15 T2 (D2): prefill from the recipient's expectedBonus. The Person
+  // field is authored as an ANNUAL total (PersonForm: "Expected bonus
+  // (annual)"); this input is per-occurrence, so QUARTERLY divides by 4.
+  const defaults = useMemo(() => {
+    const frequency = (seedPerson?.expectedBonusFrequency ?? 'ANNUAL') as BonusFrequency;
+    const perOccurrence = (seedPerson?.expectedBonus ?? 0) / (frequency === 'QUARTERLY' ? 4 : 1);
+    return {
+      bonus: perOccurrence,
+      frequency,
       isConsistent: seedPerson?.bonusIsConsistent ?? true,
-    }),
-    [seedPerson],
-  );
+    };
+  }, [seedPerson]);
   const { values, setValue, reset, isOverridden } = useCalculatorState(cardId ?? 'bonus-tax', defaults);
   const [method, setMethod] = useSupplementalMethod(cardId ?? 'bonus-tax');
 
@@ -177,7 +179,29 @@ export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
         <ResultRow label="Estimated state on bonus" value={formatCurrency(result.bonusBreakdown.state / bonusesPerYear)} />
         <ResultRow label="Estimated city on bonus" value={formatCurrency(result.bonusBreakdown.city / bonusesPerYear)} />
         <ResultRow label="Estimated total tax on bonus" value={formatCurrency(totalTaxOnBonus / bonusesPerYear)} />
-        <ResultRow label={<TermTooltip term="marginal rate" />} value={formatPercent(method === 'FLAT' ? (annualBonus > 0 ? totalTaxOnBonus / annualBonus : 0) : result.marginalRateOnBonus)} />
+        <ResultRow
+          label={
+            method === 'FLAT' ? (
+              // D3: under the 22% flat method the ratio total-tax/bonus is an
+              // EFFECTIVE withholding rate — calling it marginal was false.
+              <TermTooltip term="effective rate">effective withholding rate</TermTooltip>
+            ) : (
+              <TermTooltip term="marginal rate" />
+            )
+          }
+          value={formatPercent(
+            method === 'FLAT'
+              ? annualBonus > 0
+                ? totalTaxOnBonus / annualBonus
+                : 0
+              : result.marginalRateOnBonus,
+          )}
+        />
+        <ResultRow
+          label="Estimated take-home (per bonus)"
+          value={formatCurrency(perBonusTakeHome)}
+          emphasis
+        />
       </div>
       {values.isConsistent && (
         <div className="mt-3 pt-3 border-t text-sm">
