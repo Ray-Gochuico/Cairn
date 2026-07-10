@@ -6,8 +6,8 @@ import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useHouseholdStore } from '@/stores/household-store';
-import { SnapshotSource, AccountType } from '@/types/enums';
-import type { Account, AppSettings, Household } from '@/types/schema';
+import { SnapshotSource, AccountType, FilingStatus } from '@/types/enums';
+import type { Account, AppSettings } from '@/types/schema';
 
 function mkAccount(id: number, type: AccountType = AccountType.ACCOUNT_BROKERAGE, excluded = false): Account {
   return {
@@ -191,7 +191,7 @@ describe('CompoundInterestCard', () => {
     // (2.5%) so the pinned dollars below stay byte-identical while the test
     // exercises step 2 of the real chain instead of the removed `?? 0.025`.
     useSettingsStore.setState({
-      settings: { defaultInflation: 0.025 } as unknown as AppSettings,
+      settings: { defaultInflation: 0.025 } as AppSettings,
       isLoading: false,
       error: null,
     });
@@ -199,7 +199,7 @@ describe('CompoundInterestCard', () => {
     render(<CompoundInterestCard />); // defaults: pv 1000, pmt 100, 7% APY, 10y monthly, 2.5% inflation
     const headline = screen.getByTestId('compound-headline');
     // Nominal first (byte-identical to prior behaviour) — and no basis suffix.
-    expect(headline.textContent).toContain('$19,072');
+    expect(headline.textContent).toBe('$19,072');
     expect(headline.textContent).not.toContain("in today's dollars");
     expect(screen.getByTestId('compound-total-contributed').textContent).toContain('Total contributed');
     expect(screen.getByText('Balance over time')).toBeInTheDocument();
@@ -219,15 +219,20 @@ describe('CompoundInterestCard', () => {
   it('resolves inflation via the canonical chain: household.inflationAssumption beats settings.defaultInflation', async () => {
     const user = userEvent.setup();
     useSettingsStore.setState({
-      settings: { defaultInflation: 0.025 } as unknown as AppSettings,
+      settings: { defaultInflation: 0.025 } as AppSettings,
       isLoading: false,
       error: null,
     });
     useHouseholdStore.setState({
       household: {
-        filingStatus: 'SINGLE', state: 'CA', city: null, monthlyExpenseBaseline: 0,
-        withdrawalRate: 0.04, inflationAssumption: 0.05, growthScenarios: [],
-      } as unknown as Household,
+        filingStatus: FilingStatus.SINGLE,
+        state: 'CA',
+        city: null,
+        monthlyExpenseBaseline: 0,
+        withdrawalRate: 0.04,
+        inflationAssumption: 0.05,
+        growthScenarios: [],
+      },
       isLoading: false,
       error: null,
     });
