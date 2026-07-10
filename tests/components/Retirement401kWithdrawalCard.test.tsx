@@ -117,6 +117,18 @@ describe('Retirement401kWithdrawalCard', () => {
     expect(Number(ageInput.value)).toBeGreaterThan(18);
   });
 
+  it('default (no withdrawal entered) shows "—" + a prompt, not a $0 breakdown', () => {
+    primeStores();
+    render(<MemoryRouter><Retirement401kWithdrawalCard /></MemoryRouter>);
+    expect(screen.getByTestId('401k-withdrawal-net').textContent).toBe('—');
+    expect(screen.getByText(/Enter a withdrawal amount/i)).toBeInTheDocument();
+    // Controls stay visible (BonusTaxCard idiom).
+    expect(screen.getByLabelText(/withdrawal amount/i)).toBeInTheDocument();
+    // No breakdown rows rendered.
+    expect(screen.queryByText(/Federal tax on withdrawal/i)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('summary-net-to-you')).not.toBeInTheDocument();
+  });
+
   it('Roth radio is enabled (no longer "coming soon")', () => {
     primeStores();
     useTaxRulesStore.setState((s) => ({ ...s, year: 2026 }));
@@ -218,6 +230,8 @@ describe('Retirement401kWithdrawalCard', () => {
         <Retirement401kWithdrawalCard />
       </MemoryRouter>,
     );
+    // Wave 15 T6: the breakdown is gated behind a real withdrawal amount.
+    fireEvent.change(screen.getByLabelText(/withdrawal amount/i), { target: { value: '50000' } });
     expect(screen.getByText(/^fica$/i)).toBeInTheDocument();
     expect(screen.getByText(/n\/a on 401k/i)).toBeInTheDocument();
   });
