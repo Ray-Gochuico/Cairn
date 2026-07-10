@@ -279,6 +279,25 @@ describe('CoastFiCard', () => {
     expect(screen.getByRole('table').closest('div')).toHaveClass('overflow-x-auto');
   });
 
+  it('numeric columns are right-aligned (Wave 15 T9, Allocator precedent)', () => {
+    primeStores();
+    render(
+      <MemoryRouter>
+        <CoastFiCard />
+      </MemoryRouter>,
+    );
+
+    for (const name of [/^rate$/i, /^years$/i, /coast today/i, /% of coast/i]) {
+      expect(
+        screen.getByRole('columnheader', { name }).className,
+      ).toContain('text-right');
+    }
+    // Identity column stays left-aligned.
+    expect(
+      screen.getByRole('columnheader', { name: /^scenario$/i }).className,
+    ).not.toContain('text-right');
+  });
+
   it('uses the latest snapshot per account when multiple are seeded', () => {
     // Two accounts, two snapshots each. pv = 100k + 200k = 300k.
     primeStores({

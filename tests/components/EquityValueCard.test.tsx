@@ -156,6 +156,37 @@ describe('EquityValueCard', () => {
     expect(headline).toHaveTextContent('$62,500');
   });
 
+  it('numeric columns are right-aligned (Wave 15 T9, Allocator precedent)', () => {
+    primeStores({
+      persons: [{ id: 1, name: 'Alice' }],
+      grants: [
+        {
+          ownerPersonId: 1,
+          totalShares: 1000,
+          currentFmv: 10,
+          vestingSchedule: [{ date: '2020-01-15', cumulativePct: 1.0 }],
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter>
+        <EquityValueCard />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByRole('columnheader', { name: /^grants$/i }).className,
+    ).toContain('text-right');
+    expect(
+      screen.getByRole('columnheader', { name: /vested value/i }).className,
+    ).toContain('text-right');
+    // Identity column stays left-aligned.
+    expect(
+      screen.getByRole('columnheader', { name: /^owner$/i }).className,
+    ).not.toContain('text-right');
+  });
+
   it('per-person breakdown groups grants by owner', () => {
     // Alice owns 2 grants (10k + 20k vested), Bob owns 1 (5k vested).
     primeStores({

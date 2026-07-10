@@ -327,10 +327,10 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
             <thead>
               <tr className="text-left text-muted-foreground">
                 <th className="py-2">Scenario</th>
-                <th className="py-2">Rate</th>
-                <th className="py-2">Years</th>
-                <th className="py-2">Coast today</th>
-                <th className="py-2">% of coast</th>
+                <th className="py-2 text-right">Rate</th>
+                <th className="py-2 text-right">Years</th>
+                <th className="py-2 text-right">Coast today</th>
+                <th className="py-2 text-right">% of coast</th>
               </tr>
             </thead>
             <tbody>
@@ -342,12 +342,12 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
                 return (
                   <tr key={r.label} className="border-t">
                     <td className="py-2">{r.label}</td>
-                    <td className="py-2 tabular-nums">{formatPercent(r.rate)}</td>
-                    <td className="py-2 tabular-nums">{values.yearsUntilRetirement}</td>
-                    <td className="py-2 tabular-nums">
+                    <td className="py-2 text-right tabular-nums">{formatPercent(r.rate)}</td>
+                    <td className="py-2 text-right tabular-nums">{values.yearsUntilRetirement}</td>
+                    <td className="py-2 text-right tabular-nums">
                       {formatCurrency(r.coastNeededToday)}
                     </td>
-                    <td className="py-2 tabular-nums">{pct.toFixed(0)}%</td>
+                    <td className="py-2 text-right tabular-nums">{pct.toFixed(0)}%</td>
                   </tr>
                 );
               })}

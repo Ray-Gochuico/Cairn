@@ -307,6 +307,26 @@ describe('FinancialIndependenceCard', () => {
     expect(screen.getByText('8%')).toBeInTheDocument();
   });
 
+  it('numeric columns are right-aligned (Wave 15 T9, Allocator precedent)', () => {
+    primeStores();
+    render(
+      <MemoryRouter>
+        <FinancialIndependenceCard />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByRole('columnheader', { name: /^rate$/i }).className,
+    ).toContain('text-right');
+    expect(
+      screen.getByRole('columnheader', { name: /years to fi/i }).className,
+    ).toContain('text-right');
+    // Identity column stays left-aligned.
+    expect(
+      screen.getByRole('columnheader', { name: /^scenario$/i }).className,
+    ).not.toContain('text-right');
+  });
+
   it('shows the target portfolio derived from monthlyExpenseBaseline / withdrawalRate', () => {
     // 5000 * 12 / 0.04 = 1,500,000
     primeStores();

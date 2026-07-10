@@ -295,16 +295,16 @@ export function FinancialIndependenceCard({
         <thead>
           <tr className="text-left text-muted-foreground">
             <th className="py-2">Scenario</th>
-            <th className="py-2">Rate</th>
-            <th className="py-2">Years to FI</th>
+            <th className="py-2 text-right">Rate</th>
+            <th className="py-2 text-right">Years to FI</th>
           </tr>
         </thead>
         <tbody>
           {series.map((s) => (
             <tr key={s.label} className="border-t">
               <td className="py-2">{s.label}</td>
-              <td className="py-2 tabular-nums">{formatPercent(s.rate)}</td>
-              <td className="py-2 tabular-nums">
+              <td className="py-2 text-right tabular-nums">{formatPercent(s.rate)}</td>
+              <td className="py-2 text-right tabular-nums">
                 {Number.isFinite(s.years) ? s.years.toFixed(1) : '—'}
               </td>
             </tr>

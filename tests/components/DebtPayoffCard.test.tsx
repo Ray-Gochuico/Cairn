@@ -109,6 +109,30 @@ describe('DebtPayoffCard', () => {
     expect(screen.getByRole('table').closest('div')).toHaveClass('overflow-x-auto');
   });
 
+  it('numeric columns are right-aligned (Wave 15 T9, Allocator precedent; D9: Payoff date aligns with money columns)', () => {
+    useLoansStore.setState({
+      loans: [makeLoan({ id: 1, name: 'Car loan' })],
+      isLoading: false,
+      error: null,
+    });
+
+    render(
+      <MemoryRouter>
+        <DebtPayoffCard />
+      </MemoryRouter>,
+    );
+
+    for (const name of [/^balance$/i, /^rate$/i, /payoff date/i, /^interest$/i]) {
+      expect(
+        screen.getByRole('columnheader', { name }).className,
+      ).toContain('text-right');
+    }
+    // Identity column stays left-aligned.
+    expect(
+      screen.getByRole('columnheader', { name: /^loan$/i }).className,
+    ).not.toContain('text-right');
+  });
+
   it('strategy picker has 3 options (None / Snowball / Avalanche)', async () => {
     useLoansStore.setState({
       loans: [makeLoan({ id: 1, name: 'Card', currentBalance: 5000 })],
