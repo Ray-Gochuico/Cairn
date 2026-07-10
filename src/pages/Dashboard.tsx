@@ -1112,8 +1112,10 @@ export default function Dashboard() {
           <CardContent>
             {visibleGoals.length === 0 ? (
               <EmptyState bare icon={Target} title="No goals yet">
+                {/* W14: the Goals page owns adding — a dashboard card
+                    navigates, it doesn't deep-edit. */}
                 <Button asChild size="sm" variant="outline">
-                  <Link to="/inputs/goals">Add your first goal</Link>
+                  <Link to="/goals">Add your first goal</Link>
                 </Button>
               </EmptyState>
             ) : (

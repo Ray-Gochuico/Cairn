@@ -181,15 +181,16 @@ describe('Dashboard goals strip', () => {
     resetStores();
   });
 
-  it('shows empty state with "Add your first goal" link when no goals exist', () => {
+  it('shows empty state with "Add your first goal" link to the Goals page (W14)', () => {
     render(
       <MemoryRouter>
         <Dashboard />
       </MemoryRouter>,
     );
     expect(screen.getByText(/no goals yet/i)).toBeInTheDocument();
+    // W14: the Goals page now owns adding — a dashboard card navigates there.
     const addLink = screen.getByRole('link', { name: /add your first goal/i });
-    expect(addLink).toHaveAttribute('href', '/inputs/goals');
+    expect(addLink).toHaveAttribute('href', '/goals');
   });
 
   it('shows up to 3 goal mini-cards when goals exist', () => {

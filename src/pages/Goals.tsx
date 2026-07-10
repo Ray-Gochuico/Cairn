@@ -1,5 +1,4 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useLoadGate } from '@/lib/use-load-gate';
 import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
 import {
@@ -23,7 +22,9 @@ import {
 } from '@/lib/goal-progress';
 import { filterByForPersonId } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
-import { GOAL_TYPE_LABELS } from '@/components/forms/GoalForm';
+import GoalForm, { DEFAULT_GOAL, GOAL_TYPE_LABELS } from '@/components/forms/GoalForm';
+import { EditDrawer } from '@/components/layout/EditDrawer';
+import { useConfirm } from '@/components/ui/confirm-dialog';
 import { GoalType } from '@/types/enums';
 import type {
   AccountSnapshot,
@@ -112,12 +113,15 @@ interface GoalProgressCardProps {
   projection: GoalProjection;
   accountInfoById: Map<number, LinkedAccountInfo>;
   onUpdateBalance: (accountId: number, accountName: string) => void;
+  /** W14 one-place-per-thing: opens the page's EditDrawer for this goal. */
+  onEdit: () => void;
 }
 
 function GoalProgressCard({
   projection,
   accountInfoById,
   onUpdateBalance,
+  onEdit,
 }: GoalProgressCardProps) {
   const { goal } = projection;
   // Clamp the visual width to [0, 1]; aria-valuenow follows the same clamp so
@@ -169,7 +173,17 @@ function GoalProgressCard({
             by {formatDate(goal.targetDate)}
           </div>
         </div>
-        {onTrackBadge}
+        <div className="flex items-center gap-2 shrink-0">
+          {onTrackBadge}
+          <Button
+            size="sm"
+            variant="outline"
+            aria-label={`Edit goal ${goal.name}`}
+            onClick={onEdit}
+          >
+            Edit goal
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div>
@@ -296,13 +310,23 @@ export default function Goals() {
   const holdingsError = useHoldingsStore((s) => s.error);
   const holdingsLoading = useHoldingsStore((s) => s.isLoading);
 
+  const createGoal = useGoalsStore((s) => s.create);
+  const updateGoal = useGoalsStore((s) => s.update);
+  const removeGoal = useGoalsStore((s) => s.remove);
+
   // Tracks which account the UpdateAccountBalanceDialog is currently editing;
   // null means the dialog is closed. We keep both the id and the name in
   // state so the dialog can render its title without re-querying accounts.
+  // (Stays a Dialog per decision #9 — a record-level quick action, not
+  // entity CRUD.)
   const [dialogTarget, setDialogTarget] = useState<{
     accountId: number;
     accountName: string;
   } | null>(null);
+
+  // W14 "one place per thing": goal CRUD happens here via the EditDrawer.
+  const [drawer, setDrawer] = useState<'closed' | 'create' | { type: 'edit'; id: number }>('closed');
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   // Filter goals by the household / p1 / p2 / joint dropdown. Snapshots and
   // contributions intentionally aren't pre-filtered here — the goal already
@@ -436,6 +460,71 @@ export default function Goals() {
     });
   }, [visibleGoals, snapshots, contributions, today, annualRate]);
 
+  // W14 drawer wiring — copied from GoalsTab verbatim (same DEFAULT_GOAL,
+  // same initial mapping, same person/account options, same delete confirm
+  // copy). `open` derives from `editing != null` so a goal deleted out from
+  // under an open drawer closes it safely.
+  const personOptions = persons.map((p) => ({ id: p.id!, name: p.name }));
+  const accountOptions = accounts.map((a) => ({
+    id: a.id!,
+    name: a.name,
+    institution: a.institution,
+  }));
+
+  const renderDrawer = () => {
+    const editing = typeof drawer === 'object' ? goals.find((g) => g.id === drawer.id) : undefined;
+    const open = drawer === 'create' || editing != null;
+    return (
+      <>
+        <EditDrawer
+          open={open}
+          onClose={() => setDrawer('closed')}
+          title={drawer === 'create' ? 'Add goal' : 'Edit goal'}
+          description={drawer === 'create'
+            ? 'Track on/off-track progress toward retirement, down payment, or other targets.'
+            : undefined}
+        >
+          <GoalForm
+            initial={editing ? {
+              householdId: editing.householdId,
+              forPersonId: editing.forPersonId,
+              name: editing.name,
+              type: editing.type,
+              targetAmount: editing.targetAmount,
+              targetDate: editing.targetDate,
+              linkedAccountIds: editing.linkedAccountIds,
+            } : DEFAULT_GOAL}
+            persons={personOptions}
+            accounts={accountOptions}
+            onSubmit={async (v) => {
+              if (editing) await updateGoal(editing.id!, v); else await createGoal(v);
+              setDrawer('closed');
+            }}
+            onCancel={() => setDrawer('closed')}
+          />
+          {editing && (
+            <div className="mt-6 border-t pt-4">
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: `Delete ${editing.name}?`,
+                    description: 'This permanently removes this goal. This can’t be undone.',
+                  });
+                  if (ok) { await removeGoal(editing.id!); setDrawer('closed'); }
+                }}
+              >
+                Delete goal
+              </Button>
+            </div>
+          )}
+        </EditDrawer>
+        {confirmDialog}
+      </>
+    );
+  };
+
   if (!gate.settled) {
     return (
       <PageContainer className="space-y-6">
@@ -462,12 +551,11 @@ export default function Goals() {
         {hasStoreError ? (
           <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
         ) : (
-          <EmptyState icon={Target} title="No goals yet" description="Add one in Inputs to start tracking your financial milestones.">
-            <Button asChild>
-              <Link to="/inputs/goals">Add your first goal</Link>
-            </Button>
+          <EmptyState icon={Target} title="No goals yet" description="Add one to start tracking your financial milestones.">
+            <Button onClick={() => setDrawer('create')}>Add your first goal</Button>
           </EmptyState>
         )}
+        {renderDrawer()}
       </PageContainer>
     );
   }
@@ -485,9 +573,7 @@ export default function Goals() {
         </div>
         <div className="flex items-center gap-2">
           <ExportCsvButton baseName="goals" columns={csvColumns} rows={goals} size="sm" />
-          <Button asChild variant="outline" size="sm">
-            <Link to="/inputs/goals">Manage goals</Link>
-          </Button>
+          <Button size="sm" onClick={() => setDrawer('create')}>Add goal</Button>
         </div>
       </div>
 
@@ -510,6 +596,7 @@ export default function Goals() {
             onUpdateBalance={(accountId, accountName) =>
               setDialogTarget({ accountId, accountName })
             }
+            onEdit={() => setDrawer({ type: 'edit', id: p.goal.id! })}
           />
         ))}
       </div>
@@ -525,6 +612,7 @@ export default function Goals() {
           accountName={dialogTarget.accountName}
         />
       )}
+      {renderDrawer()}
     </PageContainer>
   );
 }
