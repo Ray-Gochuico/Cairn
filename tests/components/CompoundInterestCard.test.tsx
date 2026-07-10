@@ -4,8 +4,10 @@ import userEvent from '@testing-library/user-event';
 import { CompoundInterestCard } from '@/pages/calculators/CompoundInterestCard';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useAccountsStore } from '@/stores/accounts-store';
+import { useSettingsStore } from '@/stores/settings-store';
+import { useHouseholdStore } from '@/stores/household-store';
 import { SnapshotSource, AccountType } from '@/types/enums';
-import type { Account } from '@/types/schema';
+import type { Account, AppSettings, Household } from '@/types/schema';
 
 function mkAccount(id: number, type: AccountType = AccountType.ACCOUNT_BROKERAGE, excluded = false): Account {
   return {
@@ -29,6 +31,10 @@ describe('CompoundInterestCard', () => {
     sessionStorage.clear();
     useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null });
     useAccountsStore.setState({ accounts: [], isLoading: false, error: null });
+    // Wave 15 T5: the card now reads the canonical inflation chain — reset
+    // both inputs so each test controls its own precedence step.
+    useSettingsStore.setState({ settings: null, isLoading: false, error: null });
+    useHouseholdStore.setState({ household: null, isLoading: false, error: null });
   });
 
   it('persists the what-if inputs via the kit', async () => {
@@ -180,22 +186,63 @@ describe('CompoundInterestCard', () => {
   });
 
   it('Real mode deflates the WHOLE card — headline + tiles + title in today\'s dollars', async () => {
+    // Wave 15 T5 (D6): the card now resolves inflation via the canonical
+    // chain (household → settings → 0.03). Seed settings at the OLD fallback
+    // (2.5%) so the pinned dollars below stay byte-identical while the test
+    // exercises step 2 of the real chain instead of the removed `?? 0.025`.
+    useSettingsStore.setState({
+      settings: { defaultInflation: 0.025 } as unknown as AppSettings,
+      isLoading: false,
+      error: null,
+    });
     const user = userEvent.setup();
     render(<CompoundInterestCard />); // defaults: pv 1000, pmt 100, 7% APY, 10y monthly, 2.5% inflation
     const headline = screen.getByTestId('compound-headline');
-    // Nominal first (byte-identical to prior behaviour).
-    expect(headline.textContent).toBe('$19,072');
+    // Nominal first (byte-identical to prior behaviour) — and no basis suffix.
+    expect(headline.textContent).toContain('$19,072');
+    expect(headline.textContent).not.toContain("in today's dollars");
     expect(screen.getByTestId('compound-total-contributed').textContent).toContain('Total contributed');
     expect(screen.getByText('Balance over time')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /^real$/i }));
 
     // Headline + tiles now read the deflated (today's-dollars) figures.
-    expect(headline.textContent).toBe('$14,899');
+    expect(headline.textContent).toContain('$14,899');
+    expect(headline.textContent).toContain("in today's dollars");
     expect(screen.getByTestId('compound-total-contributed').textContent).toContain("Total contributed (today's $)");
     expect(screen.getByTestId('compound-total-contributed').textContent).toContain('$11,622');
     // Chart title names the basis.
     expect(screen.getByText("Balance over time (today's dollars)")).toBeInTheDocument();
     expect(screen.queryByText('Balance over time')).not.toBeInTheDocument();
+  });
+
+  it('resolves inflation via the canonical chain: household.inflationAssumption beats settings.defaultInflation', async () => {
+    const user = userEvent.setup();
+    useSettingsStore.setState({
+      settings: { defaultInflation: 0.025 } as unknown as AppSettings,
+      isLoading: false,
+      error: null,
+    });
+    useHouseholdStore.setState({
+      household: {
+        filingStatus: 'SINGLE', state: 'CA', city: null, monthlyExpenseBaseline: 0,
+        withdrawalRate: 0.04, inflationAssumption: 0.05, growthScenarios: [],
+      } as unknown as Household,
+      isLoading: false,
+      error: null,
+    });
+    render(<CompoundInterestCard />);
+    await user.click(screen.getByRole('button', { name: /^real$/i }));
+    const value = parseFloat(screen.getByTestId('compound-headline').textContent!.replace(/[^0-9.]/g, ''));
+    // 5% household inflation deflates HARDER than the 2.5% settings default
+    // would ($14,899 at 2.5%) — proving household wins the chain.
+    expect(value).toBeLessThan(14899);
+  });
+
+  it('collapsed-safe basis: the REAL headline itself says "in today\'s dollars"', async () => {
+    const user = userEvent.setup();
+    render(<CompoundInterestCard />);
+    await user.click(screen.getByRole('button', { name: /^real$/i }));
+    expect(screen.getByTestId('compound-headline').textContent).toContain("in today's dollars");
   });
 });
