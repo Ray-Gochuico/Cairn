@@ -137,7 +137,13 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
       title="Debt Payoff"
       headline={
         <span data-testid="debt-payoff-headline">
-          {formatCurrency(totalBalance)}
+          {/* Wave 15 T7 (D7): the headline is the ANSWER. A capped schedule
+              must never claim a date — same poisoning rule as the tiles.
+              (The null-date guard covers the degenerate empty-schedule case;
+              loans.length === 0 already early-returned above.) */}
+          {anyCapped || !aggregatePayoffDate
+            ? '—'
+            : `Debt-free ${formatPayoffDate(aggregatePayoffDate)}`}
         </span>
       }
     >
@@ -170,15 +176,18 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
       )}
       {/* Aggregate metric strip */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+        {/* T7 (D7): the balance — the demoted former headline — leads the
+            strip. It is NEVER suppressed: the balance is always real, even
+            when a capped schedule poisons the payoff-derived aggregates. */}
+        <StatTile
+          label="Total balance"
+          value={formatCurrency(totalBalance)}
+          testId="debt-total-balance"
+        />
         <StatTile
           label="Total interest"
           value={anyCapped ? '—' : formatCurrency(totalInterest)}
           testId="debt-total-interest"
-        />
-        <StatTile
-          label="Estimated payoff"
-          value={anyCapped ? '—' : formatPayoffDate(aggregatePayoffDate)}
-          testId="debt-aggregate-payoff"
         />
         <StatTile
           label="Savings vs no-extra"

@@ -55,7 +55,9 @@ describe('DebtPayoffCard', () => {
     ).toBeInTheDocument();
   });
 
-  it('renders aggregate "total balance" headline with one or more loans', () => {
+  it('headline is the ANSWER — "Debt-free Mon YYYY"; balance demotes to the tile strip', () => {
+    // Wave 15 T7 (D7): the headline answers "when am I debt-free?" — the
+    // total balance (an input echo Loans already shows) demotes to a tile.
     useLoansStore.setState({
       loans: [
         makeLoan({ id: 1, name: 'Car', currentBalance: 12000 }),
@@ -71,9 +73,11 @@ describe('DebtPayoffCard', () => {
       </MemoryRouter>,
     );
 
-    // 12,000 + 5,000 = 17,000 -> headline shows total balance
     const headline = screen.getByTestId('debt-payoff-headline');
-    expect(headline.textContent).toMatch(/\$17,000/);
+    expect(headline.textContent).toMatch(/^Debt-free [A-Z][a-z]{2} \d{4}$/);
+    expect(headline.textContent).not.toMatch(/\$17,000/);
+    // 12,000 + 5,000 = 17,000 -> balance lives in the tile strip now.
+    expect(screen.getByTestId('debt-total-balance')).toHaveTextContent('$17,000');
   });
 
   it('renders one row per loan in the loans store', () => {
@@ -398,10 +402,13 @@ describe('DebtPayoffCard', () => {
       expect(notice).toHaveTextContent(/never pays off at the current payment/i);
       expect(notice).toHaveTextContent('Underwater');
 
-      // All three aggregate tiles are suppressed (any capped loan poisons the sums).
+      // Every payoff-derived aggregate is suppressed (any capped loan poisons
+      // the sums) — including the headline, which claims a payoff date (T7/D7).
       expect(screen.getByTestId('debt-total-interest')).toHaveTextContent('—');
-      expect(screen.getByTestId('debt-aggregate-payoff')).toHaveTextContent('—');
+      expect(screen.getByTestId('debt-payoff-headline')).toHaveTextContent('—');
       expect(screen.getByTestId('debt-savings')).toHaveTextContent('—');
+      // The balance tile is NEVER suppressed — the balance is always real.
+      expect(screen.getByTestId('debt-total-balance')).not.toHaveTextContent('—');
 
       // Capped row: payoff cell carries the inline warning, interest cell is '—'.
       expect(screen.getByTestId('debt-loan-payoff-9')).toHaveTextContent(/never at this payment/i);
@@ -424,7 +431,9 @@ describe('DebtPayoffCard', () => {
         </MemoryRouter>,
       );
       expect(screen.queryByTestId('debt-never-payoff-notice')).not.toBeInTheDocument();
-      expect(screen.getByTestId('debt-aggregate-payoff')).not.toHaveTextContent('—');
+      expect(screen.getByTestId('debt-payoff-headline')).toHaveTextContent(
+        /Debt-free [A-Z][a-z]{2} \d{4}/,
+      );
     });
 
     it('a rescuing extra keeps real payoff/interest but suppresses savings and still warns (review F1)', () => {
@@ -452,7 +461,9 @@ describe('DebtPayoffCard', () => {
       // real (the with-extra projection amortizes).
       expect(screen.getByTestId('debt-savings')).toHaveTextContent('—');
       expect(screen.getByTestId('debt-total-interest')).not.toHaveTextContent('—');
-      expect(screen.getByTestId('debt-aggregate-payoff')).toHaveTextContent(/[A-Z][a-z]{2} \d{4}/);
+      expect(screen.getByTestId('debt-payoff-headline')).toHaveTextContent(
+        /Debt-free [A-Z][a-z]{2} \d{4}/,
+      );
       // Per-row payoff keeps a real date too.
       expect(screen.getByTestId('debt-loan-payoff-9')).toHaveTextContent(/[A-Z][a-z]{2} \d{4}/);
     });
