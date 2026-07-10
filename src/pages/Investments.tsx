@@ -22,6 +22,7 @@ import { useViewFilter } from '@/lib/use-view-filter';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import CardEditFrame from '@/components/investments/CardEditFrame';
+import ManageSurface from '@/components/investments/manage/ManageSurface';
 import { DataHealthPopover } from '@/components/investments/DataHealthPopover';
 import { AssetClassTargetsForm } from '@/components/investments/AssetClassTargetsForm';
 import AllocationCard from '@/components/investments/AllocationCard';
@@ -992,6 +993,11 @@ export default function Investments() {
       ) : (
         <div className="space-y-6">{renderCardFlow(visibleCards)}</div>
       )}
+
+      {/* W14 "one place per thing": accounts/holdings/contributions/tickers
+          CRUD lives HERE, below the analysis cards. Deliberately outside the
+          customizable card registry — managing data isn't a hideable widget. */}
+      <ManageSurface />
     </PageContainer>
   );
 }

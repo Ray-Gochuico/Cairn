@@ -859,8 +859,14 @@ describe('Investments page — 529 section', () => {
     // p1's brokerage is visible (Accounts list; the view-filtered
     // AssetValueChart header also shows the lone account's name — ≥1 match).
     expect(screen.getAllByText("Alice's Brokerage").length).toBeGreaterThanOrEqual(1);
-    // p2's brokerage is filtered out
-    expect(screen.queryByText("Bob's Brokerage")).not.toBeInTheDocument();
+    // p2's brokerage is filtered out of the ANALYSIS region. The W14 Manage
+    // region below is deliberately person-filter-agnostic (a CRUD list must
+    // never hide data), so scope the assertion outside it.
+    const manageRegion = document.getElementById('investments-manage-heading')!.closest('section')!;
+    const bobMatches = screen
+      .queryAllByText("Bob's Brokerage")
+      .filter((el) => !manageRegion.contains(el));
+    expect(bobMatches).toHaveLength(0);
   });
 
   it('By-holding table aggregates the same household across multiple accounts', async () => {
