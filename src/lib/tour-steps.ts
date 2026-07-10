@@ -34,7 +34,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     to: '/net-worth',
     title: 'Net worth',
-    body: 'Track everything you own and owe over time. Accounts, property, and loans roll up into one number here.',
+    body: 'Everything you own and owe, over time — flip the hero to "Investment accounts" for that slice alone.',
     core: true,
   },
   {
@@ -47,31 +47,31 @@ export const TOUR_STEPS: TourStep[] = [
   {
     to: '/investments',
     title: 'Investments',
-    body: 'See your holdings, allocation, and growth projections across every brokerage and retirement account.',
+    body: 'Allocation, drift, and growth — and manage accounts, holdings, and tickers on this page too.',
     core: true,
   },
   {
     to: '/loans',
     title: 'Loans',
-    body: 'Mortgages, auto, and student loans — balances, rates, and payoff timelines.',
+    body: 'Mortgages, auto, and student loans — payoff timelines, with add and edit right here.',
     core: false,
   },
   {
     to: '/property',
     title: 'Property',
-    body: 'Homes and real estate you own, with values that feed your net worth.',
+    body: 'Homes and real estate you own, edited where you see them.',
     core: false,
   },
   {
     to: '/vehicles',
     title: 'Vehicles',
-    body: 'Cars and other vehicles, including leases, tracked alongside your other assets.',
+    body: 'Cars and other vehicles, including leases — add or edit them right here.',
     core: false,
   },
   {
     to: '/equity-grants',
     title: 'Equity grants',
-    body: 'RSUs, options, and other equity comp, with vesting schedules.',
+    body: 'RSUs, options, and other equity comp, with vesting schedules — managed right here.',
     core: false,
   },
   {
@@ -84,7 +84,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     to: '/goals',
     title: 'Goals',
-    body: 'Set savings targets and watch your progress toward each one.',
+    body: 'Savings targets and 529 plans — set and edit each one in place.',
     core: false,
   },
   {
@@ -126,8 +126,8 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     to: '/inputs',
-    title: 'Inputs',
-    body: 'Add or edit the underlying data — people, accounts, holdings, and more.',
+    title: 'Setup',
+    body: 'The shared basics — your household, people, dependents, and spending categories. Everything else is edited where you see it.',
     core: false,
   },
   {

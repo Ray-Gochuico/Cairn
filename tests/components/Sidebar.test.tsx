@@ -149,3 +149,21 @@ describe('Sidebar', () => {
     });
   });
 });
+
+describe('INPUTS → SETUP (W14)', () => {
+  beforeEach(() => {
+    useSettingsStore.setState({ settings: null, isLoading: false, error: null, load: async () => {} } as never);
+  });
+
+  it('System order is Monthly check-in → Setup (/inputs) → Settings; no "Inputs" label anywhere', () => {
+    render(<MemoryRouter><Sidebar /></MemoryRouter>);
+    const setup = screen.getByRole('link', { name: /^setup$/i });
+    expect(setup).toHaveAttribute('href', '/inputs'); // route key kept (decision #6)
+    expect(screen.queryByRole('link', { name: /^inputs$/i })).toBeNull();
+    const nav = screen.getByRole('navigation', { name: 'Primary' });
+    const hrefs = Array.from(nav.querySelectorAll('a')).map((a) => a.getAttribute('href'));
+    const monthlyIdx = hrefs.indexOf('/monthly');
+    expect(monthlyIdx).toBeGreaterThan(-1);
+    expect(hrefs.slice(monthlyIdx)).toEqual(['/monthly', '/inputs', '/settings']);
+  });
+});

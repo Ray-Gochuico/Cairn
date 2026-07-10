@@ -28,7 +28,7 @@ describe('SidebarSection', () => {
     await waitFor(() => {
       expect(screen.getByText('Dashboard')).toBeInTheDocument();
     });
-    for (const label of ['Net Worth', 'Budget', 'Investments', 'Spending', 'Inputs', 'Settings']) {
+    for (const label of ['Net Worth', 'Budget', 'Investments', 'Spending', 'Setup', 'Settings']) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
   });

@@ -33,11 +33,11 @@ const TITLES: Record<string, string> = {
   '/monthly': 'Monthly check-in',
   '/setup': 'Setup',
   '/welcome': 'Welcome',
-  '/inputs': 'Inputs',
-  '/inputs/household': 'Inputs · Household',
-  '/inputs/persons': 'Inputs · Persons',
-  '/inputs/dependents': 'Inputs · Dependents',
-  '/inputs/categories': 'Inputs · Categories',
+  '/inputs': 'Setup',
+  '/inputs/household': 'Setup · Household',
+  '/inputs/persons': 'Setup · Persons',
+  '/inputs/dependents': 'Setup · Dependents',
+  '/inputs/categories': 'Setup · Categories',
   // W14 redirect stubs (App.tsx routes them via <Navigate> to each entity's
   // new home) — titled as their destinations so the tripwire stays exact and
   // a mid-redirect announcement never says a retired tab name.
