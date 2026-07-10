@@ -75,7 +75,7 @@ export function evaluateSaveShortTerm(ctx: RoadmapContext): NodeResult {
     return {
       status: 'active',
       evidence: 'Park the upcoming-purchase amount in HYSA / 529 / ESA depending on whether it is educational.',
-      cta: { label: 'Open Accounts →', href: '/inputs/accounts' },
+      cta: { label: 'Open Accounts →', href: '/investments?manage=accounts' },
     };
   }
   return { status: 'skipped', evidence: 'No upcoming large purchase — skipped.' };
@@ -109,13 +109,13 @@ export function evaluateMax401k(ctx: RoadmapContext): NodeResult {
     return {
       status: 'info',
       evidence: 'No 401(k) on file — add one to track progress toward maxing it.',
-      cta: { label: 'Open Accounts →', href: '/inputs/accounts' },
+      cta: { label: 'Open Accounts →', href: '/investments?manage=accounts' },
     };
   }
   return {
     status: 'info',
     evidence: `Finish maxing the employer plan (or solo-401(k) if self-employed). The $${TAX_YEAR_2026.electiveDeferralLimit.toLocaleString('en-US')} limit (tax year 2026) is your target.`,
-    cta: { label: 'Open Contributions →', href: '/inputs/contributions' },
+    cta: { label: 'Open Contributions →', href: '/investments?manage=contributions' },
   };
 }
 
@@ -140,7 +140,7 @@ export function evaluate529(ctx: RoadmapContext): NodeResult {
   return {
     status: 'info',
     evidence: 'No 529 on file. Worth evaluating if you plan to fund education for future generations.',
-    cta: { label: 'Open Accounts →', href: '/inputs/accounts' },
+    cta: { label: 'Open Accounts →', href: '/investments?manage=accounts' },
   };
 }
 
@@ -155,7 +155,7 @@ export function evaluateTaxableBrokerage(ctx: RoadmapContext): NodeResult {
   return {
     status: 'info',
     evidence: 'No taxable brokerage on file — useful for flexibility once the tax-advantaged buckets are maxed.',
-    cta: { label: 'Open Accounts →', href: '/inputs/accounts' },
+    cta: { label: 'Open Accounts →', href: '/investments?manage=accounts' },
   };
 }
 

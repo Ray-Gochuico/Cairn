@@ -112,13 +112,13 @@ export function evaluateAfterTax401kQ(ctx: RoadmapContext): NodeResult {
             await useAccountsStore.getState().update(acct.id!, { allowsMegaBackdoorRollover: value === 'yes' });
           },
         },
-        cta: { label: 'Open Accounts →', href: '/inputs/accounts' },
+        cta: { label: 'Open Accounts →', href: '/investments?manage=accounts' },
       };
     }
     return {
       status: 'unanswered',
       evidence: 'Check your 401(k) plan documents and mark whether after-tax + in-plan Roth rollover is allowed.',
-      cta: { label: 'Open Accounts →', href: '/inputs/accounts' },
+      cta: { label: 'Open Accounts →', href: '/investments?manage=accounts' },
     };
   }
   return { status: 'info', evidence: 'No 401(k) allows the mega backdoor — that path is closed for you.' };
@@ -132,7 +132,7 @@ export function evaluateMegaBackdoor(ctx: RoadmapContext): NodeResult {
     return {
       status: 'active',
       evidence: `Mega backdoor is available — max after-tax contributions and roll into Roth up to the $${TAX_YEAR_2026.dcCombinedLimit.toLocaleString('en-US')} combined limit (tax year 2026).`,
-      cta: { label: 'Open Contributions →', href: '/inputs/contributions' },
+      cta: { label: 'Open Contributions →', href: '/investments?manage=contributions' },
     };
   }
   return { status: 'skipped', evidence: 'Mega backdoor is not available based on your accounts.' };

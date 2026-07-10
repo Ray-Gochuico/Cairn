@@ -136,7 +136,11 @@ describe('roadmap CTA hrefs resolve to real routes', () => {
     const valid = validRoutePaths();
     const hrefs = collectCtaHrefs();
 
-    const broken = hrefs.filter(({ href }) => !valid.has(href));
+    // W14: CTAs may carry a query string (e.g. /investments?manage=accounts
+    // selects the Manage sub-tab) — normalize to the path before matching.
+    // Strictly stronger than dropping the guard: paths are still validated;
+    // queries are simply allowed.
+    const broken = hrefs.filter(({ href }) => !valid.has(href.split('?')[0]));
 
     expect(
       broken,
@@ -144,5 +148,12 @@ describe('roadmap CTA hrefs resolve to real routes', () => {
         `(they would fall through to NotFound):\n` +
         broken.map(({ href, file }) => `  ${href}  (${file})`).join('\n'),
     ).toEqual([]);
+  });
+
+  it('self-check: a query-string CTA resolves via path normalization (W14)', () => {
+    const valid = validRoutePaths();
+    const href = '/investments?manage=accounts';
+    expect(valid.has(href)).toBe(false); // raw form is NOT a route…
+    expect(valid.has(href.split('?')[0])).toBe(true); // …its path is.
   });
 });
