@@ -85,6 +85,60 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
     persons.length > 0 &&
     (household.growthScenarios?.length ?? 0) > 0;
 
+  // ── Derived calculations ───────────────────────────────────────────────────
+  const targetFv =
+    values.withdrawalRate > 0 ? values.annualExpenses / values.withdrawalRate : 0;
+  // Wave 15 T4 (D11): a zero/negative target (expenses or SWR zeroed) is a
+  // 0-of-$0 non-result — render an inline prompt with the controls still
+  // mounted so the user can fix it in place, never "0% of CoastFI".
+  const noTarget = targetFv <= 0;
+
+  // Rules of Hooks: this memo MUST run unconditionally, so it sits ABOVE the
+  // empty-state return below — pre-fix it ran after that return, and a live
+  // hasData flip (scenarios restored while /calculators was open) threw
+  // "Rendered more hooks than during the previous render" and crashed the page.
+  const { chartData, chartSeries, chartMarkers } = useMemo(() => {
+    const horizon = Math.max(0, Math.round(values.yearsUntilRetirement));
+    const scenarios = household?.growthScenarios ?? [];
+    if (!hasData || horizon < 1 || scenarios.length === 0 || targetFv <= 0) {
+      return {
+        chartData: [] as Record<string, number>[],
+        chartSeries: [] as ReturnType<typeof fiChartSeries>['series'],
+        chartMarkers: [] as ReturnType<typeof fiChartSeries>['markers'],
+      };
+    }
+    // Single source for the rows (target-line basis lives in the builder —
+    // see src/lib/calculators/projection-chart.ts). Coast = no contributions.
+    const data = buildProjectionChartData({
+      pv: values.currentPortfolio,
+      annualContribution: 0,
+      targetFv,
+      scenarios,
+      inflation,
+      displayMode,
+      horizon,
+    });
+    // Wave 15 T4: shared FI series semantics (Wave 11 T13) — Optimistic never
+    // wears the palette red, Moderate emphasized, target-crossing markers.
+    // Pre-fix this card hand-rolled palette[i % len] indexing and rendered
+    // the Optimistic line in the palette red. The target-line basis in `data`
+    // follows the display toggle, so crossings compare against the row's own
+    // target value.
+    const targetBasis = data.length > 0 ? Number(data[data.length - 1].target) : targetFv;
+    const { series, markers } = fiChartSeries(scenarios, data, targetBasis, {
+      targetLabel: 'Required at retirement',
+    });
+    return { chartData: data, chartSeries: series, chartMarkers: markers };
+  }, [
+    hasData,
+    values.yearsUntilRetirement,
+    values.currentPortfolio,
+    targetFv,
+    household,
+    displayMode,
+    inflation,
+  ]);
+
   if (!hasData) {
     return (
       <CalculatorCard
@@ -124,14 +178,6 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
     );
   }
 
-  // ── Derived calculations ───────────────────────────────────────────────────
-  const targetFv =
-    values.withdrawalRate > 0 ? values.annualExpenses / values.withdrawalRate : 0;
-  // Wave 15 T4 (D11): a zero/negative target (expenses or SWR zeroed) is a
-  // 0-of-$0 non-result — render an inline prompt with the controls still
-  // mounted so the user can fix it in place, never "0% of CoastFI".
-  const noTarget = targetFv <= 0;
-
   // H1: targetFv (= annualExpenses_today / SWR) is in today's dollars (real),
   // but growthScenarios rates are NOMINAL. Discounting a real target by a
   // nominal rate UNDER-states the coast amount needed today. Convert each rate
@@ -155,47 +201,6 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
   const coastFloored = (household?.growthScenarios ?? []).some(
     (s) => realRateOfUnfloored(s.rate, inflation) < 0,
   );
-
-  const { chartData, chartSeries, chartMarkers } = useMemo(() => {
-    const horizon = Math.max(0, Math.round(values.yearsUntilRetirement));
-    const scenarios = household?.growthScenarios ?? [];
-    if (horizon < 1 || scenarios.length === 0 || targetFv <= 0) {
-      return {
-        chartData: [] as Record<string, number>[],
-        chartSeries: [] as ReturnType<typeof fiChartSeries>['series'],
-        chartMarkers: [] as ReturnType<typeof fiChartSeries>['markers'],
-      };
-    }
-    // Single source for the rows (target-line basis lives in the builder —
-    // see src/lib/calculators/projection-chart.ts). Coast = no contributions.
-    const data = buildProjectionChartData({
-      pv: values.currentPortfolio,
-      annualContribution: 0,
-      targetFv,
-      scenarios,
-      inflation,
-      displayMode,
-      horizon,
-    });
-    // Wave 15 T4: shared FI series semantics (Wave 11 T13) — Optimistic never
-    // wears the palette red, Moderate emphasized, target-crossing markers.
-    // Pre-fix this card hand-rolled palette[i % len] indexing and rendered
-    // the Optimistic line in the palette red. The target-line basis in `data`
-    // follows the display toggle, so crossings compare against the row's own
-    // target value.
-    const targetBasis = data.length > 0 ? Number(data[data.length - 1].target) : targetFv;
-    const { series, markers } = fiChartSeries(scenarios, data, targetBasis, {
-      targetLabel: 'Required at retirement',
-    });
-    return { chartData: data, chartSeries: series, chartMarkers: markers };
-  }, [
-    values.yearsUntilRetirement,
-    values.currentPortfolio,
-    targetFv,
-    household,
-    displayMode,
-    inflation,
-  ]);
 
   // ── Headline ───────────────────────────────────────────────────────────────
   const moderate =

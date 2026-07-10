@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
@@ -195,6 +195,46 @@ describe('CoastFiCard', () => {
     expect(screen.getByLabelText(/annual expenses/i)).toBeInTheDocument();
     expect(screen.queryByText('Coasting to retirement')).not.toBeInTheDocument();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('survives live hasData transitions while mounted (Rules of Hooks regression)', () => {
+    // Wave 15 smoke blocker: the empty-state guard returned ABOVE the chart
+    // useMemo, so restoring growth scenarios while /calculators was open threw
+    // "Rendered more hooks than during the previous render" and the
+    // ErrorBoundary swallowed the page. Mimic the live transition with
+    // setState on the mounted render — both directions.
+    primeStores({ scenarios: [] });
+    render(
+      <MemoryRouter>
+        <CoastFiCard />
+      </MemoryRouter>,
+    );
+    expect(
+      screen.getByRole('link', { name: /add growth scenarios in household settings/i }),
+    ).toBeInTheDocument();
+
+    // Empty → populated: scenarios restored while the card is mounted.
+    act(() => {
+      useHouseholdStore.setState((state) => ({
+        household: { ...state.household!, growthScenarios: fourScenarios },
+      }));
+    });
+    expect(screen.getByRole('table')).toBeInTheDocument();
+    expect(screen.getByText('Coasting to retirement')).toBeInTheDocument();
+    expect(screen.getByTestId('coastfi-headline').textContent).toMatch(
+      /\d+(\.\d+)?%\s*of\s*CoastFI/i,
+    );
+
+    // Populated → empty: scenarios removed while the card is mounted.
+    act(() => {
+      useHouseholdStore.setState((state) => ({
+        household: { ...state.household!, growthScenarios: [] },
+      }));
+    });
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: /add growth scenarios in household settings/i }),
+    ).toBeInTheDocument();
   });
 
   it('renders headline "X% of CoastFI" when seeded with one person + snapshots', () => {
