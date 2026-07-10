@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLoadGate } from '@/lib/use-load-gate';
 import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
-import { Link } from 'react-router-dom';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useLoansStore } from '@/stores/loans-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
@@ -10,7 +9,7 @@ import { useSettingsStore } from '@/stores/settings-store';
 import { useHousingPaymentsStore } from '@/stores/housing-payments-store';
 import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
 import { latestAssetValue } from '@/lib/latest-value';
-import { AssetSnapshotOwnerType } from '@/types/enums';
+import { AssetSnapshotOwnerType, LoanType } from '@/types/enums';
 import { filterByOwnerPersonId } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { resolveUtilityCategoryIds } from '@/lib/category-config';
@@ -18,7 +17,10 @@ import { monthlyHousingObligation, isActiveOn } from '@/lib/recurring-obligation
 import { useLocalToday } from '@/lib/use-local-today';
 import { formatDate } from '@/lib/format';
 import { CategoryMultiSelect } from '@/components/categories/CategoryMultiSelect';
-import { PROPERTY_TYPE_LABELS } from '@/components/forms/PropertyForm';
+import PropertyForm, { DEFAULT_PROPERTY, PROPERTY_TYPE_LABELS } from '@/components/forms/PropertyForm';
+import HousingPaymentForm, { DEFAULT_HOUSING_PAYMENT } from '@/components/forms/HousingPaymentForm';
+import { EditDrawer } from '@/components/layout/EditDrawer';
+import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 import {
   propertyCostBasis,
   rollingExpense,
@@ -83,6 +85,8 @@ interface PropertyAssetCardProps {
   onEdit: () => void;
   onCancelEdit: () => void;
   onSaveValue: (value: number | null) => Promise<void>;
+  /** W14 one-place-per-thing: opens the page's PropertyForm EditDrawer. */
+  onEditDetails: () => void;
 }
 
 function PropertyAssetCard({
@@ -95,6 +99,7 @@ function PropertyAssetCard({
   onEdit,
   onCancelEdit,
   onSaveValue,
+  onEditDetails,
 }: PropertyAssetCardProps) {
   return (
     <Card>
@@ -106,9 +111,19 @@ function PropertyAssetCard({
               {PROPERTY_TYPE_LABELS[property.type]}
             </CardDescription>
           </div>
-          <Button size="sm" variant="outline" onClick={onEdit}>
-            Edit value
-          </Button>
+          <div className="flex shrink-0 gap-2">
+            <Button size="sm" variant="outline" onClick={onEdit}>
+              Edit value
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              aria-label={`Edit details for ${property.name}`}
+              onClick={onEditDetails}
+            >
+              Edit details
+            </Button>
+          </div>
         </div>
         {property.address ? (
           <div className="text-xs text-muted-foreground mt-1">
@@ -301,9 +316,11 @@ interface RentalCardProps {
   ownerLabel: string;
   today: string;
   onRemove: () => void | Promise<void>;
+  /** W14 one-place-per-thing: opens the page's HousingPaymentForm EditDrawer. */
+  onEdit: () => void;
 }
 
-function RentalCard({ rental, ownerLabel, today, onRemove }: RentalCardProps) {
+function RentalCard({ rental, ownerLabel, today, onRemove, onEdit }: RentalCardProps) {
   const ended = !isActiveOn(rental, today);
   return (
     <Card>
@@ -321,10 +338,8 @@ function RentalCard({ rental, ownerLabel, today, onRemove }: RentalCardProps) {
             </CardDescription>
           </div>
           <div className="flex shrink-0 gap-2">
-            <Button asChild size="sm" variant="outline">
-              <Link to="/inputs/housing-payments" aria-label="Edit rental">
-                Edit
-              </Link>
+            <Button size="sm" variant="outline" aria-label="Edit rental" onClick={onEdit}>
+              Edit
             </Button>
             <Button size="sm" variant="destructive" onClick={onRemove}>
               Remove
@@ -376,6 +391,8 @@ export default function Property() {
   const propertiesError = usePropertiesStore((s) => s.error);
   const propertiesLoading = usePropertiesStore((s) => s.isLoading);
   const updateProperty = usePropertiesStore((s) => s.update);
+  const createProperty = usePropertiesStore((s) => s.create);
+  const removeProperty = usePropertiesStore((s) => s.remove);
 
   const loans = useLoansStore((s) => s.loans);
   const loadLoans = useLoansStore((s) => s.load);
@@ -402,6 +419,9 @@ export default function Property() {
   const loadHousingPayments = useHousingPaymentsStore((s) => s.load);
   const housingPaymentsError = useHousingPaymentsStore((s) => s.error);
   const housingPaymentsLoading = useHousingPaymentsStore((s) => s.isLoading);
+  const createHousingPayment = useHousingPaymentsStore((s) => s.create);
+  const updateHousingPayment = useHousingPaymentsStore((s) => s.update);
+  const removeHousingPayment = useHousingPaymentsStore((s) => s.remove);
 
   // W10 F7: price property cards latest-snapshot-first, like AssetsDonut.
   const assetValueSnapshots = useAssetValueSnapshotsStore((s) => s.assetValueSnapshots);
@@ -411,6 +431,11 @@ export default function Property() {
   const { confirm, dialog } = useConfirm();
 
   const [editing, setEditing] = useState<EditTarget>(null);
+
+  // W14 "one place per thing": entity CRUD happens here via EditDrawers —
+  // one per entity on this page (property details + rent/housing payments).
+  const [propertyDrawer, setPropertyDrawer] = useState<'closed' | 'create' | { type: 'edit'; id: number }>('closed');
+  const [rentalDrawer, setRentalDrawer] = useState<'closed' | 'create' | { type: 'edit'; id: number }>('closed');
 
   const reload = useCallback(() => {
     loadProperties();
@@ -538,6 +563,115 @@ export default function Property() {
     }
   }, [editing, visibleProperties]);
 
+  // W14 drawer wiring — copied from PropertiesTab / HousingPaymentsTab
+  // verbatim (same DEFAULT_* presets, same initial mappings, same option
+  // lists, same delete confirm copy). `open` derives from `editing != null`
+  // so an entity deleted out from under an open drawer closes it safely.
+  const personOptions = persons.map((p) => ({ id: p.id!, name: p.name }));
+  const mortgageLoanOptions = loans
+    .filter((l) => l.type === LoanType.MORTGAGE)
+    .map((l) => ({ id: l.id!, name: l.name }));
+
+  const renderDrawers = () => {
+    const editingProperty =
+      typeof propertyDrawer === 'object' ? properties.find((p) => p.id === propertyDrawer.id) : undefined;
+    const propertyOpen = propertyDrawer === 'create' || editingProperty != null;
+    const editingRental =
+      typeof rentalDrawer === 'object' ? housingPayments.find((p) => p.id === rentalDrawer.id) : undefined;
+    const rentalOpen = rentalDrawer === 'create' || editingRental != null;
+    return (
+      <>
+        <EditDrawer
+          open={propertyOpen}
+          onClose={() => setPropertyDrawer('closed')}
+          title={propertyDrawer === 'create' ? 'Add property' : 'Edit property'}
+          description={propertyDrawer === 'create' ? 'Primary residence, rental, vacation home, or land.' : undefined}
+        >
+          <PropertyForm
+            initial={editingProperty ? {
+              householdId: editingProperty.householdId,
+              ownerPersonId: editingProperty.ownerPersonId,
+              name: editingProperty.name,
+              type: editingProperty.type,
+              address: editingProperty.address,
+              purchaseDate: editingProperty.purchaseDate,
+              purchasePrice: editingProperty.purchasePrice,
+              currentEstimatedValue: editingProperty.currentEstimatedValue,
+              linkedLoanId: editingProperty.linkedLoanId,
+              excludedFromNetWorth: editingProperty.excludedFromNetWorth,
+            } : DEFAULT_PROPERTY}
+            persons={personOptions}
+            mortgageLoans={mortgageLoanOptions}
+            onSubmit={async (v) => {
+              if (editingProperty) await updateProperty(editingProperty.id!, v);
+              else await createProperty(v);
+              setPropertyDrawer('closed');
+            }}
+            onCancel={() => setPropertyDrawer('closed')}
+          />
+          {editingProperty && (
+            <div className="mt-6 border-t pt-4">
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: `Delete ${editingProperty.name}?`,
+                    description: 'This permanently removes this property. This can’t be undone.',
+                  });
+                  if (ok) { await removeProperty(editingProperty.id!); setPropertyDrawer('closed'); }
+                }}
+              >
+                Delete property
+              </Button>
+            </div>
+          )}
+        </EditDrawer>
+        <EditDrawer
+          open={rentalOpen}
+          onClose={() => setRentalDrawer('closed')}
+          title={rentalDrawer === 'create' ? 'Add rent / housing payment' : 'Edit rent / housing payment'}
+          description={rentalDrawer === 'create' ? "Recurring monthly rent if you don't own your home." : undefined}
+        >
+          <HousingPaymentForm
+            initial={editingRental ? {
+              householdId: editingRental.householdId,
+              ownerPersonId: editingRental.ownerPersonId,
+              name: editingRental.name,
+              monthlyAmount: editingRental.monthlyAmount,
+              startDate: editingRental.startDate,
+              endDate: editingRental.endDate,
+            } : DEFAULT_HOUSING_PAYMENT}
+            persons={personOptions}
+            onSubmit={async (v) => {
+              if (editingRental) await updateHousingPayment(editingRental.id!, v);
+              else await createHousingPayment(v);
+              setRentalDrawer('closed');
+            }}
+            onCancel={() => setRentalDrawer('closed')}
+          />
+          {editingRental && (
+            <div className="mt-6 border-t pt-4">
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: 'Delete this rent/housing payment?',
+                    description: 'This permanently removes the payment record. This can’t be undone.',
+                  });
+                  if (ok) { await removeHousingPayment(editingRental.id!); setRentalDrawer('closed'); }
+                }}
+              >
+                Delete rental
+              </Button>
+            </div>
+          )}
+        </EditDrawer>
+      </>
+    );
+  };
+
   if (!gate.settled) {
     return (
       <PageContainer className="space-y-6">
@@ -561,13 +695,16 @@ export default function Property() {
           <EmptyState
             icon={Home}
             title="No properties yet"
-            description="Add a property or rental in Inputs to see equity at a glance."
+            description="Add a property or rental to see equity at a glance."
           >
-            <Button asChild>
-              <Link to="/inputs/properties">Add a property</Link>
-            </Button>
+            <div className="flex items-center justify-center gap-2">
+              <Button onClick={() => setPropertyDrawer('create')}>Add a property</Button>
+              <Button variant="outline" onClick={() => setRentalDrawer('create')}>Add a rental</Button>
+            </div>
           </EmptyState>
         )}
+        {renderDrawers()}
+        {dialog}
       </PageContainer>
     );
   }
@@ -587,7 +724,11 @@ export default function Property() {
             Equity = current value − linked-loan balance.
           </p>
         </div>
-        <ExportCsvButton baseName="properties" columns={csvColumns} rows={properties} />
+        <div className="flex items-center gap-2">
+          <ExportCsvButton baseName="properties" columns={csvColumns} rows={properties} />
+          <ImportCsvButton entity="property" />
+          <Button size="sm" onClick={() => setPropertyDrawer('create')}>Add property</Button>
+        </div>
       </div>
 
       <div className="space-y-6">
@@ -627,6 +768,7 @@ export default function Property() {
                   onEdit={() => setEditing({ id: p.id! })}
                   onCancelEdit={() => setEditing(null)}
                   onSaveValue={(v) => handleSaveProperty(p.id!, v)}
+                  onEditDetails={() => setPropertyDrawer({ type: 'edit', id: p.id! })}
                 />
                 <PropertyExpensesCard
                   propertyName={p.name}
@@ -701,19 +843,22 @@ export default function Property() {
                   });
                   if (ok) await useHousingPaymentsStore.getState().remove(r.id!);
                 }}
+                onEdit={() => setRentalDrawer({ type: 'edit', id: r.id! })}
               />
             ))}
-            <Link
-              to="/inputs/housing-payments"
+            <button
+              type="button"
+              onClick={() => setRentalDrawer('create')}
               aria-label="Add rental"
               className="flex min-h-[96px] w-full items-center justify-center gap-2 rounded-lg border border-dashed text-sm font-medium text-primary transition-colors hover:bg-accent"
             >
               <span aria-hidden="true" className="text-lg leading-none">+</span>
               Add rental
-            </Link>
+            </button>
           </div>
         </section>
       )}
+      {renderDrawers()}
       {dialog}
     </PageContainer>
   );
