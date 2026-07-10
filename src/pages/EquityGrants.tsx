@@ -194,7 +194,7 @@ export default function EquityGrants() {
   const personsLoading = usePersonsStore((s) => s.isLoading);
 
   // W14 "one place per thing": add AND edit unify on the EditDrawer
-  // (AddEquityGrantDialog retired — one pattern per job, decision #9).
+  // (the old add-grant dialog retired — one pattern per job, decision #9).
   const [drawer, setDrawer] = useState<'closed' | 'create' | { type: 'edit'; id: number }>('closed');
   const { confirm, dialog: confirmDialog } = useConfirm();
 
