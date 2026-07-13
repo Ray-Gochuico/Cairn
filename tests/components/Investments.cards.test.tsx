@@ -404,9 +404,20 @@ describe('Investments Target vs Actual — two sibling tables', () => {
     // VTI: actual 60% (600/1000), within-class target$ = 1.0 × 0.5 × 1000 = 500
     // ⇒ household target 50%, drift +10%. 60 − 50 = 10 reconciles.
     const vtiRow = await screen.findByTestId('holding-row-VTI');
-    expect(vtiRow).toHaveTextContent('60.0%'); // actual (household)
-    expect(vtiRow).toHaveTextContent('50.0%'); // target (household, = actual − drift)
-    expect(vtiRow).toHaveTextContent('+10.0%'); // drift
+    expect(vtiRow).toHaveTextContent('60.0%'); // actual (household) — class-independent
+    // Target and Drift depend on the ASYNC per-ticker asset_class lookup
+    // (loadTickerAssetClasses → the mocked tickers SELECT): the row renders
+    // BEFORE that promise resolves, with '—' in both cells (VTI still classed
+    // OTHER, so no class target applies). Await the resolved state instead of
+    // asserting synchronously after row-presence — the synchronous form flaked
+    // on slow CI runners with `VTI$30,00060.0%——`. Same hazard class as the
+    // donut-legend tests' "not all slices loaded yet" guard in
+    // Investments.test.tsx.
+    await waitFor(() => {
+      const row = screen.getByTestId('holding-row-VTI');
+      expect(row).toHaveTextContent('50.0%'); // target (household, = actual − drift)
+      expect(row).toHaveTextContent('+10.0%'); // drift
+    });
   });
 });
 
