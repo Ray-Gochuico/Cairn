@@ -15,6 +15,7 @@ import { useSettingsStore } from '@/stores/settings-store';
 import { FilingStatus } from '@/types/enums';
 import type { AppSettings } from '@/types/schema';
 import CalculatorsLayout from '@/pages/calculators/CalculatorsLayout';
+import { __resetScenarioAssumptionsForTests } from '@/lib/calculators/use-scenario-assumptions';
 
 // Federal SINGLE brackets (2026 approximate) — same fixture as BonusTaxCard.test.tsx
 const federalSingleBrackets = [
@@ -165,6 +166,9 @@ describe('CalculatorsLayout', () => {
     useSettingsStore.setState({ settings: null, isLoading: false, error: null, load: async () => {} } as never);
     sessionStorage.clear();
     localStorage.clear();
+    // Wave 16: the ScenarioBar's shared-scenario module caches overrides at
+    // module level — reset between tests.
+    __resetScenarioAssumptionsForTests();
   });
 
   afterEach(() => {
@@ -421,6 +425,25 @@ describe('CalculatorsLayout', () => {
 
     expect(sessionStorage.getItem('calc-state:commission-tax')).not.toBeNull();
     expect(sessionStorage.getItem('calc-state:commission')).toBeNull();
+  });
+
+  it('renders the ScenarioBar between the intro copy and the grid (Wave 16)', async () => {
+    primeBaseline();
+    primeSettings();
+    usePersonsStore.setState({
+      persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
+      isLoading: false,
+      error: null,
+    });
+
+    render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+
+    const bar = await screen.findByRole('region', { name: /your scenario/i });
+    const intro = screen.getByText(/All calculators run on your current Inputs data/i);
+    const grid = document.querySelector('[class*="grid-auto-rows"]')!;
+    // intro precedes bar precedes grid in document order
+    expect(intro.compareDocumentPosition(bar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(bar.compareDocumentPosition(grid) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('intro copy describes edit/reset and links to What-If', async () => {
