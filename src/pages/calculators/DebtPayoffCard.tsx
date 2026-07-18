@@ -96,7 +96,12 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
         headline="—"
       >
         <p className="text-sm text-muted-foreground">
-          Add loans on the <Link to="/loans" className="underline">Loans page</Link> to see payoff projections.
+          {/* Wave 15 T10: the CTA itself is the link. W14b: it deep-links the
+              loan's post-Inputs home (/loans, "one place per thing"). */}
+          <Link to="/loans" className="text-primary hover:underline">
+            Add loans
+          </Link>{' '}
+          on the Loans page to see payoff projections.
         </p>
       </CalculatorCard>
     );
@@ -138,7 +143,13 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
       title="Debt Payoff"
       headline={
         <span data-testid="debt-payoff-headline">
-          {formatCurrency(totalBalance)}
+          {/* Wave 15 T7 (D7): the headline is the ANSWER. A capped schedule
+              must never claim a date — same poisoning rule as the tiles.
+              (The null-date guard covers the degenerate empty-schedule case;
+              loans.length === 0 already early-returned above.) */}
+          {anyCapped || !aggregatePayoffDate
+            ? '—'
+            : `Debt-free ${formatPayoffDate(aggregatePayoffDate)}`}
         </span>
       }
     >
@@ -171,15 +182,18 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
       )}
       {/* Aggregate metric strip */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+        {/* T7 (D7): the balance — the demoted former headline — leads the
+            strip. It is NEVER suppressed: the balance is always real, even
+            when a capped schedule poisons the payoff-derived aggregates. */}
+        <StatTile
+          label="Total balance"
+          value={formatCurrency(totalBalance)}
+          testId="debt-total-balance"
+        />
         <StatTile
           label="Total interest"
           value={anyCapped ? '—' : formatCurrency(totalInterest)}
           testId="debt-total-interest"
-        />
-        <StatTile
-          label="Estimated payoff"
-          value={anyCapped ? '—' : formatPayoffDate(aggregatePayoffDate)}
-          testId="debt-aggregate-payoff"
         />
         <StatTile
           label="Savings vs no-extra"
@@ -247,10 +261,10 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
         <thead>
           <tr className="text-left text-muted-foreground">
             <th className="py-2">Loan</th>
-            <th className="py-2">Balance</th>
-            <th className="py-2">Rate</th>
-            <th className="py-2">Payoff date</th>
-            <th className="py-2">Interest</th>
+            <th className="py-2 text-right">Balance</th>
+            <th className="py-2 text-right">Rate</th>
+            <th className="py-2 text-right">Payoff date</th>
+            <th className="py-2 text-right">Interest</th>
           </tr>
         </thead>
         <tbody>
@@ -264,15 +278,15 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
                 data-testid={`debt-loan-row-${p.loan.id ?? p.loan.name}`}
               >
                 <td className="py-2">{p.loan.name}</td>
-                <td className="py-2 tabular-nums">
+                <td className="py-2 text-right tabular-nums">
                   {formatCurrency(p.loan.currentBalance)}
                 </td>
-                <td className="py-2 tabular-nums">
+                <td className="py-2 text-right tabular-nums">
                   {/* Intentionally 2 dp for loan APRs (e.g. 5.25%) — standard precision for lending disclosures. */}
                   {(p.loan.interestRate * 100).toFixed(2)}%
                 </td>
                 <td
-                  className="py-2 tabular-nums"
+                  className="py-2 text-right tabular-nums"
                   data-testid={`debt-loan-payoff-${p.loan.id ?? p.loan.name}`}
                 >
                   {capped ? (
@@ -281,7 +295,7 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
                     formatPayoffDate(last?.paymentDate)
                   )}
                 </td>
-                <td className="py-2 tabular-nums">
+                <td className="py-2 text-right tabular-nums">
                   {capped ? '—' : formatCurrency(p.amortization.totalInterest)}
                 </td>
               </tr>

@@ -5,7 +5,7 @@ import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { CalculatorCard } from './CalculatorCard';
-import { computeBonusTax } from '@/lib/tax';
+import { computePaycheck, FEDERAL_LIABILITY_CAVEAT } from '@/lib/calculators/paycheck';
 import { aggregateHouseholdPretax } from '@/lib/calculators/supplemental-wage';
 import { formatCurrency } from '@/lib/format';
 import { CONTRIBUTION_LIMITS_2026 } from '@/lib/contribution-limits';
@@ -58,20 +58,20 @@ export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
     const city = household.city ? lookup('CITY', household.city, household.filingStatus) : null;
     if (!federal || !state) return null;
 
-    // Round-3 M1: one cap implementation — aggregateHouseholdPretax caps
-    // DCFSA/HSA once per return and 401(k) per employee (Task 1). The card
-    // previously duplicated the per-person loop and inherited the 2×-cap bug.
-    // totalGross is SALARY ONLY — no bonus.
-    const { totalSalary: totalGross, pretax: totalPretax } = aggregateHouseholdPretax(persons, {
+    // Wave 15 Task 1 (D1): the card is a SUMMARY of the same engine the full
+    // page runs — computePaycheck composes computeTotalTax + per-earner FICA +
+    // take-home. Pretax still comes from the profile aggregate (per-return
+    // caps, Round-3 M1: aggregateHouseholdPretax caps DCFSA/HSA once per
+    // return and 401(k) per employee). totalSalary is SALARY ONLY — no bonus.
+    const { totalSalary, pretax } = aggregateHouseholdPretax(persons, {
       filingStatus: household.filingStatus,
       personCount: persons.length,
       dependentCount: dependents.length,
     });
-
-    const tax = computeBonusTax({
-      personGross: totalGross,
-      bonus: 0,
-      pretax: totalPretax,
+    return computePaycheck({
+      gross: totalSalary,
+      // Wave-9 F1: per-earner SS wage bases.
+      perPersonGross: persons.map((p) => p.annualSalaryPretax),
       filingStatus: household.filingStatus,
       federalBrackets: federal.brackets,
       stateBrackets: state.brackets,
@@ -83,31 +83,8 @@ export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
         state: state.standardDeduction,
         city: city?.standardDeduction ?? 0,
       },
-      // Wave-9 F1: per-earner SS wage bases (bonus is 0 here, so attribution
-      // is moot — index 0 by convention).
-      perPersonBaseGross: persons.map((p) => p.annualSalaryPretax),
-      recipientIndex: 0,
+      pretax,
     });
-
-    const pretaxTotal =
-      totalPretax.pretax401k +
-      totalPretax.pretaxHealth +
-      totalPretax.pretaxDcfsa +
-      totalPretax.pretaxHsa;
-    const takeHome = totalGross - pretaxTotal - tax.totalTax;
-
-    return {
-      gross: totalGross,
-      pretax401k: totalPretax.pretax401k,
-      pretaxHealth: totalPretax.pretaxHealth,
-      pretaxDcfsa: totalPretax.pretaxDcfsa,
-      pretaxHsa: totalPretax.pretaxHsa,
-      federalTax: tax.federalTax,
-      fica: tax.fica,
-      stateTax: tax.stateTax,
-      cityTax: tax.cityTax,
-      takeHome,
-    };
   }, [household, persons, dependents, taxItems, resolvedYear]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!annual) {
@@ -119,11 +96,20 @@ export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
         onHide={onHide}
       >
         <p className="text-sm text-muted-foreground">
-          Set up your household profile + tax rules to see take-home.
+          <Link to="/inputs/household" className="text-primary hover:underline">
+            Set up your household profile
+          </Link>{' '}
+          + tax rules to see take-home.
         </p>
       </CalculatorCard>
     );
   }
+
+  // Wave 15 review: the headline sums annualSalaryPretax, and HOURLY persons
+  // persist annualSalaryPretax = 0 (their pay isn't salary) — as do
+  // non-earning household members. Count only the people whose pay is
+  // actually in the number, or "N earners, combined" is a false sentence.
+  const salariedEarnerCount = persons.filter((p) => p.annualSalaryPretax > 0).length;
 
   const div = periodsPerYear(period);
   const perPeriod = {
@@ -132,7 +118,7 @@ export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
     pretaxHealth: annual.pretaxHealth / div,
     pretaxDcfsa: annual.pretaxDcfsa / div,
     pretaxHsa: annual.pretaxHsa / div,
-    federalTax: annual.federalTax / div,
+    federal: annual.federal / div,
     fica: annual.fica / div,
     stateTax: annual.stateTax / div,
     cityTax: annual.cityTax / div,
@@ -145,8 +131,20 @@ export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
       cardId={cardId}
       onHide={onHide}
       headline={
+        // Wave 15 T1: period unit + earner qualifier live in the HEADLINE node
+        // so a collapsed card is never ambiguous — CalculatorCard hides
+        // children when collapsed, not the headline.
         <span data-testid="paycheck-takehome">
           {formatCurrency(perPeriod.takeHome)}
+          <span className="text-base font-medium">
+            {' '}/ {PAYCHECK_PERIODS.find((p) => p.id === period)?.label.toLowerCase() ?? 'period'}
+          </span>
+          {salariedEarnerCount > 1 && (
+            <span className="block text-xs font-normal text-muted-foreground">
+              {salariedEarnerCount} earners, combined
+              {salariedEarnerCount < persons.length && ' — salary only'}
+            </span>
+          )}
         </span>
       }
     >
@@ -190,9 +188,18 @@ export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
           label={<TermTooltip term="Pretax HSA" />}
           value={formatCurrency(perPeriod.pretaxHsa)}
         />
+        {/* Wave 15 T1: the shared withholding-vs-liability caveat — one
+            exported constant, so the two surfaces cannot drift in wording. */}
         <ResultRow
-          label="Estimated federal tax"
-          value={formatCurrency(perPeriod.federalTax)}
+          label={
+            <span>
+              Estimated federal tax
+              <span className="block text-[11px] text-muted-foreground">
+                {FEDERAL_LIABILITY_CAVEAT}
+              </span>
+            </span>
+          }
+          value={formatCurrency(perPeriod.federal)}
         />
         <ResultRow
           label={<TermTooltip term="FICA" />}
@@ -219,6 +226,11 @@ export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
           {`Social Security wage base — OASDI stops at $${CONTRIBUTION_LIMITS_2026.SOCIAL_SECURITY_WAGE_BASE.toLocaleString('en-US')} per person (2026); the calculator applies the cap per earner.`}
         </p>
         <ul className="mt-2 list-disc pl-5 space-y-1">
+          <li>
+            Hourly wages — this card sums annual salaries, so an hourly
+            earner's pay is not included here (see the Overtime card for
+            hourly OT take-home).
+          </li>
           <li>
             <TermTooltip term="NIIT">NIIT</TermTooltip> (3.8% net investment
             income tax) — applies to investment income, not wages, so it&#39;s

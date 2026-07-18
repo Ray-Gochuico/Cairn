@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { CalculatorCard } from './CalculatorCard';
@@ -36,16 +37,17 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
   const { persons } = usePersonsStore();
   const tax = useHouseholdTaxContext();
 
-  const seed = persons[0] ?? null;
   // Wave-9 F1/F2: commission belongs to ONE earner — attribution drives both
   // the SS wage base and the 401(k) headroom.
+  // Wave 15 T2: the DEFAULTS seed from the same recipient (pre-fix they read
+  // persons[0], so a second-earner commission prefilled as $0).
   const recipient = persons.find((p) => (p.expectedCommission ?? 0) > 0) ?? persons[0] ?? null;
   const defaults = useMemo(
     () => ({
-      annualCommission: seed?.expectedCommission ?? 0,
-      frequency: (seed?.expectedCommissionFrequency ?? 'MONTHLY') as CommissionFrequency,
+      annualCommission: recipient?.expectedCommission ?? 0,
+      frequency: (recipient?.expectedCommissionFrequency ?? 'MONTHLY') as CommissionFrequency,
     }),
-    [seed],
+    [recipient],
   );
   const { values, setValue, reset, isOverridden } = useCalculatorState(cardId ?? 'commission-tax', defaults);
   const [method, setMethod] = useSupplementalMethod(cardId ?? 'commission-tax');
@@ -135,7 +137,10 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
       <CalculatorCard title="Estimated commission take-home" headline="—" cardId={cardId} onHide={onHide}>
         {commissionInputs}
         <p className="text-sm text-muted-foreground">
-          Set up your household profile + tax rules to see commission tax.
+          <Link to="/inputs/household" className="text-primary hover:underline">
+            Set up your household profile
+          </Link>{' '}
+          + tax rules to see commission tax.
         </p>
       </CalculatorCard>
     );

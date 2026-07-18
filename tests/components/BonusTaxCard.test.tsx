@@ -149,6 +149,18 @@ describe('BonusTaxCard', () => {
     expect(screen.getByText(/Set up your household profile/i)).toBeInTheDocument();
   });
 
+  it('empty-state CTA links to the destination it names (Wave 15 T10)', () => {
+    // stores already reset — no household, no persons ⇒ empty state
+    render(
+      <MemoryRouter>
+        <BonusTaxCard />
+      </MemoryRouter>,
+    );
+    expect(
+      screen.getByRole('link', { name: /set up your household profile/i }),
+    ).toHaveAttribute('href', '/inputs/household');
+  });
+
   it('changing the override bonus amount updates the headline', async () => {
     // Prime stores with $100k SINGLE CA. Bonus starts at 0 (no person default).
     primeStores();
@@ -546,6 +558,53 @@ describe('BonusTaxCard', () => {
     // Sanity: the fixture bites (per-earner SS actually differs).
     expect(expected.bonusBreakdown.fica).toBeGreaterThan(legacy.bonusBreakdown.fica);
     expect(screen.getByText(formatCurrency(expected.bonusBreakdown.fica))).toBeInTheDocument();
+  });
+
+  it('prefills the bonus input from the recipient person expectedBonus (ANNUAL)', async () => {
+    primeStores();
+    usePersonsStore.setState((s) => ({
+      ...s,
+      persons: s.persons.map((p) => ({ ...p, expectedBonus: 10000, expectedBonusFrequency: 'ANNUAL' as const })),
+    }));
+    render(<MemoryRouter><BonusTaxCard /></MemoryRouter>);
+    const input = (await screen.findByLabelText(/Bonus amount/i)) as HTMLInputElement;
+    expect(Number(input.value)).toBe(10000);
+    // Prefilled ⇒ the card computes immediately, no "enter a bonus" placeholder.
+    expect(await screen.findByTestId('bonus-takehome')).toBeInTheDocument();
+  });
+
+  it('QUARTERLY expectedBonus prefills the PER-QUARTER amount (annual ÷ 4)', async () => {
+    primeStores();
+    usePersonsStore.setState((s) => ({
+      ...s,
+      persons: s.persons.map((p) => ({ ...p, expectedBonus: 12000, expectedBonusFrequency: 'QUARTERLY' as const })),
+    }));
+    render(<MemoryRouter><BonusTaxCard /></MemoryRouter>);
+    const input = (await screen.findByLabelText(/Bonus amount \(per quarter\)/i)) as HTMLInputElement;
+    expect(Number(input.value)).toBe(3000);
+  });
+
+  it('FLAT method relabels the rate row "effective withholding rate" (it is NOT a marginal rate)', async () => {
+    primeStores();
+    render(<MemoryRouter><BonusTaxCard /></MemoryRouter>);
+    fireEvent.change(screen.getByLabelText(/Bonus amount/i), { target: { value: '10000' } });
+    await screen.findByTestId('bonus-takehome');
+    // Flip to Flat 22% via the method toggle (same idiom as the FLAT tests above).
+    fireEvent.click(screen.getByRole('button', { name: /flat/i }));
+    expect(screen.getByText(/effective withholding rate/i)).toBeInTheDocument();
+    const marginal = screen.queryAllByText((_, el) => {
+      const txt = (el?.textContent ?? '').replace(/[\u{2400}-\u{FFFD}]/gu, '').toLowerCase().replace(/\s+/g, ' ').trim();
+      return txt === 'marginal rate';
+    });
+    expect(marginal.length).toBe(0);
+  });
+
+  it('results grid carries an emphasized per-bonus take-home row (Commission parity)', async () => {
+    primeStores();
+    render(<MemoryRouter><BonusTaxCard /></MemoryRouter>);
+    fireEvent.change(screen.getByLabelText(/Bonus amount/i), { target: { value: '10000' } });
+    await screen.findByTestId('bonus-takehome');
+    expect(screen.getByText(/Estimated take-home \(per bonus\)/i)).toBeInTheDocument();
   });
 
   it('does not falsely claim Additional Medicare is unmodeled (it IS modeled)', async () => {

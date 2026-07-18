@@ -24,6 +24,8 @@ import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { fiEligiblePortfolioValue } from '@/lib/fi-portfolio';
 import { useSettingsStore } from '@/stores/settings-store';
+import { useHouseholdStore } from '@/stores/household-store';
+import { effectiveBaselineInflation } from '@/lib/scenarios/effective-inflation';
 import { CHART_PALETTE } from '@/components/charts/palette';
 import { RealNominalToggle } from '@/components/calculators/RealNominalToggle';
 import { StatTile } from '@/components/calculators/StatTile';
@@ -103,7 +105,13 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
   }, [values]);
 
   const [displayMode, setDisplayMode] = useChartDisplayMode(cardId ?? 'compound-interest');
-  const inflation = useSettingsStore((s) => s.settings?.defaultInflation) ?? 0.025;
+  // Wave 15 T5: the CANONICAL inflation chain (household.inflationAssumption →
+  // settings.defaultInflation → 0.03) — the SAME resolver FI/CoastFI use. The
+  // old `settings?.defaultInflation ?? 0.025` bypassed the household setting
+  // and carried a divergent fallback.
+  const { household } = useHouseholdStore();
+  const settings = useSettingsStore((s) => s.settings);
+  const inflation = effectiveBaselineInflation(null, household ?? null, settings);
 
   // Real mode deflates the WHOLE card (headline + all three tiles), not just
   // the chart — a real chart beside nominal tiles is the nominal-on-real bug
@@ -125,7 +133,6 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
     );
   }, [series, displayMode, inflation, values]);
 
-  const headline = summary ? formatCurrency(summary.finalMid) : '—';
   const realSuffix = displayMode === 'REAL' ? " (today's $)" : '';
 
   const chartData = useMemo(() => {
@@ -162,7 +169,16 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
       cardId={cardId}
       onHide={onHide}
       title="Compound Interest"
-      headline={<span data-testid="compound-headline">{headline}</span>}
+      headline={
+        <span data-testid="compound-headline">
+          {summary ? formatCurrency(summary.finalMid) : '—'}
+          {summary && displayMode === 'REAL' && (
+            // Wave 15 T5: a collapsed card must never be basis-ambiguous — the
+            // REAL marker rides IN the headline, not only on tiles/chart title.
+            <span className="text-base font-medium"> in today's dollars</span>
+          )}
+        </span>
+      }
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
         <NumberField

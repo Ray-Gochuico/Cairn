@@ -30,6 +30,9 @@ export function fiChartSeries(
   scenarios: ReadonlyArray<{ label: string }>,
   chartData: ReadonlyArray<Record<string, number>>,
   target: number,
+  // Wave 15 T4: CoastFI shares these series semantics but keeps its more
+  // descriptive target label ('Required at retirement'). Default unchanged.
+  opts?: { targetLabel?: string },
 ): { series: FiSeriesDef[]; markers: FiMarker[] } {
   const series: FiSeriesDef[] = scenarios.map((s, i) => ({
     dataKey: s.label,
@@ -41,7 +44,7 @@ export function fiChartSeries(
   // Target reference series — neutral, dotted, never emphasized.
   series.push({
     dataKey: 'target',
-    label: 'Target',
+    label: opts?.targetLabel ?? 'Target',
     color: CHART_NEUTRAL,
     strokeDasharray: '2 2',
     strokeWidth: 1.5,

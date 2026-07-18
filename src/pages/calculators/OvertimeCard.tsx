@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
@@ -33,6 +34,8 @@ import {
 } from '@/lib/paycheck-periods';
 import { FilingStatus } from '@/types/enums';
 import type { Person } from '@/types/schema';
+
+type OvertimeRecurrence = 'REPEATS' | 'ONE_OFF';
 
 const STARTER_ROW: OvertimeRow = {
   hours: 8,
@@ -77,6 +80,12 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
   // ---- ephemeral UI state ----
   const [rows, setRows] = useState<OvertimeRow[]>([STARTER_ROW]);
   const [period, setPeriod] = useState<PaycheckPeriod>('BI_WEEKLY');
+  // T3 review I1: plain useState like its sibling annualization knob `period`,
+  // NOT useCalculatorState — 'REPEATS' is a fixed default, not "my data", so
+  // picking One-off must neither surface the Base-rate "Reset to my data"
+  // affordance nor get silently flipped back when the user resets an
+  // overridden rate.
+  const [recurrence, setRecurrence] = useState<OvertimeRecurrence>('REPEATS');
 
   const overtime = useMemo(() => {
     if (!eligiblePerson || baseHourlyRate <= 0) return null;
@@ -95,6 +104,13 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
   }, [rows, baseHourlyRate, eligiblePerson]);
 
   const totalGross = overtime?.totalGross ?? 0;
+
+  const ppy = paycheckPeriodsPerYear(period);
+  // Wave 15 T3: ONE recurrence knob feeds BOTH annualizations. Pre-fix the
+  // OBBBA line annualized (×ppy) while the tax stack treated one period's OT
+  // as the whole year's supplemental wages — two different years in one card.
+  const periodsCounted = recurrence === 'REPEATS' ? ppy : 1;
+  const annualOtGross = totalGross * periodsCounted;
 
   const taxResult = useMemo(() => {
     if (!tax.ready || !household || !eligiblePerson || !tax.federal || !tax.state) return null;
@@ -116,7 +132,7 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
     });
     return computeSupplementalWageTax({
       baseSalary: agg.totalSalary,
-      supplementalWages: totalGross,
+      supplementalWages: annualOtGross,
       pretax: agg.pretax,
       filingStatus: household.filingStatus,
       federalBrackets: tax.federal.brackets,
@@ -131,7 +147,7 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
       perPersonBaseSalary: effectivePersons.map((p) => p.annualSalaryPretax),
       recipientIndex: Math.max(0, effectivePersons.findIndex((p) => p.id === eligiblePerson.id)),
     });
-  }, [tax.ready, tax.federal, tax.state, tax.city, household, eligiblePerson, persons, dependents, totalGross, baseHourlyRate]);
+  }, [tax.ready, tax.federal, tax.state, tax.city, household, eligiblePerson, persons, dependents, annualOtGross, baseHourlyRate]);
 
   // ---- early returns ----
 
@@ -139,7 +155,11 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
     return (
       <CalculatorCard title="Overtime" headline="—" cardId={cardId} onHide={onHide}>
         <p className="text-sm text-muted-foreground">
-          No eligible person — set Employment type to Hourly or Salaried with overtime to enable this card.
+          No eligible person —{' '}
+          <Link to="/inputs/persons" className="text-primary hover:underline">
+            set Employment type to Hourly or Salaried with overtime
+          </Link>{' '}
+          to enable this card.
         </p>
       </CalculatorCard>
     );
@@ -194,7 +214,27 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">
-          Display only — hours are entered per row.
+          Hours are entered per row; this sets how they annualize when overtime repeats.
+        </p>
+      </div>
+      <div className="space-y-1">
+        <Label htmlFor="ot-recurrence">Recurrence</Label>
+        <Select
+          value={recurrence}
+          onValueChange={(v) => setRecurrence(v as OvertimeRecurrence)}
+        >
+          <SelectTrigger id="ot-recurrence" aria-label="Recurrence">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="REPEATS">Repeats every period</SelectItem>
+            <SelectItem value="ONE_OFF">One-off</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          {recurrence === 'REPEATS'
+            ? 'Taxes and the OBBBA deduction use the annualized total.'
+            : 'Taxes and the OBBBA deduction use just these hours.'}
         </p>
       </div>
     </div>
@@ -241,23 +281,32 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
         {baseInput}
         {rowsEditor}
         <p className="text-sm text-muted-foreground">
-          {totalGross <= 0
-            ? 'Enter overtime hours above to see the take-home breakdown.'
-            : 'Set up your household profile + tax rules to see overtime tax.'}
+          {totalGross <= 0 ? (
+            'Enter overtime hours above to see the take-home breakdown.'
+          ) : (
+            <>
+              <Link to="/inputs/household" className="text-primary hover:underline">
+                Set up your household profile
+              </Link>{' '}
+              + tax rules to see overtime tax.
+            </>
+          )}
         </p>
       </CalculatorCard>
     );
   }
 
-  const overtimeTakeHome = taxResult.bonusTakeHome;
-  // Annualize the premium before applying the annual cap so the deduction and
-  // tax-saved figures reflect a full-year estimate, not just one pay period.
+  // Headline stays "take-home from this period's entered OT" in both modes:
+  // under REPEATS the tax stack runs on the annual OT, so divide back down.
+  const overtimeTakeHome = taxResult.bonusTakeHome / periodsCounted;
+  // Annualize the premium (×periodsCounted — ppy under REPEATS, 1 for a
+  // one-off) before applying the annual cap so the deduction and tax-saved
+  // figures reflect the recurrence the user picked.
   // Wave-9 M62: only the QUALIFIED (FLSA half-time) premium feeds OBBBA —
   // totalPremium stays for pay display.
-  const ppy = paycheckPeriodsPerYear(period);
-  const annualPremium = (overtime?.totalQualifiedPremium ?? 0) * ppy;
+  const annualPremium = (overtime?.totalQualifiedPremium ?? 0) * periodsCounted;
   const obbbaDeduction = obbbaOvertimeDeduction(annualPremium, household.filingStatus);
-  const federalMarginalOnOt = totalGross > 0 ? taxResult.bonusBreakdown.federal / totalGross : 0;
+  const federalMarginalOnOt = annualOtGross > 0 ? taxResult.bonusBreakdown.federal / annualOtGross : 0;
   // federalMarginalOnOt is a rate (fraction); multiply by annual premium for the annual saving.
   const obbbaFederalSaving = obbbaDeduction * federalMarginalOnOt;
 
@@ -298,6 +347,18 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
         <ResultRow label="Total OT take-home" value={formatCurrency(overtimeTakeHome)} emphasis />
       </div>
 
+      {recurrence === 'REPEATS' && (
+        <div className="mt-3 pt-3 border-t text-sm">
+          <span className="text-muted-foreground">Estimated annual OT take-home:</span>{' '}
+          <span className="font-medium tabular-nums">{formatCurrency(taxResult.bonusTakeHome)}</span>
+          {/* T3 review M1: the annual figure is exact; the per-period one is
+              its rounded derivative — ≈ plus reversed order so the reader
+              isn't invited to hand-multiply two independently rounded
+              figures and get a mismatch. */}
+          <span className="text-muted-foreground"> (≈ {formatCurrency(overtimeTakeHome)}/period × {ppy})</span>
+        </div>
+      )}
+
       {obbbaDeduction > 0 && (
         <div className="mt-3 border-t pt-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
@@ -305,8 +366,14 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
             <ResultRow label="Est. annual federal tax saved" value={formatCurrency(obbbaFederalSaving)} testId="ot-obbba-deduction" />
           </div>
           <p className="text-xs text-muted-foreground mt-2">
-            Annual estimate. Annualizes the overtime premium (pay above your regular rate) across{' '}
-            {ppy} pay periods, then caps at $12,500 ($25,000 MFJ).
+            {recurrence === 'REPEATS' ? (
+              <>
+                Annual estimate. Annualizes the overtime premium (pay above your regular rate) across{' '}
+                {ppy} pay periods, then caps at $12,500 ($25,000 MFJ).
+              </>
+            ) : (
+              <>Annual estimate for this one-off overtime alone, capped at $12,500 ($25,000 MFJ).</>
+            )}{' '}
             Does not model the $150k/$300k MAGI phase-out; the deduction sunsets after 2028; FICA and most state
             income taxes still apply.
           </p>
@@ -324,10 +391,52 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
       )}
 
       <p className="text-xs text-muted-foreground mt-3">
-        Hours above represent one {PAYCHECK_PERIODS.find((p) => p.id === period)?.label.toLowerCase() ?? 'period'}.
+        Hours above represent one {PAYCHECK_PERIODS.find((p) => p.id === period)?.label.toLowerCase() ?? 'period'}
+        {recurrence === 'REPEATS' ? ', repeated every period for the year' : ' as a one-off'}.
         Overtime is taxed as supplemental wages (same method as bonuses) at {eligiblePerson.name}
         &#39;s marginal rate.
       </p>
+
+      <details className="text-xs mt-3 border-t pt-2 text-muted-foreground">
+        <summary className="cursor-pointer font-medium hover:text-foreground">
+          What this calculator does NOT model
+        </summary>
+        <ul className="mt-2 list-disc pl-5 space-y-1">
+          <li>
+            <strong>State daily-overtime rules.</strong> CA owes daily OT over 8
+            hours (double-time over 12); NV has a daily rule tied to pay rate.
+            The engine never derives OT from a schedule — rows are hours you
+            enter, so state daily rules are yours to apply when entering them.
+          </li>
+          <li>
+            <strong>Exempt-status edge cases.</strong> Figures assume the earner
+            is OT-eligible (non-exempt). Misclassification, fluctuating-workweek
+            plans, and comp-time-in-lieu arrangements are not modeled.
+          </li>
+          <li>
+            <strong><TermTooltip term="OBBBA">OBBBA</TermTooltip> phase-out and sunset.</strong>{' '}
+            The deduction estimate ignores the $150k/$300k MAGI phase-out, and
+            the provision sunsets after 2028 — above those incomes the real
+            deduction is smaller or zero.
+          </li>
+          <li>
+            <strong>State-specific supplemental-wage flat rates.</strong> CA, GA,
+            NY, NJ, and others withhold supplemental wages at flat statutory
+            rates; the engine applies your ordinary marginal brackets (same treatment
+            as the bonus calculator).
+          </li>
+          <li>
+            <strong>FLSA regular-rate inclusions.</strong> Nondiscretionary
+            bonuses and commissions legally raise the OT base rate — the base
+            rate here is the one you enter.
+          </li>
+        </ul>
+        <p className="mt-2">
+          For a decision that hinges on overtime (loan qualification, whether an
+          extra shift is worth it), run the numbers past a CPA — the items above
+          can shift the bottom line materially.
+        </p>
+      </details>
     </CalculatorCard>
   );
 }

@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { CalculatorCard } from './CalculatorCard';
@@ -221,7 +222,13 @@ export function Retirement401kWithdrawalCard({
       }
     : breakdown;
 
-  const headline = view ? formatCurrency(view.netToUser) : '—';
+  // Wave 15 T6: no $0 breakdown theater. Until the user enters a real
+  // withdrawal amount there is no question to answer — headline shows "—"
+  // and the breakdown stays hidden (controls remain visible, BonusTaxCard
+  // idiom).
+  const hasAmount = (withdrawalAmount ?? 0) > 0;
+
+  const headline = view && hasAmount ? formatCurrency(view.netToUser) : '—';
 
   return (
     <CalculatorCard
@@ -235,11 +242,18 @@ export function Retirement401kWithdrawalCard({
       {controls}
       {!breakdown && (
         <p className="text-sm text-muted-foreground">
-          Set up your household profile + tax rules to see the 401k
-          withdrawal breakdown.
+          <Link to="/inputs/household" className="text-primary hover:underline">
+            Set up your household profile
+          </Link>{' '}
+          + tax rules to see the 401k withdrawal breakdown.
         </p>
       )}
-      {breakdown && (
+      {breakdown && !hasAmount && (
+        <p className="text-sm text-muted-foreground">
+          Enter a withdrawal amount to see the estimated taxes and net.
+        </p>
+      )}
+      {breakdown && hasAmount && (
         <div className="space-y-1 text-sm">
           <ResultRow
             orientation="inline"

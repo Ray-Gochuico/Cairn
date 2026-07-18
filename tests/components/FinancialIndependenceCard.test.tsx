@@ -168,17 +168,63 @@ describe('FinancialIndependenceCard', () => {
   });
 
   it('renders empty state when household is not set', () => {
-    // No household, no persons, no snapshots, no contributions
+    // No household, no persons, no snapshots, no contributions.
+    // Wave 15 T4: the empty state names the missing ingredient (no household)
+    // with a real setup link instead of the vague "Add your inputs" copy.
     render(
       <MemoryRouter>
         <FinancialIndependenceCard />
       </MemoryRouter>,
     );
     expect(
-      screen.getByText(/Add your inputs to see Years to FI/i),
-    ).toBeInTheDocument();
+      screen.getByRole('link', { name: /set up your household/i }),
+    ).toHaveAttribute('href', '/inputs/household');
     // Headline placeholder
     expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
+  it('scenarios-missing empty state names the ingredient and links to Household settings', () => {
+    primeStores({ scenarios: [] });
+    render(
+      <MemoryRouter>
+        <FinancialIndependenceCard />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('fi-headline').textContent).toBe('—');
+    const link = screen.getByRole('link', { name: /growth scenarios/i });
+    expect(link).toHaveAttribute('href', '/inputs/household');
+    expect(
+      screen.queryByText(/Add your inputs to see Years to FI/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it('no-persons empty state links to the Persons tab', () => {
+    primeStores();
+    usePersonsStore.setState({ persons: [], isLoading: false, error: null });
+    render(
+      <MemoryRouter>
+        <FinancialIndependenceCard />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('fi-headline').textContent).toBe('—');
+    expect(
+      screen.getByRole('link', { name: /add a person/i }),
+    ).toHaveAttribute('href', '/inputs/persons');
+  });
+
+  it('zero-expenses empty state prompts for the inline inputs (controls stay mounted)', () => {
+    primeStores({ monthlyExpenseBaseline: 0 });
+    render(
+      <MemoryRouter>
+        <FinancialIndependenceCard />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('fi-headline').textContent).toBe('—');
+    expect(
+      screen.getByText(/enter monthly expenses and a withdrawal rate/i),
+    ).toBeInTheDocument();
+    // Controls remain for inline correction.
+    expect(screen.getByLabelText(/monthly expenses/i)).toBeInTheDocument();
   });
 
   it('renders headline "X years" with seeded household + snapshots + contributions', () => {
@@ -259,6 +305,26 @@ describe('FinancialIndependenceCard', () => {
     expect(screen.getByText('6%')).toBeInTheDocument();
     expect(screen.getByText('7%')).toBeInTheDocument();
     expect(screen.getByText('8%')).toBeInTheDocument();
+  });
+
+  it('numeric columns are right-aligned (Wave 15 T9, Allocator precedent)', () => {
+    primeStores();
+    render(
+      <MemoryRouter>
+        <FinancialIndependenceCard />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByRole('columnheader', { name: /^rate$/i }).className,
+    ).toContain('text-right');
+    expect(
+      screen.getByRole('columnheader', { name: /years to fi/i }).className,
+    ).toContain('text-right');
+    // Identity column stays left-aligned.
+    expect(
+      screen.getByRole('columnheader', { name: /^scenario$/i }).className,
+    ).not.toContain('text-right');
   });
 
   it('shows the target portfolio derived from monthlyExpenseBaseline / withdrawalRate', () => {

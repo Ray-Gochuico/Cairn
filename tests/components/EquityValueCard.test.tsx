@@ -110,11 +110,27 @@ describe('EquityValueCard', () => {
         <EquityValueCard />
       </MemoryRouter>,
     );
+    // "Add equity grants" is now a link (Wave 15 T10) — pin the link phrase
+    // and the remaining tail separately since the link boundary splits the
+    // sentence.
     expect(
-      screen.getByText(/Add equity grants to see vested value/i),
-    ).toBeInTheDocument();
+      screen.getByRole('link', { name: /add equity grants/i }),
+    ).toHaveAttribute('href', '/equity-grants');
+    expect(screen.getByText(/to see vested value/i)).toBeInTheDocument();
     // Headline placeholder
     expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
+  it('empty-state CTA links to the destination it names (Wave 15 T10)', () => {
+    primeStores();
+    render(
+      <MemoryRouter>
+        <EquityValueCard />
+      </MemoryRouter>,
+    );
+    expect(
+      screen.getByRole('link', { name: /add equity grants/i }),
+    ).toHaveAttribute('href', '/equity-grants');
   });
 
   it('headline shows total vested value across all grants', () => {
@@ -154,6 +170,37 @@ describe('EquityValueCard', () => {
 
     const headline = screen.getByTestId('equity-value-headline');
     expect(headline).toHaveTextContent('$62,500');
+  });
+
+  it('numeric columns are right-aligned (Wave 15 T9, Allocator precedent)', () => {
+    primeStores({
+      persons: [{ id: 1, name: 'Alice' }],
+      grants: [
+        {
+          ownerPersonId: 1,
+          totalShares: 1000,
+          currentFmv: 10,
+          vestingSchedule: [{ date: '2020-01-15', cumulativePct: 1.0 }],
+        },
+      ],
+    });
+
+    render(
+      <MemoryRouter>
+        <EquityValueCard />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByRole('columnheader', { name: /^grants$/i }).className,
+    ).toContain('text-right');
+    expect(
+      screen.getByRole('columnheader', { name: /vested value/i }).className,
+    ).toContain('text-right');
+    // Identity column stays left-aligned.
+    expect(
+      screen.getByRole('columnheader', { name: /^owner$/i }).className,
+    ).not.toContain('text-right');
   });
 
   it('per-person breakdown groups grants by owner', () => {

@@ -50,19 +50,28 @@ describe('DebtPayoffCard', () => {
     );
 
     expect(screen.getByText(/Debt Payoff/i)).toBeInTheDocument();
-    expect(
-      screen.getByText(/add loans on the/i),
-    ).toBeInTheDocument();
-    // W14: the empty state deep-links the Loans page instead of naming Inputs.
-    expect(
-      screen.getByRole('link', { name: /loans page/i }),
-    ).toHaveAttribute('href', '/loans');
-    expect(
-      screen.getByText(/to see payoff projections/i),
-    ).toBeInTheDocument();
+    // Wave 15 T10: "Add loans" is the link — pin the tail separately since
+    // the link boundary splits the sentence. W14b: the sentence names the
+    // Loans page (the loan's post-Inputs home), not Inputs.
+    expect(screen.getByText(/on the Loans page to see payoff projections/i)).toBeInTheDocument();
   });
 
-  it('renders aggregate "total balance" headline with one or more loans', () => {
+  it('empty-state CTA links to the destination it names (Wave 15 T10)', () => {
+    render(
+      <MemoryRouter>
+        <DebtPayoffCard />
+      </MemoryRouter>,
+    );
+    // W14b: /inputs/loans is now a redirect stub — the CTA targets the
+    // canonical home directly.
+    expect(
+      screen.getByRole('link', { name: /add loans/i }),
+    ).toHaveAttribute('href', '/loans');
+  });
+
+  it('headline is the ANSWER — "Debt-free Mon YYYY"; balance demotes to the tile strip', () => {
+    // Wave 15 T7 (D7): the headline answers "when am I debt-free?" — the
+    // total balance (an input echo Loans already shows) demotes to a tile.
     useLoansStore.setState({
       loans: [
         makeLoan({ id: 1, name: 'Car', currentBalance: 12000 }),
@@ -78,9 +87,11 @@ describe('DebtPayoffCard', () => {
       </MemoryRouter>,
     );
 
-    // 12,000 + 5,000 = 17,000 -> headline shows total balance
     const headline = screen.getByTestId('debt-payoff-headline');
-    expect(headline.textContent).toMatch(/\$17,000/);
+    expect(headline.textContent).toMatch(/^Debt-free [A-Z][a-z]{2} \d{4}$/);
+    expect(headline.textContent).not.toMatch(/\$17,000/);
+    // 12,000 + 5,000 = 17,000 -> balance lives in the tile strip now.
+    expect(screen.getByTestId('debt-total-balance')).toHaveTextContent('$17,000');
   });
 
   it('renders one row per loan in the loans store', () => {
@@ -110,6 +121,30 @@ describe('DebtPayoffCard', () => {
 
     // Wave 11 T19: the per-loan table scrolls inside an overflow-x-auto wrapper.
     expect(screen.getByRole('table').closest('div')).toHaveClass('overflow-x-auto');
+  });
+
+  it('numeric columns are right-aligned (Wave 15 T9, Allocator precedent; D9: Payoff date aligns with money columns)', () => {
+    useLoansStore.setState({
+      loans: [makeLoan({ id: 1, name: 'Car loan' })],
+      isLoading: false,
+      error: null,
+    });
+
+    render(
+      <MemoryRouter>
+        <DebtPayoffCard />
+      </MemoryRouter>,
+    );
+
+    for (const name of [/^balance$/i, /^rate$/i, /payoff date/i, /^interest$/i]) {
+      expect(
+        screen.getByRole('columnheader', { name }).className,
+      ).toContain('text-right');
+    }
+    // Identity column stays left-aligned.
+    expect(
+      screen.getByRole('columnheader', { name: /^loan$/i }).className,
+    ).not.toContain('text-right');
   });
 
   it('strategy picker has 3 options (None / Snowball / Avalanche)', async () => {
@@ -405,10 +440,13 @@ describe('DebtPayoffCard', () => {
       expect(notice).toHaveTextContent(/never pays off at the current payment/i);
       expect(notice).toHaveTextContent('Underwater');
 
-      // All three aggregate tiles are suppressed (any capped loan poisons the sums).
+      // Every payoff-derived aggregate is suppressed (any capped loan poisons
+      // the sums) — including the headline, which claims a payoff date (T7/D7).
       expect(screen.getByTestId('debt-total-interest')).toHaveTextContent('—');
-      expect(screen.getByTestId('debt-aggregate-payoff')).toHaveTextContent('—');
+      expect(screen.getByTestId('debt-payoff-headline')).toHaveTextContent('—');
       expect(screen.getByTestId('debt-savings')).toHaveTextContent('—');
+      // The balance tile is NEVER suppressed — the balance is always real.
+      expect(screen.getByTestId('debt-total-balance')).not.toHaveTextContent('—');
 
       // Capped row: payoff cell carries the inline warning, interest cell is '—'.
       expect(screen.getByTestId('debt-loan-payoff-9')).toHaveTextContent(/never at this payment/i);
@@ -431,7 +469,9 @@ describe('DebtPayoffCard', () => {
         </MemoryRouter>,
       );
       expect(screen.queryByTestId('debt-never-payoff-notice')).not.toBeInTheDocument();
-      expect(screen.getByTestId('debt-aggregate-payoff')).not.toHaveTextContent('—');
+      expect(screen.getByTestId('debt-payoff-headline')).toHaveTextContent(
+        /Debt-free [A-Z][a-z]{2} \d{4}/,
+      );
     });
 
     it('a rescuing extra keeps real payoff/interest but suppresses savings and still warns (review F1)', () => {
@@ -459,7 +499,9 @@ describe('DebtPayoffCard', () => {
       // real (the with-extra projection amortizes).
       expect(screen.getByTestId('debt-savings')).toHaveTextContent('—');
       expect(screen.getByTestId('debt-total-interest')).not.toHaveTextContent('—');
-      expect(screen.getByTestId('debt-aggregate-payoff')).toHaveTextContent(/[A-Z][a-z]{2} \d{4}/);
+      expect(screen.getByTestId('debt-payoff-headline')).toHaveTextContent(
+        /Debt-free [A-Z][a-z]{2} \d{4}/,
+      );
       // Per-row payoff keeps a real date too.
       expect(screen.getByTestId('debt-loan-payoff-9')).toHaveTextContent(/[A-Z][a-z]{2} \d{4}/);
     });

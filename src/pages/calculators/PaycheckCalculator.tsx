@@ -8,16 +8,14 @@ import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
-import {
-  computeTotalTax,
-  computeHouseholdFica,
-  computePretaxDeductions,
-} from '@/lib/tax';
+import { computePretaxDeductions } from '@/lib/tax';
+// Wave 15 T1: the shared paycheck composition engine (tax + per-earner FICA +
+// take-home) — the same one PaycheckCard summarizes.
+import { computePaycheck, FEDERAL_LIABILITY_CAVEAT } from '@/lib/calculators/paycheck';
 // Finance #2: health-FSA cap, sourced from the same 2026 constants module the
 // tax engine uses for the 401(k)/HSA/SS caps. NOTE: CONTRIBUTION_LIMITS_2026
 // must gain a HEALTH_FSA member (see the FLAG in Task 6, Step 1).
 import { CONTRIBUTION_LIMITS_2026 } from '@/lib/contribution-limits';
-import { computeTakeHome } from '@/lib/paycheck-takehome';
 import { formatCurrency } from '@/lib/format';
 import {
   PAYCHECK_PERIODS,
@@ -39,24 +37,20 @@ import DonutChartCard, { type DonutSlice } from '@/components/charts/DonutChartC
 import PaycheckBreakdownRow from './PaycheckBreakdownRow';
 import type { FilingStatus } from '@/types/enums';
 
-// Swatch palette for the breakdown rows + donut. The slate deduction-ramp
-// (gross→federal→ss→medicare) stays raw hex — it's a legitimate sequential
-// narrative, not a duplicated token. The three SEMANTIC rows (post-tax/extra/
-// take-home) resolve to the success/warning/destructive tokens via `hsl(var(…))`
-// so they theme-track instead of duplicating those tokens as frozen hex (Design
-// F1). The take-home wedge is the green hero.
+// Swatch palette for the breakdown rows + donut — CSS-var tokens ONLY
+// (Wave 15 T8; the old slate/sky/green hex ramp is retired — two entries fell
+// under the 1.45:1 wedge floor on the stone card). The deduction ramp
+// (gross→federal→ss→medicare) binds the --paycheck-* stone ramp; the three
+// SEMANTIC rows (post-tax/extra/take-home) keep the status tokens they mean.
+// Fill-only discipline: none of these may color text.
 const COLORS = {
-  gross: '#94a3b8',
-  // Mid-slate, not near-black: '#1e293b' (slate-800) is effectively invisible
-  // on a slate-950 dark card. '#64748b'-ish reads on both themes.
-  federal: '#475569',
-  ss: '#64748b',
-  medicare: '#94a3b8',
-  state: '#0ea5e9',
-  city: '#7dd3fc',
-  pretax: '#86efac',
-  // Theme-tracked (Design F1): match the --warning/--destructive/--success
-  // tokens these rows already mean, rather than freezing them as hex.
+  gross: 'hsl(var(--paycheck-gross))',
+  federal: 'hsl(var(--paycheck-federal))',
+  ss: 'hsl(var(--paycheck-ss))',
+  medicare: 'hsl(var(--paycheck-gross))', // shares the gross step (as the old hex did)
+  state: 'hsl(var(--paycheck-state))',
+  city: 'hsl(var(--paycheck-city))',
+  pretax: 'hsl(var(--paycheck-pretax))',
   posttax: 'hsl(var(--warning))',
   extra: 'hsl(var(--destructive))',
   takehome: 'hsl(var(--success))',
@@ -335,9 +329,14 @@ export default function PaycheckCalculator() {
     const pretax401k = perPersonGross
       .map((g) => Math.min(g * (f.pretax401kPct / 100), CONTRIBUTION_LIMITS_2026.EMPLOYEE_401K))
       .reduce((a, b) => a + b, 0);
-    const pretaxTotal = pretax.total - pretax.pretax401k + pretax401k + fsaAnnual;
 
-    const tax = computeTotalTax({
+    // Wave 15 Task 1 (D1): same engine as PaycheckCard. The form owns the
+    // pretax derivation above (blended % re-capped per earner, FSA folded
+    // into the §125 bucket); the engine owns tax + per-earner FICA (Wave-9
+    // F1: per-earner SS wage bases, Medicare surtax on the combined return) +
+    // take-home. No-state-tax detection (zero-rate bracket shape, never
+    // .length) lives in the engine — see src/lib/calculators/paycheck.ts.
+    return computePaycheck({
       gross,
       perPersonGross, // wave-9 F1
       filingStatus: f.filingStatus,
@@ -355,43 +354,9 @@ export default function PaycheckCalculator() {
         pretaxDcfsa: pretax.pretaxDcfsa,
         pretaxHsa: pretax.pretaxHsa,
       },
+      postTaxAnnual: (gross * f.roth401kPct) / 100 + f.otherPostTaxMonthly * 12,
+      extraWithholdingAnnual: f.extraFederalPerPaycheck * periodsPerYear(f.payFrequency),
     });
-
-    // Wave-9 F1: per-earner SS wage bases (Medicare surtax on the combined return).
-    const fica = computeHouseholdFica(perPersonGross, f.filingStatus);
-
-    const postTaxTotal = (gross * f.roth401kPct) / 100 + f.otherPostTaxMonthly * 12;
-    const extraWithholdingTotal =
-      f.extraFederalPerPaycheck * periodsPerYear(f.payFrequency);
-
-    const takeHome = computeTakeHome({
-      gross,
-      pretaxTotal,
-      taxTotal: tax.total,
-      postTaxTotal,
-      extraWithholdingTotal,
-    });
-
-    return {
-      gross,
-      federal: tax.federal,
-      ss: fica.socialSecurity,
-      medicare: fica.medicare,
-      additionalMedicare: fica.additionalMedicare,
-      stateTax: tax.state,
-      cityTax: tax.city,
-      // No-state-tax detection: 0002_seed_tax_rules.sql stores no-income-tax
-      // states (TX/FL/NV/SD/TN/WY/AK/WA) as a single ZERO-RATE bracket, not an
-      // empty list (schema requires >=1 bracket). So detect "no state tax" by
-      // the absence of any positive rate — NOT by `brackets.length` (which is
-      // always >=1 and would wrongly show a literal "$0" for every no-tax state).
-      hasStateTax: state.brackets.some((b) => b.rate > 0),
-      hasCity: !!city,
-      pretaxTotal,
-      postTaxTotal,
-      extraWithholdingTotal,
-      takeHome,
-    };
     // Depend on the individual watched primitives (not the freshly-spread `f`
     // object, which would change every render). `persons.length` covers the
     // HSA/personCount input.
@@ -748,7 +713,7 @@ export default function PaycheckCalculator() {
                       W-4 + IRS percentage-method tables determine). Label it as
                       an estimated annual tax so users don't read it as a
                       paystub withholding figure. */}
-                  <PaycheckBreakdownRow label="Estimated federal tax" sublabel="annualized estimate, not payroll withholding" amount={result.federal / div} grossForPct={result.gross / div} color={COLORS.federal} negative />
+                  <PaycheckBreakdownRow label="Estimated federal tax" sublabel={FEDERAL_LIABILITY_CAVEAT} amount={result.federal / div} grossForPct={result.gross / div} color={COLORS.federal} negative />
                   <PaycheckBreakdownRow label="Social Security" sublabel="6.2% to wage base" amount={result.ss / div} grossForPct={result.gross / div} color={COLORS.ss} negative />
                   <PaycheckBreakdownRow
                     label="Medicare"

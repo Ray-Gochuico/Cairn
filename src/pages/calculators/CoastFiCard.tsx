@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
@@ -19,7 +20,7 @@ import { buildProjectionChartData } from '@/lib/calculators/projection-chart';
 import { RealNominalToggle } from '@/components/calculators/RealNominalToggle';
 import { useChartDisplayMode } from '@/lib/calculators/use-chart-display-mode';
 import { useSettingsStore } from '@/stores/settings-store';
-import { CHART_PALETTE, CHART_NEUTRAL } from '@/components/charts/palette';
+import { fiChartSeries } from '@/lib/calculators/fi-chart-series';
 
 interface CoastFiCardProps {
   cardId?: string;
@@ -84,6 +85,60 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
     persons.length > 0 &&
     (household.growthScenarios?.length ?? 0) > 0;
 
+  // ── Derived calculations ───────────────────────────────────────────────────
+  const targetFv =
+    values.withdrawalRate > 0 ? values.annualExpenses / values.withdrawalRate : 0;
+  // Wave 15 T4 (D11): a zero/negative target (expenses or SWR zeroed) is a
+  // 0-of-$0 non-result — render an inline prompt with the controls still
+  // mounted so the user can fix it in place, never "0% of CoastFI".
+  const noTarget = targetFv <= 0;
+
+  // Rules of Hooks: this memo MUST run unconditionally, so it sits ABOVE the
+  // empty-state return below — pre-fix it ran after that return, and a live
+  // hasData flip (scenarios restored while /calculators was open) threw
+  // "Rendered more hooks than during the previous render" and crashed the page.
+  const { chartData, chartSeries, chartMarkers } = useMemo(() => {
+    const horizon = Math.max(0, Math.round(values.yearsUntilRetirement));
+    const scenarios = household?.growthScenarios ?? [];
+    if (!hasData || horizon < 1 || scenarios.length === 0 || targetFv <= 0) {
+      return {
+        chartData: [] as Record<string, number>[],
+        chartSeries: [] as ReturnType<typeof fiChartSeries>['series'],
+        chartMarkers: [] as ReturnType<typeof fiChartSeries>['markers'],
+      };
+    }
+    // Single source for the rows (target-line basis lives in the builder —
+    // see src/lib/calculators/projection-chart.ts). Coast = no contributions.
+    const data = buildProjectionChartData({
+      pv: values.currentPortfolio,
+      annualContribution: 0,
+      targetFv,
+      scenarios,
+      inflation,
+      displayMode,
+      horizon,
+    });
+    // Wave 15 T4: shared FI series semantics (Wave 11 T13) — Optimistic never
+    // wears the palette red, Moderate emphasized, target-crossing markers.
+    // Pre-fix this card hand-rolled palette[i % len] indexing and rendered
+    // the Optimistic line in the palette red. The target-line basis in `data`
+    // follows the display toggle, so crossings compare against the row's own
+    // target value.
+    const targetBasis = data.length > 0 ? Number(data[data.length - 1].target) : targetFv;
+    const { series, markers } = fiChartSeries(scenarios, data, targetBasis, {
+      targetLabel: 'Required at retirement',
+    });
+    return { chartData: data, chartSeries: series, chartMarkers: markers };
+  }, [
+    hasData,
+    values.yearsUntilRetirement,
+    values.currentPortfolio,
+    targetFv,
+    household,
+    displayMode,
+    inflation,
+  ]);
+
   if (!hasData) {
     return (
       <CalculatorCard
@@ -93,14 +148,35 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
         titleText="CoastFI"
         headline="—"
       >
-        <p className="text-sm text-muted-foreground">Add your inputs to see CoastFI.</p>
+        {/* Wave 15 T4: name the missing ingredient per cause with a real
+            link — the previous single "Add your inputs" copy conflated
+            no-household, no-persons and no-scenarios. */}
+        {!household ? (
+          <p className="text-sm text-muted-foreground">
+            <Link to="/inputs/household" className="text-primary hover:underline">
+              Set up your household
+            </Link>{' '}
+            to see CoastFI.
+          </p>
+        ) : persons.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            <Link to="/inputs/persons" className="text-primary hover:underline">
+              Add a person
+            </Link>{' '}
+            to see CoastFI (retirement age sets the coasting horizon).
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Your household has no growth scenarios —{' '}
+            <Link to="/inputs/household" className="text-primary hover:underline">
+              add growth scenarios in Household settings
+            </Link>{' '}
+            to see CoastFI.
+          </p>
+        )}
       </CalculatorCard>
     );
   }
-
-  // ── Derived calculations ───────────────────────────────────────────────────
-  const targetFv =
-    values.withdrawalRate > 0 ? values.annualExpenses / values.withdrawalRate : 0;
 
   // H1: targetFv (= annualExpenses_today / SWR) is in today's dollars (real),
   // but growthScenarios rates are NOMINAL. Discounting a real target by a
@@ -125,44 +201,6 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
   const coastFloored = (household?.growthScenarios ?? []).some(
     (s) => realRateOfUnfloored(s.rate, inflation) < 0,
   );
-
-  const { chartData, chartSeries } = useMemo(() => {
-    const horizon = Math.max(0, Math.round(values.yearsUntilRetirement));
-    const scenarios = household?.growthScenarios ?? [];
-    // Dash patterns for WCAG 1.4.1 (opt-in, additive).
-    const DASH_PATTERNS = [undefined, '5 5', '2 2', '8 4'] as const;
-    const seriesDefs = [
-      ...scenarios.map((s, i) => ({
-        dataKey: s.label,
-        label: s.label,
-        color: CHART_PALETTE[i % CHART_PALETTE.length],
-        strokeDasharray: DASH_PATTERNS[i % DASH_PATTERNS.length],
-      })),
-      { dataKey: 'target', label: 'Required at retirement', color: CHART_NEUTRAL, strokeDasharray: '2 2' as const },
-    ];
-    if (horizon < 1 || scenarios.length === 0) {
-      return { chartData: [] as Record<string, number>[], chartSeries: seriesDefs };
-    }
-    // Single source for the rows (target-line basis lives in the builder —
-    // see src/lib/calculators/projection-chart.ts). Coast = no contributions.
-    const data = buildProjectionChartData({
-      pv: values.currentPortfolio,
-      annualContribution: 0,
-      targetFv,
-      scenarios,
-      inflation,
-      displayMode,
-      horizon,
-    });
-    return { chartData: data, chartSeries: seriesDefs };
-  }, [
-    values.yearsUntilRetirement,
-    values.currentPortfolio,
-    targetFv,
-    household,
-    displayMode,
-    inflation,
-  ]);
 
   // ── Headline ───────────────────────────────────────────────────────────────
   const moderate =
@@ -191,7 +229,7 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
       title={<TermTooltip term="COAST FI">CoastFI</TermTooltip>}
       titleText="CoastFI"
       headline={
-        atOrPastRetirement ? (
+        atOrPastRetirement || noTarget ? (
           <span data-testid="coastfi-headline">—</span>
         ) : (
           <span data-testid="coastfi-headline">{headlineLabel}</span>
@@ -247,8 +285,17 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
         </button>
       )}
 
-      {/* ── At/past retirement guard ─────────────────────────────────────── */}
-      {atOrPastRetirement ? (
+      {/* ── Zero-target inline prompt (D11) + at/past retirement guard ──── */}
+      {noTarget ? (
+        // Wave 15 review: no baseline-prefill promise here — a typed 0 is an
+        // OVERRIDE that wins over recomputed defaults (useCalculatorState),
+        // so "set your baseline to prefill" would be false in the very state
+        // that shows this prompt. FI's equivalent arm makes no such claim.
+        <p className="text-sm text-muted-foreground">
+          Enter your annual expenses and withdrawal rate above to see your
+          CoastFI target.
+        </p>
+      ) : atOrPastRetirement ? (
         <p className="text-sm text-muted-foreground">
           Already at/after your target retirement age — no CoastFI horizon to
           compute.
@@ -279,10 +326,10 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
             <thead>
               <tr className="text-left text-muted-foreground">
                 <th className="py-2">Scenario</th>
-                <th className="py-2">Rate</th>
-                <th className="py-2">Years</th>
-                <th className="py-2">Coast today</th>
-                <th className="py-2">% of coast</th>
+                <th className="py-2 text-right">Rate</th>
+                <th className="py-2 text-right">Years</th>
+                <th className="py-2 text-right">Coast today</th>
+                <th className="py-2 text-right">% of coast</th>
               </tr>
             </thead>
             <tbody>
@@ -294,12 +341,12 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
                 return (
                   <tr key={r.label} className="border-t">
                     <td className="py-2">{r.label}</td>
-                    <td className="py-2 tabular-nums">{formatPercent(r.rate)}</td>
-                    <td className="py-2 tabular-nums">{values.yearsUntilRetirement}</td>
-                    <td className="py-2 tabular-nums">
+                    <td className="py-2 text-right tabular-nums">{formatPercent(r.rate)}</td>
+                    <td className="py-2 text-right tabular-nums">{values.yearsUntilRetirement}</td>
+                    <td className="py-2 text-right tabular-nums">
                       {formatCurrency(r.coastNeededToday)}
                     </td>
-                    <td className="py-2 tabular-nums">{pct.toFixed(0)}%</td>
+                    <td className="py-2 text-right tabular-nums">{pct.toFixed(0)}%</td>
                   </tr>
                 );
               })}
@@ -316,6 +363,7 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
                 data={chartData}
                 xKey="year"
                 series={chartSeries}
+                markers={chartMarkers}
                 yFormatter={formatCurrency}
               />
             </div>

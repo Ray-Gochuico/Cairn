@@ -108,6 +108,34 @@ function primeStores() {
   });
 }
 
+// The wave-9 F1 two-earner fixture (dual $150k MFJ), extracted so the Wave-15
+// "N earners, combined" qualifier tests reuse it instead of duplicating.
+function primeStoresTwoEarners() {
+  primeStores();
+  useHouseholdStore.setState({
+    household: {
+      ...useHouseholdStore.getState().household!,
+      filingStatus: FilingStatus.MFJ,
+    },
+    isLoading: false,
+    error: null,
+  });
+  const alice = usePersonsStore.getState().persons[0];
+  usePersonsStore.setState({
+    persons: [
+      { ...alice, id: 1, name: 'Alice', annualSalaryPretax: 150000, pretax401kPct: 0 },
+      { ...alice, id: 2, name: 'Bob', annualSalaryPretax: 150000, pretax401kPct: 0 },
+    ],
+    isLoading: false,
+    error: null,
+  });
+  const items = useTaxRulesStore.getState().items.map((i) => ({
+    ...i,
+    filingStatus: FilingStatus.MFJ,
+  }));
+  useTaxRulesStore.setState({ year: 2026, items, isLoading: false, error: null });
+}
+
 describe('PaycheckCard', () => {
   beforeEach(() => {
     resetStores();
@@ -246,6 +274,18 @@ describe('PaycheckCard', () => {
     expect(await screen.findByText(/Set up your household profile/i)).toBeInTheDocument();
   });
 
+  it('empty-state CTA links to the destination it names (Wave 15 T10)', async () => {
+    // Stores already reset — no household ⇒ empty state
+    render(
+      <MemoryRouter>
+        <PaycheckCard />
+      </MemoryRouter>,
+    );
+    expect(
+      await screen.findByRole('link', { name: /set up your household profile/i }),
+    ).toHaveAttribute('href', '/inputs/household');
+  });
+
   it('links to the full calculator page', async () => {
     primeStores();
     render(<MemoryRouter><PaycheckCard /></MemoryRouter>);
@@ -258,29 +298,7 @@ describe('PaycheckCard', () => {
     // $4,350; AddMed MFJ over 250k = $450 → FICA $23,400. The combined-base
     // bug showed min(300k, 184.5k) × 6.2% + medicare = $16,239.
     const user = userEvent.setup();
-    primeStores();
-    useHouseholdStore.setState({
-      household: {
-        ...useHouseholdStore.getState().household!,
-        filingStatus: FilingStatus.MFJ,
-      },
-      isLoading: false,
-      error: null,
-    });
-    const alice = usePersonsStore.getState().persons[0];
-    usePersonsStore.setState({
-      persons: [
-        { ...alice, id: 1, name: 'Alice', annualSalaryPretax: 150000, pretax401kPct: 0 },
-        { ...alice, id: 2, name: 'Bob', annualSalaryPretax: 150000, pretax401kPct: 0 },
-      ],
-      isLoading: false,
-      error: null,
-    });
-    const items = useTaxRulesStore.getState().items.map((i) => ({
-      ...i,
-      filingStatus: FilingStatus.MFJ,
-    }));
-    useTaxRulesStore.setState({ year: 2026, items, isLoading: false, error: null });
+    primeStoresTwoEarners();
 
     render(<MemoryRouter><PaycheckCard /></MemoryRouter>);
     await screen.findByTestId('paycheck-takehome');
@@ -350,5 +368,91 @@ describe('PaycheckCard', () => {
     expect(screen.queryByText(/168,600/)).not.toBeInTheDocument();
     // Additional Medicare IS modeled (tax.ts) — it must not appear in the "not modeled" list.
     expect(screen.queryByText(/Additional Medicare/)).not.toBeInTheDocument();
+  });
+
+  it('headline carries the display-period unit (Wave 15: never a bare number)', async () => {
+    primeStores();
+    render(<MemoryRouter><PaycheckCard /></MemoryRouter>);
+    const headline = await screen.findByTestId('paycheck-takehome');
+    expect(headline.textContent).toMatch(/\/\s*monthly/i); // default period MONTHLY
+  });
+
+  it('shows the "N earners, combined" qualifier only for multi-person households', async () => {
+    primeStoresTwoEarners(); // the wave-9 F1 two-earner fixture, extracted above
+    render(<MemoryRouter><PaycheckCard /></MemoryRouter>);
+    await screen.findByTestId('paycheck-takehome');
+    expect(screen.getByText(/2 earners, combined/i)).toBeInTheDocument();
+  });
+
+  it('single-earner household shows NO combined qualifier', async () => {
+    primeStores();
+    render(<MemoryRouter><PaycheckCard /></MemoryRouter>);
+    await screen.findByTestId('paycheck-takehome');
+    expect(screen.queryByText(/earners, combined/i)).not.toBeInTheDocument();
+  });
+
+  it('hourly + salaried household shows NO combined qualifier — hourly pay is not summed (Wave 15 review)', async () => {
+    // HOURLY persons persist annualSalaryPretax = 0 (their pay isn't salary),
+    // so the headline is Alice's salary alone: captioning it "2 earners,
+    // combined" would be false.
+    primeStoresTwoEarners();
+    const [alice, bob] = usePersonsStore.getState().persons;
+    usePersonsStore.setState({
+      persons: [
+        alice,
+        { ...bob, annualSalaryPretax: 0, employmentType: 'HOURLY', hourlyRate: 30 },
+      ],
+      isLoading: false,
+      error: null,
+    });
+    render(<MemoryRouter><PaycheckCard /></MemoryRouter>);
+    await screen.findByTestId('paycheck-takehome');
+    expect(screen.queryByText(/earners, combined/i)).not.toBeInTheDocument();
+    // The NOT-modeled disclosure names the exclusion.
+    expect(
+      screen.getByText(/hourly earner's pay is not included/i),
+    ).toBeInTheDocument();
+  });
+
+  it('salaried + non-earning household member shows NO combined qualifier', async () => {
+    primeStoresTwoEarners();
+    const [alice, bob] = usePersonsStore.getState().persons;
+    usePersonsStore.setState({
+      persons: [alice, { ...bob, annualSalaryPretax: 0 }],
+      isLoading: false,
+      error: null,
+    });
+    render(<MemoryRouter><PaycheckCard /></MemoryRouter>);
+    await screen.findByTestId('paycheck-takehome');
+    expect(screen.queryByText(/earners, combined/i)).not.toBeInTheDocument();
+  });
+
+  it('caption counts salaried earners only and flags salary-only scope when a non-salaried person exists', async () => {
+    // Two salaried + one hourly: the caption must count the two people whose
+    // salary is actually in the headline, and say so.
+    primeStoresTwoEarners();
+    const [alice, bob] = usePersonsStore.getState().persons;
+    usePersonsStore.setState({
+      persons: [
+        alice,
+        bob,
+        { ...bob, id: 3, name: 'Cam', annualSalaryPretax: 0, employmentType: 'HOURLY', hourlyRate: 30 },
+      ],
+      isLoading: false,
+      error: null,
+    });
+    render(<MemoryRouter><PaycheckCard /></MemoryRouter>);
+    await screen.findByTestId('paycheck-takehome');
+    expect(
+      screen.getByText(/2 earners, combined — salary only/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/3 earners/i)).not.toBeInTheDocument();
+  });
+
+  it('federal row carries the withholding-vs-liability caveat the full page has', async () => {
+    primeStores();
+    render(<MemoryRouter><PaycheckCard /></MemoryRouter>);
+    await screen.findByTestId('paycheck-takehome');
+    expect(screen.getByText(/annualized estimate, not payroll withholding/i)).toBeInTheDocument();
   });
 });

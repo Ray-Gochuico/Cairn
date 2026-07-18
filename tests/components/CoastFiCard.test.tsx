@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
@@ -131,19 +131,24 @@ describe('CoastFiCard', () => {
     vi.useRealTimers();
   });
 
-  it('renders empty state when household is not set', () => {
+  it('renders empty state when household is not set — names the cause with a setup link', () => {
     render(
       <MemoryRouter>
         <CoastFiCard />
       </MemoryRouter>,
     );
+    // Wave 15 T4: the empty state names the missing ingredient (no household)
+    // instead of the vague "Add your inputs" copy.
     expect(
-      screen.getByText(/Add your inputs to see CoastFI/i),
-    ).toBeInTheDocument();
+      screen.getByRole('link', { name: /set up your household/i }),
+    ).toHaveAttribute('href', '/inputs/household');
+    expect(
+      screen.queryByText(/Add your inputs to see CoastFI/i),
+    ).not.toBeInTheDocument();
     expect(screen.getByText('—')).toBeInTheDocument();
   });
 
-  it('renders empty state when household has no growth scenarios', () => {
+  it('renders empty state when household has no growth scenarios — names the ingredient', () => {
     primeStores({ scenarios: [] });
     render(
       <MemoryRouter>
@@ -151,11 +156,14 @@ describe('CoastFiCard', () => {
       </MemoryRouter>,
     );
     expect(
-      screen.getByText(/Add your inputs to see CoastFI/i),
-    ).toBeInTheDocument();
+      screen.getByRole('link', { name: /add growth scenarios in household settings/i }),
+    ).toHaveAttribute('href', '/inputs/household');
+    expect(
+      screen.queryByText(/Add your inputs to see CoastFI/i),
+    ).not.toBeInTheDocument();
   });
 
-  it('renders empty state when persons list is empty', () => {
+  it('renders empty state when persons list is empty — links to Persons', () => {
     primeStores({ persons: [] });
     render(
       <MemoryRouter>
@@ -163,7 +171,81 @@ describe('CoastFiCard', () => {
       </MemoryRouter>,
     );
     expect(
-      screen.getByText(/Add your inputs to see CoastFI/i),
+      screen.getByRole('link', { name: /add a person/i }),
+    ).toHaveAttribute('href', '/inputs/persons');
+    expect(
+      screen.queryByText(/Add your inputs to see CoastFI/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it('zero expenses ⇒ headline "—" + ingredient-naming prompt (never "0% of $0")', async () => {
+    const user = userEvent.setup();
+    // Baseline 0 so the OLD branch would have rendered its "set your household
+    // expense baseline to prefill" link — a promise the typed-0 override
+    // defeats (overrides win over recomputed defaults), so the clause is gone
+    // (Wave 15 adversarial review).
+    primeStores({ monthlyExpenseBaseline: 0 });
+    render(
+      <MemoryRouter>
+        <CoastFiCard />
+      </MemoryRouter>,
+    );
+    const expenses = screen.getByLabelText(/annual expenses/i);
+    await user.clear(expenses);
+    await user.type(expenses, '0');
+    expect(screen.getByTestId('coastfi-headline').textContent).toBe('—');
+    expect(
+      screen.getByText(
+        /enter your annual expenses and withdrawal rate above to see your coastfi target\./i,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/prefill/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: /set your household expense baseline/i }),
+    ).not.toBeInTheDocument();
+    // Controls stay for inline correction (D11); table/chart suppressed.
+    expect(screen.getByLabelText(/annual expenses/i)).toBeInTheDocument();
+    expect(screen.queryByText('Coasting to retirement')).not.toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('survives live hasData transitions while mounted (Rules of Hooks regression)', () => {
+    // Wave 15 smoke blocker: the empty-state guard returned ABOVE the chart
+    // useMemo, so restoring growth scenarios while /calculators was open threw
+    // "Rendered more hooks than during the previous render" and the
+    // ErrorBoundary swallowed the page. Mimic the live transition with
+    // setState on the mounted render — both directions.
+    primeStores({ scenarios: [] });
+    render(
+      <MemoryRouter>
+        <CoastFiCard />
+      </MemoryRouter>,
+    );
+    expect(
+      screen.getByRole('link', { name: /add growth scenarios in household settings/i }),
+    ).toBeInTheDocument();
+
+    // Empty → populated: scenarios restored while the card is mounted.
+    act(() => {
+      useHouseholdStore.setState((state) => ({
+        household: { ...state.household!, growthScenarios: fourScenarios },
+      }));
+    });
+    expect(screen.getByRole('table')).toBeInTheDocument();
+    expect(screen.getByText('Coasting to retirement')).toBeInTheDocument();
+    expect(screen.getByTestId('coastfi-headline').textContent).toMatch(
+      /\d+(\.\d+)?%\s*of\s*CoastFI/i,
+    );
+
+    // Populated → empty: scenarios removed while the card is mounted.
+    act(() => {
+      useHouseholdStore.setState((state) => ({
+        household: { ...state.household!, growthScenarios: [] },
+      }));
+    });
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: /add growth scenarios in household settings/i }),
     ).toBeInTheDocument();
   });
 
@@ -247,6 +329,25 @@ describe('CoastFiCard', () => {
     // Wave 11 T19: the scenario table scrolls inside an overflow-x-auto wrapper
     // so the browser build degrades without horizontal BODY scroll.
     expect(screen.getByRole('table').closest('div')).toHaveClass('overflow-x-auto');
+  });
+
+  it('numeric columns are right-aligned (Wave 15 T9, Allocator precedent)', () => {
+    primeStores();
+    render(
+      <MemoryRouter>
+        <CoastFiCard />
+      </MemoryRouter>,
+    );
+
+    for (const name of [/^rate$/i, /^years$/i, /coast today/i, /% of coast/i]) {
+      expect(
+        screen.getByRole('columnheader', { name }).className,
+      ).toContain('text-right');
+    }
+    // Identity column stays left-aligned.
+    expect(
+      screen.getByRole('columnheader', { name: /^scenario$/i }).className,
+    ).not.toContain('text-right');
   });
 
   it('uses the latest snapshot per account when multiple are seeded', () => {

@@ -111,7 +111,12 @@ export function EquityValueCard({ cardId, onHide }: EquityValueCardProps = {}) {
         headline="—"
       >
         <p className="text-sm text-muted-foreground">
-          Add equity grants to see vested value across your household.
+          {/* W14b moved equity grants out of Inputs — /inputs/equity-grants is
+              only a redirect stub now; link the canonical home directly. */}
+          <Link to="/equity-grants" className="text-primary hover:underline">
+            Add equity grants
+          </Link>{' '}
+          to see vested value across your household.
         </p>
       </CalculatorCard>
     );
@@ -173,8 +178,8 @@ export function EquityValueCard({ cardId, onHide }: EquityValueCardProps = {}) {
         <thead>
           <tr className="text-left text-muted-foreground">
             <th className="py-2">Owner</th>
-            <th className="py-2">Grants</th>
-            <th className="py-2">Vested value</th>
+            <th className="py-2 text-right">Grants</th>
+            <th className="py-2 text-right">Vested value</th>
           </tr>
         </thead>
         <tbody>
@@ -203,8 +208,8 @@ export function EquityValueCard({ cardId, onHide }: EquityValueCardProps = {}) {
                   ),
                 )}
               </td>
-              <td className="py-2 tabular-nums">{p.grantCount}</td>
-              <td className="py-2 tabular-nums">{formatCurrency(p.vested)}</td>
+              <td className="py-2 text-right tabular-nums">{p.grantCount}</td>
+              <td className="py-2 text-right tabular-nums">{formatCurrency(p.vested)}</td>
             </tr>
           ))}
         </tbody>

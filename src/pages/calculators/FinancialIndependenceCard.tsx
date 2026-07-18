@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
@@ -217,7 +218,36 @@ export function FinancialIndependenceCard({
         headline={<span data-testid="fi-headline">—</span>}
       >
         {household ? controls : null}
-        <p className="text-sm text-muted-foreground">Add your inputs to see Years to FI.</p>
+        {/* Wave 15 T4: name the missing ingredient per cause with a real
+            link — the previous single "Add your inputs" copy conflated
+            no-household, no-persons, no-scenarios and zero expenses/SWR. */}
+        {!household ? (
+          <p className="text-sm text-muted-foreground">
+            <Link to="/inputs/household" className="text-primary hover:underline">
+              Set up your household
+            </Link>{' '}
+            to see Years to FI.
+          </p>
+        ) : persons.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            <Link to="/inputs/persons" className="text-primary hover:underline">
+              Add a person
+            </Link>{' '}
+            to see Years to FI.
+          </p>
+        ) : (household.growthScenarios?.length ?? 0) === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Your household has no growth scenarios —{' '}
+            <Link to="/inputs/household" className="text-primary hover:underline">
+              add growth scenarios in Household settings
+            </Link>{' '}
+            to see Years to FI.
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Enter monthly expenses and a withdrawal rate above to see Years to FI.
+          </p>
+        )}
       </CalculatorCard>
     );
   }
@@ -265,16 +295,16 @@ export function FinancialIndependenceCard({
         <thead>
           <tr className="text-left text-muted-foreground">
             <th className="py-2">Scenario</th>
-            <th className="py-2">Rate</th>
-            <th className="py-2">Years to FI</th>
+            <th className="py-2 text-right">Rate</th>
+            <th className="py-2 text-right">Years to FI</th>
           </tr>
         </thead>
         <tbody>
           {series.map((s) => (
             <tr key={s.label} className="border-t">
               <td className="py-2">{s.label}</td>
-              <td className="py-2 tabular-nums">{formatPercent(s.rate)}</td>
-              <td className="py-2 tabular-nums">
+              <td className="py-2 text-right tabular-nums">{formatPercent(s.rate)}</td>
+              <td className="py-2 text-right tabular-nums">
                 {Number.isFinite(s.years) ? s.years.toFixed(1) : '—'}
               </td>
             </tr>
