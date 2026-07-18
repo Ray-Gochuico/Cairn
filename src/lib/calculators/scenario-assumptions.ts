@@ -130,7 +130,10 @@ export function buildScenarioDefaults(input: ScenarioDefaultsInput): ScenarioDef
   const annualContribution = rolling12MonthContribution(input.contributions, todayIso);
   const monthlyExpenses = household?.monthlyExpenseBaseline ?? 0;
 
-  const moderate = household ? pickModerateEntry(household.growthScenarios) : undefined;
+  // Defensive `?? []`: a partial household object (store mocks, malformed
+  // rows) without growthScenarios must fall back to the app default, never
+  // crash the whole calculators page.
+  const moderate = household ? pickModerateEntry(household.growthScenarios ?? []) : undefined;
   const returnPct = moderate ? pctFromFraction(moderate.rate) : 6;
 
   // Canonical chains (no active scenario on the calculators page → null).

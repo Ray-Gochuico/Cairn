@@ -102,6 +102,15 @@ describe('buildScenarioDefaults', () => {
     expect(provenance.inflationPct).toBe('your household setting');
   });
 
+  it('a partial household without growthScenarios falls back to the 6% default (never crashes)', () => {
+    const { defaults, provenance } = buildScenarioDefaults({
+      ...EMPTY_INPUT,
+      household: { filingStatus: FilingStatus.SINGLE, state: 'CA' } as unknown as Household,
+    });
+    expect(defaults.returnPct).toBe(6);
+    expect(provenance.returnPct).toBe('app default 6%');
+  });
+
   it('settings-level inflation gets Settings provenance', () => {
     const { defaults, provenance } = buildScenarioDefaults({
       ...EMPTY_INPUT,

@@ -1,9 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { useDisclosureGate } from '@/legal/useDisclosureGate';
 import { DisclosureModal } from '@/legal/DisclosureModal';
 import { useHouseholdStore } from '@/stores/household-store';
+import { useAccountsStore } from '@/stores/accounts-store';
+import { useSnapshotsStore } from '@/stores/snapshots-store';
+import { useScenarioAssumptions } from '@/lib/calculators/use-scenario-assumptions';
 import { useRealState } from '@/components/whatif/useRealState';
 import { backtestPlan, type BacktestConfig, type BacktestResult } from '@/lib/backtest';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,24 +22,64 @@ export default function Backtest() {
   const acceptDisclaimer = useHouseholdStore((s) => s.acceptDisclaimer);
   const real = useRealState();
 
-  // Seed initial portfolio from current Inputs (total investments at start).
-  const seededPortfolio = useMemo(() => {
+  // W16: the scenario prefills read accounts + snapshots; a cold deep-link to
+  // /calculators/backtest would otherwise seed from empty stores. Idempotent —
+  // and page-side per D11 (the shared hook never loads stores; boot-loop gotcha).
+  useEffect(() => {
+    void useAccountsStore.getState().load();
+    void useSnapshotsStore.getState().load();
+  }, []);
+
+  const scenario = useScenarioAssumptions();
+
+  // Legacy fallback seed (pre-W16 behavior): projection-seed investments +
+  // cash, else $1M — used only while the shared scenario has no portfolio.
+  const legacyPortfolio = useMemo(() => {
     if (!real) return 1_000_000;
     const inv = Object.values(real.initialInvestmentsByAccount).reduce((a, b) => a + b, 0);
     return Math.max(0, Math.round(inv + real.initialCash)) || 1_000_000;
   }, [real]);
 
-  const [config, setConfig] = useState<BacktestConfig>(() => ({
-    initialPortfolio: seededPortfolio,
-    annualSpending: Math.round(seededPortfolio * 0.04),
-    horizonYears: 30,
-    goalAmount: 0,
-    strategy: 'bengen',
-    stockPct: 0.75,
-    variableRate: 0.04,
-    minWithdrawal: Math.round(seededPortfolio * 0.032),
-    maxWithdrawal: Math.round(seededPortfolio * 0.06),
-  }));
+  // W16 (D12): seed from the shared scenario — portfolio from the bar's
+  // FI-eligible figure; spending from HOUSEHOLD EXPENSES (monthlyExpenses × 12),
+  // killing the old 4%-of-portfolio circularity. A $0-expenses household falls
+  // back to the 4% heuristic (a $0-spending backtest is degenerate: every
+  // start year trivially survives). Spending seeds NEVER read swr/return/
+  // inflation — the backtest replays historical returns and CPI.
+  const expensesSeeded = scenario.engine.annualExpenses > 0;
+  const seeded = useMemo<BacktestConfig>(() => {
+    const portfolio =
+      scenario.engine.portfolio > 0 ? Math.round(scenario.engine.portfolio) : legacyPortfolio;
+    const spending = expensesSeeded
+      ? Math.round(scenario.engine.annualExpenses)
+      : Math.round(portfolio * 0.04);
+    return {
+      initialPortfolio: portfolio,
+      annualSpending: spending,
+      horizonYears: 30,
+      goalAmount: 0,
+      strategy: 'bengen',
+      stockPct: 0.75,
+      variableRate: 0.04,
+      minWithdrawal: Math.round(portfolio * 0.032),
+      maxWithdrawal: Math.round(portfolio * 0.06),
+    };
+  }, [scenario.engine.portfolio, scenario.engine.annualExpenses, expensesSeeded, legacyPortfolio]);
+
+  // Until the user edits a param, the live config IS the seed (re-seeds on
+  // hydration); the first onChange freezes ownership with the user forever.
+  const [configEdited, setConfigEdited] = useState(false);
+  const [userConfig, setUserConfig] = useState<BacktestConfig>(seeded);
+  const config = configEdited ? userConfig : seeded;
+
+  // Remount the params form (it clones `initial` into local state once) when
+  // the SEED changes while un-edited. The key is held in a ref and stops
+  // updating on first edit — so the unedited→edited transition itself never
+  // remounts (no focus loss mid-keystroke).
+  const formKeyRef = useRef('seed-init');
+  if (!configEdited) {
+    formKeyRef.current = `seed-${seeded.initialPortfolio}-${seeded.annualSpending}`;
+  }
 
   const [result, setResult] = useState<BacktestResult | null>(null);
   // BT-4 — inline validation/engine-error surfacing (NEVER throw to the route
@@ -142,9 +185,20 @@ export default function Backtest() {
           <CardTitle className="text-base">Plan parameters</CardTitle>
         </CardHeader>
         <CardContent>
+          {!configEdited && (
+            <p className="text-xs text-muted-foreground mb-3" data-testid="backtest-seed-note">
+              {expensesSeeded
+                ? 'Seeded from your scenario — starting portfolio and annual spending (monthly expenses × 12) follow the calculators scenario bar until you edit a field here.'
+                : 'Seeded from your scenario portfolio; annual spending defaults to 4% of it (set a monthly expense baseline in Inputs to seed spending from your real expenses).'}
+            </p>
+          )}
           <BacktestParamsForm
+            key={formKeyRef.current}
             initial={config}
-            onChange={setConfig}
+            onChange={(cfg) => {
+              setConfigEdited(true);
+              setUserConfig(cfg);
+            }}
             onRun={run}
             isRunning={isRunning}
           />

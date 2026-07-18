@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -63,18 +63,99 @@ vi.mock('@/components/whatif/useRealState', () => ({
 
 vi.mock('@/stores/household-store', () => ({
   useHouseholdStore: (selector?: any) => {
-    const state = { household: { id: 1, filingStatus: 'SINGLE' }, acceptDisclaimer: vi.fn() };
+    // W16: the shared-scenario hook reads expense/SWR/inflation/scenario
+    // fields off the household — extend the mock additively (existing
+    // assertions never inspect the household). monthlyExpenseBaseline 5000
+    // seeds annual spending at 60,000 (= the old 4% of the 1.5M legacy seed,
+    // so pre-W16 expectations are unchanged by coincidence of fixture).
+    const state = {
+      household: {
+        id: 1, filingStatus: 'SINGLE',
+        monthlyExpenseBaseline: 5000, withdrawalRate: 0.04,
+        inflationAssumption: 0.03, growthScenarios: [],
+      },
+      acceptDisclaimer: vi.fn(),
+    };
     return typeof selector === 'function' ? selector(state) : state;
   },
 }));
 
 import Backtest from '@/pages/calculators/Backtest';
+import { __resetScenarioAssumptionsForTests } from '@/lib/calculators/use-scenario-assumptions';
+import { useAccountsStore } from '@/stores/accounts-store';
+import { useSnapshotsStore } from '@/stores/snapshots-store';
+import type { Account } from '@/types/schema';
 
 const renderPage = () => render(<MemoryRouter><Backtest /></MemoryRouter>);
 
+function mkAccount(id: number): Account {
+  return {
+    id, householdId: 1, ownerPersonId: null, beneficiaryDependentId: null,
+    name: `Acct ${id}`, institution: null, type: 'ACCOUNT_BROKERAGE',
+    cryptoWalletAddress: null, autoFetchEnabled: false,
+    excludedFromNetWorth: false, stateOfPlan: null, accentColor: null,
+  } as unknown as Account;
+}
+
+function mkSnap(id: number, totalValue: number) {
+  return {
+    id, accountId: 1, snapshotDate: '2026-01-01', totalValue, source: 'MANUAL', notes: null,
+  } as never;
+}
+
 describe('Backtest page', () => {
-  // No shared beforeEach needed: tests that need real timers call vi.useRealTimers()
-  // inline; tests that don't run any timers at all can use the default (real) timers.
+  // W16: the page seeds from the shared scenario (accounts + snapshots stores
+  // + sessionStorage) — reset that state between tests. Noop loads so the
+  // page's hydration effect can't hit a real DB.
+  beforeEach(() => {
+    sessionStorage.clear();
+    __resetScenarioAssumptionsForTests();
+    const noop = async () => {};
+    useAccountsStore.setState({ accounts: [], isLoading: false, error: null, load: noop } as never);
+    useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null, load: noop } as never);
+  });
+
+  it('W16: seeds portfolio + spending from the shared scenario and discloses it', () => {
+    useAccountsStore.setState({ accounts: [mkAccount(1)], isLoading: false, error: null });
+    useSnapshotsStore.setState({
+      snapshots: [mkSnap(1, 800_000)],
+      isLoading: false, error: null,
+    } as never);
+    renderPage();
+    expect(screen.getByLabelText('Starting portfolio ($)')).toHaveValue(800_000);
+    // 5000 × 12 — household expenses, not 4%-of-portfolio circularity.
+    expect(screen.getByLabelText('Annual spending ($)')).toHaveValue(60_000);
+    expect(screen.getByTestId('backtest-seed-note')).toHaveTextContent('Seeded from your scenario');
+  });
+
+  it('W16: re-seeds when hydration changes the scenario — until the user edits a param', async () => {
+    vi.useRealTimers();
+    renderPage(); // stores empty → legacy 1.5M seed
+    expect(screen.getByLabelText('Starting portfolio ($)')).toHaveValue(1_500_000);
+    act(() => {
+      useAccountsStore.setState({ accounts: [mkAccount(1)], isLoading: false, error: null });
+      useSnapshotsStore.setState({ snapshots: [mkSnap(1, 800_000)], isLoading: false, error: null } as never);
+    });
+    expect(screen.getByLabelText('Starting portfolio ($)')).toHaveValue(800_000); // re-seeded
+
+    const user = userEvent.setup();
+    await user.clear(screen.getByLabelText('Starting portfolio ($)'));
+    await user.type(screen.getByLabelText('Starting portfolio ($)'), '700000');
+    act(() => {
+      useSnapshotsStore.setState({ snapshots: [mkSnap(2, 900_000)], isLoading: false, error: null } as never);
+    });
+    expect(screen.getByLabelText('Starting portfolio ($)')).toHaveValue(700_000); // frozen after edit
+    expect(screen.queryByTestId('backtest-seed-note')).toBeNull(); // note retires once edited
+  });
+
+  it('W16: seeding never runs the engine — results appear only after Run backtest', () => {
+    useAccountsStore.setState({ accounts: [mkAccount(1)], isLoading: false, error: null });
+    useSnapshotsStore.setState({ snapshots: [mkSnap(1, 800_000)], isLoading: false, error: null } as never);
+    renderPage();
+    // Run-on-click preserved: seeding is pure state derivation.
+    expect(screen.getAllByText(/no backtest run yet/i).length).toBeGreaterThan(0);
+    expect(screen.queryByTestId('backtest-summary')).not.toBeInTheDocument();
+  });
 
   it('shows a pre-run empty-state prompt before the first run (SF-3)', () => {
     renderPage();
