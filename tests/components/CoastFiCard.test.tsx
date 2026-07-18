@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
@@ -8,6 +8,8 @@ import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { FilingStatus, SnapshotSource, AccountType } from '@/types/enums';
 import { CoastFiCard } from '@/pages/calculators/CoastFiCard';
+import { ScenarioBar } from '@/pages/calculators/ScenarioBar';
+import { __resetScenarioAssumptionsForTests } from '@/lib/calculators/use-scenario-assumptions';
 import type { Account, GrowthScenario, Person } from '@/types/schema';
 
 const fourScenarios: GrowthScenario[] = [
@@ -122,6 +124,8 @@ describe('CoastFiCard', () => {
     resetStores();
     // Clear any persisted calculator overrides from previous tests.
     sessionStorage.clear();
+    // Wave 16: the shared-scenario module caches overrides at module level.
+    __resetScenarioAssumptionsForTests();
     // Pin "today" to a stable date so currentAge is deterministic.
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-05-14'));
@@ -178,33 +182,29 @@ describe('CoastFiCard', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('zero expenses ⇒ headline "—" + ingredient-naming prompt (never "0% of $0")', async () => {
-    const user = userEvent.setup();
-    // Baseline 0 so the OLD branch would have rendered its "set your household
-    // expense baseline to prefill" link — a promise the typed-0 override
-    // defeats (overrides win over recomputed defaults), so the clause is gone
-    // (Wave 15 adversarial review).
+  it('zero expenses ⇒ headline "—" + ingredient-naming prompt (never "0% of $0")', () => {
+    // Baseline 0 → the SHARED scenario default is $0/mo (W16: the card's own
+    // expenses input is gone; the value rides the scenario bar). No prefill
+    // promise in the copy — a typed 0 in the bar is an override that wins
+    // over recomputed defaults (Wave 15 adversarial review carried forward).
     primeStores({ monthlyExpenseBaseline: 0 });
     render(
       <MemoryRouter>
         <CoastFiCard />
       </MemoryRouter>,
     );
-    const expenses = screen.getByLabelText(/annual expenses/i);
-    await user.clear(expenses);
-    await user.type(expenses, '0');
     expect(screen.getByTestId('coastfi-headline').textContent).toBe('—');
     expect(
       screen.getByText(
-        /enter your annual expenses and withdrawal rate above to see your coastfi target\./i,
+        /enter your monthly expenses and withdrawal rate in the scenario bar above to see your coastfi target\./i,
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText(/prefill/i)).not.toBeInTheDocument();
     expect(
       screen.queryByRole('link', { name: /set your household expense baseline/i }),
     ).not.toBeInTheDocument();
-    // Controls stay for inline correction (D11); table/chart suppressed.
-    expect(screen.getByLabelText(/annual expenses/i)).toBeInTheDocument();
+    // W16: the shared expenses input is no longer in-card; table/chart suppressed.
+    expect(screen.queryByLabelText(/annual expenses/i)).toBeNull();
     expect(screen.queryByText('Coasting to retirement')).not.toBeInTheDocument();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
@@ -574,7 +574,7 @@ describe('CoastFiCard', () => {
       expect(screen.queryByRole('button', { name: /reset to my data/i })).toBeNull();
     });
 
-    it('"Annual expenses" input is present and prefilled from monthlyExpenseBaseline * 12', () => {
+    it('W16: shared inputs (expenses / SWR / portfolio) are no longer in the card — only years stays', () => {
       primeEditableStores();
       render(
         <MemoryRouter>
@@ -582,37 +582,50 @@ describe('CoastFiCard', () => {
         </MemoryRouter>,
       );
 
-      // 5000 * 12 = 60000
-      const input = screen.getByLabelText(/annual expenses/i) as HTMLInputElement;
-      expect(input.value).toBe('60000');
+      expect(screen.queryByLabelText(/annual expenses/i)).toBeNull();
+      expect(screen.queryByLabelText(/withdrawal rate/i)).toBeNull();
+      expect(screen.queryByLabelText(/current portfolio/i)).toBeNull();
+      expect(screen.getByLabelText(/years to retirement/i)).toBeInTheDocument();
     });
 
-    it('"Withdrawal rate" input is present and prefilled as percent (4% shown as 4)', () => {
+    it('W16: the bar\'s ONE monthly expenses number drives the coast target (annual-vs-monthly mismatch dead)', async () => {
+      const user = userEvent.setup();
       primeEditableStores();
       render(
         <MemoryRouter>
+          <ScenarioBar />
           <CoastFiCard />
         </MemoryRouter>,
       );
+      // Prefill: 5000 × 12 / 0.04 = $1,500,000.
+      expect(screen.getByText(/\$1,500,000/)).toBeInTheDocument();
 
-      const input = screen.getByLabelText(/withdrawal rate/i) as HTMLInputElement;
-      expect(input.value).toBe('4');
+      const expenses = screen.getByLabelText('Monthly expenses');
+      await user.clear(expenses);
+      await user.type(expenses, '5500');
+      // 5500 × 12 / 0.04 = $1,650,000 — the same MONTHLY number that drives
+      // the FI card (the old annual-vs-monthly silo units are gone).
+      await waitFor(() =>
+        expect(screen.getByText(/\$1,650,000/)).toBeInTheDocument(),
+      );
     });
 
-    it('"Current portfolio" input is present and prefilled from latest snapshot sum', () => {
+    it('W16: the bar Portfolio field carries the snapshot prefill the card used to own', () => {
       primeEditableStores();
       render(
         <MemoryRouter>
+          <ScenarioBar />
           <CoastFiCard />
         </MemoryRouter>,
       );
-
-      const input = screen.getByLabelText(/current portfolio/i) as HTMLInputElement;
-      expect(input.value).toBe('500000');
+      expect(
+        (screen.getByLabelText('Portfolio') as HTMLInputElement).value,
+      ).toBe('500000');
+      expect((screen.getByLabelText('Withdrawal rate') as HTMLInputElement).value).toBe('4');
     });
   });
 
-  it('seeds current portfolio from the latest snapshot on-or-before today (excludes future)', () => {
+  it('seeds current portfolio from the latest snapshot on-or-before today (excludes future) — via the bar (W16)', () => {
     primeStores();
     // Use a pinned future date relative to the fake-timer anchor (2026-05-14) so
     // this test doesn't silently break if system time advances past the snapshot.
@@ -624,8 +637,8 @@ describe('CoastFiCard', () => {
       ],
       isLoading: false, error: null,
     });
-    render(<MemoryRouter><CoastFiCard /></MemoryRouter>);
-    const field = screen.getByLabelText(/current portfolio/i) as HTMLInputElement;
+    render(<MemoryRouter><ScenarioBar /><CoastFiCard /></MemoryRouter>);
+    const field = screen.getByLabelText('Portfolio') as HTMLInputElement;
     expect(field.value).toBe('250000'); // not 9,000,000
   });
 
@@ -672,7 +685,7 @@ describe('CoastFiCard', () => {
     expect(headline.textContent).toMatch(/\d+%\s*of\s*CoastFI/i);
   });
 
-  it('current-portfolio prefill drops excludedFromNetWorth accounts', () => {
+  it('current-portfolio prefill drops excludedFromNetWorth accounts (surfaces in the bar — W16)', () => {
     primeStores({
       snapshotValues: [
         { accountId: 1, snapshotDate: '2026-04-01', totalValue: 200_000 },
@@ -686,11 +699,12 @@ describe('CoastFiCard', () => {
     });
     render(
       <MemoryRouter>
+        <ScenarioBar />
         <CoastFiCard />
       </MemoryRouter>,
     );
     expect(
-      (screen.getByLabelText(/current portfolio/i) as HTMLInputElement).value,
+      (screen.getByLabelText('Portfolio') as HTMLInputElement).value,
     ).toBe('200000');
   });
 
