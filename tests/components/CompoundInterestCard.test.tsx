@@ -1,13 +1,27 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { CompoundInterestCard } from '@/pages/calculators/CompoundInterestCard';
+import { ScenarioBar } from '@/pages/calculators/ScenarioBar';
+import { __resetScenarioAssumptionsForTests } from '@/lib/calculators/use-scenario-assumptions';
+import { SCENARIO_STORAGE_KEY } from '@/lib/calculators/scenario-assumptions';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { SnapshotSource, AccountType, FilingStatus } from '@/types/enums';
 import type { Account, AppSettings } from '@/types/schema';
+
+/** Seed shared-scenario overrides BEFORE render (the hook rehydrates them) —
+ *  the pre-W16 demo numbers (pv 1000, pmt 100/mo, 7% APY) so the pinned
+ *  dollar expectations below stay byte-identical. */
+function seedDemoScenario() {
+  sessionStorage.setItem(
+    SCENARIO_STORAGE_KEY,
+    JSON.stringify({ portfolio: 1000, annualContribution: 1200, returnPct: 7 }),
+  );
+}
 
 function mkAccount(id: number, type: AccountType = AccountType.ACCOUNT_BROKERAGE, excluded = false): Account {
   return {
@@ -29,6 +43,8 @@ function mkAccount(id: number, type: AccountType = AccountType.ACCOUNT_BROKERAGE
 describe('CompoundInterestCard', () => {
   beforeEach(() => {
     sessionStorage.clear();
+    // Wave 16: the shared-scenario module caches overrides at module level.
+    __resetScenarioAssumptionsForTests();
     useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null });
     useAccountsStore.setState({ accounts: [], isLoading: false, error: null });
     // Wave 15 T5: the card now reads the canonical inflation chain — reset
@@ -37,36 +53,55 @@ describe('CompoundInterestCard', () => {
     useHouseholdStore.setState({ household: null, isLoading: false, error: null });
   });
 
-  it('persists the what-if inputs via the kit', async () => {
+  it('persists the local what-if inputs (years) via the kit — silo keeps ONLY locals (W16)', async () => {
     const user = userEvent.setup();
-    render(<CompoundInterestCard />); // reads no stores/router
-    const pvInput = screen.getByLabelText(/initial amount/i) as HTMLInputElement;
-    await user.clear(pvInput);
-    await user.type(pvInput, '25000');
+    render(<CompoundInterestCard />); // local fields read no router
+    const yearsInput = screen.getByLabelText(/length \(years\)/i) as HTMLInputElement;
+    await user.clear(yearsInput);
+    await user.type(yearsInput, '25');
     expect(JSON.parse(sessionStorage.getItem('calc-state:compound-interest')!)).toMatchObject({
-      pv: 25000,
+      years: 25,
     });
   });
 
-  it('renders defaults with a non-zero headline (PV=1000, PMT=100, 7%, 10y, monthly)', () => {
-    render(<CompoundInterestCard />);
-    const headline = screen.getByTestId('compound-headline');
-    // PV=1000 + PMT=100/mo × 7% × 10y monthly compounding → final mid ≈ $19,290
-    expect(headline.textContent).toMatch(/\$1[89],\d{3}/);
+  it('W16: a bar Portfolio edit persists under calc-scenario:shared, not the card silo', async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter><ScenarioBar /><CompoundInterestCard /></MemoryRouter>);
+    const pvInput = screen.getByLabelText('Portfolio') as HTMLInputElement;
+    await user.clear(pvInput);
+    await user.type(pvInput, '25000');
+    await waitFor(() =>
+      expect(JSON.parse(sessionStorage.getItem(SCENARIO_STORAGE_KEY)!)).toMatchObject({
+        portfolio: 25000,
+      }),
+    );
+    expect(sessionStorage.getItem('calc-state:compound-interest')).toBeNull();
   });
 
-  it('updates the headline when initial amount changes', async () => {
+  it('empty profile shows an honest $0 projection (demo fallback removed — bar and card must agree, W16 D4)', () => {
+    render(<MemoryRouter><ScenarioBar /><CompoundInterestCard /></MemoryRouter>);
+    // No snapshots → the bar honestly shows $0 with its provenance caption…
+    expect((screen.getByLabelText('Portfolio') as HTMLInputElement).value).toBe('0');
+    expect(screen.getByText('no account snapshots yet')).toBeInTheDocument();
+    // …and the card can no longer contradict it with a phantom $1,000.
+    expect(screen.getByTestId('compound-headline').textContent).toContain('$0');
+  });
+
+  it('updates the headline when the bar Portfolio changes (W16)', async () => {
     const user = userEvent.setup();
-    render(<CompoundInterestCard />);
-    const pvInput = screen.getByLabelText(/initial amount/i) as HTMLInputElement;
+    render(<MemoryRouter><ScenarioBar /><CompoundInterestCard /></MemoryRouter>);
+    const before = screen.getByTestId('compound-headline').textContent;
+    const pvInput = screen.getByLabelText('Portfolio') as HTMLInputElement;
     await user.clear(pvInput);
     await user.type(pvInput, '10000');
-    const headline = screen.getByTestId('compound-headline');
-    // Bigger PV → bigger final
-    expect(headline.textContent).not.toMatch(/^\$1[89],\d{3}/);
+    // Bigger PV → bigger final (commit trails ~150ms behind typing).
+    await waitFor(() =>
+      expect(screen.getByTestId('compound-headline').textContent).not.toBe(before),
+    );
   });
 
   it('switches frequency to ANNUALLY and the headline actually changes', async () => {
+    seedDemoScenario(); // non-zero pv/pmt/rate so compounding frequency can move the figure
     const user = userEvent.setup();
     render(<CompoundInterestCard />);
     const headline = screen.getByTestId('compound-headline');
@@ -86,17 +121,20 @@ describe('CompoundInterestCard', () => {
     expect(screen.getByText(/enter a length in years/i)).toBeInTheDocument();
   });
 
-  it('labels the rate input as APY (Wave-3 Task 5)', () => {
-    render(<CompoundInterestCard />);
-    // The label uses a TermTooltip "APY" — NumberField carries ariaLabel="Annual percentage yield"
-    // so the spinbutton has a flat string accessible name (the TermTooltip button is non-string).
-    expect(screen.getByLabelText(/annual percentage yield/i)).toBeInTheDocument();
+  it('W16: the rate rides the bar Return field; the card renders no APY/pv/pmt inputs', () => {
+    render(<MemoryRouter><ScenarioBar /><CompoundInterestCard /></MemoryRouter>);
+    // The bar's Return field is the one rate input (read as APY by this card, D4).
+    expect(screen.getByLabelText('Return')).toBeInTheDocument();
+    // The card's old ci-rate/ci-pv/ci-pmt inputs are gone.
+    expect(screen.queryByLabelText(/annual percentage yield/i)).toBeNull();
+    expect(screen.queryByLabelText(/initial amount/i)).toBeNull();
+    expect(screen.queryByLabelText(/monthly contribution/i)).toBeNull();
   });
 
-  it('APY field clamps at 0 — negative rate cannot be entered (min-clamp gap closed)', async () => {
+  it('bar Return field clamps at 0 — negative rate cannot be entered (min-clamp preserved)', async () => {
     const user = userEvent.setup();
-    render(<CompoundInterestCard />);
-    const apyInput = screen.getByLabelText(/annual percentage yield/i) as HTMLInputElement;
+    render(<MemoryRouter><ScenarioBar /><CompoundInterestCard /></MemoryRouter>);
+    const apyInput = screen.getByLabelText('Return') as HTMLInputElement;
     await user.clear(apyInput);
     await user.type(apyInput, '-5');
     // NumberField's min=0 clamp: on blur/change the value is Math.max(0, -5) = 0.
@@ -106,20 +144,21 @@ describe('CompoundInterestCard', () => {
 
   it('annual compounding @ 7% input yields ~1.07^N * PV (APY semantics, no compounding amplification)', async () => {
     const user = userEvent.setup();
-    render(<CompoundInterestCard />);
-    // PV=1000, PMT=0, 10y, 7%, ANNUAL compounding. With APY=7% the final
-    // balance should be exactly 1000 * 1.07^10 = $1967.15.
-    // Pre-fix (APR semantics): 1000 * (1+0.07/1)^10 = 1967.15 (matches at annual).
-    // The test below using monthly checks the case where APY/APR diverge.
-    await user.clear(screen.getByLabelText(/initial amount/i));
-    await user.type(screen.getByLabelText(/initial amount/i), '1000');
-    await user.clear(screen.getByLabelText(/monthly contribution/i));
-    await user.type(screen.getByLabelText(/monthly contribution/i), '0');
+    render(<MemoryRouter><ScenarioBar /><CompoundInterestCard /></MemoryRouter>);
+    // PV=1000 (bar), PMT=0 (empty stores default), 10y, 7% (bar Return), ANNUAL
+    // compounding. With APY=7% the final balance is exactly 1000 * 1.07^10 =
+    // $1967.15 — the SAME numeric expectation as pre-W16; only the input moved
+    // to the bar (the card's APY→APR boundary is untouched).
+    await user.clear(screen.getByLabelText('Portfolio'));
+    await user.type(screen.getByLabelText('Portfolio'), '1000');
+    await user.clear(screen.getByLabelText('Return'));
+    await user.type(screen.getByLabelText('Return'), '7');
     await user.click(screen.getByRole('combobox', { name: /compound frequency/i }));
     await user.click(await screen.findByRole('option', { name: /annually/i }));
-    const headline = screen.getByTestId('compound-headline');
     // Match $1,9XX (any value between 1900 and 1999).
-    expect(headline.textContent).toMatch(/\$1,9\d{2}/);
+    await waitFor(() =>
+      expect(screen.getByTestId('compound-headline').textContent).toMatch(/\$1,9\d{2}/),
+    );
   });
 
   it('monthly compounding @ 7% APY yields a SMALLER final than 7% APR would (APY<APR semantic check)', async () => {
@@ -128,19 +167,21 @@ describe('CompoundInterestCard', () => {
     // Assert the rendered APY figure is strictly less than the APR-direct value ($20,096).
     const APR_DIRECT_VALUE = 20096; // floor of 10000 * (1+0.07/12)^120
     const user = userEvent.setup();
-    render(<CompoundInterestCard />);
-    await user.clear(screen.getByLabelText(/initial amount/i));
-    await user.type(screen.getByLabelText(/initial amount/i), '10000');
-    await user.clear(screen.getByLabelText(/monthly contribution/i));
-    await user.type(screen.getByLabelText(/monthly contribution/i), '0');
-    const headlineText = screen.getByTestId('compound-headline').textContent ?? '';
-    // Extract the numeric value from the currency string (e.g. "$19,672" → 19672).
-    const rendered = Number(headlineText.replace(/[^0-9]/g, ''));
-    expect(rendered).toBeGreaterThan(0);
-    expect(rendered).toBeLessThan(APR_DIRECT_VALUE);
+    render(<MemoryRouter><ScenarioBar /><CompoundInterestCard /></MemoryRouter>);
+    await user.clear(screen.getByLabelText('Portfolio'));
+    await user.type(screen.getByLabelText('Portfolio'), '10000');
+    await user.clear(screen.getByLabelText('Return'));
+    await user.type(screen.getByLabelText('Return'), '7');
+    await waitFor(() => {
+      const headlineText = screen.getByTestId('compound-headline').textContent ?? '';
+      // Extract the numeric value from the currency string (e.g. "$19,672" → 19672).
+      const rendered = Number(headlineText.replace(/[^0-9]/g, ''));
+      expect(rendered).toBeGreaterThan(0);
+      expect(rendered).toBeLessThan(APR_DIRECT_VALUE);
+    });
   });
 
-  it('prefills the initial amount from the latest portfolio snapshot', () => {
+  it('prefills the shared portfolio from the latest snapshot (surfaces in the bar — W16)', () => {
     useSnapshotsStore.setState({
       snapshots: [
         { id: 1, accountId: 1, snapshotDate: '2026-04-01', totalValue: 250000, source: SnapshotSource.MANUAL },
@@ -149,11 +190,11 @@ describe('CompoundInterestCard', () => {
     });
     // Wave 2: the FI-eligible selector needs a matching eligible account.
     useAccountsStore.setState({ accounts: [mkAccount(1)], isLoading: false, error: null });
-    render(<CompoundInterestCard />);
-    expect((screen.getByLabelText(/initial amount/i) as HTMLInputElement).value).toBe('250000');
+    render(<MemoryRouter><ScenarioBar /><CompoundInterestCard /></MemoryRouter>);
+    expect((screen.getByLabelText('Portfolio') as HTMLInputElement).value).toBe('250000');
   });
 
-  it('initial-amount prefill drops excludedFromNetWorth accounts', () => {
+  it('shared-portfolio prefill drops excludedFromNetWorth accounts (W16)', () => {
     useSnapshotsStore.setState({
       snapshots: [
         { id: 1, accountId: 1, snapshotDate: '2026-04-01', totalValue: 250_000, source: SnapshotSource.MANUAL },
@@ -167,15 +208,10 @@ describe('CompoundInterestCard', () => {
       isLoading: false,
       error: null,
     });
-    render(<CompoundInterestCard />);
+    render(<MemoryRouter><ScenarioBar /><CompoundInterestCard /></MemoryRouter>);
     expect(
-      (screen.getByLabelText(/initial amount/i) as HTMLInputElement).value,
+      (screen.getByLabelText('Portfolio') as HTMLInputElement).value,
     ).toBe('250000');
-  });
-
-  it('falls back to the 1000 demo default when there is no portfolio', () => {
-    render(<CompoundInterestCard />); // snapshots empty (beforeEach) → currentPortfolio 0 → pv 1000
-    expect((screen.getByLabelText(/initial amount/i) as HTMLInputElement).value).toBe('1000');
   });
 
   it('renders a Nominal/Real toggle and persists Real under calc-display-mode:compound-interest', async () => {
@@ -195,8 +231,9 @@ describe('CompoundInterestCard', () => {
       isLoading: false,
       error: null,
     });
+    seedDemoScenario(); // W16: pv/pmt/rate ride the shared scenario now
     const user = userEvent.setup();
-    render(<CompoundInterestCard />); // defaults: pv 1000, pmt 100, 7% APY, 10y monthly, 2.5% inflation
+    render(<CompoundInterestCard />); // pv 1000, pmt 100, 7% APY, 10y monthly, 2.5% inflation
     const headline = screen.getByTestId('compound-headline');
     // Nominal first (byte-identical to prior behaviour) — and no basis suffix.
     expect(headline.textContent).toBe('$19,072');
@@ -218,6 +255,7 @@ describe('CompoundInterestCard', () => {
 
   it('resolves inflation via the canonical chain: household.inflationAssumption beats settings.defaultInflation', async () => {
     const user = userEvent.setup();
+    seedDemoScenario(); // W16: non-zero pv/pmt so the deflation is observable
     useSettingsStore.setState({
       settings: { defaultInflation: 0.025 } as AppSettings,
       isLoading: false,
