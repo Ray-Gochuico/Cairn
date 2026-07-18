@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
@@ -8,18 +8,26 @@ import { useConfirm } from '@/components/ui/confirm-dialog';
 import { useLoadGate } from '@/lib/use-load-gate';
 import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import { TabLoadingSkeleton } from '@/components/inputs/TabLoadingSkeleton';
+import { EditDrawer } from '@/components/layout/EditDrawer';
 import AccountForm, {
   ACCOUNT_TYPE_LABELS,
   DEFAULT_ACCOUNT,
 } from '@/components/forms/AccountForm';
 import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 
-export default function AccountsTab() {
+/**
+ * W14 Manage surface: account CRUD on the Investments page. A near-mechanical
+ * port of the retired AccountsTab — same list JSX, store wiring, and delete
+ * confirms — with the tab's full-page mode swap replaced by an EditDrawer.
+ * Lives under src/components/ (outside the empty-state ratchet's scan) so its
+ * empty copy is gated by discipline via useLoadGate, same as the tab was.
+ */
+export default function AccountsPanel() {
   const { accounts, load, create, update, remove, isLoading, error } = useAccountsStore();
   const { persons, load: loadPersons } = usePersonsStore();
   const { dependents, load: loadDependents } = useDependentsStore();
   const { confirm, dialog } = useConfirm();
-  const [mode, setMode] = useState<'list' | 'create' | { type: 'edit'; id: number }>('list');
+  const [drawer, setDrawer] = useState<'closed' | 'create' | { type: 'edit'; id: number }>('closed');
 
   const reload = useCallback(() => {
     load();
@@ -28,83 +36,26 @@ export default function AccountsTab() {
   }, [load, loadPersons, loadDependents]);
   const gate = useLoadGate([isLoading], [error], reload);
 
-  useEffect(() => {
-    if (typeof mode === 'object' && mode.type === 'edit') {
-      if (!accounts.some((a) => a.id === mode.id)) {
-        setMode('list');
-      }
-    }
-  }, [mode, accounts]);
-
   const personOptions = persons.map((p) => ({ id: p.id!, name: p.name }));
   const dependentOptions = dependents.map((d) => ({ id: d.id!, name: d.name }));
   const personById = new Map(personOptions.map((p) => [p.id, p.name]));
 
-  if (mode === 'create') {
-    return (
-      <div className="p-6 max-w-2xl">
-        <h2 className="text-2xl font-semibold mb-1">Add account</h2>
-        <p className="text-sm text-muted-foreground mb-4">
-          Investment, savings, cash, crypto, and 529 accounts.
-        </p>
-        <AccountForm
-          initial={DEFAULT_ACCOUNT}
-          persons={personOptions}
-          dependents={dependentOptions}
-          onSubmit={async (v) => { await create(v); setMode('list'); }}
-          onCancel={() => setMode('list')}
-        />
-      </div>
-    );
-  }
-
-  if (typeof mode === 'object' && mode.type === 'edit') {
-    const target = accounts.find((a) => a.id === mode.id);
-    if (!target) {
-      // Effect above will reset mode to 'list' on the next tick.
-      return null;
-    }
-    return (
-      <div className="p-6 max-w-2xl">
-        <h2 className="text-2xl font-semibold mb-1">Edit account</h2>
-        <AccountForm
-          initial={{
-            householdId: target.householdId,
-            ownerPersonId: target.ownerPersonId,
-            beneficiaryDependentId: target.beneficiaryDependentId,
-            name: target.name,
-            institution: target.institution,
-            type: target.type,
-            cryptoWalletAddress: target.cryptoWalletAddress,
-            autoFetchEnabled: target.autoFetchEnabled,
-            excludedFromNetWorth: target.excludedFromNetWorth,
-            allowMargin: target.allowMargin,
-            stateOfPlan: target.stateOfPlan,
-            accentColor: target.accentColor,
-            apyRate: target.apyRate,
-            hasEmployerMatch: target.hasEmployerMatch,
-            employerMatchPct: target.employerMatchPct,
-            employerMatchLimitPct: target.employerMatchLimitPct,
-            allowsMegaBackdoorRollover: target.allowsMegaBackdoorRollover,
-          }}
-          persons={personOptions}
-          dependents={dependentOptions}
-          onSubmit={async (v) => { await update(mode.id, v); setMode('list'); }}
-          onCancel={() => setMode('list')}
-        />
-      </div>
-    );
-  }
+  // Open derives from `editing != null` in edit mode, so an account deleted
+  // out from under an open drawer closes it safely (Task-2 recipe).
+  const editing = typeof drawer === 'object' ? accounts.find((a) => a.id === drawer.id) : undefined;
+  const drawerOpen = drawer === 'create' || editing != null;
 
   return (
-    <div className="p-6 max-w-3xl">
-      <div className="flex items-start justify-between mb-1">
-        <h2 className="text-2xl font-semibold">Accounts</h2>
-        <ImportCsvButton entity="account" />
+    <div className="max-w-3xl">
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <p className="text-sm text-muted-foreground">
+          Every investment, savings, cash, crypto, and 529 account you want to track.
+        </p>
+        <div className="flex items-center gap-2 shrink-0">
+          <ImportCsvButton entity="account" />
+          <Button size="sm" onClick={() => setDrawer('create')}>Add account</Button>
+        </div>
       </div>
-      <p className="text-sm text-muted-foreground mb-6">
-        Every investment, savings, cash, crypto, and 529 account you want to track.
-      </p>
 
       <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
       {!gate.settled ? (
@@ -140,7 +91,7 @@ export default function AccountsTab() {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline" aria-label={`Edit ${a.name}`} onClick={() => setMode({ type: 'edit', id: a.id! })}>Edit</Button>
+                  <Button size="sm" variant="outline" aria-label={`Edit ${a.name}`} onClick={() => setDrawer({ type: 'edit', id: a.id! })}>Edit</Button>
                   <Button
                     size="sm"
                     variant="destructive"
@@ -163,9 +114,41 @@ export default function AccountsTab() {
         </div>
       )}
 
-      <div className="mt-4">
-        <Button onClick={() => setMode('create')}>Add Account</Button>
-      </div>
+      <EditDrawer
+        open={drawerOpen}
+        onClose={() => setDrawer('closed')}
+        title={editing ? 'Edit account' : 'Add account'}
+        description={editing ? undefined : 'Investment, savings, cash, crypto, and 529 accounts.'}
+      >
+        <AccountForm
+          initial={editing ? {
+            householdId: editing.householdId,
+            ownerPersonId: editing.ownerPersonId,
+            beneficiaryDependentId: editing.beneficiaryDependentId,
+            name: editing.name,
+            institution: editing.institution,
+            type: editing.type,
+            cryptoWalletAddress: editing.cryptoWalletAddress,
+            autoFetchEnabled: editing.autoFetchEnabled,
+            excludedFromNetWorth: editing.excludedFromNetWorth,
+            allowMargin: editing.allowMargin,
+            stateOfPlan: editing.stateOfPlan,
+            accentColor: editing.accentColor,
+            apyRate: editing.apyRate,
+            hasEmployerMatch: editing.hasEmployerMatch,
+            employerMatchPct: editing.employerMatchPct,
+            employerMatchLimitPct: editing.employerMatchLimitPct,
+            allowsMegaBackdoorRollover: editing.allowsMegaBackdoorRollover,
+          } : DEFAULT_ACCOUNT}
+          persons={personOptions}
+          dependents={dependentOptions}
+          onSubmit={async (v) => {
+            if (editing) await update(editing.id!, v); else await create(v);
+            setDrawer('closed');
+          }}
+          onCancel={() => setDrawer('closed')}
+        />
+      </EditDrawer>
       {dialog}
     </div>
   );

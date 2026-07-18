@@ -196,7 +196,7 @@ describe('Section 4 stragglers', () => {
       ];
       const result = evaluateAfterTax401kQ(makeContext({ accounts: accts }));
       expect(result.question).toBeUndefined();
-      expect(result.cta?.href).toBe('/inputs/accounts');
+      expect(result.cta?.href).toBe('/investments?manage=accounts');
     });
   });
 

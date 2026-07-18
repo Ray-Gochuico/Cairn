@@ -111,7 +111,9 @@ export function EquityValueCard({ cardId, onHide }: EquityValueCardProps = {}) {
         headline="—"
       >
         <p className="text-sm text-muted-foreground">
-          <Link to="/inputs/equity-grants" className="text-primary hover:underline">
+          {/* W14b moved equity grants out of Inputs — /inputs/equity-grants is
+              only a redirect stub now; link the canonical home directly. */}
+          <Link to="/equity-grants" className="text-primary hover:underline">
             Add equity grants
           </Link>{' '}
           to see vested value across your household.

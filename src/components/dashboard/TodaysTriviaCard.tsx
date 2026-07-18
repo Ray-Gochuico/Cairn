@@ -13,8 +13,8 @@ import type { TriviaQuestion } from '@/lib/trivia/bank-schema';
 
 /**
  * Compact Dashboard widget — the primary daily touchpoint for the trivia
- * feature. Reuses the NextMoveCard shape (Card p-4, uppercase eyebrow with a
- * right View link, soft tint by state, underlined CTA). It never renders a
+ * feature. Uses the house compact-card shape (Card p-4, uppercase eyebrow
+ * with a right View link, soft tint by state, underlined CTA). It never renders a
  * modal: when the learning disclosure is unaccepted it shows an in-card CTA
  * to /learn (where the modal lives). See spec §10.2.
  *
@@ -71,7 +71,7 @@ export function TodaysTriviaCard() {
     });
   }, [bank, learningState, answeredKeysByDay, todayISO, preference]);
 
-  // Finish-setup affordance (mirrors NextMoveCard household-null branch).
+  // Finish-setup affordance (mirrors the briefing's household-null next-move state).
   if (!household) {
     return (
       <Card className="p-4">

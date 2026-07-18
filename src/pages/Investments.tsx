@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useLoadGate } from '@/lib/use-load-gate';
 import { pickModerateRate } from '@/lib/growth-scenario';
 import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
@@ -22,6 +22,7 @@ import { useViewFilter } from '@/lib/use-view-filter';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import CardEditFrame from '@/components/investments/CardEditFrame';
+import ManageSurface from '@/components/investments/manage/ManageSurface';
 import { DataHealthPopover } from '@/components/investments/DataHealthPopover';
 import { AssetClassTargetsForm } from '@/components/investments/AssetClassTargetsForm';
 import AllocationCard from '@/components/investments/AllocationCard';
@@ -33,7 +34,6 @@ import type { CardLayoutEntry, AssetClassTarget } from '@/types/schema';
 import ContributionsByBucketChart from '@/components/charts/ContributionsByBucketChart';
 import { useDonutSelected, type DonutEntityPickerItem } from '@/components/charts/DonutEntityPicker';
 import { paletteColorAt } from '@/components/charts/palette';
-import AssetValueChart from '@/components/charts/AssetValueChart';
 import PerTickerDonut from '@/components/charts/PerTickerDonut';
 import SectorDonut from '@/components/charts/SectorDonut';
 import GrowthCard from '@/components/charts/GrowthCard';
@@ -175,6 +175,24 @@ export default function Investments() {
   const { filter, persons } = useViewFilter();
 
   const [editMode, setEditMode] = useState(false);
+
+  // W14: in-place deflections into the Manage region below. Writing
+  // ?manage=<panel> selects the sub-tab and ManageSurface scrolls itself
+  // into view; `replace: true` keeps Back-button history calm.
+  const [, setSearchParams] = useSearchParams();
+  const openManage = useCallback(
+    (panel: 'accounts' | 'holdings' | 'contributions' | 'tickers') => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set('manage', panel);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
 
   const accounts = useAccountsStore((s) => s.accounts);
   const loadAccounts = useAccountsStore((s) => s.load);
@@ -616,17 +634,12 @@ export default function Investments() {
   // class-targets sits next to drift, which consumes the targets.
   const cardRegistry: InvestmentsCardEntry[] = useMemo(
     () => [
-      {
-        id: 'time-series',
-        label: 'Investments Over Time',
-        size: 'wide',
-        applicable: true,
-        // AssetValueChart 'investments' surface reads stores + the ?view
-        // filter itself (respectViewFilter) — no props to thread. Card id
-        // and label are UNCHANGED so saved investments_card_layout rows
-        // keep applying (applyCardLayout matches by id).
-        render: () => <AssetValueChart surface="investments" />,
-      },
+      // W14: the 'time-series' hero card is RETIRED — the investments balance
+      // chart now lives on Net Worth as its "Investment accounts" hero tab
+      // (/net-worth?chart=investments; header link below). Saved
+      // investments_card_layout rows still naming 'time-series' are ignored
+      // by applyCardLayout (unknown-saved-id tolerance, pinned in
+      // tests/lib/investments-card-layout.test.ts).
       {
         id: 'growth',
         label: 'Investments growth',
@@ -735,7 +748,7 @@ export default function Investments() {
             investableOnly={investableOnly}
             onToggleInvestableOnly={handleToggleInvestableOnly}
             asOfDate={breakdownAsOf}
-            viewHoldingsTo="/inputs/holdings"
+            viewHoldingsTo="/investments?manage=holdings"
           />
         ),
       },
@@ -889,9 +902,9 @@ export default function Investments() {
         {/*
          * Distinguish "empty because new" from "empty because the load failed":
          * a consumed-store error shows the recoverable banner; otherwise the
-         * normalized EmptyState. The CTA routes to /inputs/accounts — Investments
-         * combines account-level holdings and snapshots, and accounts is the
-         * parent of both. (529 plans also live under /inputs/accounts.)
+         * normalized EmptyState. W14: the CTA stays ON this page — accounts
+         * are managed in the Manage region below, so the button just selects
+         * its Accounts panel (?manage=accounts) and lets it scroll into view.
          */}
         {hasStoreError ? (
           <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
@@ -899,13 +912,15 @@ export default function Investments() {
           <EmptyState
             icon={PieChart}
             title="No investment holdings yet"
-            description="Set up accounts and holdings in Inputs to see your asset allocation and drift."
+            description="Set up accounts and holdings below to see your asset allocation and drift."
           >
-            <Button asChild>
-              <Link to="/inputs/accounts">Add an account</Link>
-            </Button>
+            <Button onClick={() => openManage('accounts')}>Add an account</Button>
           </EmptyState>
         )}
+
+        {/* The Manage region stays reachable on the empty page — it IS the
+            way out of the empty state. */}
+        <ManageSurface />
       </PageContainer>
     );
   }
@@ -928,6 +943,14 @@ export default function Investments() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* W14: the balance-history hero moved to Net Worth's
+              "Investment accounts" tab — link there from its old home. */}
+          <Link
+            to="/net-worth?chart=investments"
+            className="text-sm underline text-muted-foreground hover:text-foreground"
+          >
+            Balance history → Net Worth
+          </Link>
           <button
             type="button"
             onClick={() => setEditMode((v) => !v)}
@@ -959,10 +982,14 @@ export default function Investments() {
         >
           {unclassifiedTickers.length} holding{unclassifiedTickers.length === 1 ? '' : 's'} couldn't be auto-classified:{' '}
           <span className="font-mono">{unclassifiedTickers.join(', ')}</span>. Set their asset class manually in{' '}
-          <Link to="/inputs/tickers" className="underline hover:no-underline">
-            Inputs → Tickers
-          </Link>
-          .
+          <button
+            type="button"
+            className="underline hover:no-underline"
+            onClick={() => openManage('tickers')}
+          >
+            Manage → Tickers
+          </button>{' '}
+          below.
         </div>
       )}
 
@@ -992,6 +1019,11 @@ export default function Investments() {
       ) : (
         <div className="space-y-6">{renderCardFlow(visibleCards)}</div>
       )}
+
+      {/* W14 "one place per thing": accounts/holdings/contributions/tickers
+          CRUD lives HERE, below the analysis cards. Deliberately outside the
+          customizable card registry — managing data isn't a hideable widget. */}
+      <ManageSurface />
     </PageContainer>
   );
 }

@@ -21,7 +21,7 @@ export const useHoldingsStore = create<HoldingsState>((set, get) => ({
 
   /**
    * Loads ALL holdings across every account. Per-account scoping is done
-   * in-memory by callers (HoldingsTab, Investments page) — that lets the
+   * in-memory by callers (the Investments page + its Manage surface) — that lets the
    * UI swap accounts without re-querying. Components that genuinely need
    * a SQL-level filter can call HoldingsRepo.listForAccount directly.
    *

@@ -1,10 +1,12 @@
 import React from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useLoansStore } from '@/stores/loans-store';
 import { usePersonsStore } from '@/stores/persons-store';
+import { usePropertiesStore } from '@/stores/properties-store';
+import { useVehiclesStore } from '@/stores/vehicles-store';
 import { LoanType } from '@/types/enums';
 import type { Loan } from '@/types/schema';
 
@@ -82,6 +84,10 @@ function resetStores() {
   // empty state.
   useLoansStore.setState({ loans: [], isLoading: false, error: null, load: async () => {} });
   usePersonsStore.setState({ persons: [], isLoading: false, error: null, load: async () => {} });
+  // W14: the page subscribes to properties/vehicles (LoanForm option lists) —
+  // stub their loads too so the gate settles without a DB.
+  usePropertiesStore.setState({ properties: [], isLoading: false, error: null, load: async () => {} });
+  useVehiclesStore.setState({ vehicles: [], isLoading: false, error: null, load: async () => {} });
 }
 
 function renderLoans() {
@@ -536,6 +542,59 @@ describe('person-view filter + extra-savings box (round-3 T21)', () => {
   });
 });
 
+describe('loans edit in place — EditDrawer (W14)', () => {
+  // Clock-free (test-clock ratchet): no assertion here depends on today.
+  beforeEach(() => {
+    resetStores();
+    // LoanForm needs at least one person to render its fields.
+    usePersonsStore.setState({
+      persons: [{ id: 1, householdId: 1, name: 'Alex' }] as never,
+    });
+  });
+
+  it('empty state offers an in-place "Add a loan" that opens the drawer (W14)', async () => {
+    renderLoans();
+    fireEvent.click(screen.getByRole('button', { name: /add a loan/i }));
+    expect(await screen.findByRole('dialog', { name: /add loan/i })).toBeInTheDocument();
+    // no deflection remains:
+    expect(screen.queryByRole('link', { name: /add a loan/i })).toBeNull();
+    expect(screen.queryByText(/in inputs/i)).toBeNull();
+  });
+
+  it('header has an "Add loan" button and the loan CSV import (W14)', () => {
+    useLoansStore.setState({ loans: [makeLoan({ name: 'Primary Mortgage' })] });
+    renderLoans();
+    expect(screen.getByRole('button', { name: /^add loan$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /import csv/i })).toBeInTheDocument();
+  });
+
+  it('each loan card has "Edit terms" opening a prefilled drawer; saving calls update (W14)', async () => {
+    const update = vi.fn(async () => {});
+    useLoansStore.setState({
+      loans: [makeLoan({ id: 9, name: 'Primary Mortgage' })],
+      update,
+    } as never);
+    renderLoans();
+    fireEvent.click(screen.getByRole('button', { name: /edit terms for primary mortgage/i }));
+    const dialog = await screen.findByRole('dialog', { name: /edit loan/i });
+    // prefill check: the form shows the seeded loan's name
+    expect(within(dialog).getByLabelText(/^name$/i)).toHaveValue('Primary Mortgage');
+    fireEvent.click(within(dialog).getByRole('button', { name: /^save$/i }));
+    await waitFor(() => expect(update).toHaveBeenCalledTimes(1));
+    expect(update).toHaveBeenCalledWith(9, expect.objectContaining({ name: 'Primary Mortgage' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull()); // closes on success
+  });
+
+  it('drawer delete asks for confirmation with the payment-history warning (W14)', async () => {
+    useLoansStore.setState({ loans: [makeLoan({ id: 9, name: 'Primary Mortgage' })] });
+    renderLoans();
+    fireEvent.click(screen.getByRole('button', { name: /edit terms for primary mortgage/i }));
+    const dialog = await screen.findByRole('dialog', { name: /edit loan/i });
+    fireEvent.click(within(dialog).getByRole('button', { name: /delete loan/i }));
+    expect(await screen.findByText(/also deletes its recorded payment history/i)).toBeInTheDocument();
+  });
+});
+
 describe('buildDebtSeries current-month seeding (wave-9 M10)', () => {
   it('a loan whose next payment falls next month still contributes currentBalance to the current bar', async () => {
     const { buildDebtSeries } = await import('@/pages/Loans');
@@ -566,5 +625,44 @@ describe('buildDebtSeries current-month seeding (wave-9 M10)', () => {
     const july = rows.find((r) => r.month === '2026-07');
     expect(july).toBeDefined();
     expect(july![LoanType.MORTGAGE]).toBe(250000);
+  });
+});
+
+describe('Loans page — drawer create submits (W14 page-level create coverage)', () => {
+  beforeEach(() => {
+    resetStores();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-06-20T12:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('filling the create drawer calls create and closes', async () => {
+    const create = vi.fn(async () => 1);
+    useLoansStore.setState({ create } as never);
+    usePersonsStore.setState({
+      persons: [{ id: 1, householdId: 1, name: 'Alex' }],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+    renderLoans();
+    fireEvent.click(screen.getByRole('button', { name: /add a loan/i }));
+    const dialog = await screen.findByRole('dialog', { name: /add loan/i });
+    fireEvent.change(within(dialog).getByLabelText(/^name$/i), {
+      target: { value: 'Primary Mortgage' },
+    });
+    const picker = within(dialog).getByTestId('firstPaymentDate-picker');
+    fireEvent.change(within(picker).getByLabelText(/year$/i), { target: { value: '2024' } });
+    fireEvent.change(within(picker).getByLabelText(/month$/i), { target: { value: '06' } });
+    fireEvent.change(within(picker).getByLabelText(/day$/i), { target: { value: '01' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: /^save$/i }));
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'Primary Mortgage', firstPaymentDate: '2024-06-01' }),
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 });

@@ -524,7 +524,11 @@ describe('MonthlyMiniWindow', () => {
     expect(await screen.findByRole('button', { name: 'Confirm Brokerage One' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Edit Brokerage One' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Skip Brokerage One' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Confirm Car loan payment' })).toBeInTheDocument();
+    // The loan card needs a SECOND async resolution (projected schedule +
+    // already-recorded lookup) beyond the account cards' load — await it, or
+    // CI's scheduling asserts before it mounts (same class as the
+    // Investments.cards.test.tsx flake fixed in 023acc5a).
+    expect(await screen.findByRole('button', { name: 'Confirm Car loan payment' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Skip Car loan payment' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save Checking balance' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Skip Checking balance' })).toBeInTheDocument();

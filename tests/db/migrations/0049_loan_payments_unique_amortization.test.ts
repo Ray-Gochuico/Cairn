@@ -45,7 +45,10 @@ describe('0049_loan_payments_unique_amortization', () => {
 
   it('upgrade dedupes pre-existing AMORTIZATION duplicates, keeping the earliest row', async () => {
     const all = await loadAllMigrations();
-    await runMigrations(db, all.slice(0, -1)); // everything up to 0048
+    // Everything up to 0048 — sliced by version, not by position, so appending
+    // future migrations (0050+) can't silently pull 0049 into the "pre" set.
+    const idx0049 = all.findIndex((m) => m.version.startsWith('0049'));
+    await runMigrations(db, all.slice(0, idx0049));
     const loanId = await seedLoan(db);
     await db.execute(...PAYMENT(loanId));
     await db.execute(...PAYMENT(loanId)); // the M37 corruption, pre-index

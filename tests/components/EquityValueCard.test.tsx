@@ -115,7 +115,7 @@ describe('EquityValueCard', () => {
     // sentence.
     expect(
       screen.getByRole('link', { name: /add equity grants/i }),
-    ).toHaveAttribute('href', '/inputs/equity-grants');
+    ).toHaveAttribute('href', '/equity-grants');
     expect(screen.getByText(/to see vested value/i)).toBeInTheDocument();
     // Headline placeholder
     expect(screen.getByText('—')).toBeInTheDocument();
@@ -130,7 +130,7 @@ describe('EquityValueCard', () => {
     );
     expect(
       screen.getByRole('link', { name: /add equity grants/i }),
-    ).toHaveAttribute('href', '/inputs/equity-grants');
+    ).toHaveAttribute('href', '/equity-grants');
   });
 
   it('headline shows total vested value across all grants', () => {

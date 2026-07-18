@@ -51,3 +51,14 @@ describe('applyCardLayout', () => {
     expect(REG.map((e) => e.id)).toEqual(before);
   });
 });
+
+describe('applyCardLayout — unknown SAVED ids (W14 time-series retirement)', () => {
+  it('ignores saved layout ids that no longer exist in the registry', () => {
+    const layout = [
+      { id: 'time-series', hidden: false }, // retired card, still in saved rows
+      { id: 'b', hidden: false },
+      { id: 'a', hidden: false },
+    ];
+    expect(applyCardLayout(REG, layout).map((e) => e.id)).toEqual(['b', 'a', 'c']);
+  });
+});

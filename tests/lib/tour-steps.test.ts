@@ -79,3 +79,30 @@ describe('deriveTourSteps', () => {
     expect(learn.body).not.toMatch(/lesson/i);
   });
 });
+
+describe('W14: the /inputs step teaches Setup + in-place editing', () => {
+  it('titles the /inputs step "Setup" with the shared-basics body', () => {
+    const step = TOUR_STEPS.find((s) => s.to === '/inputs')!;
+    expect(step.title).toBe('Setup');
+    expect(step.body).toBe(
+      'The shared basics — your household, people, dependents, and spending categories. Everything else is edited where you see it.',
+    );
+  });
+
+  it('entity steps teach in-place editing; Net Worth mentions the hero tab', () => {
+    const body = (to: string) => TOUR_STEPS.find((s) => s.to === to)!.body;
+    expect(body('/loans')).toMatch(/right here/i);
+    expect(body('/investments')).toMatch(/manage/i);
+    expect(body('/net-worth')).toMatch(/investment accounts/i);
+    for (const to of ['/property', '/vehicles', '/equity-grants', '/goals']) {
+      expect(body(to)).toMatch(/here|in place|where you see/i);
+    }
+  });
+
+  it('no step is titled or bodied "Inputs" anymore', () => {
+    for (const step of TOUR_STEPS) {
+      expect(step.title).not.toMatch(/inputs/i);
+      expect(step.body).not.toMatch(/inputs/i);
+    }
+  });
+});

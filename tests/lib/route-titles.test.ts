@@ -28,13 +28,21 @@ describe('titleForPath', () => {
     expect(titleForPath('/setup')).toBe('Setup');
     expect(titleForPath('/welcome')).toBe('Welcome');
   });
-  it('maps inputs tabs with the section prefix', () => {
-    expect(titleForPath('/inputs/accounts')).toBe('Inputs · Accounts');
-    expect(titleForPath('/inputs/vehicle-leases')).toBe('Inputs · Vehicle Leases');
-    expect(titleForPath('/inputs')).toBe('Inputs');
+  it('maps the kept Setup tabs with the section prefix (W14 rename)', () => {
+    expect(titleForPath('/inputs/household')).toBe('Setup · Household');
+    expect(titleForPath('/inputs/persons')).toBe('Setup · Persons');
+    expect(titleForPath('/inputs/dependents')).toBe('Setup · Dependents');
+    expect(titleForPath('/inputs/categories')).toBe('Setup · Categories');
+    expect(titleForPath('/inputs')).toBe('Setup');
+  });
+  it('W14 redirect stubs are titled as their destinations', () => {
+    expect(titleForPath('/inputs/accounts')).toBe('Investments');
+    expect(titleForPath('/inputs/vehicle-leases')).toBe('Vehicles');
+    expect(titleForPath('/inputs/plans-529')).toBe('Goals');
+    expect(titleForPath('/inputs/loans')).toBe('Loans');
   });
   it('falls back: unknown leaf inherits the nearest known ancestor; unknown root is null', () => {
-    expect(titleForPath('/inputs/some-future-tab')).toBe('Inputs');
+    expect(titleForPath('/inputs/some-future-tab')).toBe('Setup');
     expect(titleForPath('/nope')).toBeNull();
     expect(titleForPath('/net-worth/')).toBe('Net Worth'); // trailing slash
   });

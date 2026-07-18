@@ -50,9 +50,10 @@ describe('DebtPayoffCard', () => {
     );
 
     expect(screen.getByText(/Debt Payoff/i)).toBeInTheDocument();
-    // "Add loans" is now a link (Wave 15 T10) — pin the link phrase and the
-    // remaining tail separately since the link boundary splits the sentence.
-    expect(screen.getByText(/on the Inputs page to see payoff projections/i)).toBeInTheDocument();
+    // Wave 15 T10: "Add loans" is the link — pin the tail separately since
+    // the link boundary splits the sentence. W14b: the sentence names the
+    // Loans page (the loan's post-Inputs home), not Inputs.
+    expect(screen.getByText(/on the Loans page to see payoff projections/i)).toBeInTheDocument();
   });
 
   it('empty-state CTA links to the destination it names (Wave 15 T10)', () => {
@@ -61,9 +62,11 @@ describe('DebtPayoffCard', () => {
         <DebtPayoffCard />
       </MemoryRouter>,
     );
+    // W14b: /inputs/loans is now a redirect stub — the CTA targets the
+    // canonical home directly.
     expect(
       screen.getByRole('link', { name: /add loans/i }),
-    ).toHaveAttribute('href', '/inputs/loans');
+    ).toHaveAttribute('href', '/loans');
   });
 
   it('headline is the ANSWER — "Debt-free Mon YYYY"; balance demotes to the tile strip', () => {

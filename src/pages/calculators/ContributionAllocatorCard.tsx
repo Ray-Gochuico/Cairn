@@ -172,7 +172,7 @@ export function ContributionAllocatorCard({ cardId, onHide }: Props = {}) {
               You target {result.unallocatableClasses.map((u) => ASSET_CLASS_LABEL[u.assetClass]).join(', ')} but hold
               nothing in {result.unallocatableClasses.length === 1 ? 'that class' : 'those classes'} —{' '}
               {formatCurrency(result.unallocatableClasses.reduce((s, u) => s + u.need, 0))} stays in cash.
-              Add a holding in the class (Inputs → Holdings) or adjust your targets.
+              Add a holding in the class (Investments → Manage → Holdings) or adjust your targets.
             </div>
           )}
 

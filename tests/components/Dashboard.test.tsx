@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { useGoalsStore } from '@/stores/goals-store';
 import { useAccountsStore } from '@/stores/accounts-store';
@@ -17,12 +17,15 @@ import { useTickersStore } from '@/stores/tickers-store';
 import { useFundHoldingsStore } from '@/stores/fund-holdings-store';
 import { useRoadmapOverridesStore } from '@/stores/roadmap-overrides-store';
 import { usePersonsStore } from '@/stores/persons-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import {
   AccountType,
+  AssetClass,
   ContributionSource,
   FilingStatus,
   GoalType,
   SnapshotSource,
+  TickerDirection,
 } from '@/types/enums';
 import type { Account, Contribution, Goal, GrowthScenario } from '@/types/schema';
 import Dashboard from '@/pages/Dashboard';
@@ -66,6 +69,31 @@ function resetStores() {
   useTickersStore.setState({ tickers: [], isLoading: false, error: null, load: async () => {} } as never);
   useFundHoldingsStore.setState({ fundHoldings: [], isLoading: false, error: null, load: async () => {} } as never);
   useRoadmapOverridesStore.setState({ overridesByNodeId: new Map(), isLoading: false, error: null, load: async () => {} } as never);
+  // W13: settings joined the gate (briefing visit stamps). Null stamps →
+  // 'Since <month>' fallback; noop update keeps the stamp effect off the DB.
+  useSettingsStore.setState({
+    settings: seededSettings(),
+    isLoading: false,
+    error: null,
+    load: async () => {},
+    update: async () => {},
+  } as never);
+  // W13: pills + widgets live inside the Details disclosure — seed it open so
+  // the pre-W13 assertions keep meaning what they meant. The collapsed
+  // default has its own dedicated tests (which clear this key).
+  try { window.localStorage.setItem('dashboardDetailsOpen.v1', 'true'); } catch { /* ignore */ }
+}
+
+/** Minimal AppSettings slice the Dashboard/FreshnessBadge/briefing read. */
+function seededSettings() {
+  return {
+    id: 1,
+    lastRefreshAt: null,
+    refreshCadence: 'EVERY_LAUNCH',
+    lastSeenMonth: null,
+    lastVisitDate: null,
+    briefingBaselineDate: null,
+  };
 }
 
 interface PrimeOpts {
@@ -153,15 +181,16 @@ describe('Dashboard goals strip', () => {
     resetStores();
   });
 
-  it('shows empty state with "Add your first goal" link when no goals exist', () => {
+  it('shows empty state with "Add your first goal" link to the Goals page (W14)', () => {
     render(
       <MemoryRouter>
         <Dashboard />
       </MemoryRouter>,
     );
     expect(screen.getByText(/no goals yet/i)).toBeInTheDocument();
+    // W14: the Goals page now owns adding — a dashboard card navigates there.
     const addLink = screen.getByRole('link', { name: /add your first goal/i });
-    expect(addLink).toHaveAttribute('href', '/inputs/goals');
+    expect(addLink).toHaveAttribute('href', '/goals');
   });
 
   it('shows up to 3 goal mini-cards when goals exist', () => {
@@ -225,12 +254,15 @@ describe('Dashboard goals strip', () => {
 
     // The goals strip uses the same on-/off-track resolution as the Goals
     // page. Verify both badges render — over-funded gets "On track" and the
-    // stretch goal with no contributions gets "Off track".
-    const onTrackCard = screen.getByText('Already There').closest('[class*="rounded"]');
+    // stretch goal with no contributions gets "Off track". Scoped to the
+    // goals widget: the over-funded goal ALSO earns a W13 briefing row
+    // ("You've reached your … goal."), so a page-wide name query is ambiguous.
+    const goalsWidget = screen.getByTestId('widget-goals');
+    const onTrackCard = within(goalsWidget).getByText('Already There').closest('[class*="rounded"]');
     expect(onTrackCard).not.toBeNull();
     expect(within(onTrackCard as HTMLElement).getByText(/on track/i)).toBeInTheDocument();
 
-    const offTrackCard = screen.getByText('Stretch Goal').closest('[class*="rounded"]');
+    const offTrackCard = within(goalsWidget).getByText('Stretch Goal').closest('[class*="rounded"]');
     expect(offTrackCard).not.toBeNull();
     expect(within(offTrackCard as HTMLElement).getByText(/off track/i)).toBeInTheDocument();
   });
@@ -251,12 +283,12 @@ describe('Dashboard goals strip', () => {
   });
 });
 
-describe('Dashboard asset value chart widget', () => {
+describe('Dashboard asset value chart hero', () => {
   beforeEach(() => {
     resetStores();
   });
 
-  it('renders the Asset value chart widget', async () => {
+  it('renders the Total Assets chart as the fixed hero', async () => {
     render(
       <MemoryRouter>
         <Dashboard />
@@ -264,15 +296,16 @@ describe('Dashboard asset value chart widget', () => {
     );
     // The chart card's header value renders unconditionally (recharts'
     // ResponsiveContainer draws nothing in jsdom, but the header is plain
-    // DOM), so this testid is a stable presence marker for the widget.
-    const widget = screen.getByTestId('widget-asset-value-chart');
+    // DOM), so this testid is a stable presence marker. W13: the chart is
+    // the FIXED secondary hero, no longer a re-orderable widget.
     expect(await screen.findByTestId('asset-chart-header-value')).toBeInTheDocument();
+    expect(screen.queryByTestId('widget-asset-value-chart')).toBeNull();
     // resetStores() seeds NO accounts/loans → zero eligible entities, so the
     // header shows the dashboard surface's default-scope label. The dashboard
     // surface defaults to assets-only (defaultIncludeLoans: false), hence
     // 'Total assets' — NOT 'Net worth', which is the no-loans/full-set label
     // when eligible entities exist.
-    expect(within(widget).getByText('Total assets')).toBeInTheDocument();
+    expect(screen.getByText('Total assets')).toBeInTheDocument();
   });
 });
 
@@ -408,6 +441,35 @@ describe('Dashboard spending cards', () => {
     // $500 spend, $3,000 budget → $2,500 under
     expect(screen.getByText(/\$2,500 under/i)).toBeInTheDocument();
   });
+
+  it('no-budget state links the tile to the Budget editor, not Inputs (W14)', () => {
+    // Zero the expense baseline → monthlyBudget = 0 → the no-budget subtitle shows.
+    useHouseholdStore.setState({
+      household: {
+        filingStatus: FilingStatus.SINGLE,
+        state: 'CA',
+        city: null,
+        monthlyExpenseBaseline: 0,
+        withdrawalRate: 0.04,
+        inflationAssumption: 0.03,
+        growthScenarios: moderateScenarios,
+      },
+      isLoading: false,
+      error: null,
+    });
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+
+    const subtitle = screen.getByText(/^set a budget$/i);
+    expect(subtitle).toBeInTheDocument();
+    // The tile itself navigates to /budget — where budgets are actually set.
+    expect(subtitle.closest('a')).toHaveAttribute('href', '/budget');
+    // The dead-end nag is gone everywhere.
+    expect(screen.queryByText(/set a budget in inputs/i)).toBeNull();
+  });
 });
 
 describe('Dashboard pills — excluded accounts', () => {
@@ -529,5 +591,171 @@ describe('Dashboard load gate (W10 S3/S4, M3)', () => {
     expect(screen.getByRole('status', { name: /loading page/i })).toBeInTheDocument();
     expect(screen.queryByText(/continue setup/i)).not.toBeInTheDocument();
     expect(screen.queryByTestId('metric-card-value')).not.toBeInTheDocument();
+  });
+});
+
+describe('W13 briefing hero', () => {
+  beforeEach(() => {
+    resetStores();
+    // Pin "today" (Date only — real timers stay live for waitFor) so the
+    // monthly-cadence grace window and month names are deterministic.
+    // 2026-07-09 is day 9 → past the days-2..7 grace window.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-07-09T12:00:00'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function renderDashboard(initialEntries: string[] = ['/']) {
+    return render(
+      <MemoryRouter initialEntries={initialEntries}>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+  }
+
+  it('renders the briefing card with a ranked net-worth row instead of the standalone NextMoveCard', async () => {
+    // The house two-snapshot shape: a month-close snapshot and a recent one.
+    // With no stored visit stamp the baseline is end-of-last-month (June 30).
+    primeStores({
+      accounts: [{ id: 1 }],
+      snapshotValues: [
+        { accountId: 1, snapshotDate: '2026-06-30', totalValue: 207_000 },
+        { accountId: 1, snapshotDate: '2026-07-08', totalValue: 225_000 },
+      ],
+    });
+    renderDashboard();
+    const briefing = await screen.findByTestId('briefing-card');
+    expect(within(briefing).getByText(/net worth is (up|down)/i)).toBeInTheDocument();
+    // No visit stamp → the honest month fallback heading.
+    expect(within(briefing).getByText('Since June')).toBeInTheDocument();
+    // The standalone card is gone; its phrase now only exists as a feed row.
+    expect(screen.queryByText(/finish setting up to see your next move/i)).toBeNull();
+  });
+
+  it('the amber "Monthly input pending" banner is retired — the cadence ROW carries the ritual', () => {
+    // Day 9 (past grace), one non-manual account with NO June snapshot →
+    // pending, 1 balance to confirm.
+    primeStores({ accounts: [{ id: 1 }] });
+    renderDashboard();
+    expect(screen.queryByText('Monthly input pending')).toBeNull();
+    const briefing = screen.getByTestId('briefing-card');
+    expect(within(briefing).getByText(/^Close \w+ — /)).toBeInTheDocument();
+    expect(within(briefing).getByRole('link', { name: /close \w+/i })).toHaveAttribute(
+      'href',
+      '/monthly',
+    );
+  });
+
+  it('stamps the visit once when last_visit_date is stale, and not on a same-day open', async () => {
+    const update = vi.fn(async () => {});
+    useSettingsStore.setState({
+      settings: { ...seededSettings(), lastVisitDate: '2026-07-01', briefingBaselineDate: '2026-06-20' },
+      isLoading: false, error: null, load: async () => {}, update,
+    } as never);
+    renderDashboard();
+    await waitFor(() =>
+      expect(update).toHaveBeenCalledWith(
+        expect.objectContaining({ briefingBaselineDate: '2026-07-01' }),
+      ),
+    );
+    expect(update).toHaveBeenCalledTimes(1);
+
+    // Same-day open: the stamps are already today's — nothing rolls.
+    const update2 = vi.fn(async () => {});
+    useSettingsStore.setState({
+      settings: { ...seededSettings(), lastVisitDate: '2026-07-09', briefingBaselineDate: '2026-07-06' },
+      isLoading: false, error: null, load: async () => {}, update: update2,
+    } as never);
+    renderDashboard();
+    expect(screen.getAllByTestId('briefing-card').length).toBeGreaterThan(0);
+    expect(update2).not.toHaveBeenCalled();
+  });
+
+  it('empty-state honesty: neither rows nor "Nothing needs your attention" render while stores load', () => {
+    useHouseholdStore.setState({ household: null, isLoading: true, error: null, load: async () => {} } as never);
+    renderDashboard();
+    expect(screen.getByRole('status', { name: /loading page/i })).toBeInTheDocument();
+    expect(screen.queryByTestId('briefing-card')).toBeNull();
+    expect(screen.queryByText(/nothing needs your attention/i)).toBeNull();
+  });
+
+  it('?view=p1: household-scoped rows carry the "· Household" suffix (concentration)', () => {
+    usePersonsStore.setState({
+      persons: [
+        { id: 1, name: 'Alex' } as never,
+        { id: 2, name: 'Sam' } as never,
+      ],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    // >15% top exposure: BND at 80 of 100 shares of a $100k account (the
+    // ConcentrationCard seed pattern).
+    primeStores({
+      accounts: [{ id: 1 }],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-06-30', totalValue: 100_000 }],
+    });
+    useHoldingsStore.setState({
+      holdings: [
+        { id: 1, accountId: 1, ticker: 'BND', shareCount: 80, targetAllocationPct: null, costBasis: null },
+        { id: 2, accountId: 1, ticker: 'VTI', shareCount: 20, targetAllocationPct: null, costBasis: null },
+      ],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    const mkTicker = (ticker: string, assetClass: AssetClass) =>
+      ({ ticker, name: null, assetClass, leverageFactor: 1, direction: TickerDirection.LONG, userAdded: false, accentColor: null, sector: null, industry: null });
+    useTickersStore.setState({
+      tickers: [mkTicker('BND', AssetClass.US_BONDS), mkTicker('VTI', AssetClass.US_TOTAL_MARKET)],
+      isLoading: false, error: null, load: async () => {},
+      upsert: async () => {}, remove: async () => {}, lookup: () => undefined,
+    } as never);
+    renderDashboard(['/?view=p1']);
+    const row = screen.getByTestId('briefing-row-concentration');
+    expect(row).toHaveTextContent('· Household');
+  });
+});
+
+describe('W13 Details region + fixed hero chart', () => {
+  beforeEach(() => {
+    resetStores();
+  });
+
+  it('Details is collapsed by default: pill grid hidden until the toggle is clicked, then persisted', () => {
+    window.localStorage.removeItem('dashboardDetailsOpen.v1');
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByTestId('dashboard-pill-grid')).toBeNull();
+    const toggle = screen.getByTestId('dashboard-details-toggle');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(toggle);
+    expect(screen.getByTestId('dashboard-pill-grid')).toBeInTheDocument();
+    expect(window.localStorage.getItem('dashboardDetailsOpen.v1')).toBe('true');
+  });
+
+  it('the Total Assets chart renders as a FIXED hero even while Details is collapsed', async () => {
+    window.localStorage.removeItem('dashboardDetailsOpen.v1');
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByTestId('asset-chart-header-value')).toBeInTheDocument();
+    // …and it is no longer a re-orderable widget:
+    expect(screen.queryByTestId('widget-asset-value-chart')).toBeNull();
+  });
+
+  it('Customize forces the Details region open so pills/widgets stay editable', () => {
+    window.localStorage.removeItem('dashboardDetailsOpen.v1');
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByTestId('dashboard-edit-toggle'));
+    expect(screen.getByTestId('dashboard-pill-grid')).toBeInTheDocument();
   });
 });

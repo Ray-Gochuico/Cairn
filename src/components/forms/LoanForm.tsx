@@ -71,7 +71,7 @@ export interface LoanFormProps {
 }
 
 /**
- * Standalone loan form. Used by both LoansTab and the SetupWizard Step 6
+ * Standalone loan form. Used by the Loans page drawer and the SetupWizard Step 6
  * onboarding flow. Owns the amortization-driven auto-fill of monthlyPayment
  * (only until the user explicitly edits the field) and the type-dependent
  * linkedPropertyId / linkedVehicleId pickers.

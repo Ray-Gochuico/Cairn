@@ -253,7 +253,7 @@ describe('evaluateEmployerMatchQ', () => {
     });
     const result = evaluateEmployerMatchQ(ctx);
     expect(result.question).toBeUndefined();
-    expect(result.cta?.href).toBe('/inputs/accounts');
+    expect(result.cta?.href).toBe('/investments?manage=accounts');
   });
 });
 

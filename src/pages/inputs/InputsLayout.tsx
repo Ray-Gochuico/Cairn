@@ -14,31 +14,23 @@ interface TabDef {
   glossaryTerm?: string;
 }
 
+// W14 "one place per thing": every entity tab retired to its analysis page
+// (loans → /loans, accounts/holdings/contributions/tickers → the Investments
+// Manage surface, …). Only the truly-shared config remains — this hub is now
+// the Setup residual.
 const tabs: TabDef[] = [
   { path: 'household', label: 'Household' },
   { path: 'persons', label: 'Persons' },
   { path: 'dependents', label: 'Dependents' },
-  { path: 'accounts', label: 'Accounts' },
-  { path: 'holdings', label: 'Holdings' },
-  { path: 'contributions', label: 'Contributions' },
-  { path: 'loans', label: 'Loans' },
-  { path: 'equity-grants', label: 'Equity Grants', glossaryTerm: 'RSU' },
-  { path: 'properties', label: 'Properties' },
-  { path: 'housing-payments', label: 'Rent / Housing' },
-  { path: 'vehicles', label: 'Vehicles' },
-  { path: 'vehicle-leases', label: 'Vehicle Leases' },
-  { path: 'goals', label: 'Goals' },
-  { path: 'plans-529', label: '529 Plans', glossaryTerm: '529 PLAN' },
   { path: 'categories', label: 'Categories' },
-  { path: 'tickers', label: 'Tickers', glossaryTerm: 'TICKERS' },
 ];
 
 export default function InputsLayout() {
   return (
     <div className="flex h-full">
-      <nav aria-label="Input categories" className="w-48 border-r p-2 flex flex-col gap-1 overflow-y-auto">
+      <nav aria-label="Setup" className="w-48 border-r p-2 flex flex-col gap-1 overflow-y-auto">
         <div className="px-3 pt-2 pb-1 text-xs uppercase tracking-wider text-muted-foreground">
-          Input categories
+          Setup
         </div>
         {tabs.map((t) => {
           const entry = t.glossaryTerm ? getGlossaryEntry(t.glossaryTerm) : null;

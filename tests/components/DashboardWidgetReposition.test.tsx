@@ -86,9 +86,10 @@ describe('Dashboard widget reposition', () => {
 
   it('renders every dashboard widget under a stable data-widget-id wrapper', () => {
     renderDashboard();
-    // The six widgets currently composed on the dashboard.
+    // The five widgets composed on the dashboard (W13: the asset chart left
+    // the re-orderable set — it renders as the fixed secondary hero).
     expect(screen.getByTestId('widget-pills-section')).toBeInTheDocument();
-    expect(screen.getByTestId('widget-asset-value-chart')).toBeInTheDocument();
+    expect(screen.queryByTestId('widget-asset-value-chart')).toBeNull();
     expect(screen.getByTestId('widget-spending')).toBeInTheDocument();
     expect(screen.getByTestId('widget-concentration')).toBeInTheDocument();
     expect(screen.getByTestId('widget-goals')).toBeInTheDocument();
@@ -128,21 +129,22 @@ describe('Dashboard widget reposition', () => {
   it('reorders widgets via the up/down chevrons', () => {
     renderDashboard();
     fireEvent.click(screen.getByTestId('dashboard-edit-toggle'));
-    // The spending widget is at index 2 by default (after pills-section and
-    // asset-value-chart). Moving it up swaps it with asset-value-chart.
+    // The concentration widget is at index 2 by default (after pills-section
+    // and spending — W13 dropped the asset chart from the set). Moving it up
+    // swaps it with spending.
     const before = Array.from(document.querySelectorAll('[data-widget-id]')).map(
       (el) => el.getAttribute('data-widget-id'),
     );
     expect(before[0]).toBe('pills-section');
-    expect(before[1]).toBe('asset-value-chart');
-    expect(before[2]).toBe('spending');
-    fireEvent.click(screen.getByTestId('widget-spending-up'));
+    expect(before[1]).toBe('spending');
+    expect(before[2]).toBe('concentration');
+    fireEvent.click(screen.getByTestId('widget-concentration-up'));
     const after = Array.from(document.querySelectorAll('[data-widget-id]')).map(
       (el) => el.getAttribute('data-widget-id'),
     );
     expect(after[0]).toBe('pills-section');
-    expect(after[1]).toBe('spending');
-    expect(after[2]).toBe('asset-value-chart');
+    expect(after[1]).toBe('concentration');
+    expect(after[2]).toBe('spending');
   });
 
   it('hides a widget and surfaces it under the Hidden widgets tray', () => {

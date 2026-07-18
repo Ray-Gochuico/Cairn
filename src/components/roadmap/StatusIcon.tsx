@@ -54,8 +54,8 @@ interface StatusIconProps {
 
 /**
  * Single source of truth for status iconography across the Roadmap UI.
- * Reused by NodeRow, SectionCard active-indicator, NextMoveHero, and the
- * Dashboard NextMoveCard in Sub-Plan D.
+ * Reused by NodeRow, the SectionCard active-indicator, and NextMoveHero
+ * (the Dashboard's next-move surface is a W13 briefing feed row now).
  *
  * Carries both an `aria-label` (the bare status word, kept stable for
  * the test contract) and a native `title` attribute (the human-readable

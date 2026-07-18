@@ -365,6 +365,39 @@ describe('SettingsRepo — lastSeenMonth (migration 0046)', () => {
   });
 });
 
+describe('SettingsRepo — briefing visit stamps (migration 0050)', () => {
+  let db: SqliteAdapter;
+  let repo: SettingsRepo;
+
+  beforeEach(async () => {
+    db = new SqliteAdapter(':memory:');
+    await runMigrations(db, await loadAllMigrations());
+    repo = new SettingsRepo(db);
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  it('both stamps default to null and round-trip through update()', async () => {
+    const initial = await repo.get();
+    expect(initial.lastVisitDate).toBeNull();
+    expect(initial.briefingBaselineDate).toBeNull();
+    await repo.update({ lastVisitDate: '2026-07-09', briefingBaselineDate: '2026-07-06' });
+    const updated = await repo.get();
+    expect(updated.lastVisitDate).toBe('2026-07-09');
+    expect(updated.briefingBaselineDate).toBe('2026-07-06');
+  });
+
+  it('writes null when the stamps are cleared', async () => {
+    await repo.update({ lastVisitDate: '2026-07-09', briefingBaselineDate: '2026-07-06' });
+    await repo.update({ lastVisitDate: null, briefingBaselineDate: null });
+    const cleared = await repo.get();
+    expect(cleared.lastVisitDate).toBeNull();
+    expect(cleared.briefingBaselineDate).toBeNull();
+  });
+});
+
 describe('SettingsRepo — calculatorCardLayout (migration 0047)', () => {
   let db: SqliteAdapter;
   let repo: SettingsRepo;

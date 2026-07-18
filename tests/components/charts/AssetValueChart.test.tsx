@@ -206,7 +206,7 @@ describe('AssetValueChart — skeleton', () => {
   it('renders the no-eligible-entities empty state with a CTA on the dashboard', () => {
     seedEmptyStores();
     renderChart('dashboard');
-    expect(screen.getByRole('link', { name: /Add an account/ })).toHaveAttribute('href', '/inputs/accounts');
+    expect(screen.getByRole('link', { name: /Add an account/ })).toHaveAttribute('href', '/investments?manage=accounts');
   });
 
   it('header shows the latest value and a signed delta with range phrase', () => {
@@ -698,7 +698,7 @@ describe('AssetValueChart — investments surface', () => {
     useAssetValueSnapshotsStore.setState({ assetValueSnapshots: [], isLoading: false, error: null, load: async () => {} } as never);
     renderChart('investments');
     expect(screen.getByText(/balance snapshots/i)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Add an account/ })).toHaveAttribute('href', '/inputs/accounts');
+    expect(screen.getByRole('link', { name: /Add an account/ })).toHaveAttribute('href', '/investments?manage=accounts');
     // Zero-eligible label fallback is the surface's full-set label.
     expect(screen.getByText('Total investments')).toBeInTheDocument();
   });

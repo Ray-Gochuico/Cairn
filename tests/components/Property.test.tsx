@@ -196,15 +196,17 @@ describe('Property page', () => {
     resetStores();
   });
 
-  it('shows empty-state when there are no properties', () => {
+  it('shows empty-state with an in-place "Add a property" that opens the drawer (W14)', async () => {
+    const user = userEvent.setup();
     renderPage();
     expect(screen.getByRole('heading', { name: /^Property$/i })).toBeInTheDocument();
     // Normalized EmptyState primitive (Design M-1): title + CTA.
     expect(screen.getByText(/No properties yet/i)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /add a property/i })).toHaveAttribute(
-      'href',
-      '/inputs/properties',
-    );
+    // W14: the CTA opens the create drawer in place — no /inputs deflection.
+    expect(screen.queryByRole('link', { name: /add a property/i })).toBeNull();
+    expect(screen.queryByText(/in inputs/i)).toBeNull();
+    await user.click(screen.getByRole('button', { name: /add a property/i }));
+    expect(await screen.findByRole('dialog', { name: /add property/i })).toBeInTheDocument();
   });
 
   it('shows the loading skeleton, not "No properties yet", while stores load (W10 T1)', () => {
@@ -613,7 +615,8 @@ describe('Property page', () => {
     expect(screen.getByText('Joint')).toBeInTheDocument();
   });
 
-  it('renders an Edit link to Inputs on a rental card', async () => {
+  it('rental Edit opens a prefilled HousingPaymentForm drawer; saving calls update (W14)', async () => {
+    const updateSpy = vi.fn(async () => {});
     useHousingPaymentsStore.setState({
       housingPayments: [
         {
@@ -629,13 +632,22 @@ describe('Property page', () => {
       isLoading: false,
       error: null,
       load: async () => {},
+      update: updateSpy,
     } as never);
 
+    const user = userEvent.setup();
     renderPage();
 
     await screen.findByText('Downtown apartment');
-    const editLink = screen.getByRole('link', { name: /edit rental/i });
-    expect(editLink).toHaveAttribute('href', '/inputs/housing-payments');
+    // W14: no /inputs deflection remains on the card.
+    expect(screen.queryByRole('link', { name: /edit rental/i })).toBeNull();
+    await user.click(screen.getByRole('button', { name: /edit rental/i }));
+    const dialog = await screen.findByRole('dialog', { name: /edit rent/i });
+    expect(within(dialog).getByLabelText(/^label$/i)).toHaveValue('Downtown apartment');
+    await user.click(within(dialog).getByRole('button', { name: /^save$/i }));
+    await waitFor(() => expect(updateSpy).toHaveBeenCalledTimes(1));
+    expect(updateSpy).toHaveBeenCalledWith(1, expect.objectContaining({ name: 'Downtown apartment' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     // Remove still present.
     expect(screen.getByRole('button', { name: /^Remove$/i })).toBeInTheDocument();
   });
@@ -701,7 +713,7 @@ describe('Property page', () => {
     expect(screen.getAllByText(/\$2,400/).length).toBeGreaterThan(0);
   });
 
-  it('renders an on-page Add rental affordance linking to Inputs', async () => {
+  it('the Add rental tile opens the create drawer in place (W14)', async () => {
     useHousingPaymentsStore.setState({
       housingPayments: [
         {
@@ -719,11 +731,58 @@ describe('Property page', () => {
       load: async () => {},
     } as never);
 
+    const user = userEvent.setup();
     renderPage();
 
     await screen.findByText('Downtown apartment');
-    const addLink = screen.getByRole('link', { name: /add rental/i });
-    expect(addLink).toHaveAttribute('href', '/inputs/housing-payments');
+    expect(screen.queryByRole('link', { name: /add rental/i })).toBeNull();
+    await user.click(screen.getByRole('button', { name: /add rental/i }));
+    expect(await screen.findByRole('dialog', { name: /add rent/i })).toBeInTheDocument();
+  });
+
+  it('property card "Edit details" opens a prefilled PropertyForm drawer; saving calls update (W14)', async () => {
+    const updateSpy = vi.fn(async () => {});
+    usePersonsStore.setState({
+      persons: [{ id: 1, name: 'Alex' }] as never,
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    });
+    seedPropertyWithUtilities();
+    usePropertiesStore.setState({ update: updateSpy } as never);
+
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findAllByText('My Home');
+    await user.click(screen.getByRole('button', { name: /edit details for my home/i }));
+    const dialog = await screen.findByRole('dialog', { name: /edit property/i });
+    expect(within(dialog).getByLabelText(/^name$/i)).toHaveValue('My Home');
+    await user.click(within(dialog).getByRole('button', { name: /^save$/i }));
+    await waitFor(() => expect(updateSpy).toHaveBeenCalledTimes(1));
+    expect(updateSpy).toHaveBeenCalledWith(7, expect.objectContaining({ name: 'My Home' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('property drawer delete confirms with the tab\'s exact copy (W14)', async () => {
+    usePersonsStore.setState({
+      persons: [{ id: 1, name: 'Alex' }] as never,
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    });
+    seedPropertyWithUtilities();
+
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findAllByText('My Home');
+    await user.click(screen.getByRole('button', { name: /edit details for my home/i }));
+    const dialog = await screen.findByRole('dialog', { name: /edit property/i });
+    await user.click(within(dialog).getByRole('button', { name: /delete property/i }));
+    expect(
+      await screen.findByText(/this permanently removes this property/i),
+    ).toBeInTheDocument();
   });
 
   it('exports the full properties table to CSV with the owner name resolved', async () => {
@@ -954,5 +1013,31 @@ describe('equity linked-loan resolution (wave-9 M12)', () => {
     renderPage();
     await screen.findAllByText('Linked Home');
     expect(screen.getByText('$200,000')).toBeInTheDocument();
+  });
+});
+
+describe('Property page — drawer create submits (W14 page-level create coverage)', () => {
+  beforeEach(() => {
+    resetStores();
+  });
+
+  it('filling the create drawer calls create and closes', async () => {
+    const create = vi.fn(async () => 1);
+    usePropertiesStore.setState({ create } as never);
+    usePersonsStore.setState({
+      persons: [{ id: 1, householdId: 1, name: 'Alex' }],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole('button', { name: /add a property/i }));
+    const dialog = await screen.findByRole('dialog', { name: /add property/i });
+    await user.type(within(dialog).getByLabelText(/^name$/i), 'Lake house');
+    await user.click(within(dialog).getByRole('button', { name: /^save$/i }));
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ name: 'Lake house' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 });

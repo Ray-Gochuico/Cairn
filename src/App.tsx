@@ -60,18 +60,6 @@ const InputsLayout = lazyWithRetry(() => import('./pages/inputs/InputsLayout'));
 const HouseholdTab = lazyWithRetry(() => import('./pages/inputs/HouseholdTab'));
 const PersonsTab = lazyWithRetry(() => import('./pages/inputs/PersonsTab'));
 const DependentsTab = lazyWithRetry(() => import('./pages/inputs/DependentsTab'));
-const AccountsTab = lazyWithRetry(() => import('./pages/inputs/AccountsTab'));
-const HoldingsTab = lazyWithRetry(() => import('./pages/inputs/HoldingsTab'));
-const ContributionsTab = lazyWithRetry(() => import('./pages/inputs/ContributionsTab'));
-const LoansTab = lazyWithRetry(() => import('./pages/inputs/LoansTab'));
-const PropertiesTab = lazyWithRetry(() => import('./pages/inputs/PropertiesTab'));
-const HousingPaymentsTab = lazyWithRetry(() => import('./pages/inputs/HousingPaymentsTab'));
-const VehiclesTab = lazyWithRetry(() => import('./pages/inputs/VehiclesTab'));
-const VehicleLeasesTab = lazyWithRetry(() => import('./pages/inputs/VehicleLeasesTab'));
-const GoalsTab = lazyWithRetry(() => import('./pages/inputs/GoalsTab'));
-const EquityGrantsTab = lazyWithRetry(() => import('./pages/inputs/EquityGrantsTab'));
-const Plan529Tab = lazyWithRetry(() => import('./pages/inputs/Plan529Tab'));
-const TickersTab = lazyWithRetry(() => import('./pages/inputs/TickersTab'));
 const CategoriesTab = lazyWithRetry(() => import('./pages/inputs/CategoriesTab'));
 const SetupWizard = lazyWithRetry(() => import('./pages/setup/SetupWizard'));
 const OnboardingController = lazyWithRetry(() => import('./pages/setup/OnboardingController'));
@@ -145,19 +133,22 @@ const router = createBrowserRouter([
           { path: 'household', element: lazyRoute(HouseholdTab) },
           { path: 'persons', element: lazyRoute(PersonsTab) },
           { path: 'dependents', element: lazyRoute(DependentsTab) },
-          { path: 'accounts', element: lazyRoute(AccountsTab) },
-          { path: 'holdings', element: lazyRoute(HoldingsTab) },
-          { path: 'contributions', element: lazyRoute(ContributionsTab) },
-          { path: 'loans', element: lazyRoute(LoansTab) },
-          { path: 'equity-grants', element: lazyRoute(EquityGrantsTab) },
-          { path: 'properties', element: lazyRoute(PropertiesTab) },
-          { path: 'housing-payments', element: lazyRoute(HousingPaymentsTab) },
-          { path: 'vehicles', element: lazyRoute(VehiclesTab) },
-          { path: 'vehicle-leases', element: lazyRoute(VehicleLeasesTab) },
-          { path: 'goals', element: lazyRoute(GoalsTab) },
-          { path: 'plans-529', element: lazyRoute(Plan529Tab) },
           { path: 'categories', element: lazyRoute(CategoriesTab) },
-          { path: 'tickers', element: lazyRoute(TickersTab) },
+          // W14 redirect stubs: the old Inputs tabs' homes. Kept as routes
+          // (not 404s) so pre-wave deep links / muscle memory land on each
+          // entity's new home ("one place per thing").
+          { path: 'loans', element: <Navigate to="/loans" replace /> },
+          { path: 'properties', element: <Navigate to="/property" replace /> },
+          { path: 'housing-payments', element: <Navigate to="/property" replace /> },
+          { path: 'vehicles', element: <Navigate to="/vehicles" replace /> },
+          { path: 'vehicle-leases', element: <Navigate to="/vehicles" replace /> },
+          { path: 'equity-grants', element: <Navigate to="/equity-grants" replace /> },
+          { path: 'goals', element: <Navigate to="/goals" replace /> },
+          { path: 'plans-529', element: <Navigate to="/goals" replace /> },
+          { path: 'accounts', element: <Navigate to="/investments?manage=accounts" replace /> },
+          { path: 'holdings', element: <Navigate to="/investments?manage=holdings" replace /> },
+          { path: 'contributions', element: <Navigate to="/investments?manage=contributions" replace /> },
+          { path: 'tickers', element: <Navigate to="/investments?manage=tickers" replace /> },
         ],
       },
     ],

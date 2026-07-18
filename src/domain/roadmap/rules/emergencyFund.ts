@@ -121,7 +121,7 @@ export function evaluateSmallEmergencyFund(ctx: RoadmapContext): NodeResult {
   return {
     status: 'active',
     evidence: `${formatUSD(cash)} / ${formatUSD(target)} (${Math.round((cash / target) * 100)}%${suffix})`,
-    cta: { label: 'Open Accounts →', href: '/inputs/accounts' },
+    cta: { label: 'Open Accounts →', href: '/investments?manage=accounts' },
   };
 }
 
@@ -159,7 +159,7 @@ export function evaluateEmergencyFund3Months(ctx: RoadmapContext): NodeResult {
   return {
     status: 'active',
     evidence: `${formatUSD(cash)} / ${formatUSD(target)} (3-mo target, ${Math.round((cash / target) * 100)}%${suffix})`,
-    cta: { label: 'Open Accounts →', href: '/inputs/accounts' },
+    cta: { label: 'Open Accounts →', href: '/investments?manage=accounts' },
   };
 }
 
@@ -192,6 +192,6 @@ export function evaluateEmergencyFund6To12Months(ctx: RoadmapContext): NodeResul
   return {
     status: 'active',
     evidence: `${formatUSD(cash)} / ${formatUSD(target)} (6-mo floor, ${Math.round((cash / target) * 100)}%${suffix})`,
-    cta: { label: 'Open Accounts →', href: '/inputs/accounts' },
+    cta: { label: 'Open Accounts →', href: '/investments?manage=accounts' },
   };
 }

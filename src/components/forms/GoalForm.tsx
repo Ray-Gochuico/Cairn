@@ -41,7 +41,7 @@ export interface GoalFormProps {
 }
 
 /**
- * Standalone goal form used by the GoalsTab. Mirrors LoanForm's structure:
+ * Standalone goal form used by the Goals page drawer. Mirrors LoanForm's structure:
  * native `<select>` for the GoalType (avoids Radix Select to keep tests simple),
  * radio group for `forPersonId` (Household / per-person), checkbox group for
  * `linkedAccountIds` (no accounts → no group rendered).

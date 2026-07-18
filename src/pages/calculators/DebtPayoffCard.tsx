@@ -96,10 +96,12 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
         headline="—"
       >
         <p className="text-sm text-muted-foreground">
-          <Link to="/inputs/loans" className="text-primary hover:underline">
+          {/* Wave 15 T10: the CTA itself is the link. W14b: it deep-links the
+              loan's post-Inputs home (/loans, "one place per thing"). */}
+          <Link to="/loans" className="text-primary hover:underline">
             Add loans
           </Link>{' '}
-          on the Inputs page to see payoff projections.
+          on the Loans page to see payoff projections.
         </p>
       </CalculatorCard>
     );
@@ -163,7 +165,7 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
                 {cappedProjections.map((p) => p.loan.name).join(', ')}
               </span>{' '}
               never {cappedProjections.length === 1 ? 'pays' : 'pay'} off at the current payment.
-              Payoff and interest figures are hidden; fix the payment or rate in Inputs.
+              Payoff and interest figures are hidden; fix the payment or rate on the Loans page.
             </>
           ) : (
             // Rescued case (F1): the projection amortizes thanks to extra
