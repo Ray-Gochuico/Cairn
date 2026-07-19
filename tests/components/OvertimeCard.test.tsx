@@ -9,7 +9,7 @@ import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { FilingStatus } from '@/types/enums';
 import { OvertimeCard } from '@/pages/calculators/OvertimeCard';
 
-// Federal SINGLE brackets (2026 approximate) — same fixture as BonusTaxCard.test.tsx
+// Federal SINGLE brackets (2026 approximate) — same fixture as the supplemental-pay suite
 const federalSingleBrackets = [
   { min: 0,       max: 11925,  rate: 0.10 },
   { min: 11925,   max: 48475,  rate: 0.12 },
@@ -128,12 +128,41 @@ describe('OvertimeCard', () => {
     render(<MemoryRouter><OvertimeCard /></MemoryRouter>);
 
     const headline = await screen.findByTestId('ot-takehome');
-    // Card title is "Overtime"; "Total OT take-home" appears in the body summary.
+    // Card title is "Overtime"; the shared result block (Wave 18 B7) carries
+    // the emphasized take-home row.
     expect(screen.getAllByText(/Overtime/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Total OT take-home/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Estimated overtime take-home/i).length).toBeGreaterThan(0);
     const value = parseFloat(headline.textContent!.replace(/[$,]/g, ''));
     expect(value).toBeGreaterThan(150);
     expect(value).toBeLessThan(300);
+  });
+
+  it('two eligible persons: the earner picker switches the derived base rate (Wave 18 B7)', async () => {
+    const user = userEvent.setup();
+    primeStores();
+    const alex = usePersonsStore.getState().persons[0];
+    usePersonsStore.setState({
+      persons: [
+        alex,
+        { ...alex, id: 2, name: 'Blair', hourlyRate: 50 },
+      ],
+      isLoading: false,
+      error: null,
+    });
+    render(<MemoryRouter><OvertimeCard /></MemoryRouter>);
+    // Default = first eligible (Alex, $25/hr).
+    const rate = (await screen.findByLabelText(/base hourly rate/i)) as HTMLInputElement;
+    expect(Number(rate.value)).toBe(25);
+    const group = screen.getByRole('group', { name: /whose overtime/i });
+    await user.click(within(group).getByRole('button', { name: 'Blair' }));
+    expect(Number((screen.getByLabelText(/base hourly rate/i) as HTMLInputElement).value)).toBe(50);
+  });
+
+  it('single eligible person renders no earner picker (Wave 18 B7)', async () => {
+    primeStores();
+    render(<MemoryRouter><OvertimeCard /></MemoryRouter>);
+    await screen.findByTestId('ot-takehome');
+    expect(screen.queryByRole('group', { name: /whose overtime/i })).not.toBeInTheDocument();
   });
 
   it('renders empty state when no eligible person exists', () => {
@@ -553,9 +582,10 @@ describe('OvertimeCard', () => {
     primeStores();
     render(<MemoryRouter><OvertimeCard /></MemoryRouter>);
     await screen.findByTestId('ot-takehome');
-    const label = screen.getByText(/Marginal rate on OT/i);
-    const row = label.closest('div')!.parentElement as HTMLElement;
-    const pct = parseFloat((row.textContent ?? '').replace(/[^\d.]/g, ''));
+    // Wave 18 B7: the rate row lives in the shared result block now.
+    const pct = parseFloat(
+      (screen.getByTestId('supplemental-rate').textContent ?? '').replace(/[^\d.]/g, ''),
+    );
     // Pre-fix (base $0) the OT marginal was FICA-only, rendering "7.7%". A
     // real $52k base stacks federal (12%) + CA on top → well above 10%.
     expect(pct).toBeGreaterThan(10);

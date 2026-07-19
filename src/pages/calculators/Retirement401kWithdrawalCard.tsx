@@ -240,7 +240,7 @@ export function Retirement401kWithdrawalCard({
 
   // Wave 15 T6: no $0 breakdown theater. Until the user enters a real
   // withdrawal amount there is no question to answer — headline shows "—"
-  // and the breakdown stays hidden (controls remain visible, BonusTaxCard
+  // and the breakdown stays hidden (controls remain visible, supplemental-card
   // idiom).
   const hasAmount = (withdrawalAmount ?? 0) > 0;
 

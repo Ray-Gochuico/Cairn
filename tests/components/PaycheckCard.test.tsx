@@ -11,7 +11,7 @@ import { FilingStatus } from '@/types/enums';
 import { CONTRIBUTION_LIMITS_2026 } from '@/lib/contribution-limits';
 import { aggregateHouseholdPretax } from '@/lib/calculators/supplemental-wage';
 
-// Federal SINGLE brackets (2026 approximate) — same as BonusTaxCard.test.tsx
+// Federal SINGLE brackets (2026 approximate) — same as the supplemental-pay suite
 const federalSingleBrackets = [
   { min: 0,       max: 11925,  rate: 0.10 },
   { min: 11925,   max: 48475,  rate: 0.12 },

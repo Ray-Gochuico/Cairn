@@ -1,6 +1,6 @@
 -- 0005_add_employment_and_bonus_columns.sql
 -- Adds employment-type and bonus-frequency columns to persons. These fields are the
--- foundation for the OvertimeCalculator (12.6.4–12.6.5) and the BonusTaxCard
+-- foundation for the OvertimeCalculator (12.6.4–12.6.5) and the bonus-card
 -- bonus-frequency feature (12.6.6). Note: expected_bonus already exists from
 -- 0001_initial; this migration only adds the genuinely new columns.
 

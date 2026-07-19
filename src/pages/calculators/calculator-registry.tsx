@@ -5,8 +5,7 @@ import {
   type CalculatorCardDef,
 } from '@/lib/calculator-card-layout';
 import { PaycheckCard } from './PaycheckCard';
-import { BonusTaxCard } from './BonusTaxCard';
-import { CommissionTaxCard } from './CommissionTaxCard';
+import { SupplementalPayCard } from './SupplementalPayCard';
 import { OvertimeCard } from './OvertimeCard';
 import { Retirement401kWithdrawalCard } from './Retirement401kWithdrawalCard';
 import { FinancialIndependenceCard } from './FinancialIndependenceCard';
@@ -21,20 +20,10 @@ export interface CalculatorAvailabilityCtx {
   persons: Person[];
 }
 
-// Wave 18 B6 TRANSITIONAL (removed by Tasks 7–8): the merged ids gate BOTH
-// predecessors, mounted adjacently under the merged cardId, so this commit
-// changes IDS ONLY — any hidden-state regression bisects to here, isolated
-// from the card rewrites. The duplicated panel/testid DOM ids this creates
-// are accepted for exactly this one commit.
-function SupplementalPayTransitional({ cardId }: { cardId?: string }) {
-  return (
-    <>
-      <BonusTaxCard cardId={cardId} />
-      <CommissionTaxCard cardId={cardId} />
-    </>
-  );
-}
-
+// Wave 18 B6 TRANSITIONAL (removed by Task 8): path-to-fi gates BOTH
+// predecessors, mounted adjacently under the merged cardId, so the B6 commit
+// changed ids only. The duplicated DOM ids this creates are accepted until
+// Task 8 collapses the pair.
 function PathToFiTransitional({ cardId }: { cardId?: string }) {
   return (
     <>
@@ -59,7 +48,7 @@ type Registration = Omit<CalculatorCardRegistration, keyof CalculatorCardDef>;
 // def has an entry here — adding a card without registering it fails CI.
 const REGISTRATIONS: Record<string, Registration> = {
   'paycheck': { Component: PaycheckCard },
-  'supplemental-pay': { Component: SupplementalPayTransitional },
+  'supplemental-pay': { Component: SupplementalPayCard },
   'overtime': {
     Component: OvertimeCard,
     // W10: without an hourly/OT person the card can never render — the

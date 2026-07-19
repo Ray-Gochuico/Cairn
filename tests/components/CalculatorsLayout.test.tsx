@@ -18,7 +18,7 @@ import type { AppSettings } from '@/types/schema';
 import CalculatorsLayout from '@/pages/calculators/CalculatorsLayout';
 import { __resetScenarioAssumptionsForTests } from '@/lib/calculators/use-scenario-assumptions';
 
-// Federal SINGLE brackets (2026 approximate) — same fixture as BonusTaxCard.test.tsx
+// Federal SINGLE brackets (2026 approximate) — same fixture as the supplemental-pay suite
 const federalSingleBrackets = [
   { min: 0,       max: 11925,  rate: 0.10 },
   { min: 11925,   max: 48475,  rate: 0.12 },
@@ -176,7 +176,7 @@ describe('CalculatorsLayout', () => {
     vi.useRealTimers();
   });
 
-  it('renders the baseline cards (Paycheck, Bonus, Commission) when settings + household are set', async () => {
+  it('renders the baseline cards (Paycheck, Supplemental pay) when settings + household are set', async () => {
     primeBaseline();
     primeSettings();
     usePersonsStore.setState({
@@ -188,8 +188,8 @@ describe('CalculatorsLayout', () => {
     render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
 
     expect(await screen.findByRole('heading', { name: /Paycheck/i, level: 3 })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Bonus take-home/i })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Commission take-home/i })).toBeInTheDocument();
+    // Wave 18 B7: Bonus + Commission collapsed into one Supplemental pay card.
+    expect(screen.getByRole('heading', { name: /Supplemental pay/i, level: 3 })).toBeInTheDocument();
   });
 
   it('loads household on mount so the FI card can ever resolve (W10 M63)', () => {
@@ -232,7 +232,7 @@ describe('CalculatorsLayout', () => {
 
     render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
 
-    await screen.findByRole('heading', { name: /Bonus take-home/i });
+    await screen.findByRole('heading', { name: /Supplemental pay/i, level: 3 });
     expect(screen.queryByText(/^Overtime$/i)).not.toBeInTheDocument();
   });
 
@@ -266,7 +266,7 @@ describe('CalculatorsLayout', () => {
 
       render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
 
-      await screen.findByRole('heading', { name: /Bonus take-home/i });
+      await screen.findByRole('heading', { name: /Supplemental pay/i, level: 3 });
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
   });
@@ -288,7 +288,8 @@ describe('CalculatorsLayout', () => {
       render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
 
       await screen.findByRole('heading', { name: /Paycheck/i, level: 3 });
-      expect(screen.queryByText(/Bonus take-home/i)).not.toBeInTheDocument();
+      // D2: a single hidden legacy entry folds into the merged successor.
+      expect(screen.queryByTestId('calc-card-supplemental-pay')).not.toBeInTheDocument();
     });
 
     it('toggling a hidden card back on (Customize Switch) restores it via update', async () => {
@@ -308,7 +309,7 @@ describe('CalculatorsLayout', () => {
 
       render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
       await screen.findByRole('heading', { name: /Paycheck/i, level: 3 });
-      expect(screen.queryByText(/Bonus take-home/i)).not.toBeInTheDocument();
+      expect(screen.queryByTestId('calc-card-supplemental-pay')).not.toBeInTheDocument();
 
       await userEvent.click(screen.getByRole('button', { name: /customize paycheck & tax/i }));
       await userEvent.click(screen.getByRole('switch', { name: 'Supplemental pay' }));
@@ -318,7 +319,9 @@ describe('CalculatorsLayout', () => {
       // Post-upgrade writes are COMPLETE over the new id list — legacy ids wash out.
       expect(patch.calculatorCardLayout).toHaveLength(10);
       expect(patch.calculatorCardLayout.some((e) => e.id === 'bonus-tax')).toBe(false);
-      expect(await screen.findByRole('heading', { name: /Bonus take-home/i })).toBeInTheDocument();
+      expect(
+        await screen.findByRole('heading', { name: /Supplemental pay/i, level: 3 }),
+      ).toBeInTheDocument();
     });
   });
 
@@ -333,13 +336,13 @@ describe('CalculatorsLayout', () => {
     await screen.findByRole('heading', { name: /paycheck & tax/i, level: 2 });
     expect(screen.getByRole('heading', { name: /path to fi/i, level: 2 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /next dollar/i, level: 2 })).toBeInTheDocument();
-    // Render order === CALCULATOR_CARD_IDS order. Wave-18 B6 TRANSITIONAL:
-    // the merged ids each mount BOTH predecessors until Tasks 7–8 collapse
-    // them, so supplemental-pay / path-to-fi appear twice in the DOM scan.
+    // Render order === CALCULATOR_CARD_IDS order. Wave-18 B6 TRANSITIONAL
+    // (until Task 8): path-to-fi still mounts BOTH predecessors, so it
+    // appears twice in the DOM scan.
     const ids = screen.getAllByTestId(/^calc-card-/).map((el) =>
       el.getAttribute('data-testid')!.replace('calc-card-', ''));
     const expected = CALCULATOR_CARD_IDS.flatMap((id) =>
-      id === 'supplemental-pay' || id === 'path-to-fi' ? [id, id] : [id]);
+      id === 'path-to-fi' ? [id, id] : [id]);
     expect(ids).toEqual(expected);
   });
 
@@ -469,7 +472,7 @@ describe('CalculatorsLayout', () => {
     });
   });
 
-  it('Commission card id in layout matches card fallback (commission-tax)', async () => {
+  it('per-segment calc-state keys survive the merge (D12: calc-state:commission-tax preserved)', async () => {
     primeBaseline();
     primeSettings();
     usePersonsStore.setState({
@@ -478,13 +481,14 @@ describe('CalculatorsLayout', () => {
       error: null,
     });
 
-    sessionStorage.setItem('calc-state:commission-tax', JSON.stringify({ annualCommission: 99999 }));
+    sessionStorage.setItem('calc-state:commission-tax', JSON.stringify({ perCheck: 1234 }));
 
     render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
-    await screen.findByRole('heading', { name: /Commission take-home/i });
+    await screen.findByRole('heading', { name: /Supplemental pay/i, level: 3 });
 
     expect(sessionStorage.getItem('calc-state:commission-tax')).not.toBeNull();
     expect(sessionStorage.getItem('calc-state:commission')).toBeNull();
+    expect(sessionStorage.getItem('calc-state:supplemental-pay')).toBeNull();
   });
 
   it('renders the ScenarioBar between the intro copy and the grid (Wave 16)', async () => {

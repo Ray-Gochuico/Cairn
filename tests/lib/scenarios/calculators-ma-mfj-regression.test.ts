@@ -4,8 +4,8 @@ import { computeBonusTax, type Bracket } from '@/lib/tax';
 // -----------------------------------------------------------------------------
 // Wiring-sweep R3 — MA-MFJ standardDeduction regression
 //
-// Pre-fix: the 6 calculator call sites (PaycheckCard, BonusTaxCard,
-// CommissionTaxCard, OvertimeCard, Retirement401kWithdrawalCard,
+// Pre-fix: the 6 calculator call sites (PaycheckCard, the old Bonus and
+// Commission cards (now SupplementalPayCard), OvertimeCard, Retirement401kWithdrawalCard,
 // IncomePopover) passed a scalar federal.standardDeduction. The legacy
 // `normalizeStandardDeduction(scalar)` then applied that same federal SD
 // ($32,200 MFJ in 2026) to state tax — under-collecting MA state tax by

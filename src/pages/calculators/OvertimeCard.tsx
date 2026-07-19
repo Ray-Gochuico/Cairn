@@ -10,7 +10,10 @@ import { useCalculatorState } from '@/lib/calculator-state';
 import { NumberField } from '@/components/calculators/NumberField';
 import { NotModeledDisclosure } from '@/components/calculators/NotModeledDisclosure';
 import { ResultRow } from '@/components/calculators/ResultRow';
-import { formatCurrency, formatPercent } from '@/lib/format';
+import { SupplementalResultBlock } from '@/components/calculators/SupplementalResultBlock';
+import { EarnerSelect } from '@/components/calculators/EarnerSelect';
+import { useSelectedEarner } from '@/lib/calculators/use-selected-earner';
+import { formatCurrency } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import {
@@ -72,7 +75,20 @@ export function OvertimeCard({ cardId }: OvertimeCardProps = {}) {
   const dependents = useDependentsStore((s) => s.dependents);
   const tax = useHouseholdTaxContext();
 
-  const eligiblePerson = useMemo(() => persons.find(isEligible), [persons]);
+  // Wave 18 B7: with 2+ eligible persons an EarnerSelect picks whose OT this
+  // is — the selection drives deriveBaseRate, the salary patch, and
+  // recipientIndex. Single-eligible households see no picker (unchanged).
+  const eligible = useMemo(() => persons.filter(isEligible), [persons]);
+  const eligibleIds = useMemo(
+    () => eligible.map((p) => p.id).filter((id): id is number => id != null),
+    [eligible],
+  );
+  const [otEarnerId, setOtEarnerId] = useSelectedEarner(
+    cardId ?? 'overtime',
+    eligible[0]?.id ?? null,
+    eligibleIds,
+  );
+  const eligiblePerson = eligible.find((p) => p.id === otEarnerId) ?? eligible[0];
   const derivedBase = eligiblePerson ? deriveBaseRate(eligiblePerson) : 0;
   const { values, setValue, reset, isOverridden, overriddenKeys } = useCalculatorState(cardId ?? 'overtime', { baseRate: derivedBase });
   const baseHourlyRate = values.baseRate ?? 0;
@@ -187,6 +203,12 @@ export function OvertimeCard({ cardId }: OvertimeCardProps = {}) {
   const rail = (
     <>
       {isOverridden && <RailReset onClick={reset} />}
+      <EarnerSelect
+        persons={eligible}
+        selectedId={eligiblePerson?.id ?? null}
+        onChange={setOtEarnerId}
+        label="Whose overtime"
+      />
       <div className="space-y-1">
         <NumberField
           id="ot-base-rate"
@@ -356,12 +378,23 @@ export function OvertimeCard({ cardId }: OvertimeCardProps = {}) {
         ))}
       </div>
 
-      {/* Summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-        <ResultRow label="Total OT gross" value={formatCurrency(totalGross)} />
-        <ResultRow label="Marginal rate on OT" value={formatPercent(taxResult.marginalRateOnBonus)} />
-        <ResultRow label="Total OT take-home" value={formatCurrency(overtimeTakeHome)} emphasis />
-      </div>
+      {/* Summary — the shared supplemental result block (Wave 18 B7).
+          periods=1: the figures below are already per-entered-period; method
+          is fixed AGGREGATE (OT has no flat-method toggle — do not add one). */}
+      <SupplementalResultBlock
+        noun="overtime"
+        periods={1}
+        method="AGGREGATE"
+        rows={{
+          federal: taxResult.bonusBreakdown.federal / periodsCounted,
+          fica: taxResult.bonusBreakdown.fica / periodsCounted,
+          state: taxResult.bonusBreakdown.state / periodsCounted,
+          city: taxResult.bonusBreakdown.city / periodsCounted,
+          total: taxResult.bonusBreakdown.total / periodsCounted,
+          takeHome: overtimeTakeHome,
+          rate: taxResult.marginalRateOnBonus,
+        }}
+      />
 
       {recurrence === 'REPEATS' && (
         <div className="mt-3 pt-3 border-t text-sm">

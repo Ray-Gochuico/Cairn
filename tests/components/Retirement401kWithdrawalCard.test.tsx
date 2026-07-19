@@ -172,7 +172,7 @@ describe('Retirement401kWithdrawalCard', () => {
     render(<MemoryRouter><Retirement401kWithdrawalCard /></MemoryRouter>);
     expect(screen.getByTestId('401k-withdrawal-net').textContent).toBe('—');
     expect(screen.getByText(/Enter a withdrawal amount/i)).toBeInTheDocument();
-    // Controls stay visible (BonusTaxCard idiom).
+    // Controls stay visible (supplemental-card idiom).
     expect(screen.getByLabelText(/withdrawal amount/i)).toBeInTheDocument();
     // No breakdown rows rendered.
     expect(screen.queryByText(/Federal tax on withdrawal/i)).not.toBeInTheDocument();
