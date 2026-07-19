@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { vi } from 'vitest';
@@ -189,7 +189,10 @@ it('open panel carries the motion-safe 180ms fade classes (opacity only, typed d
   await user.click(screen.getByTestId('test-calc-trigger'));
   const panel = document.getElementById('panel-test-calc')!;
   expect(panel.className).toContain('motion-safe:animate-in');
-  expect(panel.className).toContain('[animation-duration:180ms]');
+  // Smoke fix 2: the duration must ride the motion-safe variant chain or the
+  // animate-in engine's own 150ms wins the cascade.
+  expect(panel.className).toContain('motion-safe:[animation-duration:180ms]');
+  expect(panel.className).not.toMatch(/(^|\s)\[animation-duration:180ms\]/);
   expect(panel.className).not.toMatch(/accordion|slide|height/);
 });
 
@@ -250,4 +253,31 @@ it('D8: Esc with focus OUTSIDE the card leaves the panel open (containment guard
   screen.getByRole('button', { name: 'Outside' }).focus();
   await user.keyboard('{Escape}');
   expect(screen.getByText('Body content')).toBeInTheDocument();
+});
+
+it("D9 focus restore never scroll-yanks: opening B while A is open (focus on body) restores A's trigger focus with preventScroll", () => {
+  // Safari/WKWebView (the Tauri webview) does NOT focus buttons on click —
+  // activeElement stays on body, so closing A fires the D9 restore. Without
+  // preventScroll the browser scrolls A's (possibly distant) trigger into
+  // view — a scroll jump on every interactive open. fireEvent.click mirrors
+  // that no-focus click.
+  render(
+    <Harness initialOpen="test-calc">
+      <>
+        {card()}
+        <CalculatorCard title="Other" headline="$2" meaning="m" cardId="other-calc">
+          <div>Other body</div>
+        </CalculatorCard>
+      </>
+    </Harness>,
+  );
+  const triggerA = screen.getByTestId('test-calc-trigger');
+  const focusSpy = vi.fn();
+  // Instance-level override (the prototype may carry an accessor-only focus
+  // in this suite's run order).
+  Object.defineProperty(triggerA, 'focus', { value: focusSpy, configurable: true });
+  (document.activeElement as HTMLElement | null)?.blur?.();
+  fireEvent.click(screen.getByTestId('other-calc-trigger'));
+  expect(screen.getByText('Other body')).toBeInTheDocument();
+  expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
 });

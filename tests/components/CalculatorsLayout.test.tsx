@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { CALCULATOR_CARD_IDS } from '@/lib/calculator-card-layout';
@@ -390,6 +390,39 @@ describe('CalculatorsLayout', () => {
       render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
       await screen.findByTestId('calc-card-paycheck');
       expect(document.querySelectorAll('[id^="panel-"]')).toHaveLength(0);
+    });
+
+    it('#hash open re-scrolls the card AFTER boot layout settles (bounded settle poll, nearest)', async () => {
+      window.history.replaceState(null, '', '/calculators#coast-fi');
+      primeBaseline();
+      primeSettings();
+      usePersonsStore.setState({ persons: [{ ...basePerson }], isLoading: false, error: null });
+      // jsdom has no scrollIntoView — install a recorder on the prototype.
+      const scrollCalls: Array<{ id: string; opts: ScrollIntoViewOptions | undefined }> = [];
+      (window.HTMLElement.prototype as { scrollIntoView?: unknown }).scrollIntoView = function (
+        this: HTMLElement,
+        opts?: ScrollIntoViewOptions,
+      ) {
+        scrollCalls.push({ id: this.id, opts });
+      };
+      try {
+        render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+        await screen.findByTestId('calc-card-coast-fi');
+        const hits = () => scrollCalls.filter((c) => c.id === 'coast-fi');
+        // The card's own open-effect fires once at the open commit…
+        expect(hits().length).toBeGreaterThan(0);
+        const initialCount = hits().length;
+        // …and smoke item 7 pins a SECOND, corrective scroll from the layout
+        // once the card's position has been stable across settle ticks —
+        // setTimeout-driven (rAF starves in hidden tabs), block:'nearest'.
+        await waitFor(
+          () => expect(hits().length).toBeGreaterThan(initialCount),
+          { timeout: 2000 },
+        );
+        expect(hits().at(-1)!.opts).toMatchObject({ block: 'nearest' });
+      } finally {
+        delete (window.HTMLElement.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+      }
     });
 
     it('open/close mirrors into the fragment via replaceState', async () => {
