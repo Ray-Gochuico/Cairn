@@ -16,7 +16,6 @@ import {
   CalendarCheck,
   GraduationCap,
   GitBranch,
-  History,
   PenSquare,
   Settings as SettingsIcon,
   type LucideIcon,
@@ -65,7 +64,10 @@ export const DEFAULT_SECTIONS: SidebarSectionShape[] = [
       { to: '/learn', label: 'Learn', icon: GraduationCap },
       { to: '/calculators', label: 'Calculators', icon: Calculator },
       { to: '/what-if', label: 'What-If', icon: GitBranch },
-      { to: '/calculators/backtest', label: 'Backtest', icon: History },
+      // Wave 18 C9: the duplicate Backtest entry is retired — the tool lives
+      // behind its Calculators waymark card (the /calculators/backtest route
+      // itself is unchanged; stored layouts carrying the old id are ignored
+      // by applySidebarLayout's unknown-id handling).
     ],
   },
   {

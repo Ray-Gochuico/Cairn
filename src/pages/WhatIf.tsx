@@ -396,7 +396,8 @@ export default function WhatIf() {
             >
               Explore with Historical Backtest →
             </Link>
-            {' '}(the backtest runs before withdrawal tax)
+            {' '}(the backtest runs before withdrawal tax — What-If changes the plan;
+            Backtest stress-tests it against history)
           </li>
           <li>
             <span className="font-medium">

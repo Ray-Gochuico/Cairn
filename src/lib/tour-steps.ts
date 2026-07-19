@@ -111,12 +111,8 @@ export const TOUR_STEPS: TourStep[] = [
     body: 'Compare scenarios side by side to see how a raise, a move, or a market change plays out.',
     core: false,
   },
-  {
-    to: '/calculators/backtest',
-    title: 'Backtest',
-    body: 'See how a portfolio would have performed against decades of historical market data.',
-    core: false,
-  },
+  // Wave 18 C9: the dedicated Backtest sidebar entry (and so its tour step)
+  // is retired — the tool is reached through the Calculators waymark card.
   // System
   {
     to: '/monthly',

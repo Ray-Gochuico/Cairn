@@ -61,6 +61,20 @@ describe('applySidebarLayout', () => {
     expect(result[0].items.map((i) => i.to)).toEqual(['/net-worth', '/', '/budget']);
   });
 
+  it('tolerates a stored entry for a since-removed item (Wave 18 C9: the retired Backtest link)', () => {
+    // A user's persisted layout may still carry '/calculators/backtest' after
+    // the duplicate sidebar entry was retired — the stored id must simply be
+    // ignored (it never matches a default item), never crash or resurrect.
+    const layout: SidebarLayoutEntry[] = [
+      { to: '/net-worth', hidden: false },
+      { to: '/calculators/backtest', hidden: false },
+      { to: '/', hidden: false },
+    ];
+    const result = applySidebarLayout(defaults, layout);
+    expect(result[0].items.map((i) => i.to)).not.toContain('/calculators/backtest');
+    expect(result[0].items.map((i) => i.to)).toContain('/net-worth');
+  });
+
   it('preserves section order and section labels', () => {
     const layout: SidebarLayoutEntry[] = [
       { to: '/spending', hidden: false },
