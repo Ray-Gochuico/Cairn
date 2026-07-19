@@ -152,11 +152,16 @@ export function CalculatorCard({
 
   // D9: indirect close (Close button, Customize hide, another card opening)
   // can unmount the focused node — if focus fell to body, restore it to the
-  // trigger so keyboard users are never dropped.
+  // trigger so keyboard users are never dropped. preventScroll (smoke fix):
+  // Safari/WKWebView never focuses buttons on click, so opening card B while
+  // A is open lands here with activeElement=body — without preventScroll the
+  // browser would yank the scroller to A's (possibly distant) trigger on
+  // every interactive open.
   useEffect(() => {
     if (wasOpen.current && !open) {
       const active = document.activeElement;
-      if (!active || active === document.body) triggerRef.current?.focus();
+      if (!active || active === document.body)
+        triggerRef.current?.focus({ preventScroll: true });
     }
     wasOpen.current = open;
     if (!open) setMenuOpen(false);
@@ -305,7 +310,7 @@ export function CalculatorCard({
       {open && (
         <CardContent
           id={`panel-${id}`}
-          className="min-w-0 pt-0 motion-safe:animate-in fade-in ease-out [animation-duration:180ms]"
+          className="min-w-0 pt-0 motion-safe:animate-in fade-in ease-out motion-safe:[animation-duration:180ms]"
         >
           <div className={cn('grid min-w-0 grid-cols-1 gap-6', rail && 'lg:grid-cols-[280px_1fr]')}>
             {rail && <div className="flex min-w-0 flex-col gap-3">{rail}</div>}

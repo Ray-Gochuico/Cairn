@@ -291,6 +291,39 @@ export default function CalculatorsLayout() {
     const card = CALCULATOR_CARDS.find((c) => c.id === target);
     if (!card || hiddenSet.has(target) || !isCardAvailable(card)) return;
     setOpenId(target);
+    // Smoke fix (checklist item 7): the card's own open-effect scrolls with
+    // block:'nearest' on the commit where it opens — at cold load the content
+    // above (bar + sections) is still settling, so that scroll can no-op
+    // against a transient position and later layout pushes the card below
+    // the fold. Re-run the scroll once the card's position has been STABLE
+    // for two consecutive 50ms ticks (bounded at 10). setTimeout, not rAF:
+    // rAF never fires in a hidden/background tab, which would strand a deep
+    // link opened there. Interactive opens never take this path (the hash is
+    // consumed ONCE), so clicking a visible trigger keeps its jank-free
+    // 'nearest' behavior.
+    const reduced =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let lastTop: number | null = null;
+    let stableTicks = 0;
+    let ticks = 0;
+    const settleTick = () => {
+      const el = document.getElementById(target);
+      if (!el) return;
+      const top = el.getBoundingClientRect?.().top ?? 0;
+      stableTicks = lastTop !== null && Math.abs(top - lastTop) < 1 ? stableTicks + 1 : 0;
+      lastTop = top;
+      ticks += 1;
+      if (stableTicks >= 2 || ticks >= 10) {
+        // A hidden tab never animates a smooth scroll (frames are throttled
+        // to zero) — jump instantly there, and under reduced motion.
+        const instant = reduced || document.visibilityState !== 'visible';
+        el.scrollIntoView?.({ block: 'nearest', behavior: instant ? 'auto' : 'smooth' });
+        return;
+      }
+      window.setTimeout(settleTick, 50);
+    };
+    window.setTimeout(settleTick, 50);
   }, [gate.settled, settings, hiddenSet, isCardAvailable]);
 
   useEffect(() => {

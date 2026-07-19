@@ -216,7 +216,7 @@ const CAIRN_END_DOT = function CairnEndDot(props: { cx?: number; cy?: number }) 
     // warns and generates NOTHING for it, silently losing the 180ms. (Note:
     // Tailwind's content scanner reads comments too — don't name the bare
     // class form here or the warning comes back.)
-    <g className="motion-safe:animate-in fade-in ease-out [animation-duration:180ms]">
+    <g className="motion-safe:animate-in fade-in ease-out motion-safe:[animation-duration:180ms]">
       <circle cx={cx} cy={cy} r={8} fill={HERO} fillOpacity={0.15} />
       <rect x={cx - 1.75} y={cy - 4.6} width={3.5} height={2.4} rx={1.2} fill={HERO} />
       <rect x={cx - 2.75} y={cy - 1.7} width={5.5} height={2.7} rx={1.35} fill={HERO} />
