@@ -26,6 +26,7 @@ import {
 // owned by Calculators Wave 0b — see the v1.x coordination contract §1/§2.
 // Replaces the inline seededYears/getCurrentTaxYear/loadAvailableYears + the
 // hand-rolled `lookup` closure this page used to own.
+import { NotModeledDisclosure } from '@/components/calculators/NotModeledDisclosure';
 import { useHouseholdTaxContext } from '@/lib/calculators/use-household-tax-context';
 import { prettifyCityCode, US_STATES } from '@/lib/jurisdiction-format';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
@@ -829,11 +830,7 @@ export default function PaycheckCalculator() {
 
           {/* Ported from PaycheckCard.tsx:224-267, trimmed for items now modeled
               (post-tax + extra-withholding bullets removed). */}
-          <details className="text-xs text-muted-foreground">
-            <summary className="cursor-pointer font-medium hover:text-foreground">
-              What this calculator does NOT model
-            </summary>
-            <ul className="mt-2 list-disc space-y-1 pl-5">
+          <NotModeledDisclosure>
               <li>
                 <TermTooltip term="FICA" /> is computed on your <strong>full gross</strong>.
                 Real Social Security &amp; Medicare wages exclude §125 cafeteria-plan
@@ -861,8 +858,7 @@ export default function PaycheckCalculator() {
                 Local rules for the ~250 city/county jurisdictions are estimates; unusual
                 residency splits aren't handled.
               </li>
-            </ul>
-          </details>
+          </NotModeledDisclosure>
           {/* (Back-nav lives at the top of the page — the shared W2 header
               affordance — so no duplicate footer back-link here.) */}
         </CardContent>

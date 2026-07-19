@@ -9,6 +9,7 @@ import { aggregateHouseholdPretax, computeSupplementalWageTax } from '@/lib/calc
 import { useHouseholdTaxContext } from '@/lib/calculators/use-household-tax-context';
 import { useCalculatorState } from '@/lib/calculator-state';
 import { NumberField } from '@/components/calculators/NumberField';
+import { NotModeledDisclosure } from '@/components/calculators/NotModeledDisclosure';
 import { ResultRow } from '@/components/calculators/ResultRow';
 import { formatCurrency, formatPercent } from '@/lib/format';
 import { Button } from '@/components/ui/button';
@@ -412,11 +413,7 @@ export function OvertimeCard({ cardId }: OvertimeCardProps = {}) {
         &#39;s marginal rate.
       </p>
 
-      <details className="text-xs mt-3 border-t pt-2 text-muted-foreground">
-        <summary className="cursor-pointer font-medium hover:text-foreground">
-          What this calculator does NOT model
-        </summary>
-        <ul className="mt-2 list-disc pl-5 space-y-1">
+      <NotModeledDisclosure footer="For a decision that hinges on overtime (loan qualification, whether an extra shift is worth it), run the numbers past a CPA — the items above can shift the bottom line materially.">
           <li>
             <strong>State daily-overtime rules.</strong> CA owes daily OT over 8
             hours (double-time over 12); NV has a daily rule tied to pay rate.
@@ -445,13 +442,7 @@ export function OvertimeCard({ cardId }: OvertimeCardProps = {}) {
             bonuses and commissions legally raise the OT base rate — the base
             rate here is the one you enter.
           </li>
-        </ul>
-        <p className="mt-2">
-          For a decision that hinges on overtime (loan qualification, whether an
-          extra shift is worth it), run the numbers past a CPA — the items above
-          can shift the bottom line materially.
-        </p>
-      </details>
+      </NotModeledDisclosure>
     </CalculatorCard>
   );
 }

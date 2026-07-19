@@ -7,6 +7,7 @@ import { calculate401kWithdrawalTax } from '@/lib/tax';
 import { useHouseholdTaxContext } from '@/lib/calculators/use-household-tax-context';
 import { useCalculatorState } from '@/lib/calculator-state';
 import { NumberField } from '@/components/calculators/NumberField';
+import { NotModeledDisclosure } from '@/components/calculators/NotModeledDisclosure';
 import { ResultRow } from '@/components/calculators/ResultRow';
 import { StatTile } from '@/components/calculators/StatTile';
 import { formatCurrency, formatPercent } from '@/lib/format';
@@ -355,11 +356,7 @@ export function Retirement401kWithdrawalCard({
               incremental-tax path via the "NIIT delta" line above (uses
               Other investment income input + filing-status threshold).
               Its bullet was removed from this list since it is now modeled. */}
-          <details className="text-xs mt-2 border-t pt-2 text-muted-foreground">
-            <summary className="cursor-pointer font-medium hover:text-foreground">
-              What this calculator does NOT model
-            </summary>
-            <ul className="mt-2 list-disc pl-5 space-y-1">
+          <NotModeledDisclosure footer="For an actual withdrawal decision, run the numbers past a CFP or tax professional — the items above can each shift the bottom line by several thousand dollars.">
               <li>
                 <TermTooltip term="AMT">AMT</TermTooltip> (Alternative Minimum Tax) on
                 ISO exercises landing in the same year as the withdrawal.
@@ -382,13 +379,7 @@ export function Retirement401kWithdrawalCard({
                 Distributions force pre-tax withdrawals on a schedule;
                 this calculator only computes a single voluntary withdrawal).
               </li>
-            </ul>
-            <p className="mt-2">
-              For an actual withdrawal decision, run the numbers past a CFP or
-              tax professional — the items above can each shift the bottom line
-              by several thousand dollars.
-            </p>
-          </details>
+          </NotModeledDisclosure>
         </div>
       )}
     </CalculatorCard>

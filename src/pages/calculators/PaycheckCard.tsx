@@ -12,6 +12,7 @@ import { CONTRIBUTION_LIMITS_2026 } from '@/lib/contribution-limits';
 import { PAYCHECK_PERIODS, periodsPerYear, type PaycheckPeriod } from '@/lib/paycheck-periods';
 import { getCurrentTaxYear } from '@/lib/current-tax-year';
 import { ResultRow } from '@/components/calculators/ResultRow';
+import { NotModeledDisclosure } from '@/components/calculators/NotModeledDisclosure';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 
 interface PaycheckCardProps {
@@ -217,14 +218,10 @@ export function PaycheckCard({ cardId }: PaycheckCardProps = {}) {
           The take-home headline is an estimate because this engine omits
           items that materially shift the real number. List them so the user
           knows what isn't included. */}
-      <details className="text-xs mt-3 border-t pt-2 text-muted-foreground">
-        <summary className="cursor-pointer font-medium hover:text-foreground">
-          What this calculator does NOT model
-        </summary>
-        <p className="mt-2">
-          {`Social Security wage base — OASDI stops at $${CONTRIBUTION_LIMITS_2026.SOCIAL_SECURITY_WAGE_BASE.toLocaleString('en-US')} per person (2026); the calculator applies the cap per earner.`}
-        </p>
-        <ul className="mt-2 list-disc pl-5 space-y-1">
+      <NotModeledDisclosure
+        intro={`Social Security wage base — OASDI stops at $${CONTRIBUTION_LIMITS_2026.SOCIAL_SECURITY_WAGE_BASE.toLocaleString('en-US')} per person (2026); the calculator applies the cap per earner.`}
+        footer="For an actual reconciliation, compare against a real pay stub or run the numbers past a CPA — the items above can each shift the bottom line by tens or hundreds of dollars per period."
+      >
           <li>
             Hourly wages — this card sums annual salaries, so an hourly
             earner's pay is not included here (see the Overtime card for
@@ -257,13 +254,7 @@ export function PaycheckCard({ cardId }: PaycheckCardProps = {}) {
             W-4 4(c) extra-withholding line — if you ask your employer to
             withhold an extra $X per check, that's not reflected here.
           </li>
-        </ul>
-        <p className="mt-2">
-          For an actual reconciliation, compare against a real pay
-          stub or run the numbers past a CPA — the items above can each shift
-          the bottom line by tens or hundreds of dollars per period.
-        </p>
-      </details>
+      </NotModeledDisclosure>
     </CalculatorCard>
   );
 }
