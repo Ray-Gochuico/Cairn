@@ -25,6 +25,8 @@ import type { CardLayoutEntry } from '@/types/schema';
 import { CALCULATOR_CARDS, type CalculatorCardRegistration } from './calculator-registry';
 import { CalculatorShellProvider, type CalculatorShellApi } from './calculator-shell-context';
 import { InlineLink } from '@/components/calculators/InlineLink';
+import { NumberField } from '@/components/calculators/NumberField';
+import { useNextDollarStore } from '@/lib/calculators/next-dollar-store';
 
 const STALE_BANNER_STORAGE_KEY = 'stale-tax-year-banner-dismissed';
 
@@ -54,6 +56,33 @@ function withCardHidden(
     id: cardId,
     hidden: hiddenById.get(cardId) === true,
   }));
+}
+
+/** Wave 18 D5: the compact section-header "next dollar" input — one number,
+ *  two answers (Debt extra + Allocator contribution), bound to the shared
+ *  session store. */
+function NextDollarField() {
+  const amount = useNextDollarStore((s) => s.amount);
+  const setAmount = useNextDollarStore((s) => s.setAmount);
+  return (
+    <div className="flex flex-wrap items-end gap-3">
+      <div className="w-40">
+        <NumberField
+          id="next-dollar"
+          label="Next dollar"
+          value={amount}
+          onChange={setAmount}
+          suffix="$/mo"
+          step="50"
+          min={0}
+        />
+      </div>
+      <p className="pb-1 text-xs text-muted-foreground">
+        One number, two answers: what it does against your debt, and where it goes in your
+        portfolio.
+      </p>
+    </div>
+  );
 }
 
 function CalculatorsSkeleton() {
@@ -374,6 +403,10 @@ export default function CalculatorsLayout() {
                   setCardHidden={setCardHidden}
                 />
               </div>
+              {/* Wave 18 D13/D5: the shared next-dollar $/mo lives in ITS
+                  section's header, feeding Debt's extra + the Allocator's
+                  contribution as defaults. No winner is declared. */}
+              {group.id === 'next-dollar' && <NextDollarField />}
               {/* Wave-12 explicitly deferred this stacked double-hairline
                   divider ("Explicit non-goals") — Wave 17 cashes the chip:
                   two 1px border rules, 3px apart. */}

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -612,6 +612,55 @@ describe('DebtPayoffCard', () => {
 });
 
 // ── Unit tests for the exported helper functions ────────────────────────────
+
+describe('shared next-dollar default (Wave 18 D5)', () => {
+  beforeEach(async () => {
+    useLoansStore.setState({ loans: [makeLoan({ id: 1 })], isLoading: false, error: null });
+    sessionStorage.clear();
+    const { useNextDollarStore } = await import('@/lib/calculators/next-dollar-store');
+    useNextDollarStore.setState({ amount: null });
+  });
+  afterEach(async () => {
+    // Never leak the shared figure into later describes (it feeds DEFAULTS).
+    const { useNextDollarStore } = await import('@/lib/calculators/next-dollar-store');
+    useNextDollarStore.setState({ amount: null });
+  });
+
+  it('the section value enters as the extra DEFAULT; a local edit overrides; Reset returns to it', async () => {
+    const { useNextDollarStore } = await import('@/lib/calculators/next-dollar-store');
+    const { act } = await import('@testing-library/react');
+    const user = userEvent.setup();
+    act(() => useNextDollarStore.getState().setAmount(300));
+    render(<MemoryRouter><DebtPayoffCard /></MemoryRouter>);
+    const extra = screen.getByLabelText(/extra monthly payment/i) as HTMLInputElement;
+    expect(Number(extra.value)).toBe(300);
+
+    // Local edit wins and SURVIVES a later store change (useCalculatorState
+    // override semantics — no new mechanism).
+    await user.clear(extra);
+    await user.type(extra, '450');
+    act(() => useNextDollarStore.getState().setAmount(700));
+    expect(Number((screen.getByLabelText(/extra monthly payment/i) as HTMLInputElement).value)).toBe(450);
+
+    // Reset returns to the shared value.
+    await user.click(screen.getByRole('button', { name: /reset to my data/i }));
+    expect(Number((screen.getByLabelText(/extra monthly payment/i) as HTMLInputElement).value)).toBe(700);
+  });
+
+  it('projections use the shared amount (interest drops vs no-extra)', async () => {
+    const { useNextDollarStore } = await import('@/lib/calculators/next-dollar-store');
+    const { act } = await import('@testing-library/react');
+    render(<MemoryRouter><DebtPayoffCard /></MemoryRouter>);
+    const before = parseFloat(
+      screen.getByTestId('debt-avalanche-interest').textContent!.replace(/[^\d.]/g, ''),
+    );
+    act(() => useNextDollarStore.getState().setAmount(400));
+    const after = parseFloat(
+      screen.getByTestId('debt-avalanche-interest').textContent!.replace(/[^\d.]/g, ''),
+    );
+    expect(after).toBeLessThan(before);
+  });
+});
 
 describe('extra-payment savings pin (round-3 T21)', () => {
   beforeEach(() => {

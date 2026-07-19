@@ -28,6 +28,7 @@ import {
   type StrategyOutcome,
 } from '@/lib/debt-payoff-comparison';
 import { InlineLink } from '@/components/calculators/InlineLink';
+import { useNextDollarStore } from '@/lib/calculators/next-dollar-store';
 import { cn } from '@/lib/utils';
 
 /**
@@ -104,7 +105,14 @@ function StrategyColumn({
 export function DebtPayoffCard({ cardId }: DebtPayoffCardProps = {}) {
   const loans = useLoansStore((s) => s.loans);
 
-  const defaults = useMemo(() => ({ strategy: 'none' as Strategy, extraTotal: 0 }), []);
+  // D5 (Wave 18): the section-level next-dollar figure enters as the extra
+  // DEFAULT — a local edit is an override that wins; Reset returns to the
+  // shared value (useCalculatorState's existing contract, no new mechanism).
+  const nextDollar = useNextDollarStore((s) => s.amount);
+  const defaults = useMemo(
+    () => ({ strategy: 'none' as Strategy, extraTotal: nextDollar ?? 0 }),
+    [nextDollar],
+  );
   const { values, setValue, reset, isOverridden, overriddenKeys } = useCalculatorState(
     cardId ?? 'debt-payoff',
     defaults,

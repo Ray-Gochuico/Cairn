@@ -332,6 +332,28 @@ describe('ContributionAllocatorCard — calculator-state + grouped buys (Wave 18
     expect(sum).toBeCloseTo(total, 0);
   });
 
+  it('D5: an explicit next-dollar beats the historical statistic; Reset returns to it', async () => {
+    const { useNextDollarStore } = await import('@/lib/calculators/next-dollar-store');
+    const { act } = await import('@testing-library/react');
+    act(() => useNextDollarStore.getState().setAmount(300));
+    render(<MemoryRouter><ContributionAllocatorCard cardId="contribution-allocator" /></MemoryRouter>);
+    const input = (await screen.findByRole('spinbutton', { name: /monthly contribution/i })) as HTMLInputElement;
+    // Store $300 wins over the $500 typical statistic — the user just told
+    // us the number (D5).
+    expect(Number(input.value)).toBe(300);
+    // Local override wins over a later store change; Reset returns to shared.
+    fireEvent.change(input, { target: { value: '900' } });
+    act(() => useNextDollarStore.getState().setAmount(350));
+    expect(
+      Number((screen.getByRole('spinbutton', { name: /monthly contribution/i }) as HTMLInputElement).value),
+    ).toBe(900);
+    fireEvent.click(screen.getByRole('button', { name: /reset to my data/i }));
+    expect(
+      Number((screen.getByRole('spinbutton', { name: /monthly contribution/i }) as HTMLInputElement).value),
+    ).toBe(350);
+    act(() => useNextDollarStore.getState().setAmount(null));
+  });
+
   it('drift tiles carry the plain-language caption', async () => {
     render(<MemoryRouter><ContributionAllocatorCard cardId="contribution-allocator" /></MemoryRouter>);
     expect(

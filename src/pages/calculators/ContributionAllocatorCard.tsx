@@ -6,6 +6,7 @@ import { CalcTable, CalcRow, type CalcColumn } from '@/components/calculators/Ca
 import { useCalculatorState } from '@/lib/calculator-state';
 import { useLocalToday } from '@/lib/use-local-today';
 import { typicalMonthlyContribution } from '@/lib/typical-contribution';
+import { useNextDollarStore } from '@/lib/calculators/next-dollar-store';
 import { useContributionsStore } from '@/stores/contributions-store';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
@@ -75,9 +76,15 @@ export function ContributionAllocatorCard({ cardId }: Props = {}) {
   // so the two cards' derived figures agree. The hardcoded $1,000 demo
   // value is dead: no history ⇒ blank field + an honest prompt. The layout
   // already hydrates contributions.
+  // D5 (Wave 18): an explicit next-dollar beats the historical statistic —
+  // the user just told us the number. Both enter as DEFAULTS; local edits
+  // override, Reset returns to the shared/derived value.
+  const nextDollar = useNextDollarStore((s) => s.amount);
   const defaults = useMemo(
-    () => ({ contribution: typicalMonthlyContribution(contributions, todayIso) }),
-    [contributions, todayIso],
+    () => ({
+      contribution: nextDollar ?? typicalMonthlyContribution(contributions, todayIso),
+    }),
+    [nextDollar, contributions, todayIso],
   );
   const { values, setValue, reset, isOverridden, overriddenKeys } = useCalculatorState(
     cardId ?? 'contribution-allocator',

@@ -488,6 +488,21 @@ describe('CalculatorsLayout', () => {
     expect(sessionStorage.getItem('calc-state:supplemental-pay')).toBeNull();
   });
 
+  it('D5 (Wave 18): the Next dollar field renders in the next-dollar section header', async () => {
+    primeBaseline();
+    primeSettings();
+    usePersonsStore.setState({ persons: [{ ...basePerson }], isLoading: false, error: null });
+    render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+    const field = await screen.findByRole('spinbutton', { name: /next dollar/i });
+    expect(field).toBeInTheDocument();
+    // It lives inside the Next dollar SECTION, not another group.
+    const section = field.closest('section')!;
+    expect(within(section).getByRole('heading', { name: /next dollar/i, level: 2 })).toBeInTheDocument();
+    expect(
+      screen.getByText(/One number, two answers/i),
+    ).toBeInTheDocument();
+  });
+
   it('renders the ScenarioBar between the intro copy and the grid (Wave 16)', async () => {
     primeBaseline();
     primeSettings();
