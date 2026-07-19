@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
@@ -9,6 +9,9 @@ import { useContributionsStore } from '@/stores/contributions-store';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { FilingStatus, ContributionSource, SnapshotSource, AccountType } from '@/types/enums';
 import { FinancialIndependenceCard } from '@/pages/calculators/FinancialIndependenceCard';
+import { ScenarioBar } from '@/pages/calculators/ScenarioBar';
+import { __resetScenarioAssumptionsForTests } from '@/lib/calculators/use-scenario-assumptions';
+import { SCENARIO_STORAGE_KEY } from '@/lib/calculators/scenario-assumptions';
 import type { Account, GrowthScenario } from '@/types/schema';
 
 // The "today" that all test logic is pinned to — must be a stable ISO string
@@ -156,6 +159,8 @@ describe('FinancialIndependenceCard', () => {
     resetStores();
     // Clear any persisted calculator overrides from previous tests.
     sessionStorage.clear();
+    // Wave 16: the shared-scenario module caches overrides at module level.
+    __resetScenarioAssumptionsForTests();
     // Pin "today" to a stable date so the rolling-12-month contribution window
     // and the on-or-before-today snapshot cutoff are fully deterministic.
     // Mirrors the pattern used in CoastFiCard.test.tsx.
@@ -212,7 +217,7 @@ describe('FinancialIndependenceCard', () => {
     ).toHaveAttribute('href', '/inputs/persons');
   });
 
-  it('zero-expenses empty state prompts for the inline inputs (controls stay mounted)', () => {
+  it('zero-expenses empty state points to the scenario bar (inputs live in the bar — W16)', () => {
     primeStores({ monthlyExpenseBaseline: 0 });
     render(
       <MemoryRouter>
@@ -223,8 +228,24 @@ describe('FinancialIndependenceCard', () => {
     expect(
       screen.getByText(/enter monthly expenses and a withdrawal rate/i),
     ).toBeInTheDocument();
-    // Controls remain for inline correction.
-    expect(screen.getByLabelText(/monthly expenses/i)).toBeInTheDocument();
+    // W16: the card no longer mounts its own inputs — it points at the bar.
+    expect(screen.queryByLabelText(/monthly expenses/i)).toBeNull();
+    expect(
+      screen.getByText(/adjust shared assumptions in the scenario bar above/i),
+    ).toBeInTheDocument();
+  });
+
+  it('W16: the card renders NO shared-assumption inputs (they live in the ScenarioBar)', () => {
+    primeStores();
+    render(
+      <MemoryRouter>
+        <FinancialIndependenceCard />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByLabelText(/current portfolio/i)).toBeNull();
+    expect(screen.queryByLabelText(/annual contribution/i)).toBeNull();
+    expect(screen.queryByLabelText(/monthly expenses/i)).toBeNull();
+    expect(screen.queryByLabelText(/withdrawal rate/i)).toBeNull();
   });
 
   it('renders headline "X years" with seeded household + snapshots + contributions', () => {
@@ -403,46 +424,71 @@ describe('FinancialIndependenceCard', () => {
     expect(headline.textContent).not.toMatch(/^0(\.0)?\s*years/i);
   });
 
-  it('recomputes years-to-FI when the current-portfolio assumption is edited, and Reset restores it', async () => {
+  it('W16: recomputes years-to-FI when the bar Portfolio is edited, and bar Reset restores it', async () => {
     const user = userEvent.setup();
     primeStores(); // seeds a positive portfolio + expenses + scenarios
     render(
       <MemoryRouter>
+        <ScenarioBar />
         <FinancialIndependenceCard />
       </MemoryRouter>,
     );
     const before = screen.getByTestId('fi-headline').textContent;
 
-    // Bumping current portfolio way up shortens years-to-FI.
-    const pv = screen.getByLabelText(/current portfolio/i) as HTMLInputElement;
+    // Bumping current portfolio way up shortens years-to-FI. The bar's commit
+    // trails ~150ms behind typing (D5) — wait for the recompute.
+    const pv = screen.getByLabelText('Portfolio') as HTMLInputElement;
     await user.clear(pv);
     await user.type(pv, '5000000');
-    const after = screen.getByTestId('fi-headline').textContent;
-    expect(after).not.toBe(before);
+    await waitFor(() =>
+      expect(screen.getByTestId('fi-headline').textContent).not.toBe(before),
+    );
 
-    // Reset to my data restores the seeded prefill (button appears once dirty).
-    await user.click(screen.getByRole('button', { name: /reset to my data/i }));
-    expect(
-      (screen.getByLabelText(/current portfolio/i) as HTMLInputElement).value,
-    ).not.toBe('5000000');
-    expect(screen.getByTestId('fi-headline').textContent).toBe(before);
+    // The bar's Reset to my data restores the seeded prefill + headline.
+    await user.click(
+      await screen.findByRole('button', { name: /^reset to my data$/i }),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId('fi-headline').textContent).toBe(before),
+    );
+    expect((screen.getByLabelText('Portfolio') as HTMLInputElement).value).not.toBe('5000000');
   });
 
-  it('persists an edit under the calc-state:financial-independence key', async () => {
+  it('W16: persists a bar edit under calc-scenario:shared (the FI silo is retired)', async () => {
     const user = userEvent.setup();
     primeStores();
     render(
       <MemoryRouter>
+        <ScenarioBar />
         <FinancialIndependenceCard />
       </MemoryRouter>,
     );
-    await user.clear(screen.getByLabelText(/annual contribution/i));
-    await user.type(screen.getByLabelText(/annual contribution/i), '60000');
-    expect(
-      JSON.parse(sessionStorage.getItem('calc-state:financial-independence')!),
-    ).toMatchObject({
-      annualContribution: 60000,
-    });
+    await user.clear(screen.getByLabelText('Annual contribution'));
+    await user.type(screen.getByLabelText('Annual contribution'), '60000');
+    await waitFor(() =>
+      expect(JSON.parse(sessionStorage.getItem(SCENARIO_STORAGE_KEY)!)).toMatchObject({
+        annualContribution: 60000,
+      }),
+    );
+    // The retired per-card silo is never written.
+    expect(sessionStorage.getItem('calc-state:financial-independence')).toBeNull();
+  });
+
+  it('W16 D3: a custom bar Return collapses the scenario table to a single Custom row', async () => {
+    const user = userEvent.setup();
+    primeStores(); // 4 household scenarios
+    render(
+      <MemoryRouter>
+        <ScenarioBar />
+        <FinancialIndependenceCard />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Conservative')).toBeInTheDocument();
+    await user.clear(screen.getByLabelText('Return'));
+    await user.type(screen.getByLabelText('Return'), '9');
+    await waitFor(() => expect(screen.getByText('Custom')).toBeInTheDocument());
+    expect(screen.queryByText('Conservative')).toBeNull();
+    expect(screen.queryByText('Bull')).toBeNull();
   });
 
   it('H1/N1: solves on REAL rates — Moderate 6% headline is ~28.5y (not the ~19.8y nominal solve)', () => {
@@ -491,7 +537,7 @@ describe('FinancialIndependenceCard', () => {
     expect(sessionStorage.getItem('calc-display-mode:financial-independence')).toBe('REAL');
   });
 
-  it('current-portfolio prefill drops excludedFromNetWorth accounts', () => {
+  it('current-portfolio prefill drops excludedFromNetWorth accounts (surfaces in the bar — W16)', () => {
     primeStores({
       snapshotValues: [
         { accountId: 1, snapshotDate: '2026-04-01', totalValue: 200_000 },
@@ -505,13 +551,14 @@ describe('FinancialIndependenceCard', () => {
     });
     render(
       <MemoryRouter>
+        <ScenarioBar />
         <FinancialIndependenceCard />
       </MemoryRouter>,
     );
-    // Assertion idiom matches the card tests' existing prefill checks
-    // (string .value on the number input).
+    // Same seeded-store setup; the prefill now surfaces in the shared bar
+    // (string .value idiom kept from the pre-W16 card-input checks).
     expect(
-      (screen.getByLabelText(/current portfolio/i) as HTMLInputElement).value,
+      (screen.getByLabelText('Portfolio') as HTMLInputElement).value,
     ).toBe('200000');
   });
 
@@ -528,15 +575,16 @@ describe('FinancialIndependenceCard', () => {
     useAccountsStore.setState({ accounts: [], isLoading: false, error: null });
     render(
       <MemoryRouter>
+        <ScenarioBar />
         <FinancialIndependenceCard />
       </MemoryRouter>,
     );
     expect(
-      (screen.getByLabelText(/current portfolio/i) as HTMLInputElement).value,
+      (screen.getByLabelText('Portfolio') as HTMLInputElement).value,
     ).toBe('0');
   });
 
-  it('excludes 529 and excluded-from-net-worth balances from the Current portfolio default', () => {
+  it('excludes 529 and excluded-from-net-worth balances from the shared portfolio default', () => {
     primeStores(); // household + persons as the file's default prime does
     useAccountsStore.setState({
       accounts: [
@@ -556,9 +604,14 @@ describe('FinancialIndependenceCard', () => {
       isLoading: false,
       error: null,
     });
-    render(<MemoryRouter><FinancialIndependenceCard /></MemoryRouter>);
+    render(
+      <MemoryRouter>
+        <ScenarioBar />
+        <FinancialIndependenceCard />
+      </MemoryRouter>,
+    );
     expect(
-      (screen.getByLabelText(/current portfolio/i) as HTMLInputElement).value,
+      (screen.getByLabelText('Portfolio') as HTMLInputElement).value,
     ).toBe('100000');
   });
 

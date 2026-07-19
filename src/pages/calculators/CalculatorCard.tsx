@@ -61,6 +61,15 @@ export function CalculatorCard({
             data-testid={cardId ? `${cardId}-headline` : undefined}
             className="text-xl sm:text-2xl font-semibold tabular-nums break-words min-w-0"
           >
+            {/* W16 review: one ScenarioBar edit recomputes several card
+                headlines at once — without attribution AT hears context-free
+                figures ("38.3 years", "77%", a bare currency). The card name
+                rides INSIDE the status region as sr-only text so every
+                announcement is attributed; the visible headline is unchanged
+                and the bar itself stays non-live (cards own announcements). */}
+            {resolvedTitleText ? (
+              <span className="sr-only">{resolvedTitleText}: </span>
+            ) : null}
             {headline}
           </div>
         </div>

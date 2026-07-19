@@ -2,104 +2,63 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
-import { useSnapshotsStore } from '@/stores/snapshots-store';
-import { useContributionsStore } from '@/stores/contributions-store';
-import { useAccountsStore } from '@/stores/accounts-store';
-import { fiEligiblePortfolioValue } from '@/lib/fi-portfolio';
 import { pickModerateEntry } from '@/lib/growth-scenario';
 import { CalculatorCard } from './CalculatorCard';
 import { financialIndependenceSeries } from '@/lib/financial-independence';
 import { formatCurrency, formatPercent } from '@/lib/format';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
-import { useCalculatorState } from '@/lib/calculator-state';
-import { NumberField } from '@/components/calculators/NumberField';
-import { effectiveSwr } from '@/lib/scenarios/effective-swr';
-import { effectiveBaselineInflation } from '@/lib/scenarios/effective-inflation';
 import LineChartCard from '@/components/charts/LineChartCard';
 import { buildProjectionChartData } from '@/lib/calculators/projection-chart';
 import { RealNominalToggle } from '@/components/calculators/RealNominalToggle';
 import { useChartDisplayMode } from '@/lib/calculators/use-chart-display-mode';
-import { useSettingsStore } from '@/stores/settings-store';
 import { fiChartSeries } from '@/lib/calculators/fi-chart-series';
+import { useScenarioAssumptions } from '@/lib/calculators/use-scenario-assumptions';
 
 interface FinancialIndependenceCardProps {
   cardId?: string;
   onHide?: (cardId: string) => void;
 }
 
+/**
+ * Wave 16 (Basecamp spine): every shared assumption — portfolio,
+ * contribution, expenses, return scenarios, SWR, inflation — now comes from
+ * the shared scenario bar via useScenarioAssumptions (engine units through
+ * the ONE pct/fraction boundary; D1/D3). The card's four duplicated
+ * NumberFields and its per-card silo `calc-state:financial-independence` are
+ * retired (existing edits migrate one-shot in scenario-assumptions.ts, D7);
+ * no editable state remains in-card, so the per-card reset is gone too (D13).
+ */
 export function FinancialIndependenceCard({
   cardId,
   onHide,
 }: FinancialIndependenceCardProps = {}) {
   const { household } = useHouseholdStore();
   const persons = usePersonsStore((s) => s.persons);
-  const snapshots = useSnapshotsStore((s) => s.snapshots);
-  const contributions = useContributionsStore((s) => s.contributions);
-  const accounts = useAccountsStore((s) => s.accounts);
 
-  // ── Real-data defaults (memoized from the stores) ──────────────────────────
-  const defaults = useMemo(() => {
-    // Shared FI-eligible definition (src/lib/fi-portfolio.ts): non-excluded
-    // accounts minus 529s, latest snapshot per account on-or-before today.
-    // Pre-Wave-2 this summed EVERY account — a 529 inflated the retirement
-    // default.
-    const todayIso = new Date().toISOString().slice(0, 10);
-    const currentPortfolio = fiEligiblePortfolioValue(accounts, snapshots, todayIso);
-
-    // Rolling 12-month contribution total — used as the annual PMT figure for
-    // the FV solver. We compare ISO date strings; chronological order matches
-    // string order for YYYY-MM-DD.
-    const oneYearAgo = new Date();
-    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-    const isoYearAgo = oneYearAgo.toISOString().slice(0, 10);
-    const annualContribution = contributions
-      .filter((c) => c.date >= isoYearAgo)
-      .reduce((sum, c) => sum + c.amount, 0);
-
-    // No active scenario on the dashboard card → pass null; effectiveSwr derives
-    // from household.withdrawalRate (when > 0) else the 0.04 canonical default.
-    // Stored as a 0–100 percent and divided by 100 in the computation.
-    const withdrawalRatePct = effectiveSwr(null, household) * 100;
-
-    return {
-      currentPortfolio,
-      annualContribution,
-      monthlyExpenses: household?.monthlyExpenseBaseline ?? 0,
-      withdrawalRatePct,
-    };
-  }, [household, snapshots, contributions, accounts]);
-
-  const { values, setValue, reset, isOverridden } = useCalculatorState(
-    cardId ?? 'financial-independence',
-    defaults,
-  );
+  const { engine, scenarioList } = useScenarioAssumptions();
 
   // ── Chart display mode (Nominal/Real toggle) + inflation ───────────────────
   const [displayMode, setDisplayMode] = useChartDisplayMode(cardId ?? 'financial-independence');
-  // N1/N3: resolve inflation through the app's CANONICAL chain
-  // (household.inflationAssumption → settings.defaultInflation → 0.03) — the
-  // SAME resolver the What-If FiCards use — so the dashboard and What-If
-  // "years to FI" / "coast needed" numbers agree exactly for the same
-  // household, and so the table/headline and the deflated chart share one
-  // inflation figure. No active scenario on the dashboard → scenario = null.
-  const settings = useSettingsStore((s) => s.settings);
-  const inflation = effectiveBaselineInflation(null, household ?? null, settings);
+  // Wave 16: inflation now rides the shared scenario (default = the same
+  // canonical chain — household.inflationAssumption → settings.defaultInflation
+  // → 0.03 — via buildScenarioDefaults; an edited bar value wins). N1/N3
+  // agreement with What-If holds for an un-edited bar.
+  const inflation = engine.inflation;
 
-  // ── Derived calculations (off the EDITED assumptions) ──────────────────────
-  const targetFv = useMemo(() => {
-    const swr = (values.withdrawalRatePct ?? 0) / 100;
-    if (swr <= 0) return 0;
-    return ((values.monthlyExpenses ?? 0) * 12) / swr;
-  }, [values.monthlyExpenses, values.withdrawalRatePct]);
+  // ── Derived calculations (off the SHARED scenario assumptions) ─────────────
+  // targetFv = annualExpenses / SWR, both already in engine units (the ÷100
+  // and ×12 conversions live in toEngineAssumptions — D1).
+  const targetFv = engine.swr > 0 ? engine.annualExpenses / engine.swr : 0;
 
   const series = useMemo(() => {
     if (!household || persons.length === 0) return null;
-    if (!household.growthScenarios || household.growthScenarios.length === 0)
-      return null;
+    // D3: scenarioList is the household list, or a single Custom row when the
+    // bar's Return is edited — the table can never disagree with the bar.
+    if (scenarioList.length === 0) return null;
     // FI needs a positive target to compute (positive expenses + a positive
     // withdrawal rate). The SWR is editable, so a non-positive rate keeps the
     // card mounted (no rows) rather than empty-stating it.
-    if ((values.monthlyExpenses ?? 0) <= 0) return null;
+    if (engine.monthlyExpenses <= 0) return null;
     if (targetFv <= 0) return null;
 
     // H1: targetFv is in today's dollars (real), but growthScenarios rates are
@@ -107,19 +66,20 @@ export function FinancialIndependenceCard({
     // REAL first — otherwise a nominal balance reaches a real target too early
     // (optimistic). The result still carries the nominal rate for display/chart.
     return financialIndependenceSeries({
-      pv: values.currentPortfolio,
-      annualContribution: values.annualContribution,
+      pv: engine.portfolio,
+      annualContribution: engine.annualContribution,
       targetFv,
-      scenarios: household.growthScenarios,
+      scenarios: scenarioList,
       inflation,
     });
   }, [
     household,
     persons,
     targetFv,
-    values.currentPortfolio,
-    values.annualContribution,
-    values.monthlyExpenses,
+    engine.portfolio,
+    engine.annualContribution,
+    engine.monthlyExpenses,
+    scenarioList,
     inflation,
   ]);
 
@@ -137,8 +97,8 @@ export function FinancialIndependenceCard({
     // Single source for the rows (target-line basis lives in the builder —
     // see src/lib/calculators/projection-chart.ts).
     const data = buildProjectionChartData({
-      pv: values.currentPortfolio,
-      annualContribution: values.annualContribution,
+      pv: engine.portfolio,
+      annualContribution: engine.annualContribution,
       targetFv,
       scenarios: series,
       inflation,
@@ -152,61 +112,7 @@ export function FinancialIndependenceCard({
     const targetBasis = data.length > 0 ? Number(data[data.length - 1].target) : targetFv;
     const { series: seriesDefs, markers } = fiChartSeries(series, data, targetBasis);
     return { chartData: data, chartSeries: seriesDefs, chartMarkers: markers };
-  }, [series, values.currentPortfolio, values.annualContribution, targetFv, displayMode, inflation]);
-
-  // ── Editable inputs (shared with the empty-state render below) ─────────────
-  const controls = (
-    <>
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <NumberField
-          id="fi-portfolio"
-          label="Current portfolio"
-          value={values.currentPortfolio}
-          onChange={(v) => setValue('currentPortfolio', v ?? 0)}
-          suffix="$"
-          step="1000"
-          min={0}
-        />
-        <NumberField
-          id="fi-contrib"
-          label="Annual contribution"
-          value={values.annualContribution}
-          onChange={(v) => setValue('annualContribution', v ?? 0)}
-          suffix="$/yr"
-          step="500"
-          min={0}
-        />
-        <NumberField
-          id="fi-expenses"
-          label="Monthly expenses"
-          value={values.monthlyExpenses}
-          onChange={(v) => setValue('monthlyExpenses', v ?? 0)}
-          suffix="$/mo"
-          step="100"
-          min={0}
-        />
-        <NumberField
-          id="fi-swr"
-          label="Withdrawal rate"
-          value={values.withdrawalRatePct}
-          onChange={(v) => setValue('withdrawalRatePct', v ?? 0)}
-          suffix="%"
-          step="0.1"
-          min={0}
-        />
-      </div>
-
-      {isOverridden && (
-        <button
-          type="button"
-          onClick={reset}
-          className="text-sm text-primary hover:underline mb-3"
-        >
-          Reset to my data
-        </button>
-      )}
-    </>
-  );
+  }, [series, engine.portfolio, engine.annualContribution, targetFv, displayMode, inflation]);
 
   if (!series || !household) {
     return (
@@ -217,7 +123,12 @@ export function FinancialIndependenceCard({
         titleText="Years to FI"
         headline={<span data-testid="fi-headline">—</span>}
       >
-        {household ? controls : null}
+        {/* W16: the shared inputs live in the scenario bar above the grid. */}
+        {household ? (
+          <p className="text-sm text-muted-foreground mb-3">
+            Adjust shared assumptions in the scenario bar above.
+          </p>
+        ) : null}
         {/* Wave 15 T4: name the missing ingredient per cause with a real
             link — the previous single "Add your inputs" copy conflated
             no-household, no-persons, no-scenarios and zero expenses/SWR. */}
@@ -235,7 +146,7 @@ export function FinancialIndependenceCard({
             </Link>{' '}
             to see Years to FI.
           </p>
-        ) : (household.growthScenarios?.length ?? 0) === 0 ? (
+        ) : scenarioList.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             Your household has no growth scenarios —{' '}
             <Link to="/inputs/household" className="text-primary hover:underline">
@@ -274,13 +185,12 @@ export function FinancialIndependenceCard({
       titleText="Years to FI"
       headline={<span data-testid="fi-headline">{yearsLabel}</span>}
     >
-      {controls}
       <p className="text-sm text-muted-foreground mb-3">
         Target portfolio:{' '}
         <span className="tabular-nums">{formatCurrency(targetFv)}</span>{' '}
-        (= 12 × {formatCurrency(values.monthlyExpenses ?? 0)} /{' '}
+        (= 12 × {formatCurrency(engine.monthlyExpenses)} /{' '}
         <TermTooltip term="SWR">
-          {formatPercent((values.withdrawalRatePct ?? 0) / 100)}
+          {formatPercent(engine.swr)}
         </TermTooltip>
         )
       </p>

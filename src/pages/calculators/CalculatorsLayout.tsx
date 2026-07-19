@@ -12,6 +12,7 @@ import { CompoundInterestCard } from './CompoundInterestCard';
 import { Retirement401kWithdrawalCard } from './Retirement401kWithdrawalCard';
 import { BacktestCard } from './BacktestCard';
 import { ContributionAllocatorCard } from './ContributionAllocatorCard';
+import { ScenarioBar } from './ScenarioBar';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
@@ -271,6 +272,10 @@ export default function CalculatorsLayout() {
           </Button>
         </div>
       )}
+      {/* Wave 16 (Basecamp spine): the shared scenario bar — mounts inside the
+          settled gate, BETWEEN the intro and the grid. The grid + card shell
+          below are untouched (Wave 17 boundary). */}
+      <ScenarioBar />
       {/* `items-start` is LOAD-BEARING (masonry grid; see useAutoRowSpan). */}
       <div className="grid items-start grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 min-w-0 [grid-auto-rows:8px] [grid-auto-flow:row_dense]">
         {!hiddenSet.has(CARD_IDS.PAYCHECK) && (

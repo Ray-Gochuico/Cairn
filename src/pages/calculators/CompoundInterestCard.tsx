@@ -17,20 +17,14 @@ import {
   type CompoundFrequency,
 } from '@/lib/compound-interest';
 import { formatCurrency } from '@/lib/format';
-import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import { useCalculatorState } from '@/lib/calculator-state';
 import { NumberField } from '@/components/calculators/NumberField';
-import { useSnapshotsStore } from '@/stores/snapshots-store';
-import { useAccountsStore } from '@/stores/accounts-store';
-import { fiEligiblePortfolioValue } from '@/lib/fi-portfolio';
-import { useSettingsStore } from '@/stores/settings-store';
-import { useHouseholdStore } from '@/stores/household-store';
-import { effectiveBaselineInflation } from '@/lib/scenarios/effective-inflation';
 import { CHART_PALETTE } from '@/components/charts/palette';
 import { RealNominalToggle } from '@/components/calculators/RealNominalToggle';
 import { StatTile } from '@/components/calculators/StatTile';
 import { useChartDisplayMode } from '@/lib/calculators/use-chart-display-mode';
 import { toRealSeries } from '@/lib/calculators/real-mode';
+import { useScenarioAssumptions } from '@/lib/calculators/use-scenario-assumptions';
 
 interface CompoundInterestCardProps {
   cardId?: string;
@@ -45,41 +39,43 @@ const FREQUENCY_OPTIONS: Array<{ value: CompoundFrequency; label: string }> = [
   { value: 'ANNUALLY', label: 'Annually' },
 ];
 
-export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardProps = {}) {
-  const { snapshots } = useSnapshotsStore();
-  const accounts = useAccountsStore((s) => s.accounts);
-  // Kit-managed input state: persists in sessionStorage under calc-state:compound-interest.
-  // pv is prefilled from the latest portfolio snapshot; falls back to 1000 demo default.
-  const defaults = useMemo(() => {
-    // Shared FI-eligible definition (src/lib/fi-portfolio.ts): non-excluded
-    // accounts minus 529s, latest snapshot per account on-or-before today.
-    // Pre-Wave-2 this summed EVERY account — a 529 inflated the retirement
-    // default.
-    const todayIso = new Date().toISOString().slice(0, 10);
-    const currentPortfolio = fiEligiblePortfolioValue(accounts, snapshots, todayIso);
-    return {
-      pv: currentPortfolio > 0 ? currentPortfolio : 1000,   // portfolio prefill; 1000 demo fallback
-      monthlyContribution: 100,
-      years: 10,
-      ratePercent: 7,
-      variancePercent: null as number | null,
-      frequency: 'MONTHLY' as CompoundFrequency,
-    };
-  }, [snapshots, accounts]);
+// W16 (D13): only the genuinely-local what-if knobs stay in the card silo
+// (calc-state:compound-interest). pv / monthly contribution / rate now ride
+// the shared scenario (their legacy silo keys migrate one-shot in
+// scenario-assumptions.ts).
+const LOCAL_DEFAULTS = {
+  years: 10,
+  variancePercent: null as number | null,
+  frequency: 'MONTHLY' as CompoundFrequency,
+};
 
+/**
+ * Wave 16 (Basecamp spine): principal, contribution and rate come from the
+ * shared scenario bar via useScenarioAssumptions — pv = the bar's portfolio,
+ * PMT = annualContribution/12 (converted at the ONE boundary, D1), APY = the
+ * scenario return read as an effective annual yield (D4; the card's own
+ * APY→APR conversion below is untouched). The `pv > 0 ? pv : 1000` demo
+ * fallback is dead (D4): an empty profile shows an honest $0-based projection
+ * — the bar above says $0, and this card can no longer contradict it.
+ */
+export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardProps = {}) {
   const { values, setValue, reset, isOverridden } = useCalculatorState(
     cardId ?? 'compound-interest',
-    defaults,
+    LOCAL_DEFAULTS,
   );
 
+  const { engine } = useScenarioAssumptions();
+
   const series = useMemo(() => {
-    const pvNum = values.pv ?? 0;
-    const pmtNum = values.monthlyContribution ?? 0;
+    const pvNum = engine.portfolio;
+    const pmtNum = engine.monthlyContribution;
     const yearsNum = Math.max(0, Math.floor(values.years ?? 0));
-    const apyNum = (values.ratePercent ?? 0) / 100;
+    const apyNum = engine.returnRate;
+    // Local variance keeps its in-card ÷100 — a genuinely local card field,
+    // outside the D1 shared-field rule.
     const apyVarianceNum = values.variancePercent == null ? undefined : (values.variancePercent ?? 0) / 100;
     if (yearsNum === 0) return null;
-    // The user-facing input is APY (effective annual yield), but
+    // The user-facing rate is APY (effective annual yield), but
     // compoundInterestSeries() interprets its rate input as APR. Convert
     // at the boundary so the engine math stays APR-consistent across the app
     // while the input matches what users see on a savings/CD comparison.
@@ -102,16 +98,13 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
       years: yearsNum,
       frequency: values.frequency,
     });
-  }, [values]);
+  }, [values, engine]);
 
   const [displayMode, setDisplayMode] = useChartDisplayMode(cardId ?? 'compound-interest');
-  // Wave 15 T5: the CANONICAL inflation chain (household.inflationAssumption →
-  // settings.defaultInflation → 0.03) — the SAME resolver FI/CoastFI use. The
-  // old `settings?.defaultInflation ?? 0.025` bypassed the household setting
-  // and carried a divergent fallback.
-  const { household } = useHouseholdStore();
-  const settings = useSettingsStore((s) => s.settings);
-  const inflation = effectiveBaselineInflation(null, household ?? null, settings);
+  // Wave 16: inflation rides the shared scenario (default = the same canonical
+  // chain — household.inflationAssumption → settings.defaultInflation → 0.03 —
+  // via buildScenarioDefaults; an edited bar value wins).
+  const inflation = engine.inflation;
 
   // Real mode deflates the WHOLE card (headline + all three tiles), not just
   // the chart — a real chart beside nominal tiles is the nominal-on-real bug
@@ -122,8 +115,8 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
     if (displayMode === 'NOMINAL') return series;
     return toRealSummary(
       {
-        pv: values.pv ?? 0,
-        monthlyContribution: values.monthlyContribution ?? 0,
+        pv: engine.portfolio,
+        monthlyContribution: engine.monthlyContribution,
         annualRate: 0, // unused by toRealSummary — final balances come from `series`
         years: Math.max(0, Math.floor(values.years ?? 0)),
         frequency: values.frequency,
@@ -131,7 +124,7 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
       series,
       inflation,
     );
-  }, [series, displayMode, inflation, values]);
+  }, [series, displayMode, inflation, values, engine]);
 
   const realSuffix = displayMode === 'REAL' ? " (today's $)" : '';
 
@@ -182,36 +175,11 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
         <NumberField
-          id="ci-pv"
-          label="Initial amount"
-          value={values.pv}
-          onChange={(v) => setValue('pv', v ?? 0)}
-          step="any"
-          min={0}
-        />
-        <NumberField
-          id="ci-pmt"
-          label="Monthly contribution"
-          value={values.monthlyContribution}
-          onChange={(v) => setValue('monthlyContribution', v ?? 0)}
-          step="any"
-          min={0}
-        />
-        <NumberField
           id="ci-years"
           label="Length (years)"
           value={values.years}
           onChange={(v) => setValue('years', v ?? 0)}
           step="1"
-          min={0}
-        />
-        <NumberField
-          id="ci-rate"
-          label={<TermTooltip term="APY">APY (%)</TermTooltip>}
-          ariaLabel="Annual percentage yield"
-          value={values.ratePercent}
-          onChange={(v) => setValue('ratePercent', v ?? 0)}
-          step="0.1"
           min={0}
         />
         <NumberField

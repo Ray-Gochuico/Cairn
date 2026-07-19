@@ -2,9 +2,6 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
-import { useSnapshotsStore } from '@/stores/snapshots-store';
-import { useAccountsStore } from '@/stores/accounts-store';
-import { fiEligiblePortfolioValue } from '@/lib/fi-portfolio';
 import { CalculatorCard } from './CalculatorCard';
 import { coastFi } from '@/lib/coast-fi';
 import { realRateOf, realRateOfUnfloored } from '@/lib/calculators/real-rate';
@@ -13,14 +10,12 @@ import { formatCurrency, formatPercent } from '@/lib/format';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import { useCalculatorState } from '@/lib/calculator-state';
 import { NumberField } from '@/components/calculators/NumberField';
-import { effectiveSwr } from '@/lib/scenarios/effective-swr';
-import { effectiveBaselineInflation } from '@/lib/scenarios/effective-inflation';
 import LineChartCard from '@/components/charts/LineChartCard';
 import { buildProjectionChartData } from '@/lib/calculators/projection-chart';
 import { RealNominalToggle } from '@/components/calculators/RealNominalToggle';
 import { useChartDisplayMode } from '@/lib/calculators/use-chart-display-mode';
-import { useSettingsStore } from '@/stores/settings-store';
 import { fiChartSeries } from '@/lib/calculators/fi-chart-series';
+import { useScenarioAssumptions } from '@/lib/calculators/use-scenario-assumptions';
 
 interface CoastFiCardProps {
   cardId?: string;
@@ -33,21 +28,21 @@ interface ScenarioRow {
   coastNeededToday: number;
 }
 
+/**
+ * Wave 16 (Basecamp spine): portfolio / expenses / SWR / return scenarios /
+ * inflation now come from the shared scenario bar via useScenarioAssumptions
+ * (engine units through the ONE pct/fraction boundary — the old in-card
+ * annual-expenses and 0.04-vs-4 SWR representations, and their ×100/÷100
+ * display gymnastics, are dead; D1/D3). Only `yearsUntilRetirement` stays
+ * per-card (persons-derived, genuinely local), so the card's silo + reset
+ * now truthfully cover that one field (D13).
+ */
 export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
   const { household } = useHouseholdStore();
   const persons = usePersonsStore((s) => s.persons);
-  const snapshots = useSnapshotsStore((s) => s.snapshots);
-  const accounts = useAccountsStore((s) => s.accounts);
 
-  // ── Real-data defaults (memoized from the stores) ──────────────────────────
+  // ── Local (per-card) defaults — years only (D13) ───────────────────────────
   const defaults = useMemo(() => {
-    // Shared FI-eligible definition (src/lib/fi-portfolio.ts): non-excluded
-    // accounts minus 529s, latest snapshot per account on-or-before today.
-    // Pre-Wave-2 this summed EVERY account — a 529 inflated the retirement
-    // default.
-    const todayIso = new Date().toISOString().slice(0, 10);
-    const currentPortfolio = fiEligiblePortfolioValue(accounts, snapshots, todayIso);
-
     // Shortest years-until-retirement across persons (fallback 20).
     let yearsUntilRetirement = 20;
     if (persons.length > 0) {
@@ -56,41 +51,35 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
       );
       yearsUntilRetirement = Math.min(...yearsByPerson);
     }
-
-    const annualExpenses = (household?.monthlyExpenseBaseline ?? 0) * 12;
-    // No active scenario on the dashboard card → pass null; effectiveSwr derives
-    // from household.withdrawalRate (when > 0) else the 0.04 canonical default.
-    const withdrawalRate = effectiveSwr(null, household);
-
-    return { currentPortfolio, yearsUntilRetirement, annualExpenses, withdrawalRate };
-  }, [household, persons, snapshots, accounts]);
+    return { yearsUntilRetirement };
+  }, [persons]);
 
   const { values, setValue, reset, isOverridden } = useCalculatorState(cardId ?? 'coast-fi', defaults);
 
+  // ── Shared scenario (W16) ──────────────────────────────────────────────────
+  const { engine, scenarioList } = useScenarioAssumptions();
+
   // ── Chart display mode (hooks MUST be before the early return) ─────────────
   const [displayMode, setDisplayMode] = useChartDisplayMode(cardId ?? 'coast-fi');
-  // N1/N3: resolve inflation through the app's CANONICAL chain
-  // (household.inflationAssumption → settings.defaultInflation → 0.03) — the
-  // SAME resolver the What-If FiCards use — so the dashboard "coast needed"
-  // matches What-If exactly for the same household, and the table + deflated
-  // chart share one inflation figure. No active scenario here → scenario = null.
-  const settings = useSettingsStore((s) => s.settings);
-  const inflation = effectiveBaselineInflation(null, household ?? null, settings);
+  // Wave 16: inflation rides the shared scenario (default = the same canonical
+  // chain via buildScenarioDefaults; an edited bar value wins), so the table +
+  // deflated chart + What-If agree for an un-edited bar exactly as before.
+  const inflation = engine.inflation;
 
   // ── Empty-state guard ──────────────────────────────────────────────────────
-  // withdrawalRate<=0 stays editable (targetFv guard → 0 rows) rather than
-  // routing to empty-state, so the user can correct it inline.
-  const hasData =
-    !!household &&
-    persons.length > 0 &&
-    (household.growthScenarios?.length ?? 0) > 0;
+  // withdrawalRate<=0 stays editable in the bar (targetFv guard → 0 rows)
+  // rather than routing to empty-state, so the user can correct it in place.
+  // D3: scenarioList is household.growthScenarios, or a single Custom row when
+  // the bar's Return is edited.
+  const hasData = !!household && persons.length > 0 && scenarioList.length > 0;
 
   // ── Derived calculations ───────────────────────────────────────────────────
-  const targetFv =
-    values.withdrawalRate > 0 ? values.annualExpenses / values.withdrawalRate : 0;
+  // Engine units only — annualExpenses (= monthly × 12) and the SWR fraction
+  // both come from toEngineAssumptions (D1).
+  const targetFv = engine.swr > 0 ? engine.annualExpenses / engine.swr : 0;
   // Wave 15 T4 (D11): a zero/negative target (expenses or SWR zeroed) is a
-  // 0-of-$0 non-result — render an inline prompt with the controls still
-  // mounted so the user can fix it in place, never "0% of CoastFI".
+  // 0-of-$0 non-result — render an inline prompt with the years control still
+  // mounted, never "0% of CoastFI".
   const noTarget = targetFv <= 0;
 
   // Rules of Hooks: this memo MUST run unconditionally, so it sits ABOVE the
@@ -99,8 +88,7 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
   // "Rendered more hooks than during the previous render" and crashed the page.
   const { chartData, chartSeries, chartMarkers } = useMemo(() => {
     const horizon = Math.max(0, Math.round(values.yearsUntilRetirement));
-    const scenarios = household?.growthScenarios ?? [];
-    if (!hasData || horizon < 1 || scenarios.length === 0 || targetFv <= 0) {
+    if (!hasData || horizon < 1 || scenarioList.length === 0 || targetFv <= 0) {
       return {
         chartData: [] as Record<string, number>[],
         chartSeries: [] as ReturnType<typeof fiChartSeries>['series'],
@@ -110,31 +98,29 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
     // Single source for the rows (target-line basis lives in the builder —
     // see src/lib/calculators/projection-chart.ts). Coast = no contributions.
     const data = buildProjectionChartData({
-      pv: values.currentPortfolio,
+      pv: engine.portfolio,
       annualContribution: 0,
       targetFv,
-      scenarios,
+      scenarios: scenarioList,
       inflation,
       displayMode,
       horizon,
     });
     // Wave 15 T4: shared FI series semantics (Wave 11 T13) — Optimistic never
     // wears the palette red, Moderate emphasized, target-crossing markers.
-    // Pre-fix this card hand-rolled palette[i % len] indexing and rendered
-    // the Optimistic line in the palette red. The target-line basis in `data`
-    // follows the display toggle, so crossings compare against the row's own
-    // target value.
+    // The target-line basis in `data` follows the display toggle, so crossings
+    // compare against the row's own target value.
     const targetBasis = data.length > 0 ? Number(data[data.length - 1].target) : targetFv;
-    const { series, markers } = fiChartSeries(scenarios, data, targetBasis, {
+    const { series, markers } = fiChartSeries(scenarioList, data, targetBasis, {
       targetLabel: 'Required at retirement',
     });
     return { chartData: data, chartSeries: series, chartMarkers: markers };
   }, [
     hasData,
     values.yearsUntilRetirement,
-    values.currentPortfolio,
+    engine.portfolio,
     targetFv,
-    household,
+    scenarioList,
     displayMode,
     inflation,
   ]);
@@ -179,12 +165,12 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
   }
 
   // H1: targetFv (= annualExpenses_today / SWR) is in today's dollars (real),
-  // but growthScenarios rates are NOMINAL. Discounting a real target by a
-  // nominal rate UNDER-states the coast amount needed today. Convert each rate
-  // to REAL (Fisher) before the PV solve, using the SAME inflation source the
-  // chart's Real toggle uses (settings.defaultInflation). The displayed `rate`
-  // stays nominal (what the user configured) and the chart keeps using s.rate.
-  const rows: ScenarioRow[] = (household?.growthScenarios ?? []).map((s) => ({
+  // but scenario rates are NOMINAL. Discounting a real target by a nominal
+  // rate UNDER-states the coast amount needed today. Convert each rate to REAL
+  // (Fisher) before the PV solve, using the SAME inflation the chart's Real
+  // toggle uses. The displayed `rate` stays nominal (what the user configured)
+  // and the chart keeps using s.rate.
+  const rows: ScenarioRow[] = scenarioList.map((s) => ({
     label: s.label,
     rate: s.rate,
     coastNeededToday: coastFi({
@@ -198,7 +184,7 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
   // "coast today" degenerate to the full FI target — the meaningful edge here,
   // unlike the FI years-to solve which uses the unfloored rate). Surface a note
   // when the floor actually bites for any scenario.
-  const coastFloored = (household?.growthScenarios ?? []).some(
+  const coastFloored = scenarioList.some(
     (s) => realRateOfUnfloored(s.rate, inflation) < 0,
   );
 
@@ -209,18 +195,11 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
     rows[0];
   const headlinePct =
     moderate && moderate.coastNeededToday > 0
-      ? (values.currentPortfolio / moderate.coastNeededToday) * 100
+      ? (engine.portfolio / moderate.coastNeededToday) * 100
       : 0;
   const headlineLabel = `${headlinePct.toFixed(0)}% of CoastFI`;
 
   const atOrPastRetirement = values.yearsUntilRetirement <= 0;
-
-  // Display the stored fraction (0.04) as a percent (4); rounding past 8 dp
-  // avoids float-display artifacts from the ÷100 round-trip on edit.
-  const displayWithdrawalRate =
-    values.withdrawalRate !== null
-      ? Math.round(values.withdrawalRate * 100 * 1e8) / 1e8
-      : null;
 
   return (
     <CalculatorCard
@@ -236,7 +215,7 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
         )
       }
     >
-      {/* ── Editable inputs ──────────────────────────────────────────────── */}
+      {/* ── Editable input — years only; the rest rides the bar (D13) ────── */}
       <div className="grid grid-cols-2 gap-3 mb-4">
         <NumberField
           id="cf-years"
@@ -244,33 +223,6 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
           value={values.yearsUntilRetirement}
           onChange={(v) => setValue('yearsUntilRetirement', v ?? 0)}
           step="1"
-          min={0}
-        />
-        <NumberField
-          id="cf-expenses"
-          label="Annual expenses"
-          value={values.annualExpenses}
-          onChange={(v) => setValue('annualExpenses', v ?? 0)}
-          suffix="$/yr"
-          step="1000"
-          min={0}
-        />
-        <NumberField
-          id="cf-rate"
-          label="Withdrawal rate"
-          value={displayWithdrawalRate}
-          onChange={(v) => setValue('withdrawalRate', v !== null ? v / 100 : 0)}
-          suffix="%"
-          step="0.1"
-          min={0}
-        />
-        <NumberField
-          id="cf-portfolio"
-          label="Current portfolio"
-          value={values.currentPortfolio}
-          onChange={(v) => setValue('currentPortfolio', v ?? 0)}
-          suffix="$"
-          step="1000"
           min={0}
         />
       </div>
@@ -287,13 +239,12 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
 
       {/* ── Zero-target inline prompt (D11) + at/past retirement guard ──── */}
       {noTarget ? (
-        // Wave 15 review: no baseline-prefill promise here — a typed 0 is an
-        // OVERRIDE that wins over recomputed defaults (useCalculatorState),
-        // so "set your baseline to prefill" would be false in the very state
-        // that shows this prompt. FI's equivalent arm makes no such claim.
+        // W16: the shared fields live in the scenario bar; no prefill promise
+        // here — a typed 0 in the bar is an OVERRIDE that wins over recomputed
+        // defaults (Wave 15 adversarial review, carried forward).
         <p className="text-sm text-muted-foreground">
-          Enter your annual expenses and withdrawal rate above to see your
-          CoastFI target.
+          Enter your monthly expenses and withdrawal rate in the scenario bar
+          above to see your CoastFI target.
         </p>
       ) : atOrPastRetirement ? (
         <p className="text-sm text-muted-foreground">
@@ -336,7 +287,7 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
               {rows.map((r) => {
                 const pct =
                   r.coastNeededToday > 0
-                    ? (values.currentPortfolio / r.coastNeededToday) * 100
+                    ? (engine.portfolio / r.coastNeededToday) * 100
                     : 0;
                 return (
                   <tr key={r.label} className="border-t">

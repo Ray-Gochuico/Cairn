@@ -134,7 +134,7 @@ describe('CalculatorsLayout', () => {
         <CalculatorsLayout />
       </MemoryRouter>,
     );
-    expect(await screen.findByText(/Contribution allocator/i)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Contribution allocator/i })).toBeInTheDocument();
   });
 
   it('hides a card whose id is marked hidden in settings.calculatorCardLayout (no localStorage read)', async () => {
@@ -145,7 +145,7 @@ describe('CalculatorsLayout', () => {
       </MemoryRouter>,
     );
     // Another card proves the grid rendered…
-    expect(await screen.findByText(/Compound Interest/i)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Compound Interest/i })).toBeInTheDocument();
     // …but the hidden one is absent.
     expect(screen.queryByText(/Contribution allocator/i)).not.toBeInTheDocument();
   });

@@ -10,7 +10,7 @@ describe('BacktestCard', () => {
         <BacktestCard />
       </MemoryRouter>,
     );
-    expect(screen.getByText(/Historical Backtest/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Historical Backtest/i })).toBeInTheDocument();
   });
 
   it('renders a link to /calculators/backtest', () => {
