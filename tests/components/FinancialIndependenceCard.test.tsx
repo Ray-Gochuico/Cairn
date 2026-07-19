@@ -667,4 +667,15 @@ describe('FinancialIndependenceCard waymark meaning (Wave 17)', () => {
     expect(screen.getByTestId('fi-headline')).toHaveTextContent('—');
     expect(document.querySelector('[data-testid="cairn-glyph"]')).toBeInTheDocument();
   });
+
+  it('meaning names the RENDERED scenario — an edited bar Return yields Custom, not Moderate (review fix 3)', () => {
+    primeStores();
+    // W16: an edited bar Return collapses scenarioList to a single Custom row;
+    // the meaning must name the entry the headline actually uses.
+    sessionStorage.setItem(SCENARIO_STORAGE_KEY, JSON.stringify({ returnPct: 8 }));
+    render(<MemoryRouter><FinancialIndependenceCard cardId="financial-independence" /></MemoryRouter>);
+    const meaning = screen.getByTestId('financial-independence-meaning');
+    expect(meaning).toHaveTextContent(/custom scenario to a .* target portfolio\./i);
+    expect(meaning).not.toHaveTextContent(/moderate/i);
+  });
 });

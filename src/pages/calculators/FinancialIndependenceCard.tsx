@@ -178,15 +178,18 @@ export function FinancialIndependenceCard({
       : '—';
   const anyUnreachable = series.some((s) => !Number.isFinite(s.years));
 
-  // Wave 17 meaning contract: a non-finite Moderate REPLACES the sentence
-  // with the warning (a degraded headline never keeps a cheerful caption).
-  const moderateUnreachable = !(moderate && Number.isFinite(moderate.years));
-  const meaning = moderateUnreachable ? (
+  // Wave 17 meaning contract: a non-finite headline scenario REPLACES the
+  // sentence with the warning (a degraded headline never keeps a cheerful
+  // caption). Review fix 3: the label comes from the SAME entry the headline
+  // uses — an edited bar Return collapses the list to a single Custom row
+  // (and some households have no 'Moderate' label at all), so hardcoding
+  // "Moderate" would claim a scenario the card doesn't render.
+  const meaning = !moderate || !Number.isFinite(moderate.years) ? (
     <span className="text-warning-foreground">
       Returns at or below inflation — the target is never reached in real terms.
     </span>
   ) : (
-    <>Moderate scenario to a {formatCurrency(targetFv)} target portfolio.</>
+    <>{moderate.label} scenario to a {formatCurrency(targetFv)} target portfolio.</>
   );
 
   return (

@@ -400,6 +400,8 @@ describe('CalculatorsLayout', () => {
       const patch = update.mock.calls.at(-1)![0] as { calculatorCardLayout: { id: string; hidden: boolean }[] };
       expect(patch.calculatorCardLayout.find((e) => e.id === 'bonus-tax')?.hidden).toBe(true);
       expect(screen.queryByTestId('calc-card-bonus-tax')).not.toBeInTheDocument();
+      // Single source of truth: the legacy localStorage key is NEVER recreated.
+      expect(localStorage.getItem('calculator-hidden-cards')).toBeNull();
     });
 
     it('disables the Overtime row with a reason when no hourly/OT person exists (W10 survives)', async () => {

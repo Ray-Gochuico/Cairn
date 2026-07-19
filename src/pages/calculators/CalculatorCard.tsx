@@ -94,6 +94,7 @@ export function CalculatorCard({
 
   const cardRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const wasOpen = useRef(open);
 
@@ -122,14 +123,18 @@ export function CalculatorCard({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [open, shell, cardId, menuOpen]);
 
-  // ⋯ menu Esc — same idiom as the section Customize popover (preventDefault
-  // marks it handled so the panel handler above defers).
+  // ⋯ menu Esc — the FULL section-Customize popover idiom: preventDefault
+  // marks it handled so the panel handler above defers, AND focus returns to
+  // the ⋯ trigger. Review fix 2: without the focus-restore half, a focused
+  // menu item unmounted on close, activeElement fell to body, and the D8
+  // containment guard permanently no-opped every subsequent panel Esc.
   useEffect(() => {
     if (!menuOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       e.preventDefault();
       setMenuOpen(false);
+      menuButtonRef.current?.focus();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
@@ -181,7 +186,10 @@ export function CalculatorCard({
       >
         {/* D5: the stretched trigger. Same element in both states — REST it
             covers the whole card (no body renders), OPEN just the header.
-            aria-expanded flips in place; focus never moves. */}
+            aria-expanded flips in place; focus never moves.
+            Review fix 1 (WCAG 2.4.7): the REST card is h-32 overflow-hidden,
+            which clips an OUTSET ring + offset to invisibility — the ring
+            must draw INSIDE the clip (ring-inset, no offset). */}
         <button
           ref={triggerRef}
           type="button"
@@ -190,7 +198,7 @@ export function CalculatorCard({
           aria-controls={`panel-${id}`}
           aria-labelledby={`${id}-waymark-title ${id}-headline`}
           data-testid={`${id}-trigger`}
-          className="absolute inset-0 z-0 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className="absolute inset-0 z-0 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         />
         <div className="pointer-events-none min-w-0 space-y-0.5 [&_a]:pointer-events-auto [&_a]:relative [&_a]:z-10 [&_button]:pointer-events-auto [&_button]:relative [&_button]:z-10">
           <h3
@@ -235,6 +243,7 @@ export function CalculatorCard({
           <div className="absolute right-3 top-3 z-10 flex items-center gap-1">
             <div className="relative">
               <Button
+                ref={menuButtonRef}
                 variant="ghost"
                 size="sm"
                 onClick={() => setMenuOpen((v) => !v)}

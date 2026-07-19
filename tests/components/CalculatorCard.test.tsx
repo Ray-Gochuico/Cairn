@@ -206,3 +206,48 @@ it('EmptyMeaning renders the cairn glyph aria-hidden beside the CTA (links survi
   expect(glyph).toHaveAttribute('aria-hidden', 'true');
   expect(screen.getByText('Add loans on the Inputs page.')).toBeInTheDocument();
 });
+
+it('REST trigger focus ring draws INSIDE the clipped card (ring-inset, no offset) — WCAG 2.4.7', () => {
+  // The REST Card carries h-32 overflow-hidden, which clips an OUTSET ring +
+  // offset to invisibility (Wave-17 review finding 1). Pin the inset form so
+  // a restyle can't silently regress the only keyboard focus indicator.
+  render(<Harness>{card()}</Harness>);
+  const trigger = screen.getByTestId('test-calc-trigger');
+  expect(trigger.className).toContain('focus-visible:ring-inset');
+  expect(trigger.className).not.toContain('ring-offset');
+});
+
+it('⋯ menu Esc: focus restores to the ⋯ button, panel survives, and a following Esc still closes the panel', async () => {
+  // Review finding 2: without the focus-restore half of the popover idiom,
+  // Esc in the menu dropped activeElement to body and the D8 containment
+  // guard permanently no-opped every later Esc.
+  const user = userEvent.setup();
+  render(<Harness initialOpen="test-calc">{card()}</Harness>);
+  await user.click(screen.getByRole('button', { name: 'Test calc card options' }));
+  // Focus a node INSIDE the menu — Esc unmounts it, which is exactly how
+  // activeElement fell to body before the fix.
+  screen.getByRole('button', { name: /hide this card/i }).focus();
+  await user.keyboard('{Escape}');
+  // Menu closed; panel body still in the document (D8 pin b).
+  expect(screen.queryByRole('button', { name: /hide this card/i })).not.toBeInTheDocument();
+  expect(screen.getByText('Body content')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Test calc card options' })).toHaveFocus();
+  // The panel Esc affordance survives.
+  await user.keyboard('{Escape}');
+  expect(screen.queryByText('Body content')).not.toBeInTheDocument();
+});
+
+it('D8: Esc with focus OUTSIDE the card leaves the panel open (containment guard)', async () => {
+  const user = userEvent.setup();
+  render(
+    <Harness initialOpen="test-calc">
+      <>
+        <button type="button">Outside</button>
+        {card()}
+      </>
+    </Harness>,
+  );
+  screen.getByRole('button', { name: 'Outside' }).focus();
+  await user.keyboard('{Escape}');
+  expect(screen.getByText('Body content')).toBeInTheDocument();
+});
