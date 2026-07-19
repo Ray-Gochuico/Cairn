@@ -336,14 +336,11 @@ describe('CalculatorsLayout', () => {
     await screen.findByRole('heading', { name: /paycheck & tax/i, level: 2 });
     expect(screen.getByRole('heading', { name: /path to fi/i, level: 2 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /next dollar/i, level: 2 })).toBeInTheDocument();
-    // Render order === CALCULATOR_CARD_IDS order. Wave-18 B6 TRANSITIONAL
-    // (until Task 8): path-to-fi still mounts BOTH predecessors, so it
-    // appears twice in the DOM scan.
+    // Render order === CALCULATOR_CARD_IDS order (all 10 merged-id cards
+    // visible with an OT person — Wave 18 B8 completed the merges).
     const ids = screen.getAllByTestId(/^calc-card-/).map((el) =>
       el.getAttribute('data-testid')!.replace('calc-card-', ''));
-    const expected = CALCULATOR_CARD_IDS.flatMap((id) =>
-      id === 'path-to-fi' ? [id, id] : [id]);
-    expect(ids).toEqual(expected);
+    expect(ids).toEqual([...CALCULATOR_CARD_IDS]);
   });
 
   it('exactly one card open at a time; opening B closes A', async () => {

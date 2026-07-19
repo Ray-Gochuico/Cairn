@@ -2,17 +2,19 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import FiCards from '@/components/whatif/FiCards';
-import { CoastFiCard } from '@/pages/calculators/CoastFiCard';
+import { PathToFiCard } from '@/pages/calculators/PathToFiCard';
+import { __resetScenarioAssumptionsForTests } from '@/lib/calculators/use-scenario-assumptions';
 import { coastFi } from '@/lib/coast-fi';
 import { realRateOf } from '@/lib/calculators/real-rate';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, formatSignedCurrency } from '@/lib/format';
 import { emptyLeverPayload } from '@/lib/scenarios';
 import type { MonthlyState } from '@/lib/scenarios';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
+import { useAccountsStore } from '@/stores/accounts-store';
 import { useSettingsStore } from '@/stores/settings-store';
-import { FilingStatus, SnapshotSource } from '@/types/enums';
+import { FilingStatus, SnapshotSource, AccountType } from '@/types/enums';
 import type { GrowthScenario, Person, Household } from '@/types/schema';
 import type { Scenario } from '@/types/scenario';
 
@@ -136,13 +138,28 @@ function primeDashboardStores() {
     isLoading: false,
     error: null,
   });
+  // W16/W18: the bar portfolio prefill needs an FI-eligible account per snapshot.
+  useAccountsStore.setState({
+    accounts: [
+      {
+        id: 1, householdId: 1, ownerPersonId: null, beneficiaryDependentId: null,
+        name: 'Acct 1', institution: null, type: AccountType.ACCOUNT_BROKERAGE,
+        cryptoWalletAddress: null, autoFetchEnabled: false, excludedFromNetWorth: false,
+        stateOfPlan: null, accentColor: null,
+      } as never,
+    ],
+    isLoading: false,
+    error: null,
+  });
 }
 
-describe('N1: dashboard CoastFiCard ⇄ What-If FiCards coast agreement', () => {
+describe('N1: dashboard PathToFiCard ⇄ What-If FiCards coast agreement', () => {
   beforeEach(() => {
     useHouseholdStore.setState({ household: null, isLoading: false, error: null });
     usePersonsStore.setState({ persons: [], isLoading: false, error: null });
     useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null });
+    useAccountsStore.setState({ accounts: [], isLoading: false, error: null });
+    __resetScenarioAssumptionsForTests();
     // settings.defaultInflation = 2.5% — DIFFERENT from the household's 5% so a
     // regression to the settings source would change the number and fail.
     useSettingsStore.setState({
@@ -195,11 +212,14 @@ describe('N1: dashboard CoastFiCard ⇄ What-If FiCards coast agreement', () => 
     expect(whatIfCoastEl).toHaveTextContent(expectedStr);
     unmount();
 
-    // ── Dashboard CoastFiCard coast figure (Moderate row "Coast today") ──────
+    // ── Dashboard PathToFiCard (Wave 18 B8): the Moderate row's signed
+    // "Gap to coast" derives from the SAME coastNeededToday — a regression to
+    // the settings-inflation source would shift this figure identically. ──────
     primeDashboardStores();
-    render(<MemoryRouter><CoastFiCard /></MemoryRouter>);
-    // The single Moderate row renders formatCurrency(coastNeededToday).
+    render(<MemoryRouter><PathToFiCard /></MemoryRouter>);
     const moderateRow = screen.getByText('Moderate').closest('tr')!;
-    expect(within(moderateRow).getByText(expectedStr)).toBeInTheDocument();
+    expect(
+      within(moderateRow).getByText(formatSignedCurrency(expectedCoast - 300_000)),
+    ).toBeInTheDocument();
   });
 });

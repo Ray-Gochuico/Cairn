@@ -8,8 +8,7 @@ import { PaycheckCard } from './PaycheckCard';
 import { SupplementalPayCard } from './SupplementalPayCard';
 import { OvertimeCard } from './OvertimeCard';
 import { Retirement401kWithdrawalCard } from './Retirement401kWithdrawalCard';
-import { FinancialIndependenceCard } from './FinancialIndependenceCard';
-import { CoastFiCard } from './CoastFiCard';
+import { PathToFiCard } from './PathToFiCard';
 import { CompoundInterestCard } from './CompoundInterestCard';
 import { BacktestCard } from './BacktestCard';
 import { DebtPayoffCard } from './DebtPayoffCard';
@@ -18,19 +17,6 @@ import { ContributionAllocatorCard } from './ContributionAllocatorCard';
 
 export interface CalculatorAvailabilityCtx {
   persons: Person[];
-}
-
-// Wave 18 B6 TRANSITIONAL (removed by Task 8): path-to-fi gates BOTH
-// predecessors, mounted adjacently under the merged cardId, so the B6 commit
-// changed ids only. The duplicated DOM ids this creates are accepted until
-// Task 8 collapses the pair.
-function PathToFiTransitional({ cardId }: { cardId?: string }) {
-  return (
-    <>
-      <FinancialIndependenceCard cardId={cardId} />
-      <CoastFiCard cardId={cardId} />
-    </>
-  );
 }
 
 export interface CalculatorCardRegistration extends CalculatorCardDef {
@@ -58,7 +44,7 @@ const REGISTRATIONS: Record<string, Registration> = {
     unavailableReason: 'Add an hourly or salary+OT person in Inputs to enable this card.',
   },
   'retirement-401k-withdrawal': { Component: Retirement401kWithdrawalCard },
-  'path-to-fi': { Component: PathToFiTransitional },
+  'path-to-fi': { Component: PathToFiCard },
   'compound-interest': { Component: CompoundInterestCard },
   'backtest': { Component: BacktestCard },
   'debt-payoff': { Component: DebtPayoffCard },
