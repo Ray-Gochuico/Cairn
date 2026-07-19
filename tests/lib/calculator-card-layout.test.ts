@@ -76,14 +76,22 @@ describe('importCalcVisibilityIfNeeded', () => {
     expect(localStorage.getItem(LEGACY_KEY)).toBeNull();
   });
 
-  it('applies LEGACY_ID_MIGRATIONS on import (fire->financial-independence, commission->commission-tax)', async () => {
+  it('LEGACY_ID_MIGRATIONS ids fall out at the intersection (Wave-18 D2: dead path, default-visible)', async () => {
+    // Pre-Wave-18 this import mapped fire→financial-independence and
+    // commission→commission-tax into hidden entries. Those ids merged into
+    // supplemental-pay / path-to-fi (Wave 18 B6); D2 deliberately leaves this
+    // extinct pre-DB path untouched — its now-unknown ids drop at the
+    // CALCULATOR_CARD_IDS intersection, and default-visible is the safe
+    // failure for a dead path.
     localStorage.setItem(LEGACY_KEY, JSON.stringify(['fire', 'commission']));
 
     await importCalcVisibilityIfNeeded();
 
     const layout = (await new SettingsRepo(db).get()).calculatorCardLayout ?? [];
     const hidden = new Set(layout.filter((e) => e.hidden).map((e) => e.id));
-    expect(hidden).toEqual(new Set(['financial-independence', 'commission-tax']));
+    expect(hidden).toEqual(new Set());
+    // The write still lands complete over the LIVE id list (never re-imports).
+    expect(layout).toHaveLength(CALCULATOR_CARD_IDS.length);
   });
 
   it('writes a non-null all-visible layout even when nothing was hidden (so it never re-imports)', async () => {
@@ -170,12 +178,50 @@ describe('importCalcVisibilityIfNeeded', () => {
   });
 });
 
+describe('Wave-18 merged-card id fold (D2)', () => {
+  const IDS = ['supplemental-pay', 'path-to-fi', 'debt-payoff'];
+  it('legacy pair BOTH hidden → successor hidden (AND rule)', () => {
+    expect(
+      applyCalculatorCardLayout(IDS, [
+        { id: 'bonus-tax', hidden: true },
+        { id: 'commission-tax', hidden: true },
+      ]),
+    ).toEqual(['supplemental-pay']);
+  });
+  it('legacy pair split (one hidden, one visible) → successor visible', () => {
+    expect(
+      applyCalculatorCardLayout(IDS, [
+        { id: 'bonus-tax', hidden: true },
+        { id: 'commission-tax', hidden: false },
+      ]),
+    ).toEqual([]);
+  });
+  it('single legacy entry hidden (other absent) → successor hidden', () => {
+    // Absent = the user never toggled it post-dating that entry's write; the
+    // one signal we have says hidden.
+    expect(
+      applyCalculatorCardLayout(IDS, [{ id: 'coast-fi', hidden: true }]),
+    ).toEqual(['path-to-fi']);
+  });
+  it('an explicit NEW-id entry always wins over the legacy fold', () => {
+    expect(
+      applyCalculatorCardLayout(IDS, [
+        { id: 'bonus-tax', hidden: true },
+        { id: 'commission-tax', hidden: true },
+        { id: 'supplemental-pay', hidden: false },
+      ]),
+    ).toEqual([]);
+  });
+});
+
 describe('CALCULATOR_CARD_DEFS (Wave-17 registry data)', () => {
   it('CALCULATOR_CARD_IDS derives from the defs (single source, grouped order)', () => {
     expect(CALCULATOR_CARD_IDS).toEqual(CALCULATOR_CARD_DEFS.map((d) => d.id));
+    // Wave 18 B6: bonus-tax + commission-tax → supplemental-pay;
+    // financial-independence + coast-fi → path-to-fi (registry section order).
     expect(CALCULATOR_CARD_IDS).toEqual([
-      'paycheck', 'bonus-tax', 'commission-tax', 'overtime', 'retirement-401k-withdrawal',
-      'financial-independence', 'coast-fi', 'compound-interest', 'backtest',
+      'paycheck', 'supplemental-pay', 'overtime', 'retirement-401k-withdrawal',
+      'path-to-fi', 'compound-interest', 'backtest',
       'debt-payoff', 'equity', 'contribution-allocator',
     ]);
   });
@@ -189,7 +235,9 @@ describe('CALCULATOR_CARD_DEFS (Wave-17 registry data)', () => {
   });
   it('labels survive the move (the old CARD_LABELS strings, byte-identical)', () => {
     expect(calculatorCardLabel('retirement-401k-withdrawal')).toBe('401k withdrawal take-home');
-    expect(calculatorCardLabel('financial-independence')).toBe('Years to FI');
+    // Wave 18 B6: merged-card labels.
+    expect(calculatorCardLabel('supplemental-pay')).toBe('Supplemental pay');
+    expect(calculatorCardLabel('path-to-fi')).toBe('Path to FI');
     expect(calculatorCardLabel('unknown-id')).toBe('unknown-id');
   });
   it('fullPagePath only on the two full-page tools', () => {

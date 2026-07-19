@@ -28,6 +28,14 @@ import { InlineLink } from '@/components/calculators/InlineLink';
 
 const STALE_BANNER_STORAGE_KEY = 'stale-tax-year-banner-dismissed';
 
+/** Wave-18: legacy per-card hash targets → their merged successors. */
+const LEGACY_HASH_TARGETS: Record<string, string> = {
+  'bonus-tax': 'supplemental-pay',
+  'commission-tax': 'supplemental-pay',
+  'financial-independence': 'path-to-fi',
+  'coast-fi': 'path-to-fi',
+};
+
 /**
  * Build the next calculatorCardLayout from the current layout + a single
  * id→hidden mutation. Always returns a COMPLETE entry per CALCULATOR_CARD_IDS
@@ -286,8 +294,11 @@ export default function CalculatorsLayout() {
   useEffect(() => {
     if (consumedInitialHash.current || !gate.settled || settings === null) return;
     consumedInitialHash.current = true;
-    const target = window.location.hash.slice(1);
-    if (!target) return;
+    const rawId = window.location.hash.slice(1);
+    if (!rawId) return;
+    // Wave 18 B6: resolve legacy per-card hashes to their merged successors
+    // before the open/scroll step.
+    const target = LEGACY_HASH_TARGETS[rawId] ?? rawId;
     const card = CALCULATOR_CARDS.find((c) => c.id === target);
     if (!card || hiddenSet.has(target) || !isCardAvailable(card)) return;
     setOpenId(target);

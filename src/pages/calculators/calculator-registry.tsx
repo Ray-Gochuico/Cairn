@@ -21,6 +21,29 @@ export interface CalculatorAvailabilityCtx {
   persons: Person[];
 }
 
+// Wave 18 B6 TRANSITIONAL (removed by Tasks 7–8): the merged ids gate BOTH
+// predecessors, mounted adjacently under the merged cardId, so this commit
+// changes IDS ONLY — any hidden-state regression bisects to here, isolated
+// from the card rewrites. The duplicated panel/testid DOM ids this creates
+// are accepted for exactly this one commit.
+function SupplementalPayTransitional({ cardId }: { cardId?: string }) {
+  return (
+    <>
+      <BonusTaxCard cardId={cardId} />
+      <CommissionTaxCard cardId={cardId} />
+    </>
+  );
+}
+
+function PathToFiTransitional({ cardId }: { cardId?: string }) {
+  return (
+    <>
+      <FinancialIndependenceCard cardId={cardId} />
+      <CoastFiCard cardId={cardId} />
+    </>
+  );
+}
+
 export interface CalculatorCardRegistration extends CalculatorCardDef {
   Component: ComponentType<{ cardId?: string }>;
   /** Absent = always available. Present = render + Customize row gate. */
@@ -36,8 +59,7 @@ type Registration = Omit<CalculatorCardRegistration, keyof CalculatorCardDef>;
 // def has an entry here — adding a card without registering it fails CI.
 const REGISTRATIONS: Record<string, Registration> = {
   'paycheck': { Component: PaycheckCard },
-  'bonus-tax': { Component: BonusTaxCard },
-  'commission-tax': { Component: CommissionTaxCard },
+  'supplemental-pay': { Component: SupplementalPayTransitional },
   'overtime': {
     Component: OvertimeCard,
     // W10: without an hourly/OT person the card can never render — the
@@ -47,8 +69,7 @@ const REGISTRATIONS: Record<string, Registration> = {
     unavailableReason: 'Add an hourly or salary+OT person in Inputs to enable this card.',
   },
   'retirement-401k-withdrawal': { Component: Retirement401kWithdrawalCard },
-  'financial-independence': { Component: FinancialIndependenceCard },
-  'coast-fi': { Component: CoastFiCard },
+  'path-to-fi': { Component: PathToFiTransitional },
   'compound-interest': { Component: CompoundInterestCard },
   'backtest': { Component: BacktestCard },
   'debt-payoff': { Component: DebtPayoffCard },

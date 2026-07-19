@@ -33,18 +33,34 @@ export const CALCULATOR_CARD_GROUPS: readonly { id: CalculatorCardGroup; label: 
  */
 export const CALCULATOR_CARD_DEFS: readonly CalculatorCardDef[] = [
   { id: 'paycheck', label: 'Paycheck', group: 'paycheck-tax', fullPagePath: '/calculators/paycheck' },
-  { id: 'bonus-tax', label: 'Bonus tax', group: 'paycheck-tax' },
-  { id: 'commission-tax', label: 'Commission tax', group: 'paycheck-tax' },
+  // Wave 18 B6: Bonus + Commission merged into one Supplemental pay card;
+  // Years-to-FI + CoastFI merged into one Path to FI card. Legacy ids fold
+  // into their successors at READ time (MERGED_CARD_IDS below, D2). Note the
+  // card id 'path-to-fi' intentionally equals the GROUP id string — separate
+  // namespaces (sections render as calc-section-<groupId>, panels as
+  // panel-<cardId>), so no DOM-id or hash collision exists.
+  { id: 'supplemental-pay', label: 'Supplemental pay', group: 'paycheck-tax' },
   { id: 'overtime', label: 'Overtime', group: 'paycheck-tax' },
   { id: 'retirement-401k-withdrawal', label: '401k withdrawal take-home', group: 'paycheck-tax' },
-  { id: 'financial-independence', label: 'Years to FI', group: 'path-to-fi' },
-  { id: 'coast-fi', label: 'CoastFI', group: 'path-to-fi' },
+  { id: 'path-to-fi', label: 'Path to FI', group: 'path-to-fi' },
   { id: 'compound-interest', label: 'Compound Interest', group: 'path-to-fi' },
   { id: 'backtest', label: 'Historical Backtest', group: 'path-to-fi', fullPagePath: '/calculators/backtest' },
   { id: 'debt-payoff', label: 'Debt Payoff', group: 'next-dollar' },
   { id: 'equity', label: 'Equity Value', group: 'next-dollar' },
   { id: 'contribution-allocator', label: 'Contribution allocator', group: 'next-dollar' },
 ];
+
+/**
+ * Wave-18 card merges: legacy id → its successor. Read-time fold only —
+ * no DB write. withCardHidden always writes COMPLETE layouts over the new
+ * id list, so legacy entries wash out of storage on the next toggle.
+ */
+export const MERGED_CARD_IDS: Record<string, string> = {
+  'bonus-tax': 'supplemental-pay',
+  'commission-tax': 'supplemental-pay',
+  'financial-independence': 'path-to-fi',
+  'coast-fi': 'path-to-fi',
+};
 
 export const CALCULATOR_CARD_IDS: readonly string[] = CALCULATOR_CARD_DEFS.map((d) => d.id);
 
@@ -64,6 +80,11 @@ export function calculatorCardLabel(id: string): string {
  *                        stored layouts). Unknown-id entries are ignored by
  *                        the caller because it intersects against the live
  *                        CALCULATOR_CARD_IDS, but we also don't synthesize them here.
+ *   - Wave 18 (D2): legacy MERGED_CARD_IDS entries AND-fold into their
+ *     successor — the successor is hidden only when ALL present legacy
+ *     entries are hidden (a user who hid Bonus but used Commission still has
+ *     a live use for the merged card). An explicit stored entry for the NEW
+ *     id (written by any post-upgrade toggle) always wins over the fold.
  * Pure; never mutates its inputs.
  */
 export function applyCalculatorCardLayout(
@@ -73,7 +94,20 @@ export function applyCalculatorCardLayout(
   if (layout === null) return [];
   const known = new Set(allIds);
   const hiddenById = new Map<string, boolean>();
-  for (const entry of layout) hiddenById.set(entry.id, entry.hidden);
+  // D2: successor hidden ⇔ ALL present legacy entries hidden (AND).
+  const legacyFold = new Map<string, boolean>();
+  for (const entry of layout) {
+    const successor = MERGED_CARD_IDS[entry.id];
+    if (successor !== undefined) {
+      legacyFold.set(successor, (legacyFold.get(successor) ?? true) && entry.hidden);
+    } else {
+      hiddenById.set(entry.id, entry.hidden);
+    }
+  }
+  // An explicit new-id entry (any post-merge toggle) wins over the fold.
+  for (const [id, hidden] of legacyFold) {
+    if (!hiddenById.has(id)) hiddenById.set(id, hidden);
+  }
   return allIds.filter((id) => known.has(id) && hiddenById.get(id) === true);
 }
 

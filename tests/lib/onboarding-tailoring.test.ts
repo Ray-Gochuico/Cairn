@@ -56,12 +56,11 @@ describe('computeTailoring', () => {
     expect(r.calculators.every((c) => c.visible)).toBe(true);
   });
 
-  it('the 8 always-shown calculators are visible even on empty input', () => {
+  it('the 7 always-shown calculators are visible even on empty input (Wave-18 merged ids)', () => {
     const r = computeTailoring(emptyInput());
     const always = [
       'paycheck',
-      'financial-independence',
-      'coast-fi',
+      'path-to-fi',
       'compound-interest',
       'contribution-allocator',
       'backtest',
@@ -109,19 +108,18 @@ describe('computeTailoring', () => {
     expect(tab(r, '/equity-grants').visible).toBe(true);
   });
 
-  it('commission 0 and bonus 0 → commission-tax and bonus-tax hidden', () => {
+  it('commission 0 and bonus 0 → supplemental-pay hidden (Wave-18 merged union)', () => {
     const r = computeTailoring(
       emptyInput({ persons: [makePerson({ expectedBonus: 0, expectedCommission: 0 })] }),
     );
-    expect(calc(r, 'commission-tax').visible).toBe(false);
-    expect(calc(r, 'bonus-tax').visible).toBe(false);
+    expect(calc(r, 'supplemental-pay').visible).toBe(false);
   });
 
-  it('expectedBonus > 0 reveals bonus-tax; expectedCommission > 0 reveals commission-tax', () => {
+  it('EITHER expectedBonus > 0 or expectedCommission > 0 reveals supplemental-pay (D2 union)', () => {
     const rb = computeTailoring(emptyInput({ persons: [makePerson({ expectedBonus: 5000 })] }));
-    expect(calc(rb, 'bonus-tax').visible).toBe(true);
+    expect(calc(rb, 'supplemental-pay').visible).toBe(true);
     const rc = computeTailoring(emptyInput({ persons: [makePerson({ expectedCommission: 5000 })] }));
-    expect(calc(rc, 'commission-tax').visible).toBe(true);
+    expect(calc(rc, 'supplemental-pay').visible).toBe(true);
   });
 
   it('a grant reveals the equity calculator', () => {
@@ -155,12 +153,11 @@ describe('computeTailoring', () => {
         ],
       }),
     );
-    expect(calc(r, 'bonus-tax').visible).toBe(true);
-    expect(calc(r, 'commission-tax').visible).toBe(true);
+    expect(calc(r, 'supplemental-pay').visible).toBe(true);
     expect(calc(r, 'overtime').visible).toBe(true);
   });
 
-  it('persons exist but all conditionals zero → all 4 conditionals hidden, 8 always-shown still visible', () => {
+  it('persons exist but all conditionals zero → all 3 conditionals hidden, 7 always-shown still visible', () => {
     const r = computeTailoring(
       emptyInput({
         persons: [
@@ -168,7 +165,7 @@ describe('computeTailoring', () => {
         ],
       }),
     );
-    for (const id of ['bonus-tax', 'commission-tax', 'overtime', 'equity']) {
+    for (const id of ['supplemental-pay', 'overtime', 'equity']) {
       expect(calc(r, id).visible).toBe(false);
     }
     expect(calc(r, 'debt-payoff').visible).toBe(true);

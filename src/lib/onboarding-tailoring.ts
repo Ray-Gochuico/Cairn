@@ -109,28 +109,27 @@ export function computeTailoring(input: TailoringInput): TailoringResult {
   const hasOvertime = !hasPerson || anyOvertime(persons);
   const hasGrants = !hasPerson || equityGrants.length > 0;
 
+  // Wave 18 B6: the merged Supplemental pay card is useful when EITHER
+  // supplemental-pay type exists (the D2 union — mirrors the AND-hidden fold).
+  const hasSupplemental = hasBonus || hasCommission;
+
   const calculators: TailorCalc[] = [
-    // Always shown (8).
+    // Always shown (7).
     { id: 'paycheck', label: calculatorCardLabel('paycheck'), visible: true, reason: 'Always available' },
-    { id: 'financial-independence', label: calculatorCardLabel('financial-independence'), visible: true, reason: 'Always available' },
-    { id: 'coast-fi', label: calculatorCardLabel('coast-fi'), visible: true, reason: 'Always available' },
+    { id: 'path-to-fi', label: calculatorCardLabel('path-to-fi'), visible: true, reason: 'Always available' },
     { id: 'compound-interest', label: calculatorCardLabel('compound-interest'), visible: true, reason: 'Always available' },
     { id: 'contribution-allocator', label: calculatorCardLabel('contribution-allocator'), visible: true, reason: 'Always available' },
     { id: 'backtest', label: calculatorCardLabel('backtest'), visible: true, reason: 'Always available' },
     { id: 'retirement-401k-withdrawal', label: calculatorCardLabel('retirement-401k-withdrawal'), visible: true, reason: 'Always available' },
     { id: 'debt-payoff', label: calculatorCardLabel('debt-payoff'), visible: true, reason: 'Always available — add a loan to use it' },
-    // Conditional (4).
+    // Conditional (3).
     {
-      id: 'bonus-tax',
-      label: calculatorCardLabel('bonus-tax'),
-      visible: hasBonus,
-      reason: hasBonus ? 'You entered an expected bonus' : 'No expected bonus entered',
-    },
-    {
-      id: 'commission-tax',
-      label: calculatorCardLabel('commission-tax'),
-      visible: hasCommission,
-      reason: hasCommission ? 'You entered an expected commission' : 'No expected commission entered',
+      id: 'supplemental-pay',
+      label: calculatorCardLabel('supplemental-pay'),
+      visible: hasSupplemental,
+      reason: hasSupplemental
+        ? 'You entered an expected bonus or commission'
+        : 'No expected bonus or commission entered',
     },
     {
       id: 'overtime',
