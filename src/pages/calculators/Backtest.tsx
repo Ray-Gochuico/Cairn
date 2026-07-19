@@ -16,6 +16,20 @@ import { BelowGoalList } from '@/components/backtest/BelowGoalList';
 import { OutcomeSummary } from '@/components/backtest/OutcomeSummary';
 import { OutcomeHistogram } from '@/components/backtest/OutcomeHistogram';
 import { BacktestDisclosureCallout } from '@/components/backtest/BacktestDisclosureCallout';
+import { InlineLink } from '@/components/calculators/InlineLink';
+import { writeLastBacktestRun } from '@/lib/backtest/last-run';
+
+/**
+ * Wave 18 C9 — the today's-dollars promotion is a COMPONENT chip (rendered
+ * next to Run and atop the results). Constraint 4: the versioned backtest
+ * disclosure BODY in src/legal/disclosures.ts is deliberately NOT edited
+ * (return-basis disclosure edits require a version bump — so we don't).
+ */
+const TodaysDollarsChip = () => (
+  <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs text-muted-foreground">
+    All figures in today&#39;s dollars
+  </span>
+);
 
 export default function Backtest() {
   const gate = useDisclosureGate('backtest');
@@ -39,6 +53,14 @@ export default function Backtest() {
     const inv = Object.values(real.initialInvestmentsByAccount).reduce((a, b) => a + b, 0);
     return Math.max(0, Math.round(inv + real.initialCash)) || 1_000_000;
   }, [real]);
+  // C9: the same expression whose `|| 1_000_000` fallback seeds the config —
+  // when Inputs has no portfolio value the plan on screen is an EXAMPLE.
+  const usingExample =
+    !real ||
+    Math.round(
+      Object.values(real.initialInvestmentsByAccount).reduce((a, b) => a + b, 0) +
+        real.initialCash,
+    ) <= 0;
 
   // W16 (D12): seed from the shared scenario — portfolio from the bar's
   // FI-eligible figure; spending from HOUSEHOLD EXPENSES (monthlyExpenses × 12),
@@ -117,12 +139,21 @@ export default function Backtest() {
     setIsRunning(true);
     setTimeout(() => {
       try {
-        setResult(
-          backtestPlan(
-            { ...real, initialInvestmentsByAccount: { ...real.initialInvestmentsByAccount } },
-            parsed.data,
-          ),
+        const r = backtestPlan(
+          { ...real, initialInvestmentsByAccount: { ...real.initialInvestmentsByAccount } },
+          parsed.data,
         );
+        setResult(r);
+        // C9/D3: persist the verdict for the collapsed waymark (fail-soft
+        // cache; the record carries the producing config for display/debug).
+        writeLastBacktestRun({
+          v: 1,
+          runAt: new Date().toISOString(),
+          goalMetCount: r.goalMetCount,
+          startYearsCount: r.startYears.count,
+          survivedCount: r.survivedCount,
+          config: parsed.data as Record<string, unknown>,
+        });
       } catch (err) {
         // Defensive: the schema catches the known degenerate inputs, but a
         // future engine path could still throw — keep it off the errorElement.
@@ -169,20 +200,29 @@ export default function Backtest() {
         <h1 className="text-2xl font-semibold">Historical Backtest</h1>
         <p className="text-sm text-muted-foreground">
           Replays your plan against every U.S. market starting year from 1871 onward.
+          Backtest asks &ldquo;would this plan have survived history?&rdquo; — What-If asks
+          &ldquo;what changes if I pull a lever?&rdquo;.
           Survival counts are before withdrawal tax — not a tax-inclusive guarantee.
           For side-by-side scenario comparison, see{' '}
-          <Link
-            to="/what-if"
-            className="text-primary underline underline-offset-4 hover:text-primary/80"
-          >
+          <InlineLink
+ to="/what-if">
             What-If →
-          </Link>
+          </InlineLink>
         </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Plan parameters</CardTitle>
+          <div className="flex items-baseline justify-between gap-3">
+            <CardTitle className="text-base">Plan parameters</CardTitle>
+            {/* C9: honesty badge — the config fell back to the $1M example
+                seed because Inputs holds no portfolio data. */}
+            {usingExample && (
+              <span className="text-xs text-muted-foreground" data-testid="backtest-example-badge">
+                example plan — add Inputs to use your data
+              </span>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {!configEdited && (
@@ -202,6 +242,11 @@ export default function Backtest() {
             onRun={run}
             isRunning={isRunning}
           />
+          {/* C9: return-basis promotion beside the Run affordance (component
+              copy — the versioned legal disclosure body is untouched). */}
+          <div className="mt-3">
+            <TodaysDollarsChip />
+          </div>
           {runError && (
             // BT-4 — calm inline validation/error surface (mirrors conventions.md
             // §"Validation surfacing"). The run() guard means we NEVER reach the
@@ -218,6 +263,10 @@ export default function Backtest() {
 
       {result ? (
         <>
+          {/* C9: the chip repeats at the top of the results block. */}
+          <div>
+            <TodaysDollarsChip />
+          </div>
           {/* BT-15 — the answer above the fold: the Outcome card (success rate +
               distribution) leads, so the verdict is the first thing rendered
               after the params. The chart (with its BelowGoalList annotation)

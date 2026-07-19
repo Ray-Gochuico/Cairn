@@ -45,7 +45,7 @@ export interface FicaBreakdown {
  *
  * `computeFica` below delegates to this and returns `.total`, so every
  * existing caller (computeTotalTax → TotalTaxOutput.fica, computeBonusTax,
- * PaycheckCard/BonusTaxCard/CommissionTaxCard) is unaffected.
+ * PaycheckCard/SupplementalPayCard) is unaffected.
  */
 export function computeFicaBreakdown(
   gross: number,
@@ -142,7 +142,7 @@ export function computePretaxDeductions(input: PretaxDeductionsInput): PretaxDed
 /**
  * Per-jurisdiction standard deductions. The engine threads three distinct
  * values; calculators that have always operated on federal-only (e.g.,
- * `BonusTaxCard`, `PaycheckCard`) still pass a single `number` and the
+ * `SupplementalPayCard`, `PaycheckCard`) still pass a single `number` and the
  * legacy semantics apply (same SD to all three jurisdictions).
  *
  * Bug-fix history: pre-2026-05-27 the engine seeded the federal SD into

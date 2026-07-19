@@ -193,6 +193,47 @@ describe('Backtest page', () => {
     expect(Number(hist.getAttribute('data-bucket-count'))).toBeGreaterThan(1);
   });
 
+  it('C9/D3: a successful run writes the versioned last-run record to localStorage', async () => {
+    vi.useRealTimers();
+    localStorage.clear();
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole('button', { name: /run backtest/i }));
+    await screen.findByTestId('backtest-summary');
+    const raw = localStorage.getItem('backtest:last-run:v1');
+    expect(raw).not.toBeNull();
+    const parsed = JSON.parse(raw!);
+    expect(parsed.v).toBe(1);
+    expect(parsed.startYearsCount).toBeGreaterThan(0);
+    expect(parsed.goalMetCount).toBeGreaterThanOrEqual(0);
+    expect(typeof parsed.runAt).toBe('string');
+    expect(parsed.config.initialPortfolio).toBeGreaterThan(0);
+  });
+
+  it("C9: the today's-dollars chip renders near Run and again atop the results", async () => {
+    vi.useRealTimers();
+    const user = userEvent.setup();
+    renderPage();
+    expect(screen.getAllByText(/All figures in today's dollars/i)).toHaveLength(1);
+    await user.click(screen.getByRole('button', { name: /run backtest/i }));
+    await screen.findByTestId('backtest-summary');
+    expect(screen.getAllByText(/All figures in today's dollars/i)).toHaveLength(2);
+  });
+
+  it('C9: no example-plan badge when real Inputs data seeds the config', () => {
+    renderPage();
+    expect(
+      screen.queryByText(/example plan — add Inputs to use your data/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it('C9: the intro carries the Backtest/What-If division-of-labor sentence', () => {
+    renderPage();
+    expect(
+      screen.getByText(/Backtest asks .would this plan have survived history\?./),
+    ).toBeInTheDocument();
+  });
+
   it('always shows the disclosure callout even before running', () => {
     renderPage();
     expect(screen.getByTestId('backtest-disclosure-callout')).toBeInTheDocument();

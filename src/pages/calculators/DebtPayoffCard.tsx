@@ -1,11 +1,9 @@
 import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
 import { useLoansStore } from '@/stores/loans-store';
 import { useLocalToday } from '@/lib/use-local-today';
-import { amortize, nextPaymentDateFrom, scheduleIsCapped } from '@/lib/amortization';
+import { scheduleIsCapped } from '@/lib/amortization';
 import { CalculatorCard, EmptyMeaning, RailReset } from './CalculatorCard';
-import { formatCurrency } from '@/lib/format';
-import { Input } from '@/components/ui/input';
+import { formatCurrency, formatMonth } from '@/lib/format';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -15,13 +13,23 @@ import {
   SelectItem,
 } from '@/components/ui/select';
 import { useCalculatorState } from '@/lib/calculator-state';
+import { NumberField } from '@/components/calculators/NumberField';
 import { StatTile } from '@/components/calculators/StatTile';
+import { CalcTable, CalcRow, type CalcColumn } from '@/components/calculators/CalcTable';
+import { InlineChart } from '@/components/charts/InlineChart';
 import {
   pickStrategyTargetIndex,
   projectionsFor,
   type Strategy,
   type LoanProjection,
 } from '@/lib/debt-payoff';
+import {
+  compareStrategies,
+  type StrategyOutcome,
+} from '@/lib/debt-payoff-comparison';
+import { InlineLink } from '@/components/calculators/InlineLink';
+import { useNextDollarStore } from '@/lib/calculators/next-dollar-store';
+import { cn } from '@/lib/utils';
 
 /**
  * Format an ISO YYYY-MM-DD payoff date as a friendly "Mon YYYY" string
@@ -40,15 +48,72 @@ function formatPayoffDate(isoDate: string | null | undefined): string {
 export type { Strategy, LoanProjection };
 export { pickStrategyTargetIndex, projectionsFor };
 
+const TABLE_COLUMNS: CalcColumn[] = [
+  { key: 'loan', header: 'Loan' },
+  { key: 'payoff', header: 'Payoff', numeric: true },
+  { key: 'interest', header: 'Interest', numeric: true },
+];
+
 interface DebtPayoffCardProps {
   cardId?: string;
+}
+
+/** One strategy column (D11): payoff / interest / saved, each suppressed to
+ *  '—' under its capped flag exactly as the old tiles were. No winner badge,
+ *  no color-coding — the quiet border marks "your pick" only. */
+function StrategyColumn({
+  heading,
+  outcome,
+  highlighted,
+  testKey,
+}: {
+  heading: string;
+  outcome: StrategyOutcome;
+  highlighted: boolean;
+  testKey: string;
+}) {
+  return (
+    <div
+      data-testid={`debt-column-${testKey}`}
+      className={cn('rounded-md border p-3 space-y-2', highlighted && 'border-primary/40')}
+    >
+      <div className="text-sm font-medium">{heading}</div>
+      <div className="space-y-2 text-sm">
+        <div>
+          <div className="text-muted-foreground">Payoff</div>
+          <div className="tabular-nums font-medium" data-testid={`debt-${testKey}-payoff`}>
+            {outcome.anyCapped ? '—' : formatPayoffDate(outcome.payoffDate)}
+          </div>
+        </div>
+        <div>
+          <div className="text-muted-foreground">Total interest</div>
+          <div className="tabular-nums font-medium" data-testid={`debt-${testKey}-interest`}>
+            {outcome.anyCapped ? '—' : formatCurrency(outcome.totalInterest)}
+          </div>
+        </div>
+        <div>
+          <div className="text-muted-foreground">Saved vs minimums</div>
+          <div className="tabular-nums font-medium" data-testid={`debt-${testKey}-saved`}>
+            {outcome.savingsCapped ? '—' : formatCurrency(outcome.savedVsMinimums)}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function DebtPayoffCard({ cardId }: DebtPayoffCardProps = {}) {
   const loans = useLoansStore((s) => s.loans);
 
-  const defaults = useMemo(() => ({ strategy: 'none' as Strategy, extraTotal: 0 }), []);
-  const { values, setValue, reset, isOverridden } = useCalculatorState(
+  // D5 (Wave 18): the section-level next-dollar figure enters as the extra
+  // DEFAULT — a local edit is an override that wins; Reset returns to the
+  // shared value (useCalculatorState's existing contract, no new mechanism).
+  const nextDollar = useNextDollarStore((s) => s.amount);
+  const defaults = useMemo(
+    () => ({ strategy: 'none' as Strategy, extraTotal: nextDollar ?? 0 }),
+    [nextDollar],
+  );
+  const { values, setValue, reset, isOverridden, overriddenKeys } = useCalculatorState(
     cardId ?? 'debt-payoff',
     defaults,
   );
@@ -56,35 +121,36 @@ export function DebtPayoffCard({ cardId }: DebtPayoffCardProps = {}) {
   // Live LOCAL day (Wave 11 T10): anchors every remaining schedule.
   const todayIso = useLocalToday();
 
-  const projections = useMemo(
-    () => projectionsFor(loans, values.strategy, values.extraTotal, todayIso),
-    [loans, values.strategy, values.extraTotal, todayIso],
+  // D11: BOTH strategies are always computed at the shared extra; the select
+  // below only highlights a column. compareStrategies also carries the
+  // all-minimums baseline (moved verbatim from this card's old useMemo).
+  const comparison = useMemo(
+    () => compareStrategies(loans, values.extraTotal ?? 0, todayIso),
+    [loans, values.extraTotal, todayIso],
   );
 
-  // Baseline: every loan with extraPayment=0. Used to estimate "savings" from
-  // the user's combined defaults + strategy choice. Recomputed only when the
-  // loan set changes. Also reports WHICH loans' baselines are capped (review
-  // F1): a below-interest contract payment that an extra RESCUES still has a
-  // never-amortizing extra-less baseline, so "savings vs no-extra" would
-  // difference a real projection against the cap's accumulation — the same
-  // rule as Loans.tsx's savingsCapped (both sides must be honest).
-  const baseline = useMemo(() => {
-    let interest = 0;
-    const cappedNames: string[] = [];
-    for (const loan of loans) {
-      const a = amortize({
-        principal: loan.currentBalance,
-        annualRatePct: loan.interestRate,
-        termMonths: loan.termMonths,
-        firstPaymentDate: nextPaymentDateFrom(loan.firstPaymentDate, todayIso),
-        monthlyPayment: loan.monthlyPayment,
-        extraPayment: 0,
-      });
-      interest += a.totalInterest;
-      if (scheduleIsCapped(a.schedule)) cappedNames.push(loan.name);
+  // The table + chart follow the HIGHLIGHTED strategy (avalanche when 'none'
+  // — the caption below names it so the table is never ambiguous).
+  const highlighted = values.strategy ?? 'none';
+  const displayed =
+    highlighted === 'snowball' ? comparison.snowball : comparison.avalanche;
+
+  // Downslope rows: total remaining balance by month under the displayed
+  // plan — months past a shorter schedule's end implicitly contribute 0.
+  const downslope = useMemo(() => {
+    if (displayed.anyCapped) return [];
+    const byMonth = new Map<string, number>();
+    for (const p of displayed.projections) {
+      for (const row of p.amortization.schedule) {
+        const m = row.paymentDate.slice(0, 7);
+        byMonth.set(m, (byMonth.get(m) ?? 0) + row.balance);
+      }
     }
-    return { interest, cappedNames };
-  }, [loans, todayIso]);
+    return [...byMonth.keys()]
+      .sort()
+      .slice(0, 360)
+      .map((m) => ({ label: formatMonth(m), balance: byMonth.get(m) ?? 0 }));
+  }, [displayed]);
 
   if (loans.length === 0) {
     return (
@@ -96,9 +162,9 @@ export function DebtPayoffCard({ cardId }: DebtPayoffCardProps = {}) {
           // Wave 15 T10: the CTA itself is the link. W14b: it deep-links the
           // loan's post-Inputs home (/loans, "one place per thing").
           <EmptyMeaning>
-            <Link to="/loans" className="text-primary hover:underline">
+            <InlineLink to="/loans">
               Add loans
-            </Link>{' '}
+            </InlineLink>{' '}
             on the Loans page to see payoff projections.
           </EmptyMeaning>
         }
@@ -107,33 +173,11 @@ export function DebtPayoffCard({ cardId }: DebtPayoffCardProps = {}) {
   }
 
   const totalBalance = loans.reduce((a, l) => a + l.currentBalance, 0);
-  const totalInterest = projections.reduce(
-    (a, p) => a + p.amortization.totalInterest,
-    0,
+  const anyCapped = displayed.anyCapped;
+  const cappedProjections = displayed.projections.filter((p) =>
+    scheduleIsCapped(p.amortization.schedule),
   );
-  const interestSavings = Math.max(0, baseline.interest - totalInterest);
-
-  // Round-2 A1: a never-amortizing contract payment runs amortize() to its
-  // safety cap — the "payoff date" is the cap month and "total interest" is
-  // the cap's accumulation (~$9.2M on the probe), both lies. Any capped loan
-  // poisons every aggregate (payoff = max over schedules; interest + savings
-  // are sums over them), so the whole strip suppresses, not just one tile.
-  const cappedProjections = projections.filter((p) => scheduleIsCapped(p.amortization.schedule));
-  const anyCapped = cappedProjections.length > 0;
-  // Review F1: the savings tile differences against the EXTRA-LESS baseline,
-  // so it is poisoned when EITHER side is capped — including the rescued
-  // case (projection amortizes, baseline doesn't).
-  const savingsCapped = anyCapped || baseline.cappedNames.length > 0;
-
-  // Estimated full-debt payoff: latest payment date across all schedules.
-  // ISO YYYY-MM-DD strings sort lexicographically as dates do.
-  const lastPaymentDates = projections
-    .map((p) => p.amortization.schedule[p.amortization.schedule.length - 1]?.paymentDate)
-    .filter((d): d is string => Boolean(d));
-  const aggregatePayoffDate =
-    lastPaymentDates.length > 0
-      ? lastPaymentDates.reduce((latest, d) => (d > latest ? d : latest))
-      : null;
+  const savingsCapped = displayed.savingsCapped;
 
   // Wave 17 meaning contract: a capped schedule REPLACES the sentence with
   // the warning (the rescued-baseline-only case keeps the normal sentence —
@@ -150,6 +194,17 @@ export function DebtPayoffCard({ cardId }: DebtPayoffCardProps = {}) {
     </>
   );
 
+  const extra = values.extraTotal ?? 0;
+  const tradeoffVisible =
+    !comparison.identical &&
+    !comparison.avalanche.anyCapped &&
+    !comparison.snowball.anyCapped &&
+    comparison.monthsDelta != null;
+  const tie =
+    tradeoffVisible &&
+    Math.abs(comparison.interestDelta) < 0.5 &&
+    Math.abs(comparison.monthsDelta ?? 0) === 0;
+
   return (
     <CalculatorCard
       cardId={cardId}
@@ -160,12 +215,12 @@ export function DebtPayoffCard({ cardId }: DebtPayoffCardProps = {}) {
         <>
           {isOverridden && <RailReset onClick={reset} />}
           <div className="space-y-1">
-            <Label htmlFor="debt-strategy">Strategy</Label>
+            <Label htmlFor="debt-strategy">Highlight a strategy</Label>
             <Select
               value={values.strategy}
               onValueChange={(v) => setValue('strategy', v as Strategy)}
             >
-              <SelectTrigger id="debt-strategy" aria-label="Strategy">
+              <SelectTrigger id="debt-strategy" aria-label="Highlight a strategy">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -174,40 +229,28 @@ export function DebtPayoffCard({ cardId }: DebtPayoffCardProps = {}) {
                 <SelectItem value="avalanche">Avalanche (highest rate)</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="debt-extra">Extra monthly payment</Label>
-            <Input
-              id="debt-extra"
-              type="number"
-              min={0}
-              step={50}
-              value={values.extraTotal}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                setValue('extraTotal', Number.isFinite(v) && v >= 0 ? v : 0);
-              }}
-              disabled={values.strategy === 'none'}
-            />
             <p className="text-xs text-muted-foreground">
-              {values.strategy === 'none'
-                ? 'Pick a strategy to apply additional monthly payments.'
-                : values.strategy === 'snowball'
-                  ? 'Applied to the smallest-balance loan each month.'
-                  : 'Applied to the highest-rate loan each month.'}
+              Both plans are always computed — pick one to highlight.
             </p>
           </div>
+          <NumberField
+            id="debt-extra"
+            label="Extra monthly payment"
+            value={values.extraTotal}
+            onChange={(v) => setValue('extraTotal', v != null && v >= 0 ? v : 0)}
+            step="50"
+            min={0}
+            edited={overriddenKeys.has('extraTotal')}
+          />
         </>
       }
       headline={
         <span data-testid="debt-payoff-headline">
           {/* Wave 15 T7 (D7): the headline is the ANSWER. A capped schedule
-              must never claim a date — same poisoning rule as the tiles.
-              (The null-date guard covers the degenerate empty-schedule case;
-              loans.length === 0 already early-returned above.) */}
-          {anyCapped || !aggregatePayoffDate
+              must never claim a date — same poisoning rule as the columns. */}
+          {anyCapped || !displayed.payoffDate
             ? '—'
-            : `Debt-free ${formatPayoffDate(aggregatePayoffDate)}`}
+            : `Debt-free ${formatPayoffDate(displayed.payoffDate)}`}
         </span>
       }
     >
@@ -231,84 +274,107 @@ export function DebtPayoffCard({ cardId }: DebtPayoffCardProps = {}) {
             // savings comparison is meaningless, so only it hides.
             <>
               Without extra payments{' '}
-              <span className="font-medium">{baseline.cappedNames.join(', ')}</span>{' '}
-              never {baseline.cappedNames.length === 1 ? 'pays' : 'pay'} off, so the savings
+              <span className="font-medium">{comparison.baselineCappedNames.join(', ')}</span>{' '}
+              never {comparison.baselineCappedNames.length === 1 ? 'pays' : 'pay'} off, so the savings
               comparison is hidden.
             </>
           )}
         </div>
       )}
-      {/* Aggregate metric strip */}
+      {/* The balance is always real — never suppressed (Wave 15 T7). */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-        {/* T7 (D7): the balance — the demoted former headline — leads the
-            strip. It is NEVER suppressed: the balance is always real, even
-            when a capped schedule poisons the payoff-derived aggregates. */}
         <StatTile
           label="Total balance"
           value={formatCurrency(totalBalance)}
           testId="debt-total-balance"
         />
-        <StatTile
-          label="Total interest"
-          value={anyCapped ? '—' : formatCurrency(totalInterest)}
-          testId="debt-total-interest"
-        />
-        <StatTile
-          label="Savings vs no-extra"
-          value={savingsCapped ? '—' : formatCurrency(interestSavings)}
-          testId="debt-savings"
-        />
       </div>
 
-      {/* Per-loan rows */}
-      <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="text-left text-muted-foreground">
-            <th className="py-2">Loan</th>
-            <th className="py-2 text-right">Balance</th>
-            <th className="py-2 text-right">Rate</th>
-            <th className="py-2 text-right">Payoff date</th>
-            <th className="py-2 text-right">Interest</th>
-          </tr>
-        </thead>
-        <tbody>
-          {projections.map((p) => {
-            const last = p.amortization.schedule[p.amortization.schedule.length - 1];
-            const capped = scheduleIsCapped(p.amortization.schedule);
-            return (
-              <tr
-                key={p.loan.id ?? p.loan.name}
-                className="border-t"
-                data-testid={`debt-loan-row-${p.loan.id ?? p.loan.name}`}
-              >
-                <td className="py-2">{p.loan.name}</td>
-                <td className="py-2 text-right tabular-nums">
-                  {formatCurrency(p.loan.currentBalance)}
-                </td>
-                <td className="py-2 text-right tabular-nums">
-                  {/* Intentionally 2 dp for loan APRs (e.g. 5.25%) — standard precision for lending disclosures. */}
-                  {(p.loan.interestRate * 100).toFixed(2)}%
-                </td>
-                <td
-                  className="py-2 text-right tabular-nums"
-                  data-testid={`debt-loan-payoff-${p.loan.id ?? p.loan.name}`}
-                >
+      {/* D11: strategy columns — both always computed, the pick only draws a
+          quiet highlight. A single loan (identical plans) renders ONE column. */}
+      {comparison.identical ? (
+        <div className="grid grid-cols-1 gap-3 sm:max-w-xs">
+          <StrategyColumn
+            heading="Extra payment plan"
+            outcome={comparison.avalanche}
+            highlighted={highlighted !== 'none'}
+            testKey="avalanche"
+          />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <StrategyColumn
+            heading="Avalanche — highest rate first"
+            outcome={comparison.avalanche}
+            highlighted={highlighted === 'avalanche'}
+            testKey="avalanche"
+          />
+          <StrategyColumn
+            heading="Snowball — smallest balance first"
+            outcome={comparison.snowball}
+            highlighted={highlighted === 'snowball'}
+            testKey="snowball"
+          />
+        </div>
+      )}
+
+      {tradeoffVisible && (
+        <p className="text-sm text-muted-foreground" data-testid="debt-tradeoff-row">
+          {tie ? (
+            <>At this extra amount the two strategies tie for you.</>
+          ) : (
+            <>
+              At {formatCurrency(extra)}/mo extra, the difference for you is{' '}
+              {formatCurrency(Math.abs(comparison.interestDelta))} and{' '}
+              {Math.abs(comparison.monthsDelta ?? 0)} months — avalanche minimizes interest;
+              snowball clears your smallest balance first.
+            </>
+          )}
+        </p>
+      )}
+
+      {/* Trimmed per-loan CalcTable (Loan | Payoff | Interest), rows from the
+          highlighted strategy's projections. */}
+      {highlighted === 'none' && !comparison.identical && (
+        <p className="text-xs text-muted-foreground">showing the avalanche plan</p>
+      )}
+      <CalcTable columns={TABLE_COLUMNS} testId="debt-loan-table">
+        {displayed.projections.map((p) => {
+          const last = p.amortization.schedule[p.amortization.schedule.length - 1];
+          const capped = scheduleIsCapped(p.amortization.schedule);
+          return (
+            <CalcRow
+              key={p.loan.id ?? p.loan.name}
+              columns={TABLE_COLUMNS}
+              testId={`debt-loan-row-${p.loan.id ?? p.loan.name}`}
+              cells={[
+                p.loan.name,
+                <span data-testid={`debt-loan-payoff-${p.loan.id ?? p.loan.name}`}>
                   {capped ? (
                     <span className="text-warning-foreground">Never at this payment</span>
                   ) : (
                     formatPayoffDate(last?.paymentDate)
                   )}
-                </td>
-                <td className="py-2 text-right tabular-nums">
-                  {capped ? '—' : formatCurrency(p.amortization.totalInterest)}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      </div>
+                </span>,
+                capped ? '—' : formatCurrency(p.amortization.totalInterest),
+              ]}
+            />
+          );
+        })}
+      </CalcTable>
+
+      {/* The downslope (C10): total remaining balance under the shown plan.
+          Suppressed entirely when capped — a capped schedule's tail is a lie. */}
+      {!anyCapped && downslope.length > 1 && (
+        <InlineChart
+          label="The downslope"
+          testId="debt-downslope-chart"
+          data={downslope}
+          xKey="label"
+          series={[{ dataKey: 'balance', label: 'Remaining balance', hero: true }]}
+          yFormatter={formatCurrency}
+        />
+      )}
     </CalculatorCard>
   );
 }

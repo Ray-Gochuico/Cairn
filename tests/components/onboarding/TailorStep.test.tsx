@@ -15,14 +15,15 @@ const ALL_TOS = DEFAULT_SECTIONS.flatMap((s) => s.items.map((i) => i.to));
 // Core tabs = every tab NOT named by a hide rule in the result fixture.
 // We assert these come back hidden:false regardless of how rows toggle.
 
-// A result with one tab hide-rec (/property) and one calc hide-rec (bonus-tax).
+// A result with one tab hide-rec (/property) and one calc hide-rec (supplemental-pay).
 function makeResult(): TailoringResult {
   return {
     tabs: [
       { to: '/property', label: 'Property', visible: false, reason: 'no property entered' },
     ],
     calculators: [
-      { id: 'bonus-tax', label: 'Bonus tax', visible: false, reason: 'no bonus entered' },
+      // Wave 18 B6: the tailoring engine emits the merged supplemental-pay id.
+      { id: 'supplemental-pay', label: 'Supplemental pay', visible: false, reason: 'no bonus or commission entered' },
       { id: 'overtime', label: 'Overtime', visible: true, reason: 'hourly employment' },
     ],
   };
@@ -83,7 +84,7 @@ describe('TailorStep', () => {
       'aria-checked',
       'true',
     );
-    expect(screen.getByRole('switch', { name: /Bonus tax/i })).toHaveAttribute(
+    expect(screen.getByRole('switch', { name: /Supplemental pay/i })).toHaveAttribute(
       'aria-checked',
       'false',
     );
@@ -126,7 +127,7 @@ describe('TailorStep', () => {
     expect(applied).toEqual(ALL_TOS.filter((to) => to !== '/property'));
   });
 
-  it('on Done writes a COMPLETE calculatorCardLayout for the 12 ids with the right hidden flags', async () => {
+  it('on Done writes a COMPLETE calculatorCardLayout for the 10 ids with the right hidden flags', async () => {
     const update = installStore();
     const user = userEvent.setup();
     render(
@@ -135,14 +136,15 @@ describe('TailorStep', () => {
     await user.click(screen.getByRole('button', { name: 'Done' }));
 
     const { calculatorCardLayout } = soleUpdatePayload(update);
-    const TWELVE = [
-      'paycheck', 'bonus-tax', 'commission-tax', 'overtime',
-      'financial-independence', 'coast-fi', 'compound-interest', 'debt-payoff',
-      'equity', 'retirement-401k-withdrawal', 'backtest', 'contribution-allocator',
+    // Wave 18 B6: the merged 10-id list (supplemental-pay, path-to-fi).
+    const TEN = [
+      'paycheck', 'supplemental-pay', 'overtime', 'retirement-401k-withdrawal',
+      'path-to-fi', 'compound-interest', 'backtest',
+      'debt-payoff', 'equity', 'contribution-allocator',
     ];
-    expect(calculatorCardLayout.map((e) => e.id).sort()).toEqual([...TWELVE].sort());
-    // bonus-tax recommended off → hidden:true; overtime on → hidden:false.
-    expect(calculatorCardLayout.find((e) => e.id === 'bonus-tax')!.hidden).toBe(true);
+    expect(calculatorCardLayout.map((e) => e.id).sort()).toEqual([...TEN].sort());
+    // supplemental-pay recommended off → hidden:true; overtime on → hidden:false.
+    expect(calculatorCardLayout.find((e) => e.id === 'supplemental-pay')!.hidden).toBe(true);
     expect(calculatorCardLayout.find((e) => e.id === 'overtime')!.hidden).toBe(false);
     // A calc with no row (not in result) defaults visible → hidden:false.
     expect(calculatorCardLayout.find((e) => e.id === 'paycheck')!.hidden).toBe(false);

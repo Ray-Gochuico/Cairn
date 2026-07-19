@@ -29,6 +29,10 @@ interface EquityGrantRow {
   company_valuation: number | null;
   company_outstanding_shares: number | null;
   company_total_debt: number | null;
+  // D9 (Wave 18): FMV-freshness stamp (SELECT * carries it; UPDATE maintains
+  // it via CURRENT_TIMESTAMP). Optional because older adapters/fixtures may
+  // omit the column.
+  updated_at?: string | null;
 }
 
 function rowToEquityGrant(row: EquityGrantRow): EquityGrant {
@@ -55,6 +59,7 @@ function rowToEquityGrant(row: EquityGrantRow): EquityGrant {
     totalShares: row.total_shares,
     vestingSchedule: schedule,
     currentFmv: row.current_fmv,
+    updatedAt: row.updated_at ?? undefined,
     grantType: row.grant_type as GrantType,
     companyValuation: row.company_valuation,
     companyOutstandingShares: row.company_outstanding_shares,

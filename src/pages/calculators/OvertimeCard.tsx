@@ -1,7 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
-import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { CalculatorCard, EmptyMeaning, RailReset, RailViewGroup } from './CalculatorCard';
 import { OvertimeRowEditor, type OvertimeRow } from './OvertimeRowEditor';
@@ -9,8 +7,12 @@ import { aggregateHouseholdPretax, computeSupplementalWageTax } from '@/lib/calc
 import { useHouseholdTaxContext } from '@/lib/calculators/use-household-tax-context';
 import { useCalculatorState } from '@/lib/calculator-state';
 import { NumberField } from '@/components/calculators/NumberField';
+import { NotModeledDisclosure } from '@/components/calculators/NotModeledDisclosure';
 import { ResultRow } from '@/components/calculators/ResultRow';
-import { formatCurrency, formatPercent } from '@/lib/format';
+import { SupplementalResultBlock } from '@/components/calculators/SupplementalResultBlock';
+import { EarnerSelect } from '@/components/calculators/EarnerSelect';
+import { useSelectedEarner } from '@/lib/calculators/use-selected-earner';
+import { formatCurrency } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import {
@@ -34,6 +36,7 @@ import {
 } from '@/lib/paycheck-periods';
 import { FilingStatus } from '@/types/enums';
 import type { Person } from '@/types/schema';
+import { InlineLink } from '@/components/calculators/InlineLink';
 
 type OvertimeRecurrence = 'REPEATS' | 'ONE_OFF';
 
@@ -67,11 +70,26 @@ interface OvertimeCardProps {
 
 export function OvertimeCard({ cardId }: OvertimeCardProps = {}) {
   const { household } = useHouseholdStore();
-  const persons = usePersonsStore((s) => s.persons);
   const dependents = useDependentsStore((s) => s.dependents);
   const tax = useHouseholdTaxContext();
+  // D7 (Wave 18): EFFECTIVE persons — bar salary overrides drive
+  // deriveBaseRate, the salary patch, and recipientIndex.
+  const persons = tax.persons;
 
-  const eligiblePerson = useMemo(() => persons.find(isEligible), [persons]);
+  // Wave 18 B7: with 2+ eligible persons an EarnerSelect picks whose OT this
+  // is — the selection drives deriveBaseRate, the salary patch, and
+  // recipientIndex. Single-eligible households see no picker (unchanged).
+  const eligible = useMemo(() => persons.filter(isEligible), [persons]);
+  const eligibleIds = useMemo(
+    () => eligible.map((p) => p.id).filter((id): id is number => id != null),
+    [eligible],
+  );
+  const [otEarnerId, setOtEarnerId] = useSelectedEarner(
+    cardId ?? 'overtime',
+    eligible[0]?.id ?? null,
+    eligibleIds,
+  );
+  const eligiblePerson = eligible.find((p) => p.id === otEarnerId) ?? eligible[0];
   const derivedBase = eligiblePerson ? deriveBaseRate(eligiblePerson) : 0;
   const { values, setValue, reset, isOverridden, overriddenKeys } = useCalculatorState(cardId ?? 'overtime', { baseRate: derivedBase });
   const baseHourlyRate = values.baseRate ?? 0;
@@ -159,9 +177,9 @@ export function OvertimeCard({ cardId }: OvertimeCardProps = {}) {
         meaning={
           <EmptyMeaning>
             No eligible person —{' '}
-            <Link to="/inputs/persons" className="text-primary hover:underline">
+            <InlineLink to="/inputs/persons">
               set Employment type to Hourly or Salaried with overtime
-            </Link>{' '}
+            </InlineLink>{' '}
             to enable this card.
           </EmptyMeaning>
         }
@@ -186,6 +204,12 @@ export function OvertimeCard({ cardId }: OvertimeCardProps = {}) {
   const rail = (
     <>
       {isOverridden && <RailReset onClick={reset} />}
+      <EarnerSelect
+        persons={eligible}
+        selectedId={eligiblePerson?.id ?? null}
+        onChange={setOtEarnerId}
+        label="Whose overtime"
+      />
       <div className="space-y-1">
         <NumberField
           id="ot-base-rate"
@@ -296,9 +320,9 @@ export function OvertimeCard({ cardId }: OvertimeCardProps = {}) {
               'Enter overtime hours to see the take-home breakdown.'
             ) : (
               <>
-                <Link to="/inputs/household" className="text-primary hover:underline">
+                <InlineLink to="/inputs/household">
                   Set up your household profile
-                </Link>{' '}
+                </InlineLink>{' '}
                 + tax rules to see overtime tax.
               </>
             )}
@@ -328,7 +352,7 @@ export function OvertimeCard({ cardId }: OvertimeCardProps = {}) {
     <CalculatorCard
       title="Overtime"
       cardId={cardId}
-      dirty={isOverridden}
+      dirty={isOverridden || tax.salaryOverridden}
       meaning={<>Take-home on {formatCurrency(totalGross)} of overtime gross.</>}
       rail={rail}
       headline={
@@ -355,12 +379,23 @@ export function OvertimeCard({ cardId }: OvertimeCardProps = {}) {
         ))}
       </div>
 
-      {/* Summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-        <ResultRow label="Total OT gross" value={formatCurrency(totalGross)} />
-        <ResultRow label="Marginal rate on OT" value={formatPercent(taxResult.marginalRateOnBonus)} />
-        <ResultRow label="Total OT take-home" value={formatCurrency(overtimeTakeHome)} emphasis />
-      </div>
+      {/* Summary — the shared supplemental result block (Wave 18 B7).
+          periods=1: the figures below are already per-entered-period; method
+          is fixed AGGREGATE (OT has no flat-method toggle — do not add one). */}
+      <SupplementalResultBlock
+        noun="overtime"
+        periods={1}
+        method="AGGREGATE"
+        rows={{
+          federal: taxResult.bonusBreakdown.federal / periodsCounted,
+          fica: taxResult.bonusBreakdown.fica / periodsCounted,
+          state: taxResult.bonusBreakdown.state / periodsCounted,
+          city: taxResult.bonusBreakdown.city / periodsCounted,
+          total: taxResult.bonusBreakdown.total / periodsCounted,
+          takeHome: overtimeTakeHome,
+          rate: taxResult.marginalRateOnBonus,
+        }}
+      />
 
       {recurrence === 'REPEATS' && (
         <div className="mt-3 pt-3 border-t text-sm">
@@ -412,11 +447,7 @@ export function OvertimeCard({ cardId }: OvertimeCardProps = {}) {
         &#39;s marginal rate.
       </p>
 
-      <details className="text-xs mt-3 border-t pt-2 text-muted-foreground">
-        <summary className="cursor-pointer font-medium hover:text-foreground">
-          What this calculator does NOT model
-        </summary>
-        <ul className="mt-2 list-disc pl-5 space-y-1">
+      <NotModeledDisclosure footer="For a decision that hinges on overtime (loan qualification, whether an extra shift is worth it), run the numbers past a CPA — the items above can shift the bottom line materially.">
           <li>
             <strong>State daily-overtime rules.</strong> CA owes daily OT over 8
             hours (double-time over 12); NV has a daily rule tied to pay rate.
@@ -445,13 +476,7 @@ export function OvertimeCard({ cardId }: OvertimeCardProps = {}) {
             bonuses and commissions legally raise the OT base rate — the base
             rate here is the one you enter.
           </li>
-        </ul>
-        <p className="mt-2">
-          For a decision that hinges on overtime (loan qualification, whether an
-          extra shift is worth it), run the numbers past a CPA — the items above
-          can shift the bottom line materially.
-        </p>
-      </details>
+      </NotModeledDisclosure>
     </CalculatorCard>
   );
 }

@@ -1,8 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { CalculatorCard, EmptyMeaning } from './CalculatorCard';
+import { useEffect, useMemo } from 'react';
+import { CalculatorCard, EmptyMeaning, RailReset } from './CalculatorCard';
 import { NumberField } from '@/components/calculators/NumberField';
 import { StatTile } from '@/components/calculators/StatTile';
+import { CalcTable, CalcRow, type CalcColumn } from '@/components/calculators/CalcTable';
+import { useCalculatorState } from '@/lib/calculator-state';
+import { useLocalToday } from '@/lib/use-local-today';
+import { typicalMonthlyContribution } from '@/lib/typical-contribution';
+import { useNextDollarStore } from '@/lib/calculators/next-dollar-store';
+import { useContributionsStore } from '@/stores/contributions-store';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
@@ -13,6 +18,7 @@ import { valueHoldings } from '@/lib/holdings-value';
 import { allocateContribution } from '@/lib/contribution-allocator';
 import { classTargetVsActual } from '@/lib/allocation-hierarchy';
 import { formatCurrency } from '@/lib/format';
+import { InlineLink } from '@/components/calculators/InlineLink';
 
 interface Props {
   cardId?: string;
@@ -36,12 +42,21 @@ const ASSET_CLASS_LABEL: Record<AssetClass, string> = {
   OTHER: 'Other',
 };
 
+const BUY_COLUMNS: CalcColumn[] = [
+  { key: 'ticker', header: 'Ticker' },
+  { key: 'buy', header: 'Buy $', numeric: true },
+  { key: 'new', header: 'New %', numeric: true },
+  { key: 'target', header: 'Target %', numeric: true },
+];
+
 export function ContributionAllocatorCard({ cardId }: Props = {}) {
   const accounts = useAccountsStore((s) => s.accounts);
   const holdings = useHoldingsStore((s) => s.holdings);
   const snapshots = useSnapshotsStore((s) => s.snapshots);
   const tickers = useTickersStore((s) => s.tickers);
   const settings = useSettingsStore((s) => s.settings);
+  const contributions = useContributionsStore((s) => s.contributions);
+  const todayIso = useLocalToday();
 
   useEffect(() => {
     // Load the portfolio stores this card needs that CalculatorsLayout does NOT
@@ -56,7 +71,26 @@ export function ContributionAllocatorCard({ cardId }: Props = {}) {
     void useSettingsStore.getState().load();
   }, []);
 
-  const [contribution, setContribution] = useState<number | null>(1000);
+  // D4 (Wave 18): the prefill is the rolling-12-month typical monthly
+  // contribution — the SAME window the FI card's annualContribution uses,
+  // so the two cards' derived figures agree. The hardcoded $1,000 demo
+  // value is dead: no history ⇒ blank field + an honest prompt. The layout
+  // already hydrates contributions.
+  // D5 (Wave 18): an explicit next-dollar beats the historical statistic —
+  // the user just told us the number. Both enter as DEFAULTS; local edits
+  // override, Reset returns to the shared/derived value.
+  const nextDollar = useNextDollarStore((s) => s.amount);
+  const defaults = useMemo(
+    () => ({
+      contribution: nextDollar ?? typicalMonthlyContribution(contributions, todayIso),
+    }),
+    [nextDollar, contributions, todayIso],
+  );
+  const { values, setValue, reset, isOverridden, overriddenKeys } = useCalculatorState(
+    cardId ?? 'contribution-allocator',
+    defaults,
+  );
+  const contribution = values.contribution;
 
   const assetClassByTicker = useMemo(() => {
     const m = new Map<string, AssetClass>();
@@ -118,37 +152,47 @@ export function ContributionAllocatorCard({ cardId }: Props = {}) {
       cardId={cardId}
       title="Contribution allocator"
       titleText="Contribution allocator"
-      headline={hasTargets ? formatCurrency(result.totalAllocated) : '—'}
+      dirty={isOverridden}
+      headline={hasTargets && contribution != null ? formatCurrency(result.totalAllocated) : '—'}
       meaning={
         !hasTargets ? (
           // UX H1: a REAL link to where targets are authored — not dead prose.
           <EmptyMeaning>
-            <Link to="/investments" className="text-primary hover:underline">
+            <InlineLink to="/investments">
               Set asset-class targets on the Investments page
-            </Link>{' '}
+            </InlineLink>{' '}
             to allocate a contribution toward them.
           </EmptyMeaning>
+        ) : contribution == null ? (
+          // D4: no history and no entry — an honest prompt, never a demo $1,000.
+          <EmptyMeaning>Enter a monthly contribution to see the buy plan.</EmptyMeaning>
         ) : (
-          <>Suggested buys for a {formatCurrency(contribution ?? 0)} contribution.</>
+          <>of a {formatCurrency(contribution)} contribution, allocated toward your targets</>
         )
       }
       rail={
         hasTargets ? (
-          // The contribution amount is a what-if entry (local useState), not an
-          // Inputs override — no edited dot, no dirty tick (D6).
-          <NumberField
-            id="alloc-contribution"
-            label="Contribution"
-            value={contribution}
-            onChange={setContribution}
-            suffix="$"
-            step="100"
-            min={0}
-          />
+          <>
+            {isOverridden && <RailReset onClick={reset} />}
+            {/* D4: the derived prefill (rolling 12 months ÷ 12); a $/mo field
+                so it feeds the shared next-dollar semantics. */}
+            <NumberField
+              id="alloc-contribution"
+              label="Monthly contribution"
+              value={contribution}
+              onChange={(v) => setValue('contribution', v)}
+              suffix="$/mo"
+              step="100"
+              min={0}
+              edited={overriddenKeys.has('contribution')}
+            />
+          </>
         ) : undefined
       }
     >
-      {hasTargets && (
+      {/* D4: contribution == null keeps the results section out entirely —
+          the meaning slot carries the "enter a monthly contribution" prompt. */}
+      {hasTargets && contribution != null && (
         <div className="space-y-3">
           {result.unreachableWithoutSelling && (
             // UX M3: NAME the overweight class(es), don't bury the reason.
@@ -202,33 +246,59 @@ export function ContributionAllocatorCard({ cardId }: Props = {}) {
               value={`${(driftAfter * 100).toFixed(1)}%`}
             />
           </div>
+          {/* Wave 18 C12: plain-language caption under the drift pair. */}
+          <p className="text-xs text-muted-foreground">
+            Share of your portfolio that would need to move to hit targets.
+          </p>
 
-          {/* DOLLARS ONLY (H1): Buy $ is the allocation — no Shares column. */}
-          <div className="overflow-x-auto" data-testid="allocator-results">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground border-b">
-                  <th className="py-2 pr-2">Ticker</th>
-                  <th className="py-2 px-2">Class</th>
-                  <th className="py-2 px-2 text-right">Buy $</th>
-                  <th className="py-2 px-2 text-right">New %</th>
-                  <th className="py-2 pl-2 text-right">Target %</th>
-                </tr>
-              </thead>
-              <tbody>
-                {result.rows.map((r) => (
-                  <tr key={r.ticker} className="border-b last:border-b-0">
-                    <td className="py-2 pr-2 font-mono">{r.ticker}</td>
-                    <td className="py-2 px-2 text-muted-foreground">{ASSET_CLASS_LABEL[r.assetClass]}</td>
-                    <td className="py-2 px-2 text-right tabular-nums">{formatCurrency(r.buyDollars)}</td>
-                    <td className="py-2 px-2 text-right tabular-nums">{(r.newPct * 100).toFixed(1)}%</td>
-                    <td className="py-2 pl-2 text-right tabular-nums text-muted-foreground">
-                      {r.targetPct != null ? `${(r.targetPct * 100).toFixed(1)}%` : '—'}
+          {/* DOLLARS ONLY (H1): Buy $ is the allocation — no Shares column.
+              Wave 18 C12: class-grouped rows with per-class subtotals; the
+              Class column died (redundant with the group headers). */}
+          <div data-testid="allocator-results">
+            <CalcTable columns={BUY_COLUMNS}>
+              {(() => {
+                // Group rows by assetClass (stable insertion order).
+                const groups = new Map<AssetClass, typeof result.rows>();
+                for (const r of result.rows) {
+                  const list = groups.get(r.assetClass) ?? [];
+                  list.push(r);
+                  groups.set(r.assetClass, list);
+                }
+                return [...groups.entries()].flatMap(([cls, rows]) => [
+                  <tr key={`header-${cls}`}>
+                    <td
+                      colSpan={4}
+                      className="pt-3 pb-1 text-xs font-medium uppercase tracking-wider text-muted-foreground"
+                    >
+                      {ASSET_CLASS_LABEL[cls]}
                     </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                  </tr>,
+                  ...rows.map((r) => (
+                    <CalcRow
+                      key={r.ticker}
+                      columns={BUY_COLUMNS}
+                      cells={[
+                        <span className="font-mono">{r.ticker}</span>,
+                        formatCurrency(r.buyDollars),
+                        `${(r.newPct * 100).toFixed(1)}%`,
+                        r.targetPct != null ? `${(r.targetPct * 100).toFixed(1)}%` : '—',
+                      ]}
+                    />
+                  )),
+                  <CalcRow
+                    key={`subtotal-${cls}`}
+                    columns={BUY_COLUMNS}
+                    subtotal
+                    cells={[
+                      'Subtotal',
+                      formatCurrency(rows.reduce((a, r) => a + r.buyDollars, 0)),
+                      '',
+                      '',
+                    ]}
+                  />,
+                ]);
+              })()}
+            </CalcTable>
           </div>
 
           {/* Finance L2: be explicit that this covers held positions only. */}
@@ -237,6 +307,13 @@ export function ContributionAllocatorCard({ cardId }: Props = {}) {
             (snapshot value is distributed by share count — no live prices, and accounts
             with no holdings, e.g. cash, aren’t included).
           </p>
+        </div>
+      )}
+      {hasTargets && (
+        <div className="pt-1">
+          <InlineLink to="/investments" className="text-sm">
+            Adjust targets →
+          </InlineLink>
         </div>
       )}
     </CalculatorCard>

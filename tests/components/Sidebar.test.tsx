@@ -90,10 +90,14 @@ describe('Sidebar', () => {
     ).toBeNull();
   });
 
-  it('has a Backtest link in Planning pointing at /calculators/backtest', () => {
+  it('Wave 18 C9: the duplicate Backtest entry is retired (ONE backtest path, via Calculators)', () => {
     render(<MemoryRouter><Sidebar /></MemoryRouter>);
-    const link = screen.getByRole('link', { name: /^backtest$/i });
-    expect(link).toHaveAttribute('href', '/calculators/backtest');
+    expect(screen.queryByRole('link', { name: /^backtest$/i })).toBeNull();
+    // The Calculators entry (which hosts the Backtest card + route) survives.
+    expect(screen.getByRole('link', { name: /^calculators$/i })).toHaveAttribute(
+      'href',
+      '/calculators',
+    );
   });
 
   it('tags each nav link with a data-tour-id matching its route (tour anchor)', () => {

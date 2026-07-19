@@ -95,7 +95,7 @@ describe('Retirement401kWithdrawalCard', () => {
     resetStores();
   });
 
-  it('pre-fills the W-2 income default from the household persons sum', () => {
+  it("pre-fills the W-2 income default from the selected earner's salary (Wave 18 A5)", () => {
     primeStores();
     render(
       <MemoryRouter>
@@ -104,6 +104,76 @@ describe('Retirement401kWithdrawalCard', () => {
     );
     const w2 = screen.getByLabelText(/annual w-2 income/i) as HTMLInputElement;
     expect(Number(w2.value)).toBe(120_000);
+  });
+
+  it('D7 (Wave 18): a bar salary override moves the W-2 prefill; store untouched', async () => {
+    const { __resetScenarioAssumptionsForTests } = await import(
+      '@/lib/calculators/use-scenario-assumptions'
+    );
+    primeStores(); // Alice $120k
+    sessionStorage.setItem('calc-scenario:salaries', JSON.stringify({ 1: 80000 }));
+    __resetScenarioAssumptionsForTests();
+    render(
+      <MemoryRouter>
+        <Retirement401kWithdrawalCard />
+      </MemoryRouter>,
+    );
+    const w2 = screen.getByLabelText(/annual w-2 income/i) as HTMLInputElement;
+    expect(Number(w2.value)).toBe(80000);
+    expect(usePersonsStore.getState().persons[0].annualSalaryPretax).toBe(120_000);
+    // Clean the module-level salary cache for later tests.
+    sessionStorage.removeItem('calc-scenario:salaries');
+    __resetScenarioAssumptionsForTests();
+  });
+
+  it('single-person household renders no earner picker (Wave 18 A5)', () => {
+    primeStores();
+    render(
+      <MemoryRouter>
+        <Retirement401kWithdrawalCard />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole('group', { name: /whose withdrawal/i })).not.toBeInTheDocument();
+  });
+
+  it('two-person household: switching earner re-derives the W-2 and age prefills (Wave 18 A5)', async () => {
+    const user = userEvent.setup();
+    primeStores();
+    const alice = usePersonsStore.getState().persons[0];
+    usePersonsStore.setState({
+      persons: [
+        alice,
+        { ...alice, id: 2, name: 'Bob', annualSalaryPretax: 60_000, dateOfBirth: '1980-06-15' },
+      ],
+      isLoading: false,
+      error: null,
+    });
+    render(
+      <MemoryRouter>
+        <Retirement401kWithdrawalCard />
+      </MemoryRouter>,
+    );
+    // Default = first person (Alice, $120k, born 1965).
+    expect(Number((screen.getByLabelText(/annual w-2 income/i) as HTMLInputElement).value)).toBe(
+      120_000,
+    );
+    const aliceAge = Number(
+      (screen.getByLabelText(/age at withdrawal/i) as HTMLInputElement).value,
+    );
+    expect(aliceAge).toBeGreaterThan(55);
+
+    const group = screen.getByRole('group', { name: /whose withdrawal/i });
+    await user.click(within(group).getByRole('button', { name: 'Bob' }));
+
+    // A withdrawal belongs to ONE account owner: W-2 = Bob's salary alone
+    // (never the household sum), age from Bob's DOB.
+    expect(Number((screen.getByLabelText(/annual w-2 income/i) as HTMLInputElement).value)).toBe(
+      60_000,
+    );
+    const bobAge = Number(
+      (screen.getByLabelText(/age at withdrawal/i) as HTMLInputElement).value,
+    );
+    expect(bobAge).toBeLessThan(aliceAge - 10);
   });
 
   it('pre-fills the age default from persons[0].dateOfBirth', () => {
@@ -122,7 +192,7 @@ describe('Retirement401kWithdrawalCard', () => {
     render(<MemoryRouter><Retirement401kWithdrawalCard /></MemoryRouter>);
     expect(screen.getByTestId('401k-withdrawal-net').textContent).toBe('—');
     expect(screen.getByText(/Enter a withdrawal amount/i)).toBeInTheDocument();
-    // Controls stay visible (BonusTaxCard idiom).
+    // Controls stay visible (supplemental-card idiom).
     expect(screen.getByLabelText(/withdrawal amount/i)).toBeInTheDocument();
     // No breakdown rows rendered.
     expect(screen.queryByText(/Federal tax on withdrawal/i)).not.toBeInTheDocument();

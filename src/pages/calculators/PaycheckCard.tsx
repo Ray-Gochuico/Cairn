@@ -1,18 +1,30 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
-import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { CalculatorCard, EmptyMeaning, RailViewGroup } from './CalculatorCard';
 import { computePaycheck, FEDERAL_LIABILITY_CAVEAT } from '@/lib/calculators/paycheck';
+import { useHouseholdTaxContext } from '@/lib/calculators/use-household-tax-context';
 import { aggregateHouseholdPretax } from '@/lib/calculators/supplemental-wage';
+import { computeTotalTax } from '@/lib/tax';
 import { formatCurrency } from '@/lib/format';
 import { CONTRIBUTION_LIMITS_2026 } from '@/lib/contribution-limits';
 import { PAYCHECK_PERIODS, periodsPerYear, type PaycheckPeriod } from '@/lib/paycheck-periods';
 import { getCurrentTaxYear } from '@/lib/current-tax-year';
 import { ResultRow } from '@/components/calculators/ResultRow';
+import { NotModeledDisclosure } from '@/components/calculators/NotModeledDisclosure';
+import { EarnerSelect } from '@/components/calculators/EarnerSelect';
+import { useSelectedEarner } from '@/lib/calculators/use-selected-earner';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
+import { InlineLink } from '@/components/calculators/InlineLink';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select';
 
 interface PaycheckCardProps {
   cardId?: string;
@@ -20,10 +32,21 @@ interface PaycheckCardProps {
 
 export function PaycheckCard({ cardId }: PaycheckCardProps = {}) {
   const { household } = useHouseholdStore();
-  const persons = usePersonsStore((s) => s.persons);
+  // D7 (Wave 18): EFFECTIVE persons — the bar's salary overrides ripple
+  // through useHouseholdTaxContext (a mapped copy; the persons store is
+  // never written). Every salary-bearing figure below reads these.
+  const { persons, salaryOverridden } = useHouseholdTaxContext();
   const dependents = useDependentsStore((s) => s.dependents);
   const taxItems = useTaxRulesStore((s) => s.items);
   const [period, setPeriod] = useState<PaycheckPeriod>('MONTHLY');
+  // D16 (Wave 18): Combined | per-person view. null = Combined (the default);
+  // a person id switches the breakdown grid to that person's marginal
+  // attribution. View-only — never sets isOverridden.
+  const personIds = useMemo(
+    () => persons.map((p) => p.id).filter((id): id is number => id != null),
+    [persons],
+  );
+  const [selectedId, setSelectedId] = useSelectedEarner(cardId ?? 'paycheck', null, personIds);
 
   // Smart-resolve the tax year from the seeded set: if the current calendar year
   // has rules use it, otherwise fall back to the most-recent seeded year.
@@ -86,6 +109,54 @@ export function PaycheckCard({ cardId }: PaycheckCardProps = {}) {
     });
   }, [household, persons, dependents, taxItems, resolvedYear]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // D16 (Wave 18, review fix 2): the per-person tax rows are MARGINAL
+  // attribution by the DIFFERENCE method with FULL pretax on both legs —
+  //   withLeg   = the household result (`annual` above: ALL persons, the
+  //               complete aggregateHouseholdPretax — identical to the
+  //               Combined view), and
+  //   withoutLeg = computeTotalTax over the OTHERS (this person's gross
+  //               zeroed in the per-earner split, the others' aggregate
+  //               pretax).
+  // Per-jurisdiction row = withLeg − withoutLeg. Because the with-leg IS the
+  // household figure, per-person ≤ household by construction — the earlier
+  // computeBonusTax framing dropped the person's own pretax from the
+  // with-leg, letting a per-person federal row exceed the entire household's
+  // federal tax. Never a fabricated proportional split: joint brackets are
+  // shared; this is the one engine-honest incremental figure. FICA stays
+  // exact under the Wave-9 per-earner wage-base split.
+  const personIdx = selectedId != null ? persons.findIndex((p) => p.id === selectedId) : -1;
+  const personWithoutLeg = useMemo(() => {
+    if (selectedId == null || personIdx < 0 || !household || taxItems.length === 0) return null;
+    const federal = lookup('FEDERAL', 'US', household.filingStatus);
+    const state = lookup('STATE', household.state, household.filingStatus);
+    const city = household.city ? lookup('CITY', household.city, household.filingStatus) : null;
+    if (!federal || !state) return null;
+    const others = persons.filter((_, i) => i !== personIdx);
+    // Household-wide counts (the aggregateHouseholdPretax contract) — the
+    // per-return DCFSA/HSA caps don't shrink because we sum a subset.
+    const othersAgg = aggregateHouseholdPretax(others, {
+      filingStatus: household.filingStatus,
+      personCount: persons.length,
+      dependentCount: dependents.length,
+    });
+    return computeTotalTax({
+      gross: othersAgg.totalSalary,
+      // Keep the person's slot (zeroed) so per-earner FICA wage bases align
+      // with the with-leg's split.
+      perPersonGross: persons.map((p, i) => (i === personIdx ? 0 : p.annualSalaryPretax)),
+      filingStatus: household.filingStatus,
+      federalBrackets: federal.brackets,
+      stateBrackets: state.brackets,
+      cityBrackets: city?.brackets ?? null,
+      standardDeduction: {
+        federal: federal.standardDeduction,
+        state: state.standardDeduction,
+        city: city?.standardDeduction ?? 0,
+      },
+      pretax: othersAgg.pretax,
+    });
+  }, [selectedId, personIdx, persons, household, dependents, taxItems, resolvedYear]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!annual) {
     return (
       <CalculatorCard
@@ -94,9 +165,9 @@ export function PaycheckCard({ cardId }: PaycheckCardProps = {}) {
         cardId={cardId}
         meaning={
           <EmptyMeaning>
-            <Link to="/inputs/household" className="text-primary hover:underline">
+            <InlineLink to="/inputs/household">
               Set up your household profile
-            </Link>{' '}
+            </InlineLink>{' '}
             + tax rules to see take-home.
           </EmptyMeaning>
         }
@@ -111,6 +182,32 @@ export function PaycheckCard({ cardId }: PaycheckCardProps = {}) {
   const salariedEarnerCount = persons.filter((p) => p.annualSalaryPretax > 0).length;
 
   const div = periodsPerYear(period);
+  // D16: per-person view figures — {name}'s own gross + pre-tax elections are
+  // EXACT (that person's own §402(g) cap, own health/DCFSA/HSA elections — not
+  // the household per-return caps); the tax rows are the marginal attribution
+  // computed above. The headline stays the Combined take-home in both views.
+  const selectedPerson =
+    personIdx >= 0 && personWithoutLeg != null ? persons[personIdx] : null;
+  const own = selectedPerson
+    ? {
+        gross: selectedPerson.annualSalaryPretax / div,
+        pretax401k:
+          Math.min(
+            selectedPerson.annualSalaryPretax * selectedPerson.pretax401kPct,
+            CONTRIBUTION_LIMITS_2026.EMPLOYEE_401K,
+          ) / div,
+        pretaxHealth: (selectedPerson.healthInsuranceMonthlyPremium * 12) / div,
+        pretaxDcfsa: (selectedPerson.dependentCareFsaMonthly * 12) / div,
+        pretaxHsa:
+          (selectedPerson.hsaEligible ? selectedPerson.hsaMonthlyContribution * 12 : 0) / div,
+        // Review fix 2: household (with-leg) − others (without-leg), per
+        // jurisdiction — ≤ the household row by construction.
+        federal: (annual.federal - personWithoutLeg!.federal) / div,
+        fica: (annual.fica - personWithoutLeg!.fica) / div,
+        stateTax: (annual.stateTax - personWithoutLeg!.state) / div,
+        cityTax: (annual.cityTax - personWithoutLeg!.city) / div,
+      }
+    : null;
   const perPeriod = {
     gross: annual.gross / div,
     pretax401k: annual.pretax401k / div,
@@ -128,21 +225,31 @@ export function PaycheckCard({ cardId }: PaycheckCardProps = {}) {
     <CalculatorCard
       title="Paycheck (estimated take-home)"
       cardId={cardId}
+      dirty={salaryOverridden}
       meaning={<>After taxes and pretax deductions on {formatCurrency(perPeriod.gross)} gross.</>}
       rail={
         <RailViewGroup>
-          <div className="flex items-center gap-2 text-sm">
-            <label htmlFor="paycheck-period" className="text-muted-foreground">Period:</label>
-            <select
-              id="paycheck-period"
-              value={period}
-              onChange={(e) => setPeriod(e.target.value as PaycheckPeriod)}
-              className="border rounded px-2 py-1 bg-background"
-            >
-              {PAYCHECK_PERIODS.map((p) => (
-                <option key={p.id} value={p.id}>{p.label}</option>
-              ))}
-            </select>
+          {/* D16: Combined | per-person — renders nothing for single-earner
+              households (EarnerSelect's <2 rule). */}
+          <EarnerSelect
+            persons={persons}
+            selectedId={selectedId}
+            onChange={setSelectedId}
+            label="Paycheck view"
+            includeCombined
+          />
+          <div className="space-y-1">
+            <Label htmlFor="paycheck-period">Period</Label>
+            <Select value={period} onValueChange={(v) => setPeriod(v as PaycheckPeriod)}>
+              <SelectTrigger id="paycheck-period" aria-label="Period">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PAYCHECK_PERIODS.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </RailViewGroup>
       }
@@ -165,66 +272,108 @@ export function PaycheckCard({ cardId }: PaycheckCardProps = {}) {
       }
     >
       <div className="mb-3">
-        <Link
+        <InlineLink
           to="/calculators/paycheck"
-          className="text-sm text-primary underline underline-offset-4 hover:text-primary/80"
+          className="text-sm"
         >
           Open full calculator →
-        </Link>
+        </InlineLink>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-        <ResultRow label="Gross" value={formatCurrency(perPeriod.gross)} />
-        <ResultRow
-          label={<TermTooltip term="Pretax 401(k)" />}
-          value={formatCurrency(perPeriod.pretax401k)}
-        />
-        <ResultRow label="Pretax health" value={formatCurrency(perPeriod.pretaxHealth)} />
-        <ResultRow
-          label={<TermTooltip term="Pretax DCFSA" />}
-          value={formatCurrency(perPeriod.pretaxDcfsa)}
-        />
-        <ResultRow
-          label={<TermTooltip term="Pretax HSA" />}
-          value={formatCurrency(perPeriod.pretaxHsa)}
-        />
-        {/* Wave 15 T1: the shared withholding-vs-liability caveat — one
-            exported constant, so the two surfaces cannot drift in wording. */}
-        <ResultRow
-          label={
-            <span>
-              Estimated federal tax
-              <span className="block text-[11px] text-muted-foreground">
-                {FEDERAL_LIABILITY_CAVEAT}
+      {own && selectedPerson ? (
+        <>
+          {/* D16 per-person view: exact own gross/pre-tax, marginal tax rows. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+            <ResultRow
+              label={`${selectedPerson.name}'s gross`}
+              value={formatCurrency(own.gross)}
+            />
+            <ResultRow
+              label={<TermTooltip term="Pretax 401(k)" />}
+              value={formatCurrency(own.pretax401k)}
+            />
+            <ResultRow label="Pretax health" value={formatCurrency(own.pretaxHealth)} />
+            <ResultRow
+              label={<TermTooltip term="Pretax DCFSA" />}
+              value={formatCurrency(own.pretaxDcfsa)}
+            />
+            <ResultRow
+              label={<TermTooltip term="Pretax HSA" />}
+              value={formatCurrency(own.pretaxHsa)}
+            />
+            <ResultRow
+              label={
+                <span>
+                  Estimated federal tax
+                  <span className="block text-[11px] text-muted-foreground">
+                    {FEDERAL_LIABILITY_CAVEAT}
+                  </span>
+                </span>
+              }
+              value={formatCurrency(own.federal)}
+            />
+            <ResultRow
+              label={<TermTooltip term="FICA" />}
+              value={formatCurrency(own.fica)}
+            />
+            <ResultRow label="Estimated state tax" value={formatCurrency(own.stateTax)} />
+            <ResultRow label="Estimated city tax" value={formatCurrency(own.cityTax)} />
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            Tax rows are the marginal share attributed to {selectedPerson.name}&#39;s pay —
+            joint brackets are shared, so the split is an estimate.
+          </p>
+        </>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+          <ResultRow label="Gross" value={formatCurrency(perPeriod.gross)} />
+          <ResultRow
+            label={<TermTooltip term="Pretax 401(k)" />}
+            value={formatCurrency(perPeriod.pretax401k)}
+          />
+          <ResultRow label="Pretax health" value={formatCurrency(perPeriod.pretaxHealth)} />
+          <ResultRow
+            label={<TermTooltip term="Pretax DCFSA" />}
+            value={formatCurrency(perPeriod.pretaxDcfsa)}
+          />
+          <ResultRow
+            label={<TermTooltip term="Pretax HSA" />}
+            value={formatCurrency(perPeriod.pretaxHsa)}
+          />
+          {/* Wave 15 T1: the shared withholding-vs-liability caveat — one
+              exported constant, so the two surfaces cannot drift in wording. */}
+          <ResultRow
+            label={
+              <span>
+                Estimated federal tax
+                <span className="block text-[11px] text-muted-foreground">
+                  {FEDERAL_LIABILITY_CAVEAT}
+                </span>
               </span>
-            </span>
-          }
-          value={formatCurrency(perPeriod.federal)}
-        />
-        <ResultRow
-          label={<TermTooltip term="FICA" />}
-          value={formatCurrency(perPeriod.fica)}
-        />
-        <ResultRow
-          label="Estimated state tax"
-          value={formatCurrency(perPeriod.stateTax)}
-        />
-        <ResultRow
-          label="Estimated city tax"
-          value={formatCurrency(perPeriod.cityTax)}
-        />
-      </div>
+            }
+            value={formatCurrency(perPeriod.federal)}
+          />
+          <ResultRow
+            label={<TermTooltip term="FICA" />}
+            value={formatCurrency(perPeriod.fica)}
+          />
+          <ResultRow
+            label="Estimated state tax"
+            value={formatCurrency(perPeriod.stateTax)}
+          />
+          <ResultRow
+            label="Estimated city tax"
+            value={formatCurrency(perPeriod.cityTax)}
+          />
+        </div>
+      )}
       {/* Wave-5 W5-5 — calculator framing parity with the 401k card.
           The take-home headline is an estimate because this engine omits
           items that materially shift the real number. List them so the user
           knows what isn't included. */}
-      <details className="text-xs mt-3 border-t pt-2 text-muted-foreground">
-        <summary className="cursor-pointer font-medium hover:text-foreground">
-          What this calculator does NOT model
-        </summary>
-        <p className="mt-2">
-          {`Social Security wage base — OASDI stops at $${CONTRIBUTION_LIMITS_2026.SOCIAL_SECURITY_WAGE_BASE.toLocaleString('en-US')} per person (2026); the calculator applies the cap per earner.`}
-        </p>
-        <ul className="mt-2 list-disc pl-5 space-y-1">
+      <NotModeledDisclosure
+        intro={`Social Security wage base — OASDI stops at $${CONTRIBUTION_LIMITS_2026.SOCIAL_SECURITY_WAGE_BASE.toLocaleString('en-US')} per person (2026); the calculator applies the cap per earner.`}
+        footer="For an actual reconciliation, compare against a real pay stub or run the numbers past a CPA — the items above can each shift the bottom line by tens or hundreds of dollars per period."
+      >
           <li>
             Hourly wages — this card sums annual salaries, so an hourly
             earner's pay is not included here (see the Overtime card for
@@ -257,13 +406,7 @@ export function PaycheckCard({ cardId }: PaycheckCardProps = {}) {
             W-4 4(c) extra-withholding line — if you ask your employer to
             withhold an extra $X per check, that's not reflected here.
           </li>
-        </ul>
-        <p className="mt-2">
-          For an actual reconciliation, compare against a real pay
-          stub or run the numbers past a CPA — the items above can each shift
-          the bottom line by tens or hundreds of dollars per period.
-        </p>
-      </details>
+      </NotModeledDisclosure>
     </CalculatorCard>
   );
 }

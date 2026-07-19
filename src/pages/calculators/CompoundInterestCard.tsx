@@ -8,7 +8,7 @@ import {
   SelectContent,
   SelectItem,
 } from '@/components/ui/select';
-import LineChartCard from '@/components/charts/LineChartCard';
+import { InlineChart } from '@/components/charts/InlineChart';
 import {
   compoundInterestSeries,
   apyToApr,
@@ -143,14 +143,16 @@ export function CompoundInterestCard({ cardId }: CompoundInterestCardProps = {})
   const hasVariance = values.variancePercent != null && (values.variancePercent ?? 0) > 0;
   // Expected (mid) leads and is emphasized (2.5px, solid, blue); Low/High are
   // thinner dashed/dotted bands (red/green). WCAG 1.4.1 opt-in: dash patterns
-  // in addition to colour.
+  // in addition to colour. Wave-18 A4: with no variance the single balance
+  // line IS the headline trajectory → blaze hero + cairn terminal; the
+  // 3-series variance view keeps its palette peers (no hero among equals).
   const chartSeries = hasVariance
     ? [
         { dataKey: 'mid',  label: 'Expected (mid)', color: CHART_PALETTE[0], strokeWidth: 2.5 }, // blue / solid / emphasized
         { dataKey: 'low',  label: 'Low',  color: CHART_PALETTE[2], strokeDasharray: '5 5', strokeWidth: 1.5 }, // red / dashed
         { dataKey: 'high', label: 'High', color: CHART_PALETTE[4], strokeDasharray: '2 2', strokeWidth: 1.5 }, // green / dotted
       ]
-    : [{ dataKey: 'mid', label: 'Balance', color: CHART_PALETTE[0] }];
+    : [{ dataKey: 'mid', label: 'Balance', hero: true }];
 
   const displayData = useMemo(() => {
     if (displayMode === 'NOMINAL') return chartData;
@@ -246,8 +248,8 @@ export function CompoundInterestCard({ cardId }: CompoundInterestCardProps = {})
               value={formatCurrency(summary.finalMid)}
             />
           </div>
-          <LineChartCard
-            title={`Balance over time${displayMode === 'REAL' ? " (today's dollars)" : ''}`}
+          <InlineChart
+            label={`Balance over time${displayMode === 'REAL' ? " (today's dollars)" : ''}`}
             data={displayData}
             xKey="year"
             series={chartSeries}

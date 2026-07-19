@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { ScenarioBar } from './ScenarioBar';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
@@ -25,8 +24,19 @@ import {
 import type { CardLayoutEntry } from '@/types/schema';
 import { CALCULATOR_CARDS, type CalculatorCardRegistration } from './calculator-registry';
 import { CalculatorShellProvider, type CalculatorShellApi } from './calculator-shell-context';
+import { InlineLink } from '@/components/calculators/InlineLink';
+import { NumberField } from '@/components/calculators/NumberField';
+import { useNextDollarStore } from '@/lib/calculators/next-dollar-store';
 
 const STALE_BANNER_STORAGE_KEY = 'stale-tax-year-banner-dismissed';
+
+/** Wave-18: legacy per-card hash targets → their merged successors. */
+const LEGACY_HASH_TARGETS: Record<string, string> = {
+  'bonus-tax': 'supplemental-pay',
+  'commission-tax': 'supplemental-pay',
+  'financial-independence': 'path-to-fi',
+  'coast-fi': 'path-to-fi',
+};
 
 /**
  * Build the next calculatorCardLayout from the current layout + a single
@@ -39,13 +49,46 @@ function withCardHidden(
   id: string,
   hidden: boolean,
 ): CardLayoutEntry[] {
-  const hiddenById = new Map<string, boolean>();
-  for (const entry of current ?? []) hiddenById.set(entry.id, entry.hidden);
-  hiddenById.set(id, hidden);
+  // Review fix 3: seed from the EFFECTIVE hidden set — the same D2 legacy
+  // fold applyCalculatorCardLayout renders from — BEFORE overlaying the
+  // toggled id. Pre-fix a legacy layout's merged-card verdict (e.g. both
+  // bonus-tax + commission-tax hidden) was dropped on the first UNRELATED
+  // toggle: the complete rewrite over the new id list resurrected the hidden
+  // merged card and permanently overwrote the preference.
+  const hiddenSet = new Set(applyCalculatorCardLayout(CALCULATOR_CARD_IDS, current));
+  if (hidden) hiddenSet.add(id);
+  else hiddenSet.delete(id);
   return CALCULATOR_CARD_IDS.map((cardId) => ({
     id: cardId,
-    hidden: hiddenById.get(cardId) === true,
+    hidden: hiddenSet.has(cardId),
   }));
+}
+
+/** Wave 18 D5: the compact section-header "next dollar" input — one number,
+ *  two answers (Debt extra + Allocator contribution), bound to the shared
+ *  session store. */
+function NextDollarField() {
+  const amount = useNextDollarStore((s) => s.amount);
+  const setAmount = useNextDollarStore((s) => s.setAmount);
+  return (
+    <div className="flex flex-wrap items-end gap-3">
+      <div className="w-40">
+        <NumberField
+          id="next-dollar"
+          label="Next dollar"
+          value={amount}
+          onChange={setAmount}
+          suffix="$/mo"
+          step="50"
+          min={0}
+        />
+      </div>
+      <p className="pb-1 text-xs text-muted-foreground">
+        One number, two answers: what it does against your debt, and where it goes in your
+        portfolio.
+      </p>
+    </div>
+  );
 }
 
 function CalculatorsSkeleton() {
@@ -286,8 +329,11 @@ export default function CalculatorsLayout() {
   useEffect(() => {
     if (consumedInitialHash.current || !gate.settled || settings === null) return;
     consumedInitialHash.current = true;
-    const target = window.location.hash.slice(1);
-    if (!target) return;
+    const rawId = window.location.hash.slice(1);
+    if (!rawId) return;
+    // Wave 18 B6: resolve legacy per-card hashes to their merged successors
+    // before the open/scroll step.
+    const target = LEGACY_HASH_TARGETS[rawId] ?? rawId;
     const card = CALCULATOR_CARDS.find((c) => c.id === target);
     if (!card || hiddenSet.has(target) || !isCardAvailable(card)) return;
     setOpenId(target);
@@ -350,7 +396,7 @@ export default function CalculatorsLayout() {
         All calculators run on your current Inputs data. Edit any field on a card to explore a
         scenario; use <span className="font-medium">Reset to my data</span> to restore it. For
         side-by-side scenario comparisons, see the{' '}
-        <Link to="/what-if" className="text-primary hover:underline">What-If</Link> page.
+        <InlineLink to="/what-if">What-If</InlineLink> page.
       </p>
       {showBanner && !dismissed && (
         <div
@@ -396,6 +442,10 @@ export default function CalculatorsLayout() {
                   setCardHidden={setCardHidden}
                 />
               </div>
+              {/* Wave 18 D13/D5: the shared next-dollar $/mo lives in ITS
+                  section's header, feeding Debt's extra + the Allocator's
+                  contribution as defaults. No winner is declared. */}
+              {group.id === 'next-dollar' && <NextDollarField />}
               {/* Wave-12 explicitly deferred this stacked double-hairline
                   divider ("Explicit non-goals") — Wave 17 cashes the chip:
                   two 1px border rules, 3px apart. */}

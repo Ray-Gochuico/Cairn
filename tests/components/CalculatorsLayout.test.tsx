@@ -18,7 +18,7 @@ import type { AppSettings } from '@/types/schema';
 import CalculatorsLayout from '@/pages/calculators/CalculatorsLayout';
 import { __resetScenarioAssumptionsForTests } from '@/lib/calculators/use-scenario-assumptions';
 
-// Federal SINGLE brackets (2026 approximate) — same fixture as BonusTaxCard.test.tsx
+// Federal SINGLE brackets (2026 approximate) — same fixture as the supplemental-pay suite
 const federalSingleBrackets = [
   { min: 0,       max: 11925,  rate: 0.10 },
   { min: 11925,   max: 48475,  rate: 0.12 },
@@ -176,7 +176,7 @@ describe('CalculatorsLayout', () => {
     vi.useRealTimers();
   });
 
-  it('renders the baseline cards (Paycheck, Bonus, Commission) when settings + household are set', async () => {
+  it('renders the baseline cards (Paycheck, Supplemental pay) when settings + household are set', async () => {
     primeBaseline();
     primeSettings();
     usePersonsStore.setState({
@@ -188,8 +188,8 @@ describe('CalculatorsLayout', () => {
     render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
 
     expect(await screen.findByRole('heading', { name: /Paycheck/i, level: 3 })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Bonus take-home/i })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Commission take-home/i })).toBeInTheDocument();
+    // Wave 18 B7: Bonus + Commission collapsed into one Supplemental pay card.
+    expect(screen.getByRole('heading', { name: /Supplemental pay/i, level: 3 })).toBeInTheDocument();
   });
 
   it('loads household on mount so the FI card can ever resolve (W10 M63)', () => {
@@ -232,7 +232,7 @@ describe('CalculatorsLayout', () => {
 
     render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
 
-    await screen.findByRole('heading', { name: /Bonus take-home/i });
+    await screen.findByRole('heading', { name: /Supplemental pay/i, level: 3 });
     expect(screen.queryByText(/^Overtime$/i)).not.toBeInTheDocument();
   });
 
@@ -266,7 +266,7 @@ describe('CalculatorsLayout', () => {
 
       render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
 
-      await screen.findByRole('heading', { name: /Bonus take-home/i });
+      await screen.findByRole('heading', { name: /Supplemental pay/i, level: 3 });
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
   });
@@ -288,12 +288,19 @@ describe('CalculatorsLayout', () => {
       render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
 
       await screen.findByRole('heading', { name: /Paycheck/i, level: 3 });
-      expect(screen.queryByText(/Bonus take-home/i)).not.toBeInTheDocument();
+      // D2: a single hidden legacy entry folds into the merged successor.
+      expect(screen.queryByTestId('calc-card-supplemental-pay')).not.toBeInTheDocument();
     });
 
     it('toggling a hidden card back on (Customize Switch) restores it via update', async () => {
+      // Wave 18 B6: a stored legacy pair (both hidden) folds into the merged
+      // supplemental-pay id (D2 AND rule); the post-upgrade toggle writes the
+      // NEW id list with no legacy entries.
       primeBaseline();
-      const update = primeSettings([{ id: 'bonus-tax', hidden: true }]);
+      const update = primeSettings([
+        { id: 'bonus-tax', hidden: true },
+        { id: 'commission-tax', hidden: true },
+      ]);
       usePersonsStore.setState({
         persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
         isLoading: false,
@@ -302,15 +309,62 @@ describe('CalculatorsLayout', () => {
 
       render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
       await screen.findByRole('heading', { name: /Paycheck/i, level: 3 });
-      expect(screen.queryByText(/Bonus take-home/i)).not.toBeInTheDocument();
+      expect(screen.queryByTestId('calc-card-supplemental-pay')).not.toBeInTheDocument();
 
       await userEvent.click(screen.getByRole('button', { name: /customize paycheck & tax/i }));
-      await userEvent.click(screen.getByRole('switch', { name: 'Bonus tax' }));
+      await userEvent.click(screen.getByRole('switch', { name: 'Supplemental pay' }));
 
       const patch = update.mock.calls.at(-1)![0] as { calculatorCardLayout: { id: string; hidden: boolean }[] };
-      expect(patch.calculatorCardLayout.find((e) => e.id === 'bonus-tax')?.hidden).toBe(false);
-      expect(await screen.findByRole('heading', { name: /Bonus take-home/i })).toBeInTheDocument();
+      expect(patch.calculatorCardLayout.find((e) => e.id === 'supplemental-pay')?.hidden).toBe(false);
+      // Post-upgrade writes are COMPLETE over the new id list — legacy ids wash out.
+      expect(patch.calculatorCardLayout).toHaveLength(10);
+      expect(patch.calculatorCardLayout.some((e) => e.id === 'bonus-tax')).toBe(false);
+      expect(
+        await screen.findByRole('heading', { name: /Supplemental pay/i, level: 3 }),
+      ).toBeInTheDocument();
     });
+  });
+
+  it('review fix 3: an unrelated toggle PRESERVES the D2 legacy fold (hidden merged cards stay hidden)', async () => {
+    // A user upgraded with a legacy 12-entry layout hiding BOTH members of
+    // each merged pair. Toggling an UNRELATED card must not resurrect the
+    // merged cards — the emitted 10-entry layout keeps the fold's result.
+    primeBaseline();
+    const update = primeSettings([
+      { id: 'paycheck', hidden: false },
+      { id: 'bonus-tax', hidden: true },
+      { id: 'commission-tax', hidden: true },
+      { id: 'overtime', hidden: false },
+      { id: 'retirement-401k-withdrawal', hidden: false },
+      { id: 'financial-independence', hidden: true },
+      { id: 'coast-fi', hidden: true },
+      { id: 'compound-interest', hidden: false },
+      { id: 'backtest', hidden: false },
+      { id: 'debt-payoff', hidden: false },
+      { id: 'equity', hidden: false },
+      { id: 'contribution-allocator', hidden: false },
+    ]);
+    usePersonsStore.setState({
+      persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
+      isLoading: false,
+      error: null,
+    });
+    render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+    await screen.findByTestId('calc-card-paycheck');
+    expect(screen.queryByTestId('calc-card-supplemental-pay')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('calc-card-path-to-fi')).not.toBeInTheDocument();
+
+    // Toggle an UNRELATED card (hide Paycheck) via the section Customize.
+    await userEvent.click(screen.getByRole('button', { name: /customize paycheck & tax/i }));
+    await userEvent.click(screen.getByRole('switch', { name: 'Paycheck' }));
+
+    const patch = update.mock.calls.at(-1)![0] as { calculatorCardLayout: { id: string; hidden: boolean }[] };
+    expect(patch.calculatorCardLayout).toHaveLength(10);
+    expect(patch.calculatorCardLayout.find((e) => e.id === 'paycheck')?.hidden).toBe(true);
+    // The fold's verdict survives the rewrite over the new id list.
+    expect(patch.calculatorCardLayout.find((e) => e.id === 'supplemental-pay')?.hidden).toBe(true);
+    expect(patch.calculatorCardLayout.find((e) => e.id === 'path-to-fi')?.hidden).toBe(true);
+    expect(patch.calculatorCardLayout.some((e) => e.id === 'bonus-tax')).toBe(false);
   });
 
   it('renders three labeled sections, cards in registry order (the lock-step assertion)', async () => {
@@ -324,7 +378,8 @@ describe('CalculatorsLayout', () => {
     await screen.findByRole('heading', { name: /paycheck & tax/i, level: 2 });
     expect(screen.getByRole('heading', { name: /path to fi/i, level: 2 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /next dollar/i, level: 2 })).toBeInTheDocument();
-    // Render order === CALCULATOR_CARD_IDS order (all 12 visible with an OT person).
+    // Render order === CALCULATOR_CARD_IDS order (all 10 merged-id cards
+    // visible with an OT person — Wave 18 B8 completed the merges).
     const ids = screen.getAllByTestId(/^calc-card-/).map((el) =>
       el.getAttribute('data-testid')!.replace('calc-card-', ''));
     expect(ids).toEqual([...CALCULATOR_CARD_IDS]);
@@ -347,14 +402,26 @@ describe('CalculatorsLayout', () => {
   describe('hash deep-links (D10)', () => {
     afterEach(() => { window.history.replaceState(null, '', '/'); });
 
-    it('#coast-fi on load opens the CoastFI card', async () => {
+    it('#coast-fi on load opens the merged Path to FI card (Wave 18 B6 redirect)', async () => {
       window.history.replaceState(null, '', '/calculators#coast-fi');
       primeBaseline();
       primeSettings();
       usePersonsStore.setState({ persons: [{ ...basePerson }], isLoading: false, error: null });
       render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
-      await screen.findByTestId('calc-card-coast-fi');
-      expect(screen.getByTestId('coast-fi-trigger')).toHaveAttribute('aria-expanded', 'true');
+      await screen.findAllByTestId('calc-card-path-to-fi');
+      const triggers = screen.getAllByTestId('path-to-fi-trigger');
+      expect(triggers[0]).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('#bonus-tax (legacy id) redirects to the merged supplemental-pay card (Wave 18 B6)', async () => {
+      window.history.replaceState(null, '', '/calculators#bonus-tax');
+      primeBaseline();
+      primeSettings();
+      usePersonsStore.setState({ persons: [{ ...basePerson }], isLoading: false, error: null });
+      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+      await screen.findAllByTestId('calc-card-supplemental-pay');
+      const triggers = screen.getAllByTestId('supplemental-pay-trigger');
+      expect(triggers[0]).toHaveAttribute('aria-expanded', 'true');
     });
 
     it('a hidden-card hash is ignored silently', async () => {
@@ -368,6 +435,8 @@ describe('CalculatorsLayout', () => {
     });
 
     it('#hash open re-scrolls the card AFTER boot layout settles (bounded settle poll, nearest)', async () => {
+      // Wave-18 id re-pin: coast-fi merged into path-to-fi (the legacy hash
+      // still redirects — both smoke intents exercised in one test).
       window.history.replaceState(null, '', '/calculators#coast-fi');
       primeBaseline();
       primeSettings();
@@ -382,8 +451,8 @@ describe('CalculatorsLayout', () => {
       };
       try {
         render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
-        await screen.findByTestId('calc-card-coast-fi');
-        const hits = () => scrollCalls.filter((c) => c.id === 'coast-fi');
+        await screen.findByTestId('calc-card-path-to-fi');
+        const hits = () => scrollCalls.filter((c) => c.id === 'path-to-fi');
         // The card's own open-effect fires once at the open commit…
         expect(hits().length).toBeGreaterThan(0);
         const initialCount = hits().length;
@@ -425,14 +494,14 @@ describe('CalculatorsLayout', () => {
       const dialog = screen.getByRole('dialog', { name: /customize paycheck & tax/i });
       const switches = within(dialog).getAllByRole('switch');
       expect(switches.map((s) => s.getAttribute('aria-label'))).toEqual([
-        'Paycheck', 'Bonus tax', 'Commission tax', 'Overtime', '401k withdrawal take-home',
+        'Paycheck', 'Supplemental pay', 'Overtime', '401k withdrawal take-home',
       ]);
-      await userEvent.click(within(dialog).getByRole('switch', { name: 'Bonus tax' }));
+      await userEvent.click(within(dialog).getByRole('switch', { name: 'Supplemental pay' }));
       // Review fix: the popover does NOT close on toggle.
       expect(screen.getByRole('dialog', { name: /customize paycheck & tax/i })).toBeInTheDocument();
       const patch = update.mock.calls.at(-1)![0] as { calculatorCardLayout: { id: string; hidden: boolean }[] };
-      expect(patch.calculatorCardLayout.find((e) => e.id === 'bonus-tax')?.hidden).toBe(true);
-      expect(screen.queryByTestId('calc-card-bonus-tax')).not.toBeInTheDocument();
+      expect(patch.calculatorCardLayout.find((e) => e.id === 'supplemental-pay')?.hidden).toBe(true);
+      expect(screen.queryByTestId('calc-card-supplemental-pay')).not.toBeInTheDocument();
       // Single source of truth: the legacy localStorage key is NEVER recreated.
       expect(localStorage.getItem('calculator-hidden-cards')).toBeNull();
     });
@@ -477,7 +546,7 @@ describe('CalculatorsLayout', () => {
     });
   });
 
-  it('Commission card id in layout matches card fallback (commission-tax)', async () => {
+  it('per-segment calc-state keys survive the merge (D12: calc-state:commission-tax preserved)', async () => {
     primeBaseline();
     primeSettings();
     usePersonsStore.setState({
@@ -486,13 +555,29 @@ describe('CalculatorsLayout', () => {
       error: null,
     });
 
-    sessionStorage.setItem('calc-state:commission-tax', JSON.stringify({ annualCommission: 99999 }));
+    sessionStorage.setItem('calc-state:commission-tax', JSON.stringify({ perCheck: 1234 }));
 
     render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
-    await screen.findByRole('heading', { name: /Commission take-home/i });
+    await screen.findByRole('heading', { name: /Supplemental pay/i, level: 3 });
 
     expect(sessionStorage.getItem('calc-state:commission-tax')).not.toBeNull();
     expect(sessionStorage.getItem('calc-state:commission')).toBeNull();
+    expect(sessionStorage.getItem('calc-state:supplemental-pay')).toBeNull();
+  });
+
+  it('D5 (Wave 18): the Next dollar field renders in the next-dollar section header', async () => {
+    primeBaseline();
+    primeSettings();
+    usePersonsStore.setState({ persons: [{ ...basePerson }], isLoading: false, error: null });
+    render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+    const field = await screen.findByRole('spinbutton', { name: /next dollar/i });
+    expect(field).toBeInTheDocument();
+    // It lives inside the Next dollar SECTION, not another group.
+    const section = field.closest('section')!;
+    expect(within(section).getByRole('heading', { name: /next dollar/i, level: 2 })).toBeInTheDocument();
+    expect(
+      screen.getByText(/One number, two answers/i),
+    ).toBeInTheDocument();
   });
 
   it('renders the ScenarioBar between the intro copy and the grid (Wave 16)', async () => {

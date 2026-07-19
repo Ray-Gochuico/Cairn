@@ -50,19 +50,76 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
+// ── Wave 18 (D7 layer): per-person salary overrides ─────────────────────────
+// Scenario-layer ONLY (owner constraint 5): these ride the same external
+// store + sessionStorage tier as the six shared fields — the persons store is
+// NEVER written. Separate key so scenario-assumptions.ts's sanitize/migration
+// contract for the flat numeric shape stays untouched.
+const SALARY_KEY = 'calc-scenario:salaries';
+
+function readSalaries(): Record<number, number> {
+  try {
+    const raw = sessionStorage.getItem(SALARY_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const out: Record<number, number> = {};
+    for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+      const id = Number(k);
+      if (Number.isInteger(id) && id > 0 && typeof v === 'number' && Number.isFinite(v) && v >= 0) {
+        out[id] = v;
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+let cachedSalaries: Record<number, number> | null = null;
+
+function getSalariesSnapshot(): Record<number, number> {
+  if (cachedSalaries === null) cachedSalaries = readSalaries();
+  return cachedSalaries;
+}
+
+function commitSalaries(next: Record<number, number>): void {
+  cachedSalaries = next;
+  try {
+    if (Object.keys(next).length === 0) sessionStorage.removeItem(SALARY_KEY);
+    else sessionStorage.setItem(SALARY_KEY, JSON.stringify(next));
+  } catch {
+    // sessionStorage unavailable — in-memory state still drives the UI.
+  }
+  listeners.forEach((l) => l());
+}
+
+/** Live per-person salary overrides — the D7 ripple's one read point
+ *  (useHouseholdTaxContext consumes this INTERNALLY). */
+export function useSalaryOverrides(): Record<number, number> {
+  return useSyncExternalStore(subscribe, getSalariesSnapshot);
+}
+
 /** Test-only: drop the module cache + listeners between tests. */
 export function __resetScenarioAssumptionsForTests(): void {
   cachedOverrides = null;
+  cachedSalaries = null;
   listeners.clear();
 }
 
 export interface UseScenarioAssumptionsResult {
   values: ScenarioAssumptions;
+  /** The store-derived prefills (un-overridden) — the D6 delta base. */
+  defaults: ScenarioAssumptions;
   engine: EngineAssumptions;
   provenance: Record<ScenarioField, string>;
   isEdited: Record<ScenarioField, boolean>;
+  /** editedCount includes per-person salary overrides (Wave 18 D7). */
   editedCount: number;
   scenarioList: GrowthScenario[];
+  /** Wave 18 (D7): per-person annual-salary overrides — scenario-layer only. */
+  salaryByPersonId: Record<number, number>;
+  setSalary: (personId: number, value: number | null) => void;
   setField: (field: ScenarioField, value: number) => void;
   resetField: (field: ScenarioField) => void;
   resetAll: () => void;
@@ -76,6 +133,7 @@ export function useScenarioAssumptions(): UseScenarioAssumptionsResult {
   const contributions = useContributionsStore((s) => s.contributions);
 
   const overrides = useSyncExternalStore(subscribe, getOverridesSnapshot);
+  const salaryByPersonId = useSyncExternalStore(subscribe, getSalariesSnapshot);
 
   const { defaults, provenance } = useMemo(
     () => buildScenarioDefaults({ household, settings, accounts, snapshots, contributions }),
@@ -93,7 +151,10 @@ export function useScenarioAssumptions(): UseScenarioAssumptionsResult {
     for (const f of SCENARIO_FIELDS) out[f] = f in overrides;
     return out;
   }, [overrides]);
-  const editedCount = useMemo(() => Object.keys(overrides).length, [overrides]);
+  const editedCount = useMemo(
+    () => Object.keys(overrides).length + Object.keys(salaryByPersonId).length,
+    [overrides, salaryByPersonId],
+  );
 
   // D3: a custom return collapses the projection tables to one honest row.
   const scenarioList = useMemo<GrowthScenario[]>(
@@ -114,10 +175,21 @@ export function useScenarioAssumptions(): UseScenarioAssumptionsResult {
     commitOverrides(next);
   }, []);
 
-  const resetAll = useCallback(() => commitOverrides({}), []);
+  const setSalary = useCallback((personId: number, value: number | null) => {
+    const next = { ...getSalariesSnapshot() };
+    if (value == null) delete next[personId];
+    else next[personId] = Math.max(0, value);
+    commitSalaries(next);
+  }, []);
+
+  const resetAll = useCallback(() => {
+    commitOverrides({});
+    commitSalaries({});
+  }, []);
 
   return {
-    values, engine, provenance, isEdited, editedCount, scenarioList,
+    values, defaults, engine, provenance, isEdited, editedCount, scenarioList,
+    salaryByPersonId, setSalary,
     setField, resetField, resetAll,
   };
 }

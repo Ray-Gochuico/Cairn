@@ -51,8 +51,8 @@ export function TailorStep({ result, totalSteps = 3, onDone, onSkip }: TailorSte
       }),
     );
 
-  // Build a COMPLETE calc-card overlay for all 12 ids. A listed calc is
-  // hidden:!visible; an unlisted (always-shown) calc defaults visible.
+  // Build a COMPLETE calc-card overlay over CALCULATOR_CARD_IDS. A listed
+  // calc is hidden:!visible; an unlisted (always-shown) calc defaults visible.
   const buildCalcLayout = (): CardLayoutEntry[] =>
     CALCULATOR_CARD_IDS.map((id): CardLayoutEntry => ({
       id,

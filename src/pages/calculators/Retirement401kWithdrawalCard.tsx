@@ -1,17 +1,19 @@
 import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
-import { usePersonsStore } from '@/stores/persons-store';
 import { CalculatorCard, EmptyMeaning, RailReset } from './CalculatorCard';
 import { calculate401kWithdrawalTax } from '@/lib/tax';
 import { useHouseholdTaxContext } from '@/lib/calculators/use-household-tax-context';
 import { useCalculatorState } from '@/lib/calculator-state';
 import { NumberField } from '@/components/calculators/NumberField';
+import { NotModeledDisclosure } from '@/components/calculators/NotModeledDisclosure';
+import { EarnerSelect } from '@/components/calculators/EarnerSelect';
+import { useSelectedEarner } from '@/lib/calculators/use-selected-earner';
 import { ResultRow } from '@/components/calculators/ResultRow';
 import { StatTile } from '@/components/calculators/StatTile';
 import { formatCurrency, formatPercent } from '@/lib/format';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { InlineLink } from '@/components/calculators/InlineLink';
 
 interface Retirement401kWithdrawalCardProps {
   cardId?: string;
@@ -30,26 +32,36 @@ export function Retirement401kWithdrawalCard({
   cardId,
 }: Retirement401kWithdrawalCardProps = {}) {
   const { household } = useHouseholdStore();
-  const { persons } = usePersonsStore();
   // Shared W-2 tax scaffolding (resolved year + jurisdiction lookups + the
   // one-time loadAvailableYears bootstrap). Replaces the card's former
   // hand-rolled seededYears/getCurrentTaxYear/loadAvailableYears effect + local
   // lookup — same resolution logic, single source of truth.
-  const { lookup, resolvedYear, federal, state, city } = useHouseholdTaxContext();
+  const { lookup, resolvedYear, federal, state, city, persons } = useHouseholdTaxContext();
+  // D7 (Wave 18): `persons` above are the context's EFFECTIVE persons — the
+  // bar's salary override moves the selected earner's W-2 prefill.
 
   // ── Real-data defaults (memoized from the stores) ──────────────────────────
-  // Prefill exactly as before: W-2 = Σ persons.annualSalaryPretax, age from
-  // persons[0].dateOfBirth (else 67); the remaining inputs start at 0. The kit
-  // merges the user's session overrides on top (overrides win) and persists
-  // every edit under calc-state:retirement-401k-withdrawal.
+  // Wave 18 A5: a withdrawal belongs to ONE account owner — W-2 and age
+  // prefill from the SELECTED earner (EarnerSelect below), not a household
+  // salary sum (summing both salaries as "your W-2 in retirement" was the
+  // wrong-person class Wave 15 fixed elsewhere). Switching earners re-derives
+  // these DEFAULTS through useCalculatorState — explicit user overrides still
+  // win, and Reset returns to the selected earner's figures.
+  const personIds = useMemo(
+    () => persons.map((p) => p.id).filter((id): id is number => id != null),
+    [persons],
+  );
+  const [earnerId, setEarnerId] = useSelectedEarner(
+    cardId ?? 'retirement-401k-withdrawal',
+    persons[0]?.id ?? null,
+    personIds,
+  );
+  const earner = persons.find((p) => p.id === earnerId) ?? persons[0] ?? null;
   const defaults = useMemo(() => {
     const todayISO = new Date().toISOString().slice(0, 10);
-    const defaultW2 = persons.reduce(
-      (acc, p) => acc + (p.annualSalaryPretax ?? 0),
-      0,
-    );
-    const defaultAge = persons[0]?.dateOfBirth
-      ? yearsBetween(persons[0].dateOfBirth, todayISO)
+    const defaultW2 = earner?.annualSalaryPretax ?? 0;
+    const defaultAge = earner?.dateOfBirth
+      ? yearsBetween(earner.dateOfBirth, todayISO)
       : 67;
     return {
       withdrawalAmount: 0,
@@ -63,7 +75,7 @@ export function Retirement401kWithdrawalCard({
       ageAtWithdrawal: defaultAge,
       planType: 'TRADITIONAL' as 'TRADITIONAL' | 'ROTH',
     };
-  }, [persons]);
+  }, [earner]);
 
   const { values, setValue, reset, isOverridden, overriddenKeys } = useCalculatorState(
     cardId ?? 'retirement-401k-withdrawal',
@@ -129,6 +141,14 @@ export function Retirement401kWithdrawalCard({
   const rail = (
     <>
       {isOverridden && <RailReset onClick={reset} />}
+      {/* Wave 18 A5: whose withdrawal — renders nothing for single-person
+          households (EarnerSelect's <2 rule). */}
+      <EarnerSelect
+        persons={persons}
+        selectedId={earner?.id ?? null}
+        onChange={setEarnerId}
+        label="Whose withdrawal"
+      />
       <NumberField
         id="withdrawal-amount"
         label="Withdrawal amount"
@@ -220,7 +240,7 @@ export function Retirement401kWithdrawalCard({
 
   // Wave 15 T6: no $0 breakdown theater. Until the user enters a real
   // withdrawal amount there is no question to answer — headline shows "—"
-  // and the breakdown stays hidden (controls remain visible, BonusTaxCard
+  // and the breakdown stays hidden (controls remain visible, supplemental-card
   // idiom).
   const hasAmount = (withdrawalAmount ?? 0) > 0;
 
@@ -231,9 +251,9 @@ export function Retirement401kWithdrawalCard({
   const meaning =
     !breakdown ? (
       <EmptyMeaning>
-        <Link to="/inputs/household" className="text-primary hover:underline">
+        <InlineLink to="/inputs/household">
           Set up your household profile
-        </Link>{' '}
+        </InlineLink>{' '}
         + tax rules to see the 401k withdrawal breakdown.
       </EmptyMeaning>
     ) : !hasAmount ? (
@@ -355,11 +375,7 @@ export function Retirement401kWithdrawalCard({
               incremental-tax path via the "NIIT delta" line above (uses
               Other investment income input + filing-status threshold).
               Its bullet was removed from this list since it is now modeled. */}
-          <details className="text-xs mt-2 border-t pt-2 text-muted-foreground">
-            <summary className="cursor-pointer font-medium hover:text-foreground">
-              What this calculator does NOT model
-            </summary>
-            <ul className="mt-2 list-disc pl-5 space-y-1">
+          <NotModeledDisclosure footer="For an actual withdrawal decision, run the numbers past a CFP or tax professional — the items above can each shift the bottom line by several thousand dollars.">
               <li>
                 <TermTooltip term="AMT">AMT</TermTooltip> (Alternative Minimum Tax) on
                 ISO exercises landing in the same year as the withdrawal.
@@ -382,13 +398,7 @@ export function Retirement401kWithdrawalCard({
                 Distributions force pre-tax withdrawals on a schedule;
                 this calculator only computes a single voluntary withdrawal).
               </li>
-            </ul>
-            <p className="mt-2">
-              For an actual withdrawal decision, run the numbers past a CFP or
-              tax professional — the items above can each shift the bottom line
-              by several thousand dollars.
-            </p>
-          </details>
+          </NotModeledDisclosure>
         </div>
       )}
     </CalculatorCard>

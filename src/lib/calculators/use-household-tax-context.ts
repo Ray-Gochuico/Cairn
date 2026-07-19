@@ -5,7 +5,8 @@ import { useDependentsStore } from '@/stores/dependents-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { getCurrentTaxYear } from '@/lib/current-tax-year';
 import { aggregateHouseholdPretax, type HouseholdPretax } from '@/lib/calculators/supplemental-wage';
-import type { TaxRule, JurisdictionType } from '@/types/schema';
+import { useSalaryOverrides } from '@/lib/calculators/use-scenario-assumptions';
+import type { Person, TaxRule, JurisdictionType } from '@/types/schema';
 
 export interface HouseholdTaxContext {
   ready: boolean;
@@ -14,6 +15,12 @@ export interface HouseholdTaxContext {
   federal: TaxRule | null;
   state: TaxRule | null;
   city: TaxRule | null;
+  /** D7 (Wave 18): EFFECTIVE persons — scenario salary overrides mapped in.
+   *  A mapped COPY; the persons store is never written (constraint 5).
+   *  Consumers use THESE for salary-bearing math. */
+  persons: Person[];
+  /** True when any bar salary override is live (edited-state surfacing). */
+  salaryOverridden: boolean;
   totalSalary: number;
   aggregatedPretax: HouseholdPretax;
 }
@@ -30,6 +37,24 @@ export function useHouseholdTaxContext(): HouseholdTaxContext {
   const persons = usePersonsStore((s) => s.persons);
   const dependents = useDependentsStore((s) => s.dependents);
   const taxItems = useTaxRulesStore((s) => s.items);
+
+  // D7 (Wave 18): ONE wiring point ripples the bar's salary overrides to
+  // every W-2 consumer (Paycheck, Supplemental, Overtime, 401k default) —
+  // a mapped copy; the persons store is never written.
+  const salaryOverrides = useSalaryOverrides();
+  const effectivePersons = useMemo(
+    () =>
+      persons.map((p) =>
+        p.id != null && salaryOverrides[p.id] != null
+          ? { ...p, annualSalaryPretax: salaryOverrides[p.id] }
+          : p,
+      ),
+    [persons, salaryOverrides],
+  );
+  const salaryOverridden = useMemo(
+    () => effectivePersons.some((p, i) => p !== persons[i]),
+    [effectivePersons, persons],
+  );
 
   const seededYears = useMemo(() => [...new Set(taxItems.map((r) => r.year))], [taxItems]);
   const { year: resolvedYear } = getCurrentTaxYear(seededYears);
@@ -60,18 +85,24 @@ export function useHouseholdTaxContext(): HouseholdTaxContext {
   const city = household?.city ? lookup('CITY', household.city, household.filingStatus) : null;
 
   const { totalSalary, aggregatedPretax } = useMemo(() => {
-    if (!household || persons.length === 0) {
+    if (!household || effectivePersons.length === 0) {
       return { totalSalary: 0, aggregatedPretax: { pretax401k: 0, pretaxHealth: 0, pretaxDcfsa: 0, pretaxHsa: 0 } };
     }
-    const agg = aggregateHouseholdPretax(persons, {
+    // D7: aggregate over the EFFECTIVE persons so the salary override rides
+    // through totalSalary + the per-employee 401(k) legs.
+    const agg = aggregateHouseholdPretax(effectivePersons, {
       filingStatus: household.filingStatus,
-      personCount: persons.length,
+      personCount: effectivePersons.length,
       dependentCount: dependents.length,
     });
     return { totalSalary: agg.totalSalary, aggregatedPretax: agg.pretax };
-  }, [household, persons, dependents]);
+  }, [household, effectivePersons, dependents]);
 
   const ready = !!household && persons.length > 0 && taxItems.length > 0 && !!federal && !!state;
 
-  return { ready, resolvedYear, lookup, federal, state, city, totalSalary, aggregatedPretax };
+  return {
+    ready, resolvedYear, lookup, federal, state, city,
+    persons: effectivePersons, salaryOverridden,
+    totalSalary, aggregatedPretax,
+  };
 }

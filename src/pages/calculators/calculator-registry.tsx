@@ -5,12 +5,10 @@ import {
   type CalculatorCardDef,
 } from '@/lib/calculator-card-layout';
 import { PaycheckCard } from './PaycheckCard';
-import { BonusTaxCard } from './BonusTaxCard';
-import { CommissionTaxCard } from './CommissionTaxCard';
+import { SupplementalPayCard } from './SupplementalPayCard';
 import { OvertimeCard } from './OvertimeCard';
 import { Retirement401kWithdrawalCard } from './Retirement401kWithdrawalCard';
-import { FinancialIndependenceCard } from './FinancialIndependenceCard';
-import { CoastFiCard } from './CoastFiCard';
+import { PathToFiCard } from './PathToFiCard';
 import { CompoundInterestCard } from './CompoundInterestCard';
 import { BacktestCard } from './BacktestCard';
 import { DebtPayoffCard } from './DebtPayoffCard';
@@ -36,8 +34,7 @@ type Registration = Omit<CalculatorCardRegistration, keyof CalculatorCardDef>;
 // def has an entry here — adding a card without registering it fails CI.
 const REGISTRATIONS: Record<string, Registration> = {
   'paycheck': { Component: PaycheckCard },
-  'bonus-tax': { Component: BonusTaxCard },
-  'commission-tax': { Component: CommissionTaxCard },
+  'supplemental-pay': { Component: SupplementalPayCard },
   'overtime': {
     Component: OvertimeCard,
     // W10: without an hourly/OT person the card can never render — the
@@ -47,8 +44,7 @@ const REGISTRATIONS: Record<string, Registration> = {
     unavailableReason: 'Add an hourly or salary+OT person in Inputs to enable this card.',
   },
   'retirement-401k-withdrawal': { Component: Retirement401kWithdrawalCard },
-  'financial-independence': { Component: FinancialIndependenceCard },
-  'coast-fi': { Component: CoastFiCard },
+  'path-to-fi': { Component: PathToFiCard },
   'compound-interest': { Component: CompoundInterestCard },
   'backtest': { Component: BacktestCard },
   'debt-payoff': { Component: DebtPayoffCard },

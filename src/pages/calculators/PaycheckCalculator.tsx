@@ -5,7 +5,6 @@ import { z } from 'zod';
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react'; // shared back-nav icon (W2/BT-6)
 import { useHouseholdStore } from '@/stores/household-store';
-import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { computePretaxDeductions } from '@/lib/tax';
@@ -26,12 +25,20 @@ import {
 // owned by Calculators Wave 0b — see the v1.x coordination contract §1/§2.
 // Replaces the inline seededYears/getCurrentTaxYear/loadAvailableYears + the
 // hand-rolled `lookup` closure this page used to own.
+import { NotModeledDisclosure } from '@/components/calculators/NotModeledDisclosure';
 import { useHouseholdTaxContext } from '@/lib/calculators/use-household-tax-context';
 import { prettifyCityCode, US_STATES } from '@/lib/jurisdiction-format';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import DonutChartCard, { type DonutSlice } from '@/components/charts/DonutChartCard';
 import PaycheckBreakdownRow from './PaycheckBreakdownRow';
@@ -43,6 +50,10 @@ import type { FilingStatus } from '@/types/enums';
 // (gross→federal→ss→medicare) binds the --paycheck-* stone ramp; the three
 // SEMANTIC rows (post-tax/extra/take-home) keep the status tokens they mean.
 // Fill-only discipline: none of these may color text.
+// Radix Select forbids value="" — the "no city" option carries this sentinel
+// and the handler maps it back to null (Wave 18 A5).
+const NO_CITY_VALUE = '__none__';
+
 const COLORS = {
   gross: 'hsl(var(--paycheck-gross))',
   federal: 'hsl(var(--paycheck-federal))',
@@ -127,7 +138,6 @@ const FORM_FALLBACK: FormValues = {
 
 export default function PaycheckCalculator() {
   const { household } = useHouseholdStore();
-  const { persons } = usePersonsStore();
   const { dependents } = useDependentsStore();
   const taxItems = useTaxRulesStore((s) => s.items);
 
@@ -139,6 +149,9 @@ export default function PaycheckCalculator() {
   // jurisdiction is the FORM's, not the household's (contract §3). `taxItems` is
   // still read directly below for the city-cascade filter.
   const tax = useHouseholdTaxContext();
+  // D7 (Wave 18): EFFECTIVE persons — the bar's salary overrides seed the
+  // form's gross/401(k) prefills; the persons store is never written.
+  const persons = tax.persons;
   const resolvedYear = tax.resolvedYear;
 
   // ---- form values seeded from the household/persons profile ----
@@ -451,20 +464,23 @@ export default function PaycheckCalculator() {
                 </div>
                 <div>
                   <Label htmlFor="payFrequency">Pay frequency</Label>
-                  <select
-                    id="payFrequency"
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                  <Select
                     value={f.payFrequency}
-                    onChange={(e) =>
-                      form.setValue('payFrequency', e.target.value as PaycheckPeriod, {
+                    onValueChange={(v) =>
+                      form.setValue('payFrequency', v as PaycheckPeriod, {
                         shouldDirty: true,
                       })
                     }
                   >
-                    {PAYCHECK_PERIODS.map((p) => (
-                      <option key={p.id} value={p.id}>{p.label}</option>
-                    ))}
-                  </select>
+                    <SelectTrigger id="payFrequency" aria-label="Pay frequency">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PAYCHECK_PERIODS.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </section>
@@ -475,21 +491,24 @@ export default function PaycheckCalculator() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <Label htmlFor="filingStatus">Filing status</Label>
-                  <select
-                    id="filingStatus"
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                  <Select
                     value={f.filingStatus}
-                    onChange={(e) =>
-                      form.setValue('filingStatus', e.target.value as FilingStatus, {
+                    onValueChange={(v) =>
+                      form.setValue('filingStatus', v as FilingStatus, {
                         shouldDirty: true,
                       })
                     }
                   >
-                    <option value="SINGLE">Single</option>
-                    <option value="MFJ">Married filing jointly</option>
-                    <option value="MFS">Married filing separately</option>
-                    <option value="HOH">Head of household</option>
-                  </select>
+                    <SelectTrigger id="filingStatus" aria-label="Filing status">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="SINGLE">Single</SelectItem>
+                      <SelectItem value="MFJ">Married filing jointly</SelectItem>
+                      <SelectItem value="MFS">Married filing separately</SelectItem>
+                      <SelectItem value="HOH">Head of household</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <Label htmlFor="dependents">Dependents</Label>
@@ -523,29 +542,35 @@ export default function PaycheckCalculator() {
                 </div>
                 <div>
                   <Label htmlFor="city">City / locality (if applicable)</Label>
-                  <select
-                    id="city"
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm disabled:opacity-60"
-                    value={f.city ?? ''}
+                  {/* Radix Select forbids value="" on items — the no-city option
+                      uses the __none__ sentinel, mapped back to null in the
+                      handler (Wave 18 A5 shell swap; semantics unchanged). */}
+                  <Select
+                    value={f.city ?? NO_CITY_VALUE}
                     disabled={cityRules.length === 0}
-                    onChange={(e) =>
-                      form.setValue('city', e.target.value === '' ? null : e.target.value, {
+                    onValueChange={(v) =>
+                      form.setValue('city', v === NO_CITY_VALUE ? null : v, {
                         shouldDirty: true,
                       })
                     }
                   >
-                    <option value="">
-                      {/* PC-3 consistency: "— No localities listed —" describes the
-                          (non-exhaustive) seed for this state, not an absolute
-                          absence-of-local-tax claim. */}
-                      {cityRules.length === 0 ? '— No localities listed —' : '(No local tax)'}
-                    </option>
-                    {cityRules.map((r) => (
-                      <option key={r.jurisdictionCode} value={r.jurisdictionCode}>
-                        {prettifyCityCode(r.jurisdictionCode)}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger id="city" aria-label="City / locality (if applicable)">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_CITY_VALUE}>
+                        {/* PC-3 consistency: "— No localities listed —" describes the
+                            (non-exhaustive) seed for this state, not an absolute
+                            absence-of-local-tax claim. */}
+                        {cityRules.length === 0 ? '— No localities listed —' : '(No local tax)'}
+                      </SelectItem>
+                      {cityRules.map((r) => (
+                        <SelectItem key={r.jurisdictionCode} value={r.jurisdictionCode}>
+                          {prettifyCityCode(r.jurisdictionCode)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </section>
@@ -829,11 +854,7 @@ export default function PaycheckCalculator() {
 
           {/* Ported from PaycheckCard.tsx:224-267, trimmed for items now modeled
               (post-tax + extra-withholding bullets removed). */}
-          <details className="text-xs text-muted-foreground">
-            <summary className="cursor-pointer font-medium hover:text-foreground">
-              What this calculator does NOT model
-            </summary>
-            <ul className="mt-2 list-disc space-y-1 pl-5">
+          <NotModeledDisclosure>
               <li>
                 <TermTooltip term="FICA" /> is computed on your <strong>full gross</strong>.
                 Real Social Security &amp; Medicare wages exclude §125 cafeteria-plan
@@ -861,8 +882,7 @@ export default function PaycheckCalculator() {
                 Local rules for the ~250 city/county jurisdictions are estimates; unusual
                 residency splits aren't handled.
               </li>
-            </ul>
-          </details>
+          </NotModeledDisclosure>
           {/* (Back-nav lives at the top of the page — the shared W2 header
               affordance — so no duplicate footer back-link here.) */}
         </CardContent>

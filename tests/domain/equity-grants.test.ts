@@ -260,6 +260,20 @@ describe('EquityGrantsRepo', () => {
     ).rejects.toThrow();
   });
 
+  it('D9 (Wave 18): exposes updated_at as a read-only updatedAt string on list + findById', async () => {
+    const id = await makeGrant(repo, personId);
+    const listed = await repo.list();
+    expect(typeof listed[0]?.updatedAt).toBe('string');
+    expect(listed[0]!.updatedAt!.length).toBeGreaterThan(0);
+    const found = await repo.findById(id);
+    expect(typeof found?.updatedAt).toBe('string');
+    // The UPDATE path refreshes the stamp column (no crash on write either —
+    // the optional field never feeds the write statements).
+    await repo.update(id, { currentFmv: 123 });
+    const after = await repo.findById(id);
+    expect(typeof after?.updatedAt).toBe('string');
+  });
+
   it('round-trips the three calculator fields through create + findById', async () => {
     const id = await makeGrant(repo, personId, {
       companyValuation: 10_000_000,
