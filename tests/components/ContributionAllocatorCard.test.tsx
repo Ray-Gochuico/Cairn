@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { render, screen, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { ContributionAllocatorCard } from '@/pages/calculators/ContributionAllocatorCard';
@@ -8,6 +8,7 @@ import { useHoldingsStore } from '@/stores/holdings-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useTickersStore } from '@/stores/tickers-store';
 import { useSettingsStore } from '@/stores/settings-store';
+import { useContributionsStore } from '@/stores/contributions-store';
 import {
   AccountType,
   AssetClass,
@@ -108,11 +109,32 @@ function seedStores(targets: AssetClassTarget[] | null) {
     load: async () => {},
     update: async () => {},
   });
+  // Wave 18 D4: the contribution prefill derives from rolling-12-month
+  // history (12 × $500 within the pinned year → $500/mo). Tests that need
+  // an empty history override this after seeding.
+  useContributionsStore.setState({
+    contributions: [
+      '2025-06-01', '2025-07-01', '2025-08-01', '2025-09-01', '2025-10-01',
+      '2025-11-01', '2025-12-01', '2026-01-01', '2026-02-01', '2026-03-01',
+      '2026-04-01', '2026-05-01',
+    ].map((date, i) => ({
+      id: i + 1, accountId: 1, personId: null, date, amount: 500, source: 'MANUAL',
+    })) as never,
+    isLoading: false,
+    error: null,
+    load: async () => {},
+  } as never);
 }
 
 describe('ContributionAllocatorCard', () => {
   beforeEach(() => {
+    sessionStorage.clear();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-05-14T12:00:00Z'));
     seedStores(null);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('empty state is a real Link to Investments (UX H1)', async () => {
@@ -213,14 +235,24 @@ describe('ContributionAllocatorCard', () => {
 });
 
 describe('ContributionAllocatorCard waymark meaning (Wave 17)', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-05-14T12:00:00Z'));
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('renders the waymark meaning line from already-rendered values (Wave 17)', async () => {
     seedStores([
       { assetClass: AssetClass.US_TOTAL_MARKET, targetPct: 0.5 },
       { assetClass: AssetClass.US_BONDS, targetPct: 0.5 },
     ]);
     render(<MemoryRouter><ContributionAllocatorCard cardId="contribution-allocator" /></MemoryRouter>);
+    // Wave 18: the meaning carries the allocated-of-contribution reading.
     expect(await screen.findByTestId('contribution-allocator-meaning')).toHaveTextContent(
-      /suggested buys for a .* contribution\./i,
+      /of a .* contribution, allocated toward your targets/i,
     );
   });
 
@@ -232,5 +264,86 @@ describe('ContributionAllocatorCard waymark meaning (Wave 17)', () => {
     expect(
       screen.getByRole('link', { name: /set asset-class targets/i }),
     ).toHaveAttribute('href', '/investments');
+  });
+});
+
+
+describe('ContributionAllocatorCard — calculator-state + grouped buys (Wave 18 C12)', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-05-14T12:00:00Z'));
+    seedStores([
+      { assetClass: AssetClass.US_TOTAL_MARKET, targetPct: 0.5 },
+      { assetClass: AssetClass.US_BONDS, targetPct: 0.5 },
+    ]);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('D4: prefills the monthly contribution from rolling-12-month history (12 × $500 → 500)', async () => {
+    render(<MemoryRouter><ContributionAllocatorCard cardId="contribution-allocator" /></MemoryRouter>);
+    const input = (await screen.findByRole('spinbutton', { name: /monthly contribution/i })) as HTMLInputElement;
+    expect(Number(input.value)).toBe(500);
+    // Results render from the derived prefill — no fabricated $1,000 anywhere.
+    expect(await screen.findByTestId('allocator-results')).toBeInTheDocument();
+  });
+
+  it('D4: no history → blank field + an honest prompt, no results section', async () => {
+    useContributionsStore.setState({ contributions: [], isLoading: false, error: null } as never);
+    render(<MemoryRouter><ContributionAllocatorCard cardId="contribution-allocator" /></MemoryRouter>);
+    const input = (await screen.findByRole('spinbutton', { name: /monthly contribution/i })) as HTMLInputElement;
+    expect(input.value).toBe('');
+    expect(
+      screen.getByText(/enter a monthly contribution to see the buy plan/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('allocator-results')).toBeNull();
+    expect(screen.queryByText(/\$1,000/)).toBeNull();
+  });
+
+  it('Reset to my data restores the derived prefill', async () => {
+    render(<MemoryRouter><ContributionAllocatorCard cardId="contribution-allocator" /></MemoryRouter>);
+    const input = (await screen.findByRole('spinbutton', { name: /monthly contribution/i })) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: '900' } });
+    expect(Number(input.value)).toBe(900);
+    fireEvent.click(screen.getByRole('button', { name: /reset to my data/i }));
+    expect(
+      Number((screen.getByRole('spinbutton', { name: /monthly contribution/i }) as HTMLInputElement).value),
+    ).toBe(500);
+  });
+
+  it('grouped buy list: class header rows + Subtotal rows summing to Total allocated', async () => {
+    render(<MemoryRouter><ContributionAllocatorCard cardId="contribution-allocator" /></MemoryRouter>);
+    const table = await screen.findByTestId('allocator-results');
+    // Class group headers replace the per-row Class column.
+    expect(within(table).getByText('US Total Market')).toBeInTheDocument();
+    expect(within(table).getByText('US Bonds')).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: /^class$/i })).toBeNull();
+    // Subtotal rows: their dollars sum to the Total allocated tile.
+    const subtotals = within(table).getAllByText('Subtotal');
+    expect(subtotals.length).toBeGreaterThan(0);
+    const sum = subtotals
+      .map((el) => el.closest('tr')!)
+      .reduce((a, tr) => a + Number((tr.textContent ?? '').replace(/[^\d.]/g, '')), 0);
+    const total = Number(
+      screen.getByTestId('allocator-total').textContent!.replace(/[^\d.]/g, ''),
+    );
+    expect(sum).toBeCloseTo(total, 0);
+  });
+
+  it('drift tiles carry the plain-language caption', async () => {
+    render(<MemoryRouter><ContributionAllocatorCard cardId="contribution-allocator" /></MemoryRouter>);
+    expect(
+      await screen.findByText(/Share of your portfolio that would need to move to hit targets\./),
+    ).toBeInTheDocument();
+  });
+
+  it('persistent Adjust targets link renders with targets set', async () => {
+    render(<MemoryRouter><ContributionAllocatorCard cardId="contribution-allocator" /></MemoryRouter>);
+    expect(await screen.findByRole('link', { name: /adjust targets/i })).toHaveAttribute(
+      'href',
+      '/investments',
+    );
   });
 });
