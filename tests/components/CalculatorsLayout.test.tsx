@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
+import { CALCULATOR_CARD_IDS } from '@/lib/calculator-card-layout';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
@@ -186,7 +187,7 @@ describe('CalculatorsLayout', () => {
 
     render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
 
-    expect(await screen.findByRole('heading', { name: /Paycheck/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Paycheck/i, level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Bonus take-home/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Commission take-home/i })).toBeInTheDocument();
   });
@@ -286,55 +287,11 @@ describe('CalculatorsLayout', () => {
 
       render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
 
-      await screen.findByRole('heading', { name: /Paycheck/i });
+      await screen.findByRole('heading', { name: /Paycheck/i, level: 3 });
       expect(screen.queryByText(/Bonus take-home/i)).not.toBeInTheDocument();
     });
 
-    it('manage popover lists all 12 cards as Switches; toggling one off hides it via update', async () => {
-      primeBaseline();
-      const update = primeSettings();
-      usePersonsStore.setState({
-        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
-        isLoading: false,
-        error: null,
-      });
-
-      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
-      await screen.findByRole('heading', { name: /Bonus take-home/i });
-
-      await userEvent.click(screen.getByRole('button', { name: /manage cards/i }));
-
-      // All 12 cards present as labeled switches.
-      const switches = screen.getAllByRole('switch');
-      expect(switches).toHaveLength(12);
-
-      // Toggle "Compound Interest" off.
-      const compoundSwitch = screen.getByRole('switch', { name: /compound interest/i });
-      await userEvent.click(compoundSwitch);
-
-      const patch = update.mock.calls.at(-1)![0] as { calculatorCardLayout: { id: string; hidden: boolean }[] };
-      expect(patch.calculatorCardLayout.find((e) => e.id === 'compound-interest')?.hidden).toBe(true);
-      expect(screen.queryByText(/Compound Interest/i)).not.toBeInTheDocument();
-      expect(localStorage.getItem('calculator-hidden-cards')).toBeNull();
-    });
-
-    it('disables the Overtime visibility switch with a reason when no hourly/OT person exists (W10)', async () => {
-      const user = userEvent.setup();
-      primeBaseline();
-      primeSettings();
-      usePersonsStore.setState({
-        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
-        isLoading: false, error: null,
-      });
-      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
-      await screen.findByRole('heading', { name: /Bonus take-home/i });
-      await user.click(screen.getByRole('button', { name: /manage cards/i }));
-      const otSwitch = screen.getByRole('switch', { name: /overtime/i });
-      expect(otSwitch).toBeDisabled();
-      expect(screen.getByText(/add an hourly or salary\+ot person/i)).toBeInTheDocument();
-    });
-
-    it('toggling a hidden card back on (Switch) restores it via update', async () => {
+    it('toggling a hidden card back on (Customize Switch) restores it via update', async () => {
       primeBaseline();
       const update = primeSettings([{ id: 'bonus-tax', hidden: true }]);
       usePersonsStore.setState({
@@ -344,46 +301,144 @@ describe('CalculatorsLayout', () => {
       });
 
       render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
-      await screen.findByRole('heading', { name: /Paycheck/i });
+      await screen.findByRole('heading', { name: /Paycheck/i, level: 3 });
       expect(screen.queryByText(/Bonus take-home/i)).not.toBeInTheDocument();
 
-      await userEvent.click(screen.getByRole('button', { name: /manage cards/i }));
-      await userEvent.click(screen.getByRole('switch', { name: /bonus tax/i }));
+      await userEvent.click(screen.getByRole('button', { name: /customize paycheck & tax/i }));
+      await userEvent.click(screen.getByRole('switch', { name: 'Bonus tax' }));
 
       const patch = update.mock.calls.at(-1)![0] as { calculatorCardLayout: { id: string; hidden: boolean }[] };
       expect(patch.calculatorCardLayout.find((e) => e.id === 'bonus-tax')?.hidden).toBe(false);
       expect(await screen.findByRole('heading', { name: /Bonus take-home/i })).toBeInTheDocument();
     });
+  });
 
-    it('Escape closes Manage cards and restores focus to the footer trigger', async () => {
+  it('renders three labeled sections, cards in registry order (the lock-step assertion)', async () => {
+    primeBaseline();
+    primeSettings();
+    usePersonsStore.setState({
+      persons: [{ ...basePerson, employmentType: 'HOURLY', hourlyRate: 25 }],
+      isLoading: false, error: null,
+    });
+    render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+    await screen.findByRole('heading', { name: /paycheck & tax/i, level: 2 });
+    expect(screen.getByRole('heading', { name: /path to fi/i, level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /next dollar/i, level: 2 })).toBeInTheDocument();
+    // Render order === CALCULATOR_CARD_IDS order (all 12 visible with an OT person).
+    const ids = screen.getAllByTestId(/^calc-card-/).map((el) =>
+      el.getAttribute('data-testid')!.replace('calc-card-', ''));
+    expect(ids).toEqual([...CALCULATOR_CARD_IDS]);
+  });
+
+  it('exactly one card open at a time; opening B closes A', async () => {
+    primeBaseline();
+    primeSettings();
+    usePersonsStore.setState({ persons: [{ ...basePerson }], isLoading: false, error: null });
+    render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+    await screen.findByTestId('calc-card-paycheck');
+    await userEvent.click(screen.getByTestId('paycheck-trigger'));
+    expect(screen.getByTestId('paycheck-trigger')).toHaveAttribute('aria-expanded', 'true');
+    await userEvent.click(screen.getByTestId('debt-payoff-trigger'));
+    expect(screen.getByTestId('debt-payoff-trigger')).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByTestId('paycheck-trigger')).toHaveAttribute('aria-expanded', 'false');
+    expect(document.querySelectorAll('[id^="panel-"]')).toHaveLength(1);
+  });
+
+  describe('hash deep-links (D10)', () => {
+    afterEach(() => { window.history.replaceState(null, '', '/'); });
+
+    it('#coast-fi on load opens the CoastFI card', async () => {
+      window.history.replaceState(null, '', '/calculators#coast-fi');
       primeBaseline();
       primeSettings();
-      usePersonsStore.setState({
-        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
-        isLoading: false,
-        error: null,
-      });
-
+      usePersonsStore.setState({ persons: [{ ...basePerson }], isLoading: false, error: null });
       render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
-      const trigger = await screen.findByRole('button', { name: /manage cards/i });
+      await screen.findByTestId('calc-card-coast-fi');
+      expect(screen.getByTestId('coast-fi-trigger')).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('a hidden-card hash is ignored silently', async () => {
+      window.history.replaceState(null, '', '/calculators#bonus-tax');
+      primeBaseline();
+      primeSettings([{ id: 'bonus-tax', hidden: true }]);
+      usePersonsStore.setState({ persons: [{ ...basePerson }], isLoading: false, error: null });
+      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+      await screen.findByTestId('calc-card-paycheck');
+      expect(document.querySelectorAll('[id^="panel-"]')).toHaveLength(0);
+    });
+
+    it('open/close mirrors into the fragment via replaceState', async () => {
+      window.history.replaceState(null, '', '/calculators');
+      primeBaseline();
+      primeSettings();
+      usePersonsStore.setState({ persons: [{ ...basePerson }], isLoading: false, error: null });
+      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+      await screen.findByTestId('calc-card-equity');
+      await userEvent.click(screen.getByTestId('equity-trigger'));
+      expect(window.location.hash).toBe('#equity');
+      await userEvent.click(screen.getByTestId('equity-trigger'));
+      expect(window.location.hash).toBe('');
+    });
+  });
+
+  describe('per-section Customize (replaces Manage cards — D11/D12)', () => {
+    it('lists the section cards in registry order and STAYS OPEN across toggles', async () => {
+      primeBaseline();
+      const update = primeSettings();
+      usePersonsStore.setState({ persons: [{ ...basePerson }], isLoading: false, error: null });
+      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+      await screen.findByTestId('calc-card-paycheck');
+      await userEvent.click(screen.getByRole('button', { name: /customize paycheck & tax/i }));
+      const dialog = screen.getByRole('dialog', { name: /customize paycheck & tax/i });
+      const switches = within(dialog).getAllByRole('switch');
+      expect(switches.map((s) => s.getAttribute('aria-label'))).toEqual([
+        'Paycheck', 'Bonus tax', 'Commission tax', 'Overtime', '401k withdrawal take-home',
+      ]);
+      await userEvent.click(within(dialog).getByRole('switch', { name: 'Bonus tax' }));
+      // Review fix: the popover does NOT close on toggle.
+      expect(screen.getByRole('dialog', { name: /customize paycheck & tax/i })).toBeInTheDocument();
+      const patch = update.mock.calls.at(-1)![0] as { calculatorCardLayout: { id: string; hidden: boolean }[] };
+      expect(patch.calculatorCardLayout.find((e) => e.id === 'bonus-tax')?.hidden).toBe(true);
+      expect(screen.queryByTestId('calc-card-bonus-tax')).not.toBeInTheDocument();
+    });
+
+    it('disables the Overtime row with a reason when no hourly/OT person exists (W10 survives)', async () => {
+      primeBaseline();
+      primeSettings();
+      usePersonsStore.setState({ persons: [{ ...basePerson }], isLoading: false, error: null });
+      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+      await screen.findByTestId('calc-card-paycheck');
+      await userEvent.click(screen.getByRole('button', { name: /customize paycheck & tax/i }));
+      const otSwitch = screen.getByRole('switch', { name: /overtime/i });
+      expect(otSwitch).toBeDisabled();
+      expect(screen.getByText(/add an hourly or salary\+ot person/i)).toBeInTheDocument();
+    });
+
+    it('Escape closes Customize and restores focus to its trigger', async () => {
+      primeBaseline();
+      primeSettings();
+      usePersonsStore.setState({ persons: [{ ...basePerson }], isLoading: false, error: null });
+      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+      const trigger = await screen.findByRole('button', { name: /customize next dollar/i });
       await userEvent.click(trigger);
-      expect(screen.getByRole('dialog', { name: /manage calculator cards/i })).toBeInTheDocument();
       await userEvent.keyboard('{Escape}');
-      expect(screen.queryByRole('dialog', { name: /manage calculator cards/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('dialog', { name: /customize next dollar/i })).not.toBeInTheDocument();
       expect(trigger).toHaveFocus();
     });
 
-    it('shows "1 card hidden" hint in the footer when one card is hidden', async () => {
+    it('a fully-hidden section keeps its header row and drops the grid (D11 — hide stays reversible)', async () => {
       primeBaseline();
-      primeSettings([{ id: 'bonus-tax', hidden: true }]);
-      usePersonsStore.setState({
-        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
-        isLoading: false,
-        error: null,
-      });
-
+      primeSettings([
+        { id: 'debt-payoff', hidden: true },
+        { id: 'equity', hidden: true },
+        { id: 'contribution-allocator', hidden: true },
+      ]);
+      usePersonsStore.setState({ persons: [{ ...basePerson }], isLoading: false, error: null });
       render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
-      expect(await screen.findByText(/1 card hidden/i)).toBeInTheDocument();
+      await screen.findByTestId('calc-card-paycheck');
+      expect(screen.getByRole('heading', { name: /next dollar/i, level: 2 })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /customize next dollar/i })).toBeInTheDocument();
+      expect(screen.queryByTestId('calc-card-debt-payoff')).not.toBeInTheDocument();
     });
   });
 
@@ -418,10 +473,11 @@ describe('CalculatorsLayout', () => {
 
     const bar = await screen.findByRole('region', { name: /your scenario/i });
     const intro = screen.getByText(/All calculators run on your current Inputs data/i);
-    const grid = document.querySelector('[class*="grid-auto-rows"]')!;
-    // intro precedes bar precedes grid in document order
+    // Wave 17: the masonry grid is gone — the bar sits above the FIRST section.
+    const firstSection = screen.getByRole('heading', { name: /paycheck & tax/i, level: 2 });
+    // intro precedes bar precedes the first section in document order
     expect(intro.compareDocumentPosition(bar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(bar.compareDocumentPosition(grid) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(bar.compareDocumentPosition(firstSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('intro copy describes edit/reset and links to What-If', async () => {
