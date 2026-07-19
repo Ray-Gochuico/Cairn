@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { ScenarioBar } from './ScenarioBar';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
@@ -25,6 +24,7 @@ import {
 import type { CardLayoutEntry } from '@/types/schema';
 import { CALCULATOR_CARDS, type CalculatorCardRegistration } from './calculator-registry';
 import { CalculatorShellProvider, type CalculatorShellApi } from './calculator-shell-context';
+import { InlineLink } from '@/components/calculators/InlineLink';
 
 const STALE_BANNER_STORAGE_KEY = 'stale-tax-year-banner-dismissed';
 
@@ -317,7 +317,7 @@ export default function CalculatorsLayout() {
         All calculators run on your current Inputs data. Edit any field on a card to explore a
         scenario; use <span className="font-medium">Reset to my data</span> to restore it. For
         side-by-side scenario comparisons, see the{' '}
-        <Link to="/what-if" className="text-primary hover:underline">What-If</Link> page.
+        <InlineLink to="/what-if">What-If</InlineLink> page.
       </p>
       {showBanner && !dismissed && (
         <div

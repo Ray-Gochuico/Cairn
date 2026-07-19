@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { CalculatorCard, EmptyMeaning } from './CalculatorCard';
 import { NumberField } from '@/components/calculators/NumberField';
 import { StatTile } from '@/components/calculators/StatTile';
@@ -13,6 +12,7 @@ import { valueHoldings } from '@/lib/holdings-value';
 import { allocateContribution } from '@/lib/contribution-allocator';
 import { classTargetVsActual } from '@/lib/allocation-hierarchy';
 import { formatCurrency } from '@/lib/format';
+import { InlineLink } from '@/components/calculators/InlineLink';
 
 interface Props {
   cardId?: string;
@@ -123,9 +123,9 @@ export function ContributionAllocatorCard({ cardId }: Props = {}) {
         !hasTargets ? (
           // UX H1: a REAL link to where targets are authored — not dead prose.
           <EmptyMeaning>
-            <Link to="/investments" className="text-primary hover:underline">
+            <InlineLink to="/investments">
               Set asset-class targets on the Investments page
-            </Link>{' '}
+            </InlineLink>{' '}
             to allocate a contribution toward them.
           </EmptyMeaning>
         ) : (

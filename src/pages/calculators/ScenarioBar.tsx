@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { NumberField } from '@/components/calculators/NumberField';
 import { useScenarioAssumptions } from '@/lib/calculators/use-scenario-assumptions';
 import type { ScenarioField } from '@/lib/calculators/scenario-assumptions';
@@ -7,6 +6,7 @@ import { useHouseholdTaxContext } from '@/lib/calculators/use-household-tax-cont
 import { useHouseholdStore } from '@/stores/household-store';
 import { formatCurrency } from '@/lib/format';
 import { prettifyCityCode } from '@/lib/jurisdiction-format';
+import { InlineLink } from '@/components/calculators/InlineLink';
 
 /**
  * Wave 16 "Basecamp spine": the shared scenario bar above the calculators
@@ -163,9 +163,9 @@ export function ScenarioBar() {
           <span className="text-xs text-muted-foreground" data-testid="scenario-chips">
             {household ? chips.join(' · ') : 'No household set up yet'}
           </span>
-          <Link to="/inputs" className="text-xs text-primary hover:underline">
+          <InlineLink to="/inputs" className="text-xs">
             Edit in Inputs
-          </Link>
+          </InlineLink>
         </div>
         {scenario.editedCount > 0 && (
           <div className="flex items-center gap-3 text-xs">

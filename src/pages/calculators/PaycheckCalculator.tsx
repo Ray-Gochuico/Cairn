@@ -33,6 +33,13 @@ import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import DonutChartCard, { type DonutSlice } from '@/components/charts/DonutChartCard';
 import PaycheckBreakdownRow from './PaycheckBreakdownRow';
@@ -44,6 +51,10 @@ import type { FilingStatus } from '@/types/enums';
 // (gross→federal→ss→medicare) binds the --paycheck-* stone ramp; the three
 // SEMANTIC rows (post-tax/extra/take-home) keep the status tokens they mean.
 // Fill-only discipline: none of these may color text.
+// Radix Select forbids value="" — the "no city" option carries this sentinel
+// and the handler maps it back to null (Wave 18 A5).
+const NO_CITY_VALUE = '__none__';
+
 const COLORS = {
   gross: 'hsl(var(--paycheck-gross))',
   federal: 'hsl(var(--paycheck-federal))',
@@ -452,20 +463,23 @@ export default function PaycheckCalculator() {
                 </div>
                 <div>
                   <Label htmlFor="payFrequency">Pay frequency</Label>
-                  <select
-                    id="payFrequency"
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                  <Select
                     value={f.payFrequency}
-                    onChange={(e) =>
-                      form.setValue('payFrequency', e.target.value as PaycheckPeriod, {
+                    onValueChange={(v) =>
+                      form.setValue('payFrequency', v as PaycheckPeriod, {
                         shouldDirty: true,
                       })
                     }
                   >
-                    {PAYCHECK_PERIODS.map((p) => (
-                      <option key={p.id} value={p.id}>{p.label}</option>
-                    ))}
-                  </select>
+                    <SelectTrigger id="payFrequency" aria-label="Pay frequency">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PAYCHECK_PERIODS.map((p) => (
+                        <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </section>
@@ -476,21 +490,24 @@ export default function PaycheckCalculator() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <Label htmlFor="filingStatus">Filing status</Label>
-                  <select
-                    id="filingStatus"
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                  <Select
                     value={f.filingStatus}
-                    onChange={(e) =>
-                      form.setValue('filingStatus', e.target.value as FilingStatus, {
+                    onValueChange={(v) =>
+                      form.setValue('filingStatus', v as FilingStatus, {
                         shouldDirty: true,
                       })
                     }
                   >
-                    <option value="SINGLE">Single</option>
-                    <option value="MFJ">Married filing jointly</option>
-                    <option value="MFS">Married filing separately</option>
-                    <option value="HOH">Head of household</option>
-                  </select>
+                    <SelectTrigger id="filingStatus" aria-label="Filing status">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="SINGLE">Single</SelectItem>
+                      <SelectItem value="MFJ">Married filing jointly</SelectItem>
+                      <SelectItem value="MFS">Married filing separately</SelectItem>
+                      <SelectItem value="HOH">Head of household</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <Label htmlFor="dependents">Dependents</Label>
@@ -524,29 +541,35 @@ export default function PaycheckCalculator() {
                 </div>
                 <div>
                   <Label htmlFor="city">City / locality (if applicable)</Label>
-                  <select
-                    id="city"
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm disabled:opacity-60"
-                    value={f.city ?? ''}
+                  {/* Radix Select forbids value="" on items — the no-city option
+                      uses the __none__ sentinel, mapped back to null in the
+                      handler (Wave 18 A5 shell swap; semantics unchanged). */}
+                  <Select
+                    value={f.city ?? NO_CITY_VALUE}
                     disabled={cityRules.length === 0}
-                    onChange={(e) =>
-                      form.setValue('city', e.target.value === '' ? null : e.target.value, {
+                    onValueChange={(v) =>
+                      form.setValue('city', v === NO_CITY_VALUE ? null : v, {
                         shouldDirty: true,
                       })
                     }
                   >
-                    <option value="">
-                      {/* PC-3 consistency: "— No localities listed —" describes the
-                          (non-exhaustive) seed for this state, not an absolute
-                          absence-of-local-tax claim. */}
-                      {cityRules.length === 0 ? '— No localities listed —' : '(No local tax)'}
-                    </option>
-                    {cityRules.map((r) => (
-                      <option key={r.jurisdictionCode} value={r.jurisdictionCode}>
-                        {prettifyCityCode(r.jurisdictionCode)}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger id="city" aria-label="City / locality (if applicable)">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_CITY_VALUE}>
+                        {/* PC-3 consistency: "— No localities listed —" describes the
+                            (non-exhaustive) seed for this state, not an absolute
+                            absence-of-local-tax claim. */}
+                        {cityRules.length === 0 ? '— No localities listed —' : '(No local tax)'}
+                      </SelectItem>
+                      {cityRules.map((r) => (
+                        <SelectItem key={r.jurisdictionCode} value={r.jurisdictionCode}>
+                          {prettifyCityCode(r.jurisdictionCode)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </section>

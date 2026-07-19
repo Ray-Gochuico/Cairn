@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
@@ -35,6 +34,7 @@ import {
 } from '@/lib/paycheck-periods';
 import { FilingStatus } from '@/types/enums';
 import type { Person } from '@/types/schema';
+import { InlineLink } from '@/components/calculators/InlineLink';
 
 type OvertimeRecurrence = 'REPEATS' | 'ONE_OFF';
 
@@ -160,9 +160,9 @@ export function OvertimeCard({ cardId }: OvertimeCardProps = {}) {
         meaning={
           <EmptyMeaning>
             No eligible person —{' '}
-            <Link to="/inputs/persons" className="text-primary hover:underline">
+            <InlineLink to="/inputs/persons">
               set Employment type to Hourly or Salaried with overtime
-            </Link>{' '}
+            </InlineLink>{' '}
             to enable this card.
           </EmptyMeaning>
         }
@@ -297,9 +297,9 @@ export function OvertimeCard({ cardId }: OvertimeCardProps = {}) {
               'Enter overtime hours to see the take-home breakdown.'
             ) : (
               <>
-                <Link to="/inputs/household" className="text-primary hover:underline">
+                <InlineLink to="/inputs/household">
                   Set up your household profile
-                </Link>{' '}
+                </InlineLink>{' '}
                 + tax rules to see overtime tax.
               </>
             )}

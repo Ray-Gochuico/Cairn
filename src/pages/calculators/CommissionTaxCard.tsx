@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { CalculatorCard, EmptyMeaning, RailReset, RailViewGroup } from './CalculatorCard';
@@ -20,6 +19,7 @@ import {
   SelectContent,
   SelectItem,
 } from '@/components/ui/select';
+import { InlineLink } from '@/components/calculators/InlineLink';
 
 type CommissionFrequency = 'MONTHLY' | 'QUARTERLY';
 
@@ -145,9 +145,9 @@ export function CommissionTaxCard({ cardId }: CommissionTaxCardProps = {}) {
         rail={rail}
         meaning={
           <EmptyMeaning>
-            <Link to="/inputs/household" className="text-primary hover:underline">
+            <InlineLink to="/inputs/household">
               Set up your household profile
-            </Link>{' '}
+            </InlineLink>{' '}
             + tax rules to see commission tax.
           </EmptyMeaning>
         }

@@ -184,7 +184,9 @@ describe('PaycheckCard', () => {
       </MemoryRouter>,
     );
 
-    await user.selectOptions(screen.getByLabelText(/Period:/i), 'BI_WEEKLY');
+    // Wave-18 A5: the period select is a Radix combobox now.
+    await user.click(screen.getByRole('combobox', { name: /period/i }));
+    await user.click(await screen.findByRole('option', { name: /^bi-weekly$/i }));
     const headline = screen.getByTestId('paycheck-takehome');
     const value = parseFloat(headline.textContent!.replace(/[$,]/g, ''));
     // T21: exact — same annual take-home spread over 26 pay periods.
@@ -303,7 +305,8 @@ describe('PaycheckCard', () => {
     render(<MemoryRouter><PaycheckCard /></MemoryRouter>);
     await screen.findByTestId('paycheck-takehome');
     // Annual period so the FICA row shows the yearly figure verbatim.
-    await user.selectOptions(screen.getByLabelText(/Period:/i), 'ANNUAL');
+    await user.click(screen.getByRole('combobox', { name: /period/i }));
+    await user.click(await screen.findByRole('option', { name: /^annual$/i }));
     expect(screen.getByText('$23,400')).toBeInTheDocument();
     expect(screen.queryByText('$16,239')).not.toBeInTheDocument();
   });
@@ -350,7 +353,8 @@ describe('PaycheckCard', () => {
     render(<MemoryRouter><PaycheckCard /></MemoryRouter>);
     await screen.findByTestId('paycheck-takehome');
     // Annual period so the pretax rows show the yearly caps verbatim.
-    await user.selectOptions(screen.getByLabelText(/Period:/i), 'ANNUAL');
+    await user.click(screen.getByRole('combobox', { name: /period/i }));
+    await user.click(await screen.findByRole('option', { name: /^annual$/i }));
     expect(screen.getByText('$7,500')).toBeInTheDocument();
     expect(screen.getByText('$8,750')).toBeInTheDocument();
     expect(screen.queryByText('$9,600')).not.toBeInTheDocument();
@@ -454,6 +458,79 @@ describe('PaycheckCard', () => {
     render(<MemoryRouter><PaycheckCard /></MemoryRouter>);
     await screen.findByTestId('paycheck-takehome');
     expect(screen.getByText(/annualized estimate, not payroll withholding/i)).toBeInTheDocument();
+  });
+});
+
+describe('PaycheckCard Combined | per-person view (Wave 18 D16)', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    resetStores();
+  });
+
+  it('single-person household renders no earner picker', async () => {
+    primeStores();
+    render(<MemoryRouter><PaycheckCard cardId="paycheck" /></MemoryRouter>);
+    await screen.findByTestId('paycheck-takehome');
+    expect(screen.queryByRole('group', { name: /paycheck view/i })).not.toBeInTheDocument();
+  });
+
+  it('two-person household renders Combined + one segment per person, Combined default', async () => {
+    primeStoresTwoEarners();
+    render(<MemoryRouter><PaycheckCard cardId="paycheck" /></MemoryRouter>);
+    await screen.findByTestId('paycheck-takehome');
+    const group = screen.getByRole('group', { name: /paycheck view/i });
+    expect(group).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Combined' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'Alice' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: 'Bob' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it("per-person view shows the person's own gross and the engine's marginal per-earner FICA", async () => {
+    // Dual $150k MFJ, no pretax. Bob's marginal FICA (with/without his salary,
+    // per-earner wage bases): SS 150k × 6.2% = $9,300 + Medicare 150k × 1.45%
+    // = $2,175 + Additional Medicare (300k − 250k) × 0.9% = $450 → $11,925/yr.
+    const user = userEvent.setup();
+    primeStoresTwoEarners();
+    render(<MemoryRouter><PaycheckCard cardId="paycheck" /></MemoryRouter>);
+    await screen.findByTestId('paycheck-takehome');
+    await user.click(screen.getByRole('combobox', { name: /period/i }));
+    await user.click(await screen.findByRole('option', { name: /^annual$/i }));
+    await user.click(screen.getByRole('button', { name: 'Bob' }));
+
+    // Bob's own gross (not the household's $300k).
+    expect(screen.getByText('$150,000')).toBeInTheDocument();
+    // The engine's marginal per-earner FICA figure.
+    expect(screen.getByText('$11,925')).toBeInTheDocument();
+    // The D16 estimate label.
+    expect(
+      screen.getByText(/marginal share attributed to Bob's pay/i),
+    ).toBeInTheDocument();
+  });
+
+  it('headline stays the Combined take-home in the per-person view', async () => {
+    const user = userEvent.setup();
+    primeStoresTwoEarners();
+    render(<MemoryRouter><PaycheckCard cardId="paycheck" /></MemoryRouter>);
+    const headline = await screen.findByTestId('paycheck-takehome');
+    const combined = headline.textContent;
+    await user.click(screen.getByRole('button', { name: 'Bob' }));
+    expect(screen.getByTestId('paycheck-takehome').textContent).toBe(combined);
+  });
+
+  it('Combined view stays byte-identical after switching away and back', async () => {
+    const user = userEvent.setup();
+    primeStoresTwoEarners();
+    render(<MemoryRouter><PaycheckCard cardId="paycheck" /></MemoryRouter>);
+    await screen.findByTestId('paycheck-takehome');
+    const combinedFica = screen.getByText('$1,950'); // 23,400 / 12 monthly
+    expect(combinedFica).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Bob' }));
+    await user.click(screen.getByRole('button', { name: 'Combined' }));
+    expect(screen.getByText('$1,950')).toBeInTheDocument();
+    expect(screen.queryByText(/marginal share attributed/i)).not.toBeInTheDocument();
   });
 });
 

@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { pickModerateEntry } from '@/lib/growth-scenario';
@@ -13,6 +12,7 @@ import { RealNominalToggle } from '@/components/calculators/RealNominalToggle';
 import { useChartDisplayMode } from '@/lib/calculators/use-chart-display-mode';
 import { fiChartSeries } from '@/lib/calculators/fi-chart-series';
 import { useScenarioAssumptions } from '@/lib/calculators/use-scenario-assumptions';
+import { InlineLink } from '@/components/calculators/InlineLink';
 
 interface FinancialIndependenceCardProps {
   cardId?: string;
@@ -128,24 +128,24 @@ export function FinancialIndependenceCard({
           <EmptyMeaning>
             {!household ? (
               <>
-                <Link to="/inputs/household" className="text-primary hover:underline">
+                <InlineLink to="/inputs/household">
                   Set up your household
-                </Link>{' '}
+                </InlineLink>{' '}
                 to see Years to FI.
               </>
             ) : persons.length === 0 ? (
               <>
-                <Link to="/inputs/persons" className="text-primary hover:underline">
+                <InlineLink to="/inputs/persons">
                   Add a person
-                </Link>{' '}
+                </InlineLink>{' '}
                 to see Years to FI.
               </>
             ) : scenarioList.length === 0 ? (
               <>
                 Your household has no growth scenarios —{' '}
-                <Link to="/inputs/household" className="text-primary hover:underline">
+                <InlineLink to="/inputs/household">
                   add growth scenarios in Household settings
-                </Link>{' '}
+                </InlineLink>{' '}
                 to see Years to FI.
               </>
             ) : (

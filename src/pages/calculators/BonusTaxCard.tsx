@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { CalculatorCard, EmptyMeaning, RailReset, RailViewGroup } from './CalculatorCard';
@@ -21,6 +20,7 @@ import {
   SelectItem,
 } from '@/components/ui/select';
 import type { BonusFrequency } from '@/types/schema';
+import { InlineLink } from '@/components/calculators/InlineLink';
 
 interface BonusTaxCardProps {
   cardId?: string;
@@ -132,9 +132,9 @@ export function BonusTaxCard({ cardId }: BonusTaxCardProps = {}) {
         rail={rail}
         meaning={
           <EmptyMeaning>
-            <Link to="/inputs/household" className="text-primary hover:underline">
+            <InlineLink to="/inputs/household">
               Set up your household profile
-            </Link>{' '}
+            </InlineLink>{' '}
             + tax rules to see bonus tax.
           </EmptyMeaning>
         }

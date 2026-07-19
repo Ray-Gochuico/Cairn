@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
 import { useEquityGrantsStore } from '@/stores/equity-grants-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { CalculatorCard, EmptyMeaning } from './CalculatorCard';
@@ -11,6 +10,7 @@ import { ResultRow } from '@/components/calculators/ResultRow';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import type { GrantType } from '@/types/enums';
 import LineChartCard from '@/components/charts/LineChartCard';
+import { InlineLink } from '@/components/calculators/InlineLink';
 
 interface EquityValueCardProps {
   cardId?: string;
@@ -111,9 +111,9 @@ export function EquityValueCard({ cardId }: EquityValueCardProps = {}) {
           // W14b moved equity grants out of Inputs — /inputs/equity-grants is
           // only a redirect stub now; link the canonical home directly.
           <EmptyMeaning>
-            <Link to="/equity-grants" className="text-primary hover:underline">
+            <InlineLink to="/equity-grants">
               Add equity grants
-            </Link>{' '}
+            </InlineLink>{' '}
             to see vested value across your household.
           </EmptyMeaning>
         }
@@ -219,12 +219,12 @@ export function EquityValueCard({ cardId }: EquityValueCardProps = {}) {
         </tbody>
       </table>
       <div className="pt-3">
-        <Link
+        <InlineLink
           to="/equity-grants"
-          className="text-sm text-primary underline underline-offset-4 hover:text-primary/80"
+          className="text-sm"
         >
           View all →
-        </Link>
+        </InlineLink>
       </div>
       {chartData.length > 1 && (
         <LineChartCard

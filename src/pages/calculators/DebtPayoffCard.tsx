@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
 import { useLoansStore } from '@/stores/loans-store';
 import { useLocalToday } from '@/lib/use-local-today';
 import { amortize, nextPaymentDateFrom, scheduleIsCapped } from '@/lib/amortization';
@@ -22,6 +21,7 @@ import {
   type Strategy,
   type LoanProjection,
 } from '@/lib/debt-payoff';
+import { InlineLink } from '@/components/calculators/InlineLink';
 
 /**
  * Format an ISO YYYY-MM-DD payoff date as a friendly "Mon YYYY" string
@@ -96,9 +96,9 @@ export function DebtPayoffCard({ cardId }: DebtPayoffCardProps = {}) {
           // Wave 15 T10: the CTA itself is the link. W14b: it deep-links the
           // loan's post-Inputs home (/loans, "one place per thing").
           <EmptyMeaning>
-            <Link to="/loans" className="text-primary hover:underline">
+            <InlineLink to="/loans">
               Add loans
-            </Link>{' '}
+            </InlineLink>{' '}
             on the Loans page to see payoff projections.
           </EmptyMeaning>
         }

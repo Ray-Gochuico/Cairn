@@ -1,5 +1,5 @@
-import { Link } from 'react-router-dom';
 import { CalculatorCard } from './CalculatorCard';
+import { InlineLink } from '@/components/calculators/InlineLink';
 
 interface BacktestCardProps {
   cardId?: string;
@@ -19,13 +19,13 @@ export function BacktestCard({ cardId }: BacktestCardProps = {}) {
         allocation to see how past conditions would have affected your outcomes.
       </p>
       <div className="mt-2">
-        <Link
+        <InlineLink
           to="/calculators/backtest"
           aria-label="Open the Historical Backtest tool"
-          className="text-sm text-primary underline underline-offset-4 hover:text-primary/80"
+          className="text-sm"
         >
           Open the Backtest tool →
-        </Link>
+        </InlineLink>
       </div>
     </CalculatorCard>
   );

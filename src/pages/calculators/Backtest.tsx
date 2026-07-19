@@ -16,6 +16,7 @@ import { BelowGoalList } from '@/components/backtest/BelowGoalList';
 import { OutcomeSummary } from '@/components/backtest/OutcomeSummary';
 import { OutcomeHistogram } from '@/components/backtest/OutcomeHistogram';
 import { BacktestDisclosureCallout } from '@/components/backtest/BacktestDisclosureCallout';
+import { InlineLink } from '@/components/calculators/InlineLink';
 
 export default function Backtest() {
   const gate = useDisclosureGate('backtest');
@@ -171,12 +172,10 @@ export default function Backtest() {
           Replays your plan against every U.S. market starting year from 1871 onward.
           Survival counts are before withdrawal tax — not a tax-inclusive guarantee.
           For side-by-side scenario comparison, see{' '}
-          <Link
-            to="/what-if"
-            className="text-primary underline underline-offset-4 hover:text-primary/80"
-          >
+          <InlineLink
+ to="/what-if">
             What-If →
-          </Link>
+          </InlineLink>
         </p>
       </div>
 
