@@ -56,4 +56,35 @@ describe('motion-safe policy', () => {
       ].join('\n'),
     ).toEqual([]);
   });
+
+  // Wave-17 smoke: an UN-prefixed arbitrary [animation-duration:...] beside a
+  // motion-safe:animate-* engine loses the cascade — the variant form of
+  // animate-in carries its own duration and wins, so the typed duration is
+  // silently dead (the 180ms fade actually ran 150ms). Every arbitrary
+  // animation-duration token must ride the same motion-safe: variant chain.
+  it('every [animation-duration:...] token in src/ carries a motion-safe: gate', async () => {
+    const violations: string[] = [];
+    for (const file of await collectSourceFiles(SRC_DIR)) {
+      const lines = (await readFile(file, 'utf8')).split('\n');
+      lines.forEach((line, i) => {
+        if (line.includes(ALLOW_MARKER)) return;
+        for (const token of line.split(/[\s"'`,{}]+/)) {
+          if (token.includes('[animation-duration:') && !token.includes('motion-safe:')) {
+            const rel = path.relative(path.resolve(__dirname, '..', '..'), file);
+            violations.push(`  ${rel}:${i + 1}  ${token}`);
+          }
+        }
+      });
+    }
+    expect(
+      violations,
+      [
+        '',
+        'Un-prefixed typed animation-duration found — the motion-safe animate engine',
+        'overrides it (dead 180ms). Use `motion-safe:[animation-duration:...]`:',
+        ...violations,
+        '',
+      ].join('\n'),
+    ).toEqual([]);
+  });
 });
