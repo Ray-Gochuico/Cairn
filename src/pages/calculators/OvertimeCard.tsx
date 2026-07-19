@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { useHouseholdStore } from '@/stores/household-store';
-import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { CalculatorCard, EmptyMeaning, RailReset, RailViewGroup } from './CalculatorCard';
 import { OvertimeRowEditor, type OvertimeRow } from './OvertimeRowEditor';
@@ -71,9 +70,11 @@ interface OvertimeCardProps {
 
 export function OvertimeCard({ cardId }: OvertimeCardProps = {}) {
   const { household } = useHouseholdStore();
-  const persons = usePersonsStore((s) => s.persons);
   const dependents = useDependentsStore((s) => s.dependents);
   const tax = useHouseholdTaxContext();
+  // D7 (Wave 18): EFFECTIVE persons — bar salary overrides drive
+  // deriveBaseRate, the salary patch, and recipientIndex.
+  const persons = tax.persons;
 
   // Wave 18 B7: with 2+ eligible persons an EarnerSelect picks whose OT this
   // is — the selection drives deriveBaseRate, the salary patch, and
@@ -351,7 +352,7 @@ export function OvertimeCard({ cardId }: OvertimeCardProps = {}) {
     <CalculatorCard
       title="Overtime"
       cardId={cardId}
-      dirty={isOverridden}
+      dirty={isOverridden || tax.salaryOverridden}
       meaning={<>Take-home on {formatCurrency(totalGross)} of overtime gross.</>}
       rail={rail}
       headline={

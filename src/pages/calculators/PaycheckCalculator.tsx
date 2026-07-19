@@ -5,7 +5,6 @@ import { z } from 'zod';
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react'; // shared back-nav icon (W2/BT-6)
 import { useHouseholdStore } from '@/stores/household-store';
-import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { computePretaxDeductions } from '@/lib/tax';
@@ -139,7 +138,6 @@ const FORM_FALLBACK: FormValues = {
 
 export default function PaycheckCalculator() {
   const { household } = useHouseholdStore();
-  const { persons } = usePersonsStore();
   const { dependents } = useDependentsStore();
   const taxItems = useTaxRulesStore((s) => s.items);
 
@@ -151,6 +149,9 @@ export default function PaycheckCalculator() {
   // jurisdiction is the FORM's, not the household's (contract §3). `taxItems` is
   // still read directly below for the city-cascade filter.
   const tax = useHouseholdTaxContext();
+  // D7 (Wave 18): EFFECTIVE persons — the bar's salary overrides seed the
+  // form's gross/401(k) prefills; the persons store is never written.
+  const persons = tax.persons;
   const resolvedYear = tax.resolvedYear;
 
   // ---- form values seeded from the household/persons profile ----

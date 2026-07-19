@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useHouseholdStore } from '@/stores/household-store';
-import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { CalculatorCard, EmptyMeaning, RailViewGroup } from './CalculatorCard';
 import { computePaycheck, FEDERAL_LIABILITY_CAVEAT } from '@/lib/calculators/paycheck';
+import { useHouseholdTaxContext } from '@/lib/calculators/use-household-tax-context';
 import { aggregateHouseholdPretax } from '@/lib/calculators/supplemental-wage';
 import { computeBonusTax } from '@/lib/tax';
 import { formatCurrency } from '@/lib/format';
@@ -32,7 +32,10 @@ interface PaycheckCardProps {
 
 export function PaycheckCard({ cardId }: PaycheckCardProps = {}) {
   const { household } = useHouseholdStore();
-  const persons = usePersonsStore((s) => s.persons);
+  // D7 (Wave 18): EFFECTIVE persons — the bar's salary overrides ripple
+  // through useHouseholdTaxContext (a mapped copy; the persons store is
+  // never written). Every salary-bearing figure below reads these.
+  const { persons, salaryOverridden } = useHouseholdTaxContext();
   const dependents = useDependentsStore((s) => s.dependents);
   const taxItems = useTaxRulesStore((s) => s.items);
   const [period, setPeriod] = useState<PaycheckPeriod>('MONTHLY');
@@ -213,6 +216,7 @@ export function PaycheckCard({ cardId }: PaycheckCardProps = {}) {
     <CalculatorCard
       title="Paycheck (estimated take-home)"
       cardId={cardId}
+      dirty={salaryOverridden}
       meaning={<>After taxes and pretax deductions on {formatCurrency(perPeriod.gross)} gross.</>}
       rail={
         <RailViewGroup>

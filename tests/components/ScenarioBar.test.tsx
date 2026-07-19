@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { ScenarioBar } from '@/pages/calculators/ScenarioBar';
 import { __resetScenarioAssumptionsForTests } from '@/lib/calculators/use-scenario-assumptions';
 import { SCENARIO_STORAGE_KEY } from '@/lib/calculators/scenario-assumptions';
@@ -221,5 +221,103 @@ describe('ScenarioBar', () => {
     expect(
       screen.getByText('Edits here are a temporary scenario. Nothing is saved to your data.'),
     ).toBeInTheDocument();
+  });
+});
+
+describe('ScenarioBar — editable salary + Send to What-If (Wave 18 D14)', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    __resetScenarioAssumptionsForTests();
+    resetStores();
+    primeBaseline();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-05-14T12:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('renders an editable Salary row (single earner) committing scenario-layer ONLY', async () => {
+    const user = userEvent.setup();
+    renderBar();
+    const salary = screen.getByLabelText('Salary') as HTMLInputElement;
+    expect(Number(salary.value)).toBe(100000);
+    await user.clear(salary);
+    await user.type(salary, '150000');
+    await screen.findByRole('button', { name: 'Reset Salary to your data' });
+    expect(screen.getByTestId('scenario-edited-count')).toHaveTextContent('Edited (1)');
+    expect(JSON.parse(sessionStorage.getItem('calc-scenario:salaries')!)).toEqual({ '1': 150000 });
+    // Constraint 5: the persons store is NEVER written.
+    expect(usePersonsStore.getState().persons[0].annualSalaryPretax).toBe(100000);
+    // The identity chip reflects the effective salary.
+    expect(screen.getByTestId('scenario-chips').textContent).toContain('$150,000 salary');
+  });
+
+  it('two earners → per-person salary rows labeled by name', () => {
+    usePersonsStore.setState({
+      persons: [
+        basePerson,
+        { ...basePerson, id: 2, name: 'Blair', annualSalaryPretax: 80000 },
+      ],
+      isLoading: false,
+      error: null,
+    } as never);
+    renderBar();
+    expect(
+      (screen.getByLabelText("Alex's salary") as HTMLInputElement).value,
+    ).toBe('100000');
+    expect(
+      (screen.getByLabelText("Blair's salary") as HTMLInputElement).value,
+    ).toBe('80000');
+  });
+
+  it('Send to What-If: disabled untouched; enabled after an edit; creates the mapped scenario and navigates', async () => {
+    const user = userEvent.setup();
+    const { useScenariosStore } = await import('@/stores/scenarios-store');
+    const create = vi.fn(async () => 42);
+    useScenariosStore.setState({ scenarios: [], create } as never);
+
+    render(
+      <MemoryRouter initialEntries={['/calculators']}>
+        <Routes>
+          <Route path="/calculators" element={<ScenarioBar />} />
+          <Route path="/what-if" element={<div data-testid="whatif-page" />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('button', { name: /send to what-if/i })).toBeDisabled();
+
+    const salary = screen.getByLabelText('Salary');
+    await user.clear(salary);
+    await user.type(salary, '150000');
+    const send = screen.getByRole('button', { name: /send to what-if/i });
+    // The salary commit trails the 150ms debounce — wait for it to land.
+    await waitFor(() => expect(send).toBeEnabled());
+    await user.click(send);
+
+    const { leverPayloadFromScenarioBar } = await import('@/lib/whatif/from-scenario-bar');
+    expect(create).toHaveBeenCalledTimes(1);
+    const arg = create.mock.calls[0][0] as Record<string, unknown>;
+    expect(arg.isBaseline).toBe(false);
+    expect(arg.visible).toBe(true);
+    expect(arg.isActive).toBe(false);
+    expect(arg.name).toMatch(/^From calculators — /);
+    expect(arg.leverPayload).toEqual(
+      leverPayloadFromScenarioBar(
+        {
+          portfolio: null,
+          realPortfolio: 0,
+          monthlyContribution: null,
+          monthlyExpenses: null,
+          swr: null,
+          inflation: null,
+          salaryByPersonIndex: [150000],
+        },
+        '2026-05-14',
+      ),
+    );
+    expect(await screen.findByTestId('whatif-page')).toBeInTheDocument();
   });
 });

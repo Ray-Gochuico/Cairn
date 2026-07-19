@@ -106,6 +106,26 @@ describe('Retirement401kWithdrawalCard', () => {
     expect(Number(w2.value)).toBe(120_000);
   });
 
+  it('D7 (Wave 18): a bar salary override moves the W-2 prefill; store untouched', async () => {
+    const { __resetScenarioAssumptionsForTests } = await import(
+      '@/lib/calculators/use-scenario-assumptions'
+    );
+    primeStores(); // Alice $120k
+    sessionStorage.setItem('calc-scenario:salaries', JSON.stringify({ 1: 80000 }));
+    __resetScenarioAssumptionsForTests();
+    render(
+      <MemoryRouter>
+        <Retirement401kWithdrawalCard />
+      </MemoryRouter>,
+    );
+    const w2 = screen.getByLabelText(/annual w-2 income/i) as HTMLInputElement;
+    expect(Number(w2.value)).toBe(80000);
+    expect(usePersonsStore.getState().persons[0].annualSalaryPretax).toBe(120_000);
+    // Clean the module-level salary cache for later tests.
+    sessionStorage.removeItem('calc-scenario:salaries');
+    __resetScenarioAssumptionsForTests();
+  });
+
   it('single-person household renders no earner picker (Wave 18 A5)', () => {
     primeStores();
     render(

@@ -158,6 +158,28 @@ describe('OvertimeCard', () => {
     expect(Number((screen.getByLabelText(/base hourly rate/i) as HTMLInputElement).value)).toBe(50);
   });
 
+  it('D7 (Wave 18): a bar salary override moves a SALARY_WITH_OT earner\'s derived base rate; store untouched', async () => {
+    const { __resetScenarioAssumptionsForTests } = await import(
+      '@/lib/calculators/use-scenario-assumptions'
+    );
+    sessionStorage.clear();
+    // $104k salary at 40h → implied base rate $50/hr; the override doubles it.
+    primeStores({
+      employmentType: 'SALARY_WITH_OT',
+      hourlyRate: null,
+      annualSalaryPretax: 104000,
+    });
+    sessionStorage.setItem('calc-scenario:salaries', JSON.stringify({ 1: 208000 }));
+    __resetScenarioAssumptionsForTests();
+    render(<MemoryRouter><OvertimeCard /></MemoryRouter>);
+    const rate = (await screen.findByLabelText(/base hourly rate/i)) as HTMLInputElement;
+    expect(Number(rate.value)).toBe(100);
+    expect(usePersonsStore.getState().persons[0].annualSalaryPretax).toBe(104000);
+    // Clean the module-level salary cache for later tests.
+    sessionStorage.removeItem('calc-scenario:salaries');
+    __resetScenarioAssumptionsForTests();
+  });
+
   it('single eligible person renders no earner picker (Wave 18 B7)', async () => {
     primeStores();
     render(<MemoryRouter><OvertimeCard /></MemoryRouter>);

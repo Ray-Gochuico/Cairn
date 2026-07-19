@@ -907,6 +907,37 @@ describe('SupplementalPayCard — Commission segment', () => {
   });
 });
 
+describe('SupplementalPayCard — D7 salary ripple (Wave 18)', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    resetStores();
+  });
+
+  it('a bar salary override moves the bonus marginal stack; the persons store is untouched', async () => {
+    const { __resetScenarioAssumptionsForTests } = await import(
+      '@/lib/calculators/use-scenario-assumptions'
+    );
+    primeStores();
+    __resetScenarioAssumptionsForTests();
+    const first = renderCard();
+    fireEvent.change(screen.getByLabelText(/Bonus amount/i), { target: { value: '10000' } });
+    const baseline = (await screen.findByTestId('supplemental-headline')).textContent;
+    first.unmount();
+
+    // Salary override pushes the base into a higher bracket → different
+    // marginal tax on the same $10k bonus.
+    sessionStorage.setItem('calc-scenario:salaries', JSON.stringify({ 1: 250000 }));
+    __resetScenarioAssumptionsForTests();
+    renderCard();
+    const overridden = (await screen.findByTestId('supplemental-headline')).textContent;
+    expect(overridden).not.toBe(baseline);
+    expect(usePersonsStore.getState().persons[0].annualSalaryPretax).toBe(100000);
+    // Clean the module-level salary cache for later tests.
+    sessionStorage.removeItem('calc-scenario:salaries');
+    __resetScenarioAssumptionsForTests();
+  });
+});
+
 describe('SupplementalPayCard waymark meaning (Wave 17)', () => {
   beforeEach(() => {
     sessionStorage.clear();

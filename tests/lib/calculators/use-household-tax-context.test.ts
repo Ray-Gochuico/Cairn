@@ -65,3 +65,36 @@ describe('useHouseholdTaxContext', () => {
     expect(result.current.aggregatedPretax.pretax401k).toBe(0);
   });
 });
+
+describe('D7 salary ripple (Wave 18)', () => {
+  it('exposes EFFECTIVE persons with scenario salary overrides mapped in; the persons store is untouched', async () => {
+    const { useScenarioAssumptions, __resetScenarioAssumptionsForTests } = await import(
+      '@/lib/calculators/use-scenario-assumptions'
+    );
+    const { act } = await import('@testing-library/react');
+    sessionStorage.clear();
+    __resetScenarioAssumptionsForTests();
+    prime(2026);
+
+    const { result } = renderHook(() => ({
+      tax: useHouseholdTaxContext(),
+      scenario: useScenarioAssumptions(),
+    }));
+    expect(result.current.tax.persons[0].annualSalaryPretax).toBe(100000);
+    expect(result.current.tax.salaryOverridden).toBe(false);
+    expect(result.current.tax.totalSalary).toBe(100000);
+
+    act(() => result.current.scenario.setSalary(1, 150000));
+
+    // The ripple: effective persons + the aggregate follow the override…
+    expect(result.current.tax.persons[0].annualSalaryPretax).toBe(150000);
+    expect(result.current.tax.totalSalary).toBe(150000);
+    expect(result.current.tax.salaryOverridden).toBe(true);
+    // …and the persons STORE is never written (owner constraint 5).
+    expect(usePersonsStore.getState().persons[0].annualSalaryPretax).toBe(100000);
+
+    act(() => result.current.scenario.resetAll());
+    expect(result.current.tax.totalSalary).toBe(100000);
+    expect(result.current.tax.salaryOverridden).toBe(false);
+  });
+});

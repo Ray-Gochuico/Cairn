@@ -1,5 +1,4 @@
 import { useCallback, useMemo, useState } from 'react';
-import { usePersonsStore } from '@/stores/persons-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { CalculatorCard, EmptyMeaning, RailReset, RailViewGroup } from './CalculatorCard';
 import {
@@ -82,8 +81,10 @@ interface SupplementalPayCardProps {
  */
 export function SupplementalPayCard({ cardId }: SupplementalPayCardProps = {}) {
   const { household } = useHouseholdStore();
-  const persons = usePersonsStore((s) => s.persons);
   const tax = useHouseholdTaxContext();
+  // D7 (Wave 18): EFFECTIVE persons — bar salary overrides ride through the
+  // context; the persons store is never read for salary-bearing math here.
+  const persons = tax.persons;
   const [type, setType] = useSupplementalType();
   const noun = type === 'BONUS' ? 'bonus' : 'commission';
 
@@ -345,7 +346,7 @@ export function SupplementalPayCard({ cardId }: SupplementalPayCardProps = {}) {
     <CalculatorCard
       title="Supplemental pay"
       cardId={cardId}
-      dirty={active.isOverridden}
+      dirty={active.isOverridden || tax.salaryOverridden}
       meaning={
         <>
           After an estimated {formatCurrency(rows.total / periods)} tax on a{' '}

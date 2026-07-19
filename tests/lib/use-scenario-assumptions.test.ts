@@ -106,3 +106,38 @@ describe('useScenarioAssumptions', () => {
     expect(result.current.editedCount).toBe(1);
   });
 });
+
+describe('salary overrides (Wave 18 D7 layer)', () => {
+  it('setSalary persists under calc-scenario:salaries and joins the edited semantics', () => {
+    const { result } = renderHook(() => useScenarioAssumptions());
+    expect(result.current.salaryByPersonId).toEqual({});
+    act(() => result.current.setSalary(1, 120_000));
+    expect(result.current.salaryByPersonId).toEqual({ 1: 120_000 });
+    expect(result.current.editedCount).toBe(1);
+    expect(JSON.parse(sessionStorage.getItem('calc-scenario:salaries')!)).toEqual({ '1': 120_000 });
+  });
+
+  it('setSalary(id, null) clears one person; resetAll clears salaries too', () => {
+    const { result } = renderHook(() => useScenarioAssumptions());
+    act(() => {
+      result.current.setSalary(1, 120_000);
+      result.current.setSalary(2, 90_000);
+    });
+    expect(result.current.editedCount).toBe(2);
+    act(() => result.current.setSalary(1, null));
+    expect(result.current.salaryByPersonId).toEqual({ 2: 90_000 });
+    act(() => result.current.resetAll());
+    expect(result.current.salaryByPersonId).toEqual({});
+    expect(result.current.editedCount).toBe(0);
+    expect(sessionStorage.getItem('calc-scenario:salaries')).toBeNull();
+  });
+
+  it('two hook instances share the salary state live', () => {
+    const { result } = renderHook(() => ({
+      bar: useScenarioAssumptions(),
+      card: useScenarioAssumptions(),
+    }));
+    act(() => result.current.bar.setSalary(1, 111_000));
+    expect(result.current.card.salaryByPersonId).toEqual({ 1: 111_000 });
+  });
+});

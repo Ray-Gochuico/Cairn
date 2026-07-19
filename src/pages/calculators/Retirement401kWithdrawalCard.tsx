@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
 import { useHouseholdStore } from '@/stores/household-store';
-import { usePersonsStore } from '@/stores/persons-store';
 import { CalculatorCard, EmptyMeaning, RailReset } from './CalculatorCard';
 import { calculate401kWithdrawalTax } from '@/lib/tax';
 import { useHouseholdTaxContext } from '@/lib/calculators/use-household-tax-context';
@@ -33,12 +32,13 @@ export function Retirement401kWithdrawalCard({
   cardId,
 }: Retirement401kWithdrawalCardProps = {}) {
   const { household } = useHouseholdStore();
-  const { persons } = usePersonsStore();
   // Shared W-2 tax scaffolding (resolved year + jurisdiction lookups + the
   // one-time loadAvailableYears bootstrap). Replaces the card's former
   // hand-rolled seededYears/getCurrentTaxYear/loadAvailableYears effect + local
   // lookup — same resolution logic, single source of truth.
-  const { lookup, resolvedYear, federal, state, city } = useHouseholdTaxContext();
+  const { lookup, resolvedYear, federal, state, city, persons } = useHouseholdTaxContext();
+  // D7 (Wave 18): `persons` above are the context's EFFECTIVE persons — the
+  // bar's salary override moves the selected earner's W-2 prefill.
 
   // ── Real-data defaults (memoized from the stores) ──────────────────────────
   // Wave 18 A5: a withdrawal belongs to ONE account owner — W-2 and age

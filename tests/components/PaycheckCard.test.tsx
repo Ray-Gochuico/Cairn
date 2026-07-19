@@ -534,6 +534,37 @@ describe('PaycheckCard Combined | per-person view (Wave 18 D16)', () => {
   });
 });
 
+describe('PaycheckCard — D7 salary ripple (Wave 18)', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    resetStores();
+  });
+
+  it('a bar salary override moves the take-home; the persons store is untouched', async () => {
+    const { __resetScenarioAssumptionsForTests } = await import(
+      '@/lib/calculators/use-scenario-assumptions'
+    );
+    primeStores(); // Alice $100k
+    __resetScenarioAssumptionsForTests();
+    const { unmount } = render(<MemoryRouter><PaycheckCard cardId="paycheck" /></MemoryRouter>);
+    const baseline = (await screen.findByTestId('paycheck-takehome')).textContent;
+    unmount();
+
+    sessionStorage.setItem('calc-scenario:salaries', JSON.stringify({ 1: 150000 }));
+    __resetScenarioAssumptionsForTests();
+    render(<MemoryRouter><PaycheckCard cardId="paycheck" /></MemoryRouter>);
+    const overridden = (await screen.findByTestId('paycheck-takehome')).textContent;
+    expect(overridden).not.toBe(baseline);
+    // Scenario-layer only (constraint 5): the store keeps the real salary.
+    expect(usePersonsStore.getState().persons[0].annualSalaryPretax).toBe(100000);
+    // D6: the override raises the scenario tick.
+    expect(screen.getByTestId('paycheck-scenario-tick')).toBeInTheDocument();
+    // Clean the module-level salary cache for later tests.
+    sessionStorage.removeItem('calc-scenario:salaries');
+    __resetScenarioAssumptionsForTests();
+  });
+});
+
 describe('PaycheckCard waymark meaning (Wave 17)', () => {
   beforeEach(() => {
     sessionStorage.clear();

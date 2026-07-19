@@ -1,10 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { NumberField } from '@/components/calculators/NumberField';
+import { Button } from '@/components/ui/button';
 import { useScenarioAssumptions } from '@/lib/calculators/use-scenario-assumptions';
 import type { ScenarioField } from '@/lib/calculators/scenario-assumptions';
 import { useHouseholdTaxContext } from '@/lib/calculators/use-household-tax-context';
 import { useHouseholdStore } from '@/stores/household-store';
-import { formatCurrency } from '@/lib/format';
+import { usePersonsStore } from '@/stores/persons-store';
+import { useScenariosStore } from '@/stores/scenarios-store';
+import { leverPayloadFromScenarioBar } from '@/lib/whatif/from-scenario-bar';
+import { defaultScenarioColor } from '@/lib/whatif/scenario-colors';
+import { localTodayISO } from '@/lib/dates';
+import { formatCurrency, formatDate } from '@/lib/format';
 import { prettifyCityCode } from '@/lib/jurisdiction-format';
 import { InlineLink } from '@/components/calculators/InlineLink';
 
@@ -55,6 +62,77 @@ function BlazeDot() {
     <svg viewBox="0 0 8 8" className="h-2 w-2 shrink-0" aria-hidden="true">
       <circle cx="4" cy="4" r="3" fill="hsl(var(--blaze))" />
     </svg>
+  );
+}
+
+/** Wave 18 (D14): the per-person editable salary row — the bar's exact field
+ *  idiom (150ms debounced commit, "edited — reset" tag, provenance line),
+ *  writing the SCENARIO layer only (constraint 5: never the persons store). */
+function SalaryBarField(props: {
+  id: string;
+  label: string;
+  committed: number;
+  edited: boolean;
+  onCommit: (value: number) => void;
+  onReset: () => void;
+}) {
+  const { id, label, committed, edited, onCommit, onReset } = props;
+  const [local, setLocal] = useState<number | null>(committed);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (timer.current === null) setLocal(committed);
+  }, [committed]);
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
+
+  const schedule = (v: number | null) => {
+    setLocal(v);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      timer.current = null;
+      onCommit(v ?? 0);
+    }, COMMIT_DELAY_MS);
+  };
+
+  const reset = () => {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+    onReset();
+    document.getElementById(id)?.focus();
+  };
+
+  return (
+    <div className="min-w-0">
+      <NumberField
+        id={id}
+        label={label}
+        value={local}
+        onChange={schedule}
+        suffix="$/yr"
+        step="1000"
+        min={0}
+      />
+      {edited ? (
+        <button
+          type="button"
+          onClick={reset}
+          aria-label={`Reset ${label} to your data`}
+          className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+        >
+          <BlazeDot />
+          edited — reset
+        </button>
+      ) : (
+        <p className="mt-0.5 text-xs text-muted-foreground truncate">from Inputs</p>
+      )}
+    </div>
   );
 }
 
@@ -139,6 +217,56 @@ export function ScenarioBar() {
   const household = useHouseholdStore((s) => s.household);
   const tax = useHouseholdTaxContext();
   const scenario = useScenarioAssumptions();
+  const navigate = useNavigate();
+  // The REAL persons (prefills + reset targets); tax.persons are effective.
+  const realPersons = usePersonsStore((s) => s.persons);
+  const [sendError, setSendError] = useState<string | null>(null);
+
+  // D14: Send to What-If — pure D6 mapping, schema-parsed at the button so a
+  // mapping bug fails loudly here and never persists garbage.
+  const sendToWhatIf = async () => {
+    const todayIso = localTodayISO();
+    try {
+      const leverPayload = leverPayloadFromScenarioBar(
+        {
+          portfolio: scenario.isEdited.portfolio ? scenario.values.portfolio : null,
+          realPortfolio: scenario.defaults.portfolio,
+          monthlyContribution: scenario.isEdited.annualContribution
+            ? scenario.engine.monthlyContribution
+            : null,
+          monthlyExpenses: scenario.isEdited.monthlyExpenses
+            ? scenario.values.monthlyExpenses
+            : null,
+          swr: scenario.isEdited.swrPct ? scenario.engine.swr : null,
+          inflation: scenario.isEdited.inflationPct ? scenario.engine.inflation : null,
+          salaryByPersonIndex: realPersons
+            .slice(0, 2)
+            .map((p) =>
+              p.id != null && scenario.salaryByPersonId[p.id] != null
+                ? scenario.salaryByPersonId[p.id]
+                : null,
+            ),
+        },
+        todayIso,
+      );
+      const existing = useScenariosStore.getState().scenarios;
+      await useScenariosStore.getState().create({
+        name: `From calculators — ${formatDate(todayIso)}`,
+        isBaseline: false,
+        color: defaultScenarioColor(existing.length, false),
+        lineStyle: 'solid',
+        visible: true,
+        isActive: false,
+        sortOrder: existing.length,
+        leverPayload,
+      });
+      setSendError(null);
+      navigate('/what-if');
+    } catch {
+      // Calm inline surface — never throw to the route.
+      setSendError('Could not create the What-If scenario. Please try again.');
+    }
+  };
 
   const chips: string[] = household
     ? [
@@ -167,30 +295,47 @@ export function ScenarioBar() {
             Edit in Inputs
           </InlineLink>
         </div>
-        {scenario.editedCount > 0 && (
-          <div className="flex items-center gap-3 text-xs">
-            <span
-              className="inline-flex items-center gap-1 text-muted-foreground"
-              data-testid="scenario-edited-count"
-            >
-              <BlazeDot />
-              Edited ({scenario.editedCount})
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                scenario.resetAll();
-                // W16 review: this button unmounts once editedCount hits 0 —
-                // hand focus to the first scenario field, not <body>.
-                document.getElementById(FIELDS[0].id)?.focus();
-              }}
-              className="text-primary hover:underline"
-            >
-              Reset to my data
-            </button>
-          </div>
-        )}
+        <div className="flex items-center gap-3 text-xs">
+          {scenario.editedCount > 0 && (
+            <>
+              <span
+                className="inline-flex items-center gap-1 text-muted-foreground"
+                data-testid="scenario-edited-count"
+              >
+                <BlazeDot />
+                Edited ({scenario.editedCount})
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  scenario.resetAll();
+                  // W16 review: this button unmounts once editedCount hits 0 —
+                  // hand focus to the first scenario field, not <body>.
+                  document.getElementById(FIELDS[0].id)?.focus();
+                }}
+                className="text-primary hover:underline"
+              >
+                Reset to my data
+              </button>
+            </>
+          )}
+          {/* D14: enabled only when ≥1 bar field is edited. */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={scenario.editedCount === 0}
+            onClick={() => void sendToWhatIf()}
+          >
+            Send to What-If →
+          </Button>
+        </div>
       </div>
+      {sendError && (
+        <div role="alert" className="text-xs text-destructive-soft-foreground">
+          {sendError}
+        </div>
+      )}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         {FIELDS.map((spec) => (
           <ScenarioBarField
@@ -203,6 +348,20 @@ export function ScenarioBar() {
             onReset={scenario.resetField}
           />
         ))}
+        {/* D14: per-person editable salary — one row per earner (named at 2+). */}
+        {realPersons.slice(0, 2).map((p) =>
+          p.id != null ? (
+            <SalaryBarField
+              key={`salary-${p.id}`}
+              id={`scenario-salary-${p.id}`}
+              label={realPersons.length > 1 ? `${p.name}'s salary` : 'Salary'}
+              committed={scenario.salaryByPersonId[p.id] ?? p.annualSalaryPretax}
+              edited={scenario.salaryByPersonId[p.id] != null}
+              onCommit={(v) => scenario.setSalary(p.id!, v)}
+              onReset={() => scenario.setSalary(p.id!, null)}
+            />
+          ) : null,
+        )}
       </div>
       <p className="text-xs text-muted-foreground">
         Edits here are a temporary scenario. Nothing is saved to your data.
