@@ -618,3 +618,53 @@ describe('projectionsFor', () => {
     }
   });
 });
+
+describe('DebtPayoffCard waymark meaning (Wave 17)', () => {
+  beforeEach(() => {
+    resetStore();
+    sessionStorage.clear();
+  });
+
+  it('renders the waymark meaning line from already-rendered values (Wave 17)', () => {
+    useLoansStore.setState({
+      loans: [
+        makeLoan({ id: 1, name: 'Car', currentBalance: 12000, monthlyPayment: 400 }),
+        makeLoan({ id: 2, name: 'Card', currentBalance: 5000, monthlyPayment: 200 }),
+      ],
+      isLoading: false,
+      error: null,
+    });
+    render(<MemoryRouter><DebtPayoffCard cardId="debt-payoff" /></MemoryRouter>);
+    expect(screen.getByTestId('debt-payoff-meaning')).toHaveTextContent(/across 2 loans\./i);
+  });
+
+  // Wave 17 honesty lock: warning REPLACES the sentence (never beside it).
+  it('capped loans replace the meaning sentence with the warning (Wave 17 honesty)', () => {
+    useLoansStore.setState({
+      loans: [
+        makeLoan({
+          id: 9,
+          name: 'Underwater',
+          currentBalance: 300000,
+          interestRate: 0.06,
+          termMonths: 360,
+          monthlyPayment: 1000, // < interest -> never amortizes
+          firstPaymentDate: '2020-01-01',
+        }),
+      ],
+      isLoading: false,
+      error: null,
+    });
+    render(<MemoryRouter><DebtPayoffCard cardId="debt-payoff" /></MemoryRouter>);
+    const meaning = screen.getByTestId('debt-payoff-meaning');
+    expect(meaning).toHaveTextContent(/never pays off at the current payment/i);
+    expect(meaning).not.toHaveTextContent(/across .* loans?\./i);
+  });
+
+  it('empty state: headline —, cairn glyph, CTA link in the meaning slot', () => {
+    render(<MemoryRouter><DebtPayoffCard cardId="debt-payoff" /></MemoryRouter>);
+    expect(screen.getByTestId('debt-payoff-headline')).toHaveTextContent('—');
+    expect(document.querySelector('[data-testid="cairn-glyph"]')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /add loans/i })).toHaveAttribute('href', '/loans');
+  });
+});

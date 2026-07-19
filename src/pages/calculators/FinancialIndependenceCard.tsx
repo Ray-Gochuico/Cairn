@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { pickModerateEntry } from '@/lib/growth-scenario';
-import { CalculatorCard } from './CalculatorCard';
+import { CalculatorCard, EmptyMeaning, RailViewGroup } from './CalculatorCard';
 import { financialIndependenceSeries } from '@/lib/financial-independence';
 import { formatCurrency, formatPercent } from '@/lib/format';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
@@ -16,7 +16,6 @@ import { useScenarioAssumptions } from '@/lib/calculators/use-scenario-assumptio
 
 interface FinancialIndependenceCardProps {
   cardId?: string;
-  onHide?: (cardId: string) => void;
 }
 
 /**
@@ -30,12 +29,14 @@ interface FinancialIndependenceCardProps {
  */
 export function FinancialIndependenceCard({
   cardId,
-  onHide,
 }: FinancialIndependenceCardProps = {}) {
   const { household } = useHouseholdStore();
   const persons = usePersonsStore((s) => s.persons);
 
-  const { engine, scenarioList } = useScenarioAssumptions();
+  const { engine, scenarioList, editedCount } = useScenarioAssumptions();
+  // D6: no local overrides remain in-card (W16 D13) — the dirty tick rides
+  // solely on shared ScenarioBar edits.
+  const scenarioEdited = editedCount > 0;
 
   // ── Chart display mode (Nominal/Real toggle) + inflation ───────────────────
   const [displayMode, setDisplayMode] = useChartDisplayMode(cardId ?? 'financial-independence');
@@ -118,10 +119,40 @@ export function FinancialIndependenceCard({
     return (
       <CalculatorCard
         cardId={cardId}
-        onHide={onHide}
         title={<>Years to <TermTooltip term="FI">FI</TermTooltip></>}
         titleText="Years to FI"
         headline={<span data-testid="fi-headline">—</span>}
+        meaning={
+          // Wave 15 T4: name the missing ingredient per cause with a real
+          // link (copy verbatim; Wave 17 moves it into the meaning slot).
+          <EmptyMeaning>
+            {!household ? (
+              <>
+                <Link to="/inputs/household" className="text-primary hover:underline">
+                  Set up your household
+                </Link>{' '}
+                to see Years to FI.
+              </>
+            ) : persons.length === 0 ? (
+              <>
+                <Link to="/inputs/persons" className="text-primary hover:underline">
+                  Add a person
+                </Link>{' '}
+                to see Years to FI.
+              </>
+            ) : scenarioList.length === 0 ? (
+              <>
+                Your household has no growth scenarios —{' '}
+                <Link to="/inputs/household" className="text-primary hover:underline">
+                  add growth scenarios in Household settings
+                </Link>{' '}
+                to see Years to FI.
+              </>
+            ) : (
+              <>Enter monthly expenses and a withdrawal rate above to see Years to FI.</>
+            )}
+          </EmptyMeaning>
+        }
       >
         {/* W16: the shared inputs live in the scenario bar above the grid. */}
         {household ? (
@@ -129,36 +160,6 @@ export function FinancialIndependenceCard({
             Adjust shared assumptions in the scenario bar above.
           </p>
         ) : null}
-        {/* Wave 15 T4: name the missing ingredient per cause with a real
-            link — the previous single "Add your inputs" copy conflated
-            no-household, no-persons, no-scenarios and zero expenses/SWR. */}
-        {!household ? (
-          <p className="text-sm text-muted-foreground">
-            <Link to="/inputs/household" className="text-primary hover:underline">
-              Set up your household
-            </Link>{' '}
-            to see Years to FI.
-          </p>
-        ) : persons.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            <Link to="/inputs/persons" className="text-primary hover:underline">
-              Add a person
-            </Link>{' '}
-            to see Years to FI.
-          </p>
-        ) : scenarioList.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Your household has no growth scenarios —{' '}
-            <Link to="/inputs/household" className="text-primary hover:underline">
-              add growth scenarios in Household settings
-            </Link>{' '}
-            to see Years to FI.
-          </p>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            Enter monthly expenses and a withdrawal rate above to see Years to FI.
-          </p>
-        )}
       </CalculatorCard>
     );
   }
@@ -177,12 +178,29 @@ export function FinancialIndependenceCard({
       : '—';
   const anyUnreachable = series.some((s) => !Number.isFinite(s.years));
 
+  // Wave 17 meaning contract: a non-finite Moderate REPLACES the sentence
+  // with the warning (a degraded headline never keeps a cheerful caption).
+  const moderateUnreachable = !(moderate && Number.isFinite(moderate.years));
+  const meaning = moderateUnreachable ? (
+    <span className="text-warning-foreground">
+      Returns at or below inflation — the target is never reached in real terms.
+    </span>
+  ) : (
+    <>Moderate scenario to a {formatCurrency(targetFv)} target portfolio.</>
+  );
+
   return (
     <CalculatorCard
       cardId={cardId}
-      onHide={onHide}
       title={<>Years to <TermTooltip term="FI">FI</TermTooltip></>}
       titleText="Years to FI"
+      dirty={scenarioEdited}
+      meaning={meaning}
+      rail={
+        <RailViewGroup>
+          <RealNominalToggle mode={displayMode} onChange={setDisplayMode} />
+        </RailViewGroup>
+      }
       headline={<span data-testid="fi-headline">{yearsLabel}</span>}
     >
       <p className="text-sm text-muted-foreground mb-3">
@@ -229,9 +247,6 @@ export function FinancialIndependenceCard({
       )}
       {chartData.length > 1 && (
         <div className="mt-4">
-          <div className="flex justify-end mb-2">
-            <RealNominalToggle mode={displayMode} onChange={setDisplayMode} />
-          </div>
           <LineChartCard
             title="Path to FI"
             data={chartData}

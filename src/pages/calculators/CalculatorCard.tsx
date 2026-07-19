@@ -21,17 +21,10 @@ interface CalculatorCardProps {
    * already renders. Warning states REPLACE it (a degraded headline never
    * keeps a cheerful caption); empty states pass <EmptyMeaning>. Truncates to
    * a single line in both states.
-   *
-   * INTERIM (Wave-17 Task 4 shim): optional with a '' default until Task 7
-   * migrates all 12 call sites, then it becomes required.
    */
-  meaning?: ReactNode;
+  meaning: ReactNode;
   /** Stable kebab id — trigger/panel wiring, hash target, hide persistence. */
   cardId?: string;
-  /** @deprecated Wave-17 Task 6/7 removes every call site; the ⋯ menu + shell
-   *  context own hide now. Accepted-but-unused so pre-migration call sites
-   *  keep compiling until Task 7 deletes them. */
-  onHide?: (cardId: string) => void;
   /** D6: this card's numbers differ from Inputs data (local overrides and/or
    *  shared-scenario edits). Renders the blaze corner tick + "Scenario:" prefix
    *  + sr-only sentence. NEVER color-only. */
@@ -85,7 +78,7 @@ export function CalculatorCard({
   title,
   titleText,
   headline,
-  meaning = '',
+  meaning,
   cardId,
   dirty = false,
   rail,

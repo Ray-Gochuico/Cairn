@@ -356,8 +356,11 @@ describe('FinancialIndependenceCard', () => {
         <FinancialIndependenceCard />
       </MemoryRouter>,
     );
-    expect(screen.getByText(/Target portfolio/i)).toBeInTheDocument();
-    expect(screen.getByText(/\$1,500,000/)).toBeInTheDocument();
+    // Wave 17: the meaning line also says "target portfolio" — pin the
+    // body copy by its colon.
+    expect(screen.getByText(/Target portfolio:/)).toBeInTheDocument();
+    // The target figure now appears in BOTH the meaning line and the body.
+    expect(screen.getAllByText(/\$1,500,000/).length).toBeGreaterThan(0);
   });
 
   it('uses the latest snapshot per account when multiple are seeded', () => {
@@ -622,5 +625,46 @@ describe('FinancialIndependenceCard', () => {
     expect(
       screen.getByText(/nominal view grows the target line with inflation/i),
     ).toBeInTheDocument();
+  });
+});
+
+describe('FinancialIndependenceCard waymark meaning (Wave 17)', () => {
+  beforeEach(() => {
+    resetStores();
+    sessionStorage.clear();
+    __resetScenarioAssumptionsForTests();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(PINNED_DATE);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('renders the waymark meaning line from already-rendered values (Wave 17)', () => {
+    primeStores();
+    render(<MemoryRouter><FinancialIndependenceCard cardId="financial-independence" /></MemoryRouter>);
+    expect(screen.getByTestId('financial-independence-meaning')).toHaveTextContent(
+      /moderate scenario to a .* target portfolio\./i,
+    );
+  });
+
+  // Wave 17 honesty lock: the warning REPLACES the sentence.
+  it('non-finite Moderate replaces the meaning with the warning sentence', () => {
+    primeStores({
+      scenarios: [{ label: 'Moderate', rate: 0 }],
+      contributionAmounts: [],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 100 }],
+    });
+    render(<MemoryRouter><FinancialIndependenceCard cardId="financial-independence" /></MemoryRouter>);
+    const meaning = screen.getByTestId('financial-independence-meaning');
+    expect(meaning).toHaveTextContent(/returns at or below inflation/i);
+    expect(meaning).not.toHaveTextContent(/target portfolio\./i);
+  });
+
+  it('empty state: headline —, cairn glyph, CTA in the meaning slot', () => {
+    render(<MemoryRouter><FinancialIndependenceCard cardId="financial-independence" /></MemoryRouter>);
+    expect(screen.getByTestId('fi-headline')).toHaveTextContent('—');
+    expect(document.querySelector('[data-testid="cairn-glyph"]')).toBeInTheDocument();
   });
 });

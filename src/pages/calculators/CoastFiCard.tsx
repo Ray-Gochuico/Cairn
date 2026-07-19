@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
-import { CalculatorCard } from './CalculatorCard';
+import { CalculatorCard, EmptyMeaning, RailReset, RailViewGroup } from './CalculatorCard';
 import { coastFi } from '@/lib/coast-fi';
 import { realRateOf, realRateOfUnfloored } from '@/lib/calculators/real-rate';
 import { currentAge } from '@/lib/dates';
@@ -19,7 +19,6 @@ import { useScenarioAssumptions } from '@/lib/calculators/use-scenario-assumptio
 
 interface CoastFiCardProps {
   cardId?: string;
-  onHide?: (cardId: string) => void;
 }
 
 interface ScenarioRow {
@@ -37,7 +36,7 @@ interface ScenarioRow {
  * per-card (persons-derived, genuinely local), so the card's silo + reset
  * now truthfully cover that one field (D13).
  */
-export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
+export function CoastFiCard({ cardId }: CoastFiCardProps = {}) {
   const { household } = useHouseholdStore();
   const persons = usePersonsStore((s) => s.persons);
 
@@ -54,10 +53,13 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
     return { yearsUntilRetirement };
   }, [persons]);
 
-  const { values, setValue, reset, isOverridden } = useCalculatorState(cardId ?? 'coast-fi', defaults);
+  const { values, setValue, reset, isOverridden, overriddenKeys } = useCalculatorState(cardId ?? 'coast-fi', defaults);
 
   // ── Shared scenario (W16) ──────────────────────────────────────────────────
-  const { engine, scenarioList } = useScenarioAssumptions();
+  const { engine, scenarioList, editedCount } = useScenarioAssumptions();
+  // D6: the card's numbers differ from Inputs data when EITHER the local
+  // years field or any shared ScenarioBar field is edited.
+  const scenarioEdited = editedCount > 0;
 
   // ── Chart display mode (hooks MUST be before the early return) ─────────────
   const [displayMode, setDisplayMode] = useChartDisplayMode(cardId ?? 'coast-fi');
@@ -129,38 +131,39 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
     return (
       <CalculatorCard
         cardId={cardId}
-        onHide={onHide}
         title={<TermTooltip term="COAST FI">CoastFI</TermTooltip>}
         titleText="CoastFI"
         headline="—"
-      >
-        {/* Wave 15 T4: name the missing ingredient per cause with a real
-            link — the previous single "Add your inputs" copy conflated
-            no-household, no-persons and no-scenarios. */}
-        {!household ? (
-          <p className="text-sm text-muted-foreground">
-            <Link to="/inputs/household" className="text-primary hover:underline">
-              Set up your household
-            </Link>{' '}
-            to see CoastFI.
-          </p>
-        ) : persons.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            <Link to="/inputs/persons" className="text-primary hover:underline">
-              Add a person
-            </Link>{' '}
-            to see CoastFI (retirement age sets the coasting horizon).
-          </p>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            Your household has no growth scenarios —{' '}
-            <Link to="/inputs/household" className="text-primary hover:underline">
-              add growth scenarios in Household settings
-            </Link>{' '}
-            to see CoastFI.
-          </p>
-        )}
-      </CalculatorCard>
+        meaning={
+          // Wave 15 T4: name the missing ingredient per cause with a real
+          // link (copy verbatim; Wave 17 moves it into the meaning slot).
+          <EmptyMeaning>
+            {!household ? (
+              <>
+                <Link to="/inputs/household" className="text-primary hover:underline">
+                  Set up your household
+                </Link>{' '}
+                to see CoastFI.
+              </>
+            ) : persons.length === 0 ? (
+              <>
+                <Link to="/inputs/persons" className="text-primary hover:underline">
+                  Add a person
+                </Link>{' '}
+                to see CoastFI (retirement age sets the coasting horizon).
+              </>
+            ) : (
+              <>
+                Your household has no growth scenarios —{' '}
+                <Link to="/inputs/household" className="text-primary hover:underline">
+                  add growth scenarios in Household settings
+                </Link>{' '}
+                to see CoastFI.
+              </>
+            )}
+          </EmptyMeaning>
+        }
+      />
     );
   }
 
@@ -201,12 +204,46 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
 
   const atOrPastRetirement = values.yearsUntilRetirement <= 0;
 
+  // Wave 17 meaning contract: warning/zero-target states REPLACE the sentence.
+  const meaning = noTarget ? (
+    // W16: the shared fields live in the scenario bar; no prefill promise
+    // here — a typed 0 in the bar is an OVERRIDE that wins over recomputed
+    // defaults (Wave 15 adversarial review, carried forward).
+    <>Enter your monthly expenses and withdrawal rate in the scenario bar above to see your CoastFI target.</>
+  ) : atOrPastRetirement ? (
+    <>Already at/after your target retirement age — no CoastFI horizon to compute.</>
+  ) : (
+    <>
+      {formatCurrency(engine.portfolio)} of the{' '}
+      {formatCurrency(moderate?.coastNeededToday ?? 0)} needed today to coast.
+    </>
+  );
+
   return (
     <CalculatorCard
       cardId={cardId}
-      onHide={onHide}
       title={<TermTooltip term="COAST FI">CoastFI</TermTooltip>}
       titleText="CoastFI"
+      dirty={isOverridden || scenarioEdited}
+      meaning={meaning}
+      rail={
+        <>
+          {isOverridden && <RailReset onClick={reset} />}
+          {/* ── Editable input — years only; the rest rides the bar (D13) ── */}
+          <NumberField
+            id="cf-years"
+            label="Years to retirement"
+            value={values.yearsUntilRetirement}
+            onChange={(v) => setValue('yearsUntilRetirement', v ?? 0)}
+            step="1"
+            min={0}
+            edited={overriddenKeys.has('yearsUntilRetirement')}
+          />
+          <RailViewGroup>
+            <RealNominalToggle mode={displayMode} onChange={setDisplayMode} />
+          </RailViewGroup>
+        </>
+      }
       headline={
         atOrPastRetirement || noTarget ? (
           <span data-testid="coastfi-headline">—</span>
@@ -215,43 +252,9 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
         )
       }
     >
-      {/* ── Editable input — years only; the rest rides the bar (D13) ────── */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <NumberField
-          id="cf-years"
-          label="Years to retirement"
-          value={values.yearsUntilRetirement}
-          onChange={(v) => setValue('yearsUntilRetirement', v ?? 0)}
-          step="1"
-          min={0}
-        />
-      </div>
-
-      {isOverridden && (
-        <button
-          type="button"
-          onClick={reset}
-          className="text-sm text-primary hover:underline mb-3"
-        >
-          Reset to my data
-        </button>
-      )}
-
-      {/* ── Zero-target inline prompt (D11) + at/past retirement guard ──── */}
-      {noTarget ? (
-        // W16: the shared fields live in the scenario bar; no prefill promise
-        // here — a typed 0 in the bar is an OVERRIDE that wins over recomputed
-        // defaults (Wave 15 adversarial review, carried forward).
-        <p className="text-sm text-muted-foreground">
-          Enter your monthly expenses and withdrawal rate in the scenario bar
-          above to see your CoastFI target.
-        </p>
-      ) : atOrPastRetirement ? (
-        <p className="text-sm text-muted-foreground">
-          Already at/after your target retirement age — no CoastFI horizon to
-          compute.
-        </p>
-      ) : (
+      {/* ── Zero-target (D11) + at/past retirement guards: the meaning slot
+          carries the sentence; the body simply omits table/chart. ──── */}
+      {!noTarget && !atOrPastRetirement && (
         <>
           <p className="text-sm text-muted-foreground mb-3">
             Target at retirement:{' '}
@@ -306,9 +309,6 @@ export function CoastFiCard({ cardId, onHide }: CoastFiCardProps = {}) {
           </div>
           {chartData.length > 1 && (
             <div className="mt-4">
-              <div className="flex justify-end mb-2">
-                <RealNominalToggle mode={displayMode} onChange={setDisplayMode} />
-              </div>
               <LineChartCard
                 title="Coasting to retirement"
                 data={chartData}

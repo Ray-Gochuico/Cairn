@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useEquityGrantsStore } from '@/stores/equity-grants-store';
 import { usePersonsStore } from '@/stores/persons-store';
-import { CalculatorCard } from './CalculatorCard';
+import { CalculatorCard, EmptyMeaning } from './CalculatorCard';
 import { computeEquityValue, vestingChartData, grantOrdinaryIncomeOnVest, isIsoAmtPreference } from '@/lib/equity-value';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { useLocalToday } from '@/lib/use-local-today';
@@ -14,7 +14,6 @@ import LineChartCard from '@/components/charts/LineChartCard';
 
 interface EquityValueCardProps {
   cardId?: string;
-  onHide?: (cardId: string) => void;
 }
 
 interface PersonTotal {
@@ -25,7 +24,7 @@ interface PersonTotal {
   grantTypes: GrantType[];
 }
 
-export function EquityValueCard({ cardId, onHide }: EquityValueCardProps = {}) {
+export function EquityValueCard({ cardId }: EquityValueCardProps = {}) {
   const equityGrants = useEquityGrantsStore((s) => s.equityGrants);
   const persons = usePersonsStore((s) => s.persons);
 
@@ -106,27 +105,32 @@ export function EquityValueCard({ cardId, onHide }: EquityValueCardProps = {}) {
     return (
       <CalculatorCard
         cardId={cardId}
-        onHide={onHide}
         title="Equity Value"
         headline="—"
-      >
-        <p className="text-sm text-muted-foreground">
-          {/* W14b moved equity grants out of Inputs — /inputs/equity-grants is
-              only a redirect stub now; link the canonical home directly. */}
-          <Link to="/equity-grants" className="text-primary hover:underline">
-            Add equity grants
-          </Link>{' '}
-          to see vested value across your household.
-        </p>
-      </CalculatorCard>
+        meaning={
+          // W14b moved equity grants out of Inputs — /inputs/equity-grants is
+          // only a redirect stub now; link the canonical home directly.
+          <EmptyMeaning>
+            <Link to="/equity-grants" className="text-primary hover:underline">
+              Add equity grants
+            </Link>{' '}
+            to see vested value across your household.
+          </EmptyMeaning>
+        }
+      />
     );
   }
 
   return (
     <CalculatorCard
       cardId={cardId}
-      onHide={onHide}
       title="Equity Value"
+      meaning={
+        <>
+          {formatCurrency(totalUnvested)} still unvested across{' '}
+          {equityGrants.length === 1 ? '1 grant' : `${equityGrants.length} grants`}.
+        </>
+      }
       headline={
         <span data-testid="equity-value-headline">
           {formatCurrency(totalVested)}

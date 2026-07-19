@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CalculatorCard } from './CalculatorCard';
+import { CalculatorCard, EmptyMeaning } from './CalculatorCard';
 import { NumberField } from '@/components/calculators/NumberField';
 import { StatTile } from '@/components/calculators/StatTile';
 import { useAccountsStore } from '@/stores/accounts-store';
@@ -16,7 +16,6 @@ import { formatCurrency } from '@/lib/format';
 
 interface Props {
   cardId?: string;
-  onHide?: (cardId: string) => void;
 }
 
 const ASSET_CLASS_LABEL: Record<AssetClass, string> = {
@@ -37,7 +36,7 @@ const ASSET_CLASS_LABEL: Record<AssetClass, string> = {
   OTHER: 'Other',
 };
 
-export function ContributionAllocatorCard({ cardId, onHide }: Props = {}) {
+export function ContributionAllocatorCard({ cardId }: Props = {}) {
   const accounts = useAccountsStore((s) => s.accounts);
   const holdings = useHoldingsStore((s) => s.holdings);
   const snapshots = useSnapshotsStore((s) => s.snapshots);
@@ -117,21 +116,26 @@ export function ContributionAllocatorCard({ cardId, onHide }: Props = {}) {
   return (
     <CalculatorCard
       cardId={cardId}
-      onHide={onHide}
       title="Contribution allocator"
       titleText="Contribution allocator"
       headline={hasTargets ? formatCurrency(result.totalAllocated) : '—'}
-    >
-      {!hasTargets ? (
-        // UX H1: a REAL link to where targets are authored — not dead prose.
-        <p className="text-sm text-muted-foreground">
-          <Link to="/investments" className="text-primary hover:underline">
-            Set asset-class targets on the Investments page
-          </Link>{' '}
-          to allocate a contribution toward them.
-        </p>
-      ) : (
-        <div className="space-y-3">
+      meaning={
+        !hasTargets ? (
+          // UX H1: a REAL link to where targets are authored — not dead prose.
+          <EmptyMeaning>
+            <Link to="/investments" className="text-primary hover:underline">
+              Set asset-class targets on the Investments page
+            </Link>{' '}
+            to allocate a contribution toward them.
+          </EmptyMeaning>
+        ) : (
+          <>Suggested buys for a {formatCurrency(contribution ?? 0)} contribution.</>
+        )
+      }
+      rail={
+        hasTargets ? (
+          // The contribution amount is a what-if entry (local useState), not an
+          // Inputs override — no edited dot, no dirty tick (D6).
           <NumberField
             id="alloc-contribution"
             label="Contribution"
@@ -141,7 +145,11 @@ export function ContributionAllocatorCard({ cardId, onHide }: Props = {}) {
             step="100"
             min={0}
           />
-
+        ) : undefined
+      }
+    >
+      {hasTargets && (
+        <div className="space-y-3">
           {result.unreachableWithoutSelling && (
             // UX M3: NAME the overweight class(es), don't bury the reason.
             <div

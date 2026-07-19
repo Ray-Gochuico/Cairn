@@ -289,3 +289,27 @@ describe('CompoundInterestCard', () => {
     expect(screen.getByTestId('compound-headline').textContent).toContain("in today's dollars");
   });
 });
+
+describe('CompoundInterestCard waymark meaning (Wave 17)', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    __resetScenarioAssumptionsForTests();
+  });
+
+  it('renders the waymark meaning line from already-rendered values (Wave 17)', () => {
+    render(<MemoryRouter><CompoundInterestCard cardId="compound-interest" /></MemoryRouter>);
+    expect(screen.getByTestId('compound-interest-meaning')).toHaveTextContent(
+      /at .*% APY for \d+ years\./i,
+    );
+  });
+
+  it('years 0 replaces the meaning with the enter-a-length prompt (the empty case)', async () => {
+    const user = userEvent.setup();
+    render(<MemoryRouter><CompoundInterestCard cardId="compound-interest" /></MemoryRouter>);
+    await user.clear(screen.getByLabelText(/length \(years\)/i));
+    await user.type(screen.getByLabelText(/length \(years\)/i), '0');
+    const meaning = screen.getByTestId('compound-interest-meaning');
+    expect(meaning).toHaveTextContent(/enter a length in years to see projected growth/i);
+    expect(meaning).not.toHaveTextContent(/% APY for/i);
+  });
+});

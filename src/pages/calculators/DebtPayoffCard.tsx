@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useLoansStore } from '@/stores/loans-store';
 import { useLocalToday } from '@/lib/use-local-today';
 import { amortize, nextPaymentDateFrom, scheduleIsCapped } from '@/lib/amortization';
-import { CalculatorCard } from './CalculatorCard';
+import { CalculatorCard, EmptyMeaning, RailReset } from './CalculatorCard';
 import { formatCurrency } from '@/lib/format';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -42,10 +42,9 @@ export { pickStrategyTargetIndex, projectionsFor };
 
 interface DebtPayoffCardProps {
   cardId?: string;
-  onHide?: (cardId: string) => void;
 }
 
-export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
+export function DebtPayoffCard({ cardId }: DebtPayoffCardProps = {}) {
   const loans = useLoansStore((s) => s.loans);
 
   const defaults = useMemo(() => ({ strategy: 'none' as Strategy, extraTotal: 0 }), []);
@@ -91,19 +90,19 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
     return (
       <CalculatorCard
         cardId={cardId}
-        onHide={onHide}
         title="Debt Payoff"
         headline="—"
-      >
-        <p className="text-sm text-muted-foreground">
-          {/* Wave 15 T10: the CTA itself is the link. W14b: it deep-links the
-              loan's post-Inputs home (/loans, "one place per thing"). */}
-          <Link to="/loans" className="text-primary hover:underline">
-            Add loans
-          </Link>{' '}
-          on the Loans page to see payoff projections.
-        </p>
-      </CalculatorCard>
+        meaning={
+          // Wave 15 T10: the CTA itself is the link. W14b: it deep-links the
+          // loan's post-Inputs home (/loans, "one place per thing").
+          <EmptyMeaning>
+            <Link to="/loans" className="text-primary hover:underline">
+              Add loans
+            </Link>{' '}
+            on the Loans page to see payoff projections.
+          </EmptyMeaning>
+        }
+      />
     );
   }
 
@@ -136,11 +135,70 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
       ? lastPaymentDates.reduce((latest, d) => (d > latest ? d : latest))
       : null;
 
+  // Wave 17 meaning contract: a capped schedule REPLACES the sentence with
+  // the warning (the rescued-baseline-only case keeps the normal sentence —
+  // the body banner covers it).
+  const meaning = anyCapped ? (
+    <span className="text-warning-foreground">
+      {cappedProjections.map((p) => p.loan.name).join(', ')} never{' '}
+      {cappedProjections.length === 1 ? 'pays' : 'pay'} off at the current payment.
+    </span>
+  ) : (
+    <>
+      {formatCurrency(totalBalance)} across{' '}
+      {loans.length === 1 ? '1 loan' : `${loans.length} loans`}.
+    </>
+  );
+
   return (
     <CalculatorCard
       cardId={cardId}
-      onHide={onHide}
       title="Debt Payoff"
+      dirty={isOverridden}
+      meaning={meaning}
+      rail={
+        <>
+          {isOverridden && <RailReset onClick={reset} />}
+          <div className="space-y-1">
+            <Label htmlFor="debt-strategy">Strategy</Label>
+            <Select
+              value={values.strategy}
+              onValueChange={(v) => setValue('strategy', v as Strategy)}
+            >
+              <SelectTrigger id="debt-strategy" aria-label="Strategy">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                <SelectItem value="snowball">Snowball (smallest balance)</SelectItem>
+                <SelectItem value="avalanche">Avalanche (highest rate)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="debt-extra">Extra monthly payment</Label>
+            <Input
+              id="debt-extra"
+              type="number"
+              min={0}
+              step={50}
+              value={values.extraTotal}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setValue('extraTotal', Number.isFinite(v) && v >= 0 ? v : 0);
+              }}
+              disabled={values.strategy === 'none'}
+            />
+            <p className="text-xs text-muted-foreground">
+              {values.strategy === 'none'
+                ? 'Pick a strategy to apply additional monthly payments.'
+                : values.strategy === 'snowball'
+                  ? 'Applied to the smallest-balance loan each month.'
+                  : 'Applied to the highest-rate loan each month.'}
+            </p>
+          </div>
+        </>
+      }
       headline={
         <span data-testid="debt-payoff-headline">
           {/* Wave 15 T7 (D7): the headline is the ANSWER. A capped schedule
@@ -201,59 +259,6 @@ export function DebtPayoffCard({ cardId, onHide }: DebtPayoffCardProps = {}) {
           testId="debt-savings"
         />
       </div>
-
-      {/* Strategy + extra-payment controls */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-        <div className="space-y-1">
-          <Label htmlFor="debt-strategy">Strategy</Label>
-          <Select
-            value={values.strategy}
-            onValueChange={(v) => setValue('strategy', v as Strategy)}
-          >
-            <SelectTrigger id="debt-strategy" aria-label="Strategy">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">None</SelectItem>
-              <SelectItem value="snowball">Snowball (smallest balance)</SelectItem>
-              <SelectItem value="avalanche">Avalanche (highest rate)</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="debt-extra">Extra monthly payment</Label>
-          <Input
-            id="debt-extra"
-            type="number"
-            min={0}
-            step={50}
-            value={values.extraTotal}
-            onChange={(e) => {
-              const v = Number(e.target.value);
-              setValue('extraTotal', Number.isFinite(v) && v >= 0 ? v : 0);
-            }}
-            disabled={values.strategy === 'none'}
-          />
-          <p className="text-xs text-muted-foreground">
-            {values.strategy === 'none'
-              ? 'Pick a strategy to apply additional monthly payments.'
-              : values.strategy === 'snowball'
-                ? 'Applied to the smallest-balance loan each month.'
-                : 'Applied to the highest-rate loan each month.'}
-          </p>
-        </div>
-      </div>
-
-      {/* Gated reset button — only appears when the user has overridden a value */}
-      {isOverridden && (
-        <button
-          type="button"
-          onClick={reset}
-          className="text-sm text-primary hover:underline"
-        >
-          Reset to my data
-        </button>
-      )}
 
       {/* Per-loan rows */}
       <div className="overflow-x-auto">

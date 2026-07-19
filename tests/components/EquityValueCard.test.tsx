@@ -550,3 +550,27 @@ describe('EquityValueCard', () => {
     expect(screen.queryByText(/ISO grants may trigger/i)).not.toBeInTheDocument();
   });
 });
+
+describe('EquityValueCard waymark meaning (Wave 17)', () => {
+  beforeEach(() => {
+    resetStores();
+  });
+
+  it('renders the waymark meaning line from already-rendered values (Wave 17)', () => {
+    primeStores({ grants: [{}, {}] });
+    render(<MemoryRouter><EquityValueCard cardId="equity" /></MemoryRouter>);
+    expect(screen.getByTestId('equity-meaning')).toHaveTextContent(
+      /still unvested across \d+ grants?\./i,
+    );
+  });
+
+  it('empty state: headline —, cairn glyph, CTA in the meaning slot', () => {
+    render(<MemoryRouter><EquityValueCard cardId="equity" /></MemoryRouter>);
+    expect(screen.getByTestId('equity-headline')).toHaveTextContent('—');
+    expect(document.querySelector('[data-testid="cairn-glyph"]')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /add equity grants/i })).toHaveAttribute(
+      'href',
+      '/equity-grants',
+    );
+  });
+});

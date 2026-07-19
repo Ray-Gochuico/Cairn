@@ -211,3 +211,26 @@ describe('ContributionAllocatorCard', () => {
     expect(screen.getByText(/held positions only/i)).toBeInTheDocument();
   });
 });
+
+describe('ContributionAllocatorCard waymark meaning (Wave 17)', () => {
+  it('renders the waymark meaning line from already-rendered values (Wave 17)', async () => {
+    seedStores([
+      { assetClass: AssetClass.US_TOTAL_MARKET, targetPct: 0.5 },
+      { assetClass: AssetClass.US_BONDS, targetPct: 0.5 },
+    ]);
+    render(<MemoryRouter><ContributionAllocatorCard cardId="contribution-allocator" /></MemoryRouter>);
+    expect(await screen.findByTestId('contribution-allocator-meaning')).toHaveTextContent(
+      /suggested buys for a .* contribution\./i,
+    );
+  });
+
+  it('no-targets state: headline —, cairn glyph, targets CTA in the meaning slot', () => {
+    seedStores(null);
+    render(<MemoryRouter><ContributionAllocatorCard cardId="contribution-allocator" /></MemoryRouter>);
+    expect(screen.getByTestId('contribution-allocator-headline')).toHaveTextContent('—');
+    expect(document.querySelector('[data-testid="cairn-glyph"]')).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: /set asset-class targets/i }),
+    ).toHaveAttribute('href', '/investments');
+  });
+});

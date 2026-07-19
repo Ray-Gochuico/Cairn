@@ -32,3 +32,12 @@ describe('BacktestCard', () => {
     expect(screen.getByTestId('calc-card-backtest')).toBeInTheDocument();
   });
 });
+
+describe('BacktestCard waymark meaning (Wave 17)', () => {
+  it('renders the static meaning line (no data claims)', () => {
+    render(<MemoryRouter><BacktestCard cardId="backtest" /></MemoryRouter>);
+    expect(screen.getByTestId('backtest-meaning')).toHaveTextContent(
+      /replay historical market sequences against your current allocation\./i,
+    );
+  });
+});

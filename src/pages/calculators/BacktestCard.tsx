@@ -3,17 +3,16 @@ import { CalculatorCard } from './CalculatorCard';
 
 interface BacktestCardProps {
   cardId?: string;
-  onHide?: (cardId: string) => void;
 }
 
-export function BacktestCard({ cardId, onHide }: BacktestCardProps = {}) {
+export function BacktestCard({ cardId }: BacktestCardProps = {}) {
   return (
     <CalculatorCard
       title="Historical Backtest"
       titleText="Historical Backtest"
       headline="Backtest your portfolio"
       cardId={cardId}
-      onHide={onHide}
+      meaning="Replay historical market sequences against your current allocation."
     >
       <p className="text-sm text-muted-foreground">
         Replay historical market sequences against your current portfolio
