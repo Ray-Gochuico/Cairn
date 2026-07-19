@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useHouseholdStore } from '@/stores/household-store';
-import { CalculatorCard } from './CalculatorCard';
+import { CalculatorCard, EmptyMeaning, RailReset, RailViewGroup } from './CalculatorCard';
 import { computeSupplementalWageTax, flatSupplementalWithholding } from '@/lib/calculators/supplemental-wage';
 import { useSupplementalMethod } from '@/lib/calculators/use-supplemental-method';
 import { SupplementalMethodToggle } from '@/components/calculators/SupplementalMethodToggle';
@@ -24,10 +24,9 @@ import type { BonusFrequency } from '@/types/schema';
 
 interface BonusTaxCardProps {
   cardId?: string;
-  onHide?: (cardId: string) => void;
 }
 
-export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
+export function BonusTaxCard({ cardId }: BonusTaxCardProps = {}) {
   const { household } = useHouseholdStore();
   const persons = usePersonsStore((s) => s.persons);
   const tax = useHouseholdTaxContext();
@@ -46,7 +45,7 @@ export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
       isConsistent: seedPerson?.bonusIsConsistent ?? true,
     };
   }, [seedPerson]);
-  const { values, setValue, reset, isOverridden } = useCalculatorState(cardId ?? 'bonus-tax', defaults);
+  const { values, setValue, reset, isOverridden, overriddenKeys } = useCalculatorState(cardId ?? 'bonus-tax', defaults);
   const [method, setMethod] = useSupplementalMethod(cardId ?? 'bonus-tax');
 
   const effectiveBonus = values.bonus ?? 0;
@@ -74,8 +73,12 @@ export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
     });
   }, [tax.ready, tax.federal, tax.state, tax.city, tax.totalSalary, tax.aggregatedPretax, household, annualBonus, persons, seedPerson]);
 
-  const controls = (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+  // Wave 17: the assumption inputs live in the open card's 280px rail —
+  // stacked single-column, RailReset pinned first, the view-only withholding
+  // toggle grouped at the bottom.
+  const rail = (
+    <>
+      {isOverridden && <RailReset onClick={reset} />}
       <NumberField
         id="bonus-override"
         label={`Bonus amount${values.frequency === 'QUARTERLY' ? ' (per quarter)' : ''}`}
@@ -84,6 +87,7 @@ export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
         suffix="$"
         step="100"
         min={0}
+        edited={overriddenKeys.has('bonus')}
       />
       <div className="space-y-1">
         <label htmlFor="bonus-frequency" className="text-sm font-medium">Bonus frequency</label>
@@ -100,7 +104,7 @@ export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
           </SelectContent>
         </Select>
       </div>
-      <div className="sm:col-span-2">
+      <div>
         <label htmlFor="bonus-consistent" className="flex items-center gap-2 text-sm">
           <Checkbox
             id="bonus-consistent"
@@ -110,36 +114,43 @@ export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
           Bonuses are consistent year over year
         </label>
       </div>
-      {isOverridden && (
-        <button type="button" onClick={reset} className="text-sm text-primary hover:underline sm:col-span-2 text-left">
-          Reset to my data
-        </button>
-      )}
-    </div>
+      <RailViewGroup>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-sm">Withholding method</span>
+          <SupplementalMethodToggle method={method} onChange={setMethod} />
+        </div>
+      </RailViewGroup>
+    </>
   );
 
   if (!result) {
     return (
-      <CalculatorCard title="Estimated bonus take-home" headline="—" cardId={cardId} onHide={onHide}>
-        {controls}
-        <p className="text-sm text-muted-foreground">
-          <Link to="/inputs/household" className="text-primary hover:underline">
-            Set up your household profile
-          </Link>{' '}
-          + tax rules to see bonus tax.
-        </p>
-      </CalculatorCard>
+      <CalculatorCard
+        title="Estimated bonus take-home"
+        headline="—"
+        cardId={cardId}
+        rail={rail}
+        meaning={
+          <EmptyMeaning>
+            <Link to="/inputs/household" className="text-primary hover:underline">
+              Set up your household profile
+            </Link>{' '}
+            + tax rules to see bonus tax.
+          </EmptyMeaning>
+        }
+      />
     );
   }
 
   if (effectiveBonus <= 0) {
     return (
-      <CalculatorCard title="Estimated bonus take-home" headline="—" cardId={cardId} onHide={onHide}>
-        {controls}
-        <p className="text-sm text-muted-foreground">
-          Enter a bonus amount to see the bonus tax breakdown.
-        </p>
-      </CalculatorCard>
+      <CalculatorCard
+        title="Estimated bonus take-home"
+        headline="—"
+        cardId={cardId}
+        rail={rail}
+        meaning={<EmptyMeaning>Enter a bonus amount to see the bonus tax breakdown.</EmptyMeaning>}
+      />
     );
   }
 
@@ -159,23 +170,22 @@ export function BonusTaxCard({ cardId, onHide }: BonusTaxCardProps = {}) {
     <CalculatorCard
       title="Estimated bonus take-home"
       cardId={cardId}
-      onHide={onHide}
+      dirty={isOverridden}
+      meaning={
+        <>After an estimated {formatCurrency(totalTaxOnBonus / bonusesPerYear)} tax on a {formatCurrency(effectiveBonus)} bonus.</>
+      }
+      rail={rail}
       headline={
         <span data-testid="bonus-takehome">
           {formatCurrency(perBonusTakeHome)}
         </span>
       }
     >
-      {controls}
       <div className="text-sm text-muted-foreground mb-3">
         On a {formatCurrency(effectiveBonus)} bonus
         {values.frequency === 'QUARTERLY'
           ? ` (${formatCurrency(annualBonus)} annual)`
           : ''}, here's the estimated tax and take-home:
-      </div>
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium">Withholding method</span>
-        <SupplementalMethodToggle method={method} onChange={setMethod} />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-sm">
         <ResultRow label="Estimated federal on bonus" value={formatCurrency(federalOnBonus / bonusesPerYear)} />

@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useHouseholdStore } from '@/stores/household-store';
-import { CalculatorCard } from './CalculatorCard';
+import { CalculatorCard, EmptyMeaning, RailReset, RailViewGroup } from './CalculatorCard';
 import { computeSupplementalWageTax, flatSupplementalWithholding } from '@/lib/calculators/supplemental-wage';
 import { useSupplementalMethod } from '@/lib/calculators/use-supplemental-method';
 import { SupplementalMethodToggle } from '@/components/calculators/SupplementalMethodToggle';
@@ -29,10 +29,9 @@ function periodsPerYear(frequency: CommissionFrequency): number {
 
 interface CommissionTaxCardProps {
   cardId?: string;
-  onHide?: (cardId: string) => void;
 }
 
-export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {}) {
+export function CommissionTaxCard({ cardId }: CommissionTaxCardProps = {}) {
   const { household } = useHouseholdStore();
   const { persons } = usePersonsStore();
   const tax = useHouseholdTaxContext();
@@ -49,7 +48,7 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
     }),
     [recipient],
   );
-  const { values, setValue, reset, isOverridden } = useCalculatorState(cardId ?? 'commission-tax', defaults);
+  const { values, setValue, reset, isOverridden, overriddenKeys } = useCalculatorState(cardId ?? 'commission-tax', defaults);
   const [method, setMethod] = useSupplementalMethod(cardId ?? 'commission-tax');
 
   const periods = periodsPerYear(values.frequency);
@@ -93,8 +92,11 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
     return { result: taxResult, commission401kPerCheck: annualCommission401k / periods };
   }, [tax.ready, tax.federal, tax.state, tax.city, tax.totalSalary, tax.aggregatedPretax, household, persons, recipient, annualCommission, periods]);
 
-  const commissionInputs = (
-    <div className="space-y-3 mb-4">
+  // Wave 17: assumption inputs live in the open card's rail — RailReset
+  // pinned first, the view-only withholding toggle grouped at the bottom.
+  const rail = (
+    <>
+      {isOverridden && <RailReset onClick={reset} />}
       <NumberField
         id="annual-commission"
         label="Annual commission"
@@ -103,6 +105,7 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
         suffix="$/yr"
         step="1000"
         min={0}
+        edited={overriddenKeys.has('annualCommission')}
       />
       <div className="space-y-1">
         <label htmlFor="commission-frequency" className="text-sm font-medium">
@@ -124,36 +127,43 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
           Per check: {formatCurrency(commissionPerCheck)}
         </p>
       </div>
-      {isOverridden && (
-        <button type="button" onClick={reset} className="text-sm text-primary hover:underline text-left">
-          Reset to my data
-        </button>
-      )}
-    </div>
+      <RailViewGroup>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-sm">Withholding method</span>
+          <SupplementalMethodToggle method={method} onChange={setMethod} />
+        </div>
+      </RailViewGroup>
+    </>
   );
 
   if (!household || persons.length === 0 || !result) {
     return (
-      <CalculatorCard title="Estimated commission take-home" headline="—" cardId={cardId} onHide={onHide}>
-        {commissionInputs}
-        <p className="text-sm text-muted-foreground">
-          <Link to="/inputs/household" className="text-primary hover:underline">
-            Set up your household profile
-          </Link>{' '}
-          + tax rules to see commission tax.
-        </p>
-      </CalculatorCard>
+      <CalculatorCard
+        title="Estimated commission take-home"
+        headline="—"
+        cardId={cardId}
+        rail={rail}
+        meaning={
+          <EmptyMeaning>
+            <Link to="/inputs/household" className="text-primary hover:underline">
+              Set up your household profile
+            </Link>{' '}
+            + tax rules to see commission tax.
+          </EmptyMeaning>
+        }
+      />
     );
   }
 
   if (annualCommission <= 0) {
     return (
-      <CalculatorCard title="Estimated commission take-home" headline="—" cardId={cardId} onHide={onHide}>
-        {commissionInputs}
-        <p className="text-sm text-muted-foreground">
-          Enter a commission amount to see the tax breakdown.
-        </p>
-      </CalculatorCard>
+      <CalculatorCard
+        title="Estimated commission take-home"
+        headline="—"
+        cardId={cardId}
+        rail={rail}
+        meaning={<EmptyMeaning>Enter a commission amount to see the tax breakdown.</EmptyMeaning>}
+      />
     );
   }
 
@@ -173,16 +183,15 @@ export function CommissionTaxCard({ cardId, onHide }: CommissionTaxCardProps = {
     <CalculatorCard
       title="Estimated commission take-home"
       cardId={cardId}
-      onHide={onHide}
+      dirty={isOverridden}
+      meaning={
+        <>Per {values.frequency === 'MONTHLY' ? 'monthly' : 'quarterly'} check, after estimated tax and 401(k).</>
+      }
+      rail={rail}
       headline={
         <span data-testid="commission-takehome">{formatCurrency(netPerCheck)}</span>
       }
     >
-      {commissionInputs}
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium">Withholding method</span>
-        <SupplementalMethodToggle method={method} onChange={setMethod} />
-      </div>
       {/* Per-check breakdown */}
       <div className="text-sm font-medium mb-2">Per check ({values.frequency === 'MONTHLY' ? 'monthly' : 'quarterly'})</div>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-sm mb-4">

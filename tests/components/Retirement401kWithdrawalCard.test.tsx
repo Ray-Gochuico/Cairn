@@ -461,3 +461,29 @@ describe('Roth assumption honesty (round-3 E3)', () => {
     expect(note).toHaveTextContent(/doesn't model/i);
   });
 });
+
+describe('Retirement401kWithdrawalCard waymark meaning (Wave 17)', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    resetStores();
+  });
+
+  it('renders the waymark meaning line from already-rendered values (Wave 17)', async () => {
+    const user = userEvent.setup();
+    primeStores();
+    render(<MemoryRouter><Retirement401kWithdrawalCard cardId="retirement-401k-withdrawal" /></MemoryRouter>);
+    const amount = screen.getByLabelText(/withdrawal amount/i);
+    await user.clear(amount);
+    await user.type(amount, '10000');
+    expect(screen.getByTestId('retirement-401k-withdrawal-meaning')).toHaveTextContent(
+      /net of an estimated .* tax on a .* withdrawal/i,
+    );
+  });
+
+  it('empty state: headline —, cairn glyph, CTA sentence in the meaning slot', () => {
+    // No household → no breakdown → empty waymark.
+    render(<MemoryRouter><Retirement401kWithdrawalCard cardId="retirement-401k-withdrawal" /></MemoryRouter>);
+    expect(screen.getByTestId('retirement-401k-withdrawal-headline')).toHaveTextContent('—');
+    expect(document.querySelector('[data-testid="cairn-glyph"]')).toBeInTheDocument();
+  });
+});

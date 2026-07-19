@@ -694,3 +694,24 @@ describe('OvertimeCard', () => {
     ).toBeInTheDocument();
   });
 });
+
+describe('OvertimeCard waymark meaning (Wave 17)', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    resetStores();
+  });
+
+  it('renders the waymark meaning line from already-rendered values (Wave 17)', async () => {
+    primeStores();
+    render(<MemoryRouter><OvertimeCard cardId="overtime" /></MemoryRouter>);
+    const meaning = await screen.findByTestId('overtime-meaning');
+    expect(meaning).toHaveTextContent(/take-home on .* of overtime gross/i);
+  });
+
+  it('empty state (no eligible person): headline —, cairn glyph, CTA in the meaning slot', () => {
+    render(<MemoryRouter><OvertimeCard cardId="overtime" /></MemoryRouter>);
+    expect(screen.getByTestId('overtime-headline')).toHaveTextContent('—');
+    expect(document.querySelector('[data-testid="cairn-glyph"]')).toBeInTheDocument();
+    expect(screen.getByTestId('overtime-meaning')).toHaveTextContent(/no eligible person/i);
+  });
+});

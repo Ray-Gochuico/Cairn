@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
-import { CalculatorCard } from './CalculatorCard';
+import { CalculatorCard, EmptyMeaning, RailReset, RailViewGroup } from './CalculatorCard';
 import { OvertimeRowEditor, type OvertimeRow } from './OvertimeRowEditor';
 import { aggregateHouseholdPretax, computeSupplementalWageTax } from '@/lib/calculators/supplemental-wage';
 import { useHouseholdTaxContext } from '@/lib/calculators/use-household-tax-context';
@@ -63,10 +63,9 @@ function isEligible(person: Person): boolean {
 
 interface OvertimeCardProps {
   cardId?: string;
-  onHide?: (cardId: string) => void;
 }
 
-export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
+export function OvertimeCard({ cardId }: OvertimeCardProps = {}) {
   const { household } = useHouseholdStore();
   const persons = usePersonsStore((s) => s.persons);
   const dependents = useDependentsStore((s) => s.dependents);
@@ -74,7 +73,7 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
 
   const eligiblePerson = useMemo(() => persons.find(isEligible), [persons]);
   const derivedBase = eligiblePerson ? deriveBaseRate(eligiblePerson) : 0;
-  const { values, setValue, reset, isOverridden } = useCalculatorState(cardId ?? 'overtime', { baseRate: derivedBase });
+  const { values, setValue, reset, isOverridden, overriddenKeys } = useCalculatorState(cardId ?? 'overtime', { baseRate: derivedBase });
   const baseHourlyRate = values.baseRate ?? 0;
 
   // ---- ephemeral UI state ----
@@ -153,15 +152,20 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
 
   if (!eligiblePerson) {
     return (
-      <CalculatorCard title="Overtime" headline="—" cardId={cardId} onHide={onHide}>
-        <p className="text-sm text-muted-foreground">
-          No eligible person —{' '}
-          <Link to="/inputs/persons" className="text-primary hover:underline">
-            set Employment type to Hourly or Salaried with overtime
-          </Link>{' '}
-          to enable this card.
-        </p>
-      </CalculatorCard>
+      <CalculatorCard
+        title="Overtime"
+        headline="—"
+        cardId={cardId}
+        meaning={
+          <EmptyMeaning>
+            No eligible person —{' '}
+            <Link to="/inputs/persons" className="text-primary hover:underline">
+              set Employment type to Hourly or Salaried with overtime
+            </Link>{' '}
+            to enable this card.
+          </EmptyMeaning>
+        }
+      />
     );
   }
 
@@ -176,8 +180,12 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
 
   // ---- inputs ----
 
-  const baseInput = (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+  // Wave 17: assumption fields live in the open card's rail — RailReset
+  // first; the annualization knobs (pay period + recurrence — plain UI state,
+  // never isOverridden) grouped under the View label.
+  const rail = (
+    <>
+      {isOverridden && <RailReset onClick={reset} />}
       <div className="space-y-1">
         <NumberField
           id="ot-base-rate"
@@ -187,57 +195,55 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
           suffix="$/hr"
           step="0.01"
           min={0}
+          edited={overriddenKeys.has('baseRate')}
         />
         <p className="text-xs text-muted-foreground">
           Auto-derived from {eligiblePerson.name} (
           {eligiblePerson.employmentType === 'HOURLY' ? 'hourly rate' : 'implied from salary'}
           ). Edit to override.
         </p>
-        {isOverridden && (
-          <button type="button" onClick={reset} className="text-sm text-primary hover:underline text-left">
-            Reset to my data
-          </button>
-        )}
       </div>
-      <div className="space-y-1">
-        <Label htmlFor="ot-period">Pay period</Label>
-        <Select value={period} onValueChange={(v) => setPeriod(v as PaycheckPeriod)}>
-          <SelectTrigger id="ot-period" aria-label="Pay period">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {PAYCHECK_PERIODS.map((p) => (
-              <SelectItem key={p.id} value={p.id}>
-                {p.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <p className="text-xs text-muted-foreground">
-          Hours are entered per row; this sets how they annualize when overtime repeats.
-        </p>
-      </div>
-      <div className="space-y-1">
-        <Label htmlFor="ot-recurrence">Recurrence</Label>
-        <Select
-          value={recurrence}
-          onValueChange={(v) => setRecurrence(v as OvertimeRecurrence)}
-        >
-          <SelectTrigger id="ot-recurrence" aria-label="Recurrence">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="REPEATS">Repeats every period</SelectItem>
-            <SelectItem value="ONE_OFF">One-off</SelectItem>
-          </SelectContent>
-        </Select>
-        <p className="text-xs text-muted-foreground">
-          {recurrence === 'REPEATS'
-            ? 'Taxes and the OBBBA deduction use the annualized total.'
-            : 'Taxes and the OBBBA deduction use just these hours.'}
-        </p>
-      </div>
-    </div>
+      <RailViewGroup>
+        <div className="space-y-1">
+          <Label htmlFor="ot-period">Pay period</Label>
+          <Select value={period} onValueChange={(v) => setPeriod(v as PaycheckPeriod)}>
+            <SelectTrigger id="ot-period" aria-label="Pay period">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PAYCHECK_PERIODS.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Hours are entered per row; this sets how they annualize when overtime repeats.
+          </p>
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="ot-recurrence">Recurrence</Label>
+          <Select
+            value={recurrence}
+            onValueChange={(v) => setRecurrence(v as OvertimeRecurrence)}
+          >
+            <SelectTrigger id="ot-recurrence" aria-label="Recurrence">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="REPEATS">Repeats every period</SelectItem>
+              <SelectItem value="ONE_OFF">One-off</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            {recurrence === 'REPEATS'
+              ? 'Taxes and the OBBBA deduction use the annualized total.'
+              : 'Taxes and the OBBBA deduction use just these hours.'}
+          </p>
+        </div>
+      </RailViewGroup>
+    </>
   );
 
   const rowsEditor = (
@@ -265,33 +271,41 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
 
   if (baseHourlyRate <= 0) {
     return (
-      <CalculatorCard title="Overtime" headline="—" cardId={cardId} onHide={onHide}>
-        {baseInput}
+      <CalculatorCard
+        title="Overtime"
+        headline="—"
+        cardId={cardId}
+        rail={rail}
+        meaning={<EmptyMeaning>Base hourly rate must be positive. Enter a rate in the rail.</EmptyMeaning>}
+      >
         {rowsEditor}
-        <p className="text-sm text-muted-foreground">
-          Base hourly rate must be positive. Enter a rate above.
-        </p>
       </CalculatorCard>
     );
   }
 
   if (totalGross <= 0 || !taxResult || !household) {
     return (
-      <CalculatorCard title="Overtime" headline="—" cardId={cardId} onHide={onHide}>
-        {baseInput}
+      <CalculatorCard
+        title="Overtime"
+        headline="—"
+        cardId={cardId}
+        rail={rail}
+        meaning={
+          <EmptyMeaning>
+            {totalGross <= 0 ? (
+              'Enter overtime hours to see the take-home breakdown.'
+            ) : (
+              <>
+                <Link to="/inputs/household" className="text-primary hover:underline">
+                  Set up your household profile
+                </Link>{' '}
+                + tax rules to see overtime tax.
+              </>
+            )}
+          </EmptyMeaning>
+        }
+      >
         {rowsEditor}
-        <p className="text-sm text-muted-foreground">
-          {totalGross <= 0 ? (
-            'Enter overtime hours above to see the take-home breakdown.'
-          ) : (
-            <>
-              <Link to="/inputs/household" className="text-primary hover:underline">
-                Set up your household profile
-              </Link>{' '}
-              + tax rules to see overtime tax.
-            </>
-          )}
-        </p>
       </CalculatorCard>
     );
   }
@@ -314,12 +328,13 @@ export function OvertimeCard({ cardId, onHide }: OvertimeCardProps = {}) {
     <CalculatorCard
       title="Overtime"
       cardId={cardId}
-      onHide={onHide}
+      dirty={isOverridden}
+      meaning={<>Take-home on {formatCurrency(totalGross)} of overtime gross.</>}
+      rail={rail}
       headline={
         <span data-testid="ot-takehome">{formatCurrency(overtimeTakeHome)}</span>
       }
     >
-      {baseInput}
       {rowsEditor}
 
       {/* Per-row breakdown */}

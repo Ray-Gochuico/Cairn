@@ -4,7 +4,7 @@ import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
-import { CalculatorCard } from './CalculatorCard';
+import { CalculatorCard, EmptyMeaning, RailViewGroup } from './CalculatorCard';
 import { computePaycheck, FEDERAL_LIABILITY_CAVEAT } from '@/lib/calculators/paycheck';
 import { aggregateHouseholdPretax } from '@/lib/calculators/supplemental-wage';
 import { formatCurrency } from '@/lib/format';
@@ -16,10 +16,9 @@ import { TermTooltip } from '@/components/ui/glossary-tooltip';
 
 interface PaycheckCardProps {
   cardId?: string;
-  onHide?: (cardId: string) => void;
 }
 
-export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
+export function PaycheckCard({ cardId }: PaycheckCardProps = {}) {
   const { household } = useHouseholdStore();
   const persons = usePersonsStore((s) => s.persons);
   const dependents = useDependentsStore((s) => s.dependents);
@@ -93,15 +92,15 @@ export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
         title="Paycheck (estimated take-home)"
         headline="—"
         cardId={cardId}
-        onHide={onHide}
-      >
-        <p className="text-sm text-muted-foreground">
-          <Link to="/inputs/household" className="text-primary hover:underline">
-            Set up your household profile
-          </Link>{' '}
-          + tax rules to see take-home.
-        </p>
-      </CalculatorCard>
+        meaning={
+          <EmptyMeaning>
+            <Link to="/inputs/household" className="text-primary hover:underline">
+              Set up your household profile
+            </Link>{' '}
+            + tax rules to see take-home.
+          </EmptyMeaning>
+        }
+      />
     );
   }
 
@@ -129,7 +128,24 @@ export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
     <CalculatorCard
       title="Paycheck (estimated take-home)"
       cardId={cardId}
-      onHide={onHide}
+      meaning={<>After taxes and pretax deductions on {formatCurrency(perPeriod.gross)} gross.</>}
+      rail={
+        <RailViewGroup>
+          <div className="flex items-center gap-2 text-sm">
+            <label htmlFor="paycheck-period" className="text-muted-foreground">Period:</label>
+            <select
+              id="paycheck-period"
+              value={period}
+              onChange={(e) => setPeriod(e.target.value as PaycheckPeriod)}
+              className="border rounded px-2 py-1 bg-background"
+            >
+              {PAYCHECK_PERIODS.map((p) => (
+                <option key={p.id} value={p.id}>{p.label}</option>
+              ))}
+            </select>
+          </div>
+        </RailViewGroup>
+      }
       headline={
         // Wave 15 T1: period unit + earner qualifier live in the HEADLINE node
         // so a collapsed card is never ambiguous — CalculatorCard hides
@@ -148,23 +164,6 @@ export function PaycheckCard({ cardId, onHide }: PaycheckCardProps = {}) {
         </span>
       }
     >
-      <div className="flex items-center gap-2 mb-3 text-sm">
-        <label htmlFor="paycheck-period" className="text-muted-foreground">
-          Period:
-        </label>
-        <select
-          id="paycheck-period"
-          value={period}
-          onChange={(e) => setPeriod(e.target.value as PaycheckPeriod)}
-          className="border rounded px-2 py-1 bg-background"
-        >
-          {PAYCHECK_PERIODS.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.label}
-            </option>
-          ))}
-        </select>
-      </div>
       <div className="mb-3">
         <Link
           to="/calculators/paycheck"

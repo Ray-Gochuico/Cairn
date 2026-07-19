@@ -615,3 +615,25 @@ describe('BonusTaxCard', () => {
     expect(screen.queryByText(/Additional Medicare/)).not.toBeInTheDocument();
   });
 });
+
+describe('BonusTaxCard waymark meaning (Wave 17)', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    resetStores();
+  });
+
+  it('renders the waymark meaning line from already-rendered values (Wave 17)', async () => {
+    primeStores();
+    render(<MemoryRouter><BonusTaxCard cardId="bonus-tax" /></MemoryRouter>);
+    fireEvent.change(await screen.findByLabelText(/Bonus amount/i), { target: { value: '10000' } });
+    const meaning = await screen.findByTestId('bonus-tax-meaning');
+    expect(meaning).toHaveTextContent(/after an estimated .* tax on a .* bonus/i);
+  });
+
+  it('empty state: headline —, cairn glyph, CTA sentence in the meaning slot', () => {
+    // No household → tax context never resolves → empty waymark.
+    render(<MemoryRouter><BonusTaxCard cardId="bonus-tax" /></MemoryRouter>);
+    expect(screen.getByTestId('bonus-tax-headline')).toHaveTextContent('—');
+    expect(document.querySelector('[data-testid="cairn-glyph"]')).toBeInTheDocument();
+  });
+});
