@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { useEquityGrantsStore } from '@/stores/equity-grants-store';
 import { usePersonsStore } from '@/stores/persons-store';
@@ -67,6 +67,7 @@ function primeStores(opts: PrimeOpts = {}) {
       strikePrice: g.strikePrice ?? 5,
       totalShares: g.totalShares ?? 1000,
       currentFmv: g.currentFmv ?? 50,
+      updatedAt: g.updatedAt,
       grantType: g.grantType ?? 'RSU',
       vestingSchedule: g.vestingSchedule ?? [
         { date: '2025-01-15', cumulativePct: 0.25 },
@@ -396,8 +397,8 @@ describe('EquityValueCard', () => {
     expect(screen.queryByTestId('equity-upcoming-vests')).not.toBeInTheDocument();
   });
 
-  it('renders the cumulative-vesting chart when a grant has multiple vest dates', () => {
-    // The default primeStores vesting schedule has 4 distinct dates → chartData.length > 1
+  it('renders the forward vest chart (D10) when vests lie in the next 24 months', () => {
+    // Pinned 2026-05-14: three of the four vests are still ahead within 24mo.
     primeStores({
       grants: [
         {
@@ -419,11 +420,13 @@ describe('EquityValueCard', () => {
         <EquityValueCard />
       </MemoryRouter>,
     );
-    // The LineChartCard title renders even though recharts draws 0×0 in jsdom
-    expect(screen.getByText('Cumulative vesting')).toBeInTheDocument();
+    // The InlineChart label renders even though recharts draws 0×0 in jsdom.
+    expect(screen.getByText('Vesting ahead (24 months)')).toBeInTheDocument();
+    // The all-time cumulative chart is gone (D10 — planning charts look forward).
+    expect(screen.queryByText('Cumulative vesting')).not.toBeInTheDocument();
   });
 
-  it('does not render the cumulative-vesting chart for a single-vest grant', () => {
+  it('no forward vests → the quiet fully-vested line replaces the chart (D10)', () => {
     primeStores({
       grants: [
         {
@@ -432,7 +435,7 @@ describe('EquityValueCard', () => {
           totalShares: 500,
           currentFmv: 20,
           vestingSchedule: [
-            { date: '2025-06-01', cumulativePct: 1.0 },
+            { date: '2025-06-01', cumulativePct: 1.0 }, // past at the pinned date
           ],
         },
       ],
@@ -442,8 +445,8 @@ describe('EquityValueCard', () => {
         <EquityValueCard />
       </MemoryRouter>,
     );
-    // Only one chart point → chart should NOT render
-    expect(screen.queryByText('Cumulative vesting')).not.toBeInTheDocument();
+    expect(screen.queryByText('Vesting ahead (24 months)')).not.toBeInTheDocument();
+    expect(screen.getByText('All grants fully vested.')).toBeInTheDocument();
   });
 
   it('shows est. ordinary income row for an NSO grant with unvested shares', () => {
@@ -521,8 +524,10 @@ describe('EquityValueCard', () => {
         <EquityValueCard />
       </MemoryRouter>,
     );
-    // The AMT note must be in the document
-    expect(screen.getByText(/AMT/)).toBeInTheDocument();
+    // The AMT note must be in the document (Wave 18: it lives inside the
+    // NotModeledDisclosure; the TermTooltip splits the text nodes).
+    expect(screen.getAllByText(/AMT/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/ISO grants may trigger/i)).toBeInTheDocument();
   });
 
   it('does NOT show AMT note when only RSU grants are present', () => {
@@ -556,11 +561,11 @@ describe('EquityValueCard waymark meaning (Wave 17)', () => {
     resetStores();
   });
 
-  it('renders the waymark meaning line from already-rendered values (Wave 17)', () => {
+  it('renders the waymark meaning line from already-rendered values (Wave 18: dual reading)', () => {
     primeStores({ grants: [{}, {}] });
     render(<MemoryRouter><EquityValueCard cardId="equity" /></MemoryRouter>);
     expect(screen.getByTestId('equity-meaning')).toHaveTextContent(
-      /still unvested across \d+ grants?\./i,
+      /vested today · .* vesting in the next 12 months/i,
     );
   });
 
@@ -571,6 +576,116 @@ describe('EquityValueCard waymark meaning (Wave 17)', () => {
     expect(screen.getByRole('link', { name: /add equity grants/i })).toHaveAttribute(
       'href',
       '/equity-grants',
+    );
+  });
+});
+
+describe('EquityValueCard — real calculator (Wave 18 C11)', () => {
+  beforeEach(() => {
+    resetStores();
+    sessionStorage.clear();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(PINNED_DATE);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const singleCompanyGrant = {
+    name: 'RSU Grant',
+    grantType: 'RSU' as const,
+    companyName: 'Acme Corp',
+    totalShares: 1000,
+    currentFmv: 50,
+    strikePrice: 0,
+    vestingSchedule: [
+      { date: '2020-01-15', cumulativePct: 0.25 },
+      { date: '2027-01-15', cumulativePct: 1.0 },
+    ],
+  };
+
+  it('FMV what-if reprices vested/unvested/income live; Reset restores (D8)', async () => {
+    primeStores({ grants: [singleCompanyGrant] });
+    render(<MemoryRouter><EquityValueCard /></MemoryRouter>);
+
+    // Prefilled from the stored FMV.
+    const fmv = screen.getByLabelText(/fmv per share/i) as HTMLInputElement;
+    expect(Number(fmv.value)).toBe(50);
+    expect(screen.getByTestId('equity-total-vested').textContent).toBe('$12,500');
+
+    fireEvent.change(fmv, { target: { value: '80' } });
+    // 250 vested × $80 = $20,000; unvested 750 × 80 = $60,000; next-12 income
+    // = 750 × 80 = $60,000 (the 2027-01-15 vest is inside the window).
+    expect(screen.getByTestId('equity-total-vested').textContent).toBe('$20,000');
+    expect(screen.getByTestId('equity-total-unvested').textContent).toBe('$60,000');
+    expect(screen.getByTestId('equity-ordinary-income').textContent).toBe('$60,000');
+
+    fireEvent.click(screen.getByRole('button', { name: /reset to my data/i }));
+    expect(screen.getByTestId('equity-total-vested').textContent).toBe('$12,500');
+  });
+
+  it('D8: multi-company households see the quiet note instead of the FMV field', () => {
+    primeStores({
+      grants: [
+        singleCompanyGrant,
+        { ...singleCompanyGrant, name: 'Other', companyName: 'Globex' },
+      ],
+    });
+    render(<MemoryRouter><EquityValueCard /></MemoryRouter>);
+    expect(screen.queryByLabelText(/fmv per share/i)).toBeNull();
+    expect(
+      screen.getByText(/Grants span multiple companies — edit each grant's FMV in Inputs\./),
+    ).toBeInTheDocument();
+  });
+
+  it('D9: the FMV caption carries the stored updatedAt date when present', () => {
+    primeStores({
+      grants: [{ ...singleCompanyGrant, updatedAt: '2026-04-01 10:00:00' }],
+    });
+    render(<MemoryRouter><EquityValueCard /></MemoryRouter>);
+    expect(screen.getByText(/prefilled from your stored FMV/i)).toBeInTheDocument();
+    expect(screen.getByText(/updated Apr 1, 2026/i)).toBeInTheDocument();
+  });
+
+  it('D9: no date parenthetical when updatedAt is absent', () => {
+    primeStores({ grants: [singleCompanyGrant] });
+    render(<MemoryRouter><EquityValueCard /></MemoryRouter>);
+    expect(screen.getByText(/prefilled from your stored FMV/i)).toBeInTheDocument();
+    expect(screen.queryByText(/updated /i)).toBeNull();
+  });
+
+  it('planning-figure swap: next-12-months emphasis row replaces the vests-today row', () => {
+    primeStores({ grants: [singleCompanyGrant] });
+    render(<MemoryRouter><EquityValueCard /></MemoryRouter>);
+    // 750 shares vest 2027-01-15 (inside 12mo of 2026-05-14) × $50 = $37,500.
+    expect(screen.getByTestId('equity-next-12mo').textContent).toBe('$37,500');
+    expect(screen.getByText('Vesting in the next 12 months')).toBeInTheDocument();
+    expect(screen.getByText('Est. ordinary income from those vests')).toBeInTheDocument();
+    // The caveat survives as this row's caption.
+    expect(
+      screen.getByText('Estimated ordinary income at vest — not withheld tax.'),
+    ).toBeInTheDocument();
+    // The old vests-today framing is gone.
+    expect(screen.queryByText(/if unvested vests today/i)).toBeNull();
+  });
+
+  it('upcoming vests get dollars: date · value pairs', () => {
+    primeStores({ grants: [singleCompanyGrant] });
+    render(<MemoryRouter><EquityValueCard /></MemoryRouter>);
+    const block = screen.getByTestId('equity-upcoming-vests');
+    expect(block.textContent).toMatch(/Next vests: Jan 15, 2027 · \$37,500/);
+  });
+
+  it('ONE NotModeledDisclosure absorbs the scattered fine print (withholding caveat first)', () => {
+    primeStores({ grants: [singleCompanyGrant] });
+    render(<MemoryRouter><EquityValueCard /></MemoryRouter>);
+    const details = document.querySelector('details')!;
+    expect(details).toHaveTextContent('What this calculator does NOT model');
+    expect(details).toHaveTextContent(
+      /Vest-day ordinary income is an estimate of taxable income, not the tax your employer withholds/,
+    );
+    expect(details).toHaveTextContent(
+      /FMV is your stored estimate, not a live market price/,
     );
   });
 });

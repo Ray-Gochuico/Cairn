@@ -101,6 +101,108 @@ export function vestingChartData(
   }));
 }
 
+/** UTC-safe YYYY-MM-DD + n months (day clamps naturally via Date rollover —
+ *  vest schedules are month-grain so the exact day only sets window edges). */
+function addMonthsIso(iso: string, months: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCMonth(d.getUTCMonth() + months);
+  return d.toISOString().slice(0, 10);
+}
+
+export interface WindowVestEvent {
+  date: string;
+  shares: number;
+  value: number;
+  ordinaryIncome: number;
+}
+
+/** Vest events in (todayIso, todayIso + months]. Holder value per share
+ *  (options net strike, floored at 0); ordinary income per the existing
+ *  RSU/NSO/ISO rules (ISO → 0, AMT-preference not ordinary income). The walk
+ *  updates prevPct on PAST entries too — that's what makes the first future
+ *  entry's delta measure from the already-vested pct. */
+export function vestsInWindow(
+  grants: ReadonlyArray<GrantInput>,
+  todayIso: string,
+  months: number,
+): { events: WindowVestEvent[]; totalValue: number; totalOrdinaryIncome: number } {
+  const end = addMonthsIso(todayIso, months);
+  const events: WindowVestEvent[] = [];
+  for (const g of grants) {
+    const holderPerShare = perShareHolderValue(g);
+    const incomePerShare =
+      g.grantType === GrantType.ISO
+        ? 0
+        : g.grantType === GrantType.NSO
+          ? Math.max(0, g.currentFmv - g.strikePrice)
+          : g.currentFmv;
+    let prevPct = 0;
+    for (const entry of g.vestingSchedule) {
+      const deltaPct = entry.cumulativePct - prevPct;
+      prevPct = entry.cumulativePct;
+      if (entry.date <= todayIso || entry.date > end || deltaPct <= 0) continue;
+      const shares = deltaPct * g.totalShares;
+      events.push({
+        date: entry.date,
+        shares,
+        value: shares * holderPerShare,
+        ordinaryIncome: shares * incomePerShare,
+      });
+    }
+  }
+  events.sort((a, b) => (a.date < b.date ? -1 : 1));
+  return {
+    events,
+    totalValue: events.reduce((s, e) => s + e.value, 0),
+    totalOrdinaryIncome: events.reduce((s, e) => s + e.ordinaryIncome, 0),
+  };
+}
+
+export interface ForwardVestPoint {
+  /** 'YYYY-MM' bucket key. */
+  month: string;
+  /** "Mon ’YY" tick label (D10). */
+  label: string;
+  cumulativeValue: number;
+}
+
+const FORWARD_MONTH_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  timeZone: 'UTC',
+});
+
+/**
+ * D10: cumulative value vesting over the NEXT `months` months, monthly-
+ * bucketed — the forward "ramp" a planning chart should show (the all-time
+ * cumulative was dominated by already-vested history). Starts at 0.
+ */
+export function forwardVestChartData(
+  grants: ReadonlyArray<GrantInput>,
+  todayIso: string,
+  months: number,
+): ForwardVestPoint[] {
+  const { events } = vestsInWindow(grants, todayIso, months);
+  const valueByMonth = new Map<string, number>();
+  for (const e of events) {
+    const m = e.date.slice(0, 7);
+    valueByMonth.set(m, (valueByMonth.get(m) ?? 0) + e.value);
+  }
+  const points: ForwardVestPoint[] = [];
+  let cumulative = 0;
+  for (let i = 1; i <= months; i++) {
+    const monthIso = addMonthsIso(todayIso, i);
+    const month = monthIso.slice(0, 7);
+    cumulative += valueByMonth.get(month) ?? 0;
+    const d = new Date(`${month}-01T00:00:00Z`);
+    points.push({
+      month,
+      label: `${FORWARD_MONTH_FORMATTER.format(d)} ’${month.slice(2, 4)}`,
+      cumulativeValue: cumulative,
+    });
+  }
+  return points;
+}
+
 /**
  * Estimated ordinary income if the unvested portion of a grant vested today at
  * the current FMV.

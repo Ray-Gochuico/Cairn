@@ -361,3 +361,128 @@ describe('option value nets the strike (wave-9 M64)', () => {
     expect(pts[pts.length - 1].vestedValue).toBeCloseTo(1000 * 7, 6);
   });
 });
+
+// ── Wave 18 C11 — forward-vest window + chart (D10) ─────────────────────────
+
+describe('vestsInWindow (Wave 18)', () => {
+  const { GrantType: GT } = { GrantType };
+  const rsu = {
+    grantDate: '2025-01-15',
+    grantType: GT.RSU,
+    strikePrice: 0,
+    totalShares: 1000,
+    currentFmv: 40,
+    vestingSchedule: [
+      { date: '2026-01-15', cumulativePct: 0.25 },
+      { date: '2026-07-15', cumulativePct: 0.5 },
+      { date: '2027-01-15', cumulativePct: 0.75 },
+      { date: '2027-07-15', cumulativePct: 1.0 },
+    ],
+  };
+
+  it('returns per-event shares/value in (today, today + months]; past entries set the delta base', async () => {
+    const { vestsInWindow } = await import('@/lib/equity-value');
+    // Today 2026-05-14: 25% already vested. Next 12 months window ends
+    // 2027-05-14 → includes 2026-07-15 (+25%) and 2027-01-15 (+25%).
+    const w = vestsInWindow([rsu], '2026-05-14', 12);
+    expect(w.events).toHaveLength(2);
+    expect(w.events[0]).toMatchObject({ date: '2026-07-15', shares: 250, value: 10000 });
+    expect(w.events[1]).toMatchObject({ date: '2027-01-15', shares: 250, value: 10000 });
+    expect(w.totalValue).toBe(20000);
+    // RSU ordinary income = full FMV.
+    expect(w.totalOrdinaryIncome).toBe(20000);
+  });
+
+  it('window edges: a vest exactly at today is EXCLUDED; exactly at today + months is INCLUDED', async () => {
+    const { vestsInWindow } = await import('@/lib/equity-value');
+    const g = {
+      ...rsu,
+      vestingSchedule: [
+        { date: '2026-05-14', cumulativePct: 0.5 },
+        { date: '2027-05-14', cumulativePct: 1.0 },
+      ],
+    };
+    const w = vestsInWindow([g], '2026-05-14', 12);
+    expect(w.events.map((e) => e.date)).toEqual(['2027-05-14']);
+    expect(w.events[0].shares).toBe(500);
+  });
+
+  it('a fully-vested grant yields no events', async () => {
+    const { vestsInWindow } = await import('@/lib/equity-value');
+    expect(vestsInWindow([rsu], '2028-01-01', 12).events).toHaveLength(0);
+  });
+
+  it('options net the strike (floored at 0) for value; NSO income = spread, ISO income = 0', async () => {
+    const { vestsInWindow } = await import('@/lib/equity-value');
+    const nso = { ...rsu, grantType: GT.NSO, strikePrice: 15 };
+    const wNso = vestsInWindow([nso], '2026-05-14', 12);
+    // Holder value per share = 40 − 15 = 25 → 250 shares × 25 = 6,250/event.
+    expect(wNso.events[0].value).toBe(6250);
+    expect(wNso.totalOrdinaryIncome).toBe(12500);
+    const iso = { ...rsu, grantType: GT.ISO, strikePrice: 15 };
+    const wIso = vestsInWindow([iso], '2026-05-14', 12);
+    expect(wIso.events[0].value).toBe(6250);
+    expect(wIso.totalOrdinaryIncome).toBe(0); // AMT preference, not ordinary income
+    const underwater = { ...rsu, grantType: GT.NSO, strikePrice: 90 };
+    expect(vestsInWindow([underwater], '2026-05-14', 12).totalValue).toBe(0);
+  });
+
+  it('merges + date-sorts events across grants', async () => {
+    const { vestsInWindow } = await import('@/lib/equity-value');
+    const other = {
+      ...rsu,
+      currentFmv: 10,
+      vestingSchedule: [{ date: '2026-06-01', cumulativePct: 1.0 }],
+    };
+    const w = vestsInWindow([rsu, other], '2026-05-14', 12);
+    expect(w.events.map((e) => e.date)).toEqual(['2026-06-01', '2026-07-15', '2027-01-15']);
+  });
+});
+
+describe('forwardVestChartData (Wave 18 D10)', () => {
+  it('buckets the next N months cumulatively, starting at 0, with Mon ’YY labels', async () => {
+    const { forwardVestChartData } = await import('@/lib/equity-value');
+    const g = {
+      grantDate: '2025-01-15',
+      grantType: GrantType.RSU,
+      strikePrice: 0,
+      totalShares: 1000,
+      currentFmv: 40,
+      vestingSchedule: [
+        { date: '2026-01-15', cumulativePct: 0.25 },
+        { date: '2026-07-15', cumulativePct: 0.5 },
+        { date: '2027-01-15', cumulativePct: 0.75 },
+        { date: '2027-07-15', cumulativePct: 1.0 },
+      ],
+    };
+    const rows = forwardVestChartData([g], '2026-05-14', 24);
+    expect(rows).toHaveLength(24);
+    expect(rows[0].month).toBe('2026-06');
+    expect(rows[0].label).toBe('Jun ’26');
+    expect(rows[0].cumulativeValue).toBe(0);
+    // 2026-07 bucket carries the +250-share vest → 10,000; stays cumulative.
+    const jul = rows.find((r) => r.month === '2026-07')!;
+    expect(jul.cumulativeValue).toBe(10000);
+    const feb27 = rows.find((r) => r.month === '2027-02')!;
+    expect(feb27.cumulativeValue).toBe(20000);
+    const end = rows[rows.length - 1];
+    expect(end.month).toBe('2028-05');
+    // 25% was already vested at 2026-05-14 — the forward ramp tops out at the
+    // remaining 75% (750 shares × $40 = $30,000), NOT the full grant value.
+    expect(end.cumulativeValue).toBe(30000);
+  });
+
+  it('returns an all-zero ramp when nothing vests forward', async () => {
+    const { forwardVestChartData } = await import('@/lib/equity-value');
+    const g = {
+      grantDate: '2020-01-15',
+      grantType: GrantType.RSU,
+      strikePrice: 0,
+      totalShares: 100,
+      currentFmv: 10,
+      vestingSchedule: [{ date: '2021-01-15', cumulativePct: 1.0 }],
+    };
+    const rows = forwardVestChartData([g], '2026-05-14', 24);
+    expect(rows.every((r) => r.cumulativeValue === 0)).toBe(true);
+  });
+});

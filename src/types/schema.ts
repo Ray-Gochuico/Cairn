@@ -299,6 +299,11 @@ export const EquityGrantSchema = z.object({
     'last vesting entry must reach cumulativePct = 1.0',
   ),
   currentFmv: z.number().nonnegative(),
+  // D9 (Wave 18): read-only FMV-freshness stamp surfaced from the SQL
+  // updated_at column (the repo's UPDATE already maintains it). Optional so
+  // every existing payload/fixture parses unchanged; never written by the
+  // repo's insert/update statements.
+  updatedAt: z.string().optional(),
   // Grant-type discriminator (RSU / ISO / NSO). Defaults to 'RSU' so existing
   // payloads (and rows back-filled by migration 0044) parse unchanged. Kept in
   // lock-step with the equity_grants.grant_type CHECK + the GrantType enum.
