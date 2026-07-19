@@ -99,6 +99,10 @@ function ScenarioBarField(props: {
       timer.current = null;
     }
     onReset(spec.field);
+    // W16 review: this button renders only while `edited` is true, so
+    // activating it unmounts the focused element — hand focus to the field's
+    // input instead of letting it drop to <body>.
+    document.getElementById(spec.id)?.focus();
   };
 
   return (
@@ -174,7 +178,12 @@ export function ScenarioBar() {
             </span>
             <button
               type="button"
-              onClick={scenario.resetAll}
+              onClick={() => {
+                scenario.resetAll();
+                // W16 review: this button unmounts once editedCount hits 0 —
+                // hand focus to the first scenario field, not <body>.
+                document.getElementById(FIELDS[0].id)?.focus();
+              }}
               className="text-primary hover:underline"
             >
               Reset to my data

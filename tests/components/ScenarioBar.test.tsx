@@ -193,6 +193,29 @@ describe('ScenarioBar', () => {
     expect(sessionStorage.getItem(SCENARIO_STORAGE_KEY)).toBeNull();
   });
 
+  it('per-field reset hands focus to the field input (the reset button unmounts on activation)', async () => {
+    const user = userEvent.setup();
+    renderBar();
+    const expenses = screen.getByLabelText('Monthly expenses');
+    await user.clear(expenses);
+    await user.type(expenses, '6500');
+    await user.click(
+      await screen.findByRole('button', { name: 'Reset Monthly expenses to your data' }),
+    );
+    // Without the handoff, focus drops to <body> when the button unmounts.
+    expect(screen.getByLabelText('Monthly expenses')).toHaveFocus();
+  });
+
+  it('Reset to my data hands focus to the first scenario field (the button unmounts at Edited 0)', async () => {
+    const user = userEvent.setup();
+    renderBar();
+    const expenses = screen.getByLabelText('Monthly expenses');
+    await user.clear(expenses);
+    await user.type(expenses, '7000');
+    await user.click(await screen.findByRole('button', { name: /^reset to my data$/i }));
+    expect(screen.getByLabelText('Portfolio')).toHaveFocus();
+  });
+
   it('shows the honesty caption verbatim', () => {
     renderBar();
     expect(

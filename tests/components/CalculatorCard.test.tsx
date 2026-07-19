@@ -94,3 +94,46 @@ it('h2 heading still present when title is a ReactNode; Hide aria-label still us
   ).toBeInTheDocument();
 });
 
+
+it('headline status region carries an sr-only card-name prefix for AT attribution (W16 review)', () => {
+  // One ScenarioBar edit recomputes several card headlines at once; without
+  // attribution AT hears three context-free figures. The card name rides
+  // INSIDE the status region as sr-only text — announced, never rendered.
+  render(
+    <MemoryRouter>
+      <CalculatorCard
+        title="Years to FI"
+        headline="12.3 years"
+        cardId="financial-independence"
+        onHide={() => {}}
+      >
+        <div>Body</div>
+      </CalculatorCard>
+    </MemoryRouter>,
+  );
+  const status = screen.getByTestId('financial-independence-headline');
+  // Accessible text is attributed…
+  expect(status.textContent).toBe('Years to FI: 12.3 years');
+  // …but the attribution is sr-only, so the VISIBLE headline is unchanged.
+  const prefix = status.querySelector('.sr-only');
+  expect(prefix).not.toBeNull();
+  expect(prefix!.textContent).toBe('Years to FI: ');
+});
+
+it('sr-only prefix uses titleText when the title is a ReactNode', () => {
+  render(
+    <MemoryRouter>
+      <CalculatorCard
+        title={<span>Coast<strong>FI</strong></span>}
+        titleText="CoastFI"
+        headline="80%"
+        cardId="coast-fi"
+        onHide={() => {}}
+      >
+        <div>Body</div>
+      </CalculatorCard>
+    </MemoryRouter>,
+  );
+  const status = screen.getByTestId('coast-fi-headline');
+  expect(status.querySelector('.sr-only')?.textContent).toBe('CoastFI: ');
+});

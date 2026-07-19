@@ -49,7 +49,7 @@ describe('DebtPayoffCard', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText(/Debt Payoff/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Debt Payoff/i })).toBeInTheDocument();
     // Wave 15 T10: "Add loans" is the link — pin the tail separately since
     // the link boundary splits the sentence. W14b: the sentence names the
     // Loans page (the loan's post-Inputs home), not Inputs.
