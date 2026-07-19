@@ -7,6 +7,7 @@ import type {
   EquityGrant,
   Loan,
 } from '@/types/schema';
+import { calculatorCardLabel } from '@/lib/calculator-card-layout';
 
 /** A non-core sidebar tab the tailoring engine may recommend hiding. */
 export interface TailorTab {
@@ -110,36 +111,36 @@ export function computeTailoring(input: TailoringInput): TailoringResult {
 
   const calculators: TailorCalc[] = [
     // Always shown (8).
-    { id: 'paycheck', label: 'Paycheck', visible: true, reason: 'Always available' },
-    { id: 'financial-independence', label: 'Years to FI', visible: true, reason: 'Always available' },
-    { id: 'coast-fi', label: 'CoastFI', visible: true, reason: 'Always available' },
-    { id: 'compound-interest', label: 'Compound Interest', visible: true, reason: 'Always available' },
-    { id: 'contribution-allocator', label: 'Contribution allocator', visible: true, reason: 'Always available' },
-    { id: 'backtest', label: 'Historical Backtest', visible: true, reason: 'Always available' },
-    { id: 'retirement-401k-withdrawal', label: '401k withdrawal take-home', visible: true, reason: 'Always available' },
-    { id: 'debt-payoff', label: 'Debt Payoff', visible: true, reason: 'Always available — add a loan to use it' },
+    { id: 'paycheck', label: calculatorCardLabel('paycheck'), visible: true, reason: 'Always available' },
+    { id: 'financial-independence', label: calculatorCardLabel('financial-independence'), visible: true, reason: 'Always available' },
+    { id: 'coast-fi', label: calculatorCardLabel('coast-fi'), visible: true, reason: 'Always available' },
+    { id: 'compound-interest', label: calculatorCardLabel('compound-interest'), visible: true, reason: 'Always available' },
+    { id: 'contribution-allocator', label: calculatorCardLabel('contribution-allocator'), visible: true, reason: 'Always available' },
+    { id: 'backtest', label: calculatorCardLabel('backtest'), visible: true, reason: 'Always available' },
+    { id: 'retirement-401k-withdrawal', label: calculatorCardLabel('retirement-401k-withdrawal'), visible: true, reason: 'Always available' },
+    { id: 'debt-payoff', label: calculatorCardLabel('debt-payoff'), visible: true, reason: 'Always available — add a loan to use it' },
     // Conditional (4).
     {
       id: 'bonus-tax',
-      label: 'Bonus tax',
+      label: calculatorCardLabel('bonus-tax'),
       visible: hasBonus,
       reason: hasBonus ? 'You entered an expected bonus' : 'No expected bonus entered',
     },
     {
       id: 'commission-tax',
-      label: 'Commission tax',
+      label: calculatorCardLabel('commission-tax'),
       visible: hasCommission,
       reason: hasCommission ? 'You entered an expected commission' : 'No expected commission entered',
     },
     {
       id: 'overtime',
-      label: 'Overtime',
+      label: calculatorCardLabel('overtime'),
       visible: hasOvertime,
       reason: hasOvertime ? 'An hourly / overtime-eligible job is set' : 'No hourly or overtime-eligible job',
     },
     {
       id: 'equity',
-      label: 'Equity Value',
+      label: calculatorCardLabel('equity'),
       visible: hasGrants,
       reason: hasGrants ? 'You have an equity grant entered' : 'No equity grants entered',
     },

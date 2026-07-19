@@ -6,29 +6,12 @@ import { useSettingsStore } from '@/stores/settings-store';
 import { DEFAULT_SECTIONS } from '@/components/layout/Sidebar';
 import type { TailoringResult, TailorTab, TailorCalc } from '@/lib/onboarding-tailoring';
 import type { SidebarLayoutEntry, CardLayoutEntry } from '@/types/schema';
+import { CALCULATOR_CARD_IDS } from '@/lib/calculator-card-layout';
 
 // The one tab the user must never hide — keep it visible in the overlay
 // regardless of any (it should never produce a) row. Mirrors
 // SidebarSection.tsx's NON_HIDEABLE rule so the two write paths agree.
 const NON_HIDEABLE = '/settings';
-
-// The complete calculator-card id set (mirrors CARD_IDS in
-// CalculatorsLayout.tsx). The overlay we persist must list all 12 so the
-// DB field is a full snapshot, not a sparse patch.
-const ALL_CALC_IDS = [
-  'paycheck',
-  'bonus-tax',
-  'commission-tax',
-  'overtime',
-  'financial-independence',
-  'coast-fi',
-  'compound-interest',
-  'debt-payoff',
-  'equity',
-  'retirement-401k-withdrawal',
-  'backtest',
-  'contribution-allocator',
-] as const;
 
 export interface TailorStepProps {
   result: TailoringResult;
@@ -71,7 +54,7 @@ export function TailorStep({ result, totalSteps = 3, onDone, onSkip }: TailorSte
   // Build a COMPLETE calc-card overlay for all 12 ids. A listed calc is
   // hidden:!visible; an unlisted (always-shown) calc defaults visible.
   const buildCalcLayout = (): CardLayoutEntry[] =>
-    ALL_CALC_IDS.map((id): CardLayoutEntry => ({
+    CALCULATOR_CARD_IDS.map((id): CardLayoutEntry => ({
       id,
       hidden: id in calcVisible ? !calcVisible[id] : false,
     }));
