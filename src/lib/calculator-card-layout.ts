@@ -3,26 +3,54 @@ import { SettingsRepo } from '@/domain/app-settings';
 import { getDatabase } from '@/db/db';
 import { getHiddenCards } from '@/lib/calculator-visibility';
 
-/**
- * The 12 stable kebab-case calculator-card ids, in display order. This is the
- * single canonical list; `CalculatorsLayout` re-exports it as `CARD_IDS`
- * (object form) for its JSX and the tailoring engine consumes it. Keep this in
- * lock-step with the cards rendered in `CalculatorsLayout.tsx`.
- */
-export const CALCULATOR_CARD_IDS: readonly string[] = [
-  'paycheck',
-  'bonus-tax',
-  'commission-tax',
-  'overtime',
-  'financial-independence',
-  'coast-fi',
-  'compound-interest',
-  'debt-payoff',
-  'equity',
-  'retirement-401k-withdrawal',
-  'backtest',
-  'contribution-allocator',
+export type CalculatorCardGroup = 'paycheck-tax' | 'path-to-fi' | 'next-dollar';
+
+export interface CalculatorCardDef {
+  /** Stable kebab-case id — persisted in settings.calculatorCardLayout. */
+  id: string;
+  /** Human label (Customize popovers, onboarding Tailor step). */
+  label: string;
+  group: CalculatorCardGroup;
+  /** Route of the full-page tool, surfaced in the open card's ⋯ menu. */
+  fullPagePath?: string;
+}
+
+/** The three /calculators sections, in page order (Wave 17). */
+export const CALCULATOR_CARD_GROUPS: readonly { id: CalculatorCardGroup; label: string }[] = [
+  { id: 'paycheck-tax', label: 'Paycheck & tax' },
+  { id: 'path-to-fi', label: 'Path to FI' },
+  { id: 'next-dollar', label: 'Next dollar' },
 ];
+
+/**
+ * THE canonical calculator-card list (Wave 17): one ordered, grouped source
+ * driving grid render order, the section blocks, the Customize popovers, and
+ * the onboarding Tailor overlay. Component wiring lives in
+ * src/pages/calculators/calculator-registry.tsx (boot-safe split: this module
+ * is imported by the settings store — no React/component imports here).
+ * Order is GROUPED (D2); all consumers are id-keyed so the reorder from the
+ * pre-Wave-17 list is persistence-safe.
+ */
+export const CALCULATOR_CARD_DEFS: readonly CalculatorCardDef[] = [
+  { id: 'paycheck', label: 'Paycheck', group: 'paycheck-tax', fullPagePath: '/calculators/paycheck' },
+  { id: 'bonus-tax', label: 'Bonus tax', group: 'paycheck-tax' },
+  { id: 'commission-tax', label: 'Commission tax', group: 'paycheck-tax' },
+  { id: 'overtime', label: 'Overtime', group: 'paycheck-tax' },
+  { id: 'retirement-401k-withdrawal', label: '401k withdrawal take-home', group: 'paycheck-tax' },
+  { id: 'financial-independence', label: 'Years to FI', group: 'path-to-fi' },
+  { id: 'coast-fi', label: 'CoastFI', group: 'path-to-fi' },
+  { id: 'compound-interest', label: 'Compound Interest', group: 'path-to-fi' },
+  { id: 'backtest', label: 'Historical Backtest', group: 'path-to-fi', fullPagePath: '/calculators/backtest' },
+  { id: 'debt-payoff', label: 'Debt Payoff', group: 'next-dollar' },
+  { id: 'equity', label: 'Equity Value', group: 'next-dollar' },
+  { id: 'contribution-allocator', label: 'Contribution allocator', group: 'next-dollar' },
+];
+
+export const CALCULATOR_CARD_IDS: readonly string[] = CALCULATOR_CARD_DEFS.map((d) => d.id);
+
+export function calculatorCardLabel(id: string): string {
+  return CALCULATOR_CARD_DEFS.find((d) => d.id === id)?.label ?? id;
+}
 
 /**
  * Resolve the set of HIDDEN card ids from the stored overlay. Mirrors the
@@ -35,7 +63,7 @@ export const CALCULATOR_CARD_IDS: readonly string[] = [
  *                        added in a future release shows up without migrating
  *                        stored layouts). Unknown-id entries are ignored by
  *                        the caller because it intersects against the live
- *                        CARD_IDS, but we also don't synthesize them here.
+ *                        CALCULATOR_CARD_IDS, but we also don't synthesize them here.
  * Pure; never mutates its inputs.
  */
 export function applyCalculatorCardLayout(

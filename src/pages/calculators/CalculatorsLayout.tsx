@@ -1,17 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { PaycheckCard } from './PaycheckCard';
-import { BonusTaxCard } from './BonusTaxCard';
-import { CommissionTaxCard } from './CommissionTaxCard';
-import { OvertimeCard } from './OvertimeCard';
-import { FinancialIndependenceCard } from './FinancialIndependenceCard';
-import { CoastFiCard } from './CoastFiCard';
-import { DebtPayoffCard } from './DebtPayoffCard';
-import { EquityValueCard } from './EquityValueCard';
-import { CompoundInterestCard } from './CompoundInterestCard';
-import { Retirement401kWithdrawalCard } from './Retirement401kWithdrawalCard';
-import { BacktestCard } from './BacktestCard';
-import { ContributionAllocatorCard } from './ContributionAllocatorCard';
 import { ScenarioBar } from './ScenarioBar';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
@@ -30,50 +18,15 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import {
   applyCalculatorCardLayout,
+  CALCULATOR_CARD_GROUPS,
   CALCULATOR_CARD_IDS,
+  calculatorCardLabel,
 } from '@/lib/calculator-card-layout';
 import type { CardLayoutEntry } from '@/types/schema';
+import { CALCULATOR_CARDS, type CalculatorCardRegistration } from './calculator-registry';
+import { CalculatorShellProvider, type CalculatorShellApi } from './calculator-shell-context';
 
 const STALE_BANNER_STORAGE_KEY = 'stale-tax-year-banner-dismissed';
-
-// Stable kebab-case ids for each calculator card. Exported (object form) for
-// reuse by the tailoring engine + the one-time import. The canonical ordered
-// list lives in calculator-card-layout.ts (CALCULATOR_CARD_IDS); these two
-// MUST stay in lock-step.
-export const CARD_IDS = {
-  PAYCHECK: 'paycheck',
-  BONUS: 'bonus-tax',
-  COMMISSION: 'commission-tax',
-  OVERTIME: 'overtime',
-  FINANCIAL_INDEPENDENCE: 'financial-independence',
-  COAST_FI: 'coast-fi',
-  COMPOUND: 'compound-interest',
-  DEBT_PAYOFF: 'debt-payoff',
-  EQUITY: 'equity',
-  RETIREMENT_401K: 'retirement-401k-withdrawal',
-  BACKTEST: 'backtest',
-  CONTRIBUTION_ALLOCATOR: 'contribution-allocator',
-} as const;
-
-// Human-friendly labels surfaced in the "manage" popover.
-export const CARD_LABELS: Record<string, string> = {
-  [CARD_IDS.PAYCHECK]: 'Paycheck',
-  [CARD_IDS.BONUS]: 'Bonus tax',
-  [CARD_IDS.COMMISSION]: 'Commission tax',
-  [CARD_IDS.OVERTIME]: 'Overtime',
-  [CARD_IDS.FINANCIAL_INDEPENDENCE]: 'Years to FI',
-  [CARD_IDS.COAST_FI]: 'CoastFI',
-  [CARD_IDS.COMPOUND]: 'Compound Interest',
-  [CARD_IDS.DEBT_PAYOFF]: 'Debt Payoff',
-  [CARD_IDS.EQUITY]: 'Equity Value',
-  [CARD_IDS.RETIREMENT_401K]: '401k withdrawal take-home',
-  [CARD_IDS.BACKTEST]: 'Historical Backtest',
-  [CARD_IDS.CONTRIBUTION_ALLOCATOR]: 'Contribution allocator',
-};
-
-function labelFor(id: string): string {
-  return CARD_LABELS[id] ?? id;
-}
 
 /**
  * Build the next calculatorCardLayout from the current layout + a single
@@ -104,20 +57,111 @@ function CalculatorsSkeleton() {
     <div className="space-y-4 min-w-0" data-testid="calculators-skeleton" aria-busy="true">
       <div className="h-8 w-48 rounded-md bg-muted motion-safe:animate-pulse" />
       <div className="h-4 w-full max-w-2xl rounded bg-muted motion-safe:animate-pulse" />
-      <div className="grid items-start grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 min-w-0">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 min-w-0">
         {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="h-40 rounded-md border bg-muted/40 motion-safe:animate-pulse" />
+          <div key={i} className="h-32 rounded-md border bg-muted/40 motion-safe:animate-pulse" />
         ))}
       </div>
     </div>
   );
 }
 
+interface SectionCustomizeProps {
+  group: (typeof CALCULATOR_CARD_GROUPS)[number];
+  cards: readonly CalculatorCardRegistration[];
+  hiddenSet: Set<string>;
+  isCardAvailable: (card: CalculatorCardRegistration) => boolean;
+  setCardHidden: (id: string, hidden: boolean) => void;
+}
+
+function SectionCustomize({
+  group,
+  cards,
+  hiddenSet,
+  isCardAvailable,
+  setCardHidden,
+}: SectionCustomizeProps) {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  // Esc closes and returns focus to the trigger. Same idiom as the retired
+  // Manage-cards popover (and AssetValueChart's IncludedPicker): listener
+  // only while open; preventDefault marks the event handled so outer Esc
+  // handlers that respect defaultPrevented (the open card panel) defer.
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [open]);
+
+  return (
+    <div className="relative">
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        aria-label={`Customize ${group.label}`}
+        className="cursor-pointer text-xs text-muted-foreground underline decoration-dotted underline-offset-4 transition-colors hover:text-foreground"
+      >
+        Customize ▾
+      </button>
+      {open && (
+        <>
+          {/* Backdrop — closes when clicked outside. */}
+          <div className="fixed inset-0 z-10" aria-hidden="true" onClick={() => setOpen(false)} />
+          <div
+            role="dialog"
+            aria-label={`Customize ${group.label}`}
+            className="absolute right-0 top-full z-20 mt-2 w-72 rounded-md border bg-background p-2 shadow-md"
+          >
+            <div className="mb-1 border-b px-2 pb-2 pt-1">
+              <span className="text-xs font-medium text-muted-foreground">Show / hide cards</span>
+            </div>
+            <ul className="max-h-80 space-y-0.5 overflow-y-auto">
+              {cards.map((card) => {
+                const unavailable = !isCardAvailable(card);
+                const visible = !hiddenSet.has(card.id);
+                return (
+                  <li
+                    key={card.id}
+                    className="flex items-center justify-between gap-2 rounded px-2 py-1.5 hover:bg-muted/40"
+                  >
+                    <span className="text-sm text-foreground">
+                      {calculatorCardLabel(card.id)}
+                      {unavailable && card.unavailableReason && (
+                        <span className="block text-xs text-muted-foreground">
+                          {card.unavailableReason}
+                        </span>
+                      )}
+                    </span>
+                    <Switch
+                      checked={visible && !unavailable}
+                      disabled={unavailable}
+                      onCheckedChange={(next) => setCardHidden(card.id, !next)}
+                      aria-label={calculatorCardLabel(card.id)}
+                    />
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function CalculatorsLayout() {
   const persons = usePersonsStore((s) => s.persons);
-  const showOvertime = persons.some(
-    (p) => p.employmentType === 'HOURLY' || p.employmentType === 'SALARY_WITH_OT',
-  );
 
   // Cold-boot hydration. The cards READ persons/dependents/portfolio stores
   // but none of them LOAD them, and settings is only boot-loaded by Sidebar —
@@ -200,42 +244,63 @@ export default function CalculatorsLayout() {
     () => new Set(applyCalculatorCardLayout(CALCULATOR_CARD_IDS, cardLayout)),
     [cardLayout],
   );
-  const hiddenCount = hiddenSet.size;
 
-  const [popoverOpen, setPopoverOpen] = useState(false);
-  const manageTriggerRef = useRef<HTMLButtonElement>(null);
+  // Availability gates (registry-declared). Only Overtime carries one today.
+  const availabilityCtx = useMemo(() => ({ persons }), [persons]);
+  const isCardAvailable = useCallback(
+    (card: CalculatorCardRegistration) => !card.isAvailable || card.isAvailable(availabilityCtx),
+    [availabilityCtx],
+  );
 
-  // Esc closes the Manage-cards popover and returns focus to its trigger.
-  // Pattern: AssetValueChart's IncludedPicker — listener registered only
-  // while open; preventDefault marks the event handled so outer Esc
-  // handlers that respect defaultPrevented defer to the innermost popover.
-  useEffect(() => {
-    if (!popoverOpen) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        setPopoverOpen(false);
-        manageTriggerRef.current?.focus();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [popoverOpen]);
+  // The one-open accordion invariant (Wave 17). openId is THE source of truth;
+  // cards consume it via CalculatorShellContext keyed by their cardId.
+  const [openId, setOpenId] = useState<string | null>(null);
 
-  // Toggle one card. Writes the COMPLETE layout to the DB; the store refresh
-  // re-renders the grid. Fire-and-forget: update() rethrows on failure but the
-  // store records the error; we don't crash the page on a transient write.
-  // Closes the popover so the user sees the updated grid immediately.
+  // Toggle one card's visibility. Writes the COMPLETE layout to the DB; the
+  // store refresh re-renders the grid. Wave-17 review fix: the Customize
+  // popover STAYS OPEN across toggles (no close here).
   const setCardHidden = useCallback(
     (id: string, hidden: boolean) => {
       const next = withCardHidden(settings?.calculatorCardLayout ?? null, id, hidden);
       void updateSettings({ calculatorCardLayout: next }).catch(() => {});
-      setPopoverOpen(false);
+      if (hidden) setOpenId((cur) => (cur === id ? null : cur));
     },
     [settings?.calculatorCardLayout, updateSettings],
   );
 
-  const handleHide = useCallback((id: string) => setCardHidden(id, true), [setCardHidden]);
+  const shellApi = useMemo<CalculatorShellApi>(
+    () => ({
+      openId,
+      setOpenId,
+      hideCard: (id: string) => setCardHidden(id, true),
+    }),
+    [openId, setCardHidden],
+  );
+
+  // D10: consume /calculators#<card-id> ONCE, after the settings gate settles
+  // (before that we can't know hidden). Invalid, hidden, or unavailable ids
+  // are ignored silently — the user's layout wins (Investments deep-link
+  // posture). After consumption, openId mirrors into the fragment via
+  // replaceState (never pushState — Back leaves the page, no history spam).
+  const consumedInitialHash = useRef(false);
+  useEffect(() => {
+    if (consumedInitialHash.current || !gate.settled || settings === null) return;
+    consumedInitialHash.current = true;
+    const target = window.location.hash.slice(1);
+    if (!target) return;
+    const card = CALCULATOR_CARDS.find((c) => c.id === target);
+    if (!card || hiddenSet.has(target) || !isCardAvailable(card)) return;
+    setOpenId(target);
+  }, [gate.settled, settings, hiddenSet, isCardAvailable]);
+
+  useEffect(() => {
+    if (!consumedInitialHash.current) return;
+    window.history.replaceState(
+      null,
+      '',
+      openId ? `#${openId}` : window.location.pathname + window.location.search,
+    );
+  }, [openId]);
 
   // Render-gate: until settings resolves we cannot know which cards are hidden,
   // so show a skeleton rather than flashing all 12 in a wrong (all-visible)
@@ -273,112 +338,49 @@ export default function CalculatorsLayout() {
         </div>
       )}
       {/* Wave 16 (Basecamp spine): the shared scenario bar — mounts inside the
-          settled gate, BETWEEN the intro and the grid. The grid + card shell
-          below are untouched (Wave 17 boundary). */}
+          settled gate, above the first section (Wave-17 placement contract). */}
       <ScenarioBar />
-      {/* `items-start` is LOAD-BEARING (masonry grid; see useAutoRowSpan). */}
-      <div className="grid items-start grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 min-w-0 [grid-auto-rows:8px] [grid-auto-flow:row_dense]">
-        {!hiddenSet.has(CARD_IDS.PAYCHECK) && (
-          <PaycheckCard cardId={CARD_IDS.PAYCHECK} onHide={handleHide} />
-        )}
-        {!hiddenSet.has(CARD_IDS.BONUS) && (
-          <BonusTaxCard cardId={CARD_IDS.BONUS} onHide={handleHide} />
-        )}
-        {!hiddenSet.has(CARD_IDS.RETIREMENT_401K) && (
-          <Retirement401kWithdrawalCard cardId={CARD_IDS.RETIREMENT_401K} onHide={handleHide} />
-        )}
-        {!hiddenSet.has(CARD_IDS.COMMISSION) && (
-          <CommissionTaxCard cardId={CARD_IDS.COMMISSION} onHide={handleHide} />
-        )}
-        {showOvertime && !hiddenSet.has(CARD_IDS.OVERTIME) && (
-          <OvertimeCard cardId={CARD_IDS.OVERTIME} onHide={handleHide} />
-        )}
-        {!hiddenSet.has(CARD_IDS.FINANCIAL_INDEPENDENCE) && (
-          <FinancialIndependenceCard cardId={CARD_IDS.FINANCIAL_INDEPENDENCE} onHide={handleHide} />
-        )}
-        {!hiddenSet.has(CARD_IDS.COAST_FI) && (
-          <CoastFiCard cardId={CARD_IDS.COAST_FI} onHide={handleHide} />
-        )}
-        {!hiddenSet.has(CARD_IDS.COMPOUND) && (
-          <CompoundInterestCard cardId={CARD_IDS.COMPOUND} onHide={handleHide} />
-        )}
-        {!hiddenSet.has(CARD_IDS.DEBT_PAYOFF) && (
-          <DebtPayoffCard cardId={CARD_IDS.DEBT_PAYOFF} onHide={handleHide} />
-        )}
-        {!hiddenSet.has(CARD_IDS.EQUITY) && (
-          <EquityValueCard cardId={CARD_IDS.EQUITY} onHide={handleHide} />
-        )}
-        {!hiddenSet.has(CARD_IDS.BACKTEST) && (
-          <BacktestCard cardId={CARD_IDS.BACKTEST} onHide={handleHide} />
-        )}
-        {!hiddenSet.has(CARD_IDS.CONTRIBUTION_ALLOCATOR) && (
-          <ContributionAllocatorCard cardId={CARD_IDS.CONTRIBUTION_ALLOCATOR} onHide={handleHide} />
-        )}
-      </div>
-      <footer className="pt-2 text-sm text-muted-foreground relative">
-        <button
-          ref={manageTriggerRef}
-          type="button"
-          onClick={() => setPopoverOpen((v) => !v)}
-          aria-expanded={popoverOpen}
-          aria-haspopup="dialog"
-          className="cursor-pointer underline decoration-dotted underline-offset-4 hover:text-foreground transition-colors"
-        >
-          <span className="font-medium">Manage cards</span>
-          {hiddenCount > 0 && (
-            <> {' — '}{hiddenCount === 1 ? '1 card hidden' : `${hiddenCount} cards hidden`}</>
-          )}
-        </button>
-        {popoverOpen && (
-          <>
-            {/* Backdrop — closes the popover when clicked outside. */}
-            <div
-              className="fixed inset-0 z-10"
-              aria-hidden="true"
-              onClick={() => setPopoverOpen(false)}
-            />
-            <div
-              role="dialog"
-              aria-label="Manage calculator cards"
-              className="absolute left-0 bottom-full mb-2 w-72 rounded-md border bg-background shadow-md p-2 z-20"
-            >
-              <div className="px-2 pt-1 pb-2 border-b mb-1">
-                <span className="text-xs font-medium text-muted-foreground">Show / hide cards</span>
+      <CalculatorShellProvider value={shellApi}>
+        {CALCULATOR_CARD_GROUPS.map((group) => {
+          const groupCards = CALCULATOR_CARDS.filter((c) => c.group === group.id);
+          const visibleCards = groupCards.filter(
+            (c) => !hiddenSet.has(c.id) && isCardAvailable(c),
+          );
+          return (
+            <section key={group.id} aria-labelledby={`calc-section-${group.id}`} className="space-y-3 min-w-0">
+              <div className="flex items-baseline justify-between gap-3">
+                <h2
+                  id={`calc-section-${group.id}`}
+                  className="text-xs uppercase tracking-wider text-muted-foreground"
+                >
+                  {group.label}
+                </h2>
+                <SectionCustomize
+                  group={group}
+                  cards={groupCards}
+                  hiddenSet={hiddenSet}
+                  isCardAvailable={isCardAvailable}
+                  setCardHidden={setCardHidden}
+                />
               </div>
-              <ul className="space-y-0.5 max-h-80 overflow-y-auto">
-                {CALCULATOR_CARD_IDS.map((id) => {
-                  const visible = !hiddenSet.has(id);
-                  // W10: the Overtime card only renders for an HOURLY/SALARY_WITH_OT
-                  // person. Without one, toggling its switch flipped a card that can
-                  // never appear — disable it with a reason instead of no-opping.
-                  const unavailable = id === CARD_IDS.OVERTIME && !showOvertime;
-                  return (
-                    <li
-                      key={id}
-                      className="flex items-center justify-between gap-2 px-2 py-1.5 rounded hover:bg-muted/40"
-                    >
-                      <span className="text-sm text-foreground">
-                        {labelFor(id)}
-                        {unavailable && (
-                          <span className="block text-xs text-muted-foreground">
-                            Add an hourly or salary+OT person in Setup to enable this card.
-                          </span>
-                        )}
-                      </span>
-                      <Switch
-                        checked={visible && !unavailable}
-                        disabled={unavailable}
-                        onCheckedChange={(next) => setCardHidden(id, !next)}
-                        aria-label={labelFor(id)}
-                      />
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          </>
-        )}
-      </footer>
+              {/* Wave-12 explicitly deferred this stacked double-hairline
+                  divider ("Explicit non-goals") — Wave 17 cashes the chip:
+                  two 1px border rules, 3px apart. */}
+              <div aria-hidden="true" className="space-y-[3px]">
+                <div className="border-t border-border" />
+                <div className="border-t border-border" />
+              </div>
+              {visibleCards.length > 0 && (
+                <div className="grid grid-cols-1 gap-4 min-w-0 md:grid-cols-2 xl:grid-cols-3">
+                  {visibleCards.map(({ id, Component }) => (
+                    <Component key={id} cardId={id} />
+                  ))}
+                </div>
+              )}
+            </section>
+          );
+        })}
+      </CalculatorShellProvider>
     </div>
   );
 }

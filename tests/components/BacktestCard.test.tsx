@@ -23,15 +23,21 @@ describe('BacktestCard', () => {
     expect(link).toHaveAttribute('href', '/calculators/backtest');
   });
 
-  it('forwards cardId + onHide so the Hide button appears on the card', () => {
-    const onHide = () => {};
+  it('forwards cardId so the card shell mounts with its stable testid (Wave 17)', () => {
     render(
       <MemoryRouter>
-        <BacktestCard cardId="backtest" onHide={onHide} />
+        <BacktestCard cardId="backtest" />
       </MemoryRouter>,
     );
-    expect(
-      screen.getByRole('button', { name: /hide historical backtest card/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId('calc-card-backtest')).toBeInTheDocument();
+  });
+});
+
+describe('BacktestCard waymark meaning (Wave 17)', () => {
+  it('renders the static meaning line (no data claims)', () => {
+    render(<MemoryRouter><BacktestCard cardId="backtest" /></MemoryRouter>);
+    expect(screen.getByTestId('backtest-meaning')).toHaveTextContent(
+      /replay historical market sequences against your current allocation\./i,
+    );
   });
 });

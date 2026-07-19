@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
-import { CalculatorCard } from './CalculatorCard';
+import { CalculatorCard, EmptyMeaning, RailReset } from './CalculatorCard';
 import { calculate401kWithdrawalTax } from '@/lib/tax';
 import { useHouseholdTaxContext } from '@/lib/calculators/use-household-tax-context';
 import { useCalculatorState } from '@/lib/calculator-state';
@@ -15,7 +15,6 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 interface Retirement401kWithdrawalCardProps {
   cardId?: string;
-  onHide?: (cardId: string) => void;
 }
 
 function yearsBetween(dobISO: string, todayISO: string): number {
@@ -29,7 +28,6 @@ function yearsBetween(dobISO: string, todayISO: string): number {
 
 export function Retirement401kWithdrawalCard({
   cardId,
-  onHide,
 }: Retirement401kWithdrawalCardProps = {}) {
   const { household } = useHouseholdStore();
   const { persons } = usePersonsStore();
@@ -67,7 +65,7 @@ export function Retirement401kWithdrawalCard({
     };
   }, [persons]);
 
-  const { values, setValue, reset, isOverridden } = useCalculatorState(
+  const { values, setValue, reset, isOverridden, overriddenKeys } = useCalculatorState(
     cardId ?? 'retirement-401k-withdrawal',
     defaults,
   );
@@ -125,82 +123,80 @@ export function Retirement401kWithdrawalCard({
 
   const earlyPenaltyApplies = ageAtWithdrawal < 59.5;
 
-  const controls = (
+  // Wave 17: assumption inputs live in the open card's rail — RailReset
+  // pinned first, per-field blaze dots from overriddenKeys. The plan-type
+  // radio is an override too (setValue), so it stays in the rail proper.
+  const rail = (
     <>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+      {isOverridden && <RailReset onClick={reset} />}
+      <NumberField
+        id="withdrawal-amount"
+        label="Withdrawal amount"
+        value={withdrawalAmount}
+        onChange={(v) => setValue('withdrawalAmount', v ?? 0)}
+        step="500"
+        min={0}
+        edited={overriddenKeys.has('withdrawalAmount')}
+      />
+      <NumberField
+        id="w2-income"
+        label="Annual W-2 income"
+        value={annualW2Income}
+        onChange={(v) => setValue('annualW2Income', v ?? 0)}
+        step="1000"
+        min={0}
+        edited={overriddenKeys.has('annualW2Income')}
+      />
+      <NumberField
+        id="cap-gains"
+        label="Capital gains for the year"
+        value={capGains}
+        onChange={(v) => setValue('capGains', v ?? 0)}
+        step="500"
+        min={0}
+        edited={overriddenKeys.has('capGains')}
+      />
+      <div className="space-y-1">
         <NumberField
-          id="withdrawal-amount"
-          label="Withdrawal amount"
-          value={withdrawalAmount}
-          onChange={(v) => setValue('withdrawalAmount', v ?? 0)}
+          id="other-investment-income"
+          label="Other investment income"
+          value={otherInvestmentIncome}
+          onChange={(v) => setValue('otherInvestmentIncome', v ?? 0)}
           step="500"
           min={0}
+          edited={overriddenKeys.has('otherInvestmentIncome')}
         />
-        <NumberField
-          id="w2-income"
-          label="Annual W-2 income"
-          value={annualW2Income}
-          onChange={(v) => setValue('annualW2Income', v ?? 0)}
-          step="1000"
-          min={0}
-        />
-        <NumberField
-          id="cap-gains"
-          label="Capital gains for the year"
-          value={capGains}
-          onChange={(v) => setValue('capGains', v ?? 0)}
-          step="500"
-          min={0}
-        />
-        <div className="space-y-1">
-          <NumberField
-            id="other-investment-income"
-            label="Other investment income"
-            value={otherInvestmentIncome}
-            onChange={(v) => setValue('otherInvestmentIncome', v ?? 0)}
-            step="500"
-            min={0}
-          />
-          <p className="text-xs text-muted-foreground">
-            Interest, non-qualified dividends, passive rental — for{' '}
-            <TermTooltip term="NIIT" /> delta.
-          </p>
-        </div>
-        <NumberField
-          id="age-at-withdrawal"
-          label="Age at withdrawal"
-          value={ageAtWithdrawal}
-          onChange={(v) => setValue('ageAtWithdrawal', v ?? 0)}
-          step="1"
-          min={18}
-        />
-        <div className="space-y-1 sm:col-span-2">
-          <RadioGroup
-            aria-label="Plan type"
-            value={planType}
-            onValueChange={(v) => setValue('planType', v as 'TRADITIONAL' | 'ROTH')}
-            className="flex flex-row gap-3 items-center text-sm"
-          >
-            <label className="flex items-center gap-1">
-              <RadioGroupItem value="TRADITIONAL" aria-label="Traditional 401k" />
-              Traditional 401k
-            </label>
-            <label className="flex items-center gap-1">
-              <RadioGroupItem value="ROTH" aria-label="Roth 401k" />
-              Roth 401k
-            </label>
-          </RadioGroup>
-        </div>
+        <p className="text-xs text-muted-foreground">
+          Interest, non-qualified dividends, passive rental — for{' '}
+          <TermTooltip term="NIIT" /> delta.
+        </p>
       </div>
-      {isOverridden && (
-        <button
-          type="button"
-          onClick={reset}
-          className="text-sm text-primary hover:underline mb-3"
+      <NumberField
+        id="age-at-withdrawal"
+        label="Age at withdrawal"
+        value={ageAtWithdrawal}
+        onChange={(v) => setValue('ageAtWithdrawal', v ?? 0)}
+        step="1"
+        min={18}
+        edited={overriddenKeys.has('ageAtWithdrawal')}
+      />
+      <div className="space-y-1">
+        <RadioGroup
+          aria-label="Plan type"
+          value={planType}
+          onValueChange={(v) => setValue('planType', v as 'TRADITIONAL' | 'ROTH')}
+          className="flex flex-row gap-3 items-center text-sm"
         >
-          Reset to my data
-        </button>
-      )}
+          <label className="flex items-center gap-1">
+            <RadioGroupItem value="TRADITIONAL" aria-label="Traditional 401k" />
+            Traditional 401k
+          </label>
+          <label className="flex items-center gap-1">
+            <RadioGroupItem value="ROTH" aria-label="Roth 401k" />
+            Roth 401k
+          </label>
+        </RadioGroup>
+      </div>
     </>
   );
 
@@ -230,29 +226,36 @@ export function Retirement401kWithdrawalCard({
 
   const headline = view && hasAmount ? formatCurrency(view.netToUser) : '—';
 
+  // Wave 17 meaning contract: one sentence from already-rendered values;
+  // empty variants REPLACE it with the CTA in the meaning slot.
+  const meaning =
+    !breakdown ? (
+      <EmptyMeaning>
+        <Link to="/inputs/household" className="text-primary hover:underline">
+          Set up your household profile
+        </Link>{' '}
+        + tax rules to see the 401k withdrawal breakdown.
+      </EmptyMeaning>
+    ) : !hasAmount ? (
+      <EmptyMeaning>Enter a withdrawal amount to see the estimated taxes and net.</EmptyMeaning>
+    ) : (
+      <>
+        Net of an estimated {formatCurrency(view!.totalTaxOnWithdrawal)} tax on a{' '}
+        {formatCurrency(withdrawalAmount)} withdrawal.
+      </>
+    );
+
   return (
     <CalculatorCard
       cardId={cardId}
       title="401k withdrawal take-home"
+      dirty={isOverridden}
+      meaning={meaning}
+      rail={rail}
       headline={
         <span data-testid="401k-withdrawal-net">{headline}</span>
       }
-      onHide={onHide}
     >
-      {controls}
-      {!breakdown && (
-        <p className="text-sm text-muted-foreground">
-          <Link to="/inputs/household" className="text-primary hover:underline">
-            Set up your household profile
-          </Link>{' '}
-          + tax rules to see the 401k withdrawal breakdown.
-        </p>
-      )}
-      {breakdown && !hasAmount && (
-        <p className="text-sm text-muted-foreground">
-          Enter a withdrawal amount to see the estimated taxes and net.
-        </p>
-      )}
       {breakdown && hasAmount && (
         <div className="space-y-1 text-sm">
           <ResultRow

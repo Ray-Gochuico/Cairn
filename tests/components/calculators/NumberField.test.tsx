@@ -64,4 +64,16 @@ describe('NumberField', () => {
       expect(onChange).toHaveBeenCalledWith(-5);
     });
   });
+
+  it('edited renders the blaze dot + sr-only text (never color-only)', () => {
+    render(<NumberField id="f" label="Field" value={1} onChange={() => {}} edited />);
+    const dot = screen.getByTestId('field-edited-dot-f');
+    expect(dot).toHaveAttribute('aria-hidden', 'true');
+    expect(dot.className).toContain('bg-blaze');
+    expect(screen.getByText('— edited')).toHaveClass('sr-only');
+  });
+  it('no dot when edited is omitted', () => {
+    render(<NumberField id="g" label="Field" value={1} onChange={() => {}} />);
+    expect(screen.queryByTestId('field-edited-dot-g')).not.toBeInTheDocument();
+  });
 });

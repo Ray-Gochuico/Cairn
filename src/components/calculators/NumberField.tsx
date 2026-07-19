@@ -18,6 +18,10 @@ interface NumberFieldProps {
   suffix?: string;
   step?: string;
   min?: number;
+  /** Wave-17: true when this field carries a session override — renders a blaze
+   *  dot + sr-only "— edited" beside the label. Wire from
+   *  useCalculatorState().overriddenKeys. */
+  edited?: boolean;
 }
 
 /**
@@ -25,10 +29,22 @@ interface NumberFieldProps {
  * is blankable, no leading-zero artifacts), otherwise a parsed finite number.
  * Replaces the per-card `Number(e.target.value)` drift.
  */
-export function NumberField({ id, label, ariaLabel, value, onChange, suffix, step = 'any', min }: NumberFieldProps) {
+export function NumberField({ id, label, ariaLabel, value, onChange, suffix, step = 'any', min, edited }: NumberFieldProps) {
   return (
     <div className="space-y-1">
-      <Label htmlFor={id}>{label}</Label>
+      <Label htmlFor={id}>
+        {label}
+        {edited && (
+          <>
+            <span
+              aria-hidden="true"
+              data-testid={`field-edited-dot-${id}`}
+              className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-blaze align-middle"
+            />
+            <span className="sr-only">— edited</span>
+          </>
+        )}
+      </Label>
       <div className="flex items-center gap-1">
         <Input
           id={id}

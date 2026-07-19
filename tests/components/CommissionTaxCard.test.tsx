@@ -523,3 +523,23 @@ describe('CommissionTaxCard', () => {
     expect(screen.getByText(/37%/, { exact: false })).toBeInTheDocument();
   });
 });
+
+describe('CommissionTaxCard waymark meaning (Wave 17)', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    resetStores();
+  });
+
+  it('renders the waymark meaning line from already-rendered values (Wave 17)', async () => {
+    primeStores();
+    render(<MemoryRouter><CommissionTaxCard cardId="commission-tax" /></MemoryRouter>);
+    const meaning = await screen.findByTestId('commission-tax-meaning');
+    expect(meaning).toHaveTextContent(/per monthly check, after estimated tax and 401\(k\)/i);
+  });
+
+  it('empty state: headline —, cairn glyph, CTA sentence in the meaning slot', () => {
+    render(<MemoryRouter><CommissionTaxCard cardId="commission-tax" /></MemoryRouter>);
+    expect(screen.getByTestId('commission-tax-headline')).toHaveTextContent('—');
+    expect(document.querySelector('[data-testid="cairn-glyph"]')).toBeInTheDocument();
+  });
+});

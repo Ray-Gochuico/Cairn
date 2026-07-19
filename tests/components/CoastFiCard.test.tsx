@@ -378,16 +378,14 @@ describe('CoastFiCard', () => {
     expect(value).toBeLessThan(500);
   });
 
-  it('forwards cardId + onHide so the Hide button appears on the card', () => {
+  it('forwards cardId so the card shell mounts with its stable testid (Wave 17)', () => {
     primeStores();
     render(
       <MemoryRouter>
-        <CoastFiCard cardId="coast-fi" onHide={() => {}} />
+        <CoastFiCard cardId="coast-fi" />
       </MemoryRouter>,
     );
-    expect(
-      screen.getByRole('button', { name: /hide coastfi card/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId('calc-card-coast-fi')).toBeInTheDocument();
   });
 
   it('shows the target portfolio derived from monthlyExpenseBaseline / withdrawalRate', () => {
@@ -718,5 +716,37 @@ describe('CoastFiCard', () => {
     expect(
       screen.getByText(/nominal view grows the target line with inflation/i),
     ).toBeInTheDocument();
+  });
+});
+
+describe('CoastFiCard waymark meaning + dirty (Wave 17)', () => {
+  beforeEach(() => {
+    resetStores();
+    sessionStorage.clear();
+    __resetScenarioAssumptionsForTests();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-05-14'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('renders the waymark meaning line from already-rendered values (Wave 17)', () => {
+    primeStores();
+    render(<MemoryRouter><CoastFiCard cardId="coast-fi" /></MemoryRouter>);
+    expect(screen.getByTestId('coast-fi-meaning')).toHaveTextContent(
+      /of the .* needed today to coast\./i,
+    );
+  });
+
+  it('editing a rail field raises the scenario tick + prefix', async () => {
+    const user = userEvent.setup();
+    primeStores();
+    render(<MemoryRouter><CoastFiCard cardId="coast-fi" /></MemoryRouter>);
+    await user.clear(screen.getByLabelText(/years to retirement/i));
+    await user.type(screen.getByLabelText(/years to retirement/i), '12');
+    expect(screen.getByTestId('coast-fi-scenario-tick')).toBeInTheDocument();
+    expect(screen.getByText(/^Scenario:/)).toBeInTheDocument();
   });
 });

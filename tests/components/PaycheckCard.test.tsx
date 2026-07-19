@@ -143,7 +143,7 @@ describe('PaycheckCard', () => {
 
   it('the headline result region is a polite live region (W10 T8)', () => {
     primeStores();
-    render(<MemoryRouter><PaycheckCard cardId="paycheck" onHide={() => {}} /></MemoryRouter>);
+    render(<MemoryRouter><PaycheckCard cardId="paycheck" /></MemoryRouter>);
     const region = screen.getByTestId('paycheck-headline');
     expect(region).toHaveAttribute('role', 'status');
   });
@@ -454,5 +454,30 @@ describe('PaycheckCard', () => {
     render(<MemoryRouter><PaycheckCard /></MemoryRouter>);
     await screen.findByTestId('paycheck-takehome');
     expect(screen.getByText(/annualized estimate, not payroll withholding/i)).toBeInTheDocument();
+  });
+});
+
+describe('PaycheckCard waymark meaning (Wave 17)', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    resetStores();
+  });
+
+  it('renders the waymark meaning line from already-rendered values (Wave 17)', () => {
+    primeStores();
+    render(<MemoryRouter><PaycheckCard cardId="paycheck" /></MemoryRouter>);
+    expect(screen.getByTestId('paycheck-meaning')).toHaveTextContent(
+      /after taxes and pretax deductions on .* gross/i,
+    );
+  });
+
+  it('empty state: headline —, cairn glyph, CTA sentence in the meaning slot', () => {
+    // No stores primed → no household → empty waymark.
+    render(<MemoryRouter><PaycheckCard cardId="paycheck" /></MemoryRouter>);
+    expect(screen.getByTestId('paycheck-headline')).toHaveTextContent('—');
+    expect(document.querySelector('[data-testid="cairn-glyph"]')).toBeInTheDocument();
+    expect(screen.getByTestId('paycheck-meaning')).toHaveTextContent(
+      /set up your household profile \+ tax rules to see take-home/i,
+    );
   });
 });

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { CalculatorCard } from './CalculatorCard';
+import { CalculatorCard, EmptyMeaning, RailReset, RailViewGroup } from './CalculatorCard';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -16,7 +16,7 @@ import {
   PERIODS_PER_YEAR,
   type CompoundFrequency,
 } from '@/lib/compound-interest';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, formatPercent } from '@/lib/format';
 import { useCalculatorState } from '@/lib/calculator-state';
 import { NumberField } from '@/components/calculators/NumberField';
 import { CHART_PALETTE } from '@/components/charts/palette';
@@ -28,7 +28,6 @@ import { useScenarioAssumptions } from '@/lib/calculators/use-scenario-assumptio
 
 interface CompoundInterestCardProps {
   cardId?: string;
-  onHide?: (cardId: string) => void;
 }
 
 const FREQUENCY_OPTIONS: Array<{ value: CompoundFrequency; label: string }> = [
@@ -58,13 +57,15 @@ const LOCAL_DEFAULTS = {
  * fallback is dead (D4): an empty profile shows an honest $0-based projection
  * — the bar above says $0, and this card can no longer contradict it.
  */
-export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardProps = {}) {
-  const { values, setValue, reset, isOverridden } = useCalculatorState(
+export function CompoundInterestCard({ cardId }: CompoundInterestCardProps = {}) {
+  const { values, setValue, reset, isOverridden, overriddenKeys } = useCalculatorState(
     cardId ?? 'compound-interest',
     LOCAL_DEFAULTS,
   );
 
-  const { engine } = useScenarioAssumptions();
+  const { engine, editedCount } = useScenarioAssumptions();
+  // D6: local what-if knobs OR shared ScenarioBar edits raise the tick.
+  const scenarioEdited = editedCount > 0;
 
   const series = useMemo(() => {
     const pvNum = engine.portfolio;
@@ -157,11 +158,65 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
     return toRealSeries(chartData, inflation, { valueKeys: keys, yearKey: 'yearNum' });
   }, [chartData, displayMode, hasVariance, inflation]);
 
+  // Wave 17 meaning contract: values the card already renders (bar pv + APY
+  // + the local years knob); the years-0 prompt REPLACES it (the empty case).
+  const meaning = !series ? (
+    <EmptyMeaning>Enter a length in years to see projected growth.</EmptyMeaning>
+  ) : (
+    <>
+      {formatCurrency(engine.portfolio)} at {formatPercent(engine.returnRate)} APY for{' '}
+      {Math.max(0, Math.floor(values.years ?? 0))} years.
+    </>
+  );
+
   return (
     <CalculatorCard
       cardId={cardId}
-      onHide={onHide}
       title="Compound Interest"
+      dirty={isOverridden || scenarioEdited}
+      meaning={meaning}
+      rail={
+        <>
+          {isOverridden && <RailReset onClick={reset} />}
+          <NumberField
+            id="ci-years"
+            label="Length (years)"
+            value={values.years}
+            onChange={(v) => setValue('years', v ?? 0)}
+            step="1"
+            min={0}
+            edited={overriddenKeys.has('years')}
+          />
+          <NumberField
+            id="ci-variance"
+            label="Variance ± (%)"
+            value={values.variancePercent}
+            onChange={(v) => setValue('variancePercent', v)}
+            step="0.1"
+            min={0}
+            edited={overriddenKeys.has('variancePercent')}
+          />
+          <div className="space-y-1">
+            <Label htmlFor="ci-frequency">Compound frequency</Label>
+            <Select
+              value={values.frequency}
+              onValueChange={(v) => setValue('frequency', v as CompoundFrequency)}
+            >
+              <SelectTrigger id="ci-frequency" aria-label="Compound frequency">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {FREQUENCY_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <RailViewGroup>
+            <RealNominalToggle mode={displayMode} onChange={setDisplayMode} />
+          </RailViewGroup>
+        </>
+      }
       headline={
         <span data-testid="compound-headline">
           {summary ? formatCurrency(summary.finalMid) : '—'}
@@ -173,52 +228,7 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
         </span>
       }
     >
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-        <NumberField
-          id="ci-years"
-          label="Length (years)"
-          value={values.years}
-          onChange={(v) => setValue('years', v ?? 0)}
-          step="1"
-          min={0}
-        />
-        <NumberField
-          id="ci-variance"
-          label="Variance ± (%)"
-          value={values.variancePercent}
-          onChange={(v) => setValue('variancePercent', v)}
-          step="0.1"
-          min={0}
-        />
-        <div className="space-y-1">
-          <Label htmlFor="ci-frequency">Compound frequency</Label>
-          <Select
-            value={values.frequency}
-            onValueChange={(v) => setValue('frequency', v as CompoundFrequency)}
-          >
-            <SelectTrigger id="ci-frequency" aria-label="Compound frequency">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {FREQUENCY_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {isOverridden && (
-        <button
-          type="button"
-          onClick={reset}
-          className="text-sm text-primary hover:underline mb-3"
-        >
-          Reset to my data
-        </button>
-      )}
-
-      {series && summary ? (
+      {series && summary && (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4 text-sm">
             <StatTile
@@ -236,9 +246,6 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
               value={formatCurrency(summary.finalMid)}
             />
           </div>
-          <div className="flex justify-end mb-2">
-            <RealNominalToggle mode={displayMode} onChange={setDisplayMode} />
-          </div>
           <LineChartCard
             title={`Balance over time${displayMode === 'REAL' ? " (today's dollars)" : ''}`}
             data={displayData}
@@ -247,8 +254,6 @@ export function CompoundInterestCard({ cardId, onHide }: CompoundInterestCardPro
             yFormatter={(v) => formatCurrency(v)}
           />
         </>
-      ) : (
-        <p className="text-sm text-muted-foreground">Enter a length in years to see projected growth.</p>
       )}
     </CalculatorCard>
   );

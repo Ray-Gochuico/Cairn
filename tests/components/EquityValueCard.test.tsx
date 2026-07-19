@@ -268,19 +268,13 @@ describe('EquityValueCard', () => {
     expect(link).toHaveAttribute('href', '/equity-grants');
   });
 
-  it('forwards cardId + onHide so the Hide button appears on the card', () => {
-    primeStores({
-      grants: [{ name: 'Grant A' }],
-    });
-
+  it('forwards cardId so the card shell mounts with its stable testid (Wave 17)', () => {
     render(
       <MemoryRouter>
-        <EquityValueCard cardId="equity" onHide={() => {}} />
+        <EquityValueCard cardId="equity" />
       </MemoryRouter>,
     );
-    expect(
-      screen.getByRole('button', { name: /hide equity value card/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId('calc-card-equity')).toBeInTheDocument();
   });
 
   it('renders the total vested value through ResultRow with a stable testId', () => {
@@ -554,5 +548,29 @@ describe('EquityValueCard', () => {
     );
     // The AMT preference note must NOT be present (the RSU badge is plain text, no AMT note)
     expect(screen.queryByText(/ISO grants may trigger/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('EquityValueCard waymark meaning (Wave 17)', () => {
+  beforeEach(() => {
+    resetStores();
+  });
+
+  it('renders the waymark meaning line from already-rendered values (Wave 17)', () => {
+    primeStores({ grants: [{}, {}] });
+    render(<MemoryRouter><EquityValueCard cardId="equity" /></MemoryRouter>);
+    expect(screen.getByTestId('equity-meaning')).toHaveTextContent(
+      /still unvested across \d+ grants?\./i,
+    );
+  });
+
+  it('empty state: headline —, cairn glyph, CTA in the meaning slot', () => {
+    render(<MemoryRouter><EquityValueCard cardId="equity" /></MemoryRouter>);
+    expect(screen.getByTestId('equity-headline')).toHaveTextContent('—');
+    expect(document.querySelector('[data-testid="cairn-glyph"]')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /add equity grants/i })).toHaveAttribute(
+      'href',
+      '/equity-grants',
+    );
   });
 });

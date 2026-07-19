@@ -8,7 +8,10 @@ import {
   applyCalculatorCardLayout,
   importCalcVisibilityIfNeeded,
   __resetImportLatchForTests,
+  CALCULATOR_CARD_DEFS,
+  CALCULATOR_CARD_GROUPS,
   CALCULATOR_CARD_IDS,
+  calculatorCardLabel,
 } from '@/lib/calculator-card-layout';
 
 const LEGACY_KEY = 'calculator-hidden-cards';
@@ -164,5 +167,36 @@ describe('importCalcVisibilityIfNeeded', () => {
       new Set(['paycheck']),
     );
     expect(localStorage.getItem(LEGACY_KEY)).toBeNull();
+  });
+});
+
+describe('CALCULATOR_CARD_DEFS (Wave-17 registry data)', () => {
+  it('CALCULATOR_CARD_IDS derives from the defs (single source, grouped order)', () => {
+    expect(CALCULATOR_CARD_IDS).toEqual(CALCULATOR_CARD_DEFS.map((d) => d.id));
+    expect(CALCULATOR_CARD_IDS).toEqual([
+      'paycheck', 'bonus-tax', 'commission-tax', 'overtime', 'retirement-401k-withdrawal',
+      'financial-independence', 'coast-fi', 'compound-interest', 'backtest',
+      'debt-payoff', 'equity', 'contribution-allocator',
+    ]);
+  });
+  it('defs are contiguous by group, in CALCULATOR_CARD_GROUPS order', () => {
+    const groupSeq = CALCULATOR_CARD_DEFS.map((d) => d.group);
+    const firstIndex = new Map<string, number>();
+    groupSeq.forEach((g, i) => { if (!firstIndex.has(g)) firstIndex.set(g, i); });
+    expect([...firstIndex.keys()]).toEqual(CALCULATOR_CARD_GROUPS.map((g) => g.id));
+    // Contiguous: sorting by first appearance must not change the sequence.
+    expect(groupSeq).toEqual([...groupSeq].sort((a, b) => firstIndex.get(a)! - firstIndex.get(b)!));
+  });
+  it('labels survive the move (the old CARD_LABELS strings, byte-identical)', () => {
+    expect(calculatorCardLabel('retirement-401k-withdrawal')).toBe('401k withdrawal take-home');
+    expect(calculatorCardLabel('financial-independence')).toBe('Years to FI');
+    expect(calculatorCardLabel('unknown-id')).toBe('unknown-id');
+  });
+  it('fullPagePath only on the two full-page tools', () => {
+    const withPath = CALCULATOR_CARD_DEFS.filter((d) => d.fullPagePath);
+    expect(withPath.map((d) => [d.id, d.fullPagePath])).toEqual([
+      ['paycheck', '/calculators/paycheck'],
+      ['backtest', '/calculators/backtest'],
+    ]);
   });
 });
