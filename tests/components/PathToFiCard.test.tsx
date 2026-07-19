@@ -484,6 +484,20 @@ describe('PathToFiCard — Stop today (Coast mode)', () => {
     );
   });
 
+  it('review fix 4: STOP mode Years is the ZERO-contribution solve (kills a KEEP-solve swap)', async () => {
+    // Same single-Moderate fixture as the KEEP 28.5y pin: pv $200k, target
+    // $1.5M, 6% nominal at 3% inflation → real 2.9126%. Zero-contribution
+    // solve: ln(1,500,000/200,000)/ln(1.0291262) = 70.2y — the with-
+    // contribution solve (28.5y) must NOT drive the STOP table.
+    primeStores({ scenarios: [{ label: 'Moderate', rate: 0.06 }] });
+    renderCard();
+    await toStop();
+    const table = screen.getByTestId('path-to-fi-table');
+    const { within } = await import('@testing-library/react');
+    expect(within(table).getByText('70.2')).toBeInTheDocument();
+    expect(within(table).queryByText('28.5')).toBeNull();
+  });
+
   it('the mode segment persists under calc-mode:path-to-fi', async () => {
     primeStores();
     renderCard();

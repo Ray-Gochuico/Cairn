@@ -325,6 +325,48 @@ describe('CalculatorsLayout', () => {
     });
   });
 
+  it('review fix 3: an unrelated toggle PRESERVES the D2 legacy fold (hidden merged cards stay hidden)', async () => {
+    // A user upgraded with a legacy 12-entry layout hiding BOTH members of
+    // each merged pair. Toggling an UNRELATED card must not resurrect the
+    // merged cards — the emitted 10-entry layout keeps the fold's result.
+    primeBaseline();
+    const update = primeSettings([
+      { id: 'paycheck', hidden: false },
+      { id: 'bonus-tax', hidden: true },
+      { id: 'commission-tax', hidden: true },
+      { id: 'overtime', hidden: false },
+      { id: 'retirement-401k-withdrawal', hidden: false },
+      { id: 'financial-independence', hidden: true },
+      { id: 'coast-fi', hidden: true },
+      { id: 'compound-interest', hidden: false },
+      { id: 'backtest', hidden: false },
+      { id: 'debt-payoff', hidden: false },
+      { id: 'equity', hidden: false },
+      { id: 'contribution-allocator', hidden: false },
+    ]);
+    usePersonsStore.setState({
+      persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
+      isLoading: false,
+      error: null,
+    });
+    render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+    await screen.findByTestId('calc-card-paycheck');
+    expect(screen.queryByTestId('calc-card-supplemental-pay')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('calc-card-path-to-fi')).not.toBeInTheDocument();
+
+    // Toggle an UNRELATED card (hide Paycheck) via the section Customize.
+    await userEvent.click(screen.getByRole('button', { name: /customize paycheck & tax/i }));
+    await userEvent.click(screen.getByRole('switch', { name: 'Paycheck' }));
+
+    const patch = update.mock.calls.at(-1)![0] as { calculatorCardLayout: { id: string; hidden: boolean }[] };
+    expect(patch.calculatorCardLayout).toHaveLength(10);
+    expect(patch.calculatorCardLayout.find((e) => e.id === 'paycheck')?.hidden).toBe(true);
+    // The fold's verdict survives the rewrite over the new id list.
+    expect(patch.calculatorCardLayout.find((e) => e.id === 'supplemental-pay')?.hidden).toBe(true);
+    expect(patch.calculatorCardLayout.find((e) => e.id === 'path-to-fi')?.hidden).toBe(true);
+    expect(patch.calculatorCardLayout.some((e) => e.id === 'bonus-tax')).toBe(false);
+  });
+
   it('renders three labeled sections, cards in registry order (the lock-step assertion)', async () => {
     primeBaseline();
     primeSettings();

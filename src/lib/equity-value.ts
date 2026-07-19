@@ -101,12 +101,23 @@ export function vestingChartData(
   }));
 }
 
-/** UTC-safe YYYY-MM-DD + n months (day clamps naturally via Date rollover —
- *  vest schedules are month-grain so the exact day only sets window edges). */
+/** UTC-safe YYYY-MM-DD + n months, day CLAMPED to the target month's last day
+ *  (review fix 1: setUTCMonth ROLLS Jan 31 + 1mo into Mar 3, silently
+ *  stretching windows and skewing month arithmetic — "next 12 months" from a
+ *  month-end day must land on the anniversary, not the month after). */
 function addMonthsIso(iso: string, months: number): string {
-  const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCMonth(d.getUTCMonth() + months);
-  return d.toISOString().slice(0, 10);
+  const y = Number(iso.slice(0, 4));
+  const m = Number(iso.slice(5, 7));
+  const day = Number(iso.slice(8, 10));
+  const firstOfTarget = new Date(Date.UTC(y, m - 1 + months, 1));
+  const lastDay = new Date(
+    Date.UTC(firstOfTarget.getUTCFullYear(), firstOfTarget.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+  return new Date(
+    Date.UTC(firstOfTarget.getUTCFullYear(), firstOfTarget.getUTCMonth(), Math.min(day, lastDay)),
+  )
+    .toISOString()
+    .slice(0, 10);
 }
 
 export interface WindowVestEvent {
@@ -187,13 +198,20 @@ export function forwardVestChartData(
     const m = e.date.slice(0, 7);
     valueByMonth.set(m, (valueByMonth.get(m) ?? 0) + e.value);
   }
+  // Review fix 1: bucket keys come from CALENDAR-month arithmetic on the
+  // first of the month (Date.UTC(y, m+i, 1) — day 1 never rolls), so an
+  // end-of-month today can neither skip nor double buckets. Current-month
+  // convention: window events between today and month-end fold into the
+  // FIRST bucket, so the chart's final cumulative always equals
+  // vestsInWindow(...).totalValue — the headline's window figure.
+  const y0 = Number(todayIso.slice(0, 4));
+  const m0 = Number(todayIso.slice(5, 7));
   const points: ForwardVestPoint[] = [];
-  let cumulative = 0;
+  let cumulative = valueByMonth.get(todayIso.slice(0, 7)) ?? 0;
   for (let i = 1; i <= months; i++) {
-    const monthIso = addMonthsIso(todayIso, i);
-    const month = monthIso.slice(0, 7);
+    const d = new Date(Date.UTC(y0, m0 - 1 + i, 1));
+    const month = d.toISOString().slice(0, 7);
     cumulative += valueByMonth.get(month) ?? 0;
-    const d = new Date(`${month}-01T00:00:00Z`);
     points.push({
       month,
       label: `${FORWARD_MONTH_FORMATTER.format(d)} ’${month.slice(2, 4)}`,

@@ -49,12 +49,18 @@ function withCardHidden(
   id: string,
   hidden: boolean,
 ): CardLayoutEntry[] {
-  const hiddenById = new Map<string, boolean>();
-  for (const entry of current ?? []) hiddenById.set(entry.id, entry.hidden);
-  hiddenById.set(id, hidden);
+  // Review fix 3: seed from the EFFECTIVE hidden set — the same D2 legacy
+  // fold applyCalculatorCardLayout renders from — BEFORE overlaying the
+  // toggled id. Pre-fix a legacy layout's merged-card verdict (e.g. both
+  // bonus-tax + commission-tax hidden) was dropped on the first UNRELATED
+  // toggle: the complete rewrite over the new id list resurrected the hidden
+  // merged card and permanently overwrote the preference.
+  const hiddenSet = new Set(applyCalculatorCardLayout(CALCULATOR_CARD_IDS, current));
+  if (hidden) hiddenSet.add(id);
+  else hiddenSet.delete(id);
   return CALCULATOR_CARD_IDS.map((cardId) => ({
     id: cardId,
-    hidden: hiddenById.get(cardId) === true,
+    hidden: hiddenSet.has(cardId),
   }));
 }
 

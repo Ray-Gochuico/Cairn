@@ -472,6 +472,61 @@ describe('forwardVestChartData (Wave 18 D10)', () => {
     expect(end.cumulativeValue).toBe(30000);
   });
 
+  it('review fix 1: end-of-month today keeps calendar-true buckets (no skip/double); final equals the window total', async () => {
+    const { forwardVestChartData, vestsInWindow } = await import('@/lib/equity-value');
+    // today 2026-01-31: the old setUTCMonth(+i) arithmetic rolled Feb 31 → Mar 3,
+    // skipping Feb/Nov buckets and double-counting May. Quarterly vests
+    // Feb/May/Aug/Nov-15, 1000 shares × $16 → $4,000 per event, $16,000 total.
+    const g = {
+      grantDate: '2026-01-01',
+      grantType: GrantType.RSU,
+      strikePrice: 0,
+      totalShares: 1000,
+      currentFmv: 16,
+      vestingSchedule: [
+        { date: '2026-02-15', cumulativePct: 0.25 },
+        { date: '2026-05-15', cumulativePct: 0.5 },
+        { date: '2026-08-15', cumulativePct: 0.75 },
+        { date: '2026-11-15', cumulativePct: 1.0 },
+      ],
+    };
+    const rows = forwardVestChartData([g], '2026-01-31', 12);
+    expect(rows).toHaveLength(12);
+    // Contiguous calendar months, no duplicates.
+    expect(rows.map((r) => r.month)).toEqual([
+      '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07',
+      '2026-08', '2026-09', '2026-10', '2026-11', '2026-12', '2027-01',
+    ]);
+    expect(new Set(rows.map((r) => r.label)).size).toBe(12);
+    expect(rows.find((r) => r.month === '2026-02')!.cumulativeValue).toBe(4000);
+    expect(rows.find((r) => r.month === '2026-11')!.cumulativeValue).toBe(16000);
+    // Chart-final ≡ the headline window total for the SAME window.
+    expect(rows.at(-1)!.cumulativeValue).toBe(16000);
+    expect(rows.at(-1)!.cumulativeValue).toBe(
+      vestsInWindow([g], '2026-01-31', 12).totalValue,
+    );
+  });
+
+  it('review fix 1: a vest between today and month-end folds into the FIRST bucket (chart ≡ headline)', async () => {
+    const { forwardVestChartData, vestsInWindow } = await import('@/lib/equity-value');
+    // today 2026-05-14; the 2026-05-20 vest is inside the window (and the
+    // headline/Next-vests list) — the chart must carry it too.
+    const g = {
+      grantDate: '2026-01-01',
+      grantType: GrantType.RSU,
+      strikePrice: 0,
+      totalShares: 100,
+      currentFmv: 50,
+      vestingSchedule: [{ date: '2026-05-20', cumulativePct: 1.0 }],
+    };
+    const rows = forwardVestChartData([g], '2026-05-14', 12);
+    expect(rows[0].month).toBe('2026-06');
+    expect(rows[0].cumulativeValue).toBe(5000);
+    expect(rows.at(-1)!.cumulativeValue).toBe(
+      vestsInWindow([g], '2026-05-14', 12).totalValue,
+    );
+  });
+
   it('returns an all-zero ramp when nothing vests forward', async () => {
     const { forwardVestChartData } = await import('@/lib/equity-value');
     const g = {

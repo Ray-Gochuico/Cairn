@@ -89,7 +89,7 @@ export function Plan529Section() {
       {deduction.maxAmount === UNLIMITED_DEDUCTION_SENTINEL
         ? 'places no dollar cap on the state income tax deduction for 529 contributions'
         : `allows up to ${formatCurrency(deduction.maxAmount)}/yr state income tax deduction for 529 contributions`}
-      . The Bonus Tax calc doesn't apply this in projections yet.
+      . The Supplemental pay calculator doesn't apply this in projections yet.
     </div>
   );
 

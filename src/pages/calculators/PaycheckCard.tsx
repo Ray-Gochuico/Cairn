@@ -6,7 +6,7 @@ import { CalculatorCard, EmptyMeaning, RailViewGroup } from './CalculatorCard';
 import { computePaycheck, FEDERAL_LIABILITY_CAVEAT } from '@/lib/calculators/paycheck';
 import { useHouseholdTaxContext } from '@/lib/calculators/use-household-tax-context';
 import { aggregateHouseholdPretax } from '@/lib/calculators/supplemental-wage';
-import { computeBonusTax } from '@/lib/tax';
+import { computeTotalTax } from '@/lib/tax';
 import { formatCurrency } from '@/lib/format';
 import { CONTRIBUTION_LIMITS_2026 } from '@/lib/contribution-limits';
 import { PAYCHECK_PERIODS, periodsPerYear, type PaycheckPeriod } from '@/lib/paycheck-periods';
@@ -109,21 +109,28 @@ export function PaycheckCard({ cardId }: PaycheckCardProps = {}) {
     });
   }, [household, persons, dependents, taxItems, resolvedYear]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // D16 (Wave 18): the per-person view's tax rows are MARGINAL attribution via
-  // the engine's existing with/without diff — computeBonusTax with the OTHER
-  // earners' wages as the base and {name}'s salary as the "bonus" yields the
-  // incremental tax attributable to that salary stacked on the household.
-  // Never a fabricated proportional split: joint brackets are shared, and this
-  // is the one figure the engine actually computes. FICA is exact under the
-  // Wave-9 per-earner wage-base split (recipientIndex).
+  // D16 (Wave 18, review fix 2): the per-person tax rows are MARGINAL
+  // attribution by the DIFFERENCE method with FULL pretax on both legs —
+  //   withLeg   = the household result (`annual` above: ALL persons, the
+  //               complete aggregateHouseholdPretax — identical to the
+  //               Combined view), and
+  //   withoutLeg = computeTotalTax over the OTHERS (this person's gross
+  //               zeroed in the per-earner split, the others' aggregate
+  //               pretax).
+  // Per-jurisdiction row = withLeg − withoutLeg. Because the with-leg IS the
+  // household figure, per-person ≤ household by construction — the earlier
+  // computeBonusTax framing dropped the person's own pretax from the
+  // with-leg, letting a per-person federal row exceed the entire household's
+  // federal tax. Never a fabricated proportional split: joint brackets are
+  // shared; this is the one engine-honest incremental figure. FICA stays
+  // exact under the Wave-9 per-earner wage-base split.
   const personIdx = selectedId != null ? persons.findIndex((p) => p.id === selectedId) : -1;
-  const personMarginal = useMemo(() => {
+  const personWithoutLeg = useMemo(() => {
     if (selectedId == null || personIdx < 0 || !household || taxItems.length === 0) return null;
     const federal = lookup('FEDERAL', 'US', household.filingStatus);
     const state = lookup('STATE', household.state, household.filingStatus);
     const city = household.city ? lookup('CITY', household.city, household.filingStatus) : null;
     if (!federal || !state) return null;
-    const person = persons[personIdx];
     const others = persons.filter((_, i) => i !== personIdx);
     // Household-wide counts (the aggregateHouseholdPretax contract) — the
     // per-return DCFSA/HSA caps don't shrink because we sum a subset.
@@ -132,10 +139,11 @@ export function PaycheckCard({ cardId }: PaycheckCardProps = {}) {
       personCount: persons.length,
       dependentCount: dependents.length,
     });
-    return computeBonusTax({
-      personGross: othersAgg.totalSalary + person.annualSalaryPretax,
-      bonus: person.annualSalaryPretax, // the "with/without {name}'s salary" diff
-      pretax: othersAgg.pretax, // others' pretax rides in both legs
+    return computeTotalTax({
+      gross: othersAgg.totalSalary,
+      // Keep the person's slot (zeroed) so per-earner FICA wage bases align
+      // with the with-leg's split.
+      perPersonGross: persons.map((p, i) => (i === personIdx ? 0 : p.annualSalaryPretax)),
       filingStatus: household.filingStatus,
       federalBrackets: federal.brackets,
       stateBrackets: state.brackets,
@@ -145,8 +153,7 @@ export function PaycheckCard({ cardId }: PaycheckCardProps = {}) {
         state: state.standardDeduction,
         city: city?.standardDeduction ?? 0,
       },
-      perPersonBaseGross: persons.map((p, i) => (i === personIdx ? 0 : p.annualSalaryPretax)),
-      recipientIndex: personIdx, // exact per-earner FICA (Wave-9 wage-base split)
+      pretax: othersAgg.pretax,
     });
   }, [selectedId, personIdx, persons, household, dependents, taxItems, resolvedYear]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -180,7 +187,7 @@ export function PaycheckCard({ cardId }: PaycheckCardProps = {}) {
   // the household per-return caps); the tax rows are the marginal attribution
   // computed above. The headline stays the Combined take-home in both views.
   const selectedPerson =
-    personIdx >= 0 && personMarginal != null ? persons[personIdx] : null;
+    personIdx >= 0 && personWithoutLeg != null ? persons[personIdx] : null;
   const own = selectedPerson
     ? {
         gross: selectedPerson.annualSalaryPretax / div,
@@ -193,10 +200,12 @@ export function PaycheckCard({ cardId }: PaycheckCardProps = {}) {
         pretaxDcfsa: (selectedPerson.dependentCareFsaMonthly * 12) / div,
         pretaxHsa:
           (selectedPerson.hsaEligible ? selectedPerson.hsaMonthlyContribution * 12 : 0) / div,
-        federal: personMarginal!.bonusBreakdown.federal / div,
-        fica: personMarginal!.bonusBreakdown.fica / div,
-        stateTax: personMarginal!.bonusBreakdown.state / div,
-        cityTax: personMarginal!.bonusBreakdown.city / div,
+        // Review fix 2: household (with-leg) − others (without-leg), per
+        // jurisdiction — ≤ the household row by construction.
+        federal: (annual.federal - personWithoutLeg!.federal) / div,
+        fica: (annual.fica - personWithoutLeg!.fica) / div,
+        stateTax: (annual.stateTax - personWithoutLeg!.state) / div,
+        cityTax: (annual.cityTax - personWithoutLeg!.city) / div,
       }
     : null;
   const perPeriod = {

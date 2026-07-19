@@ -510,6 +510,44 @@ describe('PaycheckCard Combined | per-person view (Wave 18 D16)', () => {
     ).toBeInTheDocument();
   });
 
+  it("review fix 2: per-person federal stays BELOW the household federal when the person has a 401(k) election (difference method carries full pretax on both legs)", async () => {
+    const user = userEvent.setup();
+    primeStoresTwoEarners();
+    // Alice $60k / Bob $200k with a 12% 401(k) ($24k deferral). Pre-fix the
+    // with-leg dropped Bob's own pretax: on these MFJ brackets (SD $30k) the
+    // buggy diff is federal($230k taxable) − federal($30k taxable) =
+    // $50,663 − $3,362 = $47,302 — ABOVE the household's true federal
+    // ($206k taxable → $42,983). The difference method with full pretax on
+    // the with-leg yields $42,983 − $3,362 = $39,622 < household.
+    const [alice, bob] = usePersonsStore.getState().persons;
+    usePersonsStore.setState({
+      persons: [
+        { ...alice, annualSalaryPretax: 60000 },
+        { ...bob, annualSalaryPretax: 200000, pretax401kPct: 0.12 },
+      ],
+      isLoading: false,
+      error: null,
+    });
+    render(<MemoryRouter><PaycheckCard cardId="paycheck" /></MemoryRouter>);
+    await screen.findByTestId('paycheck-takehome');
+    await user.click(screen.getByRole('combobox', { name: /period/i }));
+    await user.click(await screen.findByRole('option', { name: /^annual$/i }));
+
+    const readFederal = () =>
+      parseFloat(
+        (screen
+          .getByText(/Estimated federal tax/)
+          .closest('div')!
+          .parentElement!.querySelector('.tabular-nums')!.textContent ?? '')
+          .replace(/[$,]/g, ''),
+      );
+    const combinedFederal = readFederal();
+    await user.click(screen.getByRole('button', { name: 'Bob' }));
+    const perPersonFederal = readFederal();
+    expect(perPersonFederal).toBeGreaterThan(0);
+    expect(perPersonFederal).toBeLessThan(combinedFederal);
+  });
+
   it('headline stays the Combined take-home in the per-person view', async () => {
     const user = userEvent.setup();
     primeStoresTwoEarners();
