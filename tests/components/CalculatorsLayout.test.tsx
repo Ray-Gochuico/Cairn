@@ -393,6 +393,8 @@ describe('CalculatorsLayout', () => {
     });
 
     it('#hash open re-scrolls the card AFTER boot layout settles (bounded settle poll, nearest)', async () => {
+      // Wave-18 id re-pin: coast-fi merged into path-to-fi (the legacy hash
+      // still redirects — both smoke intents exercised in one test).
       window.history.replaceState(null, '', '/calculators#coast-fi');
       primeBaseline();
       primeSettings();
@@ -407,8 +409,8 @@ describe('CalculatorsLayout', () => {
       };
       try {
         render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
-        await screen.findByTestId('calc-card-coast-fi');
-        const hits = () => scrollCalls.filter((c) => c.id === 'coast-fi');
+        await screen.findByTestId('calc-card-path-to-fi');
+        const hits = () => scrollCalls.filter((c) => c.id === 'path-to-fi');
         // The card's own open-effect fires once at the open commit…
         expect(hits().length).toBeGreaterThan(0);
         const initialCount = hits().length;
