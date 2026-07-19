@@ -36,6 +36,8 @@ export function useCalculatorState<T extends Record<string, unknown>>(
   setValue: <K extends keyof T>(key: K, value: T[K]) => void;
   reset: () => void;
   isOverridden: boolean;
+  /** Wave-17: the currently-overridden field keys — drives per-field edited dots. */
+  overriddenKeys: ReadonlySet<string>;
 } {
   const [overrides, setOverrides] = useState<Partial<T>>(() => readOverrides(cardId) as Partial<T>);
 
@@ -63,7 +65,8 @@ export function useCalculatorState<T extends Record<string, unknown>>(
     writeOverrides(cardId, {});
   }, [cardId]);
 
-  const isOverridden = useMemo(() => Object.keys(overrides).length > 0, [overrides]);
+  const overriddenKeys = useMemo(() => new Set(Object.keys(overrides)), [overrides]);
+  const isOverridden = overriddenKeys.size > 0;
 
-  return { values, setValue, reset, isOverridden };
+  return { values, setValue, reset, isOverridden, overriddenKeys };
 }

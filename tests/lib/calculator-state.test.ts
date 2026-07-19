@@ -50,4 +50,14 @@ describe('useCalculatorState', () => {
     const { result } = renderHook(() => useCalculatorState('coast-fi', { years: 20, rate: 0.07 }));
     expect(result.current.values).toEqual({ years: 20, rate: 0.07 });
   });
+
+  it('exposes overriddenKeys — the per-field dirty source (Wave 17)', () => {
+    const { result } = renderHook(() => useCalculatorState('wm-test', { a: 1, b: 2 }));
+    expect([...result.current.overriddenKeys]).toEqual([]);
+    act(() => result.current.setValue('b', 9));
+    expect(result.current.overriddenKeys.has('b')).toBe(true);
+    expect(result.current.overriddenKeys.has('a')).toBe(false);
+    act(() => result.current.reset());
+    expect(result.current.overriddenKeys.size).toBe(0);
+  });
 });
