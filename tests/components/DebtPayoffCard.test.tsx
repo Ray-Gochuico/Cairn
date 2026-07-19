@@ -123,7 +123,7 @@ describe('DebtPayoffCard', () => {
     expect(screen.getByRole('table').closest('div')).toHaveClass('overflow-x-auto');
   });
 
-  it('numeric columns are right-aligned (Wave 15 T9, Allocator precedent; D9: Payoff date aligns with money columns)', () => {
+  it('trimmed CalcTable: Loan | Payoff | Interest, numeric columns right-aligned (Wave 18 C10)', () => {
     useLoansStore.setState({
       loans: [makeLoan({ id: 1, name: 'Car loan' })],
       isLoading: false,
@@ -136,7 +136,7 @@ describe('DebtPayoffCard', () => {
       </MemoryRouter>,
     );
 
-    for (const name of [/^balance$/i, /^rate$/i, /payoff date/i, /^interest$/i]) {
+    for (const name of [/^payoff$/i, /^interest$/i]) {
       expect(
         screen.getByRole('columnheader', { name }).className,
       ).toContain('text-right');
@@ -145,6 +145,118 @@ describe('DebtPayoffCard', () => {
     expect(
       screen.getByRole('columnheader', { name: /^loan$/i }).className,
     ).not.toContain('text-right');
+    // The Balance and Rate columns died with the trim (redundant input echoes).
+    expect(screen.queryByRole('columnheader', { name: /^balance$/i })).toBeNull();
+    expect(screen.queryByRole('columnheader', { name: /^rate$/i })).toBeNull();
+  });
+
+  it('D11: BOTH strategy columns render with two loans (no gating), neutral headings', () => {
+    useLoansStore.setState({
+      loans: [
+        makeLoan({ id: 1, name: 'Cheap', currentBalance: 8000, interestRate: 0.03, termMonths: 120 }),
+        makeLoan({ id: 2, name: 'Costly', currentBalance: 20000, interestRate: 0.07, termMonths: 120 }),
+      ],
+      isLoading: false,
+      error: null,
+    });
+    render(<MemoryRouter><DebtPayoffCard /></MemoryRouter>);
+    expect(screen.getByText(/Avalanche — highest rate first/)).toBeInTheDocument();
+    expect(screen.getByText(/Snowball — smallest balance first/)).toBeInTheDocument();
+    // Both computed at the shared extra — figures render, never '—', in both.
+    expect(screen.getByTestId('debt-avalanche-interest').textContent).toMatch(/\$/);
+    expect(screen.getByTestId('debt-snowball-interest').textContent).toMatch(/\$/);
+  });
+
+  it('D11: a single loan collapses to ONE "Extra payment plan" column', () => {
+    useLoansStore.setState({
+      loans: [makeLoan({ id: 1, name: 'Only' })],
+      isLoading: false,
+      error: null,
+    });
+    render(<MemoryRouter><DebtPayoffCard /></MemoryRouter>);
+    expect(screen.getByText('Extra payment plan')).toBeInTheDocument();
+    expect(screen.queryByText(/Snowball — smallest balance first/)).toBeNull();
+  });
+
+  it('D11: the extra input is ALWAYS enabled — strategy none included', () => {
+    useLoansStore.setState({
+      loans: [makeLoan({ id: 1 })],
+      isLoading: false,
+      error: null,
+    });
+    render(<MemoryRouter><DebtPayoffCard /></MemoryRouter>);
+    expect(screen.getByLabelText(/extra monthly payment/i)).toBeEnabled();
+  });
+
+  it('D11: the select highlights the chosen column without gating the other', async () => {
+    useLoansStore.setState({
+      loans: [
+        makeLoan({ id: 1, name: 'Cheap', currentBalance: 8000, interestRate: 0.03, termMonths: 120 }),
+        makeLoan({ id: 2, name: 'Costly', currentBalance: 20000, interestRate: 0.07, termMonths: 120 }),
+      ],
+      isLoading: false,
+      error: null,
+    });
+    const user = userEvent.setup();
+    render(<MemoryRouter><DebtPayoffCard /></MemoryRouter>);
+    // 'none' highlights neither.
+    expect(screen.getByTestId('debt-column-avalanche').className).not.toContain('border-primary/40');
+    expect(screen.getByTestId('debt-column-snowball').className).not.toContain('border-primary/40');
+    await user.click(screen.getByRole('combobox', { name: /strategy/i }));
+    await user.click(await screen.findByRole('option', { name: /snowball/i }));
+    expect(screen.getByTestId('debt-column-snowball').className).toContain('border-primary/40');
+    expect(screen.getByTestId('debt-column-avalanche').className).not.toContain('border-primary/40');
+    // The un-highlighted column still shows its figures.
+    expect(screen.getByTestId('debt-avalanche-interest').textContent).toMatch(/\$/);
+  });
+
+  it('trade-off teaching row quantifies the lib delta at the current extra (C10)', async () => {
+    const loans = [
+      makeLoan({ id: 1, name: 'Cheap', currentBalance: 8000, interestRate: 0.03, termMonths: 120 }),
+      makeLoan({ id: 2, name: 'Costly', currentBalance: 20000, interestRate: 0.07, termMonths: 120 }),
+    ];
+    useLoansStore.setState({ loans, isLoading: false, error: null });
+    const user = userEvent.setup();
+    render(<MemoryRouter><DebtPayoffCard /></MemoryRouter>);
+    const extraInput = screen.getByLabelText(/extra monthly payment/i);
+    await user.clear(extraInput);
+    await user.type(extraInput, '200');
+
+    const { compareStrategies } = await import('@/lib/debt-payoff-comparison');
+    const { formatCurrency } = await import('@/lib/format');
+    // Clock-free oracle anchor: the SAME localTodayISO() the card's
+    // useLocalToday reads (savings-pin idiom below).
+    const { localTodayISO } = await import('@/lib/dates');
+    const c = compareStrategies(loans, 200, localTodayISO());
+    const row = screen.getByTestId('debt-tradeoff-row');
+    expect(row.textContent).toContain(formatCurrency(Math.abs(c.interestDelta)));
+    expect(row.textContent).toContain(`${Math.abs(c.monthsDelta ?? 0)} months`);
+    expect(row.textContent).toMatch(/avalanche minimizes interest; snowball clears your smallest balance first/);
+    // No winner badge — the sentence presents both neutrally.
+    expect(row.textContent).not.toMatch(/best|winner|recommended/i);
+  });
+
+  it('table caption disambiguates the shown plan when no strategy is highlighted (C10)', () => {
+    useLoansStore.setState({
+      loans: [
+        makeLoan({ id: 1, name: 'Cheap', currentBalance: 8000, interestRate: 0.03, termMonths: 120 }),
+        makeLoan({ id: 2, name: 'Costly', currentBalance: 20000, interestRate: 0.07, termMonths: 120 }),
+      ],
+      isLoading: false,
+      error: null,
+    });
+    render(<MemoryRouter><DebtPayoffCard /></MemoryRouter>);
+    expect(screen.getByText(/showing the avalanche plan/i)).toBeInTheDocument();
+  });
+
+  it('downslope chart renders for healthy loans (blaze hero handled by InlineChart)', () => {
+    useLoansStore.setState({
+      loans: [makeLoan({ id: 1 })],
+      isLoading: false,
+      error: null,
+    });
+    render(<MemoryRouter><DebtPayoffCard /></MemoryRouter>);
+    expect(screen.getByText('The downslope')).toBeInTheDocument();
   });
 
   it('strategy picker has 3 options (None / Snowball / Avalanche)', async () => {
@@ -197,13 +309,11 @@ describe('DebtPayoffCard', () => {
       </MemoryRouter>,
     );
 
-    // Switch to a strategy that distributes the global extra payment.
-    await user.click(screen.getByRole('combobox', { name: /strategy/i }));
-    await user.click(await screen.findByRole('option', { name: /snowball/i }));
-
+    // D11: no strategy switch needed — both plans are always computed at the
+    // shared extra; read the avalanche column.
     const totalInterestBefore = parseFloat(
       screen
-        .getByTestId('debt-total-interest')
+        .getByTestId('debt-avalanche-interest')
         .textContent!.replace(/[^\d.]/g, ''),
     );
     expect(Number.isFinite(totalInterestBefore)).toBe(true);
@@ -216,7 +326,7 @@ describe('DebtPayoffCard', () => {
 
     const totalInterestAfter = parseFloat(
       screen
-        .getByTestId('debt-total-interest')
+        .getByTestId('debt-avalanche-interest')
         .textContent!.replace(/[^\d.]/g, ''),
     );
     expect(totalInterestAfter).toBeLessThan(totalInterestBefore);
@@ -433,11 +543,13 @@ describe('DebtPayoffCard', () => {
 
       // Every payoff-derived aggregate is suppressed (any capped loan poisons
       // the sums) — including the headline, which claims a payoff date (T7/D7).
-      expect(screen.getByTestId('debt-total-interest')).toHaveTextContent('—');
+      expect(screen.getByTestId('debt-avalanche-interest')).toHaveTextContent('—');
       expect(screen.getByTestId('debt-payoff-headline')).toHaveTextContent('—');
-      expect(screen.getByTestId('debt-savings')).toHaveTextContent('—');
+      expect(screen.getByTestId('debt-avalanche-saved')).toHaveTextContent('—');
       // The balance tile is NEVER suppressed — the balance is always real.
       expect(screen.getByTestId('debt-total-balance')).not.toHaveTextContent('—');
+      // C10: a capped schedule's tail is a lie — the downslope chart hides.
+      expect(screen.queryByText('The downslope')).not.toBeInTheDocument();
 
       // Capped row: payoff cell carries the inline warning, interest cell is '—'.
       expect(screen.getByTestId('debt-loan-payoff-9')).toHaveTextContent(/never at this payment/i);
@@ -488,8 +600,8 @@ describe('DebtPayoffCard', () => {
 
       // Savings is baseline-poisoned → suppressed; the other two tiles are
       // real (the with-extra projection amortizes).
-      expect(screen.getByTestId('debt-savings')).toHaveTextContent('—');
-      expect(screen.getByTestId('debt-total-interest')).not.toHaveTextContent('—');
+      expect(screen.getByTestId('debt-avalanche-saved')).toHaveTextContent('—');
+      expect(screen.getByTestId('debt-avalanche-interest')).not.toHaveTextContent('—');
       expect(screen.getByTestId('debt-payoff-headline')).toHaveTextContent(
         /Debt-free [A-Z][a-z]{2} \d{4}/,
       );
@@ -539,7 +651,7 @@ describe('extra-payment savings pin (round-3 T21)', () => {
     const expected = withoutExtra.totalInterest - withExtra.totalInterest;
     expect(expected).toBeGreaterThan(0); // sanity: the fixture bites
 
-    const savings = screen.getByTestId('debt-savings');
+    const savings = screen.getByTestId('debt-avalanche-saved');
     expect(savings).toHaveTextContent(formatCurrency(expected));
     expect(savings).not.toHaveTextContent('—');
   });
