@@ -63,7 +63,7 @@ export function calculatorCardLabel(id: string): string {
  *                        added in a future release shows up without migrating
  *                        stored layouts). Unknown-id entries are ignored by
  *                        the caller because it intersects against the live
- *                        CARD_IDS, but we also don't synthesize them here.
+ *                        CALCULATOR_CARD_IDS, but we also don't synthesize them here.
  * Pure; never mutates its inputs.
  */
 export function applyCalculatorCardLayout(
