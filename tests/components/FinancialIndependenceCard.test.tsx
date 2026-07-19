@@ -387,17 +387,14 @@ describe('FinancialIndependenceCard', () => {
     expect(value).toBeLessThan(40);
   });
 
-  it('forwards cardId + onHide so the Hide button appears on the card', () => {
+  it('forwards cardId so the card shell mounts with its stable testid (Wave 17)', () => {
     primeStores();
     render(
       <MemoryRouter>
-        <FinancialIndependenceCard cardId="financial-independence" onHide={() => {}} />
+        <FinancialIndependenceCard cardId="financial-independence" />
       </MemoryRouter>,
     );
-    // CalculatorCard renders a "Hide <title> card" button when cardId is set.
-    expect(
-      screen.getByRole('button', { name: /hide years to fi card/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId('calc-card-financial-independence')).toBeInTheDocument();
   });
 
   it('excludes future-dated snapshots from the current portfolio (latest on-or-before today)', () => {

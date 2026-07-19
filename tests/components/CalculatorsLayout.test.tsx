@@ -271,31 +271,9 @@ describe('CalculatorsLayout', () => {
   });
 
   describe('Hide / show cards (DB-backed, Switch popover)', () => {
-    it('per-card Hide button writes calculatorCardLayout via settings.update (not localStorage)', async () => {
-      primeBaseline();
-      const update = primeSettings();
-      usePersonsStore.setState({
-        persons: [{ ...basePerson, employmentType: 'SALARY_NO_OT' }],
-        isLoading: false,
-        error: null,
-      });
-
-      render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
-      await screen.findByRole('heading', { name: /Bonus take-home/i });
-
-      const bonusHide = screen.getByRole('button', { name: /^hide estimated bonus take-home/i });
-      await userEvent.click(bonusHide);
-
-      // update() called with a calculatorCardLayout marking bonus-tax hidden.
-      expect(update).toHaveBeenCalled();
-      const patch = update.mock.calls.at(-1)![0] as { calculatorCardLayout: { id: string; hidden: boolean }[] };
-      const bonusEntry = patch.calculatorCardLayout.find((e) => e.id === 'bonus-tax');
-      expect(bonusEntry?.hidden).toBe(true);
-      // Card removed from the grid.
-      expect(screen.queryByText(/Bonus take-home/i)).not.toBeInTheDocument();
-      // Single source of truth: localStorage key NEVER recreated.
-      expect(localStorage.getItem('calculator-hidden-cards')).toBeNull();
-    });
+    // Wave-17 Task 4: the per-card header Hide button is deleted chrome — the
+    // hide path moves to the shell context (⋯ menu + section Customize),
+    // asserted by the Task-5 suite rewrite.
 
     it('hides a card sourced from settings.calculatorCardLayout (DB read path)', async () => {
       primeBaseline();

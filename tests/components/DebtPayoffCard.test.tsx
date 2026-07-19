@@ -276,22 +276,13 @@ describe('DebtPayoffCard', () => {
     expect(parseDate(smallPayoff)).toBeLessThan(parseDate(bigPayoff));
   });
 
-  it('forwards cardId + onHide so the Hide button appears on the card', () => {
-    useLoansStore.setState({
-      loans: [makeLoan({ id: 1, name: 'Card' })],
-      isLoading: false,
-      error: null,
-    });
-
+  it('forwards cardId so the card shell mounts with its stable testid (Wave 17)', () => {
     render(
       <MemoryRouter>
-        <DebtPayoffCard cardId="debt-payoff" onHide={() => {}} />
+        <DebtPayoffCard cardId="debt-payoff" />
       </MemoryRouter>,
     );
-
-    expect(
-      screen.getByRole('button', { name: /hide debt payoff card/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId('calc-card-debt-payoff')).toBeInTheDocument();
   });
 
   it('T6 Fix-2: renders payoff dates as friendly month/year (e.g. "Jan 2031"), not ISO (e.g. "2031-01-01")', () => {

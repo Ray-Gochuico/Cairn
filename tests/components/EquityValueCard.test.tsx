@@ -268,19 +268,13 @@ describe('EquityValueCard', () => {
     expect(link).toHaveAttribute('href', '/equity-grants');
   });
 
-  it('forwards cardId + onHide so the Hide button appears on the card', () => {
-    primeStores({
-      grants: [{ name: 'Grant A' }],
-    });
-
+  it('forwards cardId so the card shell mounts with its stable testid (Wave 17)', () => {
     render(
       <MemoryRouter>
-        <EquityValueCard cardId="equity" onHide={() => {}} />
+        <EquityValueCard cardId="equity" />
       </MemoryRouter>,
     );
-    expect(
-      screen.getByRole('button', { name: /hide equity value card/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId('calc-card-equity')).toBeInTheDocument();
   });
 
   it('renders the total vested value through ResultRow with a stable testId', () => {

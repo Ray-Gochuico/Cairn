@@ -378,16 +378,14 @@ describe('CoastFiCard', () => {
     expect(value).toBeLessThan(500);
   });
 
-  it('forwards cardId + onHide so the Hide button appears on the card', () => {
+  it('forwards cardId so the card shell mounts with its stable testid (Wave 17)', () => {
     primeStores();
     render(
       <MemoryRouter>
-        <CoastFiCard cardId="coast-fi" onHide={() => {}} />
+        <CoastFiCard cardId="coast-fi" />
       </MemoryRouter>,
     );
-    expect(
-      screen.getByRole('button', { name: /hide coastfi card/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByTestId('calc-card-coast-fi')).toBeInTheDocument();
   });
 
   it('shows the target portfolio derived from monthlyExpenseBaseline / withdrawalRate', () => {
