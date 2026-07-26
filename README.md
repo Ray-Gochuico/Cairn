@@ -1,106 +1,84 @@
 # Cairn
 
-Local-only personal finance tracker for households. Standalone Tauri desktop app with local SQLite storage.
+Local-only personal finance tracker for households. Standalone Tauri desktop
+app with local SQLite storage. **All data stays on your device** — no account,
+no sync, no telemetry (see [Privacy](#privacy)).
 
-## Disclaimer
-
-This is a personal project distributed under the MIT License (see
-[LICENSE](LICENSE)). It is **not financial, investment, tax, legal,
-or accounting advice**. Calculations, projections, and recommendations
-are generated mechanically from the data you enter and from public
-reference data; they may be incomplete, outdated, or wrong. **You are
-solely responsible for verifying anything before acting on it**, and
-should consult a qualified professional for decisions that materially
-affect your finances.
-
-The app stores all data locally on your device. The author cannot
-recover lost data or restore a corrupted database. Use of this app is
-**at your own risk**, with no warranty of any kind to the maximum
-extent permitted by law.
-
-This software is not affiliated with, endorsed by, or sponsored by
-Yahoo, Yahoo Finance, or any other third party whose data or APIs
-it may access. Tax reference data is **U.S.-only** and reflects the
-author's best effort at the time of publication; tax law changes
-frequently.
+> **Not financial advice.** Cairn is a personal MIT-licensed project;
+> verify anything before acting on it. Full terms in the
+> [Disclaimer](#disclaimer).
 
 ## Install
 
-Cairn is distributed **unsigned** — no App Store, no installer wizard on
-macOS. Pick your platform below.
+**[Download the latest release →](https://github.com/Ray-Gochuico/Cairn/releases/latest)**
 
-**Download the latest build:**
-<https://github.com/Ray-Gochuico/Cairn/releases/latest>
+| Your computer | Download this file |
+| --- | --- |
+| **Mac** (Apple Silicon or Intel) | `Cairn_<version>_universal.app.tar.gz` (e.g. `Cairn_1.0.2_universal.app.tar.gz`) |
+| **Windows** (64-bit) | `Cairn_<version>_x64-setup.exe` (e.g. `Cairn_1.0.2_x64-setup.exe`) |
 
----
+Cairn is unsigned (it's a personal project, not commercial software), so
+your OS shows **one** security prompt the first time you run the download.
+Approve it once and it never appears again — the steps below include it.
+[More on why →](#why-the-security-warning)
 
-### macOS (Apple Silicon or Intel)
+### macOS
 
-Grab the file named `Cairn_<version>_universal.app.tar.gz`.
+1. **Unarchive** — double-click the downloaded `.app.tar.gz`.
+   macOS produces `Cairn.app` in the same folder.
+2. **Install** — drag `Cairn.app` into `Applications`.
+3. **First launch** — right-click `Cairn.app`, choose **Open**, then click
+   **Open** again in the dialog. macOS remembers the approval; every launch
+   after this is a normal double-click. *(This route keeps macOS's
+   tamper check on the download intact — safer than Terminal workarounds.)*
 
-> **Why `.app.tar.gz` (and not `.dmg` or `.app.zip`)?** Two reasons.
-> First, `bundle_dmg.sh` (Tauri's DMG bundler) fails on macOS 26 — its
-> AppleScript-driven Finder window positioning step needs Automation
-> permissions that don't exist in a headless build context, so there's
-> no `.dmg`. Second, the in-app updater requires gzip+tar: the Tauri 2
-> macOS updater unpacks the archive with `GzDecoder` + `tar` and has no
-> `.zip` support (that's Windows-only), so a `.zip` would pass the
-> signature check and then fail to install. Shipping the same
-> `.app.tar.gz` for both manual download and the updater keeps one
-> artifact. macOS Archive Utility unarchives `.tar.gz` on double-click,
-> same as a `.zip`.
+   *No "Open" button in the dialog (macOS 15+)?* Go to **System Settings →
+   Privacy & Security** and click **"Open Anyway"** next to the Cairn entry,
+   then launch again.
 
-1. Double-click the downloaded `.app.tar.gz` to unarchive it. macOS
-   produces `Cairn.app` in the same folder.
-2. Drag `Cairn.app` into the `Applications` folder.
-3. **First time only — right-click `Cairn.app` in `Applications`, choose
-   "Open", then click "Open" again in the dialog that appears.** This is the
-   recommended way in: it clears Gatekeeper while leaving macOS's
-   quarantine/tamper check intact (the OS still verifies the bundle hasn't
-   been altered since download, and your click records consent). macOS
-   remembers the approval, so every launch after the first one is a normal
-   double-click.
+**Updating:** inside the app — **Settings → Updates → Check for updates**.
+The updater downloads and installs the new version for you.
 
-   On **macOS 15 Sequoia and later**, if the "Open" button doesn't appear
-   in the dialog, go to **System Settings → Privacy & Security** and click
-   **"Open Anyway"** next to the Cairn entry.
+<details>
+<summary><strong>Why a <code>.tar.gz</code> and not a <code>.dmg</code>?</strong></summary>
 
-> **Advanced — only if you trust the source.** You *can* clear Gatekeeper
-> from Terminal instead:
->
-> ```bash
-> xattr -d com.apple.quarantine /Applications/Cairn.app
-> ```
->
-> Don't reach for this by default. It strips the quarantine flag outright,
-> which **removes macOS's tamper check** on this unsigned download — the OS
-> will no longer verify the bundle is the one you fetched. Only run it if you
-> downloaded the release yourself from the official link above and trust it.
-> The right-click → Open flow in step 3 is safer and just as permanent.
+Two reasons. Tauri's DMG bundler fails on macOS 26 (its AppleScript-driven
+Finder step needs Automation permissions that don't exist in a headless
+build), so there's no `.dmg`. And the Tauri 2 macOS in-app updater can only
+unpack gzip+tar (`.zip` support is Windows-only), so shipping the same
+`.app.tar.gz` for both manual download and the updater keeps one artifact.
+macOS unarchives `.tar.gz` on double-click, same as a `.zip`.
 
-**Updates (macOS):** use **Settings → Updates → Check for updates** inside
-the app. The in-app updater downloads and installs the new version for you.
+</details>
 
----
+<details>
+<summary><strong>Advanced: clearing Gatekeeper from Terminal (not recommended)</strong></summary>
 
-### Windows (64-bit)
+```bash
+xattr -d com.apple.quarantine /Applications/Cairn.app
+```
 
-Grab the file named `Cairn_<version>_x64-setup.exe`.
+Don't reach for this by default. It strips the quarantine flag outright,
+which **removes macOS's tamper check** on this unsigned download — the OS
+will no longer verify the bundle is the one you fetched. Only run it if you
+downloaded the release yourself from the official link above and trust it.
+The right-click → Open flow in step 3 is safer and just as permanent.
 
-1. Run the downloaded `Cairn_<version>_x64-setup.exe`.
-2. Windows SmartScreen may show **"Windows protected your PC"** because the
-   installer is unsigned. Click **"More info"**, then **"Run anyway"**. This
-   is a one-time prompt — Windows remembers the approval for future launches.
-3. Follow the installer prompts. If prompted to install the **WebView2
-   runtime**, allow it — most Windows 10/11 PCs already have it, but it is
-   required for the app to run.
+</details>
 
-**Updates (Windows):** there is **no in-app updater for Windows yet**. To
-update, download the new installer from the
+### Windows
+
+1. **Run** the downloaded `Cairn_<version>_x64-setup.exe`.
+2. At the **"Windows protected your PC"** SmartScreen prompt, click
+   **More info**, then **Run anyway**. This is a one-time prompt.
+3. **Follow the installer.** If it offers to install the **WebView2
+   runtime**, allow it — most Windows 10/11 PCs already have it, and the
+   app requires it.
+
+**Updating:** no in-app updater on Windows yet — download the new
+installer from the
 [Releases page](https://github.com/Ray-Gochuico/Cairn/releases) and run it.
 **Watch or star the repo** to get notified of new releases.
-
----
 
 ### Why the security warning?
 
@@ -110,12 +88,16 @@ developer" dialog; Windows shows a one-time SmartScreen prompt. After
 approving once, neither warning appears again. The app itself is the same
 code you can read in this repo; nothing is hidden by the signing absence.
 
-If/when Cairn ever scales beyond friends, code signing is a multi-step
-project, not a one-liner: enroll in the Apple Developer Program ($99/yr),
-issue a Developer ID Application certificate, set `signingIdentity` in
-`tauri.conf.json`, then notarize and staple the build. Windows code-signing
-(e.g. Azure Trusted Signing) is a separate future option. The steps are
-listed in `src-tauri/SIGNING.md`.
+<details>
+<summary>What signing would take, if Cairn ever scales beyond friends</summary>
+
+Code signing is a multi-step project, not a one-liner: enroll in the Apple
+Developer Program ($99/yr), issue a Developer ID Application certificate,
+set `signingIdentity` in `tauri.conf.json`, then notarize and staple the
+build. Windows code-signing (e.g. Azure Trusted Signing) is a separate
+future option. The steps are listed in `src-tauri/SIGNING.md`.
+
+</details>
 
 ## Privacy
 
@@ -202,11 +184,10 @@ enabled if you store sensitive financial data on the machine.
 
 ## Status
 
-**v1.0.0 — shippable.** All feature work plus the full v1.0 distribution-readiness
-remediation are complete: all 7 ship-blockers and the High set are fixed, whole-database
-backup + restore are verified on real hardware, and the suite is green (4405 vitest +
-17 cargo tests, `tsc` clean). Overall ship-readiness **A−**. Shipping is gated only on
-tagging `v1.0.0` (and a first in-app updater round-trip once a `v1.0.1` exists).
+Cairn is released and under active development — the installable build is
+always the [latest release](https://github.com/Ray-Gochuico/Cairn/releases/latest).
+Every commit is gated by a ~5,700-test suite (vitest + cargo, `tsc` clean)
+via a repo-tracked pre-commit hook and CI.
 
 The app supports **light + dark** via system theme (Settings → Appearance).
 
@@ -228,6 +209,28 @@ The refresh cadence (every launch / daily / weekly / manual) is set on
 entirely — opt out and the pill still surfaces the timestamp, but
 never nags. The "Refresh now" button there triggers an immediate price
 refresh from Yahoo Finance regardless of the chosen cadence.
+
+## Disclaimer
+
+This is a personal project distributed under the MIT License (see
+[LICENSE](LICENSE)). It is **not financial, investment, tax, legal,
+or accounting advice**. Calculations, projections, and recommendations
+are generated mechanically from the data you enter and from public
+reference data; they may be incomplete, outdated, or wrong. **You are
+solely responsible for verifying anything before acting on it**, and
+should consult a qualified professional for decisions that materially
+affect your finances.
+
+The app stores all data locally on your device. The author cannot
+recover lost data or restore a corrupted database. Use of this app is
+**at your own risk**, with no warranty of any kind to the maximum
+extent permitted by law.
+
+This software is not affiliated with, endorsed by, or sponsored by
+Yahoo, Yahoo Finance, or any other third party whose data or APIs
+it may access. Tax reference data is **U.S.-only** and reflects the
+author's best effort at the time of publication; tax law changes
+frequently.
 
 ## Feedback
 
