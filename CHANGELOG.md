@@ -5,6 +5,78 @@ All notable changes to Cairn are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-07-20
+
+The calculators grow up, the app finds its look, and a season of
+correctness fixes lands. Your database upgrades automatically on first
+launch.
+
+### Added
+
+- **Scenario bar on Calculators**: portfolio, contribution, expenses,
+  return, withdrawal rate, and inflation now live in ONE bar shared by the
+  planning calculators — edit once, every card recomputes, with per-field
+  "edited" dots and one-click reset to your real data. Salaries are
+  editable there too, rippling through the tax calculators without
+  touching your saved Inputs.
+- **Send to What-If**: turn the scenario you just sketched in the bar into
+  a real What-If scenario with one click.
+- **Debt payoff compares plans side-by-side**: Avalanche and Snowball
+  columns are always computed, with the trade-off quantified in dollars
+  and months.
+- **Equity value is a real calculator now**: what-if the FMV and watch
+  everything reprice, see the next-12-months vesting figure with a
+  forward vesting chart, and a freshness stamp on each grant's price.
+- **Backtest verdict on the card**: the last run's result (e.g. "98% of
+  123 start years sustained this plan") persists on the calculator card,
+  with all figures in today's dollars.
+- **Per-person marginal tax view** on the Paycheck card for multi-earner
+  households.
+- **Next-dollar field**: set a monthly amount once in the "Next dollar"
+  section header and the Debt and Allocator cards pick it up as their
+  default.
+- **Deep links**: `/calculators#<card>` opens that calculator directly;
+  old card links redirect to their merged successors.
+
+### Changed
+
+- **The Calculators page is rebuilt.** Three calm sections — Paycheck &
+  tax, Path to FI, Next dollar — of fixed-height summary cards, each
+  opening (one at a time) into a full-width workbench with its inputs in
+  a side rail. Twelve cards became ten: Bonus + Commission merged into
+  **Supplemental pay**, Years-to-FI + CoastFI merged into **Path to FI**
+  (with a keep-contributing / stop-today mode switch). Hidden-card
+  preferences carry over automatically.
+- **New visual identity** across the app: warm stone neutrals, Inter
+  Tight headings, a single blaze accent, and quieter chrome, in both
+  light and dark themes.
+- **The Dashboard is a briefing**: what changed since last month and what
+  needs your attention, up top.
+- **Inputs became Setup**, and facts are now edited where they live —
+  in-place edit drawers replace bouncing between pages.
+- **Learn shows one question at a time** (four per day) with a persistent
+  Basics / Going deeper / Mix difficulty toggle.
+
+### Fixed
+
+- **Money correctness sweep**, verified against hand-computed anchors:
+  FICA is now computed per earner (Social Security wage base and
+  Additional Medicare no longer applied to combined household gross);
+  the Monthly check-in can no longer corrupt a loan's payment; loan
+  interest is no longer overstated; FI / Coast-FI targets and the
+  backtest's bond leg are consistently in real (inflation-adjusted)
+  dollars, and real-dollar figures are labeled as such.
+- **Honest screens**: pages no longer flash a false "no data" state while
+  loading, and a degraded result replaces its cheerful caption instead of
+  sitting next to it.
+- **Accessibility**: visible keyboard focus throughout the new
+  calculators, screen-reader announcements name the card they come from,
+  focus is never dropped when menus and dialogs close, and contrast
+  issues from the audit are fixed.
+- **Hardening**: CSV import output is injection-safe, the app's file
+  access is frozen behind a policy test, and the onboarding flow can no
+  longer hang on first run.
+
 ## [1.0.2] - 2026-06-12
 
 Intel Macs join in, and the Windows installer actually ships.
@@ -113,6 +185,7 @@ stored in a single local SQLite file. No account, no sync, no telemetry.
   calls (Yahoo Finance quote refresh and the updater check) are both
   user-controlled and contain no PII.
 
+[1.1.0]: https://github.com/Ray-Gochuico/Cairn/releases/tag/v1.1.0
 [1.0.2]: https://github.com/Ray-Gochuico/Cairn/releases/tag/v1.0.2
 [1.0.1]: https://github.com/Ray-Gochuico/Cairn/releases/tag/v1.0.1
 [1.0.0]: https://github.com/Ray-Gochuico/Cairn/releases/tag/v1.0.0
