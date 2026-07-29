@@ -240,6 +240,43 @@ jobs:
           }
           EOF
 
+      - name: Stable-name alias for the README's direct download link
+        # https://github.com/<repo>/releases/latest/download/Cairn-macOS.app.tar.gz
+        # must always resolve: the README links that URL directly so absolute
+        # beginners download the right file with one click instead of picking
+        # it out of the asset list. Same bytes as the versioned artifact; the
+        # in-app updater keeps using the VERSIONED url in latest.json (existing
+        # installs verify the same signature either way, but the versioned
+        # name keeps updater urls immutable per release).
+        run: |
+          cd src-tauri/target/universal-apple-darwin/release/bundle/macos
+          cp "Cairn_${{ steps.ver.outputs.version }}_universal.app.tar.gz" Cairn-macOS.app.tar.gz
+
+      - name: Write the release body (this version's notes + install pointer)
+        # The release page used to embed the ENTIRE CHANGELOG, which buries
+        # "how do I install this" under every historical entry. The body is
+        # now: a one-line install pointer, then just this version's CHANGELOG
+        # section (same $NOTES extraction as latest.json above).
+        run: |
+          NOTES=$(awk -v ver="${{ steps.ver.outputs.version }}" '
+            $0 ~ "^## \\[" ver "\\]" {p=1}
+            p && /^## \[/ && $0 !~ "^## \\[" ver "\\]" {exit}
+            p && /^\[[^]]+\]:[[:space:]]/ {exit}
+            p {buf[n++]=$0}
+            END {while (n>0 && buf[n-1]=="") n--; for (i=0;i<n;i++) print buf[i]}
+          ' CHANGELOG.md)
+          if [ -z "$NOTES" ]; then
+            NOTES="Release ${{ github.ref_name }}."
+          fi
+          {
+            echo "> **Installing for the first time?** Follow the [step-by-step install guide](https://github.com/${{ github.repository }}#install) — it tells you exactly which file to download and what to click."
+            echo ""
+            printf '%s\n' "$NOTES"
+            echo ""
+            echo "---"
+            echo "**Downloads:** [Mac](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Cairn-macOS.app.tar.gz) · [Windows](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Cairn-Windows-Setup.exe) *(Windows link goes live a few minutes after the Mac build)* — full history in [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)."
+          } > RELEASE_BODY.md
+
       - name: Publish GitHub Release
         # softprops/action-gh-release is the de-facto standard for "create
         # release + attach files." It creates the release if the tag
@@ -248,16 +285,16 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: Cairn ${{ steps.ver.outputs.version }}
-          # Release body = the full CHANGELOG so the Releases page shows
-          # real content (not a placeholder). The updater's own notes
-          # (Settings → Updates) come from latest.json above, which uses
-          # just this version's CHANGELOG section.
-          body_path: CHANGELOG.md
+          # Release body = install pointer + THIS version's CHANGELOG section
+          # (written above). The updater's own notes (Settings → Updates)
+          # come from latest.json, which uses the same section.
+          body_path: RELEASE_BODY.md
           # Drafts default to off so the moment this step succeeds, the
           # in-app updater's poll URL starts returning the new version.
           files: |
             src-tauri/target/universal-apple-darwin/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_universal.app.tar.gz
             src-tauri/target/universal-apple-darwin/release/bundle/macos/Cairn_${{ steps.ver.outputs.version }}_universal.app.tar.gz.sig
+            src-tauri/target/universal-apple-darwin/release/bundle/macos/Cairn-macOS.app.tar.gz
             latest.json
 
   build-windows:
@@ -349,14 +386,23 @@ jobs:
           hits=$(find src-tauri/target/release/bundle -type f \( -name '*.db' -o -name '*.sqlite' -o -name '*.csv' -o -name '.env' \) -print)
           [ -z "$hits" ] || { echo "Forbidden files in bundle:"; echo "$hits"; exit 1; }
 
+      - name: Stable-name alias for the README's direct download link
+        # Mirrors the Mac job: .../releases/latest/download/Cairn-Windows-Setup.exe
+        # is linked directly from the README so beginners get the right file
+        # with one click. Same bytes as the versioned installer.
+        shell: bash
+        run: cp src-tauri/target/release/bundle/nsis/*_x64-setup.exe Cairn-Windows-Setup.exe
+
       - name: Append Windows installer to the GitHub Release
         # The release already exists (created by build-macos-arm64 with
-        # name + CHANGELOG body). Omitting `name:`/`body_path:` here is
+        # name + this-version body). Omitting `name:`/`body_path:` here is
         # load-bearing: action-gh-release then leaves the existing release
-        # info untouched and only uploads the new asset. The suffix glob
+        # info untouched and only uploads the new assets. The suffix glob
         # (not a hardcoded Cairn_ prefix) tolerates either binary-name
         # outcome of the mainBinaryName config.
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          files: src-tauri/target/release/bundle/nsis/*_x64-setup.exe
+          files: |
+            src-tauri/target/release/bundle/nsis/*_x64-setup.exe
+            Cairn-Windows-Setup.exe

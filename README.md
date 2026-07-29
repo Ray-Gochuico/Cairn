@@ -10,37 +10,149 @@ no sync, no telemetry (see [Privacy](#privacy)).
 
 ## Install
 
-**[Download the latest release →](https://github.com/Ray-Gochuico/Cairn/releases/latest)**
+Installing Cairn takes about two minutes: **download one file, open it,
+and approve a one-time security prompt.** The prompt appears because
+Cairn is a free personal project that isn't registered with Apple or
+Microsoft, so your computer double-checks with you once —
+[more on that below](#why-the-one-time-security-warning).
 
-| Your computer | Download this file |
+**Step 1 — click the download link for your computer:**
+
+| Your computer | Click to download |
 | --- | --- |
-| **Mac** (Apple Silicon or Intel) | `Cairn_<version>_universal.app.tar.gz` (e.g. `Cairn_1.0.2_universal.app.tar.gz`) |
-| **Windows** (64-bit) | `Cairn_<version>_x64-setup.exe` (e.g. `Cairn_1.0.2_x64-setup.exe`) |
+| **Mac** — any Mac (Apple Silicon or Intel) | **[⬇ Download Cairn for Mac](https://github.com/Ray-Gochuico/Cairn/releases/latest/download/Cairn-macOS.app.tar.gz)** (~20 MB) |
+| **Windows** — Windows 10 or 11 (64-bit) | **[⬇ Download Cairn for Windows](https://github.com/Ray-Gochuico/Cairn/releases/latest/download/Cairn-Windows-Setup.exe)** (~7 MB) |
 
-Cairn is unsigned (it's a personal project, not commercial software), so
-your OS shows **one** security prompt the first time you run the download.
-Approve it once and it never appears again — the steps below include it.
-[More on why →](#why-the-security-warning)
+The file saves to your **Downloads** folder (your browser may also show
+it in a bar or a downloads icon near the top of the window). If Safari
+asks *"Do you want to allow downloads on github.com?"*, click **Allow**.
+No account or sign-in is needed, and the links always fetch the newest
+version — they point at the same files listed on the
+[Releases page](https://github.com/Ray-Gochuico/Cairn/releases/latest).
 
-### macOS
+**Step 2 — follow the steps for your computer below.**
 
-1. **Unarchive** — double-click the downloaded `.app.tar.gz`.
-   macOS produces `Cairn.app` in the same folder.
-2. **Install** — drag `Cairn.app` into `Applications`.
-3. **First launch** — right-click `Cairn.app`, choose **Open**, then click
-   **Open** again in the dialog. macOS remembers the approval; every launch
-   after this is a normal double-click. *(This route keeps macOS's
-   tamper check on the download intact — safer than Terminal workarounds.)*
+### Mac — after the download
 
-   *No "Open" button in the dialog (macOS 15+)?* Go to **System Settings →
-   Privacy & Security** and click **"Open Anyway"** next to the Cairn entry,
-   then launch again.
+1. **Open your Downloads folder.** Click the blue-and-white smiley face
+   (**Finder**) at the left end of the Dock, then choose **Go →
+   Downloads** from the menu at the very top of the screen — or click
+   the **Downloads** stack near the right end of the Dock.
+2. **Unpack the file.** Double-click `Cairn-macOS.app.tar.gz`. After a
+   moment, an app named **Cairn** appears in the same folder.
 
-**Updating:** inside the app — **Settings → Updates → Check for updates**.
-The updater downloads and installs the new version for you.
+   *Already see **Cairn** there without doing anything? Safari often
+   unpacks downloads automatically — just continue to step 3. If you
+   instead see a file ending in **.tar**, double-click that one too.*
+3. **Put it in Applications.** Drag **Cairn** onto **Applications** in
+   the Finder sidebar. (No sidebar? Open a second window with **File →
+   New Window**, choose **Go → Applications** in it, and drag Cairn from
+   Downloads into that window.) That's all "installing" is on a Mac.
+4. **Open it the special way — first time only.** In the Applications
+   folder, hold the **Control** key and click **Cairn** (or right-click
+   it), choose **Open** from the little menu, then click **Open** again
+   when macOS warns that it can't verify the developer. Cairn's window
+   opens — you're done. macOS remembers your answer, so from now on you
+   open Cairn like any other app (double-click it, or find it with
+   Spotlight).
+
+   **Don't see an "Open" button in the warning?** Newer versions of
+   macOS hide it. Close the warning, open **System Settings** (Apple
+   menu, top-left corner of the screen → System Settings), click
+   **Privacy & Security**, scroll down until you see the message that
+   Cairn was blocked, click **"Open Anyway"**, and — when your Mac asks —
+   type your normal login password or use Touch ID. That's expected, and
+   you only ever do it once.
+
+**Updating on a Mac:** inside the app, go to **Settings → Updates →
+Check for updates**. Cairn downloads and installs the new version for
+you — no need to repeat any of the steps above.
+
+### Windows — after the download
+
+1. **Run the installer.** Open **File Explorer** (the yellow folder icon
+   in the taskbar), click **Downloads** on the left, and double-click
+   **Cairn-Windows-Setup** (your browser may also let you click it right
+   in its downloads bar).
+
+   *Did your browser say the file "was blocked" or "can't be downloaded
+   securely"? That's the same one-time check described below, applied at
+   download time. In Edge: hover over the file in the downloads list,
+   click the **⋯** (three dots) → **Keep**, then **Show more → Keep
+   anyway**.*
+2. **Get past the blue screen.** Windows shows a blue **"Windows
+   protected your PC"** message because the installer isn't registered
+   with Microsoft. Click the small **"More info"** link on that screen,
+   then the **"Run anyway"** button that appears. You'll only see this
+   once.
+3. **Click through the installer** and accept the suggestions it makes.
+   If it offers to install the **WebView2 runtime**, say yes — Cairn
+   needs it (most PCs already have it, so you may not even be asked).
+4. **Open Cairn**: press the **Windows key**, type **Cairn**, and press
+   Enter — like any other program.
+
+**Updating on Windows:** there's no in-app updater on Windows yet — when
+a new version comes out, click the
+[Windows download link](https://github.com/Ray-Gochuico/Cairn/releases/latest/download/Cairn-Windows-Setup.exe)
+again and run it; it updates your existing install in place. If you have
+a (free) GitHub account, click **Watch → Custom → Releases** at the top
+of this page to get an email only when a new version ships.
+
+### If something doesn't look right
 
 <details>
-<summary><strong>Why a <code>.tar.gz</code> and not a <code>.dmg</code>?</strong></summary>
+<summary><strong>I can't find the download.</strong></summary>
+
+Look in the **Downloads** folder (Finder → Go → Downloads on a Mac;
+File Explorer → Downloads on Windows). In most browsers **Ctrl+J**
+(Windows) or **Cmd+Option+L** (Mac, Chrome) opens the download list.
+
+</details>
+
+<details>
+<summary><strong>I ended up with a folder of code, not an app.</strong></summary>
+
+You probably clicked one of the **"Source code"** links on the Releases
+page — those are for programmers. Use the two download links at the top
+of this section instead.
+
+</details>
+
+<details>
+<summary><strong>Mac: double-clicking the <code>.tar.gz</code> does nothing.</strong></summary>
+
+Right-click the file → **Open With** → **Archive Utility**. Cairn will
+appear in the same folder.
+
+</details>
+
+<details>
+<summary><strong>Mac: it says Cairn "is damaged and can't be opened."</strong></summary>
+
+Despite the wording, this is usually the security check in disguise, not
+a broken file — use **System Settings → Privacy & Security → "Open
+Anyway"** (see Mac step 4). If that entry isn't there, move Cairn to the
+Trash, download it again from the link above, and repeat the steps.
+
+</details>
+
+<details>
+<summary><strong>Mac (advanced): clearing Gatekeeper from Terminal — not recommended.</strong></summary>
+
+```bash
+xattr -d com.apple.quarantine /Applications/Cairn.app
+```
+
+Don't reach for this by default. It strips the quarantine flag outright,
+which **removes macOS's tamper check** on this unsigned download — the OS
+will no longer verify the bundle is the one you fetched. Only run it if you
+downloaded the release yourself from the official link above and trust it.
+The Control-click → Open flow in Mac step 4 is safer and just as permanent.
+
+</details>
+
+<details>
+<summary><strong>Why a <code>.tar.gz</code> and not a <code>.dmg</code>? (for the curious)</strong></summary>
 
 Two reasons. Tauri's DMG bundler fails on macOS 26 (its AppleScript-driven
 Finder step needs Automation permissions that don't exist in a headless
@@ -51,36 +163,7 @@ macOS unarchives `.tar.gz` on double-click, same as a `.zip`.
 
 </details>
 
-<details>
-<summary><strong>Advanced: clearing Gatekeeper from Terminal (not recommended)</strong></summary>
-
-```bash
-xattr -d com.apple.quarantine /Applications/Cairn.app
-```
-
-Don't reach for this by default. It strips the quarantine flag outright,
-which **removes macOS's tamper check** on this unsigned download — the OS
-will no longer verify the bundle is the one you fetched. Only run it if you
-downloaded the release yourself from the official link above and trust it.
-The right-click → Open flow in step 3 is safer and just as permanent.
-
-</details>
-
-### Windows
-
-1. **Run** the downloaded `Cairn_<version>_x64-setup.exe`.
-2. At the **"Windows protected your PC"** SmartScreen prompt, click
-   **More info**, then **Run anyway**. This is a one-time prompt.
-3. **Follow the installer.** If it offers to install the **WebView2
-   runtime**, allow it — most Windows 10/11 PCs already have it, and the
-   app requires it.
-
-**Updating:** no in-app updater on Windows yet — download the new
-installer from the
-[Releases page](https://github.com/Ray-Gochuico/Cairn/releases) and run it.
-**Watch or star the repo** to get notified of new releases.
-
-### Why the security warning?
+### Why the one-time security warning?
 
 Cairn is distributed **unsigned** because it's a personal-finance side
 project, not commercial software. macOS shows a one-time "unidentified
@@ -286,7 +369,7 @@ enough.
 
 ## Tech stack
 
-- Tauri 2.x (Rust shell, macOS Apple Silicon + Windows x64)
+- Tauri 2.x (Rust shell, macOS universal — Apple Silicon + Intel — and Windows x64)
 - React 19 + TypeScript + Vite 7
 - Tailwind CSS v3 + shadcn/ui (slate base, New York style)
 - Radix UI primitives (Dialog, Popover) + lucide-react icons + next-themes (light / dark / system)
