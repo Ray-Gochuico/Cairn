@@ -105,17 +105,53 @@ like any other app:
 
 - **Mac:** press **Cmd+Space**, type **Cairn**, and press Enter (that's
   Spotlight — the fastest way), or double-click **Cairn** in the
-  Applications folder. For one-click access, while Cairn is running,
-  right-click its icon in the Dock and choose **Options → Keep in Dock**.
+  Applications folder.
 - **Windows:** press the **Windows key**, type **Cairn**, and press
-  Enter, or find it in the Start menu's app list. For one-click access,
-  right-click it in the Start menu and choose **Pin to taskbar**.
+  Enter, or find it in the Start menu's app list.
 
 There's no account and nothing to sign in to. The very first time Cairn
 opens it walks you through a short setup (and shows the disclaimer);
 every time after that, it opens straight into your numbers, loaded from
 the database file on your computer — see [Privacy](#privacy) for exactly
 where that file lives.
+
+### Put Cairn in the bar at the bottom of your screen (optional)
+
+If you'll use Cairn regularly, park it in the bar at the bottom of the
+screen so it's always one click away.
+
+**Mac — add Cairn to the Dock:**
+
+1. Open the **Applications** folder: click the **Finder** smiley face at
+   the left end of the Dock, then choose **Go → Applications** from the
+   menu at the top of the screen.
+2. **Drag the Cairn icon down into the Dock** — anywhere among the other
+   app icons, to the **left of the thin divider line** near the Trash.
+   The other icons slide apart to make room; let go, and Cairn stays
+   there permanently.
+3. From now on, one click on that icon opens Cairn.
+
+*Shortcut if Cairn is already open:* its icon is already sitting in the
+Dock — hold **Control** and click it (or click with two fingers on a
+trackpad), then choose **Options → Keep in Dock**.
+
+*Changed your mind?* Drag the icon upward out of the Dock until
+**Remove** appears, then let go. This only removes the shortcut — the
+app stays installed in Applications.
+
+**Windows — pin Cairn to the taskbar:**
+
+1. Press the **Windows key** and type **Cairn**.
+2. **Right-click** the Cairn search result and choose **Pin to
+   taskbar**. (You can also choose **Pin to Start** to add a tile to the
+   Start menu.)
+3. From now on, one click on the taskbar icon opens Cairn.
+
+*Shortcut if Cairn is already open:* right-click its icon in the taskbar
+and choose **Pin to taskbar**.
+
+*Changed your mind?* Right-click the taskbar icon and choose **Unpin
+from taskbar**. The app stays installed.
 
 ### If something doesn't look right
 
