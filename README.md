@@ -38,12 +38,23 @@ version — they point at the same files listed on the
    (**Finder**) at the left end of the Dock, then choose **Go →
    Downloads** from the menu at the very top of the screen — or click
    the **Downloads** stack near the right end of the Dock.
-2. **Unpack the file.** Double-click `Cairn-macOS.app.tar.gz`. After a
-   moment, an app named **Cairn** appears in the same folder.
+2. **Find the download and unpack it.** In Downloads, look for anything
+   whose name **starts with "Cairn"**. Depending on your Mac's settings
+   it appears in one of three ways — all are fine:
 
-   *Already see **Cairn** there without doing anything? Safari often
-   unpacks downloads automatically — just continue to step 3. If you
-   instead see a file ending in **.tar**, double-click that one too.*
+   - **An app simply named "Cairn"** — Safari usually unpacks downloads
+     for you, so the app may already be sitting there ready. Skip
+     straight to step 3.
+   - **A file named `Cairn-macOS.app.tar.gz`** (the ending may be partly
+     hidden — Macs often hide file endings, so it can show as
+     `Cairn-macOS.app.tar` or just `Cairn-macOS`). **Double-click it**;
+     after a moment the app **Cairn** appears in the same folder.
+   - **Two Cairn items** (the file above *and* the app) — the unpacking
+     already happened; use the app and ignore the file.
+
+   *Still can't spot it?* Type **Cairn** into the **search box in the
+   top-right corner** of the Finder window and click **"Downloads"**
+   just under the search box so it searches that folder.
 3. **Put it in Applications.** Drag **Cairn** onto **Applications** in
    the Finder sidebar. (No sidebar? Open a second window with **File →
    New Window**, choose **Go → Applications** in it, and drag Cairn from
@@ -159,8 +170,13 @@ from taskbar**. The app stays installed.
 <summary><strong>I can't find the download.</strong></summary>
 
 Look in the **Downloads** folder (Finder → Go → Downloads on a Mac;
-File Explorer → Downloads on Windows). In most browsers **Ctrl+J**
-(Windows) or **Cmd+Option+L** (Mac, Chrome) opens the download list.
+File Explorer → Downloads on Windows) and search for **Cairn** — on a
+Mac, use the search box in the top-right corner of the Finder window and
+click **"Downloads"** under it. Note that the name you see may not match
+the full file name: Macs often hide file endings, and Safari may have
+already unpacked the download into the app itself (just **Cairn**). In
+most browsers **Ctrl+J** (Windows) or **Cmd+Option+L** (Mac, Chrome)
+opens the download list, which can jump you straight to the file.
 
 </details>
 
