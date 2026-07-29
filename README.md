@@ -98,6 +98,25 @@ again and run it; it updates your existing install in place. If you have
 a (free) GitHub account, click **Watch → Custom → Releases** at the top
 of this page to get an email only when a new version ships.
 
+### Opening Cairn after installation
+
+The one-time security steps above never repeat — from now on Cairn opens
+like any other app:
+
+- **Mac:** press **Cmd+Space**, type **Cairn**, and press Enter (that's
+  Spotlight — the fastest way), or double-click **Cairn** in the
+  Applications folder. For one-click access, while Cairn is running,
+  right-click its icon in the Dock and choose **Options → Keep in Dock**.
+- **Windows:** press the **Windows key**, type **Cairn**, and press
+  Enter, or find it in the Start menu's app list. For one-click access,
+  right-click it in the Start menu and choose **Pin to taskbar**.
+
+There's no account and nothing to sign in to. The very first time Cairn
+opens it walks you through a short setup (and shows the disclaimer);
+every time after that, it opens straight into your numbers, loaded from
+the database file on your computer — see [Privacy](#privacy) for exactly
+where that file lives.
+
 ### If something doesn't look right
 
 <details>
