@@ -59,21 +59,36 @@ version — they point at the same files listed on the
    the Finder sidebar. (No sidebar? Open a second window with **File →
    New Window**, choose **Go → Applications** in it, and drag Cairn from
    Downloads into that window.) That's all "installing" is on a Mac.
-4. **Open it the special way — first time only.** In the Applications
-   folder, hold the **Control** key and click **Cairn** (or right-click
-   it), choose **Open** from the little menu, then click **Open** again
-   when macOS warns that it can't verify the developer. Cairn's window
-   opens — you're done. macOS remembers your answer, so from now on you
-   open Cairn like any other app (double-click it, or find it with
-   Spotlight).
+4. **Try to open it — your Mac will object the first time.**
+   Double-click **Cairn** in the Applications folder. macOS shows a
+   warning that it could not verify Cairn is "free of malware." **This
+   is the expected first-run check for any app that isn't registered
+   with Apple — not an actual malware finding**
+   ([why this appears](#why-the-one-time-security-warning)).
 
-   **Don't see an "Open" button in the warning?** Newer versions of
-   macOS hide it. Close the warning, open **System Settings** (Apple
-   menu, top-left corner of the screen → System Settings), click
-   **Privacy & Security**, scroll down until you see the message that
-   Cairn was blocked, click **"Open Anyway"**, and — when your Mac asks —
-   type your normal login password or use Touch ID. That's expected, and
-   you only ever do it once.
+   Click **Done**. ⚠️ **Do not click "Move to Trash"** — that deletes
+   the app you just installed.
+5. **Tell your Mac it's OK — one time only.** These are Apple's own
+   steps for exactly this situation:
+
+   1. Click the **Apple menu ** in the top-left corner of the screen,
+      choose **System Settings**, then click **Privacy & Security** in
+      the left sidebar (you may need to scroll down to find it).
+   2. Scroll the right side down to the **Security** section — you'll
+      see a message that **"Cairn" was blocked** to protect your Mac.
+   3. Click **Open Anyway**. *(This button only appears for about an
+      hour after step 4 — if you don't see it, double-click Cairn in
+      Applications again, click Done, and come back here.)*
+   4. Enter your Mac **login password** (or use Touch ID) when asked,
+      then click **OK**. Cairn opens — you're done.
+
+   macOS remembers your answer permanently: from now on, open Cairn like
+   any other app (double-click it, or find it with Spotlight).
+
+   *Using an older Mac (macOS 14 Sonoma or earlier)?* There's a
+   shortcut: hold the **Control** key, click **Cairn**, choose **Open**
+   from the little menu, then click **Open** in the warning — no trip to
+   System Settings needed.
 
 **Updating on a Mac:** inside the app, go to **Settings → Updates →
 Check for updates**. Cairn downloads and installs the new version for
@@ -202,7 +217,7 @@ appear in the same folder.
 
 Despite the wording, this is usually the security check in disguise, not
 a broken file — use **System Settings → Privacy & Security → "Open
-Anyway"** (see Mac step 4). If that entry isn't there, move Cairn to the
+Anyway"** (see Mac step 5). If that entry isn't there, move Cairn to the
 Trash, download it again from the link above, and repeat the steps.
 
 </details>
@@ -218,7 +233,8 @@ Don't reach for this by default. It strips the quarantine flag outright,
 which **removes macOS's tamper check** on this unsigned download — the OS
 will no longer verify the bundle is the one you fetched. Only run it if you
 downloaded the release yourself from the official link above and trust it.
-The Control-click → Open flow in Mac step 4 is safer and just as permanent.
+The System Settings → "Open Anyway" flow in Mac step 5 is safer and just
+as permanent.
 
 </details>
 
