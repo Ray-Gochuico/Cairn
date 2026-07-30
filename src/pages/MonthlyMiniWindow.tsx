@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLoadGate } from '@/lib/use-load-gate';
 import { useLocalToday } from '@/lib/use-local-today';
+import { useViewScope } from '@/lib/use-view-scope';
+import { filterByObligorPersonId, filterByOwnerPersonId } from '@/lib/filter-by-view';
 import { localTodayISO, dateFromLocalISO } from '@/lib/dates';
 import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
 import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
@@ -651,6 +653,35 @@ export default function MonthlyMiniWindow() {
     [lastMonth],
   );
 
+  // Wave A (constraint 3): the ritual honors the person view — every section
+  // is schema-attributable, and "confirm just my accounts" is a real
+  // two-person workflow. The scoped card lists feed everything downstream
+  // (including Confirm-all's write set), so a scoped batch can never ratify a
+  // hidden person's snapshots; the household (`all*`) twins exist only for
+  // the hidden-count disclosures. The sidebar pending dot deliberately stays
+  // household-scoped (use-monthly-input-pending.ts, untouched).
+  const { filter, isFiltered, persons, setFilter } = useViewScope();
+  const visibleAccounts = useMemo(
+    () => filterByOwnerPersonId(accounts, filter, persons),
+    [accounts, filter, persons],
+  );
+  const visibleLoans = useMemo(
+    () => filterByObligorPersonId(loans, filter, persons),
+    [loans, filter, persons],
+  );
+  const visibleProperties = useMemo(
+    () => filterByOwnerPersonId(properties, filter, persons),
+    [properties, filter, persons],
+  );
+  const visibleVehicles = useMemo(
+    () => filterByOwnerPersonId(vehicles, filter, persons),
+    [vehicles, filter, persons],
+  );
+  const visibleAccountIdSet = useMemo(
+    () => new Set(visibleAccounts.map((a) => a.id).filter((id): id is number => id != null)),
+    [visibleAccounts],
+  );
+
   // --- Section 1: derived value cards ----------------------------------------
 
   /**
@@ -658,7 +689,7 @@ export default function MonthlyMiniWindow() {
    * for last month's close. If derivation hasn't run yet (no snapshot), we
    * have nothing to ratify — skip the card rather than fabricate a zero.
    */
-  const derivedCards = useMemo(() => {
+  const allDerivedCards = useMemo(() => {
     return accounts
       .filter((a) => a.id !== undefined)
       .filter((a) => !MANUAL_BALANCE_TYPES.has(a.type))
@@ -683,6 +714,11 @@ export default function MonthlyMiniWindow() {
       });
   }, [accounts, snapshots, lastMonthClose]);
 
+  const derivedCards = useMemo(
+    () => allDerivedCards.filter(({ account }) => visibleAccountIdSet.has(account.id!)),
+    [allDerivedCards, visibleAccountIdSet],
+  );
+
   // --- "Confirm all" batch over the derived cards -----------------------------
 
   const upsertSnapshot = useSnapshotsStore((s) => s.upsert);
@@ -698,6 +734,15 @@ export default function MonthlyMiniWindow() {
         snapshot.source === SnapshotSource.AUTO_DERIVED && !skippedIds.has(snapshot.accountId),
     ),
     [derivedCards, skippedIds],
+  );
+  // Household twin of pendingDerived (same predicate over ALL derived cards)
+  // — counts only; never fed to the write path.
+  const allPendingDerived = useMemo(
+    () => allDerivedCards.filter(
+      ({ snapshot }) =>
+        snapshot.source === SnapshotSource.AUTO_DERIVED && !skippedIds.has(snapshot.accountId),
+    ),
+    [allDerivedCards, skippedIds],
   );
   const [confirmingAll, setConfirmingAll] = useState(false);
   const [confirmAllResult, setConfirmAllResult] = useState<string | null>(null);
@@ -775,7 +820,7 @@ export default function MonthlyMiniWindow() {
     };
   }, [loans]);
 
-  const loanCards = useMemo(() => {
+  const allLoanCards = useMemo(() => {
     return loans
       .filter((l): l is Loan & { id: number } => l.id !== undefined)
       .map((loan) => {
@@ -797,9 +842,18 @@ export default function MonthlyMiniWindow() {
       );
   }, [loans, loanSchedules]);
 
+  const visibleLoanIdSet = useMemo(
+    () => new Set(visibleLoans.map((l) => l.id).filter((id): id is number => id != null)),
+    [visibleLoans],
+  );
+  const loanCards = useMemo(
+    () => allLoanCards.filter(({ loan }) => visibleLoanIdSet.has(loan.id)),
+    [allLoanCards, visibleLoanIdSet],
+  );
+
   // --- Section 3: cash balance cards -----------------------------------------
 
-  const cashCards = useMemo(() => {
+  const allCashCards = useMemo(() => {
     return accounts
       .filter((a) => a.id !== undefined)
       .filter(
@@ -823,13 +877,18 @@ export default function MonthlyMiniWindow() {
       });
   }, [accounts, snapshots]);
 
+  const cashCards = useMemo(
+    () => allCashCards.filter(({ account }) => visibleAccountIdSet.has(account.id!)),
+    [allCashCards, visibleAccountIdSet],
+  );
+
   // --- Section 4: property + vehicle cards -----------------------------------
 
   // Phase 2 simplification: render all non-excluded property/vehicle entries
   // as optional nudges. The plan's >90-day-stale check needs `updated_at`,
   // which isn't on the domain type — labeled "optional" so users feel free
   // to skip rather than feeling obligated.
-  const assetCards = useMemo(() => {
+  const allAssetCards = useMemo(() => {
     const props = properties
       .filter((p): p is Property & { id: number } => p.id !== undefined)
       .filter((p) => !p.excludedFromNetWorth)
@@ -841,11 +900,40 @@ export default function MonthlyMiniWindow() {
     return [...props, ...vehs];
   }, [properties, vehicles]);
 
+  const assetCards = useMemo(() => {
+    const visiblePropertyIds = new Set(
+      visibleProperties.map((p) => p.id).filter((id): id is number => id != null),
+    );
+    const visibleVehicleIds = new Set(
+      visibleVehicles.map((v) => v.id).filter((id): id is number => id != null),
+    );
+    return allAssetCards.filter(({ kind, entity }) =>
+      kind === 'property' ? visiblePropertyIds.has(entity.id) : visibleVehicleIds.has(entity.id),
+    );
+  }, [allAssetCards, visibleProperties, visibleVehicles]);
+
+  // Hidden-count disclosures (constraint 3): the terminal states must never
+  // read "done" while a hidden person's items still await review.
+  const hiddenPendingCount =
+    (allPendingDerived.length - pendingDerived.length) +
+    (allLoanCards.filter((c) => !c.alreadyRecorded).length -
+      loanCards.filter((c) => !c.alreadyRecorded).length);
+  const hiddenItemCount =
+    (allDerivedCards.length - derivedCards.length) +
+    (allLoanCards.length - loanCards.length) +
+    (allCashCards.length - cashCards.length) +
+    (allAssetCards.length - assetCards.length);
+
   const nothingToDo =
     derivedCards.length === 0 &&
     loanCards.length === 0 &&
     cashCards.length === 0 &&
     assetCards.length === 0;
+  const householdNothingToDo =
+    allDerivedCards.length === 0 &&
+    allLoanCards.length === 0 &&
+    allCashCards.length === 0 &&
+    allAssetCards.length === 0;
 
   // W10 M38: never fake a completed ritual while stores load.
   if (!gate.settled) {
@@ -878,10 +966,22 @@ export default function MonthlyMiniWindow() {
       {nothingToDo ? (
         <Card>
           <CardContent className="py-10 text-center space-y-3">
-            <div className="text-muted-foreground">
-              Nothing to confirm this month.
-            </div>
-            <Button onClick={() => navigate('/')}>Back to Dashboard</Button>
+            {householdNothingToDo ? (
+              <div className="text-muted-foreground">Nothing to confirm this month.</div>
+            ) : (
+              // Wave A C9: the view emptied the ritual, the household did NOT
+              // finish — disclose the hidden count, never claim "done".
+              <>
+                <div className="text-muted-foreground">Nothing to check in this view.</div>
+                <p className="text-sm text-muted-foreground">
+                  {hiddenItemCount} household item{hiddenItemCount === 1 ? '' : 's'} still awaiting review in other views.
+                </p>
+                <Button onClick={() => setFilter('household')}>Show household</Button>
+              </>
+            )}
+            <Button variant={householdNothingToDo ? 'default' : 'outline'} onClick={() => navigate('/')}>
+              Back to Dashboard
+            </Button>
           </CardContent>
         </Card>
       ) : (
@@ -988,7 +1088,15 @@ export default function MonthlyMiniWindow() {
             </section>
           )}
 
-          <div className="flex justify-end pt-4">
+          <div className="flex flex-col items-end gap-2 pt-4">
+            {/* Wave A C10: an "All done" in a filtered view must disclose the
+                pending items the view is hiding. */}
+            {isFiltered && hiddenPendingCount > 0 && (
+              <p className="text-sm text-muted-foreground">
+                {hiddenPendingCount} household item{hiddenPendingCount === 1 ? '' : 's'} hidden by this
+                view {hiddenPendingCount === 1 ? 'is' : 'are'} still unconfirmed.
+              </p>
+            )}
             <Button onClick={() => navigate('/')} size="lg">
               All done
             </Button>
