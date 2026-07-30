@@ -124,6 +124,35 @@ describe('BudgetOverlayRow', () => {
     });
   });
 
+  describe('verdictFree (Wave A D2)', () => {
+    it('verdictFree: neutral fill, no over/left label, fact line kept', () => {
+      render(
+        <BudgetOverlayRow
+          verdictFree
+          row={row({ budget: 500, actual: 100, remaining: 400, pct: 0.2, overBudget: false })}
+        />,
+      );
+      expect(screen.queryByText(/left|over/)).not.toBeInTheDocument();
+      expect(screen.getByText('$100 of $500')).toBeInTheDocument();
+      expect(screen.getByTestId('budget-overlay-fill').className).not.toMatch(
+        /bg-success|bg-destructive/,
+      );
+    });
+
+    it('verdictFree over-budget row stays neutral (no red)', () => {
+      render(
+        <BudgetOverlayRow
+          verdictFree
+          row={row({ budget: 500, actual: 750, remaining: -250, pct: 1.5, overBudget: true })}
+        />,
+      );
+      expect(screen.queryByText(/over/)).not.toBeInTheDocument();
+      expect(screen.getByTestId('budget-overlay-fill').className).not.toMatch(
+        /bg-success|bg-destructive/,
+      );
+    });
+  });
+
   describe('unbudgeted row', () => {
     it('does not render an over/left label when budget is null', () => {
       render(
