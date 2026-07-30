@@ -1,7 +1,14 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
+
+// W19 fetch-on-add: adds and ticker-changing edits request a market-data
+// refresh (superset of the old bespoke enrich IIFE). Mocked so these
+// component tests stay offline and can assert the trigger contract.
+vi.mock('@/market/fetch-on-add', () => ({ fetchMarketDataOnAdd: vi.fn() }));
+
+import { fetchMarketDataOnAdd } from '@/market/fetch-on-add';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { loadAllMigrations, runMigrations } from '@/db/migrations';
 import { setDatabase } from '@/db/db';
@@ -59,6 +66,7 @@ describe('HoldingsPanel (W14 Manage surface — verbatim tab port)', () => {
     setDatabase(db);
     useAccountsStore.setState({ accounts: [], isLoading: false, error: null });
     useHoldingsStore.setState({ holdings: [], isLoading: false, error: null });
+    vi.mocked(fetchMarketDataOnAdd).mockClear();
   });
 
   afterEach(async () => {
@@ -114,6 +122,76 @@ describe('HoldingsPanel (W14 Manage surface — verbatim tab port)', () => {
       expect(holdings[0].ticker).toBe('AAPL');
       expect(holdings[0].shareCount).toBe(10);
     });
+  });
+
+  it('fires fetch-on-add once after a successful add, without stamping last_refresh_at (W19)', async () => {
+    await seedAccount(db, 'Account A');
+    const user = userEvent.setup();
+    render(<MemoryRouter><HoldingsPanel /></MemoryRouter>);
+
+    await waitFor(() => screen.getByText(/no holdings in this account yet/i));
+
+    await user.type(screen.getByLabelText(/ticker/i), 'NVDA');
+    const sharesInput = screen.getByLabelText(/shares/i) as HTMLInputElement;
+    await user.clear(sharesInput);
+    await user.type(sharesInput, '3');
+    await user.click(screen.getByRole('button', { name: /^add$/i }));
+
+    await waitFor(() => {
+      expect(vi.mocked(fetchMarketDataOnAdd)).toHaveBeenCalledTimes(1);
+    });
+    // Data repair for one ticker is NOT a user-cadence refresh: stamping
+    // last_refresh_at here would suppress the next due launch refresh.
+    const rows = await db.select<{ last_refresh_at: string | null }>(
+      'SELECT last_refresh_at FROM app_settings',
+    );
+    expect(rows[0]?.last_refresh_at ?? null).toBeNull();
+  });
+
+  it('fires fetch-on-add after a ticker-CHANGING edit (W19)', async () => {
+    const a = await seedAccount(db, 'Account A');
+    await seedHolding(db, a, 'VTI', 100);
+
+    const user = userEvent.setup();
+    render(<MemoryRouter><HoldingsPanel /></MemoryRouter>);
+
+    await waitFor(() => {
+      const tickers = screen.getAllByLabelText(/ticker/i) as HTMLInputElement[];
+      expect(tickers[0].value).toBe('VTI');
+    });
+
+    const tickerInputs = screen.getAllByLabelText(/ticker/i) as HTMLInputElement[];
+    await user.clear(tickerInputs[0]);
+    await user.type(tickerInputs[0], 'VOO');
+    await user.click(screen.getAllByRole('button', { name: /^save$/i })[0]);
+
+    await waitFor(() => {
+      expect(useHoldingsStore.getState().holdings[0].ticker).toBe('VOO');
+    });
+    expect(vi.mocked(fetchMarketDataOnAdd)).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT fire fetch-on-add for an edit that keeps the ticker (W19)', async () => {
+    const a = await seedAccount(db, 'Account A');
+    await seedHolding(db, a, 'VTI', 100);
+
+    const user = userEvent.setup();
+    render(<MemoryRouter><HoldingsPanel /></MemoryRouter>);
+
+    await waitFor(() => {
+      const tickers = screen.getAllByLabelText(/ticker/i) as HTMLInputElement[];
+      expect(tickers[0].value).toBe('VTI');
+    });
+
+    const sharesInputs = screen.getAllByLabelText(/shares/i) as HTMLInputElement[];
+    await user.clear(sharesInputs[0]);
+    await user.type(sharesInputs[0], '250');
+    await user.click(screen.getAllByRole('button', { name: /^save$/i })[0]);
+
+    await waitFor(() => {
+      expect(useHoldingsStore.getState().holdings[0].shareCount).toBe(250);
+    });
+    expect(vi.mocked(fetchMarketDataOnAdd)).not.toHaveBeenCalled();
   });
 
   it('edits a holding inline and saves', async () => {

@@ -55,6 +55,7 @@ import { ContributionsRepo } from '@/domain/contributions';
 import { AssetValueSnapshotsRepo } from '@/domain/asset-value-snapshots';
 import { EquityGrantsRepo } from '@/domain/equity-grants';
 import { getDatabase } from '@/db/db';
+import { fetchMarketDataOnAdd } from '@/market/fetch-on-add';
 import type { ImportEntity, ValidationContext, CommitResult } from '@/lib/import/types';
 
 interface Props {
@@ -209,6 +210,10 @@ export function ImportPreviewModal({
             holdings: new HoldingsRepo(db),
           });
           await loadHoldings();
+          // W19 fetch-on-add: price + enrich the imported tickers and
+          // re-derive account snapshots now, not at the next cadence-due
+          // refresh. One coalesced request covers the whole batch.
+          fetchMarketDataOnAdd(db);
           break;
         }
         case 'loan': {
