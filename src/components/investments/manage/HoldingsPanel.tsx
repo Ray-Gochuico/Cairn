@@ -7,7 +7,10 @@ import { useConfirm } from '@/components/ui/confirm-dialog';
 import { useLoadGate } from '@/lib/use-load-gate';
 import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import { TabLoadingSkeleton } from '@/components/inputs/TabLoadingSkeleton';
-import HoldingForm, { type HoldingFormValues } from '@/components/forms/HoldingForm';
+import HoldingForm, {
+  HoldingRowHeader,
+  type HoldingFormValues,
+} from '@/components/forms/HoldingForm';
 import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 import { enrichTickerIfMissing } from '@/market/ticker-enrichment';
 import { YahooClient } from '@/market/yahoo-client';
@@ -145,20 +148,10 @@ export default function HoldingsPanel() {
         <CardContent className="pt-4">
           <div className="overflow-x-auto">
             <div className="min-w-[640px]">
-              <div className="grid grid-cols-12 gap-2 text-xs text-muted-foreground uppercase tracking-wider pb-2 border-b">
-                <div className="col-span-2">Ticker</div>
-                <div className="col-span-2">Shares</div>
-                <div className="col-span-2">
-                  Target %
-                  {selectedAccount?.allowMargin && (
-                    <span className="ml-1 normal-case tracking-normal text-[10px] text-muted-foreground/80">
-                      (margin allowed — sum can exceed 100%)
-                    </span>
-                  )}
-                </div>
-                <div className="col-span-2">Cost basis</div>
-                <div className="col-span-4 text-right">Actions</div>
-              </div>
+              <HoldingRowHeader
+                allowMarginHint={selectedAccount?.allowMargin ?? false}
+                actionsLabel="Actions"
+              />
 
               {accountHoldings.length === 0 ? (
                 <div className="py-6 text-center text-sm text-muted-foreground border-b">

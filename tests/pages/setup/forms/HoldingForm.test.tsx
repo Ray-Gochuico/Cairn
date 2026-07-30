@@ -78,6 +78,27 @@ describe('Wizard HoldingForm (adapter)', () => {
     ).toBeInTheDocument();
   });
 
+  it('renders visible column titles above the holding row (W19: no unlabeled cells)', () => {
+    useAccountsStore.setState({
+      accounts: [makeAccount(1, 'Brokerage')],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+      create: async () => 1,
+      update: async () => {},
+      remove: async () => {},
+    } as any);
+    render(<HoldingForm />);
+    // VISIBLE titles (getByText, not aria queries) — the onboarding dialog
+    // previously showed a bare placeholder-only row of four cells.
+    expect(screen.getByText('Ticker')).toBeInTheDocument();
+    expect(screen.getByText('Shares')).toBeInTheDocument();
+    expect(screen.getByText('Target %')).toBeInTheDocument();
+    expect(screen.getByText('Cost basis')).toBeInTheDocument();
+    // The wizard has no margin UI — the margin hint must not leak in here.
+    expect(screen.queryByText(/margin allowed/i)).toBeNull();
+  });
+
   it('right-aligns numeric holding inputs with tabular numerals (Wave 11 T7)', () => {
     useAccountsStore.setState({
       accounts: [makeAccount(1, 'Brokerage')],
