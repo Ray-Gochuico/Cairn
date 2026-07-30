@@ -58,6 +58,10 @@ export interface ContributionsByBucketChartProps {
   /** Inclusive YYYY-MM range — typically the last N months. */
   fromYyyymm: string;
   toYyyymm: string;
+  /** Wave A C17: person-view scope declaration — muted line under the title. */
+  scopeCaption?: string;
+  /** View-aware override for the zero-data message (Wave A). */
+  emptyMessage?: string;
 }
 
 /**
@@ -73,6 +77,8 @@ export default function ContributionsByBucketChart({
   contributions,
   fromYyyymm,
   toYyyymm,
+  scopeCaption,
+  emptyMessage,
 }: ContributionsByBucketChartProps) {
   const data = useMemo(
     () => aggregateContributionsByBucket(contributions, accounts, fromYyyymm, toYyyymm),
@@ -98,7 +104,8 @@ export default function ContributionsByBucketChart({
       yFormatter={formatContributionY}
       xAxisInterval={0}
       xTickFormatter={formatContributionXTick}
-      emptyMessage="No contributions recorded in this window yet — log them under Manage → Contributions below."
+      scopeCaption={scopeCaption}
+      emptyMessage={emptyMessage ?? 'No contributions recorded in this window yet — log them under Manage → Contributions below.'}
     />
   );
 }

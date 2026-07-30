@@ -492,3 +492,71 @@ describe('Wave-3 concentration adjacency + deep links', () => {
     expect(['per-company', 'allocation']).toContain(scrolledTo[scrolledTo.length - 1]);
   });
 });
+
+describe('Wave A: ConcentrationHealthCard + DriftCard scope declarations', () => {
+  const emptyReport = {
+    perTicker: [],
+    perAssetClass: [],
+    totalValue: 0,
+    grossExposure: 0,
+    leverage: 1,
+    warnings: [],
+  } as never;
+
+  beforeEach(() => {
+    usePersonsStore.setState({
+      persons: [{ id: 1, name: 'Alice' } as never, { id: 2, name: 'Bob' } as never],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+  });
+
+  it('C1/C15: title suffix + household caption under a person view (additive only)', async () => {
+    const { default: ConcentrationHealthCard } = await import(
+      '@/components/investments/ConcentrationHealthCard'
+    );
+    render(
+      <MemoryRouter initialEntries={['/investments?view=p1']}>
+        <ConcentrationHealthCard report={emptyReport} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText(/Health · Household/)).toBeInTheDocument();
+    expect(
+      screen.getByText('Concentration is measured on the whole household portfolio.'),
+    ).toBeInTheDocument();
+  });
+
+  it('household view keeps the plain Concentration Health title (regression)', async () => {
+    const { default: ConcentrationHealthCard } = await import(
+      '@/components/investments/ConcentrationHealthCard'
+    );
+    render(
+      <MemoryRouter initialEntries={['/investments']}>
+        <ConcentrationHealthCard report={emptyReport} />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByText(/· Household/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Concentration is measured on the whole household portfolio.'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('C16: DriftCard renders the scope caption when passed', async () => {
+    const { default: DriftCard } = await import('@/components/investments/DriftCard');
+    render(
+      <DriftCard
+        classRows={[]}
+        holdingRows={[]}
+        scopeCaption="Targets are household-level; Actual is Alice's holdings only."
+      />,
+    );
+    expect(
+      screen.getByText("Targets are household-level; Actual is Alice's holdings only."),
+    ).toBeInTheDocument();
+  });
+
+  it('DriftCard renders no caption without the prop (regression)', async () => {
+    const { default: DriftCard } = await import('@/components/investments/DriftCard');
+    render(<DriftCard classRows={[]} holdingRows={[]} />);
+    expect(screen.queryByText(/household-level; Actual/)).not.toBeInTheDocument();
+  });
+});

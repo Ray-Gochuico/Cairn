@@ -1151,3 +1151,134 @@ describe('Investments page — W14 chart-hero retirement (merge into Net Worth)'
     expect(link).toHaveAttribute('href', '/net-worth?chart=investments');
   });
 });
+
+describe('Wave A: person-view honoring (D6/D7/D8)', () => {
+  function primeTwoPersons() {
+    usePersonsStore.setState({
+      persons: [basePerson, { ...basePerson, id: 2, name: 'Bob' }],
+      isLoading: false,
+      error: null,
+    });
+  }
+
+  beforeEach(() => {
+    resetStores();
+    dbSelectImpl.current = async () => [];
+    localStorage.clear();
+    primeTwoPersons();
+  });
+
+  it('D6: page-level filtered-empty replaces the false onboarding state', async () => {
+    // Everything owned by Bob or joint — nothing in Alice's name.
+    primeStores({
+      accounts: [
+        { id: 1, name: 'Bob Brokerage', ownerPersonId: 2 },
+        { id: 2, name: 'Joint Cash', ownerPersonId: null, type: AccountType.ACCOUNT_CASH },
+      ],
+      holdings: [{ id: 1, accountId: 1, ticker: 'VTI', shareCount: 10 }],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 50_000 }],
+    });
+    render(
+      <MemoryRouter initialEntries={['/investments?view=p1']}>
+        <Investments />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText("No investment accounts in Alice's name")).toBeInTheDocument();
+    expect(screen.queryByText('No investment holdings yet')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View household' })).toBeInTheDocument();
+  });
+
+  it('true-empty household keeps the onboarding EmptyState + Add CTA (regression)', async () => {
+    primeStores({});
+    render(
+      <MemoryRouter initialEntries={['/investments?view=p1']}>
+        <Investments />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText('No investment holdings yet')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add an account' })).toBeInTheDocument();
+  });
+
+  it('D7: unclassified banner counts ALL household holdings in a person view', async () => {
+    primeStores({
+      accounts: [
+        { id: 1, name: 'Alice Brokerage', ownerPersonId: 1 },
+        { id: 2, name: 'Bob Brokerage', ownerPersonId: 2 },
+      ],
+      holdings: [
+        { id: 1, accountId: 1, ticker: 'VTI', shareCount: 10 },
+        { id: 2, accountId: 2, ticker: 'ZZZC', shareCount: 5 },
+      ],
+      snapshotValues: [
+        { accountId: 1, snapshotDate: '2026-04-01', totalValue: 50_000 },
+        { accountId: 2, snapshotDate: '2026-04-01', totalValue: 20_000 },
+      ],
+    });
+    render(
+      <MemoryRouter initialEntries={['/investments?view=p1']}>
+        <Investments />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByTestId('unclassified-tickers-banner')).toHaveTextContent('ZZZC');
+  });
+
+  it("D2: class-targets card stays mounted in joint view and '(not held)' means the household", async () => {
+    // Joint account has a snapshot but no holdings; Alice's account carries
+    // the household's valued holdings. The household-level form must not
+    // vanish per-view.
+    primeStores({
+      accounts: [
+        { id: 1, name: 'Alice Brokerage', ownerPersonId: 1 },
+        { id: 2, name: 'Joint Savings', ownerPersonId: null, type: AccountType.ACCOUNT_SAVINGS },
+      ],
+      holdings: [{ id: 1, accountId: 1, ticker: 'VTI', shareCount: 10 }],
+      snapshotValues: [
+        { accountId: 1, snapshotDate: '2026-04-01', totalValue: 50_000 },
+        { accountId: 2, snapshotDate: '2026-04-01', totalValue: 5_000 },
+      ],
+    });
+    render(
+      <MemoryRouter initialEntries={['/investments?view=joint']}>
+        <Investments />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText('Asset-class targets')).toBeInTheDocument();
+  });
+
+  it('C17: contributions chart carries the account-owner-scope caption when filtered', async () => {
+    primeStores({
+      accounts: [{ id: 1, name: 'Alice Brokerage', ownerPersonId: 1 }],
+      holdings: [{ id: 1, accountId: 1, ticker: 'VTI', shareCount: 10 }],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 50_000 }],
+      contributions: [{ id: 1, accountId: 1, amount: 500 }],
+    });
+    render(
+      <MemoryRouter initialEntries={['/investments?view=p1']}>
+        <Investments />
+      </MemoryRouter>,
+    );
+    expect(
+      await screen.findByText("Contributions into Alice's accounts — joint accounts not included."),
+    ).toBeInTheDocument();
+  });
+
+  it('C2: nonempty filtered view declares the hidden accounts under the header', async () => {
+    primeStores({
+      accounts: [
+        { id: 1, name: 'Alice Brokerage', ownerPersonId: 1 },
+        { id: 2, name: 'Bob Brokerage', ownerPersonId: 2 },
+        { id: 3, name: 'Joint Cash', ownerPersonId: null, type: AccountType.ACCOUNT_CASH },
+      ],
+      holdings: [{ id: 1, accountId: 1, ticker: 'VTI', shareCount: 10 }],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 50_000 }],
+    });
+    render(
+      <MemoryRouter initialEntries={['/investments?view=p1']}>
+        <Investments />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByTestId('scope-caption')).toHaveTextContent(
+      "Showing Alice's accounts: 1 of 3 — 1 joint and 1 owned by Bob not shown.",
+    );
+  });
+});

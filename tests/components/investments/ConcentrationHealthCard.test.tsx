@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import ConcentrationHealthCard from '@/components/investments/ConcentrationHealthCard';
 import type { ConcentrationReport, ConcentrationWarning } from '@/lib/concentration';
 
@@ -42,25 +43,27 @@ const LOW: ConcentrationWarning = {
 
 describe('ConcentrationHealthCard severity chips', () => {
   it('renders a "High" chip with the destructive token on a HIGH warning', () => {
-    render(<ConcentrationHealthCard report={makeReport([HIGH])} />);
+    // Wave A: the card reads the ?view filter for its (additive) title
+    // suffix, so it needs router context now.
+    render(<MemoryRouter><ConcentrationHealthCard report={makeReport([HIGH])} /></MemoryRouter>);
     const chip = screen.getByText('High');
     expect(chip).toHaveClass('bg-destructive-soft', 'text-destructive-soft-foreground');
   });
 
   it('renders a "Watch" chip with the warning token on a MEDIUM warning', () => {
-    render(<ConcentrationHealthCard report={makeReport([MEDIUM])} />);
+    render(<MemoryRouter><ConcentrationHealthCard report={makeReport([MEDIUM])} /></MemoryRouter>);
     const chip = screen.getByText('Watch');
     expect(chip).toHaveClass('bg-warning-soft', 'text-warning-foreground');
   });
 
   it('renders a "Note" chip with the info token on a LOW warning', () => {
-    render(<ConcentrationHealthCard report={makeReport([LOW])} />);
+    render(<MemoryRouter><ConcentrationHealthCard report={makeReport([LOW])} /></MemoryRouter>);
     const chip = screen.getByText('Note');
     expect(chip).toHaveClass('bg-info-soft', 'text-info-foreground');
   });
 
   it('marks the severity icon aria-hidden so the chip is the accessible signal', () => {
-    const { container } = render(<ConcentrationHealthCard report={makeReport([HIGH])} />);
+    const { container } = render(<MemoryRouter><ConcentrationHealthCard report={makeReport([HIGH])} /></MemoryRouter>);
     expect(screen.queryByLabelText(/severity/i)).toBeNull();
     expect(container.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
   });

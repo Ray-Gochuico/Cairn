@@ -41,6 +41,9 @@ export interface AccountBreakdownCardProps {
   viewHoldingsTo?: string;
   /** Defaults to the app-wide whole-dollar currency formatter. */
   valueFormatter?: (n: number) => string;
+  /** Wave A: view-aware override for the zero-rows line — a person view
+   *  that hid every account is not "No accounts yet." */
+  emptyMessage?: string;
 }
 
 /** "+10.0%" / "-3.4%" from a fraction (0.1 -> "+10.0%"). Mirrors GrowthCard. */
@@ -121,6 +124,7 @@ export default function AccountBreakdownCard({
   asOfDate,
   viewHoldingsTo,
   valueFormatter = formatCurrency,
+  emptyMessage,
 }: AccountBreakdownCardProps) {
   // The bar + the denominator share the same guard the helper applies: with no
   // positive total there are no meaningful weights, so we hide the bar and let
@@ -205,7 +209,8 @@ export default function AccountBreakdownCard({
         {/* Row list. Mirrors the old Accounts card style: divide-y, tabular
             numerics, right-aligned value/change. */}
         {rows.length === 0 ? (
-          <div className="text-sm text-muted-foreground">No accounts yet.</div>
+          // Wave A: a view-emptied list names the recovery, never "yet".
+          <div className="text-sm text-muted-foreground">{emptyMessage ?? 'No accounts yet.'}</div>
         ) : (
           <ul className="divide-y">
             {rows.map((r) => (

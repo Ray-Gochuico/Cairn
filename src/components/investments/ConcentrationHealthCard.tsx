@@ -2,6 +2,8 @@ import { memo } from 'react';
 import { AlertTriangleIcon } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
+import { useViewFilter } from '@/lib/use-view-filter';
+import { scopeSuffix } from '@/lib/view-scope';
 import {
   topEffectiveExposures,
   type ConcentrationReport,
@@ -61,17 +63,27 @@ export interface ConcentrationHealthCardProps {
 }
 
 function ConcentrationHealthCardImpl({ report }: ConcentrationHealthCardProps) {
+  // Wave A C1/C15 (additive only — protected view): the DATA stays
+  // household-wide forever; under a person view the title carries the
+  // · Household suffix and the caption states the measurement scope.
+  const { filter } = useViewFilter();
   return (
     <Card data-testid="concentration-section">
       <CardHeader>
         <CardTitle>
-          <TermTooltip term="CONCENTRATION">Concentration</TermTooltip> Health
+          <TermTooltip term="CONCENTRATION">Concentration</TermTooltip>
+          {` Health${scopeSuffix(filter)}`}
         </CardTitle>
         <CardDescription>
           Effective exposure after fund look-through and leverage. Warnings
           fire when a single ticker exceeds 25%, an asset class exceeds 60%,
           or total leverage exceeds 1.5x.
         </CardDescription>
+        {filter !== 'household' && (
+          <CardDescription>
+            Concentration is measured on the whole household portfolio.
+          </CardDescription>
+        )}
       </CardHeader>
       <CardContent>
         {report.warnings.length === 0 ? (
