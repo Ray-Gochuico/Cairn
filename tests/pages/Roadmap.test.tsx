@@ -98,6 +98,18 @@ describe('Roadmap page', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Roadmap' })).toBeInTheDocument();
   });
 
+  it('Wave A C23: the always-visible banner region declares household scope', () => {
+    resetStores(makeHousehold(), ACCEPTED_VERSION);
+    render(
+      <MemoryRouter>
+        <Roadmap />
+      </MemoryRouter>,
+    );
+    expect(
+      screen.getByText(/The Roadmap evaluates your household as a whole — both incomes, all accounts\./),
+    ).toBeInTheDocument();
+  });
+
   it('renders the status legend above the section cards (W7-UX MF-2)', () => {
     resetStores(makeHousehold(), ACCEPTED_VERSION);
     render(

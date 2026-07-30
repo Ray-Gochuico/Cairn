@@ -195,6 +195,13 @@ export default function Roadmap() {
           input load fell through to authoritative-looking engine output. */}
       <StoreErrorBanner errors={loadGate.errors} onRetry={loadGate.retry} />
       <DisclosureBanner />
+      {/* Wave A C23: the person-view filter is hidden on this page (D3 — the
+          advice engine's correctness depends on household aggregation); this
+          page-level sentence declares the scope. Kept out of the disclosure
+          registry: scope copy, not a disclosure edit. */}
+      <p className="text-sm text-muted-foreground">
+        The Roadmap evaluates your household as a whole — both incomes, all accounts.
+      </p>
       <NextMoveHero results={results} />
       {/* Status legend explains the six possible node-status icons. Lives
           above the section cards so users have an at-a-glance reference

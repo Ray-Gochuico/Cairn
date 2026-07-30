@@ -428,6 +428,12 @@ export default function WhatIf() {
             are not modeled.
           </li>
         </ul>
+        {/* Wave A C22: the person-view filter is hidden on this page (D3) —
+            this sentence is the honest declaration of why. */}
+        <div className="pt-1">
+          Projections always model your whole household &mdash; income, expenses,
+          and accounts for both people.
+        </div>
         <div className="pt-1">
           See Settings &rarr; Disclosures for full model assumptions.
         </div>
