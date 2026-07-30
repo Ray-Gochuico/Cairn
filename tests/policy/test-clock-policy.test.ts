@@ -34,7 +34,9 @@ const REAL_CLOCK_ALLOWLIST: ReadonlySet<string> = new Set([
   'tests/components/levers/IncomePopover.test.tsx',
   'tests/components/levers/InflationPopover.test.tsx',
   'tests/db/init.test.ts',
-  'tests/dev/seed-demo-data.test.ts',
+  // seed-demo-data.test.ts was pruned 2026-07-29 (Wave A T2): its local-vs-UTC
+  // today-snapshot pin uses vi.useFakeTimers + setSystemTime, which the
+  // detector counts as fake-timer usage.
   'tests/domain/fund-holdings.test.ts',
   'tests/lib/loan-history.test.ts',
   'tests/market/price-cache.test.ts',
