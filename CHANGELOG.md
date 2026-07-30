@@ -5,6 +5,43 @@ All notable changes to Cairn are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-07-20
+
+Fixes from the first round of user feedback on 1.1.0 — thank you for
+reporting.
+
+### Fixed
+
+- **Export CSV works in the installed app.** Every "Export CSV" button
+  (and the import template download) was silently doing nothing in the
+  desktop app. Exports now open a native save dialog; if a write fails
+  after you pick a location, the app says so instead of pretending it
+  worked.
+- **New tickers get market data right away.** Adding a holding (or
+  changing its ticker, or importing holdings from CSV) now fetches the
+  price and updates your account totals immediately — previously a new
+  ticker waited for the next scheduled refresh, which could be a day
+  away or never on the manual setting.
+- **Stocks are no longer falsely flagged as "couldn't be
+  auto-classified."** The warning now appears only when classification
+  actually failed, not for every stock added after setup.
+- **"Refresh now" tells you what happened.** The refresh button (in
+  Settings → Market data and the freshness pill) now genuinely waits for
+  the fetch and reports any ticker it couldn't price — including which
+  account totals were left unchanged — instead of finishing instantly
+  and silently.
+
+### Added
+
+- **Setup shows what you've created.** Every step of the setup wizard
+  now lists the things you've added — accounts, holdings, properties,
+  vehicles, loans, goals — as named chips, so you can see at a glance
+  that an add worked (previously only people got this treatment, and
+  everything else showed just a count).
+- **The "Add a holding" step has column titles.** Ticker, Shares,
+  Target % and Cost basis are now labeled above their boxes in the setup
+  wizard, matching the rest of the app's forms.
+
 ## [1.1.0] - 2026-07-20
 
 The calculators grow up, the app finds its look, and a season of
@@ -185,6 +222,7 @@ stored in a single local SQLite file. No account, no sync, no telemetry.
   calls (Yahoo Finance quote refresh and the updater check) are both
   user-controlled and contain no PII.
 
+[1.1.1]: https://github.com/Ray-Gochuico/Cairn/releases/tag/v1.1.1
 [1.1.0]: https://github.com/Ray-Gochuico/Cairn/releases/tag/v1.1.0
 [1.0.2]: https://github.com/Ray-Gochuico/Cairn/releases/tag/v1.0.2
 [1.0.1]: https://github.com/Ray-Gochuico/Cairn/releases/tag/v1.0.1
