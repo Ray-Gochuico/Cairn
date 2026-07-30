@@ -89,6 +89,9 @@ export function ImportCsvButton({ entity }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [queue, setQueue] = useState<PendingCsv[]>([]);
   const [errors, setErrors] = useState<BatchImportError[]>([]);
+  // W19 review: the template download's Tauri branch can reject after the
+  // user picked a destination (read-only volume, disk full) — surface it.
+  const [templateError, setTemplateError] = useState<string | null>(null);
   // totalRef tracks the size of the current batch for the "File N of M" subtitle.
   // It's a ref (not state) because we only need it for rendering math derived
   // from queue length — queue.length changes already drive the re-render.
@@ -233,11 +236,25 @@ export function ImportCsvButton({ entity }: Props) {
             variant="link"
             size="sm"
             data-testid="download-template-link"
-            onClick={() => void downloadCsv(`${entity}-template.csv`, templateCsv)}
+            onClick={() =>
+              void (async () => {
+                setTemplateError(null);
+                try {
+                  await downloadCsv(`${entity}-template.csv`, templateCsv);
+                } catch {
+                  setTemplateError("Couldn't save the file — try a different location.");
+                }
+              })()
+            }
             className="text-xs h-auto p-0"
           >
             Download {ENTITY_LABEL[entity]} template ↓
           </Button>
+        )}
+        {templateError && (
+          <span role="alert" className="text-xs text-destructive-soft-foreground">
+            {templateError}
+          </span>
         )}
       </div>
       <input

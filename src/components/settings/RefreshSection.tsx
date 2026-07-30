@@ -43,8 +43,10 @@ function unpriceableTickers(snapshot: MarketDataRefreshResult['snapshot']): stri
  * W19: honest partial-refresh copy. deriveTodaysSnapshot deliberately holds
  * back an account's WHOLE snapshot when any of its holdings fails to price
  * (never an under-counted AUTO_DERIVED row) — say so, naming the tickers.
+ * Exported for the freshness-badge popover so both refresh surfaces speak
+ * the same copy (W19 review: one parse, not two).
  */
-function partialWarning(result: MarketDataRefreshResult): string | null {
+export function partialWarning(result: MarketDataRefreshResult): string | null {
   if (result.snapshot.status !== 'ok') return null;
   const { partial } = result.snapshot.result;
   if (partial.length === 0) return null;

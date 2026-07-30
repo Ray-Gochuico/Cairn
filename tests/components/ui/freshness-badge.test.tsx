@@ -314,8 +314,59 @@ describe('FreshnessBadge', () => {
     await user.click(screen.getByTestId('freshness-refresh-now'));
 
     await waitFor(() => expect(mRefresh).toHaveBeenCalledTimes(1));
-    await new Promise((r) => setTimeout(r, 0));
+    // W19 review: failure is never silent — the popover stays open with an
+    // alert pointing at the surface that has the details, and no stamp.
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/refresh failed/i);
+    expect(alert).toHaveTextContent(/settings → market data/i);
+    expect(screen.getByTestId('freshness-refresh-now')).toBeInTheDocument();
     expect(update).not.toHaveBeenCalled();
+  });
+
+  it('W19 review: a partial refresh keeps the popover open, names the tickers, and still stamps', async () => {
+    vi.useRealTimers();
+    mRefresh.mockReset();
+    mRefresh.mockResolvedValueOnce({
+      fundSync: { status: 'ok', result: { refreshed: [], skipped: [], errors: [] } },
+      enrichment: { status: 'ok', result: { enriched: 0 } },
+      snapshot: {
+        status: 'ok',
+        result: {
+          upserted: [1],
+          skipped: [],
+          partial: [7],
+          errors: ['7/XYZ: No quote data for XYZ'],
+        },
+      },
+    });
+    const update = vi.fn().mockResolvedValue(undefined);
+    useSettingsStore.setState({ update } as never);
+
+    const t = new Date(NOW.getTime() - 60 * 60 * 1000);
+    render(
+      <FreshnessBadge
+        lastRefreshAt={t.toISOString()}
+        cadence={RefreshCadence.DAILY}
+      />,
+    );
+    const user = userEvent.setup();
+    await user.hover(screen.getByTestId('freshness-badge'));
+    await waitFor(() => {
+      expect(screen.getByTestId('freshness-refresh-now')).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId('freshness-refresh-now'));
+
+    // Same partial copy RefreshSection shows (shared helper, not a re-parse).
+    const warning = await screen.findByText(/couldn't price XYZ/i);
+    expect(warning).toHaveTextContent(/left unchanged/i);
+    // Popover stays open so the message is actually seen…
+    expect(screen.getByTestId('freshness-refresh-now')).toBeInTheDocument();
+    // …and the stamp still lands (completed attempt — RefreshSection policy).
+    await waitFor(() => {
+      expect(update).toHaveBeenCalledWith(
+        expect.objectContaining({ lastRefreshAt: expect.any(String) }),
+      );
+    });
   });
 
   it('supports the "md" size variant with larger text', () => {

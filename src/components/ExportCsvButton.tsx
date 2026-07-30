@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { toCsv, downloadCsv, type CsvColumn } from '@/lib/csv';
 
@@ -26,19 +27,36 @@ export function ExportCsvButton<T>({
   label = 'Export CSV',
   size,
 }: ExportCsvButtonProps<T>) {
+  // W19 review: the Tauri branch of downloadCsv can reject AFTER the user
+  // picked a destination (read-only volume, disk full) — swallowing that
+  // would read as success, since the save dialog already closed.
+  const [error, setError] = useState<string | null>(null);
+
   const handleClick = async () => {
     const today = new Date().toISOString().slice(0, 10);
-    await downloadCsv(`${baseName}-${today}.csv`, toCsv(rows, columns));
+    setError(null);
+    try {
+      await downloadCsv(`${baseName}-${today}.csv`, toCsv(rows, columns));
+    } catch {
+      setError("Couldn't save the file — try a different location.");
+    }
   };
 
   return (
-    <Button
-      variant="outline"
-      size={size}
-      onClick={() => void handleClick()}
-      disabled={rows.length === 0}
-    >
-      {label}
-    </Button>
+    <>
+      <Button
+        variant="outline"
+        size={size}
+        onClick={() => void handleClick()}
+        disabled={rows.length === 0}
+      >
+        {label}
+      </Button>
+      {error && (
+        <span role="alert" className="text-xs text-destructive-soft-foreground">
+          {error}
+        </span>
+      )}
+    </>
   );
 }
