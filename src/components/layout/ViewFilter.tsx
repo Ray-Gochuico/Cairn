@@ -1,7 +1,7 @@
 import { useViewFilter, type ViewFilter as ViewFilterType } from '@/lib/use-view-filter';
 import { useLocation } from 'react-router-dom';
 
-const HIDDEN_PATH_PREFIXES = ['/inputs', '/setup'];
+const HIDDEN_PATH_PREFIXES = ['/inputs', '/setup', '/settings', '/learn', '/what-if', '/roadmap'];
 
 export function ViewFilter() {
   const { filter, setFilter, isAvailable, persons } = useViewFilter();
