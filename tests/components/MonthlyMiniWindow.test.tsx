@@ -865,6 +865,33 @@ describe('MonthlyMiniWindow', () => {
       expect(await screen.findByText(/Acct A/)).toBeInTheDocument();
     });
 
+    it('review fix: C9 counts only hidden PENDING items, not already-confirmed ones', async () => {
+      // Alice's card is pending; Bob's is already USER_CONFIRMED. The joint
+      // view (nothing visible) must say 1 item awaits — not 2.
+      await db.execute(
+        `INSERT INTO persons (id, household_id, name, date_of_birth, target_retirement_age, annual_salary_pretax, pretax_401k_pct)
+         VALUES (1, 1, 'Alice', '1990-01-01', 65, 0, 0), (2, 1, 'Bob', '1992-01-01', 65, 0, 0)`,
+      );
+      usePersonsStore.setState({
+        persons: [makePerson({ id: 1, name: 'Alice' }), makePerson({ id: 2, name: 'Bob' })],
+        isLoading: false, error: null, load: async () => {},
+      } as never);
+      await seedOwnedAccount('Acct A', 1, AccountType.ACCOUNT_BROKERAGE, 5000);
+      const acctB = await seedOwnedAccount('Acct B', 2, AccountType.ACCOUNT_BROKERAGE, 7000);
+      await new AccountSnapshotsRepo(db).upsert({
+        accountId: acctB,
+        snapshotDate: lastMonthCloseISO(),
+        totalValue: 7000,
+        source: SnapshotSource.USER_CONFIRMED,
+      });
+      render(<MemoryRouter initialEntries={['/monthly?view=joint']}><MonthlyMiniWindow /></MemoryRouter>);
+      expect(await screen.findByText('Nothing to check in this view.')).toBeInTheDocument();
+      expect(
+        screen.getByText('1 household item still awaiting review in other views.'),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/2 household items/)).not.toBeInTheDocument();
+    });
+
     it('C10: All done carries the hidden-pending caption in a filtered view', async () => {
       await primeTwoPersonMonthly();
       render(<MemoryRouter initialEntries={['/monthly?view=p1']}><MonthlyMiniWindow /></MemoryRouter>);

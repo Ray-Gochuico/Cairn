@@ -129,6 +129,15 @@ describe('seedDemoData', () => {
       'SELECT COUNT(*) AS n FROM properties WHERE owner_person_id IS NULL',
     );
     expect(jointProps[0].n).toBe(1); // Demo Home
+    // Review fix: Demo Home is linked to the (joint) Mortgage so the wave's
+    // full-lien property surfaces are demonstrable in the shim.
+    const mortgage = await db.select<{ id: number }>(
+      "SELECT id FROM loans WHERE name = 'Mortgage'",
+    );
+    const home = await db.select<{ linked_loan_id: number | null }>(
+      "SELECT linked_loan_id FROM properties WHERE name = 'Demo Home'",
+    );
+    expect(home[0].linked_loan_id).toBe(mortgage[0].id);
     const partnerVehicles = await db.select<{ n: number }>(
       'SELECT COUNT(*) AS n FROM vehicles WHERE owner_person_id = ?', [partner[0].id],
     );
@@ -209,12 +218,19 @@ describe('seedDemoData', () => {
     // useLocalToday(), so a UTC-dated snapshot sits in the local FUTURE all
     // evening west of UTC and every latest-value surface silently excludes
     // it (the briefing's net-worth row vanished in evening e2e runs).
+    // Review fix: pin the TZ for this test — on a UTC runner the local and
+    // UTC calendar days coincide and the assertion below would be inert.
+    const prevTZ = process.env.TZ;
+    process.env.TZ = 'America/Los_Angeles';
     vi.useFakeTimers();
     try {
       const instant = new Date('2026-07-29T23:30:00-07:00');
       vi.setSystemTime(instant);
-      await seedDemoData(db);
       const { localTodayISO } = await import('@/lib/dates');
+      // Guard: the chosen instant must actually split the two
+      // implementations, so this test self-fails if it stops discriminating.
+      expect(localTodayISO(instant)).not.toBe(instant.toISOString().slice(0, 10));
+      await seedDemoData(db);
       const expected = localTodayISO(instant);
       const rows = await db.select<{ d: string }>(
         'SELECT MAX(snapshot_date) AS d FROM account_snapshots',
@@ -222,6 +238,8 @@ describe('seedDemoData', () => {
       expect(rows[0].d).toBe(expected);
     } finally {
       vi.useRealTimers();
+      if (prevTZ === undefined) delete process.env.TZ;
+      else process.env.TZ = prevTZ;
     }
   });
 

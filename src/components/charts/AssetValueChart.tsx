@@ -49,6 +49,7 @@ import {
   type SelectedEntity,
 } from '@/lib/net-worth-chart-prefs';
 import { filterByOwnerPersonId } from '@/lib/filter-by-view';
+import { scopeSuffix } from '@/lib/view-scope';
 import { entityKey, parseEntityKey } from '@/lib/entity-key';
 import { cutoffForWindow, type TimeWindow } from '@/lib/snapshot-bucketing';
 import {
@@ -876,7 +877,9 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
     });
     // View-filter-respecting surfaces already scope their data to the
     // filtered person — no "· Household" honesty suffix needed there.
-    return filter !== 'household' && !cfg.respectViewFilter ? `${base} · Household` : base;
+    // Wave A D10 (review fix): the suffix comes from the shared scopeSuffix
+    // so the household-by-design grammar can never drift per-file.
+    return cfg.respectViewFilter ? base : `${base}${scopeSuffix(filter)}`;
   }, [effectiveKeys, eligibleAssetKeys, eligibleLoanKeys, nameByKey, filter, cfg.labels, cfg.respectViewFilter]);
 
   const xTicks = useMemo(

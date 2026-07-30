@@ -539,6 +539,36 @@ describe('Wave A: person-view honesty (D2/D6/D7)', () => {
     expect(await screen.findByText('None pending for Alice · 1 household pending')).toBeInTheDocument();
   });
 
+  it('review fix: a visible liquid account summing to $0 keeps the plain subtitle (no false "not shown")', async () => {
+    // Alice owns a liquid account whose latest snapshot is exactly $0 — the
+    // C25 "not shown" line must key off the visible LIST being empty, not
+    // the dollar sum.
+    primeStores({
+      accounts: [{ id: 1, name: 'Alice Savings', ownerPersonId: 1, type: AccountType.ACCOUNT_SAVINGS }],
+      snapshotValues: [{ accountId: 1, snapshotDate: `${localMonth}-05`, totalValue: 0 }],
+    });
+    render(<MemoryRouter initialEntries={['/?view=p1']}><Dashboard /></MemoryRouter>);
+    expect(await screen.findByText('Brokerage, cash, savings, HSA')).toBeInTheDocument();
+    expect(screen.queryByText(/household account.* not shown/)).not.toBeInTheDocument();
+  });
+
+  it('review fix: Awaiting Reimbursement joint variant mirrors the Total Debt joint grammar', async () => {
+    useTransactionsStore.setState({
+      transactions: [{
+        id: 1, householdId: 1, date: `${localMonth}-05`, merchant: 'M', merchantRaw: 'M',
+        amount: 250, categoryId: null, sourceAccountId: null, propertyId: null, vehicleId: null,
+        personId: 1, sourcePdfFilename: null, reimbursable: true, reimbursedAt: null,
+        reimbursedAmount: null, isRecurring: false, notes: null,
+      }],
+      isLoading: false, error: null, load: async () => {},
+    });
+    render(<MemoryRouter initialEntries={['/?view=joint']}><Dashboard /></MemoryRouter>);
+    expect(
+      await screen.findByText('No joint reimbursements pending · 1 household pending'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/None pending for this view/)).not.toBeInTheDocument();
+  });
+
   it('D6: goals widget shows FilteredEmptyState (no Add CTA) when goals exist but the view hid them', async () => {
     primeStores({
       goals: [

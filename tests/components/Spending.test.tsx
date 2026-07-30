@@ -1052,6 +1052,34 @@ describe('Spending page', () => {
       );
     });
 
+    it('review fix: ended obligations are excluded from the caption counts', async () => {
+      await primeTwoPersons();
+      const housingRepo = new HousingPaymentsRepo(db);
+      await housingRepo.create({
+        householdId: 1, ownerPersonId: 1, name: 'Alex Rent', monthlyAmount: 2000,
+        startDate: '2020-01-01', endDate: null,
+      });
+      await housingRepo.create({
+        householdId: 1, ownerPersonId: null, name: 'Joint Rent', monthlyAmount: 1500,
+        startDate: '2020-01-01', endDate: null,
+      });
+      // ENDED lease — the card never shows it, so the caption must not count it.
+      await new VehicleLeasesRepo(db).create({
+        householdId: 1, ownerPersonId: 2, name: 'Sam Old Lease', monthlyAmount: 400,
+        startDate: '2019-01-01', endDate: '2020-12-31',
+      });
+      render(
+        <MemoryRouter initialEntries={['/spending?view=p1']}>
+          <Spending />
+        </MemoryRouter>,
+      );
+      const card = await screen.findByTestId('spending-recurring-card');
+      expect(within(card).getByTestId('scope-caption')).toHaveTextContent(
+        "Showing Alex's recurring obligations: 1 of 2 — 1 joint not shown.",
+      );
+      expect(within(card).queryByText(/owned by Sam/)).not.toBeInTheDocument();
+    });
+
     it('C14/D12: joint view renders — for inflow with the per-person note', async () => {
       await primeTwoPersons();
       await useTransactionsStore.getState().createMany([mkTx({ personId: null })]);

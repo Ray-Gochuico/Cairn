@@ -1312,6 +1312,36 @@ describe('Wave A: person-view honoring (D6/D7/D8)', () => {
     ).toBeInTheDocument();
   });
 
+  it('review fix: GrowthCard title names the scope like NetWorth\'s does', async () => {
+    primeStores({
+      accounts: [{ id: 1, name: 'Bob Brokerage', ownerPersonId: 2 }],
+      holdings: [{ id: 1, accountId: 1, ticker: 'VTI', shareCount: 10 }],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 50_000 }],
+    });
+    render(
+      <MemoryRouter initialEntries={['/investments?view=p2']}>
+        <Investments />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText('Investments growth · Bob')).toBeInTheDocument();
+  });
+
+  it('review fix: the View-holdings link preserves ?view=', async () => {
+    primeStores({
+      accounts: [{ id: 1, name: 'Alice Brokerage', ownerPersonId: 1 }],
+      holdings: [{ id: 1, accountId: 1, ticker: 'VTI', shareCount: 10 }],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 50_000 }],
+    });
+    render(
+      <MemoryRouter initialEntries={['/investments?view=p1']}>
+        <Investments />
+      </MemoryRouter>,
+    );
+    const link = await screen.findByRole('link', { name: 'View holdings' });
+    expect(link).toHaveAttribute('href', expect.stringContaining('view=p1'));
+    expect(link).toHaveAttribute('href', expect.stringContaining('manage=holdings'));
+  });
+
   it('C2: nonempty filtered view declares the hidden accounts under the header', async () => {
     primeStores({
       accounts: [

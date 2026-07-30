@@ -20,7 +20,7 @@ import { filterByOwnerPersonId } from '@/lib/filter-by-view';
 import { includedAccountIds } from '@/lib/account-inclusion';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { useViewScope } from '@/lib/use-view-scope';
-import { partitionHidden } from '@/lib/view-scope';
+import { partitionHidden, withViewSearch } from '@/lib/view-scope';
 import { FilteredEmptyState } from '@/components/layout/FilteredEmptyState';
 import { ScopeCaption } from '@/components/layout/ScopeCaption';
 import { Card, CardContent } from '@/components/ui/card';
@@ -179,6 +179,7 @@ export default function Investments() {
   const { filter, persons } = useViewFilter();
   // Wave A: caption vocabulary (reads only — no store loads).
   const { isFiltered, personName } = useViewScope();
+  const location = useLocation();
 
   const [editMode, setEditMode] = useState(false);
 
@@ -712,7 +713,12 @@ export default function Investments() {
            * card and the chart header can't disagree (round-2 A2). Sits
            * above the donut grid so the headline number reads first.
            */
-          <GrowthCard title="Investments growth" horizons={investmentsGrowth} />
+          <GrowthCard
+            // Review fix: the digits re-scope with the view — the title
+            // names the scope, same treatment as NetWorth's GrowthCard.
+            title={`Investments growth${filter === 'household' ? '' : filter === 'joint' ? ' · Joint' : ` · ${personName}`}`}
+            horizons={investmentsGrowth}
+          />
         ),
       },
       {
@@ -829,7 +835,8 @@ export default function Investments() {
             investableOnly={investableOnly}
             onToggleInvestableOnly={handleToggleInvestableOnly}
             asOfDate={breakdownAsOf}
-            viewHoldingsTo="/investments?manage=holdings"
+            // Review fix (D9): a same-page link must not drop the ?view=.
+            viewHoldingsTo={withViewSearch('/investments?manage=holdings', location.search)}
             // Wave A: a view-emptied list is not "no accounts yet".
             emptyMessage={isFiltered && accounts.length > 0
               ? `No accounts in ${filter === 'joint' ? 'the joint view' : `${personName}'s name`} — switch to Household to see all.`
@@ -861,6 +868,8 @@ export default function Investments() {
       personName,
       accounts,
       contributions,
+      // Review fix: the View-holdings link preserves ?view=
+      location.search,
       // contributions (time-series reads stores itself now)
       visibleAccounts,
       // growth
@@ -907,7 +916,7 @@ export default function Investments() {
   // Deep links like /investments#concentration (ConcentrationCard's "See
   // full breakdown") scroll to the target card once cards have rendered.
   // A hidden card (customized layout) simply no-ops — the user's layout wins.
-  const { hash } = useLocation();
+  const { hash } = location;
   useEffect(() => {
     if (!hash) return;
     document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: 'smooth', block: 'start' });

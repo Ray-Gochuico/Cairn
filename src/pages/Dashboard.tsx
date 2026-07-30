@@ -751,6 +751,15 @@ export default function Dashboard() {
       (a) => LIQUID_INVESTMENT_TYPES.has(a.type) && a.id !== undefined && included.has(a.id),
     ).length;
   }, [accounts]);
+  // Review fix: the "not shown" subtitle keys off the visible LIST being
+  // empty — a visible liquid account that sums to exactly $0 is shown, so
+  // claiming its accounts are "not shown" would be false.
+  const visibleLiquidCount = useMemo(() => {
+    const included = includedAccountIds(visibleAccounts);
+    return visibleAccounts.filter(
+      (a) => LIQUID_INVESTMENT_TYPES.has(a.type) && a.id !== undefined && included.has(a.id),
+    ).length;
+  }, [visibleAccounts]);
 
   const spendingSummary = useMemo(
     () => summarizeSpending(visibleTransactions, categories),
@@ -941,7 +950,7 @@ export default function Dashboard() {
           label="Liquid Investments"
           value={formatUSD(liquidInvestments)}
           href={withView('/investments')}
-          subtitle={filter !== 'household' && liquidInvestments === 0 && householdLiquidCount > 0
+          subtitle={filter !== 'household' && visibleLiquidCount === 0 && householdLiquidCount > 0
             // Wave A C25 (joint grammar mirrors the Total Debt pill's).
             ? personName != null
               ? `None in ${personName}'s name · ${householdLiquidCount} household account${householdLiquidCount === 1 ? '' : 's'} not shown`
@@ -960,9 +969,11 @@ export default function Dashboard() {
           href={withView('/spending')}
           subtitle={awaitingReimbursementTotal > 0
             ? 'Click to review'
-            // Wave A C25.
+            // Wave A C25 (joint grammar mirrors the Total Debt pill's).
             : filter !== 'household' && visiblePendingReimbCount === 0 && householdPendingReimb > 0
-              ? `None pending for ${personName ?? 'this view'} · ${householdPendingReimb} household pending`
+              ? personName != null
+                ? `None pending for ${personName} · ${householdPendingReimb} household pending`
+                : `No joint reimbursements pending · ${householdPendingReimb} household pending`
               : 'None pending'}
         />
       ),

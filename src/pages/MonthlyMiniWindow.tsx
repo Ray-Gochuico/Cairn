@@ -918,9 +918,12 @@ export default function MonthlyMiniWindow() {
     (allPendingDerived.length - pendingDerived.length) +
     (allLoanCards.filter((c) => !c.alreadyRecorded).length -
       loanCards.filter((c) => !c.alreadyRecorded).length);
+  // Review fix: "still awaiting review" counts hidden PENDING work only —
+  // an already-confirmed snapshot or an already-recorded loan payment is not
+  // awaiting anything. Cash and asset cards have no confirmed state (manual
+  // check-ins), so every hidden one still counts.
   const hiddenItemCount =
-    (allDerivedCards.length - derivedCards.length) +
-    (allLoanCards.length - loanCards.length) +
+    hiddenPendingCount +
     (allCashCards.length - cashCards.length) +
     (allAssetCards.length - assetCards.length);
 

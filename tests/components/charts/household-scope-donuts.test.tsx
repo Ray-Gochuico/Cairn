@@ -16,8 +16,9 @@ import { AccountType, SnapshotSource } from '@/types/enums';
 // LiabilitiesDonut are GENUINELY FILTERED by the person view now — every
 // input entity is ownable. The '· Household' title suffix is gone because
 // the data is scoped; a filtered-to-empty donut names the hidden counts
-// (C27). PerTickerDonut/SectorDonut (protected) keep their suffix — their
-// pins live in their own suites.
+// (C27). PerTickerDonut/SectorDonut (protected views) keep their
+// household-wide data + suffix — deliberately untouched by Wave A (the
+// wave gate diffs them as receipts); their unit suites carry no suffix pin.
 function seedTwoPersons() {
   const noop = async () => {};
   usePersonsStore.setState({

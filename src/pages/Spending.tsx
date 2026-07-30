@@ -290,15 +290,6 @@ export default function Spending() {
     () => filterByOwnerPersonId(vehicleLeases, filter, persons),
     [vehicleLeases, filter, persons],
   );
-  const obligationPartition = useMemo(
-    () =>
-      partitionHidden(
-        [...housingPayments, ...vehicleLeases],
-        [...visibleHousing, ...visibleLeases],
-        (r) => r.ownerPersonId,
-      ),
-    [housingPayments, vehicleLeases, visibleHousing, visibleLeases],
-  );
   const recurringObligation = useMemo(
     () => monthlyRecurringObligation(visibleHousing, visibleLeases, todayISO),
     [visibleHousing, visibleLeases, todayISO],
@@ -323,11 +314,27 @@ export default function Spending() {
   );
   // Household twins — the card stays mounted (with the tier-2 explainer)
   // when the VIEW emptied it but the household still has active obligations.
-  const householdActiveObligations = useMemo(
+  const householdActiveHousing = useMemo(
+    () => housingPayments.filter((h) => isActiveOn(h, todayISO)),
+    [housingPayments, todayISO],
+  );
+  const householdActiveLeases = useMemo(
+    () => vehicleLeases.filter((l) => isActiveOn(l, todayISO)),
+    [vehicleLeases, todayISO],
+  );
+  const householdActiveObligations = householdActiveHousing.length + householdActiveLeases.length;
+  // Review fix: the caption/empty-state counts cover exactly the rows the
+  // card renders — ACTIVE obligations only (an ended lease the card never
+  // shows must not be declared "not shown"). Reference identity holds: both
+  // sides filter the same store arrays.
+  const obligationPartition = useMemo(
     () =>
-      housingPayments.filter((h) => isActiveOn(h, todayISO)).length +
-      vehicleLeases.filter((l) => isActiveOn(l, todayISO)).length,
-    [housingPayments, vehicleLeases, todayISO],
+      partitionHidden(
+        [...householdActiveHousing, ...householdActiveLeases],
+        [...activeHousing, ...activeLeases],
+        (r) => r.ownerPersonId,
+      ),
+    [householdActiveHousing, householdActiveLeases, activeHousing, activeLeases],
   );
 
   // Household twins for the analysis sections' filter-empty lines (a view

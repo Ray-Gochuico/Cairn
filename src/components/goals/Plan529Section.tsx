@@ -119,10 +119,14 @@ export function Plan529Section() {
         <Button size="sm" onClick={() => setDrawer('create')}>Add 529 plan</Button>
       </div>
       {tooltipBlock}
-      {/* Wave A C29: nonempty filtered view declares the hidden plans. */}
+      {/* Wave A C29: nonempty filtered view declares the hidden plans.
+          Review fix: the joint view gets its own grammar (hidden plans there
+          are individually owned — "owned by others or joint" was nonsense). */}
       {settled && isFiltered && planPartition.hiddenCount > 0 && visiblePlans.length > 0 && (
         <p className="text-sm text-muted-foreground">
-          {`${planPartition.hiddenCount} plan${planPartition.hiddenCount === 1 ? '' : 's'} owned by ${otherName ?? 'others'} or joint not shown.`}
+          {filter === 'joint'
+            ? `${planPartition.hiddenCount} plan${planPartition.hiddenCount === 1 ? '' : 's'} individually owned not shown.`
+            : `${planPartition.hiddenCount} plan${planPartition.hiddenCount === 1 ? '' : 's'} owned by ${otherName ?? 'others'} or joint not shown.`}
         </p>
       )}
       {!settled ? null : plans.length === 0 ? (

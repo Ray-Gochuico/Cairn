@@ -335,11 +335,18 @@ async function seedPartnerSlice(db: Database, today: string): Promise<void> {
   }
 
   // One joint property + one P2 vehicle so Property/Vehicles/NetWorth person
-  // views have real rows to show and hide. Unlinked (no loan links — keep
-  // the graph simple); optional Monthly Section 4 grows by two nudge cards.
+  // views have real rows to show and hide. Demo Home links to the (joint)
+  // Mortgage so the full-lien equity surfaces (Wave A C18) are demonstrable
+  // in the shim; the Partner Car stays unlinked. Optional Monthly Section 4
+  // grows by two nudge cards.
+  const mortgage = await db.select<{ id: number }>(
+    `SELECT id FROM loans WHERE name = 'Mortgage'`,
+  );
+  const mortgageId = mortgage[0]?.id ?? null;
   await db.execute(
-    `INSERT INTO properties (household_id, owner_person_id, name, type, current_estimated_value)
-     VALUES (1, NULL, 'Demo Home', 'PRIMARY_RESIDENCE', 850000)`,
+    `INSERT INTO properties (household_id, owner_person_id, name, type, current_estimated_value, linked_loan_id)
+     VALUES (1, NULL, 'Demo Home', 'PRIMARY_RESIDENCE', 850000, ?)`,
+    [mortgageId],
   );
   await db.execute(
     `INSERT INTO vehicles (household_id, owner_person_id, name, year, make, model, current_estimated_value)

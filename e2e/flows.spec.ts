@@ -81,8 +81,10 @@ test('monthly check-in: a scoped Confirm all never ratifies hidden persons’ sn
   await confirmP1.click();
   await expect(page.getByText('Confirmed 3 account values.')).toBeVisible({ timeout: 30_000 });
   // The partner's pending snapshot MUST survive the scoped batch. Switch the
-  // view via the SPA dropdown — the shim's DB is fresh per page LOAD, so a
-  // goto() would re-seed and erase what we just wrote.
+  // view via the SPA dropdown: the shim persists to IndexedDB on a debounced
+  // (250ms) flush, so an immediate goto() can race the flush, load a DB
+  // without the writes, and re-seed — the SPA switch stays in the same
+  // in-memory DB session.
   await page.getByRole('combobox', { name: 'Filter view by person' }).selectOption('household');
   await expect(page.getByRole('button', { name: /^Confirm all \(1\)$/ })).toBeVisible({ timeout: 30_000 });
   expect(errors.join('\n')).not.toContain('Maximum update depth');

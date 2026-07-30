@@ -239,6 +239,21 @@ describe('Plan529Section (W14: 529 plans live with Goals)', () => {
       ).toBeInTheDocument();
     });
 
+    it('review fix: the joint-view nonempty caption uses the individually-owned grammar', () => {
+      primeTwoPersons();
+      useAccountsStore.setState({
+        accounts: [
+          makeAccount({ id: 1, name: 'Joint 529', ownerPersonId: null }),
+          makeAccount({ id: 2, name: 'Alice 529', ownerPersonId: 1 }),
+          makeAccount({ id: 3, name: 'Bob 529', ownerPersonId: 2 }),
+        ],
+      });
+      renderSectionAt('/goals?view=joint');
+      expect(screen.getByText('Joint 529')).toBeInTheDocument();
+      expect(screen.getByText('2 plans individually owned not shown.')).toBeInTheDocument();
+      expect(screen.queryByText(/owned by others or joint/)).not.toBeInTheDocument();
+    });
+
     it('true-empty keeps "No 529 plans yet." in a filtered view (regression)', () => {
       primeTwoPersons();
       useAccountsStore.setState({ accounts: [] });
