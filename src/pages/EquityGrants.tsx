@@ -398,6 +398,7 @@ export default function EquityGrants() {
             columns={csvColumns}
             rows={equityGrants}
             size="sm"
+            householdScopeNote
           />
           <ImportCsvButton entity="equity_grant" />
           <Button size="sm" onClick={() => setDrawer('create')}>

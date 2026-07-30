@@ -737,7 +737,7 @@ export default function Vehicles() {
           <ScopeCaption noun="vehicles and leases" partition={vehiclesAndLeasesPartition} />
         </div>
         <div className="flex items-center gap-2">
-          <ExportCsvButton baseName="vehicles" columns={csvColumns} rows={vehicles} />
+          <ExportCsvButton baseName="vehicles" columns={csvColumns} rows={vehicles} householdScopeNote />
           <ImportCsvButton entity="vehicle" />
           <Button size="sm" onClick={() => setVehicleDrawer('create')}>Add vehicle</Button>
         </div>

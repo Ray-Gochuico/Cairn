@@ -757,7 +757,7 @@ export default function Property() {
           <ScopeCaption noun="properties and rentals" partition={propertiesAndRentalsPartition} />
         </div>
         <div className="flex items-center gap-2">
-          <ExportCsvButton baseName="properties" columns={csvColumns} rows={properties} />
+          <ExportCsvButton baseName="properties" columns={csvColumns} rows={properties} householdScopeNote />
           <ImportCsvButton entity="property" />
           <Button size="sm" onClick={() => setPropertyDrawer('create')}>Add property</Button>
         </div>

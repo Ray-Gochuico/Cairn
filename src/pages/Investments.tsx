@@ -331,10 +331,30 @@ export default function Investments() {
   // null id, or one with no matching account, becomes ''. targetAllocationPct
   // is the stored 0..1 fraction and is exported raw (no ×100) — hence the
   // header 'target allocation' rather than 'target allocation %'. The rows
-  // are the full `holdings` array; the ?view filter is intentionally ignored.
+  // are the full `holdings` array; the export stays household-complete BY
+  // RULING (Wave A D5) — a person-view session must never produce a
+  // silently-partial backup. The owner column (D5) makes each row
+  // self-describing ('Joint' for null-owner accounts), mirroring
+  // EquityGrants' owner column.
   const accountById = useMemo(
     () => new Map(accounts.filter((a) => a.id != null).map((a) => [a.id as number, a.name])),
     [accounts],
+  );
+  const personNameById = useMemo(
+    () => new Map(persons.filter((p) => p.id != null).map((p) => [p.id as number, p.name])),
+    [persons],
+  );
+  const ownerByAccountId = useMemo(
+    () =>
+      new Map(
+        accounts
+          .filter((a) => a.id != null)
+          .map((a) => [
+            a.id as number,
+            a.ownerPersonId == null ? null : (personNameById.get(a.ownerPersonId) ?? ''),
+          ]),
+      ),
+    [accounts, personNameById],
   );
   const csvColumns = useMemo<CsvColumn<Holding>[]>(
     () => [
@@ -342,12 +362,19 @@ export default function Investments() {
         header: 'account',
         value: (h) => accountById.get(h.accountId) ?? '',
       },
+      {
+        header: 'owner',
+        value: (h) => {
+          const owner = ownerByAccountId.get(h.accountId);
+          return owner === null ? 'Joint' : owner ?? '';
+        },
+      },
       { header: 'ticker', value: (h) => h.ticker },
       { header: 'share count', value: (h) => h.shareCount },
       { header: 'cost basis', value: (h) => h.costBasis },
       { header: 'target allocation', value: (h) => h.targetAllocationPct },
     ],
-    [accountById],
+    [accountById, ownerByAccountId],
   );
 
   const visibleSnapshots = useMemo(
@@ -1053,7 +1080,7 @@ export default function Investments() {
           >
             {editMode ? 'Done' : 'Customize'}
           </button>
-          <ExportCsvButton baseName="holdings" columns={csvColumns} rows={holdings} />
+          <ExportCsvButton baseName="holdings" columns={csvColumns} rows={holdings} householdScopeNote />
         </div>
       </div>
 

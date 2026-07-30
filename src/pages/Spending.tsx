@@ -352,7 +352,7 @@ export default function Spending() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <h1 className="text-2xl font-semibold">Spending</h1>
         <div className="flex items-center gap-2">
-          <ExportCsvButton baseName="transactions" columns={csvColumns} rows={transactions} />
+          <ExportCsvButton baseName="transactions" columns={csvColumns} rows={transactions} householdScopeNote />
         </div>
       </div>
 

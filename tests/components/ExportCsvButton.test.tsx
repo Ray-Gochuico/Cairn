@@ -49,6 +49,33 @@ describe('ExportCsvButton', () => {
     expect(screen.getByRole('button', { name: /export csv/i })).toBeDisabled();
   });
 
+  it('C24 (Wave A D5): householdScopeNote renders the uniform disclosure (title + sr-only, aria-describedby)', () => {
+    render(
+      <MemoryRouter>
+        <ExportCsvButton baseName="x" columns={columns} rows={[{ name: 'A' }]} householdScopeNote />
+      </MemoryRouter>,
+    );
+    const btn = screen.getByRole('button', { name: 'Export CSV' });
+    expect(btn).toHaveAttribute(
+      'title',
+      "Exports all household rows — the person view doesn't change what's exported.",
+    );
+    const noteId = btn.getAttribute('aria-describedby');
+    expect(noteId).toBeTruthy();
+    expect(document.getElementById(noteId!)).toHaveTextContent(/Exports all household rows/);
+  });
+
+  it('no note without the prop (regression)', () => {
+    render(
+      <MemoryRouter>
+        <ExportCsvButton baseName="x" columns={columns} rows={[{ name: 'A' }]} />
+      </MemoryRouter>,
+    );
+    const btn = screen.getByRole('button', { name: 'Export CSV' });
+    expect(btn).not.toHaveAttribute('title');
+    expect(btn).not.toHaveAttribute('aria-describedby');
+  });
+
   it('on click downloads a CSV named <baseName>-<date>.csv with the serialized rows', async () => {
     let capturedText = '';
     const createSpy = vi.spyOn(URL, 'createObjectURL').mockImplementation((b) => {

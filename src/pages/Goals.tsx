@@ -599,7 +599,7 @@ export default function Goals() {
           <ScopeCaption noun="goals" jointWord="shared" otherVerb="for" partition={goalPartition} />
         </div>
         <div className="flex items-center gap-2">
-          <ExportCsvButton baseName="goals" columns={csvColumns} rows={goals} size="sm" />
+          <ExportCsvButton baseName="goals" columns={csvColumns} rows={goals} size="sm" householdScopeNote />
           <Button size="sm" onClick={() => setDrawer('create')}>Add goal</Button>
         </div>
       </div>

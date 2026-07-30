@@ -656,7 +656,7 @@ export default function Loans() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <ExportCsvButton baseName="loans" columns={csvColumns} rows={loans} />
+          <ExportCsvButton baseName="loans" columns={csvColumns} rows={loans} householdScopeNote />
           <ImportCsvButton entity="loan" />
           <Button size="sm" onClick={() => setDrawer('create')}>Add loan</Button>
         </div>

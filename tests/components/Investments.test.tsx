@@ -404,10 +404,57 @@ describe('Investments page — 529 section', () => {
     await user.click(screen.getByRole('button', { name: /export csv/i }));
     await Promise.resolve();
 
+    // Wave A D5: the holdings export carries a self-describing owner column
+    // (a null-owner account resolves 'Joint').
     expect(capturedCsv.split('\n')[0]).toBe(
-      'account,ticker,share count,cost basis,target allocation',
+      'account,owner,ticker,share count,cost basis,target allocation',
     );
-    expect(capturedCsv.split('\n')[1]).toBe('Schwab Brokerage,VTI,10,2000,0.6');
+    expect(capturedCsv.split('\n')[1]).toBe('Schwab Brokerage,Joint,VTI,10,2000,0.6');
+
+    createSpy.mockRestore();
+    revokeSpy.mockRestore();
+  });
+
+  it('D5 (Wave A): the owner column resolves person names and Joint for null owners', async () => {
+    usePersonsStore.setState({
+      persons: [basePerson, { ...basePerson, id: 2, name: 'Bob' }],
+      isLoading: false,
+      error: null,
+      // Stub load(): ManageSurface re-loads persons through the store, and
+      // the mocked DB would empty the primed list.
+      load: async () => {},
+    } as never);
+    primeStores({
+      accounts: [
+        { id: 1, name: 'Alice Brokerage', ownerPersonId: 1 },
+        { id: 2, name: 'Joint Brokerage', ownerPersonId: null },
+      ],
+      holdings: [
+        { id: 1, accountId: 1, ticker: 'VTI', shareCount: 10, costBasis: 1000, targetAllocationPct: 0.5 },
+        { id: 2, accountId: 2, ticker: 'BND', shareCount: 5, costBasis: 500, targetAllocationPct: 0.5 },
+      ],
+    });
+
+    let capturedCsv = '';
+    const createSpy = vi.spyOn(URL, 'createObjectURL').mockImplementation((b) => {
+      void (b as Blob).text().then((t) => { capturedCsv = t; });
+      return 'blob:mock';
+    });
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+
+    render(
+      <MemoryRouter>
+        <Investments />
+      </MemoryRouter>,
+    );
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /export csv/i }));
+    await Promise.resolve();
+
+    const lines = capturedCsv.split('\n');
+    expect(lines[0]).toBe('account,owner,ticker,share count,cost basis,target allocation');
+    expect(lines[1]).toBe('Alice Brokerage,Alice,VTI,10,1000,0.5');
+    expect(lines[2]).toBe('Joint Brokerage,Joint,BND,5,500,0.5');
 
     createSpy.mockRestore();
     revokeSpy.mockRestore();
@@ -1158,7 +1205,10 @@ describe('Wave A: person-view honoring (D6/D7/D8)', () => {
       persons: [basePerson, { ...basePerson, id: 2, name: 'Bob' }],
       isLoading: false,
       error: null,
-    });
+      // Stub load(): ManageSurface re-loads persons through the store, and
+      // the mocked DB would empty the primed list.
+      load: async () => {},
+    } as never);
   }
 
   beforeEach(() => {
