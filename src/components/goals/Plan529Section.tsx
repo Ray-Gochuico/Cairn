@@ -15,6 +15,9 @@ import AccountForm, {
 import { AccountType } from '@/types/enums';
 import { get529DeductionForState, UNLIMITED_DEDUCTION_SENTINEL } from '@/lib/529-state-deductions';
 import { formatCurrency } from '@/lib/format';
+import { useViewScope } from '@/lib/use-view-scope';
+import { filterByOwnerPersonId } from '@/lib/filter-by-view';
+import { partitionHidden } from '@/lib/view-scope';
 
 const DEFAULT_529: AccountFormValues = {
   ...DEFAULT_ACCOUNT,
@@ -55,6 +58,17 @@ export function Plan529Section() {
   const plans = useMemo(
     () => accounts.filter((a) => a.type === AccountType.ACCOUNT_529),
     [accounts],
+  );
+  // Wave A D8: 529s are OWNER-scoped (matching Investments); reads only —
+  // no store loads (shared-store gate discipline, see the header comment).
+  const { filter, isFiltered, personName, otherName, persons: viewPersons } = useViewScope();
+  const visiblePlans = useMemo(
+    () => filterByOwnerPersonId(plans, filter, viewPersons),
+    [plans, filter, viewPersons],
+  );
+  const planPartition = useMemo(
+    () => partitionHidden(plans, visiblePlans, (p) => p.ownerPersonId),
+    [plans, visiblePlans],
   );
 
   const personOptions = persons.map((p) => ({ id: p.id!, name: p.name }));
@@ -105,11 +119,26 @@ export function Plan529Section() {
         <Button size="sm" onClick={() => setDrawer('create')}>Add 529 plan</Button>
       </div>
       {tooltipBlock}
+      {/* Wave A C29: nonempty filtered view declares the hidden plans. */}
+      {settled && isFiltered && planPartition.hiddenCount > 0 && visiblePlans.length > 0 && (
+        <p className="text-sm text-muted-foreground">
+          {`${planPartition.hiddenCount} plan${planPartition.hiddenCount === 1 ? '' : 's'} owned by ${otherName ?? 'others'} or joint not shown.`}
+        </p>
+      )}
       {!settled ? null : plans.length === 0 ? (
+        // Tier 1: the household truly has no 529s.
         <p className="text-sm text-muted-foreground">No 529 plans yet.</p>
+      ) : visiblePlans.length === 0 ? (
+        // Tier 2 (Wave A C29): the view hid every plan — never the false
+        // onboarding line.
+        <p className="text-sm text-muted-foreground">
+          {filter === 'joint'
+            ? `No joint 529 plans — ${planPartition.hiddenCount} individually owned not shown.`
+            : `No 529 plans owned by ${personName} — ${planPartition.hiddenCount} household plan${planPartition.hiddenCount === 1 ? '' : 's'} not shown.`}
+        </p>
       ) : (
         <div className="space-y-2">
-          {plans.map((p) => {
+          {visiblePlans.map((p) => {
             const latest = p.id != null ? latestValueByAccountId.get(p.id) : undefined;
             return (
               <Card key={p.id}>

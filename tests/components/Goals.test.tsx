@@ -602,8 +602,11 @@ describe('Goals page', () => {
         <Goals />
       </MemoryRouter>,
     );
-    expect(screen.getByText(/no goals in this view/i)).toBeInTheDocument();
-    expect(screen.getByText(/switch to household/i)).toBeInTheDocument();
+    // Wave A supersedes W10 T7's count-free copy: the explainer now carries
+    // the counts (C4/C5, shared-goal grammar) + a View-household action.
+    expect(screen.getByText("No goals in Alice's name")).toBeInTheDocument();
+    expect(screen.getByText('1 for Bob not shown.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View household' })).toBeInTheDocument();
   });
 
   it('Export CSV button downloads the goals table with the type label and person resolved', async () => {
@@ -656,6 +659,59 @@ describe('Goals page', () => {
 
     createSpy.mockRestore();
     revokeSpy.mockRestore();
+  });
+});
+
+describe('Wave A: shared-goal grammar + household-rate declarations (D1 C20/C21)', () => {
+  beforeEach(() => {
+    resetStores();
+    usePersonsStore.setState({
+      persons: [
+        { id: 1, householdId: 1, name: 'Alice' },
+        { id: 2, householdId: 1, name: 'Bob' },
+      ] as never,
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+  });
+
+  it('shared-goal grammar: count-aware explainer replaces "belongs to someone else"', () => {
+    primeStores({
+      goals: [
+        { id: 1, name: 'Shared house', forPersonId: null },
+        { id: 2, name: 'Bob trip', forPersonId: 2 },
+      ],
+    });
+    render(<MemoryRouter initialEntries={['/goals?view=p1']}><Goals /></MemoryRouter>);
+    expect(screen.queryByText(/belongs to someone else/)).not.toBeInTheDocument();
+    expect(screen.getByText("No goals in Alice's name")).toBeInTheDocument();
+    expect(screen.getByText('1 shared and 1 for Bob not shown.')).toBeInTheDocument();
+  });
+
+  it('C2 (goals grammar): nonempty view declares shared exclusions', () => {
+    primeStores({
+      goals: [
+        { id: 1, name: 'Alice trip', forPersonId: 1 },
+        { id: 2, name: 'Shared house', forPersonId: null },
+      ],
+    });
+    render(<MemoryRouter initialEntries={['/goals?view=p1']}><Goals /></MemoryRouter>);
+    expect(screen.getByTestId('scope-caption')).toHaveTextContent(
+      "Showing Alice's goals: 1 of 2 — 1 shared not shown.",
+    );
+  });
+
+  it('C20/C21: household-rate microcopy + linked-accounts declaration', () => {
+    primeStores({
+      goals: [{ id: 1, name: 'Alice trip', forPersonId: 1, linkedAccountIds: [1] }],
+      accounts: [{ id: 1, name: 'Brokerage' }],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 10_000 }],
+    });
+    render(<MemoryRouter initialEntries={['/goals?view=p1']}><Goals /></MemoryRouter>);
+    expect(screen.getAllByText(/at the household growth scenario/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/at your growth scenario/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/Progress counts each goal's linked accounts in full, including joint accounts\./),
+    ).toBeInTheDocument();
   });
 });
 
