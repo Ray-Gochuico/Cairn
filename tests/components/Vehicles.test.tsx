@@ -749,6 +749,79 @@ describe('Vehicles page', () => {
   });
 });
 
+describe('Wave A: count-aware empties, partial strips, declarations (D1/D6 C18/C19)', () => {
+  const mkVehicle = (id: number, name: string, ownerPersonId: number | null) => ({
+    id, householdId: 1, ownerPersonId, name, make: 'Toyota', model: 'RAV4', year: 2022,
+    purchasePrice: 35000, purchaseDate: '2022-03-01', currentEstimatedValue: 28000,
+    linkedLoanId: null, excludedFromNetWorth: false, notes: null,
+  });
+  const mkLease = (id: number, name: string, ownerPersonId: number | null) => ({
+    id, householdId: 1, ownerPersonId, name, monthlyAmount: 400,
+    startDate: '2024-01-01', endDate: null,
+  });
+
+  beforeEach(() => {
+    resetStores();
+    usePersonsStore.setState({
+      persons: [
+        { id: 1, householdId: 1, name: 'Alice' },
+        { id: 2, householdId: 1, name: 'Bob' },
+      ] as never,
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+  });
+
+  it('count-aware explainer replaces the "belongs to someone else" copy', () => {
+    useVehiclesStore.setState({
+      vehicles: [mkVehicle(1, 'Joint Car', null)] as never,
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    useVehicleLeasesStore.setState({
+      vehicleLeases: [mkLease(1, 'Bob Lease', 2)] as never,
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    render(<MemoryRouter initialEntries={['/vehicles?view=p1']}><Vehicles /></MemoryRouter>);
+    expect(screen.queryByText(/belongs to someone else/)).not.toBeInTheDocument();
+    expect(screen.getByText("No vehicles or leases in Alice's name")).toBeInTheDocument();
+    expect(screen.getByText('1 joint and 1 owned by Bob not shown.')).toBeInTheDocument();
+  });
+
+  it('partial strip: leases hidden but vehicles showing keeps the Leases section with a note', () => {
+    useVehiclesStore.setState({
+      vehicles: [mkVehicle(1, 'Alice Car', 1)] as never,
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    useVehicleLeasesStore.setState({
+      vehicleLeases: [mkLease(1, 'Bob Lease', 2)] as never,
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    render(<MemoryRouter initialEntries={['/vehicles?view=p1']}><Vehicles /></MemoryRouter>);
+    expect(screen.getByRole('heading', { name: 'Leases' })).toBeInTheDocument();
+    expect(screen.getByText('1 lease not shown in this view.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add lease' })).toBeInTheDocument(); // entry point restored
+  });
+
+  it('C18/C19: person view declares full-lien equity and all-payer expenses', () => {
+    useVehiclesStore.setState({
+      vehicles: [mkVehicle(1, 'Alice Car', 1)] as never,
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    render(<MemoryRouter initialEntries={['/vehicles?view=p1']}><Vehicles /></MemoryRouter>);
+    expect(screen.getByText(/Liens are counted in full, including joint loans\./)).toBeInTheDocument();
+    expect(screen.getAllByText(/· all payers/).length).toBeGreaterThan(0);
+  });
+
+  it('owner chip renders on VehicleAssetCard (parity with LeaseCard)', () => {
+    useVehiclesStore.setState({
+      vehicles: [mkVehicle(1, 'Joint Car', null), mkVehicle(2, 'Alice Car', 1)] as never,
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    render(<MemoryRouter initialEntries={['/vehicles']}><Vehicles /></MemoryRouter>);
+    expect(screen.getByText('Joint')).toBeInTheDocument();   // chip on the joint vehicle card
+    expect(screen.getByText('Alice')).toBeInTheDocument();   // chip on Alice's
+  });
+});
+
 describe('Vehicles page — gas card with configurable category set', () => {
   beforeEach(() => {
     resetStores();

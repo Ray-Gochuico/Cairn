@@ -12,6 +12,10 @@ import { latestAssetValue } from '@/lib/latest-value';
 import { AssetSnapshotOwnerType } from '@/types/enums';
 import { filterByOwnerPersonId } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
+import { useViewScope } from '@/lib/use-view-scope';
+import { partitionHidden } from '@/lib/view-scope';
+import { FilteredEmptyState } from '@/components/layout/FilteredEmptyState';
+import { ScopeCaption } from '@/components/layout/ScopeCaption';
 import { resolveUtilityCategoryIds } from '@/lib/category-config';
 import { monthlyLeaseObligation, isActiveOn } from '@/lib/recurring-obligations';
 import { useLocalToday } from '@/lib/use-local-today';
@@ -96,6 +100,8 @@ interface VehicleAssetCardProps {
   onSaveValue: (value: number | null) => Promise<void>;
   /** W14 one-place-per-thing: opens the page's VehicleForm EditDrawer. */
   onEditDetails: () => void;
+  /** Wave A: 'Joint' | owner name — the same chip LeaseCard carries. */
+  ownerLabel?: string;
 }
 
 function VehicleAssetCard({
@@ -108,6 +114,7 @@ function VehicleAssetCard({
   onCancelEdit,
   onSaveValue,
   onEditDetails,
+  ownerLabel,
 }: VehicleAssetCardProps) {
   const description = describeVehicle(vehicle);
 
@@ -119,6 +126,13 @@ function VehicleAssetCard({
             <CardTitle className="text-base truncate">{vehicle.name}</CardTitle>
             {description ? (
               <CardDescription className="text-xs">{description}</CardDescription>
+            ) : null}
+            {/* Wave A: owner chip — parity with LeaseCard, all views. */}
+            {ownerLabel ? (
+              <span className="mt-1 inline-flex items-center gap-1.5 rounded-full border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden="true" />
+                {ownerLabel}
+              </span>
             ) : null}
           </div>
           <div className="flex shrink-0 gap-2">
@@ -196,7 +210,8 @@ function VehicleExpensesCard({
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Expenses</CardTitle>
-        <CardDescription className="text-xs truncate">{vehicleName}</CardDescription>
+        {/* Wave A C19: linked spending sums every payer, in every view. */}
+        <CardDescription className="text-xs truncate">{vehicleName} · all payers</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         <dl className="grid grid-cols-2 gap-3 text-sm">
@@ -274,7 +289,8 @@ function VehicleGasCard({
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <CardTitle className="text-base">Gas</CardTitle>
-            <CardDescription className="text-xs truncate">{vehicleName}</CardDescription>
+            {/* Wave A C19: linked spending sums every payer, in every view. */}
+            <CardDescription className="text-xs truncate">{vehicleName} · all payers</CardDescription>
           </div>
           <CategoryMultiSelect
             categories={categories}
@@ -469,6 +485,18 @@ export default function Vehicles() {
   const visibleLeases = useMemo(
     () => filterByOwnerPersonId(vehicleLeases, filter, persons),
     [vehicleLeases, filter, persons],
+  );
+
+  // Wave A: caption vocabulary + exclusion counts (reads only).
+  const { isFiltered } = useViewScope();
+  const vehiclesAndLeasesPartition = useMemo(
+    () =>
+      partitionHidden(
+        [...vehicles, ...vehicleLeases],
+        [...visibleVehicles, ...visibleLeases],
+        (r) => r.ownerPersonId,
+      ),
+    [vehicles, vehicleLeases, visibleVehicles, visibleLeases],
   );
 
   const today = todayIso;
@@ -700,9 +728,13 @@ export default function Vehicles() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold mb-1">Vehicles</h1>
+          {/* Wave A C18: person views declare that liens count in full. */}
           <p className="text-sm text-muted-foreground">
-            Equity = current value − linked-loan balance.
+            {isFiltered
+              ? 'Equity = current value − linked-loan balance. Liens are counted in full, including joint loans.'
+              : 'Equity = current value − linked-loan balance.'}
           </p>
+          <ScopeCaption noun="vehicles and leases" partition={vehiclesAndLeasesPartition} />
         </div>
         <div className="flex items-center gap-2">
           <ExportCsvButton baseName="vehicles" columns={csvColumns} rows={vehicles} />
@@ -712,14 +744,18 @@ export default function Vehicles() {
       </div>
 
       {visibleVehicles.length === 0 && visibleLeases.length === 0 && (
-        // W10 T7: vehicles/leases exist, but the person filter strips them all
-        // — explain instead of a silent header over an empty grid.
-        <EmptyState
-          bare
-          icon={Car}
-          title="No vehicles in this view"
-          description="Every vehicle belongs to someone else under this filter — switch to Household to see everything."
-        />
+        // Wave A D6 (supersedes W10 T7's count-free copy): vehicles/leases
+        // exist, but the person filter stripped them all — count-aware
+        // explainer with the View-household recovery.
+        <FilteredEmptyState bare noun="vehicles or leases" partition={vehiclesAndLeasesPartition} />
+      )}
+
+      {/* Wave A partial strip: vehicles hidden but leases showing — declare
+          the hidden vehicles instead of silently dropping the grid. */}
+      {visibleVehicles.length === 0 && vehicles.length > 0 && visibleLeases.length > 0 && (
+        <p className="text-sm text-muted-foreground">
+          {`${vehicles.length - visibleVehicles.length} vehicle${vehicles.length - visibleVehicles.length === 1 ? '' : 's'} not shown in this view.`}
+        </p>
       )}
 
       <div className="space-y-6">
@@ -760,6 +796,11 @@ export default function Vehicles() {
                   onCancelEdit={() => setEditing(null)}
                   onSaveValue={(val) => handleSaveVehicle(v.id!, val)}
                   onEditDetails={() => setVehicleDrawer({ type: 'edit', id: v.id! })}
+                  ownerLabel={
+                    v.ownerPersonId == null
+                      ? 'Joint'
+                      : (personNameById.get(v.ownerPersonId) ?? 'Unknown')
+                  }
                 />
                 <VehicleExpensesCard
                   vehicleName={v.name}
@@ -792,6 +833,27 @@ export default function Vehicles() {
           );
         })}
       </div>
+
+      {/* Wave A partial strip: when the VIEW hid every lease but the
+          household has some (and vehicles still show), the section stays
+          mounted with the count + the Add-lease entry point. */}
+      {visibleLeases.length === 0 && vehicleLeases.length > 0 && visibleVehicles.length > 0 && (
+        <section aria-label="Leases" className="space-y-3">
+          <h2 className="text-xl font-semibold">Leases</h2>
+          <p className="text-sm text-muted-foreground">
+            {`${vehicleLeases.length - visibleLeases.length} lease${vehicleLeases.length - visibleLeases.length === 1 ? '' : 's'} not shown in this view.`}
+          </p>
+          <button
+            type="button"
+            onClick={() => setLeaseDrawer('create')}
+            aria-label="Add lease"
+            className="flex min-h-[64px] w-full items-center justify-center gap-2 rounded-lg border border-dashed text-sm font-medium text-primary transition-colors hover:bg-accent"
+          >
+            <span aria-hidden="true" className="text-lg leading-none">+</span>
+            Add lease
+          </button>
+        </section>
+      )}
 
       {visibleLeases.length > 0 && (
         <section aria-label="Leases" className="space-y-3">
