@@ -120,6 +120,33 @@ describe('Section3_WhatYouOwe', () => {
     ).toBeNull();
   });
 
+  it('renders each added loan as a named chip on the Loans card', () => {
+    useLoansStore.setState((s: any) => ({
+      ...s,
+      loans: [
+        { id: 1, name: 'Mortgage' },
+        { id: 2, name: 'Car loan' },
+      ],
+    }));
+    render(
+      <MemoryRouter>
+        <Section3_WhatYouOwe status="in_progress" onSetStatus={() => {}} />
+      </MemoryRouter>,
+    );
+    const chips = screen.getByTestId('loans-chips');
+    expect(within(chips).getByText('Mortgage')).toBeInTheDocument();
+    expect(within(chips).getByText('Car loan')).toBeInTheDocument();
+  });
+
+  it('renders no loans chip container when no loans exist', () => {
+    render(
+      <MemoryRouter>
+        <Section3_WhatYouOwe status="in_progress" onSetStatus={() => {}} />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByTestId('loans-chips')).toBeNull();
+  });
+
   it('shows the calm intro banner once the section is in progress', () => {
     render(
       <MemoryRouter>

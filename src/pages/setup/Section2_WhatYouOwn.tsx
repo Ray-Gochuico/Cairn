@@ -118,6 +118,7 @@ export default function Section2_WhatYouOwn({ status, onSetStatus }: Props) {
         onAddManual={() => setDialog('accounts')}
         importEnabled
         importTrigger={<ImportCsvButton entity="account" />}
+        items={accounts.map((a, i) => ({ key: a.id ?? i, label: a.name }))}
       />
       <EntityCard
         title="Holdings"
@@ -127,6 +128,7 @@ export default function Section2_WhatYouOwn({ status, onSetStatus }: Props) {
         importEnabled
         importTrigger={<ImportCsvButton entity="holding" />}
         importDisabledReason={noAccountsReason}
+        items={holdings.map((h, i) => ({ key: h.id ?? i, label: h.ticker }))}
       />
       <EntityCard
         title="Properties"
@@ -135,6 +137,7 @@ export default function Section2_WhatYouOwn({ status, onSetStatus }: Props) {
         onAddManual={() => setDialog('properties')}
         importEnabled
         importTrigger={<ImportCsvButton entity="property" />}
+        items={properties.map((pr, i) => ({ key: pr.id ?? i, label: pr.name }))}
       />
       <EntityCard
         title="Rent / housing payment"
@@ -142,6 +145,7 @@ export default function Section2_WhatYouOwn({ status, onSetStatus }: Props) {
         count={housingPayments.length}
         onAddManual={() => setDialog('housing_payments')}
         importEnabled={false}
+        items={housingPayments.map((hp, i) => ({ key: hp.id ?? i, label: hp.name }))}
       />
       <EntityCard
         title="Vehicles"
@@ -150,6 +154,7 @@ export default function Section2_WhatYouOwn({ status, onSetStatus }: Props) {
         onAddManual={() => setDialog('vehicles')}
         importEnabled
         importTrigger={<ImportCsvButton entity="vehicle" />}
+        items={vehicles.map((v, i) => ({ key: v.id ?? i, label: v.name }))}
       />
       <EntityCard
         title="Vehicle lease"
@@ -157,6 +162,7 @@ export default function Section2_WhatYouOwn({ status, onSetStatus }: Props) {
         count={vehicleLeases.length}
         onAddManual={() => setDialog('vehicle_leases')}
         importEnabled={false}
+        items={vehicleLeases.map((vl, i) => ({ key: vl.id ?? i, label: vl.name }))}
       />
       <EntityCard
         title="Equity grants"
@@ -165,6 +171,7 @@ export default function Section2_WhatYouOwn({ status, onSetStatus }: Props) {
         onAddManual={() => setDialog('equity_grants')}
         importEnabled
         importTrigger={<ImportCsvButton entity="equity_grant" />}
+        items={equityGrants.map((g, i) => ({ key: g.id ?? i, label: g.name }))}
       />
 
       <Dialog

@@ -251,6 +251,32 @@ describe('ImportCsvButton template downloads', () => {
     );
   });
 
+  it('surfaces an inline error when the template save fails (W19 review)', async () => {
+    const { downloadCsv } = await import('@/lib/csv') as unknown as {
+      downloadCsv: ReturnType<typeof vi.fn>;
+    };
+    downloadCsv.mockRejectedValueOnce(new Error('disk full'));
+    render(<ImportCsvButton entity="account" />);
+    fireEvent.click(screen.getByTestId('download-template-link'));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/couldn't save the file/i);
+  });
+
+  it('clears the template-save error on a subsequent successful download (W19 review)', async () => {
+    const { downloadCsv } = await import('@/lib/csv') as unknown as {
+      downloadCsv: ReturnType<typeof vi.fn>;
+    };
+    downloadCsv.mockRejectedValueOnce(new Error('disk full'));
+    render(<ImportCsvButton entity="account" />);
+    fireEvent.click(screen.getByTestId('download-template-link'));
+    await screen.findByRole('alert');
+
+    downloadCsv.mockResolvedValueOnce(undefined);
+    fireEvent.click(screen.getByTestId('download-template-link'));
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+  });
+
   it('uses the correct filename per entity (loan)', async () => {
     render(<ImportCsvButton entity="loan" />);
     fireEvent.click(screen.getByTestId('download-template-link'));

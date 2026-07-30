@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings-store';
 import { RefreshCadence } from '@/types/enums';
 import { runMarketDataRefresh } from '@/market/run-market-data-refresh';
+import { partialWarning } from '@/components/settings/RefreshSection';
 import { getDatabase } from '@/db/db';
 
 interface FreshnessBadgeProps {
@@ -109,6 +110,11 @@ export function FreshnessBadge({
   const updateSettings = useSettingsStore((s) => s.update);
   const [open, setOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  // W19 review: a partial or failed manual refresh is never silent — the
+  // popover stays open with the outcome instead of closing over it.
+  const [refreshOutcome, setRefreshOutcome] = useState<
+    { kind: 'warning' | 'error'; text: string } | null
+  >(null);
 
   // Resolve the inputs. Explicit props take precedence so tests + future
   // per-surface timestamps don't depend on the global store.
@@ -151,10 +157,36 @@ export function FreshnessBadge({
 
   const handleRefreshNow = async () => {
     setRefreshing(true);
+    setRefreshOutcome(null);
     try {
-      await updateSettings({ lastRefreshAt: new Date().toISOString() });
-      runMarketDataRefresh(getDatabase());
-      setOpen(false);
+      // W19: await the refresh and stamp AFTER it settles — stamping first
+      // made 'Updated just now' appear over stale prices whenever Yahoo
+      // failed. Stamp only when the pricing branch actually ran; on a
+      // snapshot-branch failure the badge keeps showing the old timestamp.
+      // W19 review: partial/failed outcomes hold the popover open with the
+      // result — closing over them read as silent success.
+      const result = await runMarketDataRefresh(getDatabase());
+      if (result.snapshot.status === 'ok') {
+        await updateSettings({ lastRefreshAt: new Date().toISOString() });
+        const warning = partialWarning(result);
+        if (warning) {
+          setRefreshOutcome({ kind: 'warning', text: warning });
+        } else {
+          setOpen(false);
+        }
+      } else {
+        setRefreshOutcome({
+          kind: 'error',
+          text: 'Refresh failed — prices unchanged. Details in Settings → Market data.',
+        });
+      }
+    } catch {
+      // Defensive: the aggregate never rejects; this catches a failed stamp.
+      // The previous timestamp remains — which is the honest state.
+      setRefreshOutcome({
+        kind: 'error',
+        text: 'Refresh failed — prices unchanged. Details in Settings → Market data.',
+      });
     } finally {
       setRefreshing(false);
     }
@@ -167,7 +199,15 @@ export function FreshnessBadge({
   const iconSize = size === 'md' ? 'h-4 w-4' : 'h-3 w-3';
 
   return (
-    <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
+    <PopoverPrimitive.Root
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        // A reopened popover starts clean — last run's outcome would read
+        // as the CURRENT state of a refresh that hasn't happened.
+        if (!o) setRefreshOutcome(null);
+      }}
+    >
       <PopoverPrimitive.Trigger asChild>
         <button
           type="button"
@@ -240,6 +280,16 @@ export function FreshnessBadge({
               Data may be out of date — consider refreshing.
             </div>
           )}
+          {refreshOutcome &&
+            (refreshOutcome.kind === 'error' ? (
+              <p role="alert" className="mt-2 text-xs text-destructive-soft-foreground">
+                {refreshOutcome.text}
+              </p>
+            ) : (
+              <p role="status" className="mt-2 text-xs text-warning-foreground">
+                {refreshOutcome.text}
+              </p>
+            ))}
           <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 text-xs">
             <button
               type="button"

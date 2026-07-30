@@ -154,6 +154,36 @@ describe('Section4_History', () => {
     expect(onSetStatus).toHaveBeenCalledWith('skipped');
   });
 
+  describe('created-entity chips', () => {
+    it('renders each added goal as a named chip on the Goals card', () => {
+      useGoalsStore.setState((s: any) => ({
+        ...s,
+        goals: [
+          { id: 1, name: 'House fund' },
+          { id: 2, name: 'Retire at 55' },
+        ],
+      }));
+      renderWithRouter();
+      const chips = screen.getByTestId('goals-chips');
+      expect(within(chips).getByText('House fund')).toBeInTheDocument();
+      expect(within(chips).getByText('Retire at 55')).toBeInTheDocument();
+    });
+
+    it('keeps snapshots and contributions count-only (no chip containers)', () => {
+      useSnapshotsStore.setState((s: any) => ({
+        ...s,
+        snapshots: [{ id: 1, accountId: 1, snapshotDate: '2026-01-01', totalValue: 100 }],
+      }));
+      useContributionsStore.setState((s: any) => ({
+        ...s,
+        contributions: [{ id: 1, accountId: 1, date: '2026-01-01', amount: 50 }],
+      }));
+      renderWithRouter();
+      expect(screen.queryByTestId('account-snapshots-chips')).toBeNull();
+      expect(screen.queryByTestId('contributions-chips')).toBeNull();
+    });
+  });
+
   describe('Section4_History — non-transactions cards', () => {
     beforeEach(() => {
       // Account snapshots + contributions imports are gated until at least

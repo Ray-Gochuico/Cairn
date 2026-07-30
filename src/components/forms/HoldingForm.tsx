@@ -43,6 +43,49 @@ function fromForm(values: HoldingRowFormValues): HoldingFormValues {
   };
 }
 
+export interface HoldingRowHeaderProps {
+  /**
+   * If true, append the "(margin allowed — sum can exceed 100%)" hint to the
+   * Target % title. The Manage surface ties this to the selected account;
+   * the wizard has no margin UI and leaves it off.
+   */
+  allowMarginHint?: boolean;
+  /**
+   * Label for the right-aligned actions column (e.g. "Actions" on the Manage
+   * surface). Omit where the only action is the row's own submit button.
+   */
+  actionsLabel?: string;
+}
+
+/**
+ * Column-title row for HoldingForm's 12-col grid. Shared between the
+ * Investments Manage surface (HoldingsPanel) and the SetupWizard's
+ * "Add a holding" dialog so the header and the form row can't drift
+ * apart (W19: the wizard dialog used to render the row with no titles).
+ * Keep the col-spans in lockstep with the form row below.
+ */
+export function HoldingRowHeader({
+  allowMarginHint,
+  actionsLabel,
+}: HoldingRowHeaderProps) {
+  return (
+    <div className="grid grid-cols-12 gap-2 text-xs text-muted-foreground uppercase tracking-wider pb-2 border-b">
+      <div className="col-span-2">Ticker</div>
+      <div className="col-span-2">Shares</div>
+      <div className="col-span-2">
+        Target %
+        {allowMarginHint && (
+          <span className="ml-1 normal-case tracking-normal text-[10px] text-muted-foreground/80">
+            (margin allowed — sum can exceed 100%)
+          </span>
+        )}
+      </div>
+      <div className="col-span-2">Cost basis</div>
+      <div className="col-span-4 text-right">{actionsLabel}</div>
+    </div>
+  );
+}
+
 export interface HoldingFormProps {
   initial: HoldingFormValues;
   onSave: (next: HoldingFormValues) => Promise<void>;
@@ -66,7 +109,7 @@ export interface HoldingFormProps {
  * Standalone single-row holding form. Used by the Investments Manage
  * surface (HoldingsPanel) and the
  * SetupWizard Step 5 onboarding flow. Renders as a 12-col grid row;
- * the caller supplies a column header row if it wants one.
+ * the caller renders <HoldingRowHeader> above it for the column titles.
  */
 export default function HoldingForm({
   initial,
@@ -144,7 +187,9 @@ export default function HoldingForm({
           }
           type="number"
           step="1"
-          placeholder="30"
+          // "%" not "30": with a visible Target % title above the column, a
+          // numeric placeholder reads like a prefilled value (W19 polish).
+          placeholder="%"
           className="text-right tabular-nums"
           {...form.register('targetAllocationPctPercent', { setValueAs: nullableNumber })}
         />

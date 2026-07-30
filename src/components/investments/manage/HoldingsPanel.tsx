@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
-import { useTickersStore } from '@/stores/tickers-store';
 import { Card, CardContent } from '@/components/ui/card';
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import { useLoadGate } from '@/lib/use-load-gate';
 import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import { TabLoadingSkeleton } from '@/components/inputs/TabLoadingSkeleton';
-import HoldingForm, { type HoldingFormValues } from '@/components/forms/HoldingForm';
+import HoldingForm, {
+  HoldingRowHeader,
+  type HoldingFormValues,
+} from '@/components/forms/HoldingForm';
 import { ImportCsvButton } from '@/components/import/ImportCsvButton';
-import { enrichTickerIfMissing } from '@/market/ticker-enrichment';
-import { YahooClient } from '@/market/yahoo-client';
-import { TickersRepo } from '@/domain/tickers';
+import { fetchMarketDataOnAdd } from '@/market/fetch-on-add';
 import { getDatabase } from '@/db/db';
 import { validateAccountTargetPct } from '@/lib/holdings-validation';
 
@@ -24,7 +24,6 @@ import { validateAccountTargetPct } from '@/lib/holdings-validation';
 export default function HoldingsPanel() {
   const { accounts, load: loadAccounts, isLoading: accountsLoading, error: accountsError } = useAccountsStore();
   const { holdings, load: loadHoldings, create, update, remove, isLoading: holdingsLoading, error: holdingsError } = useHoldingsStore();
-  const loadTickers = useTickersStore((s) => s.load);
   const { confirm, dialog } = useConfirm();
   const [selectedAccountId, setSelectedAccountId] = useState<number | null>(null);
 
@@ -145,20 +144,10 @@ export default function HoldingsPanel() {
         <CardContent className="pt-4">
           <div className="overflow-x-auto">
             <div className="min-w-[640px]">
-              <div className="grid grid-cols-12 gap-2 text-xs text-muted-foreground uppercase tracking-wider pb-2 border-b">
-                <div className="col-span-2">Ticker</div>
-                <div className="col-span-2">Shares</div>
-                <div className="col-span-2">
-                  Target %
-                  {selectedAccount?.allowMargin && (
-                    <span className="ml-1 normal-case tracking-normal text-[10px] text-muted-foreground/80">
-                      (margin allowed — sum can exceed 100%)
-                    </span>
-                  )}
-                </div>
-                <div className="col-span-2">Cost basis</div>
-                <div className="col-span-4 text-right">Actions</div>
-              </div>
+              <HoldingRowHeader
+                allowMarginHint={selectedAccount?.allowMargin ?? false}
+                actionsLabel="Actions"
+              />
 
               {accountHoldings.length === 0 ? (
                 <div className="py-6 text-center text-sm text-muted-foreground border-b">
@@ -182,6 +171,13 @@ export default function HoldingsPanel() {
                         targetAllocationPct: next.targetAllocationPct,
                         costBasis: next.costBasis,
                       });
+                      // W19 fetch-on-add: a ticker CHANGE is effectively a new
+                      // ticker — price/enrich/re-derive without waiting for
+                      // the next cadence-due refresh. Share/target edits skip
+                      // it (nothing new to fetch).
+                      if (next.ticker !== h.ticker) {
+                        fetchMarketDataOnAdd(getDatabase());
+                      }
                     }}
                     onDelete={async () => {
                       const ok = await confirm({
@@ -206,17 +202,11 @@ export default function HoldingsPanel() {
                   initial={newRowInitial}
                   onSave={async (next) => {
                     await create({ ...next, accountId: selectedAccountId ?? accounts[0].id! });
-                    void (async () => {
-                      try {
-                        await enrichTickerIfMissing(next.ticker, {
-                          yahoo: new YahooClient(),
-                          tickers: new TickersRepo(getDatabase()),
-                        });
-                        await loadTickers();
-                      } catch {
-                        // best-effort
-                      }
-                    })();
+                    // W19 fetch-on-add: the full refresh supersets the old
+                    // bespoke enrich IIFE — it enriches the new ticker AND
+                    // prices it AND re-derives the account snapshot, then
+                    // refeeds the tickers/snapshots/fund stores itself.
+                    fetchMarketDataOnAdd(getDatabase());
                   }}
                   onValidateSubmit={buildValidator(null)}
                   allowMarginHint={selectedAccount?.allowMargin ?? false}

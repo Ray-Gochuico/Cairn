@@ -4,7 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useSettingsStore } from '@/stores/settings-store';
 import { getDatabase } from '@/db/db';
-import { runMarketDataRefresh } from '@/market/run-market-data-refresh';
+import {
+  runMarketDataRefresh,
+  type MarketDataRefreshResult,
+} from '@/market/run-market-data-refresh';
 import { RefreshCadence } from '@/types/enums';
 
 const selectClass =
@@ -24,6 +27,36 @@ function formatLastRefreshed(iso: string | null): string {
   return parsed.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
+/**
+ * W19: the tickers that couldn't be priced, parsed from the snapshot
+ * branch's per-ticker error strings ("<accountId>/<ticker>: <message>").
+ */
+function unpriceableTickers(snapshot: MarketDataRefreshResult['snapshot']): string[] {
+  if (snapshot.status !== 'ok') return [];
+  const tickers = snapshot.result.errors
+    .map((e) => e.split(':')[0]?.split('/')[1])
+    .filter((t): t is string => Boolean(t));
+  return [...new Set(tickers)];
+}
+
+/**
+ * W19: honest partial-refresh copy. deriveTodaysSnapshot deliberately holds
+ * back an account's WHOLE snapshot when any of its holdings fails to price
+ * (never an under-counted AUTO_DERIVED row) — say so, naming the tickers.
+ * Exported for the freshness-badge popover so both refresh surfaces speak
+ * the same copy (W19 review: one parse, not two).
+ */
+export function partialWarning(result: MarketDataRefreshResult): string | null {
+  if (result.snapshot.status !== 'ok') return null;
+  const { partial } = result.snapshot.result;
+  if (partial.length === 0) return null;
+  const tickers = unpriceableTickers(result.snapshot);
+  const who = tickers.length > 0 ? tickers.join(', ') : 'some holdings';
+  return partial.length === 1
+    ? `Couldn't price ${who} — this account's total was left unchanged.`
+    : `Couldn't price ${who} — ${partial.length} accounts' totals were left unchanged.`;
+}
+
 export function RefreshSection() {
   const settings = useSettingsStore((s) => s.settings);
   const load = useSettingsStore((s) => s.load);
@@ -32,6 +65,9 @@ export function RefreshSection() {
   // Round-3 E5: a failed refresh surfaces here instead of silently reading
   // as fresh via a premature stamp.
   const [refreshError, setRefreshError] = useState<string | null>(null);
+  // W19: a COMPLETED refresh that couldn't price some tickers reports the
+  // held-back accounts here (warning, not failure — the stamp still lands).
+  const [refreshWarning, setRefreshWarning] = useState<string | null>(null);
 
   useEffect(() => {
     void load();
@@ -39,15 +75,28 @@ export function RefreshSection() {
 
   const cadence = settings?.refreshCadence ?? RefreshCadence.DAILY;
 
-  // Round-3 E5: the stamp means "a refresh COMPLETED", so await the refresh
-  // and stamp after — a rejected refresh must not read as fresh. update()
-  // re-loads the store, so the "Last refreshed" line refreshes.
+  // Round-3 E5 + W19: the stamp means "prices were actually refreshed", so
+  // GENUINELY await the refresh (the aggregate resolves only after all three
+  // branches settle) and stamp after. Policy pinned by tests:
+  //   - snapshot branch ok, some accounts partial → stamp AND name the
+  //     unpriceable tickers (a completed attempt, honestly reported);
+  //   - snapshot branch failed outright → no stamp, failure copy (nothing
+  //     about account values is fresher than before);
+  //   - the await itself throwing (defensive; the aggregate never rejects)
+  //     → no stamp, failure copy.
+  // update() re-loads the store, so the "Last refreshed" line refreshes.
   const handleRefreshNow = async () => {
     setRefreshing(true);
     setRefreshError(null);
+    setRefreshWarning(null);
     try {
-      await runMarketDataRefresh(getDatabase());
+      const result = await runMarketDataRefresh(getDatabase());
+      if (result.snapshot.status === 'error') {
+        setRefreshError(result.snapshot.error);
+        return;
+      }
       await update({ lastRefreshAt: new Date().toISOString() });
+      setRefreshWarning(partialWarning(result));
     } catch (e) {
       setRefreshError(e instanceof Error ? e.message : 'Refresh failed');
     } finally {
@@ -103,6 +152,14 @@ export function RefreshSection() {
           {refreshError && (
             <p role="alert" className="text-sm text-destructive-soft-foreground">
               Refresh failed: {refreshError}. The last-refreshed time was not updated.
+            </p>
+          )}
+          {refreshWarning && (
+            <p
+              role="status"
+              className="rounded-md border border-warning/40 bg-warning-soft px-3 py-2 text-sm text-warning-foreground"
+            >
+              {refreshWarning}
             </p>
           )}
         </div>

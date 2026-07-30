@@ -115,6 +115,76 @@ describe('Section2_WhatYouOwn', () => {
     expect(onSetStatus).toHaveBeenCalledWith('skipped');
   });
 
+  describe('created-entity chips', () => {
+    it('renders named chips for every entity type added in this section', () => {
+      const base = {
+        isLoading: false,
+        error: null,
+        load: async () => {},
+        create: async () => 1,
+        update: async () => {},
+        remove: async () => {},
+      };
+      useAccountsStore.setState({
+        accounts: [
+          { id: 1, name: 'Fidelity Brokerage' },
+          { id: 2, name: 'Chase Checking' },
+        ],
+        ...base,
+      } as any);
+      useHoldingsStore.setState({
+        holdings: [{ id: 1, accountId: 1, ticker: 'VTI', shareCount: 10 }],
+        ...base,
+      } as any);
+      usePropertiesStore.setState({
+        properties: [{ id: 1, name: 'Maple St house' }],
+        ...base,
+      } as any);
+      useHousingPaymentsStore.setState({
+        housingPayments: [{ id: 1, name: 'Apartment rent' }],
+        ...base,
+      } as any);
+      useVehiclesStore.setState({
+        vehicles: [{ id: 1, name: 'Corolla' }],
+        ...base,
+      } as any);
+      useVehicleLeasesStore.setState({
+        vehicleLeases: [{ id: 1, name: 'Leaf lease' }],
+        ...base,
+      } as any);
+      useEquityGrantsStore.setState({
+        equityGrants: [{ id: 1, name: 'RSU 2024' }],
+        ...base,
+      } as any);
+      render(
+        <MemoryRouter>
+          <Section2_WhatYouOwn status="in_progress" onSetStatus={() => {}} />
+        </MemoryRouter>,
+      );
+      const chipsOf = (testId: string) => screen.getByTestId(testId);
+      expect(within(chipsOf('accounts-chips')).getByText('Fidelity Brokerage')).toBeInTheDocument();
+      expect(within(chipsOf('accounts-chips')).getByText('Chase Checking')).toBeInTheDocument();
+      expect(within(chipsOf('holdings-chips')).getByText('VTI')).toBeInTheDocument();
+      expect(within(chipsOf('properties-chips')).getByText('Maple St house')).toBeInTheDocument();
+      expect(
+        within(chipsOf('rent-housing-payment-chips')).getByText('Apartment rent'),
+      ).toBeInTheDocument();
+      expect(within(chipsOf('vehicles-chips')).getByText('Corolla')).toBeInTheDocument();
+      expect(within(chipsOf('vehicle-lease-chips')).getByText('Leaf lease')).toBeInTheDocument();
+      expect(within(chipsOf('equity-grants-chips')).getByText('RSU 2024')).toBeInTheDocument();
+    });
+
+    it('renders no chip containers when nothing has been added', () => {
+      render(
+        <MemoryRouter>
+          <Section2_WhatYouOwn status="in_progress" onSetStatus={() => {}} />
+        </MemoryRouter>,
+      );
+      expect(screen.queryByTestId('accounts-chips')).toBeNull();
+      expect(screen.queryByTestId('holdings-chips')).toBeNull();
+    });
+  });
+
   describe('Section2_WhatYouOwn — import buttons enabled', () => {
     beforeEach(() => {
       // Holdings import is gated until at least one account exists (W7).

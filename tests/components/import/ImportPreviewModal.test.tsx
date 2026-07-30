@@ -7,6 +7,13 @@ vi.mock('@/lib/import/commit', () => ({
   commitSnapshotImport: vi.fn().mockResolvedValue({ inserted: 1, updated: 0, skipped: 0 }),
 }));
 
+vi.mock('@/lib/import/commit/holding', () => ({
+  commitHoldingImport: vi.fn().mockResolvedValue({ inserted: 1, updated: 0, skipped: 0 }),
+}));
+
+// W19 fetch-on-add: a committed holding import requests a market-data refresh.
+vi.mock('@/market/fetch-on-add', () => ({ fetchMarketDataOnAdd: vi.fn() }));
+
 vi.mock('@/stores/snapshots-store', () => ({
   useSnapshotsStore: Object.assign(
     (selector: (s: { load: () => Promise<void> }) => unknown) =>
@@ -187,6 +194,54 @@ describe('ImportPreviewModal queuePosition + onSaved props', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: /^commit/i }));
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+  });
+});
+
+describe('ImportPreviewModal — holding commit fires fetch-on-add (W19)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('requests one market-data refresh after a committed holding import', async () => {
+    const onOpenChange = vi.fn();
+    render(
+      <ImportPreviewModal
+        entity="holding"
+        parsed={{
+          headers: ['account_name', 'ticker', 'share_count'],
+          rows: [{ account_name: 'Brokerage', ticker: 'AAPL', share_count: '10' }],
+          errors: [],
+        }}
+        ctx={{ accounts: [{ id: 10, name: 'Brokerage' }] }}
+        open
+        onOpenChange={onOpenChange}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^commit/i }));
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+
+    const { commitHoldingImport } = await import('@/lib/import/commit/holding');
+    expect(commitHoldingImport).toHaveBeenCalled();
+    const { fetchMarketDataOnAdd } = await import('@/market/fetch-on-add');
+    expect(fetchMarketDataOnAdd).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT request a refresh for a non-holding commit (snapshot)', async () => {
+    const onOpenChange = vi.fn();
+    render(
+      <ImportPreviewModal
+        entity="snapshot"
+        parsed={cleanParsed}
+        ctx={{ accounts }}
+        open
+        onOpenChange={onOpenChange}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^commit/i }));
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+
+    const { fetchMarketDataOnAdd } = await import('@/market/fetch-on-add');
+    expect(fetchMarketDataOnAdd).not.toHaveBeenCalled();
   });
 });
 

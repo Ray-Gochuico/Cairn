@@ -2,9 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
 import HoldingFormImpl, {
+  HoldingRowHeader,
   type HoldingFormValues,
 } from '@/components/forms/HoldingForm';
 import { Label } from '@/components/ui/label';
+import { fetchMarketDataOnAdd } from '@/market/fetch-on-add';
+import { getDatabase } from '@/db/db';
 
 interface Props {
   onSaved?: () => void;
@@ -73,18 +76,29 @@ export default function HoldingForm({ onSaved }: Props) {
         </select>
       </div>
 
-      <HoldingFormImpl
-        key={selectedAccountId ?? 'none'}
-        initial={initial}
-        onSave={async (next) => {
-          await create({
-            ...next,
-            accountId: selectedAccountId ?? accounts[0].id!,
-          });
-          onSaved?.();
-        }}
-        saveLabel="Add holding"
-      />
+      <div>
+        {/* Visible column titles above the row — the dialog's inputs were
+            placeholder-only without them (W19). No margin hint here: the
+            wizard has no allowMargin UI. */}
+        <HoldingRowHeader />
+        <HoldingFormImpl
+          key={selectedAccountId ?? 'none'}
+          initial={initial}
+          onSave={async (next) => {
+            await create({
+              ...next,
+              accountId: selectedAccountId ?? accounts[0].id!,
+            });
+            // W19 fetch-on-add: price + enrich the new ticker and re-derive
+            // the account snapshot now, not at the next cadence-due refresh
+            // (up to 24h/7d/never away) — otherwise onboarding holdings show
+            // $0 until then.
+            fetchMarketDataOnAdd(getDatabase());
+            onSaved?.();
+          }}
+          saveLabel="Add holding"
+        />
+      </div>
     </div>
   );
 }

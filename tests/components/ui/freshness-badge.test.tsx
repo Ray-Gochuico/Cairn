@@ -1,10 +1,19 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+
+vi.mock('@/market/run-market-data-refresh', () => ({
+  runMarketDataRefresh: vi.fn(),
+}));
+vi.mock('@/db/db', () => ({ getDatabase: vi.fn(() => ({})) }));
+
+import { runMarketDataRefresh } from '@/market/run-market-data-refresh';
 import { FreshnessBadge } from '@/components/ui/freshness-badge';
 import { useSettingsStore } from '@/stores/settings-store';
 import { RefreshCadence } from '@/types/enums';
 import type { AppSettings } from '@/types/schema';
+
+const mRefresh = runMarketDataRefresh as unknown as ReturnType<typeof vi.fn>;
 
 /**
  * Build a minimal AppSettings stub for tests. Only fields the badge reads
@@ -234,6 +243,129 @@ describe('FreshnessBadge', () => {
     await user.hover(screen.getByTestId('freshness-badge'));
     await waitFor(() => {
       expect(screen.getByTestId('freshness-refresh-now')).toBeInTheDocument();
+    });
+  });
+
+  it('W19: popover Refresh now stamps only AFTER the awaited refresh resolves', async () => {
+    vi.useRealTimers();
+    mRefresh.mockReset();
+    let resolveRefresh!: (r: unknown) => void;
+    mRefresh.mockImplementationOnce(
+      () => new Promise((r) => { resolveRefresh = r; }),
+    );
+    const update = vi.fn().mockResolvedValue(undefined);
+    useSettingsStore.setState({ update } as never);
+
+    const t = new Date(NOW.getTime() - 60 * 60 * 1000);
+    render(
+      <FreshnessBadge
+        lastRefreshAt={t.toISOString()}
+        cadence={RefreshCadence.DAILY}
+      />,
+    );
+    const user = userEvent.setup();
+    await user.hover(screen.getByTestId('freshness-badge'));
+    await waitFor(() => {
+      expect(screen.getByTestId('freshness-refresh-now')).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId('freshness-refresh-now'));
+
+    // In flight: the refresh has been started but the stamp must NOT have
+    // landed yet — 'Updated just now' over stale prices is the round-3 E5
+    // lie this fixes.
+    expect(mRefresh).toHaveBeenCalledTimes(1);
+    expect(update).not.toHaveBeenCalled();
+
+    resolveRefresh({
+      fundSync: { status: 'ok', result: { refreshed: [], skipped: [], errors: [] } },
+      enrichment: { status: 'ok', result: { enriched: 0 } },
+      snapshot: { status: 'ok', result: { upserted: [1], skipped: [], partial: [], errors: [] } },
+    });
+    await waitFor(() => {
+      expect(update).toHaveBeenCalledWith(
+        expect.objectContaining({ lastRefreshAt: expect.any(String) }),
+      );
+    });
+  });
+
+  it('W19: popover Refresh now does NOT stamp when the snapshot branch fails', async () => {
+    vi.useRealTimers();
+    mRefresh.mockReset();
+    mRefresh.mockResolvedValueOnce({
+      fundSync: { status: 'ok', result: { refreshed: [], skipped: [], errors: [] } },
+      enrichment: { status: 'ok', result: { enriched: 0 } },
+      snapshot: { status: 'error', error: 'Yahoo unreachable' },
+    });
+    const update = vi.fn().mockResolvedValue(undefined);
+    useSettingsStore.setState({ update } as never);
+
+    const t = new Date(NOW.getTime() - 60 * 60 * 1000);
+    render(
+      <FreshnessBadge
+        lastRefreshAt={t.toISOString()}
+        cadence={RefreshCadence.DAILY}
+      />,
+    );
+    const user = userEvent.setup();
+    await user.hover(screen.getByTestId('freshness-badge'));
+    await waitFor(() => {
+      expect(screen.getByTestId('freshness-refresh-now')).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId('freshness-refresh-now'));
+
+    await waitFor(() => expect(mRefresh).toHaveBeenCalledTimes(1));
+    // W19 review: failure is never silent — the popover stays open with an
+    // alert pointing at the surface that has the details, and no stamp.
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/refresh failed/i);
+    expect(alert).toHaveTextContent(/settings → market data/i);
+    expect(screen.getByTestId('freshness-refresh-now')).toBeInTheDocument();
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('W19 review: a partial refresh keeps the popover open, names the tickers, and still stamps', async () => {
+    vi.useRealTimers();
+    mRefresh.mockReset();
+    mRefresh.mockResolvedValueOnce({
+      fundSync: { status: 'ok', result: { refreshed: [], skipped: [], errors: [] } },
+      enrichment: { status: 'ok', result: { enriched: 0 } },
+      snapshot: {
+        status: 'ok',
+        result: {
+          upserted: [1],
+          skipped: [],
+          partial: [7],
+          errors: ['7/XYZ: No quote data for XYZ'],
+        },
+      },
+    });
+    const update = vi.fn().mockResolvedValue(undefined);
+    useSettingsStore.setState({ update } as never);
+
+    const t = new Date(NOW.getTime() - 60 * 60 * 1000);
+    render(
+      <FreshnessBadge
+        lastRefreshAt={t.toISOString()}
+        cadence={RefreshCadence.DAILY}
+      />,
+    );
+    const user = userEvent.setup();
+    await user.hover(screen.getByTestId('freshness-badge'));
+    await waitFor(() => {
+      expect(screen.getByTestId('freshness-refresh-now')).toBeInTheDocument();
+    });
+    await user.click(screen.getByTestId('freshness-refresh-now'));
+
+    // Same partial copy RefreshSection shows (shared helper, not a re-parse).
+    const warning = await screen.findByText(/couldn't price XYZ/i);
+    expect(warning).toHaveTextContent(/left unchanged/i);
+    // Popover stays open so the message is actually seen…
+    expect(screen.getByTestId('freshness-refresh-now')).toBeInTheDocument();
+    // …and the stamp still lands (completed attempt — RefreshSection policy).
+    await waitFor(() => {
+      expect(update).toHaveBeenCalledWith(
+        expect.objectContaining({ lastRefreshAt: expect.any(String) }),
+      );
     });
   });
 

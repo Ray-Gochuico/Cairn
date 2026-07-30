@@ -7,35 +7,63 @@ import { FundSectorsRepo } from '@/domain/fund-sectors';
 import { TickersRepo } from '@/domain/tickers';
 import { PriceCache } from '@/market/price-cache';
 import { YahooClient } from '@/market/yahoo-client';
-import { deriveTodaysSnapshot } from '@/market/daily-snapshot';
-import { syncStaleFunds } from '@/market/fund-holdings-sync';
+import { deriveTodaysSnapshot, type DailySnapshotResult } from '@/market/daily-snapshot';
+import { syncStaleFunds, type SyncResult } from '@/market/fund-holdings-sync';
 import { enrichTickerIfMissing } from '@/market/ticker-enrichment';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useFundHoldingsStore } from '@/stores/fund-holdings-store';
 import { useFundSectorsStore } from '@/stores/fund-sectors-store';
 import { useTickersStore } from '@/stores/tickers-store';
 
+/** One branch's outcome: its result, or the error it swallowed (W19). */
+export type RefreshBranchOutcome<T> =
+  | { status: 'ok'; result: T }
+  | { status: 'error'; error: string };
+
+/**
+ * Aggregate outcome of the three refresh branches (W19). Callers that care
+ * (Settings "Refresh now", the freshness-badge popover) await it and report;
+ * the launch path keeps ignoring it.
+ */
+export interface MarketDataRefreshResult {
+  fundSync: RefreshBranchOutcome<SyncResult>;
+  enrichment: RefreshBranchOutcome<{ enriched: number }>;
+  snapshot: RefreshBranchOutcome<DailySnapshotResult>;
+}
+
+function toErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 /**
  * Run the three background market-data derivations — the stale fund-holdings
  * sync, the per-ticker sector/industry enrichment, and today's per-account
  * snapshot.
  *
- * Extracted from `init.ts` so both launch (`init.ts`, gated by
- * `isRefreshDue`) and the Settings "Refresh now" button call one
- * implementation. Each derivation runs in its own fire-and-forget IIFE that
- * swallows its own errors: a Yahoo failure in one branch must not block the
- * others, and none of them may crash startup. This function returns
- * immediately — it does NOT await the IIFEs — so the UI mounts without
- * waiting on the network. On a successful daily-snapshot derivation with
- * upserted rows, the snapshots store is reloaded so mounted dashboards
- * refeed.
+ * Extracted from `init.ts` so launch (`init.ts`, gated by `isRefreshDue`),
+ * the Settings "Refresh now" button, the freshness-badge popover, and the
+ * fetch-on-add path call one implementation. The three branches start
+ * concurrently and each swallows its own errors: a Yahoo failure in one
+ * branch must not block the others, and none of them may crash startup.
+ * The function returns synchronously with a promise — it does NOT block on
+ * the network before returning — so the UI mounts without waiting.
+ *
+ * W19 contract: the returned promise resolves once ALL THREE branches have
+ * settled, with each branch's result or swallowed error, and it NEVER
+ * rejects — init.ts keeps calling it fire-and-forget (`void run…`), while
+ * RefreshSection awaits it to stamp lastRefreshAt honestly and surface
+ * unpriceable tickers instead of resolving on the next microtask.
+ *
+ * On a successful daily-snapshot derivation with upserted rows, the
+ * snapshots store is reloaded so mounted dashboards refeed (same for the
+ * fund stores and the tickers store on their branches).
  */
-export function runMarketDataRefresh(db: Database): void {
+export function runMarketDataRefresh(db: Database): Promise<MarketDataRefreshResult> {
   // Refresh stale fund-of-funds holdings so the Concentration look-through
-  // sees up-to-date weights. Independent of snapshot derivation — kept in
-  // its own IIFE so a Yahoo failure in either branch doesn't block the
-  // other, and a partial-fail still leaves the UI responsive.
-  void (async () => {
+  // sees up-to-date weights. Independent of snapshot derivation — its own
+  // branch so a Yahoo failure in either doesn't block the other, and a
+  // partial-fail still leaves the UI responsive.
+  const fundSyncPromise = (async (): Promise<RefreshBranchOutcome<SyncResult>> => {
     try {
       const result = await syncStaleFunds({
         yahoo: new YahooClient(),
@@ -57,7 +85,7 @@ export function runMarketDataRefresh(db: Database): void {
         result.errors,
       );
       // Refeed mounted surfaces (round-2 C2, same convention as the
-      // daily-snapshot IIFE below): syncStaleFunds writes fund_holdings AND
+      // daily-snapshot branch below): syncStaleFunds writes fund_holdings AND
       // fund_sectors, so a successful refresh reloads both stores — the
       // manual Data-health path already did (DataHealthPopover). Only when
       // rows actually changed; load() de-dupes and swallows its own errors.
@@ -65,9 +93,11 @@ export function runMarketDataRefresh(db: Database): void {
         void useFundHoldingsStore.getState().load();
         void useFundSectorsStore.getState().load();
       }
+      return { status: 'ok', result };
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('[market] background fund-holdings sync failed:', err);
+      return { status: 'error', error: toErrorMessage(err) };
     }
   })();
 
@@ -78,9 +108,9 @@ export function runMarketDataRefresh(db: Database): void {
   // previous attempt returned null). Without this loop, tickers added
   // before the industry-donut feature stay "Unclassified" forever —
   // the spec § 5 explicitly promises the refresh path fixes this.
-  // Independent of snapshot derivation and fund sync — kept in its own
-  // IIFE so a Yahoo failure here doesn't block the others.
-  void (async () => {
+  // Independent of snapshot derivation and fund sync — its own branch so
+  // a Yahoo failure here doesn't block the others.
+  const enrichmentPromise = (async (): Promise<RefreshBranchOutcome<{ enriched: number }>> => {
     try {
       const holdings = new HoldingsRepo(db);
       const tickers = new TickersRepo(db);
@@ -97,27 +127,29 @@ export function runMarketDataRefresh(db: Database): void {
       // populated and swallows its own per-ticker errors, so this stays
       // O(network calls) only for the unenriched subset and one failure can't
       // abort the rest.
-      let wroteAny = false;
+      let enriched = 0;
       for (const ticker of distinctTickers) {
-        if (await enrichTickerIfMissing(ticker, { yahoo, tickers })) wroteAny = true;
+        if (await enrichTickerIfMissing(ticker, { yahoo, tickers })) enriched += 1;
       }
       // Refeed once after the serial loop (not per ticker): the tickers
       // store powers the unclassified banner + donut groupings, and a
       // single reload after N upserts is enough (round-2 C2).
-      if (wroteAny) {
+      if (enriched > 0) {
         void useTickersStore.getState().load();
       }
+      return { status: 'ok', result: { enriched } };
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('[market] background ticker enrichment failed:', err);
+      return { status: 'error', error: toErrorMessage(err) };
     }
   })();
 
   // Derive today's per-account snapshot so the dashboard shows current
   // totals immediately after boot. Independent of the 12-month backfill
-  // and fund sync — kept in its own IIFE so a failure in either doesn't
-  // block this, and vice versa.
-  void (async () => {
+  // and fund sync — its own branch so a failure in either doesn't block
+  // this, and vice versa.
+  const snapshotPromise = (async (): Promise<RefreshBranchOutcome<DailySnapshotResult>> => {
     try {
       const accounts = new AccountsRepo(db);
       const holdings = new HoldingsRepo(db);
@@ -130,7 +162,7 @@ export function runMarketDataRefresh(db: Database): void {
         result.upserted, result.skipped, result.errors,
       );
       // Refeed mounted surfaces (Wave 2 §3): a fresh AUTO_DERIVED row is
-      // invisible to stores hydrated before this IIFE landed — the dashboard
+      // invisible to stores hydrated before this branch landed — the dashboard
       // would show stale values under a fresh badge. Reload only when rows
       // actually changed; the store's in-flight de-dupe (createDedupedLoad,
       // create-entity-store.ts) makes an overlapping load a no-op, and
@@ -138,9 +170,18 @@ export function runMarketDataRefresh(db: Database): void {
       if (result.upserted.length > 0) {
         void useSnapshotsStore.getState().load();
       }
+      return { status: 'ok', result };
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('[market] daily snapshot derivation failed:', err);
+      return { status: 'error', error: toErrorMessage(err) };
     }
   })();
+
+  // Each branch resolves (never rejects), so this aggregate never rejects.
+  return (async () => ({
+    fundSync: await fundSyncPromise,
+    enrichment: await enrichmentPromise,
+    snapshot: await snapshotPromise,
+  }))();
 }

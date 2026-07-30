@@ -295,9 +295,14 @@ export default function Investments() {
   );
 
   // Unclassified-tickers banner inputs. A ticker counts as unclassified when
-  // it has no row in the `tickers` store, or its row exists but the human
-  // name was never set (name === null) — both states mean auto-classification
-  // didn't land and the donut groupings can't trust the asset_class column.
+  // it has no row in the `tickers` store, or its row is the enrichment-
+  // failure stub (name === null AND assetClass === 'OTHER', the exact shape
+  // ticker-enrichment writes when Yahoo errors) — only those states mean the
+  // donut groupings can't trust the asset_class column. name === null alone
+  // is NOT a failure: equities/crypto enrich successfully with a null name
+  // by construction (Yahoo's Morningstar category is null for quoteType
+  // EQUITY), so flagging on name alone branded every non-seeded stock
+  // "couldn't be auto-classified" forever (W19).
   // Building a Map once keeps the per-holding lookup O(1) across re-renders.
   const tickerByName = useMemo(
     () => new Map(tickers.map((t) => [t.ticker, t])),
@@ -307,7 +312,7 @@ export default function Investments() {
     const set = new Set<string>();
     for (const h of visibleHoldings) {
       const row = tickerByName.get(h.ticker);
-      if (!row || row.name === null) set.add(h.ticker);
+      if (!row || (row.name === null && row.assetClass === 'OTHER')) set.add(h.ticker);
     }
     return [...set].sort();
   }, [visibleHoldings, tickerByName]);

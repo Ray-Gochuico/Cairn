@@ -1,4 +1,10 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+vi.mock('@tauri-apps/plugin-dialog', () => ({ save: vi.fn() }));
+vi.mock('@tauri-apps/plugin-fs', () => ({ writeFile: vi.fn() }));
+
+import { save } from '@tauri-apps/plugin-dialog';
+import { writeFile } from '@tauri-apps/plugin-fs';
 import { toCsv, downloadCsv, type CsvColumn } from '@/lib/csv';
 import { parseCsv } from '@/lib/import/parse-csv';
 
@@ -104,8 +110,8 @@ describe('toCsv — formula-injection guard', () => {
   });
 });
 
-describe('downloadCsv', () => {
-  it('creates a text/csv blob and triggers an anchor download', () => {
+describe('downloadCsv — browser runtime', () => {
+  it('creates a text/csv blob and triggers an anchor download', async () => {
     let captured: Blob | undefined;
     const createSpy = vi
       .spyOn(URL, 'createObjectURL')
@@ -115,13 +121,61 @@ describe('downloadCsv', () => {
       });
     const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
 
-    downloadCsv('test.csv', 'a,b\n1,2');
+    await downloadCsv('test.csv', 'a,b\n1,2');
 
     expect(captured?.type).toBe('text/csv;charset=utf-8');
     expect(createSpy).toHaveBeenCalled();
     expect(revokeSpy).toHaveBeenCalled();
+    // The native-save path must not run outside Tauri.
+    expect(vi.mocked(save)).not.toHaveBeenCalled();
+    expect(vi.mocked(writeFile)).not.toHaveBeenCalled();
 
     createSpy.mockRestore();
     revokeSpy.mockRestore();
+  });
+});
+
+describe('downloadCsv — Tauri runtime (native save dialog + fs write)', () => {
+  beforeEach(() => {
+    // isTauriRuntime() probes exactly this marker (src/lib/tauri-runtime.ts).
+    (window as any).__TAURI_INTERNALS__ = {};
+    vi.mocked(save).mockReset();
+    vi.mocked(writeFile).mockReset();
+  });
+  afterEach(() => {
+    delete (window as any).__TAURI_INTERNALS__;
+  });
+
+  it('saves via the native dialog and plugin-fs writeFile, never the anchor path', async () => {
+    const createSpy = vi
+      .spyOn(URL, 'createObjectURL')
+      .mockImplementation(() => 'blob:mock');
+    vi.mocked(save).mockResolvedValue('/Users/you/Documents/test.csv');
+    vi.mocked(writeFile).mockResolvedValue(undefined as never);
+
+    await downloadCsv('test.csv', 'a,b\n1,2');
+
+    expect(vi.mocked(save)).toHaveBeenCalledWith({
+      defaultPath: 'test.csv',
+      filters: [{ name: 'CSV', extensions: ['csv'] }],
+    });
+    expect(vi.mocked(writeFile)).toHaveBeenCalledTimes(1);
+    const [dest, bytes] = vi.mocked(writeFile).mock.calls[0];
+    expect(dest).toBe('/Users/you/Documents/test.csv');
+    // Bytes must decode back to the exact CSV text (UTF-8).
+    expect(new TextDecoder().decode(bytes as Uint8Array)).toBe('a,b\n1,2');
+    // The browser download-manager path must NOT run in Tauri — WKWebView
+    // has no download manager, so it would be a silent no-op.
+    expect(createSpy).not.toHaveBeenCalled();
+
+    createSpy.mockRestore();
+  });
+
+  it('treats a cancelled save dialog as a clean no-op', async () => {
+    vi.mocked(save).mockResolvedValue(null);
+
+    await expect(downloadCsv('test.csv', 'a,b')).resolves.toBeUndefined();
+
+    expect(vi.mocked(writeFile)).not.toHaveBeenCalled();
   });
 });
