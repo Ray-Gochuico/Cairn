@@ -15,10 +15,14 @@ import {
   filterByOwnerPersonId,
 } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
+import { useViewScope } from '@/lib/use-view-scope';
+import { partitionHidden, type HiddenPartition } from '@/lib/view-scope';
 import { Button } from '@/components/ui/button';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import { EmptyState } from '@/components/layout/EmptyState';
+import { FilteredEmptyState } from '@/components/layout/FilteredEmptyState';
+import { ScopeCaption } from '@/components/layout/ScopeCaption';
 import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 import { FreshnessBadge } from '@/components/ui/freshness-badge';
 import AssetValueChart from '@/components/charts/AssetValueChart';
@@ -46,6 +50,7 @@ import { filterSnapshotsForNetWorth } from '@/lib/account-inclusion';
 
 export default function NetWorth() {
   const { filter, persons } = useViewFilter();
+  const { personName } = useViewScope();
 
   // W14 chart merge: the hero toggles between the whole-net-worth surface and
   // the (former Investments-page) investment-accounts surface. ?chart=
@@ -187,6 +192,27 @@ export default function NetWorth() {
     visibleProperties.length > 0 ||
     visibleVehicles.length > 0 ||
     visibleLoans.length > 0;
+  // Wave A D6 two-tier gate: onboarding copy only when the HOUSEHOLD is
+  // empty; a view that filtered everything out gets the count-aware tier-2
+  // state below, never "No net worth snapshots yet".
+  const hasAnyHouseholdData =
+    snapshots.length > 0 || properties.length > 0 || vehicles.length > 0 || loans.length > 0;
+
+  // Summed exclusion partition across the four ownable entity kinds — feeds
+  // both the tier-2 empty state and the nonempty ScopeCaption (C2).
+  const pagePartition = useMemo<HiddenPartition>(() => {
+    const parts = [
+      partitionHidden(accounts, visibleAccounts, (a) => a.ownerPersonId),
+      partitionHidden(properties, visibleProperties, (p) => p.ownerPersonId),
+      partitionHidden(vehicles, visibleVehicles, (v) => v.ownerPersonId),
+      partitionHidden(loans, visibleLoans, (l) => l.obligorPersonId),
+    ];
+    return parts.reduce((acc, p) => ({
+      total: acc.total + p.total, visibleCount: acc.visibleCount + p.visibleCount,
+      hiddenCount: acc.hiddenCount + p.hiddenCount, jointCount: acc.jointCount + p.jointCount,
+      otherCount: acc.otherCount + p.otherCount,
+    }));
+  }, [accounts, visibleAccounts, properties, visibleProperties, vehicles, visibleVehicles, loans, visibleLoans]);
 
   // Live LOCAL day (Wave 11 T9) — feeds both the as-of valuation and the
   // growth "now" so they never drift across a midnight flip.
@@ -222,7 +248,7 @@ export default function NetWorth() {
     );
   }
 
-  if (!hasAnyData) {
+  if (!hasAnyHouseholdData) {
     return (
       <PageContainer className="space-y-6">
         <div className="flex items-start justify-between gap-4">
@@ -258,6 +284,30 @@ export default function NetWorth() {
     );
   }
 
+  // Wave A D6 tier 2: the household HAS data, the active view hid all of it.
+  // Counts + "View household" — never onboarding copy, never an Add CTA.
+  if (!hasAnyData) {
+    return (
+      <PageContainer className="space-y-6">
+        <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold mb-1">Net Worth</h1>
+            <p className="text-sm text-muted-foreground">
+              Track your wealth over time across accounts, property, vehicles,
+              and debt.
+            </p>
+          </div>
+          <ImportCsvButton entity="snapshot" />
+        </div>
+        <FilteredEmptyState
+          noun="accounts, properties, vehicles, or loans"
+          partition={pagePartition}
+        />
+      </PageContainer>
+    );
+  }
+
   return (
     <PageContainer className="space-y-6">
       <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
@@ -270,6 +320,8 @@ export default function NetWorth() {
           <p className="text-sm text-muted-foreground">
             Investments include the latest confirmed snapshot per account.
           </p>
+          {/* Wave A C2: nonempty filtered views declare what the filter hid. */}
+          <ScopeCaption noun="items" partition={pagePartition} />
         </div>
         <ImportCsvButton entity="snapshot" />
       </div>
@@ -289,7 +341,12 @@ export default function NetWorth() {
       {/* Horizon chips (1d…1y), numerically consistent with the chart
           header in household view via the shared as-of factory above
           (diverges intentionally under a person filter). */}
-      <GrowthCard title="Net worth growth" horizons={netWorthGrowth} />
+      {/* Wave A D4: GrowthCard follows the visible* slices, so under a
+          filter its title names the scope. */}
+      <GrowthCard
+        title={`Net worth growth${filter === 'household' ? '' : filter === 'joint' ? ' · Joint' : ` · ${personName}`}`}
+        horizons={netWorthGrowth}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <AssetsDonut />

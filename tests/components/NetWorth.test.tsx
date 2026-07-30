@@ -199,6 +199,81 @@ describe('NetWorth page', () => {
     await db.close();
   });
 
+  describe('Wave A: person view (D4/D6)', () => {
+    async function primeTwoPersons() {
+      // Accounts carry an owner FK — the person rows must exist in the DB too.
+      await db.execute(
+        `INSERT INTO persons (id, household_id, name, date_of_birth, target_retirement_age, annual_salary_pretax, pretax_401k_pct)
+         VALUES (1, 1, 'Alice', '1990-01-01', 65, 0, 0), (2, 1, 'Bob', '1992-01-01', 65, 0, 0)`,
+      );
+      usePersonsStore.setState({
+        persons: [basePerson, { ...basePerson, id: 2, name: 'Bob' }],
+        isLoading: false,
+        error: null,
+      });
+    }
+
+    it('D6: populated household + emptying filter renders FilteredEmptyState, not onboarding', async () => {
+      await primeTwoPersons();
+      // Everything owned by Bob or joint — nothing in Alice's name.
+      const acct = await seedAccount(db, 'Bob Brokerage', 2);
+      await seedSnapshot(db, acct, '2024-06-28', 150000);
+      await seedProperty(db, 600000); // joint (ownerPersonId null)
+      render(
+        <MemoryRouter initialEntries={['/net-worth?view=p1']}>
+          <NetWorth />
+        </MemoryRouter>,
+      );
+      expect(
+        await screen.findByText("No accounts, properties, vehicles, or loans in Alice's name"),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/no net worth snapshots yet/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: /add an account/i })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'View household' })).toBeInTheDocument();
+      expect(screen.getByText('1 joint and 1 owned by Bob not shown.')).toBeInTheDocument();
+    });
+
+    it('true-empty household keeps the onboarding EmptyState (regression)', async () => {
+      await primeTwoPersons();
+      render(
+        <MemoryRouter initialEntries={['/net-worth?view=p1']}>
+          <NetWorth />
+        </MemoryRouter>,
+      );
+      expect(await screen.findByText(/no net worth snapshots yet/i)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /add an account/i })).toBeInTheDocument();
+    });
+
+    it('D4: GrowthCard title gains the person label under a filter', async () => {
+      await primeTwoPersons();
+      const acct = await seedAccount(db, 'Alice Brokerage', 1);
+      await seedSnapshot(db, acct, '2024-06-28', 150000);
+      render(
+        <MemoryRouter initialEntries={['/net-worth?view=p1']}>
+          <NetWorth />
+        </MemoryRouter>,
+      );
+      expect(await screen.findByText('Net worth growth · Alice')).toBeInTheDocument();
+    });
+
+    it('C2: nonempty filtered view declares hidden items under the header', async () => {
+      await primeTwoPersons();
+      const aliceAcct = await seedAccount(db, 'Alice Brokerage', 1);
+      await seedSnapshot(db, aliceAcct, '2024-06-28', 150000);
+      const bobAcct = await seedAccount(db, 'Bob Brokerage', 2);
+      await seedSnapshot(db, bobAcct, '2024-06-28', 90000);
+      await seedProperty(db, 600000); // joint
+      render(
+        <MemoryRouter initialEntries={['/net-worth?view=p1']}>
+          <NetWorth />
+        </MemoryRouter>,
+      );
+      expect(await screen.findByTestId('scope-caption')).toHaveTextContent(
+        "Showing Alice's items: 1 of 3 — 1 joint and 1 owned by Bob not shown.",
+      );
+    });
+  });
+
   it('renders the empty state when there is no data', async () => {
     render(
       <MemoryRouter>

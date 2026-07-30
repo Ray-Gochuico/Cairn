@@ -589,6 +589,22 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
     [eligibleAccounts, eligibleProperties, eligibleVehicles, eligibleLoans],
   );
 
+  // Wave A C26 (investments surface only): when the ?view filter — not the
+  // household — emptied the eligible set, the empty state must name the
+  // hidden accounts instead of showing onboarding copy + an Add CTA.
+  const householdEligibleAccountCount = useMemo(
+    () =>
+      cfg.respectViewFilter
+        ? accounts.filter(
+            (a) =>
+              a.id != null &&
+              !a.excludedFromNetWorth &&
+              snapshots.some((s) => s.accountId === a.id),
+          ).length
+        : 0,
+    [accounts, snapshots, cfg.respectViewFilter],
+  );
+
   // ----- State -----
   const [window_, setWindow] = useState<TimeWindow>('1Y');
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
@@ -1141,12 +1157,24 @@ export default function AssetValueChart({ surface }: AssetValueChartProps) {
 
           {/* ----- Body: empty states or the area chart ----- */}
           {!hasEligible ? (
-            <div className="py-8 text-center space-y-3">
-              <p className="text-sm text-muted-foreground">{cfg.emptyCopy}</p>
-              <Button asChild size="sm" variant="outline">
-                <Link to="/investments?manage=accounts">Add an account</Link>
-              </Button>
-            </div>
+            cfg.respectViewFilter && filter !== 'household' && householdEligibleAccountCount > 0 ? (
+              // Wave A C26: the VIEW emptied the set, not the household —
+              // name the hidden accounts; no Add CTA (that's onboarding copy).
+              <div className="py-8 text-center">
+                <p className="text-sm text-muted-foreground">
+                  {filter === 'joint'
+                    ? `No joint investment accounts — ${householdEligibleAccountCount} household account${householdEligibleAccountCount === 1 ? '' : 's'} not shown.`
+                    : `No investment accounts in ${filter === 'p1' ? persons[0]?.name : persons[1]?.name}'s name — ${householdEligibleAccountCount} household account${householdEligibleAccountCount === 1 ? '' : 's'} not shown.`}
+                </p>
+              </div>
+            ) : (
+              <div className="py-8 text-center space-y-3">
+                <p className="text-sm text-muted-foreground">{cfg.emptyCopy}</p>
+                <Button asChild size="sm" variant="outline">
+                  <Link to="/investments?manage=accounts">Add an account</Link>
+                </Button>
+              </div>
+            )
           ) : !hasSelection ? (
             <p className="text-sm text-muted-foreground py-8 text-center">
               Select at least one account, property, vehicle, or loan.

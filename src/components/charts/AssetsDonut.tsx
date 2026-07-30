@@ -11,7 +11,9 @@ import {
   latestSnapshotForAccount,
 } from '@/lib/latest-value';
 import { formatCurrency } from '@/lib/format';
-import { useViewFilter } from '@/lib/use-view-filter';
+import { useViewScope } from '@/lib/use-view-scope';
+import { filterByOwnerPersonId } from '@/lib/filter-by-view';
+import { partitionHidden } from '@/lib/view-scope';
 import { entityKey } from '@/lib/entity-key';
 import { colorForAccount, colorForEntityKey } from '@/lib/chart-colors';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -34,10 +36,13 @@ const STORAGE_KEY = 'donut.assets.hidden';
  * use `entityKey(kind, id)` so account/property/vehicle ids never collide.
  */
 export default function AssetsDonut() {
-  // W10 T7: this donut is household-wide BY DESIGN. Flag that with the same
-  // "· Household" suffix AssetValueChart uses when a person view is active.
-  const { filter } = useViewFilter();
-  const title = filter !== 'household' ? 'Assets · Household' : 'Assets';
+  // Wave A D4 (supersedes W10 T7): this donut GENUINELY filters by the
+  // person view now — every input entity (account/property/vehicle) is
+  // ownable, so the data is scoped and the '· Household' suffix is gone.
+  // A filtered-to-empty view names the hidden counts (C27) instead of the
+  // onboarding copy. (PerTickerDonut/SectorDonut stay household — protected.)
+  const { filter, isFiltered, personName, persons } = useViewScope();
+  const title = 'Assets';
   const accounts = useAccountsStore((s) => s.accounts);
   const loadAccounts = useAccountsStore((s) => s.load);
   const snapshots = useSnapshotsStore((s) => s.snapshots);
@@ -64,6 +69,34 @@ export default function AssetsDonut() {
     loadVehicles,
     loadAssetValueSnapshots,
   ]);
+
+  // Wave A D4: the slice universe honors the ?view person filter.
+  const visibleAccounts = useMemo(
+    () => filterByOwnerPersonId(accounts, filter, persons),
+    [accounts, filter, persons],
+  );
+  const visibleProperties = useMemo(
+    () => filterByOwnerPersonId(properties, filter, persons),
+    [properties, filter, persons],
+  );
+  const visibleVehicles = useMemo(
+    () => filterByOwnerPersonId(vehicles, filter, persons),
+    [vehicles, filter, persons],
+  );
+  // Exclusion counts for the C27 filtered-empty line (full entity lists —
+  // an owned-but-zero-value entity is still an item the view is hiding).
+  const hiddenPartition = useMemo(() => {
+    const parts = [
+      partitionHidden(accounts, visibleAccounts, (a) => a.ownerPersonId),
+      partitionHidden(properties, visibleProperties, (p) => p.ownerPersonId),
+      partitionHidden(vehicles, visibleVehicles, (v) => v.ownerPersonId),
+    ];
+    return parts.reduce((acc, p) => ({
+      total: acc.total + p.total, visibleCount: acc.visibleCount + p.visibleCount,
+      hiddenCount: acc.hiddenCount + p.hiddenCount, jointCount: acc.jointCount + p.jointCount,
+      otherCount: acc.otherCount + p.otherCount,
+    }));
+  }, [accounts, visibleAccounts, properties, visibleProperties, vehicles, visibleVehicles]);
 
   // Build the donut slices AND the parallel picker items in one pass so the
   // slice name and the picker key stay perfectly aligned. The picker key
@@ -92,7 +125,7 @@ export default function AssetsDonut() {
       pi.push({ key, label: name, color });
     }
 
-    for (const acc of accounts) {
+    for (const acc of visibleAccounts) {
       if (acc.id == null) continue;
       if (acc.excludedFromNetWorth) continue;
       const value = latestSnapshotForAccount(acc.id, snapshots, today);
@@ -105,7 +138,7 @@ export default function AssetsDonut() {
         );
       }
     }
-    for (const p of properties) {
+    for (const p of visibleProperties) {
       if (p.id == null) continue;
       if (p.excludedFromNetWorth) continue;
       const value = latestAssetValue(
@@ -120,7 +153,7 @@ export default function AssetsDonut() {
         push(p.name, value, key, colorForEntityKey(key));
       }
     }
-    for (const v of vehicles) {
+    for (const v of visibleVehicles) {
       if (v.id == null) continue;
       if (v.excludedFromNetWorth) continue;
       const value = latestAssetValue(
@@ -136,7 +169,7 @@ export default function AssetsDonut() {
       }
     }
     return { slices: sl, pickerItems: pi };
-  }, [accounts, snapshots, properties, vehicles, assetValueSnapshots]);
+  }, [visibleAccounts, snapshots, visibleProperties, visibleVehicles, assetValueSnapshots]);
 
   const allKeys = useMemo(() => pickerItems.map((i) => i.key), [pickerItems]);
   const selected = useDonutSelected(STORAGE_KEY, allKeys);
@@ -151,9 +184,10 @@ export default function AssetsDonut() {
   // never re-normalizes the shares that remain.
   const fullTotal = useMemo(() => slices.reduce((s, x) => s + x.value, 0), [slices]);
 
-  // When there's nothing to chart at all (no entities upstream), render a
-  // calm empty-state card. Picker would have nothing to select so we skip
-  // it.
+  // When there's nothing to chart, render a calm empty-state card. Two-tier
+  // (Wave A C27): a view that hid everything names the counts; only a truly
+  // empty household gets the onboarding copy. Picker would have nothing to
+  // select so we skip it.
   if (slices.length === 0) {
     return (
       <Card>
@@ -161,7 +195,11 @@ export default function AssetsDonut() {
           <CardTitle>{title}</CardTitle>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground">
-          No assets recorded yet.
+          {isFiltered && hiddenPartition.hiddenCount > 0
+            ? filter === 'joint'
+              ? `No joint assets — ${hiddenPartition.otherCount} individually owned not shown.`
+              : `No assets in ${personName}'s name — ${hiddenPartition.hiddenCount} household item${hiddenPartition.hiddenCount === 1 ? '' : 's'} not shown.`
+            : 'No assets recorded yet.'}
         </CardContent>
       </Card>
     );

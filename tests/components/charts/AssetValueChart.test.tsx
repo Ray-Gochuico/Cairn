@@ -703,6 +703,60 @@ describe('AssetValueChart — investments surface', () => {
     expect(screen.getByText('Total investments')).toBeInTheDocument();
   });
 
+  it('C26 (Wave A): filtered-empty investments tab names the hidden accounts and drops the Add CTA', () => {
+    usePersonsStore.setState({
+      persons: [
+        { id: 1, householdId: 1, name: 'Alice' },
+        { id: 2, householdId: 1, name: 'Bob' },
+      ],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    useAccountsStore.setState({
+      accounts: [mkAccount(2, 'Bob Brokerage', { ownerPersonId: 2 })],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    useSnapshotsStore.setState({
+      snapshots: [mkSnapshot(1, 2, '2026-06-05', 200000)],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    usePropertiesStore.setState({ properties: [], isLoading: false, error: null, load: async () => {} } as never);
+    useVehiclesStore.setState({ vehicles: [], isLoading: false, error: null, load: async () => {} } as never);
+    useLoansStore.setState({ loans: [], isLoading: false, error: null, load: async () => {} } as never);
+    useAssetValueSnapshotsStore.setState({ assetValueSnapshots: [], isLoading: false, error: null, load: async () => {} } as never);
+    render(
+      <MemoryRouter initialEntries={['/net-worth?chart=investments&view=p1']}>
+        <AssetValueChart surface="investments" />
+      </MemoryRouter>,
+    );
+    expect(
+      screen.getByText("No investment accounts in Alice's name — 1 household account not shown."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Add an account/ })).not.toBeInTheDocument();
+  });
+
+  it('true-empty investments tab keeps the Add-account CTA under a view (regression)', () => {
+    usePersonsStore.setState({
+      persons: [
+        { id: 1, householdId: 1, name: 'Alice' },
+        { id: 2, householdId: 1, name: 'Bob' },
+      ],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    useAccountsStore.setState({ accounts: [], isLoading: false, error: null, load: async () => {} } as never);
+    useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null, load: async () => {} } as never);
+    usePropertiesStore.setState({ properties: [], isLoading: false, error: null, load: async () => {} } as never);
+    useVehiclesStore.setState({ vehicles: [], isLoading: false, error: null, load: async () => {} } as never);
+    useLoansStore.setState({ loans: [], isLoading: false, error: null, load: async () => {} } as never);
+    useAssetValueSnapshotsStore.setState({ assetValueSnapshots: [], isLoading: false, error: null, load: async () => {} } as never);
+    render(
+      <MemoryRouter initialEntries={['/net-worth?chart=investments&view=p1']}>
+        <AssetValueChart surface="investments" />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText(/balance snapshots/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Add an account/ })).toBeInTheDocument();
+  });
+
   it('respects the ?view person filter (parity with the old chart) and drops the "· Household" suffix', async () => {
     seedInvestmentStores();
     usePersonsStore.setState({
