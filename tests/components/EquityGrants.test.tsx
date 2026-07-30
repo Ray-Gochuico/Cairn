@@ -419,11 +419,95 @@ describe('person-view filter (round-3 T21)', () => {
         <EquityGrants />
       </MemoryRouter>,
     );
-    // filterGrantsByView returns [] for joint — no grant card renders and the
-    // summary strip totals $0 (grants have no joint-ownership concept).
+    // filterGrantsByView returns [] for joint — no grant card renders.
+    // Wave A C12 supersedes round-3 T21's mystery-$0 strip: the schema fact
+    // is declared instead (asserted in the Wave A describe below).
     expect(screen.queryByText('Alice Grant')).not.toBeInTheDocument();
     expect(screen.queryByText('Bob Grant')).not.toBeInTheDocument();
-    expect(screen.getByTestId('equity-summary')).toHaveTextContent('$0');
+  });
+
+  describe('Wave A: meaning line + cannot-be-joint declaration (D1 C11/C12)', () => {
+    it('C11: p1 meaning line names the person', () => {
+      primeTwoOwners();
+      render(
+        <MemoryRouter initialEntries={['/equity-grants?view=p1']}>
+          <EquityGrants />
+        </MemoryRouter>,
+      );
+      expect(screen.getByText("Vesting progress and value for Alice's grants.")).toBeInTheDocument();
+    });
+
+    it('filtered-to-zero replaces the $0 tiles with the explanation', () => {
+      primeStores({
+        persons: [
+          { id: 1, name: 'Alice' },
+          { id: 2, name: 'Bob' },
+        ],
+        grants: [{ id: 1, ownerPersonId: 2, name: 'Bob Grant' }],
+      });
+      render(
+        <MemoryRouter initialEntries={['/equity-grants?view=p1']}>
+          <EquityGrants />
+        </MemoryRouter>,
+      );
+      expect(screen.queryByTestId('equity-summary')).not.toBeInTheDocument(); // no $0.00 'Total vested'
+      expect(screen.getByText("No grants in Alice's name")).toBeInTheDocument();
+      expect(screen.getByText('1 owned by Bob not shown.')).toBeInTheDocument();
+    });
+
+    it('C12: joint view declares the schema fact', () => {
+      primeTwoOwners();
+      render(
+        <MemoryRouter initialEntries={['/equity-grants?view=joint']}>
+          <EquityGrants />
+        </MemoryRouter>,
+      );
+      expect(screen.queryByTestId('equity-summary')).not.toBeInTheDocument();
+      expect(screen.getByText('No joint equity grants')).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          'Equity grants always belong to one person — there are no joint grants. 2 grants owned individually.',
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it('C2: nonempty person view declares the hidden grants', () => {
+      primeTwoOwners();
+      render(
+        <MemoryRouter initialEntries={['/equity-grants?view=p1']}>
+          <EquityGrants />
+        </MemoryRouter>,
+      );
+      expect(screen.getByTestId('scope-caption')).toHaveTextContent(
+        "Showing Alice's grants: 1 of 2 — 1 owned by Bob not shown.",
+      );
+    });
+
+    it('true-empty household keeps the onboarding EmptyState (regression)', () => {
+      primeStores({
+        persons: [
+          { id: 1, name: 'Alice' },
+          { id: 2, name: 'Bob' },
+        ],
+        grants: [],
+      });
+      render(
+        <MemoryRouter initialEntries={['/equity-grants?view=p1']}>
+          <EquityGrants />
+        </MemoryRouter>,
+      );
+      expect(screen.getByText('No equity grants yet')).toBeInTheDocument();
+    });
+
+    it('the edit surfaces stay mounted in the joint declaration branch', () => {
+      primeTwoOwners();
+      render(
+        <MemoryRouter initialEntries={['/equity-grants?view=joint']}>
+          <EquityGrants />
+        </MemoryRouter>,
+      );
+      expect(screen.getByRole('button', { name: 'Add grant' })).toBeInTheDocument();
+    });
   });
 });
 
