@@ -8,6 +8,9 @@ import { useVehiclesStore } from '@/stores/vehicles-store';
 import { amortize, nextPaymentDateFrom, scheduleIsCapped, type Amortization, type ScheduleEntry } from '@/lib/amortization';
 import { filterByObligorPersonId } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
+import { partitionHidden } from '@/lib/view-scope';
+import { FilteredEmptyState } from '@/components/layout/FilteredEmptyState';
+import { ScopeCaption } from '@/components/layout/ScopeCaption';
 import { LoanType } from '@/types/enums';
 import type { Loan } from '@/types/schema';
 import {
@@ -438,6 +441,13 @@ export default function Loans() {
     () => filterByObligorPersonId(loans, filter, persons),
     [loans, filter, persons],
   );
+  // Wave A D1: exclusion counts for the caption/tier-2 empty state. Joint
+  // debt is typically joint-and-several — a $0 "Total debt" must never
+  // silently understate what the person actually owes.
+  const loanPartition = useMemo(
+    () => partitionHidden(loans, visibleLoans, (l) => l.obligorPersonId),
+    [loans, visibleLoans],
+  );
 
   // Live LOCAL day (Wave 11 T10): anchors every remaining schedule; re-derives
   // at the midnight flip.
@@ -646,12 +656,21 @@ export default function Loans() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <ExportCsvButton baseName="loans" columns={csvColumns} rows={loans} />
+          <ExportCsvButton baseName="loans" columns={csvColumns} rows={loans} householdScopeNote />
           <ImportCsvButton entity="loan" />
           <Button size="sm" onClick={() => setDrawer('create')}>Add loan</Button>
         </div>
       </div>
 
+      {/* Wave A D6 tier 2: the household HAS loans, the view hid them all —
+          counts + View household instead of asserted $0 tiles. */}
+      {visibleLoans.length === 0 ? (
+        <>
+          <FilteredEmptyState noun="loans" partition={loanPartition} />
+          {renderDrawer()}
+        </>
+      ) : (
+      <>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-2">
@@ -698,6 +717,9 @@ export default function Loans() {
         </Card>
       </div>
 
+      {/* Wave A C2: nonempty filtered views declare what the filter hid. */}
+      <ScopeCaption noun="loans" partition={loanPartition} className="-mt-2" />
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {projections.map((p) => (
           <LoanCard
@@ -731,6 +753,8 @@ export default function Loans() {
         />
       ) : null}
       {renderDrawer()}
+      </>
+      )}
     </PageContainer>
   );
 }

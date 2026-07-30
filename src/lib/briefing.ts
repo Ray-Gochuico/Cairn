@@ -295,7 +295,9 @@ export function buildBriefing(input: BriefingInput): Briefing {
       materiality: 100, // close the books before the next optimization
       href: '/monthly',
       linkLabel: 'Open monthly check-in',
-      householdScoped: false, // pending counts are view-scoped by the caller
+      // Wave A: counts are household — the /monthly ritual reconciles the
+      // whole household, so the row carries the · Household suffix.
+      householdScoped: true,
     });
   }
 

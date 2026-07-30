@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { formatCurrencyCents, formatDate, formatMonth } from '@/lib/format';
 import { useLocalToday } from '@/lib/use-local-today';
 import { PageContainer } from '@/components/layout/PageContainer';
@@ -36,7 +36,11 @@ import {
   isActiveOn,
 } from '@/lib/recurring-obligations';
 import { useViewFilter } from '@/lib/use-view-filter';
-import { filterByPersonId } from '@/lib/filter-by-view';
+import { useViewScope } from '@/lib/use-view-scope';
+import { partitionHidden, withViewSearch } from '@/lib/view-scope';
+import { FilteredEmptyState } from '@/components/layout/FilteredEmptyState';
+import { ScopeCaption } from '@/components/layout/ScopeCaption';
+import { filterByOwnerPersonId, filterByPersonId } from '@/lib/filter-by-view';
 import type { Transaction } from '@/types/schema';
 
 const obligationCurrencyFormatter = new Intl.NumberFormat('en-US', {
@@ -89,6 +93,9 @@ export default function Spending() {
   const vehicleLeasesLoading = useVehicleLeasesStore((s) => s.isLoading);
 
   const { filter } = useViewFilter();
+  // Wave A: caption vocabulary + link helper (reads only — no store loads).
+  const { isFiltered, personName, scopeLabel } = useViewScope();
+  const location = useLocation();
 
   // Note: useSettingsStore is consumed via getState() inside handleModalSaved
   // rather than as a subscription. Subscribing here would cause Spending to
@@ -249,9 +256,12 @@ export default function Spending() {
   // Inflow = GROSS pre-tax salary / 12 per visible person (wave-9 F12:
   // labeled as gross in the UI; no surplus verdict is derived from it
   // because outflow is post-tax).
+  // Wave A D12: salary is NEVER joint-attributable — the joint view gets no
+  // fabricated "joint income" number (the inflow/net tiles render — + C14).
   const visiblePersons = useMemo(
     () => (filter === 'p1' ? persons.slice(0, 1)
       : filter === 'p2' ? persons.slice(1, 2)
+      : filter === 'joint' ? []
       : persons),
     [filter, persons],
   );
@@ -268,29 +278,80 @@ export default function Spending() {
   const recurringTotal = recurring.reduce((s, g) => s + g.monthlyAmount, 0);
 
   // Recurring obligations (rent + vehicle leases) active today (Wave 11 T10).
+  // Wave A D1: they carry ownerPersonId, so the person view scopes the
+  // totals/counts and the exclusions are declared with counts (ScopeCaption /
+  // FilteredEmptyState inside the card).
   const todayISO = useLocalToday();
+  const visibleHousing = useMemo(
+    () => filterByOwnerPersonId(housingPayments, filter, persons),
+    [housingPayments, filter, persons],
+  );
+  const visibleLeases = useMemo(
+    () => filterByOwnerPersonId(vehicleLeases, filter, persons),
+    [vehicleLeases, filter, persons],
+  );
   const recurringObligation = useMemo(
-    () => monthlyRecurringObligation(housingPayments, vehicleLeases, todayISO),
-    [housingPayments, vehicleLeases, todayISO],
+    () => monthlyRecurringObligation(visibleHousing, visibleLeases, todayISO),
+    [visibleHousing, visibleLeases, todayISO],
   );
   const housingObligation = useMemo(
-    () => monthlyHousingObligation(housingPayments, todayISO),
-    [housingPayments, todayISO],
+    () => monthlyHousingObligation(visibleHousing, todayISO),
+    [visibleHousing, todayISO],
   );
   const leaseObligation = useMemo(
-    () => monthlyLeaseObligation(vehicleLeases, todayISO),
-    [vehicleLeases, todayISO],
+    () => monthlyLeaseObligation(visibleLeases, todayISO),
+    [visibleLeases, todayISO],
   );
   // Wave 11 T18: counts + card mount use the same active predicate as the
   // dollar totals — an ended rent/lease no longer inflates the count.
   const activeHousing = useMemo(
+    () => visibleHousing.filter((h) => isActiveOn(h, todayISO)),
+    [visibleHousing, todayISO],
+  );
+  const activeLeases = useMemo(
+    () => visibleLeases.filter((l) => isActiveOn(l, todayISO)),
+    [visibleLeases, todayISO],
+  );
+  // Household twins — the card stays mounted (with the tier-2 explainer)
+  // when the VIEW emptied it but the household still has active obligations.
+  const householdActiveHousing = useMemo(
     () => housingPayments.filter((h) => isActiveOn(h, todayISO)),
     [housingPayments, todayISO],
   );
-  const activeLeases = useMemo(
+  const householdActiveLeases = useMemo(
     () => vehicleLeases.filter((l) => isActiveOn(l, todayISO)),
     [vehicleLeases, todayISO],
   );
+  const householdActiveObligations = householdActiveHousing.length + householdActiveLeases.length;
+  // Review fix: the caption/empty-state counts cover exactly the rows the
+  // card renders — ACTIVE obligations only (an ended lease the card never
+  // shows must not be declared "not shown"). Reference identity holds: both
+  // sides filter the same store arrays.
+  const obligationPartition = useMemo(
+    () =>
+      partitionHidden(
+        [...householdActiveHousing, ...householdActiveLeases],
+        [...activeHousing, ...activeLeases],
+        (r) => r.ownerPersonId,
+      ),
+    [householdActiveHousing, householdActiveLeases, activeHousing, activeLeases],
+  );
+
+  // Household twins for the analysis sections' filter-empty lines (a view
+  // that hid everything is not "no data").
+  const householdRecurringCount = useMemo(
+    () => (isFiltered ? detectRecurring(transactions, categories).length : 0),
+    [isFiltered, transactions, categories],
+  );
+  const householdPendingReimbCount = useMemo(
+    () => transactions.filter((t) => t.reimbursable && t.reimbursedAt == null).length,
+    [transactions],
+  );
+  const householdSummary = useMemo(
+    () => (isFiltered ? summarizeSpending(transactions, categories) : null),
+    [isFiltered, transactions, categories],
+  );
+  const hiddenTxnCount = transactions.length - visibleTransactions.length;
 
   return (
     <PageContainer width="full" className="space-y-8">
@@ -298,7 +359,7 @@ export default function Spending() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <h1 className="text-2xl font-semibold">Spending</h1>
         <div className="flex items-center gap-2">
-          <ExportCsvButton baseName="transactions" columns={csvColumns} rows={transactions} />
+          <ExportCsvButton baseName="transactions" columns={csvColumns} rows={transactions} householdScopeNote />
         </div>
       </div>
 
@@ -309,7 +370,15 @@ export default function Spending() {
         <SpendingSummaryHero
           transactions={visibleTransactions}
           categories={categories}
-          monthlyBudget={household?.monthlyExpenseBaseline ?? 0}
+          // Wave A C13/D2: the baseline is a household figure — person views
+          // withhold the bar (0 hides it) and declare why via scopeNote.
+          monthlyBudget={isFiltered ? 0 : (household?.monthlyExpenseBaseline ?? 0)}
+          scopeNote={isFiltered ? 'Budget comparisons are household-level — hidden in this view.' : undefined}
+          emptyScopeNote={isFiltered
+            ? filter === 'joint'
+              ? 'Joint transactions only.'
+              : `${personName}'s transactions — joint not shown.`
+            : undefined}
         />
       )}
 
@@ -323,37 +392,47 @@ export default function Spending() {
         </p>
       )}
 
-      {(activeHousing.length > 0 || activeLeases.length > 0) && (
+      {(activeHousing.length > 0 || activeLeases.length > 0 || householdActiveObligations > 0) && (
         <section aria-label="Recurring obligations">
           <Card data-testid="spending-recurring-card">
             <CardHeader className="pb-2">
               <CardTitle className="text-base">Recurring obligations</CardTitle>
               <CardDescription>Active rent + vehicle leases.</CardDescription>
+              {/* Wave A D1: exclusions are declared with counts. */}
+              <ScopeCaption noun="recurring obligations" partition={obligationPartition} />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-semibold tabular-nums">
-                {obligationCurrencyFormatter.format(recurringObligation)}/mo
-              </div>
-              <div className="mt-3 flex gap-6 border-t pt-3">
-                <div>
-                  <div className="text-base font-semibold tabular-nums">
-                    {obligationCurrencyFormatter.format(housingObligation)}
+              {activeHousing.length === 0 && activeLeases.length === 0 ? (
+                // Wave A D6: the VIEW emptied the card — the household still
+                // has active obligations, so never unmount silently.
+                <FilteredEmptyState bare noun="recurring obligations" partition={obligationPartition} />
+              ) : (
+                <>
+                  <div className="text-2xl font-semibold tabular-nums">
+                    {obligationCurrencyFormatter.format(recurringObligation)}/mo
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    Rent · {activeHousing.length} rental
-                    {activeHousing.length === 1 ? '' : 's'}
+                  <div className="mt-3 flex gap-6 border-t pt-3">
+                    <div>
+                      <div className="text-base font-semibold tabular-nums">
+                        {obligationCurrencyFormatter.format(housingObligation)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Rent · {activeHousing.length} rental
+                        {activeHousing.length === 1 ? '' : 's'}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-base font-semibold tabular-nums">
+                        {obligationCurrencyFormatter.format(leaseObligation)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Leases · {activeLeases.length} lease
+                        {activeLeases.length === 1 ? '' : 's'}
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <div className="text-base font-semibold tabular-nums">
-                    {obligationCurrencyFormatter.format(leaseObligation)}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    Leases · {activeLeases.length} lease
-                    {activeLeases.length === 1 ? '' : 's'}
-                  </div>
-                </div>
-              </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </section>
@@ -362,8 +441,10 @@ export default function Spending() {
       {/* Only render analysis sections when there are transactions */}
       {transactions.length > 0 && (
         <>
-          {/* Monthly category bars */}
-          {monthlyBarData.length > 0 && categorySeries.length > 0 && (
+          {/* Monthly category bars. Wave A: when the VIEW emptied the series
+              but the household has categorized spending, say so instead of
+              silently unmounting. */}
+          {monthlyBarData.length > 0 && categorySeries.length > 0 ? (
             <section aria-label="Monthly spending by category">
               <BarChartCard
                 title="Monthly Spending by Category (all history)"
@@ -374,7 +455,13 @@ export default function Spending() {
                 xTickFormatter={(v) => formatMonth(String(v))}
               />
             </section>
-          )}
+          ) : isFiltered && (householdSummary?.monthlyByCategory.length ?? 0) > 0 ? (
+            <section aria-label="Monthly spending by category">
+              <p className="text-sm text-muted-foreground">
+                No categorized spending in this view — household data not shown.
+              </p>
+            </section>
+          ) : null}
 
           {/* Money in vs out (last 30 days) */}
           <section>
@@ -385,10 +472,17 @@ export default function Spending() {
                   "Deficit" (with a green +) was the lie. Label the numbers as
                   what they are; no verdict. wave-11 handoff: a real take-home
                   inflow could restore a verdict. */}
+              {/* Wave A C14/D12: salary is never joint-attributable — the
+                  joint view shows the fact ('—'), not a fabricated sum. The
+                  outflow tile stays real (joint outflow IS attributable). */}
               <MetricCard
                 label="Gross income (est.)"
-                value={`$${cashflow.inflow.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                subtitle="Pre-tax salary — taxes not deducted"
+                value={filter === 'joint'
+                  ? '—'
+                  : `$${cashflow.inflow.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                subtitle={filter === 'joint'
+                  ? 'Income is per-person — never joint.'
+                  : 'Pre-tax salary — taxes not deducted'}
               />
               <MetricCard
                 label="Money out"
@@ -397,8 +491,12 @@ export default function Spending() {
               />
               <MetricCard
                 label="Gross minus spending"
-                value={`${cashflow.net >= 0 ? '+' : ''}$${cashflow.net.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                subtitle="Not take-home surplus — taxes aren't deducted"
+                value={filter === 'joint'
+                  ? '—'
+                  : `${cashflow.net >= 0 ? '+' : ''}$${cashflow.net.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                subtitle={filter === 'joint'
+                  ? 'Income is per-person — never joint.'
+                  : "Not take-home surplus — taxes aren't deducted"}
               />
             </div>
             {cashflow.outflowByCategory.length > 0 && (
@@ -422,8 +520,8 @@ export default function Spending() {
             )}
           </section>
 
-          {/* Top merchants */}
-          {summary.topMerchants.length > 0 && (
+          {/* Top merchants. Wave A: same view-emptied honesty as above. */}
+          {summary.topMerchants.length > 0 ? (
             <section aria-label="Top merchants">
               <BarChartCard
                 title="Top merchants"
@@ -434,7 +532,13 @@ export default function Spending() {
                 layout="vertical"
               />
             </section>
-          )}
+          ) : isFiltered && (householdSummary?.topMerchants.length ?? 0) > 0 ? (
+            <section aria-label="Top merchants">
+              <p className="text-sm text-muted-foreground">
+                No categorized spending in this view — household data not shown.
+              </p>
+            </section>
+          ) : null}
 
           {/* Recurring subscriptions */}
           <section aria-label="Subscriptions">
@@ -450,7 +554,12 @@ export default function Spending() {
               </CardHeader>
               <CardContent>
                 {recurring.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No recurring subscriptions detected.</p>
+                  <p className="text-sm text-muted-foreground">
+                    {isFiltered && householdRecurringCount > 0
+                      // Wave A: a view-emptied list is not "none detected".
+                      ? `None attributed to ${scopeLabel === 'Joint' ? 'the joint view' : personName} — household items not shown.`
+                      : 'No recurring subscriptions detected.'}
+                  </p>
                 ) : (
                   <ul className="space-y-1">
                     {recurring.map((g) => (
@@ -476,7 +585,12 @@ export default function Spending() {
               </CardHeader>
               <CardContent>
                 {awaitingReimbursement.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No pending reimbursements.</p>
+                  <p className="text-sm text-muted-foreground">
+                    {isFiltered && householdPendingReimbCount > 0
+                      // Wave A: a view-emptied list is not "none pending".
+                      ? `None attributed to ${scopeLabel === 'Joint' ? 'the joint view' : personName} — household items not shown.`
+                      : 'No pending reimbursements.'}
+                  </p>
                 ) : (
                   <ul className="space-y-2">
                     {awaitingReimbursement.map((t) => (
@@ -517,7 +631,8 @@ export default function Spending() {
           </h2>
           {transactions.length > 0 && (
             <Link
-              to="/spending/transactions"
+              // Wave A D9: intra-page links preserve the active ?view=.
+              to={withViewSearch('/spending/transactions', location.search)}
               className="text-sm underline text-muted-foreground hover:text-foreground"
             >
               Open all transactions
@@ -538,7 +653,10 @@ export default function Spending() {
             description="Import a statement to get started."
           />
         ) : visibleTransactions.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No transactions to show.</p>
+          // Wave A C30-style: count-aware, with the recovery named.
+          <p className="text-sm text-muted-foreground">
+            {`No transactions in this view — ${hiddenTxnCount} household transaction${hiddenTxnCount === 1 ? '' : 's'} not shown. Switch to Household to see everything.`}
+          </p>
         ) : (
           <table className="w-full text-sm border-collapse">
             <thead>

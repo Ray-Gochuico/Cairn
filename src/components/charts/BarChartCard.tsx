@@ -67,6 +67,9 @@ export interface BarChartCardProps {
    * blank grid otherwise (Wave 11 T11).
    */
   emptyMessage?: string;
+  /** Wave A: optional scope-declaration line rendered as a second muted
+   *  description under the subtitle (both the chart and empty branches). */
+  scopeCaption?: string;
 }
 
 // Long PDF-extracted merchant strings, category names, etc. overflow the
@@ -98,6 +101,7 @@ export default function BarChartCard({
   xAxisInterval,
   xTickFormatter,
   emptyMessage,
+  scopeCaption,
 }: BarChartCardProps) {
   const isVertical = layout === 'vertical';
   const effectiveHeight = isVertical
@@ -111,6 +115,7 @@ export default function BarChartCard({
         <CardHeader>
           <CardTitle>{title}</CardTitle>
           {subtitle ? <CardDescription>{subtitle}</CardDescription> : null}
+          {scopeCaption ? <CardDescription>{scopeCaption}</CardDescription> : null}
         </CardHeader>
         <CardContent>
           <div
@@ -128,6 +133,7 @@ export default function BarChartCard({
       <CardHeader>
         <CardTitle>{title}</CardTitle>
         {subtitle ? <CardDescription>{subtitle}</CardDescription> : null}
+        {scopeCaption ? <CardDescription>{scopeCaption}</CardDescription> : null}
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={effectiveHeight}>

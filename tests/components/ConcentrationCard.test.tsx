@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ConcentrationCard } from '@/components/cards/ConcentrationCard';
 import { useHoldingsStore } from '@/stores/holdings-store';
+import { usePersonsStore } from '@/stores/persons-store';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useTickersStore } from '@/stores/tickers-store';
@@ -60,6 +61,29 @@ describe('ConcentrationCard', () => {
     expect(screen.getByRole('link', { name: /see full breakdown/i })).toHaveAttribute(
       'href', '/investments#concentration',
     );
+  });
+
+  it('C1 (Wave A): header label gains · Household under a person view (additive only)', () => {
+    usePersonsStore.setState({
+      persons: [{ id: 1, name: 'Alice' } as never, { id: 2, name: 'Bob' } as never],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    render(
+      <MemoryRouter initialEntries={['/?view=p1']}>
+        <ConcentrationCard />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Concentration · Household')).toBeInTheDocument();
+  });
+
+  it('household view keeps the plain Concentration label (regression)', () => {
+    render(
+      <MemoryRouter>
+        <ConcentrationCard />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Concentration')).toBeInTheDocument();
+    expect(screen.queryByText('Concentration · Household')).not.toBeInTheDocument();
   });
 
   it('healthy state shows the largest effective position and a deep link', () => {

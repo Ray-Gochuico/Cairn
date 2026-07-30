@@ -59,13 +59,33 @@ test('spending: CSV import round-trips — file in, preview commit, transactions
 test('monthly check-in: Confirm all ratifies the seeded last-month values', async ({ page }) => {
   const errors = collectErrors(page);
   await page.goto('/monthly');
-  // Task 13 seeds one AUTO_DERIVED last-month-close snapshot per account (3).
-  const confirmAll = page.getByRole('button', { name: /^Confirm all \(3\)$/ });
+  // The Wave-A seed's derived confirm cards: Taxable Brokerage, Roth IRA,
+  // 401(k) (Demo Investor) + Partner Brokerage (Demo Partner) = 4. The
+  // cash/savings accounts are MANUAL_BALANCE_TYPES and create no derived card.
+  const confirmAll = page.getByRole('button', { name: /^Confirm all \(4\)$/ });
   await expect(confirmAll).toBeVisible({ timeout: 30_000 });
   await confirmAll.click();
   // The section's pre-mounted live region announces the batch result.
-  await expect(page.getByText('Confirmed 3 account values.')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Confirmed 4 account values.')).toBeVisible({ timeout: 30_000 });
   // Pending set is empty → the batch button unmounts.
   await expect(page.getByRole('button', { name: /^Confirm all/ })).toHaveCount(0);
+  expect(errors.join('\n')).not.toContain('Maximum update depth');
+});
+
+test('monthly check-in: a scoped Confirm all never ratifies hidden persons’ snapshots', async ({ page }) => {
+  const errors = collectErrors(page);
+  // Wave-A seed: 3 derived cards owned by Demo Investor (p1), 1 by Demo Partner (p2).
+  await page.goto('/monthly?view=p1');
+  const confirmP1 = page.getByRole('button', { name: /^Confirm all \(3\)$/ });
+  await expect(confirmP1).toBeVisible({ timeout: 30_000 });
+  await confirmP1.click();
+  await expect(page.getByText('Confirmed 3 account values.')).toBeVisible({ timeout: 30_000 });
+  // The partner's pending snapshot MUST survive the scoped batch. Switch the
+  // view via the SPA dropdown: the shim persists to IndexedDB on a debounced
+  // (250ms) flush, so an immediate goto() can race the flush, load a DB
+  // without the writes, and re-seed — the SPA switch stays in the same
+  // in-memory DB session.
+  await page.getByRole('combobox', { name: 'Filter view by person' }).selectOption('household');
+  await expect(page.getByRole('button', { name: /^Confirm all \(1\)$/ })).toBeVisible({ timeout: 30_000 });
   expect(errors.join('\n')).not.toContain('Maximum update depth');
 });

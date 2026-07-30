@@ -459,6 +459,57 @@ describe('Loans page', () => {
   });
 });
 
+describe('Wave A: count-aware filtered-empty + exclusion caption (D1/D6)', () => {
+  beforeEach(() => {
+    resetStores();
+    usePersonsStore.setState({
+      persons: [
+        { id: 1, householdId: 1, name: 'Alice', dateOfBirth: '1990-01-01', targetRetirementAge: 65, annualSalaryPretax: 100000 },
+        { id: 2, householdId: 1, name: 'Bob', dateOfBirth: '1992-01-01', targetRetirementAge: 65, annualSalaryPretax: 90000 },
+      ] as never,
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+  });
+
+  it('D6: filtered-to-zero replaces the $0 tiles with FilteredEmptyState', () => {
+    useLoansStore.setState({
+      loans: [
+        makeLoan({ id: 1, name: 'Joint Mortgage', obligorPersonId: null }),
+        makeLoan({ id: 2, name: 'Bob Loan', obligorPersonId: 2 }),
+      ],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    render(<MemoryRouter initialEntries={['/loans?view=p1']}><Loans /></MemoryRouter>);
+    expect(screen.queryByText('Total debt')).not.toBeInTheDocument(); // no asserted $0 tiles
+    expect(screen.getByText("No loans in Alice's name")).toBeInTheDocument();
+    expect(screen.getByText('1 joint and 1 owned by Bob not shown.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View household' })).toBeInTheDocument();
+    expect(screen.queryByText('No loans yet')).not.toBeInTheDocument();
+  });
+
+  it('C2: nonempty person view declares hidden loans under the tiles', () => {
+    useLoansStore.setState({
+      loans: [
+        makeLoan({ id: 1, name: 'Alice Loan', obligorPersonId: 1 }),
+        makeLoan({ id: 2, name: 'Joint Mortgage', obligorPersonId: null }),
+        makeLoan({ id: 3, name: 'Joint HELOC', obligorPersonId: null }),
+      ],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    render(<MemoryRouter initialEntries={['/loans?view=p1']}><Loans /></MemoryRouter>);
+    expect(screen.getByTestId('scope-caption')).toHaveTextContent(
+      "Showing Alice's loans: 1 of 3 — 2 joint not shown.",
+    );
+  });
+
+  it('true-empty household keeps the onboarding EmptyState (regression)', () => {
+    render(<MemoryRouter initialEntries={['/loans?view=p1']}><Loans /></MemoryRouter>);
+    expect(screen.getByText('No loans yet')).toBeInTheDocument();
+  });
+});
+
 describe('person-view filter + extra-savings box (round-3 T21)', () => {
   beforeEach(() => {
     resetStores();

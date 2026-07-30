@@ -7,8 +7,10 @@ import { runMigrations } from '@/db/migrations';
 import { setDatabase } from '@/db/db';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
+import { usePersonsStore } from '@/stores/persons-store';
 import { CategoriesRepo } from '@/domain/categories';
 import Budget from '@/pages/Budget';
+import { makePerson } from '../factories';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Transaction } from '@/types/schema';
@@ -117,6 +119,58 @@ describe('Budget page', () => {
     const cats = await new CategoriesRepo(db).list();
     const groceries = cats.find((c) => c.name === 'Groceries');
     expect(groceries?.monthlyBudget).toBeNull();
+  });
+
+  describe('Wave A: person view (D2)', () => {
+    const month = new Date().toISOString().slice(0, 7);
+    const personTxn = (personId: number | null, amount: number): Omit<Transaction, 'id'> => ({
+      householdId: 1, date: `${month}-05`, merchant: 'M', merchantRaw: 'M',
+      amount, categoryId: 33, sourceAccountId: null, propertyId: null,
+      vehicleId: null, personId, sourcePdfFilename: null, reimbursable: false,
+      reimbursedAt: null, reimbursedAmount: null, isRecurring: false, notes: null,
+    });
+
+    async function primeTwoPersonBudget() {
+      // Transactions carry a person FK — the rows must exist in the DB too.
+      await db.execute(
+        `INSERT INTO persons (id, household_id, name, date_of_birth, target_retirement_age, annual_salary_pretax, pretax_401k_pct)
+         VALUES (1, 1, 'Alice', '1990-01-01', 65, 0, 0), (2, 1, 'Bob', '1992-01-01', 65, 0, 0)`,
+      );
+      usePersonsStore.setState({
+        persons: [makePerson({ id: 1, name: 'Alice' }), makePerson({ id: 2, name: 'Bob' })],
+        isLoading: false, error: null, load: async () => {},
+      } as never);
+      // One tracked category (Groceries, id 33) with budget 500; Alice spent
+      // 100, Bob 300, joint 50 — all in the current month.
+      await new CategoriesRepo(db).update(33, { monthlyBudget: 500 });
+      await useTransactionsStore.getState().createMany([
+        personTxn(1, 100), personTxn(2, 300), personTxn(null, 50),
+      ]);
+    }
+
+    it('scopes actuals to the person, declares the household budget, drops verdicts, locks inputs', async () => {
+      await primeTwoPersonBudget();
+      render(<MemoryRouter initialEntries={['/budget?view=p1']}><Budget /></MemoryRouter>);
+      // C6 caption
+      expect(await screen.findByText(
+        "Showing Alice's spending against household budget targets — budgets aren't split per person.",
+      )).toBeInTheDocument();
+      // C7 header total declares the household figure (person actual, household budget)
+      expect(screen.getAllByText(/\$100 of \$500 household budget/).length).toBeGreaterThan(0);
+      // no over/under verdict anywhere in the rows
+      expect(screen.queryByText(/\$[\d,]+ (left|over)/)).not.toBeInTheDocument();
+      // budget input is read-only (static span, not a spinbutton)
+      expect(screen.queryByRole('spinbutton', { name: /budget for/i })).not.toBeInTheDocument();
+    });
+
+    it('household view keeps verdicts and editable inputs (regression)', async () => {
+      await primeTwoPersonBudget();
+      render(<MemoryRouter initialEntries={['/budget']}><Budget /></MemoryRouter>);
+      await screen.findByText(/^spending$/i);
+      expect(screen.getByRole('spinbutton', { name: /budget for groceries/i })).toBeInTheDocument();
+      expect(screen.getByText('$50 left')).toBeInTheDocument();
+      expect(screen.queryByText(/household budget/)).not.toBeInTheDocument();
+    });
   });
 
   describe('tracked categories + Misc catch-all', () => {

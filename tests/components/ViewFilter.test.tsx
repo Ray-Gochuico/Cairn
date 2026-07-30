@@ -103,6 +103,27 @@ describe('ViewFilter', () => {
     expect(container.firstChild).toBeNull();
   });
 
+  function renderViewFilterAt(path: string) {
+    usePersonsStore.setState({ persons: TWO_PERSONS, isLoading: false, error: null });
+    return render(
+      <MemoryRouter initialEntries={[path]}>
+        <ViewFilter />
+      </MemoryRouter>,
+    );
+  }
+
+  it.each(['/settings', '/learn', '/what-if', '/roadmap', '/inputs', '/setup'])(
+    'Wave A D3: hides the dropdown on %s',
+    (path) => {
+      renderViewFilterAt(path);
+      expect(screen.queryByRole('combobox', { name: 'Filter view by person' })).not.toBeInTheDocument();
+    },
+  );
+  it.each(['/', '/loans', '/monthly', '/budget'])('still renders on %s', (path) => {
+    renderViewFilterAt(path);
+    expect(screen.getByRole('combobox', { name: 'Filter view by person' })).toBeInTheDocument();
+  });
+
   it('changing the select updates the URL search param', () => {
     usePersonsStore.setState({ persons: TWO_PERSONS, isLoading: false, error: null });
 

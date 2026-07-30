@@ -61,6 +61,9 @@ export interface SpendingWidgetProps {
   accounts: Account[];
   /** Anchor "today" for resolving ranges. Defaults to new Date(). Tests inject. */
   asOf?: Date;
+  /** Wave A C28: person-view scope declaration — rendered as a muted caption
+   *  near the filters AND appended to the empty line. */
+  scopeNote?: string;
 }
 
 export function SpendingWidget({
@@ -68,6 +71,7 @@ export function SpendingWidget({
   categories,
   accounts,
   asOf,
+  scopeNote,
 }: SpendingWidgetProps) {
   const localToday = useLocalToday();
   const today = useMemo(() => asOf ?? dateFromLocalISO(localToday), [asOf, localToday]);
@@ -197,11 +201,16 @@ export function SpendingWidget({
             <span>{formatDate(bounds.endInclusive)}</span>
           </div>
         </div>
+        {scopeNote && (
+          <p className="text-xs text-muted-foreground" data-testid="spending-widget-scope-note">
+            {scopeNote}
+          </p>
+        )}
       </CardHeader>
       <CardContent className="space-y-6">
         {!hasData ? (
           <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-            No spending found for {rangeLabel.toLowerCase()}.
+            No spending found for {rangeLabel.toLowerCase()}.{scopeNote ? ` ${scopeNote}` : ''}
           </div>
         ) : (
           <>

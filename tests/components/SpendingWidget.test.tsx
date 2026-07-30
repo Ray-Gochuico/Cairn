@@ -120,6 +120,31 @@ describe('SpendingWidget', () => {
     expect(screen.getByText(/no spending found/i)).toBeInTheDocument();
   });
 
+  it('C28 (Wave A): scopeNote renders as a caption and inside the empty line', () => {
+    render(
+      <MemoryRouter>
+        <SpendingWidget
+          transactions={[]}
+          categories={[]}
+          accounts={[]}
+          asOf={asOf}
+          scopeNote="Alice's transactions — joint not shown."
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('spending-widget-scope-note')).toHaveTextContent(
+      "Alice's transactions — joint not shown.",
+    );
+    expect(
+      screen.getByText(/No spending found for this month\. Alice's transactions — joint not shown\./),
+    ).toBeInTheDocument();
+  });
+
+  it('no scope note without the prop (regression)', () => {
+    renderWidget([], []);
+    expect(screen.queryByTestId('spending-widget-scope-note')).not.toBeInTheDocument();
+  });
+
   it('renders the center total + a row per category sorted by spend desc', () => {
     const txns: Transaction[] = [
       txn({ id: 1, date: '2026-05-02', categoryId: 1, amount: 50 }),

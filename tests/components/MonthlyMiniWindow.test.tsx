@@ -6,6 +6,7 @@ import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { runMigrations } from '@/db/migrations';
 import { setDatabase } from '@/db/db';
 import { useAccountsStore } from '@/stores/accounts-store';
+import { usePersonsStore } from '@/stores/persons-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useLoansStore } from '@/stores/loans-store';
 import { usePropertiesStore } from '@/stores/properties-store';
@@ -17,6 +18,7 @@ import { LoanPaymentsRepo } from '@/domain/loan-payments';
 import { AccountType, LoanType, SnapshotSource } from '@/types/enums';
 import MonthlyMiniWindow from '@/pages/MonthlyMiniWindow';
 import { formatDate } from '@/lib/format';
+import { makePerson } from '../factories';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -742,6 +744,169 @@ describe('MonthlyMiniWindow', () => {
       const statusTexts = screen.getAllByRole('status').map((el) => el.textContent ?? '');
       expect(statusTexts.filter((t) => t.includes('Confirmed'))).toHaveLength(1);
       expect(screen.getAllByRole('button', { name: /^confirm (?!all)/i })).toHaveLength(1);
+    });
+  });
+
+  describe('Wave A: person-view honoring (constraint 3)', () => {
+    function lastMonthCloseISO(): string {
+      const today = new Date();
+      const prev = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const d = new Date(Date.UTC(prev.getFullYear(), prev.getMonth() + 1, 0));
+      while (d.getUTCDay() === 0 || d.getUTCDay() === 6) {
+        d.setUTCDate(d.getUTCDate() - 1);
+      }
+      return d.toISOString().slice(0, 10);
+    }
+
+    async function seedOwnedAccount(
+      name: string,
+      ownerPersonId: number | null,
+      type: AccountType,
+      derivedValue: number | null,
+    ): Promise<number> {
+      const accountId = await new AccountsRepo(db).create({
+        householdId: 1,
+        ownerPersonId,
+        beneficiaryDependentId: null,
+        name,
+        institution: null,
+        type,
+        cryptoWalletAddress: null,
+        autoFetchEnabled: false,
+        excludedFromNetWorth: false,
+        stateOfPlan: null,
+        accentColor: null,
+      });
+      if (derivedValue != null) {
+        await new AccountSnapshotsRepo(db).upsert({
+          accountId,
+          snapshotDate: lastMonthCloseISO(),
+          totalValue: derivedValue,
+          source: SnapshotSource.AUTO_DERIVED,
+        });
+      }
+      return accountId;
+    }
+
+    /** Alice(1) owns Acct A (derived pending), Bob(2) owns Acct B (derived
+     *  pending), joint Acct C is cash-type. Returns Acct A's id. */
+    async function primeTwoPersonMonthly(): Promise<number> {
+      await db.execute(
+        `INSERT INTO persons (id, household_id, name, date_of_birth, target_retirement_age, annual_salary_pretax, pretax_401k_pct)
+         VALUES (1, 1, 'Alice', '1990-01-01', 65, 0, 0), (2, 1, 'Bob', '1992-01-01', 65, 0, 0)`,
+      );
+      usePersonsStore.setState({
+        persons: [makePerson({ id: 1, name: 'Alice' }), makePerson({ id: 2, name: 'Bob' })],
+        isLoading: false, error: null, load: async () => {},
+      } as never);
+      const acctA = await seedOwnedAccount('Acct A', 1, AccountType.ACCOUNT_BROKERAGE, 5000);
+      await seedOwnedAccount('Acct B', 2, AccountType.ACCOUNT_BROKERAGE, 7000);
+      await seedOwnedAccount('Joint Cash', null, AccountType.ACCOUNT_CASH, null);
+      return acctA;
+    }
+
+    it('p1 view scopes every section and the Confirm all count', async () => {
+      await primeTwoPersonMonthly();
+      render(<MemoryRouter initialEntries={['/monthly?view=p1']}><MonthlyMiniWindow /></MemoryRouter>);
+      expect(await screen.findByRole('button', { name: 'Confirm all (1)' })).toBeInTheDocument();
+      expect(screen.getByText(/Acct A/)).toBeInTheDocument();
+      expect(screen.queryByText(/Acct B/)).not.toBeInTheDocument(); // Bob's card hidden
+      expect(screen.queryByText('Joint Cash')).not.toBeInTheDocument(); // joint cash card hidden
+    });
+
+    it('scoped Confirm all writes ONLY the visible snapshots', async () => {
+      const acctAId = await primeTwoPersonMonthly();
+      const user = userEvent.setup();
+      render(<MemoryRouter initialEntries={['/monthly?view=p1']}><MonthlyMiniWindow /></MemoryRouter>);
+      const confirmBtn = await screen.findByRole('button', { name: 'Confirm all (1)' });
+      const upserts: unknown[] = [];
+      const orig = useSnapshotsStore.getState().upsert;
+      useSnapshotsStore.setState({
+        upsert: async (s: unknown) => { upserts.push(s); return -1; },
+      } as never);
+      try {
+        await user.click(confirmBtn);
+        expect(await screen.findByText('Confirmed 1 account value.')).toBeInTheDocument();
+        expect(upserts).toHaveLength(1);
+        expect((upserts[0] as { accountId: number }).accountId).toBe(acctAId); // never Bob's
+      } finally {
+        useSnapshotsStore.setState({ upsert: orig } as never);
+      }
+    });
+
+    it('joint view shows only the joint cash card — no derived section', async () => {
+      await primeTwoPersonMonthly();
+      render(<MemoryRouter initialEntries={['/monthly?view=joint']}><MonthlyMiniWindow /></MemoryRouter>);
+      expect(await screen.findByText('Joint Cash')).toBeInTheDocument();
+      expect(screen.queryByText(/Acct A/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Acct B/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/confirm last month's values/i)).not.toBeInTheDocument();
+    });
+
+    it('C9: a view that hides everything renders the filtered terminal card', async () => {
+      // Only individually-owned items — the JOINT view has nothing to show.
+      await db.execute(
+        `INSERT INTO persons (id, household_id, name, date_of_birth, target_retirement_age, annual_salary_pretax, pretax_401k_pct)
+         VALUES (1, 1, 'Alice', '1990-01-01', 65, 0, 0), (2, 1, 'Bob', '1992-01-01', 65, 0, 0)`,
+      );
+      usePersonsStore.setState({
+        persons: [makePerson({ id: 1, name: 'Alice' }), makePerson({ id: 2, name: 'Bob' })],
+        isLoading: false, error: null, load: async () => {},
+      } as never);
+      await seedOwnedAccount('Acct A', 1, AccountType.ACCOUNT_BROKERAGE, 5000);
+      await seedOwnedAccount('Acct B', 2, AccountType.ACCOUNT_BROKERAGE, 7000);
+      const user = userEvent.setup();
+      render(<MemoryRouter initialEntries={['/monthly?view=joint']}><MonthlyMiniWindow /></MemoryRouter>);
+      expect(await screen.findByText('Nothing to check in this view.')).toBeInTheDocument();
+      expect(screen.getByText('2 household items still awaiting review in other views.')).toBeInTheDocument();
+      expect(screen.queryByText('Nothing to confirm this month.')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Show household' }));
+      expect(screen.queryByText('Nothing to check in this view.')).not.toBeInTheDocument();
+      expect(await screen.findByText(/Acct A/)).toBeInTheDocument();
+    });
+
+    it('review fix: C9 counts only hidden PENDING items, not already-confirmed ones', async () => {
+      // Alice's card is pending; Bob's is already USER_CONFIRMED. The joint
+      // view (nothing visible) must say 1 item awaits — not 2.
+      await db.execute(
+        `INSERT INTO persons (id, household_id, name, date_of_birth, target_retirement_age, annual_salary_pretax, pretax_401k_pct)
+         VALUES (1, 1, 'Alice', '1990-01-01', 65, 0, 0), (2, 1, 'Bob', '1992-01-01', 65, 0, 0)`,
+      );
+      usePersonsStore.setState({
+        persons: [makePerson({ id: 1, name: 'Alice' }), makePerson({ id: 2, name: 'Bob' })],
+        isLoading: false, error: null, load: async () => {},
+      } as never);
+      await seedOwnedAccount('Acct A', 1, AccountType.ACCOUNT_BROKERAGE, 5000);
+      const acctB = await seedOwnedAccount('Acct B', 2, AccountType.ACCOUNT_BROKERAGE, 7000);
+      await new AccountSnapshotsRepo(db).upsert({
+        accountId: acctB,
+        snapshotDate: lastMonthCloseISO(),
+        totalValue: 7000,
+        source: SnapshotSource.USER_CONFIRMED,
+      });
+      render(<MemoryRouter initialEntries={['/monthly?view=joint']}><MonthlyMiniWindow /></MemoryRouter>);
+      expect(await screen.findByText('Nothing to check in this view.')).toBeInTheDocument();
+      expect(
+        screen.getByText('1 household item still awaiting review in other views.'),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/2 household items/)).not.toBeInTheDocument();
+    });
+
+    it('C10: All done carries the hidden-pending caption in a filtered view', async () => {
+      await primeTwoPersonMonthly();
+      render(<MemoryRouter initialEntries={['/monthly?view=p1']}><MonthlyMiniWindow /></MemoryRouter>);
+      await screen.findByRole('button', { name: 'Confirm all (1)' });
+      expect(
+        screen.getByText('1 household item hidden by this view is still unconfirmed.'),
+      ).toBeInTheDocument();
+    });
+
+    it('household view is byte-identical to pre-Wave-A behavior (regression)', async () => {
+      await primeTwoPersonMonthly();
+      render(<MemoryRouter initialEntries={['/monthly']}><MonthlyMiniWindow /></MemoryRouter>);
+      expect(await screen.findByRole('button', { name: 'Confirm all (2)' })).toBeInTheDocument();
+      expect(screen.getByText('Joint Cash')).toBeInTheDocument();
+      expect(screen.queryByText(/hidden by this view/)).not.toBeInTheDocument();
     });
   });
 });

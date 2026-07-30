@@ -14,9 +14,12 @@ import { formatCurrency } from '@/lib/format';
 export interface DriftCardProps {
   classRows: ClassTargetRow[];
   holdingRows: HoldingTargetRow[];
+  /** Wave A C16: person-view scope declaration (targets are household
+   *  settings; Actual follows the view) — muted line under the description. */
+  scopeCaption?: string;
 }
 
-function DriftCardImpl({ classRows, holdingRows }: DriftCardProps) {
+function DriftCardImpl({ classRows, holdingRows, scopeCaption }: DriftCardProps) {
   return (
     <Card>
       <CardHeader>
@@ -26,6 +29,7 @@ function DriftCardImpl({ classRows, holdingRows }: DriftCardProps) {
           only. Asset classes are household-level; holdings refine within
           their class.
         </CardDescription>
+        {scopeCaption && <CardDescription>{scopeCaption}</CardDescription>}
       </CardHeader>
       <CardContent className="space-y-6">
         {/* ── By asset class (household) ── */}

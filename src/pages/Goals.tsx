@@ -24,6 +24,10 @@ import {
 } from '@/lib/goal-progress';
 import { filterByForPersonId } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
+import { useViewScope } from '@/lib/use-view-scope';
+import { partitionHidden } from '@/lib/view-scope';
+import { FilteredEmptyState } from '@/components/layout/FilteredEmptyState';
+import { ScopeCaption } from '@/components/layout/ScopeCaption';
 import GoalForm, { DEFAULT_GOAL, GOAL_TYPE_LABELS } from '@/components/forms/GoalForm';
 import { EditDrawer } from '@/components/layout/EditDrawer';
 import { useConfirm } from '@/components/ui/confirm-dialog';
@@ -221,7 +225,9 @@ function GoalProgressCard({
             </dt>
             <dd className="tabular-nums font-medium">{monthlyNeededDisplay}</dd>
             <dd className="text-xs text-muted-foreground mt-0.5">
-              at your growth scenario · vs <span className="tabular-nums">{formatCurrency(projection.recentMonthlyContribution)}</span> recent
+              {/* Wave A C21: the Moderate rate is a household setting in
+                  every view — say so. */}
+              at the household growth scenario · vs <span className="tabular-nums">{formatCurrency(projection.recentMonthlyContribution)}</span> recent
             </dd>
           </div>
           <div>
@@ -342,6 +348,12 @@ export default function Goals() {
   const visibleGoals = useMemo(
     () => filterByForPersonId(goals, filter, persons),
     [goals, filter, persons],
+  );
+  // Wave A: caption vocabulary + exclusion counts (goals grammar: shared/for).
+  const { isFiltered } = useViewScope();
+  const goalPartition = useMemo(
+    () => partitionHidden(goals, visibleGoals, (g) => g.forPersonId),
+    [goals, visibleGoals],
   );
 
   // Goals page also reads accounts so the side-effect loads keep accounts
@@ -579,25 +591,28 @@ export default function Goals() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold mb-1">Goals</h1>
+          {/* Wave A C20: person views declare that progress counts each
+              goal's linked accounts in full. */}
           <p className="text-sm text-muted-foreground">
-            Projections use the last 6 months of contributions and the Moderate
-            growth scenario ({(annualRate * 100).toFixed(1)}%).
+            {`Projections use the last 6 months of contributions and the Moderate growth scenario (${(annualRate * 100).toFixed(1)}%).${isFiltered ? " Progress counts each goal's linked accounts in full, including joint accounts." : ''}`}
           </p>
+          <ScopeCaption noun="goals" jointWord="shared" otherVerb="for" partition={goalPartition} />
         </div>
         <div className="flex items-center gap-2">
-          <ExportCsvButton baseName="goals" columns={csvColumns} rows={goals} size="sm" />
+          <ExportCsvButton baseName="goals" columns={csvColumns} rows={goals} size="sm" householdScopeNote />
           <Button size="sm" onClick={() => setDrawer('create')}>Add goal</Button>
         </div>
       </div>
 
       {visibleGoals.length === 0 ? (
-        // W10 T7: goals exist, but the person filter strips them all — explain
-        // instead of a silent header over an empty grid.
-        <EmptyState
+        // Wave A D6 (supersedes W10 T7's count-free copy): goals exist, but
+        // the person filter strips them all — shared-goal grammar counts.
+        <FilteredEmptyState
           bare
-          icon={Target}
-          title="No goals in this view"
-          description="Every goal belongs to someone else under this filter — switch to Household to see everything."
+          noun="goals"
+          jointWord="shared"
+          otherVerb="for"
+          partition={goalPartition}
         />
       ) : (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

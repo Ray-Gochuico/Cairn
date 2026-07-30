@@ -6,6 +6,10 @@ import { useEquityGrantsStore } from '@/stores/equity-grants-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { computeEquityValue, type EquityValueResult } from '@/lib/equity-value';
 import { useViewFilter, type ViewFilter } from '@/lib/use-view-filter';
+import { useViewScope } from '@/lib/use-view-scope';
+import { partitionHidden } from '@/lib/view-scope';
+import { FilteredEmptyState } from '@/components/layout/FilteredEmptyState';
+import { ScopeCaption } from '@/components/layout/ScopeCaption';
 import type { EquityGrant } from '@/types/schema';
 import {
   Card,
@@ -216,6 +220,14 @@ export default function EquityGrants() {
     () => filterGrantsByView(equityGrants, filter, persons),
     [equityGrants, filter, persons],
   );
+  // Wave A: caption vocabulary + exclusion counts. ownerPersonId is
+  // non-nullable, so jointCount is always 0 and the clause degrades to
+  // "{m} owned by {other}" correctly.
+  const { isFiltered, personName } = useViewScope();
+  const grantPartition = useMemo(
+    () => partitionHidden(equityGrants, visibleGrants, (g) => g.ownerPersonId),
+    [equityGrants, visibleGrants],
+  );
 
   // Live LOCAL day (Wave 11 T9): re-derives at the midnight flip via
   // useLocalToday so a page left open overnight re-values vesting.
@@ -371,9 +383,14 @@ export default function EquityGrants() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold mb-1">Equity Grants</h1>
+          {/* Wave A C11: p1/p2 views name the person; the joint view keeps
+              the household line (the declaration below carries the scope). */}
           <p className="text-sm text-muted-foreground">
-            Vesting progress and value across all grants in your household.
+            {isFiltered && personName != null
+              ? `Vesting progress and value for ${personName}'s grants.`
+              : 'Vesting progress and value across all grants in your household.'}
           </p>
+          <ScopeCaption noun="grants" partition={grantPartition} />
         </div>
         <div className="flex items-center gap-2">
           <ExportCsvButton
@@ -381,6 +398,7 @@ export default function EquityGrants() {
             columns={csvColumns}
             rows={equityGrants}
             size="sm"
+            householdScopeNote
           />
           <ImportCsvButton entity="equity_grant" />
           <Button size="sm" onClick={() => setDrawer('create')}>
@@ -389,6 +407,22 @@ export default function EquityGrants() {
         </div>
       </div>
 
+      {/* Wave A D1: a view that hid every grant explains itself instead of
+          presenting a mystery-$0 summary strip; the joint view declares the
+          schema fact (C12 — grants cannot be joint). */}
+      {visibleGrants.length === 0 ? (
+        filter === 'joint' ? (
+          <FilteredEmptyState
+            noun="equity grants"
+            partition={grantPartition}
+            title="No joint equity grants"
+            description={`Equity grants always belong to one person — there are no joint grants. ${equityGrants.length} grant${equityGrants.length === 1 ? '' : 's'} owned individually.`}
+          />
+        ) : (
+          <FilteredEmptyState noun="grants" partition={grantPartition} />
+        )
+      ) : (
+        <>
       <div
         data-testid="equity-summary"
         className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm"
@@ -428,6 +462,8 @@ export default function EquityGrants() {
           />
         ))}
       </div>
+        </>
+      )}
 
       {renderDrawer()}
     </PageContainer>

@@ -191,4 +191,76 @@ describe('Plan529Section (W14: 529 plans live with Goals)', () => {
       await screen.findByText(/monthly balance snapshots, holdings, and contribution history/i),
     ).toBeInTheDocument();
   });
+
+  describe('Wave A: owner scoping + two-tier empty (D8 C29)', () => {
+    function primeTwoPersons() {
+      usePersonsStore.setState({
+        persons: [
+          { id: 1, householdId: 1, name: 'Alice' },
+          { id: 2, householdId: 1, name: 'Bob' },
+        ] as never,
+        isLoading: false, error: null, load: async () => {},
+      } as never);
+    }
+
+    function renderSectionAt(entry: string) {
+      return render(
+        <MemoryRouter initialEntries={[entry]}>
+          <Plan529Section />
+        </MemoryRouter>,
+      );
+    }
+
+    it('D8/C29: 529 plans filter by account owner; hidden plans are declared', () => {
+      primeTwoPersons();
+      useAccountsStore.setState({
+        accounts: [
+          makeAccount({ id: 1, name: 'Alice 529', ownerPersonId: 1 }),
+          makeAccount({ id: 2, name: 'Bob 529', ownerPersonId: 2 }),
+          makeAccount({ id: 3, name: 'Joint 529', ownerPersonId: null }),
+        ],
+      });
+      renderSectionAt('/goals?view=p1');
+      expect(screen.getByText('Alice 529')).toBeInTheDocument();
+      expect(screen.queryByText('Bob 529')).not.toBeInTheDocument();
+      expect(screen.queryByText('Joint 529')).not.toBeInTheDocument();
+      expect(screen.getByText('2 plans owned by Bob or joint not shown.')).toBeInTheDocument();
+    });
+
+    it('C29: filtered-empty 529 copy (never the false "No 529 plans yet.")', () => {
+      primeTwoPersons();
+      useAccountsStore.setState({
+        accounts: [makeAccount({ id: 2, name: 'Bob 529', ownerPersonId: 2 })],
+      });
+      renderSectionAt('/goals?view=p1');
+      expect(screen.queryByText('No 529 plans yet.')).not.toBeInTheDocument();
+      expect(
+        screen.getByText('No 529 plans owned by Alice — 1 household plan not shown.'),
+      ).toBeInTheDocument();
+    });
+
+    it('review fix: the joint-view nonempty caption uses the individually-owned grammar', () => {
+      primeTwoPersons();
+      useAccountsStore.setState({
+        accounts: [
+          makeAccount({ id: 1, name: 'Joint 529', ownerPersonId: null }),
+          makeAccount({ id: 2, name: 'Alice 529', ownerPersonId: 1 }),
+          makeAccount({ id: 3, name: 'Bob 529', ownerPersonId: 2 }),
+        ],
+      });
+      renderSectionAt('/goals?view=joint');
+      expect(screen.getByText('Joint 529')).toBeInTheDocument();
+      expect(screen.getByText('2 plans individually owned not shown.')).toBeInTheDocument();
+      expect(screen.queryByText(/owned by others or joint/)).not.toBeInTheDocument();
+    });
+
+    it('true-empty keeps "No 529 plans yet." in a filtered view (regression)', () => {
+      primeTwoPersons();
+      useAccountsStore.setState({ accounts: [] });
+      renderSectionAt('/goals?view=p1');
+      expect(screen.getByText('No 529 plans yet.')).toBeInTheDocument();
+      // The Add entry point stays mounted in every view (edit surface).
+      expect(screen.getByRole('button', { name: 'Add 529 plan' })).toBeInTheDocument();
+    });
+  });
 });

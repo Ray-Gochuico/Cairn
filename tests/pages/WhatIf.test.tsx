@@ -321,6 +321,20 @@ describe('WhatIf — projection footnote (W7-Legal R-LWI-4)', () => {
     ).toBeInTheDocument();
   });
 
+  it('Wave A C22: the footnote declares household scope', () => {
+    render(
+      <MemoryRouter>
+        <WhatIf />
+      </MemoryRouter>,
+    );
+    const footnote = screen.getByTestId('whatif-projection-footnote');
+    expect(
+      within(footnote).getByText(
+        /Projections always model your whole household — income, expenses, and accounts for both people\./,
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('renders the footnote after the milestone strip in DOM order', () => {
     render(
       <MemoryRouter>

@@ -28,6 +28,8 @@ import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import { formatCurrency, formatMonth } from '@/lib/format';
 import { useLocalToday } from '@/lib/use-local-today';
 import { localTodayISO } from '@/lib/dates';
+import { useViewScope } from '@/lib/use-view-scope';
+import { filterByPersonId } from '@/lib/filter-by-view';
 
 export default function Budget() {
   const categories = useCategoriesStore((s) => s.categories);
@@ -61,9 +63,20 @@ export default function Budget() {
   // The SELECTED month is user state; init to the current local month.
   const [month, setMonth] = useState(() => localTodayISO().slice(0, 7));
 
+  // Wave A D2: the person view scopes ACTUALS only (transactions carry
+  // personId); budgets are household-level with no person split, so they are
+  // declared (C6/C7) and verdicts dropped rather than pretending to filter.
+  // The month list above stays derived from UNFILTERED transactions — a month
+  // with only joint spend must stay selectable in every view.
+  const { filter, isFiltered, personName, persons } = useViewScope();
+  const visibleTransactions = useMemo(
+    () => filterByPersonId(transactions, filter, persons),
+    [transactions, filter, persons],
+  );
+
   const summary = useMemo(
-    () => summarizeBudget(categories, transactions, month),
-    [categories, transactions, month],
+    () => summarizeBudget(categories, visibleTransactions, month),
+    [categories, visibleTransactions, month],
   );
 
   // Tracked-category selection persisted in localStorage. Initial value is
@@ -191,6 +204,11 @@ export default function Budget() {
           <p className="text-sm text-muted-foreground">
             Set a monthly target per category and track it against actual spending.
           </p>
+          {isFiltered && (
+            <p className="text-sm text-muted-foreground" data-testid="budget-scope-caption">
+              {`Showing ${filter === 'joint' ? 'joint' : `${personName}'s`} spending against household budget targets — budgets aren't split per person.`}
+            </p>
+          )}
         </div>
         {/* Deliberately a native month select, NOT the app's range tabs: this
             picks one specific calendar month out of an unbounded list (a
@@ -211,6 +229,7 @@ export default function Budget() {
           <h2 className="text-lg font-semibold">Spending</h2>
           <span className="text-sm text-muted-foreground tabular-nums">
             {formatCurrency(Math.abs(summary.totalActual))} of {formatCurrency(Math.abs(summary.totalBudget))}
+            {isFiltered ? ' household budget' : ''}
           </span>
         </div>
       ) : (
@@ -247,13 +266,21 @@ export default function Budget() {
                 </h3>
                 <span className="text-xs text-muted-foreground tabular-nums">
                   {formatCurrency(Math.abs(groupActual))} of {formatCurrency(Math.abs(groupBudget))}
+                  {isFiltered ? ' household budget' : ''}
                 </span>
               </div>
               <div className="divide-y">
                 {rows.map((r) => (
                   <div key={r.categoryId} className="flex items-center gap-2">
                     <div className="flex-1 min-w-0">
-                      <BudgetOverlayRow row={r} onBudgetCommit={handleBudgetCommit} />
+                      {/* Wave A D2: outside household view, budgets are
+                          read-only (they edit a household figure) and rows
+                          are verdict-free (facts, not over/under). */}
+                      <BudgetOverlayRow
+                        row={r}
+                        verdictFree={isFiltered}
+                        onBudgetCommit={isFiltered ? undefined : handleBudgetCommit}
+                      />
                     </div>
                     <button
                       type="button"
@@ -278,10 +305,11 @@ export default function Budget() {
               </h3>
               <span className="text-xs text-muted-foreground tabular-nums">
                 {formatCurrency(Math.abs(misc.actual))} of {formatCurrency(Math.abs(misc.budget ?? 0))}
+                {isFiltered ? ' household budget' : ''}
               </span>
             </div>
             <div className="divide-y">
-              <BudgetOverlayRow row={{ ...misc, categoryId: MISC_CATEGORY_ID }} />
+              <BudgetOverlayRow row={{ ...misc, categoryId: MISC_CATEGORY_ID }} verdictFree={isFiltered} />
             </div>
           </div>
         )}

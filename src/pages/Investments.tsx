@@ -19,6 +19,10 @@ import { AccountType, AssetClass } from '@/types/enums';
 import { filterByOwnerPersonId } from '@/lib/filter-by-view';
 import { includedAccountIds } from '@/lib/account-inclusion';
 import { useViewFilter } from '@/lib/use-view-filter';
+import { useViewScope } from '@/lib/use-view-scope';
+import { partitionHidden, withViewSearch } from '@/lib/view-scope';
+import { FilteredEmptyState } from '@/components/layout/FilteredEmptyState';
+import { ScopeCaption } from '@/components/layout/ScopeCaption';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import CardEditFrame from '@/components/investments/CardEditFrame';
@@ -173,6 +177,9 @@ function renderCardFlow(cards: InvestmentsCardEntry[]): ReactNode[] {
 
 export default function Investments() {
   const { filter, persons } = useViewFilter();
+  // Wave A: caption vocabulary (reads only — no store loads).
+  const { isFiltered, personName } = useViewScope();
+  const location = useLocation();
 
   const [editMode, setEditMode] = useState(false);
 
@@ -308,23 +315,47 @@ export default function Investments() {
     () => new Map(tickers.map((t) => [t.ticker, t])),
     [tickers],
   );
+  // Wave A D7: the banner input is deliberately HOUSEHOLD-wide (all holdings,
+  // not the view-visible slice) — it protects exactly what the protected
+  // household-wide donuts (Per-company/Sector) consume, so a hidden person's
+  // unclassified ticker must still surface in every view.
   const unclassifiedTickers = useMemo(() => {
     const set = new Set<string>();
-    for (const h of visibleHoldings) {
+    for (const h of holdings) {
       const row = tickerByName.get(h.ticker);
       if (!row || (row.name === null && row.assetClass === 'OTHER')) set.add(h.ticker);
     }
     return [...set].sort();
-  }, [visibleHoldings, tickerByName]);
+  }, [holdings, tickerByName]);
 
   // CSV export. accountId resolves to the account name via accountById; a
   // null id, or one with no matching account, becomes ''. targetAllocationPct
   // is the stored 0..1 fraction and is exported raw (no ×100) — hence the
   // header 'target allocation' rather than 'target allocation %'. The rows
-  // are the full `holdings` array; the ?view filter is intentionally ignored.
+  // are the full `holdings` array; the export stays household-complete BY
+  // RULING (Wave A D5) — a person-view session must never produce a
+  // silently-partial backup. The owner column (D5) makes each row
+  // self-describing ('Joint' for null-owner accounts), mirroring
+  // EquityGrants' owner column.
   const accountById = useMemo(
     () => new Map(accounts.filter((a) => a.id != null).map((a) => [a.id as number, a.name])),
     [accounts],
+  );
+  const personNameById = useMemo(
+    () => new Map(persons.filter((p) => p.id != null).map((p) => [p.id as number, p.name])),
+    [persons],
+  );
+  const ownerByAccountId = useMemo(
+    () =>
+      new Map(
+        accounts
+          .filter((a) => a.id != null)
+          .map((a) => [
+            a.id as number,
+            a.ownerPersonId == null ? null : (personNameById.get(a.ownerPersonId) ?? ''),
+          ]),
+      ),
+    [accounts, personNameById],
   );
   const csvColumns = useMemo<CsvColumn<Holding>[]>(
     () => [
@@ -332,12 +363,19 @@ export default function Investments() {
         header: 'account',
         value: (h) => accountById.get(h.accountId) ?? '',
       },
+      {
+        header: 'owner',
+        value: (h) => {
+          const owner = ownerByAccountId.get(h.accountId);
+          return owner === null ? 'Joint' : owner ?? '';
+        },
+      },
       { header: 'ticker', value: (h) => h.ticker },
       { header: 'share count', value: (h) => h.shareCount },
       { header: 'cost basis', value: (h) => h.costBasis },
       { header: 'target allocation', value: (h) => h.targetAllocationPct },
     ],
-    [accountById],
+    [accountById, ownerByAccountId],
   );
 
   const visibleSnapshots = useMemo(
@@ -459,8 +497,12 @@ export default function Investments() {
   // Look up asset classes whenever the set of tickers changes. The tickers
   // table starts empty in Phase 2; this lookup gracefully resolves to an
   // empty map and every holding falls back to AssetClass.OTHER.
+  // Wave A: keyed on ALL holdings (not the view-visible slice) so the
+  // household-level class-targets gate below classifies hidden holdings
+  // correctly; the map is ticker-keyed, so extra entries are harmless to
+  // every view-scoped lookup.
   useEffect(() => {
-    const tickers = Array.from(new Set(visibleHoldings.map((h) => h.ticker))).sort();
+    const tickers = Array.from(new Set(holdings.map((h) => h.ticker))).sort();
     if (tickers.length === 0) {
       setAssetClassByTicker(new Map());
       return;
@@ -474,7 +516,7 @@ export default function Investments() {
     return () => {
       cancelled = true;
     };
-  }, [visibleHoldings]);
+  }, [holdings]);
 
   const latestPerAccount = useMemo(
     () => latestSnapshotPerAccount(visibleSnapshots),
@@ -491,14 +533,28 @@ export default function Investments() {
     [valuations],
   );
 
-  // Distinct asset classes the user actually holds — drives the
+  // Distinct asset classes the HOUSEHOLD actually holds — drives the
   // AssetClassTargetsForm (only show classes with at least one held position)
-  // and gates the 'class-targets' card's `applicable`.
+  // and gates the 'class-targets' card's `applicable`. Wave A D2: the form
+  // edits HOUSEHOLD-level targets, so its class universe must not shrink (or
+  // vanish) under a person view — under `filter === 'household'` everything
+  // short-circuits to the existing objects (zero extra work).
+  const latestPerAccountAll = useMemo(
+    () => (filter === 'household' ? null : latestSnapshotPerAccount(snapshots)),
+    [filter, snapshots],
+  );
+  const householdValuations = useMemo(
+    () =>
+      filter === 'household' || latestPerAccountAll === null
+        ? valuations
+        : valueHoldings(accounts, holdings, latestPerAccountAll, assetClassByTicker),
+    [filter, valuations, accounts, holdings, latestPerAccountAll, assetClassByTicker],
+  );
   const heldClasses = useMemo(() => {
     const set = new Set<AssetClass>();
-    for (const v of valuations) set.add(v.assetClass);
+    for (const v of householdValuations) set.add(v.assetClass);
     return [...set];
-  }, [valuations]);
+  }, [householdValuations]);
 
   // Asset-allocation donut entity picker. Keys are the asset-class display
   // labels (already unique by definition); persisted under
@@ -657,7 +713,12 @@ export default function Investments() {
            * card and the chart header can't disagree (round-2 A2). Sits
            * above the donut grid so the headline number reads first.
            */
-          <GrowthCard title="Investments growth" horizons={investmentsGrowth} />
+          <GrowthCard
+            // Review fix: the digits re-scope with the view — the title
+            // names the scope, same treatment as NetWorth's GrowthCard.
+            title={`Investments growth${filter === 'household' ? '' : filter === 'joint' ? ' · Joint' : ` · ${personName}`}`}
+            horizons={investmentsGrowth}
+          />
         ),
       },
       {
@@ -718,7 +779,18 @@ export default function Investments() {
         label: 'Target vs Actual',
         size: 'wide',
         applicable: true,
-        render: () => <DriftCard classRows={classRows} holdingRows={holdingRows} />,
+        render: () => (
+          <DriftCard
+            classRows={classRows}
+            holdingRows={holdingRows}
+            // Wave A C16: targets are household settings; Actual follows the view.
+            scopeCaption={isFiltered
+              ? filter === 'joint'
+                ? 'Targets are household-level; Actual is joint holdings only.'
+                : `Targets are household-level; Actual is ${personName}'s holdings only.`
+              : undefined}
+          />
+        ),
       },
       {
         id: 'contributions',
@@ -731,6 +803,16 @@ export default function Investments() {
             contributions={visibleContributions}
             fromYyyymm={contribRange.from}
             toYyyymm={contribRange.to}
+            // Wave A C17 (D8): contributions keep account-owner scoping —
+            // declare the semantics instead of leaving them implicit.
+            scopeCaption={isFiltered
+              ? filter === 'joint'
+                ? 'Contributions into joint accounts only.'
+                : `Contributions into ${personName}'s accounts — joint accounts not included.`
+              : undefined}
+            emptyMessage={isFiltered && contributions.length > 0
+              ? `No contributions in ${filter === 'joint' ? 'joint' : `${personName}'s`} accounts in this window — switch to Household to see all.`
+              : undefined}
           />
         ),
       },
@@ -753,7 +835,12 @@ export default function Investments() {
             investableOnly={investableOnly}
             onToggleInvestableOnly={handleToggleInvestableOnly}
             asOfDate={breakdownAsOf}
-            viewHoldingsTo="/investments?manage=holdings"
+            // Review fix (D9): a same-page link must not drop the ?view=.
+            viewHoldingsTo={withViewSearch('/investments?manage=holdings', location.search)}
+            // Wave A: a view-emptied list is not "no accounts yet".
+            emptyMessage={isFiltered && accounts.length > 0
+              ? `No accounts in ${filter === 'joint' ? 'the joint view' : `${personName}'s name`} — switch to Household to see all.`
+              : undefined}
           />
         ),
       },
@@ -775,6 +862,14 @@ export default function Investments() {
       },
     ],
     [
+      // Wave A scope declarations (C16/C17 + view-aware empties)
+      isFiltered,
+      filter,
+      personName,
+      accounts,
+      contributions,
+      // Review fix: the View-holdings link preserves ?view=
+      location.search,
       // contributions (time-series reads stores itself now)
       visibleAccounts,
       // growth
@@ -821,7 +916,7 @@ export default function Investments() {
   // Deep links like /investments#concentration (ConcentrationCard's "See
   // full breakdown") scroll to the target card once cards have rendered.
   // A hidden card (customized layout) simply no-ops — the user's layout wins.
-  const { hash } = useLocation();
+  const { hash } = location;
   useEffect(() => {
     if (!hash) return;
     document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -883,6 +978,13 @@ export default function Investments() {
 
   const hasAnyHolding = visibleHoldings.length > 0;
   const hasAnySnapshot = visibleSnapshots.length > 0;
+  // Wave A D6 two-tier gate: onboarding copy fires only when the HOUSEHOLD
+  // (unfiltered stores) is empty; a view that hid everything gets the
+  // count-aware tier-2 state instead.
+  const household529Count = accounts.filter((a) => a.type === AccountType.ACCOUNT_529).length;
+  const hasAnyHouseholdData =
+    holdings.length > 0 || snapshots.length > 0 || household529Count > 0;
+  const accountPartition = partitionHidden(accounts, visibleAccounts, (a) => a.ownerPersonId);
 
   // A user with a 529-only setup (no holdings, no snapshots elsewhere) still
   // wants to see their 529 card, so the empty state only fires when there
@@ -891,6 +993,28 @@ export default function Investments() {
     return (
       <PageContainer className="space-y-6">
         <PageLoadingSpinner />
+      </PageContainer>
+    );
+  }
+
+  // Wave A D6 tier 2: the household HAS investment data, the view hid all of
+  // it. Counts + View household; the Manage region stays reachable (edit
+  // surfaces are view-independent).
+  if (
+    hasAnyHouseholdData &&
+    !hasAnyHolding && !hasAnySnapshot && plans529.length === 0
+  ) {
+    return (
+      <PageContainer className="space-y-6">
+        <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
+        <div>
+          <h1 className="text-2xl font-semibold mb-1">Investments</h1>
+          <p className="text-sm text-muted-foreground">
+            Asset allocation, <TermTooltip term="DRIFT">drift</TermTooltip> from your targets, and contribution trends.
+          </p>
+        </div>
+        <FilteredEmptyState noun="investment accounts" partition={accountPartition} />
+        <ManageSurface />
       </PageContainer>
     );
   }
@@ -946,6 +1070,8 @@ export default function Investments() {
             Allocation across asset classes,{' '}
             <TermTooltip term="DRIFT">drift</TermTooltip> from your targets, and contribution trends.
           </p>
+          {/* Wave A C2: nonempty filtered views declare what the filter hid. */}
+          <ScopeCaption noun="accounts" partition={accountPartition} />
         </div>
         <div className="flex items-center gap-2">
           {/* W14: the balance-history hero moved to Net Worth's
@@ -963,7 +1089,7 @@ export default function Investments() {
           >
             {editMode ? 'Done' : 'Customize'}
           </button>
-          <ExportCsvButton baseName="holdings" columns={csvColumns} rows={holdings} />
+          <ExportCsvButton baseName="holdings" columns={csvColumns} rows={holdings} householdScopeNote />
         </div>
       </div>
 

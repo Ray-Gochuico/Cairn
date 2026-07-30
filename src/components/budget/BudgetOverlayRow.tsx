@@ -10,9 +10,12 @@ export interface BudgetOverlayRowProps {
     inputEl: HTMLInputElement,
     savedBudget: number | null,
   ) => void;
+  /** Wave A D2: person views show facts, never verdicts against household
+   *  targets — neutral fill, no over/left label, keep the "X of Y" fact line. */
+  verdictFree?: boolean;
 }
 
-export default function BudgetOverlayRow({ row, onBudgetCommit }: BudgetOverlayRowProps) {
+export default function BudgetOverlayRow({ row, onBudgetCommit, verdictFree }: BudgetOverlayRowProps) {
   const { categoryId, categoryName, budget, actual, remaining, overBudget } = row;
 
   // Fill ratio: 0..1 (capped). Unbudgeted rows render an empty track.
@@ -23,16 +26,17 @@ export default function BudgetOverlayRow({ row, onBudgetCommit }: BudgetOverlayR
   const fillPct = `${Math.round(fillRatio * 100)}%`;
 
   // Fill color tracks state — green for under, red/pink for over, transparent
-  // when no spending so the muted track shows through.
-  const fillColor = overBudget
-    ? 'bg-destructive'
-    : actual > 0
-      ? 'bg-success'
-      : 'bg-transparent';
+  // when no spending so the muted track shows through. Verdict-free rows
+  // (person views, D2) use a token-derived neutral fill: a fact bar, not a
+  // status.
+  const fillColor = verdictFree
+    ? actual > 0 ? 'bg-muted-foreground/50' : 'bg-transparent'
+    : overBudget ? 'bg-destructive' : actual > 0 ? 'bg-success' : 'bg-transparent';
 
   // Right-side label — "$X over" (red) when over, "$X left" (green when there
-  // is real spending, muted when actual = 0) otherwise. Hidden for unbudgeted.
-  const showLabel = budget != null && remaining != null;
+  // is real spending, muted when actual = 0) otherwise. Hidden for unbudgeted
+  // rows and verdict-free (person-view) rows.
+  const showLabel = !verdictFree && budget != null && remaining != null;
   const labelText = overBudget
     ? `${formatCurrency(Math.abs(remaining as number))} over`
     : `${formatCurrency(Math.abs(remaining as number))} left`;

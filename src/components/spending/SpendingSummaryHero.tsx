@@ -29,6 +29,11 @@ export interface SpendingSummaryHeroProps {
   monthlyBudget: number;
   /** Injectable clock for tests. */
   asOf?: Date;
+  /** Wave A C13: person-view declaration rendered where the budget bar
+   *  used to sit (this-month range only, matching the bar's calendar rule). */
+  scopeNote?: string;
+  /** Wave A C28-style note appended to the "No spending found" empty line. */
+  emptyScopeNote?: string;
 }
 
 const currencyFormatter = new Intl.NumberFormat('en-US', {
@@ -47,6 +52,8 @@ export function SpendingSummaryHero({
   categories,
   monthlyBudget,
   asOf,
+  scopeNote,
+  emptyScopeNote,
 }: SpendingSummaryHeroProps) {
   const localToday = useLocalToday();
   const today = useMemo(() => asOf ?? dateFromLocalISO(localToday), [asOf, localToday]);
@@ -104,7 +111,7 @@ export function SpendingSummaryHero({
       <CardContent>
         {summary.byCategory.length === 0 ? (
           <div className="rounded-md border border-dashed p-6 text-center text-sm text-muted-foreground">
-            No spending found for {rangeLabel.toLowerCase()}.
+            No spending found for {rangeLabel.toLowerCase()}.{emptyScopeNote ? ` ${emptyScopeNote}` : ''}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_260px] gap-6 items-center">
@@ -155,6 +162,11 @@ export function SpendingSummaryHero({
                     (budget: ${monthlyBudget.toLocaleString()})
                   </p>
                 </div>
+              )}
+              {/* Wave A C13: in person views the budget bar is withheld (D2 —
+                  the baseline is a household figure) and this line says so. */}
+              {isThisMonth && scopeNote && (
+                <p className="text-xs text-muted-foreground pt-1">{scopeNote}</p>
               )}
             </div>
             <CategoryDonut

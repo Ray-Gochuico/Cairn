@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { runMigrations, loadAllMigrations } from '@/db/migrations';
 import { setDatabase } from '@/db/db';
@@ -18,13 +18,15 @@ describe('seedDemoData', () => {
     db = await freshDb();
   });
 
-  it('creates exactly one household, one person, and the expected accounts', async () => {
+  it('creates exactly one household, two persons, and the expected accounts', async () => {
     await seedDemoData(db);
     const hh = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM household');
     expect(hh[0].n).toBe(1);
     const persons = await db.select<{ name: string }>('SELECT name FROM persons');
-    expect(persons).toHaveLength(1);
-    expect(persons[0].name).toBe(DEMO_SEED.personName);
+    expect(persons).toHaveLength(2);
+    expect(persons.map((p) => p.name).sort()).toEqual(
+      [DEMO_SEED.personName, DEMO_SEED.partnerName].sort(),
+    );
     const accts = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM accounts');
     expect(accts[0].n).toBe(DEMO_SEED.accountCount);
   });
@@ -98,10 +100,55 @@ describe('seedDemoData', () => {
     const accts = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM accounts');
     const snaps = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM account_snapshots');
     const loans = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM loans');
-    expect(persons[0].n).toBe(1);
+    expect(persons[0].n).toBe(2);
     expect(accts[0].n).toBe(DEMO_SEED.accountCount);
     expect(snaps[0].n).toBe(DEMO_SEED.accountCount * 2);
     expect(loans[0].n).toBe(DEMO_SEED.loanCount);
+  });
+
+  it('Wave A: seeds a two-person household with joint items (ownership map)', async () => {
+    await seedDemoData(db);
+    const partner = await db.select<{ id: number }>(
+      'SELECT id FROM persons WHERE name = ?', [DEMO_SEED.partnerName],
+    );
+    expect(partner).toHaveLength(1);
+    const partnerAccts = await db.select<{ n: number }>(
+      'SELECT COUNT(*) AS n FROM accounts WHERE owner_person_id = ?', [partner[0].id],
+    );
+    expect(partnerAccts[0].n).toBe(2); // Partner Brokerage + Partner Savings
+    const jointAccts = await db.select<{ name: string }>(
+      'SELECT name FROM accounts WHERE owner_person_id IS NULL',
+    );
+    expect(jointAccts.map((a) => a.name)).toEqual(['Joint Checking']);
+    const loans = await db.select<{ name: string; obligor_person_id: number | null }>(
+      'SELECT name, obligor_person_id FROM loans ORDER BY name',
+    );
+    expect(loans.find((l) => l.name === 'Mortgage')?.obligor_person_id).toBeNull();      // joint
+    expect(loans.find((l) => l.name === 'Car Loan')?.obligor_person_id).not.toBeNull();  // P1's
+    const jointProps = await db.select<{ n: number }>(
+      'SELECT COUNT(*) AS n FROM properties WHERE owner_person_id IS NULL',
+    );
+    expect(jointProps[0].n).toBe(1); // Demo Home
+    // Review fix: Demo Home is linked to the (joint) Mortgage so the wave's
+    // full-lien property surfaces are demonstrable in the shim.
+    const mortgage = await db.select<{ id: number }>(
+      "SELECT id FROM loans WHERE name = 'Mortgage'",
+    );
+    const home = await db.select<{ linked_loan_id: number | null }>(
+      "SELECT linked_loan_id FROM properties WHERE name = 'Demo Home'",
+    );
+    expect(home[0].linked_loan_id).toBe(mortgage[0].id);
+    const partnerVehicles = await db.select<{ n: number }>(
+      'SELECT COUNT(*) AS n FROM vehicles WHERE owner_person_id = ?', [partner[0].id],
+    );
+    expect(partnerVehicles[0].n).toBe(1); // Partner Car
+  });
+
+  it('Wave A: the partner slice is independently idempotent (stale dev DBs converge)', async () => {
+    await seedDemoData(db); // full seed
+    await seedDemoData(db); // second run: both sentinels short-circuit
+    const persons = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM persons');
+    expect(persons[0].n).toBe(2);
   });
 
   it('produces non-empty holding value end-to-end (the donut precondition)', async () => {
@@ -164,6 +211,36 @@ describe('seedDemoData', () => {
       "SELECT sector FROM tickers WHERE ticker = 'BND'",
     );
     expect(bnd[0].sector).toBeNull();
+  });
+
+  it('dates the default "today" snapshots on the LOCAL calendar day, never the UTC day', async () => {
+    // 23:30 Pacific = 06:30 UTC next day. The app's as-of pipelines run on
+    // useLocalToday(), so a UTC-dated snapshot sits in the local FUTURE all
+    // evening west of UTC and every latest-value surface silently excludes
+    // it (the briefing's net-worth row vanished in evening e2e runs).
+    // Review fix: pin the TZ for this test — on a UTC runner the local and
+    // UTC calendar days coincide and the assertion below would be inert.
+    const prevTZ = process.env.TZ;
+    process.env.TZ = 'America/Los_Angeles';
+    vi.useFakeTimers();
+    try {
+      const instant = new Date('2026-07-29T23:30:00-07:00');
+      vi.setSystemTime(instant);
+      const { localTodayISO } = await import('@/lib/dates');
+      // Guard: the chosen instant must actually split the two
+      // implementations, so this test self-fails if it stops discriminating.
+      expect(localTodayISO(instant)).not.toBe(instant.toISOString().slice(0, 10));
+      await seedDemoData(db);
+      const expected = localTodayISO(instant);
+      const rows = await db.select<{ d: string }>(
+        'SELECT MAX(snapshot_date) AS d FROM account_snapshots',
+      );
+      expect(rows[0].d).toBe(expected);
+    } finally {
+      vi.useRealTimers();
+      if (prevTZ === undefined) delete process.env.TZ;
+      else process.env.TZ = prevTZ;
+    }
   });
 
   it('derives loan first-payment dates from an injectable reference day (Wave 11 T20)', async () => {
