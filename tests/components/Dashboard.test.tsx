@@ -472,6 +472,95 @@ describe('Dashboard spending cards', () => {
   });
 });
 
+describe('Wave A: person-view honesty (D2/D6/D7)', () => {
+  const localMonth = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  })();
+
+  function primeTwoPersons() {
+    usePersonsStore.setState({
+      persons: [{ id: 1, name: 'Alice' } as never, { id: 2, name: 'Bob' } as never],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+  }
+
+  beforeEach(() => {
+    resetStores();
+    primeTwoPersons();
+  });
+
+  it('C8: budget pill drops the verdict and declares the household figure in p1 view', async () => {
+    useHouseholdStore.setState({
+      household: {
+        filingStatus: FilingStatus.SINGLE, state: 'CA', city: null,
+        monthlyExpenseBaseline: 4000, withdrawalRate: 0.04,
+        inflationAssumption: 0.03, growthScenarios: moderateScenarios,
+      },
+      isLoading: false, error: null, load: async () => {},
+    });
+    useTransactionsStore.setState({
+      transactions: [{
+        id: 1, householdId: 1, date: `${localMonth}-05`, merchant: 'M', merchantRaw: 'M',
+        amount: 900, categoryId: null, sourceAccountId: null, propertyId: null, vehicleId: null,
+        personId: 1, sourcePdfFilename: null, reimbursable: false, reimbursedAt: null,
+        reimbursedAmount: null, isRecurring: false, notes: null,
+      }],
+      isLoading: false, error: null, load: async () => {},
+    });
+    render(<MemoryRouter initialEntries={['/?view=p1']}><Dashboard /></MemoryRouter>);
+    expect(await screen.findByText('Budget: $4,000 · household figure')).toBeInTheDocument();
+    expect(screen.queryByText(/\$[\d,]+ (under|over)/)).not.toBeInTheDocument();
+  });
+
+  it('C25: Total Debt $0 pill names the hidden joint count in p1 view', async () => {
+    useLoansStore.setState({
+      loans: [
+        { id: 1, householdId: 1, obligorPersonId: null, name: 'Mortgage', type: 'MORTGAGE', originalAmount: 300000, currentBalance: 250000, interestRate: 0.05, termMonths: 360, firstPaymentDate: '2020-01-01', monthlyPayment: 1600, extraPaymentDefault: 0 } as never,
+        { id: 2, householdId: 1, obligorPersonId: null, name: 'HELOC', type: 'OTHER', originalAmount: 50000, currentBalance: 20000, interestRate: 0.07, termMonths: 120, firstPaymentDate: '2023-01-01', monthlyPayment: 400, extraPaymentDefault: 0 } as never,
+      ],
+      isLoading: false, error: null, load: async () => {},
+    });
+    render(<MemoryRouter initialEntries={['/?view=p1']}><Dashboard /></MemoryRouter>);
+    expect(await screen.findByText("None in Alice's name · 2 joint not shown")).toBeInTheDocument();
+  });
+
+  it('C25: Awaiting Reimbursement $0 pill names hidden household pending', async () => {
+    useTransactionsStore.setState({
+      transactions: [{
+        id: 1, householdId: 1, date: `${localMonth}-05`, merchant: 'M', merchantRaw: 'M',
+        amount: 250, categoryId: null, sourceAccountId: null, propertyId: null, vehicleId: null,
+        personId: 2, sourcePdfFilename: null, reimbursable: true, reimbursedAt: null,
+        reimbursedAmount: null, isRecurring: false, notes: null,
+      }],
+      isLoading: false, error: null, load: async () => {},
+    });
+    render(<MemoryRouter initialEntries={['/?view=p1']}><Dashboard /></MemoryRouter>);
+    expect(await screen.findByText('None pending for Alice · 1 household pending')).toBeInTheDocument();
+  });
+
+  it('D6: goals widget shows FilteredEmptyState (no Add CTA) when goals exist but the view hid them', async () => {
+    primeStores({
+      goals: [
+        { id: 1, name: 'Bob trip', forPersonId: 2 },
+        { id: 2, name: 'Shared house', forPersonId: null },
+      ],
+    });
+    render(<MemoryRouter initialEntries={['/?view=p1']}><Dashboard /></MemoryRouter>);
+    expect(await screen.findByText("No goals in Alice's name")).toBeInTheDocument();
+    expect(screen.getByText('1 shared and 1 for Bob not shown.')).toBeInTheDocument();
+    expect(screen.queryByText('Add your first goal')).not.toBeInTheDocument();
+  });
+
+  it('true-empty goals keep the onboarding CTA (regression)', async () => {
+    primeStores({ goals: [] });
+    render(<MemoryRouter initialEntries={['/?view=p1']}><Dashboard /></MemoryRouter>);
+    expect(await screen.findByText('Add your first goal')).toBeInTheDocument();
+    expect(screen.queryByText(/No goals in Alice's name/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/shared and .* for Bob not shown/)).not.toBeInTheDocument();
+  });
+});
+
 describe('Dashboard pills — excluded accounts', () => {
   beforeEach(() => {
     resetStores();

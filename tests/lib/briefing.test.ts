@@ -189,6 +189,14 @@ describe('buildBriefing — Monthly cadence action row (the Statement composabil
     expect(b.rows[0].tone).toBe('action');
     expect(b.rows[0].href).toBe('/monthly');
   });
+  it('Wave A: the monthly-close row is householdScoped so the · Household suffix renders', () => {
+    const b = buildBriefing(quietInput({
+      monthly: { pending: true, monthToClose: '2026-06', balancesToConfirm: 3, loanPaymentsToRecord: 2 },
+    }));
+    const close = b.rows.find((r) => r.id === 'monthly-close');
+    expect(close?.householdScoped).toBe(true);
+  });
+
   it('singular forms and single-clause variants', () => {
     const one = buildBriefing(quietInput({
       monthly: { pending: true, monthToClose: '2026-06', balancesToConfirm: 1, loanPaymentsToRecord: 0 },

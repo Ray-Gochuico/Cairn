@@ -4,6 +4,8 @@ import { AlertTriangleIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { useConcentration } from '@/lib/use-concentration';
 import { topEffectiveExposures } from '@/lib/concentration';
+import { useViewFilter } from '@/lib/use-view-filter';
+import { scopeSuffix } from '@/lib/view-scope';
 import { FreshnessBadge } from '@/components/ui/freshness-badge';
 
 /**
@@ -39,6 +41,9 @@ function severityChip(severity: 'HIGH' | 'MEDIUM' | 'LOW'): { label: string; cla
 function ConcentrationCardImpl() {
   const report = useConcentration();
   const count = report.warnings.length;
+  // Wave A C1 (additive only — protected view): the DATA stays household-wide
+  // forever; under a person view the title declares it with · Household.
+  const { filter } = useViewFilter();
   // Healthy-state summary: the biggest effective position keeps the card
   // informative when there is nothing to warn about (no more dead end).
   const largest = topEffectiveExposures(report.perTicker, 1)[0] ?? null;
@@ -48,7 +53,7 @@ function ConcentrationCardImpl() {
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2">
           <div className="text-[11px] sm:text-xs uppercase tracking-wider text-muted-foreground truncate">
-            Concentration
+            {`Concentration${scopeSuffix(filter)}`}
           </div>
           <FreshnessBadge size="sm" />
         </div>

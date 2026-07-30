@@ -49,6 +49,9 @@ import {
   filterByPersonId,
 } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
+import { useViewScope } from '@/lib/use-view-scope';
+import { partitionHidden } from '@/lib/view-scope';
+import { FilteredEmptyState } from '@/components/layout/FilteredEmptyState';
 import { formatPercent } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -343,6 +346,9 @@ export function ExistingUserTourPrompt() {
 
 export default function Dashboard() {
   const { filter, persons } = useViewFilter();
+  // Wave A: caption vocabulary for the C25 $0-pill subtitles and the goals
+  // widget's tier-2 empty state (reads only — no store loads).
+  const { personName } = useViewScope();
 
   const household = useHouseholdStore((s) => s.household);
   const loadHousehold = useHouseholdStore((s) => s.load);
@@ -674,9 +680,13 @@ export default function Dashboard() {
    *     balance?" card in the mini-window instead of a last-month check).
    *   - `snapshotsLastMonth`: filtered to last month's snapshots.
    */
+  // Wave A: pending detection + the briefing close-row counts are HOUSEHOLD
+  // (unfiltered) — the row links to /monthly, a household ritual, so its
+  // counts must match what /monthly's household view will ask; the sidebar
+  // pending dot (use-monthly-input-pending) is household for the same reason.
   const pendingAccountIds = useMemo(
     () =>
-      visibleAccounts
+      accounts
         .filter(
           (a) =>
             a.id !== undefined &&
@@ -684,14 +694,14 @@ export default function Dashboard() {
             !MANUAL_BALANCE_TYPES.has(a.type),
         )
         .map((a) => a.id as number),
-    [visibleAccounts],
+    [accounts],
   );
 
   const lastMonth = useMemo(() => lastMonthYyyymm(today), [today]);
 
   const snapshotsLastMonth = useMemo(
-    () => visibleSnapshots.filter((s) => s.snapshotDate.slice(0, 7) === lastMonth),
-    [visibleSnapshots, lastMonth],
+    () => snapshots.filter((s) => s.snapshotDate.slice(0, 7) === lastMonth),
+    [snapshots, lastMonth],
   );
 
   const isInputPending = useMemo(
@@ -718,6 +728,29 @@ export default function Dashboard() {
       .reduce((s, t) => s + t.amount, 0),
     [visibleTransactions],
   );
+
+  // Wave A C25: a filtered-to-$0 pill must name what the view is hiding —
+  // a silent $0 "Total Debt" understates what the person actually owes.
+  const loanPartition = useMemo(
+    () => partitionHidden(loans, visibleLoans, (l) => l.obligorPersonId),
+    [loans, visibleLoans],
+  );
+  const householdPendingReimb = useMemo(
+    () => transactions.filter((t) => t.reimbursable && t.reimbursedAt == null).length,
+    [transactions],
+  );
+  const visiblePendingReimbCount = useMemo(
+    () => visibleTransactions.filter((t) => t.reimbursable && t.reimbursedAt == null).length,
+    [visibleTransactions],
+  );
+  // Same predicate the liquidInvestments value uses (computeLiquidInvestments),
+  // over the UNFILTERED accounts — the hidden count the C25 subtitle names.
+  const householdLiquidCount = useMemo(() => {
+    const included = includedAccountIds(accounts);
+    return accounts.filter(
+      (a) => LIQUID_INVESTMENT_TYPES.has(a.type) && a.id !== undefined && included.has(a.id),
+    ).length;
+  }, [accounts]);
 
   const spendingSummary = useMemo(
     () => summarizeSpending(visibleTransactions, categories),
@@ -764,8 +797,10 @@ export default function Dashboard() {
     [pendingAccountIds, snapshotsLastMonth],
   );
   const loanPaymentsToRecord = useMemo(
-    () => visibleLoans.filter((l) => l.currentBalance > 0).length,
-    [visibleLoans],
+    // Wave A: household count (the /monthly ritual reconciles the whole
+    // household — see the pendingAccountIds comment above).
+    () => loans.filter((l) => l.currentBalance > 0).length,
+    [loans],
   );
 
   // Next move (the demoted NextMoveCard states — same pipeline, same order).
@@ -889,7 +924,12 @@ export default function Dashboard() {
           href={withView('/loans')}
           subtitle={visibleLoans.length > 0
             ? `Across ${visibleLoans.length} loan${visibleLoans.length === 1 ? '' : 's'}`
-            : undefined}
+            // Wave A C25: a filtered-empty $0 names the hidden counts.
+            : filter !== 'household' && loans.length > 0
+              ? filter === 'joint'
+                ? `No joint loans · ${loanPartition.otherCount} individual not shown`
+                : `None in ${personName}'s name${loanPartition.jointCount > 0 ? ` · ${loanPartition.jointCount} joint not shown` : ''}`
+              : undefined}
         />
       ),
     },
@@ -901,7 +941,12 @@ export default function Dashboard() {
           label="Liquid Investments"
           value={formatUSD(liquidInvestments)}
           href={withView('/investments')}
-          subtitle="Brokerage, cash, savings, HSA"
+          subtitle={filter !== 'household' && liquidInvestments === 0 && householdLiquidCount > 0
+            // Wave A C25 (joint grammar mirrors the Total Debt pill's).
+            ? personName != null
+              ? `None in ${personName}'s name · ${householdLiquidCount} household account${householdLiquidCount === 1 ? '' : 's'} not shown`
+              : `No joint accounts · ${householdLiquidCount} household account${householdLiquidCount === 1 ? '' : 's'} not shown`
+            : 'Brokerage, cash, savings, HSA'}
         />
       ),
     },
@@ -913,7 +958,12 @@ export default function Dashboard() {
           label="Awaiting Reimbursement"
           value={formatUSD(awaitingReimbursementTotal)}
           href={withView('/spending')}
-          subtitle={awaitingReimbursementTotal > 0 ? 'Click to review' : 'None pending'}
+          subtitle={awaitingReimbursementTotal > 0
+            ? 'Click to review'
+            // Wave A C25.
+            : filter !== 'household' && visiblePendingReimbCount === 0 && householdPendingReimb > 0
+              ? `None pending for ${personName ?? 'this view'} · ${householdPendingReimb} household pending`
+              : 'None pending'}
         />
       ),
     },
@@ -927,18 +977,23 @@ export default function Dashboard() {
           // W14: with no budget set, the tile IS the affordance — it goes to
           // the Budget editor (where budgets are actually set), not Inputs.
           href={monthlyBudget > 0 ? withView('/spending') : '/budget'}
-          delta={monthlyBudget > 0
+          // Wave A C8/D2: the baseline is a HOUSEHOLD figure with no person
+          // split — person views show the person's spend as a fact, declare
+          // the household figure, and drop the over/under verdict.
+          delta={monthlyBudget > 0 && filter === 'household'
             ? currentMonthSpend > monthlyBudget
               ? `${formatUSD(currentMonthSpend - monthlyBudget)} over`
               : `${formatUSD(monthlyBudget - currentMonthSpend)} under`
             : undefined}
-          deltaTone={monthlyBudget > 0
+          deltaTone={monthlyBudget > 0 && filter === 'household'
             ? currentMonthSpend > monthlyBudget
               ? 'negative'
               : 'positive'
             : 'neutral'}
           subtitle={monthlyBudget > 0
-            ? `Budget: ${formatUSD(monthlyBudget)}`
+            ? filter === 'household'
+              ? `Budget: ${formatUSD(monthlyBudget)}`
+              : `Budget: ${formatUSD(monthlyBudget)} · household figure`
             : 'Set a budget'}
         />
       ),
@@ -1079,7 +1134,16 @@ export default function Dashboard() {
         <SpendingWidget
           transactions={visibleTransactions}
           categories={categories}
-          accounts={visibleAccounts}
+          // Wave A: UNFILTERED accounts for the source-account select —
+          // transactions are already person-scoped by personId, and the
+          // owner-filtered select made a person's transactions on joint
+          // accounts un-narrowable (audit gap).
+          accounts={accounts}
+          scopeNote={filter !== 'household'
+            ? filter === 'joint'
+              ? 'Joint transactions only.'
+              : `${personName}'s transactions — joint not shown.`
+            : undefined}
         />
       ),
     },
@@ -1110,7 +1174,10 @@ export default function Dashboard() {
             )}
           </CardHeader>
           <CardContent>
-            {visibleGoals.length === 0 ? (
+            {/* Wave A D6 two-tier gate: onboarding copy + Add CTA only when
+                the UNFILTERED store is empty; a view that hid every goal gets
+                the count-aware FilteredEmptyState (no Add CTA). */}
+            {goals.length === 0 ? (
               <EmptyState bare icon={Target} title="No goals yet">
                 {/* W14: the Goals page owns adding — a dashboard card
                     navigates, it doesn't deep-edit. */}
@@ -1118,6 +1185,14 @@ export default function Dashboard() {
                   <Link to="/goals">Add your first goal</Link>
                 </Button>
               </EmptyState>
+            ) : visibleGoals.length === 0 ? (
+              <FilteredEmptyState
+                bare
+                noun="goals"
+                jointWord="shared"
+                otherVerb="for"
+                partition={partitionHidden(goals, visibleGoals, (g) => g.forPersonId)}
+              />
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {goalProjections.slice(0, 3).map((p) => (
