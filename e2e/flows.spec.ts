@@ -71,3 +71,19 @@ test('monthly check-in: Confirm all ratifies the seeded last-month values', asyn
   await expect(page.getByRole('button', { name: /^Confirm all/ })).toHaveCount(0);
   expect(errors.join('\n')).not.toContain('Maximum update depth');
 });
+
+test('monthly check-in: a scoped Confirm all never ratifies hidden persons’ snapshots', async ({ page }) => {
+  const errors = collectErrors(page);
+  // Wave-A seed: 3 derived cards owned by Demo Investor (p1), 1 by Demo Partner (p2).
+  await page.goto('/monthly?view=p1');
+  const confirmP1 = page.getByRole('button', { name: /^Confirm all \(3\)$/ });
+  await expect(confirmP1).toBeVisible({ timeout: 30_000 });
+  await confirmP1.click();
+  await expect(page.getByText('Confirmed 3 account values.')).toBeVisible({ timeout: 30_000 });
+  // The partner's pending snapshot MUST survive the scoped batch. Switch the
+  // view via the SPA dropdown — the shim's DB is fresh per page LOAD, so a
+  // goto() would re-seed and erase what we just wrote.
+  await page.getByRole('combobox', { name: 'Filter view by person' }).selectOption('household');
+  await expect(page.getByRole('button', { name: /^Confirm all \(1\)$/ })).toBeVisible({ timeout: 30_000 });
+  expect(errors.join('\n')).not.toContain('Maximum update depth');
+});
