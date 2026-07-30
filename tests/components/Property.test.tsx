@@ -841,6 +841,95 @@ describe('Property page', () => {
   });
 });
 
+describe('Wave A: count-aware empties, partial strips, declarations (D1/D6 C18/C19)', () => {
+  const mkProperty = (id: number, name: string, ownerPersonId: number | null) => ({
+    id, householdId: 1, ownerPersonId, name, type: PropertyType.PRIMARY_RESIDENCE,
+    address: null, purchasePrice: 400000, purchaseDate: '2020-01-01',
+    currentEstimatedValue: 500000, linkedLoanId: null, excludedFromNetWorth: false,
+  });
+  const mkRental = (id: number, name: string, ownerPersonId: number | null) => ({
+    id, householdId: 1, ownerPersonId, name, monthlyAmount: 1800,
+    startDate: '2024-01-01', endDate: null,
+  });
+
+  beforeEach(() => {
+    resetStores();
+    usePersonsStore.setState({
+      persons: [
+        { id: 1, householdId: 1, name: 'Alice' },
+        { id: 2, householdId: 1, name: 'Bob' },
+      ] as never,
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+  });
+
+  it('filtered-to-zero renders the count-aware explainer (the blank-body bug is gone)', () => {
+    usePropertiesStore.setState({
+      properties: [mkProperty(1, 'Joint Home', null)] as never,
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    useHousingPaymentsStore.setState({
+      housingPayments: [mkRental(1, 'Bob Rental', 2)] as never,
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    render(<MemoryRouter initialEntries={['/property?view=p1']}><Property /></MemoryRouter>);
+    expect(screen.getByText("No properties or rentals in Alice's name")).toBeInTheDocument();
+    expect(screen.getByText('1 joint and 1 owned by Bob not shown.')).toBeInTheDocument();
+    expect(screen.queryByText('No properties yet')).not.toBeInTheDocument();
+  });
+
+  it('partial strip: rentals hidden but properties showing keeps the Rentals section with a note', () => {
+    usePropertiesStore.setState({
+      properties: [mkProperty(1, 'Alice Home', 1)] as never,
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    useHousingPaymentsStore.setState({
+      housingPayments: [mkRental(1, 'Bob Rental', 2)] as never,
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    render(<MemoryRouter initialEntries={['/property?view=p1']}><Property /></MemoryRouter>);
+    expect(screen.getByRole('heading', { name: 'Rentals' })).toBeInTheDocument();
+    expect(screen.getByText('1 rental not shown in this view.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add rental' })).toBeInTheDocument();
+  });
+
+  it('C2: nonempty filtered view declares hidden properties and rentals', () => {
+    usePropertiesStore.setState({
+      properties: [mkProperty(1, 'Alice Home', 1), mkProperty(2, 'Joint Home', null)] as never,
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    render(<MemoryRouter initialEntries={['/property?view=p1']}><Property /></MemoryRouter>);
+    expect(screen.getByTestId('scope-caption')).toHaveTextContent(
+      "Showing Alice's properties and rentals: 1 of 2 — 1 joint not shown.",
+    );
+  });
+
+  it('C18/C19: person view declares full-lien equity and all-payer expenses', () => {
+    usePropertiesStore.setState({
+      properties: [mkProperty(1, 'Alice Home', 1)] as never,
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    render(<MemoryRouter initialEntries={['/property?view=p1']}><Property /></MemoryRouter>);
+    expect(screen.getByText(/Liens are counted in full, including joint loans\./)).toBeInTheDocument();
+    expect(screen.getAllByText(/· all payers/).length).toBeGreaterThan(0);
+  });
+
+  it('owner chip renders on PropertyAssetCard (parity with RentalCard)', () => {
+    usePropertiesStore.setState({
+      properties: [mkProperty(1, 'Joint Home', null), mkProperty(2, 'Alice Home', 1)] as never,
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    render(<MemoryRouter initialEntries={['/property']}><Property /></MemoryRouter>);
+    expect(screen.getByText('Joint')).toBeInTheDocument();
+    expect(screen.getByText('Alice')).toBeInTheDocument();
+  });
+
+  it('true-empty household keeps the onboarding EmptyState (regression)', () => {
+    render(<MemoryRouter initialEntries={['/property?view=p1']}><Property /></MemoryRouter>);
+    expect(screen.getByText('No properties yet')).toBeInTheDocument();
+  });
+});
+
 describe('Property page — utilities card with configurable category set', () => {
   beforeEach(() => {
     resetStores();

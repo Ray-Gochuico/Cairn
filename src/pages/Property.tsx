@@ -12,6 +12,10 @@ import { latestAssetValue } from '@/lib/latest-value';
 import { AssetSnapshotOwnerType, LoanType } from '@/types/enums';
 import { filterByOwnerPersonId } from '@/lib/filter-by-view';
 import { useViewFilter } from '@/lib/use-view-filter';
+import { useViewScope } from '@/lib/use-view-scope';
+import { partitionHidden } from '@/lib/view-scope';
+import { FilteredEmptyState } from '@/components/layout/FilteredEmptyState';
+import { ScopeCaption } from '@/components/layout/ScopeCaption';
 import { resolveUtilityCategoryIds } from '@/lib/category-config';
 import { monthlyHousingObligation, isActiveOn } from '@/lib/recurring-obligations';
 import { useLocalToday } from '@/lib/use-local-today';
@@ -87,6 +91,8 @@ interface PropertyAssetCardProps {
   onSaveValue: (value: number | null) => Promise<void>;
   /** W14 one-place-per-thing: opens the page's PropertyForm EditDrawer. */
   onEditDetails: () => void;
+  /** Wave A: 'Joint' | owner name — the same chip RentalCard carries. */
+  ownerLabel?: string;
 }
 
 function PropertyAssetCard({
@@ -100,6 +106,7 @@ function PropertyAssetCard({
   onCancelEdit,
   onSaveValue,
   onEditDetails,
+  ownerLabel,
 }: PropertyAssetCardProps) {
   return (
     <Card>
@@ -110,6 +117,13 @@ function PropertyAssetCard({
             <CardDescription className="text-xs">
               {PROPERTY_TYPE_LABELS[property.type]}
             </CardDescription>
+            {/* Wave A: owner chip — parity with RentalCard, all views. */}
+            {ownerLabel ? (
+              <span className="mt-1 inline-flex items-center gap-1.5 rounded-full border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary" aria-hidden="true" />
+                {ownerLabel}
+              </span>
+            ) : null}
           </div>
           <div className="flex shrink-0 gap-2">
             <Button size="sm" variant="outline" onClick={onEdit}>
@@ -202,7 +216,8 @@ function PropertyExpensesCard({
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base">Expenses</CardTitle>
-        <CardDescription className="text-xs truncate">{propertyName}</CardDescription>
+        {/* Wave A C19: linked spending sums every payer, in every view. */}
+        <CardDescription className="text-xs truncate">{propertyName} · all payers</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
         <dl className="grid grid-cols-2 gap-3 text-sm">
@@ -280,7 +295,8 @@ function PropertyUtilitiesCard({
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <CardTitle className="text-base">Utilities</CardTitle>
-            <CardDescription className="text-xs truncate">{propertyName}</CardDescription>
+            {/* Wave A C19: linked spending sums every payer, in every view. */}
+            <CardDescription className="text-xs truncate">{propertyName} · all payers</CardDescription>
           </div>
           <CategoryMultiSelect
             categories={categories}
@@ -475,6 +491,18 @@ export default function Property() {
   const visibleRentals = useMemo(
     () => filterByOwnerPersonId(housingPayments, filter, persons),
     [housingPayments, filter, persons],
+  );
+
+  // Wave A: caption vocabulary + exclusion counts (reads only).
+  const { isFiltered } = useViewScope();
+  const propertiesAndRentalsPartition = useMemo(
+    () =>
+      partitionHidden(
+        [...properties, ...housingPayments],
+        [...visibleProperties, ...visibleRentals],
+        (r) => r.ownerPersonId,
+      ),
+    [properties, housingPayments, visibleProperties, visibleRentals],
   );
 
   const today = todayIso;
@@ -720,9 +748,13 @@ export default function Property() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold mb-1">Property</h1>
+          {/* Wave A C18: person views declare that liens count in full. */}
           <p className="text-sm text-muted-foreground">
-            Equity = current value − linked-loan balance.
+            {isFiltered
+              ? 'Equity = current value − linked-loan balance. Liens are counted in full, including joint loans.'
+              : 'Equity = current value − linked-loan balance.'}
           </p>
+          <ScopeCaption noun="properties and rentals" partition={propertiesAndRentalsPartition} />
         </div>
         <div className="flex items-center gap-2">
           <ExportCsvButton baseName="properties" columns={csvColumns} rows={properties} />
@@ -730,6 +762,19 @@ export default function Property() {
           <Button size="sm" onClick={() => setPropertyDrawer('create')}>Add property</Button>
         </div>
       </div>
+
+      {visibleProperties.length === 0 && visibleRentals.length === 0 && (
+        // Wave A D6: properties/rentals exist, but the person filter stripped
+        // them all — count-aware explainer instead of a header over a blank body.
+        <FilteredEmptyState bare noun="properties or rentals" partition={propertiesAndRentalsPartition} />
+      )}
+
+      {/* Wave A partial strip: properties hidden but rentals showing. */}
+      {visibleProperties.length === 0 && properties.length > 0 && visibleRentals.length > 0 && (
+        <p className="text-sm text-muted-foreground">
+          {`${properties.length - visibleProperties.length} propert${properties.length - visibleProperties.length === 1 ? 'y' : 'ies'} not shown in this view.`}
+        </p>
+      )}
 
       <div className="space-y-6">
         {visibleProperties.map((p) => {
@@ -769,6 +814,11 @@ export default function Property() {
                   onCancelEdit={() => setEditing(null)}
                   onSaveValue={(v) => handleSaveProperty(p.id!, v)}
                   onEditDetails={() => setPropertyDrawer({ type: 'edit', id: p.id! })}
+                  ownerLabel={
+                    p.ownerPersonId == null
+                      ? 'Joint'
+                      : (personNameById.get(p.ownerPersonId) ?? 'Unknown')
+                  }
                 />
                 <PropertyExpensesCard
                   propertyName={p.name}
@@ -801,6 +851,27 @@ export default function Property() {
           );
         })}
       </div>
+
+      {/* Wave A partial strip: the VIEW hid every rental but the household
+          has some (and properties still show) — keep the section with the
+          count + the Add-rental entry point. */}
+      {visibleRentals.length === 0 && housingPayments.length > 0 && visibleProperties.length > 0 && (
+        <section aria-label="Rentals" className="space-y-3">
+          <h2 className="text-xl font-semibold">Rentals</h2>
+          <p className="text-sm text-muted-foreground">
+            {`${housingPayments.length - visibleRentals.length} rental${housingPayments.length - visibleRentals.length === 1 ? '' : 's'} not shown in this view.`}
+          </p>
+          <button
+            type="button"
+            onClick={() => setRentalDrawer('create')}
+            aria-label="Add rental"
+            className="flex min-h-[64px] w-full items-center justify-center gap-2 rounded-lg border border-dashed text-sm font-medium text-primary transition-colors hover:bg-accent"
+          >
+            <span aria-hidden="true" className="text-lg leading-none">+</span>
+            Add rental
+          </button>
+        </section>
+      )}
 
       {visibleRentals.length > 0 && (
         <section aria-label="Rentals" className="space-y-3">
