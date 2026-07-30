@@ -1043,6 +1043,75 @@ describe('Investments page — W14 in-place Manage deflections', () => {
     expect(screen.getByRole('tab', { name: 'Tickers' })).toHaveAttribute('aria-selected', 'true');
   });
 
+  it('W19: does NOT flag enriched SINGLE_STOCK/CRYPTO rows whose Yahoo name is null', async () => {
+    // Equities enrich successfully with name=null by construction (Yahoo's
+    // Morningstar category is null for quoteType EQUITY) — a permanent false
+    // "couldn't be auto-classified" for every non-seeded stock.
+    primeStores({
+      accounts: [{ id: 1, name: 'Brokerage' }],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 50_000 }],
+      holdings: [
+        { accountId: 1, ticker: 'NVDA', shareCount: 1 },
+        { accountId: 1, ticker: 'BTC-USD', shareCount: 1 },
+      ],
+    });
+    useTickersStore.setState({
+      tickers: [
+        { ticker: 'NVDA', name: null, assetClass: 'SINGLE_STOCK', leverageFactor: 1, direction: 'LONG', userAdded: false, accentColor: null, sector: 'Technology', industry: 'Semiconductors' },
+        { ticker: 'BTC-USD', name: null, assetClass: 'CRYPTO', leverageFactor: 1, direction: 'LONG', userAdded: false, accentColor: null, sector: null, industry: null },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    });
+    render(
+      <MemoryRouter initialEntries={['/investments']}>
+        <Investments />
+      </MemoryRouter>,
+    );
+    // Wait for the page to settle on a stable landmark, then assert absence.
+    await screen.findByRole('heading', { name: /^manage$/i });
+    expect(screen.queryByTestId('unclassified-tickers-banner')).toBeNull();
+  });
+
+  it('W19: still flags the enrichment-failure stub (name null + assetClass OTHER)', async () => {
+    primeStores({
+      accounts: [{ id: 1, name: 'Brokerage' }],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 50_000 }],
+      holdings: [{ accountId: 1, ticker: 'TYPO', shareCount: 1 }],
+    });
+    useTickersStore.setState({
+      tickers: [
+        { ticker: 'TYPO', name: null, assetClass: 'OTHER', leverageFactor: 1, direction: 'LONG', userAdded: false, accentColor: null, sector: null, industry: null },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    });
+    render(
+      <MemoryRouter initialEntries={['/investments']}>
+        <Investments />
+      </MemoryRouter>,
+    );
+    const banner = await screen.findByTestId('unclassified-tickers-banner');
+    expect(banner).toHaveTextContent('TYPO');
+  });
+
+  it('W19: still flags a held ticker with no tickers row at all', async () => {
+    primeStores({
+      accounts: [{ id: 1, name: 'Brokerage' }],
+      snapshotValues: [{ accountId: 1, snapshotDate: '2026-04-01', totalValue: 50_000 }],
+      holdings: [{ accountId: 1, ticker: 'NOROW', shareCount: 1 }],
+    });
+    render(
+      <MemoryRouter initialEntries={['/investments']}>
+        <Investments />
+      </MemoryRouter>,
+    );
+    const banner = await screen.findByTestId('unclassified-tickers-banner');
+    expect(banner).toHaveTextContent('NOROW');
+  });
+
   it('the by-account card "View holdings" link targets the Manage surface', async () => {
     primeStores({
       accounts: [{ id: 1, name: 'Brokerage' }],

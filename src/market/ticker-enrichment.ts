@@ -79,9 +79,12 @@ export async function enrichTickerIfMissing(
   } catch {
     // Best-effort: if Yahoo errors, leave fields null. The next refresh will
     // retry (since sector stays null). Concentration math falls back to OTHER.
-    // Contract: a ticker is "unclassified / needs user attention" if it has no
-    // row OR name IS NULL. The stub row below makes that detection possible
-    // from the UI (Tickers input tab + future Investments banner).
+    // Contract (W19): a ticker is "unclassified / needs user attention" if it
+    // has no row OR (name IS NULL AND asset_class = 'OTHER') — exactly the
+    // stub shape written below. name IS NULL alone is NOT a failure signal:
+    // a successful equity/crypto enrichment also leaves name null (Yahoo's
+    // Morningstar category is null for quoteType EQUITY) while setting a
+    // real assetClass. The Investments banner mirrors this predicate.
     if (!existing) {
       try {
         await deps.tickers.upsert({
