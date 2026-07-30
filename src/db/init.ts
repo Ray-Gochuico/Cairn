@@ -47,11 +47,13 @@ export async function maybeRunLaunchRefresh(db: Database): Promise<void> {
       return;
     }
     await repo.update({ lastRefreshAt: new Date().toISOString() });
-    runMarketDataRefresh(db);
+    // W19: fire-and-forget by design — the aggregate never rejects, and
+    // launch must not block on the network. Reporting callers await it.
+    void runMarketDataRefresh(db);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[init] launch-refresh gating failed; running refresh anyway:', err);
-    runMarketDataRefresh(db);
+    void runMarketDataRefresh(db);
   }
 }
 

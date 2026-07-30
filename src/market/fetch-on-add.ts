@@ -34,14 +34,14 @@ export function fetchMarketDataOnAdd(db: Database): void {
   const now = Date.now();
   if (trailing === null && now - lastRunAt > BURST_WINDOW_MS) {
     lastRunAt = now;
-    runMarketDataRefresh(db);
+    void runMarketDataRefresh(db);
     return;
   }
   if (trailing === null) {
     trailing = setTimeout(() => {
       trailing = null;
       lastRunAt = Date.now();
-      runMarketDataRefresh(db);
+      void runMarketDataRefresh(db);
     }, BURST_WINDOW_MS);
   }
 }

@@ -28,15 +28,71 @@ describe('runMarketDataRefresh', () => {
 
   it('returns synchronously without throwing on an empty database', () => {
     // No accounts/holdings/tickers seeded — the three derivations are
-    // fire-and-forget IIFEs that swallow their own errors. The call itself
-    // must not throw and must not return a rejected promise.
+    // fire-and-forget branches that swallow their own errors. The call
+    // itself must not throw and must not return a rejected promise.
     expect(() => runMarketDataRefresh(db)).not.toThrow();
   });
 
-  it('does not reject when awaited', async () => {
-    await expect(
-      Promise.resolve(runMarketDataRefresh(db)),
-    ).resolves.toBeUndefined();
+  it('does not reject when awaited, and resolves with the three branch outcomes (W19)', async () => {
+    const result = await runMarketDataRefresh(db);
+    expect(result).toBeDefined();
+    expect(result).toHaveProperty('fundSync');
+    expect(result).toHaveProperty('enrichment');
+    expect(result).toHaveProperty('snapshot');
+  });
+
+  describe('W19 aggregate result (refresh that can report)', () => {
+    it('resolves only after all three branches settle', async () => {
+      let resolveSnapshot!: (r: dailySnapshot.DailySnapshotResult) => void;
+      vi.spyOn(dailySnapshot, 'deriveTodaysSnapshot').mockImplementation(
+        () => new Promise((r) => { resolveSnapshot = r; }),
+      );
+      vi.spyOn(fundSync, 'syncStaleFunds').mockResolvedValue({
+        refreshed: [], skipped: [], errors: [],
+      });
+
+      let settled = false;
+      const aggregate = runMarketDataRefresh(db).then((r) => {
+        settled = true;
+        return r;
+      });
+      // Give the other branches plenty of turns to finish.
+      for (let i = 0; i < 10; i++) await new Promise((r) => setImmediate(r));
+      expect(settled).toBe(false);
+
+      resolveSnapshot({ upserted: [], skipped: [], partial: [], errors: [] });
+      const result = await aggregate;
+      expect(settled).toBe(true);
+      expect(result.snapshot).toEqual({
+        status: 'ok',
+        result: { upserted: [], skipped: [], partial: [], errors: [] },
+      });
+    });
+
+    it('passes the snapshot result through so callers can surface partial/errors', async () => {
+      vi.spyOn(dailySnapshot, 'deriveTodaysSnapshot').mockResolvedValue({
+        upserted: [1], skipped: [], partial: [7], errors: ['7/XYZ: No quote data for XYZ'],
+      });
+      const result = await runMarketDataRefresh(db);
+      expect(result.snapshot).toEqual({
+        status: 'ok',
+        result: {
+          upserted: [1], skipped: [], partial: [7], errors: ['7/XYZ: No quote data for XYZ'],
+        },
+      });
+    });
+
+    it('a rejecting branch does not reject the aggregate; its error lands in the result', async () => {
+      vi.spyOn(dailySnapshot, 'deriveTodaysSnapshot').mockRejectedValue(
+        new Error('offline'),
+      );
+      vi.spyOn(fundSync, 'syncStaleFunds').mockRejectedValue(new Error('429'));
+      const result = await runMarketDataRefresh(db);
+      expect(result.snapshot).toEqual({ status: 'error', error: 'offline' });
+      expect(result.fundSync).toEqual({ status: 'error', error: '429' });
+      // Empty DB → the enrichment loop had nothing to do and succeeds.
+      expect(result.enrichment).toEqual({ status: 'ok', result: { enriched: 0 } });
+    });
   });
 
   it('enriches every distinct held ticker (lazy sector/industry backfill)', async () => {

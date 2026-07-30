@@ -152,9 +152,19 @@ export function FreshnessBadge({
   const handleRefreshNow = async () => {
     setRefreshing(true);
     try {
-      await updateSettings({ lastRefreshAt: new Date().toISOString() });
-      runMarketDataRefresh(getDatabase());
+      // W19: await the refresh and stamp AFTER it settles — stamping first
+      // made 'Updated just now' appear over stale prices whenever Yahoo
+      // failed. Stamp only when the pricing branch actually ran; on a
+      // snapshot-branch failure the badge keeps showing the old timestamp
+      // (Settings → Market data is the surface that reports the details).
+      const result = await runMarketDataRefresh(getDatabase());
+      if (result.snapshot.status === 'ok') {
+        await updateSettings({ lastRefreshAt: new Date().toISOString() });
+      }
       setOpen(false);
+    } catch {
+      // Defensive: the aggregate never rejects; a failed stamp just leaves
+      // the previous timestamp — which is the honest state.
     } finally {
       setRefreshing(false);
     }
