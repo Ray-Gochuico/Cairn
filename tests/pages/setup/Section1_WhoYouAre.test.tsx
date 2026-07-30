@@ -173,6 +173,23 @@ describe('Section1_WhoYouAre', () => {
     expect(remove).toHaveBeenCalledWith(7);
   });
 
+  it('renders each added dependent as a read-only chip on the Dependents card', () => {
+    useDependentsStore.setState({
+      dependents: [
+        { id: 1, name: 'Junior' },
+        { id: 2, name: 'Grandma May' },
+      ],
+      isLoading: false, error: null, load: async () => {}, create: async () => 1,
+      update: async () => {}, remove: async () => {},
+    } as never);
+    render(<Section1_WhoYouAre status="in_progress" onSetStatus={() => {}} />);
+    const chips = screen.getByTestId('dependents-chips');
+    expect(within(chips).getByText('Junior')).toBeInTheDocument();
+    expect(within(chips).getByText('Grandma May')).toBeInTheDocument();
+    // Read-only: no edit/remove controls for dependents (only persons have them).
+    expect(within(chips).queryByRole('button')).toBeNull();
+  });
+
   it('clicking Add manually on the Persons card opens the PersonForm dialog', async () => {
     const user = userEvent.setup();
     render(

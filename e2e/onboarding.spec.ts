@@ -42,22 +42,37 @@ test('fresh profile: disclaimer → setup → app shell, clean console', async (
   // The person renders as a chip (T23).
   await expect(page.getByTestId('person-chips').getByText('Alex Rivera')).toBeVisible();
 
-  // 4. Advance through the remaining sections. Section 1 → completed; skip 2 & 3.
+  // 4. Section 2 — start it, add one account, and confirm the created-entity
+  // chip shows its NAME on the Accounts card (W19: adds are visible, not just
+  // a "1 added" counter).
   await page.getByRole('button', { name: /next section/i }).click();
   await expect(page.getByRole('heading', { name: /Section 2 of 4/i })).toBeVisible();
-  await page.getByRole('button', { name: /skip — none of this applies/i }).click();
+  await page.getByRole('button', { name: /start this section/i }).click();
+
+  const accountsCard = page
+    .getByText('Accounts', { exact: true })
+    .locator('xpath=ancestor::div[contains(@class,"rounded")][1]');
+  await accountsCard.getByRole('button', { name: /add manually/i }).click();
+  await page.getByLabel('Name', { exact: true }).fill('Fidelity Brokerage');
+  await page.getByRole('button', { name: /add account/i }).click();
+  await expect(
+    page.getByTestId('accounts-chips').getByText('Fidelity Brokerage'),
+  ).toBeVisible();
+
+  // 5. Advance through the remaining sections; skip 3.
+  await page.getByRole('button', { name: /next section/i }).click();
   await expect(page.getByRole('heading', { name: /Section 3 of 4/i })).toBeVisible();
   await page.getByRole('button', { name: /skip — none of this applies/i }).click();
   await expect(page.getByRole('heading', { name: /Section 4 of 4/i })).toBeVisible();
 
-  // 5. Finish → the post-setup "You're set up" beat → into the app shell.
+  // 6. Finish → the post-setup "You're set up" beat → into the app shell.
   await page.getByRole('button', { name: /finish setup/i }).click();
   await expect(page.getByRole('heading', { name: /you're set up/i })).toBeVisible({
     timeout: 30_000,
   });
   await page.getByRole('button', { name: /skip setup help/i }).click();
 
-  // 6. The app shell (primary nav) renders — setup completed cleanly.
+  // 7. The app shell (primary nav) renders — setup completed cleanly.
   await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible({
     timeout: 30_000,
   });

@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Pencil, X } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -78,41 +77,20 @@ export default function Section1_WhoYouAre({ status, onSetStatus }: Props) {
         description="You and your partner (one or two adults)."
         count={persons.length}
         onAddManual={() => setDialog('persons')}
+        itemsTestId="person-chips"
+        items={persons.map((p) => ({
+          key: p.id ?? p.name,
+          label: p.name || 'Unnamed',
+          onEdit: () => setEditingPerson(p),
+          onRemove: async () => {
+            const ok = await confirm({
+              title: `Remove ${p.name}?`,
+              description: 'This removes the person from your household setup.',
+            });
+            if (ok && p.id != null) await removePerson(p.id);
+          },
+        }))}
       />
-      {persons.length > 0 && (
-        <div className="flex flex-wrap gap-2" data-testid="person-chips">
-          {persons.map((p) => (
-            <span
-              key={p.id}
-              className="inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-sm"
-            >
-              {p.name || 'Unnamed'}
-              <button
-                type="button"
-                aria-label={`Edit ${p.name}`}
-                className="rounded-full p-0.5 text-muted-foreground hover:text-foreground"
-                onClick={() => setEditingPerson(p)}
-              >
-                <Pencil className="h-3.5 w-3.5" aria-hidden />
-              </button>
-              <button
-                type="button"
-                aria-label={`Remove ${p.name}`}
-                className="rounded-full p-0.5 text-muted-foreground hover:text-destructive-soft-foreground"
-                onClick={async () => {
-                  const ok = await confirm({
-                    title: `Remove ${p.name}?`,
-                    description: 'This removes the person from your household setup.',
-                  });
-                  if (ok && p.id != null) await removePerson(p.id);
-                }}
-              >
-                <X className="h-3.5 w-3.5" aria-hidden />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
       <EntityCard
         title="Employment"
         description="Salary, bonus, commission for each person."
@@ -129,6 +107,7 @@ export default function Section1_WhoYouAre({ status, onSetStatus }: Props) {
         description="Children, parents, or others you support."
         count={dependents.length}
         onAddManual={() => setDialog('dependents')}
+        items={dependents.map((d, i) => ({ key: d.id ?? i, label: d.name }))}
       />
 
       <Dialog

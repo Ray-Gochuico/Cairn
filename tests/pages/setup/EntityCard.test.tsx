@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import EntityCard from '@/pages/setup/EntityCard';
 
@@ -161,5 +161,119 @@ describe('EntityCard', () => {
     expect(
       screen.queryByText(/imports match rows to existing accounts by name/i),
     ).toBeNull();
+  });
+
+  describe('created-entity chips (items prop)', () => {
+    it('renders each item label as a chip in a container with a title-derived testid', () => {
+      render(
+        <EntityCard
+          title="Accounts"
+          description="d"
+          count={2}
+          onAddManual={() => {}}
+          items={[
+            { key: 1, label: 'Fidelity Brokerage' },
+            { key: 2, label: 'Chase Checking' },
+          ]}
+        />,
+      );
+      const chips = screen.getByTestId('accounts-chips');
+      expect(within(chips).getByText('Fidelity Brokerage')).toBeInTheDocument();
+      expect(within(chips).getByText('Chase Checking')).toBeInTheDocument();
+    });
+
+    it('slugifies multi-word titles for the testid', () => {
+      render(
+        <EntityCard
+          title="Rent / housing payment"
+          description="d"
+          count={1}
+          onAddManual={() => {}}
+          items={[{ key: 1, label: 'Apartment rent' }]}
+        />,
+      );
+      expect(
+        within(screen.getByTestId('rent-housing-payment-chips')).getByText(
+          'Apartment rent',
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it('honors an explicit itemsTestId override (persons keep person-chips)', () => {
+      render(
+        <EntityCard
+          title="Persons"
+          description="d"
+          count={1}
+          onAddManual={() => {}}
+          items={[{ key: 1, label: 'Alice' }]}
+          itemsTestId="person-chips"
+        />,
+      );
+      expect(
+        within(screen.getByTestId('person-chips')).getByText('Alice'),
+      ).toBeInTheDocument();
+    });
+
+    it('renders no chip container when items is empty or undefined (no false empty state)', () => {
+      const { unmount } = render(
+        <EntityCard
+          title="Accounts"
+          description="d"
+          count={0}
+          onAddManual={() => {}}
+          items={[]}
+        />,
+      );
+      expect(screen.queryByTestId('accounts-chips')).toBeNull();
+      unmount();
+      render(
+        <EntityCard title="Accounts" description="d" count={0} onAddManual={() => {}} />,
+      );
+      expect(screen.queryByTestId('accounts-chips')).toBeNull();
+    });
+
+    it('renders edit/remove buttons only when handlers are provided, and wires them', async () => {
+      const user = userEvent.setup();
+      const onEdit = vi.fn();
+      const onRemove = vi.fn();
+      render(
+        <EntityCard
+          title="Persons"
+          description="d"
+          count={2}
+          onAddManual={() => {}}
+          items={[
+            { key: 1, label: 'Alice', onEdit, onRemove },
+            { key: 2, label: 'Bob' },
+          ]}
+          itemsTestId="person-chips"
+        />,
+      );
+      const chips = screen.getByTestId('person-chips');
+      await user.click(within(chips).getByRole('button', { name: 'Edit Alice' }));
+      expect(onEdit).toHaveBeenCalledOnce();
+      await user.click(within(chips).getByRole('button', { name: 'Remove Alice' }));
+      expect(onRemove).toHaveBeenCalledOnce();
+      // Read-only chip: no controls at all.
+      expect(within(chips).queryByRole('button', { name: /edit bob/i })).toBeNull();
+      expect(within(chips).queryByRole('button', { name: /remove bob/i })).toBeNull();
+    });
+
+    it('exposes the full label as a title attribute so truncated long names stay reachable', () => {
+      const long = 'A'.repeat(100);
+      render(
+        <EntityCard
+          title="Accounts"
+          description="d"
+          count={1}
+          onAddManual={() => {}}
+          items={[{ key: 1, label: long }]}
+        />,
+      );
+      const label = within(screen.getByTestId('accounts-chips')).getByText(long);
+      expect(label).toHaveAttribute('title', long);
+      expect(label.className).toMatch(/truncate/);
+    });
   });
 });

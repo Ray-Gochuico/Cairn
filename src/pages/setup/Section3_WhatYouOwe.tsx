@@ -60,6 +60,7 @@ export default function Section3_WhatYouOwe({ status, onSetStatus }: Props) {
         onAddManual={() => setDialog('loans')}
         importEnabled
         importTrigger={<ImportCsvButton entity="loan" />}
+        items={loans.map((l, i) => ({ key: l.id ?? i, label: l.name }))}
       />
 
       <Dialog

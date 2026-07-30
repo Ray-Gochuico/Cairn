@@ -175,6 +175,7 @@ export default function Section4_History({ status, onSetStatus }: Props) {
         description="Retirement, education, home, custom."
         count={goals.length}
         onAddManual={() => setDialog('goals')}
+        items={goals.map((g, i) => ({ key: g.id ?? i, label: g.name }))}
       />
 
       <Dialog
