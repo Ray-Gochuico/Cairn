@@ -960,4 +960,122 @@ describe('Spending page', () => {
     // The good file still opens the CSV modal.
     expect(screen.getByText(/import transactions from csv/i)).toBeInTheDocument();
   });
+
+  describe('Wave A: person-view honoring (D2/D9/D12)', () => {
+    const localMonth = (() => {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    })();
+
+    const mkPerson = (name: string, salary = 0): Omit<Person, 'id'> => ({
+      householdId: 1, name, dateOfBirth: '1990-01-01', targetRetirementAge: 65,
+      annualSalaryPretax: salary, expectedBonus: 0, expectedBonusFrequency: 'ANNUAL',
+      bonusIsConsistent: true, expectedCommission: 0,
+      expectedCommissionFrequency: 'MONTHLY', employmentType: 'SALARY_NO_OT',
+      hourlyRate: null, regularHoursPerWeek: 40, otThresholdHoursPerWeek: null,
+      pretax401kPct: 0, healthInsuranceMonthlyPremium: 0, dependentCareFsaMonthly: 0,
+      hsaMonthlyContribution: 0, hsaEligible: false,
+    });
+
+    const mkTx = (over: Partial<Omit<Transaction, 'id'>>): Omit<Transaction, 'id'> => ({
+      householdId: 1, date: `${localMonth}-05`, merchant: 'X', merchantRaw: 'X', amount: 100,
+      categoryId: 37, sourceAccountId: null, propertyId: null, vehicleId: null,
+      personId: null, sourcePdfFilename: 'm.pdf', reimbursable: false, reimbursedAt: null,
+      reimbursedAmount: null, isRecurring: false, notes: null, ...over,
+    });
+
+    async function primeTwoPersons(salaries: [number, number] = [120000, 60000]) {
+      await useCategoriesStore.getState().load();
+      const personsRepo = new PersonsRepo(db);
+      await personsRepo.create(mkPerson('Alex', salaries[0])); // id 1
+      await personsRepo.create(mkPerson('Sam', salaries[1]));  // id 2
+      // The page's mount effect re-loads the household from the DB, so the
+      // baseline must live there (a store prime would be overwritten).
+      await db.execute('UPDATE household SET monthly_expense_baseline = 4000 WHERE id = 1');
+    }
+
+    it('C13: person view hides the budget bar and declares why', async () => {
+      await primeTwoPersons();
+      await useTransactionsStore.getState().createMany([mkTx({ personId: 1 })]);
+      render(
+        <MemoryRouter initialEntries={['/spending?view=p1']}>
+          <Spending />
+        </MemoryRouter>,
+      );
+      await screen.findByTestId('spending-hero');
+      expect(screen.queryByText(/under budget|over budget/)).not.toBeInTheDocument();
+      expect(
+        screen.getByText('Budget comparisons are household-level — hidden in this view.'),
+      ).toBeInTheDocument();
+    });
+
+    it('household view keeps the budget bar (regression)', async () => {
+      await primeTwoPersons();
+      await useTransactionsStore.getState().createMany([mkTx({ personId: 1 })]);
+      render(
+        <MemoryRouter initialEntries={['/spending']}>
+          <Spending />
+        </MemoryRouter>,
+      );
+      await screen.findByTestId('spending-hero');
+      expect(await screen.findByText(/under budget|over budget/)).toBeInTheDocument();
+      expect(
+        screen.queryByText('Budget comparisons are household-level — hidden in this view.'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('D1: recurring obligations filter by owner and declare hidden counts', async () => {
+      await primeTwoPersons();
+      const housingRepo = new HousingPaymentsRepo(db);
+      await housingRepo.create({
+        householdId: 1, ownerPersonId: 1, name: 'Alex Rent', monthlyAmount: 2000,
+        startDate: '2020-01-01', endDate: null,
+      });
+      await housingRepo.create({
+        householdId: 1, ownerPersonId: null, name: 'Joint Rent', monthlyAmount: 1500,
+        startDate: '2020-01-01', endDate: null,
+      });
+      await new VehicleLeasesRepo(db).create({
+        householdId: 1, ownerPersonId: 2, name: 'Sam Lease', monthlyAmount: 400,
+        startDate: '2020-01-01', endDate: null,
+      });
+      render(
+        <MemoryRouter initialEntries={['/spending?view=p1']}>
+          <Spending />
+        </MemoryRouter>,
+      );
+      const card = await screen.findByTestId('spending-recurring-card');
+      // Totals reflect Alex's rent only.
+      expect(within(card).getByText('$2,000/mo')).toBeInTheDocument();
+      expect(within(card).getByTestId('scope-caption')).toHaveTextContent(
+        "Showing Alex's recurring obligations: 1 of 3 — 1 joint and 1 owned by Sam not shown.",
+      );
+    });
+
+    it('C14/D12: joint view renders — for inflow with the per-person note', async () => {
+      await primeTwoPersons();
+      await useTransactionsStore.getState().createMany([mkTx({ personId: null })]);
+      render(
+        <MemoryRouter initialEntries={['/spending?view=joint']}>
+          <Spending />
+        </MemoryRouter>,
+      );
+      await screen.findByText(/money in vs out/i);
+      expect(screen.getAllByText('Income is per-person — never joint.').length).toBeGreaterThan(0);
+      // No fabricated joint income figure (both salaries summed = $15,000.00).
+      expect(screen.queryByText('$15,000.00')).not.toBeInTheDocument();
+    });
+
+    it('D9: the Open-all-transactions link preserves ?view=', async () => {
+      await primeTwoPersons();
+      await useTransactionsStore.getState().createMany([mkTx({ personId: 2 })]);
+      render(
+        <MemoryRouter initialEntries={['/spending?view=p2']}>
+          <Spending />
+        </MemoryRouter>,
+      );
+      const link = await screen.findByRole('link', { name: 'Open all transactions' });
+      expect(link).toHaveAttribute('href', '/spending/transactions?view=p2');
+    });
+  });
 });

@@ -337,4 +337,58 @@ describe('SpendingTransactions page', () => {
     expect(screen.getByText('Jun 18, 2026')).toBeInTheDocument();
     expect(screen.queryByText('2026-06-18')).toBeNull();
   });
+
+  describe('Wave A: filter-empty honesty + ?view= preserving links (C30/D9)', () => {
+    async function primeTwoPersonsWithBobTxns() {
+      await useCategoriesStore.getState().load();
+      await db.execute(
+        `INSERT INTO persons (id, household_id, name, date_of_birth, target_retirement_age, annual_salary_pretax, pretax_401k_pct)
+         VALUES (1, 1, 'Alice', '1990-01-01', 65, 0, 0), (2, 1, 'Bob', '1992-01-01', 65, 0, 0)`,
+      );
+      usePersonsStore.setState({
+        persons: [
+          { id: 1, name: 'Alice' } as never,
+          { id: 2, name: 'Bob' } as never,
+        ],
+        isLoading: false, error: null,
+      });
+      await useTransactionsStore.getState().createMany([
+        mkTxn({ merchant: 'B1', personId: 2 }),
+        mkTxn({ merchant: 'B2', personId: 2 }),
+        mkTxn({ merchant: 'B3', personId: 2 }),
+      ]);
+    }
+
+    function renderAt(entry: string) {
+      return render(
+        <MemoryRouter initialEntries={[entry]}>
+          <Routes>
+            <Route path="/spending/transactions" element={<SpendingTransactions />} />
+            <Route path="/spending" element={<div data-testid="spending-stub">Spending stub</div>} />
+          </Routes>
+        </MemoryRouter>,
+      );
+    }
+
+    it('C30: filter-empty names the hidden count and the recovery', async () => {
+      await primeTwoPersonsWithBobTxns();
+      renderAt('/spending/transactions?view=p1');
+      expect(
+        await screen.findByText(
+          'No transactions in this view — 3 household transactions not shown. Switch to Household to see everything.',
+        ),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('No transactions match the current view.')).not.toBeInTheDocument();
+    });
+
+    it('D9: the back link preserves ?view=', async () => {
+      await primeTwoPersonsWithBobTxns();
+      renderAt('/spending/transactions?view=p1');
+      await screen.findByText(/No transactions in this view/);
+      expect(screen.getByRole('link', { name: 'Back to Spending' })).toHaveAttribute(
+        'href',
+        expect.stringContaining('view=p1'),
+      );
+    });
+  });
 });

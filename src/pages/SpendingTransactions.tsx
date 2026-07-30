@@ -2,7 +2,7 @@ import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { formatCurrencyCents, formatDate } from '@/lib/format';
 import { useLoadGate } from '@/lib/use-load-gate';
 import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useVirtualizer, observeElementRect, observeElementOffset } from '@tanstack/react-virtual';
 import { ChevronLeftIcon, PencilIcon, XIcon, CheckIcon } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,7 @@ import { useAccountsStore } from '@/stores/accounts-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { filterByPersonId } from '@/lib/filter-by-view';
+import { withViewSearch } from '@/lib/view-scope';
 import type { Transaction, Category } from '@/types/schema';
 
 const selectClass =
@@ -175,6 +176,7 @@ export default function SpendingTransactions() {
   const [busy, setBusy] = useState(false);
 
   const { filter } = useViewFilter();
+  const location = useLocation();
 
   const reload = useCallback(() => {
     void Promise.all([loadTransactions(), loadCategories(), loadAccounts(), loadPersons()]);
@@ -333,7 +335,8 @@ export default function SpendingTransactions() {
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <Link
-            to="/spending"
+            // Wave A D9: preserve the active ?view= across the round trip.
+            to={withViewSearch('/spending', location.search)}
             aria-label="Back to Spending"
             className="inline-flex h-8 w-8 items-center justify-center rounded-md border hover:bg-muted"
           >
@@ -376,11 +379,14 @@ export default function SpendingTransactions() {
           description="Import a statement from Spending to get started."
         >
           <Button asChild size="sm" variant="outline">
-            <Link to="/spending">Go to Spending</Link>
+            <Link to={withViewSearch('/spending', location.search)}>Go to Spending</Link>
           </Button>
         </EmptyState>
       ) : sorted.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No transactions match the current view.</p>
+        // Wave A C30: count-aware, with the recovery named.
+        <p className="text-sm text-muted-foreground">
+          {`No transactions in this view — ${transactions.length - sorted.length} household transaction${transactions.length - sorted.length === 1 ? '' : 's'} not shown. Switch to Household to see everything.`}
+        </p>
       ) : (
         <div
           ref={scrollParentRef}
