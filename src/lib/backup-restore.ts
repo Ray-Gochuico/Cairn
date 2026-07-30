@@ -35,15 +35,14 @@ export interface BackupValidation {
 }
 
 /**
- * True when running inside the Tauri webview (vs. `dev:browser`). We probe the
- * runtime marker Tauri injects rather than importing the SDK's `isTauri`,
- * because the browser shim for `@tauri-apps/api/core` does not re-export it —
- * importing it would break the browser build. The Data UI uses this to gate the
- * desktop-only backup/restore actions and show a "desktop app" note otherwise.
+ * True when running inside the Tauri webview (vs. `dev:browser`). The Data UI
+ * uses this to gate the desktop-only backup/restore actions and show a
+ * "desktop app" note otherwise. The implementation lives in the Tauri-import-
+ * free src/lib/tauri-runtime.ts (W19) so modules that must stay boot-safe in
+ * the browser build (e.g. csv.ts) can probe the runtime without pulling in
+ * this module's Tauri dependencies; re-exported here for existing importers.
  */
-export function isTauriRuntime(): boolean {
-  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-}
+export { isTauriRuntime } from './tauri-runtime';
 
 // Path joining uses `join()` from `@tauri-apps/api/path` (platform-correct
 // separators — `\` on Windows). It is ASYNC (a Tauri IPC call), so every

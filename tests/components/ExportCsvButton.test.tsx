@@ -69,10 +69,13 @@ describe('ExportCsvButton', () => {
       </MemoryRouter>,
     );
     await userEvent.click(screen.getByRole('button', { name: /export csv/i }));
-    await Promise.resolve();
 
-    expect(downloadName).toMatch(/^things-\d{4}-\d{2}-\d{2}\.csv$/);
-    expect(capturedText).toBe('name\nA\nB');
+    // downloadCsv is async now (W19: runtime-aware save); wait for the
+    // browser-branch anchor click and blob capture to settle.
+    await vi.waitFor(() => {
+      expect(downloadName).toMatch(/^things-\d{4}-\d{2}-\d{2}\.csv$/);
+      expect(capturedText).toBe('name\nA\nB');
+    });
 
     createSpy.mockRestore();
     revokeSpy.mockRestore();

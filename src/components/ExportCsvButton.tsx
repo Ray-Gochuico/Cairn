@@ -26,13 +26,18 @@ export function ExportCsvButton<T>({
   label = 'Export CSV',
   size,
 }: ExportCsvButtonProps<T>) {
-  const handleClick = () => {
+  const handleClick = async () => {
     const today = new Date().toISOString().slice(0, 10);
-    downloadCsv(`${baseName}-${today}.csv`, toCsv(rows, columns));
+    await downloadCsv(`${baseName}-${today}.csv`, toCsv(rows, columns));
   };
 
   return (
-    <Button variant="outline" size={size} onClick={handleClick} disabled={rows.length === 0}>
+    <Button
+      variant="outline"
+      size={size}
+      onClick={() => void handleClick()}
+      disabled={rows.length === 0}
+    >
       {label}
     </Button>
   );

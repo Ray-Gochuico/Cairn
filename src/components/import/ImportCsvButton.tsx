@@ -233,7 +233,7 @@ export function ImportCsvButton({ entity }: Props) {
             variant="link"
             size="sm"
             data-testid="download-template-link"
-            onClick={() => downloadCsv(`${entity}-template.csv`, templateCsv)}
+            onClick={() => void downloadCsv(`${entity}-template.csv`, templateCsv)}
             className="text-xs h-auto p-0"
           >
             Download {ENTITY_LABEL[entity]} template ↓

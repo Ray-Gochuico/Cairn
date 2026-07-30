@@ -3,10 +3,15 @@
  *
  * `toCsv` is pure and generic: it takes the rows and a column map and
  * produces an RFC-4180-escaped CSV string. `downloadCsv` is the only
- * impure part — a thin Blob + temporary-anchor download. It is kept
- * separate from the JSON export's download helper so this increment does
- * not depend on the Settings "Data" section.
+ * impure part — runtime-aware save (native dialog in Tauri, Blob +
+ * temporary-anchor download in a browser). It is kept separate from the
+ * JSON export's download helper so this increment does not depend on the
+ * Settings "Data" section.
  */
+
+import { save } from '@tauri-apps/plugin-dialog';
+import { writeFile } from '@tauri-apps/plugin-fs';
+import { isTauriRuntime } from './tauri-runtime';
 
 /** One CSV column: a header label and a pure cell extractor. */
 export interface CsvColumn<T> {
@@ -71,11 +76,33 @@ export function toCsv<T>(rows: T[], columns: CsvColumn<T>[]): string {
 }
 
 /**
- * Trigger a browser download of `text` as `filename`. Uses a Blob + a
- * temporary anchor; the object URL is revoked immediately after the
- * synthetic click. Works in both the Tauri WebView and a plain browser.
+ * Save `text` as `filename`, per runtime.
+ *
+ * In the Tauri app: native save dialog (plugin-dialog `save`) then
+ * plugin-fs `writeFile`. This is the same shape as the working backup
+ * "Save a copy…" flow, and it MUST be `writeFile` (bytes), not
+ * `writeTextFile` — the granted `fs:allow-write-file` capability does not
+ * permit the `write_text_file` command, and the fs capability ratchet
+ * (tests/policy/capabilities-policy.test.ts) is frozen. Cancelling the
+ * dialog is a clean no-op.
+ *
+ * In a plain browser (dev:browser / e2e): Blob + temporary anchor; the
+ * object URL is revoked immediately after the synthetic click. The anchor
+ * pattern does NOT work in the Tauri WKWebView — it has no download
+ * manager and no download handler is registered, so wry silently cancels
+ * the navigation (the pre-W19 bug: every Export CSV was a no-op in the
+ * installed app).
  */
-export function downloadCsv(filename: string, text: string): void {
+export async function downloadCsv(filename: string, text: string): Promise<void> {
+  if (isTauriRuntime()) {
+    const dest = await save({
+      defaultPath: filename,
+      filters: [{ name: 'CSV', extensions: ['csv'] }],
+    });
+    if (dest === null) return; // user cancelled
+    await writeFile(dest, new TextEncoder().encode(text));
+    return;
+  }
   const blob = new Blob([text], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   try {
