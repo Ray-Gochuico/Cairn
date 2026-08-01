@@ -27,7 +27,7 @@ import { CalculatorShellProvider, type CalculatorShellApi } from './calculator-s
 import { InlineLink } from '@/components/calculators/InlineLink';
 import { NumberField } from '@/components/calculators/NumberField';
 import { useNextDollarStore } from '@/lib/calculators/next-dollar-store';
-import { useCalcScopeUrlSync } from '@/lib/calculators/use-calc-scope';
+import { useCalcScope, useCalcScopeUrlSync } from '@/lib/calculators/use-calc-scope';
 import { useTransactionsStore } from '@/stores/transactions-store';
 
 const STALE_BANNER_STORAGE_KEY = 'stale-tax-year-banner-dismissed';
@@ -72,6 +72,7 @@ function withCardHidden(
 function NextDollarField() {
   const amount = useNextDollarStore((s) => s.amount);
   const setAmount = useNextDollarStore((s) => s.setAmount);
+  const scope = useCalcScope();
   return (
     <div className="flex flex-wrap items-end gap-3">
       <div className="w-40">
@@ -89,6 +90,12 @@ function NextDollarField() {
         One number, two answers: what it does against your debt, and where it goes in your
         portfolio.
       </p>
+      {/* CB8 (D-B8): the shared next-dollar stays household-level, labeled. */}
+      {scope.isScoped && (
+        <p className="pb-1 text-xs text-muted-foreground">
+          Household figure — not split per person.
+        </p>
+      )}
     </div>
   );
 }

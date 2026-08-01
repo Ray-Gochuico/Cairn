@@ -156,6 +156,23 @@ describe('CalculatorsLayout', () => {
     await waitFor(() => expect(getCalcScopePersonId()).toBe(2));
   });
 
+  it('Wave B CB8: the next-dollar section note appears only in person scope', async () => {
+    __resetCalcScopeForTests();
+    primeSettings();
+    usePersonsStore.setState({
+      persons: [makePerson({ id: 1, name: 'Alice' }), makePerson({ id: 2, name: 'Bob' })],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+    render(
+      <MemoryRouter initialEntries={['/calculators?view=p2']}>
+        <CalculatorsLayout />
+      </MemoryRouter>,
+    );
+    await screen.findByText('Household figure — not split per person.');
+  });
+
   it('hides a card whose id is marked hidden in settings.calculatorCardLayout (no localStorage read)', async () => {
     primeSettings({ calculatorCardLayout: [{ id: 'contribution-allocator', hidden: true }] });
     render(

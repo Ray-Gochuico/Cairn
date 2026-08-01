@@ -19,6 +19,10 @@ import { allocateContribution } from '@/lib/contribution-allocator';
 import { classTargetVsActual } from '@/lib/allocation-hierarchy';
 import { formatCurrency } from '@/lib/format';
 import { InlineLink } from '@/components/calculators/InlineLink';
+import { useCalcScope } from '@/lib/calculators/use-calc-scope';
+import { partitionHidden } from '@/lib/view-scope';
+import { ScopeCaption } from '@/components/layout/ScopeCaption';
+import { FilteredEmptyState } from '@/components/layout/FilteredEmptyState';
 
 interface Props {
   cardId?: string;
@@ -58,6 +62,37 @@ export function ContributionAllocatorCard({ cardId }: Props = {}) {
   const contributions = useContributionsStore((s) => s.contributions);
   const todayIso = useLocalToday();
 
+  const scope = useCalcScope();
+  // Wave B (D-B1/D-B13): the person's accounts only — holdings/snapshots
+  // inherit ownership through account_id, so filtering accounts up front
+  // scopes valuations, the household total, and every drift figure.
+  const scopedAccounts = useMemo(
+    () =>
+      scope.personId == null ? accounts : accounts.filter((a) => a.ownerPersonId === scope.personId),
+    [accounts, scope.personId],
+  );
+  const accountPartition = useMemo(
+    () => partitionHidden(accounts, scopedAccounts, (a) => a.ownerPersonId),
+    [accounts, scopedAccounts],
+  );
+  // valueHoldings buckets holdings by account_id on its own (the accounts
+  // list only feeds names), so scoping ACCOUNTS alone would not scope the
+  // valuations — pre-filter the holdings to the scoped accounts too (the
+  // same D-B13 composition; no resolver modified).
+  const scopedHoldings = useMemo(() => {
+    if (scope.personId == null) return holdings;
+    const ids = new Set(scopedAccounts.map((a) => a.id));
+    return holdings.filter((h) => ids.has(h.accountId));
+  }, [holdings, scope.personId, scopedAccounts]);
+  // D-B4: the typical-contribution prefill follows attributed rows in scope.
+  const scopedContributions = useMemo(
+    () =>
+      scope.personId == null
+        ? contributions
+        : contributions.filter((c) => c.personId === scope.personId),
+    [contributions, scope.personId],
+  );
+
   useEffect(() => {
     // Load the portfolio stores this card needs that CalculatorsLayout does NOT
     // already hydrate (the layout loads snapshots/contributions/loans/equity +
@@ -82,9 +117,9 @@ export function ContributionAllocatorCard({ cardId }: Props = {}) {
   const nextDollar = useNextDollarStore((s) => s.amount);
   const defaults = useMemo(
     () => ({
-      contribution: nextDollar ?? typicalMonthlyContribution(contributions, todayIso),
+      contribution: nextDollar ?? typicalMonthlyContribution(scopedContributions, todayIso),
     }),
-    [nextDollar, contributions, todayIso],
+    [nextDollar, scopedContributions, todayIso],
   );
   const { values, setValue, reset, isOverridden, overriddenKeys } = useCalculatorState(
     cardId ?? 'contribution-allocator',
@@ -110,8 +145,8 @@ export function ContributionAllocatorCard({ cardId }: Props = {}) {
   }, [snapshots]);
 
   const valuations = useMemo(
-    () => valueHoldings(accounts, holdings, latestPerAccount, assetClassByTicker),
-    [accounts, holdings, latestPerAccount, assetClassByTicker],
+    () => valueHoldings(scopedAccounts, scopedHoldings, latestPerAccount, assetClassByTicker),
+    [scopedAccounts, scopedHoldings, latestPerAccount, assetClassByTicker],
   );
   const householdTotal = useMemo(() => valuations.reduce((a, v) => a + v.value, 0), [valuations]);
 
@@ -167,7 +202,13 @@ export function ContributionAllocatorCard({ cardId }: Props = {}) {
           // D4: no history and no entry — an honest prompt, never a demo $1,000.
           <EmptyMeaning>Enter a monthly contribution to see the buy plan.</EmptyMeaning>
         ) : (
-          <>of a {formatCurrency(contribution)} contribution, allocated toward your targets</>
+          // CB17: scoped meaning names the person; targets stay household (D-B8).
+          <>
+            of a {formatCurrency(contribution)} contribution
+            {scope.isScoped
+              ? ` — where ${scope.personName}'s next dollar goes, against household targets`
+              : ', allocated toward your targets'}
+          </>
         )
       }
       rail={
@@ -194,6 +235,13 @@ export function ContributionAllocatorCard({ cardId }: Props = {}) {
           the meaning slot carries the "enter a monthly contribution" prompt. */}
       {hasTargets && contribution != null && (
         <div className="space-y-3">
+          {scope.isScoped && valuations.length === 0 && accounts.length > 0 ? (
+            // Wave B tier-2 (D-B1): the household HAS invested accounts, the
+            // scoped person holds none — counted declaration, never onboarding.
+            <FilteredEmptyState noun="investment accounts" partition={accountPartition} bare />
+          ) : (
+            <>
+          {scope.isScoped && <ScopeCaption noun="accounts" partition={accountPartition} />}
           {result.unreachableWithoutSelling && (
             // UX M3: NAME the overweight class(es), don't bury the reason.
             <div
@@ -307,6 +355,8 @@ export function ContributionAllocatorCard({ cardId }: Props = {}) {
             (snapshot value is distributed by share count — no live prices, and accounts
             with no holdings, e.g. cash, aren’t included).
           </p>
+            </>
+          )}
         </div>
       )}
       {hasTargets && (

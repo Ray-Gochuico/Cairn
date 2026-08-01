@@ -9,6 +9,9 @@ import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useTickersStore } from '@/stores/tickers-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useContributionsStore } from '@/stores/contributions-store';
+import { usePersonsStore } from '@/stores/persons-store';
+import { syncCalcScope, __resetCalcScopeForTests } from '@/lib/calculators/calc-view-scope';
+import { makePerson, makeAccount } from '../factories';
 import {
   AccountType,
   AssetClass,
@@ -367,5 +370,117 @@ describe('ContributionAllocatorCard — calculator-state + grouped buys (Wave 18
       'href',
       '/investments',
     );
+  });
+});
+
+describe('ContributionAllocatorCard — person scope (Wave B)', () => {
+  const targets = [
+    { assetClass: AssetClass.US_TOTAL_MARKET, targetPct: 0.5 },
+    { assetClass: AssetClass.US_BONDS, targetPct: 0.5 },
+  ];
+
+  function primePersons() {
+    usePersonsStore.setState({
+      persons: [makePerson({ id: 1, name: 'Alice' }), makePerson({ id: 2, name: 'Bob' })],
+      isLoading: false,
+      error: null,
+    } as never);
+  }
+
+  /** Bob-attributed contribution history so the scoped prefill resolves. */
+  function attributeContributionsTo(personId: number) {
+    useContributionsStore.setState({
+      contributions: [
+        '2025-06-01', '2025-07-01', '2025-08-01', '2025-09-01', '2025-10-01',
+        '2025-11-01', '2025-12-01', '2026-01-01', '2026-02-01', '2026-03-01',
+        '2026-04-01', '2026-05-01',
+      ].map((date, i) => ({
+        id: i + 1, accountId: 2, personId, date, amount: 500, source: 'MANUAL',
+      })) as never,
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+  }
+
+  const renderScopedAt = (path: string) =>
+    render(
+      <MemoryRouter initialEntries={[path]}>
+        <ContributionAllocatorCard cardId="contribution-allocator" />
+      </MemoryRouter>,
+    );
+
+  beforeEach(() => {
+    sessionStorage.clear();
+    __resetCalcScopeForTests();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-05-14T12:00:00Z'));
+    seedStores(targets);
+    primePersons();
+    attributeContributionsTo(2);
+    // Ownership map: account 1 = Alice's (QQQ only), account 2 = Bob's
+    // (VTI + BND), account 3 = joint.
+    useAccountsStore.setState({
+      accounts: [
+        makeAccount({ id: 1, ownerPersonId: 1, name: 'P1 Brokerage' }),
+        makeAccount({ id: 2, ownerPersonId: 2, name: 'P2 Brokerage' }),
+        makeAccount({ id: 3, ownerPersonId: null, name: 'Joint Brokerage' }),
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+    useHoldingsStore.setState({
+      holdings: [
+        { id: 1, accountId: 1, ticker: 'QQQ', shareCount: 5, targetAllocationPct: null, costBasis: null },
+        { id: 2, accountId: 2, ticker: 'VTI', shareCount: 7, targetAllocationPct: null, costBasis: null },
+        { id: 3, accountId: 2, ticker: 'BND', shareCount: 3, targetAllocationPct: null, costBasis: null },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+    useSnapshotsStore.setState({
+      snapshots: [
+        { id: 1, accountId: 1, snapshotDate: '2026-04-01', totalValue: 5000, source: SnapshotSource.MANUAL },
+        { id: 2, accountId: 2, snapshotDate: '2026-04-01', totalValue: 1000, source: SnapshotSource.MANUAL },
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("Wave B: person scope values only the person's accounts and derives the typical contribution from their attributed rows (CB17)", () => {
+    syncCalcScope(2);
+    renderScopedAt('/calculators?view=p2');
+    // meaning names the person + household targets:
+    expect(screen.getByTestId('contribution-allocator-meaning')).toHaveTextContent(
+      "— where Bob's next dollar goes, against household targets",
+    );
+    // p1's account rows are absent from the buy table:
+    expect(screen.queryByText('QQQ')).not.toBeInTheDocument();
+    expect(screen.getByTestId('scope-caption')).toHaveTextContent(/Showing Bob's accounts/);
+  });
+
+  it('Wave B: scoped person with no invested accounts → FilteredEmptyState (household has accounts)', () => {
+    // Bob owns nothing: reassign account 2 to Alice.
+    useAccountsStore.setState({
+      accounts: [
+        makeAccount({ id: 1, ownerPersonId: 1, name: 'P1 Brokerage' }),
+        makeAccount({ id: 2, ownerPersonId: 1, name: 'P1 Second' }),
+        makeAccount({ id: 3, ownerPersonId: null, name: 'Joint Brokerage' }),
+      ],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+    syncCalcScope(2);
+    renderScopedAt('/calculators?view=p2');
+    expect(screen.getByText("No investment accounts in Bob's name")).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View household' })).toBeInTheDocument();
   });
 });
