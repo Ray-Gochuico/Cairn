@@ -407,6 +407,29 @@ describe('ScenarioBar — page-scope control + scoped bar (Wave B)', () => {
     );
   });
 
+  it("0051: person scope prefers the person's durable baseline with 'from {name}'s Inputs' provenance", () => {
+    usePersonsStore.setState({
+      persons: [
+        basePerson,
+        { ...basePerson, id: 2, name: 'Sam', annualSalaryPretax: 80000, monthlyExpenseBaseline: 2600 },
+      ],
+      isLoading: false,
+      error: null,
+    } as never);
+    syncCalcScope(2);
+    renderBarAt('/calculators?view=p2');
+    expect(screen.getByLabelText('Monthly expenses')).toHaveValue(2600);
+    expect(screen.getByText("from Sam's Inputs")).toBeInTheDocument();
+    expect(screen.queryByText('half your household baseline — even split')).not.toBeInTheDocument();
+  });
+
+  it('0051: person scope keeps the labeled even split when the durable baseline is NULL (CB4 unchanged)', () => {
+    syncCalcScope(2);
+    renderBarAt('/calculators?view=p2');
+    expect(screen.getByLabelText('Monthly expenses')).toHaveValue(2500); // half of 5000
+    expect(screen.getByText('half your household baseline — even split')).toBeInTheDocument();
+  });
+
   it('CB5: the expense hint renders under Monthly expenses in person scope when attributed transactions exist', () => {
     useTransactionsStore.setState({
       transactions: [

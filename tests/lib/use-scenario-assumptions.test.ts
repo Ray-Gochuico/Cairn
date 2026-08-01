@@ -229,4 +229,23 @@ describe('Wave B: scope-aware bar state', () => {
     expect(result.current.scopePersonName).toBe('Bob');
     expect(result.current.scopeExclusions).toEqual({ jointPortfolio: 8000, unattributedContribution: 600 });
   });
+
+  it("0051: the hook feeds the scoped person's durable baseline into the defaults + provenance", () => {
+    usePersonsStore.setState({
+      persons: [
+        makePerson({ id: 1, name: 'Alice' }),
+        makePerson({ id: 2, name: 'Bob', monthlyExpenseBaseline: 2600 }),
+      ],
+      isLoading: false,
+      error: null,
+    } as never);
+    act(() => syncCalcScope(2));
+    const { result } = renderHook(() => useScenarioAssumptions());
+    expect(result.current.defaults.monthlyExpenses).toBe(2600);
+    expect(result.current.provenance.monthlyExpenses).toBe("from Bob's Inputs");
+    // Household scope is untouched by the person figure:
+    act(() => syncCalcScope(null));
+    expect(result.current.defaults.monthlyExpenses).toBe(5000);
+    expect(result.current.provenance.monthlyExpenses).toBe('your monthly expense baseline');
+  });
 });

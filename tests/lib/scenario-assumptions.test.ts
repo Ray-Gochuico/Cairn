@@ -352,4 +352,44 @@ describe('Wave B: scoped buildScenarioDefaults', () => {
     expect(provenance.portfolio).toBe("no snapshots for Bob's accounts");
     expect(provenance.annualContribution).toBe('no contributions attributed to Bob in the last 12 months');
   });
+
+  // ── Migration 0051: the durable per-person baseline upgrades the default ──
+
+  it("0051: a set person baseline replaces the even split, provenance 'from {name}'s Inputs'", () => {
+    const { defaults, provenance } = buildScenarioDefaults({
+      household, settings: null, accounts, snapshots, contributions,
+      todayIso: '2026-07-30',
+      scope: { personId: 2, personName: 'Bob', monthlyExpenseBaseline: 2600 },
+    });
+    expect(defaults.monthlyExpenses).toBe(2600);
+    expect(provenance.monthlyExpenses).toBe("from Bob's Inputs");
+  });
+
+  it('0051: a NULL person baseline keeps the labeled even split (CB4 unchanged)', () => {
+    const { defaults, provenance } = buildScenarioDefaults({
+      household, settings: null, accounts, snapshots, contributions,
+      todayIso: '2026-07-30',
+      scope: { personId: 2, personName: 'Bob', monthlyExpenseBaseline: null },
+    });
+    expect(defaults.monthlyExpenses).toBe(3000);
+    expect(provenance.monthlyExpenses).toBe('half your household baseline — even split');
+  });
+
+  it("0051: an explicit $0 person baseline is honored and still labeled from Inputs (set ≠ unset)", () => {
+    const { defaults, provenance } = buildScenarioDefaults({
+      household, settings: null, accounts, snapshots, contributions,
+      todayIso: '2026-07-30',
+      scope: { personId: 2, personName: 'Bob', monthlyExpenseBaseline: 0 },
+    });
+    expect(defaults.monthlyExpenses).toBe(0);
+    expect(provenance.monthlyExpenses).toBe("from Bob's Inputs");
+  });
+
+  it('0051: household scope ignores person baselines entirely (no scope input — byte-identical)', () => {
+    const { defaults, provenance } = buildScenarioDefaults({
+      household, settings: null, accounts, snapshots, contributions, todayIso: '2026-07-30',
+    });
+    expect(defaults.monthlyExpenses).toBe(6000);
+    expect(provenance.monthlyExpenses).toBe('your monthly expense baseline');
+  });
 });

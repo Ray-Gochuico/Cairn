@@ -95,8 +95,13 @@ export interface ScenarioDefaultsInput {
   contributions: ReadonlyArray<{ accountId: number; date: string; amount: number; personId?: number | null }>;
   /** Injectable for tests; defaults to today. */
   todayIso?: string;
-  /** Wave B: person scope — omit/null for household (pre-Wave-B behavior). */
-  scope?: { personId: number; personName: string } | null;
+  /**
+   * Wave B: person scope — omit/null for household (pre-Wave-B behavior).
+   * Migration 0051: `monthlyExpenseBaseline` is the scoped person's durable
+   * monthly expense figure (persons.monthly_expense_baseline). Non-null
+   * replaces the even-split default; null/omitted keeps the labeled split.
+   */
+  scope?: { personId: number; personName: string; monthlyExpenseBaseline?: number | null } | null;
 }
 
 /** Wave B (D-B1/D-B4): what a person scope EXCLUDED — surfaced, never silent. */
@@ -151,10 +156,14 @@ export function buildScenarioDefaults(input: ScenarioDefaultsInput): ScenarioDef
 
   const portfolio = fiEligiblePortfolioValue(scopedAccounts, input.snapshots, todayIso);
   const annualContribution = rolling12MonthContribution(scopedContributions, todayIso);
-  // D-B5: person scope defaults to the labeled even split of the household
-  // baseline (migration 0051 is the durable upgrade — D-B7, not this wave).
+  // D-B5 + migration 0051: person scope prefers the person's own durable
+  // baseline when SET (non-null — an explicit $0 counts as set); otherwise
+  // the labeled even split of the household baseline. Household scope never
+  // reads the per-person figure.
   const baseline = household?.monthlyExpenseBaseline ?? 0;
-  const monthlyExpenses = scope == null ? baseline : baseline / 2;
+  const personBaseline = scope?.monthlyExpenseBaseline ?? null;
+  const monthlyExpenses =
+    scope == null ? baseline : personBaseline != null ? personBaseline : baseline / 2;
 
   const scopeExclusions: ScopeExclusions | null =
     scope == null
@@ -199,11 +208,15 @@ export function buildScenarioDefaults(input: ScenarioDefaultsInput): ScenarioDef
           ? `${scope.personName}'s contributions, last 12 months`
           : `no contributions attributed to ${scope.personName} in the last 12 months`,
     monthlyExpenses:
-      monthlyExpenses > 0
-        ? scope == null
-          ? 'your monthly expense baseline'
-          : 'half your household baseline — even split'
-        : 'not set in Inputs',
+      // 0051: the durable per-person figure is labeled from Inputs even at $0
+      // — 'not set in Inputs' would be dishonest for an explicitly set value.
+      scope != null && personBaseline != null
+        ? `from ${scope.personName}'s Inputs`
+        : monthlyExpenses > 0
+          ? scope == null
+            ? 'your monthly expense baseline'
+            : 'half your household baseline — even split'
+          : 'not set in Inputs',
     returnPct: moderate ? `your ${moderate.label} growth scenario` : 'app default 6%',
     swrPct:
       household?.withdrawalRate != null && household.withdrawalRate > 0
