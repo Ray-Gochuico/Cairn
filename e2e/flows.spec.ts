@@ -103,16 +103,25 @@ test('calculators: the page scope honors ?view= — scoped FI figures + caption,
   await expect(
     page.getByText("from Demo Partner's account snapshots — joint accounts not included"),
   ).toBeVisible();
-  // Expenses default to the labeled even split of the $6,000 baseline:
-  await expect(page.getByLabel('Monthly expenses')).toHaveValue('3000');
-  await expect(page.getByText('half your household baseline — even split')).toBeVisible();
+  // 0051: Demo Partner's durable baseline (2600, seeded) replaces the even
+  // split, with the upgraded provenance:
+  await expect(page.getByLabel('Monthly expenses')).toHaveValue('2600');
+  await expect(page.getByText("from Demo Partner's Inputs")).toBeVisible();
   // The FI waymark re-scopes (its meaning names the person):
   await expect(page.getByTestId('path-to-fi-meaning')).toContainText('Demo Partner');
   // Open the card: the exclusions caption carries the counted joint total.
   await page.getByTestId('path-to-fi-trigger').click();
   await expect(page.getByTestId('path-to-fi-scope-exclusions')).toContainText('joint accounts ($8,000)');
-  // The header copy is deduped on the grid; the BAR control flips the scope:
+  // The header copy is deduped on the grid; the BAR control flips the scope.
+  // Demo Investor's baseline stays NULL, so P1 scope keeps the labeled even
+  // split of the $6,000 household baseline (CB4 unchanged — 0051 receipt):
   await expect(page.getByRole('combobox', { name: 'Filter view by person' })).toHaveCount(0);
+  await page
+    .getByRole('group', { name: 'Calculator scope' })
+    .getByRole('button', { name: 'Demo Investor' })
+    .click();
+  await expect(page.getByLabel('Monthly expenses')).toHaveValue('3000');
+  await expect(page.getByText('half your household baseline — even split')).toBeVisible();
   await page
     .getByRole('group', { name: 'Calculator scope' })
     .getByRole('button', { name: 'Household' })
