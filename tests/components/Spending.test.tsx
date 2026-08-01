@@ -84,6 +84,8 @@ describe('Spending page', () => {
       mig('0015_add_accent_colors'),
       mig('0024_cash_apy'),
       mig('0036_add_rent_lease_tracking'),
+      // 0051: PersonsRepo.create now writes monthly_expense_baseline.
+      mig('0051_person_expense_baseline'),
     ]);
     setDatabase(db);
     useCategoriesStore.setState({ categories: [], isLoading: false, error: null });

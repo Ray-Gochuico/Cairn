@@ -178,7 +178,15 @@ export function useScenarioAssumptions(): UseScenarioAssumptionsResult {
     () =>
       buildScenarioDefaults({
         household, settings, accounts, snapshots, contributions,
-        scope: scopePerson?.id != null ? { personId: scopePerson.id, personName: scopePerson.name } : null,
+        scope:
+          scopePerson?.id != null
+            ? {
+                personId: scopePerson.id,
+                personName: scopePerson.name,
+                // 0051: the durable per-person expense figure rides the scope.
+                monthlyExpenseBaseline: scopePerson.monthlyExpenseBaseline,
+              }
+            : null,
       }),
     [household, settings, accounts, snapshots, contributions, scopePerson],
   );

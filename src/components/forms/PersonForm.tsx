@@ -48,6 +48,7 @@ export const DEFAULT_PERSON: PersonFormValues = {
   dependentCareFsaMonthly: 0,
   hsaMonthlyContribution: 0,
   hsaEligible: false,
+  monthlyExpenseBaseline: null,
 };
 
 export interface PersonFormProps {
@@ -97,6 +98,7 @@ const PersonFormSchema = PersonSchema.omit({
   hourlyRate: z.number().positive().nullable(),
   regularHoursPerWeek: z.number().positive(),
   otThresholdHoursPerWeek: z.number().positive().nullable(),
+  monthlyExpenseBaseline: z.number().nonnegative().nullable(),
   pretax401kPctPercent: z
     .number()
     .min(0, 'must be at least 0')
@@ -372,6 +374,29 @@ export default function PersonForm({
               <TermTooltip term="HSA">HSA</TermTooltip> eligible (on a{' '}
               <TermTooltip term="HDHP">HDHP</TermTooltip> plan)
             </label>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="monthlyExpenseBaseline">
+                Monthly expenses (this person&#39;s share)
+              </Label>
+              <Input
+                id="monthlyExpenseBaseline"
+                type="number"
+                step="any"
+                min="0"
+                aria-describedby="monthlyExpenseBaseline-hint"
+                {...form.register('monthlyExpenseBaseline', { setValueAs: emptyToNullNumber })}
+              />
+              <p
+                id="monthlyExpenseBaseline-hint"
+                className="text-xs text-muted-foreground mt-1"
+              >
+                Used by person-scoped calculators. Leave blank to use an even split of the
+                household baseline.
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>

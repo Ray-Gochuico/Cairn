@@ -723,6 +723,24 @@ describe('PathToFiCard — person scope (Wave B)', () => {
     expect(screen.getByTestId('path-to-fi-scope-exclusions')).not.toHaveTextContent('Expenses default');
   });
 
+  it("0051: the CB16 even-split clause drops when Bob's durable baseline is used (unedited)", () => {
+    usePersonsStore.setState({
+      persons: [
+        { ...basePerson, id: 1, name: 'Alice', targetRetirementAge: 46 } as Person,
+        { ...basePerson, id: 2, name: 'Bob', targetRetirementAge: 66, monthlyExpenseBaseline: 2600 } as Person,
+      ],
+      isLoading: false,
+      error: null,
+    });
+    syncCalcScope(2);
+    renderScoped();
+    const caption = screen.getByTestId('path-to-fi-scope-exclusions');
+    // The exclusions declaration itself stays…
+    expect(caption).toHaveTextContent(/joint accounts \(\$8,000\)/);
+    // …but the even-split sentence is gone: expenses now come from Bob's Inputs.
+    expect(caption).not.toHaveTextContent('Expenses default');
+  });
+
   it('Wave B: the years-to-retirement rail default follows the SCOPED person, not the household min', () => {
     syncCalcScope(2);
     renderScoped();

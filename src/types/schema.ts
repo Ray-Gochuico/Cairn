@@ -86,6 +86,10 @@ export const PersonSchema = z.object({
   dependentCareFsaMonthly: z.number().nonnegative(),
   hsaMonthlyContribution: z.number().nonnegative(),
   hsaEligible: z.boolean(),
+  // Migration 0051 (D-B7): this person's own monthly expense share ($/mo).
+  // NULL = not set → person-scoped calculators keep the labeled even split
+  // of household.monthlyExpenseBaseline.
+  monthlyExpenseBaseline: z.number().nonnegative().nullable().default(null),
   // Roadmap rule-engine chart answers.
   jobStability: z.enum(['stable', 'unstable']).nullable().default(null),
   expectsHigherFutureIncome: z.boolean().nullable().default(null),

@@ -62,6 +62,61 @@ describe('PersonForm — W10 M44 error honesty', () => {
   });
 });
 
+describe('PersonForm — monthly expenses (migration 0051)', () => {
+  it('renders the field with the even-split hint, empty when unset (NULL)', () => {
+    render(<PersonForm initial={DEFAULT_PERSON} onSubmit={vi.fn()} onCancel={vi.fn()} />);
+    const field = screen.getByLabelText(/monthly expenses \(this person's share\)/i);
+    expect(field).toHaveValue(null);
+    expect(field).toHaveAccessibleDescription(
+      /leave blank to use an even split of the household baseline/i,
+    );
+  });
+
+  it('submits a typed value as monthlyExpenseBaseline', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <PersonForm
+        initial={{ ...DEFAULT_PERSON, name: 'Alice', dateOfBirth: '1990-01-01' }}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />,
+    );
+    await user.type(
+      screen.getByLabelText(/monthly expenses \(this person's share\)/i),
+      '2600',
+    );
+    await user.click(screen.getByRole('button', { name: /save/i }));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ monthlyExpenseBaseline: 2600 }),
+    );
+  });
+
+  it('clearing the field submits null — back to the even split', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <PersonForm
+        initial={{
+          ...DEFAULT_PERSON,
+          name: 'Alice',
+          dateOfBirth: '1990-01-01',
+          monthlyExpenseBaseline: 3100,
+        }}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />,
+    );
+    const field = screen.getByLabelText(/monthly expenses \(this person's share\)/i);
+    expect(field).toHaveValue(3100);
+    await user.clear(field);
+    await user.click(screen.getByRole('button', { name: /save/i }));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ monthlyExpenseBaseline: null }),
+    );
+  });
+});
+
 describe('PersonForm — DOB adult-year ceiling (T23)', () => {
   it("caps the Date-of-birth year dropdown at 16 years before today (household members are adults)", () => {
     vi.useFakeTimers();
