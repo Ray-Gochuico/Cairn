@@ -90,12 +90,30 @@ export function EquityValueCard({ cardId }: EquityValueCardProps = {}) {
     return { storedFmv: dominant.currentFmv, storedUpdatedAt: dominant.updatedAt };
   }, [scopedGrants]);
 
-  const defaults = useMemo(() => ({ fmvPerShare: storedFmv }), [storedFmv]);
-  const { values, setValue, reset, isOverridden, overriddenKeys } = useCalculatorState(
+  // Wave B gate fix (MAJOR): the single company the CURRENT scope's gate saw.
+  // The stored override is tagged with its originating company and applies
+  // only when it matches — the calc-state:equity silo is scope-global (D-B9:
+  // value overrides survive scope flips), and the per-scope D8 gate would
+  // otherwise let an override typed in one person's scope (company X)
+  // reprice the other person's company-Y grants.
+  const dominantCompany = singleCompany ? (scopedGrants[0]?.companyName ?? null) : null;
+
+  const defaults = useMemo(
+    () => ({ fmvPerShare: storedFmv, fmvCompany: dominantCompany ?? '' }),
+    [storedFmv, dominantCompany],
+  );
+  const { values, setValue, reset, overriddenKeys } = useCalculatorState(
     cardId ?? 'equity',
     defaults,
   );
-  const fmvOverridden = singleCompany && overriddenKeys.has('fmvPerShare');
+  // Applied = overridden AND the stored company tag matches this scope's
+  // single company (W18 D8 restored: an override never reprices a different
+  // company's grants). A mismatched stored override renders as not-applied.
+  const fmvOverridden =
+    singleCompany &&
+    overriddenKeys.has('fmvPerShare') &&
+    overriddenKeys.has('fmvCompany') &&
+    values.fmvCompany === dominantCompany;
 
   // All figures derive from pricedGrants — vested/unvested/income reprice live.
   const pricedGrants = useMemo(
@@ -206,18 +224,24 @@ export function EquityValueCard({ cardId }: EquityValueCardProps = {}) {
 
   const rail = (
     <>
-      {isOverridden && singleCompany && <RailReset onClick={reset} />}
+      {fmvOverridden && <RailReset onClick={reset} />}
       {singleCompany ? (
         <div className="space-y-1">
           <NumberField
             id="equity-fmv"
             label="FMV per share (what-if)"
-            value={values.fmvPerShare}
-            onChange={(v) => setValue('fmvPerShare', v ?? 0)}
+            // A stored override from ANOTHER company renders as not-applied:
+            // the field shows this scope's default, no edited dot.
+            value={fmvOverridden ? values.fmvPerShare : storedFmv}
+            onChange={(v) => {
+              setValue('fmvPerShare', v ?? 0);
+              // Tag the override with the company it was typed against.
+              setValue('fmvCompany', dominantCompany ?? '');
+            }}
             suffix="$"
             step="0.5"
             min={0}
-            edited={overriddenKeys.has('fmvPerShare')}
+            edited={fmvOverridden}
           />
           <p className="text-xs text-muted-foreground">
             prefilled from your stored FMV

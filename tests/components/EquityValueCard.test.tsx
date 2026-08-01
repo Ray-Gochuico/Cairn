@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, within, fireEvent } from '@testing-library/react';
+import { render, screen, within, fireEvent, cleanup } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { useEquityGrantsStore } from '@/stores/equity-grants-store';
 import { usePersonsStore } from '@/stores/persons-store';
@@ -757,6 +757,46 @@ describe('EquityValueCard — person scope (Wave B)', () => {
     expect(screen.getByText("No grants in Bob's name")).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'View household' })).toBeInTheDocument();
     expect(screen.queryByText(/add equity grants/i)).not.toBeInTheDocument();
+  });
+
+  it("Wave B gate fix (MAJOR): an FMV override typed in one scope never reprices the OTHER scope's company", () => {
+    // Alice owns AcmeCorp (1,000 sh × $50 = $50,000); Bob owns BetaCo
+    // (300 sh × $50 = $15,000). Each scope passes its own single-company gate.
+    primeGrants([
+      { ...aliceGrant, companyName: 'AcmeCorp' },
+      { ...bobGrant, companyName: 'BetaCo' },
+    ]);
+    // Type an FMV override ($80) in ALICE's scope:
+    syncCalcScope(1);
+    render(
+      <MemoryRouter initialEntries={['/calculators?view=p1']}>
+        <EquityValueCard cardId="equity" />
+      </MemoryRouter>,
+    );
+    fireEvent.change(screen.getByLabelText(/fmv per share/i), { target: { value: '80' } });
+    expect(screen.getByTestId('equity-value-headline')).toHaveTextContent('$80,000');
+    cleanup();
+    // Flip to BOB's scope: his BetaCo grants must NOT be repriced by the
+    // AcmeCorp override — headline stays $15,000, field shows his default,
+    // no edited dot (the override renders as not-applied).
+    syncCalcScope(2);
+    render(
+      <MemoryRouter initialEntries={['/calculators?view=p2']}>
+        <EquityValueCard cardId="equity" />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('equity-value-headline')).toHaveTextContent('$15,000');
+    expect((screen.getByLabelText(/fmv per share/i) as HTMLInputElement).value).toBe('50');
+    expect(screen.queryByRole('button', { name: /reset to my data/i })).not.toBeInTheDocument();
+    cleanup();
+    // Back in Alice's scope the override still applies (D-B9 survive rule):
+    syncCalcScope(1);
+    render(
+      <MemoryRouter initialEntries={['/calculators?view=p1']}>
+        <EquityValueCard cardId="equity" />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('equity-value-headline')).toHaveTextContent('$80,000');
   });
 
   it('Wave B: household scope is unchanged (no scope sources primed)', () => {

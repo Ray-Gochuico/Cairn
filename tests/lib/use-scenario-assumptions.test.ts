@@ -209,6 +209,19 @@ describe('Wave B: scope-aware bar state', () => {
     expect(result.current.salaryByPersonId[2]).toBeUndefined();
   });
 
+  it('Wave B gate fix: a stale mirrored id degrades WRITES to household too — no orphan silo', () => {
+    act(() => syncCalcScope(99)); // person 99 does not exist
+    const { result } = renderHook(() => useScenarioAssumptions());
+    expect(result.current.scopePersonId).toBeNull(); // display degrades…
+    act(() => result.current.setField('portfolio', 123));
+    // …and the write follows the SAME degraded resolution:
+    expect(sessionStorage.getItem('calc-scenario:p99')).toBeNull();
+    expect(JSON.parse(sessionStorage.getItem('calc-scenario:shared')!)).toEqual({ portfolio: 123 });
+    expect(result.current.values.portfolio).toBe(123);
+    act(() => result.current.resetAll());
+    expect(sessionStorage.getItem('calc-scenario:shared')).toBeNull();
+  });
+
   it('exposes the scope + exclusions for the cards', () => {
     act(() => syncCalcScope(2));
     const { result } = renderHook(() => useScenarioAssumptions());

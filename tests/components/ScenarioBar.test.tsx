@@ -399,6 +399,14 @@ describe('ScenarioBar — page-scope control + scoped bar (Wave B)', () => {
     expect(screen.getByText('Switch to Household to send this scenario.')).toBeInTheDocument();
   });
 
+  it('Wave B gate fix: the disabled Send button carries the CB6 reason as its accessible description', () => {
+    syncCalcScope(2);
+    renderBarAt('/calculators?view=p2');
+    expect(screen.getByRole('button', { name: /send to what-if/i })).toHaveAccessibleDescription(
+      'Switch to Household to send this scenario.',
+    );
+  });
+
   it('CB5: the expense hint renders under Monthly expenses in person scope when attributed transactions exist', () => {
     useTransactionsStore.setState({
       transactions: [

@@ -354,8 +354,31 @@ describe('Backtest page — person scope (Wave B)', () => {
       </MemoryRouter>,
     );
 
-  it('Wave B CB22: person scope shows the scoped seed note (expenses seeded)', () => {
+  it('Wave B gate fix: the example-substituted scoped seed note never claims the person seeded it', () => {
+    // Empty stores → scoped portfolio $0 → D-B15 seeds the $1M example. The
+    // note must be consistent with the example badge, not CB22's claim.
     renderScoped();
+    expect(screen.getByTestId('backtest-seed-note')).toHaveTextContent(
+      "Starting portfolio is the $1M example — no snapshots for Bob's accounts; annual spending follows the bar's monthly expenses × 12.",
+    );
+    expect(screen.getByTestId('backtest-seed-note')).not.toHaveTextContent("Seeded from Bob's scenario");
+  });
+
+  it("Wave B CB22: the genuine scoped seed note renders verbatim when Bob's accounts actually seed it", () => {
+    useAccountsStore.setState({
+      accounts: [{ ...mkAccount(1), ownerPersonId: 2 }],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+    useSnapshotsStore.setState({
+      snapshots: [mkSnap(1, 800_000)],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+    renderScoped();
+    expect(screen.getByLabelText('Starting portfolio ($)')).toHaveValue(800_000);
     expect(screen.getByTestId('backtest-seed-note')).toHaveTextContent(
       "Seeded from Bob's scenario — the starting portfolio counts Bob's accounts only (joint excluded); annual spending follows the bar's monthly expenses × 12.",
     );

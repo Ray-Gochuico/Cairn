@@ -238,12 +238,20 @@ export default function Backtest() {
         <CardContent>
           {!configEdited && (
             <p className="text-xs text-muted-foreground mb-3" data-testid="backtest-seed-note">
+              {/* Wave B gate fix: when D-B15 substituted the $1M example
+                  (scoped portfolio $0) the note must not claim the person's
+                  accounts seeded it — stay consistent with the example badge.
+                  CB22 stays verbatim for the genuinely-seeded scoped case. */}
               {expensesSeeded
                 ? scope.isScoped
-                  ? `Seeded from ${scope.personName}'s scenario — the starting portfolio counts ${scope.personName}'s accounts only (joint excluded); annual spending follows the bar's monthly expenses × 12.`
+                  ? usingExample
+                    ? `Starting portfolio is the $1M example — no snapshots for ${scope.personName}'s accounts; annual spending follows the bar's monthly expenses × 12.`
+                    : `Seeded from ${scope.personName}'s scenario — the starting portfolio counts ${scope.personName}'s accounts only (joint excluded); annual spending follows the bar's monthly expenses × 12.`
                   : 'Seeded from your scenario — starting portfolio and annual spending (monthly expenses × 12) follow the calculators scenario bar until you edit a field here.'
                 : scope.isScoped
-                  ? `Seeded from ${scope.personName}'s scenario portfolio (joint excluded); annual spending defaults to 4% of it.`
+                  ? usingExample
+                    ? `Starting portfolio is the $1M example — no snapshots for ${scope.personName}'s accounts; annual spending defaults to 4% of it.`
+                    : `Seeded from ${scope.personName}'s scenario portfolio (joint excluded); annual spending defaults to 4% of it.`
                   : 'Seeded from your scenario portfolio; annual spending defaults to 4% of it (set a monthly expense baseline in Inputs to seed spending from your real expenses).'}
             </p>
           )}

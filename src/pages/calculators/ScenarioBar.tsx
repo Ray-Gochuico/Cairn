@@ -373,16 +373,23 @@ export function ScenarioBar() {
           {/* D-B6: a person-scoped payload would silently misattribute —
               disabled in person scope with the one-line reason. */}
           {scope.isScoped && (
-            <span className="text-muted-foreground" data-testid="send-whatif-scoped-note">
+            <span
+              id="send-whatif-scoped-note"
+              className="text-muted-foreground"
+              data-testid="send-whatif-scoped-note"
+            >
               Switch to Household to send this scenario.
             </span>
           )}
-          {/* D14: enabled only when ≥1 bar field is edited. */}
+          {/* D14: enabled only when ≥1 bar field is edited. Wave B gate fix:
+              the CB6 reason is programmatically associated so AT users hear
+              WHY the button is disabled, not just a bare disabled control. */}
           <Button
             type="button"
             variant="outline"
             size="sm"
             disabled={scenario.editedCount === 0 || scope.isScoped}
+            aria-describedby={scope.isScoped ? 'send-whatif-scoped-note' : undefined}
             onClick={() => void sendToWhatIf()}
           >
             Send to What-If →

@@ -58,6 +58,18 @@ function commitOverridesFor(scopePersonId: number | null, next: Partial<Scenario
   listeners.forEach((l) => l());
 }
 
+/**
+ * Wave B gate fix: the ONE live-scope resolution point for WRITES — the same
+ * degradation the display uses (a mirrored id whose person no longer exists
+ * degrades to household). Pre-fix, setField read the raw mirror and could
+ * write an orphan calc-scenario:p{id} silo while the UI showed household.
+ */
+function resolveActiveScopeId(): number | null {
+  const id = getCalcScopePersonId();
+  if (id == null) return null;
+  return usePersonsStore.getState().persons.some((p) => p.id === id) ? id : null;
+}
+
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
@@ -206,12 +218,12 @@ export function useScenarioAssumptions(): UseScenarioAssumptionsResult {
   // same pattern the shared-silo version used) so a scope flip mid-session
   // routes the very next edit into the newly-active silo.
   const setField = useCallback((field: ScenarioField, value: number) => {
-    const scopeId = getCalcScopePersonId();
+    const scopeId = resolveActiveScopeId();
     commitOverridesFor(scopeId, { ...getOverridesSnapshotFor(scopeId), [field]: value });
   }, []);
 
   const resetField = useCallback((field: ScenarioField) => {
-    const scopeId = getCalcScopePersonId();
+    const scopeId = resolveActiveScopeId();
     const next = { ...getOverridesSnapshotFor(scopeId) };
     delete next[field];
     commitOverridesFor(scopeId, next);
@@ -227,7 +239,7 @@ export function useScenarioAssumptions(): UseScenarioAssumptionsResult {
   // D-B11: the scoped variant clears only the ACTIVE silo and only the scoped
   // person's salary override — the other person's edits survive.
   const resetAll = useCallback(() => {
-    const scopeId = getCalcScopePersonId();
+    const scopeId = resolveActiveScopeId();
     commitOverridesFor(scopeId, {});
     if (scopeId == null) {
       commitSalaries({});
