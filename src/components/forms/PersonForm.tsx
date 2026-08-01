@@ -48,6 +48,7 @@ export const DEFAULT_PERSON: PersonFormValues = {
   dependentCareFsaMonthly: 0,
   hsaMonthlyContribution: 0,
   hsaEligible: false,
+  monthlyExpenseBaseline: null,
 };
 
 export interface PersonFormProps {
@@ -97,6 +98,7 @@ const PersonFormSchema = PersonSchema.omit({
   hourlyRate: z.number().positive().nullable(),
   regularHoursPerWeek: z.number().positive(),
   otThresholdHoursPerWeek: z.number().positive().nullable(),
+  monthlyExpenseBaseline: z.number().nonnegative().nullable(),
   pretax401kPctPercent: z
     .number()
     .min(0, 'must be at least 0')

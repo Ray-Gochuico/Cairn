@@ -156,6 +156,48 @@ describe('PersonsRepo', () => {
     expect(p?.otThresholdHoursPerWeek).toBe(8);
   });
 
+  it('round-trips monthly_expense_baseline (0051): set on create, clearable to NULL on update', async () => {
+    const id = await repo.create({
+      householdId: 1,
+      name: 'Dana',
+      dateOfBirth: '1991-02-20',
+      targetRetirementAge: 60,
+      annualSalaryPretax: 90000,
+      expectedCommission: 0,
+      expectedCommissionFrequency: 'MONTHLY',
+      pretax401kPct: 0,
+      healthInsuranceMonthlyPremium: 0,
+      dependentCareFsaMonthly: 0,
+      hsaMonthlyContribution: 0,
+      hsaEligible: false,
+      monthlyExpenseBaseline: 2600,
+    });
+    const p = await repo.findById(id);
+    expect(p?.monthlyExpenseBaseline).toBe(2600);
+
+    // Clearing back to NULL = "use the even split of the household baseline".
+    await repo.update(id, { monthlyExpenseBaseline: null });
+    expect((await repo.findById(id))?.monthlyExpenseBaseline).toBeNull();
+  });
+
+  it('defaults monthly_expense_baseline to NULL when omitted (NULL = not set → even split)', async () => {
+    const id = await repo.create({
+      householdId: 1,
+      name: 'Evan',
+      dateOfBirth: '1993-08-01',
+      targetRetirementAge: 65,
+      annualSalaryPretax: 70000,
+      expectedCommission: 0,
+      expectedCommissionFrequency: 'MONTHLY',
+      pretax401kPct: 0,
+      healthInsuranceMonthlyPremium: 0,
+      dependentCareFsaMonthly: 0,
+      hsaMonthlyContribution: 0,
+      hsaEligible: false,
+    });
+    expect((await repo.findById(id))?.monthlyExpenseBaseline).toBeNull();
+  });
+
   it('reads expected_bonus, expected_bonus_frequency, bonus_is_consistent', async () => {
     const id = await repo.create({
       householdId: 1,

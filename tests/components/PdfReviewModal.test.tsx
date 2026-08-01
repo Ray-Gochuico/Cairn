@@ -65,6 +65,8 @@ describe('PdfReviewModal', () => {
       mig('0009_seed_categories'),
       mig('0010_seed_merchant_mappings'),
       mig('0013_add_category_budget'),
+      // 0051: PersonsRepo.create now writes monthly_expense_baseline.
+      mig('0051_person_expense_baseline'),
     ]);
     setDatabase(db);
     useCategoriesStore.setState({ categories: [], isLoading: false, error: null });

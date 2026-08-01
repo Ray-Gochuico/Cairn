@@ -22,6 +22,8 @@ const loadAppSettingsMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0014_add_app_settings.sql'), 'utf-8');
 const loadCashApyMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0024_cash_apy.sql'), 'utf-8');
+const loadPersonExpenseBaselineMigration = () =>
+  readFileSync(resolve(__dirname, '../../src/db/migrations/0051_person_expense_baseline.sql'), 'utf-8');
 
 const makePerson = async (personsRepo: PersonsRepo, name: string): Promise<number> => {
   return personsRepo.create({
@@ -72,6 +74,8 @@ describe('ContributionsRepo', () => {
       { version: '0015_add_accent_colors', sql: loadAccentColorsMigration() },
       { version: '0014_add_app_settings', sql: loadAppSettingsMigration() },
       { version: '0024_cash_apy', sql: loadCashApyMigration() },
+      // 0051: PersonsRepo.create now writes monthly_expense_baseline.
+      { version: '0051_person_expense_baseline', sql: loadPersonExpenseBaselineMigration() },
     ]);
     repo = new ContributionsRepo(db);
     accountsRepo = new AccountsRepo(db);

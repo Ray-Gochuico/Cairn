@@ -36,6 +36,8 @@ const loadCommissionMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0003_add_commission_columns.sql'), 'utf-8');
 const loadEmploymentBonusMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0005_add_employment_and_bonus_columns.sql'), 'utf-8');
+const loadPersonExpenseBaselineMigration = () =>
+  readFileSync(resolve(__dirname, '../../src/db/migrations/0051_person_expense_baseline.sql'), 'utf-8');
 
 async function selectDate(user: UserEvent, pickerId: string, isoDate: string) {
   const [yyyy, mm, dd] = isoDate.split('-');
@@ -54,6 +56,8 @@ describe('PersonsTab', () => {
       { version: '0001_initial', sql: loadInitialMigration() },
       { version: '0003_add_commission_columns', sql: loadCommissionMigration() },
       { version: '0005_add_employment_and_bonus_columns', sql: loadEmploymentBonusMigration() },
+      // 0051: PersonsRepo.create now writes monthly_expense_baseline.
+      { version: '0051_person_expense_baseline', sql: loadPersonExpenseBaselineMigration() },
     ]);
     setDatabase(db);
     usePersonsStore.setState({ persons: [], isLoading: false, error: null });

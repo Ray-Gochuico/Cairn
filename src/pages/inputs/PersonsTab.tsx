@@ -73,6 +73,7 @@ export default function PersonsTab() {
             dependentCareFsaMonthly: target.dependentCareFsaMonthly,
             hsaMonthlyContribution: target.hsaMonthlyContribution,
             hsaEligible: target.hsaEligible,
+            monthlyExpenseBaseline: target.monthlyExpenseBaseline,
           }}
           onSubmit={async (v) => {
             await update(mode.id, v);

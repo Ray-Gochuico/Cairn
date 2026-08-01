@@ -73,7 +73,7 @@ use tauri::Manager;
 use tauri_plugin_sql::{DbInstances, DbPool};
 
 /// The highest schema version this build understands. Derived from the
-/// migration list: it is the COUNT of registered migrations (currently 48),
+/// migration list: it is the COUNT of registered migrations (currently 51),
 /// which the JS migration runner stamps into `PRAGMA user_version` after
 /// migrations apply (see `src/db/migrations.ts` `MAX_SCHEMA_VERSION` — the two
 /// MUST stay in lock-step). `db_restore` refuses any backup whose stamped
@@ -86,7 +86,7 @@ use tauri_plugin_sql::{DbInstances, DbPool};
 /// `tests::max_schema_version_is_pinned_to_50` below, the JS side by
 /// `tests/db/schema-version-guard.test.ts` (which also asserts the JS value
 /// equals the migration count).
-pub const MAX_SCHEMA_VERSION: i64 = 50;
+pub const MAX_SCHEMA_VERSION: i64 = 51;
 
 /// Outcome of validating a candidate backup file, surfaced to JS so the UI can
 /// show a specific message before the destructive confirm.
@@ -762,7 +762,7 @@ mod tests {
     /// `MAX_SCHEMA_VERSION` is asserted equal to this literal AND to the
     /// migration count in `tests/db/schema-version-guard.test.ts`.
     #[test]
-    fn max_schema_version_is_pinned_to_50() {
-        assert_eq!(MAX_SCHEMA_VERSION, 50);
+    fn max_schema_version_is_pinned_to_51() {
+        assert_eq!(MAX_SCHEMA_VERSION, 51);
     }
 }

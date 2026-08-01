@@ -22,6 +22,7 @@ interface PersonRow {
   dependent_care_fsa_monthly: number;
   hsa_monthly_contribution: number;
   hsa_eligible: number;
+  monthly_expense_baseline: number | null;
   job_stability: string | null;
   expects_higher_future_income: number | null;
   on_parent_health_insurance: number | null;
@@ -64,6 +65,7 @@ function rowToPerson(row: PersonRow): Person {
     dependentCareFsaMonthly: row.dependent_care_fsa_monthly,
     hsaMonthlyContribution: row.hsa_monthly_contribution,
     hsaEligible: row.hsa_eligible === 1,
+    monthlyExpenseBaseline: row.monthly_expense_baseline ?? null,
     jobStability: row.job_stability as 'stable' | 'unstable' | null,
     expectsHigherFutureIncome: nullableBool(row.expects_higher_future_income),
     onParentHealthInsurance: nullableBool(row.on_parent_health_insurance),
@@ -90,8 +92,8 @@ export class PersonsRepo {
         expected_commission, expected_commission_frequency,
         employment_type, hourly_rate, regular_hours_per_week, ot_threshold_hours_per_week,
         pretax_401k_pct, health_insurance_monthly_premium, dependent_care_fsa_monthly,
-        hsa_monthly_contribution, hsa_eligible
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        hsa_monthly_contribution, hsa_eligible, monthly_expense_baseline
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         parsed.householdId,
         parsed.name,
@@ -112,6 +114,7 @@ export class PersonsRepo {
         parsed.dependentCareFsaMonthly,
         parsed.hsaMonthlyContribution,
         parsed.hsaEligible ? 1 : 0,
+        parsed.monthlyExpenseBaseline,
       ]
     );
     if (!result.lastInsertId) {
@@ -146,6 +149,7 @@ export class PersonsRepo {
         dependent_care_fsa_monthly = ?,
         hsa_monthly_contribution = ?,
         hsa_eligible = ?,
+        monthly_expense_baseline = ?,
         job_stability = ?,
         expects_higher_future_income = ?,
         on_parent_health_insurance = ?,
@@ -171,6 +175,7 @@ export class PersonsRepo {
         merged.dependentCareFsaMonthly,
         merged.hsaMonthlyContribution,
         merged.hsaEligible ? 1 : 0,
+        merged.monthlyExpenseBaseline,
         merged.jobStability,
         boolToInt(merged.expectsHigherFutureIncome),
         boolToInt(merged.onParentHealthInsurance),

@@ -16,6 +16,8 @@ const loadEquityGrantCompanyValuationMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0027_equity_grant_company_valuation.sql'), 'utf-8');
 const loadEquityGrantTypeMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0044_equity_grant_type.sql'), 'utf-8');
+const loadPersonExpenseBaselineMigration = () =>
+  readFileSync(resolve(__dirname, '../../src/db/migrations/0051_person_expense_baseline.sql'), 'utf-8');
 
 const seedPerson = async (
   personsRepo: PersonsRepo,
@@ -85,6 +87,8 @@ describe('EquityGrantsRepo', () => {
       { version: '0005_add_employment_and_bonus_columns', sql: loadEmploymentBonusMigration() },
       { version: '0027_equity_grant_company_valuation', sql: loadEquityGrantCompanyValuationMigration() },
       { version: '0044_equity_grant_type', sql: loadEquityGrantTypeMigration() },
+      // 0051: PersonsRepo.create now writes monthly_expense_baseline.
+      { version: '0051_person_expense_baseline', sql: loadPersonExpenseBaselineMigration() },
     ]);
     repo = new EquityGrantsRepo(db);
     personsRepo = new PersonsRepo(db);
