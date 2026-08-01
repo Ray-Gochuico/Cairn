@@ -7,6 +7,7 @@ import { usePersonsStore } from '@/stores/persons-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { FilingStatus } from '@/types/enums';
 import { Retirement401kWithdrawalCard } from '@/pages/calculators/Retirement401kWithdrawalCard';
+import { syncCalcScope, __resetCalcScopeForTests } from '@/lib/calculators/calc-view-scope';
 
 const federalSingleBrackets = [
   { min: 0,      max: 11_600,  rate: 0.10 },
@@ -555,5 +556,35 @@ describe('Retirement401kWithdrawalCard waymark meaning (Wave 17)', () => {
     render(<MemoryRouter><Retirement401kWithdrawalCard cardId="retirement-401k-withdrawal" /></MemoryRouter>);
     expect(screen.getByTestId('retirement-401k-withdrawal-headline')).toHaveTextContent('—');
     expect(document.querySelector('[data-testid="cairn-glyph"]')).toBeInTheDocument();
+  });
+});
+
+describe('Retirement401kWithdrawalCard — page scope (Wave B)', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    resetStores();
+    __resetCalcScopeForTests();
+  });
+
+  it('Wave B: the scoped person is the default earner (overrides still win via the stored pick)', async () => {
+    primeStores();
+    const alice = usePersonsStore.getState().persons[0];
+    usePersonsStore.setState({
+      persons: [alice, { ...alice, id: 2, name: 'Bob', annualSalaryPretax: 90_000 }],
+      isLoading: false,
+      error: null,
+    });
+    syncCalcScope(2);
+    render(
+      <MemoryRouter initialEntries={['/calculators?view=p2']}>
+        <Retirement401kWithdrawalCard cardId="retirement-401k-withdrawal" />
+      </MemoryRouter>,
+    );
+    const group = await screen.findByRole('group', { name: /whose withdrawal/i });
+    const { within: rtlWithin } = await import('@testing-library/react');
+    expect(rtlWithin(group).getByRole('button', { name: 'Bob' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
   });
 });

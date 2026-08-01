@@ -8,6 +8,7 @@ import { useDependentsStore } from '@/stores/dependents-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { FilingStatus } from '@/types/enums';
 import { OvertimeCard } from '@/pages/calculators/OvertimeCard';
+import { syncCalcScope, __resetCalcScopeForTests } from '@/lib/calculators/calc-view-scope';
 
 // Federal SINGLE brackets (2026 approximate) — same fixture as the supplemental-pay suite
 const federalSingleBrackets = [
@@ -765,5 +766,61 @@ describe('OvertimeCard waymark meaning (Wave 17)', () => {
     expect(screen.getByTestId('overtime-headline')).toHaveTextContent('—');
     expect(document.querySelector('[data-testid="cairn-glyph"]')).toBeInTheDocument();
     expect(screen.getByTestId('overtime-meaning')).toHaveTextContent(/no eligible person/i);
+  });
+});
+
+describe('OvertimeCard — page scope (Wave B CB20)', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    __resetCalcScopeForTests();
+  });
+
+  it('Wave B: the scoped person is the default earner when OT-eligible', async () => {
+    primeStores();
+    const alex = usePersonsStore.getState().persons[0];
+    usePersonsStore.setState({
+      persons: [alex, { ...alex, id: 2, name: 'Blair', hourlyRate: 50 }],
+      isLoading: false,
+      error: null,
+    });
+    syncCalcScope(2);
+    render(
+      <MemoryRouter initialEntries={['/calculators?view=p2']}>
+        <OvertimeCard cardId="overtime" />
+      </MemoryRouter>,
+    );
+    const rate = (await screen.findByLabelText(/base hourly rate/i)) as HTMLInputElement;
+    expect(Number(rate.value)).toBe(50); // Blair's rate — the scope won the default
+  });
+
+  it('Wave B CB20: an ineligible scoped person degrades to the eligible earner with the note', async () => {
+    primeStores();
+    const alex = usePersonsStore.getState().persons[0];
+    usePersonsStore.setState({
+      persons: [
+        alex,
+        {
+          ...alex,
+          id: 2,
+          name: 'Blair',
+          employmentType: 'SALARY_NO_OT' as const,
+          hourlyRate: null,
+          annualSalaryPretax: 120000,
+        },
+      ],
+      isLoading: false,
+      error: null,
+    });
+    syncCalcScope(2);
+    render(
+      <MemoryRouter initialEntries={['/calculators?view=p2']}>
+        <OvertimeCard cardId="overtime" />
+      </MemoryRouter>,
+    );
+    const rate = (await screen.findByLabelText(/base hourly rate/i)) as HTMLInputElement;
+    expect(Number(rate.value)).toBe(25); // Alex — the eligible earner
+    expect(
+      screen.getByText('showing Alex — Blair has no hourly or overtime pay'),
+    ).toBeInTheDocument();
   });
 });

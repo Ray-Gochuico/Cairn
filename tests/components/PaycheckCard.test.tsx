@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { PaycheckCard } from '@/pages/calculators/PaycheckCard';
@@ -10,6 +10,7 @@ import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { FilingStatus } from '@/types/enums';
 import { CONTRIBUTION_LIMITS_2026 } from '@/lib/contribution-limits';
 import { aggregateHouseholdPretax } from '@/lib/calculators/supplemental-wage';
+import { syncCalcScope, __resetCalcScopeForTests } from '@/lib/calculators/calc-view-scope';
 
 // Federal SINGLE brackets (2026 approximate) — same as the supplemental-pay suite
 const federalSingleBrackets = [
@@ -625,5 +626,61 @@ describe('PaycheckCard waymark meaning (Wave 17)', () => {
     expect(screen.getByTestId('paycheck-meaning')).toHaveTextContent(
       /set up your household profile \+ tax rules to see take-home/i,
     );
+  });
+});
+
+describe('PaycheckCard — page scope (Wave B D-B3/D-B9)', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    resetStores();
+    __resetCalcScopeForTests();
+  });
+
+  const renderScoped = () =>
+    render(
+      <MemoryRouter initialEntries={['/calculators?view=p2']}>
+        <PaycheckCard cardId="paycheck" />
+      </MemoryRouter>,
+    );
+
+  it('Wave B D-B3: page scope defaults the view to the person AND re-scopes the headline (CB18/CB19)', async () => {
+    primeStoresTwoEarners();
+    // Capture the Combined take-home from an unscoped render first.
+    render(<MemoryRouter><PaycheckCard cardId="paycheck" /></MemoryRouter>);
+    const combinedMonthlyTakeHome = (await screen.findByTestId('paycheck-takehome')).textContent!;
+    cleanup();
+    syncCalcScope(2);
+    renderScoped();
+    await screen.findByTestId('paycheck-takehome');
+    // headline = Bob's own take-home (own gross − own pretax − marginal rows):
+    expect(screen.getByTestId('paycheck-takehome').textContent).not.toBe(combinedMonthlyTakeHome);
+    expect(screen.getByText('Bob — marginal share')).toBeInTheDocument();
+    expect(screen.queryByText(/earners, combined/)).not.toBeInTheDocument();
+    // the D16 marginal grid + caption render (the scoped default selected Bob):
+    expect(screen.getByText(/Tax rows are the marginal share attributed to Bob/)).toBeInTheDocument();
+    // CB19: the meaning names Bob's OWN gross ($150k / 12 = $12,500 monthly).
+    expect(screen.getByTestId('paycheck-meaning')).toHaveTextContent(
+      'After taxes and pretax deductions on $12,500 gross.',
+    );
+  });
+
+  it('Wave B D-B9: in person scope the card-local Combined pick still wins for this card', async () => {
+    const user = userEvent.setup();
+    primeStoresTwoEarners();
+    syncCalcScope(2);
+    renderScoped();
+    await screen.findByTestId('paycheck-takehome');
+    await user.click(screen.getByRole('button', { name: 'Combined' }));
+    expect(sessionStorage.getItem('calc-earner:paycheck')).toBe('combined');
+    expect(screen.getByText(/earners, combined/)).toBeInTheDocument(); // Combined headline restored
+  });
+
+  it('Wave B: household scope is byte-identical D16 (Combined headline even in card-local person view)', async () => {
+    const user = userEvent.setup();
+    primeStoresTwoEarners();
+    render(<MemoryRouter><PaycheckCard cardId="paycheck" /></MemoryRouter>);
+    await screen.findByTestId('paycheck-takehome');
+    await user.click(screen.getByRole('button', { name: 'Bob' }));
+    expect(screen.getByText(/earners, combined/)).toBeInTheDocument(); // headline stays Combined
   });
 });

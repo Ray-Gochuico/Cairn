@@ -8,6 +8,7 @@ import { NumberField } from '@/components/calculators/NumberField';
 import { NotModeledDisclosure } from '@/components/calculators/NotModeledDisclosure';
 import { EarnerSelect } from '@/components/calculators/EarnerSelect';
 import { useSelectedEarner } from '@/lib/calculators/use-selected-earner';
+import { useCalcScope } from '@/lib/calculators/use-calc-scope';
 import { ResultRow } from '@/components/calculators/ResultRow';
 import { StatTile } from '@/components/calculators/StatTile';
 import { formatCurrency, formatPercent } from '@/lib/format';
@@ -51,9 +52,12 @@ export function Retirement401kWithdrawalCard({
     () => persons.map((p) => p.id).filter((id): id is number => id != null),
     [persons],
   );
+  const scope = useCalcScope();
   const [earnerId, setEarnerId] = useSelectedEarner(
     cardId ?? 'retirement-401k-withdrawal',
-    persons[0]?.id ?? null,
+    // Wave B (D-B9): page scope wins the default; overrides still win via the
+    // stored pick, and Reset returns to the scoped earner (the W18 A5 path).
+    scope.personId ?? persons[0]?.id ?? null,
     personIds,
   );
   const earner = persons.find((p) => p.id === earnerId) ?? persons[0] ?? null;
