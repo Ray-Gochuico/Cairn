@@ -58,4 +58,12 @@ describe('backtest last-run persistence (D3)', () => {
     });
     expect(readLastBacktestRun()).toBeNull();
   });
+
+  it('Wave B D-B14: scopeLabel round-trips; a legacy record (no field) reads as Household', () => {
+    writeLastBacktestRun({ v: 1, runAt: '2026-07-30T00:00:00Z', goalMetCount: 9, startYearsCount: 10, survivedCount: 10, scopeLabel: 'Bob', config: {} });
+    expect(readLastBacktestRun()?.scopeLabel).toBe('Bob');
+    localStorage.setItem('backtest:last-run:v1', JSON.stringify({ v: 1, runAt: '2026-07-30T00:00:00Z', goalMetCount: 9, startYearsCount: 10, survivedCount: 10, config: {} }));
+    expect(readLastBacktestRun()).not.toBeNull(); // optional field — legacy parses
+    expect(readLastBacktestRun()?.scopeLabel).toBeUndefined();
+  });
 });

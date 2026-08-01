@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
+import { withViewSearch } from '@/lib/view-scope';
 import { MoreHorizontalIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -71,6 +72,22 @@ export function RailViewGroup({ children }: { children: ReactNode }) {
       <div className="text-xs uppercase tracking-wider text-muted-foreground">View</div>
       {children}
     </div>
+  );
+}
+
+/** Wave B (D9 view preservation): the ⋯-menu full-page link carries the
+ *  active ?view= into the tool. A subcomponent (mounted only inside the open
+ *  menu, exactly where the old <Link> lived) so CalculatorCard's top level
+ *  stays router-free for bare card-test renders. */
+function FullPageLink({ to }: { to: string }) {
+  const location = useLocation();
+  return (
+    <Link
+      to={withViewSearch(to, location.search)}
+      className="block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-muted/40"
+    >
+      Open full page →
+    </Link>
   );
 }
 
@@ -270,14 +287,7 @@ export function CalculatorCard({
                     aria-label={resolvedTitleText ? `${resolvedTitleText} card options` : 'Card options'}
                     className="absolute right-0 top-full z-20 mt-1 w-56 rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
                   >
-                    {fullPagePath && (
-                      <Link
-                        to={fullPagePath}
-                        className="block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-muted/40"
-                      >
-                        Open full page →
-                      </Link>
-                    )}
+                    {fullPagePath && <FullPageLink to={fullPagePath} />}
                     <button
                       type="button"
                       onClick={() => {

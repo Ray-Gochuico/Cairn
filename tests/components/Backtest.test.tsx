@@ -322,3 +322,61 @@ describe('Backtest page', () => {
     expect(screen.queryByTestId('backtest-summary')).not.toBeInTheDocument();
   });
 });
+
+describe('Backtest page — person scope (Wave B)', () => {
+  const primeTwoPersons = async () => {
+    const { usePersonsStore } = await import('@/stores/persons-store');
+    const { makePerson } = await import('../factories');
+    usePersonsStore.setState({
+      persons: [makePerson({ id: 1, name: 'Alice' }), makePerson({ id: 2, name: 'Bob' })],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+  };
+
+  beforeEach(async () => {
+    sessionStorage.clear();
+    localStorage.clear();
+    __resetScenarioAssumptionsForTests();
+    const { __resetCalcScopeForTests } = await import('@/lib/calculators/calc-view-scope');
+    __resetCalcScopeForTests();
+    const noop = async () => {};
+    useAccountsStore.setState({ accounts: [], isLoading: false, error: null, load: noop } as never);
+    useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null, load: noop } as never);
+    await primeTwoPersons();
+  });
+
+  const renderScoped = () =>
+    render(
+      <MemoryRouter initialEntries={['/calculators/backtest?view=p2']}>
+        <Backtest />
+      </MemoryRouter>,
+    );
+
+  it('Wave B CB22: person scope shows the scoped seed note (expenses seeded)', () => {
+    renderScoped();
+    expect(screen.getByTestId('backtest-seed-note')).toHaveTextContent(
+      "Seeded from Bob's scenario — the starting portfolio counts Bob's accounts only (joint excluded); annual spending follows the bar's monthly expenses × 12.",
+    );
+  });
+
+  it('Wave B D-B15: person scope with a $0 scoped portfolio seeds the labeled $1M example, never the household projection seed', () => {
+    renderScoped();
+    // The mocked useRealState holds $1.5M — household scope would seed that.
+    expect(screen.getByLabelText('Starting portfolio ($)')).toHaveValue(1_000_000);
+    expect(
+      screen.getByText(/example plan — add Inputs to use your data/i),
+    ).toBeInTheDocument();
+  });
+
+  it('Wave B D-B14: a run under person scope records the person scopeLabel', async () => {
+    vi.useRealTimers();
+    const user = userEvent.setup();
+    renderScoped();
+    await user.click(screen.getByRole('button', { name: /run backtest/i }));
+    await screen.findByTestId('backtest-summary');
+    const parsed = JSON.parse(localStorage.getItem('backtest:last-run:v1')!);
+    expect(parsed.scopeLabel).toBe('Bob');
+  });
+});

@@ -2,6 +2,9 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { BacktestCard } from '@/pages/calculators/BacktestCard';
+import { usePersonsStore } from '@/stores/persons-store';
+import { writeLastBacktestRun } from '@/lib/backtest/last-run';
+import { makePerson } from '../factories';
 
 describe('BacktestCard', () => {
   beforeEach(() => localStorage.clear());
@@ -81,5 +84,57 @@ describe('BacktestCard waymark meaning (Wave 17)', () => {
     expect(screen.getByTestId('backtest-headline')).toHaveTextContent(
       /backtest your portfolio/i,
     );
+  });
+});
+
+describe('BacktestCard — scope tag (Wave B CB23 / D-B14)', () => {
+  const record = {
+    v: 1 as const,
+    runAt: '2026-07-18T15:00:00.000Z',
+    goalMetCount: 108,
+    startYearsCount: 124,
+    survivedCount: 120,
+    config: {},
+  };
+
+  function primeTwoPersons() {
+    usePersonsStore.setState({
+      persons: [
+        makePerson({ id: 1, name: 'Demo Investor' }),
+        makePerson({ id: 2, name: 'Demo Partner' }),
+      ],
+      isLoading: false,
+      error: null,
+    } as never);
+  }
+
+  beforeEach(() => {
+    localStorage.clear();
+    usePersonsStore.setState({ persons: [], isLoading: false, error: null } as never);
+  });
+
+  it("Wave B CB23: a 2-person household sees the run's scope tag in the meaning", () => {
+    primeTwoPersons();
+    writeLastBacktestRun({ ...record, scopeLabel: 'Demo Partner' });
+    render(<MemoryRouter><BacktestCard cardId="backtest" /></MemoryRouter>);
+    expect(screen.getByTestId('backtest-meaning')).toHaveTextContent('· Demo Partner run');
+  });
+
+  it('Wave B CB23: a legacy record reads as a Household run', () => {
+    primeTwoPersons();
+    localStorage.setItem('backtest:last-run:v1', JSON.stringify(record));
+    render(<MemoryRouter><BacktestCard cardId="backtest" /></MemoryRouter>);
+    expect(screen.getByTestId('backtest-meaning')).toHaveTextContent('· Household run');
+  });
+
+  it('Wave B CB23: a single-person household never shows the tag', () => {
+    usePersonsStore.setState({
+      persons: [makePerson({ id: 1, name: 'Demo Investor' })],
+      isLoading: false,
+      error: null,
+    } as never);
+    writeLastBacktestRun({ ...record, scopeLabel: 'Household' });
+    render(<MemoryRouter><BacktestCard cardId="backtest" /></MemoryRouter>);
+    expect(screen.getByTestId('backtest-meaning')).not.toHaveTextContent('· Household run');
   });
 });

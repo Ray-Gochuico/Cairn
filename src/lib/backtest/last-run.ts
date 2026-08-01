@@ -15,6 +15,10 @@ export const BacktestLastRunSchema = z.object({
   goalMetCount: z.number().int().nonnegative(),
   startYearsCount: z.number().int().positive(),
   survivedCount: z.number().int().nonnegative(),
+  /** Wave B (D-B14): the page scope the run was made under ('Household' or a
+   *  person name). Absent on pre-Wave-B records — which were all household
+   *  runs by construction, so readers default to 'Household'. */
+  scopeLabel: z.string().optional(),
   /** The exact config that produced the verdict (display/debug only). */
   config: z.record(z.string(), z.unknown()),
 });

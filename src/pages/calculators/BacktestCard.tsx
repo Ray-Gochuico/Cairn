@@ -1,7 +1,10 @@
+import { useLocation } from 'react-router-dom';
 import { CalculatorCard } from './CalculatorCard';
 import { InlineLink } from '@/components/calculators/InlineLink';
 import { readLastBacktestRun } from '@/lib/backtest/last-run';
 import { formatDate } from '@/lib/format';
+import { usePersonsStore } from '@/stores/persons-store';
+import { withViewSearch } from '@/lib/view-scope';
 
 interface BacktestCardProps {
   cardId?: string;
@@ -16,6 +19,10 @@ interface BacktestCardProps {
  */
 export function BacktestCard({ cardId }: BacktestCardProps = {}) {
   const lastRun = readLastBacktestRun();
+  // Wave B (CB23/D-B14): 2-person households see which scope produced the
+  // verdict; legacy records (no field) were all household runs by construction.
+  const persons = usePersonsStore((s) => s.persons);
+  const location = useLocation();
   const pct =
     lastRun && lastRun.startYearsCount > 0
       ? Math.round((lastRun.goalMetCount / lastRun.startYearsCount) * 100)
@@ -36,7 +43,9 @@ export function BacktestCard({ cardId }: BacktestCardProps = {}) {
       }
       meaning={
         lastRun
-          ? `start years since 1871 sustained this plan · last run ${formatDate(lastRun.runAt.slice(0, 10))}`
+          ? `start years since 1871 sustained this plan · last run ${formatDate(lastRun.runAt.slice(0, 10))}${
+              persons.length === 2 ? ` · ${lastRun.scopeLabel ?? 'Household'} run` : ''
+            }`
           : undefined
       }
     >
@@ -46,7 +55,7 @@ export function BacktestCard({ cardId }: BacktestCardProps = {}) {
       </p>
       <div className="mt-2">
         <InlineLink
-          to="/calculators/backtest"
+          to={withViewSearch('/calculators/backtest', location.search)}
           aria-label="Open the Historical Backtest tool"
           className="text-sm"
         >

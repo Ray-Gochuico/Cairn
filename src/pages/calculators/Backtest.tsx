@@ -18,6 +18,7 @@ import { OutcomeHistogram } from '@/components/backtest/OutcomeHistogram';
 import { BacktestDisclosureCallout } from '@/components/backtest/BacktestDisclosureCallout';
 import { InlineLink } from '@/components/calculators/InlineLink';
 import { writeLastBacktestRun } from '@/lib/backtest/last-run';
+import { useCalcScope, useCalcScopeUrlSync } from '@/lib/calculators/use-calc-scope';
 
 /**
  * Wave 18 C9 — the today's-dollars promotion is a COMPONENT chip (rendered
@@ -32,6 +33,10 @@ const TodaysDollarsChip = () => (
 );
 
 export default function Backtest() {
+  // Wave B (D-B10): this page has no ScenarioBar — the header ViewFilter IS
+  // its scope control; the bridge mirrors ?view= into the calc-scope store.
+  useCalcScopeUrlSync();
+  const scope = useCalcScope();
   const gate = useDisclosureGate('backtest');
   const acceptDisclaimer = useHouseholdStore((s) => s.acceptDisclaimer);
   const real = useRealState();
@@ -49,18 +54,22 @@ export default function Backtest() {
   // Legacy fallback seed (pre-W16 behavior): projection-seed investments +
   // cash, else $1M — used only while the shared scenario has no portfolio.
   const legacyPortfolio = useMemo(() => {
+    // D-B15: in person scope the household projection seed would silently
+    // misattribute — degrade to the labeled $1M example instead.
+    if (scope.isScoped) return 1_000_000;
     if (!real) return 1_000_000;
     const inv = Object.values(real.initialInvestmentsByAccount).reduce((a, b) => a + b, 0);
     return Math.max(0, Math.round(inv + real.initialCash)) || 1_000_000;
-  }, [real]);
+  }, [real, scope.isScoped]);
   // C9: the same expression whose `|| 1_000_000` fallback seeds the config —
   // when Inputs has no portfolio value the plan on screen is an EXAMPLE.
-  const usingExample =
-    !real ||
-    Math.round(
-      Object.values(real.initialInvestmentsByAccount).reduce((a, b) => a + b, 0) +
-        real.initialCash,
-    ) <= 0;
+  const usingExample = scope.isScoped
+    ? scenario.engine.portfolio <= 0
+    : !real ||
+      Math.round(
+        Object.values(real.initialInvestmentsByAccount).reduce((a, b) => a + b, 0) +
+          real.initialCash,
+      ) <= 0;
 
   // W16 (D12): seed from the shared scenario — portfolio from the bar's
   // FI-eligible figure; spending from HOUSEHOLD EXPENSES (monthlyExpenses × 12),
@@ -152,6 +161,8 @@ export default function Backtest() {
           goalMetCount: r.goalMetCount,
           startYearsCount: r.startYears.count,
           survivedCount: r.survivedCount,
+          // D-B14: record which scope produced the verdict.
+          scopeLabel: scope.isScoped ? scope.personName! : 'Household',
           config: parsed.data as Record<string, unknown>,
         });
       } catch (err) {
@@ -228,8 +239,12 @@ export default function Backtest() {
           {!configEdited && (
             <p className="text-xs text-muted-foreground mb-3" data-testid="backtest-seed-note">
               {expensesSeeded
-                ? 'Seeded from your scenario — starting portfolio and annual spending (monthly expenses × 12) follow the calculators scenario bar until you edit a field here.'
-                : 'Seeded from your scenario portfolio; annual spending defaults to 4% of it (set a monthly expense baseline in Inputs to seed spending from your real expenses).'}
+                ? scope.isScoped
+                  ? `Seeded from ${scope.personName}'s scenario — the starting portfolio counts ${scope.personName}'s accounts only (joint excluded); annual spending follows the bar's monthly expenses × 12.`
+                  : 'Seeded from your scenario — starting portfolio and annual spending (monthly expenses × 12) follow the calculators scenario bar until you edit a field here.'
+                : scope.isScoped
+                  ? `Seeded from ${scope.personName}'s scenario portfolio (joint excluded); annual spending defaults to 4% of it.`
+                  : 'Seeded from your scenario portfolio; annual spending defaults to 4% of it (set a monthly expense baseline in Inputs to seed spending from your real expenses).'}
             </p>
           )}
           <BacktestParamsForm
