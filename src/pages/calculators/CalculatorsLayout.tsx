@@ -27,6 +27,8 @@ import { CalculatorShellProvider, type CalculatorShellApi } from './calculator-s
 import { InlineLink } from '@/components/calculators/InlineLink';
 import { NumberField } from '@/components/calculators/NumberField';
 import { useNextDollarStore } from '@/lib/calculators/next-dollar-store';
+import { useCalcScopeUrlSync } from '@/lib/calculators/use-calc-scope';
+import { useTransactionsStore } from '@/stores/transactions-store';
 
 const STALE_BANNER_STORAGE_KEY = 'stale-tax-year-banner-dismissed';
 
@@ -204,6 +206,8 @@ function SectionCustomize({
 }
 
 export default function CalculatorsLayout() {
+  // Wave B (D-B10): mirror ?view= into the router-free calc-scope store.
+  useCalcScopeUrlSync();
   const persons = usePersonsStore((s) => s.persons);
 
   // Cold-boot hydration. The cards READ persons/dependents/portfolio stores
@@ -223,6 +227,10 @@ export default function CalculatorsLayout() {
     void useEquityGrantsStore.getState().load();
     void useSettingsStore.getState().load();
     void useHouseholdStore.getState().load();
+    // Wave B (CB5): the bar's person-scope expense hint reads transactions.
+    // NOT in the load gate — the hint is progressive enhancement, never a
+    // boot blocker.
+    void useTransactionsStore.getState().load();
   }, []);
 
   // W10 T1: keep the skeleton up until every hydrated store settles, so no

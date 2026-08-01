@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { NumberField } from '@/components/calculators/NumberField';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,11 @@ import { localTodayISO } from '@/lib/dates';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { prettifyCityCode } from '@/lib/jurisdiction-format';
 import { InlineLink } from '@/components/calculators/InlineLink';
+import { useViewFilter } from '@/lib/use-view-filter';
+import { useCalcScope } from '@/lib/calculators/use-calc-scope';
+import { EarnerSelect } from '@/components/calculators/EarnerSelect';
+import { useTransactionsStore } from '@/stores/transactions-store';
+import { personMonthlyExpenseHint } from '@/lib/calculators/person-expense-hint';
 
 /**
  * Wave 16 "Basecamp spine": the shared scenario bar above the calculators
@@ -141,10 +146,12 @@ function ScenarioBarField(props: {
   committed: number;
   edited: boolean;
   provenance: string;
+  /** Wave B (CB5): optional muted hint line under the provenance row. */
+  hint?: string;
   onCommit: (field: ScenarioField, value: number) => void;
   onReset: (field: ScenarioField) => void;
 }) {
-  const { spec, committed, edited, provenance, onCommit, onReset } = props;
+  const { spec, committed, edited, provenance, hint, onCommit, onReset } = props;
   // Local per-keystroke echo; commits trail 150ms behind typing (D5) so the
   // heavy chart builders downstream never recompute per keystroke.
   const [local, setLocal] = useState<number | null>(committed);
@@ -209,7 +216,38 @@ function ScenarioBarField(props: {
           {provenance}
         </p>
       )}
+      {hint && (
+        <p className="mt-0.5 text-xs text-muted-foreground truncate" title={hint}>
+          {hint}
+        </p>
+      )}
     </div>
+  );
+}
+
+/** Wave B (CB1): the page-scope control — bound to the SAME ?view= URL state
+ *  as the app-wide ViewFilter (whose header copy is hidden on /calculators,
+ *  D-B12). Scope is a lens: this never touches overrides or editedCount. */
+function ScopeControl() {
+  const { filter, setFilter, isAvailable, persons } = useViewFilter();
+  if (!isAvailable) return null;
+  const selectedId =
+    filter === 'p1' ? (persons[0]?.id ?? null)
+    : filter === 'p2' ? (persons[1]?.id ?? null)
+    : null; // household + joint both render Household (D-B2)
+  return (
+    <EarnerSelect
+      persons={persons}
+      selectedId={selectedId}
+      onChange={(id) => {
+        if (id == null) setFilter('household');
+        else if (id === persons[0]?.id) setFilter('p1');
+        else setFilter('p2');
+      }}
+      label="Calculator scope"
+      includeCombined
+      combinedLabel="Household"
+    />
   );
 }
 
@@ -220,7 +258,19 @@ export function ScenarioBar() {
   const navigate = useNavigate();
   // The REAL persons (prefills + reset targets); tax.persons are effective.
   const realPersons = usePersonsStore((s) => s.persons);
+  const scope = useCalcScope();
+  const transactions = useTransactionsStore((s) => s.transactions);
   const [sendError, setSendError] = useState<string | null>(null);
+
+  // CB5 (D-B5): the transactions-derived per-person expense hint — one muted
+  // line under Monthly expenses in person scope, never a default.
+  const expenseHint = useMemo(() => {
+    if (!scope.isScoped || scope.personId == null) return undefined;
+    const avg = personMonthlyExpenseHint(transactions, scope.personId, localTodayISO());
+    return avg != null
+      ? `${scope.personName}'s attributed transactions suggest ~${formatCurrency(avg)}/mo`
+      : undefined;
+  }, [scope, transactions]);
 
   // D14: Send to What-If — pure D6 mapping, schema-parsed at the button so a
   // mapping bug fails loudly here and never persists garbage.
@@ -294,6 +344,7 @@ export function ScenarioBar() {
           <InlineLink to="/inputs" className="text-xs">
             Edit in Inputs
           </InlineLink>
+          <ScopeControl />
         </div>
         <div className="flex items-center gap-3 text-xs">
           {scenario.editedCount > 0 && (
@@ -319,12 +370,19 @@ export function ScenarioBar() {
               </button>
             </>
           )}
+          {/* D-B6: a person-scoped payload would silently misattribute —
+              disabled in person scope with the one-line reason. */}
+          {scope.isScoped && (
+            <span className="text-muted-foreground" data-testid="send-whatif-scoped-note">
+              Switch to Household to send this scenario.
+            </span>
+          )}
           {/* D14: enabled only when ≥1 bar field is edited. */}
           <Button
             type="button"
             variant="outline"
             size="sm"
-            disabled={scenario.editedCount === 0}
+            disabled={scenario.editedCount === 0 || scope.isScoped}
             onClick={() => void sendToWhatIf()}
           >
             Send to What-If →
@@ -344,12 +402,17 @@ export function ScenarioBar() {
             committed={scenario.values[spec.field]}
             edited={scenario.isEdited[spec.field]}
             provenance={scenario.provenance[spec.field]}
+            hint={spec.field === 'monthlyExpenses' ? expenseHint : undefined}
             onCommit={scenario.setField}
             onReset={scenario.resetField}
           />
         ))}
-        {/* D14: per-person editable salary — one row per earner (named at 2+). */}
-        {realPersons.slice(0, 2).map((p) =>
+        {/* D14: per-person editable salary — one row per earner (named at 2+).
+            Wave B (D-B11): in person scope only the scoped person's row renders. */}
+        {realPersons
+          .slice(0, 2)
+          .filter((p) => scope.personId == null || p.id === scope.personId)
+          .map((p) =>
           p.id != null ? (
             <SalaryBarField
               key={`salary-${p.id}`}

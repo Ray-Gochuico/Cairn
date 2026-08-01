@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { ScenarioBar } from '@/pages/calculators/ScenarioBar';
 import { __resetScenarioAssumptionsForTests } from '@/lib/calculators/use-scenario-assumptions';
 import { SCENARIO_STORAGE_KEY } from '@/lib/calculators/scenario-assumptions';
+import { syncCalcScope, __resetCalcScopeForTests } from '@/lib/calculators/calc-view-scope';
+import { useTransactionsStore } from '@/stores/transactions-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
@@ -319,5 +321,96 @@ describe('ScenarioBar — editable salary + Send to What-If (Wave 18 D14)', () =
       ),
     );
     expect(await screen.findByTestId('whatif-page')).toBeInTheDocument();
+  });
+});
+
+describe('ScenarioBar — page-scope control + scoped bar (Wave B)', () => {
+  function LocationProbe() {
+    const location = useLocation();
+    return <div data-testid="loc">{location.search}</div>;
+  }
+
+  const renderBarAt = (path: string) =>
+    render(
+      <MemoryRouter initialEntries={[path]}>
+        <ScenarioBar />
+        <LocationProbe />
+      </MemoryRouter>,
+    );
+
+  beforeEach(() => {
+    sessionStorage.clear();
+    __resetScenarioAssumptionsForTests();
+    __resetCalcScopeForTests();
+    resetStores();
+    primeBaseline();
+    // Two persons — the scope control renders only at 2 (EarnerSelect rule).
+    usePersonsStore.setState({
+      persons: [basePerson, { ...basePerson, id: 2, name: 'Sam', annualSalaryPretax: 80000 }],
+      isLoading: false,
+      error: null,
+    } as never);
+    useTransactionsStore.setState({ transactions: [], isLoading: false, error: null } as never);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-05-14T12:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('CB1: renders the scope control in the identity row, Household pressed by default', () => {
+    renderBarAt('/calculators');
+    const group = screen.getByRole('group', { name: 'Calculator scope' });
+    expect(within(group).getByRole('button', { name: 'Household' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(group).getByRole('button', { name: 'Alex' })).toBeInTheDocument();
+  });
+
+  it('clicking a person writes ?view= (the SAME useViewFilter state) — and Household clears it', async () => {
+    const user = userEvent.setup();
+    renderBarAt('/calculators');
+    await user.click(screen.getByRole('button', { name: 'Sam' })); // persons[1]
+    expect(screen.getByTestId('loc')).toHaveTextContent('view=p2');
+    await user.click(screen.getByRole('button', { name: 'Household' }));
+    expect(screen.getByTestId('loc')).not.toHaveTextContent('view=');
+  });
+
+  it('D-B2: ?view=joint renders with Household pressed (coerced)', () => {
+    renderBarAt('/calculators?view=joint');
+    expect(screen.getByRole('button', { name: 'Household' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it("person scope: only the scoped person's salary field renders (D-B11)", () => {
+    syncCalcScope(2);
+    renderBarAt('/calculators?view=p2');
+    expect(screen.getByLabelText("Sam's salary")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Alex's salary")).not.toBeInTheDocument();
+  });
+
+  it('D-B6: Send-to-What-If is disabled in person scope with the CB6 reason', async () => {
+    syncCalcScope(2);
+    renderBarAt('/calculators?view=p2');
+    // Even WITH an edit in the person silo the send stays disabled:
+    const user = userEvent.setup();
+    await user.clear(screen.getByLabelText('Portfolio'));
+    await user.type(screen.getByLabelText('Portfolio'), '50000');
+    await waitFor(() => expect(screen.getByTestId('scenario-edited-count')).toHaveTextContent('Edited (1)'));
+    expect(screen.getByRole('button', { name: /send to what-if/i })).toBeDisabled();
+    expect(screen.getByText('Switch to Household to send this scenario.')).toBeInTheDocument();
+  });
+
+  it('CB5: the expense hint renders under Monthly expenses in person scope when attributed transactions exist', () => {
+    useTransactionsStore.setState({
+      transactions: [
+        { id: 1, date: '2026-05-01', amount: 900, personId: 2 },
+        { id: 2, date: '2026-04-01', amount: 900, personId: 2 },
+        { id: 3, date: '2026-03-01', amount: 900, personId: 2 },
+      ],
+      isLoading: false,
+      error: null,
+    } as never);
+    syncCalcScope(2);
+    renderBarAt('/calculators?view=p2');
+    expect(screen.getByText("Sam's attributed transactions suggest ~$900/mo")).toBeInTheDocument();
   });
 });

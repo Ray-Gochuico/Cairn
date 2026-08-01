@@ -496,3 +496,18 @@ describe('HSA eligibility + dependents honesty (round-3 E2)', () => {
     expect(screen.getAllByText(/child tax credits aren.t modeled yet/i).length).toBeGreaterThan(0);
   });
 });
+
+describe('Wave B (D-B12/CB24): household-only declaration', () => {
+  beforeEach(() => { resetStores(); });
+
+  it('the intro declares the page household-only and points at the card toggle', async () => {
+    primeStores();
+    render(<MemoryRouter><PaycheckCalculator /></MemoryRouter>);
+    await screen.findByTestId('paycheck-calc-takehome');
+    expect(
+      screen.getByText(
+        /Estimate your take-home pay after taxes and deductions\. This page always models your whole household — for one person's share, use the Paycheck card's view toggle on the Calculators page\./,
+      ),
+    ).toBeInTheDocument();
+  });
+});
