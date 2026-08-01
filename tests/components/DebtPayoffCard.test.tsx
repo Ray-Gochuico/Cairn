@@ -3,6 +3,9 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useLoansStore } from '@/stores/loans-store';
+import { usePersonsStore } from '@/stores/persons-store';
+import { syncCalcScope, __resetCalcScopeForTests } from '@/lib/calculators/calc-view-scope';
+import { makePerson } from '../factories';
 import { LoanType } from '@/types/enums';
 import {
   DebtPayoffCard,
@@ -827,5 +830,81 @@ describe('DebtPayoffCard waymark meaning (Wave 17)', () => {
     expect(screen.getByTestId('debt-payoff-headline')).toHaveTextContent('—');
     expect(document.querySelector('[data-testid="cairn-glyph"]')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /add loans/i })).toHaveAttribute('href', '/loans');
+  });
+});
+
+describe('DebtPayoffCard — person scope (Wave B)', () => {
+  // Alice's Car Loan ($22,000, amortizing) + a joint Mortgage.
+  const aliceLoan = makeLoan({
+    id: 1,
+    name: 'Car Loan',
+    obligorPersonId: 1,
+    originalAmount: 42000,
+    currentBalance: 22000,
+    interestRate: 0.049,
+    termMonths: 60,
+    monthlyPayment: 791,
+    firstPaymentDate: '2025-01-01',
+  });
+  const jointMortgage = makeLoan({
+    id: 2,
+    name: 'Mortgage',
+    obligorPersonId: null,
+    originalAmount: 650000,
+    currentBalance: 540000,
+    interestRate: 0.0625,
+    termMonths: 360,
+    monthlyPayment: 4001,
+    firstPaymentDate: '2022-01-01',
+  });
+
+  function primeScopedFixture() {
+    useLoansStore.setState({ loans: [aliceLoan, jointMortgage], isLoading: false, error: null });
+    usePersonsStore.setState({
+      persons: [makePerson({ id: 1, name: 'Alice' }), makePerson({ id: 2, name: 'Bob' })],
+      isLoading: false,
+      error: null,
+    } as never);
+  }
+
+  const renderScopedAt = (path: string) =>
+    render(
+      <MemoryRouter initialEntries={[path]}>
+        <DebtPayoffCard cardId="debt-payoff" />
+      </MemoryRouter>,
+    );
+
+  beforeEach(() => {
+    resetStore();
+    sessionStorage.clear();
+    __resetCalcScopeForTests();
+    primeScopedFixture();
+  });
+
+  it("Wave B: person scope computes ONLY the person's loans (CB9 meaning + CB10 caption)", () => {
+    syncCalcScope(1);
+    renderScopedAt('/calculators?view=p1');
+    expect(screen.getByTestId('debt-payoff-meaning')).toHaveTextContent(
+      "$22,000 across 1 loan in Alice's name.",
+    );
+    expect(screen.getByTestId('scope-caption')).toHaveTextContent(
+      "Showing Alice's loans: 1 of 2 — 1 joint not shown.",
+    );
+    // The joint mortgage must be absent from the table:
+    expect(screen.queryByText('Mortgage')).not.toBeInTheDocument();
+  });
+
+  it('Wave B: scoped-empty view renders FilteredEmptyState with counts, never the Add-loans CTA', () => {
+    syncCalcScope(2); // p2 owns nothing; 1 joint + 1 owned by Alice exist
+    renderScopedAt('/calculators?view=p2');
+    expect(screen.getByText("No loans in Bob's name")).toBeInTheDocument();
+    expect(screen.getByText('1 joint and 1 owned by Alice not shown.')).toBeInTheDocument();
+    expect(screen.queryByText(/add loans/i)).not.toBeInTheDocument();
+  });
+
+  it('Wave B CB7: the extra-payment field carries the household label in person scope only', () => {
+    syncCalcScope(1);
+    renderScopedAt('/calculators?view=p1');
+    expect(screen.getByText('your household figure — not split per person')).toBeInTheDocument();
   });
 });
