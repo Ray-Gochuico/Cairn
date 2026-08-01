@@ -255,6 +255,18 @@ describe('seedDemoData', () => {
     expect(byName.get('Car Loan')).toBe('2025-01-01');
   });
 
+  it("0051: Demo Partner gets a durable monthly_expense_baseline; Demo Investor stays NULL (both provenance paths smokable)", async () => {
+    await seedDemoData(db);
+    const rows = await db.select<{ name: string; b: number | null }>(
+      'SELECT name, monthly_expense_baseline AS b FROM persons ORDER BY name',
+    );
+    const byName = new Map(rows.map((r) => [r.name, r.b]));
+    // Partner set → the scoped bar's \"from Demo Partner's Inputs\" path;
+    // Investor NULL → the labeled even-split path stays demonstrable too.
+    expect(byName.get(DEMO_SEED.partnerName)).toBe(2600);
+    expect(byName.get(DEMO_SEED.personName)).toBeNull();
+  });
+
   it('Wave B: seeds one RSU grant per person (the exact card is smokable) — idempotently', async () => {
     const todayISO = '2026-07-08';
     await seedDemoData(db, { todayISO });

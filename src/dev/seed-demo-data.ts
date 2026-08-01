@@ -294,9 +294,13 @@ async function seedPartnerSlice(db: Database, today: string): Promise<void> {
   );
   const primaryId = person[0]?.id;
 
+  // 0051: the partner carries a durable per-person expense baseline so the
+  // scoped bar's "from Demo Partner's Inputs" provenance is smokable; the
+  // primary person stays NULL so the labeled even-split path shows too.
+  // 2600 ≠ 3000 (half the 6000 household baseline) so the upgrade is visible.
   const partnerRes = await db.execute(
-    `INSERT INTO persons (household_id, name, date_of_birth, target_retirement_age, annual_salary_pretax, pretax_401k_pct)
-     VALUES (1, ?, '1990-09-03', 62, 145000, 0.08)`,
+    `INSERT INTO persons (household_id, name, date_of_birth, target_retirement_age, annual_salary_pretax, pretax_401k_pct, monthly_expense_baseline)
+     VALUES (1, ?, '1990-09-03', 62, 145000, 0.08, 2600)`,
     [DEMO_SEED.partnerName],
   );
   const partnerId = partnerRes.lastInsertId!;
