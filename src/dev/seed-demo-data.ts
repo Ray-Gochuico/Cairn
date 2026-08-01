@@ -76,6 +76,13 @@ export async function seedDemoData(
   if (!partnerExists) {
     await seedPartnerSlice(db, today);
   }
+  // Wave B: per-person RSU grants so the Equity card's exact person scope is
+  // observable. Guarded on the grants table being empty so existing dev DBs
+  // converge without duplicating.
+  const grantRows = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM equity_grants');
+  if ((grantRows[0]?.n ?? 0) === 0) {
+    await seedEquityGrantsSlice(db, today);
+  }
 }
 
 async function countPersons(db: Database, name: string): Promise<boolean> {
@@ -353,4 +360,46 @@ async function seedPartnerSlice(db: Database, today: string): Promise<void> {
      VALUES (1, ?, 'Partner Car', 2022, 'Honda', 'CR-V', 24000)`,
     [partnerId],
   );
+}
+
+/**
+ * Wave B: one RSU grant per person so the Equity card's EXACT person scope
+ * is observable in the browser shim. Same company ('Acme') so the single-
+ * company FMV what-if stays available household-wide. Guarded on an empty
+ * equity_grants table (converges stale dev DBs; never duplicates).
+ * Vested today at FMV $25: Demo Investor 2,000 sh = $50,000; Demo Partner
+ * 600 sh = $15,000 (household $65,000).
+ */
+async function seedEquityGrantsSlice(db: Database, today: string): Promise<void> {
+  const monthsFrom = (iso: string, months: number): string => {
+    const d = new Date(`${iso}T12:00:00Z`);
+    d.setUTCMonth(d.getUTCMonth() + months);
+    return d.toISOString().slice(0, 10);
+  };
+  const schedule = (grantIso: string) =>
+    JSON.stringify([
+      { date: monthsFrom(grantIso, 12), cumulativePct: 0.25 },
+      { date: monthsFrom(grantIso, 24), cumulativePct: 0.5 },
+      { date: monthsFrom(grantIso, 36), cumulativePct: 0.75 },
+      { date: monthsFrom(grantIso, 48), cumulativePct: 1 },
+    ]);
+  const personId = async (name: string): Promise<number | null> => {
+    const r = await db.select<{ id: number }>('SELECT id FROM persons WHERE name = ?', [name]);
+    return r[0]?.id ?? null;
+  };
+  const investorId = await personId(DEMO_SEED.personName);
+  const partnerId = await personId(DEMO_SEED.partnerName);
+  if (investorId == null || partnerId == null) return;
+  const grantDate = monthsFrom(today, -24); // exactly half vested today
+  const insert = async (owner: number, name: string, shares: number) =>
+    db.execute(
+      `INSERT INTO equity_grants (
+         household_id, owner_person_id, name, company_name,
+         grant_date, strike_price, total_shares, vesting_schedule, current_fmv,
+         grant_type, company_valuation, company_outstanding_shares, company_total_debt
+       ) VALUES (1, ?, ?, 'Acme', ?, 0, ?, ?, 25, 'RSU', NULL, NULL, NULL)`,
+      [owner, name, grantDate, shares, schedule(grantDate)],
+    );
+  await insert(investorId, 'Investor RSU', 4000);
+  await insert(partnerId, 'Partner RSU', 1200);
 }

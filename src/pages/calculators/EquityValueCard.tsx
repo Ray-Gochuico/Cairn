@@ -20,6 +20,10 @@ import { InlineChart } from '@/components/charts/InlineChart';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import type { GrantType } from '@/types/enums';
 import { InlineLink } from '@/components/calculators/InlineLink';
+import { useCalcScope } from '@/lib/calculators/use-calc-scope';
+import { partitionHidden } from '@/lib/view-scope';
+import { ScopeCaption } from '@/components/layout/ScopeCaption';
+import { FilteredEmptyState } from '@/components/layout/FilteredEmptyState';
 
 interface EquityValueCardProps {
   cardId?: string;
@@ -55,20 +59,36 @@ export function EquityValueCard({ cardId }: EquityValueCardProps = {}) {
   // useLocalToday.
   const todayISO = useLocalToday();
 
+  const scope = useCalcScope();
+  // Wave B: the ONE exact split — grants are non-nullably owned. Filter first;
+  // every derived figure below (single-company gate, FMV prefill, totals,
+  // forward window) then re-scopes for free.
+  const scopedGrants = useMemo(
+    () =>
+      scope.personId == null
+        ? equityGrants
+        : equityGrants.filter((g) => g.ownerPersonId === scope.personId),
+    [equityGrants, scope.personId],
+  );
+  const grantPartition = useMemo(
+    () => partitionHidden(equityGrants, scopedGrants, (g) => g.ownerPersonId),
+    [equityGrants, scopedGrants],
+  );
+
   // D8: the rail FMV field renders only when ALL grants share one company.
   const singleCompany = useMemo(
-    () => new Set(equityGrants.map((g) => g.companyName)).size === 1,
-    [equityGrants],
+    () => new Set(scopedGrants.map((g) => g.companyName)).size === 1,
+    [scopedGrants],
   );
 
   // Stored FMV prefill: all one company; if grants disagree, use the
   // max-share-count grant's FMV (the dominant position names the company's
   // price; any disagreement is stale data the what-if lets the user reprice).
   const { storedFmv, storedUpdatedAt } = useMemo(() => {
-    if (equityGrants.length === 0) return { storedFmv: 0, storedUpdatedAt: undefined };
-    const dominant = [...equityGrants].sort((a, b) => b.totalShares - a.totalShares)[0];
+    if (scopedGrants.length === 0) return { storedFmv: 0, storedUpdatedAt: undefined };
+    const dominant = [...scopedGrants].sort((a, b) => b.totalShares - a.totalShares)[0];
     return { storedFmv: dominant.currentFmv, storedUpdatedAt: dominant.updatedAt };
-  }, [equityGrants]);
+  }, [scopedGrants]);
 
   const defaults = useMemo(() => ({ fmvPerShare: storedFmv }), [storedFmv]);
   const { values, setValue, reset, isOverridden, overriddenKeys } = useCalculatorState(
@@ -81,9 +101,9 @@ export function EquityValueCard({ cardId }: EquityValueCardProps = {}) {
   const pricedGrants = useMemo(
     () =>
       fmvOverridden
-        ? equityGrants.map((g) => ({ ...g, currentFmv: values.fmvPerShare ?? g.currentFmv }))
-        : equityGrants,
-    [fmvOverridden, equityGrants, values.fmvPerShare],
+        ? scopedGrants.map((g) => ({ ...g, currentFmv: values.fmvPerShare ?? g.currentFmv }))
+        : scopedGrants,
+    [fmvOverridden, scopedGrants, values.fmvPerShare],
   );
 
   // Owner name lookup (id is non-nullable on persisted Person rows).
@@ -145,8 +165,8 @@ export function EquityValueCard({ cardId }: EquityValueCardProps = {}) {
   );
 
   const hasIso = useMemo(
-    () => equityGrants.some((g) => isIsoAmtPreference(g.grantType)),
-    [equityGrants],
+    () => scopedGrants.some((g) => isIsoAmtPreference(g.grantType)),
+    [scopedGrants],
   );
 
   if (equityGrants.length === 0) {
@@ -166,6 +186,21 @@ export function EquityValueCard({ cardId }: EquityValueCardProps = {}) {
           </EmptyMeaning>
         }
       />
+    );
+  }
+
+  // Wave B tier-2 (D-B1): the household HAS grants, the scoped person owns
+  // none — counted declaration + View household, never onboarding copy.
+  if (scope.isScoped && scopedGrants.length === 0) {
+    return (
+      <CalculatorCard
+        cardId={cardId}
+        title="Equity Value"
+        headline="—"
+        meaning={<>No grants in {scope.personName}&#39;s name.</>}
+      >
+        <FilteredEmptyState noun="grants" partition={grantPartition} bare />
+      </CalculatorCard>
     );
   }
 
@@ -205,9 +240,16 @@ export function EquityValueCard({ cardId }: EquityValueCardProps = {}) {
       title="Equity Value"
       dirty={fmvOverridden}
       meaning={
-        <>
-          vested today · {formatCurrency(next12.totalValue)} vesting in the next 12 months
-        </>
+        scope.isScoped ? (
+          <>
+            vested for {scope.personName} · {formatCurrency(next12.totalValue)} vesting in the
+            next 12 months
+          </>
+        ) : (
+          <>
+            vested today · {formatCurrency(next12.totalValue)} vesting in the next 12 months
+          </>
+        )
       }
       rail={rail}
       headline={
@@ -216,10 +258,19 @@ export function EquityValueCard({ cardId }: EquityValueCardProps = {}) {
         </span>
       }
     >
+      {scope.isScoped && (
+        <>
+          <ScopeCaption noun="grants" partition={grantPartition} />
+          <p className="text-xs text-muted-foreground">
+            Grants are individually owned — {scope.personName}&#39;s figure is exact; nothing
+            joint exists to exclude.
+          </p>
+        </>
+      )}
       <div className="flex items-center gap-2 flex-wrap mb-3">
         <p className="text-sm text-muted-foreground">
-          Total vested across {equityGrants.length}{' '}
-          {equityGrants.length === 1 ? 'grant' : 'grants'}.
+          Total vested across {scopedGrants.length}{' '}
+          {scopedGrants.length === 1 ? 'grant' : 'grants'}.
         </p>
         <FreshnessBadge size="sm" />
       </div>
