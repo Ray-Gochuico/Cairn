@@ -91,14 +91,27 @@ export interface ScenarioDefaultsInput {
   settings: AppSettings | null;
   accounts: ReadonlyArray<Account>;
   snapshots: ReadonlyArray<{ accountId: number; snapshotDate: string; totalValue: number }>;
-  contributions: ReadonlyArray<{ accountId: number; date: string; amount: number }>;
+  /** personId rides along for Wave-B person scoping (Contribution.personId). */
+  contributions: ReadonlyArray<{ accountId: number; date: string; amount: number; personId?: number | null }>;
   /** Injectable for tests; defaults to today. */
   todayIso?: string;
+  /** Wave B: person scope — omit/null for household (pre-Wave-B behavior). */
+  scope?: { personId: number; personName: string } | null;
+}
+
+/** Wave B (D-B1/D-B4): what a person scope EXCLUDED — surfaced, never silent. */
+export interface ScopeExclusions {
+  /** Latest-snapshot sum over FI-eligible JOINT (null-owner) accounts. */
+  jointPortfolio: number;
+  /** Rolling-12-month contributions with NO person attribution. */
+  unattributedContribution: number;
 }
 
 export interface ScenarioDefaultsResult {
   defaults: ScenarioAssumptions;
   provenance: Record<ScenarioField, string>;
+  /** null in household scope. */
+  scopeExclusions: ScopeExclusions | null;
 }
 
 /**
@@ -126,9 +139,37 @@ export function buildScenarioDefaults(input: ScenarioDefaultsInput): ScenarioDef
   const todayIso = input.todayIso ?? new Date().toISOString().slice(0, 10);
   const { household, settings } = input;
 
-  const portfolio = fiEligiblePortfolioValue(input.accounts, input.snapshots, todayIso);
-  const annualContribution = rolling12MonthContribution(input.contributions, todayIso);
-  const monthlyExpenses = household?.monthlyExpenseBaseline ?? 0;
+  const scope = input.scope ?? null;
+  // D-B13: owner filtering composes by pre-filtering the account/contribution
+  // lists — fiEligiblePortfolioValue and rolling12MonthContribution are NOT
+  // modified. Same semantics as filterByOwnerPersonId/personId ('joint' rows
+  // are the ownerPersonId == null ones).
+  const scopedAccounts =
+    scope == null ? input.accounts : input.accounts.filter((a) => a.ownerPersonId === scope.personId);
+  const scopedContributions =
+    scope == null ? input.contributions : input.contributions.filter((c) => c.personId === scope.personId);
+
+  const portfolio = fiEligiblePortfolioValue(scopedAccounts, input.snapshots, todayIso);
+  const annualContribution = rolling12MonthContribution(scopedContributions, todayIso);
+  // D-B5: person scope defaults to the labeled even split of the household
+  // baseline (migration 0051 is the durable upgrade — D-B7, not this wave).
+  const baseline = household?.monthlyExpenseBaseline ?? 0;
+  const monthlyExpenses = scope == null ? baseline : baseline / 2;
+
+  const scopeExclusions: ScopeExclusions | null =
+    scope == null
+      ? null
+      : {
+          jointPortfolio: fiEligiblePortfolioValue(
+            input.accounts.filter((a) => a.ownerPersonId == null),
+            input.snapshots,
+            todayIso,
+          ),
+          unattributedContribution: rolling12MonthContribution(
+            input.contributions.filter((c) => c.personId == null),
+            todayIso,
+          ),
+        };
 
   // Defensive `?? []`: a partial household object (store mocks, malformed
   // rows) without growthScenarios must fall back to the app default, never
@@ -141,12 +182,28 @@ export function buildScenarioDefaults(input: ScenarioDefaultsInput): ScenarioDef
   const inflationPct = pctFromFraction(effectiveBaselineInflation(null, household, settings));
 
   const provenance: Record<ScenarioField, string> = {
-    portfolio: portfolio > 0 ? 'from your account snapshots' : 'no account snapshots yet',
+    portfolio:
+      scope == null
+        ? portfolio > 0
+          ? 'from your account snapshots'
+          : 'no account snapshots yet'
+        : portfolio > 0
+          ? `from ${scope.personName}'s account snapshots — joint accounts not included`
+          : `no snapshots for ${scope.personName}'s accounts`,
     annualContribution:
-      annualContribution > 0
-        ? 'your last 12 months of contributions'
-        : 'no contributions in the last 12 months',
-    monthlyExpenses: monthlyExpenses > 0 ? 'your monthly expense baseline' : 'not set in Inputs',
+      scope == null
+        ? annualContribution > 0
+          ? 'your last 12 months of contributions'
+          : 'no contributions in the last 12 months'
+        : annualContribution > 0
+          ? `${scope.personName}'s contributions, last 12 months`
+          : `no contributions attributed to ${scope.personName} in the last 12 months`,
+    monthlyExpenses:
+      monthlyExpenses > 0
+        ? scope == null
+          ? 'your monthly expense baseline'
+          : 'half your household baseline — even split'
+        : 'not set in Inputs',
     returnPct: moderate ? `your ${moderate.label} growth scenario` : 'app default 6%',
     swrPct:
       household?.withdrawalRate != null && household.withdrawalRate > 0
@@ -163,6 +220,7 @@ export function buildScenarioDefaults(input: ScenarioDefaultsInput): ScenarioDef
   return {
     defaults: { portfolio, annualContribution, monthlyExpenses, returnPct, swrPct, inflationPct },
     provenance,
+    scopeExclusions,
   };
 }
 
@@ -279,6 +337,44 @@ export function writeSharedOverrides(overrides: Partial<ScenarioAssumptions>): v
   try {
     if (Object.keys(overrides).length === 0) sessionStorage.removeItem(SCENARIO_STORAGE_KEY);
     else sessionStorage.setItem(SCENARIO_STORAGE_KEY, JSON.stringify(overrides));
+  } catch {
+    // sessionStorage unavailable — in-memory state still drives the UI.
+  }
+}
+
+/**
+ * Wave B (D-B11): per-scope override silos. Household keeps the W16 shared
+ * key — its sanitize + one-shot legacy-migration contract is UNTOUCHED (the
+ * migration below runs only through readSharedOverrides). Person scopes get
+ * sibling silos keyed by person id; same shape, same sanitize, same
+ * empty-removes-key contract.
+ */
+export function scenarioStorageKeyFor(scopePersonId: number | null): string {
+  return scopePersonId == null ? SCENARIO_STORAGE_KEY : `calc-scenario:p${scopePersonId}`;
+}
+
+export function readOverridesFor(scopePersonId: number | null): Partial<ScenarioAssumptions> {
+  if (scopePersonId == null) return readSharedOverrides();
+  try {
+    const raw = sessionStorage.getItem(scenarioStorageKeyFor(scopePersonId));
+    return raw == null ? {} : sanitize(JSON.parse(raw));
+  } catch {
+    return {};
+  }
+}
+
+export function writeOverridesFor(
+  scopePersonId: number | null,
+  overrides: Partial<ScenarioAssumptions>,
+): void {
+  if (scopePersonId == null) {
+    writeSharedOverrides(overrides);
+    return;
+  }
+  const key = scenarioStorageKeyFor(scopePersonId);
+  try {
+    if (Object.keys(overrides).length === 0) sessionStorage.removeItem(key);
+    else sessionStorage.setItem(key, JSON.stringify(overrides));
   } catch {
     // sessionStorage unavailable — in-memory state still drives the UI.
   }
