@@ -89,3 +89,34 @@ test('monthly check-in: a scoped Confirm all never ratifies hidden persons’ sn
   await expect(page.getByRole('button', { name: /^Confirm all \(1\)$/ })).toBeVisible({ timeout: 30_000 });
   expect(errors.join('\n')).not.toContain('Maximum update depth');
 });
+
+test('calculators: the page scope honors ?view= — scoped FI figures + caption, flip via the bar control', async ({ page }) => {
+  const errors = collectErrors(page);
+  // Cold deep-link in P2 scope (Demo Partner). FI-eligible P2 portfolio =
+  // Partner Brokerage 118,000 + Partner Savings 22,000; Joint Checking (8,000)
+  // is excluded and declared.
+  await page.goto('/calculators?view=p2');
+  // exact:true — the Backtest card's "Backtest your portfolio" trigger name
+  // also substring-matches 'Portfolio'.
+  const portfolio = page.getByLabel('Portfolio', { exact: true });
+  await expect(portfolio).toHaveValue('140000', { timeout: 30_000 });
+  await expect(
+    page.getByText("from Demo Partner's account snapshots — joint accounts not included"),
+  ).toBeVisible();
+  // Expenses default to the labeled even split of the $6,000 baseline:
+  await expect(page.getByLabel('Monthly expenses')).toHaveValue('3000');
+  await expect(page.getByText('half your household baseline — even split')).toBeVisible();
+  // The FI waymark re-scopes (its meaning names the person):
+  await expect(page.getByTestId('path-to-fi-meaning')).toContainText('Demo Partner');
+  // Open the card: the exclusions caption carries the counted joint total.
+  await page.getByTestId('path-to-fi-trigger').click();
+  await expect(page.getByTestId('path-to-fi-scope-exclusions')).toContainText('joint accounts ($8,000)');
+  // The header copy is deduped on the grid; the BAR control flips the scope:
+  await expect(page.getByRole('combobox', { name: 'Filter view by person' })).toHaveCount(0);
+  await page
+    .getByRole('group', { name: 'Calculator scope' })
+    .getByRole('button', { name: 'Household' })
+    .click();
+  await expect(portfolio).toHaveValue('935000');
+  expect(errors.join('\n')).not.toContain('Maximum update depth');
+});
