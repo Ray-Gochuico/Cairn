@@ -10,6 +10,9 @@ import { useSettingsStore } from '@/stores/settings-store';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useContributionsStore } from '@/stores/contributions-store';
+import { usePersonsStore } from '@/stores/persons-store';
+import { syncCalcScope, __resetCalcScopeForTests } from '@/lib/calculators/calc-view-scope';
+import { makePerson, makeAccount } from '../factories';
 import { FilingStatus } from '@/types/enums';
 import type { Household } from '@/types/schema';
 
@@ -28,11 +31,17 @@ function mkHousehold(): Household {
 beforeEach(() => {
   sessionStorage.clear();
   __resetScenarioAssumptionsForTests();
+  __resetCalcScopeForTests();
   useHouseholdStore.setState({ household: mkHousehold(), isLoading: false, error: null });
   useSettingsStore.setState({ settings: null, isLoading: false, error: null } as never);
   useAccountsStore.setState({ accounts: [], isLoading: false, error: null });
   useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null });
   useContributionsStore.setState({ contributions: [], isLoading: false, error: null });
+  usePersonsStore.setState({
+    persons: [makePerson({ id: 1, name: 'Alice' }), makePerson({ id: 2, name: 'Bob' })],
+    isLoading: false,
+    error: null,
+  } as never);
 });
 
 describe('useScenarioAssumptions', () => {
@@ -139,5 +148,72 @@ describe('salary overrides (Wave 18 D7 layer)', () => {
     }));
     act(() => result.current.bar.setSalary(1, 111_000));
     expect(result.current.card.salaryByPersonId).toEqual({ 1: 111_000 });
+  });
+});
+
+describe('Wave B: scope-aware bar state', () => {
+  // Same fixture shape as the scoped buildScenarioDefaults suite: p1 owns
+  // account 1 ($100k), p2 owns account 2 ($40k), account 3 joint ($8k);
+  // contributions $1,200 for p2, $600 unattributed, $500 for p1.
+  beforeEach(() => {
+    useAccountsStore.setState({
+      accounts: [
+        makeAccount({ id: 1, ownerPersonId: 1 }),
+        makeAccount({ id: 2, ownerPersonId: 2 }),
+        makeAccount({ id: 3, ownerPersonId: null }),
+      ],
+      isLoading: false,
+      error: null,
+    });
+    useSnapshotsStore.setState({
+      snapshots: [
+        { accountId: 1, snapshotDate: '2026-07-01', totalValue: 100_000 },
+        { accountId: 2, snapshotDate: '2026-07-01', totalValue: 40_000 },
+        { accountId: 3, snapshotDate: '2026-07-01', totalValue: 8_000 },
+      ],
+      isLoading: false,
+      error: null,
+    } as never);
+    useContributionsStore.setState({
+      contributions: [
+        { accountId: 2, date: '2026-06-15', amount: 1_200, personId: 2 },
+        { accountId: 3, date: '2026-06-20', amount: 600, personId: null },
+        { accountId: 1, date: '2026-06-25', amount: 500, personId: 1 },
+      ],
+      isLoading: false,
+      error: null,
+    } as never);
+  });
+
+  it('person scope resolves scoped defaults and a sibling silo; household silo is untouched', () => {
+    const { result } = renderHook(() => useScenarioAssumptions());
+    act(() => result.current.setField('portfolio', 111)); // household edit
+    act(() => syncCalcScope(2));
+    expect(result.current.values.portfolio).toBe(40000);      // Bob's scoped default (no override)
+    expect(result.current.editedCount).toBe(0);               // scope flip alone edits NOTHING (constraint 1)
+    act(() => result.current.setField('portfolio', 222));
+    expect(JSON.parse(sessionStorage.getItem('calc-scenario:p2')!)).toEqual({ portfolio: 222 });
+    expect(JSON.parse(sessionStorage.getItem('calc-scenario:shared')!)).toEqual({ portfolio: 111 });
+    act(() => syncCalcScope(null));
+    expect(result.current.values.portfolio).toBe(111);        // the household override is still there
+  });
+
+  it('D-B11: editedCount counts only the VISIBLE salary override; scoped resetAll spares the other person', () => {
+    const { result } = renderHook(() => useScenarioAssumptions());
+    act(() => result.current.setSalary(1, 90000));
+    act(() => result.current.setSalary(2, 80000));
+    act(() => syncCalcScope(2));
+    expect(result.current.editedCount).toBe(1); // only Bob's salary is visible in Bob's scope
+    act(() => result.current.resetAll());
+    expect(result.current.salaryByPersonId[1]).toBe(90000); // Alice's override survives
+    expect(result.current.salaryByPersonId[2]).toBeUndefined();
+  });
+
+  it('exposes the scope + exclusions for the cards', () => {
+    act(() => syncCalcScope(2));
+    const { result } = renderHook(() => useScenarioAssumptions());
+    expect(result.current.scopePersonId).toBe(2);
+    expect(result.current.scopePersonName).toBe('Bob');
+    expect(result.current.scopeExclusions).toEqual({ jointPortfolio: 8000, unattributedContribution: 600 });
   });
 });

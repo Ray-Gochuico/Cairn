@@ -8,13 +8,17 @@ import type { GrowthScenario } from '@/types/schema';
 import {
   SCENARIO_FIELDS,
   buildScenarioDefaults,
-  readSharedOverrides,
+  readOverridesFor,
+  scenarioStorageKeyFor,
   toEngineAssumptions,
-  writeSharedOverrides,
+  writeOverridesFor,
   type EngineAssumptions,
   type ScenarioAssumptions,
   type ScenarioField,
+  type ScopeExclusions,
 } from './scenario-assumptions';
+import { getCalcScopePersonId, subscribeCalcScope } from './calc-view-scope';
+import { usePersonsStore } from '@/stores/persons-store';
 
 /**
  * React binding for the Wave-16 shared scenario (Basecamp spine). One
@@ -31,17 +35,26 @@ import {
  * setField here is synchronous.
  */
 
-let cachedOverrides: Partial<ScenarioAssumptions> | null = null;
 const listeners = new Set<() => void>();
 
-function getOverridesSnapshot(): Partial<ScenarioAssumptions> {
-  if (cachedOverrides === null) cachedOverrides = readSharedOverrides();
-  return cachedOverrides;
+// Wave B (D-B11): one cached snapshot per silo key so useSyncExternalStore
+// gets a stable reference per scope. The household entry keeps flowing
+// through readSharedOverrides (its migration contract untouched).
+const overridesCacheByKey = new Map<string, Partial<ScenarioAssumptions>>();
+
+function getOverridesSnapshotFor(scopePersonId: number | null): Partial<ScenarioAssumptions> {
+  const key = scenarioStorageKeyFor(scopePersonId);
+  let cached = overridesCacheByKey.get(key);
+  if (cached === undefined) {
+    cached = readOverridesFor(scopePersonId);
+    overridesCacheByKey.set(key, cached);
+  }
+  return cached;
 }
 
-function commitOverrides(next: Partial<ScenarioAssumptions>): void {
-  cachedOverrides = next;
-  writeSharedOverrides(next);
+function commitOverridesFor(scopePersonId: number | null, next: Partial<ScenarioAssumptions>): void {
+  overridesCacheByKey.set(scenarioStorageKeyFor(scopePersonId), next);
+  writeOverridesFor(scopePersonId, next);
   listeners.forEach((l) => l());
 }
 
@@ -102,7 +115,7 @@ export function useSalaryOverrides(): Record<number, number> {
 
 /** Test-only: drop the module cache + listeners between tests. */
 export function __resetScenarioAssumptionsForTests(): void {
-  cachedOverrides = null;
+  overridesCacheByKey.clear();
   cachedSalaries = null;
   listeners.clear();
 }
@@ -123,6 +136,11 @@ export interface UseScenarioAssumptionsResult {
   setField: (field: ScenarioField, value: number) => void;
   resetField: (field: ScenarioField) => void;
   resetAll: () => void;
+  /** Wave B: the active page scope (null = household; stale ids degrade). */
+  scopePersonId: number | null;
+  scopePersonName: string | null;
+  /** Wave B (D-B1/D-B4): what the person scope excluded; null in household. */
+  scopeExclusions: ScopeExclusions | null;
 }
 
 export function useScenarioAssumptions(): UseScenarioAssumptionsResult {
@@ -132,12 +150,25 @@ export function useScenarioAssumptions(): UseScenarioAssumptionsResult {
   const snapshots = useSnapshotsStore((s) => s.snapshots);
   const contributions = useContributionsStore((s) => s.contributions);
 
-  const overrides = useSyncExternalStore(subscribe, getOverridesSnapshot);
+  // Wave B (D-B10/D-B11): the mirrored page scope selects the active silo +
+  // the scoped defaults. A stale mirrored id (deleted person, store reset)
+  // degrades to household.
+  const mirroredScopeId = useSyncExternalStore(subscribeCalcScope, getCalcScopePersonId);
+  const realPersons = usePersonsStore((s) => s.persons);
+  const scopePerson =
+    mirroredScopeId != null ? (realPersons.find((p) => p.id === mirroredScopeId) ?? null) : null;
+  const effectiveScopeId = scopePerson?.id ?? null;
+
+  const overrides = useSyncExternalStore(subscribe, () => getOverridesSnapshotFor(effectiveScopeId));
   const salaryByPersonId = useSyncExternalStore(subscribe, getSalariesSnapshot);
 
-  const { defaults, provenance } = useMemo(
-    () => buildScenarioDefaults({ household, settings, accounts, snapshots, contributions }),
-    [household, settings, accounts, snapshots, contributions],
+  const { defaults, provenance, scopeExclusions } = useMemo(
+    () =>
+      buildScenarioDefaults({
+        household, settings, accounts, snapshots, contributions,
+        scope: scopePerson?.id != null ? { personId: scopePerson.id, personName: scopePerson.name } : null,
+      }),
+    [household, settings, accounts, snapshots, contributions, scopePerson],
   );
 
   const values = useMemo<ScenarioAssumptions>(
@@ -151,9 +182,15 @@ export function useScenarioAssumptions(): UseScenarioAssumptionsResult {
     for (const f of SCENARIO_FIELDS) out[f] = f in overrides;
     return out;
   }, [overrides]);
+  // D-B11: in person scope only the scoped person's salary field is visible —
+  // editedCount counts only what the bar renders.
+  const visibleSalaryEdits = useMemo(() => {
+    if (effectiveScopeId == null) return Object.keys(salaryByPersonId).length;
+    return salaryByPersonId[effectiveScopeId] != null ? 1 : 0;
+  }, [salaryByPersonId, effectiveScopeId]);
   const editedCount = useMemo(
-    () => Object.keys(overrides).length + Object.keys(salaryByPersonId).length,
-    [overrides, salaryByPersonId],
+    () => Object.keys(overrides).length + visibleSalaryEdits,
+    [overrides, visibleSalaryEdits],
   );
 
   // D3: a custom return collapses the projection tables to one honest row.
@@ -165,14 +202,19 @@ export function useScenarioAssumptions(): UseScenarioAssumptionsResult {
     [isEdited.returnPct, engine.returnRate, household],
   );
 
+  // setField/resetField read the LIVE mirror at call time (closure-free, the
+  // same pattern the shared-silo version used) so a scope flip mid-session
+  // routes the very next edit into the newly-active silo.
   const setField = useCallback((field: ScenarioField, value: number) => {
-    commitOverrides({ ...getOverridesSnapshot(), [field]: value });
+    const scopeId = getCalcScopePersonId();
+    commitOverridesFor(scopeId, { ...getOverridesSnapshotFor(scopeId), [field]: value });
   }, []);
 
   const resetField = useCallback((field: ScenarioField) => {
-    const next = { ...getOverridesSnapshot() };
+    const scopeId = getCalcScopePersonId();
+    const next = { ...getOverridesSnapshotFor(scopeId) };
     delete next[field];
-    commitOverrides(next);
+    commitOverridesFor(scopeId, next);
   }, []);
 
   const setSalary = useCallback((personId: number, value: number | null) => {
@@ -182,14 +224,26 @@ export function useScenarioAssumptions(): UseScenarioAssumptionsResult {
     commitSalaries(next);
   }, []);
 
+  // D-B11: the scoped variant clears only the ACTIVE silo and only the scoped
+  // person's salary override — the other person's edits survive.
   const resetAll = useCallback(() => {
-    commitOverrides({});
-    commitSalaries({});
+    const scopeId = getCalcScopePersonId();
+    commitOverridesFor(scopeId, {});
+    if (scopeId == null) {
+      commitSalaries({});
+    } else {
+      const next = { ...getSalariesSnapshot() };
+      delete next[scopeId];
+      commitSalaries(next);
+    }
   }, []);
 
   return {
     values, defaults, engine, provenance, isEdited, editedCount, scenarioList,
     salaryByPersonId, setSalary,
     setField, resetField, resetAll,
+    scopePersonId: effectiveScopeId,
+    scopePersonName: scopePerson?.name ?? null,
+    scopeExclusions,
   };
 }
