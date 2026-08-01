@@ -17,6 +17,7 @@ import { RealNominalToggle } from '@/components/calculators/RealNominalToggle';
 import { useChartDisplayMode } from '@/lib/calculators/use-chart-display-mode';
 import { fiChartSeries } from '@/lib/calculators/fi-chart-series';
 import { useScenarioAssumptions } from '@/lib/calculators/use-scenario-assumptions';
+import { useCalcScope } from '@/lib/calculators/use-calc-scope';
 import { InlineLink } from '@/components/calculators/InlineLink';
 import { cn } from '@/lib/utils';
 
@@ -77,26 +78,28 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
   const { household } = useHouseholdStore();
   const persons = usePersonsStore((s) => s.persons);
   const [mode, setMode] = usePathMode();
+  const scope = useCalcScope();
 
-  // Local rail default: shortest years-until-retirement across persons
-  // (fallback 20) — the CoastFiCard derivation, verbatim.
+  // Local rail default: the SCOPED person's years-until-retirement in person
+  // scope (their solve, their horizon); the household shortest otherwise —
+  // the CoastFiCard derivation, scope-aware (Wave B).
   const defaults = useMemo(() => {
     let yearsUntilRetirement = 20;
-    if (persons.length > 0) {
-      const yearsByPerson = persons.map(
-        (p) => p.targetRetirementAge - currentAge(p.dateOfBirth),
+    const source = scope.person != null ? [scope.person] : persons;
+    if (source.length > 0) {
+      yearsUntilRetirement = Math.min(
+        ...source.map((p) => p.targetRetirementAge - currentAge(p.dateOfBirth)),
       );
-      yearsUntilRetirement = Math.min(...yearsByPerson);
     }
     return { yearsUntilRetirement };
-  }, [persons]);
+  }, [persons, scope.person]);
   const { values, setValue, reset, isOverridden, overriddenKeys } = useCalculatorState(
     cardId ?? 'path-to-fi',
     defaults,
   );
   const yearsUntilRetirement = values.yearsUntilRetirement ?? 0;
 
-  const { engine, scenarioList, editedCount } = useScenarioAssumptions();
+  const { engine, scenarioList, editedCount, scopeExclusions, isEdited } = useScenarioAssumptions();
   const scenarioEdited = editedCount > 0;
 
   const [displayMode, setDisplayMode] = useChartDisplayMode(cardId ?? 'path-to-fi');
@@ -343,12 +346,13 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
       <>Already at/after your target retirement age — no CoastFI horizon to compute.</>
     ) : mode === 'KEEP' ? (
       <>
-        to your FI target · {coastPct.toFixed(0)}% of the way to coasting
+        to {scope.isScoped ? `${scope.personName}'s` : 'your'} FI target · {coastPct.toFixed(0)}%
+        of the way to coasting
       </>
     ) : (
       <>
-        of the coast amount · {moderateKeepFi?.label ?? 'Moderate'} {keepYearsLabel} yrs if
-        you keep contributing
+        of {scope.isScoped ? `${scope.personName}'s` : 'the'} coast amount ·{' '}
+        {moderateKeepFi?.label ?? 'Moderate'} {keepYearsLabel} yrs if you keep contributing
       </>
     );
 
@@ -372,6 +376,18 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
             You&#39;re {coastPct.toFixed(0)}% of the way to coasting — at 100% you could stop
             contributing now and still retire on time.
           </p>
+          {/* CB16 (D-B1/D-B4/D-B5): the scoped solve's counted exclusions —
+              declared, never silent; the even-split clause drops once the
+              expenses field is edited (the default no longer applies). */}
+          {scope.isScoped && scopeExclusions && (
+            <p className="text-xs text-muted-foreground" data-testid="path-to-fi-scope-exclusions">
+              {scope.personName}&#39;s solve counts only {scope.personName}&#39;s accounts and
+              contributions — joint accounts ({formatCurrency(scopeExclusions.jointPortfolio)})
+              and unattributed contributions (
+              {formatCurrency(scopeExclusions.unattributedContribution)}/yr) aren&#39;t counted.
+              {!isEdited.monthlyExpenses && ' Expenses default to half the household baseline.'}
+            </p>
+          )}
           <CalcTable columns={COLUMNS} testId="path-to-fi-table">
             {fiSeries.map((s, i) => {
               const coast = coastRows[i];
