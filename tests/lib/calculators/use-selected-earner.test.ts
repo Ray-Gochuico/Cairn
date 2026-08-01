@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useSelectedEarner } from '@/lib/calculators/use-selected-earner';
+import { useSelectedEarner, clearEarnerPicks } from '@/lib/calculators/use-selected-earner';
 
 describe('useSelectedEarner', () => {
   beforeEach(() => sessionStorage.clear());
@@ -36,5 +36,30 @@ describe('useSelectedEarner', () => {
     act(() => result.current[1](null));
     expect(result.current[0]).toBeNull();
     expect(sessionStorage.getItem('calc-earner:paycheck')).toBeNull();
+  });
+
+  it('Wave B D-B9: explicitCombined stores the sentinel — Combined survives a person defaultId', () => {
+    const { result } = renderHook(() =>
+      useSelectedEarner('paycheck', 1 /* page scope P1 */, [1, 2], { explicitCombined: true }),
+    );
+    act(() => result.current[1](null)); // the user picks Combined
+    expect(sessionStorage.getItem('calc-earner:paycheck')).toBe('combined');
+    expect(result.current[0]).toBeNull(); // Combined, NOT the defaultId
+  });
+
+  it('Wave B D-B9: without the flag, set(null) still removes the key (legacy contract)', () => {
+    const { result } = renderHook(() => useSelectedEarner('overtime', 2, [1, 2]));
+    act(() => result.current[1](1));
+    act(() => result.current[1](null));
+    expect(sessionStorage.getItem('calc-earner:overtime')).toBeNull();
+    expect(result.current[0]).toBe(2); // back to defaultId
+  });
+
+  it('Wave B D-B9: clearEarnerPicks resets a MOUNTED hook to its default via the epoch', () => {
+    const { result } = renderHook(() => useSelectedEarner('paycheck', null, [1, 2]));
+    act(() => result.current[1](2));
+    expect(result.current[0]).toBe(2);
+    act(() => clearEarnerPicks());
+    expect(result.current[0]).toBeNull(); // stored pick gone, default wins
   });
 });
