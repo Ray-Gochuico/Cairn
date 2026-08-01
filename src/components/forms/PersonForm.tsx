@@ -375,6 +375,29 @@ export default function PersonForm({
               <TermTooltip term="HDHP">HDHP</TermTooltip> plan)
             </label>
           </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="monthlyExpenseBaseline">
+                Monthly expenses (this person&#39;s share)
+              </Label>
+              <Input
+                id="monthlyExpenseBaseline"
+                type="number"
+                step="any"
+                min="0"
+                aria-describedby="monthlyExpenseBaseline-hint"
+                {...form.register('monthlyExpenseBaseline', { setValueAs: emptyToNullNumber })}
+              />
+              <p
+                id="monthlyExpenseBaseline-hint"
+                className="text-xs text-muted-foreground mt-1"
+              >
+                Used by person-scoped calculators. Leave blank to use an even split of the
+                household baseline.
+              </p>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
