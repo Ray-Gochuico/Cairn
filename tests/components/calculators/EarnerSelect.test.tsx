@@ -99,6 +99,24 @@ describe('EarnerSelect', () => {
       );
     });
 
+    it('Wave B: combinedLabel renames the Combined segment', () => {
+      render(
+        <EarnerSelect
+          persons={[alex, brooke]}
+          selectedId={null}
+          onChange={() => {}}
+          label="Calculator scope"
+          includeCombined
+          combinedLabel="Household"
+        />,
+      );
+      expect(screen.getByRole('button', { name: 'Household' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      expect(screen.queryByRole('button', { name: 'Combined' })).not.toBeInTheDocument();
+    });
+
     it('clicking Combined fires onChange(null)', async () => {
       const user = userEvent.setup();
       const onChange = vi.fn();

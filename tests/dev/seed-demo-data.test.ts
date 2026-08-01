@@ -254,4 +254,16 @@ describe('seedDemoData', () => {
     // Car loan: exactly 18 months before → 2025-01-01.
     expect(byName.get('Car Loan')).toBe('2025-01-01');
   });
+
+  it('Wave B: seeds one RSU grant per person (the exact card is smokable) — idempotently', async () => {
+    const todayISO = '2026-07-08';
+    await seedDemoData(db, { todayISO });
+    await seedDemoData(db, { todayISO });
+    const grants = await db.select<{ owner_person_id: number; grant_type: string }>(
+      'SELECT owner_person_id, grant_type FROM equity_grants ORDER BY id',
+    );
+    expect(grants).toHaveLength(2);
+    expect(new Set(grants.map((g) => g.owner_person_id)).size).toBe(2);
+    expect(grants.every((g) => g.grant_type === 'RSU')).toBe(true);
+  });
 });

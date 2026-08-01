@@ -23,6 +23,7 @@ import { useDependentsStore } from '@/stores/dependents-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { FilingStatus } from '@/types/enums';
 import { SupplementalPayCard } from '@/pages/calculators/SupplementalPayCard';
+import { syncCalcScope, __resetCalcScopeForTests } from '@/lib/calculators/calc-view-scope';
 
 // Federal SINGLE brackets (2026 approximate) — same as the old suites.
 const federalSingleBrackets = [
@@ -964,5 +965,57 @@ describe('SupplementalPayCard waymark meaning (Wave 17)', () => {
     renderCard('supplemental-pay');
     expect(screen.getByTestId('supplemental-pay-headline')).toHaveTextContent('—');
     expect(document.querySelector('[data-testid="cairn-glyph"]')).toBeInTheDocument();
+  });
+});
+
+describe('SupplementalPayCard — page scope (Wave B CB21)', () => {
+  function primeTwoEarnerBonus() {
+    primeStores();
+    useHouseholdStore.setState({
+      household: { ...useHouseholdStore.getState().household!, filingStatus: FilingStatus.MFJ },
+      isLoading: false,
+      error: null,
+    });
+    const alice = usePersonsStore.getState().persons[0];
+    usePersonsStore.setState({
+      persons: [
+        { ...alice, id: 1, name: 'Alice', annualSalaryPretax: 150000, expectedBonus: 30000 },
+        { ...alice, id: 2, name: 'Bob', annualSalaryPretax: 150000, expectedBonus: 12000 },
+      ],
+      isLoading: false,
+      error: null,
+    });
+    const items = useTaxRulesStore.getState().items.map((i) => ({
+      ...i,
+      filingStatus: FilingStatus.MFJ,
+    }));
+    useTaxRulesStore.setState({ year: 2026, items, isLoading: false, error: null });
+  }
+
+  beforeEach(() => {
+    sessionStorage.clear();
+    resetStores();
+    __resetCalcScopeForTests();
+  });
+
+  it('Wave B: page scope defaults the recipient to the scoped person and the meaning names them (CB21)', async () => {
+    primeTwoEarnerBonus();
+    syncCalcScope(2);
+    render(
+      <MemoryRouter initialEntries={['/calculators?view=p2']}>
+        <SupplementalPayCard cardId="supplemental-pay" />
+      </MemoryRouter>,
+    );
+    await screen.findByTestId('supplemental-headline');
+    // Without the scope the default recipient is Alice (first with a bonus) —
+    // the page scope broadcast wins (D-B9):
+    expect(screen.getByTestId('supplemental-pay-meaning')).toHaveTextContent(/tax on Bob's/);
+  });
+
+  it('Wave B: household scope keeps the unnamed meaning (byte-identical)', async () => {
+    primeTwoEarnerBonus();
+    render(<MemoryRouter><SupplementalPayCard cardId="supplemental-pay" /></MemoryRouter>);
+    await screen.findByTestId('supplemental-headline');
+    expect(screen.getByTestId('supplemental-pay-meaning')).toHaveTextContent(/tax on a/);
   });
 });

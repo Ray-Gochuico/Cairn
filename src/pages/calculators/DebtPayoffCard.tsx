@@ -30,6 +30,10 @@ import {
 import { InlineLink } from '@/components/calculators/InlineLink';
 import { useNextDollarStore } from '@/lib/calculators/next-dollar-store';
 import { cn } from '@/lib/utils';
+import { useCalcScope } from '@/lib/calculators/use-calc-scope';
+import { partitionHidden } from '@/lib/view-scope';
+import { ScopeCaption } from '@/components/layout/ScopeCaption';
+import { FilteredEmptyState } from '@/components/layout/FilteredEmptyState';
 
 /**
  * Format an ISO YYYY-MM-DD payoff date as a friendly "Mon YYYY" string
@@ -105,6 +109,20 @@ function StrategyColumn({
 export function DebtPayoffCard({ cardId }: DebtPayoffCardProps = {}) {
   const loans = useLoansStore((s) => s.loans);
 
+  const scope = useCalcScope();
+  // Wave B (D-B1): loans in {name}'s name only — the filterByObligorPersonId
+  // semantics, composed by pre-filtering (D-B13). Joint (null-obligor) loans
+  // are excluded from the person's solve and ALWAYS declared with counts.
+  const visibleLoans = useMemo(
+    () =>
+      scope.personId == null ? loans : loans.filter((l) => l.obligorPersonId === scope.personId),
+    [loans, scope.personId],
+  );
+  const loanPartition = useMemo(
+    () => partitionHidden(loans, visibleLoans, (l) => l.obligorPersonId),
+    [loans, visibleLoans],
+  );
+
   // D5 (Wave 18): the section-level next-dollar figure enters as the extra
   // DEFAULT — a local edit is an override that wins; Reset returns to the
   // shared value (useCalculatorState's existing contract, no new mechanism).
@@ -125,8 +143,8 @@ export function DebtPayoffCard({ cardId }: DebtPayoffCardProps = {}) {
   // below only highlights a column. compareStrategies also carries the
   // all-minimums baseline (moved verbatim from this card's old useMemo).
   const comparison = useMemo(
-    () => compareStrategies(loans, values.extraTotal ?? 0, todayIso),
-    [loans, values.extraTotal, todayIso],
+    () => compareStrategies(visibleLoans, values.extraTotal ?? 0, todayIso),
+    [visibleLoans, values.extraTotal, todayIso],
   );
 
   // The table + chart follow the HIGHLIGHTED strategy (avalanche when 'none'
@@ -172,7 +190,22 @@ export function DebtPayoffCard({ cardId }: DebtPayoffCardProps = {}) {
     );
   }
 
-  const totalBalance = loans.reduce((a, l) => a + l.currentBalance, 0);
+  // Wave B tier-2 (D-B1): the household HAS loans, the scoped person owes
+  // none — counted declaration + View household, never onboarding copy.
+  if (scope.isScoped && visibleLoans.length === 0) {
+    return (
+      <CalculatorCard
+        cardId={cardId}
+        title="Debt Payoff"
+        headline="—"
+        meaning={<>No loans in {scope.personName}&#39;s name.</>}
+      >
+        <FilteredEmptyState noun="loans" partition={loanPartition} bare />
+      </CalculatorCard>
+    );
+  }
+
+  const totalBalance = visibleLoans.reduce((a, l) => a + l.currentBalance, 0);
   const anyCapped = displayed.anyCapped;
   const cappedProjections = displayed.projections.filter((p) =>
     scheduleIsCapped(p.amortization.schedule),
@@ -190,7 +223,8 @@ export function DebtPayoffCard({ cardId }: DebtPayoffCardProps = {}) {
   ) : (
     <>
       {formatCurrency(totalBalance)} across{' '}
-      {loans.length === 1 ? '1 loan' : `${loans.length} loans`}.
+      {visibleLoans.length === 1 ? '1 loan' : `${visibleLoans.length} loans`}
+      {scope.isScoped ? ` in ${scope.personName}'s name` : ''}.
     </>
   );
 
@@ -242,6 +276,12 @@ export function DebtPayoffCard({ cardId }: DebtPayoffCardProps = {}) {
             min={0}
             edited={overriddenKeys.has('extraTotal')}
           />
+          {/* CB7 (D-B8): the next-dollar figure stays household-level, labeled. */}
+          {scope.isScoped && (
+            <p className="text-xs text-muted-foreground">
+              your household figure — not split per person
+            </p>
+          )}
         </>
       }
       headline={
@@ -254,6 +294,7 @@ export function DebtPayoffCard({ cardId }: DebtPayoffCardProps = {}) {
         </span>
       }
     >
+      {scope.isScoped && <ScopeCaption noun="loans" partition={loanPartition} />}
       {savingsCapped && (
         <div
           role="note"

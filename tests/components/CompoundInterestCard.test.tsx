@@ -10,6 +10,10 @@ import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useHouseholdStore } from '@/stores/household-store';
+import { usePersonsStore } from '@/stores/persons-store';
+import { useContributionsStore } from '@/stores/contributions-store';
+import { syncCalcScope, __resetCalcScopeForTests } from '@/lib/calculators/calc-view-scope';
+import { makePerson } from '../factories';
 import { SnapshotSource, AccountType, FilingStatus } from '@/types/enums';
 import type { Account, AppSettings } from '@/types/schema';
 
@@ -311,5 +315,60 @@ describe('CompoundInterestCard waymark meaning (Wave 17)', () => {
     const meaning = screen.getByTestId('compound-interest-meaning');
     expect(meaning).toHaveTextContent(/enter a length in years to see projected growth/i);
     expect(meaning).not.toHaveTextContent(/% APY for/i);
+  });
+});
+
+describe('CompoundInterestCard — person scope (Wave B)', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    __resetScenarioAssumptionsForTests();
+    __resetCalcScopeForTests();
+    useSettingsStore.setState({ settings: null, isLoading: false, error: null });
+    useHouseholdStore.setState({ household: null, isLoading: false, error: null });
+    useContributionsStore.setState({ contributions: [], isLoading: false, error: null } as never);
+    usePersonsStore.setState({
+      persons: [makePerson({ id: 1, name: 'Alice' }), makePerson({ id: 2, name: 'Bob' })],
+      isLoading: false,
+      error: null,
+    } as never);
+    // Bob owns account 2 ($40k); account 3 is joint ($8k).
+    useAccountsStore.setState({
+      accounts: [
+        { ...mkAccount(2), ownerPersonId: 2 },
+        mkAccount(3),
+      ],
+      isLoading: false,
+      error: null,
+    });
+    useSnapshotsStore.setState({
+      snapshots: [
+        { id: 1, accountId: 2, snapshotDate: '2026-07-01', totalValue: 40_000, source: 'MANUAL', notes: null },
+        { id: 2, accountId: 3, snapshotDate: '2026-07-01', totalValue: 8_000, source: 'MANUAL', notes: null },
+      ],
+      isLoading: false,
+      error: null,
+    } as never);
+  });
+
+  it('Wave B CB14: person scope qualifies the meaning with the owner and re-scopes pv via the bar', () => {
+    syncCalcScope(2);
+    render(
+      <MemoryRouter initialEntries={['/calculators?view=p2']}>
+        <CompoundInterestCard cardId="compound-interest" />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('compound-interest-meaning')).toHaveTextContent(
+      "$40,000 in Bob's accounts at",
+    );
+  });
+
+  it('Wave B: household scope keeps the unqualified meaning', () => {
+    render(
+      <MemoryRouter>
+        <CompoundInterestCard cardId="compound-interest" />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('compound-interest-meaning')).toHaveTextContent('$48,000 at');
+    expect(screen.getByTestId('compound-interest-meaning')).not.toHaveTextContent('accounts at');
   });
 });

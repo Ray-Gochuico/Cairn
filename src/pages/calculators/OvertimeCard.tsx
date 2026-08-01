@@ -12,6 +12,7 @@ import { ResultRow } from '@/components/calculators/ResultRow';
 import { SupplementalResultBlock } from '@/components/calculators/SupplementalResultBlock';
 import { EarnerSelect } from '@/components/calculators/EarnerSelect';
 import { useSelectedEarner } from '@/lib/calculators/use-selected-earner';
+import { useCalcScope } from '@/lib/calculators/use-calc-scope';
 import { formatCurrency } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -84,9 +85,17 @@ export function OvertimeCard({ cardId }: OvertimeCardProps = {}) {
     () => eligible.map((p) => p.id).filter((id): id is number => id != null),
     [eligible],
   );
+  const scope = useCalcScope();
+  // Wave B (D-B9): the scoped person is the default WHEN eligible; an
+  // ineligible scoped person degrades to the first eligible earner (CB20
+  // names the substitution in the rail).
+  const scopedEligibleDefault =
+    scope.personId != null && eligibleIds.includes(scope.personId)
+      ? scope.personId
+      : (eligible[0]?.id ?? null);
   const [otEarnerId, setOtEarnerId] = useSelectedEarner(
     cardId ?? 'overtime',
-    eligible[0]?.id ?? null,
+    scopedEligibleDefault,
     eligibleIds,
   );
   const eligiblePerson = eligible.find((p) => p.id === otEarnerId) ?? eligible[0];
@@ -210,6 +219,12 @@ export function OvertimeCard({ cardId }: OvertimeCardProps = {}) {
         onChange={setOtEarnerId}
         label="Whose overtime"
       />
+      {/* CB20: graceful degrade — the scoped person has no OT-shaped pay. */}
+      {scope.personId != null && !eligibleIds.includes(scope.personId) && eligiblePerson && (
+        <p className="text-xs text-muted-foreground">
+          showing {eligiblePerson.name} — {scope.personName} has no hourly or overtime pay
+        </p>
+      )}
       <div className="space-y-1">
         <NumberField
           id="ot-base-rate"

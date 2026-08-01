@@ -16,6 +16,9 @@ interface EarnerSelectProps {
   /** Prepend a "Combined" segment (Paycheck's household view — D16).
    *  Selecting it fires onChange(null). */
   includeCombined?: boolean;
+  /** Label for the Combined segment (default 'Combined'; the page-scope
+   *  control renames it 'Household' — Wave B CB1). */
+  combinedLabel?: string;
 }
 
 /**
@@ -29,6 +32,7 @@ export function EarnerSelect({
   onChange,
   label,
   includeCombined = false,
+  combinedLabel = 'Combined',
 }: EarnerSelectProps) {
   if (persons.length < 2) return null;
   return (
@@ -40,7 +44,7 @@ export function EarnerSelect({
           onClick={() => onChange(null)}
           className={cn(BTN_BASE, selectedId === null ? BTN_ACTIVE : '')}
         >
-          Combined
+          {combinedLabel}
         </button>
       )}
       {persons.map((p, i) => (

@@ -415,7 +415,9 @@ export default function PaycheckCalculator() {
         <div>
           <h1 className="text-2xl font-semibold">Paycheck calculator</h1>
           <p className="text-sm text-muted-foreground">
-            Estimate your take-home pay after taxes and deductions.
+            Estimate your take-home pay after taxes and deductions. This page always models
+            your whole household — for one person&#39;s share, use the Paycheck card&#39;s view
+            toggle on the Calculators page.
           </p>
         </div>
         {resolvedYear && (

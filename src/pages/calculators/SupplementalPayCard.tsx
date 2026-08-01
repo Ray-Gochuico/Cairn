@@ -18,6 +18,7 @@ import { NotModeledDisclosure } from '@/components/calculators/NotModeledDisclos
 import { ResultRow } from '@/components/calculators/ResultRow';
 import { EarnerSelect } from '@/components/calculators/EarnerSelect';
 import { useSelectedEarner } from '@/lib/calculators/use-selected-earner';
+import { useCalcScope } from '@/lib/calculators/use-calc-scope';
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/format';
 import { CONTRIBUTION_LIMITS_2026 } from '@/lib/contribution-limits';
@@ -99,9 +100,11 @@ export function SupplementalPayCard({ cardId }: SupplementalPayCardProps = {}) {
     () => persons.map((p) => p.id).filter((id): id is number => id != null),
     [persons],
   );
+  const scope = useCalcScope();
   const [earnerId, setEarnerId] = useSelectedEarner(
     cardId ?? 'supplemental-pay',
-    defaultEarner?.id ?? null,
+    // Wave B (D-B9): the page scope beats the has-a-bonus heuristic.
+    scope.personId ?? defaultEarner?.id ?? null,
     personIds,
   );
   const earner = persons.find((p) => p.id === earnerId) ?? defaultEarner;
@@ -349,8 +352,8 @@ export function SupplementalPayCard({ cardId }: SupplementalPayCardProps = {}) {
       dirty={active.isOverridden || tax.salaryOverridden}
       meaning={
         <>
-          After an estimated {formatCurrency(rows.total / periods)} tax on a{' '}
-          {formatCurrency(perEvent)} {noun}.
+          After an estimated {formatCurrency(rows.total / periods)} tax on{' '}
+          {scope.isScoped && earner ? `${earner.name}'s` : 'a'} {formatCurrency(perEvent)} {noun}.
         </>
       }
       rail={rail}

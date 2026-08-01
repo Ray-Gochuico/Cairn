@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, within, fireEvent } from '@testing-library/react';
+import { render, screen, within, fireEvent, cleanup } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { useEquityGrantsStore } from '@/stores/equity-grants-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import type { EquityGrant, Person } from '@/types/schema';
 import { EquityValueCard } from '@/pages/calculators/EquityValueCard';
+import { syncCalcScope, __resetCalcScopeForTests } from '@/lib/calculators/calc-view-scope';
 
 // Pin "today" to a stable date so vest-date comparisons in computeEquityValue
 // are fully deterministic. Mirrors the pattern used in CoastFiCard.test.tsx.
@@ -687,5 +688,127 @@ describe('EquityValueCard — real calculator (Wave 18 C11)', () => {
     expect(details).toHaveTextContent(
       /FMV is your stored estimate, not a live market price/,
     );
+  });
+});
+
+describe('EquityValueCard — person scope (Wave B)', () => {
+  // Alice fully vested $50,000 (1,000 sh × $50); Bob fully vested $15,000
+  // (300 sh × $50); both Acme Corp.
+  const aliceGrant = {
+    id: 1,
+    ownerPersonId: 1,
+    name: 'Alice RSU',
+    totalShares: 1000,
+    currentFmv: 50,
+    vestingSchedule: [{ date: '2020-01-15', cumulativePct: 1.0 }],
+  };
+  const bobGrant = {
+    id: 2,
+    ownerPersonId: 2,
+    name: 'Bob RSU',
+    totalShares: 300,
+    currentFmv: 50,
+    vestingSchedule: [{ date: '2020-01-15', cumulativePct: 1.0 }],
+  };
+  const twoPersons = [
+    { id: 1, name: 'Alice' },
+    { id: 2, name: 'Bob' },
+  ];
+
+  function primeGrants(grants: Array<Partial<EquityGrant>>) {
+    primeStores({ persons: twoPersons, grants });
+  }
+
+  const renderScoped = () =>
+    render(
+      <MemoryRouter initialEntries={['/calculators?view=p2']}>
+        <EquityValueCard cardId="equity" />
+      </MemoryRouter>,
+    );
+
+  beforeEach(() => {
+    resetStores();
+    sessionStorage.clear();
+    __resetCalcScopeForTests();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(PINNED_DATE);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('Wave B: person scope filters the headline, next-12-months, table and meaning (CB12) — exactly', () => {
+    primeGrants([aliceGrant, bobGrant]);
+    syncCalcScope(2);
+    renderScoped();
+    expect(screen.getByTestId('equity-value-headline')).toHaveTextContent('$15,000');
+    expect(screen.getByTestId('equity-meaning')).toHaveTextContent(/vested for Bob/);
+    expect(screen.queryByTestId('equity-person-row-1')).not.toBeInTheDocument();
+    expect(screen.getByText("Grants are individually owned — Bob's figure is exact; nothing joint exists to exclude.")).toBeInTheDocument();
+    // The ScopeCaption grammar (grants can't be joint → pure owned-by clause):
+    expect(screen.getByTestId('scope-caption')).toHaveTextContent("Showing Bob's grants: 1 of 2 — 1 owned by Alice not shown.");
+  });
+
+  it('Wave B: scoped person with no grants → FilteredEmptyState, never onboarding copy', () => {
+    // household HAS grants (Alice's), Bob has none:
+    primeGrants([aliceGrant]);
+    syncCalcScope(2);
+    renderScoped();
+    expect(screen.getByText("No grants in Bob's name")).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View household' })).toBeInTheDocument();
+    expect(screen.queryByText(/add equity grants/i)).not.toBeInTheDocument();
+  });
+
+  it("Wave B gate fix (MAJOR): an FMV override typed in one scope never reprices the OTHER scope's company", () => {
+    // Alice owns AcmeCorp (1,000 sh × $50 = $50,000); Bob owns BetaCo
+    // (300 sh × $50 = $15,000). Each scope passes its own single-company gate.
+    primeGrants([
+      { ...aliceGrant, companyName: 'AcmeCorp' },
+      { ...bobGrant, companyName: 'BetaCo' },
+    ]);
+    // Type an FMV override ($80) in ALICE's scope:
+    syncCalcScope(1);
+    render(
+      <MemoryRouter initialEntries={['/calculators?view=p1']}>
+        <EquityValueCard cardId="equity" />
+      </MemoryRouter>,
+    );
+    fireEvent.change(screen.getByLabelText(/fmv per share/i), { target: { value: '80' } });
+    expect(screen.getByTestId('equity-value-headline')).toHaveTextContent('$80,000');
+    cleanup();
+    // Flip to BOB's scope: his BetaCo grants must NOT be repriced by the
+    // AcmeCorp override — headline stays $15,000, field shows his default,
+    // no edited dot (the override renders as not-applied).
+    syncCalcScope(2);
+    render(
+      <MemoryRouter initialEntries={['/calculators?view=p2']}>
+        <EquityValueCard cardId="equity" />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('equity-value-headline')).toHaveTextContent('$15,000');
+    expect((screen.getByLabelText(/fmv per share/i) as HTMLInputElement).value).toBe('50');
+    expect(screen.queryByRole('button', { name: /reset to my data/i })).not.toBeInTheDocument();
+    cleanup();
+    // Back in Alice's scope the override still applies (D-B9 survive rule):
+    syncCalcScope(1);
+    render(
+      <MemoryRouter initialEntries={['/calculators?view=p1']}>
+        <EquityValueCard cardId="equity" />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('equity-value-headline')).toHaveTextContent('$80,000');
+  });
+
+  it('Wave B: household scope is unchanged (no scope sources primed)', () => {
+    // NOTE (plan deviation): this card has always rendered an InlineLink, so a
+    // truly router-free render was never possible — a plain MemoryRouter with
+    // no ?view= proves the same thing: household scope needs no scope priming.
+    primeGrants([aliceGrant, bobGrant]);
+    render(
+      <MemoryRouter>
+        <EquityValueCard />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('equity-value-headline')).toHaveTextContent('$65,000');
   });
 });

@@ -20,6 +20,10 @@ import { InlineChart } from '@/components/charts/InlineChart';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import type { GrantType } from '@/types/enums';
 import { InlineLink } from '@/components/calculators/InlineLink';
+import { useCalcScope } from '@/lib/calculators/use-calc-scope';
+import { partitionHidden } from '@/lib/view-scope';
+import { ScopeCaption } from '@/components/layout/ScopeCaption';
+import { FilteredEmptyState } from '@/components/layout/FilteredEmptyState';
 
 interface EquityValueCardProps {
   cardId?: string;
@@ -55,35 +59,69 @@ export function EquityValueCard({ cardId }: EquityValueCardProps = {}) {
   // useLocalToday.
   const todayISO = useLocalToday();
 
+  const scope = useCalcScope();
+  // Wave B: the ONE exact split — grants are non-nullably owned. Filter first;
+  // every derived figure below (single-company gate, FMV prefill, totals,
+  // forward window) then re-scopes for free.
+  const scopedGrants = useMemo(
+    () =>
+      scope.personId == null
+        ? equityGrants
+        : equityGrants.filter((g) => g.ownerPersonId === scope.personId),
+    [equityGrants, scope.personId],
+  );
+  const grantPartition = useMemo(
+    () => partitionHidden(equityGrants, scopedGrants, (g) => g.ownerPersonId),
+    [equityGrants, scopedGrants],
+  );
+
   // D8: the rail FMV field renders only when ALL grants share one company.
   const singleCompany = useMemo(
-    () => new Set(equityGrants.map((g) => g.companyName)).size === 1,
-    [equityGrants],
+    () => new Set(scopedGrants.map((g) => g.companyName)).size === 1,
+    [scopedGrants],
   );
 
   // Stored FMV prefill: all one company; if grants disagree, use the
   // max-share-count grant's FMV (the dominant position names the company's
   // price; any disagreement is stale data the what-if lets the user reprice).
   const { storedFmv, storedUpdatedAt } = useMemo(() => {
-    if (equityGrants.length === 0) return { storedFmv: 0, storedUpdatedAt: undefined };
-    const dominant = [...equityGrants].sort((a, b) => b.totalShares - a.totalShares)[0];
+    if (scopedGrants.length === 0) return { storedFmv: 0, storedUpdatedAt: undefined };
+    const dominant = [...scopedGrants].sort((a, b) => b.totalShares - a.totalShares)[0];
     return { storedFmv: dominant.currentFmv, storedUpdatedAt: dominant.updatedAt };
-  }, [equityGrants]);
+  }, [scopedGrants]);
 
-  const defaults = useMemo(() => ({ fmvPerShare: storedFmv }), [storedFmv]);
-  const { values, setValue, reset, isOverridden, overriddenKeys } = useCalculatorState(
+  // Wave B gate fix (MAJOR): the single company the CURRENT scope's gate saw.
+  // The stored override is tagged with its originating company and applies
+  // only when it matches — the calc-state:equity silo is scope-global (D-B9:
+  // value overrides survive scope flips), and the per-scope D8 gate would
+  // otherwise let an override typed in one person's scope (company X)
+  // reprice the other person's company-Y grants.
+  const dominantCompany = singleCompany ? (scopedGrants[0]?.companyName ?? null) : null;
+
+  const defaults = useMemo(
+    () => ({ fmvPerShare: storedFmv, fmvCompany: dominantCompany ?? '' }),
+    [storedFmv, dominantCompany],
+  );
+  const { values, setValue, reset, overriddenKeys } = useCalculatorState(
     cardId ?? 'equity',
     defaults,
   );
-  const fmvOverridden = singleCompany && overriddenKeys.has('fmvPerShare');
+  // Applied = overridden AND the stored company tag matches this scope's
+  // single company (W18 D8 restored: an override never reprices a different
+  // company's grants). A mismatched stored override renders as not-applied.
+  const fmvOverridden =
+    singleCompany &&
+    overriddenKeys.has('fmvPerShare') &&
+    overriddenKeys.has('fmvCompany') &&
+    values.fmvCompany === dominantCompany;
 
   // All figures derive from pricedGrants — vested/unvested/income reprice live.
   const pricedGrants = useMemo(
     () =>
       fmvOverridden
-        ? equityGrants.map((g) => ({ ...g, currentFmv: values.fmvPerShare ?? g.currentFmv }))
-        : equityGrants,
-    [fmvOverridden, equityGrants, values.fmvPerShare],
+        ? scopedGrants.map((g) => ({ ...g, currentFmv: values.fmvPerShare ?? g.currentFmv }))
+        : scopedGrants,
+    [fmvOverridden, scopedGrants, values.fmvPerShare],
   );
 
   // Owner name lookup (id is non-nullable on persisted Person rows).
@@ -145,8 +183,8 @@ export function EquityValueCard({ cardId }: EquityValueCardProps = {}) {
   );
 
   const hasIso = useMemo(
-    () => equityGrants.some((g) => isIsoAmtPreference(g.grantType)),
-    [equityGrants],
+    () => scopedGrants.some((g) => isIsoAmtPreference(g.grantType)),
+    [scopedGrants],
   );
 
   if (equityGrants.length === 0) {
@@ -169,20 +207,41 @@ export function EquityValueCard({ cardId }: EquityValueCardProps = {}) {
     );
   }
 
+  // Wave B tier-2 (D-B1): the household HAS grants, the scoped person owns
+  // none — counted declaration + View household, never onboarding copy.
+  if (scope.isScoped && scopedGrants.length === 0) {
+    return (
+      <CalculatorCard
+        cardId={cardId}
+        title="Equity Value"
+        headline="—"
+        meaning={<>No grants in {scope.personName}&#39;s name.</>}
+      >
+        <FilteredEmptyState noun="grants" partition={grantPartition} bare />
+      </CalculatorCard>
+    );
+  }
+
   const rail = (
     <>
-      {isOverridden && singleCompany && <RailReset onClick={reset} />}
+      {fmvOverridden && <RailReset onClick={reset} />}
       {singleCompany ? (
         <div className="space-y-1">
           <NumberField
             id="equity-fmv"
             label="FMV per share (what-if)"
-            value={values.fmvPerShare}
-            onChange={(v) => setValue('fmvPerShare', v ?? 0)}
+            // A stored override from ANOTHER company renders as not-applied:
+            // the field shows this scope's default, no edited dot.
+            value={fmvOverridden ? values.fmvPerShare : storedFmv}
+            onChange={(v) => {
+              setValue('fmvPerShare', v ?? 0);
+              // Tag the override with the company it was typed against.
+              setValue('fmvCompany', dominantCompany ?? '');
+            }}
             suffix="$"
             step="0.5"
             min={0}
-            edited={overriddenKeys.has('fmvPerShare')}
+            edited={fmvOverridden}
           />
           <p className="text-xs text-muted-foreground">
             prefilled from your stored FMV
@@ -205,9 +264,16 @@ export function EquityValueCard({ cardId }: EquityValueCardProps = {}) {
       title="Equity Value"
       dirty={fmvOverridden}
       meaning={
-        <>
-          vested today · {formatCurrency(next12.totalValue)} vesting in the next 12 months
-        </>
+        scope.isScoped ? (
+          <>
+            vested for {scope.personName} · {formatCurrency(next12.totalValue)} vesting in the
+            next 12 months
+          </>
+        ) : (
+          <>
+            vested today · {formatCurrency(next12.totalValue)} vesting in the next 12 months
+          </>
+        )
       }
       rail={rail}
       headline={
@@ -216,10 +282,19 @@ export function EquityValueCard({ cardId }: EquityValueCardProps = {}) {
         </span>
       }
     >
+      {scope.isScoped && (
+        <>
+          <ScopeCaption noun="grants" partition={grantPartition} />
+          <p className="text-xs text-muted-foreground">
+            Grants are individually owned — {scope.personName}&#39;s figure is exact; nothing
+            joint exists to exclude.
+          </p>
+        </>
+      )}
       <div className="flex items-center gap-2 flex-wrap mb-3">
         <p className="text-sm text-muted-foreground">
-          Total vested across {equityGrants.length}{' '}
-          {equityGrants.length === 1 ? 'grant' : 'grants'}.
+          Total vested across {scopedGrants.length}{' '}
+          {scopedGrants.length === 1 ? 'grant' : 'grants'}.
         </p>
         <FreshnessBadge size="sm" />
       </div>

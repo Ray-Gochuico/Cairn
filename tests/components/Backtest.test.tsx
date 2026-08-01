@@ -322,3 +322,84 @@ describe('Backtest page', () => {
     expect(screen.queryByTestId('backtest-summary')).not.toBeInTheDocument();
   });
 });
+
+describe('Backtest page — person scope (Wave B)', () => {
+  const primeTwoPersons = async () => {
+    const { usePersonsStore } = await import('@/stores/persons-store');
+    const { makePerson } = await import('../factories');
+    usePersonsStore.setState({
+      persons: [makePerson({ id: 1, name: 'Alice' }), makePerson({ id: 2, name: 'Bob' })],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+  };
+
+  beforeEach(async () => {
+    sessionStorage.clear();
+    localStorage.clear();
+    __resetScenarioAssumptionsForTests();
+    const { __resetCalcScopeForTests } = await import('@/lib/calculators/calc-view-scope');
+    __resetCalcScopeForTests();
+    const noop = async () => {};
+    useAccountsStore.setState({ accounts: [], isLoading: false, error: null, load: noop } as never);
+    useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null, load: noop } as never);
+    await primeTwoPersons();
+  });
+
+  const renderScoped = () =>
+    render(
+      <MemoryRouter initialEntries={['/calculators/backtest?view=p2']}>
+        <Backtest />
+      </MemoryRouter>,
+    );
+
+  it('Wave B gate fix: the example-substituted scoped seed note never claims the person seeded it', () => {
+    // Empty stores → scoped portfolio $0 → D-B15 seeds the $1M example. The
+    // note must be consistent with the example badge, not CB22's claim.
+    renderScoped();
+    expect(screen.getByTestId('backtest-seed-note')).toHaveTextContent(
+      "Starting portfolio is the $1M example — no snapshots for Bob's accounts; annual spending follows the bar's monthly expenses × 12.",
+    );
+    expect(screen.getByTestId('backtest-seed-note')).not.toHaveTextContent("Seeded from Bob's scenario");
+  });
+
+  it("Wave B CB22: the genuine scoped seed note renders verbatim when Bob's accounts actually seed it", () => {
+    useAccountsStore.setState({
+      accounts: [{ ...mkAccount(1), ownerPersonId: 2 }],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+    useSnapshotsStore.setState({
+      snapshots: [mkSnap(1, 800_000)],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+    renderScoped();
+    expect(screen.getByLabelText('Starting portfolio ($)')).toHaveValue(800_000);
+    expect(screen.getByTestId('backtest-seed-note')).toHaveTextContent(
+      "Seeded from Bob's scenario — the starting portfolio counts Bob's accounts only (joint excluded); annual spending follows the bar's monthly expenses × 12.",
+    );
+  });
+
+  it('Wave B D-B15: person scope with a $0 scoped portfolio seeds the labeled $1M example, never the household projection seed', () => {
+    renderScoped();
+    // The mocked useRealState holds $1.5M — household scope would seed that.
+    expect(screen.getByLabelText('Starting portfolio ($)')).toHaveValue(1_000_000);
+    expect(
+      screen.getByText(/example plan — add Inputs to use your data/i),
+    ).toBeInTheDocument();
+  });
+
+  it('Wave B D-B14: a run under person scope records the person scopeLabel', async () => {
+    vi.useRealTimers();
+    const user = userEvent.setup();
+    renderScoped();
+    await user.click(screen.getByRole('button', { name: /run backtest/i }));
+    await screen.findByTestId('backtest-summary');
+    const parsed = JSON.parse(localStorage.getItem('backtest:last-run:v1')!);
+    expect(parsed.scopeLabel).toBe('Bob');
+  });
+});

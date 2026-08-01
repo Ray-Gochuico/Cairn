@@ -15,6 +15,7 @@ import { ResultRow } from '@/components/calculators/ResultRow';
 import { NotModeledDisclosure } from '@/components/calculators/NotModeledDisclosure';
 import { EarnerSelect } from '@/components/calculators/EarnerSelect';
 import { useSelectedEarner } from '@/lib/calculators/use-selected-earner';
+import { useCalcScope } from '@/lib/calculators/use-calc-scope';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import { InlineLink } from '@/components/calculators/InlineLink';
 import { Label } from '@/components/ui/label';
@@ -46,7 +47,16 @@ export function PaycheckCard({ cardId }: PaycheckCardProps = {}) {
     () => persons.map((p) => p.id).filter((id): id is number => id != null),
     [persons],
   );
-  const [selectedId, setSelectedId] = useSelectedEarner(cardId ?? 'paycheck', null, personIds);
+  const scope = useCalcScope();
+  const [selectedId, setSelectedId] = useSelectedEarner(
+    cardId ?? 'paycheck',
+    // Wave B: the page scope is the broadcast default (D-B9); Household keeps
+    // the D16 Combined default (null). explicitCombined lets a user in person
+    // scope still pick Combined per-card (the 'combined' sentinel).
+    scope.personId ?? null,
+    personIds,
+    { explicitCombined: true },
+  );
 
   // Smart-resolve the tax year from the seeded set: if the current calendar year
   // has rules use it, otherwise fall back to the most-recent seeded year.
@@ -208,6 +218,15 @@ export function PaycheckCard({ cardId }: PaycheckCardProps = {}) {
         cityTax: (annual.cityTax - personWithoutLeg!.city) / div,
       }
     : null;
+  const ownTakeHome = own
+    ? own.gross - own.pretax401k - own.pretaxHealth - own.pretaxDcfsa - own.pretaxHsa -
+      own.federal - own.fica - own.stateTax - own.cityTax
+    : null;
+  const scopedHeadline = scope.isScoped && own != null && selectedPerson != null;
+  // Wave B (D-B3): the person's take-home under page scope — own gross minus
+  // own pretax elections minus the D16 marginal tax rows (with-leg − without-
+  // leg). Derived ONLY from the household-difference method (owner
+  // constraint 4); never a proportional split.
   const perPeriod = {
     gross: annual.gross / div,
     pretax401k: annual.pretax401k / div,
@@ -226,7 +245,12 @@ export function PaycheckCard({ cardId }: PaycheckCardProps = {}) {
       title="Paycheck (estimated take-home)"
       cardId={cardId}
       dirty={salaryOverridden}
-      meaning={<>After taxes and pretax deductions on {formatCurrency(perPeriod.gross)} gross.</>}
+      meaning={
+        <>
+          After taxes and pretax deductions on{' '}
+          {formatCurrency(scopedHeadline ? own!.gross : perPeriod.gross)} gross.
+        </>
+      }
       rail={
         <RailViewGroup>
           {/* D16: Combined | per-person — renders nothing for single-earner
@@ -258,15 +282,21 @@ export function PaycheckCard({ cardId }: PaycheckCardProps = {}) {
         // so a collapsed card is never ambiguous — CalculatorCard hides
         // children when collapsed, not the headline.
         <span data-testid="paycheck-takehome">
-          {formatCurrency(perPeriod.takeHome)}
+          {formatCurrency(scopedHeadline ? ownTakeHome! : perPeriod.takeHome)}
           <span className="text-base font-medium">
             {' '}/ {PAYCHECK_PERIODS.find((p) => p.id === period)?.label.toLowerCase() ?? 'period'}
           </span>
-          {salariedEarnerCount > 1 && (
+          {scopedHeadline ? (
             <span className="block text-xs font-normal text-muted-foreground">
-              {salariedEarnerCount} earners, combined
-              {salariedEarnerCount < persons.length && ' — salary only'}
+              {selectedPerson!.name} — marginal share
             </span>
+          ) : (
+            salariedEarnerCount > 1 && (
+              <span className="block text-xs font-normal text-muted-foreground">
+                {salariedEarnerCount} earners, combined
+                {salariedEarnerCount < persons.length && ' — salary only'}
+              </span>
+            )
           )}
         </span>
       }

@@ -25,6 +25,7 @@ import { StatTile } from '@/components/calculators/StatTile';
 import { useChartDisplayMode } from '@/lib/calculators/use-chart-display-mode';
 import { toRealSeries } from '@/lib/calculators/real-mode';
 import { useScenarioAssumptions } from '@/lib/calculators/use-scenario-assumptions';
+import { useCalcScope } from '@/lib/calculators/use-calc-scope';
 
 interface CompoundInterestCardProps {
   cardId?: string;
@@ -64,6 +65,7 @@ export function CompoundInterestCard({ cardId }: CompoundInterestCardProps = {})
   );
 
   const { engine, editedCount } = useScenarioAssumptions();
+  const scope = useCalcScope();
   // D6: local what-if knobs OR shared ScenarioBar edits raise the tick.
   const scenarioEdited = editedCount > 0;
 
@@ -165,9 +167,12 @@ export function CompoundInterestCard({ cardId }: CompoundInterestCardProps = {})
   const meaning = !series ? (
     <EmptyMeaning>Enter a length in years to see projected growth.</EmptyMeaning>
   ) : (
+    // Wave B (CB14): person scope names the owner — the pv IS the scoped
+    // bar portfolio, so the qualifier sources only rendered values.
     <>
-      {formatCurrency(engine.portfolio)} at {formatPercent(engine.returnRate)} APY for{' '}
-      {Math.max(0, Math.floor(values.years ?? 0))} years.
+      {formatCurrency(engine.portfolio)}
+      {scope.isScoped ? ` in ${scope.personName}'s accounts` : ''} at{' '}
+      {formatPercent(engine.returnRate)} APY for {Math.max(0, Math.floor(values.years ?? 0))} years.
     </>
   );
 

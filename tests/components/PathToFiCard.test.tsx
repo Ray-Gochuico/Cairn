@@ -26,6 +26,8 @@ import { PathToFiCard } from '@/pages/calculators/PathToFiCard';
 import { ScenarioBar } from '@/pages/calculators/ScenarioBar';
 import { __resetScenarioAssumptionsForTests } from '@/lib/calculators/use-scenario-assumptions';
 import { SCENARIO_STORAGE_KEY } from '@/lib/calculators/scenario-assumptions';
+import { syncCalcScope, __resetCalcScopeForTests } from '@/lib/calculators/calc-view-scope';
+import { cleanup } from '@testing-library/react';
 import type { Account, GrowthScenario, Person } from '@/types/schema';
 
 const PINNED_DATE = new Date('2026-05-14T12:00:00Z');
@@ -639,5 +641,98 @@ describe('PathToFiCard waymark meaning + dirty (Wave 17)', () => {
     await user.type(screen.getByLabelText(/years to retirement/i), '12');
     expect(screen.getByTestId('path-to-fi-scenario-tick')).toBeInTheDocument();
     expect(screen.getByText(/^Scenario:/)).toBeInTheDocument();
+  });
+});
+
+describe('PathToFiCard — person scope (Wave B)', () => {
+  // Alice retires in 10y (target 46 at age 36), Bob in 30y (target 66) —
+  // household default 10, Bob scope 30. Bob owns account 2 ($40k); account 3
+  // is joint ($8k); Alice owns account 1 ($100k). Contributions: $1,200 Bob,
+  // $600 unattributed, $500 Alice.
+  function primeScoped() {
+    primeStores({
+      persons: [
+        { ...basePerson, id: 1, name: 'Alice', targetRetirementAge: 46 } as Person,
+        { ...basePerson, id: 2, name: 'Bob', targetRetirementAge: 66 } as Person,
+      ],
+      snapshotValues: [
+        { accountId: 1, snapshotDate: '2026-04-01', totalValue: 100_000 },
+        { accountId: 2, snapshotDate: '2026-04-01', totalValue: 40_000 },
+        { accountId: 3, snapshotDate: '2026-04-01', totalValue: 8_000 },
+      ],
+    });
+    useAccountsStore.setState({
+      accounts: [
+        { ...mkAccount(1), ownerPersonId: 1 },
+        { ...mkAccount(2), ownerPersonId: 2 },
+        mkAccount(3),
+      ],
+      isLoading: false,
+      error: null,
+    });
+    useContributionsStore.setState({
+      contributions: [
+        { id: 1, accountId: 2, personId: 2, date: '2026-04-15', amount: 1_200, source: ContributionSource.MANUAL },
+        { id: 2, accountId: 3, personId: null, date: '2026-04-20', amount: 600, source: ContributionSource.MANUAL },
+        { id: 3, accountId: 1, personId: 1, date: '2026-04-25', amount: 500, source: ContributionSource.MANUAL },
+      ],
+      isLoading: false,
+      error: null,
+    } as never);
+  }
+
+  const renderScoped = () =>
+    render(
+      <MemoryRouter initialEntries={['/calculators?view=p2']}>
+        <PathToFiCard cardId="path-to-fi" />
+      </MemoryRouter>,
+    );
+
+  beforeEach(() => {
+    resetStores();
+    sessionStorage.clear();
+    __resetScenarioAssumptionsForTests();
+    __resetCalcScopeForTests();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(PINNED_DATE);
+    primeScoped();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('Wave B CB15: the scoped meaning names the person in both modes', () => {
+    syncCalcScope(2);
+    renderScoped();
+    expect(screen.getByTestId('path-to-fi-meaning')).toHaveTextContent(/to Bob's FI target/);
+  });
+
+  it('Wave B CB16: the exclusions caption declares joint + unattributed amounts, and the even-split clause drops once expenses are edited', () => {
+    syncCalcScope(2);
+    renderScoped(); // open card
+    const caption = screen.getByTestId('path-to-fi-scope-exclusions');
+    expect(caption).toHaveTextContent(
+      "Bob's solve counts only Bob's accounts and contributions — joint accounts ($8,000) and unattributed contributions ($600/yr) aren't counted. Expenses default to half the household baseline.",
+    );
+    // Edit the expenses field in the P2 silo before a fresh render — the
+    // even-split clause must drop (the default no longer applies):
+    cleanup();
+    sessionStorage.setItem('calc-scenario:p2', JSON.stringify({ monthlyExpenses: 2500 }));
+    __resetScenarioAssumptionsForTests();
+    renderScoped();
+    expect(screen.getByTestId('path-to-fi-scope-exclusions')).not.toHaveTextContent('Expenses default');
+  });
+
+  it('Wave B: the years-to-retirement rail default follows the SCOPED person, not the household min', () => {
+    syncCalcScope(2);
+    renderScoped();
+    expect(screen.getByLabelText('Years to retirement')).toHaveValue(30);
+  });
+
+  it('Wave B: household scope keeps the shortest-horizon default and the unscoped meaning', () => {
+    renderCard('path-to-fi');
+    expect(screen.getByLabelText('Years to retirement')).toHaveValue(10);
+    expect(screen.getByTestId('path-to-fi-meaning')).toHaveTextContent(/to your FI target/);
+    expect(screen.queryByTestId('path-to-fi-scope-exclusions')).not.toBeInTheDocument();
   });
 });

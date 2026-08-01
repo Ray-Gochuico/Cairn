@@ -27,6 +27,8 @@ import { CalculatorShellProvider, type CalculatorShellApi } from './calculator-s
 import { InlineLink } from '@/components/calculators/InlineLink';
 import { NumberField } from '@/components/calculators/NumberField';
 import { useNextDollarStore } from '@/lib/calculators/next-dollar-store';
+import { useCalcScope, useCalcScopeUrlSync } from '@/lib/calculators/use-calc-scope';
+import { useTransactionsStore } from '@/stores/transactions-store';
 
 const STALE_BANNER_STORAGE_KEY = 'stale-tax-year-banner-dismissed';
 
@@ -70,6 +72,7 @@ function withCardHidden(
 function NextDollarField() {
   const amount = useNextDollarStore((s) => s.amount);
   const setAmount = useNextDollarStore((s) => s.setAmount);
+  const scope = useCalcScope();
   return (
     <div className="flex flex-wrap items-end gap-3">
       <div className="w-40">
@@ -87,6 +90,12 @@ function NextDollarField() {
         One number, two answers: what it does against your debt, and where it goes in your
         portfolio.
       </p>
+      {/* CB8 (D-B8): the shared next-dollar stays household-level, labeled. */}
+      {scope.isScoped && (
+        <p className="pb-1 text-xs text-muted-foreground">
+          Household figure — not split per person.
+        </p>
+      )}
     </div>
   );
 }
@@ -204,6 +213,8 @@ function SectionCustomize({
 }
 
 export default function CalculatorsLayout() {
+  // Wave B (D-B10): mirror ?view= into the router-free calc-scope store.
+  useCalcScopeUrlSync();
   const persons = usePersonsStore((s) => s.persons);
 
   // Cold-boot hydration. The cards READ persons/dependents/portfolio stores
@@ -223,6 +234,10 @@ export default function CalculatorsLayout() {
     void useEquityGrantsStore.getState().load();
     void useSettingsStore.getState().load();
     void useHouseholdStore.getState().load();
+    // Wave B (CB5): the bar's person-scope expense hint reads transactions.
+    // NOT in the load gate — the hint is progressive enhancement, never a
+    // boot blocker.
+    void useTransactionsStore.getState().load();
   }, []);
 
   // W10 T1: keep the skeleton up until every hydrated store settles, so no

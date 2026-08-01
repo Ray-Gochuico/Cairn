@@ -124,6 +124,19 @@ describe('ViewFilter', () => {
     expect(screen.getByRole('combobox', { name: 'Filter view by person' })).toBeInTheDocument();
   });
 
+  it('Wave B D-B12: hides the header copy on exactly /calculators (the bar owns the control there)', () => {
+    renderViewFilterAt('/calculators');
+    expect(screen.queryByRole('combobox', { name: 'Filter view by person' })).not.toBeInTheDocument();
+  });
+  it("Wave B D-B12: still renders on /calculators/backtest (it IS that page's scope control)", () => {
+    renderViewFilterAt('/calculators/backtest');
+    expect(screen.getByRole('combobox', { name: 'Filter view by person' })).toBeInTheDocument();
+  });
+  it('Wave B D-B12: hides on /calculators/paycheck (household-only page)', () => {
+    renderViewFilterAt('/calculators/paycheck');
+    expect(screen.queryByRole('combobox', { name: 'Filter view by person' })).not.toBeInTheDocument();
+  });
+
   it('changing the select updates the URL search param', () => {
     usePersonsStore.setState({ persons: TWO_PERSONS, isLoading: false, error: null });
 

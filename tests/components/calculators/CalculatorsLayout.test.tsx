@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import CalculatorsLayout from '@/pages/calculators/CalculatorsLayout';
 import { usePersonsStore } from '@/stores/persons-store';
+import { getCalcScopePersonId, __resetCalcScopeForTests } from '@/lib/calculators/calc-view-scope';
+import { makePerson } from '../../factories';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useContributionsStore } from '@/stores/contributions-store';
@@ -135,6 +137,40 @@ describe('CalculatorsLayout', () => {
       </MemoryRouter>,
     );
     expect(await screen.findByRole('heading', { name: /Contribution allocator/i })).toBeInTheDocument();
+  });
+
+  it('Wave B: the layout bridges ?view= into the calc-scope mirror', async () => {
+    __resetCalcScopeForTests();
+    primeSettings();
+    usePersonsStore.setState({
+      persons: [makePerson({ id: 1, name: 'Alice' }), makePerson({ id: 2, name: 'Bob' })],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+    render(
+      <MemoryRouter initialEntries={['/calculators?view=p2']}>
+        <CalculatorsLayout />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(getCalcScopePersonId()).toBe(2));
+  });
+
+  it('Wave B CB8: the next-dollar section note appears only in person scope', async () => {
+    __resetCalcScopeForTests();
+    primeSettings();
+    usePersonsStore.setState({
+      persons: [makePerson({ id: 1, name: 'Alice' }), makePerson({ id: 2, name: 'Bob' })],
+      isLoading: false,
+      error: null,
+      load: async () => {},
+    } as never);
+    render(
+      <MemoryRouter initialEntries={['/calculators?view=p2']}>
+        <CalculatorsLayout />
+      </MemoryRouter>,
+    );
+    await screen.findByText('Household figure — not split per person.');
   });
 
   it('hides a card whose id is marked hidden in settings.calculatorCardLayout (no localStorage read)', async () => {

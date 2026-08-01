@@ -7,6 +7,9 @@ import {
   pctFromFraction,
   readSharedOverrides,
   writeSharedOverrides,
+  scenarioStorageKeyFor,
+  readOverridesFor,
+  writeOverridesFor,
   type ScenarioAssumptions,
 } from '@/lib/calculators/scenario-assumptions';
 import { effectiveSwr } from '@/lib/scenarios/effective-swr';
@@ -276,5 +279,77 @@ describe('one-shot legacy-silo migration (D7)', () => {
   it('drops non-finite legacy values instead of importing them', () => {
     sessionStorage.setItem('calc-state:financial-independence', JSON.stringify({ currentPortfolio: 'lots', withdrawalRatePct: 4.2 }));
     expect(readSharedOverrides()).toEqual({ swrPct: 4.2 });
+  });
+});
+
+describe('Wave B: per-scope silos', () => {
+  it('scenarioStorageKeyFor: household = the untouched W16 key; person = a sibling silo', () => {
+    expect(scenarioStorageKeyFor(null)).toBe('calc-scenario:shared');
+    expect(scenarioStorageKeyFor(7)).toBe('calc-scenario:p7');
+  });
+  it('read/write round-trips a person silo with the same sanitize + empty-removes-key contract', () => {
+    writeOverridesFor(7, { portfolio: 500 });
+    expect(JSON.parse(sessionStorage.getItem('calc-scenario:p7')!)).toEqual({ portfolio: 500 });
+    sessionStorage.setItem('calc-scenario:p7', JSON.stringify({ portfolio: 1, junk: 'x', returnPct: 'NaN' }));
+    expect(readOverridesFor(7)).toEqual({ portfolio: 1 });
+    writeOverridesFor(7, {});
+    expect(sessionStorage.getItem('calc-scenario:p7')).toBeNull();
+  });
+  it('OWNER CONSTRAINT 2: the one-shot legacy migration never runs for a person silo', () => {
+    sessionStorage.setItem('calc-state:financial-independence', JSON.stringify({ currentPortfolio: 123 }));
+    expect(readOverridesFor(7)).toEqual({});
+    // The legacy silo is untouched (migration is the SHARED key's business):
+    expect(sessionStorage.getItem('calc-state:financial-independence')).not.toBeNull();
+  });
+});
+
+describe('Wave B: scoped buildScenarioDefaults', () => {
+  // Fixture shape: p1 owns account 1 ($100k), p2 owns account 2 ($40k),
+  // account 3 is joint/null ($8k); contributions: $1,200 for p2 (in-window),
+  // $600 unattributed (null), $500 for p1; baseline $6,000/mo.
+  const household = mkHousehold({ monthlyExpenseBaseline: 6000 });
+  const accounts = [
+    { ...mkAccount(1), ownerPersonId: 1 },
+    { ...mkAccount(2), ownerPersonId: 2 },
+    mkAccount(3), // joint (null owner)
+  ] as Account[];
+  const snapshots = [
+    { accountId: 1, snapshotDate: '2026-07-01', totalValue: 100_000 },
+    { accountId: 2, snapshotDate: '2026-07-01', totalValue: 40_000 },
+    { accountId: 3, snapshotDate: '2026-07-01', totalValue: 8_000 },
+  ];
+  const contributions = [
+    { accountId: 2, date: '2026-06-15', amount: 1_200, personId: 2 },
+    { accountId: 3, date: '2026-06-20', amount: 600, personId: null },
+    { accountId: 1, date: '2026-06-25', amount: 500, personId: 1 },
+  ];
+
+  it('person scope filters portfolio + contributions and halves expenses, with CB2-CB4 provenance', () => {
+    const { defaults, provenance, scopeExclusions } = buildScenarioDefaults({
+      household, settings: null, accounts, snapshots, contributions,
+      todayIso: '2026-07-30',
+      scope: { personId: 2, personName: 'Bob' },
+    });
+    expect(defaults.portfolio).toBe(40000);
+    expect(defaults.annualContribution).toBe(1200);
+    expect(defaults.monthlyExpenses).toBe(3000);
+    expect(provenance.portfolio).toBe("from Bob's account snapshots — joint accounts not included");
+    expect(provenance.annualContribution).toBe("Bob's contributions, last 12 months");
+    expect(provenance.monthlyExpenses).toBe('half your household baseline — even split');
+    expect(scopeExclusions).toEqual({ jointPortfolio: 8000, unattributedContribution: 600 });
+  });
+  it('household scope is byte-identical to pre-Wave-B output (no scope input)', () => {
+    const before = buildScenarioDefaults({ household, settings: null, accounts, snapshots, contributions, todayIso: '2026-07-30' });
+    expect(before.defaults.portfolio).toBe(148000);
+    expect(before.provenance.portfolio).toBe('from your account snapshots');
+    expect(before.scopeExclusions).toBeNull();
+  });
+  it('empty scoped states name the person (CB2/CB3 zero variants)', () => {
+    const { provenance } = buildScenarioDefaults({
+      household, settings: null, accounts: [], snapshots: [], contributions: [],
+      todayIso: '2026-07-30', scope: { personId: 2, personName: 'Bob' },
+    });
+    expect(provenance.portfolio).toBe("no snapshots for Bob's accounts");
+    expect(provenance.annualContribution).toBe('no contributions attributed to Bob in the last 12 months');
   });
 });
