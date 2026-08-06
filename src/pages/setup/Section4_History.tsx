@@ -21,6 +21,7 @@ import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 import TransactionsSectionImporter from '@/components/setup/TransactionsSectionImporter';
 import EntityCard from './EntityCard';
 import SectionEntryGate from './SectionEntryGate';
+import { TabLoadingSkeleton } from '@/components/inputs/TabLoadingSkeleton';
 import GoalForm from './forms/GoalForm';
 import ValueHistorySection from '@/components/inputs/ValueHistorySection';
 import { useAccountsStore } from '@/stores/accounts-store';
@@ -48,9 +49,13 @@ type ActiveDialog =
 interface Props {
   status: SectionStatus;
   onSetStatus: (s: SectionStatus) => void;
+  /** Wave C (C2): store-derived truth from SectionLayout — ≥1 saved entity. */
+  hasData: boolean;
+  /** Wave C (C2): SectionLayout's latched load gate — gate copy may render. */
+  settled: boolean;
 }
 
-export default function Section4_History({ status, onSetStatus }: Props) {
+export default function Section4_History({ status, onSetStatus, hasData, settled }: Props) {
   const accounts = useAccountsStore((s) => s.accounts);
   const loadAccounts = useAccountsStore((s) => s.load);
   const snapshots = useSnapshotsStore((s) => s.snapshots);
@@ -107,7 +112,12 @@ export default function Section4_History({ status, onSetStatus }: Props) {
       ? 'Add an account first — imports match rows to existing accounts by name.'
       : undefined;
 
-  if (status === 'pending' || status === 'skipped') {
+  // Wave C (C2, owner constraint 1): the entry gate is an EMPTY STATE — it
+  // renders only when the section is truly empty (DC3: including skipped-
+  // with-data), and never before the stores settle (the W10 F6 false-empty
+  // class). Saved data always renders the entity cards.
+  if (!hasData && (status === 'pending' || status === 'skipped')) {
+    if (!settled) return <TabLoadingSkeleton />;
     return (
       <SectionEntryGate
         title={meta.introTitle}

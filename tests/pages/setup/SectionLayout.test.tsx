@@ -26,14 +26,56 @@ import {
   shouldRedirectToSetup,
 } from '@/lib/setup-dismissal';
 import { markTailorDone } from '@/lib/onboarding-state';
+import { usePersonsStore } from '@/stores/persons-store';
+import { useDependentsStore } from '@/stores/dependents-store';
 import { useAccountsStore } from '@/stores/accounts-store';
+import { useHoldingsStore } from '@/stores/holdings-store';
+import { usePropertiesStore } from '@/stores/properties-store';
+import { useVehiclesStore } from '@/stores/vehicles-store';
+import { useHousingPaymentsStore } from '@/stores/housing-payments-store';
+import { useVehicleLeasesStore } from '@/stores/vehicle-leases-store';
+import { useEquityGrantsStore } from '@/stores/equity-grants-store';
+import { useLoansStore } from '@/stores/loans-store';
+import { useSnapshotsStore } from '@/stores/snapshots-store';
+import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
+import { useContributionsStore } from '@/stores/contributions-store';
+import { useTransactionsStore } from '@/stores/transactions-store';
+import { useGoalsStore } from '@/stores/goals-store';
+import { useHouseholdStore } from '@/stores/household-store';
+import { useCategoriesStore } from '@/stores/categories-store';
+import { makePerson } from '../../factories';
+
+/** Wave C (C1): SectionLayout now hydrates all 15 entity stores behind a
+ *  latched useLoadGate — prime each with settled, empty, noop-load state so
+ *  every test starts from "loaded and empty" (and no real load hits jsdom). */
+function primeStores() {
+  const base = { isLoading: false, error: null, load: async () => {} };
+  usePersonsStore.setState({ persons: [], ...base } as never);
+  useDependentsStore.setState({ dependents: [], ...base } as never);
+  useAccountsStore.setState({ accounts: [], ...base } as never);
+  useHoldingsStore.setState({ holdings: [], ...base } as never);
+  usePropertiesStore.setState({ properties: [], ...base } as never);
+  useVehiclesStore.setState({ vehicles: [], ...base } as never);
+  useHousingPaymentsStore.setState({ housingPayments: [], ...base } as never);
+  useVehicleLeasesStore.setState({ vehicleLeases: [], ...base } as never);
+  useEquityGrantsStore.setState({ equityGrants: [], ...base } as never);
+  useLoansStore.setState({ loans: [], ...base } as never);
+  useSnapshotsStore.setState({ snapshots: [], ...base } as never);
+  useAssetValueSnapshotsStore.setState({ assetValueSnapshots: [], ...base } as never);
+  useContributionsStore.setState({ contributions: [], ...base } as never);
+  useTransactionsStore.setState({ transactions: [], ...base } as never);
+  useGoalsStore.setState({ goals: [], ...base } as never);
+  // The section components read these two beyond the 15 gate stores.
+  useHouseholdStore.setState({ household: null, ...base } as never);
+  useCategoriesStore.setState({ categories: [], ...base } as never);
+}
 
 describe('SectionLayout', () => {
   beforeEach(() => {
     localStorage.clear();
     // Reset the data stores SectionLayout reads to derive the done-vs-visited
     // badge (H3) so seeded entities don't leak across tests.
-    useAccountsStore.setState({ accounts: [] } as never);
+    primeStores();
   });
 
   it('renders a top progress bar with all 4 sections', () => {
@@ -356,5 +398,54 @@ describe('SectionLayout', () => {
     renderAtSection4();
     await user.click(screen.getByRole('button', { name: /finish setup/i }));
     expect(screen.getByTestId('pathname').textContent).toBe('/');
+  });
+
+  it('Wave C C2: a pending section with saved data renders entity cards, not the gate', async () => {
+    localStorage.clear(); // no progress key — the post-Finish wiped state
+    usePersonsStore.setState({ persons: [makePerson({ id: 1, name: 'Demo Investor' })] } as never);
+    render(
+      <MemoryRouter>
+        <SectionLayout />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByTestId('person-chips')).toHaveTextContent('Demo Investor');
+    expect(screen.queryByRole('button', { name: 'Start this section' })).not.toBeInTheDocument();
+  });
+
+  it('Wave C C3: pending-with-data gets the neutral marker and becomes clickable — never ✓ done', async () => {
+    localStorage.clear();
+    useAccountsStore.setState({ accounts: [{ id: 1, name: 'Brokerage' }] } as never);
+    render(
+      <MemoryRouter>
+        <SectionLayout />
+      </MemoryRouter>,
+    );
+    const s2 = await screen.findByRole('button', { name: /Section 2/ });
+    expect(s2).toHaveTextContent('has saved data');
+    expect(s2).not.toHaveTextContent('✓ done');
+    expect(s2).toBeEnabled();
+  });
+
+  it('Wave C C2/G6: an explicit initialSection promotes pending → in_progress (deep-link implies start)', async () => {
+    localStorage.clear();
+    render(
+      <MemoryRouter>
+        <SectionLayout initialSection={4} />
+      </MemoryRouter>,
+    );
+    // Section 4 is empty AND pending, but the deep-link declared intent —
+    // the import cards render, not the gate.
+    expect(await screen.findByText('Account snapshots')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Start this section' })).not.toBeInTheDocument();
+  });
+
+  it('Wave C C2 (owner constraint 1): a truly empty pending section still gets the gate — after settle', async () => {
+    localStorage.clear();
+    render(
+      <MemoryRouter>
+        <SectionLayout />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByRole('button', { name: 'Start this section' })).toBeInTheDocument();
   });
 });

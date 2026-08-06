@@ -9,6 +9,7 @@ import {
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import EntityCard from './EntityCard';
 import SectionEntryGate from './SectionEntryGate';
+import { TabLoadingSkeleton } from '@/components/inputs/TabLoadingSkeleton';
 import HouseholdForm from './forms/HouseholdForm';
 import PersonForm from './forms/PersonForm';
 import PersonFormImpl from '@/components/forms/PersonForm';
@@ -25,9 +26,13 @@ type ActiveDialog = null | 'household' | 'persons' | 'employment' | 'dependents'
 interface Props {
   status: SectionStatus;
   onSetStatus: (s: SectionStatus) => void;
+  /** Wave C (C2): store-derived truth from SectionLayout — ≥1 saved entity. */
+  hasData: boolean;
+  /** Wave C (C2): SectionLayout's latched load gate — gate copy may render. */
+  settled: boolean;
 }
 
-export default function Section1_WhoYouAre({ status, onSetStatus }: Props) {
+export default function Section1_WhoYouAre({ status, onSetStatus, hasData, settled }: Props) {
   const household = useHouseholdStore((s) => s.household);
   const loadHousehold = useHouseholdStore((s) => s.load);
   const persons = usePersonsStore((s) => s.persons);
@@ -52,7 +57,12 @@ export default function Section1_WhoYouAre({ status, onSetStatus }: Props) {
 
   const meta = SECTIONS[0];
 
-  if (status === 'pending' || status === 'skipped') {
+  // Wave C (C2, owner constraint 1): the entry gate is an EMPTY STATE — it
+  // renders only when the section is truly empty (DC3: including skipped-
+  // with-data), and never before the stores settle (the W10 F6 false-empty
+  // class). Saved data always renders the entity cards.
+  if (!hasData && (status === 'pending' || status === 'skipped')) {
+    if (!settled) return <TabLoadingSkeleton />;
     return (
       <SectionEntryGate
         title={meta.introTitle}

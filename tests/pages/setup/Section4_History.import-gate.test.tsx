@@ -54,7 +54,7 @@ function seedStores(accountCount: number) {
 function renderSection() {
   return render(
     <MemoryRouter>
-      <Section4_History status="in_progress" onSetStatus={() => {}} />
+      <Section4_History hasData={false} settled status="in_progress" onSetStatus={() => {}} />
     </MemoryRouter>,
   );
 }

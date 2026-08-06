@@ -86,7 +86,7 @@ function renderWithRouter(initialEntries: string[] = ['/setup']) {
         <Route
           path="/setup"
           element={
-            <Section4_History status="in_progress" onSetStatus={() => {}} />
+            <Section4_History hasData={false} settled status="in_progress" onSetStatus={() => {}} />
           }
         />
         <Route path="/spending" element={<div>Spending page</div>} />
@@ -103,7 +103,7 @@ describe('Section4_History', () => {
   it('renders the entry gate when status is pending', () => {
     render(
       <MemoryRouter>
-        <Section4_History status="pending" onSetStatus={() => {}} />
+        <Section4_History hasData={false} settled status="pending" onSetStatus={() => {}} />
       </MemoryRouter>,
     );
     expect(
@@ -147,7 +147,7 @@ describe('Section4_History', () => {
     const onSetStatus = vi.fn();
     render(
       <MemoryRouter>
-        <Section4_History status="pending" onSetStatus={onSetStatus} />
+        <Section4_History hasData={false} settled status="pending" onSetStatus={onSetStatus} />
       </MemoryRouter>,
     );
     await user.click(screen.getByRole('button', { name: /skip/i }));
@@ -221,5 +221,19 @@ describe('Section4_History', () => {
       expect(btn).toBeDisabled();
       expect(within(card).queryByText(/coming soon/i)).toBeNull();
     });
+  });
+
+  it('Wave C C2: saved history renders the cards even when status is pending', () => {
+    useGoalsStore.setState((s: any) => ({
+      ...s,
+      goals: [{ id: 1, name: 'House fund' }],
+    }));
+    render(
+      <MemoryRouter>
+        <Section4_History hasData settled status="pending" onSetStatus={() => {}} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Account snapshots')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Start this section' })).not.toBeInTheDocument();
   });
 });

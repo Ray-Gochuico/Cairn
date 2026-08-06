@@ -72,7 +72,7 @@ describe('Section2_WhatYouOwn', () => {
 
   it('renders the entry gate when status is pending', () => {
     render(
-      <Section2_WhatYouOwn status="pending" onSetStatus={() => {}} />,
+      <Section2_WhatYouOwn hasData={false} settled status="pending" onSetStatus={() => {}} />,
     );
     expect(screen.getByText(/Your assets/i)).toBeInTheDocument();
     expect(
@@ -82,7 +82,7 @@ describe('Section2_WhatYouOwn', () => {
 
   it('renders the seven cards when status is in_progress', () => {
     render(
-      <Section2_WhatYouOwn status="in_progress" onSetStatus={() => {}} />,
+      <Section2_WhatYouOwn hasData={false} settled status="in_progress" onSetStatus={() => {}} />,
     );
     expect(screen.getByText(/^Accounts$/)).toBeInTheDocument();
     expect(screen.getByText(/^Holdings$/)).toBeInTheDocument();
@@ -97,7 +97,7 @@ describe('Section2_WhatYouOwn', () => {
     const user = userEvent.setup();
     const onSetStatus = vi.fn();
     render(
-      <Section2_WhatYouOwn status="pending" onSetStatus={onSetStatus} />,
+      <Section2_WhatYouOwn hasData={false} settled status="pending" onSetStatus={onSetStatus} />,
     );
     await user.click(
       screen.getByRole('button', { name: /start this section/i }),
@@ -109,7 +109,7 @@ describe('Section2_WhatYouOwn', () => {
     const user = userEvent.setup();
     const onSetStatus = vi.fn();
     render(
-      <Section2_WhatYouOwn status="pending" onSetStatus={onSetStatus} />,
+      <Section2_WhatYouOwn hasData={false} settled status="pending" onSetStatus={onSetStatus} />,
     );
     await user.click(screen.getByRole('button', { name: /skip/i }));
     expect(onSetStatus).toHaveBeenCalledWith('skipped');
@@ -158,7 +158,7 @@ describe('Section2_WhatYouOwn', () => {
       } as any);
       render(
         <MemoryRouter>
-          <Section2_WhatYouOwn status="in_progress" onSetStatus={() => {}} />
+          <Section2_WhatYouOwn hasData={false} settled status="in_progress" onSetStatus={() => {}} />
         </MemoryRouter>,
       );
       const chipsOf = (testId: string) => screen.getByTestId(testId);
@@ -177,7 +177,7 @@ describe('Section2_WhatYouOwn', () => {
     it('renders no chip containers when nothing has been added', () => {
       render(
         <MemoryRouter>
-          <Section2_WhatYouOwn status="in_progress" onSetStatus={() => {}} />
+          <Section2_WhatYouOwn hasData={false} settled status="in_progress" onSetStatus={() => {}} />
         </MemoryRouter>,
       );
       expect(screen.queryByTestId('accounts-chips')).toBeNull();
@@ -195,7 +195,7 @@ describe('Section2_WhatYouOwn', () => {
     function renderSection() {
       render(
         <MemoryRouter>
-          <Section2_WhatYouOwn status="in_progress" onSetStatus={() => {}} />
+          <Section2_WhatYouOwn hasData={false} settled status="in_progress" onSetStatus={() => {}} />
         </MemoryRouter>,
       );
     }
@@ -238,5 +238,16 @@ describe('Section2_WhatYouOwn', () => {
       const btn = within(card).getByRole('button', { name: /^import csv$/i });
       expect(btn).not.toBeDisabled();
     });
+  });
+
+  it('Wave C C2: saved accounts render the cards even when status is pending', () => {
+    useAccountsStore.setState({ accounts: [{ id: 1, name: 'Brokerage' }] } as never);
+    render(
+      <MemoryRouter>
+        <Section2_WhatYouOwn hasData settled status="pending" onSetStatus={() => {}} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Brokerage')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Start this section' })).not.toBeInTheDocument();
   });
 });

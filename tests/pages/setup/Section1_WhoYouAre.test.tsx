@@ -50,7 +50,7 @@ describe('Section1_WhoYouAre', () => {
 
   it('renders the entry gate when status is pending', () => {
     render(
-      <Section1_WhoYouAre status="pending" onSetStatus={() => {}} />,
+      <Section1_WhoYouAre hasData={false} settled status="pending" onSetStatus={() => {}} />,
     );
     expect(
       screen.getByText(/Tell us about your household/i),
@@ -62,7 +62,7 @@ describe('Section1_WhoYouAre', () => {
 
   it('renders the four cards when status is in_progress', () => {
     render(
-      <Section1_WhoYouAre status="in_progress" onSetStatus={() => {}} />,
+      <Section1_WhoYouAre hasData={false} settled status="in_progress" onSetStatus={() => {}} />,
     );
     expect(screen.getByText(/^Household$/)).toBeInTheDocument();
     expect(screen.getByText(/^Persons$/)).toBeInTheDocument();
@@ -74,7 +74,7 @@ describe('Section1_WhoYouAre', () => {
     const user = userEvent.setup();
     const onSetStatus = vi.fn();
     render(
-      <Section1_WhoYouAre status="pending" onSetStatus={onSetStatus} />,
+      <Section1_WhoYouAre hasData={false} settled status="pending" onSetStatus={onSetStatus} />,
     );
     await user.click(
       screen.getByRole('button', { name: /start this section/i }),
@@ -86,7 +86,7 @@ describe('Section1_WhoYouAre', () => {
     const user = userEvent.setup();
     const onSetStatus = vi.fn();
     render(
-      <Section1_WhoYouAre status="pending" onSetStatus={onSetStatus} />,
+      <Section1_WhoYouAre hasData={false} settled status="pending" onSetStatus={onSetStatus} />,
     );
     await user.click(screen.getByRole('button', { name: /skip/i }));
     expect(onSetStatus).toHaveBeenCalledWith('skipped');
@@ -94,7 +94,7 @@ describe('Section1_WhoYouAre', () => {
 
   it('shows the "wasSkipped" hint when status is skipped', () => {
     render(
-      <Section1_WhoYouAre status="skipped" onSetStatus={() => {}} />,
+      <Section1_WhoYouAre hasData={false} settled status="skipped" onSetStatus={() => {}} />,
     );
     expect(
       screen.getByText(/you skipped this section earlier/i),
@@ -117,7 +117,7 @@ describe('Section1_WhoYouAre', () => {
       update: async () => {},
       remove: async () => {},
     } as never);
-    render(<Section1_WhoYouAre status="in_progress" onSetStatus={() => {}} />);
+    render(<Section1_WhoYouAre hasData={false} settled status="in_progress" onSetStatus={() => {}} />);
     const employmentHeading = screen.getByText(/^Employment$/);
     const employmentCard = employmentHeading.closest('div[class*="rounded"]');
     expect(employmentCard).not.toBeNull();
@@ -136,7 +136,7 @@ describe('Section1_WhoYouAre', () => {
       isLoading: false, error: null, load: async () => {}, create: async () => 1,
       update: async () => {}, remove: async () => {},
     } as never);
-    render(<Section1_WhoYouAre status="in_progress" onSetStatus={() => {}} />);
+    render(<Section1_WhoYouAre hasData={false} settled status="in_progress" onSetStatus={() => {}} />);
     const chips = screen.getByTestId('person-chips');
     expect(within(chips).getByText('Alice')).toBeInTheDocument();
     expect(within(chips).getByText('Bob')).toBeInTheDocument();
@@ -151,7 +151,7 @@ describe('Section1_WhoYouAre', () => {
       isLoading: false, error: null, load: async () => {}, create: async () => 1,
       update: async () => {}, remove: async () => {},
     } as never);
-    render(<Section1_WhoYouAre status="in_progress" onSetStatus={() => {}} />);
+    render(<Section1_WhoYouAre hasData={false} settled status="in_progress" onSetStatus={() => {}} />);
     await user.click(screen.getByRole('button', { name: /edit alice/i }));
     expect(await screen.findByRole('heading', { name: /edit person/i })).toBeInTheDocument();
     expect((screen.getByLabelText(/name/i) as HTMLInputElement).value).toBe('Alice');
@@ -165,7 +165,7 @@ describe('Section1_WhoYouAre', () => {
       isLoading: false, error: null, load: async () => {}, create: async () => 1,
       update: async () => {}, remove,
     } as never);
-    render(<Section1_WhoYouAre status="in_progress" onSetStatus={() => {}} />);
+    render(<Section1_WhoYouAre hasData={false} settled status="in_progress" onSetStatus={() => {}} />);
     await user.click(screen.getByRole('button', { name: /remove carol/i }));
     // Confirm in the house ConfirmDialog.
     const confirmBtn = await screen.findByRole('button', { name: /^(remove|confirm|delete)/i });
@@ -182,7 +182,7 @@ describe('Section1_WhoYouAre', () => {
       isLoading: false, error: null, load: async () => {}, create: async () => 1,
       update: async () => {}, remove: async () => {},
     } as never);
-    render(<Section1_WhoYouAre status="in_progress" onSetStatus={() => {}} />);
+    render(<Section1_WhoYouAre hasData={false} settled status="in_progress" onSetStatus={() => {}} />);
     const chips = screen.getByTestId('dependents-chips');
     expect(within(chips).getByText('Junior')).toBeInTheDocument();
     expect(within(chips).getByText('Grandma May')).toBeInTheDocument();
@@ -193,7 +193,7 @@ describe('Section1_WhoYouAre', () => {
   it('clicking Add manually on the Persons card opens the PersonForm dialog', async () => {
     const user = userEvent.setup();
     render(
-      <Section1_WhoYouAre status="in_progress" onSetStatus={() => {}} />,
+      <Section1_WhoYouAre hasData={false} settled status="in_progress" onSetStatus={() => {}} />,
     );
     // Find the Persons card; multiple cards have Add manually buttons.
     const personsHeading = screen.getByText(/^Persons$/);
@@ -207,5 +207,16 @@ describe('Section1_WhoYouAre', () => {
     expect(
       await screen.findByRole('button', { name: /add person/i }),
     ).toBeInTheDocument();
+  });
+
+  it('Wave C C2: saved persons render the cards even when status is pending', () => {
+    usePersonsStore.setState({
+      persons: [{ id: 1, name: 'Alice', annualSalaryPretax: 0, hourlyRate: null } as unknown as Person],
+      isLoading: false, error: null, load: async () => {}, create: async () => 1,
+      update: async () => {}, remove: async () => {},
+    } as never);
+    render(<Section1_WhoYouAre hasData settled status="pending" onSetStatus={() => {}} />);
+    expect(within(screen.getByTestId('person-chips')).getByText('Alice')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Start this section' })).not.toBeInTheDocument();
   });
 });

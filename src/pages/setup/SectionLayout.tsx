@@ -12,6 +12,8 @@ import Section3_WhatYouOwe from './Section3_WhatYouOwe';
 import Section4_History from './Section4_History';
 import { markSetupDismissed } from '@/lib/setup-dismissal';
 import { isTailorDone } from '@/lib/onboarding-state';
+import { useLoadGate } from '@/lib/use-load-gate';
+import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useAccountsStore } from '@/stores/accounts-store';
@@ -80,7 +82,16 @@ export default function SectionLayout({ initialSection }: Props) {
   const navigate = useNavigate();
   const [progress, setProgress] = useState<Progress>(() => {
     const p = loadProgress();
-    if (initialSection !== undefined) p.currentSection = initialSection;
+    if (initialSection !== undefined) {
+      p.currentSection = initialSection;
+      // Wave C (C2/G6): an explicit ?section= deep-link is declared intent —
+      // landing on the entry gate was the Settings → "Open import wizard"
+      // dead end. Promote pending/skipped to started so the cards render.
+      const cur = p.sectionStatus[initialSection];
+      if (cur === 'pending' || cur === 'skipped') {
+        p.sectionStatus = { ...p.sectionStatus, [initialSection]: 'in_progress' };
+      }
+    }
     return p;
   });
 
@@ -183,6 +194,55 @@ export default function SectionLayout({ initialSection }: Props) {
   const transactionsCount = useTransactionsStore((s) => s.transactions.length);
   const goalsCount = useGoalsStore((s) => s.goals.length);
 
+  // Wave C (C1): SectionLayout already subscribes to every count for the H3
+  // badges but the load() calls lived inside each section's mount — so
+  // sectionHasData lied until a section was visited (a returning user's
+  // Section 2 badge read "visited" over 6 saved accounts). Hydrate here,
+  // behind the LATCHED useLoadGate (safe against the shared-store-gate
+  // boot-loop gotcha by construction — descendants re-loading can never
+  // re-hide settled content). The per-section load effects stay: idempotent,
+  // deduped in flight, and standalone section tests rely on them.
+  const loadAll = useCallback(() => {
+    void usePersonsStore.getState().load();
+    void useDependentsStore.getState().load();
+    void useAccountsStore.getState().load();
+    void useHoldingsStore.getState().load();
+    void usePropertiesStore.getState().load();
+    void useVehiclesStore.getState().load();
+    void useHousingPaymentsStore.getState().load();
+    void useVehicleLeasesStore.getState().load();
+    void useEquityGrantsStore.getState().load();
+    void useLoansStore.getState().load();
+    void useSnapshotsStore.getState().load();
+    void useAssetValueSnapshotsStore.getState().load();
+    void useContributionsStore.getState().load();
+    void useTransactionsStore.getState().load();
+    void useGoalsStore.getState().load();
+  }, []);
+  const gate = useLoadGate(
+    [
+      usePersonsStore((s) => s.isLoading), useDependentsStore((s) => s.isLoading),
+      useAccountsStore((s) => s.isLoading), useHoldingsStore((s) => s.isLoading),
+      usePropertiesStore((s) => s.isLoading), useVehiclesStore((s) => s.isLoading),
+      useHousingPaymentsStore((s) => s.isLoading), useVehicleLeasesStore((s) => s.isLoading),
+      useEquityGrantsStore((s) => s.isLoading), useLoansStore((s) => s.isLoading),
+      useSnapshotsStore((s) => s.isLoading), useAssetValueSnapshotsStore((s) => s.isLoading),
+      useContributionsStore((s) => s.isLoading), useTransactionsStore((s) => s.isLoading),
+      useGoalsStore((s) => s.isLoading),
+    ],
+    [
+      usePersonsStore((s) => s.error), useDependentsStore((s) => s.error),
+      useAccountsStore((s) => s.error), useHoldingsStore((s) => s.error),
+      usePropertiesStore((s) => s.error), useVehiclesStore((s) => s.error),
+      useHousingPaymentsStore((s) => s.error), useVehicleLeasesStore((s) => s.error),
+      useEquityGrantsStore((s) => s.error), useLoansStore((s) => s.error),
+      useSnapshotsStore((s) => s.error), useAssetValueSnapshotsStore((s) => s.error),
+      useContributionsStore((s) => s.error), useTransactionsStore((s) => s.error),
+      useGoalsStore((s) => s.error),
+    ],
+    loadAll,
+  );
+
   const sectionHasData: Record<SectionIndex, boolean> = {
     1: personsCount > 0 || dependentsCount > 0,
     2:
@@ -202,10 +262,14 @@ export default function SectionLayout({ initialSection }: Props) {
       goalsCount > 0,
   };
 
+  const currentSectionHasData = sectionHasData[currentSection];
+  const gateSettled = gate.settled;
   const sectionContent = useMemo(() => {
     const props = {
       status: progress.sectionStatus[currentSection],
       onSetStatus: (s: SectionStatus) => setStatus(currentSection, s),
+      hasData: currentSectionHasData,
+      settled: gateSettled,
     };
     switch (currentSection) {
       case 1:
@@ -217,10 +281,11 @@ export default function SectionLayout({ initialSection }: Props) {
       case 4:
         return <Section4_History {...props} />;
     }
-  }, [currentSection, progress.sectionStatus, setStatus]);
+  }, [currentSection, progress.sectionStatus, setStatus, currentSectionHasData, gateSettled]);
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
+      <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
       <nav
         aria-label="Setup progress"
         className="flex items-center gap-2"
@@ -231,11 +296,17 @@ export default function SectionLayout({ initialSection }: Props) {
           const clickable =
             status === 'completed' ||
             status === 'skipped' ||
-            isCurrent;
+            isCurrent ||
+            sectionHasData[s.index]; // Wave C C3: saved data is reachable
           // "✓ done" (green) only when the section is completed AND has data;
           // a completed-but-empty section reads as neutral "visited" (H3).
           const doneWithData = status === 'completed' && sectionHasData[s.index];
           const visitedEmpty = status === 'completed' && !sectionHasData[s.index];
+          // Wave C (C3): pending/skipped WITH saved data — a neutral, muted
+          // marker (CW1). Never promoted to ✓ done: completion stays a user
+          // act (owner constraint 2).
+          const savedNotDone =
+            (status === 'pending' || status === 'skipped') && sectionHasData[s.index];
           return (
             <button
               key={s.index}
@@ -262,6 +333,9 @@ export default function SectionLayout({ initialSection }: Props) {
               )}
               {status === 'skipped' && (
                 <div className="text-[10px] mt-0.5">↩ skipped</div>
+              )}
+              {savedNotDone && (
+                <div className="text-[10px] mt-0.5 text-muted-foreground">has saved data</div>
               )}
             </button>
           );
