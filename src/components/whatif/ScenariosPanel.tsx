@@ -12,6 +12,9 @@ interface ScenariosPanelProps {
   milestones: Map<number, Milestones>;
   onOpenManage: () => void;
   onEditLevers?: (scenarioId: number) => void;
+  /** Wave C (C11): the just-sent scenario's id (navigation state) — its row
+   *  gets a calm ring on arrival so the handoff is visible. */
+  highlightId?: number | null;
 }
 
 const COLLAPSED_KEY = 'scenariosPanel.collapsed';
@@ -24,6 +27,7 @@ export function ScenariosPanel({
   milestones,
   onOpenManage,
   onEditLevers,
+  highlightId,
 }: ScenariosPanelProps) {
   const store = useScenariosStore();
   const { scenarios, toggleVisibility, setActive, duplicate, remove } = store;
@@ -115,7 +119,9 @@ export function ScenariosPanel({
                 <li
                   key={s.id}
                   data-row-id={s.id}
-                  className="flex items-center gap-2 px-1 py-1 rounded hover:bg-accent/40 relative"
+                  className={`flex items-center gap-2 px-1 py-1 rounded hover:bg-accent/40 relative${
+                    s.id === highlightId ? ' ring-1 ring-primary/50' : ''
+                  }`}
                 >
                   <input
                     type="checkbox"

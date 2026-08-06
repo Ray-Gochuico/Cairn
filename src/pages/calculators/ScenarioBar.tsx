@@ -304,18 +304,24 @@ export function ScenarioBar() {
         todayIso,
       );
       const existing = useScenariosStore.getState().scenarios;
-      await useScenariosStore.getState().create({
+      // Wave C (DC6): sending BEFORE ever visiting /what-if meant the store's
+      // ensureBaseline never ran — nothing was active, and the page greeted
+      // the user with "No active scenario" right after they sent one. The
+      // sent scenario activates iff there is no active scenario to displace;
+      // otherwise the new row is highlighted on arrival (navigation state).
+      const hasActive = existing.some((s) => s.isActive);
+      const createdId = await useScenariosStore.getState().create({
         name: `From calculators — ${formatDate(todayIso)}`,
         isBaseline: false,
         color: defaultScenarioColor(existing.length, false),
         lineStyle: 'solid',
         visible: true,
-        isActive: false,
+        isActive: !hasActive,
         sortOrder: existing.length,
         leverPayload,
       });
       setSendError(null);
-      navigate('/what-if');
+      navigate('/what-if', { state: { createdScenarioId: createdId } });
     } catch {
       // Calm inline surface — never throw to the route.
       setSendError('Could not create the What-If scenario. Please try again.');
@@ -385,6 +391,14 @@ export function ScenarioBar() {
               Switch to Household to send this scenario.
             </span>
           )}
+          {/* Wave C (C11/CW15): the 0-edits disabled Send previously gave no
+              reason at all — the visible note doubles as the button's
+              accessible description. */}
+          {!scope.isScoped && scenario.editedCount === 0 && (
+            <span id="send-whatif-empty-note" className="text-muted-foreground">
+              Edit a field above to send it as a scenario.
+            </span>
+          )}
           {/* D14: enabled only when ≥1 bar field is edited. Wave B gate fix:
               the CB6 reason is programmatically associated so AT users hear
               WHY the button is disabled, not just a bare disabled control. */}
@@ -393,7 +407,13 @@ export function ScenarioBar() {
             variant="outline"
             size="sm"
             disabled={scenario.editedCount === 0 || scope.isScoped}
-            aria-describedby={scope.isScoped ? 'send-whatif-scoped-note' : undefined}
+            aria-describedby={
+              scope.isScoped
+                ? 'send-whatif-scoped-note'
+                : scenario.editedCount === 0
+                  ? 'send-whatif-empty-note'
+                  : undefined
+            }
             onClick={() => void sendToWhatIf()}
           >
             Send to What-If →
