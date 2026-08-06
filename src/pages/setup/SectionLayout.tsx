@@ -10,7 +10,7 @@ import Section1_WhoYouAre from './Section1_WhoYouAre';
 import Section2_WhatYouOwn from './Section2_WhatYouOwn';
 import Section3_WhatYouOwe from './Section3_WhatYouOwe';
 import Section4_History from './Section4_History';
-import { markSetupDismissed } from '@/lib/setup-dismissal';
+import { markSetupDismissed, SETUP_PROGRESS_KEY } from '@/lib/setup-dismissal';
 import { isTailorDone } from '@/lib/onboarding-state';
 import { useLoadGate } from '@/lib/use-load-gate';
 import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
@@ -30,8 +30,6 @@ import { useContributionsStore } from '@/stores/contributions-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { useGoalsStore } from '@/stores/goals-store';
 
-const STORAGE_KEY = 'setupWizard.progress.v1';
-
 interface Progress {
   currentSection: SectionIndex;
   sectionStatus: Record<SectionIndex, SectionStatus>;
@@ -48,7 +46,7 @@ function defaultProgress(): Progress {
 
 function loadProgress(): Progress {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(SETUP_PROGRESS_KEY);
     if (raw === null) return defaultProgress();
     const parsed = JSON.parse(raw);
     // W10 T5: currentSection was validated but sectionStatus was cast
@@ -98,7 +96,7 @@ export default function SectionLayout({ initialSection }: Props) {
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+    localStorage.setItem(SETUP_PROGRESS_KEY, JSON.stringify(progress));
   }, [progress]);
 
   // M2 (a11y): on section change, move focus to the section heading so
@@ -154,7 +152,7 @@ export default function SectionLayout({ initialSection }: Props) {
     // (main.tsx) does NOT loop a zero-persons user back to /setup (H1). This
     // is independent of clearing the wizard progress below.
     markSetupDismissed();
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(SETUP_PROGRESS_KEY);
     // New users go into the post-setup onboarding flow at /welcome; existing
     // users who re-enter the wizard via /setup?section=4 (Tailor already done)
     // go straight to the Dashboard — the guard prevents re-running onboarding.
