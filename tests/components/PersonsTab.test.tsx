@@ -12,7 +12,11 @@ import PersonsTab from '@/pages/inputs/PersonsTab';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-async function seedPerson(db: SqliteAdapter, name: string): Promise<number> {
+async function seedPerson(
+  db: SqliteAdapter,
+  name: string,
+  overrides: Record<string, unknown> = {},
+): Promise<number> {
   const repo = new PersonsRepo(db);
   return repo.create({
     householdId: 1,
@@ -27,7 +31,8 @@ async function seedPerson(db: SqliteAdapter, name: string): Promise<number> {
     dependentCareFsaMonthly: 0,
     hsaMonthlyContribution: 0,
     hsaEligible: false,
-  });
+    ...overrides,
+  } as never);
 }
 
 const loadInitialMigration = () =>
@@ -72,6 +77,27 @@ describe('PersonsTab', () => {
     await waitFor(() => {
       expect(screen.getByText(/no persons added yet/i)).toBeInTheDocument();
     });
+  });
+
+  it('Wave C C9: an HOURLY person shows their rate — never "Salary $0"', async () => {
+    await seedPerson(db, 'Ray', { employmentType: 'HOURLY', hourlyRate: 62, annualSalaryPretax: 0 });
+    render(<MemoryRouter><PersonsTab /></MemoryRouter>);
+    const row = await screen.findByTestId('persons-row');
+    expect(row).toHaveTextContent('Hourly $62/hr');
+    expect(row).not.toHaveTextContent('Salary $0');
+  });
+
+  it('Wave C C9: bonus/commission/expenses surface as row suffixes', async () => {
+    await seedPerson(db, 'Ray', {
+      employmentType: 'SALARY_WITH_OT', annualSalaryPretax: 180000,
+      expectedBonus: 20000, expectedCommission: 5000, monthlyExpenseBaseline: 2500,
+    });
+    render(<MemoryRouter><PersonsTab /></MemoryRouter>);
+    const row = await screen.findByTestId('persons-row');
+    expect(row).toHaveTextContent('Salary $180,000 + OT');
+    expect(row).toHaveTextContent('+ bonus');
+    expect(row).toHaveTextContent('+ commission');
+    expect(row).toHaveTextContent('$2,500/mo expenses');
   });
 
   it('opens the add-person form when clicking Add Person', async () => {

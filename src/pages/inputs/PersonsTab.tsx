@@ -109,7 +109,20 @@ export default function PersonsTab() {
                 <div className="min-w-0 flex-1">
                   <div className="font-medium truncate">{p.name}</div>
                   <div className="text-xs text-muted-foreground truncate">
-                    DOB: {p.dateOfBirth} · Retire at {p.targetRetirementAge} · Salary ${p.annualSalaryPretax.toLocaleString()}
+                    {/* Wave C (C9/IN-G7): the row previously showed only DOB ·
+                        retire-age · salary — an HOURLY person read "Salary $0"
+                        (a lie), and ~11 comp/benefit fields hid behind Edit. */}
+                    DOB: {p.dateOfBirth} · Retire at {p.targetRetirementAge} ·{' '}
+                    {p.employmentType === 'HOURLY'
+                      ? `Hourly $${(p.hourlyRate ?? 0).toLocaleString()}/hr`
+                      : `Salary $${p.annualSalaryPretax.toLocaleString()}${
+                          p.employmentType === 'SALARY_WITH_OT' ? ' + OT' : ''
+                        }`}
+                    {p.expectedBonus > 0 ? ' · + bonus' : ''}
+                    {p.expectedCommission > 0 ? ' · + commission' : ''}
+                    {p.monthlyExpenseBaseline != null
+                      ? ` · $${p.monthlyExpenseBaseline.toLocaleString()}/mo expenses`
+                      : ''}
                   </div>
                 </div>
                 <div className="flex gap-2 shrink-0">
