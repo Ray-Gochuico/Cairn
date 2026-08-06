@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { NumberField } from '@/components/calculators/NumberField';
 import { Button } from '@/components/ui/button';
 import { useScenarioAssumptions } from '@/lib/calculators/use-scenario-assumptions';
-import type { ScenarioField } from '@/lib/calculators/scenario-assumptions';
+import { readOverridesFor, type ScenarioField } from '@/lib/calculators/scenario-assumptions';
 import { useHouseholdTaxContext } from '@/lib/calculators/use-household-tax-context';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
@@ -328,9 +328,22 @@ export function ScenarioBar() {
         household.state,
         ...(household.city ? [prettifyCityCode(household.city)] : []),
         ...(tax.resolvedYear != null ? [`${tax.resolvedYear} tax year`] : []),
-        ...(tax.totalSalary > 0 ? [`${formatCurrency(tax.totalSalary)} salary`] : []),
+        // Wave C (N2/CW19): the chips stay household-level by design (D-B2
+        // family) — while scoped, qualify the salary so it can't be misread
+        // as the person's own figure.
+        ...(tax.totalSalary > 0
+          ? [`${formatCurrency(tax.totalSalary)}${scope.isScoped ? ' household salary' : ' salary'}`]
+          : []),
       ]
     : [];
+
+  // Wave C (N2): flipping Household → person silently shrank "Edited (4)" to
+  // "Edited (1)" — household edits looked destroyed (they're preserved in
+  // their silo, D-B11). Declare the view on the badge and count the kept edits.
+  const keptHouseholdEdits = scope.isScoped
+    ? Object.keys(readOverridesFor(null)).length +
+      Object.keys(scenario.salaryByPersonId).filter((id) => Number(id) !== scope.personId).length
+    : 0;
 
   return (
     <section
@@ -367,9 +380,14 @@ export function ScenarioBar() {
                 <span
                   className="inline-flex items-center gap-1 text-muted-foreground"
                   data-testid="scenario-edited-count"
+                  title={
+                    scope.isScoped
+                      ? `${keptHouseholdEdits} household-scope edit${keptHouseholdEdits === 1 ? '' : 's'} kept`
+                      : undefined
+                  }
                 >
                   <BlazeDot />
-                  Edited ({scenario.editedCount})
+                  Edited ({scenario.editedCount}){scope.isScoped ? ' in this view' : ''}
                 </span>
                 <button
                   type="button"

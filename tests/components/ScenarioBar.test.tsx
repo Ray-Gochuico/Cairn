@@ -539,6 +539,52 @@ describe('ScenarioBar — un-truncated honesty layer (Wave C C10/DC2)', () => {
   });
 });
 
+describe('ScenarioBar — scope-flip legibility (Wave C N2)', () => {
+  const renderBarAt = (path: string) =>
+    render(
+      <MemoryRouter initialEntries={[path]}>
+        <ScenarioBar />
+      </MemoryRouter>,
+    );
+
+  beforeEach(() => {
+    sessionStorage.clear();
+    __resetScenarioAssumptionsForTests();
+    __resetCalcScopeForTests();
+    resetStores();
+    primeBaseline();
+    usePersonsStore.setState({
+      persons: [basePerson, { ...basePerson, id: 2, name: 'Sam', annualSalaryPretax: 80000 }],
+      isLoading: false,
+      error: null,
+    } as never);
+    useTransactionsStore.setState({ transactions: [], isLoading: false, error: null } as never);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-05-14T12:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('Wave C N2: scoped Edited badge declares the view and the kept household edits (CW18)', () => {
+    // Two kept household-scope edits + one edit in the p2 silo.
+    sessionStorage.setItem('calc-scenario:shared', JSON.stringify({ portfolio: 1, returnPct: 7 }));
+    sessionStorage.setItem('calc-scenario:p2', JSON.stringify({ portfolio: 50000 }));
+    syncCalcScope(2);
+    renderBarAt('/calculators?view=p2');
+    const badge = screen.getByTestId('scenario-edited-count');
+    expect(badge).toHaveTextContent('Edited (1) in this view');
+    expect(badge).toHaveAttribute('title', '2 household-scope edits kept');
+  });
+
+  it('Wave C N2: the salary chip is qualified while scoped (CW19)', () => {
+    syncCalcScope(2);
+    renderBarAt('/calculators?view=p2');
+    expect(screen.getByTestId('scenario-chips')).toHaveTextContent(/household salary/);
+  });
+});
+
 describe('ScenarioBar — two-row layout + app-defaults qualifier (Wave C N1+N8)', () => {
   beforeEach(() => {
     sessionStorage.clear();
