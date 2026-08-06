@@ -166,6 +166,10 @@ export function CompoundInterestCard({ cardId }: CompoundInterestCardProps = {})
   // + the local years knob); the years-0 prompt REPLACES it (the empty case).
   const meaning = !series ? (
     <EmptyMeaning>Enter a length in years to see projected growth.</EmptyMeaning>
+  ) : engine.portfolio <= 0 ? (
+    // Wave C (N3): a bare "$0 at 6% APY for 10 years." reads like a verdict
+    // on an empty profile — invite instead (CW21).
+    <EmptyMeaning>Enter a starting portfolio in the scenario bar to see growth.</EmptyMeaning>
   ) : (
     // Wave B (CB14): person scope names the owner — the pv IS the scoped
     // bar portfolio, so the qualifier sources only rendered values.

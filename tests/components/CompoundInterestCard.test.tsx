@@ -301,9 +301,20 @@ describe('CompoundInterestCard waymark meaning (Wave 17)', () => {
   });
 
   it('renders the waymark meaning line from already-rendered values (Wave 17)', () => {
+    // Wave C N3: a $0 portfolio now invites instead of asserting — seed the
+    // demo scenario so this test keeps exercising the value-bearing sentence.
+    seedDemoScenario();
     render(<MemoryRouter><CompoundInterestCard cardId="compound-interest" /></MemoryRouter>);
     expect(screen.getByTestId('compound-interest-meaning')).toHaveTextContent(
       /at .*% APY for \d+ years\./i,
+    );
+  });
+
+  it('Wave C N3: a $0 portfolio invites instead of asserting "$0 at 6% APY"', () => {
+    // Nothing primed → the bar portfolio resolves 0 (empty profile).
+    render(<MemoryRouter><CompoundInterestCard cardId="compound-interest" /></MemoryRouter>);
+    expect(screen.getByTestId('compound-interest-meaning')).toHaveTextContent(
+      'Enter a starting portfolio in the scenario bar to see growth.',
     );
   });
 

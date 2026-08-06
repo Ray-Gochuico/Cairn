@@ -246,10 +246,24 @@ export function PaycheckCard({ cardId }: PaycheckCardProps = {}) {
       cardId={cardId}
       dirty={salaryOverridden}
       meaning={
-        <>
-          After taxes and pretax deductions on{' '}
-          {formatCurrency(scopedHeadline ? own!.gross : perPeriod.gross)} gross.
-        </>
+        // Wave C (N3, CW22): the earner qualifier folds into the meaning so
+        // the headline is figure + period only. Both figures are rendered
+        // values (owner constraint 3); the scoped branch is Wave-B CB19,
+        // byte-identical.
+        scopedHeadline ? (
+          <>After taxes and pretax deductions on {formatCurrency(own!.gross)} gross.</>
+        ) : (
+          <>
+            After taxes and pretax deductions on {formatCurrency(perPeriod.gross)} gross
+            {salariedEarnerCount > 1 && (
+              <>
+                {' · '}{salariedEarnerCount} earners, combined
+                {salariedEarnerCount < persons.length && ' — salary only'}
+              </>
+            )}
+            .
+          </>
+        )
       }
       rail={
         <RailViewGroup>
@@ -286,17 +300,12 @@ export function PaycheckCard({ cardId }: PaycheckCardProps = {}) {
           <span className="text-base font-medium">
             {' '}/ {PAYCHECK_PERIODS.find((p) => p.id === period)?.label.toLowerCase() ?? 'period'}
           </span>
-          {scopedHeadline ? (
+          {/* Wave C (N3): the household earner qualifier moved into the
+              meaning (CW22); the Wave-B CB18 scoped attribution stays. */}
+          {scopedHeadline && (
             <span className="block text-xs font-normal text-muted-foreground">
               {selectedPerson!.name} — marginal share
             </span>
-          ) : (
-            salariedEarnerCount > 1 && (
-              <span className="block text-xs font-normal text-muted-foreground">
-                {salariedEarnerCount} earners, combined
-                {salariedEarnerCount < persons.length && ' — salary only'}
-              </span>
-            )
           )}
         </span>
       }

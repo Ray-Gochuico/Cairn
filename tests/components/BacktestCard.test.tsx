@@ -85,6 +85,14 @@ describe('BacktestCard waymark meaning (Wave 17)', () => {
       /backtest your portfolio/i,
     );
   });
+
+  it('Wave C N3: pre-first-run rest card carries the CW20 invite, no data claims', () => {
+    localStorage.clear(); // no last-run record
+    render(<MemoryRouter><BacktestCard cardId="backtest" /></MemoryRouter>);
+    expect(screen.getByTestId('backtest-meaning')).toHaveTextContent(
+      'Replay 150+ years of markets against your allocation.',
+    );
+  });
 });
 
 describe('BacktestCard — scope tag (Wave B CB23 / D-B14)', () => {

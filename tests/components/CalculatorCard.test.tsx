@@ -297,3 +297,17 @@ it('Wave C DC2: dirty meanings stay single-line (the follow-up chip owns the dir
   render(<CalculatorCard cardId="x" title="T" headline="—" dirty meaning="scenario sentence" />);
   expect(screen.getByTestId('x-meaning').className).toContain('truncate');
 });
+
+it('Wave C N3/N4: rest cards top-align, show the chevron affordance, and hover-shift the border', () => {
+  render(<Harness>{card()}</Harness>); // shell provider with openId null → REST
+  const header = screen.getByTestId('test-calc-trigger').parentElement!;
+  expect(header.className).toContain('justify-start');
+  expect(screen.getByTestId('test-calc-open-affordance')).toBeInTheDocument();
+  const cardEl = screen.getByTestId('calc-card-test-calc');
+  expect(cardEl.className).toContain('hover:border-muted-foreground/40');
+});
+
+it('Wave C N4: the chevron never renders on an OPEN card', () => {
+  render(<Harness initialOpen="test-calc">{card()}</Harness>);
+  expect(screen.queryByTestId('test-calc-open-affordance')).not.toBeInTheDocument();
+});

@@ -389,6 +389,14 @@ describe('PaycheckCard', () => {
     expect(screen.getByText(/2 earners, combined/i)).toBeInTheDocument();
   });
 
+  it('Wave C N3: the earner qualifier folds into the meaning; the headline is figure + period only', async () => {
+    primeStoresTwoEarners(); // 2 salaried earners
+    render(<MemoryRouter><PaycheckCard cardId="paycheck" /></MemoryRouter>);
+    await screen.findByTestId('paycheck-takehome');
+    expect(screen.getByTestId('paycheck-meaning')).toHaveTextContent(/earners, combined/);
+    expect(screen.getByTestId('paycheck-takehome')).not.toHaveTextContent('earners, combined');
+  });
+
   it('single-earner household shows NO combined qualifier', async () => {
     primeStores();
     render(<MemoryRouter><PaycheckCard /></MemoryRouter>);
