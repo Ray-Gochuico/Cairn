@@ -12,6 +12,7 @@ import { leverPayloadFromScenarioBar } from '@/lib/whatif/from-scenario-bar';
 import { defaultScenarioColor } from '@/lib/whatif/scenario-colors';
 import { localTodayISO } from '@/lib/dates';
 import { formatCurrency, formatDate } from '@/lib/format';
+import { FILING_STATUS_LABELS } from '@/lib/filing-status-labels';
 import { prettifyCityCode } from '@/lib/jurisdiction-format';
 import { InlineLink } from '@/components/calculators/InlineLink';
 import { useViewFilter } from '@/lib/use-view-filter';
@@ -34,13 +35,6 @@ import { personMonthlyExpenseHint } from '@/lib/calculators/person-expense-hint'
  * blaze dot is an SVG fill of hsl(var(--blaze)) per the Wave-12 D3 token
  * discipline (fill/stroke only, never text). Not sticky (Wave-16 D6).
  */
-
-const FILING_LABELS: Record<string, string> = {
-  SINGLE: 'Single',
-  MFJ: 'Married filing jointly',
-  MFS: 'Married filing separately',
-  HOH: 'Head of household',
-};
 
 const COMMIT_DELAY_MS = 150;
 
@@ -330,7 +324,7 @@ export function ScenarioBar() {
 
   const chips: string[] = household
     ? [
-        FILING_LABELS[household.filingStatus] ?? household.filingStatus,
+        FILING_STATUS_LABELS[household.filingStatus] ?? household.filingStatus,
         household.state,
         ...(household.city ? [prettifyCityCode(household.city)] : []),
         ...(tax.resolvedYear != null ? [`${tax.resolvedYear} tax year`] : []),

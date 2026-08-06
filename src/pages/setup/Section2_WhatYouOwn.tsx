@@ -95,6 +95,10 @@ export default function Section2_WhatYouOwn({ status, onSetStatus, hasData, sett
 
   const meta = SECTIONS[1];
 
+  // Wave C (C5, CW5): qualify holding chips by account so duplicate tickers
+  // across accounts stay distinguishable.
+  const accountNameById = new Map(accounts.map((a) => [a.id, a.name]));
+
   // Holdings import resolves CSV rows to existing accounts by name; with no
   // accounts there is nothing to match, so gate the import (W7).
   const noAccountsReason =
@@ -140,7 +144,10 @@ export default function Section2_WhatYouOwn({ status, onSetStatus, hasData, sett
         importEnabled
         importTrigger={<ImportCsvButton entity="holding" />}
         importDisabledReason={noAccountsReason}
-        items={holdings.map((h, i) => ({ key: h.id ?? i, label: h.ticker }))}
+        items={holdings.map((h, i) => ({
+          key: h.id ?? i,
+          label: `${h.ticker} · ${accountNameById.get(h.accountId) ?? 'account'}`,
+        }))}
         manageHref="/investments?manage=holdings"
         manageLabel="Manage on Investments page"
       />

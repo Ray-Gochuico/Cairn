@@ -172,7 +172,8 @@ describe('Section2_WhatYouOwn', () => {
       const chipsOf = (testId: string) => screen.getByTestId(testId);
       expect(within(chipsOf('accounts-chips')).getByText('Fidelity Brokerage')).toBeInTheDocument();
       expect(within(chipsOf('accounts-chips')).getByText('Chase Checking')).toBeInTheDocument();
-      expect(within(chipsOf('holdings-chips')).getByText('VTI')).toBeInTheDocument();
+      // Wave C C5 (CW5): holding chips are account-qualified.
+      expect(within(chipsOf('holdings-chips')).getByText('VTI · Fidelity Brokerage')).toBeInTheDocument();
       expect(within(chipsOf('properties-chips')).getByText('Maple St house')).toBeInTheDocument();
       expect(
         within(chipsOf('rent-housing-payment-chips')).getByText('Apartment rent'),
@@ -246,6 +247,30 @@ describe('Section2_WhatYouOwn', () => {
       const btn = within(card).getByRole('button', { name: /^import csv$/i });
       expect(btn).not.toBeDisabled();
     });
+  });
+
+  it('Wave C C5: holding chips are account-qualified (CW5) — duplicate tickers disambiguate', () => {
+    const base = {
+      isLoading: false, error: null, load: async () => {}, create: async () => 1,
+      update: async () => {}, remove: async () => {},
+    };
+    useAccountsStore.setState({
+      accounts: [{ id: 1, name: 'Taxable Brokerage' }, { id: 2, name: 'Roth IRA' }],
+      ...base,
+    } as never);
+    useHoldingsStore.setState({
+      holdings: [
+        { id: 10, accountId: 1, ticker: 'VTI' }, { id: 11, accountId: 2, ticker: 'VTI' },
+      ],
+      ...base,
+    } as never);
+    render(
+      <MemoryRouter>
+        <Section2_WhatYouOwn hasData settled status="in_progress" onSetStatus={() => {}} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('VTI · Taxable Brokerage')).toBeInTheDocument();
+    expect(screen.getByText('VTI · Roth IRA')).toBeInTheDocument();
   });
 
   it('Wave C N7: the Accounts card carries the Manage on Investments link (CW25)', () => {

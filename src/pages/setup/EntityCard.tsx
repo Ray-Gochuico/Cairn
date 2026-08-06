@@ -60,6 +60,10 @@ interface Props {
    *  required together; absent = no link (keeps bare test renders router-free). */
   manageHref?: string;
   manageLabel?: string;
+  /** Wave C (C5): replaces "{count} added" with a value-bearing caption
+   *  (e.g. "Married filing jointly · CA · $8,000/mo baseline"). Count-only
+   *  "N added" remains the default. */
+  countLabel?: string;
 }
 
 export default function EntityCard({
@@ -74,6 +78,7 @@ export default function EntityCard({
   itemsTestId,
   manageHref,
   manageLabel,
+  countLabel,
 }: Props) {
   // Stable id so the disabled Import CSV button can point at its reason note
   // via aria-describedby (L1) — a keyboard user tabbing onto the dead button
@@ -90,7 +95,7 @@ export default function EntityCard({
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">{title}</CardTitle>
           <span className="text-xs text-muted-foreground">
-            {count} added
+            {countLabel ?? `${count} added`}
           </span>
         </div>
       </CardHeader>

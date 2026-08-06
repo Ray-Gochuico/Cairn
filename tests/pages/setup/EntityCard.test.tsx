@@ -293,4 +293,20 @@ describe('EntityCard', () => {
     render(<EntityCard title="X" description="d" count={0} onAddManual={() => {}} />);
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
+
+  it('Wave C C5: countLabel replaces "{count} added" with a value-bearing caption', () => {
+    render(
+      <EntityCard
+        title="Household"
+        description="d"
+        count={1}
+        countLabel="Married filing jointly · CA · $8,000/mo baseline"
+        onAddManual={() => {}}
+      />,
+    );
+    expect(
+      screen.getByText('Married filing jointly · CA · $8,000/mo baseline'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/1 added/)).not.toBeInTheDocument();
+  });
 });

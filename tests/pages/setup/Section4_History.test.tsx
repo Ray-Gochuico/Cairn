@@ -223,6 +223,18 @@ describe('Section4_History', () => {
     });
   });
 
+  it('Wave C C5/DC7: count-only cards get qualified counts (CW6-CW8), never chip floods', () => {
+    useSnapshotsStore.setState((s: any) => ({
+      ...s,
+      snapshots: [
+        { id: 1, accountId: 1, snapshotDate: '2026-05-31', totalValue: 1, source: 'MANUAL' },
+        { id: 2, accountId: 2, snapshotDate: '2026-06-30', totalValue: 1, source: 'MANUAL' },
+      ],
+    }));
+    renderWithRouter();
+    expect(screen.getByText('2 snapshots across 2 accounts · latest Jun 2026')).toBeInTheDocument();
+  });
+
   it('Wave C C2: saved history renders the cards even when status is pending', () => {
     useGoalsStore.setState((s: any) => ({
       ...s,

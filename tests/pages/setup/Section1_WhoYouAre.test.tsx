@@ -8,6 +8,7 @@ import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import Section1_WhoYouAre from '@/pages/setup/Section1_WhoYouAre';
+import { makeHousehold, makePerson } from '../../factories';
 
 function resetStores() {
   useHouseholdStore.setState({
@@ -240,6 +241,55 @@ describe('Section1_WhoYouAre', () => {
     expect(
       await screen.findByRole('button', { name: /add person/i }),
     ).toBeInTheDocument();
+  });
+
+  it('Wave C C5: the household card caption shows the saved facts, not "1 added" (CW2)', () => {
+    useHouseholdStore.setState({
+      household: makeHousehold({ filingStatus: 'MFJ', state: 'CA', monthlyExpenseBaseline: 8000 }),
+    } as never);
+    render(
+      <MemoryRouter>
+        <Section1_WhoYouAre hasData settled status="in_progress" onSetStatus={() => {}} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Married filing jointly · CA · $8,000/mo baseline')).toBeInTheDocument();
+    const householdCard = screen.getByText(/^Household$/).closest('div[class*="rounded"]')!;
+    expect(within(householdCard as HTMLElement).queryByText('1 added')).not.toBeInTheDocument();
+  });
+
+  it('Wave C C5 (0051, CW3): per-person expense overrides are declared on the caption', () => {
+    useHouseholdStore.setState({
+      household: makeHousehold({ filingStatus: 'MFJ', state: 'CA', monthlyExpenseBaseline: 8000 }),
+    } as never);
+    usePersonsStore.setState({
+      persons: [makePerson({ id: 1, name: 'A', monthlyExpenseBaseline: 2500 })],
+    } as never);
+    render(
+      <MemoryRouter>
+        <Section1_WhoYouAre hasData settled status="in_progress" onSetStatus={() => {}} />
+      </MemoryRouter>,
+    );
+    expect(
+      screen.getByText(
+        'Married filing jointly · CA · $8,000/mo household baseline · per-person expenses set',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('Wave C C5: employment chips carry pay (CW4)', () => {
+    usePersonsStore.setState({
+      persons: [
+        makePerson({ id: 1, name: 'Alice', annualSalaryPretax: 180000 }),
+        makePerson({ id: 2, name: 'Bob', employmentType: 'HOURLY', hourlyRate: 62, annualSalaryPretax: 0 }),
+      ],
+    } as never);
+    render(
+      <MemoryRouter>
+        <Section1_WhoYouAre hasData settled status="in_progress" onSetStatus={() => {}} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Alice — $180,000 salary')).toBeInTheDocument();
+    expect(screen.getByText('Bob — $62/hr hourly')).toBeInTheDocument();
   });
 
   it('Wave C C2: saved persons render the cards even when status is pending', () => {

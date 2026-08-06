@@ -37,7 +37,17 @@ import {
   ContributionSource,
   SnapshotSource,
 } from '@/types/enums';
+import { formatMonth } from '@/lib/format';
 import { SECTIONS, type SectionStatus } from './sections';
+
+// Wave C (C5/DC7): qualified counts for the count-only history cards —
+// one honest sentence instead of a 214-chip flood.
+const plural = (n: number, s: string, p: string) => `${n} ${n === 1 ? s : p}`;
+const latestOf = (dates: string[]) => {
+  if (dates.length === 0) return null;
+  const sorted = [...dates].sort();
+  return formatMonth(sorted[sorted.length - 1].slice(0, 7));
+};
 
 type ActiveDialog =
   | null
@@ -135,6 +145,11 @@ export default function Section4_History({ status, onSetStatus, hasData, settled
         title="Account snapshots"
         description="Historical balances per account."
         count={snapshots.length}
+        countLabel={
+          snapshots.length > 0
+            ? `${plural(snapshots.length, 'snapshot', 'snapshots')} across ${plural(new Set(snapshots.map((s) => s.accountId)).size, 'account', 'accounts')} · latest ${latestOf(snapshots.map((s) => s.snapshotDate))}`
+            : undefined
+        }
         onAddManual={() => setDialog('snapshots')}
         importEnabled
         importTrigger={<ImportCsvButton entity="snapshot" />}
@@ -146,12 +161,22 @@ export default function Section4_History({ status, onSetStatus, hasData, settled
         title="Property / vehicle values"
         description="Historical estimated values."
         count={assetSnapshots.length}
+        countLabel={
+          assetSnapshots.length > 0
+            ? `${plural(assetSnapshots.length, 'entry', 'entries')} across ${plural(new Set(assetSnapshots.map((s) => `${s.ownerType}-${s.ownerId}`)).size, 'asset', 'assets')} · latest ${latestOf(assetSnapshots.map((s) => s.snapshotDate))}`
+            : undefined
+        }
         onAddManual={() => setDialog('asset_snapshots')}
       />
       <EntityCard
         title="Contributions"
         description="Past contributions per account."
         count={contributions.length}
+        countLabel={
+          contributions.length > 0
+            ? `${plural(contributions.length, 'contribution', 'contributions')} · latest ${latestOf(contributions.map((c) => c.date))}`
+            : undefined
+        }
         onAddManual={() => setDialog('contributions')}
         importEnabled
         importTrigger={<ImportCsvButton entity="contribution" />}

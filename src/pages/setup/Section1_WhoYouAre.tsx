@@ -19,6 +19,8 @@ import { useDependentsStore } from '@/stores/dependents-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { SECTIONS, type SectionStatus } from './sections';
+import { formatCurrency } from '@/lib/format';
+import { FILING_STATUS_LABELS } from '@/lib/filing-status-labels';
 import type { Person } from '@/types/schema';
 
 type ActiveDialog = null | 'household' | 'persons' | 'employment' | 'dependents';
@@ -80,6 +82,15 @@ export default function Section1_WhoYouAre({ status, onSetStatus, hasData, settl
         title="Household"
         description="Filing status, state, default assumptions."
         count={household ? 1 : 0}
+        countLabel={
+          // Wave C (C5, CW2/CW3): the saved household facts, not "1 added" —
+          // 0051-aware: declare per-person expense overrides when present.
+          household
+            ? persons.some((p) => p.monthlyExpenseBaseline != null)
+              ? `${FILING_STATUS_LABELS[household.filingStatus] ?? household.filingStatus} · ${household.state} · ${formatCurrency(household.monthlyExpenseBaseline)}/mo household baseline · per-person expenses set`
+              : `${FILING_STATUS_LABELS[household.filingStatus] ?? household.filingStatus} · ${household.state} · ${formatCurrency(household.monthlyExpenseBaseline)}/mo baseline`
+            : undefined
+        }
         onAddManual={() => setDialog('household')}
         manageHref="/inputs/household"
         manageLabel="Manage on Setup page"
@@ -115,6 +126,18 @@ export default function Section1_WhoYouAre({ status, onSetStatus, hasData, settl
           ).length
         }
         onAddManual={() => setDialog('employment')}
+        items={persons
+          .filter((p) => p.annualSalaryPretax > 0 || (p.hourlyRate ?? 0) > 0)
+          .map((p) => ({
+            key: p.id ?? p.name,
+            // Wave C (C5, CW4): the pay itself, not just a count.
+            label:
+              p.employmentType === 'HOURLY'
+                ? `${p.name} — ${formatCurrency(p.hourlyRate ?? 0)}/hr hourly`
+                : `${p.name} — ${formatCurrency(p.annualSalaryPretax)} salary${
+                    p.employmentType === 'SALARY_WITH_OT' ? ' + OT' : ''
+                  }`,
+          }))}
         manageHref="/inputs/persons"
         manageLabel="Manage on Setup page"
       />
