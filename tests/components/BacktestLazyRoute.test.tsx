@@ -95,9 +95,11 @@ describe('Backtest lazy route (B6 — dynamic-import chain)', () => {
     // Suspense fallback shows first, then the resolved chunk renders the page.
     await waitFor(() => expect(screen.getByTestId('backtest-page')).toBeInTheDocument());
     // W2 / BT-6 — the inline back-nav (byte-identical to the paycheck page) is
-    // present on the detail route and points at /calculators.
+    // present on the detail route and points at /calculators. Wave C (C12):
+    // the link now carries the card's #hash (and ?view= when scoped) so Back
+    // reopens the card in place.
     const back = screen.getByRole('link', { name: /back to calculators/i });
-    expect(back).toHaveAttribute('href', '/calculators');
+    expect(back).toHaveAttribute('href', '/calculators#backtest');
   });
 
   it('loads + Zod-validates the lazily-imported Shiller data chunk', async () => {
