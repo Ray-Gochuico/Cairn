@@ -5,12 +5,14 @@ import type { LoanPayment } from '@/types/schema';
 
 interface LoanPaymentsState {
   /**
-   * Phase 2 keeps the cache empty by default — pages that need a loan's
-   * payment history fetch via the repo or call `loadForLoan(id)`. The
-   * monthly mini-window writes through `create()` without reading any
-   * prior state, so we don't preload here.
+   * Wave C (DC10): keyed PER LOAN — several expanded loan cards on /loans
+   * read their histories concurrently, so a single flat array would let the
+   * last-loaded loan clobber every other card's rows. Pages that need a
+   * loan's payment history call `loadForLoan(id)`; the monthly mini-window
+   * writes through `create()` without reading any prior state, so we don't
+   * preload here.
    */
-  payments: LoanPayment[];
+  paymentsByLoanId: Record<number, LoanPayment[]>;
   isLoading: boolean;
   error: string | null;
   loadForLoan: (loanId: number) => Promise<void>;
@@ -19,11 +21,11 @@ interface LoanPaymentsState {
     id: number,
     patch: Partial<Omit<LoanPayment, 'id' | 'loanId'>>,
   ) => Promise<void>;
-  remove: (id: number) => Promise<void>;
+  remove: (id: number, loanId: number) => Promise<void>;
 }
 
 export const useLoanPaymentsStore = create<LoanPaymentsState>((set) => ({
-  payments: [],
+  paymentsByLoanId: {},
   isLoading: false,
   error: null,
 
@@ -32,7 +34,10 @@ export const useLoanPaymentsStore = create<LoanPaymentsState>((set) => ({
     try {
       const repo = new LoanPaymentsRepo(getDatabase());
       const payments = await repo.listForLoan(loanId);
-      set({ payments, isLoading: false });
+      set((state) => ({
+        paymentsByLoanId: { ...state.paymentsByLoanId, [loanId]: payments },
+        isLoading: false,
+      }));
     } catch (e) {
       set({
         isLoading: false,
@@ -51,8 +56,14 @@ export const useLoanPaymentsStore = create<LoanPaymentsState>((set) => ({
     await repo.update(id, patch);
   },
 
-  remove: async (id) => {
+  remove: async (id, loanId) => {
     const repo = new LoanPaymentsRepo(getDatabase());
     await repo.delete(id);
+    set((state) => ({
+      paymentsByLoanId: {
+        ...state.paymentsByLoanId,
+        [loanId]: (state.paymentsByLoanId[loanId] ?? []).filter((p) => p.id !== id),
+      },
+    }));
   },
 }));

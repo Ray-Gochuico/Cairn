@@ -1,8 +1,9 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Landmark } from 'lucide-react';
 import { useLoadGate } from '@/lib/use-load-gate';
 import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
 import { useLoansStore } from '@/stores/loans-store';
+import { useLoanPaymentsStore } from '@/stores/loan-payments-store';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
 import { amortize, nextPaymentDateFrom, scheduleIsCapped, type Amortization, type ScheduleEntry } from '@/lib/amortization';
@@ -22,7 +23,7 @@ import {
 } from '@/components/ui/card';
 import StackedAreaChartCard, { type StackedAreaSeries } from '@/components/charts/StackedAreaChartCard';
 import { CHART_PALETTE } from '@/components/charts/palette';
-import { formatCurrency, formatMonth } from '@/lib/format';
+import { formatCurrency, formatDate, formatMonth } from '@/lib/format';
 import { useLocalToday } from '@/lib/use-local-today';
 import { Button } from '@/components/ui/button';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
@@ -229,6 +230,90 @@ function AmortizationTable({ schedule }: { schedule: ScheduleEntry[] }) {
 }
 
 // ---------------------------------------------------------------------------
+/** Wave C (C8/IN-G6): the recorded loan_payments rows (AMORTIZATION/MANUAL
+ *  from the Monthly check-in) were create-only and invisible — the page shows
+ *  the PROJECTED schedule, not what was actually recorded. Read-only history
+ *  + row delete; correction = delete here, re-confirm in Monthly. Closes the
+ *  Wave-9 "Monthly loan-payment corruption" family's missing user-visible
+ *  correction path. */
+function RecordedPayments({ loanId, loanName }: { loanId: number; loanName: string }) {
+  const payments = useLoanPaymentsStore((s) => s.paymentsByLoanId[loanId]);
+  const loadForLoan = useLoanPaymentsStore((s) => s.loadForLoan);
+  const removePayment = useLoanPaymentsStore((s) => s.remove);
+  const { confirm, dialog } = useConfirm();
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (open) void loadForLoan(loanId);
+  }, [open, loanId, loadForLoan]);
+  const rows = payments ?? [];
+  return (
+    <details
+      className="mt-3 rounded-md border"
+      onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}
+    >
+      <summary className="cursor-pointer px-3 py-1.5 text-sm hover:bg-muted/40">
+        Recorded payments{payments ? ` (${rows.length})` : ''}
+      </summary>
+      <div className="space-y-2 p-3">
+        {rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No payments recorded yet — the Monthly check-in records them.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-muted-foreground">
+                  <th className="py-1 pr-3 font-normal">Date</th>
+                  <th className="py-1 pr-3 font-normal">Principal</th>
+                  <th className="py-1 pr-3 font-normal">Interest</th>
+                  <th className="py-1 pr-3 font-normal">Extra</th>
+                  <th className="py-1 pr-3 font-normal">Source</th>
+                  <th className="py-1 font-normal" />
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((p) => (
+                  <tr key={p.id} className="border-t">
+                    <td className="py-1 pr-3 font-mono text-xs tabular-nums">{p.paymentDate}</td>
+                    <td className="py-1 pr-3 tabular-nums">{formatCurrency(p.principal)}</td>
+                    <td className="py-1 pr-3 tabular-nums">{formatCurrency(p.interest)}</td>
+                    <td className="py-1 pr-3 tabular-nums">{formatCurrency(p.extra)}</td>
+                    <td className="py-1 pr-3 text-xs text-muted-foreground">
+                      {p.source.toLowerCase()}
+                    </td>
+                    <td className="py-1 text-right">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        aria-label={`Delete payment ${p.paymentDate}`}
+                        onClick={async () => {
+                          const ok = await confirm({
+                            title: 'Delete this recorded payment?',
+                            description: `Removes the ${formatDate(p.paymentDate)} payment row from ${loanName}’s history. This can’t be undone.`,
+                          });
+                          if (ok && p.id != null) await removePayment(p.id, loanId);
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="text-xs text-muted-foreground">
+          To correct a payment, delete it here and re-confirm it in the Monthly check-in.
+        </p>
+      </div>
+      {dialog}
+    </details>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // LoanCard
 // ---------------------------------------------------------------------------
 
@@ -380,6 +465,8 @@ function LoanCard({ projection, expanded, onToggleExpand, schedule, onEdit }: Lo
             <AmortizationTable schedule={schedule} />
           </div>
         )}
+
+        <RecordedPayments loanId={loanId} loanName={loan.name} />
       </CardContent>
     </Card>
   );
