@@ -164,6 +164,21 @@ describe('AccountsPanel (W14 Manage surface)', () => {
       expect(screen.getByText(/no accounts added yet/i)).toBeInTheDocument();
     });
 
+    it('Wave C C7: each account row carries Update balance + the balance history', async () => {
+      await seedAccount(db, 'Schwab Brokerage');
+      const user = userEvent.setup();
+      render(<MemoryRouter><AccountsPanel /></MemoryRouter>);
+
+      await screen.findByText('Schwab Brokerage');
+      expect(screen.getByText('Balance history (0)')).toBeInTheDocument();
+      await user.click(
+        screen.getByRole('button', { name: /^update schwab brokerage balance$/i }),
+      );
+      expect(
+        await screen.findByRole('dialog', { name: /update.*balance/i }),
+      ).toBeInTheDocument();
+    });
+
     it('Cancel keeps the account', async () => {
       await seedAccount(db, 'Schwab Brokerage');
       const user = userEvent.setup();

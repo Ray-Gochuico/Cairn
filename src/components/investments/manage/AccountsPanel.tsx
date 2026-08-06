@@ -14,6 +14,8 @@ import AccountForm, {
   DEFAULT_ACCOUNT,
 } from '@/components/forms/AccountForm';
 import { ImportCsvButton } from '@/components/import/ImportCsvButton';
+import AccountBalanceHistory from './AccountBalanceHistory';
+import { UpdateAccountBalanceDialog } from '@/components/dialogs/UpdateAccountBalanceDialog';
 
 /**
  * W14 Manage surface: account CRUD on the Investments page. A near-mechanical
@@ -28,6 +30,8 @@ export default function AccountsPanel() {
   const { dependents, load: loadDependents } = useDependentsStore();
   const { confirm, dialog } = useConfirm();
   const [drawer, setDrawer] = useState<'closed' | 'create' | { type: 'edit'; id: number }>('closed');
+  // Wave C (C7): which account the Update balance dialog targets.
+  const [balanceTarget, setBalanceTarget] = useState<{ id: number; name: string } | null>(null);
 
   const reload = useCallback(() => {
     load();
@@ -70,44 +74,57 @@ export default function AccountsPanel() {
         <div className="space-y-2">
           {accounts.map((a) => (
             <Card key={a.id}>
-              <CardContent className="flex items-center justify-between py-3">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{a.name}</span>
-                    {a.allowMargin && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                        Margin
-                      </span>
-                    )}
+              {/* Wave C (C7): the CardContent becomes a column so the balance
+                  history sits beneath the untouched name/buttons row. */}
+              <CardContent className="py-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{a.name}</span>
+                      {a.allowMargin && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                          Margin
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {ACCOUNT_TYPE_LABELS[a.type]}
+                      {a.institution ? ` · ${a.institution}` : ''}
+                      {' · '}
+                      {a.ownerPersonId == null
+                        ? 'Joint'
+                        : personById.get(a.ownerPersonId) ?? 'Unknown owner'}
+                      {a.excludedFromNetWorth ? ' · excluded from net worth' : ''}
+                    </div>
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    {ACCOUNT_TYPE_LABELS[a.type]}
-                    {a.institution ? ` · ${a.institution}` : ''}
-                    {' · '}
-                    {a.ownerPersonId == null
-                      ? 'Joint'
-                      : personById.get(a.ownerPersonId) ?? 'Unknown owner'}
-                    {a.excludedFromNetWorth ? ' · excluded from net worth' : ''}
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      aria-label={`Update ${a.name} balance`}
+                      onClick={() => setBalanceTarget({ id: a.id!, name: a.name })}
+                    >
+                      Update balance
+                    </Button>
+                    <Button size="sm" variant="outline" aria-label={`Edit ${a.name}`} onClick={() => setDrawer({ type: 'edit', id: a.id! })}>Edit</Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      aria-label={`Delete ${a.name}`}
+                      onClick={async () => {
+                        const ok = await confirm({
+                          title: `Delete ${a.name}?`,
+                          description:
+                            'This also permanently deletes its monthly balance snapshots, holdings, and contribution history. This can’t be undone.',
+                        });
+                        if (ok) await remove(a.id!);
+                      }}
+                    >
+                      Delete
+                    </Button>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" aria-label={`Edit ${a.name}`} onClick={() => setDrawer({ type: 'edit', id: a.id! })}>Edit</Button>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    aria-label={`Delete ${a.name}`}
-                    onClick={async () => {
-                      const ok = await confirm({
-                        title: `Delete ${a.name}?`,
-                        description:
-                          'This also permanently deletes its monthly balance snapshots, holdings, and contribution history. This can’t be undone.',
-                      });
-                      if (ok) await remove(a.id!);
-                    }}
-                  >
-                    Delete
-                  </Button>
-                </div>
+                <AccountBalanceHistory accountId={a.id!} accountName={a.name} />
               </CardContent>
             </Card>
           ))}
@@ -150,6 +167,14 @@ export default function AccountsPanel() {
         />
       </EditDrawer>
       {dialog}
+      {balanceTarget && (
+        <UpdateAccountBalanceDialog
+          open
+          onOpenChange={(o) => !o && setBalanceTarget(null)}
+          accountId={balanceTarget.id}
+          accountName={balanceTarget.name}
+        />
+      )}
     </div>
   );
 }
