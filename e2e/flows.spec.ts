@@ -129,3 +129,40 @@ test('calculators: the page scope honors ?view= — scoped FI figures + caption,
   await expect(portfolio).toHaveValue('935000');
   expect(errors.join('\n')).not.toContain('Maximum update depth');
 });
+
+test('setup honesty: saved data renders cards not gates; abandonment surfaces the briefing resume row', async ({ page }) => {
+  const errors = collectErrors(page);
+  // Finished-user re-entry repro (OB-Q1): the seed has persons/accounts but NO
+  // wizard progress key — exactly the post-Finish wiped state. The seeded
+  // disclosure acceptance bypasses Step 0.
+  await page.goto('/setup');
+  await expect(page.getByTestId('person-chips')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('person-chips')).toContainText('Demo Investor');
+  await expect(page.getByRole('button', { name: 'Start this section' })).toHaveCount(0);
+  // C3: sections with saved data but no completion carry the neutral marker.
+  await expect(page.getByText('has saved data').first()).toBeVisible();
+
+  // Abandonment (OB-Q2): persist a half-done run, then land on the Dashboard —
+  // the shipped "Continue setup" row must finally fire (C4).
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'setupWizard.progress.v1',
+      JSON.stringify({
+        currentSection: 3,
+        sectionStatus: { 1: 'completed', 2: 'completed', 3: 'pending', 4: 'pending' },
+        startedAt: new Date().toISOString(),
+      }),
+    );
+    localStorage.removeItem('setupWizard.dismissed.v1');
+  });
+  // A fresh profile's root visit inside the new-month grace window
+  // auto-routes to /monthly?from=new-month at bootstrap (main.tsx), so the
+  // briefing never renders on a hard '/' load. Reach the Dashboard through
+  // the app's own sidebar — a client-side navigation that skips bootstrap —
+  // which is also the path a real user takes from the monthly nudge.
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Dashboard' }).click();
+  await expect(page.getByText('Suggested next step: finish setting up.')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('link', { name: 'Continue setup' })).toBeVisible();
+  expect(errors.join('\n')).not.toContain('Maximum update depth');
+});
