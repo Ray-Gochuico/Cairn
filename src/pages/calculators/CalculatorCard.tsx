@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { isValidElement, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { withViewSearch } from '@/lib/view-scope';
 import { MoreHorizontalIcon } from 'lucide-react';
@@ -21,7 +21,8 @@ interface CalculatorCardProps {
    * The REST-state meaning line: ONE sentence built ONLY from values the card
    * already renders. Warning states REPLACE it (a degraded headline never
    * keeps a cheerful caption); empty states pass <EmptyMeaning>. Truncates to
-   * a single line in both states.
+   * a single line in both states, EXCEPT <EmptyMeaning> empty states, which
+   * may wrap to two clamped lines (Wave C DC2 safe subset).
    */
   meaning: ReactNode;
   /** Stable kebab id — trigger/panel wiring, hash target, hide persistence. */
@@ -38,13 +39,15 @@ interface CalculatorCardProps {
 }
 
 /** Empty/no-data waymark sentence: the shared cairn glyph beside the CTA copy.
- *  Keep any Wave-15 <Link> inside children — links stay clickable over the
- *  stretched trigger (D5 z-raise). */
+ *  Wave C (DC2 safe subset): empty-state invites may wrap to two lines — the
+ *  glyph flows INLINE so a wrapped second line aligns under the text, and the
+ *  outer meaning <p> owns the clamp (line-clamp-2). Keep any Wave-15 <Link>
+ *  inside children — links stay clickable over the stretched trigger (D5). */
 export function EmptyMeaning({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-flex max-w-full items-center gap-1.5 align-bottom">
-      <CairnGlyph className="h-4 w-4 shrink-0" />
-      <span className="truncate">{children}</span>
+    <span className="max-w-full">
+      <CairnGlyph className="mr-1.5 inline-block h-4 w-4 -translate-y-px align-text-bottom" />
+      {children}
     </span>
   );
 }
@@ -116,6 +119,10 @@ export function CalculatorCard({
   const wasOpen = useRef(open);
 
   const fullPagePath = CALCULATOR_CARD_DEFS.find((d) => d.id === cardId)?.fullPagePath;
+
+  // Wave C (DC2): EmptyMeaning states clamp to two lines; every other meaning
+  // (incl. dirty "Scenario:" lines) keeps the W17 one-line truncate.
+  const isEmptyMeaning = isValidElement(meaning) && meaning.type === EmptyMeaning;
 
   const toggle = () => {
     if (!shell || !cardId) return;
@@ -250,7 +257,10 @@ export function CalculatorCard({
           </div>
           <p
             data-testid={`${id}-meaning`}
-            className="min-w-0 truncate text-sm text-muted-foreground"
+            className={cn(
+              'min-w-0 text-sm text-muted-foreground',
+              isEmptyMeaning ? 'line-clamp-2' : 'truncate',
+            )}
           >
             {dirty && (
               <>

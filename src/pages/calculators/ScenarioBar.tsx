@@ -212,12 +212,16 @@ function ScenarioBarField(props: {
           edited — reset
         </button>
       ) : (
-        <p className="mt-0.5 text-xs text-muted-foreground truncate" title={provenance}>
+        /* Wave C (C10/DC2): provenance is the honesty layer — clamp to two
+           lines instead of truncating ("joint accounts not included" was
+           unreadable at grid widths). The bar has no height cap, so the
+           second line is free. */
+        <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2" title={provenance}>
           {provenance}
         </p>
       )}
       {hint && (
-        <p className="mt-0.5 text-xs text-muted-foreground truncate" title={hint}>
+        <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2" title={hint}>
           {hint}
         </p>
       )}

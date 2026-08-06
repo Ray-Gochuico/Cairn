@@ -445,3 +445,27 @@ describe('ScenarioBar — page-scope control + scoped bar (Wave B)', () => {
     expect(screen.getByText("Sam's attributed transactions suggest ~$900/mo")).toBeInTheDocument();
   });
 });
+
+describe('ScenarioBar — un-truncated honesty layer (Wave C C10/DC2)', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    __resetScenarioAssumptionsForTests();
+    __resetCalcScopeForTests();
+    resetStores();
+    primeBaseline();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-05-14T12:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('Wave C C10: provenance lines clamp to two lines instead of truncating (title attr kept)', () => {
+    renderBar();
+    const prov = screen.getByText('your monthly expense baseline');
+    expect(prov.className).toContain('line-clamp-2');
+    expect(prov.className).not.toContain('truncate');
+    expect(prov).toHaveAttribute('title', 'your monthly expense baseline');
+  });
+});
