@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { HouseholdSchema, type Household } from '@/types/schema';
@@ -71,26 +71,41 @@ const HouseholdFormSchema = HouseholdSchema.omit({
   upcomingPurchaseMonths: true,
   withdrawalRate: true,
   inflationAssumption: true,
+  growthScenarios: true,
 }).extend({
   withdrawalRatePercent: z.number().min(0).max(100),
   inflationAssumptionPercent: z.number().min(0).max(100),
+  growthScenariosPercent: z.array(
+    z.object({
+      label: z.string().min(1, 'needs a label').max(50),
+      ratePercent: z.number().min(0, 'must be at least 0').max(100, 'must be at most 100'),
+    }),
+  ),
 });
 type HouseholdFormShape = z.infer<typeof HouseholdFormSchema>;
 
 const toFormShape = (v: HouseholdFormValues): HouseholdFormShape => {
-  const { withdrawalRate, inflationAssumption, ...rest } = v;
+  const { withdrawalRate, inflationAssumption, growthScenarios, ...rest } = v;
   return {
     ...rest,
     withdrawalRatePercent: fractionToPercent(withdrawalRate),
     inflationAssumptionPercent: fractionToPercent(inflationAssumption),
+    growthScenariosPercent: growthScenarios.map((g) => ({
+      label: g.label,
+      ratePercent: fractionToPercent(g.rate),
+    })),
   };
 };
 const fromFormShape = (v: HouseholdFormShape): HouseholdFormValues => {
-  const { withdrawalRatePercent, inflationAssumptionPercent, ...rest } = v;
+  const { withdrawalRatePercent, inflationAssumptionPercent, growthScenariosPercent, ...rest } = v;
   return {
     ...rest,
     withdrawalRate: percentToFraction(withdrawalRatePercent),
     inflationAssumption: percentToFraction(inflationAssumptionPercent),
+    growthScenarios: growthScenariosPercent.map((g) => ({
+      label: g.label,
+      rate: percentToFraction(g.ratePercent),
+    })),
   };
 };
 
@@ -131,6 +146,7 @@ export default function HouseholdForm({
     defaultValues: toFormShape(HOUSEHOLD_DEFAULT_VALUES),
     values: formValues,
   });
+  const growthArray = useFieldArray({ control: form.control, name: 'growthScenariosPercent' });
 
   // Load tax rules for 2026 on mount so city dropdown is populated.
   useEffect(() => {
@@ -340,6 +356,60 @@ export default function HouseholdForm({
               <FieldError id="household-inflation-error" message={form.formState.errors.inflationAssumptionPercent?.message} />
             </div>
           </div>
+
+          <div>
+            <Label>Growth scenarios</Label>
+            {/* Wave C (C6/IN-G1): growthScenarios previously had NO editor
+                anywhere — PathToFiCard's empty state linked here to a form
+                without the field (a dead end). Rates render as %, stored as
+                fractions (the withdrawalRate boundary pattern). */}
+            <p className="mb-2 text-xs text-muted-foreground">
+              Return assumptions used by Path to FI, Goals, and the calculators. Rates are % per year.
+            </p>
+            <div className="space-y-2">
+              {growthArray.fields.map((f, i) => (
+                <div key={f.id} className="flex items-end gap-2">
+                  <div className="min-w-0 flex-1">
+                    <Label htmlFor={`growth-label-${i}`} className="text-xs">Label</Label>
+                    <Input
+                      id={`growth-label-${i}`}
+                      {...form.register(`growthScenariosPercent.${i}.label`)}
+                      aria-invalid={form.formState.errors.growthScenariosPercent?.[i]?.label ? true : undefined}
+                    />
+                  </div>
+                  <div className="w-28">
+                    <Label htmlFor={`growth-rate-${i}`} className="text-xs">Rate (%)</Label>
+                    <Input
+                      id={`growth-rate-${i}`}
+                      type="number"
+                      step="0.1"
+                      className="text-right tabular-nums"
+                      {...form.register(`growthScenariosPercent.${i}.ratePercent`, { valueAsNumber: true })}
+                      aria-invalid={form.formState.errors.growthScenariosPercent?.[i]?.ratePercent ? true : undefined}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    aria-label={`Remove ${form.watch(`growthScenariosPercent.${i}.label`) || 'scenario'}`}
+                    onClick={() => growthArray.remove(i)}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-2"
+              onClick={() => growthArray.append({ label: '', ratePercent: 6 })}
+            >
+              Add scenario
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -354,6 +424,7 @@ export default function HouseholdForm({
           inflationAssumptionPercent: 'Inflation assumption',
           monthlyExpenseBaseline: 'Monthly expenses',
           filingStatus: 'Filing status',
+          growthScenariosPercent: 'Growth scenarios',
         }}
       />
 
