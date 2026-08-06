@@ -565,12 +565,12 @@ describe('CalculatorsLayout', () => {
     expect(sessionStorage.getItem('calc-state:supplemental-pay')).toBeNull();
   });
 
-  it('D5 (Wave 18): the Next dollar field renders in the next-dollar section header', async () => {
+  it('D5 (Wave 18): the next-dollar field renders in the next-dollar section (Wave C N5: labeled Amount)', async () => {
     primeBaseline();
     primeSettings();
     usePersonsStore.setState({ persons: [{ ...basePerson }], isLoading: false, error: null });
     render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
-    const field = await screen.findByRole('spinbutton', { name: /next dollar/i });
+    const field = await screen.findByRole('spinbutton', { name: 'Amount' });
     expect(field).toBeInTheDocument();
     // It lives inside the Next dollar SECTION, not another group.
     const section = field.closest('section')!;
@@ -578,6 +578,19 @@ describe('CalculatorsLayout', () => {
     expect(
       screen.getByText(/One number, two answers/i),
     ).toBeInTheDocument();
+  });
+
+  it('Wave C N5: the next-dollar field renders BELOW the double hairline with the Amount label and stacked captions', async () => {
+    primeBaseline();
+    primeSettings();
+    usePersonsStore.setState({ persons: [{ ...basePerson }], isLoading: false, error: null });
+    render(<MemoryRouter><CalculatorsLayout /></MemoryRouter>);
+    const field = await screen.findByLabelText('Amount');
+    const section = field.closest('section')!;
+    const hairline = section.querySelector('[aria-hidden="true"].space-y-\\[3px\\]')!;
+    // The hairline now precedes the field in document order:
+    expect(hairline.compareDocumentPosition(field) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText(/One number, two answers/)).toBeInTheDocument();
   });
 
   it('renders the ScenarioBar between the intro copy and the grid (Wave 16)', async () => {
