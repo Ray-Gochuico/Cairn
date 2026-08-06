@@ -40,6 +40,15 @@ describe('HouseholdForm growth-scenarios editor (Wave C C6/IN-G1)', () => {
     );
   });
 
+  it('Wave C review (MINOR 8): the Moderate-headline hint renders with the editor', () => {
+    render(<HouseholdForm values={HOUSEHOLD_DEFAULT_VALUES} onSubmit={vi.fn()} />);
+    expect(
+      screen.getByText(
+        "Calculators headline the 'Moderate' scenario — renaming it changes which row they use.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('removing a row drops it from the submitted array', async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn().mockResolvedValue(undefined);

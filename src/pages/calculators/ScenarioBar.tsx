@@ -297,6 +297,11 @@ export function ScenarioBar() {
         },
         todayIso,
       );
+      // Wave C review (MAJOR 2): after an app restart the store is [] until
+      // something loads it — reading it cold made DC6 activate a SECOND
+      // scenario, and the single-active UNIQUE constraint then failed every
+      // retry. Load first (in-flight-deduped; cheap when already warm).
+      await useScenariosStore.getState().load();
       const existing = useScenariosStore.getState().scenarios;
       // Wave C (DC6): sending BEFORE ever visiting /what-if meant the store's
       // ensureBaseline never ran — nothing was active, and the page greeted
@@ -336,6 +341,21 @@ export function ScenarioBar() {
           : []),
       ]
     : [];
+
+  // Wave C review (MINOR 5): the Return field has NO What-If lever
+  // counterpart, so a Return-only edit maps to an empty payload — which DC6
+  // would now auto-activate as a scenario that does nothing. Send requires
+  // at least one edit the D6 mapping actually carries (mirrors
+  // leverPayloadFromScenarioBar's branches, incl. the portfolio===real
+  // no-op guard).
+  const hasMappableEdit =
+    (scenario.isEdited.portfolio &&
+      scenario.values.portfolio !== scenario.defaults.portfolio) ||
+    scenario.isEdited.annualContribution ||
+    scenario.isEdited.monthlyExpenses ||
+    scenario.isEdited.swrPct ||
+    scenario.isEdited.inflationPct ||
+    Object.keys(scenario.salaryByPersonId).length > 0;
 
   // Wave C (N2): flipping Household → person silently shrank "Edited (4)" to
   // "Edited (1)" — household edits looked destroyed (they're preserved in
@@ -428,20 +448,29 @@ export function ScenarioBar() {
                 Edit a field above to send it as a scenario.
               </span>
             )}
-            {/* D14: enabled only when ≥1 bar field is edited. Wave B gate fix:
-                the CB6 reason is programmatically associated so AT users hear
-                WHY the button is disabled, not just a bare disabled control. */}
+            {/* Wave C review (MINOR 5): edits exist but none maps to a lever
+                (e.g. Return-only) — say why Send stays disabled. */}
+            {!scope.isScoped && scenario.editedCount > 0 && !hasMappableEdit && (
+              <span id="send-whatif-unmappable-note" className="text-muted-foreground">
+                This edit doesn’t map to a What-If lever yet.
+              </span>
+            )}
+            {/* D14: enabled only when ≥1 MAPPABLE bar field is edited. Wave B
+                gate fix: the reason is programmatically associated so AT users
+                hear WHY the button is disabled, not just a bare control. */}
             <Button
               type="button"
               variant="outline"
               size="sm"
-              disabled={scenario.editedCount === 0 || scope.isScoped}
+              disabled={scenario.editedCount === 0 || scope.isScoped || !hasMappableEdit}
               aria-describedby={
                 scope.isScoped
                   ? 'send-whatif-scoped-note'
                   : scenario.editedCount === 0
                     ? 'send-whatif-empty-note'
-                    : undefined
+                    : !hasMappableEdit
+                      ? 'send-whatif-unmappable-note'
+                      : undefined
               }
               onClick={() => void sendToWhatIf()}
             >

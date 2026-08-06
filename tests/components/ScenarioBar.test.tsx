@@ -513,6 +513,38 @@ describe('ScenarioBar — Send-to-What-If handoff (Wave C C11/DC6)', () => {
     await editThenSend();
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ isActive: false }));
   });
+
+  it('Wave C review (MAJOR 2): send loads the store first — a DB-seeded active scenario is respected even when store state is empty (app restart)', async () => {
+    const { useScenariosStore } = await import('@/stores/scenarios-store');
+    const create = vi.fn(async () => 7);
+    // The restart repro: the DB holds an active scenario but the store is []
+    // (nothing loaded it yet). The stubbed load hydrates like the repo would.
+    const load = vi.fn(async () => {
+      useScenariosStore.setState({
+        scenarios: [{ id: 1, name: 'Baseline', isActive: true }],
+      } as never);
+    });
+    useScenariosStore.setState({ scenarios: [], create, load } as never);
+    renderBarWithRoutes();
+    await editThenSend();
+    expect(load).toHaveBeenCalled();
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ isActive: false }));
+  });
+
+  it('Wave C review (MINOR 5): a Return-only edit keeps Send disabled with the no-lever reason', async () => {
+    const user = userEvent.setup();
+    renderBar();
+    await user.clear(screen.getByLabelText('Return'));
+    await user.type(screen.getByLabelText('Return'), '9');
+    await waitFor(() =>
+      expect(screen.getByTestId('scenario-edited-count')).toHaveTextContent('Edited (1)'),
+    );
+    const send = screen.getByRole('button', { name: 'Send to What-If →' });
+    expect(send).toBeDisabled();
+    const note = screen.getByText('This edit doesn’t map to a What-If lever yet.');
+    expect(note).toHaveAttribute('id', 'send-whatif-unmappable-note');
+    expect(send).toHaveAttribute('aria-describedby', 'send-whatif-unmappable-note');
+  });
 });
 
 describe('ScenarioBar — un-truncated honesty layer (Wave C C10/DC2)', () => {

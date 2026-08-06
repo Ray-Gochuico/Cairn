@@ -363,8 +363,16 @@ export default function HouseholdForm({
                 anywhere — PathToFiCard's empty state linked here to a form
                 without the field (a dead end). Rates render as %, stored as
                 fractions (the withdrawalRate boundary pattern). */}
-            <p className="mb-2 text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Return assumptions used by Path to FI, Goals, and the calculators. Rates are % per year.
+            </p>
+            {/* Wave C review (MINOR 8): pickModerateEntry prefers the row
+                LABELLED 'Moderate' (else the second row) — deleting or
+                renaming it silently switches which scenario drives the
+                headline projections. Say so. */}
+            <p className="mb-2 text-xs text-muted-foreground">
+              Calculators headline the &#39;Moderate&#39; scenario — renaming it changes which row
+              they use.
             </p>
             <div className="space-y-2">
               {growthArray.fields.map((f, i) => (

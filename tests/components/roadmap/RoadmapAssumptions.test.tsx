@@ -78,4 +78,28 @@ describe('RoadmapAssumptions (Wave C DC1 / IN-G2·G3·G4)', () => {
       upcomingPurchaseMonths: null,
     });
   });
+
+  it("Wave C review (MINOR 6): person-row re-ask NULLs exactly that person's column", async () => {
+    const user = userEvent.setup();
+    render(<RoadmapAssumptions />);
+    await user.click(
+      screen.getByRole('button', { name: "Ask again: Is Alice's job stable or unstable?" }),
+    );
+    await user.click(await confirmButton());
+    expect(updatePerson).toHaveBeenCalledWith(1, { jobStability: null });
+    expect(updateHousehold).not.toHaveBeenCalled();
+    expect(updateAccount).not.toHaveBeenCalled();
+  });
+
+  it("Wave C review (MINOR 6): account-row re-ask NULLs exactly that account's column", async () => {
+    const user = userEvent.setup();
+    render(<RoadmapAssumptions />);
+    await user.click(
+      screen.getByRole('button', { name: 'Ask again: Does Fidelity HSA have high fees?' }),
+    );
+    await user.click(await confirmButton());
+    expect(updateAccount).toHaveBeenCalledWith(3, { hasHighFees: null });
+    expect(updateHousehold).not.toHaveBeenCalled();
+    expect(updatePerson).not.toHaveBeenCalled();
+  });
 });

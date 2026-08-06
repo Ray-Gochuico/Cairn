@@ -292,6 +292,20 @@ describe('Section1_WhoYouAre', () => {
     expect(screen.getByText('Bob — $62/hr hourly')).toBeInTheDocument();
   });
 
+  it('Wave C review (MINOR 7): an hourly rate with cents keeps them on the chip', () => {
+    usePersonsStore.setState({
+      persons: [
+        makePerson({ id: 2, name: 'Bob', employmentType: 'HOURLY', hourlyRate: 62.5, annualSalaryPretax: 0 }),
+      ],
+    } as never);
+    render(
+      <MemoryRouter>
+        <Section1_WhoYouAre hasData settled status="in_progress" onSetStatus={() => {}} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Bob — $62.50/hr hourly')).toBeInTheDocument();
+  });
+
   it('Wave C C2: saved persons render the cards even when status is pending', () => {
     usePersonsStore.setState({
       persons: [{ id: 1, name: 'Alice', annualSalaryPretax: 0, hourlyRate: null } as unknown as Person],

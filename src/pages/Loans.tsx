@@ -238,8 +238,13 @@ function AmortizationTable({ schedule }: { schedule: ScheduleEntry[] }) {
  *  correction path. */
 function RecordedPayments({ loanId, loanName }: { loanId: number; loanName: string }) {
   const payments = useLoanPaymentsStore((s) => s.paymentsByLoanId[loanId]);
+  const paymentsError = useLoanPaymentsStore((s) => s.error);
   const loadForLoan = useLoanPaymentsStore((s) => s.loadForLoan);
   const removePayment = useLoanPaymentsStore((s) => s.remove);
+  // Wave C review (MAJOR 1): deleting an AMORTIZATION row restores the
+  // coupled balance decrement in the store — refetch loans so this page's
+  // projections recompute from the restored balance.
+  const reloadLoans = useLoansStore((s) => s.load);
   const { confirm, dialog } = useConfirm();
   const [open, setOpen] = useState(false);
   useEffect(() => {
@@ -255,7 +260,16 @@ function RecordedPayments({ loanId, loanName }: { loanId: number; loanName: stri
         Recorded payments{payments ? ` (${rows.length})` : ''}
       </summary>
       <div className="space-y-2 p-3">
-        {rows.length === 0 ? (
+        {/* Wave C review (MINOR 4): `payments` is undefined until THIS loan's
+            load settles — never show the definitive empty claim over an
+            unloaded or failed history (the W10 F6 false-empty class). */}
+        {payments == null ? (
+          <p className="text-sm text-muted-foreground">
+            {paymentsError
+              ? 'Couldn’t load recorded payments — reopen to retry.'
+              : 'Loading…'}
+          </p>
+        ) : rows.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No payments recorded yet — the Monthly check-in records them.
           </p>
@@ -292,7 +306,12 @@ function RecordedPayments({ loanId, loanName }: { loanId: number; loanName: stri
                             title: 'Delete this recorded payment?',
                             description: `Removes the ${formatDate(p.paymentDate)} payment row from ${loanName}’s history. This can’t be undone.`,
                           });
-                          if (ok && p.id != null) await removePayment(p.id, loanId);
+                          if (ok && p.id != null) {
+                            await removePayment(p.id, loanId);
+                            // MAJOR 1: an AMORTIZATION delete restored the
+                            // coupled balance decrement — refresh loans.
+                            if (p.source === 'AMORTIZATION') void reloadLoans();
+                          }
                         }}
                       >
                         Delete

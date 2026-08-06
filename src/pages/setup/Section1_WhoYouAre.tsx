@@ -25,6 +25,13 @@ import type { Person } from '@/types/schema';
 
 type ActiveDialog = null | 'household' | 'persons' | 'employment' | 'dependents';
 
+/** Wave C review (MINOR 7): formatCurrency drops cents ($62.50 → "$63") —
+ *  keep them when the stored rate has them, matching PersonForm's value. */
+const formatHourlyRate = (rate: number): string =>
+  Number.isInteger(rate)
+    ? formatCurrency(rate)
+    : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(rate);
+
 interface Props {
   status: SectionStatus;
   onSetStatus: (s: SectionStatus) => void;
@@ -133,7 +140,7 @@ export default function Section1_WhoYouAre({ status, onSetStatus, hasData, settl
             // Wave C (C5, CW4): the pay itself, not just a count.
             label:
               p.employmentType === 'HOURLY'
-                ? `${p.name} — ${formatCurrency(p.hourlyRate ?? 0)}/hr hourly`
+                ? `${p.name} — ${formatHourlyRate(p.hourlyRate ?? 0)}/hr hourly`
                 : `${p.name} — ${formatCurrency(p.annualSalaryPretax)} salary${
                     p.employmentType === 'SALARY_WITH_OT' ? ' + OT' : ''
                   }`,

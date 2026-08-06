@@ -755,6 +755,36 @@ describe('Recorded loan payments (Wave C C8/IN-G6)', () => {
     ).toBeVisible();
   });
 
+  it('Wave C review (MINOR 4): an unloaded history shows Loading, never the definitive empty copy', async () => {
+    const user = userEvent.setup();
+    useLoanPaymentsStore.setState({
+      paymentsByLoanId: {}, isLoading: true, error: null,
+      loadForLoan: vi.fn(async () => {}), remove: vi.fn(async () => {}),
+    } as never);
+    renderLoans();
+    await user.click(await screen.findByText(/Recorded payments/));
+    expect(
+      screen.queryByText('No payments recorded yet — the Monthly check-in records them.'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Loading…')).toBeInTheDocument();
+  });
+
+  it('Wave C review (MINOR 4): a failed history load gets honest copy, never the empty claim', async () => {
+    const user = userEvent.setup();
+    useLoanPaymentsStore.setState({
+      paymentsByLoanId: {}, isLoading: false, error: 'DB gone',
+      loadForLoan: vi.fn(async () => {}), remove: vi.fn(async () => {}),
+    } as never);
+    renderLoans();
+    await user.click(await screen.findByText(/Recorded payments/));
+    expect(
+      screen.queryByText('No payments recorded yet — the Monthly check-in records them.'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Couldn’t load recorded payments — reopen to retry.'),
+    ).toBeInTheDocument();
+  });
+
   it('Wave C C8: row delete confirms then calls remove(id, loanId)', async () => {
     const user = userEvent.setup();
     const remove = vi.fn(async () => {});
