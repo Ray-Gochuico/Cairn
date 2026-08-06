@@ -81,6 +81,8 @@ export default function Section1_WhoYouAre({ status, onSetStatus, hasData, settl
         description="Filing status, state, default assumptions."
         count={household ? 1 : 0}
         onAddManual={() => setDialog('household')}
+        manageHref="/inputs/household"
+        manageLabel="Manage on Setup page"
       />
       <EntityCard
         title="Persons"
@@ -100,6 +102,8 @@ export default function Section1_WhoYouAre({ status, onSetStatus, hasData, settl
             if (ok && p.id != null) await removePerson(p.id);
           },
         }))}
+        manageHref="/inputs/persons"
+        manageLabel="Manage on Setup page"
       />
       <EntityCard
         title="Employment"
@@ -111,6 +115,8 @@ export default function Section1_WhoYouAre({ status, onSetStatus, hasData, settl
           ).length
         }
         onAddManual={() => setDialog('employment')}
+        manageHref="/inputs/persons"
+        manageLabel="Manage on Setup page"
       />
       <EntityCard
         title="Dependents"
@@ -118,6 +124,8 @@ export default function Section1_WhoYouAre({ status, onSetStatus, hasData, settl
         count={dependents.length}
         onAddManual={() => setDialog('dependents')}
         items={dependents.map((d, i) => ({ key: d.id ?? i, label: d.name }))}
+        manageHref="/inputs/dependents"
+        manageLabel="Manage on Setup page"
       />
 
       <Dialog

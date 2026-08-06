@@ -72,7 +72,9 @@ describe('Section2_WhatYouOwn', () => {
 
   it('renders the entry gate when status is pending', () => {
     render(
-      <Section2_WhatYouOwn hasData={false} settled status="pending" onSetStatus={() => {}} />,
+      <MemoryRouter>
+        <Section2_WhatYouOwn hasData={false} settled status="pending" onSetStatus={() => {}} />
+      </MemoryRouter>,
     );
     expect(screen.getByText(/Your assets/i)).toBeInTheDocument();
     expect(
@@ -82,7 +84,9 @@ describe('Section2_WhatYouOwn', () => {
 
   it('renders the seven cards when status is in_progress', () => {
     render(
-      <Section2_WhatYouOwn hasData={false} settled status="in_progress" onSetStatus={() => {}} />,
+      <MemoryRouter>
+        <Section2_WhatYouOwn hasData={false} settled status="in_progress" onSetStatus={() => {}} />
+      </MemoryRouter>,
     );
     expect(screen.getByText(/^Accounts$/)).toBeInTheDocument();
     expect(screen.getByText(/^Holdings$/)).toBeInTheDocument();
@@ -97,7 +101,9 @@ describe('Section2_WhatYouOwn', () => {
     const user = userEvent.setup();
     const onSetStatus = vi.fn();
     render(
-      <Section2_WhatYouOwn hasData={false} settled status="pending" onSetStatus={onSetStatus} />,
+      <MemoryRouter>
+        <Section2_WhatYouOwn hasData={false} settled status="pending" onSetStatus={onSetStatus} />
+      </MemoryRouter>,
     );
     await user.click(
       screen.getByRole('button', { name: /start this section/i }),
@@ -109,7 +115,9 @@ describe('Section2_WhatYouOwn', () => {
     const user = userEvent.setup();
     const onSetStatus = vi.fn();
     render(
-      <Section2_WhatYouOwn hasData={false} settled status="pending" onSetStatus={onSetStatus} />,
+      <MemoryRouter>
+        <Section2_WhatYouOwn hasData={false} settled status="pending" onSetStatus={onSetStatus} />
+      </MemoryRouter>,
     );
     await user.click(screen.getByRole('button', { name: /skip/i }));
     expect(onSetStatus).toHaveBeenCalledWith('skipped');
@@ -238,6 +246,17 @@ describe('Section2_WhatYouOwn', () => {
       const btn = within(card).getByRole('button', { name: /^import csv$/i });
       expect(btn).not.toBeDisabled();
     });
+  });
+
+  it('Wave C N7: the Accounts card carries the Manage on Investments link (CW25)', () => {
+    render(
+      <MemoryRouter>
+        <Section2_WhatYouOwn hasData={false} settled status="in_progress" onSetStatus={() => {}} />
+      </MemoryRouter>,
+    );
+    const card = findCard(/^Accounts$/);
+    const link = within(card).getByRole('link', { name: 'Manage on Investments page →' });
+    expect(link).toHaveAttribute('href', '/investments?manage=accounts');
   });
 
   it('Wave C C2: saved accounts render the cards even when status is pending', () => {

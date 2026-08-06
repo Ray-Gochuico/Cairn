@@ -66,7 +66,9 @@ describe('Section3_WhatYouOwe', () => {
 
   it('renders the entry gate when status is pending', () => {
     render(
-      <Section3_WhatYouOwe hasData={false} settled status="pending" onSetStatus={() => {}} />,
+      <MemoryRouter>
+        <Section3_WhatYouOwe hasData={false} settled status="pending" onSetStatus={() => {}} />
+      </MemoryRouter>,
     );
     expect(screen.getByText(/Your debts/i)).toBeInTheDocument();
     expect(
@@ -76,7 +78,9 @@ describe('Section3_WhatYouOwe', () => {
 
   it('renders the Loans card when status is in_progress', () => {
     render(
-      <Section3_WhatYouOwe hasData={false} settled status="in_progress" onSetStatus={() => {}} />,
+      <MemoryRouter>
+        <Section3_WhatYouOwe hasData={false} settled status="in_progress" onSetStatus={() => {}} />
+      </MemoryRouter>,
     );
     expect(screen.getByText(/^Loans$/)).toBeInTheDocument();
   });
@@ -85,7 +89,9 @@ describe('Section3_WhatYouOwe', () => {
     const user = userEvent.setup();
     const onSetStatus = vi.fn();
     render(
-      <Section3_WhatYouOwe hasData={false} settled status="pending" onSetStatus={onSetStatus} />,
+      <MemoryRouter>
+        <Section3_WhatYouOwe hasData={false} settled status="pending" onSetStatus={onSetStatus} />
+      </MemoryRouter>,
     );
     await user.click(screen.getByRole('button', { name: /skip/i }));
     expect(onSetStatus).toHaveBeenCalledWith('skipped');
@@ -94,7 +100,9 @@ describe('Section3_WhatYouOwe', () => {
   it('clicking Add manually on the Loans card opens the LoanForm dialog', async () => {
     const user = userEvent.setup();
     render(
-      <Section3_WhatYouOwe hasData={false} settled status="in_progress" onSetStatus={() => {}} />,
+      <MemoryRouter>
+        <Section3_WhatYouOwe hasData={false} settled status="in_progress" onSetStatus={() => {}} />
+      </MemoryRouter>,
     );
     await user.click(
       screen.getByRole('button', { name: /add manually/i }),
@@ -162,7 +170,9 @@ describe('Section3_WhatYouOwe', () => {
 
   it('does not show the in-progress banner on the pre-start gate', () => {
     render(
-      <Section3_WhatYouOwe hasData={false} settled status="pending" onSetStatus={() => {}} />,
+      <MemoryRouter>
+        <Section3_WhatYouOwe hasData={false} settled status="pending" onSetStatus={() => {}} />
+      </MemoryRouter>,
     );
     // The SectionEntryGate is shown instead; the in-progress banner is absent.
     expect(screen.queryByTestId('section3-intro')).toBeNull();
@@ -175,7 +185,9 @@ describe('Section3_WhatYouOwe', () => {
       update: async () => {}, remove: async () => {},
     } as never);
     render(
-      <Section3_WhatYouOwe hasData settled status="pending" onSetStatus={() => {}} />,
+      <MemoryRouter>
+        <Section3_WhatYouOwe hasData settled status="pending" onSetStatus={() => {}} />
+      </MemoryRouter>,
     );
     expect(screen.getByText('Mortgage')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Start this section' })).not.toBeInTheDocument();

@@ -139,6 +139,8 @@ export default function Section4_History({ status, onSetStatus, hasData, settled
         importEnabled
         importTrigger={<ImportCsvButton entity="snapshot" />}
         importDisabledReason={noAccountsReason}
+        manageHref="/investments?manage=accounts"
+        manageLabel="Manage on Investments page"
       />
       <EntityCard
         title="Property / vehicle values"
@@ -154,6 +156,8 @@ export default function Section4_History({ status, onSetStatus, hasData, settled
         importEnabled
         importTrigger={<ImportCsvButton entity="contribution" />}
         importDisabledReason={noAccountsReason}
+        manageHref="/investments?manage=contributions"
+        manageLabel="Manage on Investments page"
       />
       <Card>
         <CardHeader>
@@ -186,6 +190,8 @@ export default function Section4_History({ status, onSetStatus, hasData, settled
         count={goals.length}
         onAddManual={() => setDialog('goals')}
         items={goals.map((g, i) => ({ key: g.id ?? i, label: g.name }))}
+        manageHref="/goals"
+        manageLabel="Manage on Goals page"
       />
 
       <Dialog

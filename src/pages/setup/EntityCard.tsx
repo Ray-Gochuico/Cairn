@@ -1,4 +1,5 @@
 import { type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { Pencil, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -54,6 +55,11 @@ interface Props {
    * Persons pass "person-chips" to keep the shipped e2e/test contract.
    */
   itemsTestId?: string;
+  /** Wave C (N7/OB-G7): link to this entity's one-place-per-thing home —
+   *  generalizes the shipped Section-4 "Manage on Spending page →". Both
+   *  required together; absent = no link (keeps bare test renders router-free). */
+  manageHref?: string;
+  manageLabel?: string;
 }
 
 export default function EntityCard({
@@ -66,6 +72,8 @@ export default function EntityCard({
   importDisabledReason,
   items,
   itemsTestId,
+  manageHref,
+  manageLabel,
 }: Props) {
   // Stable id so the disabled Import CSV button can point at its reason note
   // via aria-describedby (L1) — a keyboard user tabbing onto the dead button
@@ -149,6 +157,13 @@ export default function EntityCard({
                 )}
               </span>
             ))}
+          </div>
+        )}
+        {manageHref && manageLabel && (
+          <div className="flex justify-end">
+            <Link to={manageHref} className="text-xs text-muted-foreground underline">
+              {manageLabel} →
+            </Link>
           </div>
         )}
       </CardContent>

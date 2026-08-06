@@ -129,6 +129,8 @@ export default function Section2_WhatYouOwn({ status, onSetStatus, hasData, sett
         importEnabled
         importTrigger={<ImportCsvButton entity="account" />}
         items={accounts.map((a, i) => ({ key: a.id ?? i, label: a.name }))}
+        manageHref="/investments?manage=accounts"
+        manageLabel="Manage on Investments page"
       />
       <EntityCard
         title="Holdings"
@@ -139,6 +141,8 @@ export default function Section2_WhatYouOwn({ status, onSetStatus, hasData, sett
         importTrigger={<ImportCsvButton entity="holding" />}
         importDisabledReason={noAccountsReason}
         items={holdings.map((h, i) => ({ key: h.id ?? i, label: h.ticker }))}
+        manageHref="/investments?manage=holdings"
+        manageLabel="Manage on Investments page"
       />
       <EntityCard
         title="Properties"
@@ -148,6 +152,8 @@ export default function Section2_WhatYouOwn({ status, onSetStatus, hasData, sett
         importEnabled
         importTrigger={<ImportCsvButton entity="property" />}
         items={properties.map((pr, i) => ({ key: pr.id ?? i, label: pr.name }))}
+        manageHref="/property"
+        manageLabel="Manage on Property page"
       />
       <EntityCard
         title="Rent / housing payment"
@@ -156,6 +162,8 @@ export default function Section2_WhatYouOwn({ status, onSetStatus, hasData, sett
         onAddManual={() => setDialog('housing_payments')}
         importEnabled={false}
         items={housingPayments.map((hp, i) => ({ key: hp.id ?? i, label: hp.name }))}
+        manageHref="/property"
+        manageLabel="Manage on Property page"
       />
       <EntityCard
         title="Vehicles"
@@ -165,6 +173,8 @@ export default function Section2_WhatYouOwn({ status, onSetStatus, hasData, sett
         importEnabled
         importTrigger={<ImportCsvButton entity="vehicle" />}
         items={vehicles.map((v, i) => ({ key: v.id ?? i, label: v.name }))}
+        manageHref="/vehicles"
+        manageLabel="Manage on Vehicles page"
       />
       <EntityCard
         title="Vehicle lease"
@@ -173,6 +183,8 @@ export default function Section2_WhatYouOwn({ status, onSetStatus, hasData, sett
         onAddManual={() => setDialog('vehicle_leases')}
         importEnabled={false}
         items={vehicleLeases.map((vl, i) => ({ key: vl.id ?? i, label: vl.name }))}
+        manageHref="/vehicles"
+        manageLabel="Manage on Vehicles page"
       />
       <EntityCard
         title="Equity grants"
@@ -182,6 +194,8 @@ export default function Section2_WhatYouOwn({ status, onSetStatus, hasData, sett
         importEnabled
         importTrigger={<ImportCsvButton entity="equity_grant" />}
         items={equityGrants.map((g, i) => ({ key: g.id ?? i, label: g.name }))}
+        manageHref="/equity-grants"
+        manageLabel="Manage on Equity grants page"
       />
 
       <Dialog

@@ -71,6 +71,8 @@ export default function Section3_WhatYouOwe({ status, onSetStatus, hasData, sett
         importEnabled
         importTrigger={<ImportCsvButton entity="loan" />}
         items={loans.map((l, i) => ({ key: l.id ?? i, label: l.name }))}
+        manageHref="/loans"
+        manageLabel="Manage on Loans page"
       />
 
       <Dialog
