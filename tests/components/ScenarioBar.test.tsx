@@ -538,3 +538,40 @@ describe('ScenarioBar — un-truncated honesty layer (Wave C C10/DC2)', () => {
     expect(prov).toHaveAttribute('title', 'your monthly expense baseline');
   });
 });
+
+describe('ScenarioBar — two-row layout + app-defaults qualifier (Wave C N1+N8)', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    __resetScenarioAssumptionsForTests();
+    __resetCalcScopeForTests();
+    resetStores();
+    primeBaseline();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-05-14T12:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('Wave C N1: the temporary-scenario sentence lives in the action row at 0 edits and yields to Edited(n)', async () => {
+    const user = userEvent.setup();
+    renderBar();
+    expect(
+      screen.getByText('Edits here are a temporary scenario. Nothing is saved to your data.'),
+    ).toBeVisible();
+    // After an edit the sentence yields to the badge:
+    await user.clear(screen.getByLabelText('Portfolio'));
+    await user.type(screen.getByLabelText('Portfolio'), '50000');
+    await waitFor(() =>
+      expect(screen.getByTestId('scenario-edited-count')).toHaveTextContent('Edited (1)'),
+    );
+    expect(screen.queryByText(/Edits here are a temporary scenario/)).not.toBeInTheDocument();
+  });
+
+  it('Wave C N8/DC9: a person-less profile qualifies the identity chips as app defaults', () => {
+    usePersonsStore.setState({ persons: [] } as never);
+    renderBar();
+    expect(screen.getByTestId('scenario-chips').textContent).toMatch(/ — app defaults$/);
+  });
+});

@@ -343,81 +343,99 @@ export function ScenarioBar() {
       role="region"
       aria-label="Your scenario"
       data-testid="scenario-bar"
-      className="rounded-md border bg-card p-4 space-y-3 min-w-0"
+      className="rounded-md border bg-card p-4 space-y-2 min-w-0"
     >
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+      <div className="space-y-1">
+        {/* Row 1 — identity: title · chips · Edit in Inputs · scope control */}
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 min-w-0">
           <span className="text-sm font-medium">Your scenario</span>
           <span className="text-xs text-muted-foreground" data-testid="scenario-chips">
-            {household ? chips.join(' · ') : 'No household set up yet'}
+            {household
+              ? realPersons.length === 0
+                ? `${chips.join(' · ')} — app defaults` // DC9: nothing user-confirmed yet
+                : chips.join(' · ')
+              : 'No household set up yet'}
           </span>
           <InlineLink to="/inputs" className="text-xs">
             Edit in Inputs
           </InlineLink>
           <ScopeControl />
         </div>
-        <div className="flex items-center gap-3 text-xs">
-          {scenario.editedCount > 0 && (
-            <>
-              <span
-                className="inline-flex items-center gap-1 text-muted-foreground"
-                data-testid="scenario-edited-count"
-              >
-                <BlazeDot />
-                Edited ({scenario.editedCount})
+        {/* Row 2 — actions (A#3: never a lone orphaned cluster under the title).
+            Left: the nothing-saved contract (CW16, moved verbatim from the old
+            footer line — with the tighter gaps below this reclaims ~70px of
+            the 1024 first screen) OR the Edited badge + Reset. Right: reason
+            note + Send, ml-auto so the notes never rewrap the row. */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <div className="flex min-w-0 items-center gap-3 text-xs">
+            {scenario.editedCount > 0 ? (
+              <>
+                <span
+                  className="inline-flex items-center gap-1 text-muted-foreground"
+                  data-testid="scenario-edited-count"
+                >
+                  <BlazeDot />
+                  Edited ({scenario.editedCount})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    scenario.resetAll();
+                    // W16 review: this button unmounts once editedCount hits 0 —
+                    // hand focus to the first scenario field, not <body>.
+                    document.getElementById(FIELDS[0].id)?.focus();
+                  }}
+                  className="text-primary hover:underline"
+                >
+                  Reset to my data
+                </button>
+              </>
+            ) : (
+              <span className="text-muted-foreground">
+                Edits here are a temporary scenario. Nothing is saved to your data.
               </span>
-              <button
-                type="button"
-                onClick={() => {
-                  scenario.resetAll();
-                  // W16 review: this button unmounts once editedCount hits 0 —
-                  // hand focus to the first scenario field, not <body>.
-                  document.getElementById(FIELDS[0].id)?.focus();
-                }}
-                className="text-primary hover:underline"
+            )}
+          </div>
+          <div className="ml-auto flex items-center gap-3 text-xs">
+            {/* D-B6: a person-scoped payload would silently misattribute —
+                disabled in person scope with the one-line reason. */}
+            {scope.isScoped && (
+              <span
+                id="send-whatif-scoped-note"
+                className="text-muted-foreground"
+                data-testid="send-whatif-scoped-note"
               >
-                Reset to my data
-              </button>
-            </>
-          )}
-          {/* D-B6: a person-scoped payload would silently misattribute —
-              disabled in person scope with the one-line reason. */}
-          {scope.isScoped && (
-            <span
-              id="send-whatif-scoped-note"
-              className="text-muted-foreground"
-              data-testid="send-whatif-scoped-note"
+                Switch to Household to send this scenario.
+              </span>
+            )}
+            {/* Wave C (C11/CW15): the 0-edits disabled Send previously gave no
+                reason at all — the visible note doubles as the button's
+                accessible description. */}
+            {!scope.isScoped && scenario.editedCount === 0 && (
+              <span id="send-whatif-empty-note" className="text-muted-foreground">
+                Edit a field above to send it as a scenario.
+              </span>
+            )}
+            {/* D14: enabled only when ≥1 bar field is edited. Wave B gate fix:
+                the CB6 reason is programmatically associated so AT users hear
+                WHY the button is disabled, not just a bare disabled control. */}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={scenario.editedCount === 0 || scope.isScoped}
+              aria-describedby={
+                scope.isScoped
+                  ? 'send-whatif-scoped-note'
+                  : scenario.editedCount === 0
+                    ? 'send-whatif-empty-note'
+                    : undefined
+              }
+              onClick={() => void sendToWhatIf()}
             >
-              Switch to Household to send this scenario.
-            </span>
-          )}
-          {/* Wave C (C11/CW15): the 0-edits disabled Send previously gave no
-              reason at all — the visible note doubles as the button's
-              accessible description. */}
-          {!scope.isScoped && scenario.editedCount === 0 && (
-            <span id="send-whatif-empty-note" className="text-muted-foreground">
-              Edit a field above to send it as a scenario.
-            </span>
-          )}
-          {/* D14: enabled only when ≥1 bar field is edited. Wave B gate fix:
-              the CB6 reason is programmatically associated so AT users hear
-              WHY the button is disabled, not just a bare disabled control. */}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={scenario.editedCount === 0 || scope.isScoped}
-            aria-describedby={
-              scope.isScoped
-                ? 'send-whatif-scoped-note'
-                : scenario.editedCount === 0
-                  ? 'send-whatif-empty-note'
-                  : undefined
-            }
-            onClick={() => void sendToWhatIf()}
-          >
-            Send to What-If →
-          </Button>
+              Send to What-If →
+            </Button>
+          </div>
         </div>
       </div>
       {sendError && (
@@ -425,7 +443,7 @@ export function ScenarioBar() {
           {sendError}
         </div>
       )}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-x-3 gap-y-2">
         {FIELDS.map((spec) => (
           <ScenarioBarField
             key={spec.field}
@@ -457,9 +475,6 @@ export function ScenarioBar() {
           ) : null,
         )}
       </div>
-      <p className="text-xs text-muted-foreground">
-        Edits here are a temporary scenario. Nothing is saved to your data.
-      </p>
     </section>
   );
 }
