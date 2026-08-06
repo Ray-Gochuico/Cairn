@@ -23,6 +23,7 @@ import { evaluate } from '@/domain/roadmap/evaluate';
 import { NODES } from '@/domain/roadmap/nodes';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { DisclosureBanner } from '@/components/roadmap/DisclosureBanner';
+import { RoadmapAssumptions } from '@/components/roadmap/RoadmapAssumptions';
 import { NextMoveHero } from '@/components/roadmap/NextMoveHero';
 import { SectionCard } from '@/components/roadmap/SectionCard';
 import { StatusLegend } from '@/components/roadmap/StatusIcon';
@@ -218,6 +219,9 @@ export default function Roadmap() {
           ctx={ctx}
         />
       ))}
+      {/* Wave C (DC1): answered write-once questions, reviewable + re-askable
+          at the bottom of their one-place-per-thing home. */}
+      <RoadmapAssumptions />
     </PageContainer>
   );
 }
