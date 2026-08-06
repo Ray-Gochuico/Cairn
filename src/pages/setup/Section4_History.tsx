@@ -21,6 +21,7 @@ import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 import TransactionsSectionImporter from '@/components/setup/TransactionsSectionImporter';
 import EntityCard from './EntityCard';
 import SectionEntryGate from './SectionEntryGate';
+import { TabLoadingSkeleton } from '@/components/inputs/TabLoadingSkeleton';
 import GoalForm from './forms/GoalForm';
 import ValueHistorySection from '@/components/inputs/ValueHistorySection';
 import { useAccountsStore } from '@/stores/accounts-store';
@@ -36,7 +37,17 @@ import {
   ContributionSource,
   SnapshotSource,
 } from '@/types/enums';
+import { formatMonth } from '@/lib/format';
 import { SECTIONS, type SectionStatus } from './sections';
+
+// Wave C (C5/DC7): qualified counts for the count-only history cards —
+// one honest sentence instead of a 214-chip flood.
+const plural = (n: number, s: string, p: string) => `${n} ${n === 1 ? s : p}`;
+const latestOf = (dates: string[]) => {
+  if (dates.length === 0) return null;
+  const sorted = [...dates].sort();
+  return formatMonth(sorted[sorted.length - 1].slice(0, 7));
+};
 
 type ActiveDialog =
   | null
@@ -48,9 +59,13 @@ type ActiveDialog =
 interface Props {
   status: SectionStatus;
   onSetStatus: (s: SectionStatus) => void;
+  /** Wave C (C2): store-derived truth from SectionLayout — ≥1 saved entity. */
+  hasData: boolean;
+  /** Wave C (C2): SectionLayout's latched load gate — gate copy may render. */
+  settled: boolean;
 }
 
-export default function Section4_History({ status, onSetStatus }: Props) {
+export default function Section4_History({ status, onSetStatus, hasData, settled }: Props) {
   const accounts = useAccountsStore((s) => s.accounts);
   const loadAccounts = useAccountsStore((s) => s.load);
   const snapshots = useSnapshotsStore((s) => s.snapshots);
@@ -107,7 +122,12 @@ export default function Section4_History({ status, onSetStatus }: Props) {
       ? 'Add an account first — imports match rows to existing accounts by name.'
       : undefined;
 
-  if (status === 'pending' || status === 'skipped') {
+  // Wave C (C2, owner constraint 1): the entry gate is an EMPTY STATE — it
+  // renders only when the section is truly empty (DC3: including skipped-
+  // with-data), and never before the stores settle (the W10 F6 false-empty
+  // class). Saved data always renders the entity cards.
+  if (!hasData && (status === 'pending' || status === 'skipped')) {
+    if (!settled) return <TabLoadingSkeleton />;
     return (
       <SectionEntryGate
         title={meta.introTitle}
@@ -125,25 +145,44 @@ export default function Section4_History({ status, onSetStatus }: Props) {
         title="Account snapshots"
         description="Historical balances per account."
         count={snapshots.length}
+        countLabel={
+          snapshots.length > 0
+            ? `${plural(snapshots.length, 'snapshot', 'snapshots')} across ${plural(new Set(snapshots.map((s) => s.accountId)).size, 'account', 'accounts')} · latest ${latestOf(snapshots.map((s) => s.snapshotDate))}`
+            : undefined
+        }
         onAddManual={() => setDialog('snapshots')}
         importEnabled
         importTrigger={<ImportCsvButton entity="snapshot" />}
         importDisabledReason={noAccountsReason}
+        manageHref="/investments?manage=accounts"
+        manageLabel="Manage on Investments page"
       />
       <EntityCard
         title="Property / vehicle values"
         description="Historical estimated values."
         count={assetSnapshots.length}
+        countLabel={
+          assetSnapshots.length > 0
+            ? `${plural(assetSnapshots.length, 'entry', 'entries')} across ${plural(new Set(assetSnapshots.map((s) => `${s.ownerType}-${s.ownerId}`)).size, 'asset', 'assets')} · latest ${latestOf(assetSnapshots.map((s) => s.snapshotDate))}`
+            : undefined
+        }
         onAddManual={() => setDialog('asset_snapshots')}
       />
       <EntityCard
         title="Contributions"
         description="Past contributions per account."
         count={contributions.length}
+        countLabel={
+          contributions.length > 0
+            ? `${plural(contributions.length, 'contribution', 'contributions')} · latest ${latestOf(contributions.map((c) => c.date))}`
+            : undefined
+        }
         onAddManual={() => setDialog('contributions')}
         importEnabled
         importTrigger={<ImportCsvButton entity="contribution" />}
         importDisabledReason={noAccountsReason}
+        manageHref="/investments?manage=contributions"
+        manageLabel="Manage on Investments page"
       />
       <Card>
         <CardHeader>
@@ -176,6 +215,8 @@ export default function Section4_History({ status, onSetStatus }: Props) {
         count={goals.length}
         onAddManual={() => setDialog('goals')}
         items={goals.map((g, i) => ({ key: g.id ?? i, label: g.name }))}
+        manageHref="/goals"
+        manageLabel="Manage on Goals page"
       />
 
       <Dialog

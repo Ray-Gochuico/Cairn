@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
+import { withViewSearch } from '@/lib/view-scope';
 import { useDisclosureGate } from '@/legal/useDisclosureGate';
 import { DisclosureModal } from '@/legal/DisclosureModal';
 import { useHouseholdStore } from '@/stores/household-store';
@@ -33,6 +34,7 @@ const TodaysDollarsChip = () => (
 );
 
 export default function Backtest() {
+  const location = useLocation(); // Wave C (C12): back link carries ?view= + #hash
   // Wave B (D-B10): this page has no ScenarioBar — the header ViewFilter IS
   // its scope control; the bridge mirrors ?view= into the calc-scope store.
   useCalcScopeUrlSync();
@@ -200,9 +202,11 @@ export default function Backtest() {
       </div>
       {/* W2 / BT-6 — ONE canonical back-nav markup for every calculator detail
           route (the paycheck detail page has the identical block). Match it
-          byte-for-byte here so the two detail pages don't drift. */}
+          byte-for-byte here so the two detail pages don't drift. Wave C (C12):
+          the link carries the active ?view= plus this card's #hash so Back
+          lands on /calculators with the card open and the scope intact. */}
       <Link
-        to="/calculators"
+        to={`${withViewSearch('/calculators', location.search)}#backtest`}
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" /> Back to calculators

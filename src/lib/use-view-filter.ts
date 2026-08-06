@@ -1,4 +1,4 @@
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { usePersonsStore } from '@/stores/persons-store';
 
 export type ViewFilter = 'household' | 'p1' | 'p2' | 'joint';
@@ -28,7 +28,9 @@ export type ViewFilter = 'household' | 'p1' | 'p2' | 'joint';
  * per-person filter silently hidden.
  */
 export function useViewFilter() {
-  const [params, setParams] = useSearchParams();
+  const [params] = useSearchParams();
+  const navigate = useNavigate();
+  const location = useLocation();
   const persons = usePersonsStore((s) => s.persons);
 
   const raw = params.get('view');
@@ -37,9 +39,13 @@ export function useViewFilter() {
 
   const setFilter = (v: ViewFilter) => {
     if (!isAvailable) return;
-    if (v === 'household') params.delete('view');
-    else params.set('view', v);
-    setParams(params);
+    const next = new URLSearchParams(params);
+    if (v === 'household') next.delete('view');
+    else next.set('view', v);
+    // Wave C (C12): react-router's setSearchParams drops the #hash, so
+    // flipping the calculators scope stripped an open card's deep link.
+    // Same push semantics, hash carried.
+    navigate({ search: next.toString() ? `?${next.toString()}` : '', hash: location.hash });
   };
 
   return {

@@ -4,6 +4,7 @@ import { render, screen, waitFor, within, fireEvent } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { useLoansStore } from '@/stores/loans-store';
+import { useLoanPaymentsStore } from '@/stores/loan-payments-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
@@ -715,5 +716,87 @@ describe('Loans page — drawer create submits (W14 page-level create coverage)'
       expect.objectContaining({ name: 'Primary Mortgage', firstPaymentDate: '2024-06-01' }),
     );
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+});
+
+describe('Recorded loan payments (Wave C C8/IN-G6)', () => {
+  const PAYMENT = {
+    id: 5, loanId: 1, paymentDate: '2026-06-15',
+    principal: 900, interest: 2100, extra: 0, source: 'AMORTIZATION' as const,
+  };
+
+  beforeEach(() => {
+    resetStores();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-06-20T12:00:00Z'));
+    useLoansStore.setState({
+      loans: [makeLoan({ id: 1, name: 'Primary Mortgage' })],
+      isLoading: false,
+    } as never);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('Wave C C8: recorded payments render per loan with the correction note', async () => {
+    const user = userEvent.setup();
+    useLoanPaymentsStore.setState({
+      paymentsByLoanId: { 1: [PAYMENT] },
+      loadForLoan: vi.fn(async () => {}), remove: vi.fn(async () => {}),
+    } as never);
+    renderLoans();
+    await user.click(await screen.findByText(/Recorded payments/));
+    expect(screen.getByText('2026-06-15')).toBeInTheDocument();
+    expect(screen.getByText('$900')).toBeInTheDocument();   // principal
+    expect(screen.getByText('$2,100')).toBeInTheDocument(); // interest
+    expect(
+      screen.getByText('To correct a payment, delete it here and re-confirm it in the Monthly check-in.'),
+    ).toBeVisible();
+  });
+
+  it('Wave C review (MINOR 4): an unloaded history shows Loading, never the definitive empty copy', async () => {
+    const user = userEvent.setup();
+    useLoanPaymentsStore.setState({
+      paymentsByLoanId: {}, isLoading: true, error: null,
+      loadForLoan: vi.fn(async () => {}), remove: vi.fn(async () => {}),
+    } as never);
+    renderLoans();
+    await user.click(await screen.findByText(/Recorded payments/));
+    expect(
+      screen.queryByText('No payments recorded yet — the Monthly check-in records them.'),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Loading…')).toBeInTheDocument();
+  });
+
+  it('Wave C review (MINOR 4): a failed history load gets honest copy, never the empty claim', async () => {
+    const user = userEvent.setup();
+    useLoanPaymentsStore.setState({
+      paymentsByLoanId: {}, isLoading: false, error: 'DB gone',
+      loadForLoan: vi.fn(async () => {}), remove: vi.fn(async () => {}),
+    } as never);
+    renderLoans();
+    await user.click(await screen.findByText(/Recorded payments/));
+    expect(
+      screen.queryByText('No payments recorded yet — the Monthly check-in records them.'),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText('Couldn’t load recorded payments — reopen to retry.'),
+    ).toBeInTheDocument();
+  });
+
+  it('Wave C C8: row delete confirms then calls remove(id, loanId)', async () => {
+    const user = userEvent.setup();
+    const remove = vi.fn(async () => {});
+    useLoanPaymentsStore.setState({
+      paymentsByLoanId: { 1: [PAYMENT] }, loadForLoan: vi.fn(async () => {}), remove,
+    } as never);
+    renderLoans();
+    await user.click(await screen.findByText(/Recorded payments/));
+    await user.click(screen.getByRole('button', { name: 'Delete payment 2026-06-15' }));
+    expect(await screen.findByText('Delete this recorded payment?')).toBeInTheDocument();
+    // The useConfirm dialog's confirm button label is exactly "Delete".
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(remove).toHaveBeenCalledWith(5, 1);
   });
 });

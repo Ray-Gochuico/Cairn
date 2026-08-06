@@ -66,19 +66,22 @@ function withCardHidden(
   }));
 }
 
-/** Wave 18 D5: the compact section-header "next dollar" input — one number,
- *  two answers (Debt extra + Allocator contribution), bound to the shared
- *  session store. */
+/** Wave 18 D5: the shared "next dollar" input — one number, two answers
+ *  (Debt extra + Allocator contribution), bound to the shared session store.
+ *  Wave C (N5): lives BELOW the section's double hairline as section content
+ *  (the NEXT DOLLAR header already names it — the field label is just
+ *  `Amount`, killing the NEXT DOLLAR / Next dollar stutter), with the
+ *  captions stacked beneath the field. */
 function NextDollarField() {
   const amount = useNextDollarStore((s) => s.amount);
   const setAmount = useNextDollarStore((s) => s.setAmount);
   const scope = useCalcScope();
   return (
-    <div className="flex flex-wrap items-end gap-3">
+    <div className="max-w-md space-y-1">
       <div className="w-40">
         <NumberField
           id="next-dollar"
-          label="Next dollar"
+          label="Amount"
           value={amount}
           onChange={setAmount}
           suffix="$/mo"
@@ -86,15 +89,13 @@ function NextDollarField() {
           min={0}
         />
       </div>
-      <p className="pb-1 text-xs text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         One number, two answers: what it does against your debt, and where it goes in your
         portfolio.
       </p>
       {/* CB8 (D-B8): the shared next-dollar stays household-level, labeled. */}
       {scope.isScoped && (
-        <p className="pb-1 text-xs text-muted-foreground">
-          Household figure — not split per person.
-        </p>
+        <p className="text-xs text-muted-foreground">Household figure — not split per person.</p>
       )}
     </div>
   );
@@ -457,10 +458,6 @@ export default function CalculatorsLayout() {
                   setCardHidden={setCardHidden}
                 />
               </div>
-              {/* Wave 18 D13/D5: the shared next-dollar $/mo lives in ITS
-                  section's header, feeding Debt's extra + the Allocator's
-                  contribution as defaults. No winner is declared. */}
-              {group.id === 'next-dollar' && <NextDollarField />}
               {/* Wave-12 explicitly deferred this stacked double-hairline
                   divider ("Explicit non-goals") — Wave 17 cashes the chip:
                   two 1px border rules, 3px apart. */}
@@ -468,6 +465,11 @@ export default function CalculatorsLayout() {
                 <div className="border-t border-border" />
                 <div className="border-t border-border" />
               </div>
+              {/* Wave 18 D13/D5 + Wave C N5: the shared next-dollar $/mo is
+                  ITS section's content (below the hairline, not squeezed into
+                  the header row), feeding Debt's extra + the Allocator's
+                  contribution as defaults. No winner is declared. */}
+              {group.id === 'next-dollar' && <NextDollarField />}
               {visibleCards.length > 0 && (
                 <div className="grid grid-cols-1 gap-4 min-w-0 md:grid-cols-2 xl:grid-cols-3">
                   {visibleCards.map(({ id, Component }) => (

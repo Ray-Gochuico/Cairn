@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { isValidElement, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { withViewSearch } from '@/lib/view-scope';
-import { MoreHorizontalIcon } from 'lucide-react';
+import { ChevronDown, MoreHorizontalIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -21,7 +21,8 @@ interface CalculatorCardProps {
    * The REST-state meaning line: ONE sentence built ONLY from values the card
    * already renders. Warning states REPLACE it (a degraded headline never
    * keeps a cheerful caption); empty states pass <EmptyMeaning>. Truncates to
-   * a single line in both states.
+   * a single line in both states, EXCEPT <EmptyMeaning> empty states, which
+   * may wrap to two clamped lines (Wave C DC2 safe subset).
    */
   meaning: ReactNode;
   /** Stable kebab id — trigger/panel wiring, hash target, hide persistence. */
@@ -38,13 +39,15 @@ interface CalculatorCardProps {
 }
 
 /** Empty/no-data waymark sentence: the shared cairn glyph beside the CTA copy.
- *  Keep any Wave-15 <Link> inside children — links stay clickable over the
- *  stretched trigger (D5 z-raise). */
+ *  Wave C (DC2 safe subset): empty-state invites may wrap to two lines — the
+ *  glyph flows INLINE so a wrapped second line aligns under the text, and the
+ *  outer meaning <p> owns the clamp (line-clamp-2). Keep any Wave-15 <Link>
+ *  inside children — links stay clickable over the stretched trigger (D5). */
 export function EmptyMeaning({ children }: { children: ReactNode }) {
   return (
-    <span className="inline-flex max-w-full items-center gap-1.5 align-bottom">
-      <CairnGlyph className="h-4 w-4 shrink-0" />
-      <span className="truncate">{children}</span>
+    <span className="max-w-full">
+      <CairnGlyph className="mr-1.5 inline-block h-4 w-4 -translate-y-px align-text-bottom" />
+      {children}
     </span>
   );
 }
@@ -116,6 +119,10 @@ export function CalculatorCard({
   const wasOpen = useRef(open);
 
   const fullPagePath = CALCULATOR_CARD_DEFS.find((d) => d.id === cardId)?.fullPagePath;
+
+  // Wave C (DC2): EmptyMeaning states clamp to two lines; every other meaning
+  // (incl. dirty "Scenario:" lines) keeps the W17 one-line truncate.
+  const isEmptyMeaning = isValidElement(meaning) && meaning.type === EmptyMeaning;
 
   const toggle = () => {
     if (!shell || !cardId) return;
@@ -189,7 +196,13 @@ export function CalculatorCard({
       ref={cardRef}
       id={cardId}
       data-testid={cardId ? `calc-card-${cardId}` : undefined}
-      className={cn('relative min-w-0', open ? 'col-span-full' : 'h-32 overflow-hidden')}
+      className={cn(
+        'relative min-w-0',
+        open ? 'col-span-full' : 'h-32 overflow-hidden',
+        // Wave C (N4): rest cards hover-shift the border (tokens only, color
+        // transition only) so closed cards read as openable.
+        !open && 'transition-colors hover:border-muted-foreground/40',
+      )}
     >
       {/* D6: blaze corner tick — a fill-only mark; the "Scenario:" prefix and
           sr-only sentence below carry the meaning (never color-only). */}
@@ -203,7 +216,9 @@ export function CalculatorCard({
       <CardHeader
         className={cn(
           'relative block space-y-0.5 p-4',
-          !open && 'flex h-full flex-col justify-center',
+          // Wave C (N3): top-align rest content so titles/headlines/meanings
+          // form consistent tracks across a row (A#4's 18px stair-step).
+          !open && 'flex h-full flex-col justify-start',
         )}
       >
         {/* D5: the stretched trigger. Same element in both states — REST it
@@ -222,6 +237,17 @@ export function CalculatorCard({
           data-testid={`${id}-trigger`}
           className="absolute inset-0 z-0 cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         />
+        {!open && (
+          // Wave C (N4): the rest card had NO open affordance — no chevron, no
+          // hover state; the page intro says "edit any field" over cards with
+          // no visible fields. Decorative (the stretched trigger below is the
+          // interactive element); pointer-events-none keeps it out of the way.
+          <ChevronDown
+            aria-hidden="true"
+            data-testid={cardId ? `${id}-open-affordance` : undefined}
+            className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-muted-foreground/70"
+          />
+        )}
         <div className="pointer-events-none min-w-0 space-y-0.5 [&_a]:pointer-events-auto [&_a]:relative [&_a]:z-10 [&_button]:pointer-events-auto [&_button]:relative [&_button]:z-10">
           <h3
             id={`${id}-waymark-title`}
@@ -250,7 +276,10 @@ export function CalculatorCard({
           </div>
           <p
             data-testid={`${id}-meaning`}
-            className="min-w-0 truncate text-sm text-muted-foreground"
+            className={cn(
+              'min-w-0 text-sm text-muted-foreground',
+              isEmptyMeaning ? 'line-clamp-2' : 'truncate',
+            )}
           >
             {dirty && (
               <>

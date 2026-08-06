@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import EntityCard from '@/pages/setup/EntityCard';
 
 describe('EntityCard', () => {
@@ -275,5 +276,37 @@ describe('EntityCard', () => {
       expect(label).toHaveAttribute('title', long);
       expect(label.className).toMatch(/truncate/);
     });
+  });
+
+  it('Wave C N7: manage link renders bottom-right when provided (the Spending-link precedent, generalized)', () => {
+    render(
+      <MemoryRouter>
+        <EntityCard title="Accounts" description="d" count={2} onAddManual={() => {}}
+          manageHref="/investments?manage=accounts" manageLabel="Manage on Investments page" />
+      </MemoryRouter>,
+    );
+    const link = screen.getByRole('link', { name: 'Manage on Investments page →' });
+    expect(link).toHaveAttribute('href', '/investments?manage=accounts');
+  });
+
+  it('Wave C N7: no link without the props (existing renders untouched)', () => {
+    render(<EntityCard title="X" description="d" count={0} onAddManual={() => {}} />);
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+
+  it('Wave C C5: countLabel replaces "{count} added" with a value-bearing caption', () => {
+    render(
+      <EntityCard
+        title="Household"
+        description="d"
+        count={1}
+        countLabel="Married filing jointly · CA · $8,000/mo baseline"
+        onAddManual={() => {}}
+      />,
+    );
+    expect(
+      screen.getByText('Married filing jointly · CA · $8,000/mo baseline'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/1 added/)).not.toBeInTheDocument();
   });
 });

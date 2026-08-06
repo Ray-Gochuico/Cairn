@@ -55,6 +55,21 @@ describe('CategoriesTab', () => {
     });
   });
 
+  it('Wave C N6: a budgeted category row shows the muted /budget pointer (CW24)', async () => {
+    const repo = new CategoriesRepo(getDatabase());
+    const groceries = (await repo.list()).find((c) => c.name === 'Groceries')!;
+    await repo.update(groceries.id!, { monthlyBudget: 850 });
+    renderTab();
+    const link = await screen.findByRole('link', { name: '$850/mo budget' });
+    expect(link).toHaveAttribute('href', '/budget');
+  });
+
+  it('Wave C N6: no suffix when no budget is set', async () => {
+    renderTab();
+    await screen.findByText('Groceries');
+    expect(screen.queryByText(/\/mo budget/)).not.toBeInTheDocument();
+  });
+
   it('creating a category adds it to the list', async () => {
     const user = userEvent.setup();
     renderTab();

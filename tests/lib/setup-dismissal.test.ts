@@ -4,6 +4,8 @@ import {
   isSetupDismissed,
   markSetupDismissed,
   shouldRedirectToSetup,
+  hasSetupInProgress,
+  SETUP_PROGRESS_KEY,
 } from '@/lib/setup-dismissal';
 
 describe('setup-dismissal marker', () => {
@@ -50,5 +52,17 @@ describe('shouldRedirectToSetup (H1: gate on dismissed marker)', () => {
     expect(
       shouldRedirectToSetup({ personCount: 0, dismissed: false, path: '/monthly' }),
     ).toBe(false);
+  });
+});
+
+describe('hasSetupInProgress (Wave C C4)', () => {
+  beforeEach(() => localStorage.clear());
+  it('false with no persisted wizard run; true once progress exists', () => {
+    expect(hasSetupInProgress()).toBe(false);
+    localStorage.setItem(SETUP_PROGRESS_KEY, '{"currentSection":3}');
+    expect(hasSetupInProgress()).toBe(true);
+  });
+  it('exports the canonical key SectionLayout writes', () => {
+    expect(SETUP_PROGRESS_KEY).toBe('setupWizard.progress.v1');
   });
 });

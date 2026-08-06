@@ -72,7 +72,9 @@ describe('Section2_WhatYouOwn', () => {
 
   it('renders the entry gate when status is pending', () => {
     render(
-      <Section2_WhatYouOwn status="pending" onSetStatus={() => {}} />,
+      <MemoryRouter>
+        <Section2_WhatYouOwn hasData={false} settled status="pending" onSetStatus={() => {}} />
+      </MemoryRouter>,
     );
     expect(screen.getByText(/Your assets/i)).toBeInTheDocument();
     expect(
@@ -82,7 +84,9 @@ describe('Section2_WhatYouOwn', () => {
 
   it('renders the seven cards when status is in_progress', () => {
     render(
-      <Section2_WhatYouOwn status="in_progress" onSetStatus={() => {}} />,
+      <MemoryRouter>
+        <Section2_WhatYouOwn hasData={false} settled status="in_progress" onSetStatus={() => {}} />
+      </MemoryRouter>,
     );
     expect(screen.getByText(/^Accounts$/)).toBeInTheDocument();
     expect(screen.getByText(/^Holdings$/)).toBeInTheDocument();
@@ -97,7 +101,9 @@ describe('Section2_WhatYouOwn', () => {
     const user = userEvent.setup();
     const onSetStatus = vi.fn();
     render(
-      <Section2_WhatYouOwn status="pending" onSetStatus={onSetStatus} />,
+      <MemoryRouter>
+        <Section2_WhatYouOwn hasData={false} settled status="pending" onSetStatus={onSetStatus} />
+      </MemoryRouter>,
     );
     await user.click(
       screen.getByRole('button', { name: /start this section/i }),
@@ -109,7 +115,9 @@ describe('Section2_WhatYouOwn', () => {
     const user = userEvent.setup();
     const onSetStatus = vi.fn();
     render(
-      <Section2_WhatYouOwn status="pending" onSetStatus={onSetStatus} />,
+      <MemoryRouter>
+        <Section2_WhatYouOwn hasData={false} settled status="pending" onSetStatus={onSetStatus} />
+      </MemoryRouter>,
     );
     await user.click(screen.getByRole('button', { name: /skip/i }));
     expect(onSetStatus).toHaveBeenCalledWith('skipped');
@@ -158,13 +166,14 @@ describe('Section2_WhatYouOwn', () => {
       } as any);
       render(
         <MemoryRouter>
-          <Section2_WhatYouOwn status="in_progress" onSetStatus={() => {}} />
+          <Section2_WhatYouOwn hasData={false} settled status="in_progress" onSetStatus={() => {}} />
         </MemoryRouter>,
       );
       const chipsOf = (testId: string) => screen.getByTestId(testId);
       expect(within(chipsOf('accounts-chips')).getByText('Fidelity Brokerage')).toBeInTheDocument();
       expect(within(chipsOf('accounts-chips')).getByText('Chase Checking')).toBeInTheDocument();
-      expect(within(chipsOf('holdings-chips')).getByText('VTI')).toBeInTheDocument();
+      // Wave C C5 (CW5): holding chips are account-qualified.
+      expect(within(chipsOf('holdings-chips')).getByText('VTI · Fidelity Brokerage')).toBeInTheDocument();
       expect(within(chipsOf('properties-chips')).getByText('Maple St house')).toBeInTheDocument();
       expect(
         within(chipsOf('rent-housing-payment-chips')).getByText('Apartment rent'),
@@ -177,7 +186,7 @@ describe('Section2_WhatYouOwn', () => {
     it('renders no chip containers when nothing has been added', () => {
       render(
         <MemoryRouter>
-          <Section2_WhatYouOwn status="in_progress" onSetStatus={() => {}} />
+          <Section2_WhatYouOwn hasData={false} settled status="in_progress" onSetStatus={() => {}} />
         </MemoryRouter>,
       );
       expect(screen.queryByTestId('accounts-chips')).toBeNull();
@@ -195,7 +204,7 @@ describe('Section2_WhatYouOwn', () => {
     function renderSection() {
       render(
         <MemoryRouter>
-          <Section2_WhatYouOwn status="in_progress" onSetStatus={() => {}} />
+          <Section2_WhatYouOwn hasData={false} settled status="in_progress" onSetStatus={() => {}} />
         </MemoryRouter>,
       );
     }
@@ -238,5 +247,51 @@ describe('Section2_WhatYouOwn', () => {
       const btn = within(card).getByRole('button', { name: /^import csv$/i });
       expect(btn).not.toBeDisabled();
     });
+  });
+
+  it('Wave C C5: holding chips are account-qualified (CW5) — duplicate tickers disambiguate', () => {
+    const base = {
+      isLoading: false, error: null, load: async () => {}, create: async () => 1,
+      update: async () => {}, remove: async () => {},
+    };
+    useAccountsStore.setState({
+      accounts: [{ id: 1, name: 'Taxable Brokerage' }, { id: 2, name: 'Roth IRA' }],
+      ...base,
+    } as never);
+    useHoldingsStore.setState({
+      holdings: [
+        { id: 10, accountId: 1, ticker: 'VTI' }, { id: 11, accountId: 2, ticker: 'VTI' },
+      ],
+      ...base,
+    } as never);
+    render(
+      <MemoryRouter>
+        <Section2_WhatYouOwn hasData settled status="in_progress" onSetStatus={() => {}} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('VTI · Taxable Brokerage')).toBeInTheDocument();
+    expect(screen.getByText('VTI · Roth IRA')).toBeInTheDocument();
+  });
+
+  it('Wave C N7: the Accounts card carries the Manage on Investments link (CW25)', () => {
+    render(
+      <MemoryRouter>
+        <Section2_WhatYouOwn hasData={false} settled status="in_progress" onSetStatus={() => {}} />
+      </MemoryRouter>,
+    );
+    const card = findCard(/^Accounts$/);
+    const link = within(card).getByRole('link', { name: 'Manage on Investments page →' });
+    expect(link).toHaveAttribute('href', '/investments?manage=accounts');
+  });
+
+  it('Wave C C2: saved accounts render the cards even when status is pending', () => {
+    useAccountsStore.setState({ accounts: [{ id: 1, name: 'Brokerage' }] } as never);
+    render(
+      <MemoryRouter>
+        <Section2_WhatYouOwn hasData settled status="pending" onSetStatus={() => {}} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Brokerage')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Start this section' })).not.toBeInTheDocument();
   });
 });

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { Person } from '@/types/schema';
@@ -7,6 +8,7 @@ import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import Section1_WhoYouAre from '@/pages/setup/Section1_WhoYouAre';
+import { makeHousehold, makePerson } from '../../factories';
 
 function resetStores() {
   useHouseholdStore.setState({
@@ -50,7 +52,9 @@ describe('Section1_WhoYouAre', () => {
 
   it('renders the entry gate when status is pending', () => {
     render(
-      <Section1_WhoYouAre status="pending" onSetStatus={() => {}} />,
+      <MemoryRouter>
+        <Section1_WhoYouAre hasData={false} settled status="pending" onSetStatus={() => {}} />
+      </MemoryRouter>,
     );
     expect(
       screen.getByText(/Tell us about your household/i),
@@ -62,7 +66,9 @@ describe('Section1_WhoYouAre', () => {
 
   it('renders the four cards when status is in_progress', () => {
     render(
-      <Section1_WhoYouAre status="in_progress" onSetStatus={() => {}} />,
+      <MemoryRouter>
+        <Section1_WhoYouAre hasData={false} settled status="in_progress" onSetStatus={() => {}} />
+      </MemoryRouter>,
     );
     expect(screen.getByText(/^Household$/)).toBeInTheDocument();
     expect(screen.getByText(/^Persons$/)).toBeInTheDocument();
@@ -74,7 +80,9 @@ describe('Section1_WhoYouAre', () => {
     const user = userEvent.setup();
     const onSetStatus = vi.fn();
     render(
-      <Section1_WhoYouAre status="pending" onSetStatus={onSetStatus} />,
+      <MemoryRouter>
+        <Section1_WhoYouAre hasData={false} settled status="pending" onSetStatus={onSetStatus} />
+      </MemoryRouter>,
     );
     await user.click(
       screen.getByRole('button', { name: /start this section/i }),
@@ -86,7 +94,9 @@ describe('Section1_WhoYouAre', () => {
     const user = userEvent.setup();
     const onSetStatus = vi.fn();
     render(
-      <Section1_WhoYouAre status="pending" onSetStatus={onSetStatus} />,
+      <MemoryRouter>
+        <Section1_WhoYouAre hasData={false} settled status="pending" onSetStatus={onSetStatus} />
+      </MemoryRouter>,
     );
     await user.click(screen.getByRole('button', { name: /skip/i }));
     expect(onSetStatus).toHaveBeenCalledWith('skipped');
@@ -94,7 +104,9 @@ describe('Section1_WhoYouAre', () => {
 
   it('shows the "wasSkipped" hint when status is skipped', () => {
     render(
-      <Section1_WhoYouAre status="skipped" onSetStatus={() => {}} />,
+      <MemoryRouter>
+        <Section1_WhoYouAre hasData={false} settled status="skipped" onSetStatus={() => {}} />
+      </MemoryRouter>,
     );
     expect(
       screen.getByText(/you skipped this section earlier/i),
@@ -117,7 +129,11 @@ describe('Section1_WhoYouAre', () => {
       update: async () => {},
       remove: async () => {},
     } as never);
-    render(<Section1_WhoYouAre status="in_progress" onSetStatus={() => {}} />);
+    render(
+      <MemoryRouter>
+        <Section1_WhoYouAre hasData={false} settled status="in_progress" onSetStatus={() => {}} />
+      </MemoryRouter>,
+    );
     const employmentHeading = screen.getByText(/^Employment$/);
     const employmentCard = employmentHeading.closest('div[class*="rounded"]');
     expect(employmentCard).not.toBeNull();
@@ -136,7 +152,11 @@ describe('Section1_WhoYouAre', () => {
       isLoading: false, error: null, load: async () => {}, create: async () => 1,
       update: async () => {}, remove: async () => {},
     } as never);
-    render(<Section1_WhoYouAre status="in_progress" onSetStatus={() => {}} />);
+    render(
+      <MemoryRouter>
+        <Section1_WhoYouAre hasData={false} settled status="in_progress" onSetStatus={() => {}} />
+      </MemoryRouter>,
+    );
     const chips = screen.getByTestId('person-chips');
     expect(within(chips).getByText('Alice')).toBeInTheDocument();
     expect(within(chips).getByText('Bob')).toBeInTheDocument();
@@ -151,7 +171,11 @@ describe('Section1_WhoYouAre', () => {
       isLoading: false, error: null, load: async () => {}, create: async () => 1,
       update: async () => {}, remove: async () => {},
     } as never);
-    render(<Section1_WhoYouAre status="in_progress" onSetStatus={() => {}} />);
+    render(
+      <MemoryRouter>
+        <Section1_WhoYouAre hasData={false} settled status="in_progress" onSetStatus={() => {}} />
+      </MemoryRouter>,
+    );
     await user.click(screen.getByRole('button', { name: /edit alice/i }));
     expect(await screen.findByRole('heading', { name: /edit person/i })).toBeInTheDocument();
     expect((screen.getByLabelText(/name/i) as HTMLInputElement).value).toBe('Alice');
@@ -165,7 +189,11 @@ describe('Section1_WhoYouAre', () => {
       isLoading: false, error: null, load: async () => {}, create: async () => 1,
       update: async () => {}, remove,
     } as never);
-    render(<Section1_WhoYouAre status="in_progress" onSetStatus={() => {}} />);
+    render(
+      <MemoryRouter>
+        <Section1_WhoYouAre hasData={false} settled status="in_progress" onSetStatus={() => {}} />
+      </MemoryRouter>,
+    );
     await user.click(screen.getByRole('button', { name: /remove carol/i }));
     // Confirm in the house ConfirmDialog.
     const confirmBtn = await screen.findByRole('button', { name: /^(remove|confirm|delete)/i });
@@ -182,7 +210,11 @@ describe('Section1_WhoYouAre', () => {
       isLoading: false, error: null, load: async () => {}, create: async () => 1,
       update: async () => {}, remove: async () => {},
     } as never);
-    render(<Section1_WhoYouAre status="in_progress" onSetStatus={() => {}} />);
+    render(
+      <MemoryRouter>
+        <Section1_WhoYouAre hasData={false} settled status="in_progress" onSetStatus={() => {}} />
+      </MemoryRouter>,
+    );
     const chips = screen.getByTestId('dependents-chips');
     expect(within(chips).getByText('Junior')).toBeInTheDocument();
     expect(within(chips).getByText('Grandma May')).toBeInTheDocument();
@@ -193,7 +225,9 @@ describe('Section1_WhoYouAre', () => {
   it('clicking Add manually on the Persons card opens the PersonForm dialog', async () => {
     const user = userEvent.setup();
     render(
-      <Section1_WhoYouAre status="in_progress" onSetStatus={() => {}} />,
+      <MemoryRouter>
+        <Section1_WhoYouAre hasData={false} settled status="in_progress" onSetStatus={() => {}} />
+      </MemoryRouter>,
     );
     // Find the Persons card; multiple cards have Add manually buttons.
     const personsHeading = screen.getByText(/^Persons$/);
@@ -207,5 +241,83 @@ describe('Section1_WhoYouAre', () => {
     expect(
       await screen.findByRole('button', { name: /add person/i }),
     ).toBeInTheDocument();
+  });
+
+  it('Wave C C5: the household card caption shows the saved facts, not "1 added" (CW2)', () => {
+    useHouseholdStore.setState({
+      household: makeHousehold({ filingStatus: 'MFJ', state: 'CA', monthlyExpenseBaseline: 8000 }),
+    } as never);
+    render(
+      <MemoryRouter>
+        <Section1_WhoYouAre hasData settled status="in_progress" onSetStatus={() => {}} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Married filing jointly · CA · $8,000/mo baseline')).toBeInTheDocument();
+    const householdCard = screen.getByText(/^Household$/).closest('div[class*="rounded"]')!;
+    expect(within(householdCard as HTMLElement).queryByText('1 added')).not.toBeInTheDocument();
+  });
+
+  it('Wave C C5 (0051, CW3): per-person expense overrides are declared on the caption', () => {
+    useHouseholdStore.setState({
+      household: makeHousehold({ filingStatus: 'MFJ', state: 'CA', monthlyExpenseBaseline: 8000 }),
+    } as never);
+    usePersonsStore.setState({
+      persons: [makePerson({ id: 1, name: 'A', monthlyExpenseBaseline: 2500 })],
+    } as never);
+    render(
+      <MemoryRouter>
+        <Section1_WhoYouAre hasData settled status="in_progress" onSetStatus={() => {}} />
+      </MemoryRouter>,
+    );
+    expect(
+      screen.getByText(
+        'Married filing jointly · CA · $8,000/mo household baseline · per-person expenses set',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('Wave C C5: employment chips carry pay (CW4)', () => {
+    usePersonsStore.setState({
+      persons: [
+        makePerson({ id: 1, name: 'Alice', annualSalaryPretax: 180000 }),
+        makePerson({ id: 2, name: 'Bob', employmentType: 'HOURLY', hourlyRate: 62, annualSalaryPretax: 0 }),
+      ],
+    } as never);
+    render(
+      <MemoryRouter>
+        <Section1_WhoYouAre hasData settled status="in_progress" onSetStatus={() => {}} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Alice — $180,000 salary')).toBeInTheDocument();
+    expect(screen.getByText('Bob — $62/hr hourly')).toBeInTheDocument();
+  });
+
+  it('Wave C review (MINOR 7): an hourly rate with cents keeps them on the chip', () => {
+    usePersonsStore.setState({
+      persons: [
+        makePerson({ id: 2, name: 'Bob', employmentType: 'HOURLY', hourlyRate: 62.5, annualSalaryPretax: 0 }),
+      ],
+    } as never);
+    render(
+      <MemoryRouter>
+        <Section1_WhoYouAre hasData settled status="in_progress" onSetStatus={() => {}} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Bob — $62.50/hr hourly')).toBeInTheDocument();
+  });
+
+  it('Wave C C2: saved persons render the cards even when status is pending', () => {
+    usePersonsStore.setState({
+      persons: [{ id: 1, name: 'Alice', annualSalaryPretax: 0, hourlyRate: null } as unknown as Person],
+      isLoading: false, error: null, load: async () => {}, create: async () => 1,
+      update: async () => {}, remove: async () => {},
+    } as never);
+    render(
+      <MemoryRouter>
+        <Section1_WhoYouAre hasData settled status="pending" onSetStatus={() => {}} />
+      </MemoryRouter>,
+    );
+    expect(within(screen.getByTestId('person-chips')).getByText('Alice')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Start this section' })).not.toBeInTheDocument();
   });
 });

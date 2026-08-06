@@ -59,3 +59,22 @@ export function shouldRedirectToSetup({
   if (personCount !== 0) return false;
   return path === '/' || path === '';
 }
+
+/** Canonical wizard-progress key. SectionLayout owns writes (and removes it
+ *  in handleFinish); the Dashboard briefing predicate only reads. */
+export const SETUP_PROGRESS_KEY = 'setupWizard.progress.v1';
+
+/**
+ * True while a wizard run is mid-flight: progress was persisted and Finish
+ * was never clicked (handleFinish removes the key). With isSetupDismissed()
+ * this is the honest resume predicate (OB-G5) — the briefing's shipped
+ * "Continue setup" row previously fired on `!household`, which is
+ * unreachable (the household row is a migration-seeded singleton).
+ */
+export function hasSetupInProgress(): boolean {
+  try {
+    return localStorage.getItem(SETUP_PROGRESS_KEY) !== null;
+  } catch {
+    return false;
+  }
+}

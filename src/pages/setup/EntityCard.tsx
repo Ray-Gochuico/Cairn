@@ -1,4 +1,5 @@
 import { type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { Pencil, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -54,6 +55,15 @@ interface Props {
    * Persons pass "person-chips" to keep the shipped e2e/test contract.
    */
   itemsTestId?: string;
+  /** Wave C (N7/OB-G7): link to this entity's one-place-per-thing home —
+   *  generalizes the shipped Section-4 "Manage on Spending page →". Both
+   *  required together; absent = no link (keeps bare test renders router-free). */
+  manageHref?: string;
+  manageLabel?: string;
+  /** Wave C (C5): replaces "{count} added" with a value-bearing caption
+   *  (e.g. "Married filing jointly · CA · $8,000/mo baseline"). Count-only
+   *  "N added" remains the default. */
+  countLabel?: string;
 }
 
 export default function EntityCard({
@@ -66,6 +76,9 @@ export default function EntityCard({
   importDisabledReason,
   items,
   itemsTestId,
+  manageHref,
+  manageLabel,
+  countLabel,
 }: Props) {
   // Stable id so the disabled Import CSV button can point at its reason note
   // via aria-describedby (L1) — a keyboard user tabbing onto the dead button
@@ -82,7 +95,7 @@ export default function EntityCard({
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">{title}</CardTitle>
           <span className="text-xs text-muted-foreground">
-            {count} added
+            {countLabel ?? `${count} added`}
           </span>
         </div>
       </CardHeader>
@@ -149,6 +162,13 @@ export default function EntityCard({
                 )}
               </span>
             ))}
+          </div>
+        )}
+        {manageHref && manageLabel && (
+          <div className="flex justify-end">
+            <Link to={manageHref} className="text-xs text-muted-foreground underline">
+              {manageLabel} →
+            </Link>
           </div>
         )}
       </CardContent>

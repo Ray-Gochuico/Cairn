@@ -9,6 +9,7 @@ import {
 import { ImportCsvButton } from '@/components/import/ImportCsvButton';
 import EntityCard from './EntityCard';
 import SectionEntryGate from './SectionEntryGate';
+import { TabLoadingSkeleton } from '@/components/inputs/TabLoadingSkeleton';
 import AccountForm from './forms/AccountForm';
 import HoldingForm from './forms/HoldingForm';
 import PropertyForm from './forms/PropertyForm';
@@ -41,9 +42,13 @@ type ActiveDialog =
 interface Props {
   status: SectionStatus;
   onSetStatus: (s: SectionStatus) => void;
+  /** Wave C (C2): store-derived truth from SectionLayout — ≥1 saved entity. */
+  hasData: boolean;
+  /** Wave C (C2): SectionLayout's latched load gate — gate copy may render. */
+  settled: boolean;
 }
 
-export default function Section2_WhatYouOwn({ status, onSetStatus }: Props) {
+export default function Section2_WhatYouOwn({ status, onSetStatus, hasData, settled }: Props) {
   const accounts = useAccountsStore((s) => s.accounts);
   const loadAccounts = useAccountsStore((s) => s.load);
   const holdings = useHoldingsStore((s) => s.holdings);
@@ -90,6 +95,10 @@ export default function Section2_WhatYouOwn({ status, onSetStatus }: Props) {
 
   const meta = SECTIONS[1];
 
+  // Wave C (C5, CW5): qualify holding chips by account so duplicate tickers
+  // across accounts stay distinguishable.
+  const accountNameById = new Map(accounts.map((a) => [a.id, a.name]));
+
   // Holdings import resolves CSV rows to existing accounts by name; with no
   // accounts there is nothing to match, so gate the import (W7).
   const noAccountsReason =
@@ -97,7 +106,12 @@ export default function Section2_WhatYouOwn({ status, onSetStatus }: Props) {
       ? 'Add an account first — imports match rows to existing accounts by name.'
       : undefined;
 
-  if (status === 'pending' || status === 'skipped') {
+  // Wave C (C2, owner constraint 1): the entry gate is an EMPTY STATE — it
+  // renders only when the section is truly empty (DC3: including skipped-
+  // with-data), and never before the stores settle (the W10 F6 false-empty
+  // class). Saved data always renders the entity cards.
+  if (!hasData && (status === 'pending' || status === 'skipped')) {
+    if (!settled) return <TabLoadingSkeleton />;
     return (
       <SectionEntryGate
         title={meta.introTitle}
@@ -119,6 +133,8 @@ export default function Section2_WhatYouOwn({ status, onSetStatus }: Props) {
         importEnabled
         importTrigger={<ImportCsvButton entity="account" />}
         items={accounts.map((a, i) => ({ key: a.id ?? i, label: a.name }))}
+        manageHref="/investments?manage=accounts"
+        manageLabel="Manage on Investments page"
       />
       <EntityCard
         title="Holdings"
@@ -128,7 +144,12 @@ export default function Section2_WhatYouOwn({ status, onSetStatus }: Props) {
         importEnabled
         importTrigger={<ImportCsvButton entity="holding" />}
         importDisabledReason={noAccountsReason}
-        items={holdings.map((h, i) => ({ key: h.id ?? i, label: h.ticker }))}
+        items={holdings.map((h, i) => ({
+          key: h.id ?? i,
+          label: `${h.ticker} · ${accountNameById.get(h.accountId) ?? 'account'}`,
+        }))}
+        manageHref="/investments?manage=holdings"
+        manageLabel="Manage on Investments page"
       />
       <EntityCard
         title="Properties"
@@ -138,6 +159,8 @@ export default function Section2_WhatYouOwn({ status, onSetStatus }: Props) {
         importEnabled
         importTrigger={<ImportCsvButton entity="property" />}
         items={properties.map((pr, i) => ({ key: pr.id ?? i, label: pr.name }))}
+        manageHref="/property"
+        manageLabel="Manage on Property page"
       />
       <EntityCard
         title="Rent / housing payment"
@@ -146,6 +169,8 @@ export default function Section2_WhatYouOwn({ status, onSetStatus }: Props) {
         onAddManual={() => setDialog('housing_payments')}
         importEnabled={false}
         items={housingPayments.map((hp, i) => ({ key: hp.id ?? i, label: hp.name }))}
+        manageHref="/property"
+        manageLabel="Manage on Property page"
       />
       <EntityCard
         title="Vehicles"
@@ -155,6 +180,8 @@ export default function Section2_WhatYouOwn({ status, onSetStatus }: Props) {
         importEnabled
         importTrigger={<ImportCsvButton entity="vehicle" />}
         items={vehicles.map((v, i) => ({ key: v.id ?? i, label: v.name }))}
+        manageHref="/vehicles"
+        manageLabel="Manage on Vehicles page"
       />
       <EntityCard
         title="Vehicle lease"
@@ -163,6 +190,8 @@ export default function Section2_WhatYouOwn({ status, onSetStatus }: Props) {
         onAddManual={() => setDialog('vehicle_leases')}
         importEnabled={false}
         items={vehicleLeases.map((vl, i) => ({ key: vl.id ?? i, label: vl.name }))}
+        manageHref="/vehicles"
+        manageLabel="Manage on Vehicles page"
       />
       <EntityCard
         title="Equity grants"
@@ -172,6 +201,8 @@ export default function Section2_WhatYouOwn({ status, onSetStatus }: Props) {
         importEnabled
         importTrigger={<ImportCsvButton entity="equity_grant" />}
         items={equityGrants.map((g, i) => ({ key: g.id ?? i, label: g.name }))}
+        manageHref="/equity-grants"
+        manageLabel="Manage on Equity grants page"
       />
 
       <Dialog

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { ArrowDownUp } from 'lucide-react';
 import { GitBranch } from 'lucide-react';
 import { EmptyState } from '@/components/layout/EmptyState';
@@ -42,6 +42,11 @@ import {
 import { FiPillsPosition, ProjectionDetailLevel } from '@/types/enums';
 
 export default function WhatIf() {
+  const location = useLocation();
+  // Wave C (C11): the just-sent scenario, highlighted calmly on arrival —
+  // navigation state only, so a reload clears it (no persistence, no motion).
+  const createdScenarioId =
+    (location.state as { createdScenarioId?: number } | null)?.createdScenarioId ?? null;
   const scenarios          = useScenariosStore((s) => s.scenarios);
   const load               = useScenariosStore((s) => s.load);
   const projectedScenarios = useScenariosStore((s) => s.projectedScenarios);
@@ -303,6 +308,7 @@ export default function WhatIf() {
             milestones={milestones}
             onOpenManage={() => setManageOpen(true)}
             onEditLevers={openLeversFor}
+            highlightId={createdScenarioId}
           />
         </div>
       </CardHeader>

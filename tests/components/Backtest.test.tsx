@@ -354,6 +354,14 @@ describe('Backtest page — person scope (Wave B)', () => {
       </MemoryRouter>,
     );
 
+  it('Wave C C12: the back link carries ?view= and the card hash', () => {
+    renderScoped();
+    expect(screen.getByRole('link', { name: /Back to calculators/ })).toHaveAttribute(
+      'href',
+      '/calculators?view=p2#backtest',
+    );
+  });
+
   it('Wave B gate fix: the example-substituted scoped seed note never claims the person seeded it', () => {
     // Empty stores → scoped portfolio $0 → D-B15 seeds the $1M example. The
     // note must be consistent with the example badge, not CB22's claim.

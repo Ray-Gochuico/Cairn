@@ -79,6 +79,19 @@ function primeStores(opts?: { state?: string; salary?: number }) {
 describe('PaycheckCalculator', () => {
   beforeEach(() => { resetStores(); });
 
+  it('Wave C C12: the back link carries ?view= and the card hash', () => {
+    primeStores();
+    render(
+      <MemoryRouter initialEntries={['/calculators/paycheck?view=p2']}>
+        <PaycheckCalculator />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('link', { name: /Back to calculators/ })).toHaveAttribute(
+      'href',
+      '/calculators?view=p2#paycheck',
+    );
+  });
+
   it('renders a seeded take-home for $100k CA SINGLE', async () => {
     primeStores();
     render(<MemoryRouter><PaycheckCalculator /></MemoryRouter>);

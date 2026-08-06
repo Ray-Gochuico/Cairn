@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { NumberField } from '@/components/calculators/NumberField';
 import { Button } from '@/components/ui/button';
 import { useScenarioAssumptions } from '@/lib/calculators/use-scenario-assumptions';
-import type { ScenarioField } from '@/lib/calculators/scenario-assumptions';
+import { readOverridesFor, type ScenarioField } from '@/lib/calculators/scenario-assumptions';
 import { useHouseholdTaxContext } from '@/lib/calculators/use-household-tax-context';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
@@ -12,6 +12,7 @@ import { leverPayloadFromScenarioBar } from '@/lib/whatif/from-scenario-bar';
 import { defaultScenarioColor } from '@/lib/whatif/scenario-colors';
 import { localTodayISO } from '@/lib/dates';
 import { formatCurrency, formatDate } from '@/lib/format';
+import { FILING_STATUS_LABELS } from '@/lib/filing-status-labels';
 import { prettifyCityCode } from '@/lib/jurisdiction-format';
 import { InlineLink } from '@/components/calculators/InlineLink';
 import { useViewFilter } from '@/lib/use-view-filter';
@@ -34,13 +35,6 @@ import { personMonthlyExpenseHint } from '@/lib/calculators/person-expense-hint'
  * blaze dot is an SVG fill of hsl(var(--blaze)) per the Wave-12 D3 token
  * discipline (fill/stroke only, never text). Not sticky (Wave-16 D6).
  */
-
-const FILING_LABELS: Record<string, string> = {
-  SINGLE: 'Single',
-  MFJ: 'Married filing jointly',
-  MFS: 'Married filing separately',
-  HOH: 'Head of household',
-};
 
 const COMMIT_DELAY_MS = 150;
 
@@ -212,12 +206,16 @@ function ScenarioBarField(props: {
           edited — reset
         </button>
       ) : (
-        <p className="mt-0.5 text-xs text-muted-foreground truncate" title={provenance}>
+        /* Wave C (C10/DC2): provenance is the honesty layer — clamp to two
+           lines instead of truncating ("joint accounts not included" was
+           unreadable at grid widths). The bar has no height cap, so the
+           second line is free. */
+        <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2" title={provenance}>
           {provenance}
         </p>
       )}
       {hint && (
-        <p className="mt-0.5 text-xs text-muted-foreground truncate" title={hint}>
+        <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2" title={hint}>
           {hint}
         </p>
       )}
@@ -299,19 +297,30 @@ export function ScenarioBar() {
         },
         todayIso,
       );
+      // Wave C review (MAJOR 2): after an app restart the store is [] until
+      // something loads it — reading it cold made DC6 activate a SECOND
+      // scenario, and the single-active UNIQUE constraint then failed every
+      // retry. Load first (in-flight-deduped; cheap when already warm).
+      await useScenariosStore.getState().load();
       const existing = useScenariosStore.getState().scenarios;
-      await useScenariosStore.getState().create({
+      // Wave C (DC6): sending BEFORE ever visiting /what-if meant the store's
+      // ensureBaseline never ran — nothing was active, and the page greeted
+      // the user with "No active scenario" right after they sent one. The
+      // sent scenario activates iff there is no active scenario to displace;
+      // otherwise the new row is highlighted on arrival (navigation state).
+      const hasActive = existing.some((s) => s.isActive);
+      const createdId = await useScenariosStore.getState().create({
         name: `From calculators — ${formatDate(todayIso)}`,
         isBaseline: false,
         color: defaultScenarioColor(existing.length, false),
         lineStyle: 'solid',
         visible: true,
-        isActive: false,
+        isActive: !hasActive,
         sortOrder: existing.length,
         leverPayload,
       });
       setSendError(null);
-      navigate('/what-if');
+      navigate('/what-if', { state: { createdScenarioId: createdId } });
     } catch {
       // Calm inline surface — never throw to the route.
       setSendError('Could not create the What-If scenario. Please try again.');
@@ -320,80 +329,154 @@ export function ScenarioBar() {
 
   const chips: string[] = household
     ? [
-        FILING_LABELS[household.filingStatus] ?? household.filingStatus,
+        FILING_STATUS_LABELS[household.filingStatus] ?? household.filingStatus,
         household.state,
         ...(household.city ? [prettifyCityCode(household.city)] : []),
         ...(tax.resolvedYear != null ? [`${tax.resolvedYear} tax year`] : []),
-        ...(tax.totalSalary > 0 ? [`${formatCurrency(tax.totalSalary)} salary`] : []),
+        // Wave C (N2/CW19): the chips stay household-level by design (D-B2
+        // family) — while scoped, qualify the salary so it can't be misread
+        // as the person's own figure.
+        ...(tax.totalSalary > 0
+          ? [`${formatCurrency(tax.totalSalary)}${scope.isScoped ? ' household salary' : ' salary'}`]
+          : []),
       ]
     : [];
+
+  // Wave C review (MINOR 5): the Return field has NO What-If lever
+  // counterpart, so a Return-only edit maps to an empty payload — which DC6
+  // would now auto-activate as a scenario that does nothing. Send requires
+  // at least one edit the D6 mapping actually carries (mirrors
+  // leverPayloadFromScenarioBar's branches, incl. the portfolio===real
+  // no-op guard).
+  const hasMappableEdit =
+    (scenario.isEdited.portfolio &&
+      scenario.values.portfolio !== scenario.defaults.portfolio) ||
+    scenario.isEdited.annualContribution ||
+    scenario.isEdited.monthlyExpenses ||
+    scenario.isEdited.swrPct ||
+    scenario.isEdited.inflationPct ||
+    Object.keys(scenario.salaryByPersonId).length > 0;
+
+  // Wave C (N2): flipping Household → person silently shrank "Edited (4)" to
+  // "Edited (1)" — household edits looked destroyed (they're preserved in
+  // their silo, D-B11). Declare the view on the badge and count the kept edits.
+  const keptHouseholdEdits = scope.isScoped
+    ? Object.keys(readOverridesFor(null)).length +
+      Object.keys(scenario.salaryByPersonId).filter((id) => Number(id) !== scope.personId).length
+    : 0;
 
   return (
     <section
       role="region"
       aria-label="Your scenario"
       data-testid="scenario-bar"
-      className="rounded-md border bg-card p-4 space-y-3 min-w-0"
+      className="rounded-md border bg-card p-4 space-y-2 min-w-0"
     >
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+      <div className="space-y-1">
+        {/* Row 1 — identity: title · chips · Edit in Inputs · scope control */}
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 min-w-0">
           <span className="text-sm font-medium">Your scenario</span>
           <span className="text-xs text-muted-foreground" data-testid="scenario-chips">
-            {household ? chips.join(' · ') : 'No household set up yet'}
+            {household
+              ? realPersons.length === 0
+                ? `${chips.join(' · ')} — app defaults` // DC9: nothing user-confirmed yet
+                : chips.join(' · ')
+              : 'No household set up yet'}
           </span>
           <InlineLink to="/inputs" className="text-xs">
             Edit in Inputs
           </InlineLink>
           <ScopeControl />
         </div>
-        <div className="flex items-center gap-3 text-xs">
-          {scenario.editedCount > 0 && (
-            <>
-              <span
-                className="inline-flex items-center gap-1 text-muted-foreground"
-                data-testid="scenario-edited-count"
-              >
-                <BlazeDot />
-                Edited ({scenario.editedCount})
+        {/* Row 2 — actions (A#3: never a lone orphaned cluster under the title).
+            Left: the nothing-saved contract (CW16, moved verbatim from the old
+            footer line — with the tighter gaps below this reclaims ~70px of
+            the 1024 first screen) OR the Edited badge + Reset. Right: reason
+            note + Send, ml-auto so the notes never rewrap the row. */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <div className="flex min-w-0 items-center gap-3 text-xs">
+            {scenario.editedCount > 0 ? (
+              <>
+                <span
+                  className="inline-flex items-center gap-1 text-muted-foreground"
+                  data-testid="scenario-edited-count"
+                  title={
+                    scope.isScoped
+                      ? `${keptHouseholdEdits} household-scope edit${keptHouseholdEdits === 1 ? '' : 's'} kept`
+                      : undefined
+                  }
+                >
+                  <BlazeDot />
+                  Edited ({scenario.editedCount}){scope.isScoped ? ' in this view' : ''}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    scenario.resetAll();
+                    // W16 review: this button unmounts once editedCount hits 0 —
+                    // hand focus to the first scenario field, not <body>.
+                    document.getElementById(FIELDS[0].id)?.focus();
+                  }}
+                  className="text-primary hover:underline"
+                >
+                  Reset to my data
+                </button>
+              </>
+            ) : (
+              <span className="text-muted-foreground">
+                Edits here are a temporary scenario. Nothing is saved to your data.
               </span>
-              <button
-                type="button"
-                onClick={() => {
-                  scenario.resetAll();
-                  // W16 review: this button unmounts once editedCount hits 0 —
-                  // hand focus to the first scenario field, not <body>.
-                  document.getElementById(FIELDS[0].id)?.focus();
-                }}
-                className="text-primary hover:underline"
+            )}
+          </div>
+          <div className="ml-auto flex items-center gap-3 text-xs">
+            {/* D-B6: a person-scoped payload would silently misattribute —
+                disabled in person scope with the one-line reason. */}
+            {scope.isScoped && (
+              <span
+                id="send-whatif-scoped-note"
+                className="text-muted-foreground"
+                data-testid="send-whatif-scoped-note"
               >
-                Reset to my data
-              </button>
-            </>
-          )}
-          {/* D-B6: a person-scoped payload would silently misattribute —
-              disabled in person scope with the one-line reason. */}
-          {scope.isScoped && (
-            <span
-              id="send-whatif-scoped-note"
-              className="text-muted-foreground"
-              data-testid="send-whatif-scoped-note"
+                Switch to Household to send this scenario.
+              </span>
+            )}
+            {/* Wave C (C11/CW15): the 0-edits disabled Send previously gave no
+                reason at all — the visible note doubles as the button's
+                accessible description. */}
+            {!scope.isScoped && scenario.editedCount === 0 && (
+              <span id="send-whatif-empty-note" className="text-muted-foreground">
+                Edit a field above to send it as a scenario.
+              </span>
+            )}
+            {/* Wave C review (MINOR 5): edits exist but none maps to a lever
+                (e.g. Return-only) — say why Send stays disabled. */}
+            {!scope.isScoped && scenario.editedCount > 0 && !hasMappableEdit && (
+              <span id="send-whatif-unmappable-note" className="text-muted-foreground">
+                This edit doesn’t map to a What-If lever yet.
+              </span>
+            )}
+            {/* D14: enabled only when ≥1 MAPPABLE bar field is edited. Wave B
+                gate fix: the reason is programmatically associated so AT users
+                hear WHY the button is disabled, not just a bare control. */}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={scenario.editedCount === 0 || scope.isScoped || !hasMappableEdit}
+              aria-describedby={
+                scope.isScoped
+                  ? 'send-whatif-scoped-note'
+                  : scenario.editedCount === 0
+                    ? 'send-whatif-empty-note'
+                    : !hasMappableEdit
+                      ? 'send-whatif-unmappable-note'
+                      : undefined
+              }
+              onClick={() => void sendToWhatIf()}
             >
-              Switch to Household to send this scenario.
-            </span>
-          )}
-          {/* D14: enabled only when ≥1 bar field is edited. Wave B gate fix:
-              the CB6 reason is programmatically associated so AT users hear
-              WHY the button is disabled, not just a bare disabled control. */}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={scenario.editedCount === 0 || scope.isScoped}
-            aria-describedby={scope.isScoped ? 'send-whatif-scoped-note' : undefined}
-            onClick={() => void sendToWhatIf()}
-          >
-            Send to What-If →
-          </Button>
+              Send to What-If →
+            </Button>
+          </div>
         </div>
       </div>
       {sendError && (
@@ -401,7 +484,7 @@ export function ScenarioBar() {
           {sendError}
         </div>
       )}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-x-3 gap-y-2">
         {FIELDS.map((spec) => (
           <ScenarioBarField
             key={spec.field}
@@ -433,9 +516,6 @@ export function ScenarioBar() {
           ) : null,
         )}
       </div>
-      <p className="text-xs text-muted-foreground">
-        Edits here are a temporary scenario. Nothing is saved to your data.
-      </p>
     </section>
   );
 }

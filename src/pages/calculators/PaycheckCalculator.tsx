@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react'; // shared back-nav icon (W2/BT-6)
+import { withViewSearch } from '@/lib/view-scope';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
@@ -137,6 +138,7 @@ const FORM_FALLBACK: FormValues = {
 };
 
 export default function PaycheckCalculator() {
+  const location = useLocation(); // Wave C (C12): back link carries ?view= + #hash
   const { household } = useHouseholdStore();
   const { dependents } = useDependentsStore();
   const taxItems = useTaxRulesStore((s) => s.items);
@@ -401,12 +403,12 @@ export default function PaycheckCalculator() {
       {/* W2 / BT-6 — shared card→detail back-nav: the house-style affordance for
           every calculator detail route spun out of the /calculators grid (a
           lucide `ArrowLeft h-4 w-4` + `text-sm text-muted-foreground`, above the
-          <h1>). The historical-backtest detail route (/calculators/backtest),
-          specified in docs/superpowers/plans/2026-05-28-historical-backtest-plan.md
-          and built next in the sequence, will reuse this IDENTICAL element so the
-          two detail pages don't drift. (Today this is the only such page.) */}
+          <h1>). The backtest detail route reuses this IDENTICAL block so the
+          two detail pages don't drift. Wave C (C12): the link carries the
+          active ?view= plus this card's #hash so Back lands on /calculators
+          with the card open and the scope intact. */}
       <Link
-        to="/calculators"
+        to={`${withViewSearch('/calculators', location.search)}#paycheck`}
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" /> Back to calculators

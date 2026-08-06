@@ -66,7 +66,9 @@ describe('Section3_WhatYouOwe', () => {
 
   it('renders the entry gate when status is pending', () => {
     render(
-      <Section3_WhatYouOwe status="pending" onSetStatus={() => {}} />,
+      <MemoryRouter>
+        <Section3_WhatYouOwe hasData={false} settled status="pending" onSetStatus={() => {}} />
+      </MemoryRouter>,
     );
     expect(screen.getByText(/Your debts/i)).toBeInTheDocument();
     expect(
@@ -76,7 +78,9 @@ describe('Section3_WhatYouOwe', () => {
 
   it('renders the Loans card when status is in_progress', () => {
     render(
-      <Section3_WhatYouOwe status="in_progress" onSetStatus={() => {}} />,
+      <MemoryRouter>
+        <Section3_WhatYouOwe hasData={false} settled status="in_progress" onSetStatus={() => {}} />
+      </MemoryRouter>,
     );
     expect(screen.getByText(/^Loans$/)).toBeInTheDocument();
   });
@@ -85,7 +89,9 @@ describe('Section3_WhatYouOwe', () => {
     const user = userEvent.setup();
     const onSetStatus = vi.fn();
     render(
-      <Section3_WhatYouOwe status="pending" onSetStatus={onSetStatus} />,
+      <MemoryRouter>
+        <Section3_WhatYouOwe hasData={false} settled status="pending" onSetStatus={onSetStatus} />
+      </MemoryRouter>,
     );
     await user.click(screen.getByRole('button', { name: /skip/i }));
     expect(onSetStatus).toHaveBeenCalledWith('skipped');
@@ -94,7 +100,9 @@ describe('Section3_WhatYouOwe', () => {
   it('clicking Add manually on the Loans card opens the LoanForm dialog', async () => {
     const user = userEvent.setup();
     render(
-      <Section3_WhatYouOwe status="in_progress" onSetStatus={() => {}} />,
+      <MemoryRouter>
+        <Section3_WhatYouOwe hasData={false} settled status="in_progress" onSetStatus={() => {}} />
+      </MemoryRouter>,
     );
     await user.click(
       screen.getByRole('button', { name: /add manually/i }),
@@ -107,7 +115,7 @@ describe('Section3_WhatYouOwe', () => {
   it('Loans card has a functional Import CSV button (not the placeholder)', () => {
     render(
       <MemoryRouter>
-        <Section3_WhatYouOwe status="in_progress" onSetStatus={() => {}} />
+        <Section3_WhatYouOwe hasData={false} settled status="in_progress" onSetStatus={() => {}} />
       </MemoryRouter>,
     );
     const card = findCard(/^Loans$/);
@@ -130,7 +138,7 @@ describe('Section3_WhatYouOwe', () => {
     }));
     render(
       <MemoryRouter>
-        <Section3_WhatYouOwe status="in_progress" onSetStatus={() => {}} />
+        <Section3_WhatYouOwe hasData={false} settled status="in_progress" onSetStatus={() => {}} />
       </MemoryRouter>,
     );
     const chips = screen.getByTestId('loans-chips');
@@ -141,7 +149,7 @@ describe('Section3_WhatYouOwe', () => {
   it('renders no loans chip container when no loans exist', () => {
     render(
       <MemoryRouter>
-        <Section3_WhatYouOwe status="in_progress" onSetStatus={() => {}} />
+        <Section3_WhatYouOwe hasData={false} settled status="in_progress" onSetStatus={() => {}} />
       </MemoryRouter>,
     );
     expect(screen.queryByTestId('loans-chips')).toBeNull();
@@ -150,7 +158,7 @@ describe('Section3_WhatYouOwe', () => {
   it('shows the calm intro banner once the section is in progress', () => {
     render(
       <MemoryRouter>
-        <Section3_WhatYouOwe status="in_progress" onSetStatus={() => {}} />
+        <Section3_WhatYouOwe hasData={false} settled status="in_progress" onSetStatus={() => {}} />
       </MemoryRouter>,
     );
     expect(screen.getByTestId('section3-intro')).toBeInTheDocument();
@@ -162,9 +170,26 @@ describe('Section3_WhatYouOwe', () => {
 
   it('does not show the in-progress banner on the pre-start gate', () => {
     render(
-      <Section3_WhatYouOwe status="pending" onSetStatus={() => {}} />,
+      <MemoryRouter>
+        <Section3_WhatYouOwe hasData={false} settled status="pending" onSetStatus={() => {}} />
+      </MemoryRouter>,
     );
     // The SectionEntryGate is shown instead; the in-progress banner is absent.
     expect(screen.queryByTestId('section3-intro')).toBeNull();
+  });
+
+  it('Wave C C2: saved loans render the cards even when status is pending', () => {
+    useLoansStore.setState({
+      loans: [{ id: 1, name: 'Mortgage' }],
+      isLoading: false, error: null, load: async () => {}, create: async () => 1,
+      update: async () => {}, remove: async () => {},
+    } as never);
+    render(
+      <MemoryRouter>
+        <Section3_WhatYouOwe hasData settled status="pending" onSetStatus={() => {}} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Mortgage')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Start this section' })).not.toBeInTheDocument();
   });
 });

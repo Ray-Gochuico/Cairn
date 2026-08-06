@@ -173,4 +173,18 @@ describe('useViewFilter', () => {
     expect(result.current.search).toBe('');
     expect(result.current.filter).toBe('household');
   });
+
+  it('Wave C C12: setFilter preserves the location hash (open-card deep links survive scope flips)', () => {
+    usePersonsStore.setState({ persons: [p1, p2], isLoading: false, error: null });
+    const useViewFilterWithLocation = () => ({ filter: useViewFilter(), location: useLocation() });
+    const { result } = renderHook(() => useViewFilterWithLocation(), {
+      wrapper: wrapper(['/calculators?view=p1#paycheck']),
+    });
+    act(() => result.current.filter.setFilter('p2'));
+    expect(result.current.location.hash).toBe('#paycheck');
+    expect(result.current.location.search).toBe('?view=p2');
+    act(() => result.current.filter.setFilter('household'));
+    expect(result.current.location.hash).toBe('#paycheck');
+    expect(result.current.location.search).toBe('');
+  });
 });

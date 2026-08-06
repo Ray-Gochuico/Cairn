@@ -304,7 +304,10 @@ describe('ScenarioBar — editable salary + Send to What-If (Wave 18 D14)', () =
     const arg = create.mock.calls[0][0] as Record<string, unknown>;
     expect(arg.isBaseline).toBe(false);
     expect(arg.visible).toBe(true);
-    expect(arg.isActive).toBe(false);
+    // Wave C DC6: this suite primes an EMPTY scenarios store (never visited
+    // /what-if → ensureBaseline never ran → nothing active) — sending into
+    // that vacuum now activates the sent scenario.
+    expect(arg.isActive).toBe(true);
     expect(arg.name).toMatch(/^From calculators — /);
     expect(arg.leverPayload).toEqual(
       leverPayloadFromScenarioBar(
@@ -443,5 +446,210 @@ describe('ScenarioBar — page-scope control + scoped bar (Wave B)', () => {
     syncCalcScope(2);
     renderBarAt('/calculators?view=p2');
     expect(screen.getByText("Sam's attributed transactions suggest ~$900/mo")).toBeInTheDocument();
+  });
+});
+
+describe('ScenarioBar — Send-to-What-If handoff (Wave C C11/DC6)', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    __resetScenarioAssumptionsForTests();
+    __resetCalcScopeForTests();
+    resetStores();
+    primeBaseline();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-05-14T12:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('Wave C C11: 0 edits shows the aria-described disabled reason (CW15)', () => {
+    renderBar(); // household scope, no edits
+    const note = screen.getByText('Edit a field above to send it as a scenario.');
+    expect(note).toHaveAttribute('id', 'send-whatif-empty-note');
+    expect(screen.getByRole('button', { name: 'Send to What-If →' })).toHaveAttribute(
+      'aria-describedby',
+      'send-whatif-empty-note',
+    );
+  });
+
+  const renderBarWithRoutes = () =>
+    render(
+      <MemoryRouter initialEntries={['/calculators']}>
+        <Routes>
+          <Route path="/calculators" element={<ScenarioBar />} />
+          <Route path="/what-if" element={<div data-testid="whatif-page" />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+  async function editThenSend() {
+    const user = userEvent.setup();
+    const salary = screen.getByLabelText('Salary');
+    await user.clear(salary);
+    await user.type(salary, '150000');
+    const send = screen.getByRole('button', { name: /send to what-if/i });
+    await waitFor(() => expect(send).toBeEnabled());
+    await user.click(send);
+  }
+
+  it('Wave C DC6: sending into a vacuum creates the scenario ACTIVE', async () => {
+    const { useScenariosStore } = await import('@/stores/scenarios-store');
+    const create = vi.fn(async () => 7);
+    useScenariosStore.setState({ scenarios: [], create } as never);
+    renderBarWithRoutes();
+    await editThenSend();
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ isActive: true }));
+  });
+
+  it('Wave C DC6: an existing active scenario keeps the sent one inactive', async () => {
+    const { useScenariosStore } = await import('@/stores/scenarios-store');
+    const create = vi.fn(async () => 7);
+    useScenariosStore.setState({
+      scenarios: [{ id: 1, name: 'Baseline', isActive: true }], create,
+    } as never);
+    renderBarWithRoutes();
+    await editThenSend();
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ isActive: false }));
+  });
+
+  it('Wave C review (MAJOR 2): send loads the store first — a DB-seeded active scenario is respected even when store state is empty (app restart)', async () => {
+    const { useScenariosStore } = await import('@/stores/scenarios-store');
+    const create = vi.fn(async () => 7);
+    // The restart repro: the DB holds an active scenario but the store is []
+    // (nothing loaded it yet). The stubbed load hydrates like the repo would.
+    const load = vi.fn(async () => {
+      useScenariosStore.setState({
+        scenarios: [{ id: 1, name: 'Baseline', isActive: true }],
+      } as never);
+    });
+    useScenariosStore.setState({ scenarios: [], create, load } as never);
+    renderBarWithRoutes();
+    await editThenSend();
+    expect(load).toHaveBeenCalled();
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ isActive: false }));
+  });
+
+  it('Wave C review (MINOR 5): a Return-only edit keeps Send disabled with the no-lever reason', async () => {
+    const user = userEvent.setup();
+    renderBar();
+    await user.clear(screen.getByLabelText('Return'));
+    await user.type(screen.getByLabelText('Return'), '9');
+    await waitFor(() =>
+      expect(screen.getByTestId('scenario-edited-count')).toHaveTextContent('Edited (1)'),
+    );
+    const send = screen.getByRole('button', { name: 'Send to What-If →' });
+    expect(send).toBeDisabled();
+    const note = screen.getByText('This edit doesn’t map to a What-If lever yet.');
+    expect(note).toHaveAttribute('id', 'send-whatif-unmappable-note');
+    expect(send).toHaveAttribute('aria-describedby', 'send-whatif-unmappable-note');
+  });
+});
+
+describe('ScenarioBar — un-truncated honesty layer (Wave C C10/DC2)', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    __resetScenarioAssumptionsForTests();
+    __resetCalcScopeForTests();
+    resetStores();
+    primeBaseline();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-05-14T12:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('Wave C C10: provenance lines clamp to two lines instead of truncating (title attr kept)', () => {
+    renderBar();
+    const prov = screen.getByText('your monthly expense baseline');
+    expect(prov.className).toContain('line-clamp-2');
+    expect(prov.className).not.toContain('truncate');
+    expect(prov).toHaveAttribute('title', 'your monthly expense baseline');
+  });
+});
+
+describe('ScenarioBar — scope-flip legibility (Wave C N2)', () => {
+  const renderBarAt = (path: string) =>
+    render(
+      <MemoryRouter initialEntries={[path]}>
+        <ScenarioBar />
+      </MemoryRouter>,
+    );
+
+  beforeEach(() => {
+    sessionStorage.clear();
+    __resetScenarioAssumptionsForTests();
+    __resetCalcScopeForTests();
+    resetStores();
+    primeBaseline();
+    usePersonsStore.setState({
+      persons: [basePerson, { ...basePerson, id: 2, name: 'Sam', annualSalaryPretax: 80000 }],
+      isLoading: false,
+      error: null,
+    } as never);
+    useTransactionsStore.setState({ transactions: [], isLoading: false, error: null } as never);
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-05-14T12:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('Wave C N2: scoped Edited badge declares the view and the kept household edits (CW18)', () => {
+    // Two kept household-scope edits + one edit in the p2 silo.
+    sessionStorage.setItem('calc-scenario:shared', JSON.stringify({ portfolio: 1, returnPct: 7 }));
+    sessionStorage.setItem('calc-scenario:p2', JSON.stringify({ portfolio: 50000 }));
+    syncCalcScope(2);
+    renderBarAt('/calculators?view=p2');
+    const badge = screen.getByTestId('scenario-edited-count');
+    expect(badge).toHaveTextContent('Edited (1) in this view');
+    expect(badge).toHaveAttribute('title', '2 household-scope edits kept');
+  });
+
+  it('Wave C N2: the salary chip is qualified while scoped (CW19)', () => {
+    syncCalcScope(2);
+    renderBarAt('/calculators?view=p2');
+    expect(screen.getByTestId('scenario-chips')).toHaveTextContent(/household salary/);
+  });
+});
+
+describe('ScenarioBar — two-row layout + app-defaults qualifier (Wave C N1+N8)', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    __resetScenarioAssumptionsForTests();
+    __resetCalcScopeForTests();
+    resetStores();
+    primeBaseline();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-05-14T12:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('Wave C N1: the temporary-scenario sentence lives in the action row at 0 edits and yields to Edited(n)', async () => {
+    const user = userEvent.setup();
+    renderBar();
+    expect(
+      screen.getByText('Edits here are a temporary scenario. Nothing is saved to your data.'),
+    ).toBeVisible();
+    // After an edit the sentence yields to the badge:
+    await user.clear(screen.getByLabelText('Portfolio'));
+    await user.type(screen.getByLabelText('Portfolio'), '50000');
+    await waitFor(() =>
+      expect(screen.getByTestId('scenario-edited-count')).toHaveTextContent('Edited (1)'),
+    );
+    expect(screen.queryByText(/Edits here are a temporary scenario/)).not.toBeInTheDocument();
+  });
+
+  it('Wave C N8/DC9: a person-less profile qualifies the identity chips as app defaults', () => {
+    usePersonsStore.setState({ persons: [] } as never);
+    renderBar();
+    expect(screen.getByTestId('scenario-chips').textContent).toMatch(/ — app defaults$/);
   });
 });

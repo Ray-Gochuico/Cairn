@@ -86,7 +86,7 @@ function renderWithRouter(initialEntries: string[] = ['/setup']) {
         <Route
           path="/setup"
           element={
-            <Section4_History status="in_progress" onSetStatus={() => {}} />
+            <Section4_History hasData={false} settled status="in_progress" onSetStatus={() => {}} />
           }
         />
         <Route path="/spending" element={<div>Spending page</div>} />
@@ -103,7 +103,7 @@ describe('Section4_History', () => {
   it('renders the entry gate when status is pending', () => {
     render(
       <MemoryRouter>
-        <Section4_History status="pending" onSetStatus={() => {}} />
+        <Section4_History hasData={false} settled status="pending" onSetStatus={() => {}} />
       </MemoryRouter>,
     );
     expect(
@@ -147,7 +147,7 @@ describe('Section4_History', () => {
     const onSetStatus = vi.fn();
     render(
       <MemoryRouter>
-        <Section4_History status="pending" onSetStatus={onSetStatus} />
+        <Section4_History hasData={false} settled status="pending" onSetStatus={onSetStatus} />
       </MemoryRouter>,
     );
     await user.click(screen.getByRole('button', { name: /skip/i }));
@@ -221,5 +221,31 @@ describe('Section4_History', () => {
       expect(btn).toBeDisabled();
       expect(within(card).queryByText(/coming soon/i)).toBeNull();
     });
+  });
+
+  it('Wave C C5/DC7: count-only cards get qualified counts (CW6-CW8), never chip floods', () => {
+    useSnapshotsStore.setState((s: any) => ({
+      ...s,
+      snapshots: [
+        { id: 1, accountId: 1, snapshotDate: '2026-05-31', totalValue: 1, source: 'MANUAL' },
+        { id: 2, accountId: 2, snapshotDate: '2026-06-30', totalValue: 1, source: 'MANUAL' },
+      ],
+    }));
+    renderWithRouter();
+    expect(screen.getByText('2 snapshots across 2 accounts · latest Jun 2026')).toBeInTheDocument();
+  });
+
+  it('Wave C C2: saved history renders the cards even when status is pending', () => {
+    useGoalsStore.setState((s: any) => ({
+      ...s,
+      goals: [{ id: 1, name: 'House fund' }],
+    }));
+    render(
+      <MemoryRouter>
+        <Section4_History hasData settled status="pending" onSetStatus={() => {}} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Account snapshots')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Start this section' })).not.toBeInTheDocument();
   });
 });

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -15,6 +16,7 @@ import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import { TabLoadingSkeleton } from '@/components/inputs/TabLoadingSkeleton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { formatCurrency } from '@/lib/format';
 
 const CategoryFormSchema = CategorySchema.omit({ id: true, systemManaged: true });
 type CategoryFormValues = z.infer<typeof CategoryFormSchema>;
@@ -291,6 +293,16 @@ export default function CategoriesTab() {
                       <div className="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-2">
                         <span className="font-medium truncate">{cat.name}</span>
                         <span className="text-xs text-muted-foreground shrink-0">{cat.type}</span>
+                        {cat.monthlyBudget != null && cat.monthlyBudget > 0 && (
+                          // Wave C (N6/IN-G8): a view-only pointer — budgets
+                          // are edited on /budget (one-place-per-thing, DC8).
+                          <Link
+                            to="/budget"
+                            className="shrink-0 text-xs text-muted-foreground underline"
+                          >
+                            {formatCurrency(cat.monthlyBudget)}/mo budget
+                          </Link>
+                        )}
                         {cat.systemManaged && (
                           <span className="text-xs text-muted-foreground shrink-0" title="System managed">
                             🔒

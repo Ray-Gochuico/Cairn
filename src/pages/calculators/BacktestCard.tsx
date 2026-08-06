@@ -1,5 +1,5 @@
 import { useLocation } from 'react-router-dom';
-import { CalculatorCard } from './CalculatorCard';
+import { CalculatorCard, EmptyMeaning } from './CalculatorCard';
 import { InlineLink } from '@/components/calculators/InlineLink';
 import { readLastBacktestRun } from '@/lib/backtest/last-run';
 import { formatDate } from '@/lib/format';
@@ -42,11 +42,16 @@ export function BacktestCard({ cardId }: BacktestCardProps = {}) {
         )
       }
       meaning={
-        lastRun
-          ? `start years since 1871 sustained this plan · last run ${formatDate(lastRun.runAt.slice(0, 10))}${
-              persons.length === 2 ? ` · ${lastRun.scopeLabel ?? 'Household'} run` : ''
-            }`
-          : undefined
+        lastRun ? (
+          `start years since 1871 sustained this plan · last run ${formatDate(lastRun.runAt.slice(0, 10))}${
+            persons.length === 2 ? ` · ${lastRun.scopeLabel ?? 'Household'} run` : ''
+          }`
+        ) : (
+          // Wave C (N3, CW20): pre-first-run the meaning slot was empty — an
+          // honest invite, no run, no verdict, no data claim (the W18 C9
+          // honest-imperative intent survives).
+          <EmptyMeaning>Replay 150+ years of markets against your allocation.</EmptyMeaning>
+        )
       }
     >
       <p className="text-sm text-muted-foreground">

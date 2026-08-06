@@ -9,6 +9,7 @@ import {
 import { useConfirm } from '@/components/ui/confirm-dialog';
 import EntityCard from './EntityCard';
 import SectionEntryGate from './SectionEntryGate';
+import { TabLoadingSkeleton } from '@/components/inputs/TabLoadingSkeleton';
 import HouseholdForm from './forms/HouseholdForm';
 import PersonForm from './forms/PersonForm';
 import PersonFormImpl from '@/components/forms/PersonForm';
@@ -18,16 +19,29 @@ import { useDependentsStore } from '@/stores/dependents-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { SECTIONS, type SectionStatus } from './sections';
+import { formatCurrency } from '@/lib/format';
+import { FILING_STATUS_LABELS } from '@/lib/filing-status-labels';
 import type { Person } from '@/types/schema';
 
 type ActiveDialog = null | 'household' | 'persons' | 'employment' | 'dependents';
 
+/** Wave C review (MINOR 7): formatCurrency drops cents ($62.50 → "$63") —
+ *  keep them when the stored rate has them, matching PersonForm's value. */
+const formatHourlyRate = (rate: number): string =>
+  Number.isInteger(rate)
+    ? formatCurrency(rate)
+    : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(rate);
+
 interface Props {
   status: SectionStatus;
   onSetStatus: (s: SectionStatus) => void;
+  /** Wave C (C2): store-derived truth from SectionLayout — ≥1 saved entity. */
+  hasData: boolean;
+  /** Wave C (C2): SectionLayout's latched load gate — gate copy may render. */
+  settled: boolean;
 }
 
-export default function Section1_WhoYouAre({ status, onSetStatus }: Props) {
+export default function Section1_WhoYouAre({ status, onSetStatus, hasData, settled }: Props) {
   const household = useHouseholdStore((s) => s.household);
   const loadHousehold = useHouseholdStore((s) => s.load);
   const persons = usePersonsStore((s) => s.persons);
@@ -52,7 +66,12 @@ export default function Section1_WhoYouAre({ status, onSetStatus }: Props) {
 
   const meta = SECTIONS[0];
 
-  if (status === 'pending' || status === 'skipped') {
+  // Wave C (C2, owner constraint 1): the entry gate is an EMPTY STATE — it
+  // renders only when the section is truly empty (DC3: including skipped-
+  // with-data), and never before the stores settle (the W10 F6 false-empty
+  // class). Saved data always renders the entity cards.
+  if (!hasData && (status === 'pending' || status === 'skipped')) {
+    if (!settled) return <TabLoadingSkeleton />;
     return (
       <SectionEntryGate
         title={meta.introTitle}
@@ -70,7 +89,18 @@ export default function Section1_WhoYouAre({ status, onSetStatus }: Props) {
         title="Household"
         description="Filing status, state, default assumptions."
         count={household ? 1 : 0}
+        countLabel={
+          // Wave C (C5, CW2/CW3): the saved household facts, not "1 added" —
+          // 0051-aware: declare per-person expense overrides when present.
+          household
+            ? persons.some((p) => p.monthlyExpenseBaseline != null)
+              ? `${FILING_STATUS_LABELS[household.filingStatus] ?? household.filingStatus} · ${household.state} · ${formatCurrency(household.monthlyExpenseBaseline)}/mo household baseline · per-person expenses set`
+              : `${FILING_STATUS_LABELS[household.filingStatus] ?? household.filingStatus} · ${household.state} · ${formatCurrency(household.monthlyExpenseBaseline)}/mo baseline`
+            : undefined
+        }
         onAddManual={() => setDialog('household')}
+        manageHref="/inputs/household"
+        manageLabel="Manage on Setup page"
       />
       <EntityCard
         title="Persons"
@@ -90,6 +120,8 @@ export default function Section1_WhoYouAre({ status, onSetStatus }: Props) {
             if (ok && p.id != null) await removePerson(p.id);
           },
         }))}
+        manageHref="/inputs/persons"
+        manageLabel="Manage on Setup page"
       />
       <EntityCard
         title="Employment"
@@ -101,6 +133,20 @@ export default function Section1_WhoYouAre({ status, onSetStatus }: Props) {
           ).length
         }
         onAddManual={() => setDialog('employment')}
+        items={persons
+          .filter((p) => p.annualSalaryPretax > 0 || (p.hourlyRate ?? 0) > 0)
+          .map((p) => ({
+            key: p.id ?? p.name,
+            // Wave C (C5, CW4): the pay itself, not just a count.
+            label:
+              p.employmentType === 'HOURLY'
+                ? `${p.name} — ${formatHourlyRate(p.hourlyRate ?? 0)}/hr hourly`
+                : `${p.name} — ${formatCurrency(p.annualSalaryPretax)} salary${
+                    p.employmentType === 'SALARY_WITH_OT' ? ' + OT' : ''
+                  }`,
+          }))}
+        manageHref="/inputs/persons"
+        manageLabel="Manage on Setup page"
       />
       <EntityCard
         title="Dependents"
@@ -108,6 +154,8 @@ export default function Section1_WhoYouAre({ status, onSetStatus }: Props) {
         count={dependents.length}
         onAddManual={() => setDialog('dependents')}
         items={dependents.map((d, i) => ({ key: d.id ?? i, label: d.name }))}
+        manageHref="/inputs/dependents"
+        manageLabel="Manage on Setup page"
       />
 
       <Dialog
