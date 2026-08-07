@@ -3,7 +3,7 @@ import { splitAmount } from '@/lib/interview/waterfall';
 import { computeBucketGaps, avalancheOrder } from '@/lib/interview/gaps';
 import type { InterviewContext } from '@/types/interview';
 import type { AccountSnapshot } from '@/types/schema';
-import { AccountType } from '@/types/enums';
+import { AccountType, ContributionSource } from '@/types/enums';
 import { makeHousehold, makePerson, makeAccount, makeLoan } from '../../factories';
 
 const snap = (accountId: number, totalValue: number): AccountSnapshot =>
@@ -140,5 +140,72 @@ describe('splitAmount — one-time (hand-computed, design §3.1-3.4)', () => {
     const s = splitAmount(input, 'aggressive',
       fixtureCtx({ loans: [makeLoan({ id: 1, name: 'Mortgage', currentBalance: 540000, interestRate: 0.0625 })] }));
     expect(s.skipped.find((k) => k.bucket === 'high_rate_debt')!.reason).toBe('No loans at or above 8%.');
+  });
+});
+
+describe('splitAmount — per-month phases (design §3.3)', () => {
+  const perMonth = { amountCents: 100_000, cadence: 'per-month' as const }; // $1,000/mo
+
+  it('Conservative: EF-target phase is ceil(gap/flow); debt months come from the amortization schedule', () => {
+    // Trivial-schedule loan: $1,000 @ 6% (mid band), payment $500, extra
+    // $1,000/mo → month 1 pays 1,500 ≥ 1,005 → payoff in the first
+    // schedule month → debt phase months = 1 (clamped ≥ 1).
+    const ctx = fixtureCtx({
+      loans: [makeLoan({ id: 1, name: 'Tiny', currentBalance: 1000, interestRate: 0.06, monthlyPayment: 500, termMonths: 12, firstPaymentDate: '2026-09-01' })],
+    });
+    const s = splitAmount(perMonth, 'conservative', ctx);
+    // Phase 1: B4 gap $6,000 at $1,000/mo → 6 months. Phase 2: Tiny → 1 month. Phase 3: ongoing invest.
+    expect(s.phases.map((p) => [p.months, p.rows.map((r) => r.bucket)])).toEqual([
+      [6, ['ef_target']],
+      [1, ['mid_rate_debt']],
+      [null, ['invest']],
+    ]);
+    // Every phase's rows sum to the flow (the per-month sum invariant):
+    for (const p of s.phases) {
+      expect(p.rows.reduce((a, r) => a + r.amountCents, 0)).toBe(100_000);
+    }
+    expect(s.rows).toEqual(s.phases[0].rows);
+  });
+
+  it('Moderate: steady state splits mid-rate/invest 50/50 until the band clears, then ongoing invest', () => {
+    const ctx = fixtureCtx({
+      loans: [makeLoan({ id: 1, name: 'Tiny', currentBalance: 1000, interestRate: 0.06, monthlyPayment: 500, termMonths: 12, firstPaymentDate: '2026-09-01' })],
+    });
+    const s = splitAmount(perMonth, 'moderate', ctx);
+    const last2 = s.phases.slice(-2);
+    expect(last2[0].rows.map((r) => [r.bucket, r.amountCents])).toEqual([
+      ['mid_rate_debt', 50000],
+      ['invest', 50000],
+    ]);
+    expect(last2[1]).toEqual({ months: null, rows: [{ bucket: 'invest', amountCents: 100_000 }] });
+  });
+
+  it('B2 carve-out is deducted first in EVERY phase and labeled through December', () => {
+    const matchedCtx = fixtureCtx({
+      persons: [makePerson({ id: 1, name: 'Sam', annualSalaryPretax: 100000, jobStability: null })],
+      accounts: [
+        ...fixtureCtx().accounts,
+        makeAccount({ id: 10, type: AccountType.ACCOUNT_401K, name: '401(k)', ownerPersonId: 1, hasEmployerMatch: true, employerMatchPct: 0.03, employerMatchLimitPct: 0.06 }),
+      ],
+      contributions: [{ accountId: 10, date: '2026-03-15', amount: 2000, source: ContributionSource.PAYCHECK }] as never,
+      loans: [],
+    });
+    const s = splitAmount(perMonth, 'conservative', matchedCtx);
+    // carve = $800/mo (match test above); avail = $200/mo; B4 gap $6,000 → 30 months.
+    expect(s.phases[0].months).toBe(30);
+    expect(s.phases[0].rows).toEqual([
+      { bucket: 'match', amountCents: 80000 },
+      { bucket: 'ef_target', amountCents: 20000 },
+    ]);
+    expect(s.phases.at(-1)!.rows[0]).toEqual({ bucket: 'match', amountCents: 80000 });
+  });
+
+  it('match unknown → per-month skip carries CI-13 (unlike the one-time CI-12)', () => {
+    const ctx = fixtureCtx({
+      accounts: [...fixtureCtx().accounts, makeAccount({ id: 11, type: AccountType.ACCOUNT_ROTH_IRA, hasEmployerMatch: null })],
+    });
+    const s = splitAmount(perMonth, 'aggressive', ctx);
+    expect(s.skipped.find((k) => k.bucket === 'match')!.reason)
+      .toBe('Employer match unknown — answer the match question on the Roadmap to include it.');
   });
 });

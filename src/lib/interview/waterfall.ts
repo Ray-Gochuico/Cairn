@@ -1,5 +1,9 @@
 import { frameworkById, type FrameworkId } from '@/domain/interview/frameworks';
+import { monthsBetweenIso } from '@/domain/interview/evaluate';
+import { compareStrategies } from '@/lib/debt-payoff-comparison';
+import type { Loan } from '@/types/schema';
 import { computeBucketGaps, type BucketGaps } from './gaps';
+import { computeMatchSummary } from './match-value';
 import type { Cadence, InterviewContext } from '@/types/interview';
 
 export type BucketId =
@@ -37,6 +41,26 @@ const noHighRate = (high: number): string => `No loans at or above ${high}%.`;
 const noMidRate = (low: number, high: number): string => `No loans in the ${low}–${high}% band.`;
 const aggressiveMinimums = (low: number, high: number): string =>
   `Debt between ${low}–${high}% stays at minimum payments in this framework.`;
+const MATCH_UNKNOWN =
+  'Employer match unknown — answer the match question on the Roadmap to include it.';
+const NO_MATCH = 'No employer match on your retirement accounts.';
+
+/**
+ * Months to clear a band with `extraCentsPerMonth` of extra payment, from
+ * compareStrategies' avalanche SCHEDULE (interest accrues — design §3.3
+ * forbids naive division for debt). null when the schedule is capped
+ * (honesty flags) — the phase renders "until paid off" with no date.
+ */
+export function debtPayoffMonths(
+  loans: Loan[],
+  extraCentsPerMonth: number,
+  todayIso: string,
+): number | null {
+  if (loans.length === 0 || extraCentsPerMonth <= 0) return null;
+  const cmp = compareStrategies(loans, extraCentsPerMonth / 100, todayIso);
+  if (cmp.avalanche.anyCapped || cmp.avalanche.payoffDate == null) return null;
+  return Math.max(1, monthsBetweenIso(todayIso, cmp.avalanche.payoffDate));
+}
 
 /**
  * THE waterfall (design §3): pure over (input, policyId, ctx), integer
@@ -114,5 +138,59 @@ export function splitAmount(
     };
   }
 
-  throw new Error('per-month lands in Task 5');
+  // ── per-month: phase schedule (design §3.3) ───────────────────────────────
+  const todayIso = ctx.today.toISOString().slice(0, 10);
+  const match = computeMatchSummary(ctx);
+  let matchCarve = 0;
+  if (match.state === 'active') {
+    matchCarve = Math.min(input.amountCents, match.runRateCentsPerMonth);
+    for (const e of match.excluded) skipped.push({ bucket: 'match', reason: e.reason });
+  } else if (match.state === 'unknown') {
+    skipped.push({ bucket: 'match', reason: MATCH_UNKNOWN });
+  } else {
+    skipped.push({ bucket: 'match', reason: NO_MATCH });
+  }
+  const avail = input.amountCents - matchCarve;
+  const carveRows: SplitRow[] = matchCarve > 0 ? [{ bucket: 'match', amountCents: matchCarve }] : [];
+  const phases: Phase[] = [];
+  const pushPhase = (months: number | null, bucket: BucketId, amountCents: number): void => {
+    if (amountCents > 0) phases.push({ months, rows: [...carveRows, { bucket, amountCents }] });
+  };
+
+  if (avail > 0) {
+    // B1
+    if (noBaseline || gaps.efFloorGapCents === 0) skipEf('ef_floor');
+    else pushPhase(Math.ceil(gaps.efFloorGapCents / avail), 'ef_floor', avail);
+    // B3 — payoff months from the amortization schedule, never naive division
+    if (gaps.highLoans.length === 0) skipDebt('high_rate_debt');
+    else pushPhase(debtPayoffMonths(gaps.highLoans, avail, todayIso), 'high_rate_debt', avail);
+    // B4 — the floor phase already closed efFloorGapCents
+    const b4Gap = Math.max(0, efTargetTotalCents - gaps.efFloorGapCents);
+    if (noBaseline || b4Gap === 0) skipEf('ef_target');
+    else pushPhase(Math.ceil(b4Gap / avail), 'ef_target', avail);
+    // B5 per policy
+    if (gaps.midLoans.length === 0) skipDebt('mid_rate_debt');
+    else if (policy.midRate === 'fill') {
+      pushPhase(debtPayoffMonths(gaps.midLoans, avail, todayIso), 'mid_rate_debt', avail);
+    } else if (policy.midRate === 'minimums') {
+      skipped.push({ bucket: 'mid_rate_debt', reason: aggressiveMinimums(low, high) });
+    } else {
+      // Moderate steady split until the band clears (odd cent to B5, D-GI11)
+      const b5 = Math.floor(avail / 2) + (avail % 2);
+      phases.push({
+        months: debtPayoffMonths(gaps.midLoans, b5, todayIso),
+        rows: [...carveRows, { bucket: 'mid_rate_debt', amountCents: b5 }, { bucket: 'invest', amountCents: avail - b5 }],
+      });
+    }
+    // Ongoing terminal sink
+    phases.push({ months: null, rows: [...carveRows, { bucket: 'invest', amountCents: avail }] });
+  } else {
+    // The whole flow is the match carve — a single ongoing match phase.
+    phases.push({ months: null, rows: carveRows });
+  }
+
+  return {
+    policyId, cadence: 'per-month', rows: phases[0]?.rows ?? [], phases, skipped,
+    efMultiple: ef.multiple, efAssumed: ef.assumed && policy.id === 'moderate', gaps,
+  };
 }
