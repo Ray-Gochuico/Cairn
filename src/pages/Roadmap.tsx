@@ -18,6 +18,12 @@ import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useRoadmapOverridesStore } from '@/stores/roadmap-overrides-store';
+import { useVehiclesStore } from '@/stores/vehicles-store';
+import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
+import { useSettingsStore } from '@/stores/settings-store';
+import { useHoldingsStore } from '@/stores/holdings-store';
+import { useTickersStore } from '@/stores/tickers-store';
+import { useInterviewAnswersStore } from '@/stores/interview-answers-store';
 import { useRoadmap } from '@/domain/roadmap/context';
 import { evaluate } from '@/domain/roadmap/evaluate';
 import { NODES } from '@/domain/roadmap/nodes';
@@ -78,6 +84,16 @@ export default function Roadmap() {
   const loadTransactions = useTransactionsStore((s) => s.load);
   const loadCategories = useCategoriesStore((s) => s.load);
   const loadOverrides = useRoadmapOverridesStore((s) => s.load);
+  // Guided interview (D-GI14): six more input stores join the same latched
+  // gate — vehicles/asset-snapshots/settings/holdings/tickers feed the
+  // InterviewContext, interview-answers feeds the kernel walker. Interview
+  // components never call .load() themselves (boot-loop gotcha).
+  const loadVehicles = useVehiclesStore((s) => s.load);
+  const loadAssetValueSnapshots = useAssetValueSnapshotsStore((s) => s.load);
+  const loadSettings = useSettingsStore((s) => s.load);
+  const loadHoldings = useHoldingsStore((s) => s.load);
+  const loadTickers = useTickersStore((s) => s.load);
+  const loadInterviewAnswers = useInterviewAnswersStore((s) => s.load);
 
   const reload = useCallback(() => {
     void loadHousehold();
@@ -89,6 +105,12 @@ export default function Roadmap() {
     void loadTransactions();
     void loadCategories();
     void loadOverrides();
+    void loadVehicles();
+    void loadAssetValueSnapshots();
+    void loadSettings();
+    void loadHoldings();
+    void loadTickers();
+    void loadInterviewAnswers();
   }, [
     loadHousehold,
     loadPersons,
@@ -99,6 +121,12 @@ export default function Roadmap() {
     loadTransactions,
     loadCategories,
     loadOverrides,
+    loadVehicles,
+    loadAssetValueSnapshots,
+    loadSettings,
+    loadHoldings,
+    loadTickers,
+    loadInterviewAnswers,
   ]);
 
   // W10 M28: the engine (evaluate) renders authoritative-looking evidence
@@ -116,6 +144,12 @@ export default function Roadmap() {
       useTransactionsStore((s) => s.isLoading),
       useCategoriesStore((s) => s.isLoading),
       useRoadmapOverridesStore((s) => s.isLoading),
+      useVehiclesStore((s) => s.isLoading),
+      useAssetValueSnapshotsStore((s) => s.isLoading),
+      useSettingsStore((s) => s.isLoading),
+      useHoldingsStore((s) => s.isLoading),
+      useTickersStore((s) => s.isLoading),
+      useInterviewAnswersStore((s) => s.isLoading),
     ],
     [
       useHouseholdStore((s) => s.error),
@@ -127,6 +161,12 @@ export default function Roadmap() {
       useTransactionsStore((s) => s.error),
       useCategoriesStore((s) => s.error),
       useRoadmapOverridesStore((s) => s.error),
+      useVehiclesStore((s) => s.error),
+      useAssetValueSnapshotsStore((s) => s.error),
+      useSettingsStore((s) => s.error),
+      useHoldingsStore((s) => s.error),
+      useTickersStore((s) => s.error),
+      useInterviewAnswersStore((s) => s.error),
     ],
     reload,
   );
