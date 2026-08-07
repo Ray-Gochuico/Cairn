@@ -303,11 +303,20 @@ export function ScenarioBar() {
       // retry. Load first (in-flight-deduped; cheap when already warm).
       await useScenariosStore.getState().load();
       const existing = useScenariosStore.getState().scenarios;
-      // Wave C (DC6): sending BEFORE ever visiting /what-if meant the store's
-      // ensureBaseline never ran — nothing was active, and the page greeted
-      // the user with "No active scenario" right after they sent one. The
-      // sent scenario activates iff there is no active scenario to displace;
-      // otherwise the new row is highlighted on arrival (navigation state).
+      // Wave C (DC6) + smoke investigation (2026-08-07): there is no
+      // standalone ensureBaseline helper — the Baseline seed lives INSIDE
+      // useScenariosStore.load() (first load of an EMPTY table creates the
+      // Baseline with isActive: true), and the awaited load above runs it.
+      // So on a fresh profile the vacuum below can no longer occur on this
+      // path: sends arrive with the Baseline active and create
+      // isActive: false (highlighted on arrival, never stealing activation).
+      // The branch is kept belt-and-braces for the residual all-inactive
+      // state — scenariosStore.remove() deletes without reassigning
+      // activation, so deleting the active scenario leaves a POPULATED
+      // table with no isActive row (the seed only fires on an empty one) —
+      // and its test pins the vacuum by stubbing load. Do NOT remove it or
+      // change activation semantics; whether a sent scenario should steal
+      // activation is an open owner design question.
       const hasActive = existing.some((s) => s.isActive);
       const createdId = await useScenariosStore.getState().create({
         name: `From calculators — ${formatDate(todayIso)}`,
@@ -484,7 +493,14 @@ export function ScenarioBar() {
           {sendError}
         </div>
       )}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-x-3 gap-y-2">
+      {/* Wave C smoke fix (2026-08-07): xl capped at FOUR columns — six packed
+          ~174px fields inside the max-w-6xl container, and the longest
+          provenance contract string ("…— joint accounts not included")
+          ellipsized INSIDE the DC2 two-line clamp at 1440×900 (manual check:
+          scrollHeight > clientHeight on the provenance <p>). Four columns
+          (~267px) hold it with room; below xl — the Task-10 1024 layout —
+          nothing changes. */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-x-3 gap-y-2">
         {FIELDS.map((spec) => (
           <ScenarioBarField
             key={spec.field}

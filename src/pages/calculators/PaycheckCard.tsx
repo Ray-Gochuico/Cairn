@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
+import { withViewSearch } from '@/lib/view-scope';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
@@ -32,6 +34,10 @@ interface PaycheckCardProps {
 }
 
 export function PaycheckCard({ cardId }: PaycheckCardProps = {}) {
+  // Wave C smoke fix (2026-08-07): the full-page link carries ?view= (the
+  // Backtest pair's idiom) purely so the RETURN trip restores the scope the
+  // user left — the full page itself stays household-only (CB24 unchanged).
+  const location = useLocation();
   const { household } = useHouseholdStore();
   // D7 (Wave 18): EFFECTIVE persons — the bar's salary overrides ripple
   // through useHouseholdTaxContext (a mapped copy; the persons store is
@@ -312,7 +318,7 @@ export function PaycheckCard({ cardId }: PaycheckCardProps = {}) {
     >
       <div className="mb-3">
         <InlineLink
-          to="/calculators/paycheck"
+          to={withViewSearch('/calculators/paycheck', location.search)}
           className="text-sm"
         >
           Open full calculator →
