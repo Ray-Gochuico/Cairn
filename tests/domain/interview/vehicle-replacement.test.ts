@@ -4,7 +4,7 @@ import { VEHICLE_REPLACEMENT_THREAD } from '@/domain/interview/threads/vehicle-r
 import { INTERVIEW_THREADS } from '@/domain/interview/registry';
 import { answerKey, type InterviewAnswer } from '@/types/interview';
 import { makeHousehold, makeVehicle } from '../../factories';
-import { fixtureCtx } from '../../lib/interview/waterfall.test';
+import { fixtureCtx } from '../../lib/interview/fixture';
 
 const CATS = [
   { id: 2, name: 'Vehicles', parentCategoryId: null, type: 'NEED' },

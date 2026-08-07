@@ -3,7 +3,7 @@ import { computeEffect } from '@/lib/interview/effects';
 import { splitAmount } from '@/lib/interview/waterfall';
 import { makeHousehold, makeAccount, makeLoan } from '../../factories';
 import { AccountType } from '@/types/enums';
-import { fixtureCtx } from './waterfall.test';
+import { fixtureCtx } from './fixture';
 
 const GROWTH = [
   { label: 'low', rate: 0.04 }, { label: 'moderate', rate: 0.06 }, { label: 'high', rate: 0.08 },
@@ -78,5 +78,40 @@ describe('computeEffect — headline selection (D-GI9) + bindings (§3.5)', () =
     expect(eCap.secondaries.join('\n')).toContain(
       "The stated payment can't amortize this balance — interest and payoff figures aren't shown.",
     );
+  });
+});
+
+describe('computeEffect — CI-28 EF funded date (review M1)', () => {
+  it('two EF phases: the date accumulates through the LAST EF phase, not the first', () => {
+    // Reserve $0, baseline $6,000, no loans, Conservative $1,000/mo:
+    // phase 1 ef_floor 6 months ($6,000 gap), phase 2 ef_target 30 months
+    // ($36,000 − $6,000), then ongoing invest. Fully funded = Aug 2026 + 36
+    // = August 2029 — NOT February 2027 (the first phase's end).
+    const ctx = fixtureCtx({ snapshots: [], loans: [] });
+    const s = splitAmount({ amountCents: 100_000, cadence: 'per-month' }, 'conservative', ctx);
+    expect(s.phases.map((p) => [p.months, p.rows.map((r) => r.bucket)])).toEqual([
+      [6, ['ef_floor']],
+      [30, ['ef_target']],
+      [null, ['invest']],
+    ]);
+    const e = computeEffect(s, ctx);
+    expect(e.headline).toContain('Emergency fund fully funded by August 2029 at this pace');
+  });
+
+  it('an unbounded (months=null) phase before the EF phase suppresses the CI-28 line entirely', () => {
+    // Capped high-rate loan → its phase has months=null and precedes the EF
+    // phase; a concrete funded date would be fabricated. No EF date line at
+    // all (mirrors the CI-30 suppression ethos; no new copy).
+    // $600,000 @ 22% accrues ≈ $11,000/mo interest — the $1 payment plus the
+    // whole $1,000/mo flow can never amortize it, so the schedule stays capped.
+    const capped = makeLoan({ id: 9, name: 'Trap', currentBalance: 600000, interestRate: 0.22, monthlyPayment: 1, termMonths: 12, firstPaymentDate: '2026-09-01' });
+    const ctx = fixtureCtx({ loans: [capped] });
+    const s = splitAmount({ amountCents: 100_000, cadence: 'per-month' }, 'conservative', ctx);
+    // Shape sanity: null-months debt phase, then the EF phase.
+    expect(s.phases[0].months).toBeNull();
+    expect(s.phases[1].rows.some((r) => r.bucket === 'ef_target')).toBe(true);
+    const e = computeEffect(s, ctx);
+    expect(e.headline).not.toContain('Emergency fund fully funded');
+    expect(e.secondaries.join('\n')).not.toContain('Emergency fund fully funded');
   });
 });

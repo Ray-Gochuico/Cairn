@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { buildFrameworkCards } from '@/lib/interview/framework-cards';
-import { fixtureCtx } from './waterfall.test';
+import { AccountType } from '@/types/enums';
+import { makeAccount, makeHolding, makeLoan } from '../../factories';
+import { fixtureCtx, snap } from './fixture';
 
 describe('buildFrameworkCards', () => {
   const cards = buildFrameworkCards({ amountCents: 1_000_000, cadence: 'one-time' }, fixtureCtx());
@@ -46,5 +48,60 @@ describe('buildFrameworkCards', () => {
     const aggressive = cards[2];
     expect(aggressive.rows.find((r) => r.label === 'Invest')).toBeDefined();
     expect(aggressive.assumes.some((a) => a.text === 'No target allocation set — shown as one investing amount.')).toBe(true);
+  });
+});
+
+describe('B6 per-class rows use the house labels (review M2)', () => {
+  const targetedCtx = () => fixtureCtx({
+    loans: [],
+    accounts: [
+      ...fixtureCtx().accounts,
+      makeAccount({ id: 3, type: AccountType.ACCOUNT_BROKERAGE, name: 'Brokerage' }),
+    ],
+    snapshots: [...fixtureCtx().snapshots, snap(3, 10000)],
+    holdings: [makeHolding({ accountId: 3, ticker: 'VTI', shareCount: 10 })],
+    tickers: [{ ticker: 'VTI', assetClass: 'US_TOTAL_MARKET' }] as never,
+    settings: {
+      assetClassTargetAllocations: [
+        { assetClass: 'US_TOTAL_MARKET', targetPct: 0.6 },
+        { assetClass: 'US_BONDS', targetPct: 0.4 },
+      ],
+    } as never,
+  });
+
+  it('CI-7: Invest rows carry ASSET_CLASS_LABEL names, never raw enum strings', () => {
+    const cards = buildFrameworkCards({ amountCents: 1_000_000, cadence: 'one-time' }, targetedCtx());
+    const aggressive = cards[2];
+    const labels = aggressive.rows.map((r) => r.label);
+    expect(labels).toContain('Invest — US Total Market');
+    expect(labels.join('\n')).not.toContain('US_TOTAL_MARKET');
+  });
+
+  it('CI-21: the no-held-fund class list is human-labeled', () => {
+    const cards = buildFrameworkCards({ amountCents: 1_000_000, cadence: 'one-time' }, targetedCtx());
+    const aggressive = cards[2];
+    expect(aggressive.assumes.some((a) =>
+      a.text === 'No held fund for US Bonds — that part stays as unallocated cash.')).toBe(true);
+    expect(aggressive.assumes.some((a) => a.text.includes('US_BONDS'))).toBe(false);
+  });
+});
+
+describe('CI-25 avalanche assume row (review m1)', () => {
+  it('fires when the multi-loan band funds in a LATER phase (EF-first schedule)', () => {
+    // Two mid-band loans; Conservative per-month: phase 1 is the EF target,
+    // the mid band funds in phase 2 — the avalanche tie-break row must still
+    // render (funded-ness is judged across every phase, not phase 1 only).
+    const ctx = fixtureCtx({
+      loans: [
+        makeLoan({ id: 1, name: 'HELOC', currentBalance: 8000, interestRate: 0.07, monthlyPayment: 200, termMonths: 120, firstPaymentDate: '2026-01-01' }),
+        makeLoan({ id: 2, name: 'Consolidation', currentBalance: 5000, interestRate: 0.06, monthlyPayment: 150, termMonths: 60, firstPaymentDate: '2026-01-01' }),
+      ],
+    });
+    const cards = buildFrameworkCards({ amountCents: 100_000, cadence: 'per-month' }, ctx);
+    const conservative = cards[0];
+    // Shape sanity: the EF phase precedes the mid-band phase.
+    expect(conservative.phases[0].rows.some((r) => r.label.startsWith('Emergency fund'))).toBe(true);
+    expect(conservative.assumes.some((a) =>
+      a.text === 'Multiple loans pay highest rate first; rate ties go to the smaller balance, then the lower ID.')).toBe(true);
   });
 });

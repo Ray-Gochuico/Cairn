@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { evaluateCarSignals } from '@/lib/interview/vehicle-signals';
 import { AssetSnapshotOwnerType } from '@/types/enums';
 import { makeVehicle } from '../../factories';
-import { fixtureCtx } from './waterfall.test';
+import { fixtureCtx } from './fixture';
 
 const CATS = [
   { id: 2, name: 'Vehicles', parentCategoryId: null, type: 'NEED' },

@@ -3,6 +3,7 @@ import { allocateContribution } from '@/lib/contribution-allocator';
 import { valueHoldings } from '@/lib/holdings-value';
 import { buildScenarioDefaults } from '@/lib/calculators/scenario-assumptions';
 import { formatCurrency } from '@/lib/format';
+import { ASSET_CLASS_LABEL } from '@/lib/asset-class-labels';
 import type { AssetClass } from '@/types/enums';
 import type { InterviewContext } from '@/types/interview';
 import { splitAmount, type BucketId, type FrameworkSplit, type SplitInput } from './waterfall';
@@ -10,7 +11,12 @@ import { computeEffect } from './effects';
 
 export interface CardRow { label: string; amount: string; forLabel?: string }
 export interface CardPhase { label: 'First' | 'Then' | 'Ongoing'; rows: CardRow[] }
-export interface AssumeRow { group: 'provenance' | 'constants' | 'skipped'; text: string }
+export interface AssumeRow {
+  group: 'provenance' | 'constants' | 'skipped';
+  text: string;
+  /** Rendered as a router Link after the text (CI-11's Open Household →). */
+  cta?: { label: string; to: string };
+}
 
 export interface FrameworkCardModel {
   policyId: string;
@@ -78,19 +84,19 @@ function investRows(
   if (result.unallocatableClasses.length > 0) {
     assumes.push({
       group: 'skipped',
-      text: `No held fund for ${result.unallocatableClasses.map((u) => u.assetClass).join(', ')} — that part stays as unallocated cash.`,
+      text: `No held fund for ${result.unallocatableClasses.map((u) => ASSET_CLASS_LABEL[u.assetClass]).join(', ')} — that part stays as unallocated cash.`,
     });
   }
   // One 'Invest — {class}' row per FUNDED class (result.rows is per-ticker
   // {ticker, assetClass, buyDollars} — aggregate by class), plus the exact
-  // cashLeftOver row. Dollars only; the class label is the AssetClass enum
-  // string (the allocator card's ASSET_CLASS_LABEL is not exported).
+  // cashLeftOver row. Dollars only; labels via the house ASSET_CLASS_LABEL
+  // map ("one map, one spelling") — review M2: raw enum strings never render.
   const byClass = new Map<AssetClass, number>();
   for (const r of result.rows) {
     if (r.buyDollars > 0) byClass.set(r.assetClass, (byClass.get(r.assetClass) ?? 0) + r.buyDollars);
   }
   const out: CardRow[] = [...byClass.entries()].map(([cls, dollars]) => ({
-    label: `Invest — ${cls}`,
+    label: `Invest — ${ASSET_CLASS_LABEL[cls]}`,
     amount: formatCurrency(dollars),
   }));
   if (result.cashLeftOver > 0) {
@@ -124,8 +130,13 @@ export function buildFrameworkCards(input: SplitInput, ctx: InterviewContext): F
       group: 'constants',
       text: `Debt bands: ${ctx.thresholds.low}% and ${ctx.thresholds.high}% — ${overridden ? 'your Settings override' : 'app defaults'}.`,
     });
-    if ((split.gaps.highLoans.length > 1 && split.rows.some((r) => r.bucket === 'high_rate_debt'))
-      || (split.gaps.midLoans.length > 1 && split.rows.some((r) => r.bucket === 'mid_rate_debt'))) {
+    // Review m1: judge funded-ness across EVERY phase — split.rows is only
+    // phase 1 for per-month, and a multi-loan band commonly funds after EF.
+    const fundedRows = split.cadence === 'one-time'
+      ? split.rows
+      : split.phases.flatMap((p) => p.rows);
+    if ((split.gaps.highLoans.length > 1 && fundedRows.some((r) => r.bucket === 'high_rate_debt'))
+      || (split.gaps.midLoans.length > 1 && fundedRows.some((r) => r.bucket === 'mid_rate_debt'))) {
       assumes.push({
         group: 'constants',
         text: 'Multiple loans pay highest rate first; rate ties go to the smaller balance, then the lower ID.',
@@ -137,8 +148,8 @@ export function buildFrameworkCards(input: SplitInput, ctx: InterviewContext): F
         text: 'Assumes a 6× expense reserve — no job-stability answer on file. Answer below to use 3×.',
       });
     }
-    // (c) skipped — verbatim from the waterfall
-    for (const k of split.skipped) assumes.push({ group: 'skipped', text: k.reason });
+    // (c) skipped — verbatim from the waterfall (cta rides along, CI-11)
+    for (const k of split.skipped) assumes.push({ group: 'skipped', text: k.reason, cta: k.cta });
 
     // Table rows (invest rows may expand per class + push assume rows)
     const toRows = (rows: FrameworkSplit['rows']): CardRow[] =>

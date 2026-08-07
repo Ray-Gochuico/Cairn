@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { evaluateThread } from '@/domain/interview/evaluate';
 import { NEXT_DOLLAR_THREAD } from '@/domain/interview/threads/next-dollar';
 import { INTERVIEW_THREADS } from '@/domain/interview/registry';
-import { fixtureCtx } from '../../lib/interview/waterfall.test';
+import { fixtureCtx } from '../../lib/interview/fixture';
 
 describe('next_dollar thread', () => {
   it('is registered first, household-scoped, with the stable id', () => {

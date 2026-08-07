@@ -10,7 +10,12 @@ export type BucketId =
   | 'ef_floor' | 'match' | 'high_rate_debt' | 'ef_target' | 'mid_rate_debt' | 'invest';
 
 export interface SplitRow { bucket: BucketId; amountCents: number }
-export interface SkipEntry { bucket: BucketId; reason: string }
+export interface SkipEntry {
+  bucket: BucketId;
+  reason: string;
+  /** CI-11 carries a CTA into the assumes region (review M3). */
+  cta?: { label: string; to: string };
+}
 export interface SplitInput { amountCents: number; cadence: Cadence }
 /** Per-month schedule step. months null = open-ended (ongoing / capped debt). */
 export interface Phase { months: number | null; rows: SplitRow[] }
@@ -85,6 +90,8 @@ export function splitAmount(
     skipped.push({
       bucket,
       reason: noBaseline ? NO_BASELINE : efCoveredReason(gaps.reserveDollars, gaps.baselineDollars),
+      // CI-11's contract includes the CTA link (review M3).
+      ...(noBaseline ? { cta: { label: 'Open Household →', to: '/inputs/household' } } : {}),
     });
   };
   const skipDebt = (bucket: 'high_rate_debt' | 'mid_rate_debt'): void => {
@@ -116,8 +123,12 @@ export function splitAmount(
     // B4 — EF to the policy target, net of what B1 just filled
     const b1Alloc = rows.find((r) => r.bucket === 'ef_floor')?.amountCents ?? 0;
     const b4Gap = Math.max(0, efTargetTotalCents - b1Alloc);
-    if (noBaseline || b4Gap === 0) skipEf('ef_target');
-    else take('ef_target', b4Gap);
+    if (noBaseline || efTargetTotalCents === 0) skipEf('ef_target');
+    else if (b4Gap === 0) {
+      // Review m2: the target is covered by THIS split's floor fill (sub-floor
+      // baselines) — the B1 row on the same card already shows the EF being
+      // funded, so no skip row (a "covered by reserve" reason would be false).
+    } else take('ef_target', b4Gap);
     // B5 — per policy
     if (gaps.midLoans.length === 0) skipDebt('mid_rate_debt');
     else if (policy.midRate === 'fill') take('mid_rate_debt', gaps.midRateGapCents);
@@ -166,8 +177,11 @@ export function splitAmount(
     else pushPhase(debtPayoffMonths(gaps.highLoans, avail, todayIso), 'high_rate_debt', avail);
     // B4 — the floor phase already closed efFloorGapCents
     const b4Gap = Math.max(0, efTargetTotalCents - gaps.efFloorGapCents);
-    if (noBaseline || b4Gap === 0) skipEf('ef_target');
-    else pushPhase(Math.ceil(b4Gap / avail), 'ef_target', avail);
+    if (noBaseline || efTargetTotalCents === 0) skipEf('ef_target');
+    else if (b4Gap === 0) {
+      // Review m2: covered by this split's floor phase — no skip row (the
+      // floor phase on the same card already shows the EF being funded).
+    } else pushPhase(Math.ceil(b4Gap / avail), 'ef_target', avail);
     // B5 per policy
     if (gaps.midLoans.length === 0) skipDebt('mid_rate_debt');
     else if (policy.midRate === 'fill') {

@@ -1,36 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { splitAmount } from '@/lib/interview/waterfall';
 import { computeBucketGaps, avalancheOrder } from '@/lib/interview/gaps';
-import type { InterviewContext } from '@/types/interview';
-import type { AccountSnapshot } from '@/types/schema';
 import { AccountType, ContributionSource } from '@/types/enums';
 import { makeHousehold, makePerson, makeAccount, makeLoan } from '../../factories';
-
-const snap = (accountId: number, totalValue: number): AccountSnapshot =>
-  ({ accountId, snapshotDate: '2026-07-30', totalValue } as AccountSnapshot);
-
-export function fixtureCtx(overrides: Partial<InterviewContext> = {}): InterviewContext {
-  return {
-    household: makeHousehold({ monthlyExpenseBaseline: 6000 }),
-    persons: [makePerson({ id: 1, jobStability: null })],
-    accounts: [
-      makeAccount({ id: 1, type: AccountType.ACCOUNT_SAVINGS, name: 'Savings' }),
-      makeAccount({ id: 2, type: AccountType.ACCOUNT_CASH, name: 'Checking' }),
-    ],
-    snapshots: [snap(1, 22000), snap(2, 8000)],
-    loans: [
-      makeLoan({ id: 1, name: 'Mortgage', currentBalance: 540000, interestRate: 0.0625, monthlyPayment: 4001, termMonths: 360, firstPaymentDate: '2022-02-01' }),
-      makeLoan({ id: 2, name: 'Visa', currentBalance: 3000, interestRate: 0.22, monthlyPayment: 150, termMonths: 36, firstPaymentDate: '2026-01-01' }),
-      makeLoan({ id: 3, name: 'Car', currentBalance: 22000, interestRate: 0.049, monthlyPayment: 791, termMonths: 60, firstPaymentDate: '2025-02-01' }),
-    ],
-    contributions: [], transactions: [], categories: [], overrides: new Map(),
-    thresholds: { low: 5, high: 8 }, taxYear: 2026,
-    today: new Date('2026-08-01T12:00:00Z'),
-    vehicles: [], assetValueSnapshots: [], settings: null, holdings: [], tickers: [],
-    interviewAnswers: new Map(),
-    ...overrides,
-  } as InterviewContext;
-}
+import { fixtureCtx } from './fixture';
 
 const rowsOf = (s: ReturnType<typeof splitAmount>) =>
   s.rows.map((r) => [r.bucket, r.amountCents]);
@@ -207,5 +180,41 @@ describe('splitAmount — per-month phases (design §3.3)', () => {
     const s = splitAmount(perMonth, 'aggressive', ctx);
     expect(s.skipped.find((k) => k.bucket === 'match')!.reason)
       .toBe('Employer match unknown — answer the match question on the Roadmap to include it.');
+  });
+});
+
+describe('sub-floor baselines: no self-contradictory EF skip (review m2)', () => {
+  // baseline $300: the $1,000 floor EXCEEDS the 3× target ($900), so the B1
+  // fill covers B4 entirely. The old code emitted "Emergency fund already at
+  // 0.0× monthly expenses — skipped." on the same card that was actively
+  // funding the EF. Covered-by-this-split's-floor-fill omits the row; the
+  // CI-10 covered-by-reserve reason stays for the genuine case.
+  it('one-time: allocation unchanged, no false 0.0× ef_target row', () => {
+    const ctx = fixtureCtx({
+      household: makeHousehold({ monthlyExpenseBaseline: 300 }),
+      snapshots: [], loans: [],
+    });
+    const s = splitAmount({ amountCents: 200_000, cadence: 'one-time' }, 'aggressive', ctx);
+    expect(s.rows.map((r) => [r.bucket, r.amountCents])).toEqual([
+      ['ef_floor', 100_000],
+      ['invest', 100_000],
+    ]);
+    expect(s.skipped.some((k) => k.bucket === 'ef_target')).toBe(false);
+  });
+
+  it('per-month: same shape, no false ef_target skip row', () => {
+    const ctx = fixtureCtx({
+      household: makeHousehold({ monthlyExpenseBaseline: 300 }),
+      snapshots: [], loans: [],
+    });
+    const s = splitAmount({ amountCents: 200_000, cadence: 'per-month' }, 'aggressive', ctx);
+    expect(s.phases[0].rows[0].bucket).toBe('ef_floor');
+    expect(s.skipped.some((k) => k.bucket === 'ef_target')).toBe(false);
+  });
+
+  it('covered-by-reserve still renders the CI-10 reason (unchanged)', () => {
+    const s = splitAmount({ amountCents: 1_000_000, cadence: 'one-time' }, 'aggressive', fixtureCtx());
+    expect(s.skipped.find((k) => k.bucket === 'ef_target')!.reason)
+      .toBe('Emergency fund already at 5.0× monthly expenses — skipped.');
   });
 });

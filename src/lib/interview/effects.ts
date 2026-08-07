@@ -45,7 +45,7 @@ function baselinePhrase(source: 'transactions' | 'household' | 'none'): string {
   return source === 'transactions' ? '12-month spending baseline' : 'entered monthly baseline';
 }
 
-function efLine(split: FrameworkSplit, ctx: InterviewContext, allocCents: number): string {
+function efLine(split: FrameworkSplit, ctx: InterviewContext, allocCents: number): string | null {
   const g = split.gaps;
   const basis = `based on ${formatCurrency(g.reserveDollars)} across cash and savings accounts and your ${baselinePhrase(g.baselineSource)}`;
   if (split.cadence === 'one-time') {
@@ -53,12 +53,21 @@ function efLine(split: FrameworkSplit, ctx: InterviewContext, allocCents: number
     const after = ((g.reserveDollars + allocCents / 100) / g.baselineDollars).toFixed(1);
     return `Your cash reserve would cover ${after} months of expenses, up from ${before} — ${basis}.`;
   }
-  const phase = split.phases.find((p) => p.rows.some((r) => r.bucket === 'ef_floor' || r.bucket === 'ef_target'));
-  // Funded date = cumulative months through the end of the EF phase.
+  // Review M1: "fully funded" means the end of the LAST EF phase (a low
+  // reserve emits ef_floor AND ef_target phases), and every phase at or
+  // before it must have concrete months — an unbounded (capped-debt)
+  // predecessor makes any date a fabrication, so the line is omitted
+  // entirely (the CI-30 suppression ethos; no new copy).
+  let lastEfIdx = -1;
+  split.phases.forEach((p, i) => {
+    if (p.rows.some((r) => r.bucket === 'ef_floor' || r.bucket === 'ef_target')) lastEfIdx = i;
+  });
+  if (lastEfIdx === -1) return null;
   let cumulative = 0;
-  for (const p of split.phases) {
-    cumulative += p.months ?? 0;
-    if (p === phase) break;
+  for (let i = 0; i <= lastEfIdx; i += 1) {
+    const m = split.phases[i].months;
+    if (m == null) return null;
+    cumulative += m;
   }
   return `Emergency fund fully funded by ${monthYear(addMonths(ctx.today, cumulative))} at this pace — ${basis}.`;
 }
@@ -160,7 +169,7 @@ function efAllocCents(split: FrameworkSplit): number {
     .reduce((a, r) => a + r.amountCents, 0);
 }
 
-function lineFor(bucket: BucketId, split: FrameworkSplit, ctx: InterviewContext): { text: string; projection: boolean } {
+function lineFor(bucket: BucketId, split: FrameworkSplit, ctx: InterviewContext): { text: string | null; projection: boolean } {
   const cents = allFundedRows(split).find((r) => r.bucket === bucket)?.amountCents ?? 0;
   switch (bucket) {
     case 'ef_floor':
@@ -205,16 +214,17 @@ export function computeEffect(split: FrameworkSplit, ctx: InterviewContext): Eff
       && allFundedRows(split).some((r) => r.bucket === b && r.amountCents > 0),
   );
   // Dedupe by rendered text: both funded EF buckets share one combined
-  // narrative, so the second collapses away here.
-  const seen = new Set<string>([headLine.text]);
+  // narrative, so the second collapses away here. A null line (M1: the
+  // suppressed CI-28 date) contributes nothing — never an empty-string row.
+  const seen = new Set<string>(headLine.text == null ? [] : [headLine.text]);
   const secondaries: string[] = [];
-  let usedProjection = headLine.projection;
+  let usedProjection = headLine.text == null ? false : headLine.projection;
   for (const b of funded) {
     const l = lineFor(b, split, ctx);
-    if (seen.has(l.text)) continue;
+    if (l.text == null || seen.has(l.text)) continue;
     seen.add(l.text);
     secondaries.push(l.text);
     usedProjection = usedProjection || l.projection;
   }
-  return { headline: headLine.text, secondaries, usedProjection };
+  return { headline: headLine.text ?? '', secondaries, usedProjection };
 }

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { computeMatchSummary, monthsRemainingInCalendarYear } from '@/lib/interview/match-value';
 import { AccountType, ContributionSource } from '@/types/enums';
 import { makeAccount, makePerson } from '../../factories';
-import { fixtureCtx } from './waterfall.test';
+import { fixtureCtx } from './fixture';
 
 const matched401k = makeAccount({
   id: 10, type: AccountType.ACCOUNT_401K, name: '401(k)', ownerPersonId: 1,

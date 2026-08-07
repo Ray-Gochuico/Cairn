@@ -118,16 +118,18 @@ export function evaluateThread(
       if (stored == null) {
         return { state: 'ask', node, subject, reason: 'unanswered', priorAnswer: null, pinBasis };
       }
+      // D-GI16 (review m5): the Zod check runs FIRST — a corrupt value is
+      // unanswered regardless of version/basis, so a stale-version corrupt
+      // row can never surface a "Your earlier answer: 'undefined'" preamble.
+      const parsed = node.valueSchema.safeParse(stored.value);
+      if (!parsed.success) {
+        return { state: 'ask', node, subject, reason: 'unanswered', priorAnswer: null, pinBasis };
+      }
       if (stored.questionVersion < node.version) {
         return { state: 'ask', node, subject, reason: 'version-changed', priorAnswer: stored, pinBasis };
       }
       if (stored.basis != null && lastBranch != null && stored.basis.branch !== lastBranch.branch) {
         return { state: 'ask', node, subject, reason: 'basis-changed', priorAnswer: stored, pinBasis };
-      }
-      const parsed = node.valueSchema.safeParse(stored.value);
-      if (!parsed.success) {
-        // D-GI16: corrupt row = unanswered; the next answer overwrites it.
-        return { state: 'ask', node, subject, reason: 'unanswered', priorAnswer: null, pinBasis };
       }
       if (isAgeStale(node, stored, ctx.today)) staleAnswers.push({ node, answer: stored });
       answeredValues.set(node.id, parsed.data);

@@ -39,12 +39,19 @@ export function ThreadCard({ thread, subject, ctx, evaluation }: {
         <AnswerPrompt
           prompt={prompt}
           spec={node.answer}
-          onSubmit={(value) =>
-            saveAnswer({
+          onSubmit={async (value) => {
+            // Review m4: write-path validation — the node's schema guards the
+            // row BEFORE it can persist (the read side already Zod-parses,
+            // D-GI16). Failure surfaces through AnswerPrompt's existing
+            // inline error path; the message is its shipped fallback copy.
+            const parsed = node.valueSchema.safeParse(value);
+            if (!parsed.success) throw new Error('Could not save your answer.');
+            await saveAnswer({
               threadId: thread.id, questionId: node.id, subjectKey: subject,
-              value, questionVersion: node.version,
+              value: parsed.data, questionVersion: node.version,
               basis: pinBasis == null ? null : { branch: pinBasis.branch, ...pinBasis.facts },
-            })}
+            });
+          }}
         />
       </Card>
     );
@@ -76,7 +83,11 @@ export function ThreadCard({ thread, subject, ctx, evaluation }: {
       ))}
       <div className="flex gap-2 flex-wrap">
         {answeredPath.filter(({ node }) => node.storage.kind === 'interview-answer').map(({ node }) => (
+          // Review m7: adjacent multi-answer buttons keep the CI-35 visible
+          // text byte-identical; the ACCESSIBLE name alone is disambiguated
+          // with the node's prompt (a11y metadata, not visible copy).
           <Button key={node.id} size="sm" variant="ghost"
+            aria-label={`Ask me again: ${typeof node.prompt === 'function' ? node.prompt(ctx, subject) : node.prompt}`}
             onClick={() => clearAnswer(thread.id, node.id, subject)}>
             Ask me again
           </Button>

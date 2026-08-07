@@ -15,7 +15,7 @@
 --                      re-evaluation invalidates the answer.
 CREATE TABLE IF NOT EXISTS interview_answers (
   id               INTEGER PRIMARY KEY AUTOINCREMENT,
-  household_id     INTEGER NOT NULL REFERENCES household(id),
+  household_id     INTEGER NOT NULL REFERENCES household(id) ON DELETE CASCADE,
   thread_id        TEXT NOT NULL,
   question_id      TEXT NOT NULL,
   subject_key      TEXT NOT NULL DEFAULT '',

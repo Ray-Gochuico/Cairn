@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { DecisionPrompt } from '@/components/roadmap/DecisionPrompt';
 import { usePersonsStore } from '@/stores/persons-store';
@@ -43,7 +44,8 @@ export function FrameworkCard({ model }: { model: FrameworkCardModel }) {
               {renderRows(p.rows, true)}
             </div>
           ))}
-      <p className="text-sm">{model.headline}</p>
+      {/* M1: a suppressed CI-28 line leaves an empty headline — render nothing. */}
+      {model.headline !== '' && <p className="text-sm">{model.headline}</p>}
       {model.secondaries.map((s, i) => (
         <p key={i} className="text-xs text-muted-foreground">{s}</p>
       ))}
@@ -71,7 +73,15 @@ export function FrameworkCard({ model }: { model: FrameworkCardModel }) {
         <summary className="cursor-pointer">What this assumes</summary>
         <ul className="mt-1 space-y-1 list-disc pl-4">
           {model.assumes.map((a, i) => (
-            <li key={i}>{a.text}</li>
+            <li key={i}>
+              {a.text}
+              {a.cta && (
+                <>
+                  {' '}
+                  <Link className="underline hover:no-underline" to={a.cta.to}>{a.cta.label}</Link>
+                </>
+              )}
+            </li>
           ))}
         </ul>
       </details>

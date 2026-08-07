@@ -107,6 +107,20 @@ describe('evaluateThread', () => {
     expect(r.staleAnswers.map((s) => s.node.id)).toEqual(['q1']);
   });
 
+  it('D-GI16 letter (review m5): corrupt AND version-stale is unanswered — never version-changed with an undefined prior', () => {
+    // A row that is both Zod-invalid and version-stale must not surface as
+    // 'version-changed' — that renders "Your earlier answer: 'undefined'".
+    const answers = new Map([[
+      answerKey('t', 'q1', ''),
+      storedRow({ questionVersion: 1, valueJson: '"not-an-option"' }), // node version is 2
+    ]]);
+    const r = evaluateThread(THREAD, ctxWith({ loans: [LOAN], interviewAnswers: answers }), '');
+    expect(r.state).toBe('ask');
+    if (r.state !== 'ask') return;
+    expect(r.reason).toBe('unanswered');
+    expect(r.priorAnswer).toBeNull();
+  });
+
   it('D-GI16: a corrupt stored value re-asks as unanswered — never crashes', () => {
     const answers = new Map([[
       answerKey('t', 'q1', ''),
