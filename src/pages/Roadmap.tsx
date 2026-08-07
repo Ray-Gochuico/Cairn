@@ -27,6 +27,7 @@ import { useInterviewAnswersStore } from '@/stores/interview-answers-store';
 import { useRoadmap } from '@/domain/roadmap/context';
 import { useInterview } from '@/domain/interview/context';
 import { QuestionBar } from '@/components/interview/QuestionBar';
+import { InterviewThreads } from '@/components/interview/InterviewThreads';
 import { evaluate } from '@/domain/roadmap/evaluate';
 import { NODES } from '@/domain/roadmap/nodes';
 import { PageContainer } from '@/components/layout/PageContainer';
@@ -266,6 +267,10 @@ export default function Roadmap() {
           ctx={ctx}
         />
       ))}
+      {/* Guided interview: the "Questions for you" strip — every surfaced
+          thread × subject, after the section cards. Renders nothing when no
+          thread surfaces (no false empty state). */}
+      {interviewCtx && <InterviewThreads ctx={interviewCtx} />}
       {/* Wave C (DC1): answered write-once questions, reviewable + re-askable
           at the bottom of their one-place-per-thing home. */}
       <RoadmapAssumptions />
