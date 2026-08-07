@@ -20,7 +20,7 @@ export interface Migration {
  * `tests/db/schema-version-guard.test.ts` asserts this equals the migration
  * count AND pins the literal so a one-sided bump fails a test.
  */
-export const MAX_SCHEMA_VERSION = 51;
+export const MAX_SCHEMA_VERSION = 52;
 
 /**
  * Thrown by `runMigrations` when the database's stamped `user_version` is
@@ -278,6 +278,9 @@ const MIGRATION_REGISTRY: ReadonlyArray<
   // NULL keeps the Wave-B labeled even split of the household baseline; a
   // value upgrades person-scoped calculator defaults to "from {name}'s Inputs".
   ['0051_person_expense_baseline', () => import('./migrations/0051_person_expense_baseline.sql?raw')],
+  // 0052 adds interview_answers — durable guided-interview answers
+  // (thread/question/subject-keyed upsert rows; design §1.2).
+  ['0052_interview_answers', () => import('./migrations/0052_interview_answers.sql?raw')],
 ];
 
 export async function loadAllMigrations(): Promise<Migration[]> {
