@@ -81,6 +81,9 @@ export function QuestionBar({ ctx }: { ctx: InterviewContext }) {
         <DisclosureModal
           document={gate.document}
           continueLabel="Continue"
+          // Smoke defect: Escape must not dismiss this gate — Cancel is the
+          // only non-accept exit (Task 12 Step 6 point 2).
+          dismissOnEscape={false}
           onAccept={async (v) => {
             await acceptDisclaimer('interview', v);
             setGateOpen(false);

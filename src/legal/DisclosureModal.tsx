@@ -21,6 +21,15 @@ interface Props {
    * without it, so their look is unchanged. The versioned body is NOT touched.
    */
   heroHeader?: React.ReactNode;
+  /**
+   * When false, Escape does NOT dismiss even though an onCancel is provided —
+   * the explicit Cancel button stays the only non-accept exit. Default true
+   * keeps every existing gate's Escape→onCancel semantics byte-identical
+   * (e.g. the Roadmap gate's Escape→navigate('/')); only the interview
+   * QuestionBar opts out (its smoke checklist pins "Escape/outside-click
+   * does NOT dismiss; Cancel returns without computing").
+   */
+  dismissOnEscape?: boolean;
 }
 
 /**
@@ -67,6 +76,7 @@ export function DisclosureModal({
   onCancel,
   continueLabel = 'Continue',
   heroHeader,
+  dismissOnEscape = true,
 }: Props) {
   const [checked, setChecked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -129,7 +139,7 @@ export function DisclosureModal({
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => {
-          if (!onCancel) e.preventDefault();
+          if (!onCancel || !dismissOnEscape) e.preventDefault();
         }}
       >
         {heroHeader}

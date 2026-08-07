@@ -55,6 +55,26 @@ describe('QuestionBar', () => {
     expect(useInterviewBarStore.getState().submitted).toBeNull(); // nothing computed pre-accept
   });
 
+  it('Escape does NOT dismiss the interview gate; Cancel is the only non-accept exit (smoke defect)', () => {
+    // Task 12 Step 6 point 2 pins: "Escape/outside-click does NOT dismiss;
+    // Cancel returns without computing." Browser smoke caught Escape leaking.
+    useAcceptancesStore.setState({ acceptedVersions: {} } as never);
+    render(<MemoryRouter><QuestionBar ctx={fixtureCtx()} /></MemoryRouter>);
+    fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '10000' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Show me' }));
+    expect(screen.getByText('About the Frameworks')).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    // Still open, still nothing computed:
+    expect(screen.getByText('About the Frameworks')).toBeInTheDocument();
+    expect(useInterviewBarStore.getState().submitted).toBeNull();
+
+    // Cancel remains the legitimate non-accept exit — closes without computing.
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByText('About the Frameworks')).not.toBeInTheDocument();
+    expect(useInterviewBarStore.getState().submitted).toBeNull();
+  });
+
   it('CI-11: the no-baseline skip row carries the Open Household → CTA link (review M3)', () => {
     const ctx = fixtureCtx({ household: makeHousehold({ monthlyExpenseBaseline: 0 }) });
     render(<MemoryRouter><QuestionBar ctx={ctx} /></MemoryRouter>);
