@@ -652,4 +652,19 @@ describe('ScenarioBar — two-row layout + app-defaults qualifier (Wave C N1+N8)
     renderBar();
     expect(screen.getByTestId('scenario-chips').textContent).toMatch(/ — app defaults$/);
   });
+
+  it('Wave C smoke fix 1: the wide-viewport field grid caps at 4 columns so the 2-line clamp holds the longest provenance clause', () => {
+    // Smoke 2026-08-07 (1440×900, person scope): six xl columns left ~174px
+    // per field inside the max-w-6xl container — "…— joint accounts not
+    // included" ellipsized INSIDE the 2-line clamp (scrollHeight >
+    // clientHeight on the provenance <p> is the manual check). Four xl
+    // columns (~267px) hold the longest contract string; everything below
+    // xl — including the Task-10 1024 layout — is untouched.
+    renderBar();
+    const grid = screen.getByLabelText('Portfolio').closest('.grid')!;
+    expect(grid.className).toContain('xl:grid-cols-4');
+    expect(grid.className).not.toContain('xl:grid-cols-6');
+    expect(grid.className).toContain('grid-cols-2');
+    expect(grid.className).toContain('md:grid-cols-3');
+  });
 });

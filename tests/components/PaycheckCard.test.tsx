@@ -389,6 +389,20 @@ describe('PaycheckCard', () => {
     expect(screen.getByText(/2 earners, combined/i)).toBeInTheDocument();
   });
 
+  it('Wave C smoke fix 2: the full-page link carries ?view= so the round trip restores scope', async () => {
+    primeStores();
+    render(
+      <MemoryRouter initialEntries={['/calculators?view=p2']}>
+        <PaycheckCard cardId="paycheck" />
+      </MemoryRouter>,
+    );
+    await screen.findByTestId('paycheck-takehome');
+    expect(screen.getByRole('link', { name: 'Open full calculator →' })).toHaveAttribute(
+      'href',
+      '/calculators/paycheck?view=p2',
+    );
+  });
+
   it('Wave C N3: the earner qualifier folds into the meaning; the headline is figure + period only', async () => {
     primeStoresTwoEarners(); // 2 salaried earners
     render(<MemoryRouter><PaycheckCard cardId="paycheck" /></MemoryRouter>);
