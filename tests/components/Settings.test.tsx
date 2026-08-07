@@ -50,7 +50,11 @@ describe('Settings page', () => {
     ]) {
       expect(h2s).toContain(title);
     }
-    expect(h2s).toHaveLength(12);
+    // 12 section titles + the interview disclosure body's own
+    // '## Mechanical frameworks, not advice' markdown heading (the CI-47
+    // body is verbatim legal copy; DisclosureViewer renders body h2s by
+    // design — see its [&_h2] prose styling).
+    expect(h2s).toHaveLength(13);
   });
 
   it('renders a sticky section table-of-contents with anchors to every section', () => {

@@ -93,8 +93,19 @@ describe('DISCLOSURES', () => {
     }
   });
 
-  it('exposes exactly the four expected document IDs', () => {
-    expect(Object.keys(DISCLOSURES).sort()).toEqual(['app_wide', 'backtest', 'learning', 'roadmap']);
+  it('exposes exactly the five expected document IDs', () => {
+    expect(Object.keys(DISCLOSURES).sort()).toEqual(['app_wide', 'backtest', 'interview', 'learning', 'roadmap']);
+  });
+
+  it('interview disclosure: v1.0, no diff (first version), checkbox label pinned', () => {
+    expect(DISCLOSURES.interview.version).toBe('1.0');
+    expect(DISCLOSURES.interview.title).toBe('About the Frameworks');
+    expect(DISCLOSURES.interview.diffFromPrevious).toBeUndefined();
+    expect(DISCLOSURES.interview.acceptanceCheckboxLabel).toBe(
+      'I understand these are mechanical frameworks applied to my numbers — educational, not personalized financial advice.',
+    );
+    expect(DISCLOSURES.interview.body).toContain('Mechanical frameworks, not advice');
+    expect(DISCLOSURES.interview.body).toContain('Projections are not predictions');
   });
 });
 

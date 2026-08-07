@@ -30,10 +30,10 @@ describe('Settings → Disclosures section (Legal M1/M2)', () => {
     expect(screen.getByText('Disclosures')).toBeInTheDocument();
   });
 
-  it('renders all four consented documents, each in its own viewer with its title as a heading', () => {
+  it('renders all five consented documents, each in its own viewer with its title as a heading', () => {
     renderSection();
     const viewers = screen.getAllByTestId('disclosure-viewer');
-    expect(viewers).toHaveLength(4);
+    expect(viewers).toHaveLength(5);
     // Each DISCLOSURES doc surfaces its own title as the viewer's <h3>. We scope
     // to the heading because several bodies OPEN with the same bold line (e.g.
     // "**About the Learning feature**"), so a bare getByText would be ambiguous.
@@ -43,17 +43,17 @@ describe('Settings → Disclosures section (Legal M1/M2)', () => {
         .filter((el): el is HTMLElement => el !== null);
       expect(headingMatches, `expected a viewer heading for "${doc.title}"`).toHaveLength(1);
     }
-    // Sanity: exactly the four we expect.
-    expect(Object.keys(DISCLOSURES)).toHaveLength(4);
+    // Sanity: exactly the five we expect.
+    expect(Object.keys(DISCLOSURES)).toHaveLength(5);
   });
 
   it('shows each document version', () => {
     renderSection();
-    // app_wide=1.5, roadmap=1.0, learning=1.0, backtest=1.2 — versions are
-    // surfaced so a user can see which revision they are reading.
+    // app_wide=1.5, roadmap=1.0, learning=1.0, backtest=1.2, interview=1.0 —
+    // versions are surfaced so a user can see which revision they are reading.
     expect(screen.getByText(/Version 1\.5/)).toBeInTheDocument();
     expect(screen.getByText(/Version 1\.2/)).toBeInTheDocument();
-    expect(screen.getAllByText(/Version 1\.0/).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText(/Version 1\.0/).length).toBeGreaterThanOrEqual(3);
   });
 
   it('renders each document body as Markdown (bold → <strong>, no literal asterisks)', () => {
@@ -61,7 +61,7 @@ describe('Settings → Disclosures section (Legal M1/M2)', () => {
     // app_wide body opens with a **bold** sentence; after react-markdown the
     // asterisks are gone and a <strong> exists in that doc's rendered body.
     const bodies = screen.getAllByTestId('disclosure-viewer-body');
-    expect(bodies).toHaveLength(4);
+    expect(bodies).toHaveLength(5);
     for (const body of bodies) {
       expect(body.textContent).not.toMatch(/\*\*/);
     }

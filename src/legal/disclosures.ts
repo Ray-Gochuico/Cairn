@@ -93,6 +93,20 @@ Content is hand-curated; errors are possible. If a question looks wrong, treat t
 
 **Trivia is for vocabulary and intuition; decisions belong with a CFP, CPA, or attorney.**`;
 
+const INTERVIEW_TEXT_v1_0 = `## Mechanical frameworks, not advice
+
+The question bar and the "Questions for you" cards apply **fixed, mechanical frameworks** to numbers you entered. Nothing here is personalized financial advice, a recommendation, or a prediction.
+
+**How the three frameworks work.** Conservative, Moderate, and Aggressive are three fixed orderings of the same six buckets: a starter emergency fund, employer match, high-rate debt, a fuller emergency reserve, mid-rate debt, and investing. They differ only in the reserve size they target and how they weight mid-rate debt against investing. The split you see is arithmetic over your balances, rates, and expense baseline — the same inputs the Roadmap reads.
+
+**What this app does not know.** Your taxes in detail, your job security beyond what you told it, your health, your family plans, your risk tolerance. A framework cannot weigh what it cannot see.
+
+**Every figure states its basis.** If a number's basis line says a value is assumed or missing, treat the figure as illustrative only.
+
+**Projections are not predictions.** Growth figures use your saved scenario rates and are shown in today's dollars. Real returns vary and can be negative.
+
+Decisions about debt, investing, and reserves belong with you — and, for anything consequential, a CFP, CPA, or attorney.`;
+
 export interface DisclosureDocument {
   version: string;
   /** Modal heading for this disclosure (e.g. "Disclaimer"). */
@@ -135,6 +149,13 @@ export const DISCLOSURES = {
       'Version 1.2 corrects the stated data coverage. v1.1 said the replay ran "from 1871 to today" and named 2000 as an example start year, but the underlying Shiller dataset ends in 2022 — so coverage is 1871 to 2022, and a 30-year horizon can start no later than 1993 (1993 + 29 = 2022). The example start years are now in-range (1929, 1966, 1973), and the "held at 2026 brackets across the entire replay" line now reads "1871-to-2022" rather than "1871-to-present." No change to the count-not-probability, overlapping-windows, or real-returns framing carried over from v1.1. Please re-read and re-accept.',
     acceptanceCheckboxLabel:
       'I understand the backtest reports historical outcomes only and is not a prediction of future performance.',
+  } satisfies DisclosureDocument,
+  interview: {
+    version: '1.0',
+    title: 'About the Frameworks',
+    body: INTERVIEW_TEXT_v1_0,
+    acceptanceCheckboxLabel:
+      'I understand these are mechanical frameworks applied to my numbers — educational, not personalized financial advice.',
   } satisfies DisclosureDocument,
 } as const;
 
