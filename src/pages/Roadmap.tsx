@@ -25,6 +25,8 @@ import { useHoldingsStore } from '@/stores/holdings-store';
 import { useTickersStore } from '@/stores/tickers-store';
 import { useInterviewAnswersStore } from '@/stores/interview-answers-store';
 import { useRoadmap } from '@/domain/roadmap/context';
+import { useInterview } from '@/domain/interview/context';
+import { QuestionBar } from '@/components/interview/QuestionBar';
 import { evaluate } from '@/domain/roadmap/evaluate';
 import { NODES } from '@/domain/roadmap/nodes';
 import { PageContainer } from '@/components/layout/PageContainer';
@@ -172,6 +174,7 @@ export default function Roadmap() {
   );
 
   const ctx = useRoadmap();
+  const interviewCtx = useInterview();
   const household = useHouseholdStore((s) => s.household);
   const results = useMemo(
     () => (ctx ? evaluate(ctx) : new Map()),
@@ -244,6 +247,10 @@ export default function Roadmap() {
         The Roadmap evaluates your household as a whole — both incomes, all accounts.
       </p>
       <NextMoveHero results={results} />
+      {/* Guided interview (D-GI2): the "$X — what's next?" bar sits directly
+          below the hero, above the legend, behind the page's existing gates,
+          inheriting the household-scope sentence above. */}
+      {interviewCtx && <QuestionBar ctx={interviewCtx} />}
       {/* Status legend explains the six possible node-status icons. Lives
           above the section cards so users have an at-a-glance reference
           before they start scanning rows. W7-UX MF-2. */}
