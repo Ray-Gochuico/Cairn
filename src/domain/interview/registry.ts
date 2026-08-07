@@ -1,5 +1,6 @@
 import type { InterviewThread } from '@/types/interview';
 import { NEXT_DOLLAR_THREAD } from './threads/next-dollar';
+import { VEHICLE_REPLACEMENT_THREAD } from './threads/vehicle-replacement';
 
 /**
  * Every shipped interview thread, in surface order (data-branch-triggered
@@ -11,5 +12,5 @@ import { NEXT_DOLLAR_THREAD } from './threads/next-dollar';
  */
 export const INTERVIEW_THREADS: readonly InterviewThread[] = [
   NEXT_DOLLAR_THREAD,
-  // vehicle_replacement joins in Task 10.
+  VEHICLE_REPLACEMENT_THREAD,
 ];
