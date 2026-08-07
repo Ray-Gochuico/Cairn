@@ -142,3 +142,35 @@ describe('disclosure_acceptances + roadmap_node_overrides FK cascade (migration 
     expect(overrides[0].node_id).toBe('R7');
   });
 });
+
+// Review m3: interview_answers (0052, unreleased) declared its household FK
+// without an action — the exact foot-gun 0033 rebuilt two tables to fix.
+// 0052 was edited IN PLACE (pre-release) to add ON DELETE CASCADE.
+describe('interview_answers FK cascade (migration 0052)', () => {
+  let db: SqliteAdapter;
+
+  beforeEach(async () => {
+    db = new SqliteAdapter(':memory:');
+    await runMigrations(db, await loadAllMigrations());
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  it('cascade-deletes interview_answers rows when their household is deleted', async () => {
+    await db.execute(
+      `INSERT INTO interview_answers (household_id, thread_id, question_id, subject_key, value_json, question_version, answered_at)
+       VALUES (1, 'vehicle_replacement', 'q_keep_horizon', 'vehicle:3', '"no-plans"', 1, '2026-08-01T00:00:00Z')`,
+    );
+    const before = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM interview_answers');
+    expect(before[0].n).toBe(1);
+
+    // Must not throw (pre-fix: "FOREIGN KEY constraint failed" — the restore
+    // path's DELETE FROM household would abort).
+    await db.execute('DELETE FROM household WHERE id = 1');
+
+    const after = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM interview_answers');
+    expect(after[0].n).toBe(0);
+  });
+});

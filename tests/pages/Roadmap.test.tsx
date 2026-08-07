@@ -11,6 +11,12 @@ import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { useCategoriesStore } from '@/stores/categories-store';
 import { useRoadmapOverridesStore } from '@/stores/roadmap-overrides-store';
+import { useVehiclesStore } from '@/stores/vehicles-store';
+import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
+import { useSettingsStore } from '@/stores/settings-store';
+import { useHoldingsStore } from '@/stores/holdings-store';
+import { useTickersStore } from '@/stores/tickers-store';
+import { useInterviewAnswersStore } from '@/stores/interview-answers-store';
 import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import type { Household } from '@/types/schema';
 import { makeHousehold } from '../factories';
@@ -58,6 +64,14 @@ function resetStores(household: Household | null, roadmapAccepted?: string) {
     setOverride: async () => {},
     clearOverride: async () => {},
   } as any);
+  // Guided interview (D-GI14): six more stores joined the load gate — prime
+  // them the same way so the latched gate settles without touching the DB.
+  useVehiclesStore.setState({ vehicles: [], isLoading: false, error: null, load: async () => {} } as any);
+  useAssetValueSnapshotsStore.setState({ assetValueSnapshots: [], isLoading: false, error: null, load: async () => {} } as any);
+  useSettingsStore.setState({ settings: null, isLoading: false, error: null, load: async () => {} } as any);
+  useHoldingsStore.setState({ holdings: [], isLoading: false, error: null, load: async () => {} } as any);
+  useTickersStore.setState({ tickers: [], isLoading: false, error: null, load: async () => {} } as any);
+  useInterviewAnswersStore.setState({ answersByKey: new Map(), isLoading: false, error: null, load: async () => {} } as any);
 }
 
 describe('Roadmap page', () => {

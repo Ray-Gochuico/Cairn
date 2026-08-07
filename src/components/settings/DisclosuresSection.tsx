@@ -25,7 +25,7 @@ import { DISCLOSURES, type DisclosureId } from '@/legal/disclosures';
 // Explicit display order (don't rely on object insertion order): the app-wide
 // disclaimer first, then the feature-specific ones in the order they appear in
 // the product.
-const DISPLAY_ORDER: readonly DisclosureId[] = ['app_wide', 'roadmap', 'learning', 'backtest'];
+const DISPLAY_ORDER: readonly DisclosureId[] = ['app_wide', 'roadmap', 'learning', 'backtest', 'interview'];
 
 // The repo's canonical copy of the aggregated third-party attributions. The
 // same file is bundled with the app (tauri.conf.json `bundle.licenseFile`); the

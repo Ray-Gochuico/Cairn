@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveUtilityCategoryIds } from '@/lib/category-config';
+import { resolveUtilityCategoryIds, resolveVehicleRepairCategoryIds } from '@/lib/category-config';
 import type { Category } from '@/types/schema';
 import { CategoryType } from '@/types/enums';
 
@@ -88,5 +88,20 @@ describe('resolveUtilityCategoryIds', () => {
     it('configured=[17,18,19] with 18 and 19 stale → returns [17]', () => {
       expect(resolveUtilityCategoryIds([17, 18, 19], SEED, 'vehicle_gas')).toEqual([17]);
     });
+  });
+});
+
+describe('resolveVehicleRepairCategoryIds (D-GI15)', () => {
+  const cats = [
+    { id: 2, name: 'Vehicles', parentCategoryId: null },
+    { id: 18, name: 'Vehicle Maintenance', parentCategoryId: 2 },
+    { id: 21, name: 'Major Repairs', parentCategoryId: 2 },
+    { id: 11, name: 'Home Maintenance', parentCategoryId: 3 },
+  ] as never[];
+  it('resolves BOTH seeded children under Vehicles', () => {
+    expect(resolveVehicleRepairCategoryIds(cats)).toEqual([18, 21]);
+  });
+  it('missing seeds → empty (signal silently absent, never a guess)', () => {
+    expect(resolveVehicleRepairCategoryIds([])).toEqual([]);
   });
 });

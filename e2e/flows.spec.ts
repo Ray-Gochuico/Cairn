@@ -166,3 +166,35 @@ test('setup honesty: saved data renders cards not gates; abandonment surfaces th
   await expect(page.getByRole('link', { name: 'Continue setup' })).toBeVisible();
   expect(errors.join('\n')).not.toContain('Maximum update depth');
 });
+
+test('roadmap interview: the $X bar answers with three framework cards on the seeded profile', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.goto('/roadmap');
+  // Gate 1 — the roadmap disclosure (seed accepts only app_wide):
+  await page.getByRole('checkbox').check();
+  await page.getByRole('button', { name: 'Open Roadmap' }).click();
+  // The hero phrase is intact and the bar sits below it:
+  await expect(page.getByText('Suggested next step').first()).toBeVisible({ timeout: 30_000 });
+  // Submit $10,000 one-time:
+  await page.getByLabel('Amount').fill('10000');
+  await page.getByRole('button', { name: 'Show me' }).click();
+  // Gate 2 — the interview disclosure, first submission only:
+  await expect(page.getByText('About the Frameworks')).toBeVisible();
+  await page.getByRole('checkbox').check();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  // Three cards with the seed-derived split (hand-computed pins):
+  const conservative = page.getByTestId('framework-conservative');
+  await expect(conservative).toContainText('Emergency fund — to 6× expenses');
+  await expect(conservative).toContainText('$6,000');
+  await expect(conservative).toContainText('$4,000'); // mid-rate remainder → Mortgage
+  await expect(conservative).toContainText('up from 5.0'); // 30,000/6,000 → 36,000/6,000
+  const moderate = page.getByTestId('framework-moderate');
+  await expect(moderate).toContainText('$2,000'); // 50/50 of the $4,000 remainder
+  const aggressive = page.getByTestId('framework-aggressive');
+  await expect(aggressive).toContainText('$10,000'); // 3× covered → all invest
+  await aggressive.getByText('What this assumes').click();
+  await expect(aggressive).toContainText('Debt between 5–8% stays at minimum payments in this framework.');
+  // Fixed footer on every card:
+  await expect(page.getByText('One mechanical framework applied to your numbers — not advice, not a recommendation.')).toHaveCount(3);
+  expect(errors.join('\n')).not.toContain('Maximum update depth');
+});

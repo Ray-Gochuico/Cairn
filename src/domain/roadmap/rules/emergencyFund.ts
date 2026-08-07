@@ -68,9 +68,9 @@ function formatUSD(n: number): string {
   return `$${Math.round(n).toLocaleString('en-US')}`;
 }
 
-type BaselineSource = 'transactions' | 'household' | 'none';
+export type BaselineSource = 'transactions' | 'household' | 'none';
 
-function efContext(
+export function efContext(
   ctx: RoadmapContext,
 ): { baseline: number; cash: number; baselineSource: BaselineSource } {
   const todayISO = ctx.today.toISOString().slice(0, 10);
@@ -95,7 +95,7 @@ function efContext(
   };
 }
 
-function baselineSuffix(source: BaselineSource): string {
+export function baselineSuffix(source: BaselineSource): string {
   if (source === 'transactions') return ' from 12-mo avg';
   if (source === 'household') return ' from Household';
   return '';

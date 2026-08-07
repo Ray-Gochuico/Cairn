@@ -57,3 +57,18 @@ export function resolveUtilityCategoryIds(
   if (filtered.length === 0) return fallback;
   return filtered;
 }
+
+/** The interview's repair bucket: BOTH seeded children under 'Vehicles'
+ *  (ids 18 + 21 in 0009). Two children is why this is not a UtilityBucketKey
+ *  (that machinery is one-child-per-bucket). No configured override in
+ *  phase 1 — a Settings picker is a chipped follow-up (D-GI15). */
+const VEHICLE_REPAIR_CHILD_NAMES = ['Vehicle Maintenance', 'Major Repairs'] as const;
+
+export function resolveVehicleRepairCategoryIds(categories: Category[]): number[] {
+  const ids: number[] = [];
+  for (const childName of VEHICLE_REPAIR_CHILD_NAMES) {
+    const id = seededIdFor(categories, { childName, parentName: 'Vehicles' });
+    if (id != null) ids.push(id);
+  }
+  return ids;
+}
