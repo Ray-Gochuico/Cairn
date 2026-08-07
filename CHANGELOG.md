@@ -5,6 +5,65 @@ All notable changes to Cairn are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-08-06
+
+Every page, per person — plus a setup flow that shows you what you've
+saved, and a home for every number you've entered. Your database
+upgrades automatically on first launch.
+
+### Added
+
+- **See everything for one person.** The Household / person / joint
+  switch now genuinely works everywhere: pick a person and every page —
+  Dashboard, Net Worth, Investments, Spending, Loans, Property,
+  Vehicles, Goals, Budget, the Monthly check-in, and all ten
+  calculators — shows that person's numbers with honest captions
+  ("3 of 10 — 3 joint and 4 owned by Alex not shown"). Joint items are
+  never silently assigned to one person, empty filtered views explain
+  themselves instead of pretending you have no data, and pages whose
+  math is inherently household-wide (What-If, Roadmap) now say so
+  plainly instead of showing a switch that does nothing.
+- **Per-person monthly expenses.** Each person can now have their own
+  expense figure (Setup → People), and person-scoped calculators say
+  exactly which basis they used — "from Alex's Inputs" when set, or a
+  clearly-labeled even split of the household baseline when not.
+- **A home for every number.** Growth scenarios get a real editor
+  (Household settings); every account has a viewable balance history
+  with corrections; recorded loan payments are listed per loan and can
+  be deleted safely — the loan balance is restored automatically, so a
+  delete-and-reconfirm can never double-count; and the Roadmap now
+  lists the assumptions you've told it, each with an "Ask again"
+  button, so one mis-click is no longer permanent.
+- **The calculators' scenario bar can scope per person too** — with
+  per-person what-if values kept separate per view, and "Send to
+  What-If" that works reliably (including right after the app starts).
+
+### Changed
+
+- **Setup shows what you've saved.** Reopening the setup wizard now
+  shows your actual data — named entries with real values ("Married
+  filing jointly · CA · $6,000/mo baseline", salaries on the employment
+  chips, "12 snapshots across 6 accounts") — instead of "Start this
+  section" screens over a full database. Section markers honestly show
+  where saved data exists, and if you leave setup unfinished the
+  Dashboard offers to resume where you left off.
+- **Calculator polish**: honesty captions get room to breathe instead
+  of truncating, full-page tools (Paycheck, Backtest) return you to
+  exactly where you were — same person view, same open card — and the
+  scenario bar reads more calmly at every window size.
+
+### Fixed
+
+- Deleting a recorded loan payment restores the loan balance (the
+  delete + re-confirm flow is now provably balance-neutral).
+- "Send to What-If" no longer fails after restarting the app, and edits
+  that don't map to a What-If lever say so instead of creating an empty
+  scenario.
+- Assorted honesty fixes: loading states never claim "nothing here"
+  while data is still loading, hourly rates keep their cents, and
+  renaming the "Moderate" growth scenario now warns that calculators
+  headline that row.
+
 ## [1.1.1] - 2026-07-20
 
 Fixes from the first round of user feedback on 1.1.0 — thank you for
@@ -222,6 +281,7 @@ stored in a single local SQLite file. No account, no sync, no telemetry.
   calls (Yahoo Finance quote refresh and the updater check) are both
   user-controlled and contain no PII.
 
+[1.2.0]: https://github.com/Ray-Gochuico/Cairn/releases/tag/v1.2.0
 [1.1.1]: https://github.com/Ray-Gochuico/Cairn/releases/tag/v1.1.1
 [1.1.0]: https://github.com/Ray-Gochuico/Cairn/releases/tag/v1.1.0
 [1.0.2]: https://github.com/Ray-Gochuico/Cairn/releases/tag/v1.0.2
