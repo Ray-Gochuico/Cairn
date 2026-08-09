@@ -12,7 +12,7 @@ import {
 } from '@/lib/setup-progress';
 import { finishSetup } from '@/lib/setup-dismissal';
 import {
-  GATE_ENTITY_COUNT, effectiveStatus, nextInstance, partPosition, partStatus,
+  GATE_ENTITY_COUNT, effectiveStatus, partPosition, partStatus,
   prevInstance, resumeTarget, visibleInstances, type GateStepId,
 } from '@/domain/setup-flow/engine';
 import type { FlowCtx, StepInstance } from '@/domain/setup-flow/types';
@@ -164,6 +164,25 @@ export default function FlowShell({ onSwitchView }: Props) {
     setCurrent(inst ?? 'finish');
   };
 
+  /** Advance from `from` over the UPDATED progress AND fresh store rows.
+   *  The deferred one-shot create's progressUpdate clears the partner draft
+   *  in the same tick the new person row lands in the store — the render
+   *  closure's ctx is one frame stale, which would transiently drop the
+   *  partner role block (and the current instance with it) from the visible
+   *  list and silently skip benefits:partner. If the current instance
+   *  vanished anyway (a real visibility flip), resume honestly at the first
+   *  visible incomplete instance instead of jumping to Finish. */
+  const advanceFrom = (from: StepInstance, np: SetupProgressV2) => {
+    const freshCtx: FlowCtx = {
+      ...ctx,
+      persons: usePersonsStore.getState().persons,
+      progress: np,
+    };
+    const list = visibleInstances(freshCtx);
+    const idx = list.findIndex((x) => x.key === from.key);
+    goTo(idx >= 0 ? list[idx + 1] ?? null : resumeTarget(freshCtx));
+  };
+
   const handleNext = async () => {
     if (current == null || current === 'finish') return;
     const result = (await submitRef.current?.()) ?? { ok: true as const };
@@ -185,7 +204,7 @@ export default function FlowShell({ onSwitchView }: Props) {
       np = { ...np, statuses: { ...np.statuses, [current.key]: 'completed' } };
     }
     setProgress(np);
-    goTo(nextInstance(current, { ...ctx, progress: np }));
+    advanceFrom(current, np);
   };
 
   const handleSkip = () => {
@@ -196,7 +215,7 @@ export default function FlowShell({ onSwitchView }: Props) {
       statuses: { ...progress.statuses, [current.key]: 'skipped' },
     };
     setProgress(np);
-    goTo(nextInstance(current, { ...ctx, progress: np }));
+    advanceFrom(current, np);
   };
 
   const handleBack = async () => {

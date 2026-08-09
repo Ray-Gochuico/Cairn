@@ -239,6 +239,50 @@ describe('FlowShell', () => {
     expect(onSwitchView).toHaveBeenCalledTimes(1);
   });
 
+  it("the partner's one-shot create advances to benefits:partner, not Finish (stale-ctx regression)", async () => {
+    // The deferred create's progressUpdate clears drafts.partner in the same
+    // tick the new person row lands in the store; advancing over the stale
+    // render ctx transiently dropped the partner role block (and the current
+    // instance with it), skipping benefits:partner and jumping to Finish.
+    const user = userEvent.setup();
+    const alex = { id: 11, name: 'Alex Rivera' };
+    usePersonsStore.setState({
+      persons: [alex],
+      create: async (values: { name: string }) => {
+        usePersonsStore.setState((s: { persons: Array<{ id: number; name: string }> }) => ({
+          persons: [...s.persons, { id: 12, name: values.name }],
+        }) as never);
+        return 12;
+      },
+    } as never);
+    saveSetupProgress({
+      ...defaultProgressV2(),
+      statuses: {
+        about_you: 'completed', marital_filing: 'completed', state_city: 'completed',
+        dependents_gate: 'skipped', expenses: 'completed',
+        'pay:you': 'completed', 'retirement:you': 'completed', 'benefits:you': 'skipped',
+        'pay:partner': 'completed',
+      },
+      bindings: { you: 11 },
+      drafts: {
+        partner: { name: 'Sam Rivera', dateOfBirth: '1991-02-03' },
+        pay: { partner: {
+          employmentType: 'SALARY_NO_OT', annualSalaryPretax: 80000,
+          hourlyRate: null, regularHoursPerWeek: 40, otThresholdHoursPerWeek: null,
+        } },
+      },
+      cursor: { stepId: 'retirement', role: 'partner' },
+    });
+    renderShell();
+    await screen.findByRole('heading', { name: 'Work & pay — step 5 of 6' });
+    await user.type(screen.getByLabelText('Target retirement age'), '66');
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(
+      await screen.findByRole('heading', { name: 'Work & pay — step 6 of 6' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Benefits for Sam Rivera.')).toBeInTheDocument();
+  });
+
   it('a pristine step toggles with no dialog', async () => {
     const user = userEvent.setup();
     const onSwitchView = vi.fn();

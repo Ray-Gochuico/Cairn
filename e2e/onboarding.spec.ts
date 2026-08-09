@@ -9,7 +9,7 @@ import { collectErrors } from './console-guard';
  * lands on the disclaimer + Setup Wizard. One end-to-end walk: accept → add a
  * person → advance the sections → finish → reach the app shell, clean console.
  */
-test('fresh profile: disclaimer → setup → app shell, clean console', async ({ page }) => {
+test('fresh profile (form view): disclaimer → switch to form view → setup → app shell, clean console', async ({ page }) => {
   const errors = collectErrors(page);
   await page.goto('/');
 
@@ -19,9 +19,12 @@ test('fresh profile: disclaimer → setup → app shell, clean console', async (
   });
   await expect(page.getByRole('heading', { name: 'Disclaimer' })).toBeVisible();
 
-  // 2. Accept and continue to setup.
+  // 2. Accept and continue to setup. The worded flow is the default now —
+  // one click reaches the card wizard, and EVERYTHING below is unchanged
+  // (that is the point of this pin).
   await page.getByRole('checkbox').check();
   await page.getByRole('button', { name: /continue to setup/i }).click();
+  await page.getByRole('button', { name: 'Switch to form view' }).click();
 
   // 3. Section 1 — start it, then add one person via the dialog.
   await expect(page.getByRole('heading', { name: /Section 1 of 4/i })).toBeVisible();
