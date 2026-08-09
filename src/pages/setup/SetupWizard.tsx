@@ -30,7 +30,7 @@ import { documentTitleFor } from '@/lib/route-titles';
  * app-wide).
  */
 export default function SetupWizard() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const household = useHouseholdStore((s) => s.household);
   const loadHousehold = useHouseholdStore((s) => s.load);
   const appWideAccepted = useAcceptancesStore((s) => s.acceptedVersions.app_wide ?? null);
@@ -47,6 +47,11 @@ export default function SetupWizard() {
     const p = loadSetupProgress();
     saveSetupProgress({ ...p, view: v }); // the toggle writes `view`; /setup honors it on mount
     setStoredView(v);
+    // Smoke D2: ?section= always OPENS the form view — it must not pin it.
+    // Toggling to guided questions drops the param, else the toggle is inert.
+    if (v === 'worded' && searchParams.get('section') != null) {
+      setSearchParams({}, { replace: true });
+    }
   };
 
   // W10 M47: showDisclaimer/initialSection read persons.length — deciding

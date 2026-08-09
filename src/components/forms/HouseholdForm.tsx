@@ -215,12 +215,23 @@ export default function HouseholdForm({
             <Label htmlFor="filingStatus">Filing status</Label>
             <Select
               value={form.watch('filingStatus')}
-              onValueChange={(v) =>
+              onValueChange={(v) => {
+                // Smoke D1 root cause: react-hook-form's `values` reset (the
+                // first hydration that DIFFERS from defaultValues — e.g. a
+                // saved MFJ over the SINGLE default) makes Radix's hidden
+                // bubble <select> reset and echo onValueChange('') back,
+                // which clobbered the just-hydrated value with '' and left
+                // the trigger blank after every reload. This select has no
+                // clearable/empty option, so '' can never be a user pick —
+                // drop the echo. (SINGLE never hit it: values === defaults
+                // is a no-op reset; jsdom never hit it: no StrictMode +
+                // native form-reset plumbing.)
+                if (v === '') return;
                 form.setValue('filingStatus', v as FilingStatus, {
                   shouldDirty: true,
                   shouldTouch: true,
-                })
-              }
+                });
+              }}
             >
               <SelectTrigger
                 id="filingStatus"

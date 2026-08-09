@@ -19,7 +19,7 @@ vi.mock('@/lib/statements-archive', () => ({
 
 import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
@@ -114,6 +114,11 @@ function resetStores(opts: {
   useGoalsStore.setState({ goals: [], ...base } as any);
 }
 
+function SearchProbe() {
+  const { search } = useLocation();
+  return <div data-testid="search-probe">{search}</div>;
+}
+
 function renderAt(entries: string[]) {
   return render(
     <MemoryRouter initialEntries={entries}>
@@ -182,6 +187,33 @@ describe('SetupWizard route handler', () => {
       await screen.findByRole('heading', { name: 'About you — step 1 of 5' }),
     ).toBeInTheDocument();
     expect(loadSetupProgress().view).toBe('worded');
+  });
+
+  it('D2: the toggle under ?section=N clears the param and reaches the worded flow', async () => {
+    const user = userEvent.setup();
+    resetStores({
+      household: makeHousehold({ inflationAssumption: 0.024 }),
+      appWideAccepted: DISCLOSURES.app_wide.version,
+      persons: [{ id: 1, name: 'Alice' }],
+    });
+    render(
+      <MemoryRouter initialEntries={['/setup?section=4']}>
+        <Routes>
+          <Route path="/setup" element={<><SetupWizard /><SearchProbe /></>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('heading', { name: /Section 4 of 4/i })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Switch to guided questions' }));
+    // The worded flow renders and the pinning param is gone (spec: ?section=
+    // always OPENS the form view — it must not make the toggle inert). The
+    // ?section=4 promotion moved the shared cursor to import_gate, so the
+    // flow resumes there (place-keeping), in Part 5.
+    expect(
+      await screen.findByRole('heading', { name: 'History & goals — step 1 of 2' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Switch to form view' })).toBeInTheDocument();
+    expect(screen.getByTestId('search-probe').textContent).toBe('');
   });
 
   it('a stored view of form (e.g. a migrated v1 user) opens the card wizard directly', () => {
