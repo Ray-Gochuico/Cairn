@@ -15,7 +15,7 @@ import type { StepComponentProps } from '../step-props';
 
 /** goals_gate — the Section 4 goals card inline. */
 export default function GoalsGateStep({ ctx, onDirtyChange, submitRef }: StepComponentProps) {
-  const { answer, setAnswer, storedStatus, entityCount } = useGateAnswer(
+  const { answer, setAnswer, storedStatus, literalAnswer, entityCount, requiredError } = useGateAnswer(
     'goals_gate', ctx, submitRef, onDirtyChange,
   );
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -31,6 +31,8 @@ export default function GoalsGateStep({ ctx, onDirtyChange, submitRef }: StepCom
         nounPlural={cfg.nounPlural}
         storedStatus={storedStatus}
         answer={answer}
+        literalAnswer={literalAnswer}
+        showRequiredError={requiredError}
         onAnswer={setAnswer}
       >
         <EntityCard

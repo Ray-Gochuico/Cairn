@@ -4,8 +4,8 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { FieldError } from '@/components/forms/form-errors';
 import type { EmploymentType } from '@/types/schema';
-import type { EmploymentDraft } from '@/lib/employment-fields';
-import { nameForRole, prefillPay, savePay } from '@/domain/setup-flow/steps/part2';
+import { validateEmploymentDraft, type EmploymentDraft } from '@/lib/employment-fields';
+import { nameForRole, personForRole, prefillPay, savePay } from '@/domain/setup-flow/steps/part2';
 import type { StepComponentProps } from '../step-props';
 
 const emptyToNullNumber = (v: string): number | null => {
@@ -18,7 +18,11 @@ const emptyToNullNumber = (v: string): number | null => {
  *  saves park as a pay draft (deferred creation). */
 export default function PayStep({ ctx, role = 'you', asked, onDirtyChange, submitRef }: StepComponentProps) {
   const name = nameForRole(ctx, role);
-  const [seed] = useState<EmploymentDraft | null>(() => (asked ? prefillPay(ctx, role) : null));
+  // Review M5 (D-W4): a bound person's saved cells prefill regardless of the
+  // asked flag — Settings → Revisit setup opens with progress cleared.
+  const [seed] = useState<EmploymentDraft | null>(() =>
+    personForRole(ctx, role) != null || asked ? prefillPay(ctx, role) : null,
+  );
   // The pay-type radiogroup starts unanswered on a never-asked step; fields
   // reveal from the chosen type (D-W3 conditional reveal).
   const [payType, setPayType] = useState<EmploymentType | null>(seed?.employmentType ?? null);
@@ -62,11 +66,10 @@ export default function PayStep({ ctx, role = 'you', asked, onDirtyChange, submi
         setSaveError(false);
         const r = await savePay(role, draft, ctx);
         if (!r.ok) {
-          const salaryMissing = payType !== 'HOURLY' && salary.trim() === '';
-          const hourlyMissing =
-            payType !== 'SALARY_NO_OT' && (hourlyRate == null || hours.trim() === '');
-          setSalaryError(salaryMissing);
-          setHourlyError(hourlyMissing);
+          // Review m5: ONE source of truth for the validation predicates.
+          const v = validateEmploymentDraft(draft);
+          setSalaryError(!v.ok && v.salaryMissing);
+          setHourlyError(!v.ok && v.hourlyMissing);
         } else {
           setSalaryError(false);
           setHourlyError(false);

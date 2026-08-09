@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
+import { FieldError } from '@/components/forms/form-errors';
 import type { StepStatus } from '@/lib/setup-progress';
 
 interface Props {
@@ -13,9 +14,16 @@ interface Props {
   nounPlural: string;
   storedStatus: StepStatus;
   answer: 'yes' | 'no' | null;   // local step state, seeded by the parent
+  /** The RECORDED literal answer (progress.gateAnswers) — review M2: the
+   *  "You said …" hints render ONLY from this, never from a status DERIVED
+   *  by a form-view Section action. */
+  literalAnswer: 'yes' | 'no' | null;
   onAnswer: (a: 'yes' | 'no') => void;
   /** CW-34 override for the import gate; defaults to the standard template. */
   changedYourMindText?: string;
+  /** Review m2: an attempted Next without an answer renders the required
+   *  message, wired to the radiogroup. */
+  showRequiredError?: boolean;
   /** Inline cards — rendered when the EFFECTIVE answer is yes. */
   children?: ReactNode;
   extraNote?: ReactNode;         // CW-21 HOH "no" note etc.
@@ -25,9 +33,10 @@ export default function GateQuestion(p: Props) {
   // Gate honesty: with data present the control reflects the DATA.
   const effectiveAnswer = p.entityCount > 0 ? 'yes' : p.answer;
   const skippedWithData = p.storedStatus === 'skipped' && p.entityCount > 0;
-  const changedYourMind = p.storedStatus === 'skipped' && p.entityCount === 0;
-  const yesWithZero =
-    (p.storedStatus === 'completed' || p.storedStatus === 'in_progress') && p.entityCount === 0;
+  // M2: attribution hints key on the LITERAL recorded answer only — a
+  // derived status renders the gate unanswered with no hint.
+  const changedYourMind = p.literalAnswer === 'no' && p.entityCount === 0;
+  const yesWithZero = p.literalAnswer === 'yes' && p.entityCount === 0;
   const noun = p.entityCount === 1 ? p.nounSingular : p.nounPlural;
   return (
     <div className="space-y-3">
@@ -52,6 +61,8 @@ export default function GateQuestion(p: Props) {
       )}
       <RadioGroup
         aria-labelledby={`${p.idPrefix}-q`}
+        aria-invalid={p.showRequiredError ? true : undefined}
+        aria-describedby={p.showRequiredError ? `${p.idPrefix}-required-error` : undefined}
         value={effectiveAnswer ?? ''}
         onValueChange={(v) => p.onAnswer(v as 'yes' | 'no')}
       >
@@ -64,6 +75,9 @@ export default function GateQuestion(p: Props) {
           <Label htmlFor={`${p.idPrefix}-no`}>No</Label>
         </div>
       </RadioGroup>
+      {p.showRequiredError && (
+        <FieldError id={`${p.idPrefix}-required-error`} message="An answer is required." />
+      )}
       {effectiveAnswer === 'no' && (
         <p className="text-sm text-muted-foreground">{p.consequence}</p>
       )}

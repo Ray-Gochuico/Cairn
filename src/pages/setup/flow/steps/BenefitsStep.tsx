@@ -15,20 +15,21 @@ import type { StepComponentProps } from '../step-props';
 
 /** 2c — CW-28. Person-scoped copy always (never the household HDHP fact);
  *  entered-fields-only writes (D-WF18); skip handled by the shell (CW-29). */
-export default function BenefitsStep({ ctx, role = 'you', asked, onDirtyChange, submitRef }: StepComponentProps) {
+export default function BenefitsStep({ ctx, role = 'you', onDirtyChange, submitRef }: StepComponentProps) {
   const name = nameForRole(ctx, role);
+  // Review M5 (D-W4): a bound person's saved cells prefill regardless of the
+  // asked flag — Settings → Revisit setup opens with progress cleared.
+  // Review m4: the HSA yes/no seeds from the CONTRIBUTION only — after an
+  // explicit-No save wrote the honest zero, eligibility alone must not flip
+  // the control back to Yes.
   const [seed] = useState<BenefitsValues>(() => {
-    if (!asked) {
-      return { pct401k: null, hsaContributes: null, hsaEligible: false, hsaMonthly: null, premiumMonthly: null };
-    }
     const bound = personForRole(ctx, role);
     if (!bound) {
       return { pct401k: null, hsaContributes: null, hsaEligible: false, hsaMonthly: null, premiumMonthly: null };
     }
     return {
       pct401k: bound.pretax401kPct > 0 ? fractionToPercent(bound.pretax401kPct) : null,
-      hsaContributes:
-        bound.hsaMonthlyContribution > 0 || bound.hsaEligible ? true : null,
+      hsaContributes: bound.hsaMonthlyContribution > 0 ? true : null,
       hsaEligible: bound.hsaEligible,
       hsaMonthly: bound.hsaMonthlyContribution || null,
       premiumMonthly: bound.healthInsuranceMonthlyPremium || null,

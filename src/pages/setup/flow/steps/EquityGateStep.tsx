@@ -17,7 +17,7 @@ import type { StepComponentProps } from '../step-props';
 
 /** equity_gate — the Section 2 equity-grants card inline. */
 export default function EquityGateStep({ ctx, onDirtyChange, submitRef }: StepComponentProps) {
-  const { answer, setAnswer, storedStatus, entityCount } = useGateAnswer(
+  const { answer, setAnswer, storedStatus, literalAnswer, entityCount, requiredError } = useGateAnswer(
     'equity_gate', ctx, submitRef, onDirtyChange,
   );
   const createEquityGrant = useEquityGrantsStore((s) => s.create);
@@ -34,6 +34,8 @@ export default function EquityGateStep({ ctx, onDirtyChange, submitRef }: StepCo
         nounPlural={cfg.nounPlural}
         storedStatus={storedStatus}
         answer={answer}
+        literalAnswer={literalAnswer}
+        showRequiredError={requiredError}
         onAnswer={setAnswer}
       >
         <EntityCard

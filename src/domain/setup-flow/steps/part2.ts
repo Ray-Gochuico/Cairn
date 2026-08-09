@@ -125,6 +125,11 @@ export async function saveBenefits(
   if (v.hsaContributes === true) {
     patch.hsaEligible = v.hsaEligible;
     if (v.hsaMonthly != null) patch.hsaMonthlyContribution = v.hsaMonthly;
+  } else if (v.hsaContributes === false && bound.hsaMonthlyContribution > 0) {
+    // Review m4: an explicit "No" IS an answer, not a skip — a previously
+    // saved contribution gets the honest zero (eligibility stays a fact of
+    // its own and is not touched).
+    patch.hsaMonthlyContribution = 0;
   }
   if (v.premiumMonthly != null) patch.healthInsuranceMonthlyPremium = v.premiumMonthly;
   if (Object.keys(patch).length === 0) return { ok: true }; // nothing entered → nothing written

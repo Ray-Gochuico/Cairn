@@ -5,13 +5,17 @@ import { FieldError } from '@/components/forms/form-errors';
 import { prettifyCityCode, US_STATES } from '@/lib/jurisdiction-format';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { prefillStateCity, saveStateCity } from '@/domain/setup-flow/steps/part1';
+import { isSetupDismissed } from '@/lib/setup-dismissal';
 import type { StepComponentProps } from '../step-props';
 
 /** 1c — CW-20. City select appears only for states with seeded CITY rules;
  *  a mismatched city auto-clears (HouseholdForm parity). Store STATE read
  *  only — loadYear belongs to the shell's hydration block. */
 export default function StateCityStep({ ctx, asked, onDirtyChange, submitRef }: StepComponentProps) {
-  const [seed] = useState(() => (asked ? prefillStateCity(ctx) : { state: null, city: null }));
+  // Review M5 (D-W4): post-finish, Revisit setup prefills the household cells.
+  const [seed] = useState(() =>
+    asked || isSetupDismissed() ? prefillStateCity(ctx) : { state: null, city: null },
+  );
   const [state, setState] = useState<string | null>(seed.state);
   const [city, setCity] = useState<string | null>(seed.city);
   const [stateError, setStateError] = useState(false);

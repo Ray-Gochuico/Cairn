@@ -58,7 +58,7 @@ function FlowAccountCreate({ ctx, onSaved }: { ctx: FlowCtx; onSaved: () => void
 
 /** The accounts gate — the ONE gate with flow-specific persistence. */
 export default function AccountsGateStep({ ctx, onDirtyChange, submitRef }: StepComponentProps) {
-  const { answer, setAnswer, storedStatus, entityCount } = useGateAnswer(
+  const { answer, setAnswer, storedStatus, literalAnswer, entityCount, requiredError } = useGateAnswer(
     'accounts_gate', ctx, submitRef, onDirtyChange,
   );
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -75,6 +75,8 @@ export default function AccountsGateStep({ ctx, onDirtyChange, submitRef }: Step
         nounPlural={cfg.nounPlural}
         storedStatus={storedStatus}
         answer={answer}
+        literalAnswer={literalAnswer}
+        showRequiredError={requiredError}
         onAnswer={setAnswer}
       >
         <EntityCard

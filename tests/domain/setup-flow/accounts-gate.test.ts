@@ -47,4 +47,15 @@ describe('accounts gate three-write sequence', () => {
     });
     expect(upsert).not.toHaveBeenCalled();
   });
+
+  it('m3: a mid-sequence failure removes the created account before rethrowing (no orphan; retry starts clean)', async () => {
+    const remove = vi.fn(async () => {});
+    useAccountsStore.setState({ remove } as never);
+    update.mockRejectedValueOnce(new Error('db locked'));
+    await expect(
+      createAccountWithBalance({ ...DEFAULT_ACCOUNT, name: 'My 401k' }, 12500, '2026-08-09'),
+    ).rejects.toThrow('db locked');
+    expect(remove).toHaveBeenCalledWith(5);
+    expect(upsert).not.toHaveBeenCalled();
+  });
 });

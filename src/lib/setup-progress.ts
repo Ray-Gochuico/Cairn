@@ -91,6 +91,11 @@ export const SetupProgressV2Schema = z.object({
   version: z.literal(2),
   /** Keyed stepId or `${stepId}:${role}` for per-person steps. */
   statuses: z.record(z.string(), StepStatusSchema),
+  /** LITERAL gate answers — recorded only when a gate radio is actually
+   *  submitted in the worded view (review M2). Statuses DERIVED from
+   *  form-view Section actions never appear here, so "You said …" hints and
+   *  control pre-selection can never fabricate an attribution. */
+  gateAnswers: z.record(z.string(), z.enum(['yes', 'no'])),
   cursor: z.object({ stepId: z.string(), role: RoleSchema.optional() }).nullable(),
   /** Person bindings — patched on create / 1b reuse; resolved lazily (D-WF6). */
   bindings: z.object({ you: z.number().optional(), partner: z.number().optional() }),
@@ -114,6 +119,7 @@ export function defaultProgressV2(view: 'worded' | 'form' = 'worded'): SetupProg
   return {
     version: 2,
     statuses: {},
+    gateAnswers: {},
     cursor: null,
     bindings: {},
     drafts: {},
@@ -229,7 +235,15 @@ const MIGRATION_INPUT: VisibilityInput = {
 
 /** Pure localStorage transform (no entity access — D-WF5). Returns null on a
  *  corrupt v1 shape (caller falls back to defaults, matching the shipped
- *  loadProgress corrupt-shape behavior). */
+ *  loadProgress corrupt-shape behavior).
+ *
+ *  Known, accepted residue (review m1): the migration runs with
+ *  hasPartner:false, so a TWO-person v1 household's completed Section 1
+ *  migrates without partner step keys — the render-time deriver (which sees
+ *  the real persons) reads Section 1 as in_progress, i.e. a badge downgrade
+ *  plus a prefilled re-ask of the partner steps. Self-healing: the next
+ *  Section-1 advance (form view) or partner-step completion (flow) writes
+ *  the missing keys. No heal machinery by decision. */
 export function migrateV1(parsed: unknown): SetupProgressV2 | null {
   const validStatus = (v: unknown): v is StepStatus =>
     v === 'pending' || v === 'in_progress' || v === 'completed' || v === 'skipped';

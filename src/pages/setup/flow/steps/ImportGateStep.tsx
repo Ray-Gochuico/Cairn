@@ -7,7 +7,7 @@ import type { StepComponentProps } from '../step-props';
 /** import_gate — Yes renders the shared Section 4 importer; the CW-34
  *  variant comes from GATE_CONFIG's changedYourMindText. */
 export default function ImportGateStep({ ctx, onDirtyChange, submitRef }: StepComponentProps) {
-  const { answer, setAnswer, storedStatus, entityCount } = useGateAnswer(
+  const { answer, setAnswer, storedStatus, literalAnswer, entityCount, requiredError } = useGateAnswer(
     'import_gate', ctx, submitRef, onDirtyChange,
   );
   const cfg = GATE_CONFIG.import_gate;
@@ -21,6 +21,8 @@ export default function ImportGateStep({ ctx, onDirtyChange, submitRef }: StepCo
       nounPlural={cfg.nounPlural}
       storedStatus={storedStatus}
       answer={answer}
+      literalAnswer={literalAnswer}
+      showRequiredError={requiredError}
       onAnswer={setAnswer}
       changedYourMindText={cfg.changedYourMindText}
     >

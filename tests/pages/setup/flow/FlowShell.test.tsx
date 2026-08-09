@@ -16,7 +16,7 @@ vi.mock('@/lib/statements-archive', () => ({
   resolveArchivePath: vi.fn(),
 }));
 
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import FlowShell from '@/pages/setup/flow/FlowShell';
@@ -43,7 +43,7 @@ import { useTransactionsStore } from '@/stores/transactions-store';
 import { useGoalsStore } from '@/stores/goals-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
-import { makeHousehold } from '../../../factories';
+import { makeHousehold, makeLoan } from '../../../factories';
 
 const householdUpdate = vi.fn(async () => {});
 const dependentsCreate = vi.fn(async () => 1);
@@ -124,6 +124,11 @@ describe('FlowShell', () => {
     expect(
       screen.getByRole('heading', { name: 'About you — step 1 of 5' }),
     ).toBeInTheDocument();
+    // m7: the DOB error is programmatically associated with the picker group.
+    expect(screen.getByText('Date of birth is required.')).toBeInTheDocument();
+    const dobGroup = screen.getByRole('group', { name: 'Your date of birth' });
+    expect(dobGroup).toHaveAttribute('aria-invalid', 'true');
+    expect(dobGroup).toHaveAttribute('aria-describedby', 'flow-your-dob-error');
   });
 
   it('completing 1a advances to step 2 and moves focus to the heading', async () => {
@@ -160,7 +165,66 @@ describe('FlowShell', () => {
     await user.click(screen.getByRole('button', { name: 'Next' }));
     await screen.findByRole('heading', { name: 'About you — step 5 of 5' });
     expect(loadSetupProgress().statuses.dependents_gate).toBe('skipped');
+    // M2: the literal answer is recorded alongside the derived-compatible status.
+    expect(loadSetupProgress().gateAnswers.dependents_gate).toBe('no');
     expect(dependentsCreate).not.toHaveBeenCalled();
+  });
+
+  it('m2: Next on a pristine gate shows the required error and stays; selecting clears it', async () => {
+    const user = userEvent.setup();
+    saveSetupProgress({
+      ...defaultProgressV2(),
+      statuses: {
+        about_you: 'completed', marital_filing: 'completed', state_city: 'completed',
+      },
+      cursor: { stepId: 'dependents_gate' },
+    });
+    renderShell();
+    await screen.findByRole('heading', { name: 'About you — step 4 of 5' });
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    expect(await screen.findByText('An answer is required.')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'About you — step 4 of 5' }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: 'No' }));
+    expect(screen.queryByText('An answer is required.')).toBeNull();
+  });
+
+  it('M2: a DERIVED completed gate renders unanswered with no fabricated hint', async () => {
+    // A form-view Section advance derives loans_gate 'completed'; the user
+    // never answered the loans question in the worded view.
+    saveSetupProgress({
+      ...defaultProgressV2(),
+      statuses: { ...PART12_COMPLETE, accounts_gate: 'skipped', home_gate: 'skipped',
+        rent_gate: 'skipped', vehicles_gate: 'skipped', equity_gate: 'skipped',
+        loans_gate: 'completed' },
+      cursor: { stepId: 'loans_gate' },
+    });
+    renderShell();
+    await screen.findByRole('heading', { name: 'What you owe — step 1 of 1' });
+    expect(screen.queryByText('You said yes earlier — nothing has been added yet.')).toBeNull();
+    expect(screen.getByRole('radio', { name: 'Yes' })).not.toBeChecked();
+    expect(screen.getByRole('radio', { name: 'No' })).not.toBeChecked();
+  });
+
+  it('M3: data forces yes — Next over rows never records a skip, even with a literal no on file', async () => {
+    const user = userEvent.setup();
+    useLoansStore.setState({ loans: [makeLoan({ id: 1 })] } as never);
+    saveSetupProgress({
+      ...defaultProgressV2(),
+      statuses: { ...PART12_COMPLETE, accounts_gate: 'skipped', home_gate: 'skipped',
+        rent_gate: 'skipped', vehicles_gate: 'skipped', equity_gate: 'skipped',
+        loans_gate: 'skipped' },
+      gateAnswers: { loans_gate: 'no' },
+      cursor: { stepId: 'loans_gate' },
+    });
+    renderShell();
+    await screen.findByRole('heading', { name: 'What you owe — step 1 of 1' });
+    // Do NOT touch the radio — submit as-is.
+    await user.click(screen.getByRole('button', { name: 'Next' }));
+    await screen.findByRole('heading', { name: 'History & goals — step 1 of 2' });
+    expect(loadSetupProgress().statuses.loans_gate).toBe('completed');
+    expect(loadSetupProgress().statuses.loans_gate).not.toBe('skipped');
   });
 
   it('the expenses skip control records skipped and writes NOTHING', async () => {
@@ -281,6 +345,43 @@ describe('FlowShell', () => {
       await screen.findByRole('heading', { name: 'Work & pay — step 6 of 6' }),
     ).toBeInTheDocument();
     expect(screen.getByText('Benefits for Sam Rivera.')).toBeInTheDocument();
+  });
+
+  it('m8: two synchronous Next clicks at the retirement step create exactly one person', async () => {
+    const create = vi.fn(async (values: { name: string }) => {
+      // Slow create so the second click lands while the first is in flight.
+      await new Promise((r) => setTimeout(r, 20));
+      usePersonsStore.setState((s: { persons: Array<{ id: number; name: string }> }) => ({
+        persons: [...s.persons, { id: 11, name: values.name }],
+      }) as never);
+      return 11;
+    });
+    usePersonsStore.setState({ persons: [], create } as never);
+    saveSetupProgress({
+      ...defaultProgressV2(),
+      statuses: {
+        about_you: 'completed', marital_filing: 'completed', state_city: 'completed',
+        dependents_gate: 'skipped', expenses: 'completed', 'pay:you': 'completed',
+      },
+      drafts: {
+        you: { name: 'Alex Rivera', dateOfBirth: '1990-05-01' },
+        pay: { you: {
+          employmentType: 'SALARY_NO_OT', annualSalaryPretax: 95000,
+          hourlyRate: null, regularHoursPerWeek: 40, otThresholdHoursPerWeek: null,
+        } },
+      },
+      cursor: { stepId: 'retirement', role: 'you' },
+    });
+    renderShell();
+    await screen.findByRole('heading', { name: 'Work & pay — step 2 of 3' });
+    fireEvent.change(screen.getByLabelText('Target retirement age'), { target: { value: '67' } });
+    const next = screen.getByRole('button', { name: 'Next' });
+    fireEvent.click(next);
+    fireEvent.click(next);
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Work & pay — step 3 of 3' })).toBeInTheDocument(),
+    );
+    expect(create).toHaveBeenCalledTimes(1);
   });
 
   it('a pristine step toggles with no dialog', async () => {

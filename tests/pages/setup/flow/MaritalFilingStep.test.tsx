@@ -145,6 +145,42 @@ describe('MaritalFilingStep (1b)', () => {
     ).toBeInTheDocument();
   });
 
+  it('M1: Back after a married-yes save re-renders the married branch with the partner draft editable', () => {
+    // Deferred creation: household already MFJ, no partner row yet, partner
+    // drafted. This must NOT engage conflict mode — the "mismatch" is the
+    // flow's own transient — and the CW-16 fields (the draft's only editor)
+    // must render with the draft values.
+    renderStep(
+      ctxWith({
+        household: makeHousehold({ filingStatus: 'MFJ' }),
+        persons: [],
+        progress: {
+          ...defaultProgressV2(),
+          drafts: { partner: { name: 'Sam Rivera', dateOfBirth: '1991-02-03' } },
+        },
+      }),
+      { asked: true },
+    );
+    expect(screen.queryByText(/doesn't match the number of people/)).toBeNull();
+    expect(screen.getByRole('radio', { name: 'Yes' })).toBeChecked();
+    expect(screen.getByLabelText("Your partner's name")).toHaveValue('Sam Rivera');
+  });
+
+  it('m6: CW-18 renders for a first-entry No whenever a person 2 exists', async () => {
+    const user = userEvent.setup();
+    renderStep(
+      ctxWith({
+        household: makeHousehold({ filingStatus: 'MFJ' }),
+        persons: [makePerson({ id: 1, name: 'Alex' }), makePerson({ id: 2, name: 'Sam' })],
+      }),
+      { asked: false }, // never asked in the flow — no married-yes prefill
+    );
+    await user.click(screen.getByRole('radio', { name: 'No' }));
+    expect(
+      screen.getByText('Sam is still in your household — remove them under Inputs → People if needed.'),
+    ).toBeInTheDocument();
+  });
+
   it('the CW-15 honesty line is always present', () => {
     renderStep(ctxWith());
     expect(

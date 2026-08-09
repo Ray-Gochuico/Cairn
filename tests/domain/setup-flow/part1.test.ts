@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   prefillAboutYou, saveAboutYou, maritalConflict, filingStatusFromValues,
-  saveMaritalFiling, saveStateCity, saveExpenses, EMPTY_MARITAL_VALUES,
+  prefillMaritalFiling, saveMaritalFiling, saveStateCity, saveExpenses,
+  EMPTY_MARITAL_VALUES,
 } from '@/domain/setup-flow/steps/part1';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
@@ -74,6 +75,49 @@ describe('part1 save mappers', () => {
     expect(maritalConflict(ctxWith({ household: makeHousehold({ filingStatus: 'MFJ' }), persons: [makePerson({ id: 1 })] }))).toBe(true);
     expect(maritalConflict(ctxWith({ household: makeHousehold({ filingStatus: 'MFJ' }), persons: two }))).toBe(false);
     expect(maritalConflict(ctxWith({ household: makeHousehold({ filingStatus: 'SINGLE' }), persons: [] }))).toBe(false);
+  });
+
+  it('M1: no conflict while the flow holds a pending pre-creation draft or binding', () => {
+    // Deferred creation puts EVERY married-branch user in the persons<2 +
+    // MFJ state between 1b's save and the partner's one-shot create — that
+    // is the flow's own transient, never a genuine mismatch.
+    expect(maritalConflict(ctxWith({
+      household: makeHousehold({ filingStatus: 'MFJ' }),
+      persons: [],
+      progress: {
+        ...defaultProgressV2(),
+        drafts: { partner: { name: 'Sam', dateOfBirth: '1991-02-03' } },
+      },
+    }))).toBe(false);
+    // The escape-hatch case: MFS picked with no partner drafted yet, but the
+    // user's own 1a draft still pends.
+    expect(maritalConflict(ctxWith({
+      household: makeHousehold({ filingStatus: 'MFS' }),
+      persons: [],
+      progress: {
+        ...defaultProgressV2(),
+        drafts: { you: { name: 'Alex', dateOfBirth: '1990-05-01' } },
+      },
+    }))).toBe(false);
+    expect(maritalConflict(ctxWith({
+      household: makeHousehold({ filingStatus: 'MFJ' }),
+      persons: [makePerson({ id: 1 })],
+      progress: { ...defaultProgressV2(), bindings: { partner: 2 } },
+    }))).toBe(false);
+  });
+
+  it('M1: prefillMaritalFiling carries the pending partner draft into the CW-16 fields', () => {
+    const ctx = ctxWith({
+      household: makeHousehold({ filingStatus: 'MFJ' }),
+      progress: {
+        ...defaultProgressV2(),
+        drafts: { partner: { name: 'Sam Rivera', dateOfBirth: '1991-02-03' } },
+      },
+    });
+    const prefill = prefillMaritalFiling(ctx);
+    expect(prefill.married).toBe('yes');
+    expect(prefill.partnerName).toBe('Sam Rivera');
+    expect(prefill.partnerDob).toBe('1991-02-03');
   });
 
   it('married yes drafts the partner (no row!) and writes filingStatus only', async () => {

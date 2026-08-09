@@ -18,7 +18,7 @@ import type { StepComponentProps } from '../step-props';
  *  (the all-required LoanForm with amortize auto-fill — never worded
  *  field-by-field). */
 export default function LoansGateStep({ ctx, onDirtyChange, submitRef }: StepComponentProps) {
-  const { answer, setAnswer, storedStatus, entityCount } = useGateAnswer(
+  const { answer, setAnswer, storedStatus, literalAnswer, entityCount, requiredError } = useGateAnswer(
     'loans_gate', ctx, submitRef, onDirtyChange,
   );
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -39,6 +39,8 @@ export default function LoansGateStep({ ctx, onDirtyChange, submitRef }: StepCom
         nounPlural={cfg.nounPlural}
         storedStatus={storedStatus}
         answer={answer}
+        literalAnswer={literalAnswer}
+        showRequiredError={requiredError}
         onAnswer={setAnswer}
       >
         <EntityCard

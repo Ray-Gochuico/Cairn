@@ -19,15 +19,27 @@ export async function createAccountWithBalance(
   todayIso: string,
 ): Promise<number> {
   const id = await useAccountsStore.getState().create(values);
-  await useAccountsStore.getState().update(id, {
-    hasEmployerMatch: values.hasEmployerMatch,
-    employerMatchPct: values.employerMatchPct,
-    employerMatchLimitPct: values.employerMatchLimitPct,
-  });
-  if (balance != null) {
-    await useSnapshotsStore.getState().upsert({
-      accountId: id, snapshotDate: todayIso, totalValue: balance, source: SnapshotSource.MANUAL,
+  try {
+    await useAccountsStore.getState().update(id, {
+      hasEmployerMatch: values.hasEmployerMatch,
+      employerMatchPct: values.employerMatchPct,
+      employerMatchLimitPct: values.employerMatchLimitPct,
     });
+    if (balance != null) {
+      await useSnapshotsStore.getState().upsert({
+        accountId: id, snapshotDate: todayIso, totalValue: balance, source: SnapshotSource.MANUAL,
+      });
+    }
+  } catch (err) {
+    // Review m3: self-cleaning — a step-2/3 failure would otherwise strand a
+    // match-less account, and a retry would duplicate it. Remove the created
+    // row (best-effort) before rethrowing so retry starts clean.
+    try {
+      await useAccountsStore.getState().remove(id);
+    } catch {
+      // The original failure is the one worth surfacing.
+    }
+    throw err;
   }
   return id;
 }

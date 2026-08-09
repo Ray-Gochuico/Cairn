@@ -100,6 +100,28 @@ describe('setup-flow engine', () => {
     expect(resumeTarget(ctx)?.key).toBe('loans_gate'); // the honesty-downgraded gate
   });
 
+  it('M4: the cursor wins over an EARLIER visible incomplete instance', () => {
+    // accounts_gate is 'completed' with zero accounts → honesty-downgraded to
+    // in_progress, i.e. an earlier visible incomplete instance exists. The
+    // cursor points at loans_gate (in_progress) — the resume rule's cursor
+    // clause must win; deleting that clause would land on accounts_gate.
+    const ctx = ctxWith({
+      progress: progressWith({
+        statuses: {
+          about_you: 'completed', marital_filing: 'completed', state_city: 'completed',
+          dependents_gate: 'skipped', expenses: 'completed',
+          'pay:you': 'completed', 'retirement:you': 'completed', 'benefits:you': 'completed',
+          accounts_gate: 'completed', // 0 accounts → effectiveStatus in_progress
+          home_gate: 'skipped', rent_gate: 'skipped',
+          vehicles_gate: 'skipped', equity_gate: 'skipped',
+          loans_gate: 'in_progress',
+        },
+        cursor: { stepId: 'loans_gate' },
+      }),
+    });
+    expect(resumeTarget(ctx)?.key).toBe('loans_gate');
+  });
+
   it('resume: everything complete → null (shell shows Finish)', () => {
     // NOTE: home_gate 'skipped' makes rent_gate VISIBLE (D-WF9), so a truly
     // all-complete record must carry a rent_gate status too — the plan's test

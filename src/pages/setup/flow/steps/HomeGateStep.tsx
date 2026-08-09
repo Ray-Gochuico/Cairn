@@ -16,7 +16,7 @@ import type { StepComponentProps } from '../step-props';
 
 /** home_gate — the Section 2 Properties card inline (CW-30c/31c). */
 export default function HomeGateStep({ ctx, onDirtyChange, submitRef }: StepComponentProps) {
-  const { answer, setAnswer, storedStatus, entityCount } = useGateAnswer(
+  const { answer, setAnswer, storedStatus, literalAnswer, entityCount, requiredError } = useGateAnswer(
     'home_gate', ctx, submitRef, onDirtyChange,
   );
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -32,6 +32,8 @@ export default function HomeGateStep({ ctx, onDirtyChange, submitRef }: StepComp
         nounPlural={cfg.nounPlural}
         storedStatus={storedStatus}
         answer={answer}
+        literalAnswer={literalAnswer}
+        showRequiredError={requiredError}
         onAnswer={setAnswer}
       >
         <EntityCard

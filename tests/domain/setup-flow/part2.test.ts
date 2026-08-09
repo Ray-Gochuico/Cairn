@@ -127,4 +127,20 @@ describe('part2 save mappers', () => {
     expect(r.ok).toBe(true);
     expect(personsUpdate).not.toHaveBeenCalled();
   });
+
+  it('m4: an explicit HSA "No" writes the honest zero over a saved contribution', async () => {
+    const p = makePerson({ id: 7, hsaMonthlyContribution: 250 });
+    await saveBenefits('you', {
+      pct401k: null, hsaContributes: false, hsaEligible: true, hsaMonthly: null, premiumMonthly: null,
+    }, ctxWith({ persons: [p] }));
+    expect(personsUpdate).toHaveBeenCalledWith(7, { hsaMonthlyContribution: 0 });
+    personsUpdate.mockClear();
+    // Explicit No with nothing stored stays a no-op (entered-fields-only).
+    const clean = makePerson({ id: 8, hsaMonthlyContribution: 0 });
+    const r = await saveBenefits('you', {
+      pct401k: null, hsaContributes: false, hsaEligible: false, hsaMonthly: null, premiumMonthly: null,
+    }, ctxWith({ persons: [clean] }));
+    expect(r.ok).toBe(true);
+    expect(personsUpdate).not.toHaveBeenCalled();
+  });
 });

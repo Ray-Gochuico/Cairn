@@ -18,7 +18,7 @@ import type { StepComponentProps } from '../step-props';
 /** vehicles_gate — the Section 2 vehicles + lease cards inline;
  *  entityCount = vehicles + leases. */
 export default function VehiclesGateStep({ ctx, onDirtyChange, submitRef }: StepComponentProps) {
-  const { answer, setAnswer, storedStatus, entityCount } = useGateAnswer(
+  const { answer, setAnswer, storedStatus, literalAnswer, entityCount, requiredError } = useGateAnswer(
     'vehicles_gate', ctx, submitRef, onDirtyChange,
   );
   const [dialog, setDialog] = useState<null | 'vehicles' | 'vehicle_leases'>(null);
@@ -34,6 +34,8 @@ export default function VehiclesGateStep({ ctx, onDirtyChange, submitRef }: Step
         nounPlural={cfg.nounPlural}
         storedStatus={storedStatus}
         answer={answer}
+        literalAnswer={literalAnswer}
+        showRequiredError={requiredError}
         onAnswer={setAnswer}
       >
         <div className="space-y-4">

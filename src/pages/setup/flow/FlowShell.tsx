@@ -145,6 +145,10 @@ export default function FlowShell({ onSwitchView }: Props) {
   }, [current]);
 
   const dirtyRef = useRef(false);
+  // Review m8: one save in flight at a time — a double-click during the
+  // one-shot person create must never duplicate a row.
+  const submittingRef = useRef(false);
+  const [submitting, setSubmitting] = useState(false);
   const submitRef = useRef<(() => Promise<import('@/domain/setup-flow/types').StepSaveResult>) | null>(null);
   const { confirm, dialog: confirmDialog } = useConfirm();
 
@@ -185,30 +189,45 @@ export default function FlowShell({ onSwitchView }: Props) {
 
   const handleNext = async () => {
     if (current == null || current === 'finish') return;
-    const result = (await submitRef.current?.()) ?? { ok: true as const };
-    if (!result.ok) return; // validation errors render in the step
-    // Compute the post-save progress deterministically, then advance over it
-    // (branch flips — e.g. home "no" revealing rent — change visibility).
-    let np = 'progressUpdate' in result && result.progressUpdate
-      ? result.progressUpdate(progress)
-      : progress;
-    const meta = stepMeta(current.id);
-    if (meta.gate) {
-      // D-WF11 — the shell owns gate statuses.
-      const count = GATE_ENTITY_COUNT[current.id as GateStepId](ctx);
-      const gateAnswer = 'gateAnswer' in result ? result.gateAnswer : undefined;
-      const status: StepStatus =
-        gateAnswer === 'no' ? 'skipped' : count > 0 ? 'completed' : 'in_progress';
-      np = { ...np, statuses: { ...np.statuses, [current.key]: status } };
-    } else {
-      np = { ...np, statuses: { ...np.statuses, [current.key]: 'completed' } };
+    if (submittingRef.current) return; // m8: a save is already in flight
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      const result = (await submitRef.current?.()) ?? { ok: true as const };
+      if (!result.ok) return; // validation errors render in the step
+      // Compute the post-save progress deterministically, then advance over it
+      // (branch flips — e.g. home "no" revealing rent — change visibility).
+      let np = 'progressUpdate' in result && result.progressUpdate
+        ? result.progressUpdate(progress)
+        : progress;
+      const meta = stepMeta(current.id);
+      if (meta.gate) {
+        // D-WF11 — the shell owns gate statuses.
+        const count = GATE_ENTITY_COUNT[current.id as GateStepId](ctx);
+        const gateAnswer = 'gateAnswer' in result ? result.gateAnswer : undefined;
+        const status: StepStatus =
+          gateAnswer === 'no' ? 'skipped' : count > 0 ? 'completed' : 'in_progress';
+        np = { ...np, statuses: { ...np.statuses, [current.key]: status } };
+        // Review M2: record the LITERAL answer the user just submitted —
+        // the "You said …" hints render only from this record, never from a
+        // status a form-view Section action derived.
+        if (gateAnswer != null) {
+          np = { ...np, gateAnswers: { ...np.gateAnswers, [current.key]: gateAnswer } };
+        }
+      } else {
+        np = { ...np, statuses: { ...np.statuses, [current.key]: 'completed' } };
+      }
+      setProgress(np);
+      advanceFrom(current, np);
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
     }
-    setProgress(np);
-    advanceFrom(current, np);
   };
 
   const handleSkip = () => {
     if (current == null || current === 'finish') return;
+    if (submittingRef.current) return; // m8
     // Writes NOTHING to entities — a skip is only a progress status.
     const np: SetupProgressV2 = {
       ...progress,
@@ -220,6 +239,7 @@ export default function FlowShell({ onSwitchView }: Props) {
 
   const handleBack = async () => {
     if (current == null || current === 'finish') return;
+    if (submittingRef.current) return; // m8
     if (!(await confirmDiscardIfDirty())) return;
     goTo(prevInstance(current, ctx));
   };
@@ -365,7 +385,7 @@ export default function FlowShell({ onSwitchView }: Props) {
             >
               Back
             </Button>
-            <Button type="button" onClick={() => void handleNext()}>
+            <Button type="button" disabled={submitting} onClick={() => void handleNext()}>
               Next
             </Button>
           </div>

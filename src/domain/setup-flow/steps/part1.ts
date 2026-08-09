@@ -43,11 +43,21 @@ export const EMPTY_MARITAL_VALUES: MaritalFilingValues = {
   partnerName: '', partnerDob: '',
 };
 
-/** Spec conflict contract: ≥2 persons with SINGLE/HOH, or <2 with MFJ/MFS. */
+/** Spec conflict contract: ≥2 persons with SINGLE/HOH, or <2 with MFJ/MFS.
+ *  Review M1: under deferred creation, EVERY married-branch user occupies the
+ *  persons<2 + married state between 1b's save and the one-shot creates — a
+ *  pending pre-creation draft or binding marks that state as the flow's OWN
+ *  transient, never a genuine mismatch. Drafts clear post-create, so genuine
+ *  pre-existing-entity conflicts still engage exactly per D-WF17. */
 export function maritalConflict(ctx: FlowCtx): boolean {
   const fs = ctx.household?.filingStatus;
   if (fs == null) return false;
   const married = fs === 'MFJ' || fs === 'MFS';
+  const pendingFlowState =
+    ctx.progress.drafts.partner != null ||
+    ctx.progress.drafts.you != null ||
+    ctx.progress.bindings.partner != null;
+  if (married && ctx.persons.length < 2 && pendingFlowState) return false;
   return (ctx.persons.length >= 2 && !married) || (ctx.persons.length < 2 && married);
 }
 
@@ -70,8 +80,18 @@ export function filingStatusFromValues(v: MaritalFilingValues): FilingStatus | n
  *  Persistence rule 6; the household row is pre-seeded SINGLE/CA/$0). */
 export function prefillMaritalFiling(ctx: FlowCtx): MaritalFilingValues {
   const fs = ctx.household?.filingStatus;
-  if (fs === 'MFJ') return { ...EMPTY_MARITAL_VALUES, married: 'yes', filing: 'jointly' };
-  if (fs === 'MFS') return { ...EMPTY_MARITAL_VALUES, married: 'yes', filing: 'separately' };
+  // Review M1: a pending partner draft is edited HERE (its only editor) —
+  // carry it into the CW-16 fields on re-entry.
+  const draft = ctx.progress.drafts.partner;
+  const partnerFields = draft
+    ? { partnerName: draft.name, partnerDob: draft.dateOfBirth }
+    : {};
+  if (fs === 'MFJ') {
+    return { ...EMPTY_MARITAL_VALUES, married: 'yes', filing: 'jointly', ...partnerFields };
+  }
+  if (fs === 'MFS') {
+    return { ...EMPTY_MARITAL_VALUES, married: 'yes', filing: 'separately', ...partnerFields };
+  }
   if (fs === 'HOH') return { ...EMPTY_MARITAL_VALUES, married: 'no', noChoice: 'hoh' };
   return { ...EMPTY_MARITAL_VALUES, married: 'no', noChoice: 'single' };
 }

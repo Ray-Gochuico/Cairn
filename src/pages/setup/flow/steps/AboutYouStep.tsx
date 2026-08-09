@@ -62,6 +62,8 @@ export default function AboutYouStep({ ctx, onDirtyChange, submitRef }: StepComp
             value={dateOfBirth}
             onChange={setDateOfBirth}
             maxYear={new Date().getFullYear() - 16}
+            ariaInvalid={dobError}
+            ariaDescribedBy={dobError ? 'flow-your-dob-error' : undefined}
           />
           <FieldError
             id="flow-your-dob-error"

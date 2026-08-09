@@ -14,6 +14,7 @@ import {
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 import { FieldError } from '@/components/forms/form-errors';
 import { FILING_STATUS_LABELS } from '@/lib/filing-status-labels';
+import { isSetupDismissed } from '@/lib/setup-dismissal';
 import { FilingStatus } from '@/types/enums';
 import { resolveBindings } from '@/domain/setup-flow/engine';
 import {
@@ -69,8 +70,11 @@ const HONESTY_LINE =
 export default function MaritalFilingStep({ ctx, asked, onDirtyChange, submitRef }: StepComponentProps) {
   const conflict = maritalConflict(ctx);
   const { partner } = resolveBindings(ctx);
+  // Review M5 (D-W4): post-finish (isSetupDismissed) the household cells are
+  // genuinely the user's — Revisit setup prefills; the pre-seeded-row hazard
+  // only exists pre-first-finish.
   const [seed] = useState<MaritalFilingValues>(() =>
-    asked && !conflict ? prefillMaritalFiling(ctx) : EMPTY_MARITAL_VALUES,
+    (asked || isSetupDismissed()) && !conflict ? prefillMaritalFiling(ctx) : EMPTY_MARITAL_VALUES,
   );
   const [values, setValues] = useState<MaritalFilingValues>(seed);
   const [conflictStatus, setConflictStatus] = useState<FilingStatus | null>(null);
@@ -136,8 +140,6 @@ export default function MaritalFilingStep({ ctx, asked, onDirtyChange, submitRef
       </div>
     );
   }
-
-  const prefillSaidYes = seed.married === 'yes';
 
   return (
     <div className="space-y-3">
@@ -245,7 +247,9 @@ export default function MaritalFilingStep({ ctx, asked, onDirtyChange, submitRef
               </div>
             </div>
           </RadioGroup>
-          {prefillSaidYes && partner != null && (
+          {partner != null && (
+            // Review m6: whenever a person 2 exists, a "No" needs the CW-18
+            // note — first-entry users included, not only prefilled flips.
             <p className="text-sm text-muted-foreground" role="note">
               {partner.name} is still in your household — remove them under Inputs → People
               if needed.

@@ -6,10 +6,11 @@ import { nameForRole, personForRole, saveRetirement } from '@/domain/setup-flow/
 import type { StepComponentProps } from '../step-props';
 
 /** 2b — CW-27. The unbound save is THE one-shot person create (D-WF2). */
-export default function RetirementStep({ ctx, role = 'you', asked, onDirtyChange, submitRef }: StepComponentProps) {
+export default function RetirementStep({ ctx, role = 'you', onDirtyChange, submitRef }: StepComponentProps) {
   const name = nameForRole(ctx, role);
+  // Review M5 (D-W4): a bound person's saved age prefills regardless of the
+  // asked flag — Settings → Revisit setup opens with progress cleared.
   const [seed] = useState<string>(() => {
-    if (!asked) return '';
     const bound = personForRole(ctx, role);
     return bound ? String(bound.targetRetirementAge) : '';
   });

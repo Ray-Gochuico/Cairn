@@ -14,7 +14,7 @@ import type { StepComponentProps } from '../step-props';
  */
 export function makeSimpleGateStep(id: GateStepId): ComponentType<StepComponentProps> {
   function SimpleGateStep({ ctx, onDirtyChange, submitRef }: StepComponentProps) {
-    const { answer, setAnswer, storedStatus, entityCount } = useGateAnswer(
+    const { answer, setAnswer, storedStatus, literalAnswer, entityCount, requiredError } = useGateAnswer(
       id, ctx, submitRef, onDirtyChange,
     );
     const cfg = GATE_CONFIG[id];
@@ -28,6 +28,8 @@ export function makeSimpleGateStep(id: GateStepId): ComponentType<StepComponentP
         nounPlural={cfg.nounPlural}
         storedStatus={storedStatus}
         answer={answer}
+        literalAnswer={literalAnswer}
+        showRequiredError={requiredError}
         onAnswer={setAnswer}
         changedYourMindText={cfg.changedYourMindText}
       />

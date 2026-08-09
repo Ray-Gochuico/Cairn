@@ -15,7 +15,7 @@ import type { StepComponentProps } from '../step-props';
 /** 1d — CW-21/CW-31a. The gate opens the SAME Dependents card composition
  *  Section 1 uses; the shell maps yes/no → status per D-WF11. */
 export default function DependentsGateStep({ ctx, onDirtyChange, submitRef }: StepComponentProps) {
-  const { answer, setAnswer, storedStatus, entityCount } = useGateAnswer(
+  const { answer, setAnswer, storedStatus, literalAnswer, entityCount, requiredError } = useGateAnswer(
     'dependents_gate', ctx, submitRef, onDirtyChange,
   );
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -41,6 +41,8 @@ export default function DependentsGateStep({ ctx, onDirtyChange, submitRef }: St
         nounPlural="dependents"
         storedStatus={storedStatus}
         answer={answer}
+        literalAnswer={literalAnswer}
+        showRequiredError={requiredError}
         onAnswer={setAnswer}
         extraNote={
           isHoh && effectiveAnswer === 'no' ? (
