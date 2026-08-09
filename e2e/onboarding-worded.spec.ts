@@ -107,5 +107,11 @@ test('fresh profile (worded default): married branch, account with balance, no-g
   await page.goto('/investments?manage=accounts');
   await expect(page.getByText('Joint checking').first()).toBeVisible();
 
+  // Smoke D1 pin: the MARRIED filing status must read back from the
+  // PERSISTED household row on the normal Inputs form — the cell, not the
+  // flow's own echo.
+  await page.goto('/inputs/household');
+  await expect(page.getByLabel('Filing status')).toContainText('Married Filing Jointly');
+
   expect(errors).toEqual([]);
 });

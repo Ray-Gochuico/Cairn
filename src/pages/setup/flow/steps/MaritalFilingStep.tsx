@@ -41,7 +41,13 @@ function FilingStatusSelect({
   return (
     <div>
       <Label htmlFor="flow-filing-status">Filing status</Label>
-      <Select value={value ?? undefined} onValueChange={(v) => onChange(v as FilingStatus)}>
+      <Select
+        value={value ?? undefined}
+        onValueChange={(v) => {
+          if (v === '') return; // Radix bubble-reset echo — never a user pick
+          onChange(v as FilingStatus);
+        }}
+      >
         <SelectTrigger id="flow-filing-status">
           <SelectValue />
         </SelectTrigger>
