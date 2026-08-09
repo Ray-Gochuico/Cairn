@@ -10,14 +10,13 @@ import Section1_WhoYouAre from './Section1_WhoYouAre';
 import Section2_WhatYouOwn from './Section2_WhatYouOwn';
 import Section3_WhatYouOwe from './Section3_WhatYouOwe';
 import Section4_History from './Section4_History';
-import { markSetupDismissed } from '@/lib/setup-dismissal';
+import { finishSetup } from '@/lib/setup-dismissal';
 import {
-  loadSetupProgress, saveSetupProgress, clearSetupProgress,
+  loadSetupProgress, saveSetupProgress,
   applySectionAdvanced, applySectionPromoted, applySectionSkipped,
   deriveSectionStatus, partOfStep, FIRST_STEP_OF_SECTION, PART_TO_SECTION,
   type SetupProgressV2, type VisibilityInput,
 } from '@/lib/setup-progress';
-import { isTailorDone } from '@/lib/onboarding-state';
 import { useLoadGate } from '@/lib/use-load-gate';
 import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import { usePersonsStore } from '@/stores/persons-store';
@@ -134,15 +133,9 @@ export default function SectionLayout({ initialSection, onSwitchView }: Props) {
   }, []);
 
   const handleFinish = useCallback(() => {
-    // Persist an explicit "setup finished" marker so the first-launch redirect
-    // (main.tsx) does NOT loop a zero-persons user back to /setup (H1). This
-    // is independent of clearing the wizard progress below.
-    markSetupDismissed();
-    clearSetupProgress();
-    // New users go into the post-setup onboarding flow at /welcome; existing
-    // users who re-enter the wizard via /setup?section=4 (Tailor already done)
-    // go straight to the Dashboard — the guard prevents re-running onboarding.
-    navigate(isTailorDone() ? '/' : '/welcome');
+    // The ONE shared Finish (worded-onboarding Task 10): dismissal marker +
+    // clear both progress keys + route by tailor-done.
+    finishSetup(navigate);
   }, [navigate]);
 
   // currentSection is DERIVED from the shared cursor (form→flow place-keeping).

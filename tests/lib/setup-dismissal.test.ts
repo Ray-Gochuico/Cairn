@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   SETUP_DISMISSED_KEY,
   isSetupDismissed,
@@ -6,7 +6,10 @@ import {
   shouldRedirectToSetup,
   hasSetupInProgress,
   SETUP_PROGRESS_KEY,
+  finishSetup,
 } from '@/lib/setup-dismissal';
+import { SETUP_PROGRESS_V2_KEY, SETUP_PROGRESS_V1_KEY } from '@/lib/setup-progress';
+import { ONBOARDING_TAILOR_DONE_KEY } from '@/lib/onboarding-state';
 
 describe('setup-dismissal marker', () => {
   beforeEach(() => {
@@ -68,5 +71,27 @@ describe('hasSetupInProgress (Wave C C4)', () => {
   it('true when only the v2 progress key exists (worded-onboarding wave)', () => {
     localStorage.setItem('setupWizard.progress.v2', '{}');
     expect(hasSetupInProgress()).toBe(true);
+  });
+});
+
+describe('finishSetup (shared by both views)', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('marks dismissed, clears BOTH progress keys, routes fresh users to /welcome', () => {
+    localStorage.setItem(SETUP_PROGRESS_V1_KEY, '{}');
+    localStorage.setItem(SETUP_PROGRESS_V2_KEY, '{}');
+    const navigate = vi.fn();
+    finishSetup(navigate);
+    expect(localStorage.getItem('setupWizard.dismissed.v1')).not.toBeNull();
+    expect(localStorage.getItem(SETUP_PROGRESS_V1_KEY)).toBeNull();
+    expect(localStorage.getItem(SETUP_PROGRESS_V2_KEY)).toBeNull();
+    expect(navigate).toHaveBeenCalledWith('/welcome');
+  });
+
+  it('routes tailor-done users straight to the Dashboard', () => {
+    localStorage.setItem(ONBOARDING_TAILOR_DONE_KEY, '2026-08-01T00:00:00.000Z');
+    const navigate = vi.fn();
+    finishSetup(navigate);
+    expect(navigate).toHaveBeenCalledWith('/');
   });
 });

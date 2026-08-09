@@ -68,3 +68,17 @@ export {
   SETUP_PROGRESS_V1_KEY as SETUP_PROGRESS_KEY,
   hasSetupInProgress,
 } from '@/lib/setup-progress';
+
+import { clearSetupProgress } from '@/lib/setup-progress';
+import { isTailorDone } from '@/lib/onboarding-state';
+
+/**
+ * The ONE Finish implementation shared by the card wizard and the worded flow
+ * (design: byte-identical to the shipped SectionLayout.handleFinish). New
+ * users go to /welcome; re-entrant users with Tailor done go to the Dashboard.
+ */
+export function finishSetup(navigate: (to: string) => void): void {
+  markSetupDismissed();
+  clearSetupProgress();
+  navigate(isTailorDone() ? '/' : '/welcome');
+}

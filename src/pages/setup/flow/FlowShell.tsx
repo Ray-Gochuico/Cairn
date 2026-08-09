@@ -7,11 +7,10 @@ import PageLoadingSpinner from '@/components/layout/PageLoadingSpinner';
 import { useLoadGate } from '@/lib/use-load-gate';
 import { CITY_TAX_YEAR } from '@/lib/city-tax-year';
 import {
-  PART_LABELS, loadSetupProgress, saveSetupProgress, clearSetupProgress, stepMeta,
+  PART_LABELS, loadSetupProgress, saveSetupProgress, stepMeta,
   type FlowPart, type SetupProgressV2, type StepStatus,
 } from '@/lib/setup-progress';
-import { markSetupDismissed } from '@/lib/setup-dismissal';
-import { isTailorDone } from '@/lib/onboarding-state';
+import { finishSetup } from '@/lib/setup-dismissal';
 import {
   GATE_ENTITY_COUNT, effectiveStatus, nextInstance, partPosition, partStatus,
   prevInstance, resumeTarget, visibleInstances, type GateStepId,
@@ -225,11 +224,8 @@ export default function FlowShell({ onSwitchView }: Props) {
   };
 
   const handleFinish = () => {
-    // Byte-identical behavior to SectionLayout.handleFinish (Task 10 extracts
-    // the shared helper; this inline copy is replaced there).
-    markSetupDismissed();
-    clearSetupProgress();
-    navigate(isTailorDone() ? '/' : '/welcome');
+    // The ONE shared Finish (D-WF10/Task 10) — both views, byte-identical.
+    finishSetup(navigate);
   };
 
   if (!gate.settled || current === null) {

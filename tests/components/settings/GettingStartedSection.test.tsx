@@ -63,4 +63,13 @@ describe('GettingStartedSection', () => {
     // react-router renders Link `to` as the href.
     expect(link).toHaveAttribute('href', '/calculators');
   });
+
+  it('Revisit setup links to /setup with the CW-37 helper sentence', () => {
+    renderSection();
+    const link = screen.getByRole('link', { name: 'Revisit setup' });
+    expect(link).toHaveAttribute('href', '/setup');
+    expect(
+      screen.getByText('Reopens guided setup with your saved answers filled in.'),
+    ).toBeInTheDocument();
+  });
 });
