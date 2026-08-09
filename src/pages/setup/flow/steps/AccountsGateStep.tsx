@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -14,9 +14,8 @@ import AccountFormImpl from '@/components/forms/AccountForm';
 import { DEFAULT_ACCOUNT } from '@/lib/entity-scaffolds';
 import GateQuestion from '../GateQuestion';
 import { GATE_CONFIG } from '../step-registry';
-import { GATE_ENTITY_COUNT } from '@/domain/setup-flow/engine';
 import { createAccountWithBalance } from '@/domain/setup-flow/steps/accounts-gate';
-import { stepKey } from '@/lib/setup-progress';
+import { useGateAnswer } from './useGateAnswer';
 import type { FlowCtx } from '@/domain/setup-flow/types';
 import type { StepComponentProps } from '../step-props';
 
@@ -59,27 +58,10 @@ function FlowAccountCreate({ ctx, onSaved }: { ctx: FlowCtx; onSaved: () => void
 
 /** The accounts gate — the ONE gate with flow-specific persistence. */
 export default function AccountsGateStep({ ctx, onDirtyChange, submitRef }: StepComponentProps) {
-  const key = stepKey('accounts_gate');
-  const storedStatus = ctx.progress.statuses[key] ?? 'pending';
-  const entityCount = GATE_ENTITY_COUNT.accounts_gate(ctx);
-  const [answer, setAnswer] = useState<'yes' | 'no' | null>(() => {
-    if (storedStatus === 'skipped') return 'no';
-    if (storedStatus === 'completed' || storedStatus === 'in_progress') return 'yes';
-    return null;
-  });
+  const { answer, setAnswer, storedStatus, entityCount } = useGateAnswer(
+    'accounts_gate', ctx, submitRef, onDirtyChange,
+  );
   const [dialogOpen, setDialogOpen] = useState(false);
-
-  useEffect(() => {
-    // Entries save through the dialog's own form — the step is never dirty.
-    onDirtyChange(false);
-  }, [onDirtyChange]);
-
-  useEffect(() => {
-    submitRef.current = async () => ({
-      ok: answer != null || entityCount > 0,
-      gateAnswer: entityCount > 0 ? 'yes' : answer ?? 'yes',
-    });
-  });
 
   const cfg = GATE_CONFIG.accounts_gate;
   return (

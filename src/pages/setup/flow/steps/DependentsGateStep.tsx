@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -9,38 +9,19 @@ import {
 import EntityCard from '@/pages/setup/EntityCard';
 import DependentForm from '@/pages/setup/forms/DependentForm';
 import GateQuestion from '../GateQuestion';
-import { GATE_ENTITY_COUNT } from '@/domain/setup-flow/engine';
-import { stepKey } from '@/lib/setup-progress';
+import { useGateAnswer } from './useGateAnswer';
 import type { StepComponentProps } from '../step-props';
 
 /** 1d — CW-21/CW-31a. The gate opens the SAME Dependents card composition
  *  Section 1 uses; the shell maps yes/no → status per D-WF11. */
 export default function DependentsGateStep({ ctx, onDirtyChange, submitRef }: StepComponentProps) {
-  const key = stepKey('dependents_gate');
-  const storedStatus = ctx.progress.statuses[key] ?? 'pending';
-  const entityCount = GATE_ENTITY_COUNT.dependents_gate(ctx);
-  const [answer, setAnswer] = useState<'yes' | 'no' | null>(() => {
-    if (storedStatus === 'skipped') return 'no';
-    if (storedStatus === 'completed' || storedStatus === 'in_progress') return 'yes';
-    return null;
-  });
+  const { answer, setAnswer, storedStatus, entityCount } = useGateAnswer(
+    'dependents_gate', ctx, submitRef, onDirtyChange,
+  );
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const isHoh = ctx.household?.filingStatus === 'HOH';
   const effectiveAnswer = entityCount > 0 ? 'yes' : answer;
-
-  useEffect(() => {
-    // Gates hold restorable answer state, not unsaved entries — the cards
-    // save through their own dialogs. Never dirty.
-    onDirtyChange(false);
-  }, [onDirtyChange]);
-
-  useEffect(() => {
-    submitRef.current = async () => ({
-      ok: answer != null || entityCount > 0,
-      gateAnswer: entityCount > 0 ? 'yes' : answer ?? 'yes',
-    });
-  });
 
   return (
     <>

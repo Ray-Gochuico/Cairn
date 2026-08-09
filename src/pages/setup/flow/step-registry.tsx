@@ -11,7 +11,13 @@ import PayStep from './steps/PayStep';
 import RetirementStep from './steps/RetirementStep';
 import BenefitsStep from './steps/BenefitsStep';
 import AccountsGateStep from './steps/AccountsGateStep';
-import { makeSimpleGateStep } from './steps/makeSimpleGateStep';
+import HomeGateStep from './steps/HomeGateStep';
+import RentGateStep from './steps/RentGateStep';
+import VehiclesGateStep from './steps/VehiclesGateStep';
+import EquityGateStep from './steps/EquityGateStep';
+import LoansGateStep from './steps/LoansGateStep';
+import ImportGateStep from './steps/ImportGateStep';
+import GoalsGateStep from './steps/GoalsGateStep';
 
 export interface GateCopy {
   question: string;
@@ -95,12 +101,11 @@ export const STEP_COMPONENTS: Record<StepId, ComponentType<StepComponentProps>> 
   retirement: RetirementStep,
   benefits: BenefitsStep,
   accounts_gate: AccountsGateStep,
-  // Simple (card-less) gates — Task 9 swaps these for card-bearing steps.
-  home_gate: makeSimpleGateStep('home_gate'),
-  rent_gate: makeSimpleGateStep('rent_gate'),
-  vehicles_gate: makeSimpleGateStep('vehicles_gate'),
-  equity_gate: makeSimpleGateStep('equity_gate'),
-  loans_gate: makeSimpleGateStep('loans_gate'),
-  import_gate: makeSimpleGateStep('import_gate'),
-  goals_gate: makeSimpleGateStep('goals_gate'),
+  home_gate: HomeGateStep,
+  rent_gate: RentGateStep,
+  vehicles_gate: VehiclesGateStep,
+  equity_gate: EquityGateStep,
+  loans_gate: LoansGateStep,
+  import_gate: ImportGateStep,
+  goals_gate: GoalsGateStep,
 };
