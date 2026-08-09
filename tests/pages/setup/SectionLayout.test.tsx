@@ -25,6 +25,11 @@ import {
   isSetupDismissed,
   shouldRedirectToSetup,
 } from '@/lib/setup-dismissal';
+import {
+  loadSetupProgress,
+  deriveSectionStatus,
+  type VisibilityInput,
+} from '@/lib/setup-progress';
 import { markTailorDone } from '@/lib/onboarding-state';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useDependentsStore } from '@/stores/dependents-store';
@@ -70,12 +75,37 @@ function primeStores() {
   useCategoriesStore.setState({ categories: [], ...base } as never);
 }
 
+const VI_SOLO: VisibilityInput = {
+  hasPartner: false, homeGateStatus: 'pending', propertiesCount: 0, housingPaymentsCount: 0,
+};
+
 describe('SectionLayout', () => {
   beforeEach(() => {
     localStorage.clear();
     // Reset the data stores SectionLayout reads to derive the done-vs-visited
     // badge (H3) so seeded entities don't leak across tests.
     primeStores();
+  });
+
+  it('migrates a v1 progress key on mount: renders the v1 section, writes v2, deletes v1', () => {
+    localStorage.setItem(
+      'setupWizard.progress.v1',
+      JSON.stringify({
+        currentSection: 2,
+        sectionStatus: { 1: 'completed', 2: 'pending', 3: 'pending', 4: 'pending' },
+        startedAt: '2026-05-26T12:00:00Z',
+      }),
+    );
+    render(
+      <MemoryRouter>
+        <SectionLayout />
+      </MemoryRouter>,
+    );
+    expect(
+      screen.getByRole('heading', { name: /Section 2 of 4/i }),
+    ).toBeInTheDocument();
+    expect(localStorage.getItem('setupWizard.progress.v1')).toBeNull();
+    expect(localStorage.getItem('setupWizard.progress.v2')).not.toBeNull();
   });
 
   it('renders a top progress bar with all 4 sections', () => {
@@ -116,7 +146,7 @@ describe('SectionLayout', () => {
     expect(screen.getByRole('heading', { name: /Section 1 of 4/i })).toBeInTheDocument();
   });
 
-  it('persists currentSection to localStorage on advance', async () => {
+  it('persists the cursor (v2) to localStorage on advance', async () => {
     const user = userEvent.setup();
     render(
       <MemoryRouter>
@@ -124,10 +154,10 @@ describe('SectionLayout', () => {
       </MemoryRouter>,
     );
     await user.click(screen.getByRole('button', { name: /next section/i }));
-    const stored = JSON.parse(
-      localStorage.getItem('setupWizard.progress.v1') ?? '{}',
-    );
-    expect(stored.currentSection).toBe(2);
+    // Progress persists as v2 steps now; Section 2's first step is the cursor.
+    const stored = loadSetupProgress();
+    expect(stored.cursor).toEqual({ stepId: 'accounts_gate' });
+    expect(deriveSectionStatus(1, stored.statuses, VI_SOLO)).toBe('completed');
   });
 
   it('restores currentSection from localStorage on remount', () => {
@@ -250,13 +280,11 @@ describe('SectionLayout', () => {
     expect(
       screen.getByRole('heading', { name: /Section 2 of 4/i }),
     ).toBeInTheDocument();
-    // localStorage should reflect both: section 1 marked skipped + cursor
-    // on section 2.
-    const stored = JSON.parse(
-      localStorage.getItem('setupWizard.progress.v1') ?? '{}',
-    );
-    expect(stored.currentSection).toBe(2);
-    expect(stored.sectionStatus[1]).toBe('skipped');
+    // localStorage (v2) should reflect both: section 1 derived skipped +
+    // cursor on section 2's first step.
+    const stored = loadSetupProgress();
+    expect(stored.cursor).toEqual({ stepId: 'accounts_gate' });
+    expect(deriveSectionStatus(1, stored.statuses, VI_SOLO)).toBe('skipped');
   });
 
   it('shows "visited" (not "✓ done") for a completed section that wrote no entities (H3)', () => {

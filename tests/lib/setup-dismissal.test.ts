@@ -65,4 +65,8 @@ describe('hasSetupInProgress (Wave C C4)', () => {
   it('exports the canonical key SectionLayout writes', () => {
     expect(SETUP_PROGRESS_KEY).toBe('setupWizard.progress.v1');
   });
+  it('true when only the v2 progress key exists (worded-onboarding wave)', () => {
+    localStorage.setItem('setupWizard.progress.v2', '{}');
+    expect(hasSetupInProgress()).toBe(true);
+  });
 });
