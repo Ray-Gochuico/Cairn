@@ -18,16 +18,36 @@ vi.mock('@/lib/statements-archive', () => ({
 }));
 
 import { render, screen, act } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { useDependentsStore } from '@/stores/dependents-store';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
+import { useAccountsStore } from '@/stores/accounts-store';
+import { useHoldingsStore } from '@/stores/holdings-store';
+import { usePropertiesStore } from '@/stores/properties-store';
+import { useVehiclesStore } from '@/stores/vehicles-store';
+import { useHousingPaymentsStore } from '@/stores/housing-payments-store';
+import { useVehicleLeasesStore } from '@/stores/vehicle-leases-store';
+import { useEquityGrantsStore } from '@/stores/equity-grants-store';
+import { useLoansStore } from '@/stores/loans-store';
+import { useSnapshotsStore } from '@/stores/snapshots-store';
+import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
+import { useContributionsStore } from '@/stores/contributions-store';
+import { useTransactionsStore } from '@/stores/transactions-store';
+import { useGoalsStore } from '@/stores/goals-store';
 import type { Household } from '@/types/schema';
 import { DISCLOSURES } from '@/legal/disclosures';
 import SetupWizard from '@/pages/setup/SetupWizard';
-import { makeHousehold } from '../../factories';
+import {
+  applySectionAdvanced,
+  defaultProgressV2,
+  loadSetupProgress,
+  saveSetupProgress,
+} from '@/lib/setup-progress';
+import { makeHousehold, makePerson } from '../../factories';
 
 
 function resetStores(opts: {
@@ -76,6 +96,22 @@ function resetStores(opts: {
     error: null,
     loadYear: async () => {},
   } as any);
+  // The worded FlowShell hydrates ALL 17 stores behind its latched gate —
+  // prime the rest to settled-empty-noop so no real load hits jsdom.
+  const base = { isLoading: false, error: null, load: async () => {} };
+  useAccountsStore.setState({ accounts: [], ...base } as any);
+  useHoldingsStore.setState({ holdings: [], ...base } as any);
+  usePropertiesStore.setState({ properties: [], ...base } as any);
+  useVehiclesStore.setState({ vehicles: [], ...base } as any);
+  useHousingPaymentsStore.setState({ housingPayments: [], ...base } as any);
+  useVehicleLeasesStore.setState({ vehicleLeases: [], ...base } as any);
+  useEquityGrantsStore.setState({ equityGrants: [], ...base } as any);
+  useLoansStore.setState({ loans: [], ...base } as any);
+  useSnapshotsStore.setState({ snapshots: [], ...base } as any);
+  useAssetValueSnapshotsStore.setState({ assetValueSnapshots: [], ...base } as any);
+  useContributionsStore.setState({ contributions: [], ...base } as any);
+  useTransactionsStore.setState({ transactions: [], ...base } as any);
+  useGoalsStore.setState({ goals: [], ...base } as any);
 }
 
 function renderAt(entries: string[]) {
@@ -101,18 +137,19 @@ describe('SetupWizard route handler', () => {
     ).toBeInTheDocument();
   });
 
-  it('mounts SectionLayout at Section 1 when the disclaimer is already accepted', () => {
+  it('mounts the WORDED flow (not the card wizard) once the disclaimer is accepted', async () => {
     resetStores({
       household: makeHousehold({ inflationAssumption: 0.024 }),
       appWideAccepted: DISCLOSURES.app_wide.version,
     });
     renderAt(['/setup']);
     expect(
-      screen.getByRole('heading', { name: /Section 1 of 4/i }),
+      await screen.findByRole('heading', { name: 'About you — step 1 of 5' }),
     ).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Section 1 of 4/i })).toBeNull();
   });
 
-  it('?section=4 jumps to Section 4 when persons exist (existing household)', () => {
+  it('?section=4 jumps to Section 4 (FORM view) when persons exist, with the CW-4 toggle', () => {
     resetStores({
       household: makeHousehold({ inflationAssumption: 0.024 }),
       appWideAccepted: DISCLOSURES.app_wide.version,
@@ -121,6 +158,66 @@ describe('SetupWizard route handler', () => {
     renderAt(['/setup?section=4']);
     expect(
       screen.getByRole('heading', { name: /Section 4 of 4/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Switch to guided questions' }),
+    ).toBeInTheDocument();
+  });
+
+  it('the view toggle round-trips both directions and persists `view`', async () => {
+    const user = userEvent.setup();
+    resetStores({
+      household: makeHousehold({ inflationAssumption: 0.024 }),
+      appWideAccepted: DISCLOSURES.app_wide.version,
+    });
+    renderAt(['/setup']);
+    await screen.findByRole('heading', { name: 'About you — step 1 of 5' });
+    await user.click(screen.getByRole('button', { name: 'Switch to form view' }));
+    expect(
+      await screen.findByRole('heading', { name: /Section 1 of 4/i }),
+    ).toBeInTheDocument();
+    expect(loadSetupProgress().view).toBe('form');
+    await user.click(screen.getByRole('button', { name: 'Switch to guided questions' }));
+    expect(
+      await screen.findByRole('heading', { name: 'About you — step 1 of 5' }),
+    ).toBeInTheDocument();
+    expect(loadSetupProgress().view).toBe('worded');
+  });
+
+  it('a stored view of form (e.g. a migrated v1 user) opens the card wizard directly', () => {
+    resetStores({
+      household: makeHousehold({ inflationAssumption: 0.024 }),
+      appWideAccepted: DISCLOSURES.app_wide.version,
+    });
+    saveSetupProgress({ ...defaultProgressV2('form') });
+    renderAt(['/setup']);
+    expect(
+      screen.getByRole('heading', { name: /Section 1 of 4/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('form→flow place-keeping: a form-completed Section 1 resumes the flow at What you own', async () => {
+    const user = userEvent.setup();
+    resetStores({
+      household: makeHousehold({ inflationAssumption: 0.024 }),
+      appWideAccepted: DISCLOSURES.app_wide.version,
+    });
+    usePersonsStore.setState({ persons: [makePerson({ id: 1, name: 'Alex' })] } as any);
+    // The card-wizard user added a dependent too — gate honesty would
+    // otherwise (correctly) resume at the never-actually-answered
+    // dependents gate (completed + zero rows = in_progress, spec rule).
+    useDependentsStore.setState({ dependents: [{ id: 1, name: 'Kid' }] } as any);
+    // Mid-run card-wizard user: stored view 'form', Section 1 advanced.
+    saveSetupProgress(
+      applySectionAdvanced(defaultProgressV2('form'), 1, {
+        hasPartner: false, homeGateStatus: 'pending', propertiesCount: 0, housingPaymentsCount: 0,
+      }),
+    );
+    renderAt(['/setup']);
+    await screen.findByRole('heading', { name: /Section 1 of 4/i });
+    await user.click(screen.getByRole('button', { name: 'Switch to guided questions' }));
+    expect(
+      await screen.findByRole('heading', { name: 'What you own — step 1 of 4' }),
     ).toBeInTheDocument();
   });
 

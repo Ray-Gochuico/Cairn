@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Step0Disclaimer from './Step0Disclaimer';
 import SectionLayout from './SectionLayout';
+import FlowShell from './flow/FlowShell';
+import { loadSetupProgress, saveSetupProgress } from '@/lib/setup-progress';
 import { DISCLOSURES } from '@/legal/disclosures';
 import { useHouseholdStore } from '@/stores/household-store';
 import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
@@ -38,6 +40,14 @@ export default function SetupWizard() {
   const personsLoading = usePersonsStore((s) => s.isLoading);
   const personsError = usePersonsStore((s) => s.error);
   const [stepZeroAccepted, setStepZeroAccepted] = useState(false);
+  // Stored view preference; the initializer also runs the one-time v1→v2
+  // progress migration if needed (harmless and idempotent).
+  const [storedView, setStoredView] = useState<'worded' | 'form'>(() => loadSetupProgress().view);
+  const switchView = (v: 'worded' | 'form') => {
+    const p = loadSetupProgress();
+    saveSetupProgress({ ...p, view: v }); // the toggle writes `view`; /setup honors it on mount
+    setStoredView(v);
+  };
 
   // W10 M47: showDisclaimer/initialSection read persons.length — deciding
   // before the load resolves dropped ?section= and flashed the disclaimer at
@@ -93,10 +103,18 @@ export default function SetupWizard() {
       ? queryParamSection
       : undefined;
 
+  // A valid ?section= ALWAYS opens the form view at that Section (spec View
+  // persistence rule); it never rewrites the stored preference.
+  const effectiveView = initialSection !== undefined ? 'form' : storedView;
+
   return (
     <>
       <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
-      <SectionLayout initialSection={initialSection} />
+      {effectiveView === 'form' ? (
+        <SectionLayout initialSection={initialSection} onSwitchView={() => switchView('worded')} />
+      ) : (
+        <FlowShell onSwitchView={() => switchView('form')} />
+      )}
     </>
   );
 }

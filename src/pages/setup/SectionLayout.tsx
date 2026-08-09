@@ -69,9 +69,11 @@ function liveVisibility(prev: SetupProgressV2): VisibilityInput {
 interface Props {
   /** Optional initial section override (used by ?section= in SetupWizard). */
   initialSection?: SectionIndex;
+  /** Renders the worded-flow toggle (CW-4). Absent in standalone tests. */
+  onSwitchView?: () => void;
 }
 
-export default function SectionLayout({ initialSection }: Props) {
+export default function SectionLayout({ initialSection, onSwitchView }: Props) {
   const navigate = useNavigate();
   const [progress, setProgress] = useState<SetupProgressV2>(() => {
     let p = loadSetupProgress();
@@ -290,6 +292,17 @@ export default function SectionLayout({ initialSection }: Props) {
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
       <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
+      {onSwitchView && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={onSwitchView}
+            className="text-sm underline text-muted-foreground"
+          >
+            Switch to guided questions
+          </button>
+        </div>
+      )}
       <nav
         aria-label="Setup progress"
         className="flex items-center gap-2"
