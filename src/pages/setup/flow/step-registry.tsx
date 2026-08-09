@@ -10,6 +10,7 @@ import DependentsGateStep from './steps/DependentsGateStep';
 import PayStep from './steps/PayStep';
 import RetirementStep from './steps/RetirementStep';
 import BenefitsStep from './steps/BenefitsStep';
+import AccountsGateStep from './steps/AccountsGateStep';
 import { makeSimpleGateStep } from './steps/makeSimpleGateStep';
 
 export interface GateCopy {
@@ -93,8 +94,8 @@ export const STEP_COMPONENTS: Record<StepId, ComponentType<StepComponentProps>> 
   pay: PayStep,
   retirement: RetirementStep,
   benefits: BenefitsStep,
-  // Simple (card-less) gates — Tasks 8/9 swap these for card-bearing steps.
-  accounts_gate: makeSimpleGateStep('accounts_gate'),
+  accounts_gate: AccountsGateStep,
+  // Simple (card-less) gates — Task 9 swaps these for card-bearing steps.
   home_gate: makeSimpleGateStep('home_gate'),
   rent_gate: makeSimpleGateStep('rent_gate'),
   vehicles_gate: makeSimpleGateStep('vehicles_gate'),
