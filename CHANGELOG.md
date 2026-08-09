@@ -5,6 +5,44 @@ All notable changes to Cairn are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-08-08
+
+Ask the Roadmap "what's next" — a question bar and interview questions
+that apply fixed, mechanical frameworks to your own numbers, computed
+entirely on your machine. Your database upgrades automatically on
+first launch.
+
+### Added
+
+- **"I have $X — what's next?"** A question bar on the Roadmap: enter
+  an amount, one-time or per month, and three framework cards —
+  Conservative, Moderate, and Aggressive — show how each fixed
+  ordering would split that money across your emergency fund, employer
+  match, debt, and investing, using the balances, rates, and expense
+  baseline you've already entered. Every figure states its basis on
+  the card; a "What this assumes" section lists the assumptions and
+  every reason a bucket was skipped; per-month splits show a
+  First / Then / Ongoing schedule. The first use explains exactly what
+  the frameworks are and are not — mechanical arithmetic, never a
+  recommendation.
+- **Questions for you.** The Roadmap can now ask about things your
+  data suggests are worth a look — starting with cars: when a
+  vehicle's model year, value trend, or categorized repair spending
+  warrants it, a card asks about replacement plans, and a named budget
+  becomes the monthly saving it implies (with and without growth).
+  Answers are saved, re-askable ("Ask me again"), and re-confirmed
+  calmly when they age or the facts beneath them change.
+- Card effects come from the same engines the rest of the app uses:
+  months of expenses covered, interest and payoff dates versus minimum
+  payments, employer-match value, and years-to-FI deltas — in today's
+  dollars, each labeled with the scenario it assumes.
+
+### Changed
+
+- The Roadmap hosts the question bar below the next-step hero and the
+  "Questions for you" strip below the sections — behind the page's
+  existing disclosure gate, household-scoped like the rest of the page.
+
 ## [1.2.0] - 2026-08-06
 
 Every page, per person — plus a setup flow that shows you what you've
