@@ -136,6 +136,8 @@ test('setup honesty: saved data renders cards not gates; abandonment surfaces th
   // wizard progress key — exactly the post-Finish wiped state. The seeded
   // disclosure acceptance bypasses Step 0.
   await page.goto('/setup');
+  // The worded flow is the /setup default now; this pin covers the FORM view.
+  await page.getByRole('button', { name: 'Switch to form view' }).click();
   await expect(page.getByTestId('person-chips')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('person-chips')).toContainText('Demo Investor');
   await expect(page.getByRole('button', { name: 'Start this section' })).toHaveCount(0);
@@ -165,6 +167,17 @@ test('setup honesty: saved data renders cards not gates; abandonment surfaces th
   await expect(page.getByText('Suggested next step: finish setting up.')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('link', { name: 'Continue setup' })).toBeVisible();
   expect(errors.join('\n')).not.toContain('Maximum update depth');
+});
+
+test('re-entrant finish with Tailor done lands on the Dashboard, not /welcome', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => {
+    localStorage.setItem('onboarding.tailor.done.v1', new Date().toISOString());
+  });
+  await page.goto('/setup?section=4');            // ?section= always opens the form view
+  await page.getByRole('button', { name: /finish setup/i }).click();
+  await expect(page.getByRole('navigation', { name: 'Primary' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /you're set up/i })).toHaveCount(0);
 });
 
 test('roadmap interview: the $X bar answers with three framework cards on the seeded profile', async ({ page }) => {

@@ -54,6 +54,14 @@ export function GettingStartedSection() {
             page.
           </p>
         </div>
+        <div className="mt-4">
+          <p className="text-sm text-muted-foreground mb-3">
+            Reopens guided setup with your saved answers filled in.
+          </p>
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/setup">Revisit setup</Link>
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );

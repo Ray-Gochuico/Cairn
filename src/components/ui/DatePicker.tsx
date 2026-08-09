@@ -19,6 +19,11 @@ export interface DatePickerProps {
   minYear?: number;
   /** Highest year to offer. Defaults to today's year + 1. */
   maxYear?: number;
+  /** Optional error association (worded-onboarding m7): mirrors the house
+   *  aria-invalid + aria-describedby trio on the labeled group wrapper so a
+   *  validation error is programmatically tied to the picker. */
+  ariaInvalid?: boolean;
+  ariaDescribedBy?: string;
 }
 
 const MONTH_LABELS = [
@@ -63,6 +68,8 @@ export default function DatePicker({
   disabled = false,
   minYear = 1900,
   maxYear,
+  ariaInvalid,
+  ariaDescribedBy,
 }: DatePickerProps) {
   const today = useMemo(() => new Date(), []);
   const effectiveMaxYear = maxYear ?? today.getUTCFullYear() + 1;
@@ -138,6 +145,8 @@ export default function DatePicker({
     <div
       role={label ? 'group' : undefined}
       aria-label={label}
+      aria-invalid={ariaInvalid || undefined}
+      aria-describedby={ariaDescribedBy}
       className="flex flex-wrap gap-2"
       data-testid={id ? `${id}-picker` : undefined}
     >

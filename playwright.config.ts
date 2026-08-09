@@ -22,14 +22,18 @@ export default defineConfig({
     {
       // The seeded smoke suite (disclosures accepted, demo data present).
       name: 'seeded',
-      testIgnore: /onboarding\.spec\.ts/,
+      // [^/] keeps the match inside the FILENAME segment — a plain .* would
+      // also match when a parent directory name contains "onboarding".
+      testIgnore: /onboarding[^/]*\.spec\.ts/,
       use: { baseURL: 'http://localhost:1422' },
     },
     {
       // T26: a FRESH (unseeded) IndexedDB so boot lands on the disclaimer +
       // setup path — the only way to exercise the real onboarding happy path.
+      // D-WF16: BOTH onboarding specs (form-view pin + worded default) run
+      // against the fresh server.
       name: 'onboarding',
-      testMatch: /onboarding\.spec\.ts/,
+      testMatch: /onboarding[^/]*\.spec\.ts/,
       use: { baseURL: 'http://localhost:1423' },
     },
   ],

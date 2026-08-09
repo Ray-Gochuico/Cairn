@@ -10,8 +10,13 @@ import Section1_WhoYouAre from './Section1_WhoYouAre';
 import Section2_WhatYouOwn from './Section2_WhatYouOwn';
 import Section3_WhatYouOwe from './Section3_WhatYouOwe';
 import Section4_History from './Section4_History';
-import { markSetupDismissed, SETUP_PROGRESS_KEY } from '@/lib/setup-dismissal';
-import { isTailorDone } from '@/lib/onboarding-state';
+import { finishSetup } from '@/lib/setup-dismissal';
+import {
+  loadSetupProgress, saveSetupProgress,
+  applySectionAdvanced, applySectionPromoted, applySectionSkipped,
+  deriveSectionStatus, partOfStep, FIRST_STEP_OF_SECTION, PART_TO_SECTION,
+  type SetupProgressV2, type VisibilityInput,
+} from '@/lib/setup-progress';
 import { useLoadGate } from '@/lib/use-load-gate';
 import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
 import { usePersonsStore } from '@/stores/persons-store';
@@ -30,65 +35,52 @@ import { useContributionsStore } from '@/stores/contributions-store';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { useGoalsStore } from '@/stores/goals-store';
 
-interface Progress {
-  currentSection: SectionIndex;
-  sectionStatus: Record<SectionIndex, SectionStatus>;
-  startedAt: string;
-}
-
-function defaultProgress(): Progress {
+// Derivation inputs at state-init time come from the progress record alone
+// (stores may not be hydrated yet); interaction-time write sites and the live
+// badge derivation below use store counts.
+function visibilityFromProgress(p: SetupProgressV2): VisibilityInput {
   return {
-    currentSection: 1,
-    sectionStatus: { 1: 'pending', 2: 'pending', 3: 'pending', 4: 'pending' },
-    startedAt: new Date().toISOString(),
+    hasPartner: p.bindings.partner != null || p.drafts.partner != null,
+    homeGateStatus: p.statuses['home_gate'] ?? 'pending',
+    propertiesCount: 0,
+    housingPaymentsCount: 0,
   };
 }
 
-function loadProgress(): Progress {
-  try {
-    const raw = localStorage.getItem(SETUP_PROGRESS_KEY);
-    if (raw === null) return defaultProgress();
-    const parsed = JSON.parse(raw);
-    // W10 T5: currentSection was validated but sectionStatus was cast
-    // unchecked — a corrupt entry (e.g. sectionStatus: "garbage") crashed the
-    // wizard grid. Validate the shape before trusting it.
-    const validStatus = (v: unknown): v is SectionStatus =>
-      v === 'pending' || v === 'in_progress' || v === 'completed' || v === 'skipped';
-    const statuses = parsed?.sectionStatus;
-    if (
-      typeof parsed !== 'object' ||
-      parsed === null ||
-      ![1, 2, 3, 4].includes(parsed.currentSection) ||
-      typeof statuses !== 'object' ||
-      statuses === null ||
-      ![1, 2, 3, 4].every((i) => validStatus((statuses as Record<number, unknown>)[i]))
-    ) {
-      return defaultProgress();
-    }
-    return parsed as Progress;
-  } catch {
-    return defaultProgress();
-  }
+// Interaction-time visibility for the section write sites: the spec's
+// round-trip rule (Section completed/skipped ⇒ ALL mapped visible steps
+// completed/skipped, derived back exactly) requires the SAME hasPartner the
+// render-time deriver sees — a two-person household's partner keys must be
+// written too, so live counts are merged over the progress record. (getState
+// reads, not loads — stores are already hydrated behind the gate.)
+function liveVisibility(prev: SetupProgressV2): VisibilityInput {
+  return {
+    hasPartner:
+      usePersonsStore.getState().persons.length > 1 ||
+      prev.bindings.partner != null ||
+      prev.drafts.partner != null,
+    homeGateStatus: prev.statuses['home_gate'] ?? 'pending',
+    propertiesCount: usePropertiesStore.getState().properties.length,
+    housingPaymentsCount: useHousingPaymentsStore.getState().housingPayments.length,
+  };
 }
 
 interface Props {
   /** Optional initial section override (used by ?section= in SetupWizard). */
   initialSection?: SectionIndex;
+  /** Renders the worded-flow toggle (CW-4). Absent in standalone tests. */
+  onSwitchView?: () => void;
 }
 
-export default function SectionLayout({ initialSection }: Props) {
+export default function SectionLayout({ initialSection, onSwitchView }: Props) {
   const navigate = useNavigate();
-  const [progress, setProgress] = useState<Progress>(() => {
-    const p = loadProgress();
+  const [progress, setProgress] = useState<SetupProgressV2>(() => {
+    let p = loadSetupProgress();
     if (initialSection !== undefined) {
-      p.currentSection = initialSection;
-      // Wave C (C2/G6): an explicit ?section= deep-link is declared intent —
-      // landing on the entry gate was the Settings → "Open import wizard"
-      // dead end. Promote pending/skipped to started so the cards render.
-      const cur = p.sectionStatus[initialSection];
-      if (cur === 'pending' || cur === 'skipped') {
-        p.sectionStatus = { ...p.sectionStatus, [initialSection]: 'in_progress' };
-      }
+      // Wave C (C2/G6) deep-link promotion, now expressed on steps (spec:
+      // ?section= promotion ⇒ mapped steps in_progress).
+      p = applySectionPromoted(p, initialSection, visibilityFromProgress(p));
+      p = { ...p, cursor: { stepId: FIRST_STEP_OF_SECTION[initialSection] } };
     }
     return p;
   });
@@ -96,23 +88,18 @@ export default function SectionLayout({ initialSection }: Props) {
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
-    localStorage.setItem(SETUP_PROGRESS_KEY, JSON.stringify(progress));
+    saveSetupProgress(progress);
   }, [progress]);
-
-  // M2 (a11y): on section change, move focus to the section heading so
-  // screen-reader and keyboard users get a landmark instead of stranding focus
-  // on a just-unmounted "Next/Previous section" button.
-  useEffect(() => {
-    headingRef.current?.focus();
-  }, [progress.currentSection]);
 
   const setStatus = useCallback(
     (idx: SectionIndex, status: SectionStatus) => {
       setProgress((prev) => {
-        const next = {
-          ...prev,
-          sectionStatus: { ...prev.sectionStatus, [idx]: status },
-        };
+        const vi = liveVisibility(prev);
+        let next =
+          status === 'skipped' ? applySectionSkipped(prev, idx, vi)
+          : status === 'in_progress' ? applySectionPromoted(prev, idx, vi)
+          : status === 'completed' ? applySectionAdvanced(prev, idx, vi)
+          : prev;
         // Smoke-test 2026-05-27 finding: clicking "Skip — none of this
         // applies" on the SectionEntryGate marked the section as skipped
         // but didn't advance the wizard. Users had to also click "Next
@@ -120,8 +107,9 @@ export default function SectionLayout({ initialSection }: Props) {
         // Treat skipping the CURRENT section as a one-click advance —
         // they're saying "none of this applies, move on". Re-skipping a
         // non-current section (rare; user clicking back) stays put.
-        if (status === 'skipped' && idx === prev.currentSection && idx < 4) {
-          next.currentSection = (idx + 1) as SectionIndex;
+        const prevSection = prev.cursor ? PART_TO_SECTION[partOfStep(prev.cursor.stepId)] : 1;
+        if (status === 'skipped' && idx === prevSection && idx < 4) {
+          next = { ...next, cursor: { stepId: FIRST_STEP_OF_SECTION[(idx + 1) as SectionIndex] } };
         }
         return next;
       });
@@ -130,37 +118,38 @@ export default function SectionLayout({ initialSection }: Props) {
   );
 
   const goToSection = useCallback((idx: SectionIndex) => {
-    setProgress((prev) => ({ ...prev, currentSection: idx }));
+    setProgress((prev) => ({ ...prev, cursor: { stepId: FIRST_STEP_OF_SECTION[idx] } }));
   }, []);
 
   const handleAdvance = useCallback(() => {
-    const cur = progress.currentSection;
-    if (cur === 4) return;
-    setProgress((prev) => ({
-      ...prev,
-      sectionStatus: {
-        ...prev.sectionStatus,
-        [cur]:
-          prev.sectionStatus[cur] === 'skipped' ? 'skipped' : 'completed',
-      },
-      currentSection: (cur + 1) as SectionIndex,
-    }));
-  }, [progress.currentSection]);
+    setProgress((prev) => {
+      const cur = prev.cursor ? PART_TO_SECTION[partOfStep(prev.cursor.stepId)] : 1;
+      if (cur === 4) return prev;
+      return {
+        ...applySectionAdvanced(prev, cur, liveVisibility(prev)),
+        cursor: { stepId: FIRST_STEP_OF_SECTION[(cur + 1) as SectionIndex] },
+      };
+    });
+  }, []);
 
   const handleFinish = useCallback(() => {
-    // Persist an explicit "setup finished" marker so the first-launch redirect
-    // (main.tsx) does NOT loop a zero-persons user back to /setup (H1). This
-    // is independent of clearing the wizard progress below.
-    markSetupDismissed();
-    localStorage.removeItem(SETUP_PROGRESS_KEY);
-    // New users go into the post-setup onboarding flow at /welcome; existing
-    // users who re-enter the wizard via /setup?section=4 (Tailor already done)
-    // go straight to the Dashboard — the guard prevents re-running onboarding.
-    navigate(isTailorDone() ? '/' : '/welcome');
+    // The ONE shared Finish (worded-onboarding Task 10): dismissal marker +
+    // clear both progress keys + route by tailor-done.
+    finishSetup(navigate);
   }, [navigate]);
 
-  const currentSection = progress.currentSection;
+  // currentSection is DERIVED from the shared cursor (form→flow place-keeping).
+  const currentSection: SectionIndex = progress.cursor
+    ? PART_TO_SECTION[partOfStep(progress.cursor.stepId)]
+    : 1;
   const currentMeta = SECTIONS[currentSection - 1];
+
+  // M2 (a11y): on section change, move focus to the section heading so
+  // screen-reader and keyboard users get a landmark instead of stranding focus
+  // on a just-unmounted "Next/Previous section" button.
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, [currentSection]);
 
   // H3: green "✓ done" should imply data exists. Derive, per section, whether
   // the user actually wrote at least one entity (from the same stores each
@@ -241,6 +230,17 @@ export default function SectionLayout({ initialSection }: Props) {
     loadAll,
   );
 
+  const visibility: VisibilityInput = {
+    hasPartner:
+      personsCount > 1 || progress.bindings.partner != null || progress.drafts.partner != null,
+    homeGateStatus: progress.statuses['home_gate'] ?? 'pending',
+    propertiesCount: propertiesCount,
+    housingPaymentsCount: housingPaymentsCount,
+  };
+
+  const sectionStatus = (idx: SectionIndex) =>
+    deriveSectionStatus(idx, progress.statuses, visibility);
+
   const sectionHasData: Record<SectionIndex, boolean> = {
     1: personsCount > 0 || dependentsCount > 0,
     2:
@@ -261,10 +261,11 @@ export default function SectionLayout({ initialSection }: Props) {
   };
 
   const currentSectionHasData = sectionHasData[currentSection];
+  const currentSectionStatus = sectionStatus(currentSection);
   const gateSettled = gate.settled;
   const sectionContent = useMemo(() => {
     const props = {
-      status: progress.sectionStatus[currentSection],
+      status: currentSectionStatus,
       onSetStatus: (s: SectionStatus) => setStatus(currentSection, s),
       hasData: currentSectionHasData,
       settled: gateSettled,
@@ -279,17 +280,28 @@ export default function SectionLayout({ initialSection }: Props) {
       case 4:
         return <Section4_History {...props} />;
     }
-  }, [currentSection, progress.sectionStatus, setStatus, currentSectionHasData, gateSettled]);
+  }, [currentSection, currentSectionStatus, setStatus, currentSectionHasData, gateSettled]);
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
       <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
+      {onSwitchView && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={onSwitchView}
+            className="text-sm underline text-muted-foreground"
+          >
+            Switch to guided questions
+          </button>
+        </div>
+      )}
       <nav
         aria-label="Setup progress"
         className="flex items-center gap-2"
       >
         {SECTIONS.map((s) => {
-          const status = progress.sectionStatus[s.index];
+          const status = sectionStatus(s.index);
           const isCurrent = s.index === currentSection;
           const clickable =
             status === 'completed' ||

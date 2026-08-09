@@ -5,7 +5,6 @@ import {
   PersonSchema,
   EmploymentTypeSchema,
   BonusFrequencySchema,
-  type Person,
 } from '@/types/schema';
 import { Button } from '@/components/ui/button';
 import DatePicker from '@/components/ui/DatePicker';
@@ -14,42 +13,14 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FieldError, FormErrorSummary, useFormSubmit } from './form-errors';
 import { fractionToPercent, percentToFraction } from '@/lib/percent-fields';
+import { normalizeEmploymentValues } from '@/lib/employment-fields';
+import { DEFAULT_PERSON, type PersonScaffoldValues } from '@/lib/entity-scaffolds';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
 
-// PersonFormValues mirrors Person but drops the DB-only id and the
-// roadmap rule-engine chart-answer columns (those are written by
-// roadmap decision nodes, not by the person edit form).
-export type PersonFormValues = Omit<
-  Person,
-  | 'id'
-  | 'jobStability'
-  | 'expectsHigherFutureIncome'
-  | 'onParentHealthInsurance'
-  | 'isRelativelyHealthy'
->;
-
-export const DEFAULT_PERSON: PersonFormValues = {
-  householdId: 1,
-  name: '',
-  dateOfBirth: '',
-  targetRetirementAge: 65,
-  annualSalaryPretax: 0,
-  expectedBonus: 0,
-  expectedBonusFrequency: 'ANNUAL',
-  bonusIsConsistent: true,
-  expectedCommission: 0,
-  expectedCommissionFrequency: 'MONTHLY',
-  employmentType: 'SALARY_NO_OT',
-  hourlyRate: null,
-  regularHoursPerWeek: 40,
-  otThresholdHoursPerWeek: null,
-  pretax401kPct: 0,
-  healthInsuranceMonthlyPremium: 0,
-  dependentCareFsaMonthly: 0,
-  hsaMonthlyContribution: 0,
-  hsaEligible: false,
-  monthlyExpenseBaseline: null,
-};
+// The scaffold moved to the component-free module (worded-onboarding
+// Persistence rule 2); re-exported here so existing importers are untouched.
+export type PersonFormValues = PersonScaffoldValues;
+export { DEFAULT_PERSON };
 
 export interface PersonFormProps {
   initial: PersonFormValues;
@@ -137,10 +108,13 @@ export default function PersonForm({
   // the storage-shaped pretax401kPct fraction.
   const wrappedSubmit = (values: InternalFormValues): Promise<void> => {
     const { pretax401kPctPercent, ...rest } = values;
-    const personValues: PersonFormValues = {
+    // normalizeEmploymentValues: the ONE employment contract — an HOURLY
+    // submit persists salary 0 even when a stale hidden value lingers
+    // (reconciles the shipped PersonForm/EmploymentSection divergence).
+    const personValues: PersonFormValues = normalizeEmploymentValues({
       ...rest,
       pretax401kPct: percentToFraction(pretax401kPctPercent),
-    };
+    });
     return onSubmit(personValues);
   };
 

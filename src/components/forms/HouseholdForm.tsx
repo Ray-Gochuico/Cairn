@@ -19,8 +19,7 @@ import {
 } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FieldError, FormErrorSummary, useFormSubmit } from './form-errors';
-
-const CITY_TAX_YEAR = 2026;
+import { CITY_TAX_YEAR } from '@/lib/city-tax-year';
 
 // Roadmap rule-engine chart-answer columns are not managed by this form
 // (set by roadmap decision nodes). Strip them so RHF + zodResolver see a
