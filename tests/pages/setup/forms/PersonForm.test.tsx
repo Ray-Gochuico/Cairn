@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { usePersonsStore } from '@/stores/persons-store';
 import PersonForm from '@/pages/setup/forms/PersonForm';
+import PersonFormImpl, { DEFAULT_PERSON } from '@/components/forms/PersonForm';
 
 describe('Wizard PersonForm (adapter)', () => {
   beforeEach(() => {
@@ -36,5 +37,23 @@ describe('Wizard PersonForm (adapter)', () => {
     render(<PersonForm onSaved={onSaved} />);
     await user.click(screen.getByRole('button', { name: /cancel/i }));
     expect(onSaved).toHaveBeenCalledOnce();
+  });
+
+  it('switching an existing salaried person to Hourly submits annualSalaryPretax 0', async () => {
+    // The shared employment contract (worded-onboarding Task 2): PersonForm
+    // used to silently keep the stale hidden salary; EmploymentSection zeroed
+    // it. One contract now — HOURLY persists 0, always.
+    const onSubmit = vi.fn(async () => {});
+    render(<PersonFormImpl
+      initial={{ ...DEFAULT_PERSON, name: 'Alex', dateOfBirth: '1990-01-01', annualSalaryPretax: 90000 }}
+      onSubmit={onSubmit}
+    />);
+    await userEvent.selectOptions(screen.getByLabelText(/employment type/i), 'HOURLY');
+    await userEvent.type(screen.getByLabelText(/hourly rate/i), '31.25');
+    // regular hours prefilled (40); submit
+    await userEvent.click(screen.getByRole('button', { name: /save/i }));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ employmentType: 'HOURLY', annualSalaryPretax: 0 }),
+    );
   });
 });

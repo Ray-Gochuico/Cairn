@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react';
 import { usePersonsStore } from '@/stores/persons-store';
-import type { EmploymentType, Person } from '@/types/schema';
+import type { EmploymentType } from '@/types/schema';
+import {
+  employmentDraftFromPerson,
+  employmentPatchFromDraft,
+  validateEmploymentDraft,
+  type EmploymentDraft,
+} from '@/lib/employment-fields';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -11,26 +17,10 @@ interface Props {
   onSaved?: () => void;
 }
 
-interface PersonDraft {
-  // Required-numeric fields are stored as strings here so an empty input
-  // stays empty (instead of silently coercing to 0). The save handler
-  // converts back to numbers and validates against the schema.
-  employmentType: EmploymentType;
-  annualSalaryPretax: string;
-  hourlyRate: number | null;
-  regularHoursPerWeek: string;
-  otThresholdHoursPerWeek: number | null;
-}
-
-function personToDraft(p: Person): PersonDraft {
-  return {
-    employmentType: p.employmentType,
-    annualSalaryPretax: String(p.annualSalaryPretax),
-    hourlyRate: p.hourlyRate,
-    regularHoursPerWeek: String(p.regularHoursPerWeek),
-    otThresholdHoursPerWeek: p.otThresholdHoursPerWeek,
-  };
-}
+// Draft shape + person→draft conversion live in the shared employment-field
+// module now (worded-onboarding wave) — one save contract for PersonForm,
+// this section, and the flow.
+type PersonDraft = EmploymentDraft;
 
 function emptyToNullNumber(v: string): number | null {
   if (v === '') return null;
@@ -66,7 +56,7 @@ export default function EmploymentSection({ onSaved }: Props) {
       const next = { ...prev };
       for (const p of persons) {
         if (p.id != null && next[p.id] === undefined) {
-          next[p.id] = personToDraft(p);
+          next[p.id] = employmentDraftFromPerson(p);
         }
       }
       return next;
@@ -83,45 +73,24 @@ export default function EmploymentSection({ onSaved }: Props) {
   const handleSave = async (id: number) => {
     const draft = drafts[id];
     if (!draft) return;
-    // Branch validation on employmentType, mirroring the canonical PersonForm
-    // (M1): SALARY_* needs an annual salary; HOURLY / SALARY_WITH_OT need an
-    // hourly rate + regular hours. An HOURLY worker has no salary, so the old
-    // unconditional salary guard wrongly blocked the save (or forced a bogus 0).
-    const isHourly = draft.employmentType === 'HOURLY';
-    const isSalary = draft.employmentType !== 'HOURLY'; // SALARY_NO_OT | SALARY_WITH_OT
-    const needsHourlyFields = draft.employmentType !== 'SALARY_NO_OT'; // HOURLY | SALARY_WITH_OT
-    const salaryMissing = isSalary && draft.annualSalaryPretax.trim() === '';
-    const hourlyMissing =
-      needsHourlyFields &&
-      (draft.hourlyRate == null || draft.regularHoursPerWeek.trim() === '');
-    if (salaryMissing || hourlyMissing) {
+    // Validation + patch come from the shared employment contract (the module
+    // IS the code that used to live inline here): SALARY_* needs an annual
+    // salary; HOURLY / SALARY_WITH_OT need an hourly rate + regular hours;
+    // HOURLY persists salary 0; a hidden/empty hours field preserves the
+    // stored schema-positive value.
+    const validation = validateEmploymentDraft(draft);
+    if (!validation.ok) {
       setErrorById((prev) => ({
         ...prev,
         [id]: "Couldn't save — please check the values.",
       }));
       return;
     }
-    // HOURLY persists 0 salary (no misleading non-zero value); SALARY uses the
-    // entered amount.
-    const annualSalaryPretax = isHourly ? 0 : Number(draft.annualSalaryPretax);
-    // For SALARY_NO_OT the hours field is hidden; preserve the person's stored
-    // (schema-positive) value when the draft is empty rather than writing a 0
-    // that would fail `regularHoursPerWeek: z.number().positive()`.
     const storedHours = persons.find((p) => p.id === id)?.regularHoursPerWeek;
-    const regularHoursPerWeek =
-      draft.regularHoursPerWeek.trim() === ''
-        ? storedHours ?? 40
-        : Number(draft.regularHoursPerWeek);
     setSavingId(id);
     setErrorById((prev) => ({ ...prev, [id]: null }));
     try {
-      await update(id, {
-        employmentType: draft.employmentType,
-        annualSalaryPretax,
-        hourlyRate: draft.hourlyRate,
-        regularHoursPerWeek,
-        otThresholdHoursPerWeek: draft.otThresholdHoursPerWeek,
-      });
+      await update(id, employmentPatchFromDraft(draft, storedHours ?? null));
       onSaved?.();
     } catch {
       setErrorById((prev) => ({
@@ -147,7 +116,7 @@ export default function EmploymentSection({ onSaved }: Props) {
     <div className="space-y-3">
       {persons.map((p) => {
         const id = p.id!;
-        const draft = drafts[id] ?? personToDraft(p);
+        const draft = drafts[id] ?? employmentDraftFromPerson(p);
         const showHourlyFields = draft.employmentType !== 'SALARY_NO_OT';
         const showAnnualSalary = draft.employmentType !== 'HOURLY';
         const isSaving = savingId === id;

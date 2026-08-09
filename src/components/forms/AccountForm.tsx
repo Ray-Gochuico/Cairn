@@ -2,8 +2,9 @@ import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { AccountSchema, type Account } from '@/types/schema';
+import { AccountSchema } from '@/types/schema';
 import { AccountType } from '@/types/enums';
+import { DEFAULT_ACCOUNT, type AccountScaffoldValues } from '@/lib/entity-scaffolds';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -46,29 +47,10 @@ const AccountFormSchema = AccountSchema.omit({
 
 type InternalFormValues = z.infer<typeof AccountFormSchema>;
 
-// Strip only the roadmap chart-answer column written by other surfaces
-// (hasHighFees) and id. The 401(k) plan-benefit flags ARE written here now.
-export type AccountFormValues = Omit<Account, 'id' | 'hasHighFees'>;
-
-export const DEFAULT_ACCOUNT: AccountFormValues = {
-  householdId: 1,
-  ownerPersonId: null,
-  beneficiaryDependentId: null,
-  name: '',
-  institution: null,
-  type: AccountType.ACCOUNT_BROKERAGE,
-  cryptoWalletAddress: null,
-  autoFetchEnabled: false,
-  excludedFromNetWorth: false,
-  allowMargin: false,
-  stateOfPlan: null,
-  accentColor: null,
-  apyRate: null,
-  hasEmployerMatch: null,
-  employerMatchPct: null,
-  employerMatchLimitPct: null,
-  allowsMegaBackdoorRollover: null,
-};
+// The scaffold moved to the component-free module (worded-onboarding
+// Persistence rule 2); re-exported here so existing importers are untouched.
+export type AccountFormValues = AccountScaffoldValues;
+export { DEFAULT_ACCOUNT };
 
 export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {
   [AccountType.ACCOUNT_ROTH_401K]: 'Roth 401(k)',
