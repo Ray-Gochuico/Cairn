@@ -357,6 +357,10 @@ export const TickerSchema = z.object({
     .nullable(),
   sector: z.string().max(100).nullable(),
   industry: z.string().max(100).nullable(),
+  // 52-week trading range fetched from Yahoo summaryDetail on each refresh
+  // (0053, D-P4 revised). Null until first fetched; renders "—".
+  fiftyTwoWeekLow: z.number().nonnegative().nullable().default(null),
+  fiftyTwoWeekHigh: z.number().nonnegative().nullable().default(null),
 });
 export type Ticker = z.infer<typeof TickerSchema>;
 

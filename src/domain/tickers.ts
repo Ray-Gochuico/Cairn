@@ -1,3 +1,4 @@
+import type { z } from 'zod';
 import type { Database } from '@/db/db';
 import { TickerSchema, type Ticker } from '@/types/schema';
 
@@ -11,6 +12,8 @@ interface TickerRow {
   accent_color: string | null;
   sector: string | null;
   industry: string | null;
+  fifty_two_week_low: number | null;
+  fifty_two_week_high: number | null;
 }
 
 function rowToTicker(row: TickerRow): Ticker {
@@ -24,6 +27,8 @@ function rowToTicker(row: TickerRow): Ticker {
     accentColor: row.accent_color ?? null,
     sector: row.sector ?? null,
     industry: row.industry ?? null,
+    fiftyTwoWeekLow: row.fifty_two_week_low ?? null,
+    fiftyTwoWeekHigh: row.fifty_two_week_high ?? null,
   });
 }
 
@@ -45,11 +50,11 @@ export class TickersRepo {
     return rows.length > 0 ? rowToTicker(rows[0]) : null;
   }
 
-  async upsert(ticker: Ticker): Promise<void> {
+  async upsert(ticker: z.input<typeof TickerSchema>): Promise<void> {
     const parsed = TickerSchema.parse(ticker);
     await this.db.execute(
-      `INSERT OR REPLACE INTO tickers (ticker, name, asset_class, leverage_factor, direction, user_added, accent_color, sector, industry)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO tickers (ticker, name, asset_class, leverage_factor, direction, user_added, accent_color, sector, industry, fifty_two_week_low, fifty_two_week_high)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         parsed.ticker,
         parsed.name,
@@ -60,6 +65,8 @@ export class TickersRepo {
         parsed.accentColor ?? null,
         parsed.sector ?? null,
         parsed.industry ?? null,
+        parsed.fiftyTwoWeekLow ?? null,
+        parsed.fiftyTwoWeekHigh ?? null,
       ]
     );
   }
@@ -72,6 +79,15 @@ export class TickersRepo {
     await this.db.execute(
       'UPDATE tickers SET accent_color = ? WHERE ticker = ?',
       [color, ticker],
+    );
+  }
+
+  /** Targeted 52-week write (D-PT14): UPDATE, never upsert — a missing row is
+   * a no-op and a partial write can't clobber the other nine columns. */
+  async set52Week(ticker: string, low: number | null, high: number | null): Promise<void> {
+    await this.db.execute(
+      'UPDATE tickers SET fifty_two_week_low = ?, fifty_two_week_high = ? WHERE ticker = ?',
+      [low, high, ticker],
     );
   }
 

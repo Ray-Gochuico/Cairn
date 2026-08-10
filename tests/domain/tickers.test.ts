@@ -18,6 +18,9 @@ const loadAccentColorsMigration = () =>
 const loadSectorIndustryMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0016_add_ticker_sector_industry.sql'), 'utf-8');
 
+const loadTicker52WeekMigration = () =>
+  readFileSync(resolve(__dirname, '../../src/db/migrations/0053_ticker_52_week.sql'), 'utf-8');
+
 const sampleTicker = (): Ticker => ({
   ticker: 'VTI',
   name: 'Vanguard Total Stock Market ETF',
@@ -40,6 +43,8 @@ describe('TickersRepo', () => {
       { version: '0001_initial', sql: loadInitialMigration() },
       { version: '0015_add_accent_colors', sql: loadAccentColorsMigration() },
       { version: '0016_add_ticker_sector_industry', sql: loadSectorIndustryMigration() },
+      // 0053 is required since upsert writes the 52-week columns (deviation #5).
+      { version: '0053_ticker_52_week', sql: loadTicker52WeekMigration() },
     ]);
     repo = new TickersRepo(db);
   });
@@ -189,6 +194,59 @@ describe('TickersRepo', () => {
   });
 });
 
+describe('TickersRepo — 52-week fields (0053)', () => {
+  let db: SqliteAdapter;
+
+  beforeEach(async () => {
+    db = new SqliteAdapter(':memory:');
+    await runMigrations(db, [
+      { version: '0001_initial', sql: loadInitialMigration() },
+      { version: '0015_add_accent_colors', sql: loadAccentColorsMigration() },
+      { version: '0016_add_ticker_sector_industry', sql: loadSectorIndustryMigration() },
+      { version: '0053_ticker_52_week', sql: loadTicker52WeekMigration() },
+    ]);
+  });
+
+  afterEach(async () => {
+    await db.close();
+  });
+
+  it('round-trips the 52-week fields and defaults them null when omitted (0053)', async () => {
+    const repo = new TickersRepo(db);
+    await repo.upsert({
+      ticker: 'RNG', name: null, assetClass: 'OTHER', leverageFactor: 1.0,
+      direction: 'LONG', userAdded: false, accentColor: null, sector: null, industry: null,
+      fiftyTwoWeekLow: 61.1, fiftyTwoWeekHigh: 78.9,
+    });
+    expect(await repo.lookup('RNG')).toMatchObject({ fiftyTwoWeekLow: 61.1, fiftyTwoWeekHigh: 78.9 });
+    // Omitted on input → Zod default(null) fills them (the leverageFactor precedent).
+    await repo.upsert({
+      ticker: 'OMIT', name: null, assetClass: 'OTHER', leverageFactor: 1.0,
+      direction: 'LONG', userAdded: false, accentColor: null, sector: null, industry: null,
+    });
+    expect(await repo.lookup('OMIT')).toMatchObject({ fiftyTwoWeekLow: null, fiftyTwoWeekHigh: null });
+  });
+
+  it('set52Week updates in place; a full-object re-upsert preserves the fields (deviation #5)', async () => {
+    const repo = new TickersRepo(db);
+    await repo.upsert({
+      ticker: 'KEEP', name: null, assetClass: 'OTHER', leverageFactor: 1.0,
+      direction: 'LONG', userAdded: false, accentColor: null, sector: null, industry: null,
+    });
+    await repo.set52Week('KEEP', 10.5, 20.25);
+    expect(await repo.lookup('KEEP')).toMatchObject({ fiftyTwoWeekLow: 10.5, fiftyTwoWeekHigh: 20.25 });
+    // The enrichment idiom: spread the existing row, overwrite sector/industry.
+    const existing = (await repo.lookup('KEEP'))!;
+    await repo.upsert({ ...existing, sector: 'Technology', industry: 'Software' });
+    expect(await repo.lookup('KEEP')).toMatchObject({
+      fiftyTwoWeekLow: 10.5, fiftyTwoWeekHigh: 20.25, sector: 'Technology',
+    });
+    // set52Week on a missing ticker is a no-op, never an insert.
+    await repo.set52Week('GHOST', 1, 2);
+    expect(await repo.lookup('GHOST')).toBeNull();
+  });
+});
+
 describe('TickersRepo with seed migration', () => {
   let db: SqliteAdapter;
   let repo: TickersRepo;
@@ -200,6 +258,8 @@ describe('TickersRepo with seed migration', () => {
       { version: '0006_seed_tickers', sql: loadSeedTickersMigration() },
       { version: '0015_add_accent_colors', sql: loadAccentColorsMigration() },
       { version: '0016_add_ticker_sector_industry', sql: loadSectorIndustryMigration() },
+      // 0053 is required since upsert writes the 52-week columns (deviation #5).
+      { version: '0053_ticker_52_week', sql: loadTicker52WeekMigration() },
     ]);
     repo = new TickersRepo(db);
   });
