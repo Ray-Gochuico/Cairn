@@ -149,7 +149,13 @@ function AccountTable({ account }: { account: AccountPositions }) {
               </td>
               <td className="py-2 px-2" />
               <td className="py-2 px-2 text-right tabular-nums whitespace-nowrap">
-                {account.totalValue === null ? DASH : formatCurrency(account.totalValue)}
+                {/* m1: when the total is null AND unpriced rows exist, the
+                    CP-6 suffix renders ALONE (it carries the count; CP-8
+                    explains the refresh path) — a null-total dash composed
+                    with the suffix read as "— — excludes…". Dash alone only
+                    when null with no unpriced rows (branch totality). */}
+                {account.totalValue !== null && formatCurrency(account.totalValue)}
+                {account.totalValue === null && account.unpricedCount === 0 && DASH}
                 {account.unpricedCount > 0 && (
                   <span className="text-muted-foreground font-normal">
                     {' '}— excludes {account.unpricedCount} without a price
@@ -186,12 +192,17 @@ export default function PositionsSection({ positions }: { positions: PositionsRe
             holding on the Holdings form.
           </p>
           {/* CP-3 / CP-8 — the as-of honesty line (derived from the table's own
-              price rows, NOT settings.lastRefreshAt — D-P6). */}
-          <p className="text-xs text-muted-foreground mb-2" data-testid="positions-as-of">
-            {positions.asOfUtc !== null
-              ? `Prices as of ${formatFetchedAt(positions.asOfUtc)} — updated only when you refresh.`
-              : 'No cached prices yet — prices fill in when you refresh market data.'}
-          </p>
+              price rows, NOT settings.lastRefreshAt — D-P6). Withheld until the
+              price SELECT has resolved (m3): rendering CP-8 off the initial
+              empty state flashed "No cached prices yet" falsely for one frame
+              for users WITH cached prices. */}
+          {positions.pricesResolved && (
+            <p className="text-xs text-muted-foreground mb-2" data-testid="positions-as-of">
+              {positions.asOfUtc !== null
+                ? `Prices as of ${formatFetchedAt(positions.asOfUtc)} — updated only when you refresh.`
+                : 'No cached prices yet — prices fill in when you refresh market data.'}
+            </p>
+          )}
           <div className="space-y-4">
             {positions.accounts.map((a) => (
               <AccountTable key={a.accountId} account={a} />

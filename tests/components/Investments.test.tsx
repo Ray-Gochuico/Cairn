@@ -954,12 +954,17 @@ describe('Investments page — 529 section', () => {
     expect(vtiRow).toHaveTextContent('—');  // unpriced dash state
     const acctTwo = screen.getByRole('table', { name: 'Positions — Acct Two' });
     expect(within(acctTwo).getByTestId('position-row-2')).toHaveTextContent('BND');
-    // Zero-priced account total: "—" (never $0) + the excludes suffix (CP-6)
-    expect(within(acctOne).getByTestId('positions-total-1')).toHaveTextContent('— excludes 1 without a price');
-    // CP-8: the honest zero-cached-prices caption
-    expect(screen.getByTestId('positions-as-of')).toHaveTextContent(
-      'No cached prices yet — prices fill in when you refresh market data.',
-    );
+    // Zero-priced account total: the CP-6 suffix ALONE — the m1 ruling: no
+    // redundant null-total dash composed in front of it. EXACT cell text.
+    const totalCells = within(within(acctOne).getByTestId('positions-total-1')).getAllByRole('cell');
+    expect(totalCells[4].textContent?.replace(/\s+/g, ' ').trim()).toBe('— excludes 1 without a price');
+    // CP-8: the honest zero-cached-prices caption — renders only once the
+    // price SELECT has resolved (m3), hence the waitFor.
+    await waitFor(() => {
+      expect(screen.getByTestId('positions-as-of')).toHaveTextContent(
+        'No cached prices yet — prices fill in when you refresh market data.',
+      );
+    });
   });
 
   it('growth card sums the CHART universe: cash included, excluded accounts dropped (round-2 A2)', async () => {

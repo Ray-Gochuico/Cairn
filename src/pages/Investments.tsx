@@ -339,7 +339,10 @@ export default function Investments() {
   // currentPrice wrote fresh price_cache rows; lastRefreshAt covers the
   // manual FreshnessBadge path when no snapshot row changed. (The 52-week
   // fields refeed separately via the tickers-store reload — D-PT14.)
-  const [priceRows, setPriceRows] = useState<PriceCacheRow[]>([]);
+  // null = SELECT not yet resolved (m3): buildPositions marks the result
+  // unresolved so the as-of caption (CP-3/CP-8) is withheld — the initial-[]
+  // version flashed "No cached prices yet" falsely for one frame.
+  const [priceRows, setPriceRows] = useState<PriceCacheRow[] | null>(null);
   const visibleTickerKey = useMemo(
     () => Array.from(new Set(visibleHoldings.map((h) => h.ticker))).sort().join(','),
     [visibleHoldings],

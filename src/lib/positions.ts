@@ -67,18 +67,27 @@ export interface PositionsResult {
   accounts: AccountPositions[];
   /** Lexical max fetched_at across held tickers' rows; null when no prices. */
   asOfUtc: string | null;
+  /** False while the page's price SELECT has not yet resolved (priceRows
+   * null) — gates the as-of caption so "No cached prices yet" (CP-8) never
+   * flashes falsely for users WITH cached prices (m3). Rows still build
+   * (dashed) during that frame; only the caption is gated. */
+  pricesResolved: boolean;
 }
 
 export function buildPositions(
   accounts: ReadonlyArray<{ id?: number | null; name: string }>,
   holdings: Holding[],
   tickerInfo: ReadonlyMap<string, TickerPositionInfo>,
-  priceRows: PriceCacheRow[],
+  priceRows: PriceCacheRow[] | null,
 ): PositionsResult {
+  // null = the SELECT has not resolved yet (m3): build rows as unpriced but
+  // mark the result unresolved so the component withholds the as-of caption.
+  const pricesResolved = priceRows !== null;
+  const resolvedRows = priceRows ?? [];
   // Per-ticker rows sorted by date asc. PK (ticker, date) guarantees distinct
   // dates; re-sort defensively rather than trusting SELECT order.
   const byTicker = new Map<string, PriceCacheRow[]>();
-  for (const r of priceRows) {
+  for (const r of resolvedRows) {
     const list = byTicker.get(r.ticker) ?? [];
     list.push(r);
     byTicker.set(r.ticker, list);
@@ -179,9 +188,9 @@ export function buildPositions(
   // the 'YYYY-MM-DD HH:MM:SS' format makes lexical order chronological.
   const held = new Set(holdings.map((h) => h.ticker));
   let asOfUtc: string | null = null;
-  for (const r of priceRows) {
+  for (const r of resolvedRows) {
     if (held.has(r.ticker) && (asOfUtc === null || r.fetched_at > asOfUtc)) asOfUtc = r.fetched_at;
   }
 
-  return { accounts: out, asOfUtc };
+  return { accounts: out, asOfUtc, pricesResolved };
 }

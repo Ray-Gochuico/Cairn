@@ -124,6 +124,47 @@ describe('TickersPanel (W14 Manage surface)', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
+  it('a form edit round-trips the fetched 52-week fields untouched (m2 clobber pin)', async () => {
+    // The 52-week fields are fetched facts with NO form inputs — they must
+    // survive an edit purely via the editingValues pass-through (the
+    // sector/industry precedent). If TickersPanel stopped forwarding them,
+    // the INSERT OR REPLACE upsert would silently NULL them on every save.
+    await useTickersStore.getState().upsert({
+      ticker: 'RNGX',
+      name: null,
+      assetClass: AssetClass.SINGLE_STOCK,
+      leverageFactor: 1,
+      direction: Direction.LONG,
+      userAdded: true,
+      accentColor: null,
+      sector: null,
+      industry: null,
+      fiftyTwoWeekLow: 61.1,
+      fiftyTwoWeekHigh: 78.9,
+    });
+    const user = userEvent.setup();
+    render(<MemoryRouter><TickersPanel /></MemoryRouter>);
+    await screen.findByText('RNGX');
+
+    const row = screen
+      .getAllByTestId('tickers-row')
+      .find((r) => within(r).queryByText('RNGX'))!;
+    await user.click(within(row).getByRole('button', { name: /^edit$/i }));
+
+    const drawer = await screen.findByRole('dialog', { name: /edit ticker/i });
+    // Dirty an unrelated field (Save is disabled until dirty) — the 52-week
+    // fields themselves are deliberately untouched.
+    await user.type(within(drawer).getByLabelText(/name/i), 'Range Co');
+    await user.click(within(drawer).getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => {
+      const t = useTickersStore.getState().tickers.find((x) => x.ticker === 'RNGX');
+      expect(t?.name).toBe('Range Co');
+      expect(t?.fiftyTwoWeekLow).toBe(61.1);
+      expect(t?.fiftyTwoWeekHigh).toBe(78.9);
+    });
+  });
+
   it('announces the visible count politely', async () => {
     const user = userEvent.setup();
     await seedUserTicker('ZQXY');

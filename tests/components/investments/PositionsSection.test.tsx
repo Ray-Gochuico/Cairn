@@ -119,16 +119,60 @@ describe('PositionsSection', () => {
     expect(parseFloat(marker.style.left)).toBeCloseTo(61.8, 1); // (72.1 − 61.1) / 17.8
   });
 
-  it('zero cached prices anywhere → CP-8 as-of line', () => {
+  it('zero cached prices anywhere → CP-8 as-of line (resolved-empty)', () => {
     renderSection(buildPositions([{ id: 1, name: 'D' }], [h(51, 1, 'XYZ', 3, null)], new Map(), []));
     expect(screen.getByTestId('positions-as-of')).toHaveTextContent(
       'No cached prices yet — prices fill in when you refresh market data.',
     );
   });
 
+  it('price rows not yet loaded (null) → NO as-of caption at all; rows still render dashed (m3)', () => {
+    renderSection(buildPositions([{ id: 1, name: 'D' }], [h(51, 1, 'XYZ', 3, null)], new Map(), null));
+    // The false "No cached prices yet" flash is the bug — until the SELECT
+    // resolves we don't know, so neither CP-3 nor CP-8 may render.
+    expect(screen.queryByTestId('positions-as-of')).toBeNull();
+    // Only the caption is gated: the rows render (dashed) during the frame.
+    expect(screen.getByTestId('position-row-51')).toBeInTheDocument();
+  });
+
   it('no visible holdings → CP-7 empty state, no captions', () => {
     renderSection(buildPositions([], [], new Map(), []));
     expect(screen.getByText('No holdings with values yet.')).toBeInTheDocument();
     expect(screen.queryByTestId('positions-as-of')).toBeNull();
+  });
+
+  it('all-unpriced account total renders the excludes suffix ALONE — no leading dash (m1)', () => {
+    renderSection(buildPositions([{ id: 1, name: 'F' }], [h(71, 1, 'XYZ', 3, 50)], new Map(), []));
+    const total = screen.getByTestId('positions-total-1');
+    const cells = within(total).getAllByRole('cell');
+    // Row layout: label · (empty) · since-refresh · (empty) · value · (colspan)
+    const valueCell = cells[4];
+    expect(valueCell.textContent?.replace(/\s+/g, ' ').trim()).toBe('— excludes 1 without a price');
+  });
+
+  it('null total with zero unpriced rows renders the dash alone (m1 branch total)', () => {
+    // Not constructible via buildPositions (null total implies unpriced rows
+    // exist) — hand-built to total the branches per the m1 ruling.
+    render(
+      <PositionsSection
+        positions={{
+          pricesResolved: true,
+          asOfUtc: null,
+          accounts: [
+            {
+              accountId: 9,
+              accountName: 'Z',
+              rows: [],
+              totalValue: null,
+              totalSinceRefresh: null,
+              unpricedCount: 0,
+            },
+          ],
+        }}
+      />,
+    );
+    const total = screen.getByTestId('positions-total-9');
+    const cells = within(total).getAllByRole('cell');
+    expect(cells[4].textContent?.replace(/\s+/g, ' ').trim()).toBe('—');
   });
 });

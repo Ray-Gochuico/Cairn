@@ -192,3 +192,27 @@ describe('buildPositions — honest edges', () => {
     expect(r.asOfUtc).toBeNull();
   });
 });
+
+describe('buildPositions — not-yet-loaded vs resolved-empty price rows (m3)', () => {
+  it('null price rows (SELECT not yet resolved) → pricesResolved false; rows still build unpriced', () => {
+    const r = buildPositions([{ id: 1, name: 'A' }], [h(1, 1, 'VTI', 10, null)], new Map(), null);
+    expect(r.pricesResolved).toBe(false);
+    expect(r.accounts).toHaveLength(1);
+    expect(r.accounts[0].rows[0].lastPrice).toBeNull();
+    expect(r.accounts[0].rows[0].quantity).toBe(10);
+    expect(r.asOfUtc).toBeNull();
+  });
+
+  it('empty array (resolved-empty) → pricesResolved true', () => {
+    const r = buildPositions([{ id: 1, name: 'A' }], [h(1, 1, 'VTI', 10, null)], new Map(), []);
+    expect(r.pricesResolved).toBe(true);
+  });
+
+  it('populated rows → pricesResolved true', () => {
+    const r = buildPositions(
+      [{ id: 1, name: 'A' }], [h(1, 1, 'VTI', 10, null)], new Map(),
+      [p('VTI', '2026-08-08', 245.5)],
+    );
+    expect(r.pricesResolved).toBe(true);
+  });
+});

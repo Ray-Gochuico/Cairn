@@ -383,9 +383,12 @@ describe('Investments Allocation & positions — class table + Positions', () =>
     // Positions section + captions (CP-1, CP-4, CP-8); By-holding is gone (D-P1).
     expect(screen.getByText('Positions')).toBeInTheDocument();
     expect(screen.getByText(/last-fetched prices × shares/)).toBeInTheDocument();
-    expect(screen.getByTestId('positions-as-of')).toHaveTextContent(
-      'No cached prices yet — prices fill in when you refresh market data.',
-    );
+    // CP-8 renders only once the price SELECT resolves (m3) — waitFor.
+    await waitFor(() => {
+      expect(screen.getByTestId('positions-as-of')).toHaveTextContent(
+        'No cached prices yet — prices fill in when you refresh market data.',
+      );
+    });
     expect(screen.queryByRole('table', { name: /by holding/i })).toBeNull();
   });
 
