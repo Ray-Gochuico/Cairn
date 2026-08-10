@@ -278,4 +278,43 @@ describe('seedDemoData', () => {
     expect(new Set(grants.map((g) => g.owner_person_id)).size).toBe(2);
     expect(grants.every((g) => g.grant_type === 'RSU')).toBe(true);
   });
+
+  it('seeds Positions price pairs: two recent dates per priced ticker, none for MSFT', async () => {
+    await seedDemoData(db);
+    const counts = await db.select<{ ticker: string; n: number }>(
+      'SELECT ticker, COUNT(*) AS n FROM price_cache GROUP BY ticker ORDER BY ticker',
+    );
+    expect(counts).toEqual([
+      { ticker: 'AAPL', n: 2 },
+      { ticker: 'BND', n: 2 },
+      { ticker: 'FXAIX', n: 2 },
+      { ticker: 'NVDA', n: 2 },
+      { ticker: 'VTI', n: 2 },
+      // no MSFT rows — the demo's "excludes 1 without a price" account total
+    ]);
+  });
+
+  it('seeds 52-week fields on the fund trio only (AAPL/NVDA stay null → "—")', async () => {
+    await seedDemoData(db);
+    const rows = await db.select<{ ticker: string; lo: number | null; hi: number | null }>(
+      'SELECT ticker, fifty_two_week_low AS lo, fifty_two_week_high AS hi FROM tickers WHERE ticker IN (?,?,?,?,?) ORDER BY ticker',
+      ['AAPL', 'BND', 'FXAIX', 'NVDA', 'VTI'],
+    );
+    expect(rows).toEqual([
+      { ticker: 'AAPL', lo: null, hi: null },
+      { ticker: 'BND', lo: 66.5, hi: 74.9 },
+      { ticker: 'FXAIX', lo: 133.2, hi: 159.1 },
+      { ticker: 'NVDA', lo: null, hi: null },
+      { ticker: 'VTI', lo: 206.4, hi: 246.6 },
+    ]);
+  });
+
+  it('seeds cost basis on all holdings except BND (its gain honestly renders "—")', async () => {
+    await seedDemoData(db);
+    const rows = await db.select<{ ticker: string; cost_basis: number | null }>(
+      'SELECT ticker, cost_basis FROM holdings ORDER BY id',
+    );
+    expect(rows.filter((r) => r.cost_basis === null).map((r) => r.ticker)).toEqual(['BND']);
+    expect(rows.find((r) => r.ticker === 'VTI')?.cost_basis).toBe(24_000);
+  });
 });
