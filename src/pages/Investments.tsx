@@ -52,7 +52,8 @@ import { useLocalToday } from '@/lib/use-local-today';
 import { dateFromLocalISO } from '@/lib/dates';
 import { useConcentration } from '@/lib/use-concentration';
 import { valueHoldings, type HoldingValuation } from '@/lib/holdings-value';
-import { classTargetVsActual, holdingTargetVsActual } from '@/lib/allocation-hierarchy';
+import { classTargetVsActual } from '@/lib/allocation-hierarchy';
+import { buildPositions, type PriceCacheRow } from '@/lib/positions';
 import type { Dependent, AccountSnapshot, Holding } from '@/types/schema';
 import { ExportCsvButton } from '@/components/ExportCsvButton';
 import { TermTooltip } from '@/components/ui/glossary-tooltip';
@@ -109,6 +110,23 @@ async function loadTickerAssetClasses(tickers: string[]): Promise<Map<string, As
     }
   }
   return result;
+}
+
+/**
+ * All cached price rows for the given tickers (Positions table, D-PT2).
+ * Unbounded by date: "Last price" is the latest cached price of ANY age —
+ * the as-of caption carries the honesty (D-P6). Read-only; the
+ * two-user-controlled-network-calls guarantee is untouched.
+ */
+async function loadPriceRows(tickers: string[]): Promise<PriceCacheRow[]> {
+  if (tickers.length === 0) return [];
+  const placeholders = tickers.map(() => '?').join(',');
+  return getDatabase().select<PriceCacheRow>(
+    `SELECT ticker, date, price, fetched_at FROM price_cache
+     WHERE ticker IN (${placeholders})
+     ORDER BY ticker ASC, date ASC`,
+    tickers,
+  );
 }
 
 function latestSnapshotPerAccount(
@@ -314,6 +332,54 @@ export default function Investments() {
   const tickerByName = useMemo(
     () => new Map(tickers.map((t) => [t.ticker, t])),
     [tickers],
+  );
+
+  // Positions table price rows (D-PT2). The `snapshots` dep is the refeed
+  // signal — the refresh's snapshot branch reloads that store right after
+  // currentPrice wrote fresh price_cache rows; lastRefreshAt covers the
+  // manual FreshnessBadge path when no snapshot row changed. (The 52-week
+  // fields refeed separately via the tickers-store reload — D-PT14.)
+  const [priceRows, setPriceRows] = useState<PriceCacheRow[]>([]);
+  const visibleTickerKey = useMemo(
+    () => Array.from(new Set(visibleHoldings.map((h) => h.ticker))).sort().join(','),
+    [visibleHoldings],
+  );
+  const lastRefreshAt = settings?.lastRefreshAt ?? null;
+  useEffect(() => {
+    void lastRefreshAt; // refeed keys — values unused in the body by design
+    void snapshots;
+    const tickers = visibleTickerKey === '' ? [] : visibleTickerKey.split(',');
+    if (tickers.length === 0) {
+      setPriceRows([]);
+      return;
+    }
+    let cancelled = false;
+    loadPriceRows(tickers)
+      .then((rows) => {
+        if (!cancelled) setPriceRows(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setPriceRows([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [visibleTickerKey, lastRefreshAt, snapshots]);
+
+  // Ticker display facts for the builder (name + fetched 52-week range).
+  const tickerInfo = useMemo(
+    () =>
+      new Map(
+        [...tickerByName].map(([t, row]) => [
+          t,
+          { name: row.name, fiftyTwoWeekLow: row.fiftyTwoWeekLow, fiftyTwoWeekHigh: row.fiftyTwoWeekHigh },
+        ]),
+      ),
+    [tickerByName],
+  );
+  const positions = useMemo(
+    () => buildPositions(visibleAccounts, visibleHoldings, tickerInfo, priceRows),
+    [visibleAccounts, visibleHoldings, tickerInfo, priceRows],
   );
   // Wave A D7: the banner input is deliberately HOUSEHOLD-wide (all holdings,
   // not the view-visible slice) — it protects exactly what the protected
@@ -591,15 +657,11 @@ export default function Investments() {
     [allocation],
   );
 
-  // Two sibling target-vs-actual views (I10): class drift is household-level,
-  // holding drift is within-class aggregated per ticker across accounts. Both
-  // consume the same household class targets from settings.
+  // Class drift is household-level (I10), consuming the household class
+  // targets from settings. (The old within-class holding drift table was
+  // replaced by the Positions section — D-P1; `positions` is built above.)
   const classRows = useMemo(
     () => classTargetVsActual(valuations, settings?.assetClassTargetAllocations ?? null),
-    [valuations, settings?.assetClassTargetAllocations],
-  );
-  const holdingRows = useMemo(
-    () => holdingTargetVsActual(valuations, settings?.assetClassTargetAllocations ?? null),
     [valuations, settings?.assetClassTargetAllocations],
   );
 
@@ -776,13 +838,13 @@ export default function Investments() {
       },
       {
         id: 'drift',
-        label: 'Target vs Actual',
+        label: 'Allocation & positions',
         size: 'wide',
         applicable: true,
         render: () => (
           <DriftCard
             classRows={classRows}
-            holdingRows={holdingRows}
+            positions={positions}
             // Wave A C16: targets are household settings; Actual follows the view.
             scopeCaption={isFiltered
               ? filter === 'joint'
@@ -883,9 +945,9 @@ export default function Investments() {
       heldClasses,
       settings?.assetClassTargetAllocations,
       updateSettings,
-      // drift (two tables: class household-level + holding within-class)
+      // drift card (class table + Positions section)
       classRows,
-      holdingRows,
+      positions,
       // concentration
       concentration,
       // contributions

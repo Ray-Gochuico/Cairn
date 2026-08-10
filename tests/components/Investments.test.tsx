@@ -463,12 +463,17 @@ describe('Investments page — 529 section', () => {
   describe('asset allocation donut — entity picker', () => {
     beforeEach(() => {
       // Pin asset_class lookups so the allocation aggregation sees multiple
-      // distinct slices instead of everything collapsing to "Other".
-      dbSelectImpl.current = async () => [
-        { ticker: 'VTI', asset_class: 'US_TOTAL_MARKET' },
-        { ticker: 'BND', asset_class: 'US_BONDS' },
-        { ticker: 'BTC', asset_class: 'CRYPTO' },
-      ];
+      // distinct slices instead of everything collapsing to "Other". The
+      // Positions price_cache SELECT must return [] (not these ticker rows —
+      // rows without price/fetched_at would poison the builder).
+      dbSelectImpl.current = async (sql: string) => {
+        if (sql.includes('FROM price_cache')) return [];
+        return [
+          { ticker: 'VTI', asset_class: 'US_TOTAL_MARKET' },
+          { ticker: 'BND', asset_class: 'US_BONDS' },
+          { ticker: 'BTC', asset_class: 'CRYPTO' },
+        ];
+      };
     });
 
     it('renders a picker button with the count of visible asset classes', async () => {
@@ -916,13 +921,9 @@ describe('Investments page — 529 section', () => {
     expect(bobMatches).toHaveLength(0);
   });
 
-  it('By-holding table aggregates the same household across multiple accounts', async () => {
-    // Two accounts, one ticker each. valueHoldings splits each account's
-    // snapshot by share count: VTI = 40k, BND = 60k; household total 100k. The
-    // By-holding table (I10) lists every position with its Invested $ and a
-    // household-basis Actual %. With no household class targets seeded, Target
-    // and Drift render "—" (untargeted), but the positions still surface so the
-    // user sees the whole portfolio.
+  it('Positions section groups holdings per account, dash rows without cached prices', async () => {
+    // Two accounts, one holding each. The default dbSelect mock returns [] for
+    // the price_cache SELECT, so every row renders the honest dash state.
     primeStores({
       accounts: [
         { id: 1, name: 'Acct One', type: AccountType.ACCOUNT_BROKERAGE },
@@ -944,15 +945,21 @@ describe('Investments page — 529 section', () => {
       </MemoryRouter>,
     );
 
-    // The By-holding table renders both tickers with their household actual %.
-    const byHolding = await screen.findByRole('table', { name: /by holding/i });
-    const vtiRow = within(byHolding).getByTestId('holding-row-VTI');
+    // One table per account (CP-11), rows under their OWN account — no
+    // cross-account aggregation (spec: real Holding rows).
+    const acctOne = await screen.findByRole('table', { name: 'Positions — Acct One' });
+    const vtiRow = within(acctOne).getByTestId('position-row-1');
     expect(vtiRow).toHaveTextContent('VTI');
-    expect(vtiRow).toHaveTextContent('$40,000'); // Invested $ (40k of 100k)
-    expect(vtiRow).toHaveTextContent('40.0%'); // household actual
-    const bndRow = within(byHolding).getByTestId('holding-row-BND');
-    expect(bndRow).toHaveTextContent('$60,000');
-    expect(bndRow).toHaveTextContent('60.0%');
+    expect(vtiRow).toHaveTextContent('10'); // Quantity renders (entered data)
+    expect(vtiRow).toHaveTextContent('—');  // unpriced dash state
+    const acctTwo = screen.getByRole('table', { name: 'Positions — Acct Two' });
+    expect(within(acctTwo).getByTestId('position-row-2')).toHaveTextContent('BND');
+    // Zero-priced account total: "—" (never $0) + the excludes suffix (CP-6)
+    expect(within(acctOne).getByTestId('positions-total-1')).toHaveTextContent('— excludes 1 without a price');
+    // CP-8: the honest zero-cached-prices caption
+    expect(screen.getByTestId('positions-as-of')).toHaveTextContent(
+      'No cached prices yet — prices fill in when you refresh market data.',
+    );
   });
 
   it('growth card sums the CHART universe: cash included, excluded accounts dropped (round-2 A2)', async () => {
@@ -993,12 +1000,17 @@ describe('Investments page — 529 section', () => {
   it('class-targets renders as a wide card (own row), not a one-third orphan (round-2 D1)', async () => {
     // Seed exactly as the asset-allocation donut test does: asset-class rows
     // via the DB mock + one account with three classified holdings, so
-    // heldClasses is non-empty and the card is applicable.
-    dbSelectImpl.current = async () => [
-      { ticker: 'VTI', asset_class: 'US_TOTAL_MARKET' },
-      { ticker: 'BND', asset_class: 'US_BONDS' },
-      { ticker: 'BTC', asset_class: 'CRYPTO' },
-    ];
+    // heldClasses is non-empty and the card is applicable. The Positions
+    // price_cache SELECT must return [] (rows without price/fetched_at
+    // would poison the builder).
+    dbSelectImpl.current = async (sql: string) => {
+      if (sql.includes('FROM price_cache')) return [];
+      return [
+        { ticker: 'VTI', asset_class: 'US_TOTAL_MARKET' },
+        { ticker: 'BND', asset_class: 'US_BONDS' },
+        { ticker: 'BTC', asset_class: 'CRYPTO' },
+      ];
+    };
     primeStores({
       accounts: [
         { id: 1, name: 'Brokerage', type: AccountType.ACCOUNT_BROKERAGE },
