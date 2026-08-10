@@ -2,27 +2,34 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { YahooClient } from '@/market/yahoo-client';
 import type { TickersRepo } from '@/domain/tickers';
 import type { Ticker } from '@/types/schema';
-import { enrichTickerIfMissing } from '@/market/ticker-enrichment';
+import { enrichTickerIfMissing, updateTicker52Week } from '@/market/ticker-enrichment';
 
 function makeYahooMock(
   overrides: Partial<{
     fundProfile: ReturnType<typeof vi.fn>;
     assetProfile: ReturnType<typeof vi.fn>;
+    summaryDetail: ReturnType<typeof vi.fn>;
   }> = {},
 ): YahooClient {
   return {
     fundProfile: vi.fn().mockResolvedValue({ category: null, quoteType: null }),
     assetProfile: vi.fn().mockResolvedValue({ sector: null, industry: null }),
+    summaryDetail: vi.fn().mockResolvedValue({ fiftyTwoWeekLow: null, fiftyTwoWeekHigh: null }),
     ...overrides,
   } as unknown as YahooClient;
 }
 
 function makeTickersMock(
-  overrides: Partial<{ lookup: ReturnType<typeof vi.fn>; upsert: ReturnType<typeof vi.fn> }> = {},
+  overrides: Partial<{
+    lookup: ReturnType<typeof vi.fn>;
+    upsert: ReturnType<typeof vi.fn>;
+    set52Week: ReturnType<typeof vi.fn>;
+  }> = {},
 ): TickersRepo {
   return {
     lookup: vi.fn().mockResolvedValue(null),
     upsert: vi.fn().mockResolvedValue(undefined),
+    set52Week: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   } as unknown as TickersRepo;
 }
@@ -322,5 +329,67 @@ describe('enrichTickerIfMissing return value (round-2 C2: did a row get written?
     const yahoo = makeYahooMock({ assetProfile: vi.fn().mockRejectedValue(new Error('429')) });
     const tickers = makeTickersMock({ lookup: vi.fn().mockResolvedValue({ ...existingTicker }) });
     await expect(enrichTickerIfMissing('VTI', { yahoo, tickers })).resolves.toBe(false);
+  });
+});
+
+describe('updateTicker52Week (D-PT14)', () => {
+  it('fetches summaryDetail and writes via set52Week', async () => {
+    const yahoo = makeYahooMock({
+      summaryDetail: vi.fn().mockResolvedValue({ fiftyTwoWeekLow: 61.1, fiftyTwoWeekHigh: 78.9 }),
+    });
+    const tickers = makeTickersMock();
+
+    const wrote = await updateTicker52Week('VTI', { yahoo, tickers });
+
+    expect(wrote).toBe(true);
+    expect(yahoo.summaryDetail).toHaveBeenCalledWith('VTI');
+    expect(tickers.set52Week).toHaveBeenCalledWith('VTI', 61.1, 78.9);
+  });
+
+  it('writes a partial range (one field null) — better than dropping the fetched half', async () => {
+    const yahoo = makeYahooMock({
+      summaryDetail: vi.fn().mockResolvedValue({ fiftyTwoWeekLow: 61.1, fiftyTwoWeekHigh: null }),
+    });
+    const tickers = makeTickersMock();
+
+    const wrote = await updateTicker52Week('VTI', { yahoo, tickers });
+
+    expect(wrote).toBe(true);
+    expect(tickers.set52Week).toHaveBeenCalledWith('VTI', 61.1, null);
+  });
+
+  it('a both-null Yahoo response writes NOTHING (never clobbers stored values)', async () => {
+    const yahoo = makeYahooMock({
+      summaryDetail: vi.fn().mockResolvedValue({ fiftyTwoWeekLow: null, fiftyTwoWeekHigh: null }),
+    });
+    const tickers = makeTickersMock();
+
+    const wrote = await updateTicker52Week('VTI', { yahoo, tickers });
+
+    expect(wrote).toBe(false);
+    expect(tickers.set52Week).not.toHaveBeenCalled();
+  });
+
+  it('is best-effort: a Yahoo error returns false and writes nothing', async () => {
+    const yahoo = makeYahooMock({
+      summaryDetail: vi.fn().mockRejectedValue(new Error('429')),
+    });
+    const tickers = makeTickersMock();
+
+    const wrote = await updateTicker52Week('VTI', { yahoo, tickers });
+
+    expect(wrote).toBe(false);
+    expect(tickers.set52Week).not.toHaveBeenCalled();
+  });
+
+  it('is best-effort: a set52Week write failure returns false (never throws)', async () => {
+    const yahoo = makeYahooMock({
+      summaryDetail: vi.fn().mockResolvedValue({ fiftyTwoWeekLow: 61.1, fiftyTwoWeekHigh: 78.9 }),
+    });
+    const tickers = makeTickersMock({
+      set52Week: vi.fn().mockRejectedValue(new Error('locked')),
+    });
+
+    await expect(updateTicker52Week('VTI', { yahoo, tickers })).resolves.toBe(false);
   });
 });

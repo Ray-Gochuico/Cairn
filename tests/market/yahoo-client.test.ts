@@ -319,6 +319,56 @@ describe('YahooClient', () => {
     });
   });
 
+  describe('summaryDetail', () => {
+    it('unwraps {raw} numerics and invokes with modules=[summaryDetail]', async () => {
+      const response = {
+        quoteSummary: {
+          result: [
+            {
+              summaryDetail: {
+                fiftyTwoWeekLow: { raw: 61.1, fmt: '61.10' },
+                fiftyTwoWeekHigh: { raw: 78.9, fmt: '78.90' },
+              },
+            },
+          ],
+          error: null,
+        },
+      };
+      mockInvoke.mockResolvedValueOnce(JSON.stringify(response));
+
+      const result = await client.summaryDetail('VTI');
+
+      expect(result).toEqual({ fiftyTwoWeekLow: 61.1, fiftyTwoWeekHigh: 78.9 });
+      expect(mockInvoke).toHaveBeenCalledWith('yahoo_quote_summary', {
+        ticker: 'VTI',
+        modules: ['summaryDetail'],
+      });
+    });
+
+    it('nulls fields absent from the module', async () => {
+      const partialResponse = {
+        quoteSummary: {
+          result: [{ summaryDetail: { fiftyTwoWeekLow: { raw: 61.1, fmt: '61.10' } } }],
+          error: null,
+        },
+      };
+      mockInvoke.mockResolvedValueOnce(JSON.stringify(partialResponse));
+
+      const result = await client.summaryDetail('VTI');
+
+      expect(result).toEqual({ fiftyTwoWeekLow: 61.1, fiftyTwoWeekHigh: null });
+    });
+
+    it('missing module → both null (no throw)', async () => {
+      const noModuleResponse = { quoteSummary: { result: [{}], error: null } };
+      mockInvoke.mockResolvedValueOnce(JSON.stringify(noModuleResponse));
+
+      const result = await client.summaryDetail('VTI');
+
+      expect(result).toEqual({ fiftyTwoWeekLow: null, fiftyTwoWeekHigh: null });
+    });
+  });
+
   describe('failure paths (round-2 D4)', () => {
     afterEach(() => {
       mockFetch.mockReset();
