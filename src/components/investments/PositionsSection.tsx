@@ -122,9 +122,12 @@ function AccountTable({ account }: { account: AccountPositions }) {
                   ) : (
                     <>
                       <div>{formatCurrency(r.costBasis)}</div>
+                      {/* "/ share" per the Ray-approved mockup ("$234.96 / share") —
+                          mockup-approved renderings outrank the plan's bare-figure
+                          sketch. 52-week labels + Last price stay unitless as mocked. */}
                       {r.costBasisPerShare !== null && (
                         <div className="text-xs text-muted-foreground">
-                          {formatCurrencyCents(r.costBasisPerShare)}
+                          {formatCurrencyCents(r.costBasisPerShare)} / share
                         </div>
                       )}
                     </>
