@@ -54,7 +54,7 @@ describe('PositionsSection', () => {
     expect(vti).toHaveTextContent('$2,455');             // whole-dollar value
     expect(vti).toHaveTextContent('63.0%');              // 2,455 / 3,897
     expect(vti).toHaveTextContent('$2,100');             // basis total
-    expect(vti).toHaveTextContent('$210.00');            // per-share basis, cents
+    expect(vti).toHaveTextContent('$210.00 / share');    // per-share basis, cents + mockup unit
   });
 
   it('52-week bar on the priced row: labels + clamped marker position (D-PT3)', () => {
@@ -72,7 +72,7 @@ describe('PositionsSection', () => {
     // Last price, Since refresh, Total G/L, Current value, % of account, 52-week
     expect(within(abc).getAllByText('—')).toHaveLength(6);
     expect(abc).toHaveTextContent('$100');   // basis still renders
-    expect(abc).toHaveTextContent('$20.00'); // per-share
+    expect(abc).toHaveTextContent('$20.00 / share'); // per-share + mockup unit
   });
 
   it('fetched range renders even on an unpriced row — labels without a marker (D-PT3)', () => {
