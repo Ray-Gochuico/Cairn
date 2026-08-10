@@ -5,6 +5,47 @@ All notable changes to Cairn are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-08-09
+
+Setup now talks you through it, and Investments shows your positions
+the way a brokerage does. Your database upgrades automatically on
+first launch.
+
+### Added
+
+- **Guided setup, question by question.** Setting up Cairn is now a
+  conversation — "Are you married?", "How is each of you paid?" —
+  small grouped questions that reveal only the follow-ups that apply
+  to you, with yes/no gates that open the familiar entry cards for
+  accounts, loans, home, vehicles, and history, or skip them
+  entirely. Every answer lands in the same fields you edit later
+  under Inputs (nothing is stored twice), "Switch to form view"
+  swaps to the classic card wizard at any time without losing your
+  place, and Settings gains "Revisit setup" — the same flow, with
+  your saved answers filled in.
+- **A positions view on Investments.** The renamed "Allocation &
+  positions" card lists every holding per account, brokerage-style:
+  name and ticker, last fetched price, change since your last
+  refresh, total gain/loss against your cost basis, current value,
+  share of the account, quantity, cost basis with per-share, and the
+  52-week range. Values in this table use your last-fetched prices ×
+  shares — stated right on the card — and anything the app doesn't
+  know renders as "—", never a made-up zero. Prices and 52-week
+  ranges update only when you click refresh, as always.
+
+### Changed
+
+- The asset-class table's "Invested" column is now labeled "Value" —
+  it always showed current value, and the new positions table is
+  where cost basis actually lives.
+
+### Fixed
+
+- A saved filing status could render as blank (or fall back to
+  Single) after a reload even though it was stored correctly — a
+  long-dormant display bug that mattered once setup made every
+  filing status easy to choose. Selections now survive reloads.
+
 ## [1.3.0] - 2026-08-08
 
 Ask the Roadmap "what's next" — a question bar and interview questions
