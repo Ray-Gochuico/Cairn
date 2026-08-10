@@ -106,3 +106,27 @@ export async function enrichTickerIfMissing(
   }
   return false;
 }
+
+/**
+ * Refresh the 52-week range for one ticker (D-P4 revised / D-PT14). Runs on
+ * EVERY refresh — unlike sector/industry, the range drifts weekly, so a
+ * fetch-if-missing rule would silently stale-date it; every-refresh also
+ * auto-backfills rows that pre-date migration 0053. Best-effort like
+ * enrichTickerIfMissing: errors are swallowed → false. Writes via the
+ * targeted set52Week UPDATE so a missing row is a no-op (row creation stays
+ * enrichTickerIfMissing's job) and a both-null Yahoo response never
+ * clobbers previously-fetched values.
+ */
+export async function updateTicker52Week(
+  ticker: string,
+  deps: { yahoo: YahooClient; tickers: TickersRepo },
+): Promise<boolean> {
+  try {
+    const { fiftyTwoWeekLow, fiftyTwoWeekHigh } = await deps.yahoo.summaryDetail(ticker);
+    if (fiftyTwoWeekLow === null && fiftyTwoWeekHigh === null) return false;
+    await deps.tickers.set52Week(ticker, fiftyTwoWeekLow, fiftyTwoWeekHigh);
+    return true;
+  } catch {
+    return false;
+  }
+}

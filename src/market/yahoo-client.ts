@@ -259,6 +259,27 @@ export class YahooClient {
     return { sector: profile?.sector ?? null, industry: profile?.industry ?? null };
   }
 
+  /**
+   * Returns the 52-week trading range for `ticker`, sourced from Yahoo's
+   * `quoteSummary` endpoint with `modules=summaryDetail` (D-P4 revised).
+   * Yahoo wraps numerics as {raw, fmt}; an absent module or field → null —
+   * callers treat null as "not fetchable right now", never as zero.
+   */
+  async summaryDetail(
+    ticker: string,
+  ): Promise<{ fiftyTwoWeekLow: number | null; fiftyTwoWeekHigh: number | null }> {
+    const data = await this.quoteSummary(ticker, ['summaryDetail']);
+    // Same `as any` rationale as fundTopHoldings / assetProfile — quoteSummary
+    // returns an open-ended JSON blob; the typed boundary is this return type.
+    const detail = (data as any).quoteSummary?.result?.[0]?.summaryDetail;
+    const low = detail?.fiftyTwoWeekLow?.raw;
+    const high = detail?.fiftyTwoWeekHigh?.raw;
+    return {
+      fiftyTwoWeekLow: typeof low === 'number' ? low : null,
+      fiftyTwoWeekHigh: typeof high === 'number' ? high : null,
+    };
+  }
+
   private async fetchChart(url: string, ticker: string): Promise<ChartResponse> {
     const res = await fetch(url, { method: 'GET' });
     if (!res.ok) {

@@ -339,85 +339,116 @@ describe('Investments cards edit mode', () => {
   });
 });
 
-describe('Investments Target vs Actual — two sibling tables', () => {
-  beforeEach(() => {
-    // Pin asset_class so VTI/BND land in distinct classes (not "Other").
-    dbSelectImpl.current = async () => [
-      { ticker: 'VTI', asset_class: 'US_TOTAL_MARKET' },
-      { ticker: 'BND', asset_class: 'US_BONDS' },
-    ];
-  });
-
-  // VTI shareCount 6 + BND shareCount 4, snapshot 1000 ⇒ valueHoldings splits
-  // by share count: VTI 600, BND 400; household total 1000. VTI carries a
-  // per-ticker target (1.0 → within-class share 1.0 since it's the only
-  // US_TOTAL_MARKET holding). Class targets 50/50.
-  function primeTargetStores() {
+describe('Investments Allocation & positions — class table + Positions', () => {
+  it('renders the renamed card with the Value header and the Positions section (CP-9/10/13, D-P1)', async () => {
+    dbSelectImpl.current = async (sql: string) => {
+      if (sql.includes('FROM price_cache')) return [];
+      if (sql.includes('FROM tickers')) return [{ ticker: 'VTI', asset_class: 'US_TOTAL_MARKET' }];
+      return [];
+    };
     primeBaseStores();
+    useAccountsStore.setState({
+      accounts: [{ id: 1, name: 'Brokerage', type: AccountType.ACCOUNT_BROKERAGE }],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
     useHoldingsStore.setState({
-      holdings: [
-        { id: 1, accountId: 1, ticker: 'VTI', shareCount: 6, targetAllocationPct: 1.0, costBasis: null },
-        { id: 2, accountId: 1, ticker: 'BND', shareCount: 4, targetAllocationPct: null, costBasis: null },
-      ],
-      isLoading: false,
-      error: null,
-      load: async () => {},
-    });
-    useSettingsStore.setState({
-      settings: {
-        ...baseSettings,
-        assetClassTargetAllocations: [
-          { assetClass: 'US_TOTAL_MARKET', targetPct: 0.5 },
-          { assetClass: 'US_BONDS', targetPct: 0.5 },
-        ],
-      },
-      isLoading: false,
-      error: null,
-      load: async () => {},
-      update: async () => {},
-    });
-  }
+      holdings: [{ id: 1, accountId: 1, ticker: 'VTI', shareCount: 10, targetAllocationPct: null, costBasis: null }],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    useSnapshotsStore.setState({
+      snapshots: [{ id: 1, accountId: 1, snapshotDate: '2026-08-01', totalValue: 50_000, source: SnapshotSource.MANUAL }],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
 
-  it('renders a By-asset-class and a By-holding table with Invested and the dual-basis caption', async () => {
-    primeTargetStores();
     render(
       <MemoryRouter>
         <Investments />
       </MemoryRouter>,
     );
-    expect(await screen.findByRole('table', { name: /by asset class/i })).toBeInTheDocument();
-    expect(screen.getByRole('table', { name: /by holding/i })).toBeInTheDocument();
-    // Invested column renders a currency value (DriftRow.value surfaced). The
-    // By-class table DROPPED "Target $" (Design H3) — do NOT assert it.
-    expect(screen.getByTestId('class-row-US_BONDS')).toHaveTextContent('$');
-    // Dual-basis caption present (UX H2/H3, Finance M2).
-    expect(screen.getByText(/share of its asset-class target/i)).toBeInTheDocument();
+
+    // CP-13 (D-P5): the card is renamed; the old title is gone everywhere.
+    expect(await screen.findByText('Allocation & positions')).toBeInTheDocument();
+    expect(screen.queryByText('Target vs Actual')).toBeNull();
+    expect(screen.getByRole('table', { name: /by asset class/i })).toBeInTheDocument();
+    // CP-9: 'Value' in, 'Invested' gone (the original conflation fix); math untouched.
+    expect(screen.getByRole('columnheader', { name: 'Value' })).toBeInTheDocument();
+    expect(screen.queryByText('Invested')).toBeNull();
+    // CP-10 card description + preserved class-row-* testid with untouched math
+    // ($50,000 snapshot spread over the lone holding; class resolves async via
+    // the mocked tickers SELECT — hence the waitFor).
+    expect(screen.getByText(/Asset-class drift is approximate/)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByTestId('class-row-US_TOTAL_MARKET')).toHaveTextContent('$50,000');
+    });
+    // Positions section + captions (CP-1, CP-4, CP-8); By-holding is gone (D-P1).
+    expect(screen.getByText('Positions')).toBeInTheDocument();
+    expect(screen.getByText(/last-fetched prices × shares/)).toBeInTheDocument();
+    // CP-8 renders only once the price SELECT resolves (m3) — waitFor.
+    await waitFor(() => {
+      expect(screen.getByTestId('positions-as-of')).toHaveTextContent(
+        'No cached prices yet — prices fill in when you refresh market data.',
+      );
+    });
+    expect(screen.queryByRole('table', { name: /by holding/i })).toBeNull();
   });
 
-  it('renders the By-holding Target on the household basis so Actual − Target = Drift', async () => {
-    primeTargetStores();
+  it('renders market-basis position rows from cached prices + fetched 52-week fields (hand-computed)', async () => {
+    dbSelectImpl.current = async (sql: string) => {
+      if (sql.includes('FROM price_cache')) {
+        return [
+          { ticker: 'VTI', date: '2026-08-07', price: 240, fetched_at: '2026-08-07 20:10:00' },
+          { ticker: 'VTI', date: '2026-08-08', price: 245.5, fetched_at: '2026-08-08 20:10:00' },
+        ];
+      }
+      return [];
+    };
+    primeBaseStores();
+    useAccountsStore.setState({
+      accounts: [{ id: 1, name: 'Brokerage', type: AccountType.ACCOUNT_BROKERAGE }],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    useHoldingsStore.setState({
+      holdings: [{ id: 1, accountId: 1, ticker: 'VTI', shareCount: 10, targetAllocationPct: null, costBasis: 2100 }],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+    useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null, load: async () => {} } as never);
+    // End-to-end pin of the store → tickerInfo plumbing: name + 52-week fields.
+    useTickersStore.setState({
+      tickers: [{
+        ticker: 'VTI', name: 'Vanguard Total Stock Market ETF', assetClass: 'US_TOTAL_MARKET',
+        leverageFactor: 1, direction: 'LONG', userAdded: false, accentColor: null,
+        sector: null, industry: null, fiftyTwoWeekLow: 200, fiftyTwoWeekHigh: 250,
+      }],
+      isLoading: false, error: null, load: async () => {},
+    } as never);
+
     render(
       <MemoryRouter>
         <Investments />
       </MemoryRouter>,
     );
-    // VTI: actual 60% (600/1000), within-class target$ = 1.0 × 0.5 × 1000 = 500
-    // ⇒ household target 50%, drift +10%. 60 − 50 = 10 reconciles.
-    const vtiRow = await screen.findByTestId('holding-row-VTI');
-    expect(vtiRow).toHaveTextContent('60.0%'); // actual (household) — class-independent
-    // Target and Drift depend on the ASYNC per-ticker asset_class lookup
-    // (loadTickerAssetClasses → the mocked tickers SELECT): the row renders
-    // BEFORE that promise resolves, with '—' in both cells (VTI still classed
-    // OTHER, so no class target applies). Await the resolved state instead of
-    // asserting synchronously after row-presence — the synchronous form flaked
-    // on slow CI runners with `VTI$30,00060.0%——`. Same hazard class as the
-    // donut-legend tests' "not all slices loaded yet" guard in
-    // Investments.test.tsx.
+
+    // The price SELECT resolves async — await the priced render (the same
+    // flake-guard the old household-basis test carried for slow CI runners).
     await waitFor(() => {
-      const row = screen.getByTestId('holding-row-VTI');
-      expect(row).toHaveTextContent('50.0%'); // target (household, = actual − drift)
-      expect(row).toHaveTextContent('+10.0%'); // drift
+      expect(screen.getByTestId('position-row-1')).toHaveTextContent('$245.50');
     });
+    const row = screen.getByTestId('position-row-1');
+    expect(row).toHaveTextContent('Vanguard Total Stock Market ETF'); // two-line symbol cell
+    expect(row).toHaveTextContent('+$55.00');   // (245.50 − 240.00) × 10
+    expect(row).toHaveTextContent('(+2.3%)');   // 5.5 / 240
+    expect(row).toHaveTextContent('+$355.00');  // 2,455 − 2,100
+    expect(row).toHaveTextContent('(+16.9%)');  // 355 / 2,100
+    expect(row).toHaveTextContent('$2,455');    // 245.50 × 10
+    expect(row).toHaveTextContent('100.0%');    // sole priced position
+    expect(row).toHaveTextContent('$200.00');   // fetched 52-week low label
+    expect(row).toHaveTextContent('$250.00');   // fetched 52-week high label
+    const total = screen.getByTestId('positions-total-1');
+    expect(total).toHaveTextContent('$2,455');
+    expect(total).not.toHaveTextContent('excludes');
+    expect(screen.getByTestId('positions-as-of')).toHaveTextContent(
+      /^Prices as of .+ — updated only when you refresh\.$/,
+    );
   });
 });
 
@@ -540,12 +571,16 @@ describe('Wave A: ConcentrationHealthCard + DriftCard scope declarations', () =>
     ).not.toBeInTheDocument();
   });
 
+  // Empty PositionsResult for direct DriftCard renders (the caption tests
+  // don't exercise the table; the CP-7 empty state renders beneath).
+  const emptyPositions = { accounts: [], asOfUtc: null };
+
   it('C16: DriftCard renders the scope caption when passed', async () => {
     const { default: DriftCard } = await import('@/components/investments/DriftCard');
     render(
       <DriftCard
         classRows={[]}
-        holdingRows={[]}
+        positions={emptyPositions}
         scopeCaption="Targets are household-level; Actual is Alice's holdings only."
       />,
     );
@@ -556,7 +591,7 @@ describe('Wave A: ConcentrationHealthCard + DriftCard scope declarations', () =>
 
   it('DriftCard renders no caption without the prop (regression)', async () => {
     const { default: DriftCard } = await import('@/components/investments/DriftCard');
-    render(<DriftCard classRows={[]} holdingRows={[]} />);
+    render(<DriftCard classRows={[]} positions={emptyPositions} />);
     expect(screen.queryByText(/household-level; Actual/)).not.toBeInTheDocument();
   });
 });

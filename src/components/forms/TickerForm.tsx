@@ -27,9 +27,13 @@ export const ASSET_CLASS_LABELS: Record<AssetClass, string> = {
 };
 
 // Strip defaults from the omitted schema so RHF infers concrete (non-optional) types.
+// The 52-week fields are fetched facts (0053), never form inputs — they ride the
+// values pass-through (the sector/industry precedent) so an edit can't clobber them.
 const TickerFormSchema = TickerSchema.omit({ userAdded: true }).extend({
   leverageFactor: z.number().nonnegative(),
   direction: z.nativeEnum(Direction),
+  fiftyTwoWeekLow: z.number().nonnegative().nullable(),
+  fiftyTwoWeekHigh: z.number().nonnegative().nullable(),
 });
 export type TickerFormValues = z.infer<typeof TickerFormSchema>;
 
@@ -42,6 +46,8 @@ export const DEFAULT_TICKER_FORM: TickerFormValues = {
   accentColor: null,
   sector: null,
   industry: null,
+  fiftyTwoWeekLow: null,
+  fiftyTwoWeekHigh: null,
 };
 
 export interface TickerFormProps {

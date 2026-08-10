@@ -132,19 +132,26 @@ async function seedPrimarySlice(db: Database, today: string): Promise<void> {
 
   // 4. Holdings. Mix of funds (VTI, FXAIX → exercise look-through) and single
   //    names (AAPL, MSFT, NVDA, BND). share_count drives the value split.
-  async function addHolding(accountId: number, ticker: string, shareCount: number): Promise<void> {
+  //    Cost bases feed the Positions table's Total gain/loss column (D-PT8);
+  //    BND deliberately basis-less — the demo needs one honest "—" gain cell.
+  async function addHolding(
+    accountId: number,
+    ticker: string,
+    shareCount: number,
+    costBasis: number | null = null,
+  ): Promise<void> {
     await db.execute(
-      `INSERT INTO holdings (account_id, ticker, share_count) VALUES (?, ?, ?)`,
-      [accountId, ticker, shareCount],
+      `INSERT INTO holdings (account_id, ticker, share_count, cost_basis) VALUES (?, ?, ?, ?)`,
+      [accountId, ticker, shareCount, costBasis],
     );
   }
-  await addHolding(brokerageId, 'VTI', 120); // US total market fund (look-through)
-  await addHolding(brokerageId, 'AAPL', 40);
-  await addHolding(brokerageId, 'NVDA', 15);
-  await addHolding(rothId, 'FXAIX', 200); // S&P 500 index fund (look-through)
-  await addHolding(rothId, 'MSFT', 25);
-  await addHolding(k401Id, 'FXAIX', 350);
-  await addHolding(k401Id, 'BND', 180); // bond fund
+  await addHolding(brokerageId, 'VTI', 120, 24_000); // US total market fund (look-through)
+  await addHolding(brokerageId, 'AAPL', 40, 5_200);
+  await addHolding(brokerageId, 'NVDA', 15, 1_300);
+  await addHolding(rothId, 'FXAIX', 200, 26_500); // S&P 500 index fund (look-through)
+  await addHolding(rothId, 'MSFT', 25, 8_100);
+  await addHolding(k401Id, 'FXAIX', 350, 46_000);
+  await addHolding(k401Id, 'BND', 180); // bond fund — basis left null → Total gain/loss "—"
 
   // 5. account_snapshots — THE critical rows. Two per account: dated today
   //    (drives every latest-value donut) and dated LAST MONTH'S CLOSE
@@ -268,6 +275,41 @@ async function seedPrimarySlice(db: Database, today: string): Promise<void> {
     ]);
   }
 
+  // 8c. Positions-table demo data (2026-08-09 wave, D-PT8). LOCAL writes only —
+  //    no Yahoo; the two-user-controlled-network-calls guarantee is untouched.
+  //      price_cache: TWO recent consecutive dates per priced ticker so
+  //        "Since last refresh" is a real delta; MSFT gets NO rows (dash row
+  //        + the excludes-1 account-total suffix).
+  //      tickers.fifty_two_week_*: seeded for the fund trio only — AAPL/NVDA
+  //        stay NULL so the fetched-fields "—" state demos honestly (a real
+  //        refresh fills them via updateTicker52Week).
+  const round2 = (n: number): number => Math.round(n * 100) / 100;
+  const priceBase: Record<string, number> = { VTI: 240, FXAIX: 155, BND: 72, AAPL: 205, NVDA: 118 };
+  async function addPrice(ticker: string, daysAgo: number, price: number): Promise<void> {
+    const date = new Date(Date.parse(`${today}T00:00:00Z`) - daysAgo * 86_400_000)
+      .toISOString().slice(0, 10);
+    await db.execute(
+      `INSERT OR REPLACE INTO price_cache (ticker, date, price, fetched_at) VALUES (?, ?, ?, ?)`,
+      [ticker, date, round2(price), `${date} 20:00:00`],
+    );
+  }
+  for (const ticker of ['VTI', 'FXAIX', 'BND', 'AAPL', 'NVDA'] as const) {
+    const base = priceBase[ticker];
+    await addPrice(ticker, 2, base * 0.98);   // penultimate cached date
+    await addPrice(ticker, 1, base * 0.995);  // latest → a real since-refresh delta
+  }
+  const week52: Record<string, [number, number]> = {
+    VTI: [206.4, 246.6],
+    FXAIX: [133.2, 159.1],
+    BND: [66.5, 74.9],
+  };
+  for (const [ticker, [lo, hi]] of Object.entries(week52)) {
+    await db.execute(
+      'UPDATE tickers SET fifty_two_week_low = ?, fifty_two_week_high = ? WHERE ticker = ?',
+      [lo, hi, ticker],
+    );
+  }
+
   // 9. Disclosure acceptance so AppDisclaimerGate doesn't block the smoke.
   await db.execute(
     `INSERT OR IGNORE INTO disclosure_acceptances (household_id, document_id, version, accepted_at)
@@ -317,8 +359,10 @@ async function seedPartnerSlice(db: Database, today: string): Promise<void> {
   const partnerSavingsId = await addAccount(partnerId, 'Partner Savings', 'ACCOUNT_SAVINGS', 'Ally');
   const jointCheckingId = await addAccount(null, 'Joint Checking', 'ACCOUNT_CASH', 'Chase');
 
-  await db.execute(`INSERT INTO holdings (account_id, ticker, share_count) VALUES (?, 'VTI', 60)`, [partnerBrokerageId]);
-  await db.execute(`INSERT INTO holdings (account_id, ticker, share_count) VALUES (?, 'MSFT', 20)`, [partnerBrokerageId]);
+  // Cost bases included (D-PT8: every holding except the primary slice's BND
+  // carries one, so the Positions gain column demos on partner rows too).
+  await db.execute(`INSERT INTO holdings (account_id, ticker, share_count, cost_basis) VALUES (?, 'VTI', 60, 12500)`, [partnerBrokerageId]);
+  await db.execute(`INSERT INTO holdings (account_id, ticker, share_count, cost_basis) VALUES (?, 'MSFT', 20, 6800)`, [partnerBrokerageId]);
 
   const lastMonthClose = lastBusinessDayOfMonth(lastMonthYyyymm(new Date()));
   async function addSnapshot(accountId: number, snapshotDate: string, totalValue: number): Promise<void> {

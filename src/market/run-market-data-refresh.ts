@@ -9,7 +9,7 @@ import { PriceCache } from '@/market/price-cache';
 import { YahooClient } from '@/market/yahoo-client';
 import { deriveTodaysSnapshot, type DailySnapshotResult } from '@/market/daily-snapshot';
 import { syncStaleFunds, type SyncResult } from '@/market/fund-holdings-sync';
-import { enrichTickerIfMissing } from '@/market/ticker-enrichment';
+import { enrichTickerIfMissing, updateTicker52Week } from '@/market/ticker-enrichment';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useFundHoldingsStore } from '@/stores/fund-holdings-store';
 import { useFundSectorsStore } from '@/stores/fund-sectors-store';
@@ -128,15 +128,25 @@ export function runMarketDataRefresh(db: Database): Promise<MarketDataRefreshRes
       // O(network calls) only for the unenriched subset and one failure can't
       // abort the rest.
       let enriched = 0;
+      let updated52w = 0;
       for (const ticker of distinctTickers) {
         if (await enrichTickerIfMissing(ticker, { yahoo, tickers })) enriched += 1;
+        // 52-week range rides the SAME serial, user-initiated loop (D-P4
+        // revised: one summaryDetail call per held ticker per refresh, spread
+        // out exactly like the enrichment calls — no new network behavior
+        // category, and the 24h Rust crumb cache keeps the auth cost flat).
+        // Unlike sector enrichment it runs on EVERY refresh: the range
+        // drifts weekly, and every-refresh auto-backfills pre-0053 rows.
+        if (await updateTicker52Week(ticker, { yahoo, tickers })) updated52w += 1;
       }
-      // Refeed once after the serial loop (not per ticker): the tickers
-      // store powers the unclassified banner + donut groupings, and a
-      // single reload after N upserts is enough (round-2 C2).
-      if (enriched > 0) {
+      // Refeed once after the serial loop (not per ticker, round-2 C2): the
+      // tickers store powers the unclassified banner, donut groupings, AND
+      // the Positions 52-week cells.
+      if (enriched > 0 || updated52w > 0) {
         void useTickersStore.getState().load();
       }
+      // The branch's public result type ({ enriched }) is deliberately
+      // UNCHANGED — no consumer needs the 52-week count (D-PT14).
       return { status: 'ok', result: { enriched } };
     } catch (err) {
       // eslint-disable-next-line no-console

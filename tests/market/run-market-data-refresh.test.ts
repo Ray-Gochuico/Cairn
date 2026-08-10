@@ -128,6 +128,9 @@ describe('runMarketDataRefresh', () => {
     const enrichSpy = vi
       .spyOn(tickerEnrichment, 'enrichTickerIfMissing')
       .mockResolvedValue(false);
+    const update52Spy = vi
+      .spyOn(tickerEnrichment, 'updateTicker52Week')
+      .mockResolvedValue(false);
 
     runMarketDataRefresh(db);
 
@@ -141,6 +144,11 @@ describe('runMarketDataRefresh', () => {
     // Once per distinct ticker (AAPL twice in holdings → counted once).
     const calledTickers = enrichSpy.mock.calls.map((c) => c[0]);
     expect(calledTickers.sort()).toEqual(['AAPL', 'MSFT']);
+    // The 52-week pass rides the SAME serial loop, once per distinct held
+    // ticker on EVERY refresh (D-PT14 — the range drifts weekly, so no
+    // fetch-if-missing early exit).
+    const called52w = update52Spy.mock.calls.map((c) => c[0]);
+    expect(called52w.sort()).toEqual(['AAPL', 'MSFT']);
   });
 
   describe('daily-snapshot store refeed (Wave 2 §3)', () => {
@@ -273,6 +281,16 @@ describe('runMarketDataRefresh', () => {
     it('reloads the tickers store once when any enrichment wrote a row', async () => {
       await seedOneHolding();
       vi.spyOn(tickerEnrichment, 'enrichTickerIfMissing').mockResolvedValue(true);
+      vi.spyOn(tickerEnrichment, 'updateTicker52Week').mockResolvedValue(false);
+      runMarketDataRefresh(db);
+      await flush();
+      expect(tickersLoad).toHaveBeenCalledTimes(1);
+    });
+
+    it('reloads the tickers store once when only the 52-week pass wrote (enrich all no-op)', async () => {
+      await seedOneHolding();
+      vi.spyOn(tickerEnrichment, 'enrichTickerIfMissing').mockResolvedValue(false);
+      vi.spyOn(tickerEnrichment, 'updateTicker52Week').mockResolvedValue(true);
       runMarketDataRefresh(db);
       await flush();
       expect(tickersLoad).toHaveBeenCalledTimes(1);
@@ -281,6 +299,7 @@ describe('runMarketDataRefresh', () => {
     it('does NOT reload the tickers store when every enrichment was a no-op', async () => {
       await seedOneHolding();
       vi.spyOn(tickerEnrichment, 'enrichTickerIfMissing').mockResolvedValue(false);
+      vi.spyOn(tickerEnrichment, 'updateTicker52Week').mockResolvedValue(false);
       runMarketDataRefresh(db);
       await flush();
       expect(tickersLoad).not.toHaveBeenCalled();

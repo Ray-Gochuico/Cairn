@@ -20,7 +20,7 @@ export interface Migration {
  * `tests/db/schema-version-guard.test.ts` asserts this equals the migration
  * count AND pins the literal so a one-sided bump fails a test.
  */
-export const MAX_SCHEMA_VERSION = 52;
+export const MAX_SCHEMA_VERSION = 53;
 
 /**
  * Thrown by `runMigrations` when the database's stamped `user_version` is
@@ -281,6 +281,9 @@ const MIGRATION_REGISTRY: ReadonlyArray<
   // 0052 adds interview_answers — durable guided-interview answers
   // (thread/question/subject-keyed upsert rows; design §1.2).
   ['0052_interview_answers', () => import('./migrations/0052_interview_answers.sql?raw')],
+  // 0053 adds nullable fifty_two_week_low/high to tickers — fetched by the
+  // existing user-initiated refresh for the Positions table (D-P4 revised).
+  ['0053_ticker_52_week', () => import('./migrations/0053_ticker_52_week.sql?raw')],
 ];
 
 export async function loadAllMigrations(): Promise<Migration[]> {
