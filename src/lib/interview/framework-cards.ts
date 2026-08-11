@@ -52,6 +52,7 @@ function investRows(
   investCents: number,
   ctx: InterviewContext,
   assumes: AssumeRow[],
+  unallocatable: Map<AssetClass, number>,
 ): CardRow[] {
   const targets = ctx.settings?.assetClassTargetAllocations ?? null;
   const amount = formatCurrency(investCents / 100);
@@ -81,11 +82,12 @@ function investRows(
     group: 'provenance',
     text: 'Account values come from your latest snapshots, spread across holdings by share count — not live prices.',
   });
-  if (result.unallocatableClasses.length > 0) {
-    assumes.push({
-      group: 'skipped',
-      text: `No held fund for ${result.unallocatableClasses.map((u) => ASSET_CLASS_LABEL[u.assetClass]).join(', ')} — that part stays as unallocated cash.`,
-    });
+  // CB-9 (extends CI-21): record each class's dead-end dollars. investRows
+  // runs once per per-month phase — keep the MAX per class (the steady-state
+  // figure) and emit the rows once, after all invocations (D-WA12).
+  for (const u of result.unallocatableClasses) {
+    const prev = unallocatable.get(u.assetClass) ?? 0;
+    if (u.need > prev) unallocatable.set(u.assetClass, u.need);
   }
   // One 'Invest — {class}' row per FUNDED class (result.rows is per-ticker
   // {ticker, assetClass, buyDollars} — aggregate by class), plus the exact
@@ -110,6 +112,7 @@ export function buildFrameworkCards(input: SplitInput, ctx: InterviewContext): F
     const split = splitAmount(input, policy.id, ctx);
     const effect = computeEffect(split, ctx);
     const assumes: AssumeRow[] = [];
+    const unallocatable = new Map<AssetClass, number>();
     // (a) provenance — only when a projection figure rendered (CI-22 + CI-26b)
     if (effect.usedProjection) {
       const todayIso = ctx.today.toISOString().slice(0, 10);
@@ -154,7 +157,7 @@ export function buildFrameworkCards(input: SplitInput, ctx: InterviewContext): F
     // Table rows (invest rows may expand per class + push assume rows)
     const toRows = (rows: FrameworkSplit['rows']): CardRow[] =>
       rows.flatMap((r) => r.bucket === 'invest'
-        ? investRows(r.amountCents, ctx, assumes)
+        ? investRows(r.amountCents, ctx, assumes, unallocatable)
         : [{ label: bucketLabel(r.bucket, split, ctx), amount: formatCurrency(r.amountCents / 100) }]);
 
     const phases: CardPhase[] = split.cadence === 'per-month'
@@ -166,6 +169,16 @@ export function buildFrameworkCards(input: SplitInput, ctx: InterviewContext): F
       : null;
 
     const rows = toRows(split.rows);
+    // CB-9: one row per unallocatable class, dollars attached. `need` is
+    // already DOLLARS (allocateContribution is fed investCents / 100);
+    // per-month cards carry the card's own $/mo unit.
+    const perMonthSuffix = split.cadence === 'per-month' ? '/mo' : '';
+    for (const [cls, need] of unallocatable) {
+      assumes.push({
+        group: 'skipped',
+        text: `No held fund for ${ASSET_CLASS_LABEL[cls]} — ${formatCurrency(need)}${perMonthSuffix} stays as unallocated cash.`,
+      });
+    }
     // investRows pushes its assume rows on every toRows call (once per
     // per-month phase + once for the model rows) — dedupe by text, keeping
     // first occurrence so group order is stable.

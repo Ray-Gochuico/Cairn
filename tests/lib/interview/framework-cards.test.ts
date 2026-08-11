@@ -77,12 +77,40 @@ describe('B6 per-class rows use the house labels (review M2)', () => {
     expect(labels.join('\n')).not.toContain('US_TOTAL_MARKET');
   });
 
-  it('CI-21: the no-held-fund class list is human-labeled', () => {
+  it("CB-9: the no-held-fund row carries that class's dollars, house-labeled", () => {
+    // HAND-COMPUTED from targetedCtx() + the aggressive one-time split:
+    //   accounts cash = 22,000 + 8,000 = 30,000 ≥ aggressive EF 3×6,000 =
+    //   18,000 → covered; loans [] → the whole $10,000 invests.
+    //   valuations: VTI $10,000 (account 3 snapshot spread over its only
+    //   holding) → householdTotal 10,000; postTotal = 10,000 + 10,000 cash
+    //   = 20,000. US_BONDS target 0.4 × 20,000 = 8,000, current $0 → need
+    //   8,000; US_TOTAL_MARKET need 12,000 − 10,000 = 2,000; totalNeed
+    //   10,000 ≤ cash → full-fund → bonds budget = 8,000; no held bonds
+    //   ticker → unallocatable { US_BONDS, need: 8000 } → $8,000.
     const cards = buildFrameworkCards({ amountCents: 1_000_000, cadence: 'one-time' }, targetedCtx());
     const aggressive = cards[2];
     expect(aggressive.assumes.some((a) =>
-      a.text === 'No held fund for US Bonds — that part stays as unallocated cash.')).toBe(true);
+      a.text === 'No held fund for US Bonds — $8,000 stays as unallocated cash.',
+    )).toBe(true);
+    // House idiom: raw enum spellings never render.
     expect(aggressive.assumes.some((a) => a.text.includes('US_BONDS'))).toBe(false);
+    // The old dollar-less joined form is gone.
+    expect(aggressive.assumes.some((a) =>
+      a.text === 'No held fund for US Bonds — that part stays as unallocated cash.',
+    )).toBe(false);
+  });
+
+  it('CB-9 per-month: one row per class, /mo suffix, deduped across phases (D-WA12)', () => {
+    // $500/mo: every framework's Ongoing phase invests the full $500 (EF
+    // covered or reached), so the per-class MAX across invocations is $500
+    // for all three cards — ONE distinct text with the /mo unit.
+    const cards = buildFrameworkCards({ amountCents: 50_000, cadence: 'per-month' }, targetedCtx());
+    const rows = cards
+      .flatMap((c) => c.assumes)
+      .filter((a) => a.text.startsWith('No held fund for US Bonds'));
+    const texts = [...new Set(rows.map((r) => r.text))];
+    expect(texts).toHaveLength(1);                       // ONE row per class per card set…
+    expect(texts[0]).toMatch(/ — \$[\d,]+\/mo stays as unallocated cash\.$/); // …with the /mo unit
   });
 });
 
