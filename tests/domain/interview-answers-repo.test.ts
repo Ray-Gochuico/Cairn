@@ -58,4 +58,18 @@ describe('InterviewAnswersRepo', () => {
     await repo.delete(1, 't', 'q', '');
     expect(await repo.list()).toEqual([]);
   });
+
+  it('deleteForSubject removes every row for exactly that subject across threads', async () => {
+    const base = {
+      householdId: 1, valueJson: '"keep_3_5"', questionVersion: 1,
+      answeredAt: '2026-08-10T00:00:00Z', basisJson: null,
+    };
+    await repo.upsert({ ...base, threadId: 'vehicle_replacement', questionId: 'q_keep_horizon', subjectKey: 'vehicle:1' });
+    await repo.upsert({ ...base, threadId: 'vehicle_replacement', questionId: 'q_replacement_budget', subjectKey: 'vehicle:1' });
+    await repo.upsert({ ...base, threadId: 'vehicle_replacement', questionId: 'q_keep_horizon', subjectKey: 'vehicle:10' }); // prefix cousin — must survive
+    await repo.upsert({ ...base, threadId: 'next_dollar', questionId: 'q_any', subjectKey: '' });                            // household-global — must survive
+    await repo.deleteForSubject('vehicle:1');
+    const left = await repo.list();
+    expect(left.map((a) => a.subjectKey).sort()).toEqual(['', 'vehicle:10']);
+  });
 });

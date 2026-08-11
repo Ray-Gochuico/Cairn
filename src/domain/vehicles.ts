@@ -1,6 +1,7 @@
 import type { BatchStatement, Database } from '@/db/db';
 import { VehicleSchema, type Vehicle } from '@/types/schema';
 import { AssetValueSnapshotsRepo } from './asset-value-snapshots';
+import { InterviewAnswersRepo } from './interview-answers-repo';
 
 interface VehicleRow {
   id: number;
@@ -148,6 +149,10 @@ export class VehiclesRepo {
     // Cascade dated value snapshots first — owner_type is a discriminated
     // union so there is no SQL FK to enforce this at the database layer.
     await new AssetValueSnapshotsRepo(this.db).deleteForOwner('VEHICLE', id);
+    // Wave A item 8: interview answers are keyed 'vehicle:<id>' — without
+    // this cascade a deleted vehicle leaves inert rows behind. No SQL FK
+    // exists (subject_key is a discriminated string, like owner_type above).
+    await new InterviewAnswersRepo(this.db).deleteForSubject(`vehicle:${id}`);
     await this.db.execute('DELETE FROM vehicles WHERE id = ?', [id]);
   }
 }

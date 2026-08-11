@@ -4,6 +4,7 @@ import { runMigrations } from '@/db/migrations';
 import { VehiclesRepo } from '@/domain/vehicles';
 import { LoansRepo } from '@/domain/loans';
 import { AssetValueSnapshotsRepo } from '@/domain/asset-value-snapshots';
+import { InterviewAnswersRepo } from '@/domain/interview-answers-repo';
 import { LoanType } from '@/types/enums';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -17,6 +18,14 @@ const loadAssetSnapshotsMigration = () =>
     'utf-8',
   );
 
+// VehiclesRepo.delete now cascades interview_answers (Wave A item 8), so the
+// suite's minimal migration set must create that table too.
+const loadInterviewAnswersMigration = () =>
+  readFileSync(
+    resolve(__dirname, '../../src/db/migrations/0052_interview_answers.sql'),
+    'utf-8',
+  );
+
 describe('VehiclesRepo', () => {
   let db: SqliteAdapter;
   let repo: VehiclesRepo;
@@ -27,6 +36,7 @@ describe('VehiclesRepo', () => {
     await runMigrations(db, [
       { version: '0001_initial', sql: loadInitialMigration() },
       { version: '0026_asset_value_snapshots', sql: loadAssetSnapshotsMigration() },
+      { version: '0052_interview_answers', sql: loadInterviewAnswersMigration() },
     ]);
     repo = new VehiclesRepo(db);
     loansRepo = new LoansRepo(db);
@@ -243,6 +253,34 @@ describe('VehiclesRepo', () => {
     expect(await snapshotsRepo.listForOwner('VEHICLE', vehicleId)).toHaveLength(0);
     expect(await snapshotsRepo.listForOwner('VEHICLE', otherVehicleId)).toHaveLength(1);
     expect(await snapshotsRepo.listForOwner('PROPERTY', vehicleId)).toHaveLength(1);
+  });
+
+  it('cascades delete to interview_answers (Wave A item 8)', async () => {
+    const vehicleId = await repo.create({
+      householdId: 1, ownerPersonId: null,
+      name: 'Old Wagon', year: 2014, make: 'Honda', model: 'Civic',
+      purchaseDate: null, purchasePrice: null,
+      currentEstimatedValue: 8000, linkedLoanId: null,
+      excludedFromNetWorth: false,
+    });
+    const siblingId = await repo.create({
+      householdId: 1, ownerPersonId: null,
+      name: 'Second car', year: 2020, make: 'Toyota', model: 'Corolla',
+      purchaseDate: null, purchasePrice: null,
+      currentEstimatedValue: 15000, linkedLoanId: null,
+      excludedFromNetWorth: false,
+    });
+    const answers = new InterviewAnswersRepo(db);
+    const base = {
+      householdId: 1, valueJson: '"keep_3_5"', questionVersion: 1,
+      answeredAt: '2026-08-10T00:00:00Z', basisJson: null,
+      threadId: 'vehicle_replacement', questionId: 'q_keep_horizon',
+    };
+    await answers.upsert({ ...base, subjectKey: `vehicle:${vehicleId}` });
+    await answers.upsert({ ...base, subjectKey: `vehicle:${siblingId}` });
+    await repo.delete(vehicleId);
+    const left = await answers.list();
+    expect(left.map((a) => a.subjectKey)).toEqual([`vehicle:${siblingId}`]); // sibling survives
   });
 
   it('listing returns vehicles in id order', async () => {
