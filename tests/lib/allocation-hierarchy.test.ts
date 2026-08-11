@@ -6,7 +6,6 @@ import {
   validateClassTargets,
   withinClassShares,
   classTargetVsActual,
-  holdingTargetVsActual,
 } from '@/lib/allocation-hierarchy';
 
 function val(
@@ -59,6 +58,21 @@ describe('withinClassShares', () => {
     // BND alone in US_BONDS ⇒ 1.0
     expect(shares.get('BND')).toBeCloseTo(1, 5);
   });
+  it("SUMS a ticker's per-account targets before normalizing (documented aggregation)", () => {
+    // Relocated from the deleted holdingTargetVsActual suite (Wave A item
+    // 5a) — the semantic belongs to withinClassShares and must stay pinned:
+    // VTI appears in two accounts at 0.5 each → summed 1.0; VXUS 0.5 ⇒
+    // class sum 1.5 → VTI share 1.0/1.5, VXUS share 0.5/1.5.
+    const vals = [
+      { ...val('VTI', 300, AssetClass.US_TOTAL_MARKET, 0.5), accountName: 'A' },
+      { ...val('VTI', 300, AssetClass.US_TOTAL_MARKET, 0.5), accountName: 'B' },
+      { ...val('VXUS', 100, AssetClass.US_TOTAL_MARKET, 0.5), accountName: 'A' },
+    ];
+    const shares = withinClassShares(vals);
+    expect(shares.get('VTI')).toBeCloseTo(1 / 1.5, 5);
+    expect(shares.get('VXUS')).toBeCloseTo(0.5 / 1.5, 5);
+  });
+
   it('omits tickers whose class has no targeted ticker', () => {
     const vals = [val('AAA', 50, AssetClass.CRYPTO, null)];
     expect(withinClassShares(vals).has('AAA')).toBe(false);
@@ -105,28 +119,3 @@ describe('classTargetVsActual', () => {
   });
 });
 
-describe('holdingTargetVsActual', () => {
-  it('aggregates a ticker across accounts and scales ticker target into household $', () => {
-    const vals = [
-      { ...val('VTI', 300, AssetClass.US_TOTAL_MARKET, 0.5), accountName: 'A' },
-      { ...val('VTI', 300, AssetClass.US_TOTAL_MARKET, 0.5), accountName: 'B' },
-      { ...val('VXUS', 100, AssetClass.US_TOTAL_MARKET, 0.5), accountName: 'A' },
-      { ...val('BND', 300, AssetClass.US_BONDS, null), accountName: 'A' },
-    ]; // householdTotal = 1000 ; US_TOTAL_MARKET value = 700
-    const targets: AssetClassTarget[] = [
-      { assetClass: AssetClass.US_TOTAL_MARKET, targetPct: 0.7 },
-    ];
-    const rows = holdingTargetVsActual(vals, targets);
-    const vti = rows.find((r) => r.ticker === 'VTI')!;
-    // VTI aggregated value = 600 across A+B
-    expect(vti.actualValue).toBeCloseTo(600, 5);
-    // withinClassShares SUMS a ticker's per-account targets (documented
-    // aggregation): VTI = 0.5(A)+0.5(B) = 1.0, VXUS = 0.5 ⇒ class sum 1.5.
-    // within-class share VTI = 1.0/1.5 = 0.6667 ; classTarget$ = 0.7×1000=700 ;
-    // target$ = 0.6667 × 700 ≈ 466.67.
-    expect(vti.targetValue).toBeCloseTo((1 / 1.5) * 0.7 * 1000, 5);
-    // BND has no class target ⇒ targetValue null
-    const bnd = rows.find((r) => r.ticker === 'BND')!;
-    expect(bnd.targetValue).toBeNull();
-  });
-});

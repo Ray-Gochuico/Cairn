@@ -66,15 +66,6 @@ export interface ClassTargetRow {
   driftPct: number; // actualPct − targetPct (0 when no target)
 }
 
-export interface HoldingTargetRow {
-  ticker: string;
-  assetClass: AssetClass;
-  actualValue: number; // aggregated across accounts
-  actualPct: number; // household basis
-  targetValue: number | null; // withinClassShare × classTarget$ (null if class untargeted)
-  driftPct: number; // (actualValue − targetValue)/householdTotal (0 when untargeted)
-}
-
 function householdTotalOf(valuations: HoldingValuation[]): number {
   return valuations.reduce((a, v) => a + v.value, 0);
 }
@@ -116,35 +107,6 @@ export function classTargetVsActual(
     const targetValue = targetPct == null ? null : targetPct * total;
     const driftPct = targetPct == null ? 0 : actualPct - targetPct;
     rows.push({ assetClass: cls, actualValue, actualPct, targetPct, targetValue, driftPct });
-  }
-  return rows.sort((a, b) => Math.abs(b.driftPct) - Math.abs(a.driftPct));
-}
-
-/** Within-class target-vs-actual per ticker, aggregated across accounts (the "By holding" table). */
-export function holdingTargetVsActual(
-  valuations: HoldingValuation[],
-  targets: AssetClassTarget[] | null,
-): HoldingTargetRow[] {
-  const total = householdTotalOf(valuations);
-  const tmap = classTargetMap(targets);
-  const shares = withinClassShares(valuations);
-  // Aggregate value + class per ticker.
-  const tickerValue = new Map<string, number>();
-  const tickerClass = new Map<string, AssetClass>();
-  for (const v of valuations) {
-    tickerValue.set(v.holding.ticker, (tickerValue.get(v.holding.ticker) ?? 0) + v.value);
-    tickerClass.set(v.holding.ticker, v.assetClass);
-  }
-  const rows: HoldingTargetRow[] = [];
-  for (const [ticker, actualValue] of tickerValue.entries()) {
-    const cls = tickerClass.get(ticker)!;
-    const classTargetPct = tmap.get(cls);
-    const share = shares.get(ticker);
-    const targetValue =
-      classTargetPct != null && share != null ? share * classTargetPct * total : null;
-    const actualPct = total === 0 ? 0 : actualValue / total;
-    const driftPct = targetValue == null || total === 0 ? 0 : (actualValue - targetValue) / total;
-    rows.push({ ticker, assetClass: cls, actualValue, actualPct, targetValue, driftPct });
   }
   return rows.sort((a, b) => Math.abs(b.driftPct) - Math.abs(a.driftPct));
 }
