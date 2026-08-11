@@ -196,6 +196,11 @@ export function PaycheckCard({ cardId }: PaycheckCardProps = {}) {
   // non-earning household members. Count only the people whose pay is
   // actually in the number, or "N earners, combined" is a false sentence.
   const salariedEarnerCount = persons.filter((p) => p.annualSalaryPretax > 0).length;
+  // Wave A item 1: hourly is detected by employmentType — the first-class
+  // discriminator employment-fields.ts enforces (HOURLY persists salary 0).
+  // salary === 0 alone would misread non-earning members as hourly earners.
+  const hourlyEarnerCount = persons.filter((p) => p.employmentType === 'HOURLY').length;
+  const allHourly = salariedEarnerCount === 0 && hourlyEarnerCount > 0;
 
   const div = periodsPerYear(period);
   // D16: per-person view figures — {name}'s own gross + pre-tax elections are
@@ -258,6 +263,12 @@ export function PaycheckCard({ cardId }: PaycheckCardProps = {}) {
         // byte-identical.
         scopedHeadline ? (
           <>After taxes and pretax deductions on {formatCurrency(own!.gross)} gross.</>
+        ) : allHourly ? (
+          // CB-1: an unqualified $0 gross reads as data loss — say why it is $0.
+          <>
+            After taxes and pretax deductions on {formatCurrency(perPeriod.gross)} gross
+            {' — salary only; every earner here is paid hourly.'}
+          </>
         ) : (
           <>
             After taxes and pretax deductions on {formatCurrency(perPeriod.gross)} gross
@@ -267,6 +278,7 @@ export function PaycheckCard({ cardId }: PaycheckCardProps = {}) {
                 {salariedEarnerCount < persons.length && ' — salary only'}
               </>
             )}
+            {salariedEarnerCount === 1 && hourlyEarnerCount > 0 && ' — salary only'}
             .
           </>
         )
