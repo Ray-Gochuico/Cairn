@@ -15,6 +15,7 @@ export type FlowPart = 1 | 2 | 3 | 4 | 5;
 export type WizardSection = 1 | 2 | 3 | 4;
 export type Role = 'you' | 'partner';
 export type StepStatus = 'pending' | 'in_progress' | 'completed' | 'skipped';
+export type SetupOrigin = 'first-run' | 'revisit';
 
 export type StepId =
   | 'about_you' | 'marital_filing' | 'state_city' | 'dependents_gate' | 'expenses'
@@ -108,6 +109,10 @@ export const SetupProgressV2Schema = z.object({
       .optional(),
   }),
   view: z.enum(['worded', 'form']),
+  /** Which entry created this record (Wave A item 3). Revisit-origin records
+   *  never light the Dashboard resume nudge. `.default` keeps every record
+   *  persisted before this field — and the v1 era — counting as first-run. */
+  origin: z.enum(['first-run', 'revisit']).default('first-run'),
   startedAt: z.string(),
 });
 
@@ -115,7 +120,10 @@ export type SetupProgressV2 = Omit<z.infer<typeof SetupProgressV2Schema>, 'curso
   cursor: { stepId: StepId; role?: Role } | null;
 };
 
-export function defaultProgressV2(view: 'worded' | 'form' = 'worded'): SetupProgressV2 {
+export function defaultProgressV2(
+  view: 'worded' | 'form' = 'worded',
+  origin: SetupOrigin = 'first-run',
+): SetupProgressV2 {
   return {
     version: 2,
     statuses: {},
@@ -124,6 +132,7 @@ export function defaultProgressV2(view: 'worded' | 'form' = 'worded'): SetupProg
     bindings: {},
     drafts: {},
     view,
+    origin,
     // Sanctioned wall-clock read (the shipped defaultProgress precedent).
     startedAt: new Date().toISOString(),
   };
@@ -287,13 +296,15 @@ function pruneOrphans(statuses: Record<string, StepStatus>): Record<string, Step
   return out;
 }
 
-/** Read-only except the one-time v1→v2 migration (which writes v2, deletes v1). */
-export function loadSetupProgress(): SetupProgressV2 {
+/** Read-only except the one-time v1→v2 migration (which writes v2, deletes v1).
+ *  `originIfNew` (Wave A item 3, D-WA6) matters ONLY when no stored record
+ *  parses — a stored record keeps its own origin; migrateV1 stays first-run. */
+export function loadSetupProgress(originIfNew: SetupOrigin = 'first-run'): SetupProgressV2 {
   try {
     const rawV2 = localStorage.getItem(SETUP_PROGRESS_V2_KEY);
     if (rawV2 !== null) {
       const parsed = SetupProgressV2Schema.safeParse(JSON.parse(rawV2));
-      if (!parsed.success) return defaultProgressV2();
+      if (!parsed.success) return defaultProgressV2('worded', originIfNew);
       const p = parsed.data;
       const cursor =
         p.cursor && isStepId(p.cursor.stepId)
@@ -310,12 +321,12 @@ export function loadSetupProgress(): SetupProgressV2 {
         return migrated;
       }
       // Corrupt v1: fall back to defaults, leave the key (shipped behavior parity).
-      return defaultProgressV2();
+      return defaultProgressV2('worded', originIfNew);
     }
   } catch {
     // fall through to defaults
   }
-  return defaultProgressV2();
+  return defaultProgressV2('worded', originIfNew);
 }
 
 export function saveSetupProgress(p: SetupProgressV2): void {
@@ -339,14 +350,25 @@ export function clearSetupProgress(): void {
   }
 }
 
-/** True while a wizard/flow run is mid-flight — v2 OR a leftover v1 key
- *  (design: "a leftover v1 key still counts as in-progress"). */
+/** True while a run the app should nudge about is mid-flight: a v2 record
+ *  whose origin is not 'revisit', OR a leftover v1 key (always first-run
+ *  era). Revisit abandonment never nudges (Wave A item 3). An unparseable
+ *  v2 payload still counts — presence semantics, matching the shipped
+ *  conservative behavior. Minimal JSON.parse, no Zod (D-WA14 — this runs
+ *  on every Dashboard render). */
 export function hasSetupInProgress(): boolean {
   try {
-    return (
-      localStorage.getItem(SETUP_PROGRESS_V2_KEY) !== null ||
-      localStorage.getItem(SETUP_PROGRESS_V1_KEY) !== null
-    );
+    const rawV2 = localStorage.getItem(SETUP_PROGRESS_V2_KEY);
+    if (rawV2 !== null) {
+      let revisit = false;
+      try {
+        revisit = (JSON.parse(rawV2) as { origin?: unknown }).origin === 'revisit';
+      } catch {
+        // Unparseable: fall through with revisit=false → counts.
+      }
+      if (!revisit) return true;
+    }
+    return localStorage.getItem(SETUP_PROGRESS_V1_KEY) !== null;
   } catch {
     return false;
   }

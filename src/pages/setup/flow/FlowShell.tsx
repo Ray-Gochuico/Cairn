@@ -8,7 +8,7 @@ import { useLoadGate } from '@/lib/use-load-gate';
 import { CITY_TAX_YEAR } from '@/lib/city-tax-year';
 import {
   PART_LABELS, loadSetupProgress, saveSetupProgress, stepMeta,
-  type FlowPart, type SetupProgressV2, type StepStatus,
+  type FlowPart, type SetupOrigin, type SetupProgressV2, type StepStatus,
 } from '@/lib/setup-progress';
 import { finishSetup } from '@/lib/setup-dismissal';
 import {
@@ -37,6 +37,9 @@ import { useHouseholdStore } from '@/stores/household-store';
 import { useTaxRulesStore } from '@/stores/tax-rules-store';
 
 interface Props {
+  /** Entry origin for a record minted on THIS mount (Wave A item 3, D-WA6);
+   *  an existing stored record keeps its own origin. */
+  originIfNew?: SetupOrigin;
   /** Renders the CW-3 toggle; dirty steps confirm first (CW-5, D-WF12). */
   onSwitchView: () => void;
 }
@@ -46,7 +49,7 @@ const STATUS_BADGE: Partial<Record<StepStatus, string>> = {
   skipped: '↩ skipped',
 };
 
-export default function FlowShell({ onSwitchView }: Props) {
+export default function FlowShell({ originIfNew, onSwitchView }: Props) {
   const navigate = useNavigate();
 
   // ── THE sanctioned hydration block (the ONLY .load()/loadYear call site in
@@ -97,7 +100,7 @@ export default function FlowShell({ onSwitchView }: Props) {
   );
 
   // ── shared progress + ctx ──
-  const [progress, setProgress] = useState<SetupProgressV2>(() => loadSetupProgress());
+  const [progress, setProgress] = useState<SetupProgressV2>(() => loadSetupProgress(originIfNew));
   useEffect(() => {
     saveSetupProgress(progress);
   }, [progress]);

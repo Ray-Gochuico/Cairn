@@ -15,7 +15,7 @@ import {
   loadSetupProgress, saveSetupProgress,
   applySectionAdvanced, applySectionPromoted, applySectionSkipped,
   deriveSectionStatus, partOfStep, FIRST_STEP_OF_SECTION, PART_TO_SECTION,
-  type SetupProgressV2, type VisibilityInput,
+  type SetupOrigin, type SetupProgressV2, type VisibilityInput,
 } from '@/lib/setup-progress';
 import { useLoadGate } from '@/lib/use-load-gate';
 import { StoreErrorBanner } from '@/components/layout/StoreErrorBanner';
@@ -68,14 +68,17 @@ function liveVisibility(prev: SetupProgressV2): VisibilityInput {
 interface Props {
   /** Optional initial section override (used by ?section= in SetupWizard). */
   initialSection?: SectionIndex;
+  /** Entry origin for a record minted on THIS mount (Wave A item 3, D-WA6);
+   *  an existing stored record keeps its own origin. */
+  originIfNew?: SetupOrigin;
   /** Renders the worded-flow toggle (CW-4). Absent in standalone tests. */
   onSwitchView?: () => void;
 }
 
-export default function SectionLayout({ initialSection, onSwitchView }: Props) {
+export default function SectionLayout({ initialSection, originIfNew, onSwitchView }: Props) {
   const navigate = useNavigate();
   const [progress, setProgress] = useState<SetupProgressV2>(() => {
-    let p = loadSetupProgress();
+    let p = loadSetupProgress(originIfNew);
     if (initialSection !== undefined) {
       // Wave C (C2/G6) deep-link promotion, now expressed on steps (spec:
       // ?section= promotion ⇒ mapped steps in_progress).

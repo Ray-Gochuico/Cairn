@@ -197,4 +197,40 @@ describe('setup-progress v2', () => {
     expect(SETUP_PROGRESS_V2_KEY).toBe('setupWizard.progress.v2');
     expect(stepKey('pay', 'partner')).toBe('pay:partner');
   });
+
+  describe('origin (Wave A item 3 — revisit-nudge quieting)', () => {
+    it('a pre-Wave-A v2 record (no origin field) parses as first-run — additive default', () => {
+      const legacy = { ...defaultProgressV2('form') } as Record<string, unknown>;
+      delete legacy.origin; // the shipped shape
+      localStorage.setItem(SETUP_PROGRESS_V2_KEY, JSON.stringify(legacy));
+      expect(loadSetupProgress().origin).toBe('first-run');
+      expect(hasSetupInProgress()).toBe(true); // behavior preserved exactly
+    });
+
+    it('loadSetupProgress mints a NEW record with the caller-supplied origin', () => {
+      expect(loadSetupProgress('revisit').origin).toBe('revisit');
+      expect(loadSetupProgress().origin).toBe('first-run'); // default param
+    });
+
+    it('an EXISTING record keeps its stored origin regardless of the entry param', () => {
+      saveSetupProgress(defaultProgressV2('worded', 'first-run'));
+      expect(loadSetupProgress('revisit').origin).toBe('first-run');
+    });
+
+    it('hasSetupInProgress: revisit-origin v2 records never count', () => {
+      saveSetupProgress(defaultProgressV2('worded', 'revisit'));
+      expect(hasSetupInProgress()).toBe(false);
+    });
+
+    it('hasSetupInProgress: a leftover v1 key counts even beside a revisit v2 record', () => {
+      saveSetupProgress(defaultProgressV2('worded', 'revisit'));
+      localStorage.setItem(SETUP_PROGRESS_V1_KEY, '{"currentSection":1}');
+      expect(hasSetupInProgress()).toBe(true);
+    });
+
+    it('hasSetupInProgress: an unparseable v2 payload still counts (presence semantics)', () => {
+      localStorage.setItem(SETUP_PROGRESS_V2_KEY, 'not json');
+      expect(hasSetupInProgress()).toBe(true);
+    });
+  });
 });

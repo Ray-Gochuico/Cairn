@@ -72,6 +72,10 @@ describe('hasSetupInProgress (Wave C C4)', () => {
     localStorage.setItem('setupWizard.progress.v2', '{}');
     expect(hasSetupInProgress()).toBe(true);
   });
+  it('false for a revisit-origin v2 record through the re-exported symbol (Wave A item 3)', () => {
+    localStorage.setItem('setupWizard.progress.v2', '{"origin":"revisit"}');
+    expect(hasSetupInProgress()).toBe(false);
+  });
 });
 
 describe('finishSetup (shared by both views)', () => {

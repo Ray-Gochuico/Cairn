@@ -59,7 +59,7 @@ export function GettingStartedSection() {
             Reopens guided setup with your saved answers filled in.
           </p>
           <Button variant="outline" size="sm" asChild>
-            <Link to="/setup">Revisit setup</Link>
+            <Link to="/setup?origin=revisit">Revisit setup</Link>
           </Button>
         </div>
       </CardContent>

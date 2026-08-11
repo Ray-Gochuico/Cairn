@@ -64,10 +64,11 @@ describe('GettingStartedSection', () => {
     expect(link).toHaveAttribute('href', '/calculators');
   });
 
-  it('Revisit setup links to /setup with the CW-37 helper sentence', () => {
+  it('Revisit setup links to /setup?origin=revisit with the CW-37 helper sentence', () => {
     renderSection();
     const link = screen.getByRole('link', { name: 'Revisit setup' });
-    expect(link).toHaveAttribute('href', '/setup');
+    // Wave A item 3 (D-WA6): the revisit origin quiets the resume nudge.
+    expect(link).toHaveAttribute('href', '/setup?origin=revisit');
     expect(
       screen.getByText('Reopens guided setup with your saved answers filled in.'),
     ).toBeInTheDocument();

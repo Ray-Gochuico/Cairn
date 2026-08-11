@@ -42,6 +42,7 @@ import type { Household } from '@/types/schema';
 import { DISCLOSURES } from '@/legal/disclosures';
 import SetupWizard from '@/pages/setup/SetupWizard';
 import {
+  SETUP_PROGRESS_V2_KEY,
   applySectionAdvanced,
   defaultProgressV2,
   loadSetupProgress,
@@ -152,6 +153,26 @@ describe('SetupWizard route handler', () => {
       await screen.findByRole('heading', { name: 'About you — step 1 of 5' }),
     ).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /Section 1 of 4/i })).toBeNull();
+  });
+
+  it('a fresh /setup?origin=revisit mount persists a revisit-origin record (Wave A item 3, D-WA6)', async () => {
+    resetStores({
+      household: makeHousehold({ inflationAssumption: 0.024 }),
+      appWideAccepted: DISCLOSURES.app_wide.version,
+    });
+    renderAt(['/setup?origin=revisit']);
+    await screen.findByRole('heading', { name: 'About you — step 1 of 5' });
+    expect(JSON.parse(localStorage.getItem(SETUP_PROGRESS_V2_KEY)!).origin).toBe('revisit');
+  });
+
+  it('a fresh plain /setup mount persists a first-run record (Wave A item 3)', async () => {
+    resetStores({
+      household: makeHousehold({ inflationAssumption: 0.024 }),
+      appWideAccepted: DISCLOSURES.app_wide.version,
+    });
+    renderAt(['/setup']);
+    await screen.findByRole('heading', { name: 'About you — step 1 of 5' });
+    expect(JSON.parse(localStorage.getItem(SETUP_PROGRESS_V2_KEY)!).origin).toBe('first-run');
   });
 
   it('?section=4 jumps to Section 4 (FORM view) when persons exist, with the CW-4 toggle', () => {
