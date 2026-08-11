@@ -179,7 +179,10 @@ function renderCardFlow(cards: InvestmentsCardEntry[]): ReactNode[] {
     if (compactRun.length === 0) return;
     out.push(
       <div key={`grid-${compactRun[0].id}`} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {compactRun.map((c) => <div key={c.id} id={c.id}>{c.render()}</div>)}
+        {/* min-w-0 (Wave A item 5b, D-WA9): grid items default to
+            min-width:auto — a card's min-content width can force the track,
+            and therefore `main`, wider at the 1024px floor. Layout-only. */}
+        {compactRun.map((c) => <div key={c.id} id={c.id} className="min-w-0">{c.render()}</div>)}
       </div>,
     );
     compactRun = [];

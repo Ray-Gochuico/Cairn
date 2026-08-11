@@ -211,3 +211,23 @@ test('roadmap interview: the $X bar answers with three framework cards on the se
   await expect(page.getByText('One mechanical framework applied to your numbers — not advice, not a recommendation.')).toHaveCount(3);
   expect(errors.join('\n')).not.toContain('Maximum update depth');
 });
+
+test('investments at the 1024×700 window floor: no horizontal body pan', async ({ page }) => {
+  // Wave A item 5b (D-WA9): permanent ratchet — CSS grid items default to
+  // min-width:auto, so a donut card's min-content width can force `main`
+  // wider than the viewport at the 1024px floor.
+  await page.setViewportSize({ width: 1024, height: 700 });
+  await page.goto('/investments');
+  // Settle: the compact donut row and the wide card are both painted.
+  await expect(page.getByText('Allocation & positions')).toBeVisible();
+  await expect(page.getByText('Per-company exposure', { exact: false }).first()).toBeVisible();
+  const overflow = await page.evaluate(() => {
+    const main = document.getElementById('main')!;
+    return {
+      doc: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      main: main.scrollWidth - main.clientWidth,
+    };
+  });
+  expect(overflow.doc).toBe(0);
+  expect(overflow.main).toBe(0);
+});
