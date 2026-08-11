@@ -277,6 +277,16 @@ describe('SettingsRepo — utility category id columns', () => {
     const out = await repo.get();
     expect(out.propertyUtilitiesCategoryIds).toBeNull();
   });
+
+  it('round-trips vehicleRepairCategoryIds and defaults it null (0054)', async () => {
+    // Fresh settings row: unconfigured → null (seeded-fallback signal).
+    expect((await repo.get()).vehicleRepairCategoryIds).toBeNull();
+    await repo.update({ vehicleRepairCategoryIds: [3, 7] });
+    expect((await repo.get()).vehicleRepairCategoryIds).toEqual([3, 7]);
+    // Clearing persists null, not [] (the picker's clear idiom).
+    await repo.update({ vehicleRepairCategoryIds: null });
+    expect((await repo.get()).vehicleRepairCategoryIds).toBeNull();
+  });
 });
 
 describe('SettingsRepo — assetClassTargetAllocations (migration 0045)', () => {
