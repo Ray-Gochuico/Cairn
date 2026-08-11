@@ -230,4 +230,15 @@ test('investments at the 1024×700 window floor: no horizontal body pan', async 
   });
   expect(overflow.doc).toBe(0);
   expect(overflow.main).toBe(0);
+  // Review m2: the page-level assertion alone is vacuous for the min-w-0
+  // class (it passed pre-fix in this seed). Structural ratchet: every
+  // compact-grid item wrapper must compute min-width 0px — a min-w-0 revert
+  // goes RED here regardless of what the seed data happens to render.
+  const wrapperMinWidths = await page.evaluate(() =>
+    [...document.querySelectorAll('#main [class*="lg:grid-cols-3"] > div')].map(
+      (el) => getComputedStyle(el).minWidth,
+    ),
+  );
+  expect(wrapperMinWidths.length).toBeGreaterThan(0); // never vacuously green
+  for (const mw of wrapperMinWidths) expect(mw).toBe('0px');
 });

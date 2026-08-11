@@ -47,6 +47,22 @@ function bucketLabel(bucket: BucketId, split: FrameworkSplit, ctx: InterviewCont
   }
 }
 
+/** CB-9 collector policy (D-WA12), extracted for direct pinning (review
+ *  MAJOR: the fixture-shaped suites let a first-seen mutant survive —
+ *  one-time is single-invocation and the equal-phase per-month fixture
+ *  never disagrees across phases). Keep the MAX need per class across a
+ *  card's investRows invocations: investRows runs once per per-month
+ *  phase, and the max is the steady-state (Ongoing) figure. */
+export function recordUnallocatableMax(
+  collector: Map<AssetClass, number>,
+  classes: ReadonlyArray<{ assetClass: AssetClass; need: number }>,
+): void {
+  for (const u of classes) {
+    const prev = collector.get(u.assetClass) ?? 0;
+    if (u.need > prev) collector.set(u.assetClass, u.need);
+  }
+}
+
 /** Per-class Invest rows via the allocator when targets exist (§3.1 B6). */
 function investRows(
   investCents: number,
@@ -82,13 +98,10 @@ function investRows(
     group: 'provenance',
     text: 'Account values come from your latest snapshots, spread across holdings by share count — not live prices.',
   });
-  // CB-9 (extends CI-21): record each class's dead-end dollars. investRows
-  // runs once per per-month phase — keep the MAX per class (the steady-state
-  // figure) and emit the rows once, after all invocations (D-WA12).
-  for (const u of result.unallocatableClasses) {
-    const prev = unallocatable.get(u.assetClass) ?? 0;
-    if (u.need > prev) unallocatable.set(u.assetClass, u.need);
-  }
+  // CB-9 (extends CI-21): record each class's dead-end dollars — max-wins
+  // across this card's invocations, emitted once after all of them (D-WA12;
+  // policy extracted above so the max rule is pinned directly).
+  recordUnallocatableMax(unallocatable, result.unallocatableClasses);
   // One 'Invest — {class}' row per FUNDED class (result.rows is per-ticker
   // {ticker, assetClass, buyDollars} — aggregate by class), plus the exact
   // cashLeftOver row. Dollars only; labels via the house ASSET_CLASS_LABEL

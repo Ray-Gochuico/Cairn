@@ -762,4 +762,27 @@ describe('PaycheckCard — page scope (Wave B D-B3/D-B9)', () => {
     await user.click(screen.getByRole('button', { name: 'Bob' }));
     expect(screen.getByText(/earners, combined/)).toBeInTheDocument(); // headline stays Combined
   });
+
+  it('review m1: a scope set to an HOURLY person carries the CB-2 salary-only qualifier, never a bare $0', async () => {
+    // The scopedHeadline branch outranks the allHourly branch — without the
+    // qualifier, scoping to hourly Bob renders an unqualified '$0 gross', the
+    // exact honesty gap Wave A item 1 closed. Reuses the CB-2 suffix string
+    // byte-identical (' — salary only' + the closing period).
+    primeStoresTwoEarners();
+    const [alice, bob] = usePersonsStore.getState().persons;
+    usePersonsStore.setState({
+      persons: [
+        alice,
+        { ...bob, annualSalaryPretax: 0, employmentType: 'HOURLY', hourlyRate: 30 },
+      ],
+      isLoading: false,
+      error: null,
+    });
+    syncCalcScope(2);
+    renderScoped();
+    await screen.findByTestId('paycheck-takehome');
+    expect(screen.getByTestId('paycheck-meaning')).toHaveTextContent(
+      'After taxes and pretax deductions on $0 gross — salary only.',
+    );
+  });
 });

@@ -262,7 +262,14 @@ export function PaycheckCard({ cardId }: PaycheckCardProps = {}) {
         // values (owner constraint 3); the scoped branch is Wave-B CB19,
         // byte-identical.
         scopedHeadline ? (
-          <>After taxes and pretax deductions on {formatCurrency(own!.gross)} gross.</>
+          // Review m1: a scope set to an HOURLY person would otherwise render
+          // the same unqualified '$0 gross' item 1 closed — the CB-2 suffix
+          // string is reused byte-identical (' — salary only' + the period).
+          <>
+            After taxes and pretax deductions on {formatCurrency(own!.gross)} gross
+            {selectedPerson!.employmentType === 'HOURLY' && ' — salary only'}
+            .
+          </>
         ) : allHourly ? (
           // CB-1: an unqualified $0 gross reads as data loss — say why it is $0.
           <>

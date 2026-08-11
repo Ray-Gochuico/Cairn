@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { buildFrameworkCards } from '@/lib/interview/framework-cards';
-import { AccountType } from '@/types/enums';
+import { buildFrameworkCards, recordUnallocatableMax } from '@/lib/interview/framework-cards';
+import { AccountType, AssetClass } from '@/types/enums';
 import { makeAccount, makeHolding, makeLoan } from '../../factories';
 import { fixtureCtx, snap } from './fixture';
 
@@ -111,6 +111,68 @@ describe('B6 per-class rows use the house labels (review M2)', () => {
     const texts = [...new Set(rows.map((r) => r.text))];
     expect(texts).toHaveLength(1);                       // ONE row per class per card set…
     expect(texts[0]).toMatch(/ — \$[\d,]+\/mo stays as unallocated cash\.$/); // …with the /mo unit
+  });
+
+  it('D-WA12 collector policy: recordUnallocatableMax keeps the max, both orders (review MAJOR)', () => {
+    // Direct pin of the extracted policy — the fixture-shaped suites let a
+    // first-seen mutant survive (single-invocation one-time; equal-phase
+    // per-month). Two unequal needs for ONE class, both arrival orders:
+    const grows = new Map<AssetClass, number>();
+    recordUnallocatableMax(grows, [{ assetClass: AssetClass.US_BONDS, need: 250 }]);
+    recordUnallocatableMax(grows, [{ assetClass: AssetClass.US_BONDS, need: 500 }]);
+    expect(grows.get(AssetClass.US_BONDS)).toBe(500); // larger-later (kills first-seen, min-seen)
+
+    const shrinks = new Map<AssetClass, number>();
+    recordUnallocatableMax(shrinks, [{ assetClass: AssetClass.US_BONDS, need: 500 }]);
+    recordUnallocatableMax(shrinks, [{ assetClass: AssetClass.US_BONDS, need: 250 }]);
+    expect(shrinks.get(AssetClass.US_BONDS)).toBe(500); // larger-first (kills last-seen, min-seen)
+
+    // Classes stay independent.
+    recordUnallocatableMax(shrinks, [{ assetClass: AssetClass.CRYPTO, need: 10 }]);
+    expect(shrinks.get(AssetClass.US_BONDS)).toBe(500);
+    expect(shrinks.get(AssetClass.CRYPTO)).toBe(10);
+  });
+
+  it('D-WA12 discriminating scenario: phases invest DIFFERENT amounts — the Ongoing max renders (review MAJOR)', () => {
+    // The verifiers’ non-equivalence shape: Moderate + ONE mid-band 6% loan
+    // + targets + no held bond fund + $500/mo. Moderate splits the
+    // post-EF-target remainder 50/50 debt/invest, so the debt-phase invest
+    // is $250/mo while the Ongoing (post-payoff) phase invests the full
+    // $500/mo — investRows sees UNEQUAL needs for US_BONDS across phases.
+    //
+    // HAND-COMPUTED needs (allocateContribution per invocation):
+    //   valuations: VTI $10,000 only → US_TOTAL_MARKET is overweight in
+    //   both phases (current $10,000 > 0.6 × postTotal), need 0.
+    //   Debt phase:   cash 250 → postTotal 10,250 → US_BONDS target
+    //                 0.4×10,250 = 4,100 > 250 → bonds gets ALL 250.
+    //   Ongoing:      cash 500 → postTotal 10,500 → bonds target 4,200
+    //                 > 500 → bonds gets ALL 500.
+    //   max(250, 500) = 500 → '$500/mo'. A first-seen collector renders
+    //   '$250/mo' — a 2× wrong user-visible dollar (the upheld MAJOR).
+    const ctx = fixtureCtx({
+      loans: [
+        makeLoan({ id: 1, name: 'HELOC', currentBalance: 8000, interestRate: 0.06, monthlyPayment: 200, termMonths: 120, firstPaymentDate: '2026-01-01' }),
+      ],
+      accounts: [
+        ...fixtureCtx().accounts,
+        makeAccount({ id: 3, type: AccountType.ACCOUNT_BROKERAGE, name: 'Brokerage' }),
+      ],
+      snapshots: [...fixtureCtx().snapshots, snap(3, 10000)],
+      holdings: [makeHolding({ accountId: 3, ticker: 'VTI', shareCount: 10 })],
+      tickers: [{ ticker: 'VTI', assetClass: 'US_TOTAL_MARKET' }] as never,
+      settings: {
+        assetClassTargetAllocations: [
+          { assetClass: 'US_TOTAL_MARKET', targetPct: 0.6 },
+          { assetClass: 'US_BONDS', targetPct: 0.4 },
+        ],
+      } as never,
+    });
+    const cards = buildFrameworkCards({ amountCents: 50_000, cadence: 'per-month' }, ctx);
+    const moderate = cards[1];
+    const bondRows = moderate.assumes.filter((a) => a.text.startsWith('No held fund for US Bonds'));
+    expect(bondRows.map((r) => r.text)).toEqual([
+      'No held fund for US Bonds — $500/mo stays as unallocated cash.',
+    ]);
   });
 });
 
