@@ -43,7 +43,7 @@ const DEFAULT_529: AccountFormValues = {
 export function Plan529Section() {
   const accounts = useAccountsStore((s) => s.accounts);
   const accountsLoading = useAccountsStore((s) => s.isLoading);
-  const createAccount = useAccountsStore((s) => s.create);
+  const createAccount = useAccountsStore((s) => s.createWithAnswers);
   const updateAccount = useAccountsStore((s) => s.update);
   const removeAccount = useAccountsStore((s) => s.remove);
   const persons = usePersonsStore((s) => s.persons);

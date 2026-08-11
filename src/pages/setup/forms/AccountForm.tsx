@@ -12,7 +12,7 @@ interface Props {
 
 /** Wizard wrapper around the canonical AccountForm. */
 export default function AccountForm({ onSaved }: Props) {
-  const create = useAccountsStore((s) => s.create);
+  const createWithAnswers = useAccountsStore((s) => s.createWithAnswers);
   const { persons, load: loadPersons } = usePersonsStore();
   const { dependents, load: loadDependents } = useDependentsStore();
 
@@ -27,7 +27,7 @@ export default function AccountForm({ onSaved }: Props) {
       persons={persons.map((p) => ({ id: p.id!, name: p.name }))}
       dependents={dependents.map((d) => ({ id: d.id!, name: d.name }))}
       onSubmit={async (values) => {
-        await create(values);
+        await createWithAnswers(values);
         onSaved?.();
       }}
       onCancel={() => onSaved?.()}

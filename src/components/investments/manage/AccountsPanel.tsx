@@ -25,7 +25,7 @@ import { UpdateAccountBalanceDialog } from '@/components/dialogs/UpdateAccountBa
  * empty copy is gated by discipline via useLoadGate, same as the tab was.
  */
 export default function AccountsPanel() {
-  const { accounts, load, create, update, remove, isLoading, error } = useAccountsStore();
+  const { accounts, load, createWithAnswers, update, remove, isLoading, error } = useAccountsStore();
   const { persons, load: loadPersons } = usePersonsStore();
   const { dependents, load: loadDependents } = useDependentsStore();
   const { confirm, dialog } = useConfirm();
@@ -160,7 +160,7 @@ export default function AccountsPanel() {
           persons={personOptions}
           dependents={dependentOptions}
           onSubmit={async (v) => {
-            if (editing) await update(editing.id!, v); else await create(v);
+            if (editing) await update(editing.id!, v); else await createWithAnswers(v);
             setDrawer('closed');
           }}
           onCancel={() => setDrawer('closed')}

@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { SqliteAdapter } from '@/db/sqlite-adapter';
 import { loadAllMigrations, runMigrations } from '@/db/migrations';
 import { setDatabase } from '@/db/db';
 import { useAccountsStore } from '@/stores/accounts-store';
+import { AccountsRepo } from '@/domain/accounts';
 import { AccountType } from '@/types/enums';
 
 const sampleAccount = {
@@ -115,5 +116,38 @@ describe('useAccountsStore', () => {
         type: 'NOT_A_REAL_TYPE',
       })
     ).rejects.toThrow();
+  });
+
+  it('createWithAnswers persists all four collected chart answers (Wave A item 2)', async () => {
+    const id = await useAccountsStore.getState().createWithAnswers({
+      ...sampleAccount,
+      hasEmployerMatch: true,
+      employerMatchPct: 0.04,        // 4% — stored as a fraction
+      employerMatchLimitPct: 0.06,   // of-salary limit, fraction
+      allowsMegaBackdoorRollover: true,
+    });
+    const saved = useAccountsStore.getState().accounts.find((a) => a.id === id)!;
+    expect(saved.hasEmployerMatch).toBe(true);
+    expect(saved.employerMatchPct).toBeCloseTo(0.04, 10);
+    expect(saved.employerMatchLimitPct).toBeCloseTo(0.06, 10);
+    expect(saved.allowsMegaBackdoorRollover).toBe(true);
+    expect(saved.hasHighFees).toBeNull(); // never collected — stays null
+  });
+
+  it('createWithAnswers self-cleans: an answers-update failure removes the created row and rethrows', async () => {
+    const updateSpy = vi
+      .spyOn(AccountsRepo.prototype, 'update')
+      .mockRejectedValueOnce(new Error('disk full'));
+    await expect(
+      useAccountsStore.getState().createWithAnswers({
+        ...sampleAccount,
+        hasEmployerMatch: true,
+        employerMatchPct: null,
+        employerMatchLimitPct: null,
+        allowsMegaBackdoorRollover: null,
+      }),
+    ).rejects.toThrow('disk full');
+    expect(useAccountsStore.getState().accounts).toHaveLength(0); // no stranded match-less account
+    updateSpy.mockRestore();
   });
 });

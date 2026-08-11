@@ -114,6 +114,33 @@ describe('AccountsPanel (W14 Manage surface)', () => {
     expect(await screen.findByText('Schwab Brokerage')).toBeInTheDocument();
   });
 
+  it('new-account submit keeps the collected 401(k) chart answers (Wave A item 2)', async () => {
+    // Pre-fix, the panel routed through plain create(), which force-nulls the
+    // four chart-answer columns — the user's match answers silently vanished.
+    const user = userEvent.setup();
+    render(<MemoryRouter><AccountsPanel /></MemoryRouter>);
+    await waitFor(() => screen.getByRole('button', { name: /add account/i }));
+    await user.click(screen.getByRole('button', { name: /add account/i }));
+
+    const drawer = await screen.findByRole('dialog', { name: /add account/i });
+    await user.type(within(drawer).getByLabelText(/^name$/i), 'Work 401k');
+    await user.selectOptions(within(drawer).getByLabelText(/^type$/i), AccountType.ACCOUNT_401K);
+    await user.click(within(drawer).getByRole('radio', { name: /alex/i }));
+    await user.selectOptions(within(drawer).getByLabelText(/employer match\?/i), 'yes');
+    await user.type(within(drawer).getByLabelText(/match rate/i), '4');
+    await user.type(within(drawer).getByLabelText(/match limit/i), '6');
+    await user.selectOptions(within(drawer).getByLabelText(/mega-backdoor/i), 'yes');
+    await user.click(within(drawer).getByRole('button', { name: /save/i }));
+
+    await waitFor(() => expect(useAccountsStore.getState().accounts).toHaveLength(1));
+    const saved = useAccountsStore.getState().accounts[0];
+    expect(saved.hasEmployerMatch).toBe(true);
+    expect(saved.employerMatchPct).toBeCloseTo(0.04, 10);      // 4% form twin → 0.04 fraction
+    expect(saved.employerMatchLimitPct).toBeCloseTo(0.06, 10); // 6% of salary → 0.06 fraction
+    expect(saved.allowsMegaBackdoorRollover).toBe(true);
+    expect(saved.hasHighFees).toBeNull(); // never collected — stays null
+  });
+
   it('Edit opens a prefilled drawer and updates the account', async () => {
     await seedAccount(db, 'OldName');
     const user = userEvent.setup();
