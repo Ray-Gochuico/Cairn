@@ -75,4 +75,25 @@ describe('evaluateCarSignals — three independent signals (design §4.2)', () =
     const ctx = fixtureCtx({ vehicles: [makeVehicle({ id: 1, year: null })], categories: CATS });
     expect(evaluateCarSignals(ctx, 1).branch).toBe('unknown');
   });
+
+  it('configured settings override redirects the repair bucket (Wave A item 7)', () => {
+    // settings.vehicleRepairCategoryIds = [30] → transactions in category 30
+    // count toward the repair signal; the seeded category 18 stops counting.
+    const catsWithCustom = [
+      ...CATS,
+      { id: 30, name: 'Car Stuff', parentCategoryId: null, type: 'NEED' },
+    ] as never[];
+    const ctx = fixtureCtx({
+      vehicles: [makeVehicle({ id: 1, year: 2024 })],
+      categories: catsWithCustom,
+      settings: { vehicleRepairCategoryIds: [30] } as never,
+      transactions: [
+        tx('2026-05-01', 1500, 30, 1), // custom category → counts
+        tx('2026-06-01', 2000, 18, 1), // seeded category, no longer configured → ignored
+      ],
+    });
+    const r = evaluateCarSignals(ctx, 1);
+    expect(r.facts.repair12mDollars).toBe(1500); // 1500 counted, 2000 excluded
+    expect(r.branch).toBe('signal'); // 1500 ≥ 1200
+  });
 });

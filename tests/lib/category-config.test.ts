@@ -92,16 +92,36 @@ describe('resolveUtilityCategoryIds', () => {
 });
 
 describe('resolveVehicleRepairCategoryIds (D-GI15)', () => {
+  const maintenanceId = 18;
+  const majorRepairsId = 21;
+  const customId = 11; // exists in cats, outside the Vehicles seed pair
   const cats = [
     { id: 2, name: 'Vehicles', parentCategoryId: null },
-    { id: 18, name: 'Vehicle Maintenance', parentCategoryId: 2 },
-    { id: 21, name: 'Major Repairs', parentCategoryId: 2 },
-    { id: 11, name: 'Home Maintenance', parentCategoryId: 3 },
+    { id: maintenanceId, name: 'Vehicle Maintenance', parentCategoryId: 2 },
+    { id: majorRepairsId, name: 'Major Repairs', parentCategoryId: 2 },
+    { id: customId, name: 'Home Maintenance', parentCategoryId: 3 },
   ] as never[];
   it('resolves BOTH seeded children under Vehicles', () => {
-    expect(resolveVehicleRepairCategoryIds(cats)).toEqual([18, 21]);
+    expect(resolveVehicleRepairCategoryIds(null, cats)).toEqual([18, 21]);
   });
   it('missing seeds → empty (signal silently absent, never a guess)', () => {
-    expect(resolveVehicleRepairCategoryIds([])).toEqual([]);
+    expect(resolveVehicleRepairCategoryIds(null, [])).toEqual([]);
+  });
+
+  // Wave A item 7: configured override, resolveUtilityCategoryIds precedence.
+  it('configured null → the seeded two-child fallback (both Vehicles children)', () => {
+    expect(resolveVehicleRepairCategoryIds(null, cats)).toEqual([maintenanceId, majorRepairsId]);
+  });
+
+  it('configured [] → explicitly disabled (empty, no fallback)', () => {
+    expect(resolveVehicleRepairCategoryIds([], cats)).toEqual([]);
+  });
+
+  it('configured ids filter to survivors — no fallback mixing', () => {
+    expect(resolveVehicleRepairCategoryIds([customId, 9999], cats)).toEqual([customId]);
+  });
+
+  it('all-stale configured ids → the seeded fallback (equivalent to unconfigured)', () => {
+    expect(resolveVehicleRepairCategoryIds([9998, 9999], cats)).toEqual([maintenanceId, majorRepairsId]);
   });
 });
