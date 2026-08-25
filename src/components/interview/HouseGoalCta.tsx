@@ -18,6 +18,7 @@ import { monthYearLabel, type HouseTarget } from '@/domain/interview/threads/hom
  */
 export function HouseGoalCta({ target }: { target: HouseTarget }) {
   const goals = useGoalsStore((s) => s.goals);
+  const goalsLoadError = useGoalsStore((s) => s.error);
   const create = useGoalsStore((s) => s.create);
   const householdId = useHouseholdStore((s) => s.household?.id ?? 1);
   const [pending, setPending] = useState(false);
@@ -32,6 +33,13 @@ export function HouseGoalCta({ target }: { target: HouseTarget }) {
       </div>
     );
   }
+
+  // f4 (review): the D-HP6 dedup only holds over a successfully hydrated
+  // list. When the goals load FAILED (the gate settles with error set and
+  // the page renders under StoreErrorBanner), the list may be empty-but-
+  // wrong — creating here could duplicate. Withhold the affordance; the
+  // tracked state above still renders on affirmative evidence.
+  if (goalsLoadError != null) return null;
 
   return (
     <div className="space-y-1">

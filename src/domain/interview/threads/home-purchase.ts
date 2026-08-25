@@ -3,6 +3,7 @@ import { computeGoalProgress } from '@/lib/goal-progress';
 import { pickModerateRate } from '@/lib/growth-scenario';
 import { formatCurrency } from '@/lib/format';
 import { monthlyHousingObligation } from '@/lib/recurring-obligations';
+import { localTodayISO } from '@/lib/dates';
 import { monthsBetweenIso } from '@/domain/interview/evaluate';
 import { cashSavingsReserve, computeEfOverlap } from '@/lib/interview/cash-reserve-variants';
 import { useHouseholdStore } from '@/stores/household-store';
@@ -37,7 +38,11 @@ export const monthYearLabel = (targetMonth: string): string =>
  * never a category heuristic). Pure; ctx.today only.
  */
 function evaluateTenure(ctx: InterviewContext): { branch: string; facts: Record<string, unknown> } {
-  const todayIso = ctx.today.toISOString().slice(0, 10);
+  // f1 (review): the LOCAL calendar day — toISOString reads the UTC day,
+  // which is the PRIOR day (and near month starts the prior month) for a
+  // local-midnight `today` in any UTC+ zone. localTodayISO is the inverse
+  // of dateFromLocalISO; the Date stays injected, purity intact.
+  const todayIso = localTodayISO(ctx.today);
   const owner = ctx.properties.some((p) => p.type === PropertyType.PRIMARY_RESIDENCE);
   const rentPerMonth = monthlyHousingObligation(ctx.housingPayments, todayIso);
   const tenure = owner ? 'owner' : rentPerMonth > 0 ? 'renter' : 'unknown';
@@ -53,7 +58,10 @@ function evaluateTenure(ctx: InterviewContext): { branch: string; facts: Record<
  * unwired in the frozen kernel — this dispatch is the honest substitute).
  */
 export async function recordUpcomingPurchase(target: HouseTarget, today: Date): Promise<void> {
-  const todayIso = today.toISOString().slice(0, 10);
+  // f1 (review): local calendar day (see evaluateTenure) — the UTC day
+  // wrote +1 month for the entire local 1st in UTC+ zones, and a 60-month
+  // target computed 61 and silently skipped the write the control allowed.
+  const todayIso = localTodayISO(today);
   const months = monthsBetweenIso(todayIso, `${target.targetMonth}-01`);
   if (months < 1 || months > WRITE_THROUGH_MAX_MONTHS) return;
   await useHouseholdStore.getState().update({
@@ -89,9 +97,13 @@ function housePlanReply(ctx: InterviewContext, answers: AnswerValues) {
       ? `Cash and savings on hand: ${formatCurrency(reserve)} — from your latest account snapshots. HSA balances aren't counted toward a down payment.`
       : `Cash and savings on hand: ${formatCurrency(reserve)} — from your latest account snapshots.`,
   );
-  // CI-H5 / CI-H5b — the MANDATORY double-count declaration.
+  // CI-H5 / CI-H5b — the MANDATORY double-count declaration. f2 (review):
+  // CI-H5b gates on reserve > 0, mirroring CI-H5's overlapDollars > 0 guard
+  // — "some of this reserve" is a false sentence over a $0 reserve.
   if (overlap.baselineSource === 'none') {
-    lines.push("Some of this reserve is your emergency fund — it can't be sized without an expense baseline.");
+    if (reserve > 0) {
+      lines.push("Some of this reserve is your emergency fund — it can't be sized without an expense baseline.");
+    }
   } else if (overlap.overlapDollars > 0) {
     lines.push(
       `Of that, ${formatCurrency(overlap.overlapDollars)} is also the emergency fund the Moderate framework targets (${overlap.multiple}× expenses${overlap.assumed ? ', assumed' : ''}). The same dollars can't fund both.`,

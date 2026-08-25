@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { InterviewThreads } from '@/components/interview/InterviewThreads';
 import { useInterviewAnswersStore } from '@/stores/interview-answers-store';
@@ -47,7 +47,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   useInterviewAnswersStore.setState({ saveAnswer, clearAnswer } as never);
   useHouseholdStore.setState({ household: { id: 1 }, update } as never);
-  useGoalsStore.setState({ goals: [], create: createGoal } as never);
+  useGoalsStore.setState({ goals: [], error: null, create: createGoal } as never);
 });
 
 describe('home_purchase on the strip', () => {
@@ -112,6 +112,53 @@ describe('home_purchase on the strip', () => {
     expect(within(card).getByText('Tracked as a Goal — Home down payment.')).toBeInTheDocument();
     expect(within(card).getByRole('link', { name: 'Open Goals →' })).toHaveAttribute('href', '/goals');
     expect(within(card).queryByRole('button', { name: 'Track this as a Goal' })).toBeNull();
+  });
+
+  it('f4 (review): a failed goals load suppresses the create button (dedup cannot be trusted over an errored list)', () => {
+    useGoalsStore.setState({ goals: [], error: 'DB gone', create: createGoal } as never);
+    renderThreads(renterCtx(new Map([
+      row('q_want_house', '"yes-within-5y"'),
+      row('q_target', '{"amountDollars":60000,"targetMonth":"2028-06"}'),
+    ])));
+    const card = screen.getByTestId('thread-home_purchase-');
+    // The plan card itself still renders; only the goal-creating affordance
+    // is withheld while the dedup read is unreliable (D-HP6).
+    expect(within(card).getByText(/Saving \$1,364\/mo/)).toBeInTheDocument();
+    expect(within(card).queryByRole('button', { name: 'Track this as a Goal' })).toBeNull();
+    expect(within(card).queryByText(/Tracked as a Goal/)).toBeNull();
+  });
+
+  it('f5 (review): a goal appearing after render still cannot be duplicated (the D-HP6 click-time leg)', () => {
+    renderThreads(renterCtx(new Map([
+      row('q_want_house', '"yes-within-5y"'),
+      row('q_target', '{"amountDollars":60000,"targetMonth":"2028-06"}'),
+    ])));
+    const card = screen.getByTestId('thread-home_purchase-');
+    const button = within(card).getByRole('button', { name: 'Track this as a Goal' });
+    act(() => {
+      // A concurrent surface (Goals page, another window) lands a
+      // DOWN_PAYMENT goal between render and click.
+      useGoalsStore.setState({
+        goals: [{ id: 9, householdId: 1, forPersonId: null, name: 'Home down payment', type: GoalType.DOWN_PAYMENT, targetAmount: 60000, targetDate: '2028-06-01', linkedAccountIds: [] }],
+      } as never);
+      fireEvent.click(button);
+    });
+    expect(createGoal).not.toHaveBeenCalled();
+  });
+
+  it('f5 (review): the button disables while the create is pending', async () => {
+    let resolveCreate!: (id: number) => void;
+    createGoal.mockImplementationOnce(() => new Promise<number>((resolve) => { resolveCreate = resolve; }));
+    renderThreads(renterCtx(new Map([
+      row('q_want_house', '"yes-within-5y"'),
+      row('q_target', '{"amountDollars":60000,"targetMonth":"2028-06"}'),
+    ])));
+    const card = screen.getByTestId('thread-home_purchase-');
+    const button = within(card).getByRole('button', { name: 'Track this as a Goal' });
+    fireEvent.click(button);
+    await waitFor(() => expect(button).toBeDisabled());
+    resolveCreate(1);
+    await waitFor(() => expect(button).toBeEnabled());
   });
 
   it('both answered questions expose Ask me again (aria-disambiguated, m7 behavior)', () => {

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { evaluateThread } from '@/domain/interview/evaluate';
 import { HOME_PURCHASE_THREAD, recordUpcomingPurchase } from '@/domain/interview/threads/home-purchase';
 import { INTERVIEW_THREADS } from '@/domain/interview/registry';
@@ -177,6 +177,21 @@ describe('home_purchase — the plan reply (hand-computed, fixture: reserve $30,
     );
   });
 
+  it('f2 (review): a $0 reserve renders NO EF declaration, even without a baseline', () => {
+    // "Some of this reserve is your emergency fund" is a false sentence when
+    // there is no reserve — CI-H5b gates on reserve > 0, mirroring CI-H5's
+    // overlapDollars > 0 guard (coordinator ruling; string byte-identical).
+    const ctx = renterCtx(answeredBoth(), {
+      household: makeHousehold({ monthlyExpenseBaseline: 0, growthScenarios: [{ label: 'moderate', rate: 0.05 }] }),
+      accounts: [],
+      snapshots: [],
+    });
+    const r = evaluateThread(HOME_PURCHASE_THREAD, ctx, '');
+    if (r.state !== 'reply' || r.reply.kind !== 'plan') throw new Error('expected plan');
+    expect(r.reply.lines[0]).toBe('Cash and savings on hand: $0 — from your latest account snapshots.');
+    expect(r.reply.lines.join('\n')).not.toMatch(/emergency fund/);
+  });
+
   it('CI-H11 sync row renders ONLY from live household state', () => {
     const inSync = renterCtx(answeredBoth(), {
       household: { ...HOUSE_HOUSEHOLD(), upcomingLargePurchase: true, upcomingPurchaseAmount: 60000, upcomingPurchaseMonths: 22 },
@@ -223,5 +238,78 @@ describe('recordUpcomingPurchase — the D-HP4 write-through', () => {
   it('a non-future month writes NOTHING (defense in depth behind the control)', async () => {
     await recordUpcomingPurchase({ amountDollars: 60000, targetMonth: '2026-08' }, new Date('2026-08-01T12:00:00Z'));
     expect(update).not.toHaveBeenCalled();
+  });
+
+  // f3 (review): the D-HP4 window boundaries, pinned exactly. Local-midnight
+  // dates — with f1 these are TZ-agnostic (localTodayISO(today) reads the
+  // LOCAL calendar in every zone).
+  it('months exactly 1 (2026-08 → 2026-09): writes upcomingPurchaseMonths 1', async () => {
+    await recordUpcomingPurchase({ amountDollars: 60000, targetMonth: '2026-09' }, new Date(2026, 7, 1));
+    expect(update).toHaveBeenCalledWith({
+      upcomingLargePurchase: true, upcomingPurchaseAmount: 60000, upcomingPurchaseMonths: 1,
+    });
+  });
+
+  it('months exactly 60 (2026-08 → 2031-08): writes upcomingPurchaseMonths 60', async () => {
+    await recordUpcomingPurchase({ amountDollars: 60000, targetMonth: '2031-08' }, new Date(2026, 7, 1));
+    expect(update).toHaveBeenCalledWith({
+      upcomingLargePurchase: true, upcomingPurchaseAmount: 60000, upcomingPurchaseMonths: 60,
+    });
+  });
+
+  it('months exactly 61 (2026-08 → 2031-09): writes NOTHING', async () => {
+    await recordUpcomingPurchase({ amountDollars: 60000, targetMonth: '2031-09' }, new Date(2026, 7, 1));
+    expect(update).not.toHaveBeenCalled();
+  });
+});
+
+describe('f1 (review): the day is the LOCAL calendar day, never the UTC one', () => {
+  // In any UTC+ zone, local midnight on the 1st is still the PRIOR day in
+  // UTC — toISOString().slice(0,10) computed from the prior month (+1 month
+  // written; a 60-month target computed 61 and silently skipped the write
+  // the control just allowed), diverging from the compound control's own
+  // local-day validation. The fix routes both sites through
+  // localTodayISO(today) (@/lib/dates — the inverse of dateFromLocalISO).
+  // TZ is scoped to this describe: Node's process.env.TZ interceptor resets
+  // the date-time configuration on assignment (verified in this repo's Node).
+  const ORIGINAL_TZ = process.env.TZ;
+  const update = vi.fn(async () => {});
+  beforeEach(() => {
+    process.env.TZ = 'Pacific/Auckland'; // UTC+12/+13 — local midnight is the prior UTC day
+    update.mockClear();
+    useHouseholdStore.setState({ update } as never);
+  });
+  afterEach(() => {
+    if (ORIGINAL_TZ === undefined) delete process.env.TZ;
+    else process.env.TZ = ORIGINAL_TZ;
+  });
+
+  it('a 60-month target saved at local midnight on the 1st WRITES (the UTC day computed 61 and skipped)', async () => {
+    // Local 2026-09-01 00:00 NZST = 2026-08-31T12:00Z. Local calendar:
+    // 2026-09 → 2031-09 = 60 months, inside the window.
+    await recordUpcomingPurchase({ amountDollars: 60000, targetMonth: '2031-09' }, new Date(2026, 8, 1));
+    expect(update).toHaveBeenCalledWith({
+      upcomingLargePurchase: true, upcomingPurchaseAmount: 60000, upcomingPurchaseMonths: 60,
+    });
+  });
+
+  it('months count from the local month (24, not the UTC month’s 25)', async () => {
+    await recordUpcomingPurchase({ amountDollars: 60000, targetMonth: '2028-09' }, new Date(2026, 8, 1));
+    expect(update).toHaveBeenCalledWith({
+      upcomingLargePurchase: true, upcomingPurchaseAmount: 60000, upcomingPurchaseMonths: 24,
+    });
+  });
+
+  it('d_tenure classifies a lease that starts today (local) as renter, not unknown', () => {
+    const lease: HousingPayment = { ...rent(), startDate: '2026-09-01' };
+    const ctx = fixtureCtx({
+      household: HOUSE_HOUSEHOLD(),
+      housingPayments: [lease],
+      today: new Date(2026, 8, 1), // local midnight on the lease's start day
+    });
+    const r = evaluateThread(HOME_PURCHASE_THREAD, ctx, '');
+    expect(r.state).toBe('ask');
+    if (r.state !== 'ask') return;
+    expect(r.pinBasis?.facts.tenure).toBe('renter');
   });
 });

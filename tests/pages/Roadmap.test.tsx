@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Roadmap from '@/pages/Roadmap';
@@ -175,5 +175,21 @@ describe('Roadmap page', () => {
     useAccountsStore.setState({ accounts: [], isLoading: false, error: 'DB gone', load: async () => {} } as any);
     render(<MemoryRouter><Roadmap /></MemoryRouter>);
     expect(screen.getByRole('alert')).toHaveTextContent(/couldn.t load or save/i);
+  });
+
+  it('T2 f6 (D-HP7): mount loads properties, housing payments, and goals exactly once', () => {
+    // The cheapest wiring pin: deleting any of the three loads from the
+    // reload callback goes RED here while every other test stays green.
+    resetStores(makeHousehold(), ACCEPTED_VERSION);
+    const loadProperties = vi.fn(async () => {});
+    const loadHousingPayments = vi.fn(async () => {});
+    const loadGoals = vi.fn(async () => {});
+    usePropertiesStore.setState({ load: loadProperties } as any);
+    useHousingPaymentsStore.setState({ load: loadHousingPayments } as any);
+    useGoalsStore.setState({ load: loadGoals } as any);
+    render(<MemoryRouter><Roadmap /></MemoryRouter>);
+    expect(loadProperties).toHaveBeenCalledTimes(1);
+    expect(loadHousingPayments).toHaveBeenCalledTimes(1);
+    expect(loadGoals).toHaveBeenCalledTimes(1);
   });
 });
