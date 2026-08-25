@@ -144,11 +144,16 @@ function targetBits(ctx: InterviewContext, answers: AnswerValues): TargetBits {
     pathAssumes.push(`No ${ctx.household.state} in-state figure encoded — using the national average.`);
   }
   if (t.stateSpecific) pathAssumes.push('Housing and food use the national average.');
+  // CI-C6 as AMENDED (review f2, coordinator ruling): a negative real rate
+  // reads as direction words — never a hyphen-minus 'grown -{x}%'.
+  const rateClause = growth.pctPerYear < 0
+    ? `declining ${Number(Math.abs(growth.pctPerYear).toFixed(2))}% a year after inflation`
+    : `grown ${Number(growth.pctPerYear.toFixed(2))}% a year above inflation`;
   return {
     start,
     targetDollars,
     targetLine: `Four years at ${TUITION_SECTOR_LABELS[SECTOR]} starting ${monthYearLabel(start.startYm)}: ≈ ${fmt(targetDollars)} in today's dollars.`,
-    basisLine: `Based on: published ${TUITION_BASE_ACADEMIC_YEAR} prices (${stateBasis}), grown ${Number(growth.pctPerYear.toFixed(2))}% a year above inflation.`,
+    basisLine: `Based on: published ${TUITION_BASE_ACADEMIC_YEAR} prices (${stateBasis}), ${rateClause}.`,
     pathAssumes,
     title: start.usingName == null ? 'College plan' : `College for ${start.usingName}`,
   };

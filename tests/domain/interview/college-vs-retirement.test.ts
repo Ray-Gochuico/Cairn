@@ -3,7 +3,7 @@ import { evaluateThread } from '@/domain/interview/evaluate';
 import { COLLEGE_VS_RETIREMENT_THREAD } from '@/domain/interview/threads/college-vs-retirement';
 import { INTERVIEW_THREADS } from '@/domain/interview/registry';
 import { answerKey, type InterviewAnswer } from '@/types/interview';
-import { AccountType } from '@/types/enums';
+import { AccountType, FilingStatus } from '@/types/enums';
 import {
   computeCollegeTarget, project529Real,
 } from '@/lib/interview/college-tradeoff';
@@ -143,8 +143,18 @@ describe('college_vs_retirement thread', () => {
     // fixtureCtx has expenses + 4% SWR → FI computable; the delta line's shape:
     expect(r.reply.lines[3]).toMatch(
       /^The same \$500\/mo toward retirement instead: ≈ \d+(\.\d)? years sooner to your FI target — two identical projections, one with this monthly amount added\.$/); // CI-C9
+    // CI-C6 as AMENDED (review f2, coordinator ruling): a negative rate
+    // reads as direction words — 'declining {x}% a year after inflation' —
+    // never a hyphen-minus 'grown -{x}%'. Positive rates keep the original
+    // 'grown {x}% a year above inflation' shape.
     expect(r.reply.assumes[0]).toBe(
-      `Based on: published ${TUITION_BASE_ACADEMIC_YEAR} prices (${t.stateSpecific ? 'CA in-state tuition and fees' : 'national averages'}), grown ${Number(growth.pctPerYear.toFixed(2))}% a year above inflation.`); // CI-C6
+      growth.pctPerYear < 0
+        ? `Based on: published ${TUITION_BASE_ACADEMIC_YEAR} prices (${t.stateSpecific ? 'CA in-state tuition and fees' : 'national averages'}), declining ${Number(Math.abs(growth.pctPerYear).toFixed(2))}% a year after inflation.`
+        : `Based on: published ${TUITION_BASE_ACADEMIC_YEAR} prices (${t.stateSpecific ? 'CA in-state tuition and fees' : 'national averages'}), grown ${Number(growth.pctPerYear.toFixed(2))}% a year above inflation.`); // CI-C6 (amended)
+    // The current dataset's in-state rate IS negative — byte-pin the arm the
+    // ternary above actually exercises, so it can never go inert:
+    expect(r.reply.assumes[0]).toContain('declining 0.69% a year after inflation.');
+    expect(JSON.stringify(r.reply)).not.toContain('grown -');
     expect(r.reply.assumes).toContain('These dollars count toward exactly one side.'); // CI-C12
     expect(r.reply.assumes).toContain("529 balances aren't counted in the FI target — education-earmarked."); // CI-C13
     expect(r.reply.assumes).toContain('No state deduction encoded for CA.'); // CI-C15
@@ -213,5 +223,90 @@ describe('college_vs_retirement thread', () => {
     const answers = new Map([row('q_monthly_amount', '500', 'has-529')]);
     expect(evaluateThread(COLLEGE_VS_RETIREMENT_THREAD, fullCtx(answers), ''))
       .toEqual(evaluateThread(COLLEGE_VS_RETIREMENT_THREAD, fullCtx(answers), ''));
+  });
+
+  // ── Review f1: the deduction-hint branches, pinned where they actually flow ──
+
+  it('CI-C16: an unlimited-sentinel state (NM) renders the exact hint and the sentinel NEVER leaks as dollars', () => {
+    const nmHH = makeHousehold({
+      state: 'NM', // UNLIMITED_DEDUCTION_SENTINEL for every filing status
+      inflationAssumption: 0.03,
+      growthScenarios: [{ label: 'moderate', rate: 0.05 }],
+    });
+    const ctx = fixtureCtx({
+      household: nmHH, dependents: [kid],
+      accounts: [plan529, brokerage],
+      snapshots: [snap(9, 10_000), snap(2, 800_000)],
+      interviewAnswers: new Map([row('q_monthly_amount', '500', 'has-529')]),
+    });
+    const r = evaluateThread(COLLEGE_VS_RETIREMENT_THREAD, ctx, '');
+    if (r.state !== 'reply' || r.reply.kind !== 'plan') throw new Error('expected reply');
+    expect(r.reply.assumes).toContain(
+      'NM allows an unlimited 529 deduction — confirm with the state DOR.'); // CI-C16
+    // D-T3-11 leak guard on the path where the sentinel actually flows: a
+    // dropped sentinel branch renders formatCurrency(999_999) = '$999,999'.
+    const json = JSON.stringify(r.reply);
+    expect(json).not.toContain('999,999');
+    expect(json).not.toContain('$999');
+  });
+
+  it('CI-C14: a capped state (NY, MFJ) renders the exact hint including the filing label', () => {
+    const nyHH = makeHousehold({
+      state: 'NY', filingStatus: FilingStatus.MFJ, // NY MFJ cap: $10,000
+      inflationAssumption: 0.03,
+      growthScenarios: [{ label: 'moderate', rate: 0.05 }],
+    });
+    const ctx = fixtureCtx({
+      household: nyHH, dependents: [kid],
+      accounts: [plan529, brokerage],
+      snapshots: [snap(9, 10_000), snap(2, 800_000)],
+      interviewAnswers: new Map([row('q_monthly_amount', '500', 'has-529')]),
+    });
+    const r = evaluateThread(COLLEGE_VS_RETIREMENT_THREAD, ctx, '');
+    if (r.state !== 'reply' || r.reply.kind !== 'plan') throw new Error('expected reply');
+    expect(r.reply.assumes).toContain(
+      'NY allows deducting up to $10,000 of 529 contributions for married filing jointly filers — confirm with the state DOR.'); // CI-C14
+  });
+
+  it('CI-C18 + CI-C6 national variant: a state missing from the tuition table (DC) degrades honestly', () => {
+    const dcHH = makeHousehold({
+      state: 'DC', // in neither the 50-state tuition table nor the deduction table
+      inflationAssumption: 0.03,
+      growthScenarios: [{ label: 'moderate', rate: 0.05 }],
+    });
+    const ctx = fixtureCtx({
+      household: dcHH, dependents: [kid],
+      accounts: [plan529, brokerage],
+      snapshots: [snap(9, 10_000), snap(2, 800_000)],
+      interviewAnswers: new Map([row('q_monthly_amount', '500', 'has-529')]),
+    });
+    const r = evaluateThread(COLLEGE_VS_RETIREMENT_THREAD, ctx, '');
+    if (r.state !== 'reply' || r.reply.kind !== 'plan') throw new Error('expected reply');
+    expect(r.reply.assumes).toContain(
+      'No DC in-state figure encoded — using the national average.'); // CI-C18 (table non-empty, DC absent)
+    // CI-C6, national-averages + amended declining variant, byte-exact:
+    expect(r.reply.assumes[0]).toBe(
+      `Based on: published ${TUITION_BASE_ACADEMIC_YEAR} prices (national averages), declining 0.69% a year after inflation.`);
+    expect(r.reply.assumes).toContain('No state deduction encoded for DC.'); // CI-C15
+    // National basis ⇒ no CI-C23 housing note (its condition is state-specific):
+    expect(r.reply.assumes).not.toContain('Housing and food use the national average.');
+  });
+
+  // ── Review f3: corrupt compound row (D-GI16) ──
+
+  it('D-GI16: a corrupt q_target_year compound row re-asks as unanswered with no prior-answer preamble', () => {
+    const ctx = fixtureCtx({
+      household: HH, accounts: [plan529], snapshots: [snap(9, 10_000)],
+      interviewAnswers: new Map([
+        // Schema-invalid: amountDollars missing, targetMonth a number.
+        row('q_target_year', '{"targetMonth":12}', 'no-dependents-529'),
+      ]),
+    });
+    const r = evaluateThread(COLLEGE_VS_RETIREMENT_THREAD, ctx, '');
+    expect(r.state).toBe('ask');
+    if (r.state !== 'ask') return;
+    expect(r.node.id).toBe('q_target_year');
+    expect(r.reason).toBe('unanswered');
+    expect(r.priorAnswer).toBeNull();
   });
 });
