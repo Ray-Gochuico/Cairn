@@ -5,6 +5,7 @@ import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-stor
 import { useSettingsStore } from '@/stores/settings-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
 import { useTickersStore } from '@/stores/tickers-store';
+import { useDependentsStore } from '@/stores/dependents-store';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useHousingPaymentsStore } from '@/stores/housing-payments-store';
 import { useInterviewAnswersStore } from '@/stores/interview-answers-store';
@@ -24,12 +25,13 @@ export function useInterview(): InterviewContext | null {
   const settings = useSettingsStore((s) => s.settings);
   const holdings = useHoldingsStore((s) => s.holdings);
   const tickers = useTickersStore((s) => s.tickers);
+  const dependents = useDependentsStore((s) => s.dependents);
   const properties = usePropertiesStore((s) => s.properties);
   const housingPayments = useHousingPaymentsStore((s) => s.housingPayments);
   const interviewAnswers = useInterviewAnswersStore((s) => s.answersByKey);
 
   return useMemo(() => {
     if (!base) return null;
-    return { ...base, vehicles, assetValueSnapshots, settings, holdings, tickers, properties, housingPayments, interviewAnswers };
-  }, [base, vehicles, assetValueSnapshots, settings, holdings, tickers, properties, housingPayments, interviewAnswers]);
+    return { ...base, vehicles, assetValueSnapshots, settings, holdings, tickers, dependents, properties, housingPayments, interviewAnswers };
+  }, [base, vehicles, assetValueSnapshots, settings, holdings, tickers, dependents, properties, housingPayments, interviewAnswers]);
 }

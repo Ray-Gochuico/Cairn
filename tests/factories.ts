@@ -7,6 +7,7 @@ import {
   AccountSchema,
   HoldingSchema,
   HouseholdSchema,
+  DependentSchema,
   type Person,
   type Loan,
   type Property,
@@ -15,8 +16,9 @@ import {
   type Account,
   type Holding,
   type Household,
+  type Dependent,
 } from '@/types/schema';
-import { LoanType, PropertyType, AccountType, FilingStatus } from '@/types/enums';
+import { LoanType, PropertyType, AccountType, FilingStatus, DependentType } from '@/types/enums';
 
 /**
  * Zod-parsing fixture factories for unit tests. Each `make*` builds a minimal
@@ -156,6 +158,17 @@ export function makeHousehold(overrides: Partial<Household> = {}): Household {
     withdrawalRate: 0.04,
     inflationAssumption: 0.03,
     growthScenarios: [],
+    ...overrides,
+  });
+}
+
+export function makeDependent(overrides: Partial<Dependent> = {}): Dependent {
+  return DependentSchema.parse({
+    id: 1,
+    householdId: 1,
+    name: 'Kid',
+    dateOfBirth: '2018-08-15',
+    type: DependentType.CHILD,
     ...overrides,
   });
 }

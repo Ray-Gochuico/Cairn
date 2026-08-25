@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type {
-  Vehicle, AssetValueSnapshot, AppSettings, Holding, Ticker, Property, HousingPayment,
+  Vehicle, AssetValueSnapshot, AppSettings, Holding, Ticker, Property, HousingPayment, Dependent,
 } from './schema';
 import type { RoadmapContext } from './roadmap';
 
@@ -39,6 +39,8 @@ export interface InterviewContext extends RoadmapContext {
   settings: AppSettings | null;
   holdings: Holding[];
   tickers: Ticker[];
+  /** T3 (D-T3-7): additive slice for the college thread's d_dependents. */
+  dependents: Dependent[];
   properties: Property[];
   housingPayments: HousingPayment[];
   interviewAnswers: ReadonlyMap<string, InterviewAnswer>;
