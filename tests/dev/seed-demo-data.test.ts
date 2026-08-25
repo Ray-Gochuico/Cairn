@@ -190,7 +190,9 @@ describe('seedDemoData', () => {
       `SELECT COUNT(*) AS n FROM account_snapshots WHERE snapshot_date = ? AND source = 'AUTO_DERIVED'`,
       [close],
     );
-    expect(rows[0].n).toBe(DEMO_SEED.accountCount);
+    // T3: the 529's close snapshot is MANUAL by design (the college slice
+    // stays out of the Monthly confirm flow), so it is accountCount − 1.
+    expect(rows[0].n).toBe(DEMO_SEED.accountCount - 1);
   });
 
   it('backfills sector/industry for directly-held single names (Sector donut demo coverage)', async () => {
@@ -336,6 +338,34 @@ describe('seedDemoData', () => {
     expect(71.52 + 0.12).toBeCloseTo(byTicker.get('BND')!, 2);    // 71.64
     expect(154.8 + -0.57).toBeCloseTo(byTicker.get('FXAIX')!, 2); // 154.23
     expect(237.6 + 1.2).toBeCloseTo(byTicker.get('VTI')!, 2);     // 238.80
+  });
+
+  it('Wave T3: seeds Demo Kid + a MANUAL-source 529 (college thread smokable; Monthly confirm untouched) — idempotently', async () => {
+    await seedDemoData(db);
+    await seedDemoData(db); // college sentinel short-circuits: no duplicates
+    const kids = await db.select<{ name: string; date_of_birth: string; type: string }>(
+      'SELECT name, date_of_birth, type FROM dependents',
+    );
+    // dob is load-bearing: 2016-05 + 216 months = May 2034 — the e2e pins
+    // the 'starting May 2034' label.
+    expect(kids).toEqual([{ name: 'Demo Kid', date_of_birth: '2016-05-12', type: 'CHILD' }]);
+    const accts = await db.select<{ id: number; beneficiary_dependent_id: number | null; owner_person_id: number | null }>(
+      "SELECT id, beneficiary_dependent_id, owner_person_id FROM accounts WHERE type = 'ACCOUNT_529'",
+    );
+    expect(accts).toHaveLength(1);
+    expect(accts[0].beneficiary_dependent_id).not.toBeNull();
+    expect(accts[0].owner_person_id).not.toBeNull();
+    // BOTH snapshots are MANUAL: the Monthly confirm flow keys on
+    // AUTO_DERIVED close-dated rows (the e2e's 'Confirm all (4)' pin) —
+    // the college slice stays out of that flow by design.
+    const snaps = await db.select<{ total_value: number; source: string }>(
+      'SELECT total_value, source FROM account_snapshots WHERE account_id = ? ORDER BY snapshot_date',
+      [accts[0].id],
+    );
+    expect(snaps).toEqual([
+      { total_value: 11800, source: 'MANUAL' },
+      { total_value: 12000, source: 'MANUAL' },
+    ]);
   });
 
   it('seeds cost basis on all holdings except BND (its gain honestly renders "—")', async () => {
