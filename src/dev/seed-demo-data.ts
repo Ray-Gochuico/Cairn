@@ -282,7 +282,7 @@ async function seedPrimarySlice(db: Database, today: string): Promise<void> {
   //        + the excludes-1 account-total suffix).
   //      tickers.fifty_two_week_*: seeded for the fund trio only — AAPL/NVDA
   //        stay NULL so the fetched-fields "—" state demos honestly (a real
-  //        refresh fills them via updateTicker52Week).
+  //        refresh fills them via updateTicker52WeekAndDayChange).
   const round2 = (n: number): number => Math.round(n * 100) / 100;
   const priceBase: Record<string, number> = { VTI: 240, FXAIX: 155, BND: 72, AAPL: 205, NVDA: 118 };
   async function addPrice(ticker: string, daysAgo: number, price: number): Promise<void> {
@@ -307,6 +307,25 @@ async function seedPrimarySlice(db: Database, today: string): Promise<void> {
     await db.execute(
       'UPDATE tickers SET fifty_two_week_low = ?, fifty_two_week_high = ? WHERE ticker = ?',
       [lo, hi, ticker],
+    );
+  }
+  //      tickers.regular_market_*: day-change facts (Wave B, 0055) for the
+  //        fund trio only — AAPL/NVDA stay NULL so the "Day change —" state
+  //        demos honestly (a real refresh fills them via
+  //        updateTicker52WeekAndDayChange). Values chosen so previous_close
+  //        + change equals the seeded LATEST cached price (base × 0.995) at
+  //        2 decimals — the coherence a real refresh produces — while
+  //        deliberately DIFFERING from the since-refresh delta (latest −
+  //        penultimate), so the demo teaches the two columns apart.
+  const dayChange: Record<string, [number, number]> = {
+    VTI: [1.2, 237.6],     // 237.60 + 1.20 ≈ 238.80 · brokerage 120 sh → +$144.00 (+0.5%)
+    FXAIX: [-0.57, 154.8], // 154.80 − 0.57 ≈ 154.23 · Roth 200 sh → −$114.00 · 401k 350 sh → −$199.50 (−0.4%)
+    BND: [0.12, 71.52],    // 71.52 + 0.12 ≈ 71.64 · 401k 180 sh → +$21.60 (+0.2%)
+  };
+  for (const [ticker, [chg, prev]] of Object.entries(dayChange)) {
+    await db.execute(
+      'UPDATE tickers SET regular_market_change = ?, regular_market_previous_close = ? WHERE ticker = ?',
+      [chg, prev, ticker],
     );
   }
 

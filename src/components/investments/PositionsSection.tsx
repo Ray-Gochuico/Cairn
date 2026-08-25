@@ -1,4 +1,10 @@
-import type { AccountPositions, PositionRow, PositionsResult } from '@/lib/positions';
+import { useState } from 'react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
+import {
+  DEFAULT_POSITIONS_SORT, sortPositionRows,
+  type AccountPositions, type PositionRow, type PositionsResult,
+  type PositionsSort, type PositionsSortKey,
+} from '@/lib/positions';
 import { formatCurrency, formatCurrencyCents } from '@/lib/format';
 
 const DASH = '—';
@@ -69,7 +75,58 @@ function formatQuantity(q: number): string {
   return Number.isInteger(q) ? String(q) : q.toFixed(3);
 }
 
-function AccountTable({ account }: { account: AccountPositions }) {
+/** First click on an inactive header: symbol reads A→Z, numbers read
+ * biggest-first (the Fidelity muscle memory); re-click toggles (D-WB10). */
+const SORT_INITIAL_DIR: Record<PositionsSortKey, 'asc' | 'desc'> = {
+  symbol: 'asc', lastPrice: 'desc', dayChange: 'desc', sinceRefresh: 'desc',
+  totalGain: 'desc', currentValue: 'desc', pctOfAccount: 'desc',
+  quantity: 'desc', costBasis: 'desc',
+};
+
+function SortableHeader({ label, sortKey, sort, onSort, className }: {
+  label: string;
+  sortKey: PositionsSortKey;
+  sort: PositionsSort;
+  onSort: (next: PositionsSort) => void;
+  className: string;
+}) {
+  const active = sort.key === sortKey;
+  return (
+    <th
+      className={className}
+      aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}
+    >
+      <button
+        type="button"
+        // Tailwind preflight sets `text-transform: none` on <button>, so the
+        // header row's `uppercase` does NOT inherit — restate it here.
+        className="inline-flex items-center gap-1 uppercase tracking-wider hover:text-foreground"
+        onClick={() =>
+          onSort(
+            active
+              ? { key: sortKey, dir: sort.dir === 'asc' ? 'desc' : 'asc' }
+              : { key: sortKey, dir: SORT_INITIAL_DIR[sortKey] },
+          )
+        }
+      >
+        {label}
+        {active &&
+          (sort.dir === 'asc' ? (
+            <ChevronUp aria-hidden className="h-3 w-3" />
+          ) : (
+            <ChevronDown aria-hidden className="h-3 w-3" />
+          ))}
+      </button>
+    </th>
+  );
+}
+
+function AccountTable({ account, sort, onSort }: {
+  account: AccountPositions;
+  sort: PositionsSort;
+  onSort: (next: PositionsSort) => void;
+}) {
+  const rows = sortPositionRows(account.rows, sort);
   return (
     <div data-testid={`positions-account-${account.accountId}`}>
       <div className="text-sm font-medium mb-1">{account.accountName}</div>
@@ -80,19 +137,21 @@ function AccountTable({ account }: { account: AccountPositions }) {
         <table className="w-full text-sm" aria-label={`Positions — ${account.accountName}`}>
           <thead>
             <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground border-b">
-              <th className="py-2 pr-2">Symbol</th>
-              <th className="py-2 px-2 text-right">Last price</th>
-              <th className="py-2 px-2 text-right">Since last refresh</th>
-              <th className="py-2 px-2 text-right">Total gain/loss</th>
-              <th className="py-2 px-2 text-right">Current value</th>
-              <th className="py-2 px-2 text-right">% of account</th>
-              <th className="py-2 px-2 text-right">Quantity</th>
-              <th className="py-2 px-2 text-right">Cost basis</th>
+              <SortableHeader label="Symbol" sortKey="symbol" sort={sort} onSort={onSort} className="py-2 pr-2" />
+              <SortableHeader label="Last price" sortKey="lastPrice" sort={sort} onSort={onSort} className="py-2 px-2 text-right" />
+              <SortableHeader label="Day change" sortKey="dayChange" sort={sort} onSort={onSort} className="py-2 px-2 text-right" />
+              <SortableHeader label="Since last refresh" sortKey="sinceRefresh" sort={sort} onSort={onSort} className="py-2 px-2 text-right" />
+              <SortableHeader label="Total gain/loss" sortKey="totalGain" sort={sort} onSort={onSort} className="py-2 px-2 text-right" />
+              <SortableHeader label="Current value" sortKey="currentValue" sort={sort} onSort={onSort} className="py-2 px-2 text-right" />
+              <SortableHeader label="% of account" sortKey="pctOfAccount" sort={sort} onSort={onSort} className="py-2 px-2 text-right" />
+              <SortableHeader label="Quantity" sortKey="quantity" sort={sort} onSort={onSort} className="py-2 px-2 text-right" />
+              <SortableHeader label="Cost basis" sortKey="costBasis" sort={sort} onSort={onSort} className="py-2 px-2 text-right" />
+              {/* Not sortable: a range has no honest scalar (D-WB8 / CP-W9). */}
               <th className="py-2 pl-2">52-week range</th>
             </tr>
           </thead>
           <tbody>
-            {account.rows.map((r) => (
+            {rows.map((r) => (
               <tr key={r.key} data-testid={`position-row-${r.key}`} className="border-b">
                 <td className="py-2 pr-2 align-top">
                   <div className="font-mono font-semibold">{r.ticker}</div>
@@ -102,6 +161,9 @@ function AccountTable({ account }: { account: AccountPositions }) {
                 </td>
                 <td className="py-2 px-2 text-right tabular-nums align-top">
                   {r.lastPrice === null ? DASH : formatCurrencyCents(r.lastPrice)}
+                </td>
+                <td className="py-2 px-2 text-right tabular-nums align-top">
+                  <DeltaCell value={r.dayChangeValue} pct={r.dayChangePct} />
                 </td>
                 <td className="py-2 px-2 text-right tabular-nums align-top">
                   <DeltaCell value={r.sinceRefreshValue} pct={r.sinceRefreshPct} />
@@ -142,6 +204,15 @@ function AccountTable({ account }: { account: AccountPositions }) {
               <td className="py-2 pr-2">Account total</td>
               <td className="py-2 px-2" />
               <td className="py-2 px-2 text-right tabular-nums">
+                {account.totalDayChange === null ? (
+                  DASH
+                ) : (
+                  <span className={deltaColor(account.totalDayChange)}>
+                    {signedCents(account.totalDayChange)}
+                  </span>
+                )}
+              </td>
+              <td className="py-2 px-2 text-right tabular-nums">
                 {account.totalSinceRefresh === null ? (
                   DASH
                 ) : (
@@ -179,8 +250,15 @@ function AccountTable({ account }: { account: AccountPositions }) {
  * spec, D-P1..D-P6): account-grouped, MARKET basis (last cached price ×
  * shares), strict "—" null rules — never $0 for unknown. Presentation only;
  * all math lives in buildPositions (src/lib/positions.ts).
+ * Wave B: sortable headers (one section-wide sort, unpriced pinned last) +
+ * fetched Day change — as of the last refresh's market day, never "today"
+ * (CP-W2 carries the honesty).
  */
 export default function PositionsSection({ positions }: { positions: PositionsResult }) {
+  // ONE sort for the whole section, applied within each account group
+  // (D-WB1). Ephemeral by design — reload restores the default (= the
+  // v1.4.0 order); persistence is a filed chip, not a hidden behavior.
+  const [sort, setSort] = useState<PositionsSort>(DEFAULT_POSITIONS_SORT);
   return (
     <div>
       <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Positions</div>
@@ -202,13 +280,13 @@ export default function PositionsSection({ positions }: { positions: PositionsRe
           {positions.pricesResolved && (
             <p className="text-xs text-muted-foreground mb-2" data-testid="positions-as-of">
               {positions.asOfUtc !== null
-                ? `Prices as of ${formatFetchedAt(positions.asOfUtc)} — updated only when you refresh.`
+                ? `Prices and day change as of ${formatFetchedAt(positions.asOfUtc)} — updated only when you refresh.`
                 : 'No cached prices yet — prices fill in when you refresh market data.'}
             </p>
           )}
           <div className="space-y-4">
             {positions.accounts.map((a) => (
-              <AccountTable key={a.accountId} account={a} />
+              <AccountTable key={a.accountId} account={a} sort={sort} onSort={setSort} />
             ))}
           </div>
         </>

@@ -108,24 +108,35 @@ export async function enrichTickerIfMissing(
 }
 
 /**
- * Refresh the 52-week range for one ticker (D-P4 revised / D-PT14). Runs on
- * EVERY refresh — unlike sector/industry, the range drifts weekly, so a
- * fetch-if-missing rule would silently stale-date it; every-refresh also
- * auto-backfills rows that pre-date migration 0053. Best-effort like
- * enrichTickerIfMissing: errors are swallowed → false. Writes via the
- * targeted set52Week UPDATE so a missing row is a no-op (row creation stays
- * enrichTickerIfMissing's job) and a both-null Yahoo response never
- * clobbers previously-fetched values.
+ * Refresh the 52-week range AND regular-market day change for one ticker
+ * (D-P4 revised / D-PT14 / Wave B D-WB6). Runs on EVERY refresh — both fact
+ * groups drift daily/weekly, so fetch-if-missing would silently stale-date
+ * them; every-refresh also auto-backfills rows that pre-date migrations
+ * 0053/0055. ONE quoteFacts call (modules summaryDetail + price — the same
+ * single network request the 52-week fetch already made), then TWO
+ * group-independent targeted writes: a group writes only when at least one
+ * of its fields came back, so a missing Yahoo module for one group never
+ * clobbers the other group's stored values. Partial groups write (the
+ * shipped partial-52-week semantics, applied per group). Best-effort like
+ * enrichTickerIfMissing: errors are swallowed → false. Row creation stays
+ * enrichTickerIfMissing's job — both writes are missing-row no-ops.
  */
-export async function updateTicker52Week(
+export async function updateTicker52WeekAndDayChange(
   ticker: string,
   deps: { yahoo: YahooClient; tickers: TickersRepo },
 ): Promise<boolean> {
   try {
-    const { fiftyTwoWeekLow, fiftyTwoWeekHigh } = await deps.yahoo.summaryDetail(ticker);
-    if (fiftyTwoWeekLow === null && fiftyTwoWeekHigh === null) return false;
-    await deps.tickers.set52Week(ticker, fiftyTwoWeekLow, fiftyTwoWeekHigh);
-    return true;
+    const facts = await deps.yahoo.quoteFacts(ticker);
+    let wrote = false;
+    if (facts.fiftyTwoWeekLow !== null || facts.fiftyTwoWeekHigh !== null) {
+      await deps.tickers.set52Week(ticker, facts.fiftyTwoWeekLow, facts.fiftyTwoWeekHigh);
+      wrote = true;
+    }
+    if (facts.regularMarketChange !== null || facts.regularMarketPreviousClose !== null) {
+      await deps.tickers.setDayChange(ticker, facts.regularMarketChange, facts.regularMarketPreviousClose);
+      wrote = true;
+    }
+    return wrote;
   } catch {
     return false;
   }

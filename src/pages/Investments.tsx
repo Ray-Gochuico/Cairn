@@ -372,13 +372,20 @@ export default function Investments() {
     };
   }, [visibleTickerKey, lastRefreshAt, snapshots]);
 
-  // Ticker display facts for the builder (name + fetched 52-week range).
+  // Ticker display facts for the builder (name + fetched 52-week range +
+  // day-change facts, Wave B 0055).
   const tickerInfo = useMemo(
     () =>
       new Map(
         [...tickerByName].map(([t, row]) => [
           t,
-          { name: row.name, fiftyTwoWeekLow: row.fiftyTwoWeekLow, fiftyTwoWeekHigh: row.fiftyTwoWeekHigh },
+          {
+            name: row.name,
+            fiftyTwoWeekLow: row.fiftyTwoWeekLow,
+            fiftyTwoWeekHigh: row.fiftyTwoWeekHigh,
+            regularMarketChange: row.regularMarketChange,
+            regularMarketPreviousClose: row.regularMarketPreviousClose,
+          },
         ]),
       ),
     [tickerByName],

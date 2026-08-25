@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import PositionsSection from '@/components/investments/PositionsSection';
 import { buildPositions, type PriceCacheRow, type TickerPositionInfo } from '@/lib/positions';
 import type { Holding } from '@/types/schema';
@@ -8,8 +8,19 @@ const h = (id: number, accountId: number, ticker: string, shareCount: number, co
   ({ id, accountId, ticker, shareCount, targetAllocationPct: null, costBasis } as Holding);
 const p = (ticker: string, date: string, price: number): PriceCacheRow =>
   ({ ticker, date, price, fetched_at: `${date} 20:10:00` });
-const info = (name: string | null, low: number | null, high: number | null): TickerPositionInfo =>
-  ({ name, fiftyTwoWeekLow: low, fiftyTwoWeekHigh: high });
+const info = (
+  name: string | null,
+  low: number | null,
+  high: number | null,
+  change: number | null = null,
+  prevClose: number | null = null,
+): TickerPositionInfo => ({
+  name,
+  fiftyTwoWeekLow: low,
+  fiftyTwoWeekHigh: high,
+  regularMarketChange: change,
+  regularMarketPreviousClose: prevClose,
+});
 
 const INFO = new Map<string, TickerPositionInfo>([
   ['VTI', info('Vanguard Total Stock Market ETF', 200, 250)],
@@ -29,7 +40,7 @@ describe('PositionsSection', () => {
     expect(screen.getByText('Positions')).toBeInTheDocument();
     expect(screen.getByText(/last-fetched prices × shares/)).toBeInTheDocument();
     expect(screen.getByTestId('positions-as-of')).toHaveTextContent(
-      /^Prices as of .+ — updated only when you refresh\.$/, // exact instant is TZ-dependent; format pinned, value not
+      /^Prices and day change as of .+ — updated only when you refresh\.$/, // exact instant is TZ-dependent; format pinned, value not
     );
     expect(screen.getByRole('table', { name: 'Positions — Brokerage' })).toBeInTheDocument();
   });
@@ -66,11 +77,11 @@ describe('PositionsSection', () => {
     expect(parseFloat(marker.style.left)).toBeCloseTo(91, 1); // (245.5 − 200) / 50
   });
 
-  it('dash rules: unpriced row with no fetched range shows 6 dashes but keeps entered data', () => {
+  it('dash rules: unpriced row with no fetched range shows 7 dashes but keeps entered data', () => {
     renderSection(buildPositions(accounts, holdings, INFO, prices));
     const abc = screen.getByTestId('position-row-13');
-    // Last price, Since refresh, Total G/L, Current value, % of account, 52-week
-    expect(within(abc).getAllByText('—')).toHaveLength(6);
+    // Last price, Day change, Since refresh, Total G/L, Current value, % of account, 52-week
+    expect(within(abc).getAllByText('—')).toHaveLength(7);
     expect(abc).toHaveTextContent('$100');   // basis still renders
     expect(abc).toHaveTextContent('$20.00 / share'); // per-share + mockup unit
   });
@@ -145,9 +156,13 @@ describe('PositionsSection', () => {
     renderSection(buildPositions([{ id: 1, name: 'F' }], [h(71, 1, 'XYZ', 3, 50)], new Map(), []));
     const total = screen.getByTestId('positions-total-1');
     const cells = within(total).getAllByRole('cell');
-    // Row layout: label · (empty) · since-refresh · (empty) · value · (colspan)
-    const valueCell = cells[4];
+    // Current value is the 6th cell now — the Day-change cell (Wave B) sits at index 2.
+    const valueCell = cells[5];
     expect(valueCell.textContent?.replace(/\s+/g, ' ').trim()).toBe('— excludes 1 without a price');
+    // CP-W6 null clause: a null totalDayChange renders EXACTLY the dash —
+    // never a fake muted $0.00 (this is the DEFAULT state for every
+    // upgrading user before their first post-upgrade refresh).
+    expect(cells[2].textContent?.replace(/\s+/g, ' ').trim()).toBe('—');
   });
 
   it('null total with zero unpriced rows renders the dash alone (m1 branch total)', () => {
@@ -165,6 +180,7 @@ describe('PositionsSection', () => {
               rows: [],
               totalValue: null,
               totalSinceRefresh: null,
+              totalDayChange: null,
               unpricedCount: 0,
             },
           ],
@@ -173,6 +189,145 @@ describe('PositionsSection', () => {
     );
     const total = screen.getByTestId('positions-total-9');
     const cells = within(total).getAllByRole('cell');
-    expect(cells[4].textContent?.replace(/\s+/g, ' ').trim()).toBe('—');
+    // Current value is the 6th cell now — the Day-change cell (Wave B) sits at index 2.
+    expect(cells[5].textContent?.replace(/\s+/g, ' ').trim()).toBe('—');
+    // CP-W6 null clause: a null totalDayChange renders EXACTLY the dash —
+    // never a fake muted $0.00 (the fixture carries totalDayChange: null).
+    expect(cells[2].textContent?.replace(/\s+/g, ' ').trim()).toBe('—');
+  });
+});
+
+describe('Day change column (Wave B, CP-W1/W5/W6)', () => {
+  const accounts = [{ id: 1, name: 'Brokerage' }];
+  const holdings = [h(11, 1, 'VTI', 10, 2100), h(12, 1, 'BND', 20, null)];
+  const prices = [p('VTI', '2026-08-07', 240), p('VTI', '2026-08-08', 245.5), p('BND', '2026-08-08', 72.1)];
+  const DAY_INFO = new Map<string, TickerPositionInfo>([
+    ['VTI', info('Vanguard Total Stock Market ETF', 200, 250, 1.2, 237.6)],
+  ]);
+
+  it('renders the 10 headers in the CP-W4 order', () => {
+    renderSection(buildPositions(accounts, holdings, DAY_INFO, prices));
+    const headers = screen.getAllByRole('columnheader').map((th) => th.textContent);
+    expect(headers).toEqual([
+      'Symbol', 'Last price', 'Day change', 'Since last refresh', 'Total gain/loss',
+      'Current value', '% of account', 'Quantity', 'Cost basis', '52-week range',
+    ]);
+  });
+
+  it('hand-computed day-change cell on the priced row (CP-W5)', () => {
+    renderSection(buildPositions(accounts, holdings, DAY_INFO, prices));
+    const vti = screen.getByTestId('position-row-11');
+    expect(vti).toHaveTextContent('+$12.00');   // 1.20 × 10
+    expect(vti).toHaveTextContent('(+0.5%)');   // 1.2 / 237.6
+    // BND has no fetched facts → its Day-change cell is a dash. It already
+    // dashes Total gain/loss (null basis) — so ≥ 2 dashes on the row.
+    expect(within(screen.getByTestId('position-row-12')).getAllByText('—').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('negative day change renders TRUE MINUS on both parts', () => {
+    const fx = buildPositions(
+      [{ id: 1, name: 'R' }], [h(31, 1, 'FXAIX', 200, null)],
+      new Map([['FXAIX', info(null, null, null, -0.57, 154.8)]]),
+      [p('FXAIX', '2026-08-08', 154.23)],
+    );
+    renderSection(fx);
+    const row = screen.getByTestId('position-row-31');
+    expect(row).toHaveTextContent('−$114.00'); // −0.57 × 200
+    expect(row).toHaveTextContent('(−0.4%)');  // 0.57 / 154.8
+  });
+
+  it('day change renders on an UNPRICED row when the facts exist (D-WB9)', () => {
+    const bare = buildPositions(
+      [{ id: 1, name: 'E' }], [h(61, 1, 'NOP', 5, null)],
+      new Map([['NOP', info(null, null, null, 9.9, 100)]]), [],
+    );
+    renderSection(bare);
+    const row = screen.getByTestId('position-row-61');
+    expect(row).toHaveTextContent('+$49.50');  // 9.9 × 5 — honest fetched fact
+    expect(row).toHaveTextContent('(+9.9%)');  // 9.9 / 100
+  });
+
+  it('account-total Day-change cell sums priced rows only, signed cents, no pct (CP-W6)', () => {
+    renderSection(buildPositions(accounts, holdings, DAY_INFO, prices));
+    const total = screen.getByTestId('positions-total-1');
+    expect(total).toHaveTextContent('+$12.00'); // only VTI has facts
+    // and the since-refresh total still renders beside it
+    expect(total).toHaveTextContent('+$55.00'); // (245.50 − 240.00) × 10
+  });
+});
+
+describe('Sortable headers (Wave B, D-WB1/10/11, CP-W8/W9)', () => {
+  // TWO accounts — pins the section-wide scope: one click re-sorts BOTH tables.
+  const accounts = [{ id: 1, name: 'Brokerage' }, { id: 2, name: 'Roth IRA' }];
+  const holdings = [
+    h(11, 1, 'VTI', 10, 2100), h(12, 1, 'BND', 20, null), h(13, 1, 'ABC', 5, 100), // ABC unpriced
+    h(21, 2, 'VTI', 4, null), h(22, 2, 'BND', 20, null),
+  ];
+  const prices = [p('VTI', '2026-08-07', 240), p('VTI', '2026-08-08', 245.5), p('BND', '2026-08-08', 72.1)];
+  const rowOrder = (name: string) =>
+    within(screen.getByRole('table', { name }))
+      .getAllByTestId(/^position-row-/)
+      .map((el) => el.getAttribute('data-testid'));
+
+  it('default: aria-sort="descending" on every Current-value header; no other th carries aria-sort', () => {
+    renderSection(buildPositions(accounts, holdings, INFO, prices));
+    const valueHeaders = screen.getAllByRole('columnheader', { name: 'Current value' });
+    expect(valueHeaders).toHaveLength(2); // one per account table
+    for (const th of valueHeaders) expect(th).toHaveAttribute('aria-sort', 'descending');
+    for (const th of screen.getAllByRole('columnheader', { name: 'Symbol' })) {
+      expect(th).not.toHaveAttribute('aria-sort');
+    }
+  });
+
+  it('clicking Symbol in ONE table re-sorts EVERY table (section scope) — unpriced still pinned last', () => {
+    renderSection(buildPositions(accounts, holdings, INFO, prices));
+    // defaults: Brokerage [VTI 2455, BND 1442, ABC]; Roth [BND 1442, VTI 982]
+    expect(rowOrder('Positions — Brokerage')).toEqual(['position-row-11', 'position-row-12', 'position-row-13']);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Symbol' })[0]); // first click → asc
+    // asc: Brokerage priced [BND, VTI] + pinned unpriced ABC (alphabetically FIRST, still last)
+    expect(rowOrder('Positions — Brokerage')).toEqual(['position-row-12', 'position-row-11', 'position-row-13']);
+    expect(rowOrder('Positions — Roth IRA')).toEqual(['position-row-22', 'position-row-21']);
+    for (const th of screen.getAllByRole('columnheader', { name: 'Symbol' })) {
+      expect(th).toHaveAttribute('aria-sort', 'ascending');
+    }
+    // Current value headers dropped their aria-sort
+    for (const th of screen.getAllByRole('columnheader', { name: 'Current value' })) {
+      expect(th).not.toHaveAttribute('aria-sort');
+    }
+  });
+
+  it('clicking the ACTIVE header toggles direction', () => {
+    renderSection(buildPositions(accounts, holdings, INFO, prices));
+    const symbol = screen.getAllByRole('button', { name: 'Symbol' })[0];
+    fireEvent.click(symbol); // asc
+    fireEvent.click(symbol); // desc
+    expect(rowOrder('Positions — Brokerage')).toEqual(['position-row-11', 'position-row-12', 'position-row-13']);
+    expect(rowOrder('Positions — Roth IRA')).toEqual(['position-row-21', 'position-row-22']);
+    expect(screen.getAllByRole('columnheader', { name: 'Symbol' })[0]).toHaveAttribute('aria-sort', 'descending');
+  });
+
+  it('numeric headers start desc; null-key rows sink within their partition (Total gain/loss)', () => {
+    renderSection(buildPositions(accounts, holdings, INFO, prices));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Total gain/loss' })[0]);
+    // Brokerage priced: VTI +355 keyed; BND null basis → keyless, after VTI; ABC unpriced last.
+    expect(rowOrder('Positions — Brokerage')).toEqual(['position-row-11', 'position-row-12', 'position-row-13']);
+    expect(screen.getAllByRole('columnheader', { name: 'Total gain/loss' })[0])
+      .toHaveAttribute('aria-sort', 'descending');
+  });
+
+  it('the 52-week header is NOT a button and never carries aria-sort (CP-W9)', () => {
+    renderSection(buildPositions(accounts, holdings, INFO, prices));
+    expect(screen.queryByRole('button', { name: '52-week range' })).toBeNull();
+    for (const th of screen.getAllByRole('columnheader', { name: '52-week range' })) {
+      expect(th).not.toHaveAttribute('aria-sort');
+    }
+  });
+
+  it('the account-total row stays last under every sort', () => {
+    renderSection(buildPositions(accounts, holdings, INFO, prices));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Symbol' })[0]);
+    const table = screen.getByRole('table', { name: 'Positions — Brokerage' });
+    const bodyRows = within(table).getAllByRole('row').slice(1); // drop header row
+    expect(bodyRows[bodyRows.length - 1]).toHaveAttribute('data-testid', 'positions-total-1');
   });
 });

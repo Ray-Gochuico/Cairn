@@ -74,9 +74,11 @@ export default function TickersPanel() {
         accentColor: editing.accentColor,
         sector: editing.sector,
         industry: editing.industry,
-        // Fetched facts (0053) pass through so a form edit preserves them.
+        // Fetched facts (0053/0055) pass through so a form edit preserves them.
         fiftyTwoWeekLow: editing.fiftyTwoWeekLow,
         fiftyTwoWeekHigh: editing.fiftyTwoWeekHigh,
+        regularMarketChange: editing.regularMarketChange,
+        regularMarketPreviousClose: editing.regularMarketPreviousClose,
       }
     : undefined;
 

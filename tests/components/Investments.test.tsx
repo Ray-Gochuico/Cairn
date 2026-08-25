@@ -956,8 +956,9 @@ describe('Investments page — 529 section', () => {
     expect(within(acctTwo).getByTestId('position-row-2')).toHaveTextContent('BND');
     // Zero-priced account total: the CP-6 suffix ALONE — the m1 ruling: no
     // redundant null-total dash composed in front of it. EXACT cell text.
+    // Current value is the 6th cell now — the Day-change cell (Wave B) sits at index 2.
     const totalCells = within(within(acctOne).getByTestId('positions-total-1')).getAllByRole('cell');
-    expect(totalCells[4].textContent?.replace(/\s+/g, ' ').trim()).toBe('— excludes 1 without a price');
+    expect(totalCells[5].textContent?.replace(/\s+/g, ' ').trim()).toBe('— excludes 1 without a price');
     // CP-8: the honest zero-cached-prices caption — renders only once the
     // price SELECT has resolved (m3), hence the waitFor.
     await waitFor(() => {

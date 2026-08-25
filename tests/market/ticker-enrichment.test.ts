@@ -2,19 +2,22 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { YahooClient } from '@/market/yahoo-client';
 import type { TickersRepo } from '@/domain/tickers';
 import type { Ticker } from '@/types/schema';
-import { enrichTickerIfMissing, updateTicker52Week } from '@/market/ticker-enrichment';
+import { enrichTickerIfMissing, updateTicker52WeekAndDayChange } from '@/market/ticker-enrichment';
 
 function makeYahooMock(
   overrides: Partial<{
     fundProfile: ReturnType<typeof vi.fn>;
     assetProfile: ReturnType<typeof vi.fn>;
-    summaryDetail: ReturnType<typeof vi.fn>;
+    quoteFacts: ReturnType<typeof vi.fn>;
   }> = {},
 ): YahooClient {
   return {
     fundProfile: vi.fn().mockResolvedValue({ category: null, quoteType: null }),
     assetProfile: vi.fn().mockResolvedValue({ sector: null, industry: null }),
-    summaryDetail: vi.fn().mockResolvedValue({ fiftyTwoWeekLow: null, fiftyTwoWeekHigh: null }),
+    quoteFacts: vi.fn().mockResolvedValue({
+      fiftyTwoWeekLow: null, fiftyTwoWeekHigh: null,
+      regularMarketChange: null, regularMarketPreviousClose: null,
+    }),
     ...overrides,
   } as unknown as YahooClient;
 }
@@ -24,12 +27,14 @@ function makeTickersMock(
     lookup: ReturnType<typeof vi.fn>;
     upsert: ReturnType<typeof vi.fn>;
     set52Week: ReturnType<typeof vi.fn>;
+    setDayChange: ReturnType<typeof vi.fn>;
   }> = {},
 ): TickersRepo {
   return {
     lookup: vi.fn().mockResolvedValue(null),
     upsert: vi.fn().mockResolvedValue(undefined),
     set52Week: vi.fn().mockResolvedValue(undefined),
+    setDayChange: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   } as unknown as TickersRepo;
 }
@@ -332,39 +337,51 @@ describe('enrichTickerIfMissing return value (round-2 C2: did a row get written?
   });
 });
 
-describe('updateTicker52Week (D-PT14)', () => {
-  it('fetches summaryDetail and writes via set52Week', async () => {
+describe('updateTicker52WeekAndDayChange (D-PT14 / Wave B D-WB6)', () => {
+  it('fetches quoteFacts and writes via set52Week', async () => {
     const yahoo = makeYahooMock({
-      summaryDetail: vi.fn().mockResolvedValue({ fiftyTwoWeekLow: 61.1, fiftyTwoWeekHigh: 78.9 }),
+      quoteFacts: vi.fn().mockResolvedValue({
+        fiftyTwoWeekLow: 61.1, fiftyTwoWeekHigh: 78.9,
+        regularMarketChange: null, regularMarketPreviousClose: null,
+      }),
     });
     const tickers = makeTickersMock();
 
-    const wrote = await updateTicker52Week('VTI', { yahoo, tickers });
+    const wrote = await updateTicker52WeekAndDayChange('VTI', { yahoo, tickers });
 
     expect(wrote).toBe(true);
-    expect(yahoo.summaryDetail).toHaveBeenCalledWith('VTI');
+    expect(yahoo.quoteFacts).toHaveBeenCalledWith('VTI');
     expect(tickers.set52Week).toHaveBeenCalledWith('VTI', 61.1, 78.9);
+    // Group independence (D-WB6): a null day group never writes.
+    expect(tickers.setDayChange).not.toHaveBeenCalled();
   });
 
   it('writes a partial range (one field null) — better than dropping the fetched half', async () => {
     const yahoo = makeYahooMock({
-      summaryDetail: vi.fn().mockResolvedValue({ fiftyTwoWeekLow: 61.1, fiftyTwoWeekHigh: null }),
+      quoteFacts: vi.fn().mockResolvedValue({
+        fiftyTwoWeekLow: 61.1, fiftyTwoWeekHigh: null,
+        regularMarketChange: null, regularMarketPreviousClose: null,
+      }),
     });
     const tickers = makeTickersMock();
 
-    const wrote = await updateTicker52Week('VTI', { yahoo, tickers });
+    const wrote = await updateTicker52WeekAndDayChange('VTI', { yahoo, tickers });
 
     expect(wrote).toBe(true);
     expect(tickers.set52Week).toHaveBeenCalledWith('VTI', 61.1, null);
+    expect(tickers.setDayChange).not.toHaveBeenCalled();
   });
 
-  it('a both-null Yahoo response writes NOTHING (never clobbers stored values)', async () => {
+  it('a both-null 52-week response with no day facts writes NOTHING (never clobbers stored values)', async () => {
     const yahoo = makeYahooMock({
-      summaryDetail: vi.fn().mockResolvedValue({ fiftyTwoWeekLow: null, fiftyTwoWeekHigh: null }),
+      quoteFacts: vi.fn().mockResolvedValue({
+        fiftyTwoWeekLow: null, fiftyTwoWeekHigh: null,
+        regularMarketChange: null, regularMarketPreviousClose: null,
+      }),
     });
     const tickers = makeTickersMock();
 
-    const wrote = await updateTicker52Week('VTI', { yahoo, tickers });
+    const wrote = await updateTicker52WeekAndDayChange('VTI', { yahoo, tickers });
 
     expect(wrote).toBe(false);
     expect(tickers.set52Week).not.toHaveBeenCalled();
@@ -372,24 +389,89 @@ describe('updateTicker52Week (D-PT14)', () => {
 
   it('is best-effort: a Yahoo error returns false and writes nothing', async () => {
     const yahoo = makeYahooMock({
-      summaryDetail: vi.fn().mockRejectedValue(new Error('429')),
+      quoteFacts: vi.fn().mockRejectedValue(new Error('429')),
     });
     const tickers = makeTickersMock();
 
-    const wrote = await updateTicker52Week('VTI', { yahoo, tickers });
+    const wrote = await updateTicker52WeekAndDayChange('VTI', { yahoo, tickers });
 
     expect(wrote).toBe(false);
     expect(tickers.set52Week).not.toHaveBeenCalled();
+    expect(tickers.setDayChange).not.toHaveBeenCalled();
   });
 
   it('is best-effort: a set52Week write failure returns false (never throws)', async () => {
     const yahoo = makeYahooMock({
-      summaryDetail: vi.fn().mockResolvedValue({ fiftyTwoWeekLow: 61.1, fiftyTwoWeekHigh: 78.9 }),
+      quoteFacts: vi.fn().mockResolvedValue({
+        fiftyTwoWeekLow: 61.1, fiftyTwoWeekHigh: 78.9,
+        regularMarketChange: null, regularMarketPreviousClose: null,
+      }),
     });
     const tickers = makeTickersMock({
       set52Week: vi.fn().mockRejectedValue(new Error('locked')),
     });
 
-    await expect(updateTicker52Week('VTI', { yahoo, tickers })).resolves.toBe(false);
+    await expect(updateTicker52WeekAndDayChange('VTI', { yahoo, tickers })).resolves.toBe(false);
+  });
+
+  it('a day-change-only response writes via setDayChange and NOT set52Week', async () => {
+    const yahoo = makeYahooMock({
+      quoteFacts: vi.fn().mockResolvedValue({
+        fiftyTwoWeekLow: null, fiftyTwoWeekHigh: null,
+        regularMarketChange: 1.2, regularMarketPreviousClose: 237.6,
+      }),
+    });
+    const tickers = makeTickersMock();
+    const wrote = await updateTicker52WeekAndDayChange('VTI', { yahoo, tickers });
+    expect(wrote).toBe(true);
+    expect(tickers.setDayChange).toHaveBeenCalledWith('VTI', 1.2, 237.6);
+    expect(tickers.set52Week).not.toHaveBeenCalled();
+  });
+
+  it('both groups present → both targeted writes fire', async () => {
+    const yahoo = makeYahooMock({
+      quoteFacts: vi.fn().mockResolvedValue({
+        fiftyTwoWeekLow: 61.1, fiftyTwoWeekHigh: 78.9,
+        regularMarketChange: -0.57, regularMarketPreviousClose: 154.8,
+      }),
+    });
+    const tickers = makeTickersMock();
+    const wrote = await updateTicker52WeekAndDayChange('VTI', { yahoo, tickers });
+    expect(wrote).toBe(true);
+    expect(tickers.set52Week).toHaveBeenCalledWith('VTI', 61.1, 78.9);
+    expect(tickers.setDayChange).toHaveBeenCalledWith('VTI', -0.57, 154.8);
+  });
+
+  it('a partial day group (change only) still writes — the shipped partial-52-week semantics, per group', async () => {
+    const yahoo = makeYahooMock({
+      quoteFacts: vi.fn().mockResolvedValue({
+        fiftyTwoWeekLow: null, fiftyTwoWeekHigh: null,
+        regularMarketChange: 1.2, regularMarketPreviousClose: null,
+      }),
+    });
+    const tickers = makeTickersMock();
+    const wrote = await updateTicker52WeekAndDayChange('VTI', { yahoo, tickers });
+    expect(wrote).toBe(true);
+    expect(tickers.setDayChange).toHaveBeenCalledWith('VTI', 1.2, null);
+  });
+
+  it('an all-four-null response writes NOTHING (never clobbers either group)', async () => {
+    const yahoo = makeYahooMock(); // default mock: all four null
+    const tickers = makeTickersMock();
+    const wrote = await updateTicker52WeekAndDayChange('VTI', { yahoo, tickers });
+    expect(wrote).toBe(false);
+    expect(tickers.set52Week).not.toHaveBeenCalled();
+    expect(tickers.setDayChange).not.toHaveBeenCalled();
+  });
+
+  it('is best-effort: a setDayChange write failure returns false (never throws)', async () => {
+    const yahoo = makeYahooMock({
+      quoteFacts: vi.fn().mockResolvedValue({
+        fiftyTwoWeekLow: null, fiftyTwoWeekHigh: null,
+        regularMarketChange: 1.2, regularMarketPreviousClose: 237.6,
+      }),
+    });
+    const tickers = makeTickersMock({ setDayChange: vi.fn().mockRejectedValue(new Error('locked')) });
+    await expect(updateTicker52WeekAndDayChange('VTI', { yahoo, tickers })).resolves.toBe(false);
   });
 });

@@ -8,6 +8,9 @@ import type { Holding } from '@/types/schema';
  * (donuts + concentration consume it); this module must never import it.
  * Pure and CLOCK-FREE: no DB, no new Date(), no network. The 52-week range
  * is a fetched fact carried on the ticker (D-P4 revised), not derived here.
+ * Wave B (0055): day-change facts pass through from the tickers store;
+ * sortPositionRows is the ONLY reordering surface (buildPositions' own
+ * output order is frozen — its pins and the default render depend on it).
  */
 
 /** Raw price_cache row as SELECTed (snake_case fetched_at preserved). */
@@ -24,6 +27,12 @@ export interface TickerPositionInfo {
   name: string | null;
   fiftyTwoWeekLow: number | null;
   fiftyTwoWeekHigh: number | null;
+  /** Per-share $ move for the market day current at the last refresh
+   * (0055, SIGNED). Null until first fetched. */
+  regularMarketChange: number | null;
+  /** That market day's baseline close — kept so pct is DERIVED
+   * (change / previousClose), never a second fetched unit. */
+  regularMarketPreviousClose: number | null;
 }
 
 export interface PositionRow {
@@ -49,6 +58,14 @@ export interface PositionRow {
   /** Marker fraction 0..1 (clamped); null when the range is absent OR the
    * row has no last price to place (D-PT3). */
   week52MarkerPct: number | null;
+  /** Position-level $ move for the last refresh's market day: fetched
+   * per-share regularMarketChange × shares (D-WB2). Independent of the
+   * price cache — renders even on an unpriced row (D-WB9, the 52-week
+   * labels precedent); null when the fact was never fetched. */
+  dayChangeValue: number | null;
+  /** change / previousClose (fraction) — derived; null when either fact
+   * is missing or previousClose ≤ 0. */
+  dayChangePct: number | null;
 }
 
 export interface AccountPositions {
@@ -60,6 +77,10 @@ export interface AccountPositions {
   totalValue: number | null;
   /** Sum of sinceRefreshValue over rows that have one; null when none (D-PT4). */
   totalSinceRefresh: number | null;
+  /** Sum of dayChangeValue over PRICED rows that have one (mirrors
+   * totalSinceRefresh; unpriced rows are excluded from every total —
+   * D-WB9); null when none. */
+  totalDayChange: number | null;
   unpricedCount: number;
 }
 
@@ -130,6 +151,15 @@ export function buildPositions(
           : 0.5;
     }
 
+    // Day change (Wave B, 0055): fetched per-share market-day facts.
+    // LOOSE != null guards (the h.costBasis precedent): a fixture or
+    // pre-parse row that omits the fields behaves like null, never NaN.
+    const change = fetched?.regularMarketChange ?? null;
+    const prevClose = fetched?.regularMarketPreviousClose ?? null;
+    const dayChangeValue = change != null ? change * h.shareCount : null;
+    const dayChangePct =
+      change != null && prevClose != null && prevClose > 0 ? change / prevClose : null;
+
     return {
       key: h.id != null ? String(h.id) : `${h.ticker}#${idx}`,
       ticker: h.ticker,
@@ -148,6 +178,8 @@ export function buildPositions(
       week52Low,
       week52High,
       week52MarkerPct,
+      dayChangeValue,
+      dayChangePct,
     };
   };
 
@@ -173,6 +205,7 @@ export function buildPositions(
       r.pctOfAccount = pricedSum > 0 ? r.currentValue! / pricedSum : null;
     }
     const withDelta = priced.filter((r) => r.sinceRefreshValue !== null);
+    const withDay = priced.filter((r) => r.dayChangeValue !== null);
     out.push({
       accountId: a.id,
       accountName: a.name,
@@ -180,6 +213,8 @@ export function buildPositions(
       totalValue: priced.length > 0 ? pricedSum : null,
       totalSinceRefresh:
         withDelta.length > 0 ? withDelta.reduce((s, r) => s + r.sinceRefreshValue!, 0) : null,
+      totalDayChange:
+        withDay.length > 0 ? withDay.reduce((s, r) => s + r.dayChangeValue!, 0) : null,
       unpricedCount: unpriced.length,
     });
   }
@@ -193,4 +228,72 @@ export function buildPositions(
   }
 
   return { accounts: out, asOfUtc, pricesResolved };
+}
+
+/** Sortable column keys (D-WB10). The 52-week range is deliberately NOT
+ * sortable — a range has no honest scalar (D-WB8 in the Wave B plan). */
+export type PositionsSortKey =
+  | 'symbol'
+  | 'lastPrice'
+  | 'dayChange'
+  | 'sinceRefresh'
+  | 'totalGain'
+  | 'currentValue'
+  | 'pctOfAccount'
+  | 'quantity'
+  | 'costBasis';
+
+export interface PositionsSort {
+  key: PositionsSortKey;
+  dir: 'asc' | 'desc';
+}
+
+/** The v1.4.0 render: sortPositionRows(rows, DEFAULT_POSITIONS_SORT) is the
+ * IDENTITY on buildPositions output (priced by value desc, unpriced by
+ * ticker A→Z, pinned last) — pinned by test. */
+export const DEFAULT_POSITIONS_SORT: PositionsSort = { key: 'currentValue', dir: 'desc' };
+
+function sortValue(r: PositionRow, key: PositionsSortKey): number | string | null {
+  switch (key) {
+    case 'symbol': return r.ticker;
+    case 'lastPrice': return r.lastPrice;
+    case 'dayChange': return r.dayChangeValue;
+    case 'sinceRefresh': return r.sinceRefreshValue;
+    case 'totalGain': return r.totalGainValue;
+    case 'currentValue': return r.currentValue;
+    case 'pctOfAccount': return r.pctOfAccount;
+    case 'quantity': return r.quantity;
+    case 'costBasis': return r.costBasis;
+  }
+}
+
+/**
+ * Pure, NON-MUTATING view-layer reorder of built rows (D-WB10). Rules:
+ * (1) unpriced rows are ALWAYS pinned after priced rows, regardless of key
+ *     (owner rule — their derived cells are "—");
+ * (2) within each partition, rows whose sort value is null go last and keep
+ *     their default order;
+ * (3) non-null values compare asc/desc; ties keep the default order
+ *     (stable Array.sort over the builder's frozen output order).
+ * buildPositions' own output order is untouched — the default sort is the
+ * identity, so the initial render is byte-identical to v1.4.0.
+ */
+export function sortPositionRows(rows: PositionRow[], sort: PositionsSort): PositionRow[] {
+  const sortPartition = (group: PositionRow[]): PositionRow[] => {
+    const keyed = group.filter((r) => sortValue(r, sort.key) !== null);
+    const keyless = group.filter((r) => sortValue(r, sort.key) === null);
+    const sorted = [...keyed].sort((a, b) => {
+      const va = sortValue(a, sort.key)!;
+      const vb = sortValue(b, sort.key)!;
+      const cmp =
+        typeof va === 'string'
+          ? va < (vb as string) ? -1 : va > (vb as string) ? 1 : 0
+          : (va as number) - (vb as number);
+      return sort.dir === 'asc' ? cmp : -cmp;
+    });
+    return [...sorted, ...keyless];
+  };
+  const priced = rows.filter((r) => r.currentValue !== null);
+  const unpriced = rows.filter((r) => r.currentValue === null);
+  return [...sortPartition(priced), ...sortPartition(unpriced)];
 }

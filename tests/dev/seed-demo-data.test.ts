@@ -309,6 +309,35 @@ describe('seedDemoData', () => {
     ]);
   });
 
+  it('seeds day-change facts on the fund trio only, coherent with the latest cached price (AAPL/NVDA stay null → "—")', async () => {
+    await seedDemoData(db);
+    const rows = await db.select<{ ticker: string; chg: number | null; prev: number | null }>(
+      'SELECT ticker, regular_market_change AS chg, regular_market_previous_close AS prev FROM tickers WHERE ticker IN (?,?,?,?,?) ORDER BY ticker',
+      ['AAPL', 'BND', 'FXAIX', 'NVDA', 'VTI'],
+    );
+    expect(rows).toEqual([
+      { ticker: 'AAPL', chg: null, prev: null },
+      { ticker: 'BND', chg: 0.12, prev: 71.52 },
+      { ticker: 'FXAIX', chg: -0.57, prev: 154.8 },
+      { ticker: 'NVDA', chg: null, prev: null },
+      { ticker: 'VTI', chg: 1.2, prev: 237.6 },
+    ]);
+    // Coherence (D-WB13): previous_close + change ≈ the latest seeded cached
+    // price — what a real refresh produces. toBeCloseTo, NEVER exact float
+    // sums (237.6 + 1.2 === 238.79999999999998 in doubles).
+    const latest = await db.select<{ ticker: string; price: number }>(
+      `SELECT ticker, price FROM price_cache pc
+       WHERE ticker IN (?,?,?)
+         AND date = (SELECT MAX(date) FROM price_cache p2 WHERE p2.ticker = pc.ticker)
+       ORDER BY ticker`,
+      ['BND', 'FXAIX', 'VTI'],
+    );
+    const byTicker = new Map(latest.map((r) => [r.ticker, r.price]));
+    expect(71.52 + 0.12).toBeCloseTo(byTicker.get('BND')!, 2);    // 71.64
+    expect(154.8 + -0.57).toBeCloseTo(byTicker.get('FXAIX')!, 2); // 154.23
+    expect(237.6 + 1.2).toBeCloseTo(byTicker.get('VTI')!, 2);     // 238.80
+  });
+
   it('seeds cost basis on all holdings except BND (its gain honestly renders "—")', async () => {
     await seedDemoData(db);
     const rows = await db.select<{ ticker: string; cost_basis: number | null }>(

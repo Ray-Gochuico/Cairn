@@ -21,6 +21,9 @@ const loadSectorIndustryMigration = () =>
 const loadTicker52WeekMigration = () =>
   readFileSync(resolve(__dirname, '../../src/db/migrations/0053_ticker_52_week.sql'), 'utf-8');
 
+const loadTickerDayChangeMigration = () =>
+  readFileSync(resolve(__dirname, '../../src/db/migrations/0055_ticker_day_change.sql'), 'utf-8');
+
 const sampleTicker = (): Ticker => ({
   ticker: 'VTI',
   name: 'Vanguard Total Stock Market ETF',
@@ -45,6 +48,8 @@ describe('TickersRepo', () => {
       { version: '0016_add_ticker_sector_industry', sql: loadSectorIndustryMigration() },
       // 0053 is required since upsert writes the 52-week columns (deviation #5).
       { version: '0053_ticker_52_week', sql: loadTicker52WeekMigration() },
+      // 0055 is required since upsert writes the day-change columns (same class).
+      { version: '0055_ticker_day_change', sql: loadTickerDayChangeMigration() },
     ]);
     repo = new TickersRepo(db);
   });
@@ -194,7 +199,7 @@ describe('TickersRepo', () => {
   });
 });
 
-describe('TickersRepo — 52-week fields (0053)', () => {
+describe('TickersRepo — 52-week (0053) + day-change (0055) fields', () => {
   let db: SqliteAdapter;
 
   beforeEach(async () => {
@@ -204,6 +209,7 @@ describe('TickersRepo — 52-week fields (0053)', () => {
       { version: '0015_add_accent_colors', sql: loadAccentColorsMigration() },
       { version: '0016_add_ticker_sector_industry', sql: loadSectorIndustryMigration() },
       { version: '0053_ticker_52_week', sql: loadTicker52WeekMigration() },
+      { version: '0055_ticker_day_change', sql: loadTickerDayChangeMigration() },
     ]);
   });
 
@@ -245,6 +251,66 @@ describe('TickersRepo — 52-week fields (0053)', () => {
     await repo.set52Week('GHOST', 1, 2);
     expect(await repo.lookup('GHOST')).toBeNull();
   });
+
+  it('round-trips the day-change fields — SIGNED change — and defaults them null when omitted (0055)', async () => {
+    const repo = new TickersRepo(db);
+    await repo.upsert({
+      ticker: 'DAY', name: null, assetClass: 'OTHER', leverageFactor: 1.0,
+      direction: 'LONG', userAdded: false, accentColor: null, sector: null, industry: null,
+      regularMarketChange: -0.57, regularMarketPreviousClose: 154.8,
+    });
+    expect(await repo.lookup('DAY')).toMatchObject({
+      regularMarketChange: -0.57, regularMarketPreviousClose: 154.8,
+    });
+    await repo.upsert({
+      ticker: 'OMIT2', name: null, assetClass: 'OTHER', leverageFactor: 1.0,
+      direction: 'LONG', userAdded: false, accentColor: null, sector: null, industry: null,
+    });
+    expect(await repo.lookup('OMIT2')).toMatchObject({
+      regularMarketChange: null, regularMarketPreviousClose: null,
+    });
+  });
+
+  it('setDayChange updates in place; a full-object re-upsert preserves the fields (deviation-#5 class)', async () => {
+    const repo = new TickersRepo(db);
+    await repo.upsert({
+      ticker: 'KEEP2', name: null, assetClass: 'OTHER', leverageFactor: 1.0,
+      direction: 'LONG', userAdded: false, accentColor: null, sector: null, industry: null,
+    });
+    await repo.setDayChange('KEEP2', 1.2, 237.6);
+    expect(await repo.lookup('KEEP2')).toMatchObject({
+      regularMarketChange: 1.2, regularMarketPreviousClose: 237.6,
+    });
+    // The enrichment idiom: spread the existing row, overwrite sector/industry —
+    // must NOT clobber the day-change fields (13-column upsert).
+    const existing = (await repo.lookup('KEEP2'))!;
+    await repo.upsert({ ...existing, sector: 'Technology', industry: 'Software' });
+    expect(await repo.lookup('KEEP2')).toMatchObject({
+      regularMarketChange: 1.2, regularMarketPreviousClose: 237.6, sector: 'Technology',
+    });
+    // setDayChange on a missing ticker is a no-op, never an insert.
+    await repo.setDayChange('GHOST2', 1, 2);
+    expect(await repo.lookup('GHOST2')).toBeNull();
+  });
+
+  it('set52Week and setDayChange are independent — neither write touches the other group', async () => {
+    const repo = new TickersRepo(db);
+    await repo.upsert({
+      ticker: 'IND', name: null, assetClass: 'OTHER', leverageFactor: 1.0,
+      direction: 'LONG', userAdded: false, accentColor: null, sector: null, industry: null,
+    });
+    await repo.set52Week('IND', 200, 250);
+    await repo.setDayChange('IND', 1.2, 237.6);
+    expect(await repo.lookup('IND')).toMatchObject({
+      fiftyTwoWeekLow: 200, fiftyTwoWeekHigh: 250,
+      regularMarketChange: 1.2, regularMarketPreviousClose: 237.6,
+    });
+    await repo.setDayChange('IND', -0.3, 239.1);
+    expect(await repo.lookup('IND')).toMatchObject({
+      fiftyTwoWeekLow: 200, fiftyTwoWeekHigh: 250,   // untouched by the day write
+      regularMarketChange: -0.3, regularMarketPreviousClose: 239.1,
+    });
+  });
 });
 
 describe('TickersRepo with seed migration', () => {
@@ -260,6 +326,8 @@ describe('TickersRepo with seed migration', () => {
       { version: '0016_add_ticker_sector_industry', sql: loadSectorIndustryMigration() },
       // 0053 is required since upsert writes the 52-week columns (deviation #5).
       { version: '0053_ticker_52_week', sql: loadTicker52WeekMigration() },
+      // 0055 is required since upsert writes the day-change columns (same class).
+      { version: '0055_ticker_day_change', sql: loadTickerDayChangeMigration() },
     ]);
     repo = new TickersRepo(db);
   });
