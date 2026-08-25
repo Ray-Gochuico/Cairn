@@ -6,7 +6,8 @@ import { ThreadCard } from '@/components/interview/ThreadCard';
 import type { InterviewThread, PreferenceNode, ThreadEvaluation } from '@/types/interview';
 import { useInterviewAnswersStore } from '@/stores/interview-answers-store';
 import { answerKey, type InterviewAnswer } from '@/types/interview';
-import { makeHousehold, makeVehicle } from '../../factories';
+import { PropertyType } from '@/types/enums';
+import { makeHousehold, makeVehicle, makeProperty } from '../../factories';
 import { fixtureCtx } from '../../lib/interview/fixture';
 
 const CATS = [
@@ -16,10 +17,14 @@ const CATS = [
 const saveAnswer = vi.fn(async () => {});
 const clearAnswer = vi.fn(async () => {});
 
+// Owner household (Wave T2): a PRIMARY_RESIDENCE hides the home_purchase
+// thread (D-HP1), keeping this suite's vehicle-only premises intact —
+// without it the bare fixture's unknown tenure surfaces the house ask.
 const signalCtx = (answers = new Map<string, InterviewAnswer>()) => fixtureCtx({
   household: makeHousehold({ monthlyExpenseBaseline: 6000, growthScenarios: [{ label: 'moderate', rate: 0.05 }] }),
   vehicles: [makeVehicle({ id: 7, name: 'Old Wagon', year: 2014 })],
   categories: CATS,
+  properties: [makeProperty({ id: 1, type: PropertyType.PRIMARY_RESIDENCE })],
   interviewAnswers: answers,
 });
 
@@ -30,7 +35,11 @@ beforeEach(() => {
 
 describe('InterviewThreads / ThreadCard', () => {
   it('renders nothing at all when no thread surfaces (no false empty state)', () => {
-    const { container } = render(<InterviewThreads ctx={fixtureCtx()} />);
+    // Owner household: with Wave T2's home_purchase registered, a bare
+    // fixture (unknown tenure) would honestly ask CI-H1 — the premise
+    // here is "no thread surfaces", so make the household an owner.
+    const ctx = fixtureCtx({ properties: [makeProperty({ id: 1, type: PropertyType.PRIMARY_RESIDENCE })] });
+    const { container } = render(<InterviewThreads ctx={ctx} />);
     expect(container).toBeEmptyDOMElement();
   });
 
