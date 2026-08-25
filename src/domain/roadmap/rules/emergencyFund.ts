@@ -37,7 +37,7 @@ const CASH_TYPES = new Set<AccountType>([
   AccountType.ACCOUNT_HSA,
 ]);
 
-function latestSnapshotValue(snapshots: AccountSnapshot[], accountId: number): number {
+export function latestSnapshotValue(snapshots: AccountSnapshot[], accountId: number): number {
   let winner: AccountSnapshot | undefined;
   for (const s of snapshots) {
     if (s.accountId !== accountId) continue;
