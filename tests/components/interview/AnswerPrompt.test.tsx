@@ -54,4 +54,39 @@ describe('AnswerPrompt — amount-month-year arm (the T2 kernel-control delta)',
     fireEvent.change(screen.getByLabelText('Year'), { target: { value: '2028' } });
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
   });
+
+  // Smoke a11y fix: the past/current-month rejection must not be silent —
+  // Save stays disabled, and an inline error EXPLAINS it (the house trio:
+  // FieldError text + aria-invalid + aria-describedby on the month/year
+  // group), cleared once the selection becomes valid.
+  it('a past month with an amount entered explains WHY Save is disabled (the aria trio)', () => {
+    render(<AnswerPrompt prompt="p" spec={SPEC} onSubmit={async () => {}} />);
+    // No amount yet → no error even with a past month selected:
+    fireEvent.change(screen.getByLabelText('Month'), { target: { value: '01' } });
+    fireEvent.change(screen.getByLabelText('Year'), { target: { value: '2026' } });
+    expect(screen.queryByText('Pick a month at least one month ahead.')).toBeNull();
+    // Amount entered → the rejection is explained:
+    fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '60000' } });
+    const error = screen.getByText('Pick a month at least one month ahead.');
+    const month = screen.getByLabelText('Month');
+    const year = screen.getByLabelText('Year');
+    expect(month).toHaveAttribute('aria-invalid', 'true');
+    expect(year).toHaveAttribute('aria-invalid', 'true');
+    expect(month.getAttribute('aria-describedby')).toBe(error.id);
+    expect(year.getAttribute('aria-describedby')).toBe(error.id);
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  it('the month error clears (trio and all) when the selection becomes valid', () => {
+    render(<AnswerPrompt prompt="p" spec={SPEC} onSubmit={async () => {}} />);
+    fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '60000' } });
+    fireEvent.change(screen.getByLabelText('Month'), { target: { value: '01' } });
+    fireEvent.change(screen.getByLabelText('Year'), { target: { value: '2026' } });
+    expect(screen.getByText('Pick a month at least one month ahead.')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Year'), { target: { value: '2028' } });
+    expect(screen.queryByText('Pick a month at least one month ahead.')).toBeNull();
+    expect(screen.getByLabelText('Month')).not.toHaveAttribute('aria-invalid');
+    expect(screen.getByLabelText('Year')).not.toHaveAttribute('aria-invalid');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+  });
 });
