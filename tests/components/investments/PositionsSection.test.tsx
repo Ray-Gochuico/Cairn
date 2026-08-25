@@ -8,8 +8,19 @@ const h = (id: number, accountId: number, ticker: string, shareCount: number, co
   ({ id, accountId, ticker, shareCount, targetAllocationPct: null, costBasis } as Holding);
 const p = (ticker: string, date: string, price: number): PriceCacheRow =>
   ({ ticker, date, price, fetched_at: `${date} 20:10:00` });
-const info = (name: string | null, low: number | null, high: number | null): TickerPositionInfo =>
-  ({ name, fiftyTwoWeekLow: low, fiftyTwoWeekHigh: high });
+const info = (
+  name: string | null,
+  low: number | null,
+  high: number | null,
+  change: number | null = null,
+  prevClose: number | null = null,
+): TickerPositionInfo => ({
+  name,
+  fiftyTwoWeekLow: low,
+  fiftyTwoWeekHigh: high,
+  regularMarketChange: change,
+  regularMarketPreviousClose: prevClose,
+});
 
 const INFO = new Map<string, TickerPositionInfo>([
   ['VTI', info('Vanguard Total Stock Market ETF', 200, 250)],

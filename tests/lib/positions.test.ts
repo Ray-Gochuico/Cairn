@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import type { Holding } from '@/types/schema';
-import { buildPositions, type PriceCacheRow, type TickerPositionInfo } from '@/lib/positions';
+import {
+  buildPositions, sortPositionRows, DEFAULT_POSITIONS_SORT,
+  type PositionsSort, type PriceCacheRow, type TickerPositionInfo,
+} from '@/lib/positions';
 
 function h(id: number, accountId: number, ticker: string, shareCount: number, costBasis: number | null): Holding {
   return { id, accountId, ticker, shareCount, targetAllocationPct: null, costBasis } as Holding;
@@ -8,8 +11,20 @@ function h(id: number, accountId: number, ticker: string, shareCount: number, co
 function p(ticker: string, date: string, price: number): PriceCacheRow {
   return { ticker, date, price, fetched_at: `${date} 20:10:00` };
 }
-function info(name: string | null, low: number | null, high: number | null): TickerPositionInfo {
-  return { name, fiftyTwoWeekLow: low, fiftyTwoWeekHigh: high };
+function info(
+  name: string | null,
+  low: number | null,
+  high: number | null,
+  change: number | null = null,
+  prevClose: number | null = null,
+): TickerPositionInfo {
+  return {
+    name,
+    fiftyTwoWeekLow: low,
+    fiftyTwoWeekHigh: high,
+    regularMarketChange: change,
+    regularMarketPreviousClose: prevClose,
+  };
 }
 
 const INFO = new Map<string, TickerPositionInfo>([
@@ -214,5 +229,151 @@ describe('buildPositions — not-yet-loaded vs resolved-empty price rows (m3)', 
       [p('VTI', '2026-08-08', 245.5)],
     );
     expect(r.pricesResolved).toBe(true);
+  });
+});
+
+describe('buildPositions — day change (Wave B, 0055)', () => {
+  const build = (i: TickerPositionInfo | null, prices: PriceCacheRow[], shares = 10) =>
+    buildPositions(
+      [{ id: 1, name: 'A' }],
+      [h(1, 1, 'T', shares, null)],
+      i === null ? new Map() : new Map([['T', i]]),
+      prices,
+    ).accounts[0].rows[0];
+
+  it('dayChangeValue = change × shares; pct derived from previousClose (hand-computed)', () => {
+    const row = build(info(null, null, null, 1.2, 237.6), [p('T', '2026-08-08', 238.8)]);
+    expect(row.dayChangeValue).toBeCloseTo(12, 6);            // 1.20 × 10
+    expect(row.dayChangePct).toBeCloseTo(0.0050505, 6);       // 1.2 / 237.6
+  });
+
+  it('negative change stays signed end to end', () => {
+    const row = build(info(null, null, null, -0.57, 154.8), [p('T', '2026-08-08', 154.23)], 200);
+    expect(row.dayChangeValue).toBeCloseTo(-114, 6);          // −0.57 × 200
+    expect(row.dayChangePct).toBeCloseTo(-0.0036822, 6);      // −0.57 / 154.8
+  });
+
+  it('null change → both outputs null (strict "—")', () => {
+    const row = build(info(null, 200, 250, null, 237.6), [p('T', '2026-08-08', 238.8)]);
+    expect(row.dayChangeValue).toBeNull();
+    expect(row.dayChangePct).toBeNull();
+  });
+
+  it('change without previousClose → value renders, pct null (DeltaCell degrades)', () => {
+    const row = build(info(null, null, null, 1.2, null), [p('T', '2026-08-08', 238.8)]);
+    expect(row.dayChangeValue).toBeCloseTo(12, 6);
+    expect(row.dayChangePct).toBeNull();
+  });
+
+  it('previousClose 0 → pct null (no divide-by-zero)', () => {
+    const row = build(info(null, null, null, 1.2, 0), [p('T', '2026-08-08', 238.8)]);
+    expect(row.dayChangePct).toBeNull();
+  });
+
+  it('no ticker info at all → null (loose guards, never NaN)', () => {
+    const row = build(null, [p('T', '2026-08-08', 238.8)]);
+    expect(row.dayChangeValue).toBeNull();
+  });
+
+  it('UNPRICED row with fetched facts still carries a day change (D-WB9 honesty)…', () => {
+    const row = build(info(null, null, null, 1.2, 237.6), []);
+    expect(row.currentValue).toBeNull();
+    expect(row.dayChangeValue).toBeCloseTo(12, 6);
+  });
+
+  it('…but totalDayChange sums PRICED rows only, mirroring totalSinceRefresh (D-WB9)', () => {
+    const r = buildPositions(
+      [{ id: 1, name: 'A' }],
+      [h(1, 1, 'VTI', 10, null), h(2, 1, 'FXA', 200, null), h(3, 1, 'NOP', 5, null)],
+      new Map([
+        ['VTI', info(null, null, null, 1.2, 237.6)],   // priced: +12
+        ['FXA', info(null, null, null, -0.57, 154.8)], // priced: −114
+        ['NOP', info(null, null, null, 9.9, 100)],     // UNPRICED — excluded from the total
+      ]),
+      [p('VTI', '2026-08-08', 238.8), p('FXA', '2026-08-08', 154.23)],
+    );
+    expect(r.accounts[0].totalDayChange).toBeCloseTo(-102, 6); // 12 − 114
+    expect(r.accounts[0].rows.find((x) => x.ticker === 'NOP')!.dayChangeValue).toBeCloseTo(49.5, 6);
+  });
+
+  it('no row has a day change → totalDayChange null (never a fake $0)', () => {
+    const r = buildPositions(
+      [{ id: 1, name: 'A' }], [h(1, 1, 'VTI', 10, null)], new Map(),
+      [p('VTI', '2026-08-08', 238.8)],
+    );
+    expect(r.accounts[0].totalDayChange).toBeNull();
+  });
+});
+
+describe('sortPositionRows (Wave B, D-WB10)', () => {
+  // Fixture: three priced (VTI 2455 / BND 1442 / FXA 620), two unpriced (ABC, ZZZ).
+  // Hand math: VTI 245.5 × 10; BND 72.1 × 20; FXA 155 × 4.
+  const accounts = [{ id: 1, name: 'A' }];
+  const holdings = [
+    h(1, 1, 'VTI', 10, 2000),  // gain +455 (2455 − 2000); day +12 (1.2 × 10)
+    h(2, 1, 'BND', 20, null),  // gain null; day null (no info)
+    h(3, 1, 'FXA', 4, 400),    // gain +220 (620 − 400); day −2.28 (−0.57 × 4)
+    h(4, 1, 'ABC', 5, 100),    // unpriced
+    h(5, 1, 'ZZZ', 50, null),  // unpriced
+  ];
+  const INFO2 = new Map<string, TickerPositionInfo>([
+    ['VTI', info(null, 200, 250, 1.2, 237.6)],
+    ['FXA', info(null, null, null, -0.57, 154.8)],
+  ]);
+  const prices = [
+    p('VTI', '2026-08-07', 240), p('VTI', '2026-08-08', 245.5),
+    p('BND', '2026-08-08', 72.1), p('FXA', '2026-08-08', 155),
+  ];
+  const rows = buildPositions(accounts, holdings, INFO2, prices).accounts[0].rows;
+  const order = (sort: PositionsSort) => sortPositionRows(rows, sort).map((r) => r.ticker);
+
+  it('default sort is the IDENTITY on builder output (v1.4.0 render preserved)', () => {
+    expect(order(DEFAULT_POSITIONS_SORT)).toEqual(['VTI', 'BND', 'FXA', 'ABC', 'ZZZ']);
+    expect(sortPositionRows(rows, DEFAULT_POSITIONS_SORT)).not.toBe(rows); // non-mutating copy
+  });
+
+  it('symbol asc sorts within each partition — unpriced PINNED LAST even though ABC is alphabetically first', () => {
+    expect(order({ key: 'symbol', dir: 'asc' })).toEqual(['BND', 'FXA', 'VTI', 'ABC', 'ZZZ']);
+  });
+
+  it('symbol desc reverses both partitions independently', () => {
+    expect(order({ key: 'symbol', dir: 'desc' })).toEqual(['VTI', 'FXA', 'BND', 'ZZZ', 'ABC']);
+  });
+
+  it('currentValue asc reverses the priced partition; unpriced keep default order', () => {
+    expect(order({ key: 'currentValue', dir: 'asc' })).toEqual(['FXA', 'BND', 'VTI', 'ABC', 'ZZZ']);
+  });
+
+  it('totalGain desc: null-basis BND drops below keyed rows but stays above unpriced', () => {
+    expect(order({ key: 'totalGain', dir: 'desc' })).toEqual(['VTI', 'FXA', 'BND', 'ABC', 'ZZZ']);
+  });
+
+  it('totalGain asc: keyed rows flip, null-key + unpriced blocks hold position', () => {
+    expect(order({ key: 'totalGain', dir: 'asc' })).toEqual(['FXA', 'VTI', 'BND', 'ABC', 'ZZZ']);
+  });
+
+  it('dayChange desc/asc treats null day facts as keyless', () => {
+    expect(order({ key: 'dayChange', dir: 'desc' })).toEqual(['VTI', 'FXA', 'BND', 'ABC', 'ZZZ']);
+    expect(order({ key: 'dayChange', dir: 'asc' })).toEqual(['FXA', 'VTI', 'BND', 'ABC', 'ZZZ']);
+  });
+
+  it('quantity sorts BOTH partitions by their real values (unpriced still pinned last)', () => {
+    // priced: FXA 4 < VTI 10 < BND 20; unpriced: ABC 5 < ZZZ 50
+    expect(order({ key: 'quantity', dir: 'asc' })).toEqual(['FXA', 'VTI', 'BND', 'ABC', 'ZZZ']);
+    expect(order({ key: 'quantity', dir: 'desc' })).toEqual(['BND', 'VTI', 'FXA', 'ZZZ', 'ABC']);
+  });
+
+  it('costBasis desc: keyed [VTI 2000, FXA 400], null-basis BND last in priced; ABC keyed, ZZZ keyless in unpriced', () => {
+    expect(order({ key: 'costBasis', dir: 'desc' })).toEqual(['VTI', 'FXA', 'BND', 'ABC', 'ZZZ']);
+  });
+
+  it('ties keep the default order (stable sort): duplicate same-ticker lots', () => {
+    const dup = buildPositions(
+      accounts,
+      [h(11, 1, 'VTI', 10, null), h(12, 1, 'VTI', 10, null)],
+      new Map(), [p('VTI', '2026-08-08', 245.5)],
+    ).accounts[0].rows;
+    const sorted = sortPositionRows(dup, { key: 'lastPrice', dir: 'desc' });
+    expect(sorted.map((r) => r.key)).toEqual(['11', '12']); // equal keys → input order
   });
 });
