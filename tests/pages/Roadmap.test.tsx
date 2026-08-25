@@ -16,6 +16,9 @@ import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-stor
 import { useSettingsStore } from '@/stores/settings-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
 import { useTickersStore } from '@/stores/tickers-store';
+import { usePropertiesStore } from '@/stores/properties-store';
+import { useHousingPaymentsStore } from '@/stores/housing-payments-store';
+import { useGoalsStore } from '@/stores/goals-store';
 import { useInterviewAnswersStore } from '@/stores/interview-answers-store';
 import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import type { Household } from '@/types/schema';
@@ -71,6 +74,11 @@ function resetStores(household: Household | null, roadmapAccepted?: string) {
   useSettingsStore.setState({ settings: null, isLoading: false, error: null, load: async () => {} } as any);
   useHoldingsStore.setState({ holdings: [], isLoading: false, error: null, load: async () => {} } as any);
   useTickersStore.setState({ tickers: [], isLoading: false, error: null, load: async () => {} } as any);
+  // Wave T2 (D-HP7): three more stores joined the gate (15 → 18) —
+  // properties/housing-payments feed d_tenure, goals feeds the CTA dedup.
+  usePropertiesStore.setState({ properties: [], isLoading: false, error: null, load: async () => {} } as any);
+  useHousingPaymentsStore.setState({ housingPayments: [], isLoading: false, error: null, load: async () => {} } as any);
+  useGoalsStore.setState({ goals: [], isLoading: false, error: null, load: async () => {} } as any);
   useInterviewAnswersStore.setState({ answersByKey: new Map(), isLoading: false, error: null, load: async () => {} } as any);
 }
 
