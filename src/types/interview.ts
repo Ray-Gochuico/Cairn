@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type {
-  Vehicle, AssetValueSnapshot, AppSettings, Holding, Ticker,
+  Vehicle, AssetValueSnapshot, AppSettings, Holding, Ticker, Property, HousingPayment,
 } from './schema';
 import type { RoadmapContext } from './roadmap';
 
@@ -39,6 +39,8 @@ export interface InterviewContext extends RoadmapContext {
   settings: AppSettings | null;
   holdings: Holding[];
   tickers: Ticker[];
+  properties: Property[];
+  housingPayments: HousingPayment[];
   interviewAnswers: ReadonlyMap<string, InterviewAnswer>;
 }
 
@@ -47,7 +49,11 @@ export interface InterviewContext extends RoadmapContext {
 export type AnswerSpec =
   | { kind: 'enum'; options: { value: string; label: string }[] }
   | { kind: 'amount'; maxDollars?: number }
-  | { kind: 'amount-cadence' }; // the bar; session-only by convention (D-GI13)
+  | { kind: 'amount-cadence' } // the bar; session-only by convention (D-GI13)
+  // T2 (Appendix A pre-authorized): compound amount + month-year. Stored
+  // value shape: { amountDollars: number; targetMonth: 'YYYY-MM' } — the
+  // node's valueSchema pins it (home-purchase.ts HOUSE_TARGET_SCHEMA).
+  | { kind: 'amount-month-year'; maxDollars?: number };
 
 export type StorageSpec =
   | { kind: 'interview-answer' }

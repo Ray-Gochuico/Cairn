@@ -242,3 +242,51 @@ test('investments at the 1024×700 window floor: no horizontal body pan', async 
   expect(wrapperMinWidths.length).toBeGreaterThan(0); // never vacuously green
   for (const mw of wrapperMinWidths) expect(mw).toBe('0px');
 });
+
+test('roadmap interview: home-purchase — hidden for the owner, asks once the home is removed, plans, and tracks a goal', async ({ page }) => {
+  const errors = collectErrors(page);
+  // 1 — Owner state: the seed owns 'Demo Home' (PRIMARY_RESIDENCE) → the
+  //     house question must NOT surface (D-HP1 receipt).
+  await page.goto('/roadmap');
+  await page.getByRole('checkbox').check();
+  await page.getByRole('button', { name: 'Open Roadmap' }).click();
+  await expect(page.getByText('Suggested next step').first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Are there plans to buy a home?')).toHaveCount(0);
+  // 2 — Remove the property (test-local mutation: fresh context ⇒ fresh
+  //     IndexedDB). Verified against Property.tsx at execution: the editor
+  //     opens via the card's 'Edit details for Demo Home' button (clicking
+  //     the name text opens nothing); 'Delete property' lives in that
+  //     drawer; the confirm dialog's destructive button defaults 'Delete'.
+  //     Navigation is CLIENT-SIDE (sidebar links, the setup-honesty test's
+  //     idiom): the sql.js shim debounces IndexedDB persistence 250ms after
+  //     each write, so a hard page.goto right after a write races the flush
+  //     and can reload a pre-write DB (acceptance + delete both lost).
+  //     SPA navigation keeps the in-memory DB — no race, and it is the
+  //     path a real user takes.
+  await page.getByRole('link', { name: 'Property' }).click();
+  await page.getByRole('button', { name: 'Edit details for Demo Home' }).click();
+  await page.getByRole('button', { name: 'Delete property' }).click();
+  await page.getByRole('button', { name: 'Delete' }).click();
+  await expect(page.getByText('Demo Home')).toHaveCount(0); // the delete landed
+  // 3 — Back on /roadmap (no re-gate — acceptance held in-store): the ask.
+  await page.getByRole('link', { name: 'Roadmap' }).click();
+  await expect(page.getByText('Are there plans to buy a home?')).toBeVisible({ timeout: 30_000 });
+  await page.getByRole('button', { name: 'Within 5 years' }).click();
+  // 4 — The compound target: $60,000 by June two years out (run-date-relative).
+  const card = page.getByTestId('thread-home_purchase-');
+  const year = String(new Date().getFullYear() + 2);
+  await card.getByLabel('Amount').fill('60000');   // scoped: the bar has its own 'Amount'
+  await card.getByLabel('Month').selectOption('06');
+  await card.getByLabel('Year').selectOption(year);
+  await card.getByRole('button', { name: 'Save' }).click();
+  // 5 — The plan reply (monthly figures vary with run date → pattern pins;
+  //     the reserve is a seed literal → exact).
+  await expect(card).toContainText('Cash and savings on hand: $30,000');
+  await expect(card).toContainText(new RegExp(`reaches \\$60,000 by June ${year}`));
+  await expect(card).toContainText('The target is your number, not a suggestion.');
+  // 6 — CTA → a real DOWN_PAYMENT goal; the tracked state reads back from
+  //     the reloaded goals store (proves the write landed).
+  await card.getByRole('button', { name: 'Track this as a Goal' }).click();
+  await expect(card).toContainText('Tracked as a Goal — Home down payment.');
+  expect(errors.join('\n')).not.toContain('Maximum update depth');
+});

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Roadmap from '@/pages/Roadmap';
@@ -16,6 +16,9 @@ import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-stor
 import { useSettingsStore } from '@/stores/settings-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
 import { useTickersStore } from '@/stores/tickers-store';
+import { usePropertiesStore } from '@/stores/properties-store';
+import { useHousingPaymentsStore } from '@/stores/housing-payments-store';
+import { useGoalsStore } from '@/stores/goals-store';
 import { useInterviewAnswersStore } from '@/stores/interview-answers-store';
 import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import type { Household } from '@/types/schema';
@@ -71,6 +74,11 @@ function resetStores(household: Household | null, roadmapAccepted?: string) {
   useSettingsStore.setState({ settings: null, isLoading: false, error: null, load: async () => {} } as any);
   useHoldingsStore.setState({ holdings: [], isLoading: false, error: null, load: async () => {} } as any);
   useTickersStore.setState({ tickers: [], isLoading: false, error: null, load: async () => {} } as any);
+  // Wave T2 (D-HP7): three more stores joined the gate (15 → 18) —
+  // properties/housing-payments feed d_tenure, goals feeds the CTA dedup.
+  usePropertiesStore.setState({ properties: [], isLoading: false, error: null, load: async () => {} } as any);
+  useHousingPaymentsStore.setState({ housingPayments: [], isLoading: false, error: null, load: async () => {} } as any);
+  useGoalsStore.setState({ goals: [], isLoading: false, error: null, load: async () => {} } as any);
   useInterviewAnswersStore.setState({ answersByKey: new Map(), isLoading: false, error: null, load: async () => {} } as any);
 }
 
@@ -167,5 +175,21 @@ describe('Roadmap page', () => {
     useAccountsStore.setState({ accounts: [], isLoading: false, error: 'DB gone', load: async () => {} } as any);
     render(<MemoryRouter><Roadmap /></MemoryRouter>);
     expect(screen.getByRole('alert')).toHaveTextContent(/couldn.t load or save/i);
+  });
+
+  it('T2 f6 (D-HP7): mount loads properties, housing payments, and goals exactly once', () => {
+    // The cheapest wiring pin: deleting any of the three loads from the
+    // reload callback goes RED here while every other test stays green.
+    resetStores(makeHousehold(), ACCEPTED_VERSION);
+    const loadProperties = vi.fn(async () => {});
+    const loadHousingPayments = vi.fn(async () => {});
+    const loadGoals = vi.fn(async () => {});
+    usePropertiesStore.setState({ load: loadProperties } as any);
+    useHousingPaymentsStore.setState({ load: loadHousingPayments } as any);
+    useGoalsStore.setState({ load: loadGoals } as any);
+    render(<MemoryRouter><Roadmap /></MemoryRouter>);
+    expect(loadProperties).toHaveBeenCalledTimes(1);
+    expect(loadHousingPayments).toHaveBeenCalledTimes(1);
+    expect(loadGoals).toHaveBeenCalledTimes(1);
   });
 });

@@ -27,6 +27,7 @@ export function fixtureCtx(overrides: Partial<InterviewContext> = {}): Interview
     thresholds: { low: 5, high: 8 }, taxYear: 2026,
     today: new Date('2026-08-01T12:00:00Z'),
     vehicles: [], assetValueSnapshots: [], settings: null, holdings: [], tickers: [],
+    properties: [], housingPayments: [],
     interviewAnswers: new Map(),
     ...overrides,
   } as InterviewContext;

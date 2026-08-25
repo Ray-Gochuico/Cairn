@@ -3,6 +3,8 @@ import { Button } from '@/components/ui/button';
 import { useInterviewAnswersStore } from '@/stores/interview-answers-store';
 import type { InterviewContext, InterviewThread, SubjectKey, ThreadEvaluation } from '@/types/interview';
 import { AnswerPrompt } from './AnswerPrompt';
+import { HouseGoalCta } from './HouseGoalCta';
+import { recordUpcomingPurchase, type HouseTarget } from '@/domain/interview/threads/home-purchase';
 
 const monthYear = (iso: string): string =>
   new Date(iso).toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
@@ -51,6 +53,13 @@ export function ThreadCard({ thread, subject, ctx, evaluation }: {
               value: parsed.data, questionVersion: node.version,
               basis: pinBasis == null ? null : { branch: pinBasis.branch, ...pinBasis.facts },
             });
+            // D-HP4: home-purchase q_target additionally write-throughs the
+            // household's upcoming-purchase columns (the s5 consistency
+            // contract). The kernel's entity-column write side is unwired —
+            // this dispatch is the sanctioned substitute (plan T2).
+            if (thread.id === 'home_purchase' && node.id === 'q_target') {
+              await recordUpcomingPurchase(parsed.data as HouseTarget, ctx.today);
+            }
           }}
         />
       </Card>
@@ -65,6 +74,10 @@ export function ThreadCard({ thread, subject, ctx, evaluation }: {
         reply.lines.map((l, i) => <p key={i} className="text-sm">{l}</p>)}
       {reply.kind === 'plan' &&
         reply.assumes.map((a, i) => <p key={i} className="text-xs text-muted-foreground">{a}</p>)}
+      {thread.id === 'home_purchase' && reply.kind === 'plan' && (() => {
+        const hit = answeredPath.find(({ node }) => node.id === 'q_target');
+        return hit ? <HouseGoalCta target={hit.answer.value as HouseTarget} /> : null;
+      })()}
       {staleAnswers.map(({ node, answer }) => (
         <div key={node.id} className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
           <span>Answered {monthYear(answer.answeredAt!)} — still true?</span>

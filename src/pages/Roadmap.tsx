@@ -23,6 +23,9 @@ import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-stor
 import { useSettingsStore } from '@/stores/settings-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
 import { useTickersStore } from '@/stores/tickers-store';
+import { usePropertiesStore } from '@/stores/properties-store';
+import { useHousingPaymentsStore } from '@/stores/housing-payments-store';
+import { useGoalsStore } from '@/stores/goals-store';
 import { useInterviewAnswersStore } from '@/stores/interview-answers-store';
 import { useRoadmap } from '@/domain/roadmap/context';
 import { useInterview } from '@/domain/interview/context';
@@ -96,6 +99,13 @@ export default function Roadmap() {
   const loadSettings = useSettingsStore((s) => s.load);
   const loadHoldings = useHoldingsStore((s) => s.load);
   const loadTickers = useTickersStore((s) => s.load);
+  // T2 (D-HP7): three more stores join the same latched gate —
+  // properties/housing-payments feed d_tenure (an unhydrated properties
+  // store would misclassify an owner as unknown), goals feeds the
+  // HouseGoalCta dedup read.
+  const loadProperties = usePropertiesStore((s) => s.load);
+  const loadHousingPayments = useHousingPaymentsStore((s) => s.load);
+  const loadGoals = useGoalsStore((s) => s.load);
   const loadInterviewAnswers = useInterviewAnswersStore((s) => s.load);
 
   const reload = useCallback(() => {
@@ -113,6 +123,9 @@ export default function Roadmap() {
     void loadSettings();
     void loadHoldings();
     void loadTickers();
+    void loadProperties();
+    void loadHousingPayments();
+    void loadGoals();
     void loadInterviewAnswers();
   }, [
     loadHousehold,
@@ -129,6 +142,9 @@ export default function Roadmap() {
     loadSettings,
     loadHoldings,
     loadTickers,
+    loadProperties,
+    loadHousingPayments,
+    loadGoals,
     loadInterviewAnswers,
   ]);
 
@@ -152,6 +168,9 @@ export default function Roadmap() {
       useSettingsStore((s) => s.isLoading),
       useHoldingsStore((s) => s.isLoading),
       useTickersStore((s) => s.isLoading),
+      usePropertiesStore((s) => s.isLoading),
+      useHousingPaymentsStore((s) => s.isLoading),
+      useGoalsStore((s) => s.isLoading),
       useInterviewAnswersStore((s) => s.isLoading),
     ],
     [
@@ -169,6 +188,9 @@ export default function Roadmap() {
       useSettingsStore((s) => s.error),
       useHoldingsStore((s) => s.error),
       useTickersStore((s) => s.error),
+      usePropertiesStore((s) => s.error),
+      useHousingPaymentsStore((s) => s.error),
+      useGoalsStore((s) => s.error),
       useInterviewAnswersStore((s) => s.error),
     ],
     reload,
