@@ -260,23 +260,36 @@ export class YahooClient {
   }
 
   /**
-   * Returns the 52-week trading range for `ticker`, sourced from Yahoo's
-   * `quoteSummary` endpoint with `modules=summaryDetail` (D-P4 revised).
-   * Yahoo wraps numerics as {raw, fmt}; an absent module or field → null —
-   * callers treat null as "not fetchable right now", never as zero.
+   * Returns the fetched per-ticker quote facts the Positions table renders:
+   * the 52-week trading range (summaryDetail module, D-P4 revised) and the
+   * regular-market day change + previous close (price module, Wave B 0055)
+   * — ONE quoteSummary call, two modules. Yahoo wraps numerics as
+   * {raw, fmt}; an absent module or field → null — callers treat null as
+   * "not fetchable right now", never as zero. The percent is deliberately
+   * NOT read (its raw unit is a fraction here but percent units on the v7
+   * quote endpoint — callers derive change / previousClose instead).
    */
-  async summaryDetail(
-    ticker: string,
-  ): Promise<{ fiftyTwoWeekLow: number | null; fiftyTwoWeekHigh: number | null }> {
-    const data = await this.quoteSummary(ticker, ['summaryDetail']);
+  async quoteFacts(ticker: string): Promise<{
+    fiftyTwoWeekLow: number | null;
+    fiftyTwoWeekHigh: number | null;
+    regularMarketChange: number | null;
+    regularMarketPreviousClose: number | null;
+  }> {
+    const data = await this.quoteSummary(ticker, ['summaryDetail', 'price']);
     // Same `as any` rationale as fundTopHoldings / assetProfile — quoteSummary
     // returns an open-ended JSON blob; the typed boundary is this return type.
-    const detail = (data as any).quoteSummary?.result?.[0]?.summaryDetail;
+    const result = (data as any).quoteSummary?.result?.[0];
+    const detail = result?.summaryDetail;
+    const price = result?.price;
     const low = detail?.fiftyTwoWeekLow?.raw;
     const high = detail?.fiftyTwoWeekHigh?.raw;
+    const change = price?.regularMarketChange?.raw;
+    const prevClose = price?.regularMarketPreviousClose?.raw;
     return {
       fiftyTwoWeekLow: typeof low === 'number' ? low : null,
       fiftyTwoWeekHigh: typeof high === 'number' ? high : null,
+      regularMarketChange: typeof change === 'number' ? change : null,
+      regularMarketPreviousClose: typeof prevClose === 'number' ? prevClose : null,
     };
   }
 

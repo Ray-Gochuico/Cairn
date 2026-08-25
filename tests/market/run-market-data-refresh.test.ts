@@ -129,7 +129,7 @@ describe('runMarketDataRefresh', () => {
       .spyOn(tickerEnrichment, 'enrichTickerIfMissing')
       .mockResolvedValue(false);
     const update52Spy = vi
-      .spyOn(tickerEnrichment, 'updateTicker52Week')
+      .spyOn(tickerEnrichment, 'updateTicker52WeekAndDayChange')
       .mockResolvedValue(false);
 
     runMarketDataRefresh(db);
@@ -281,16 +281,16 @@ describe('runMarketDataRefresh', () => {
     it('reloads the tickers store once when any enrichment wrote a row', async () => {
       await seedOneHolding();
       vi.spyOn(tickerEnrichment, 'enrichTickerIfMissing').mockResolvedValue(true);
-      vi.spyOn(tickerEnrichment, 'updateTicker52Week').mockResolvedValue(false);
+      vi.spyOn(tickerEnrichment, 'updateTicker52WeekAndDayChange').mockResolvedValue(false);
       runMarketDataRefresh(db);
       await flush();
       expect(tickersLoad).toHaveBeenCalledTimes(1);
     });
 
-    it('reloads the tickers store once when only the 52-week pass wrote (enrich all no-op)', async () => {
+    it('reloads the tickers store once when only the facts pass wrote (enrich all no-op)', async () => {
       await seedOneHolding();
       vi.spyOn(tickerEnrichment, 'enrichTickerIfMissing').mockResolvedValue(false);
-      vi.spyOn(tickerEnrichment, 'updateTicker52Week').mockResolvedValue(true);
+      vi.spyOn(tickerEnrichment, 'updateTicker52WeekAndDayChange').mockResolvedValue(true);
       runMarketDataRefresh(db);
       await flush();
       expect(tickersLoad).toHaveBeenCalledTimes(1);
@@ -299,7 +299,7 @@ describe('runMarketDataRefresh', () => {
     it('does NOT reload the tickers store when every enrichment was a no-op', async () => {
       await seedOneHolding();
       vi.spyOn(tickerEnrichment, 'enrichTickerIfMissing').mockResolvedValue(false);
-      vi.spyOn(tickerEnrichment, 'updateTicker52Week').mockResolvedValue(false);
+      vi.spyOn(tickerEnrichment, 'updateTicker52WeekAndDayChange').mockResolvedValue(false);
       runMarketDataRefresh(db);
       await flush();
       expect(tickersLoad).not.toHaveBeenCalled();

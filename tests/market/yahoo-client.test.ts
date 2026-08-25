@@ -319,53 +319,80 @@ describe('YahooClient', () => {
     });
   });
 
-  describe('summaryDetail', () => {
-    it('unwraps {raw} numerics and invokes with modules=[summaryDetail]', async () => {
-      const response = {
+  describe('quoteFacts', () => {
+    it('unwraps {raw} numerics from BOTH modules and invokes with modules=[summaryDetail, price]', async () => {
+      mockInvoke.mockResolvedValueOnce(JSON.stringify({
         quoteSummary: {
-          result: [
-            {
-              summaryDetail: {
-                fiftyTwoWeekLow: { raw: 61.1, fmt: '61.10' },
-                fiftyTwoWeekHigh: { raw: 78.9, fmt: '78.90' },
-              },
+          result: [{
+            summaryDetail: {
+              fiftyTwoWeekLow: { raw: 61.1, fmt: '61.10' },
+              fiftyTwoWeekHigh: { raw: 78.9, fmt: '78.90' },
             },
-          ],
+            price: {
+              regularMarketChange: { raw: 1.2, fmt: '1.20' },
+              regularMarketPreviousClose: { raw: 237.6, fmt: '237.60' },
+            },
+          }],
           error: null,
         },
-      };
-      mockInvoke.mockResolvedValueOnce(JSON.stringify(response));
-
-      const result = await client.summaryDetail('VTI');
-
-      expect(result).toEqual({ fiftyTwoWeekLow: 61.1, fiftyTwoWeekHigh: 78.9 });
+      }));
+      const result = await client.quoteFacts('VTI');
+      expect(result).toEqual({
+        fiftyTwoWeekLow: 61.1, fiftyTwoWeekHigh: 78.9,
+        regularMarketChange: 1.2, regularMarketPreviousClose: 237.6,
+      });
       expect(mockInvoke).toHaveBeenCalledWith('yahoo_quote_summary', {
         ticker: 'VTI',
-        modules: ['summaryDetail'],
+        modules: ['summaryDetail', 'price'],
       });
     });
 
-    it('nulls fields absent from the module', async () => {
-      const partialResponse = {
+    it('a NEGATIVE regularMarketChange raw passes through signed', async () => {
+      mockInvoke.mockResolvedValueOnce(JSON.stringify({
+        quoteSummary: {
+          result: [{ price: { regularMarketChange: { raw: -0.57 }, regularMarketPreviousClose: { raw: 154.8 } } }],
+          error: null,
+        },
+      }));
+      const result = await client.quoteFacts('FXAIX');
+      expect(result.regularMarketChange).toBe(-0.57);
+      expect(result.fiftyTwoWeekLow).toBeNull(); // summaryDetail module absent → 52-week group null
+    });
+
+    it('nulls fields absent from a module (partial summaryDetail)', async () => {
+      mockInvoke.mockResolvedValueOnce(JSON.stringify({
         quoteSummary: {
           result: [{ summaryDetail: { fiftyTwoWeekLow: { raw: 61.1, fmt: '61.10' } } }],
           error: null,
         },
-      };
-      mockInvoke.mockResolvedValueOnce(JSON.stringify(partialResponse));
-
-      const result = await client.summaryDetail('VTI');
-
-      expect(result).toEqual({ fiftyTwoWeekLow: 61.1, fiftyTwoWeekHigh: null });
+      }));
+      const result = await client.quoteFacts('VTI');
+      expect(result).toEqual({
+        fiftyTwoWeekLow: 61.1, fiftyTwoWeekHigh: null,
+        regularMarketChange: null, regularMarketPreviousClose: null,
+      });
     });
 
-    it('missing module → both null (no throw)', async () => {
-      const noModuleResponse = { quoteSummary: { result: [{}], error: null } };
-      mockInvoke.mockResolvedValueOnce(JSON.stringify(noModuleResponse));
+    it('missing price module → day-change group null while the 52-week group parses', async () => {
+      mockInvoke.mockResolvedValueOnce(JSON.stringify({
+        quoteSummary: {
+          result: [{ summaryDetail: { fiftyTwoWeekLow: { raw: 61.1 }, fiftyTwoWeekHigh: { raw: 78.9 } } }],
+          error: null,
+        },
+      }));
+      const result = await client.quoteFacts('VTI');
+      expect(result).toEqual({
+        fiftyTwoWeekLow: 61.1, fiftyTwoWeekHigh: 78.9,
+        regularMarketChange: null, regularMarketPreviousClose: null,
+      });
+    });
 
-      const result = await client.summaryDetail('VTI');
-
-      expect(result).toEqual({ fiftyTwoWeekLow: null, fiftyTwoWeekHigh: null });
+    it('empty result → all four null (no throw)', async () => {
+      mockInvoke.mockResolvedValueOnce(JSON.stringify({ quoteSummary: { result: [{}], error: null } }));
+      expect(await client.quoteFacts('VTI')).toEqual({
+        fiftyTwoWeekLow: null, fiftyTwoWeekHigh: null,
+        regularMarketChange: null, regularMarketPreviousClose: null,
+      });
     });
   });
 
