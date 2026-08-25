@@ -495,6 +495,9 @@ export const AppSettingsSchema = z.object({
   // (card shows empty state); [a, b, c] = sum across those category ids.
   propertyUtilitiesCategoryIds: z.array(z.number().int().positive()).nullable().default(null),
   vehicleGasCategoryIds: z.array(z.number().int().positive()).nullable().default(null),
+  /** Interview repair-bucket override (0054, D-GI15 closed). Null =
+   *  unconfigured → the seeded two-child fallback in category-config.ts. */
+  vehicleRepairCategoryIds: z.array(z.number().int().positive()).nullable().default(null),
   // Household-level asset-class target allocations — the class-led hierarchy's
   // strategic envelope. Each targetPct is a 0..1 fraction of the WHOLE
   // portfolio; the Σ ≤ 1 invariant is enforced in SettingsRepo/the form (not

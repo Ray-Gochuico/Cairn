@@ -29,6 +29,7 @@ interface AppSettingsRow {
   default_drawdown_tax_rate: number | null;
   property_utilities_category_ids: string | null;
   vehicle_gas_category_ids: string | null;
+  vehicle_repair_category_ids: string | null;
   asset_class_target_allocations: string | null;
   last_seen_month: string | null;
   last_visit_date: string | null;
@@ -114,6 +115,7 @@ function rowToAppSettings(row: AppSettingsRow): AppSettings {
     defaultDrawdownTaxRate: row.default_drawdown_tax_rate,
     propertyUtilitiesCategoryIds: parseIdArray(row.property_utilities_category_ids),
     vehicleGasCategoryIds: parseIdArray(row.vehicle_gas_category_ids),
+    vehicleRepairCategoryIds: parseIdArray(row.vehicle_repair_category_ids),
     assetClassTargetAllocations: parseAssetClassTargets(row.asset_class_target_allocations),
     lastSeenMonth: row.last_seen_month,
     lastVisitDate: row.last_visit_date,
@@ -162,6 +164,7 @@ export class SettingsRepo {
         default_drawdown_tax_rate = ?,
         property_utilities_category_ids = ?,
         vehicle_gas_category_ids = ?,
+        vehicle_repair_category_ids = ?,
         asset_class_target_allocations = ?,
         last_seen_month = ?,
         last_visit_date = ?,
@@ -189,6 +192,9 @@ export class SettingsRepo {
         merged.vehicleGasCategoryIds === null
           ? null
           : JSON.stringify(merged.vehicleGasCategoryIds),
+        merged.vehicleRepairCategoryIds === null
+          ? null
+          : JSON.stringify(merged.vehicleRepairCategoryIds),
         merged.assetClassTargetAllocations === null
           ? null
           : JSON.stringify(merged.assetClassTargetAllocations),

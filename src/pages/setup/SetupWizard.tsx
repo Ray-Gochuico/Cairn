@@ -80,6 +80,11 @@ export default function SetupWizard() {
     return n as SectionIndex;
   })();
 
+  // Wave A item 3 (D-WA6): only the Settings "Revisit setup" link carries
+  // this param. It matters ONLY when no record exists yet — an existing
+  // record keeps its stored origin.
+  const originIfNew = searchParams.get('origin') === 'revisit' ? ('revisit' as const) : ('first-run' as const);
+
   const personsExist = persons.length > 0;
 
   const disclaimerSatisfied =
@@ -116,9 +121,13 @@ export default function SetupWizard() {
     <>
       <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
       {effectiveView === 'form' ? (
-        <SectionLayout initialSection={initialSection} onSwitchView={() => switchView('worded')} />
+        <SectionLayout
+          initialSection={initialSection}
+          originIfNew={originIfNew}
+          onSwitchView={() => switchView('worded')}
+        />
       ) : (
-        <FlowShell onSwitchView={() => switchView('form')} />
+        <FlowShell originIfNew={originIfNew} onSwitchView={() => switchView('form')} />
       )}
     </>
   );

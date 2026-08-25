@@ -318,3 +318,38 @@ describe('buildBriefing — the withView mapper (person-scope honesty, W10 S1)',
     expect(href('monthly-close')).toBe('/monthly');                    // ritual is one place
   });
 });
+
+describe('roadmap question-bar row (Wave A item 6)', () => {
+  it('renders the CB-3 invitation as a ranked-last action row', () => {
+    const b = buildBriefing({ ...quietInput(), questionBarReady: true });
+    const row = b.rows.find((r) => r.id === 'roadmap-question')!;
+    expect(briefingRowText(row)).toBe('The roadmap can answer "I have $X — what\'s next?"');
+    expect(row.tone).toBe('action');
+    expect(row.href).toBe('/roadmap');
+    expect(row.linkLabel).toBe('Open roadmap');
+    expect(row.householdScoped).toBe(true);
+  });
+
+  it('ranks below the next-move and monthly-close action rows (materiality 25 < 50 < 100)', () => {
+    const q = quietInput();
+    const b = buildBriefing({
+      ...q,
+      questionBarReady: true,
+      nextMove: { kind: 'setup' },
+      monthly: { ...q.monthly, pending: true, balancesToConfirm: 1 },
+    });
+    const actionIds = b.rows.filter((r) => r.tone === 'action').map((r) => r.id);
+    expect(actionIds).toEqual(['monthly-close', 'next-move', 'roadmap-question']);
+  });
+
+  it('absent when the flag is false or omitted — the calm empty state stays reachable', () => {
+    expect(buildBriefing(quietInput()).rows.find((r) => r.id === 'roadmap-question')).toBeUndefined();
+    expect(buildBriefing({ ...quietInput(), questionBarReady: false }).empty).not.toBeNull();
+  });
+
+  it('never reuses the legally load-bearing phrase (R-LWI-3)', () => {
+    const b = buildBriefing({ ...quietInput(), questionBarReady: true });
+    const row = b.rows.find((r) => r.id === 'roadmap-question')!;
+    expect(briefingRowText(row)).not.toContain('Suggested next step');
+  });
+});

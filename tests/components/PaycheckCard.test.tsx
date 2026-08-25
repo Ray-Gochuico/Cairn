@@ -421,7 +421,8 @@ describe('PaycheckCard', () => {
   it('hourly + salaried household shows NO combined qualifier — hourly pay is not summed (Wave 15 review)', async () => {
     // HOURLY persons persist annualSalaryPretax = 0 (their pay isn't salary),
     // so the headline is Alice's salary alone: captioning it "2 earners,
-    // combined" would be false.
+    // combined" would be false. Wave A item 1: the meaning now SAYS the
+    // hourly exclusion inline (CB-2) — the old intent, stated.
     primeStoresTwoEarners();
     const [alice, bob] = usePersonsStore.getState().persons;
     usePersonsStore.setState({
@@ -435,10 +436,66 @@ describe('PaycheckCard', () => {
     render(<MemoryRouter><PaycheckCard /></MemoryRouter>);
     await screen.findByTestId('paycheck-takehome');
     expect(screen.queryByText(/earners, combined/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/gross — salary only\./)).toBeInTheDocument();
     // The NOT-modeled disclosure names the exclusion.
     expect(
       screen.getByText(/hourly earner's pay is not included/i),
     ).toBeInTheDocument();
+  });
+
+  it('all-hourly household: $0 gross carries the CB-1 qualifier, never an unqualified $0', async () => {
+    // Two HOURLY earners — annualSalaryPretax 0 by the employment-fields contract.
+    primeStoresTwoEarners();
+    const [alice, bob] = usePersonsStore.getState().persons;
+    usePersonsStore.setState({
+      persons: [
+        { ...alice, annualSalaryPretax: 0, employmentType: 'HOURLY', hourlyRate: 30 },
+        { ...bob, annualSalaryPretax: 0, employmentType: 'HOURLY', hourlyRate: 22 },
+      ],
+      isLoading: false,
+      error: null,
+    });
+    render(<MemoryRouter><PaycheckCard /></MemoryRouter>);
+    await screen.findByTestId('paycheck-takehome');
+    expect(
+      await screen.findByText(
+        /on \$0 gross — salary only; every earner here is paid hourly\./,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/earners, combined/i)).not.toBeInTheDocument();
+  });
+
+  it('one salaried + one hourly: the salary-only qualifier renders without the combined count (CB-2)', async () => {
+    // 1 salaried + 1 hourly — previously rendered NO qualifier at all.
+    primeStoresTwoEarners();
+    const [alice, bob] = usePersonsStore.getState().persons;
+    usePersonsStore.setState({
+      persons: [
+        alice,
+        { ...bob, annualSalaryPretax: 0, employmentType: 'HOURLY', hourlyRate: 30 },
+      ],
+      isLoading: false,
+      error: null,
+    });
+    render(<MemoryRouter><PaycheckCard /></MemoryRouter>);
+    await screen.findByTestId('paycheck-takehome');
+    expect(await screen.findByText(/gross — salary only\./)).toBeInTheDocument();
+    expect(screen.queryByText(/earners, combined/i)).not.toBeInTheDocument();
+  });
+
+  it('salaried + non-earning member (no hourly): NO qualifier — unchanged behavior', async () => {
+    // 1 salaried + 1 non-earning (salary 0, employmentType SALARY_NO_OT).
+    primeStoresTwoEarners();
+    const [alice, bob] = usePersonsStore.getState().persons;
+    usePersonsStore.setState({
+      persons: [alice, { ...bob, annualSalaryPretax: 0 }],
+      isLoading: false,
+      error: null,
+    });
+    render(<MemoryRouter><PaycheckCard /></MemoryRouter>);
+    await screen.findByTestId('paycheck-takehome');
+    expect(await screen.findByText(/After taxes and pretax deductions on .* gross\./)).toBeInTheDocument();
+    expect(screen.queryByText(/salary only/i)).not.toBeInTheDocument();
   });
 
   it('salaried + non-earning household member shows NO combined qualifier', async () => {
@@ -704,5 +761,28 @@ describe('PaycheckCard — page scope (Wave B D-B3/D-B9)', () => {
     await screen.findByTestId('paycheck-takehome');
     await user.click(screen.getByRole('button', { name: 'Bob' }));
     expect(screen.getByText(/earners, combined/)).toBeInTheDocument(); // headline stays Combined
+  });
+
+  it('review m1: a scope set to an HOURLY person carries the CB-2 salary-only qualifier, never a bare $0', async () => {
+    // The scopedHeadline branch outranks the allHourly branch — without the
+    // qualifier, scoping to hourly Bob renders an unqualified '$0 gross', the
+    // exact honesty gap Wave A item 1 closed. Reuses the CB-2 suffix string
+    // byte-identical (' — salary only' + the closing period).
+    primeStoresTwoEarners();
+    const [alice, bob] = usePersonsStore.getState().persons;
+    usePersonsStore.setState({
+      persons: [
+        alice,
+        { ...bob, annualSalaryPretax: 0, employmentType: 'HOURLY', hourlyRate: 30 },
+      ],
+      isLoading: false,
+      error: null,
+    });
+    syncCalcScope(2);
+    renderScoped();
+    await screen.findByTestId('paycheck-takehome');
+    expect(screen.getByTestId('paycheck-meaning')).toHaveTextContent(
+      'After taxes and pretax deductions on $0 gross — salary only.',
+    );
   });
 });

@@ -17,12 +17,21 @@ type AccountCreateInput = Omit<
   | 'hasHighFees'
 >;
 
+/** What the canonical AccountForm actually collects: everything except
+ *  hasHighFees (roadmap-node-owned, no form field). */
+type AccountCreateWithAnswersInput = Omit<Account, 'id' | 'hasHighFees'>;
+
 interface AccountsState {
   accounts: Account[];
   isLoading: boolean;
   error: string | null;
   load: () => Promise<void>;
   create: (account: AccountCreateInput) => Promise<number>;
+  /** Create AND persist the four chart answers the form collects
+   *  (create → update, self-cleaning — the accounts-gate m3 sequence,
+   *  now shared by every UI entry path; Wave A item 2 / D-WA2/D-WA3).
+   *  Plain create() keeps its chart-answer-free contract for imports. */
+  createWithAnswers: (values: AccountCreateWithAnswersInput) => Promise<number>;
   update: (id: number, patch: Partial<Omit<Account, 'id' | 'householdId'>>) => Promise<void>;
   remove: (id: number) => Promise<void>;
 }
@@ -51,6 +60,28 @@ export const useAccountsStore = create<AccountsState>((set, get) => ({
       hasHighFees: null,
     });
     await get().load();
+    return id;
+  },
+
+  createWithAnswers: async (values) => {
+    const id = await get().create(values);
+    try {
+      await get().update(id, {
+        hasEmployerMatch: values.hasEmployerMatch,
+        employerMatchPct: values.employerMatchPct,
+        employerMatchLimitPct: values.employerMatchLimitPct,
+        allowsMegaBackdoorRollover: values.allowsMegaBackdoorRollover,
+      });
+    } catch (err) {
+      // Self-cleaning (accounts-gate review m3): a stranded match-less row
+      // would duplicate on retry. Best-effort remove, original error wins.
+      try {
+        await get().remove(id);
+      } catch {
+        // The original failure is the one worth surfacing.
+      }
+      throw err;
+    }
     return id;
   },
 

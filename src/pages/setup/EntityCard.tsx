@@ -90,7 +90,7 @@ export default function EntityCard({
   const reasonId = `entity-import-reason-${slug}`;
   const chipsTestId = itemsTestId ?? `${slug}-chips`;
   return (
-    <Card>
+    <Card data-testid={`entity-card-${slug}`}>
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">{title}</CardTitle>

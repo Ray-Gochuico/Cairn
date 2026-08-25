@@ -86,7 +86,7 @@ use tauri_plugin_sql::{DbInstances, DbPool};
 /// `tests::max_schema_version_is_pinned` below, the JS side by
 /// `tests/db/schema-version-guard.test.ts` (which also asserts the JS value
 /// equals the migration count).
-pub const MAX_SCHEMA_VERSION: i64 = 53;
+pub const MAX_SCHEMA_VERSION: i64 = 54;
 
 /// Outcome of validating a candidate backup file, surfaced to JS so the UI can
 /// show a specific message before the destructive confirm.
@@ -765,6 +765,6 @@ mod tests {
     /// this test, and a versioned name went stale on the 50→51 bump.
     #[test]
     fn max_schema_version_is_pinned() {
-        assert_eq!(MAX_SCHEMA_VERSION, 53);
+        assert_eq!(MAX_SCHEMA_VERSION, 54);
     }
 }

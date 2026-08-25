@@ -89,6 +89,33 @@ describe('vehicle_replacement thread', () => {
     );
   });
 
+  it('CI-42: the repair honesty line is verbatim when the repair signal fires', () => {
+    // Pin (CB-8, Wave A deviation #8): the string shipped unpinned. Drive a
+    // plan reply whose firing includes 'repairs' — $1,500 categorized repair
+    // spend in the trailing 12 months (≥ the $1,200 threshold).
+    const ctx = fixtureCtx({
+      household: makeHousehold({
+        monthlyExpenseBaseline: 6000,
+        growthScenarios: [{ label: 'low', rate: 0.03 }, { label: 'moderate', rate: 0.05 }, { label: 'high', rate: 0.07 }],
+      }),
+      vehicles: [makeVehicle({ id: 7, name: 'Old Wagon', year: 2014, currentEstimatedValue: 8000 })],
+      categories: CATS,
+      transactions: [
+        { date: '2026-05-01', amount: 1500, categoryId: 18, vehicleId: 7, reimbursable: false, reimbursedAt: null } as never,
+      ],
+      interviewAnswers: new Map([
+        row('q_keep_horizon', '"replace-within-2y"'),
+        row('q_replacement_budget', '30000'),
+      ]),
+    });
+    const r = evaluateThread(VEHICLE_REPLACEMENT_THREAD, ctx, 'vehicle:7');
+    expect(r.state).toBe('reply');
+    if (r.state !== 'reply') return;
+    expect(r.reply.lines).toContain(
+      'Repair spend counts categorized imported transactions only — categorization is merchant-name matching.',
+    );
+  });
+
   it('the answered basis invalidates when the branch changes (CI-37 machinery)', () => {
     // Pin says the answer sat on a DIFFERENT branch string → re-ask.
     const stale = new Map([row('q_keep_horizon', '"no-plans"')]);

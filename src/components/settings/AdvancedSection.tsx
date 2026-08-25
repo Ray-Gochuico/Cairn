@@ -520,6 +520,25 @@ export function AdvancedSection() {
                   label="Gas categories"
                 />
               </div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <Label className="text-sm font-normal">Vehicle repair categories</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Used by the roadmap&apos;s vehicle questions. Falls back to
+                    &quot;Vehicles &rsaquo; Vehicle Maintenance&quot; and &quot;Vehicles &rsaquo; Major Repairs&quot; when nothing is selected.
+                  </p>
+                </div>
+                <CategoryMultiSelect
+                  categories={categories}
+                  selected={settings?.vehicleRepairCategoryIds ?? []}
+                  onChange={(ids) =>
+                    void updateSettings({
+                      vehicleRepairCategoryIds: ids.length === 0 ? null : ids,
+                    })
+                  }
+                  label="Repair categories"
+                />
+              </div>
             </div>
           </section>
 

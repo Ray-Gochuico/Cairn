@@ -153,6 +153,10 @@ export interface BriefingInput {
     | { kind: 'disclosure' }
     | { kind: 'active'; title: string; href: string; ctaLabel?: string }
     | null;
+  /** Wave A item 6: true when /roadmap's "$X — what's next?" bar would
+   *  render (household ctx + roadmap disclosure accepted) AND it hasn't
+   *  been used this session (D-WA11). The Dashboard owns the predicate. */
+  questionBarReady?: boolean;
   /** W10 S1: keep ?view= across navigation for view-respecting rows. */
   withView?: (path: string) => string;
 }
@@ -319,6 +323,20 @@ export function buildBriefing(input: BriefingInput): Briefing {
       href: spec.href,
       linkLabel: spec.linkLabel,
       householdScoped: true, // the roadmap evaluates the whole household
+    });
+  }
+
+  // --- Roadmap question bar (Wave A item 6; copy CB-3 — the next-move
+  // block's R-LWI-3-reserved suggestion phrase is never reused here) -------
+  if (input.questionBarReady) {
+    actions.push({
+      id: 'roadmap-question',
+      parts: [{ text: 'The roadmap can answer "I have $X — what\'s next?"' }],
+      tone: 'action',
+      materiality: 25, // below the roadmap's own next step (50) and monthly close (100)
+      href: '/roadmap',
+      linkLabel: 'Open roadmap',
+      householdScoped: true, // the bar evaluates the whole household
     });
   }
 

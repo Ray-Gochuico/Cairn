@@ -58,17 +58,30 @@ export function resolveUtilityCategoryIds(
   return filtered;
 }
 
-/** The interview's repair bucket: BOTH seeded children under 'Vehicles'
- *  (ids 18 + 21 in 0009). Two children is why this is not a UtilityBucketKey
- *  (that machinery is one-child-per-bucket). No configured override in
- *  phase 1 — a Settings picker is a chipped follow-up (D-GI15). */
+/** The interview's repair bucket: BOTH seeded children under 'Vehicles'.
+ *  Two children is why this is not a UtilityBucketKey (that machinery is
+ *  one-child-per-bucket). The configured override (Wave A item 7, closing
+ *  D-GI15) follows resolveUtilityCategoryIds' precedence exactly, with the
+ *  two-child seed list as the fallback:
+ *    null → seeded pair · [] → disabled · ids → existence-filtered
+ *    survivors · all-stale → seeded pair. */
 const VEHICLE_REPAIR_CHILD_NAMES = ['Vehicle Maintenance', 'Major Repairs'] as const;
 
-export function resolveVehicleRepairCategoryIds(categories: Category[]): number[] {
-  const ids: number[] = [];
+export function resolveVehicleRepairCategoryIds(
+  configured: number[] | null,
+  categories: Category[],
+): number[] {
+  const fallback: number[] = [];
   for (const childName of VEHICLE_REPAIR_CHILD_NAMES) {
     const id = seededIdFor(categories, { childName, parentName: 'Vehicles' });
-    if (id != null) ids.push(id);
+    if (id != null) fallback.push(id);
   }
-  return ids;
+  if (configured === null) return fallback;
+  if (configured.length === 0) return [];
+  const validIds = new Set(
+    categories.map((c) => c.id).filter((id): id is number => id != null),
+  );
+  const filtered = configured.filter((id) => validIds.has(id));
+  if (filtered.length === 0) return fallback;
+  return filtered;
 }

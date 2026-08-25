@@ -479,6 +479,57 @@ describe('AdvancedSection — Property & Vehicle stat categories', () => {
     await userEvent.click(screen.getByLabelText(/^Utilities$/));
     expect(update).toHaveBeenLastCalledWith({ propertyUtilitiesCategoryIds: null });
   });
+
+  // ─── Vehicle repair categories (Wave A item 7, CB-5/6/7) ─────────────────
+  it('renders the vehicle-repair picker with the CB-5 label + CB-6 description', () => {
+    resetSettingsStore(makeSettings());
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button', { name: /expand advanced/i }));
+    expect(screen.getByText('Vehicle repair categories')).toBeInTheDocument();
+    // CB-6 verbatim (› is U+203A, matching the utility blocks' &rsaquo;).
+    expect(
+      screen.getByText((_, el) =>
+        el?.tagName === 'P' &&
+        el.textContent ===
+          'Used by the roadmap\'s vehicle questions. Falls back to "Vehicles › Vehicle Maintenance" and "Vehicles › Major Repairs" when nothing is selected.',
+      ),
+    ).toBeInTheDocument();
+    // CB-7: the picker button label.
+    expect(
+      screen.getByRole('button', { name: /repair categories \(/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('saves a vehicle-repair selection to the settings store', async () => {
+    const update = vi.fn().mockResolvedValue(undefined);
+    resetSettingsStore(makeSettings(), update);
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button', { name: /expand advanced/i }));
+    await userEvent.click(screen.getByRole('button', { name: /repair categories \(/i }));
+    await userEvent.click(screen.getByLabelText(/^Auto Insurance$/));
+    expect(update).toHaveBeenCalledWith({ vehicleRepairCategoryIds: [18] });
+  });
+
+  it('persists null when the user clears the last repair selection', async () => {
+    const update = vi.fn(async (patch: Partial<AppSettings>) => {
+      useSettingsStore.setState(
+        (prev: any) => ({
+          ...prev,
+          settings: { ...prev.settings, ...patch },
+        }) as never,
+      );
+    });
+    resetSettingsStore(
+      makeSettings({ vehicleRepairCategoryIds: [18] }),
+      update,
+    );
+    render(<MemoryRouter><AdvancedSection /></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button', { name: /expand advanced/i }));
+    await userEvent.click(screen.getByRole('button', { name: /repair categories \(/i }));
+    // Clear must persist null (never []) so the seeded fallback resurfaces.
+    await userEvent.click(screen.getByLabelText(/^Auto Insurance$/));
+    expect(update).toHaveBeenLastCalledWith({ vehicleRepairCategoryIds: null });
+  });
 });
 
 describe('AdvancedSection — Default cash APY input', () => {

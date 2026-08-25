@@ -79,7 +79,7 @@ describe('AccountsGateStep', () => {
     expect(within(dialog).getByRole('button', { name: 'Add Account' })).toBeInTheDocument();
   });
 
-  it('submitting the form runs the three-write sequence with the entered balance', async () => {
+  it('submitting the form runs the shared write sequence with the entered balance', async () => {
     const user = userEvent.setup();
     renderStep(ctxWith());
     await user.click(screen.getByRole('radio', { name: 'Yes' }));
@@ -90,8 +90,12 @@ describe('AccountsGateStep', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Add Account' }));
     await vi.waitFor(() => expect(accountsCreate).toHaveBeenCalledTimes(1));
     expect(accountsCreate.mock.calls[0][0]).toMatchObject({ name: 'Joint checking' });
+    // Wave A item 2: the shared createWithAnswers action persists all FOUR
+    // collected chart answers (mega-backdoor included, D-WA2) — null here,
+    // since the checking form leaves the 401(k) block untouched.
     expect(accountsUpdate).toHaveBeenCalledWith(5, {
       hasEmployerMatch: null, employerMatchPct: null, employerMatchLimitPct: null,
+      allowsMegaBackdoorRollover: null,
     });
     expect(snapshotsUpsert).toHaveBeenCalledWith({
       accountId: 5, snapshotDate: '2026-08-09', totalValue: 12500, source: 'MANUAL',

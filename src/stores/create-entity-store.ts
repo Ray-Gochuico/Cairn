@@ -39,8 +39,9 @@
  *   - disclosure-acceptances-store: tri-state `status` + fail-closed load
  *     timeout (boot-gate safety; see the shared-store-gate-boot-loop
  *     gotcha). Its per-outcome status writes don't fit the factory.
- *   - tax-rules-store: parameterized loadYear(year) with a result-cache
- *     early return (a cache, not an in-flight guard) + two-field writes.
+ *   - tax-rules-store: parameterized loadYear(year) — result-cache early
+ *     return plus its own per-year in-flight map (Wave A); the
+ *     single-promise factory shape still doesn't fit.
  *   - loan-payments-store: parameterized loadForLoan(loanId) — a single
  *     shared promise would wrongly collapse loads for DIFFERENT loans.
  */

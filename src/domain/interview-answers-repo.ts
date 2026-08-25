@@ -81,4 +81,13 @@ export class InterviewAnswersRepo {
       [householdId, threadId, questionId, subjectKey],
     );
   }
+
+  /** Entity-delete cascade (the AssetValueSnapshotsRepo.deleteForOwner
+   * pattern): remove every answer keyed to one subject, across threads.
+   * Household-agnostic on purpose — subject_key embeds the entity table's
+   * unique id ('vehicle:<id>', see subjectsOf in domain/interview/evaluate),
+   * and exact matching cannot cross-hit ('vehicle:1' ≠ 'vehicle:10'). */
+  async deleteForSubject(subjectKey: string): Promise<void> {
+    await this.db.execute('DELETE FROM interview_answers WHERE subject_key = ?', [subjectKey]);
+  }
 }

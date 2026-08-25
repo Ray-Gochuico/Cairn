@@ -14,6 +14,12 @@ interface TaxRulesState {
   lookup: (jurisdictionType: JurisdictionType, code: string, filingStatus: FilingStatus) => TaxRule | null;
 }
 
+// Per-year in-flight guard (Wave A item 4b). Deliberately NOT the
+// createDedupedLoad factory — loadYear is parameterized, and one shared
+// promise would wrongly collapse loads for DIFFERENT years (the same reason
+// create-entity-store.ts lists this store as a non-user).
+const inflightByYear = new Map<number, Promise<void>>();
+
 export const useTaxRulesStore = create<TaxRulesState>((set, get) => ({
   year: null,
   items: [],
@@ -22,22 +28,30 @@ export const useTaxRulesStore = create<TaxRulesState>((set, get) => ({
 
   async loadYear(year: number) {
     if (get().year === year && get().items.length > 0) return;
-    set({ isLoading: true, error: null });
-    try {
-      const repo = new TaxRulesRepo(getDatabase());
-      const items = await repo.listForYear(year);
-      if (items.length === 0) {
-        // No rules for the requested year — preserve the prior items so the
-        // UI's getCurrentTaxYear() resolver can still fall back to the
-        // most-recent seeded year. Just record the attempted year and clear
-        // the loading flag.
-        set({ year, isLoading: false });
-      } else {
-        set({ year, items, isLoading: false });
+    const existing = inflightByYear.get(year);
+    if (existing) return existing;
+    const run = (async () => {
+      set({ isLoading: true, error: null });
+      try {
+        const repo = new TaxRulesRepo(getDatabase());
+        const items = await repo.listForYear(year);
+        if (items.length === 0) {
+          // No rules for the requested year — preserve the prior items so the
+          // UI's getCurrentTaxYear() resolver can still fall back to the
+          // most-recent seeded year. Just record the attempted year and clear
+          // the loading flag.
+          set({ year, isLoading: false });
+        } else {
+          set({ year, items, isLoading: false });
+        }
+      } catch (e) {
+        set({ error: e instanceof Error ? e.message : String(e), isLoading: false });
       }
-    } catch (e) {
-      set({ error: e instanceof Error ? e.message : String(e), isLoading: false });
-    }
+    })().finally(() => {
+      inflightByYear.delete(year);
+    });
+    inflightByYear.set(year, run);
+    return run;
   },
 
   async loadAvailableYears() {

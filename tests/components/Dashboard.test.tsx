@@ -18,6 +18,9 @@ import { useFundHoldingsStore } from '@/stores/fund-holdings-store';
 import { useRoadmapOverridesStore } from '@/stores/roadmap-overrides-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useSettingsStore } from '@/stores/settings-store';
+import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
+import { useInterviewBarStore } from '@/lib/interview/bar-store';
+import { DISCLOSURES } from '@/legal/disclosures';
 import {
   AccountType,
   AssetClass,
@@ -832,6 +835,17 @@ describe('W13 briefing hero', () => {
     renderDashboard(['/?view=p1']);
     const row = screen.getByTestId('briefing-row-concentration');
     expect(row).toHaveTextContent('· Household');
+  });
+
+  it('Wave A item 6: the roadmap-question invitation renders with ctx + accepted disclosure + no session submission', async () => {
+    primeStores({ accounts: [{ id: 1 }] });
+    useAcceptancesStore.setState({
+      acceptedVersions: { roadmap: DISCLOSURES.roadmap.version },
+      status: 'ready', isLoading: false, error: null, load: async () => {},
+    } as never);
+    useInterviewBarStore.setState({ submitted: null });
+    renderDashboard();
+    expect(await screen.findByTestId('briefing-row-roadmap-question')).toBeInTheDocument();
   });
 });
 

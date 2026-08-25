@@ -70,6 +70,7 @@ import { useWidgetLayout } from '@/components/dashboard/use-widget-layout';
 import { SpendingWidget } from '@/components/dashboard/SpendingWidget';
 import { useDisclosureGate } from '@/legal/useDisclosureGate';
 import { useRoadmap } from '@/domain/roadmap/context';
+import { useInterviewBarStore } from '@/lib/interview/bar-store';
 import { evaluate } from '@/domain/roadmap/evaluate';
 import { NODES } from '@/domain/roadmap/nodes';
 import { useConcentration } from '@/lib/use-concentration';
@@ -815,6 +816,9 @@ export default function Dashboard() {
   // Next move (the demoted NextMoveCard states — same pipeline, same order).
   const roadmapCtx = useRoadmap();
   const disclosureGate = useDisclosureGate('roadmap');
+  // Wave A item 6 (D-WA11): session-scoped suppression — once the bar has
+  // been used this session, the invitation's job is done.
+  const questionBarSubmitted = useInterviewBarStore((s) => s.submitted);
   const nextMove = useMemo(() => {
     // Wave C (C4/OB-G5): `!household` was unreachable — the household row is
     // a migration-seeded singleton (0001_initial.sql:272). The honest resume
@@ -858,6 +862,10 @@ export default function Dashboard() {
           .filter((p) => p.goal.id != null)
           .map((p) => ({ id: p.goal.id as number, name: p.goal.name, percentComplete: p.percentComplete })),
         nextMove,
+        questionBarReady:
+          roadmapCtx !== null &&
+          disclosureGate.state === 'ready' &&
+          questionBarSubmitted === null,
         withView,
       }),
     [
@@ -871,6 +879,9 @@ export default function Dashboard() {
       loanPaymentsToRecord,
       goalProjections,
       nextMove,
+      roadmapCtx,
+      disclosureGate.state,
+      questionBarSubmitted,
       withView,
     ],
   );

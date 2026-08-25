@@ -30,9 +30,7 @@ test('fresh profile (form view): disclaimer → switch to form view → setup �
   await expect(page.getByRole('heading', { name: /Section 1 of 4/i })).toBeVisible();
   await page.getByRole('button', { name: /start this section/i }).click();
 
-  const personsCard = page
-    .getByText('Persons', { exact: true })
-    .locator('xpath=ancestor::div[contains(@class,"rounded")][1]');
+  const personsCard = page.getByTestId('entity-card-persons');
   await personsCard.getByRole('button', { name: /add manually/i }).click();
 
   await page.getByLabel('Name', { exact: true }).fill('Alex Rivera');
@@ -52,9 +50,7 @@ test('fresh profile (form view): disclaimer → switch to form view → setup �
   await expect(page.getByRole('heading', { name: /Section 2 of 4/i })).toBeVisible();
   await page.getByRole('button', { name: /start this section/i }).click();
 
-  const accountsCard = page
-    .getByText('Accounts', { exact: true })
-    .locator('xpath=ancestor::div[contains(@class,"rounded")][1]');
+  const accountsCard = page.getByTestId('entity-card-accounts');
   await accountsCard.getByRole('button', { name: /add manually/i }).click();
   await page.getByLabel('Name', { exact: true }).fill('Fidelity Brokerage');
   await page.getByRole('button', { name: /add account/i }).click();

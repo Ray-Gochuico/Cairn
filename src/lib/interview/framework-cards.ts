@@ -47,11 +47,28 @@ function bucketLabel(bucket: BucketId, split: FrameworkSplit, ctx: InterviewCont
   }
 }
 
+/** CB-9 collector policy (D-WA12), extracted for direct pinning (review
+ *  MAJOR: the fixture-shaped suites let a first-seen mutant survive —
+ *  one-time is single-invocation and the equal-phase per-month fixture
+ *  never disagrees across phases). Keep the MAX need per class across a
+ *  card's investRows invocations: investRows runs once per per-month
+ *  phase, and the max is the steady-state (Ongoing) figure. */
+export function recordUnallocatableMax(
+  collector: Map<AssetClass, number>,
+  classes: ReadonlyArray<{ assetClass: AssetClass; need: number }>,
+): void {
+  for (const u of classes) {
+    const prev = collector.get(u.assetClass) ?? 0;
+    if (u.need > prev) collector.set(u.assetClass, u.need);
+  }
+}
+
 /** Per-class Invest rows via the allocator when targets exist (§3.1 B6). */
 function investRows(
   investCents: number,
   ctx: InterviewContext,
   assumes: AssumeRow[],
+  unallocatable: Map<AssetClass, number>,
 ): CardRow[] {
   const targets = ctx.settings?.assetClassTargetAllocations ?? null;
   const amount = formatCurrency(investCents / 100);
@@ -81,12 +98,10 @@ function investRows(
     group: 'provenance',
     text: 'Account values come from your latest snapshots, spread across holdings by share count — not live prices.',
   });
-  if (result.unallocatableClasses.length > 0) {
-    assumes.push({
-      group: 'skipped',
-      text: `No held fund for ${result.unallocatableClasses.map((u) => ASSET_CLASS_LABEL[u.assetClass]).join(', ')} — that part stays as unallocated cash.`,
-    });
-  }
+  // CB-9 (extends CI-21): record each class's dead-end dollars — max-wins
+  // across this card's invocations, emitted once after all of them (D-WA12;
+  // policy extracted above so the max rule is pinned directly).
+  recordUnallocatableMax(unallocatable, result.unallocatableClasses);
   // One 'Invest — {class}' row per FUNDED class (result.rows is per-ticker
   // {ticker, assetClass, buyDollars} — aggregate by class), plus the exact
   // cashLeftOver row. Dollars only; labels via the house ASSET_CLASS_LABEL
@@ -110,6 +125,7 @@ export function buildFrameworkCards(input: SplitInput, ctx: InterviewContext): F
     const split = splitAmount(input, policy.id, ctx);
     const effect = computeEffect(split, ctx);
     const assumes: AssumeRow[] = [];
+    const unallocatable = new Map<AssetClass, number>();
     // (a) provenance — only when a projection figure rendered (CI-22 + CI-26b)
     if (effect.usedProjection) {
       const todayIso = ctx.today.toISOString().slice(0, 10);
@@ -154,7 +170,7 @@ export function buildFrameworkCards(input: SplitInput, ctx: InterviewContext): F
     // Table rows (invest rows may expand per class + push assume rows)
     const toRows = (rows: FrameworkSplit['rows']): CardRow[] =>
       rows.flatMap((r) => r.bucket === 'invest'
-        ? investRows(r.amountCents, ctx, assumes)
+        ? investRows(r.amountCents, ctx, assumes, unallocatable)
         : [{ label: bucketLabel(r.bucket, split, ctx), amount: formatCurrency(r.amountCents / 100) }]);
 
     const phases: CardPhase[] = split.cadence === 'per-month'
@@ -166,6 +182,16 @@ export function buildFrameworkCards(input: SplitInput, ctx: InterviewContext): F
       : null;
 
     const rows = toRows(split.rows);
+    // CB-9: one row per unallocatable class, dollars attached. `need` is
+    // already DOLLARS (allocateContribution is fed investCents / 100);
+    // per-month cards carry the card's own $/mo unit.
+    const perMonthSuffix = split.cadence === 'per-month' ? '/mo' : '';
+    for (const [cls, need] of unallocatable) {
+      assumes.push({
+        group: 'skipped',
+        text: `No held fund for ${ASSET_CLASS_LABEL[cls]} — ${formatCurrency(need)}${perMonthSuffix} stays as unallocated cash.`,
+      });
+    }
     // investRows pushes its assume rows on every toRows call (once per
     // per-month phase + once for the model rows) — dedupe by text, keeping
     // first occurrence so group order is stable.

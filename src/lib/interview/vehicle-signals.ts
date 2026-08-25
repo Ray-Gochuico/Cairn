@@ -38,7 +38,9 @@ function repairSpend(
   vehicleId: number,
   todayIso: string,
 ): { attributed: number; unattributed: number } {
-  const repairIds = new Set(resolveVehicleRepairCategoryIds(ctx.categories ?? []));
+  const repairIds = new Set(
+    resolveVehicleRepairCategoryIds(ctx.settings?.vehicleRepairCategoryIds ?? null, ctx.categories ?? []),
+  );
   if (repairIds.size === 0) return { attributed: 0, unattributed: 0 };
   const singleVehicle = ctx.vehicles.length === 1;
   const categoriesById = new Map<number, Category>();

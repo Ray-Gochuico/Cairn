@@ -142,9 +142,9 @@ describe('Plan529Section (W14: 529 plans live with Goals)', () => {
     expect(screen.getByText(/no 529 plans yet/i)).toBeInTheDocument();
   });
 
-  it('"Add 529 plan" opens the drawer with type preset; saving calls create with ACCOUNT_529', async () => {
+  it('"Add 529 plan" opens the drawer with type preset; saving routes through createWithAnswers (Wave A item 2)', async () => {
     const createSpy = vi.fn(async () => 1);
-    useAccountsStore.setState({ create: createSpy } as never);
+    useAccountsStore.setState({ createWithAnswers: createSpy } as never);
     const user = userEvent.setup();
     renderSection();
     await user.click(screen.getByRole('button', { name: /add 529 plan/i }));

@@ -4,12 +4,13 @@ import { SnapshotSource } from '@/types/enums';
 import type { AccountScaffoldValues } from '@/lib/entity-scaffolds';
 
 /**
- * The flow-specific accounts-gate write (spec rule 4): NO existing component
- * does create-then-update, and every existing create path silently drops the
- * match answers (the store nulls them). Sequence, strictly awaited (D-WF14):
- *   1. store.create(values)              — the row (match columns null)
- *   2. store.update(id, match columns)   — persists hasEmployerMatch/pct/limit
- *   3. snapshots.upsert MANUAL           — today's balance (only when entered)
+ * The flow-specific accounts-gate write (spec rule 4). Steps 1+2 — create,
+ * then persist the four collected chart answers, self-cleaning — now live in
+ * the shared store action `createWithAnswers` (Wave A item 2, D-WA3), so
+ * every UI entry path uses the same sequence. This gate keeps its OWN
+ * snapshot step + rollback (behavior parity with the shipped m3 self-clean):
+ *   1+2. store.createWithAnswers(values) — row + the four collected columns
+ *   3.   snapshots.upsert MANUAL         — today's balance (only when entered)
  * MANUAL wins the snapshot upsert's source-aware conflict rule, so re-adding
  * the same date is safe.
  */
@@ -18,22 +19,18 @@ export async function createAccountWithBalance(
   balance: number | null,
   todayIso: string,
 ): Promise<number> {
-  const id = await useAccountsStore.getState().create(values);
+  // Steps 1+2 (create → persist collected answers, self-cleaning) now live
+  // in the shared store action — every UI entry path uses the same sequence.
+  const id = await useAccountsStore.getState().createWithAnswers(values);
   try {
-    await useAccountsStore.getState().update(id, {
-      hasEmployerMatch: values.hasEmployerMatch,
-      employerMatchPct: values.employerMatchPct,
-      employerMatchLimitPct: values.employerMatchLimitPct,
-    });
     if (balance != null) {
       await useSnapshotsStore.getState().upsert({
         accountId: id, snapshotDate: todayIso, totalValue: balance, source: SnapshotSource.MANUAL,
       });
     }
   } catch (err) {
-    // Review m3: self-cleaning — a step-2/3 failure would otherwise strand a
-    // match-less account, and a retry would duplicate it. Remove the created
-    // row (best-effort) before rethrowing so retry starts clean.
+    // Review m3 parity: a snapshot failure still removes the created row so
+    // a retry starts clean.
     try {
       await useAccountsStore.getState().remove(id);
     } catch {

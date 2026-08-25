@@ -4,7 +4,7 @@ import { stepKey, type StepStatus } from '@/lib/setup-progress';
 import type { FlowCtx, StepSaveResult } from '@/domain/setup-flow/types';
 
 /**
- * Shared gate answer state (factored out of makeSimpleGateStep, Task 9):
+ * Shared gate answer state (factored out of the retired cardless-gate factory, Task 9):
  * restorable yes/no seeded from the RECORDED LITERAL answer (review M2 —
  * a status derived by a form-view Section action never pre-selects the
  * control), never-dirty semantics (entries save through the cards' own
