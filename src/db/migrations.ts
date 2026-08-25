@@ -20,7 +20,7 @@ export interface Migration {
  * `tests/db/schema-version-guard.test.ts` asserts this equals the migration
  * count AND pins the literal so a one-sided bump fails a test.
  */
-export const MAX_SCHEMA_VERSION = 54;
+export const MAX_SCHEMA_VERSION = 55;
 
 /**
  * Thrown by `runMigrations` when the database's stamped `user_version` is
@@ -287,6 +287,9 @@ const MIGRATION_REGISTRY: ReadonlyArray<
   // 0054 adds nullable vehicle_repair_category_ids to app_settings — the
   // interview repair-bucket override (Wave A item 7, closing D-GI15).
   ['0054_vehicle_repair_categories', () => import('./migrations/0054_vehicle_repair_categories.sql?raw')],
+  // 0055 adds nullable regular_market_change/previous_close to tickers —
+  // fetched by the existing user-initiated refresh (Positions Day change).
+  ['0055_ticker_day_change', () => import('./migrations/0055_ticker_day_change.sql?raw')],
 ];
 
 export async function loadAllMigrations(): Promise<Migration[]> {

@@ -361,6 +361,14 @@ export const TickerSchema = z.object({
   // (0053, D-P4 revised). Null until first fetched; renders "—".
   fiftyTwoWeekLow: z.number().nonnegative().nullable().default(null),
   fiftyTwoWeekHigh: z.number().nonnegative().nullable().default(null),
+  // Regular-market day change fetched from Yahoo's quoteSummary `price`
+  // module on each refresh (0055, Wave B). regularMarketChange is the
+  // per-share $ move for the market day current at the last refresh —
+  // SIGNED (losses are negative), so no .nonnegative(). Null until first
+  // fetched; renders "—". Pct is DERIVED (change / previousClose), never
+  // fetched — Yahoo's changePercent raw unit is ambiguous across endpoints.
+  regularMarketChange: z.number().nullable().default(null),
+  regularMarketPreviousClose: z.number().nonnegative().nullable().default(null),
 });
 export type Ticker = z.infer<typeof TickerSchema>;
 

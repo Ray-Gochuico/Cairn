@@ -14,6 +14,8 @@ interface TickerRow {
   industry: string | null;
   fifty_two_week_low: number | null;
   fifty_two_week_high: number | null;
+  regular_market_change: number | null;
+  regular_market_previous_close: number | null;
 }
 
 function rowToTicker(row: TickerRow): Ticker {
@@ -29,6 +31,8 @@ function rowToTicker(row: TickerRow): Ticker {
     industry: row.industry ?? null,
     fiftyTwoWeekLow: row.fifty_two_week_low ?? null,
     fiftyTwoWeekHigh: row.fifty_two_week_high ?? null,
+    regularMarketChange: row.regular_market_change ?? null,
+    regularMarketPreviousClose: row.regular_market_previous_close ?? null,
   });
 }
 
@@ -53,8 +57,8 @@ export class TickersRepo {
   async upsert(ticker: z.input<typeof TickerSchema>): Promise<void> {
     const parsed = TickerSchema.parse(ticker);
     await this.db.execute(
-      `INSERT OR REPLACE INTO tickers (ticker, name, asset_class, leverage_factor, direction, user_added, accent_color, sector, industry, fifty_two_week_low, fifty_two_week_high)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT OR REPLACE INTO tickers (ticker, name, asset_class, leverage_factor, direction, user_added, accent_color, sector, industry, fifty_two_week_low, fifty_two_week_high, regular_market_change, regular_market_previous_close)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         parsed.ticker,
         parsed.name,
@@ -67,6 +71,8 @@ export class TickersRepo {
         parsed.industry ?? null,
         parsed.fiftyTwoWeekLow ?? null,
         parsed.fiftyTwoWeekHigh ?? null,
+        parsed.regularMarketChange ?? null,
+        parsed.regularMarketPreviousClose ?? null,
       ]
     );
   }
@@ -88,6 +94,17 @@ export class TickersRepo {
     await this.db.execute(
       'UPDATE tickers SET fifty_two_week_low = ?, fifty_two_week_high = ? WHERE ticker = ?',
       [low, high, ticker],
+    );
+  }
+
+  /** Targeted day-change write (D-WB7): UPDATE, never upsert — a missing row
+   * is a no-op and a partial write can't clobber the other eleven columns.
+   * Independent of set52Week so a missing Yahoo module for one group never
+   * clobbers the other group's stored values (D-WB6). */
+  async setDayChange(ticker: string, change: number | null, prevClose: number | null): Promise<void> {
+    await this.db.execute(
+      'UPDATE tickers SET regular_market_change = ?, regular_market_previous_close = ? WHERE ticker = ?',
+      [change, prevClose, ticker],
     );
   }
 
