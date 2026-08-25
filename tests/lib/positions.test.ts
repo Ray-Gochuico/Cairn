@@ -303,6 +303,23 @@ describe('buildPositions — day change (Wave B, 0055)', () => {
     );
     expect(r.accounts[0].totalDayChange).toBeNull();
   });
+
+  it('tickers WITH info but NO day facts → totalDayChange null (the post-upgrade default, not a hand-built fixture)', () => {
+    // Every held ticker has real 52-week info but null day facts — the exact
+    // state every upgrading user's DB is in until their first post-upgrade
+    // refresh fetches the price module. The total must be null → "—".
+    const r = buildPositions(
+      [{ id: 1, name: 'A' }],
+      [h(1, 1, 'VTI', 10, 2000), h(2, 1, 'BND', 20, null)],
+      new Map([
+        ['VTI', info('Vanguard Total Stock Market ETF', 200, 250, null, null)],
+        ['BND', info(null, 66.5, 74.9, null, null)],
+      ]),
+      [p('VTI', '2026-08-08', 238.8), p('BND', '2026-08-08', 71.64)],
+    );
+    expect(r.accounts[0].totalDayChange).toBeNull();
+    expect(r.accounts[0].rows.every((x) => x.dayChangeValue === null)).toBe(true);
+  });
 });
 
 describe('sortPositionRows (Wave B, D-WB10)', () => {

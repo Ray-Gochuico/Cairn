@@ -159,6 +159,10 @@ describe('PositionsSection', () => {
     // Current value is the 6th cell now — the Day-change cell (Wave B) sits at index 2.
     const valueCell = cells[5];
     expect(valueCell.textContent?.replace(/\s+/g, ' ').trim()).toBe('— excludes 1 without a price');
+    // CP-W6 null clause: a null totalDayChange renders EXACTLY the dash —
+    // never a fake muted $0.00 (this is the DEFAULT state for every
+    // upgrading user before their first post-upgrade refresh).
+    expect(cells[2].textContent?.replace(/\s+/g, ' ').trim()).toBe('—');
   });
 
   it('null total with zero unpriced rows renders the dash alone (m1 branch total)', () => {
@@ -187,6 +191,9 @@ describe('PositionsSection', () => {
     const cells = within(total).getAllByRole('cell');
     // Current value is the 6th cell now — the Day-change cell (Wave B) sits at index 2.
     expect(cells[5].textContent?.replace(/\s+/g, ' ').trim()).toBe('—');
+    // CP-W6 null clause: a null totalDayChange renders EXACTLY the dash —
+    // never a fake muted $0.00 (the fixture carries totalDayChange: null).
+    expect(cells[2].textContent?.replace(/\s+/g, ' ').trim()).toBe('—');
   });
 });
 

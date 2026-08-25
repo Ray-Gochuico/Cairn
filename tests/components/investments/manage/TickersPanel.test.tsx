@@ -124,11 +124,12 @@ describe('TickersPanel (W14 Manage surface)', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
-  it('a form edit round-trips the fetched 52-week fields untouched (m2 clobber pin)', async () => {
-    // The 52-week fields are fetched facts with NO form inputs — they must
-    // survive an edit purely via the editingValues pass-through (the
-    // sector/industry precedent). If TickersPanel stopped forwarding them,
-    // the INSERT OR REPLACE upsert would silently NULL them on every save.
+  it('a form edit round-trips the fetched 52-week + day-change fields untouched (m2 clobber pin)', async () => {
+    // The 52-week (0053) and day-change (0055) fields are fetched facts with
+    // NO form inputs — they must survive an edit purely via the editingValues
+    // pass-through (the sector/industry precedent). If TickersPanel stopped
+    // forwarding them, the INSERT OR REPLACE upsert would silently NULL them
+    // on every save.
     await useTickersStore.getState().upsert({
       ticker: 'RNGX',
       name: null,
@@ -141,6 +142,8 @@ describe('TickersPanel (W14 Manage surface)', () => {
       industry: null,
       fiftyTwoWeekLow: 61.1,
       fiftyTwoWeekHigh: 78.9,
+      regularMarketChange: -0.57,
+      regularMarketPreviousClose: 154.8,
     });
     const user = userEvent.setup();
     render(<MemoryRouter><TickersPanel /></MemoryRouter>);
@@ -162,6 +165,8 @@ describe('TickersPanel (W14 Manage surface)', () => {
       expect(t?.name).toBe('Range Co');
       expect(t?.fiftyTwoWeekLow).toBe(61.1);
       expect(t?.fiftyTwoWeekHigh).toBe(78.9);
+      expect(t?.regularMarketChange).toBe(-0.57);
+      expect(t?.regularMarketPreviousClose).toBe(154.8);
     });
   });
 
