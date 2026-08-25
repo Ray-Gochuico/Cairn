@@ -2,6 +2,7 @@ import type { InterviewThread } from '@/types/interview';
 import { NEXT_DOLLAR_THREAD } from './threads/next-dollar';
 import { VEHICLE_REPLACEMENT_THREAD } from './threads/vehicle-replacement';
 import { HOME_PURCHASE_THREAD } from './threads/home-purchase';
+import { COLLEGE_VS_RETIREMENT_THREAD } from './threads/college-vs-retirement';
 
 /**
  * Every shipped interview thread, in surface order (data-branch-triggered
@@ -15,4 +16,5 @@ export const INTERVIEW_THREADS: readonly InterviewThread[] = [
   NEXT_DOLLAR_THREAD,
   VEHICLE_REPLACEMENT_THREAD,
   HOME_PURCHASE_THREAD,
+  COLLEGE_VS_RETIREMENT_THREAD,
 ];

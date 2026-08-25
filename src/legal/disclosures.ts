@@ -93,7 +93,7 @@ Content is hand-curated; errors are possible. If a question looks wrong, treat t
 
 **Trivia is for vocabulary and intuition; decisions belong with a CFP, CPA, or attorney.**`;
 
-const INTERVIEW_TEXT_v1_0 = `## Mechanical frameworks, not advice
+const INTERVIEW_TEXT_v1_1 = `## Mechanical frameworks, not advice
 
 The question bar and the "Questions for you" cards apply **fixed, mechanical frameworks** to numbers you entered. Nothing here is personalized financial advice, a recommendation, or a prediction.
 
@@ -104,6 +104,8 @@ The question bar and the "Questions for you" cards apply **fixed, mechanical fra
 **Every figure states its basis.** If a number's basis line says a value is assumed or missing, treat the figure as illustrative only.
 
 **Projections are not predictions.** Growth figures use your saved scenario rates and are shown in today's dollars. Real returns vary and can be negative.
+
+**Reference data.** College-cost figures are the College Board's published sticker-price averages for the 2025-26 academic year, bundled with this app and grown at each sector's published long-run rate above inflation. They are list prices, not what any family pays after aid, and they age. State 529 deduction hints are a static snapshot. Verify costs with the school and deduction rules with your state's Department of Revenue.
 
 Decisions about debt, investing, and reserves belong with you — and, for anything consequential, a CFP, CPA, or attorney.`;
 
@@ -151,9 +153,11 @@ export const DISCLOSURES = {
       'I understand the backtest reports historical outcomes only and is not a prediction of future performance.',
   } satisfies DisclosureDocument,
   interview: {
-    version: '1.0',
+    version: '1.1',
     title: 'About the Frameworks',
-    body: INTERVIEW_TEXT_v1_0,
+    body: INTERVIEW_TEXT_v1_1,
+    diffFromPrevious:
+      "Version 1.1 adds a 'Reference data' paragraph: the college questions use bundled College Board 2025-26 sticker-price averages grown at published above-inflation rates — list prices, not post-aid costs — plus static state 529 deduction hints. No other content changes since v1.0. Please re-read and re-accept.",
     acceptanceCheckboxLabel:
       'I understand these are mechanical frameworks applied to my numbers — educational, not personalized financial advice.',
   } satisfies DisclosureDocument,

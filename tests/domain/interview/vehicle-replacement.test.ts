@@ -33,7 +33,7 @@ const row = (questionId: string, valueJson: string, version = 1): [string, Inter
 describe('vehicle_replacement thread', () => {
   it('registered after next_dollar; per-vehicle subject', () => {
     // Wave T2 appended home_purchase (registry order is the surface order).
-    expect(INTERVIEW_THREADS.map((t) => t.id)).toEqual(['next_dollar', 'vehicle_replacement', 'home_purchase']);
+    expect(INTERVIEW_THREADS.map((t) => t.id)).toEqual(['next_dollar', 'vehicle_replacement', 'home_purchase', 'college_vs_retirement']);
     expect(VEHICLE_REPLACEMENT_THREAD.subject).toEqual({ kind: 'vehicle' });
   });
 

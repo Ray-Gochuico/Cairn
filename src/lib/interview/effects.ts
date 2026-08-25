@@ -196,6 +196,36 @@ function lineFor(bucket: BucketId, split: FrameworkSplit, ctx: InterviewContext)
   }
 }
 
+// ── Wave T3: standalone per-month FI two-solve (D-T3-16) ────────────────────
+// Mirrors investLine's per-month recipe EXACTLY (same defaults, same target,
+// same moderate-scenario solve — including its toISOString todayIso, which
+// parity with the shipped line requires) without touching the shipped,
+// review-hardened investLine. The parity test in effects.test.ts pins the
+// two together — if investLine's recipe ever changes, that test fails and
+// this function follows.
+export type FiMonthlyDelta =
+  | { kind: 'delta'; years: number }
+  | { kind: 'fi-unreachable' }
+  | { kind: 'not-computable' };
+
+export function computeFiMonthlyDelta(ctx: InterviewContext, monthlyDollars: number): FiMonthlyDelta {
+  const todayIso = ctx.today.toISOString().slice(0, 10);
+  const { defaults } = buildScenarioDefaults({
+    household: ctx.household, settings: ctx.settings, accounts: ctx.accounts,
+    snapshots: ctx.snapshots, contributions: ctx.contributions, todayIso,
+  });
+  if (!(defaults.monthlyExpenses > 0 && defaults.swrPct > 0)) return { kind: 'not-computable' };
+  const targetFv = (defaults.monthlyExpenses * 12) / (defaults.swrPct / 100);
+  const scenarios = [{ label: 'moderate', rate: defaults.returnPct / 100 }];
+  const inflation = defaults.inflationPct / 100;
+  const solve = (pv: number, pmt: number): number =>
+    financialIndependenceSeries({ pv, annualContribution: pmt, targetFv, scenarios, inflation })[0].years;
+  const base = solve(defaults.portfolio, defaults.annualContribution);
+  const withX = solve(defaults.portfolio, defaults.annualContribution + monthlyDollars * 12);
+  if (!Number.isFinite(base) || !Number.isFinite(withX)) return { kind: 'fi-unreachable' };
+  return { kind: 'delta', years: base - withX };
+}
+
 /** §3.5: the largest-share bucket supplies the headline; other funded buckets one secondary each. */
 export function computeEffect(split: FrameworkSplit, ctx: InterviewContext): EffectResult {
   const head = pickHeadlineBucket(split);

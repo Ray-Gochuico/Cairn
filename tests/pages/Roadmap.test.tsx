@@ -20,6 +20,7 @@ import { usePropertiesStore } from '@/stores/properties-store';
 import { useHousingPaymentsStore } from '@/stores/housing-payments-store';
 import { useGoalsStore } from '@/stores/goals-store';
 import { useInterviewAnswersStore } from '@/stores/interview-answers-store';
+import { useDependentsStore } from '@/stores/dependents-store';
 import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import type { Household } from '@/types/schema';
 import { makeHousehold } from '../factories';
@@ -80,6 +81,9 @@ function resetStores(household: Household | null, roadmapAccepted?: string) {
   useHousingPaymentsStore.setState({ housingPayments: [], isLoading: false, error: null, load: async () => {} } as any);
   useGoalsStore.setState({ goals: [], isLoading: false, error: null, load: async () => {} } as any);
   useInterviewAnswersStore.setState({ answersByKey: new Map(), isLoading: false, error: null, load: async () => {} } as any);
+  // Wave T3 (D-T3-7): dependents joined the gate (18 → 19) — feeds the
+  // college thread's d_dependents branch.
+  useDependentsStore.setState({ dependents: [], isLoading: false, error: null, load: async () => {} } as any);
 }
 
 describe('Roadmap page', () => {

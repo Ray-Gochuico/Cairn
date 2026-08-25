@@ -33,7 +33,7 @@ const row = (questionId: string, valueJson: string): [string, InterviewAnswer] =
 
 describe('home_purchase thread — registration + tenure branch', () => {
   it('registered third, household-scoped, no per-instance subject', () => {
-    expect(INTERVIEW_THREADS.map((t) => t.id)).toEqual(['next_dollar', 'vehicle_replacement', 'home_purchase']);
+    expect(INTERVIEW_THREADS.map((t) => t.id)).toEqual(['next_dollar', 'vehicle_replacement', 'home_purchase', 'college_vs_retirement']);
     expect(HOME_PURCHASE_THREAD.scope).toBe('household');
     expect(HOME_PURCHASE_THREAD.subject).toBeUndefined();
   });

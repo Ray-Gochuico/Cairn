@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeEffect } from '@/lib/interview/effects';
+import { computeEffect, computeFiMonthlyDelta } from '@/lib/interview/effects';
 import { splitAmount } from '@/lib/interview/waterfall';
 import { makeHousehold, makeAccount, makeLoan } from '../../factories';
 import { AccountType } from '@/types/enums';
@@ -113,5 +113,44 @@ describe('computeEffect — CI-28 EF funded date (review M1)', () => {
     const e = computeEffect(s, ctx);
     expect(e.headline).not.toContain('Emergency fund fully funded');
     expect(e.secondaries.join('\n')).not.toContain('Emergency fund fully funded');
+  });
+});
+
+describe('computeFiMonthlyDelta (T3 standalone two-solve, D-T3-16)', () => {
+  // Same FI-computable ctx the lump-delta test uses: 30k reserve (aggressive
+  // 3× covered), 100k brokerage, no loans → a $1,000/mo aggressive split is
+  // ALL invest, so computeEffect's headline IS investLine's per-month delta.
+  const fiCtx = () => fixtureCtx({
+    household: makeHousehold({
+      monthlyExpenseBaseline: 6000, withdrawalRate: 0.04,
+      inflationAssumption: 0.03, growthScenarios: GROWTH,
+    }),
+    accounts: [
+      ...fixtureCtx().accounts,
+      makeAccount({ id: 3, type: AccountType.ACCOUNT_BROKERAGE, name: 'Brokerage' }),
+    ],
+    snapshots: [
+      ...fixtureCtx().snapshots,
+      { accountId: 3, snapshotDate: '2026-07-30', totalValue: 100000 } as never,
+    ],
+    loans: [],
+  });
+
+  it('PARITY: matches the years figure investLine renders for a per-month invest split', () => {
+    const ctx = fiCtx();
+    const s = splitAmount({ amountCents: 100_000, cadence: 'per-month' }, 'aggressive', ctx);
+    const e = computeEffect(s, ctx);
+    const m = e.headline.match(/≈ (\d+(?:\.\d)?) years sooner/);
+    expect(m).not.toBeNull(); // recipe drift in investLine breaks here…
+    const r = computeFiMonthlyDelta(ctx, 1_000);
+    expect(r.kind).toBe('delta');
+    if (r.kind === 'delta') expect(r.years.toFixed(1)).toBe(m![1]); // …or here.
+  });
+
+  it('no expense baseline ⇒ not-computable (never a fabricated delta)', () => {
+    const ctx = fixtureCtx({
+      household: makeHousehold({ monthlyExpenseBaseline: 0, growthScenarios: GROWTH }),
+    });
+    expect(computeFiMonthlyDelta(ctx, 300)).toEqual({ kind: 'not-computable' });
   });
 });

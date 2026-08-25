@@ -188,8 +188,10 @@ test('roadmap interview: the $X bar answers with three framework cards on the se
   await page.getByRole('button', { name: 'Open Roadmap' }).click();
   // The hero phrase is intact and the bar sits below it:
   await expect(page.getByText('Suggested next step').first()).toBeVisible({ timeout: 30_000 });
-  // Submit $10,000 one-time:
-  await page.getByLabel('Amount').fill('10000');
+  // Submit $10,000 one-time. Scoped to the bar region: since T3 the strip's
+  // college card carries its own 'Amount' input on the seeded profile.
+  await page.getByRole('region', { name: "What's next question bar" })
+    .getByLabel('Amount').fill('10000');
   await page.getByRole('button', { name: 'Show me' }).click();
   // Gate 2 — the interview disclosure, first submission only:
   await expect(page.getByText('About the Frameworks')).toBeVisible();
@@ -288,5 +290,32 @@ test('roadmap interview: home-purchase — hidden for the owner, asks once the h
   //     the reloaded goals store (proves the write landed).
   await card.getByRole('button', { name: 'Track this as a Goal' }).click();
   await expect(card).toContainText('Tracked as a Goal — Home down payment.');
+  expect(errors.join('\n')).not.toContain('Maximum update depth');
+});
+
+test('roadmap interview: college vs. retirement reaches its two-sided card on the seeded profile', async ({ page }) => {
+  const errors = collectErrors(page);
+  await page.goto('/roadmap');
+  await page.getByRole('checkbox').check();
+  await page.getByRole('button', { name: 'Open Roadmap' }).click();
+  // Dependent + 529 seeded → the strip asks the monthly amount (q_target_year skipped):
+  const card = page.getByTestId('thread-college_vs_retirement-');
+  await expect(card).toBeVisible({ timeout: 30_000 });
+  await expect(card).toContainText('About how much goes toward college savings each month?');
+  await card.getByLabel('Amount').fill('300');
+  await card.getByRole('button', { name: 'Save' }).click();
+  // The two-sided card. Structure pins only — target and FV move with the run
+  // date (today → months-to-2034 shrinks monthly); 'May 2034' is time-stable.
+  await expect(card).toContainText('College for Demo Kid');
+  await expect(card).toContainText('starting May 2034');
+  await expect(card).toContainText("in today's dollars");
+  await expect(card).toContainText('moderate scenario, inflation-adjusted');
+  await expect(card).toContainText('These dollars count toward exactly one side.');
+  await expect(card).toContainText('No state deduction encoded for CA.');
+  await expect(card).toContainText('Published 2025-26 prices — verify with the school.');
+  await expect(card).toContainText(/years sooner to your FI target|retirement side/);
+  // Ask me again clears back to the question (kernel machinery, no re-gate):
+  await card.getByRole('button', { name: /Ask me again/ }).click();
+  await expect(card).toContainText('About how much goes toward college savings each month?');
   expect(errors.join('\n')).not.toContain('Maximum update depth');
 });

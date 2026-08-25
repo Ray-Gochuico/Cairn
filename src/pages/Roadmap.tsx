@@ -23,6 +23,7 @@ import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-stor
 import { useSettingsStore } from '@/stores/settings-store';
 import { useHoldingsStore } from '@/stores/holdings-store';
 import { useTickersStore } from '@/stores/tickers-store';
+import { useDependentsStore } from '@/stores/dependents-store';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useHousingPaymentsStore } from '@/stores/housing-payments-store';
 import { useGoalsStore } from '@/stores/goals-store';
@@ -107,6 +108,9 @@ export default function Roadmap() {
   const loadHousingPayments = useHousingPaymentsStore((s) => s.load);
   const loadGoals = useGoalsStore((s) => s.load);
   const loadInterviewAnswers = useInterviewAnswersStore((s) => s.load);
+  // T3 (D-T3-7): dependents feeds the college thread's d_dependents branch —
+  // same latched gate, same no-.load()-in-components discipline.
+  const loadDependents = useDependentsStore((s) => s.load);
 
   const reload = useCallback(() => {
     void loadHousehold();
@@ -127,6 +131,7 @@ export default function Roadmap() {
     void loadHousingPayments();
     void loadGoals();
     void loadInterviewAnswers();
+    void loadDependents();
   }, [
     loadHousehold,
     loadPersons,
@@ -146,6 +151,7 @@ export default function Roadmap() {
     loadHousingPayments,
     loadGoals,
     loadInterviewAnswers,
+    loadDependents,
   ]);
 
   // W10 M28: the engine (evaluate) renders authoritative-looking evidence
@@ -172,6 +178,7 @@ export default function Roadmap() {
       useHousingPaymentsStore((s) => s.isLoading),
       useGoalsStore((s) => s.isLoading),
       useInterviewAnswersStore((s) => s.isLoading),
+      useDependentsStore((s) => s.isLoading),
     ],
     [
       useHouseholdStore((s) => s.error),
@@ -192,6 +199,7 @@ export default function Roadmap() {
       useHousingPaymentsStore((s) => s.error),
       useGoalsStore((s) => s.error),
       useInterviewAnswersStore((s) => s.error),
+      useDependentsStore((s) => s.error),
     ],
     reload,
   );

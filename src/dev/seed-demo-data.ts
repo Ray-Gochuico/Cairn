@@ -35,7 +35,7 @@ import { lastMonthYyyymm } from '@/lib/input-pending';
 export const DEMO_SEED = {
   personName: 'Demo Investor',
   partnerName: 'Demo Partner',
-  accountCount: 6, // 3 original + Partner Brokerage + Partner Savings + Joint Checking
+  accountCount: 7, // 3 original + Partner Brokerage + Partner Savings + Joint Checking + 529 College Fund (T3)
   loanCount: 2,
   // Imported from the disclosure registry rather than hardcoded so a future
   // app_wide version bump can't leave the seeded acceptance stale (which would
@@ -82,6 +82,14 @@ export async function seedDemoData(
   const grantRows = await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM equity_grants');
   if ((grantRows[0]?.n ?? 0) === 0) {
     await seedEquityGrantsSlice(db, today);
+  }
+  // Wave T3: dependent + 529 so the college_vs_retirement thread is smokable.
+  // Guarded on its own row so pre-T3 dev DBs converge without duplicating.
+  const kidRows = await db.select<{ n: number }>(
+    "SELECT COUNT(*) AS n FROM dependents WHERE name = 'Demo Kid'",
+  );
+  if ((kidRows[0]?.n ?? 0) === 0) {
+    await seedCollegeSlice(db, today);
   }
 }
 
@@ -469,4 +477,42 @@ async function seedEquityGrantsSlice(db: Database, today: string): Promise<void>
     );
   await insert(investorId, 'Investor RSU', 4000);
   await insert(partnerId, 'Partner RSU', 1200);
+}
+
+/**
+ * Wave T3: one dependent + one 529 with snapshots. 'Demo Kid' turns 18 in
+ * May 2034 (2016-05 + 216 months) — the e2e pins that month label, so the
+ * date of birth is load-bearing. CA household + MFJ → the deduction hint
+ * exercises the CI-C15 null contract ("No state deduction encoded for CA.").
+ * Orthogonal to the framework-card e2e pins (no cash/savings/loan/holding
+ * rows; FI-eligible portfolio excludes 529s per fi-portfolio.ts). BOTH
+ * snapshots are MANUAL-source: the Monthly confirm flow keys on
+ * AUTO_DERIVED close-dated rows ('Confirm all (4)') and the college slice
+ * stays out of it by design — so the close-count seed pin reads
+ * accountCount − 1.
+ */
+async function seedCollegeSlice(db: Database, today: string): Promise<void> {
+  const dep = await db.execute(
+    `INSERT INTO dependents (household_id, name, date_of_birth, type)
+     VALUES (1, 'Demo Kid', '2016-05-12', 'CHILD')`,
+  );
+  const person = await db.select<{ id: number }>(
+    'SELECT id FROM persons WHERE name = ?', [DEMO_SEED.personName],
+  );
+  const acct = await db.execute(
+    `INSERT INTO accounts (household_id, owner_person_id, name, institution, type, beneficiary_dependent_id)
+     VALUES (1, ?, '529 College Fund', 'Vanguard', 'ACCOUNT_529', ?)`,
+    [person[0]?.id ?? null, dep.lastInsertId!],
+  );
+  const lastMonthClose = lastBusinessDayOfMonth(lastMonthYyyymm(new Date()));
+  await db.execute(
+    `INSERT OR REPLACE INTO account_snapshots (account_id, snapshot_date, total_value, source)
+     VALUES (?, ?, ?, 'MANUAL')`,
+    [acct.lastInsertId!, lastMonthClose, 11800],
+  );
+  await db.execute(
+    `INSERT OR REPLACE INTO account_snapshots (account_id, snapshot_date, total_value, source)
+     VALUES (?, ?, ?, 'MANUAL')`,
+    [acct.lastInsertId!, today, 12000],
+  );
 }
