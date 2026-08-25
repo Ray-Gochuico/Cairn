@@ -5,6 +5,54 @@ All notable changes to Cairn are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-08-25
+
+Two new questions the Roadmap can ask — buying a home, and college
+versus retirement — plus a sharper positions table and a wide sweep of
+fixes. Your database upgrades automatically on first launch.
+
+### Added
+
+- **"Are there plans to buy a home?"** When you rent (or the app can't
+  tell), the Roadmap can ask. Answer with a target amount and month
+  and it computes a savings plan from your actual cash and savings —
+  declaring plainly when those same dollars are also your emergency
+  fund — can track the target as a Goal with one click, and keeps the
+  Roadmap's large-purchase question in sync automatically. Owners
+  aren't asked.
+- **College vs. retirement.** With a dependent or a 529 on file, the
+  Roadmap can ask what goes toward college each month and answers with
+  both sides: the projected 529 balance against published tuition
+  prices (bundled College Board 2025-26 sticker-price averages, grown
+  at published above-inflation rates — list prices, not post-aid
+  costs, stated on the card), and what the same dollars would mean for
+  financial independence. State 529 deduction hints where encoded.
+  The frameworks disclosure gains a "Reference data" paragraph, so
+  you'll be asked to re-read and re-accept it once.
+- **Sortable positions and day change.** Click any column in the
+  Positions table to sort within every account (unpriced holdings stay
+  last), and a new "Day change" column shows each holding's move as of
+  your last refresh — nothing auto-polls, as always.
+- Settings can now choose which spending categories count as vehicle
+  repairs for the Roadmap's car questions.
+- The Dashboard briefing can point you to the Roadmap's "what's next"
+  bar once it's ready for you.
+
+### Fixed
+
+- New accounts no longer silently lose their employer-match answers —
+  they were dropped on create through every entry path.
+- A household whose only earner is paid hourly now sees an explained
+  paycheck estimate instead of an unqualified $0.
+- Leaving "Revisit setup" midway no longer nudges finished profiles to
+  continue setup.
+- Date questions that can't accept a month now say why instead of
+  silently disabling Save.
+- Assorted polish: honest dashes wherever day-change data hasn't been
+  fetched, a vehicle's interview answers are cleaned up when the
+  vehicle is deleted, duplicate-free tax-table loading, and sturdier
+  tests throughout.
+
 ## [1.4.0] - 2026-08-09
 
 Setup now talks you through it, and Investments shows your positions
