@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { DISCLOSURES } from '@/legal/disclosures';
+import { TUITION_BASE_ACADEMIC_YEAR } from '@/data/tuition-reference';
 
 describe('DISCLOSURES', () => {
   it('defines an app_wide disclosure with a version + body + checkbox label', () => {
@@ -97,15 +98,23 @@ describe('DISCLOSURES', () => {
     expect(Object.keys(DISCLOSURES).sort()).toEqual(['app_wide', 'backtest', 'interview', 'learning', 'roadmap']);
   });
 
-  it('interview disclosure: v1.0, no diff (first version), checkbox label pinned', () => {
-    expect(DISCLOSURES.interview.version).toBe('1.0');
+  it('interview disclosure: v1.1 (T3 reference-data vintage), checkbox label pinned', () => {
+    expect(DISCLOSURES.interview.version).toBe('1.1');
     expect(DISCLOSURES.interview.title).toBe('About the Frameworks');
-    expect(DISCLOSURES.interview.diffFromPrevious).toBeUndefined();
     expect(DISCLOSURES.interview.acceptanceCheckboxLabel).toBe(
       'I understand these are mechanical frameworks applied to my numbers — educational, not personalized financial advice.',
     );
     expect(DISCLOSURES.interview.body).toContain('Mechanical frameworks, not advice');
     expect(DISCLOSURES.interview.body).toContain('Projections are not predictions');
+  });
+
+  it('interview 1.1 carries a re-prompt diff (house rule: body change ⇒ bump + diff)', () => {
+    expect(DISCLOSURES.interview.diffFromPrevious).toContain('Reference data');
+    expect(DISCLOSURES.interview.diffFromPrevious).toContain('re-read and re-accept');
+  });
+
+  it('interview body names the bundled dataset vintage (re-vintage without a bump trips here)', () => {
+    expect(DISCLOSURES.interview.body).toContain(TUITION_BASE_ACADEMIC_YEAR);
   });
 });
 
