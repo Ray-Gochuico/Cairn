@@ -418,6 +418,7 @@ describe('Investments Allocation & positions — class table + Positions', () =>
         ticker: 'VTI', name: 'Vanguard Total Stock Market ETF', assetClass: 'US_TOTAL_MARKET',
         leverageFactor: 1, direction: 'LONG', userAdded: false, accentColor: null,
         sector: null, industry: null, fiftyTwoWeekLow: 200, fiftyTwoWeekHigh: 250,
+        regularMarketChange: 1.2, regularMarketPreviousClose: 237.6,
       }],
       isLoading: false, error: null, load: async () => {},
     } as never);
@@ -443,11 +444,13 @@ describe('Investments Allocation & positions — class table + Positions', () =>
     expect(row).toHaveTextContent('100.0%');    // sole priced position
     expect(row).toHaveTextContent('$200.00');   // fetched 52-week low label
     expect(row).toHaveTextContent('$250.00');   // fetched 52-week high label
+    expect(row).toHaveTextContent('+$12.00');   // day change: 1.2 × 10 (store → memo → builder → render)
+    expect(row).toHaveTextContent('(+0.5%)');   // 1.2 / 237.6
     const total = screen.getByTestId('positions-total-1');
     expect(total).toHaveTextContent('$2,455');
     expect(total).not.toHaveTextContent('excludes');
     expect(screen.getByTestId('positions-as-of')).toHaveTextContent(
-      /^Prices as of .+ — updated only when you refresh\.$/,
+      /^Prices and day change as of .+ — updated only when you refresh\.$/,
     );
   });
 });
