@@ -119,10 +119,10 @@ describe('DISCLOSURES', () => {
 });
 
 describe('backtest disclosure', () => {
-  it('is registered at v1.2 with a non-empty body + acceptance label', () => {
+  it('is registered at v1.3 with a non-empty body + acceptance label', () => {
     const d = DISCLOSURES.backtest;
     expect(d).toBeDefined();
-    expect(d.version).toBe('1.2');
+    expect(d.version).toBe('1.3');
     expect(d.body.length).toBeGreaterThan(200);
     expect(d.acceptanceCheckboxLabel).toMatch(/not a prediction|historical outcomes/i);
   });
@@ -161,11 +161,21 @@ describe('backtest disclosure', () => {
     expect(body).not.toMatch(/\b2000\b/);
   });
 
-  it('v1.2 ships a diffFromPrevious that explains the data-coverage correction', () => {
+  it('v1.3 ships a diffFromPrevious that explains the stress-test addition (house rule: body change ⇒ bump + diff)', () => {
     const diff = DISCLOSURES.backtest.diffFromPrevious;
     expect(diff).toBeTruthy();
-    expect(diff!.length).toBeGreaterThan(40);
-    expect(diff).toMatch(/2022/);
-    expect(diff).toMatch(/coverage|data|ends|through/i);
+    expect(diff).toContain('Stress Test');
+    expect(diff).toMatch(/2022/); // names the same 1871-to-2022 dataset
+    expect(diff).toContain('re-read and re-accept');
+  });
+
+  it('v1.3 covers BOTH W1 surfaces, scopes the bracket line, and does not pre-describe W2', () => {
+    const body = DISCLOSURES.backtest.body;
+    expect(body).toContain('Backtest tool');
+    expect(body).toContain('Stress Test card');
+    expect(body).toContain('applies no tax treatment');
+    expect(body).toContain('history replayed, never a forecast');
+    // W2 owns v1.4 and the History-view framing — v1.3 must not claim it.
+    expect(body).not.toMatch(/history view/i);
   });
 });
