@@ -9,7 +9,7 @@ import { useAccountsStore } from '@/stores/accounts-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useScenarioAssumptions } from '@/lib/calculators/use-scenario-assumptions';
 import { useRealState } from '@/components/whatif/useRealState';
-import { backtestPlan, type BacktestConfig, type BacktestResult } from '@/lib/backtest';
+import { DEFAULT_STOCK_PCT, backtestPlan, type BacktestConfig, type BacktestResult } from '@/lib/backtest';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BacktestParamsForm, BacktestParamsSchema } from '@/components/backtest/BacktestParamsForm';
 import BacktestChart from '@/components/backtest/BacktestChart';
@@ -92,7 +92,7 @@ export default function Backtest() {
       horizonYears: 30,
       goalAmount: 0,
       strategy: 'bengen',
-      stockPct: 0.75,
+      stockPct: DEFAULT_STOCK_PCT,
       variableRate: 0.04,
       minWithdrawal: Math.round(portfolio * 0.032),
       maxWithdrawal: Math.round(portfolio * 0.06),
