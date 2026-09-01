@@ -9,8 +9,10 @@ import { SupplementalPayCard } from './SupplementalPayCard';
 import { OvertimeCard } from './OvertimeCard';
 import { Retirement401kWithdrawalCard } from './Retirement401kWithdrawalCard';
 import { PathToFiCard } from './PathToFiCard';
+import { EarliestRetirementCard } from './EarliestRetirementCard';
 import { CompoundInterestCard } from './CompoundInterestCard';
 import { BacktestCard } from './BacktestCard';
+import { StressTestCard } from './StressTestCard';
 import { DebtPayoffCard } from './DebtPayoffCard';
 import { EquityValueCard } from './EquityValueCard';
 import { ContributionAllocatorCard } from './ContributionAllocatorCard';
@@ -45,8 +47,10 @@ const REGISTRATIONS: Record<string, Registration> = {
   },
   'retirement-401k-withdrawal': { Component: Retirement401kWithdrawalCard },
   'path-to-fi': { Component: PathToFiCard },
+  'retirement-age': { Component: EarliestRetirementCard },
   'compound-interest': { Component: CompoundInterestCard },
   'backtest': { Component: BacktestCard },
+  'stress-test': { Component: StressTestCard },
   'debt-payoff': { Component: DebtPayoffCard },
   'equity': { Component: EquityValueCard },
   'contribution-allocator': { Component: ContributionAllocatorCard },

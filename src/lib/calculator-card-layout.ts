@@ -43,8 +43,12 @@ export const CALCULATOR_CARD_DEFS: readonly CalculatorCardDef[] = [
   { id: 'overtime', label: 'Overtime', group: 'paycheck-tax' },
   { id: 'retirement-401k-withdrawal', label: '401k withdrawal take-home', group: 'paycheck-tax' },
   { id: 'path-to-fi', label: 'Path to FI', group: 'path-to-fi' },
+  // W1 (D-W1-1): both ids are persisted-forever material (settings.calculatorCardLayout
+  // is id-keyed, so mid-list insertion is persistence-safe). Neither is a full-page tool.
+  { id: 'retirement-age', label: 'Earliest Retirement', group: 'path-to-fi' },
   { id: 'compound-interest', label: 'Compound Interest', group: 'path-to-fi' },
   { id: 'backtest', label: 'Historical Backtest', group: 'path-to-fi', fullPagePath: '/calculators/backtest' },
+  { id: 'stress-test', label: 'Stress Test', group: 'path-to-fi' },
   { id: 'debt-payoff', label: 'Debt Payoff', group: 'next-dollar' },
   { id: 'equity', label: 'Equity Value', group: 'next-dollar' },
   { id: 'contribution-allocator', label: 'Contribution allocator', group: 'next-dollar' },
