@@ -11,6 +11,7 @@ import {
   EXPLORE_DB_URL,
   clearExploreFlag,
   clearExplorePrefs,
+  clearExploreSessionStorage,
   isExploreMode,
 } from '@/lib/explore-mode';
 import { resetSampleDb } from '@/db/sample-reset';
@@ -99,6 +100,9 @@ export async function initDatabase(): Promise<void> {
       // error: the NEXT launch is the real profile by construction, and the
       // sample file was never the real DB, so leaving is always safe.
       clearExplorePrefs();
+      // Same guarantee as the exit: raw session keys frozen modules wrote go
+      // too (clearExploreSessionStorage's docblock has the reasoning).
+      clearExploreSessionStorage();
       clearExploreFlag();
       // eslint-disable-next-line no-console
       console.warn('[explore] sample boot failed; leaving sample mode:', e);

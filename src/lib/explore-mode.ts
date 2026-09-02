@@ -103,3 +103,33 @@ export function clearExplorePrefs(): void {
     }
   }
 }
+
+/**
+ * Blank the WHOLE sessionStorage on the way out of explore — run right after
+ * `clearExplorePrefs()`, before the flag is cleared, on both exit paths
+ * (exitExploreMode and the explore-boot failure branch).
+ *
+ * Why a blunt wipe when the namespace ratchet exists: the ratchet only binds
+ * modules we may edit. A FROZEN module — the $X bar's session store in the
+ * interview kernel — writes a RAW key, and sessionStorage SURVIVES the exit's
+ * `location.assign`, so a hypothetical typed against the sample was still
+ * "answered" on the user's real profile. "Nothing an explore session does
+ * outlives the exit" has to hold for the keys the prefix cannot reach too.
+ *
+ * Safe because of WHEN it runs: the profile booting next is first-run — no
+ * user data has ever been entered, so nothing of theirs lives in the store.
+ * (The one long-lived resident, App.tsx's `lazy-chunk-reloaded` guard, is a
+ * single-shot stale-chunk latch: clearing it costs at most one extra reload
+ * attempt on a later stale chunk, never a loop — each reload re-arms it.)
+ * localStorage is deliberately NOT blanket-wiped: real device prefs (`theme`)
+ * and the D-S7 onboarding keys live there and belong to the user.
+ *
+ * Best-effort, like every other step of the exit: never throws, never blocks.
+ */
+export function clearExploreSessionStorage(): void {
+  try {
+    sessionStorage.clear();
+  } catch {
+    // Best-effort by design (private mode / denied storage).
+  }
+}

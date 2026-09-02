@@ -1,9 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { ScenariosPanel } from '@/components/whatif/ScenariosPanel';
 import { emptyLeverPayload } from '@/lib/scenarios';
+import { clearExploreFlag, clearExplorePrefs, setExploreFlag } from '@/lib/explore-mode';
 import type { Scenario } from '@/types/scenario';
 import type { Milestones } from '@/lib/scenarios';
 
@@ -227,5 +228,45 @@ describe('scenario selector aria-pressed (round-3 cleanup)', () => {
     // Baseline is active (activeScenario() → baseline in the store mock).
     expect(screen.getByRole('button', { name: /Baseline/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: /Aggressive payoff/ })).toHaveAttribute('aria-pressed', 'false');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// W4 smoke D1 — the panel's collapsed state is a VISIBILITY preference the
+// user sets from the UI, so it is namespaced while exploring: nothing a
+// sample session does may outlive "Start my real setup".
+// ---------------------------------------------------------------------------
+describe('ScenariosPanel collapse under explore mode (W4 pref ratchet)', () => {
+  const COLLAPSED_KEY = 'scenariosPanel.collapsed';
+  const EXPLORE_COLLAPSED_KEY = 'explore.scenariosPanel.collapsed';
+
+  beforeEach(() => {
+    localStorage.removeItem(COLLAPSED_KEY);
+    localStorage.removeItem(EXPLORE_COLLAPSED_KEY);
+  });
+  afterEach(() => {
+    clearExploreFlag();
+    localStorage.removeItem(COLLAPSED_KEY);
+    localStorage.removeItem(EXPLORE_COLLAPSED_KEY);
+  });
+
+  it('collapsing while exploring writes the namespaced key, never the real one', async () => {
+    setExploreFlag();
+    const { user } = setup();
+    await user.click(screen.getByTestId('scenarios-panel-toggle'));
+
+    expect(localStorage.getItem(EXPLORE_COLLAPSED_KEY)).toBe('true');
+    expect(localStorage.getItem(COLLAPSED_KEY)).toBeNull();
+
+    clearExplorePrefs();
+    clearExploreFlag();
+    expect(localStorage.getItem(EXPLORE_COLLAPSED_KEY)).toBeNull();
+  });
+
+  it('an explore-era collapse never collapses the real profile\'s panel', () => {
+    // Exit WITHOUT the sweep: the real read composes the unprefixed key.
+    localStorage.setItem(EXPLORE_COLLAPSED_KEY, 'true');
+    setup();
+    expect(screen.getByText('Aggressive payoff')).toBeInTheDocument();
   });
 });

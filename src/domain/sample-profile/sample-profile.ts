@@ -166,6 +166,14 @@ async function seedPrimarySlice(db: Database, today: string): Promise<void> {
     `UPDATE household SET monthly_expense_baseline = 6000
      WHERE id = 1 AND monthly_expense_baseline = 0`,
   );
+  // W4 smoke D2: the SAME fallout hit the name (SE-N4). 0001 omits the name
+  // column ⇒ NULL, so the INSERT's 'Sample Household' never landed and the
+  // sample tour showed an EMPTY "Household name (optional)" on Inputs →
+  // Household. Same shape as the baseline backfill: migration default only
+  // (NULL), never over a name someone typed.
+  await db.execute(
+    `UPDATE household SET name = 'Sample Household' WHERE id = 1 AND name IS NULL`,
+  );
 
   // 2. Person. Only NOT-NULL/no-default columns are named; ALTER-added
   //    columns (commission, employment) carry table DEFAULTs.
