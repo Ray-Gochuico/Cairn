@@ -72,7 +72,7 @@ export function CompoundInterestCard({ cardId }: CompoundInterestCardProps = {})
   const scenarioEdited = editedCount > 0;
 
   // Engine input built once; the SAME object feeds compoundInterestSeries AND
-  // the boundary's toRealSummary — the two can never diverge.
+  // the basis boundary's real-summary conversion — the two can never diverge.
   const engineInput = useMemo<CompoundInterestInput | null>(() => {
     const yearsNum = Math.max(0, Math.floor(values.years ?? 0));
     if (yearsNum === 0) return null;
