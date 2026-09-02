@@ -35,6 +35,11 @@ async function deviceKeys(page: Page) {
     progressV2: localStorage.getItem('setupWizard.progress.v2'),
     tailor: localStorage.getItem('onboarding.tailor.done.v1'),
     tour: localStorage.getItem('onboarding.tour.done.v1'),
+    // W4 smoke D1: the dashboard layout hooks persist on MOUNT, so the
+    // session's `page.goto('/')` below writes them without the user touching
+    // Customize. Namespaced, the raw keys must still read null mid-session.
+    pillLayout: localStorage.getItem('dashboardPillLayout.v1'),
+    widgetLayout: localStorage.getItem('dashboardWidgetLayout.v1'),
   }));
 }
 
@@ -112,6 +117,8 @@ test('exit: a truly clean first-run — wizard at FlowShell, sample record gone,
   expect(before.progressV2).toBeNull();
   expect(before.tailor).toBeNull();
   expect(before.tour).toBeNull();
+  expect(before.pillLayout).toBeNull();
+  expect(before.widgetLayout).toBeNull();
   await explore.click();
   await expect(page.getByRole('note', { name: 'Sample data notice' })).toBeVisible({
     timeout: 30_000,
@@ -124,9 +131,22 @@ test('exit: a truly clean first-run — wizard at FlowShell, sample record gone,
   await expect(page.getByRole('note', { name: 'Sample data notice' })).toBeVisible({
     timeout: 30_000,
   });
+  // Wait for the DASHBOARD itself, not just the app-level banner: the page
+  // renders post-gate, and its layout hooks persist on mount. Without this
+  // the wipe proofs below would pass vacuously — nothing would have been
+  // written to wipe.
+  await expect(page.getByTestId('dashboard-details-toggle')).toBeVisible({ timeout: 30_000 });
   const during = await deviceKeys(page);
   expect(during.progressV2).toBeNull(); // still absent, not merely unchanged
   expect(during).toEqual(before);
+  // W4 smoke D1, non-vacuity for the wipe proofs below: the session DID write
+  // a dashboard layout — under `explore.`. No Customize click is needed; the
+  // layout hooks persist on mount, which is why the raw keys showed up in the
+  // real profile before the namespace (and why `during` still reads null).
+  const exploreLayout = await page.evaluate(() =>
+    localStorage.getItem('explore.dashboardPillLayout.v1'),
+  );
+  expect(exploreLayout).not.toBeNull();
 
   // D-S4: exit from a NON-root page. The banner is app-level chrome, so the
   // action is there — and a reload-in-place would strand the fresh profile on
@@ -175,6 +195,9 @@ test('exit: a truly clean first-run — wizard at FlowShell, sample record gone,
       progressV2: localStorage.getItem('setupWizard.progress.v2'),
       tailor: localStorage.getItem('onboarding.tailor.done.v1'),
       tour: localStorage.getItem('onboarding.tour.done.v1'),
+      pillLayout: localStorage.getItem('dashboardPillLayout.v1'),
+      widgetLayout: localStorage.getItem('dashboardWidgetLayout.v1'),
+      exploreNamespaced: Object.keys(localStorage).filter((k) => k.startsWith('explore.')),
     };
   });
   expect(state.idbKeys).not.toContain('sample-explore.db');
@@ -183,6 +206,13 @@ test('exit: a truly clean first-run — wizard at FlowShell, sample record gone,
   expect(state.progressV1).toBeNull();
   expect(state.tailor).toBeNull();
   expect(state.tour).toBeNull();
+  // W4 smoke D1, at the real level: the sample session's Dashboard visit wrote
+  // both layout keys under `explore.`, and the exit sweep reaped the whole
+  // family. The user's real profile boots with no layout of its own — the
+  // state a control run (never entering explore) leaves behind.
+  expect(state.pillLayout).toBeNull();
+  expect(state.widgetLayout).toBeNull();
+  expect(state.exploreNamespaced).toEqual([]);
   // progress.v2 is NOT expected to be absent here: the worded wizard we just
   // landed on writes its own record on mount. What must hold is that it is a
   // PRISTINE first-run record — nothing carried over from the sample session.

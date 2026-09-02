@@ -1,3 +1,4 @@
+import { prefKey } from '@/lib/explore-mode';
 import { useLayoutStore, type LayoutEntry, type LayoutHook } from './use-layout-store';
 
 const STORAGE_KEY = 'dashboardWidgetLayout.v1';
@@ -23,7 +24,11 @@ const PRISTINE_DEFAULTS: readonly (readonly string[])[] = [
 
 export function migrateUncustomizedLayout(defaultIds: readonly string[]): void {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    // W4 smoke D1: this is the widget key's SECOND write path and it fires on
+    // mount — reading the RAW key from an explore boot would rewrite the real
+    // profile's stored layout before the user touched anything.
+    const key = prefKey(STORAGE_KEY);
+    const raw = window.localStorage.getItem(key);
     if (!raw) return;
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return;
@@ -38,7 +43,7 @@ export function migrateUncustomizedLayout(defaultIds: readonly string[]): void {
       );
     if (PRISTINE_DEFAULTS.some(matchesPristine)) {
       window.localStorage.setItem(
-        STORAGE_KEY,
+        key,
         JSON.stringify(defaultIds.map((id) => ({ id, hidden: false }))),
       );
     }

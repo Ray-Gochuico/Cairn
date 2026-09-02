@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, renderHook } from '@testing-library/react';
 import { enterExploreMode, exitExploreMode } from '@/lib/explore-transitions';
 import { EXPLORE_FLAG_KEY, prefKey } from '@/lib/explore-mode';
+import { usePillLayout } from '@/components/dashboard/use-pill-layout';
 
 /** The flag's VALUE is opaque to isExploreMode() — only presence matters —
  * so a fixed literal keeps this suite off the real clock (test-clock policy). */
@@ -85,6 +87,32 @@ describe('explore transitions', () => {
     expect(sessionStorage.getItem('explore.calculator.overrides.fi')).toBeNull();
     expect(localStorage.getItem('donut.assets.hidden')).toBe('["account:9"]');
     expect(localStorage.getItem('theme')).toBe('dark'); // D-S7's device-pref exemption
+  });
+
+  // W4 smoke D1, the whole leak in one test: the smoke drove
+  // Explore → Customize layout → Move a pill → Start my real setup and found
+  // `dashboardPillLayout.v1` sitting in the REAL profile, ordered by the
+  // SAMPLE session. Nothing below is stubbed except the DB/navigation deps —
+  // the layout write is the production hook.
+  it('enter → reorder the dashboard → exit leaves NO dashboard layout key behind', async () => {
+    const deps = { closeDb: async () => {}, reset: async () => {}, navigate: () => {} };
+    await enterExploreMode(deps);
+
+    const { result, unmount } = renderHook(() =>
+      usePillLayout(['net-worth', 'total-debt', 'savings-rate']),
+    );
+    act(() => result.current.move('total-debt', -1));
+    expect(JSON.parse(localStorage.getItem('explore.dashboardPillLayout.v1')!)[0].id)
+      .toBe('total-debt');
+    unmount();
+
+    await exitExploreMode(deps);
+
+    // The real profile boots with no layout key at all — exactly the state a
+    // control run (never entering explore) leaves behind.
+    expect(localStorage.getItem('dashboardPillLayout.v1')).toBeNull();
+    expect(localStorage.getItem('explore.dashboardPillLayout.v1')).toBeNull();
+    expect(localStorage.getItem(EXPLORE_FLAG_KEY)).toBeNull();
   });
 
   it('exit: the flag clears and navigation fires EVEN when the wipe throws (stale file is inert; next entry re-wipes)', async () => {

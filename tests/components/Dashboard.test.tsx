@@ -32,6 +32,7 @@ import {
 } from '@/types/enums';
 import type { Account, Contribution, Goal, GrowthScenario } from '@/types/schema';
 import Dashboard from '@/pages/Dashboard';
+import { clearExploreFlag, clearExplorePrefs, setExploreFlag } from '@/lib/explore-mode';
 
 const moderateScenarios: GrowthScenario[] = [
   { label: 'Conservative', rate: 0.05 },
@@ -935,5 +936,58 @@ describe('Dashboard setup-resume nudge — explore guard (D-S7)', () => {
     expect(
       screen.queryByRole('link', { name: /Suggested next step: finish setting up/ }),
     ).not.toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// W4 smoke D1 — the Details-open pref is NAMESPACED while exploring. It sits
+// in the same localStorage class as the pill/widget layout keys the smoke
+// caught leaking (Dashboard.tsx says so at the constant), and it is written
+// by a UI interaction inside the sample tour.
+// ---------------------------------------------------------------------------
+describe('Dashboard Details disclosure under explore mode (W4 pref ratchet)', () => {
+  const DETAILS_KEY = 'dashboardDetailsOpen.v1';
+  const EXPLORE_DETAILS_KEY = 'explore.dashboardDetailsOpen.v1';
+
+  beforeEach(() => {
+    resetStores();
+    // resetStores seeds the REAL key open for the pre-W13 assertions; this
+    // suite is about who gets written, so start from nothing.
+    localStorage.removeItem(DETAILS_KEY);
+    localStorage.removeItem(EXPLORE_DETAILS_KEY);
+  });
+  afterEach(() => {
+    clearExploreFlag();
+    localStorage.removeItem(DETAILS_KEY);
+    localStorage.removeItem(EXPLORE_DETAILS_KEY);
+  });
+
+  it('opening Details while exploring writes the namespaced key, never the real one', () => {
+    setExploreFlag();
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByTestId('dashboard-details-toggle'));
+    expect(screen.getByTestId('dashboard-pill-grid')).toBeInTheDocument();
+    expect(localStorage.getItem(EXPLORE_DETAILS_KEY)).toBe('true');
+    expect(localStorage.getItem(DETAILS_KEY)).toBeNull();
+
+    clearExplorePrefs();
+    clearExploreFlag();
+    expect(localStorage.getItem(EXPLORE_DETAILS_KEY)).toBeNull();
+  });
+
+  it('an explore-era open state never opens Details on the real profile', () => {
+    // Exit WITHOUT the sweep: the real read composes the unprefixed key.
+    localStorage.setItem(EXPLORE_DETAILS_KEY, 'true');
+    render(
+      <MemoryRouter>
+        <Dashboard />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByTestId('dashboard-pill-grid')).toBeNull();
+    expect(screen.getByTestId('dashboard-details-toggle')).toHaveAttribute('aria-expanded', 'false');
   });
 });

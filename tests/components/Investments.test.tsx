@@ -1,5 +1,5 @@
 import { StrictMode } from 'react';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -23,6 +23,7 @@ import {
 } from '@/types/enums';
 import type { Account, Contribution, Dependent, GrowthScenario, Holding, Person } from '@/types/schema';
 import Investments from '@/pages/Investments';
+import { clearExploreFlag, clearExplorePrefs, setExploreFlag } from '@/lib/explore-mode';
 
 const basePerson: Person = {
   id: 1,
@@ -1378,5 +1379,59 @@ describe('Wave A: person-view honoring (D6/D7/D8)', () => {
     expect(await screen.findByTestId('scope-caption')).toHaveTextContent(
       "Showing Alice's accounts: 1 of 3 — 1 joint and 1 owned by Bob not shown.",
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// W4 smoke D1 — "Investable only" hides cash-like accounts from the
+// Portfolio-by-account card, its bar and its % denominator: a VISIBILITY
+// preference set from the UI, so it is namespaced while exploring. Left raw,
+// a sample-session toggle would silently filter the user's own portfolio
+// after "Start my real setup".
+// ---------------------------------------------------------------------------
+describe('Investments "Investable only" under explore mode (W4 pref ratchet)', () => {
+  const KEY = 'investments.byAccount.investableOnly';
+  const EXPLORE_KEY = 'explore.investments.byAccount.investableOnly';
+
+  beforeEach(() => {
+    resetStores();
+    dbSelectImpl.current = async () => [];
+    localStorage.clear();
+    primeStores({
+      accounts: [
+        { id: 1, name: 'Schwab Brokerage', type: AccountType.ACCOUNT_BROKERAGE },
+        { id: 2, name: 'Ally Savings', type: AccountType.ACCOUNT_SAVINGS },
+      ],
+      snapshotValues: [
+        { accountId: 1, snapshotDate: '2026-04-01', totalValue: 50_000 },
+        { accountId: 2, snapshotDate: '2026-04-01', totalValue: 10_000 },
+      ],
+    });
+  });
+  afterEach(() => {
+    clearExploreFlag();
+    localStorage.clear();
+  });
+
+  it('toggling it while exploring writes the namespaced key, never the real one', async () => {
+    setExploreFlag();
+    const user = userEvent.setup();
+    render(<MemoryRouter><Investments /></MemoryRouter>);
+
+    await user.click(screen.getByRole('checkbox', { name: /investable only/i }));
+
+    expect(localStorage.getItem(EXPLORE_KEY)).toBe('1');
+    expect(localStorage.getItem(KEY)).toBeNull();
+
+    clearExplorePrefs();
+    clearExploreFlag();
+    expect(localStorage.getItem(EXPLORE_KEY)).toBeNull();
+  });
+
+  it('an explore-era toggle never filters the real profile (the leak this prevents)', () => {
+    // Exit WITHOUT the sweep: the real read composes the unprefixed key.
+    localStorage.setItem(EXPLORE_KEY, '1');
+    render(<MemoryRouter><Investments /></MemoryRouter>);
+    expect(screen.getByRole('checkbox', { name: /investable only/i })).not.toBeChecked();
   });
 });
