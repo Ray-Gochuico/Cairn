@@ -10,6 +10,10 @@ import { useSettingsStore } from '@/stores/settings-store';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { usePersonsStore } from '@/stores/persons-store';
+import { EXPLORE_FLAG_KEY } from '@/lib/explore-mode';
+
+/** Opaque to isExploreMode() — only presence matters (test-clock policy). */
+const FLAG_SET_AT = '2026-07-08T12:00:00.000Z';
 
 // Wave-4 a11y: PageShell owns the per-route document.title and the
 // focus-main-on-navigation behavior (SPA route changes are silent for
@@ -48,6 +52,7 @@ describe('PageShell route title + focus', () => {
   });
 
   afterEach(async () => {
+    localStorage.removeItem(EXPLORE_FLAG_KEY);
     await db.close();
   });
 
@@ -85,5 +90,20 @@ describe('PageShell route title + focus', () => {
     });
     expect(document.getElementById('main')).not.toHaveFocus();
     expect(link).toHaveFocus(); // user's position untouched
+  });
+
+  // W4: the sample banner is app-level chrome owned by the shell, and the
+  // window title carries the ' — Sample' suffix so the OS switcher is honest.
+  it('while exploring: renders the sample-data note and suffixes the window title', () => {
+    localStorage.setItem(EXPLORE_FLAG_KEY, FLAG_SET_AT);
+    renderAt('/');
+    expect(screen.getByRole('note', { name: 'Sample data notice' })).toBeInTheDocument();
+    expect(document.title).toBe('Dashboard · Cairn — Sample');
+  });
+
+  it('without the flag: no note, no title suffix (production first-run is untouched)', () => {
+    renderAt('/');
+    expect(screen.queryByRole('note', { name: 'Sample data notice' })).toBeNull();
+    expect(document.title).toBe('Dashboard · Cairn');
   });
 });

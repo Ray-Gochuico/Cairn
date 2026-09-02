@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
+import { isExploreMode } from '@/lib/explore-mode';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -62,6 +63,13 @@ function someLoadingNow(): boolean {
 }
 
 export default function OnboardingController() {
+  // W4 (D-S5/D-S7): while exploring, /setup and /welcome redirect home — this
+  // closes every writer of real device-local setup state (dismissed/progress/
+  // tailor) and keeps all reachable surfaces under the banner. Legal to
+  // early-return before hooks: isExploreMode() is a boot constant, so the
+  // hook order can never differ between renders of one mount.
+  if (isExploreMode()) return <Navigate to="/" replace />;
+
   const navigate = useNavigate();
   const { start: tourStart } = useTourStore();
 

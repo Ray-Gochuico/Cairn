@@ -39,6 +39,10 @@ import {
 } from '@/lib/backup-restore';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { DataSection } from '@/components/settings/DataSection';
+import { EXPLORE_FLAG_KEY } from '@/lib/explore-mode';
+
+/** Opaque to isExploreMode() — only presence matters (test-clock policy). */
+const FLAG_SET_AT = '2026-07-08T12:00:00.000Z';
 
 const mIsTauri = isTauriRuntime as unknown as ReturnType<typeof vi.fn>;
 const mRunBackup = runBackup as unknown as ReturnType<typeof vi.fn>;
@@ -353,5 +357,33 @@ describe('DataSection — platform-aware copy (distribution plan A3)', () => {
     expect(screen.getByText(/if this\s+computer is lost/i)).toBeInTheDocument();
     expect(screen.queryByText(/this mac/i)).toBeNull();
     await waitFor(() => expect(mList).toHaveBeenCalled());
+  });
+});
+
+describe('W4 explore mode', () => {
+  afterEach(() => {
+    localStorage.removeItem(EXPLORE_FLAG_KEY);
+  });
+
+  it('disables every write path and explains why (SE-C9); Reveal stays enabled (P-W4-11)', async () => {
+    localStorage.setItem(EXPLORE_FLAG_KEY, FLAG_SET_AT);
+    mList.mockResolvedValue([entry('cairn-20260602-100000.db', new Date('2026-06-02T22:50:00'))]);
+    renderSection();
+    await waitFor(() => expect(mList).toHaveBeenCalled());
+    expect(screen.getByRole('button', { name: /back up now/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /save a copy/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /restore from a file/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^Restore backup from/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /reveal backups/i })).toBeEnabled();
+    expect(screen.getByTestId('sample-mode-backup-note')).toHaveTextContent(
+      'Backups work on your own data — this sample profile is wiped when you leave.',
+    );
+  });
+
+  it('without the flag: the note is absent and the controls are live', async () => {
+    renderSection();
+    await waitFor(() => expect(mList).toHaveBeenCalled());
+    expect(screen.queryByTestId('sample-mode-backup-note')).toBeNull();
+    expect(screen.getByRole('button', { name: /back up now/i })).toBeEnabled();
   });
 });

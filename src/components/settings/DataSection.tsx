@@ -18,6 +18,7 @@ import {
 } from '@/lib/backup-restore';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { isWindows } from '@/lib/platform';
+import { isExploreMode } from '@/lib/explore-mode';
 
 /** Human-readable "when this backup was taken", e.g. "Jun 2, 2026, 11:50 PM". */
 function formatTakenAt(takenAt: Date): string {
@@ -50,6 +51,10 @@ function formatTakenAt(takenAt: Date): string {
  */
 export function DataSection() {
   const tauri = isTauriRuntime();
+  // W4 (D-S7): backup/restore act on the REAL finance.db pool, which is not
+  // even open while exploring — disable them and say why. "Reveal backups"
+  // stays enabled (P-W4-11): it opens a folder and touches no data path.
+  const exploring = isExploreMode();
   const { confirm, dialog } = useConfirm();
 
   const [busy, setBusy] = useState<null | 'backup' | 'save' | 'restore'>(null);
@@ -241,6 +246,12 @@ export function DataSection() {
           </p>
         )}
 
+        {exploring && (
+          <p className="text-sm text-muted-foreground" data-testid="sample-mode-backup-note">
+            Backups work on your own data — this sample profile is wiped when you leave.
+          </p>
+        )}
+
         <div className="grid gap-6 md:grid-cols-2">
           <div className="space-y-3">
             <h3 className="text-sm font-medium">Back up</h3>
@@ -249,13 +260,13 @@ export function DataSection() {
               backups in a folder next to your data.
             </p>
             <div className="flex flex-wrap items-center gap-2">
-              <Button onClick={handleBackupNow} disabled={!tauri || busy !== null}>
+              <Button onClick={handleBackupNow} disabled={!tauri || exploring || busy !== null}>
                 {busy === 'backup' ? 'Backing up…' : 'Back up now'}
               </Button>
               <Button
                 variant="outline"
                 onClick={handleSaveCopy}
-                disabled={!tauri || busy !== null}
+                disabled={!tauri || exploring || busy !== null}
               >
                 {busy === 'save' ? 'Saving…' : 'Save a copy…'}
               </Button>
@@ -286,7 +297,7 @@ export function DataSection() {
                       size="sm"
                       aria-label={`Restore backup from ${formatTakenAt(b.takenAt)}`}
                       onClick={() => handleRestoreEntry(b)}
-                      disabled={!tauri || busy !== null}
+                      disabled={!tauri || exploring || busy !== null}
                     >
                       {busyPath === b.path ? 'Restoring…' : 'Restore'}
                     </Button>
@@ -308,7 +319,7 @@ export function DataSection() {
             <Button
               variant="ghost"
               onClick={handleRestoreFromFile}
-              disabled={!tauri || busy !== null}
+              disabled={!tauri || exploring || busy !== null}
             >
               Restore from a file…
             </Button>
