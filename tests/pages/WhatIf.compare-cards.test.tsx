@@ -415,11 +415,18 @@ describe('WhatIf — W3 page plumbing', () => {
     expect(screen.getByText(/No account snapshots yet/)).toBeInTheDocument();
   });
 
-  // Review REFUTED-2 residual: the page owns the 'unanswered' literal and the
-  // context it scans; the lib only ever sees the finished boolean.
-  it('G9: the page scans the roadmap context for UNANSWERED nodes', () => {
+  // Review REFUTED-2 residual: the page owns the predicate and the context it
+  // scans; the lib only ever sees the finished boolean.
+  //
+  // Smoke D2 (2026-09-02): the predicate is the ROADMAP's own — a node result
+  // carrying a question NodeRow would render (hasDecisionPrompt). A bare
+  // 'unanswered' status is broader than what /roadmap offers to answer, and
+  // G9's CTA led to a page with nothing on it.
+  const QUESTION = { prompt: 'Have you written an IPS?', answerType: 'yes-no', onAnswer: async () => {} };
+
+  it('G9: the page scans the roadmap context for nodes carrying a QUESTION', () => {
     h.roadmapCtx = { today: new Date('2026-08-25T12:00:00Z') };
-    h.roadmapResults = new Map([['n1', { status: 'unanswered' }]]);
+    h.roadmapResults = new Map([['n1', { status: 'unanswered', question: QUESTION }]]);
     renderWhatIf();
     expect(screen.getByText(
       "The roadmap has questions you haven't answered — its checklist and frameworks assume less until you do.",
@@ -430,6 +437,20 @@ describe('WhatIf — W3 page plumbing', () => {
   it('G9 does not fire for a node that is merely ACTIVE', () => {
     h.roadmapCtx = { today: new Date('2026-08-25T12:00:00Z') };
     h.roadmapResults = new Map([['n1', { status: 'active' }]]);
+    renderWhatIf();
+    expect(screen.queryByText(/The roadmap has questions/)).toBeNull();
+  });
+
+  it("G9 stays silent for an 'unanswered' node the roadmap offers no question for", () => {
+    // The s1_employer_match / mega-backdoor shape: status 'unanswered', a CTA
+    // pointing at ANOTHER page, and no inline prompt. /roadmap has nothing to
+    // answer here, so the sentence would be false and its link a dead end.
+    h.roadmapCtx = { today: new Date('2026-08-25T12:00:00Z') };
+    h.roadmapResults = new Map([['n1', {
+      status: 'unanswered',
+      evidence: 'Mark which retirement accounts (if any) come with an employer match.',
+      cta: { label: 'Open Accounts →', href: '/investments?manage=accounts' },
+    }]]);
     renderWhatIf();
     expect(screen.queryByText(/The roadmap has questions/)).toBeNull();
   });

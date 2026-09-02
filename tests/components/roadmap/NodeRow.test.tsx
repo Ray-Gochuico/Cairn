@@ -117,6 +117,25 @@ describe('NodeRow', () => {
     expect(answeredWith).toBe('yes');
   });
 
+  // Extraction pin (smoke D2, 2026-09-02): NodeRow now calls the exported
+  // hasDecisionPrompt() instead of an inline `result.question &&`. Behavior is
+  // byte-identical — an 'unanswered' row WITHOUT a question still renders its
+  // evidence and CTA and no prompt, which is exactly the case /what-if's G9
+  // used to fire on.
+  it('renders NO prompt for an unanswered result that carries no question', () => {
+    renderRow({
+      result: {
+        status: 'unanswered',
+        evidence: 'Mark which retirement accounts (if any) come with an employer match.',
+        cta: { label: 'Open Accounts →', href: '/investments?manage=accounts' },
+      },
+    });
+    expect(screen.getByText('Mark which retirement accounts (if any) come with an employer match.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /open accounts/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Yes' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'No' })).toBeNull();
+  });
+
   it('opens the detail drawer when the (i) button is clicked', () => {
     renderRow({ result: { status: 'active', evidence: 'because reasons' } });
     // Drawer is initially closed → chart-text body not present.

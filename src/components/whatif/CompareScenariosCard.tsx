@@ -94,22 +94,33 @@ export function CompareScenariosCard({
     const userScenarioCount = scenarios.filter((s) => !s.isBaseline).length;
     return (
       <Card data-testid="whatif-compare-card">
-        <CardContent className="pt-6">
-          <EmptyState bare title={SECOND_SCENARIO_PROMPT}>
-            <div className="flex flex-col items-center gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => setSaveOpen(true)}>
-                + Save current
-              </Button>
-              <p className="text-xs text-muted-foreground">{SEND_POINTER}</p>
-            </div>
-          </EmptyState>
-          {saveOpen && (
-            <SaveCurrentDialog
-              defaultName={`Scenario ${userScenarioCount + 1}`}
-              onClose={() => setSaveOpen(false)}
-            />
-          )}
-        </CardContent>
+        {/* Smoke M4 (2026-09-02): the CR-1 heading is the aria-labelledby
+            target, so it stays in the prompt state too — without it the region
+            had no accessible name. The heading NAMES the card; the prompt
+            sentence stays the EmptyState's bare title. */}
+        <section aria-labelledby="compare-scenarios-heading">
+          <CardHeader className="pb-2">
+            <CardTitle id="compare-scenarios-heading" className="text-base">
+              Compare scenarios
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <EmptyState bare title={SECOND_SCENARIO_PROMPT}>
+              <div className="flex flex-col items-center gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => setSaveOpen(true)}>
+                  + Save current
+                </Button>
+                <p className="text-xs text-muted-foreground">{SEND_POINTER}</p>
+              </div>
+            </EmptyState>
+            {saveOpen && (
+              <SaveCurrentDialog
+                defaultName={`Scenario ${userScenarioCount + 1}`}
+                onClose={() => setSaveOpen(false)}
+              />
+            )}
+          </CardContent>
+        </section>
       </Card>
     );
   }

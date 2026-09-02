@@ -195,7 +195,37 @@ type Elp = LeverPayload['extraLoanPayments'][number];
 type Lump = LeverPayload['lumpSums'][number];
 type ExpPeriod = LeverPayload['expensePeriods'][number];
 type Contribution = LeverPayload['contributions'][number];
-type IncomeEvt = LeverPayload['income']['perPerson'][number]['events'][number];
+type PersonPlan = LeverPayload['income']['perPerson'][number];
+type IncomeEvt = PersonPlan['events'][number];
+
+// ── income shape is not a difference (smoke defect D1, 2026-09-02) ──────────
+// The Income lever dialog normalizes income.perPerson into one entry PER
+// PERSON, so a lever-identical twin can carry one entry on one side and two on
+// the other. The engine resolves a missing entry as
+//   payload.income.perPerson[idx] ?? payload.income.perPerson[0]
+// (src/lib/scenarios/engine.ts:515), so ONE entry models the same raises and
+// the same income events for every person that the same entry repeated does.
+// Both sides are aligned to THAT rule before anything is compared — a
+// shape-only difference is not a difference the projected lines have, and
+// rendering it ("Annual raises: 0% vs 0% / 0%") was a false sentence.
+/** The engine's fallback — MIRRORED, never invented. A padding default of
+ *  "0% and no events" would report differences the projection does not have.
+ *  The schema guarantees 1..2 entries after a Zod read (lever-types.ts:138),
+ *  so EMPTY_PLAN is unreachable in practice and exists only so a hand-built
+ *  payload cannot throw. */
+const EMPTY_PLAN: PersonPlan = { annualRaiseRate: 0, events: [] };
+function planAt(pp: readonly PersonPlan[], idx: number): PersonPlan {
+  return pp[idx] ?? pp[0] ?? EMPTY_PLAN;
+}
+/** Both sides' per-person plans padded to a common length by that fallback. */
+function alignedIncomePlans(a: LeverPayload, b: LeverPayload): { a: PersonPlan[]; b: PersonPlan[] } {
+  const pa = a.income?.perPerson ?? [];
+  const pb = b.income?.perPerson ?? [];
+  const n = Math.max(pa.length, pb.length);
+  const pad = (pp: readonly PersonPlan[]): PersonPlan[] =>
+    pp.length === 0 ? [] : Array.from({ length: n }, (_, i) => planAt(pp, i));
+  return { a: pad(pa), b: pad(pb) };
+}
 
 // Phrase shapes CR-L1..CR-L5 — mirror lever-summary.ts:25-74 byte-for-byte
 // where the lever is one summarizeLevers reports (loan / lump / expense /
@@ -235,12 +265,12 @@ export function buildLeverDiff(
   b: LeverPayload,
   ctx: { loanNames: Record<number, string> },
 ): LeverDiff {
-  const entries = (p: LeverPayload): Map<string, string> => {
+  const aligned = alignedIncomePlans(a, b);
+  const entries = (p: LeverPayload, pp: PersonPlan[]): Map<string, string> => {
     const m = new Map<string, string>();
     for (const e of p.extraLoanPayments ?? []) m.set(`elp:${canonicalJson(e)}`, loanPhrase(e, ctx.loanNames));
     for (const e of p.lumpSums ?? []) m.set(`lump:${canonicalJson(e)}`, lumpPhrase(e));
     for (const e of p.expensePeriods ?? []) m.set(`exp:${canonicalJson(e)}`, expensePhrase(e));
-    const pp = p.income?.perPerson ?? [];
     pp.forEach((person, i) => {
       for (const e of person.events ?? []) {
         m.set(`inc:${i}:${canonicalJson(e)}`, incomeEventPhrase(e, i, pp.length));
@@ -249,8 +279,8 @@ export function buildLeverDiff(
     for (const c of p.contributions ?? []) m.set(`contrib:${canonicalJson(c)}`, contributionPhrase(c));
     return m;
   };
-  const ma = entries(a);
-  const mb = entries(b);
+  const ma = entries(a, aligned.a);
+  const mb = entries(b, aligned.b);
   const rawA: string[] = [];
   const rawB: string[] = [];
   for (const [k, phrase] of ma) if (!mb.has(k)) rawA.push(phrase);
@@ -260,9 +290,16 @@ export function buildLeverDiff(
   const collide = new Set(rawA.filter((p) => rawB.includes(p)));
   const mark = (list: string[]): string[] => list.map((p) => (collide.has(p) ? `${p} (details differ)` : p));
   const changed: string[] = [];
-  const raisesOf = (p: LeverPayload): string =>
-    (p.income?.perPerson ?? []).map((x) => fmtPct0(x.annualRaiseRate ?? 0)).join(' / ');
-  if (raisesOf(a) !== raisesOf(b)) changed.push(`Annual raises: ${raisesOf(a)} vs ${raisesOf(b)}`);
+  // CR-MD2 compares the ALIGNED per-person rates positionally — one entry vs
+  // the same entry repeated is one rate to the engine, so it renders nothing.
+  // Rendering keeps the frozen format ('{a} vs {b}', each side per-person
+  // fmtPct0 joined ' / ') over the same aligned lists, so both sides always
+  // carry the same number of figures.
+  const raisesOf = (pp: PersonPlan[]): string =>
+    pp.map((x) => fmtPct0(x.annualRaiseRate ?? 0)).join(' / ');
+  const raisesA = raisesOf(aligned.a);
+  const raisesB = raisesOf(aligned.b);
+  if (raisesA !== raisesB) changed.push(`Annual raises: ${raisesA} vs ${raisesB}`);
   const onlyInA = mark(rawA);
   const onlyInB = mark(rawB);
   return {

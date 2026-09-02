@@ -142,6 +142,22 @@ describe('CompareScenariosCard', () => {
     expect((screen.getByLabelText('Scenario name') as HTMLInputElement).value).toBe('Scenario 1');
   });
 
+  // Smoke M4 (2026-09-02): the prompt state rendered no CR-1 heading, so the
+  // labelled region lost its accessible name — the aria-labelledby target
+  // simply was not in the document. The heading is chrome, not a claim: it
+  // stays, and the EmptyState's bare title stays the prompt sentence.
+  it('the prompt state keeps the CR-1 heading and its aria-labelledby wiring', () => {
+    const { container } = renderCard({ scenarios: [baseline], pair: { a: baseline, b: null } });
+    const section = container.querySelector('section[aria-labelledby="compare-scenarios-heading"]');
+    expect(section).not.toBeNull();
+    expect(container.querySelector('#compare-scenarios-heading')?.textContent).toBe('Compare scenarios');
+    // The prompt is still the EmptyState title — the heading did not replace it.
+    expect(screen.getByText(SECOND_SCENARIO_PROMPT)).toBeInTheDocument();
+    // ...and no picker chrome arrives with it (there is nothing to pick yet).
+    expect(screen.queryByLabelText('Compare scenario A')).toBeNull();
+    expect(screen.queryByLabelText('Compare scenario B')).toBeNull();
+  });
+
   it('the dialog default name counts USER scenarios, not the baseline', async () => {
     const user = userEvent.setup();
     // Two user scenarios present but only one rendered pair side → the prompt

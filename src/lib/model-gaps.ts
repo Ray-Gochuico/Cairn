@@ -40,8 +40,13 @@ export interface ModelGapsInput {
   accounts: Account[];
   snapshots: AccountSnapshot[];
   contributions: Contribution[];
-  /** ≥1 roadmap rule-engine node with status 'unanswered' (page computes via
-   *  evaluate(useRoadmap()); false when the roadmap context is unavailable). */
+  /** ≥1 roadmap node the ROADMAP PAGE would render an answerable prompt for —
+   *  the page computes it as anyDecisionPrompt(evaluate(useRoadmap()).values()),
+   *  reusing NodeRow's own hasDecisionPrompt test so G9's sentence and its
+   *  "Open Roadmap →" CTA can never disagree with what that page shows
+   *  (smoke D2, 2026-09-02). NOT the broader "any node with status
+   *  'unanswered'": those include CTA-only rows pointing at OTHER pages.
+   *  False when the roadmap context is unavailable. */
   roadmapHasUnanswered: boolean;
   /** Does the ENGINE actually seed month 0 at zero? G2's condition is the
    *  canonical snapshot-only provenance string, but its consequence claims
