@@ -1,8 +1,9 @@
 import {
+  Area,
   CartesianGrid,
+  ComposedChart,
   Legend,
   Line,
-  LineChart,
   ReferenceDot,
   ResponsiveContainer,
   Tooltip,
@@ -18,6 +19,8 @@ const AXIS_STROKE = 'hsl(var(--muted-foreground))';
 const AXIS_TICK = { fill: AXIS_STROKE };
 // Wave-12 D3 discipline: --blaze is fill/stroke only, never text.
 const HERO = 'hsl(var(--blaze))';
+// BT-15 parity: the fan fill rides the dark-aware band token, never a raw color.
+const FAN_FILL = 'hsl(var(--chart-band))';
 
 export interface InlineChartPoint {
   [key: string]: number | string;
@@ -35,6 +38,19 @@ export interface InlineChartSeries {
    * series per chart — the headline trajectory.
    */
   hero?: boolean;
+}
+
+/**
+ * W2 (D-UB8): an optional percentile fan drawn UNDER the lines, in the shipped
+ * BacktestChart delta-stack idiom — an invisible floor Area plus one stacked
+ * delta. Rows must already carry both keys (the caller's basis boundary owns
+ * the encoding); InlineChart derives nothing.
+ */
+export interface InlineChartFan {
+  /** dataKey of the invisible floor series (absolute p25 values). */
+  floorKey: string;
+  /** dataKey of the delta series stacked on the floor (p75 − p25). */
+  deltaKey: string;
 }
 
 export interface InlineChartMarker {
@@ -55,6 +71,8 @@ interface InlineChartProps {
   testId?: string;
   /** data-testid for the label node (W5 basis-caption registration). */
   labelTestId?: string;
+  /** W2: draw a percentile band beneath the lines. Omit for no fan. */
+  fan?: InlineChartFan;
 }
 
 /**
@@ -91,6 +109,7 @@ export function InlineChart({
   markers,
   testId,
   labelTestId,
+  fan,
 }: InlineChartProps) {
   const last = data.length > 0 ? data[data.length - 1] : null;
   return (
@@ -104,7 +123,7 @@ export function InlineChart({
         </div>
       )}
       <ResponsiveContainer width="100%" height={height}>
-        <LineChart data={data} margin={{ top: 8, right: 16, bottom: 0, left: 8 }}>
+        <ComposedChart data={data} margin={{ top: 8, right: 16, bottom: 0, left: 8 }}>
           <CartesianGrid vertical={false} stroke={GRID_STROKE} />
           <XAxis dataKey={xKey} stroke={AXIS_STROKE} fontSize={12} tick={AXIS_TICK} />
           <YAxis
@@ -123,6 +142,37 @@ export function InlineChart({
             }
           />
           {series.length > 1 && <Legend content={<ChartLegend />} />}
+          {fan != null && (
+            <>
+              {/* Delta-stack fan (the BacktestChart bands idiom): invisible floor
+                  + one p75−p25 delta. tooltipType/legendType "none" — a stacked
+                  delta is not a balance; it must never surface as a bare dollar
+                  figure (W2 D-P2). Areas render BEFORE the Lines so they paint
+                  underneath. */}
+              <Area
+                type="monotone"
+                dataKey={fan.floorKey}
+                fill="transparent"
+                fillOpacity={0}
+                stroke="none"
+                stackId="fan"
+                isAnimationActive={false}
+                tooltipType="none"
+                legendType="none"
+              />
+              <Area
+                type="monotone"
+                dataKey={fan.deltaKey}
+                fill={FAN_FILL}
+                fillOpacity={0.28}
+                stroke="none"
+                stackId="fan"
+                isAnimationActive={false}
+                tooltipType="none"
+                legendType="none"
+              />
+            </>
+          )}
           {series.map((s, idx) => (
             <Line
               key={s.dataKey}
@@ -159,7 +209,7 @@ export function InlineChart({
                   shape={CAIRN_TERMINAL}
                 />
               ))}
-        </LineChart>
+        </ComposedChart>
       </ResponsiveContainer>
     </div>
   );

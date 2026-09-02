@@ -9,6 +9,23 @@ vi.mock('recharts', () => ({
   LineChart: ({ children }: { children: ReactNode }) => (
     <svg data-testid="rc-line-chart">{children}</svg>
   ),
+  ComposedChart: ({ children, data }: { children: ReactNode; data?: unknown[] }) => (
+    <svg data-testid="rc-composed-chart" data-rows={JSON.stringify(data ?? [])}>
+      {children}
+    </svg>
+  ),
+  Area: (p: Record<string, unknown>) => (
+    <g
+      data-testid={`rc-area-${String(p.dataKey)}`}
+      data-stack={String(p.stackId ?? '')}
+      data-fill={String(p.fill ?? '')}
+      data-fill-opacity={String(p.fillOpacity ?? '')}
+      data-stroke={String(p.stroke ?? '')}
+      data-animation={String(p.isAnimationActive)}
+      data-tooltip-type={String(p.tooltipType ?? '')}
+      data-legend-type={String(p.legendType ?? '')}
+    />
+  ),
   CartesianGrid: () => null,
   XAxis: () => null,
   YAxis: () => null,
@@ -145,5 +162,60 @@ describe('InlineChart', () => {
     expect(dots).toHaveLength(1);
     expect(dots[0]).toHaveAttribute('data-x', 'Year 1');
     expect(dots[0]).toHaveAttribute('data-hasshape', 'false');
+  });
+});
+
+const FAN_DATA = [
+  { year: 0, fanFloor: 100, fan2575: 50, p50: 120 },
+  { year: 1, fanFloor: 110, fan2575: 60, p50: 140 },
+];
+const P50_SERIES = [
+  { dataKey: 'p50', label: 'Median (p50)', color: 'hsl(var(--foreground))', strokeWidth: 2.5 },
+];
+
+describe('InlineChart fan (W2)', () => {
+  it('the root is a ComposedChart carrying the rows (Line/ReferenceDot rendering unchanged)', () => {
+    render(
+      <InlineChart data={DATA} xKey="year" series={[{ dataKey: 'mid', label: 'Balance' }]} />,
+    );
+    expect(screen.getByTestId('rc-composed-chart')).toBeInTheDocument();
+    expect(screen.queryByTestId('rc-line-chart')).toBeNull();
+    expect(screen.getByTestId('line-mid')).toBeInTheDocument();
+  });
+
+  it('renders no Area when fan is omitted', () => {
+    render(<InlineChart data={FAN_DATA} xKey="year" series={P50_SERIES} />);
+    expect(screen.queryByTestId('rc-area-fanFloor')).toBeNull();
+    expect(screen.queryByTestId('rc-area-fan2575')).toBeNull();
+  });
+
+  it('fan renders floor + delta in one stack with the band token (D-P2 tooltip/legend opt-out)', () => {
+    render(
+      <InlineChart
+        data={FAN_DATA}
+        xKey="year"
+        series={P50_SERIES}
+        fan={{ floorKey: 'fanFloor', deltaKey: 'fan2575' }}
+      />,
+    );
+    const floor = screen.getByTestId('rc-area-fanFloor');
+    const delta = screen.getByTestId('rc-area-fan2575');
+    expect(floor.getAttribute('data-stack')).toBe('fan');
+    expect(delta.getAttribute('data-stack')).toBe('fan');
+    expect(floor.getAttribute('data-fill-opacity')).toBe('0');
+    expect(floor.getAttribute('data-stroke')).toBe('none');
+    expect(delta.getAttribute('data-fill')).toBe('hsl(var(--chart-band))');
+    expect(delta.getAttribute('data-fill-opacity')).toBe('0.28');
+    expect(delta.getAttribute('data-stroke')).toBe('none');
+    for (const el of [floor, delta]) {
+      expect(el.getAttribute('data-animation')).toBe('false');
+      // D-P2 / R3: a stacked delta is NOT a balance. The tooltip is the stratum
+      // the basis-audit render sweep cannot see, so both Areas opt out of it
+      // (and of the legend, which the hand-rolled HistoryFanLegend owns).
+      expect(el.getAttribute('data-tooltip-type')).toBe('none');
+      expect(el.getAttribute('data-legend-type')).toBe('none');
+    }
+    // Lines still render beside the fan:
+    expect(screen.getByTestId('line-p50')).toBeInTheDocument();
   });
 });
