@@ -320,11 +320,11 @@ fn resolve_sqlite_path<R: tauri::Runtime>(
     let rel = db
         .split_once(':')
         .map(|(_, p)| p)
-        .ok_or_else(|| format!("db_restore: '{db}' is not a sqlite: URL"))?;
+        .ok_or_else(|| format!("resolve_sqlite_path: '{db}' is not a sqlite: URL"))?;
     let mut base = app
         .path()
         .app_config_dir()
-        .map_err(|e| format!("db_restore: could not resolve app config dir: {e}"))?;
+        .map_err(|e| format!("resolve_sqlite_path: could not resolve app config dir: {e}"))?;
     base.push(rel);
     Ok(base)
 }
@@ -403,6 +403,87 @@ pub async fn db_restore(app: tauri::AppHandle, db: String, source: String) -> Re
     replace_database_file(&source_path, &live_path)?;
 
     Ok(())
+}
+
+/// The ONE database URL `db_sample_reset` may touch (W4 D-S8). Mirrored in TS
+/// as `EXPLORE_DB_URL` (src/lib/explore-mode.ts); pinned by
+/// `sample_db_url_is_pinned` and cross-language in tests/policy/ipc-parity.test.ts.
+pub const SAMPLE_DB_URL: &str = "sqlite:sample-explore.db";
+
+/// Equality allowlist — it must be IMPOSSIBLE to aim this command at
+/// finance.db. Free function so the refusal is unit-tested without an AppHandle.
+fn ensure_sample_url(db: &str) -> Result<(), String> {
+    if db == SAMPLE_DB_URL {
+        Ok(())
+    } else {
+        Err(format!(
+            "db_sample_reset: refusing to reset '{db}' — only '{SAMPLE_DB_URL}' can be wiped"
+        ))
+    }
+}
+
+/// Delete a sqlite main file + its `-wal`/`-shm` sidecars, tolerating absence
+/// (idempotent: the boot wipe runs on every explore boot, file present or not).
+fn remove_db_files(live: &Path) -> Result<(), String> {
+    let mut targets = vec![live.to_path_buf()];
+    targets.extend(sidecar_paths(live));
+    for t in targets {
+        match std::fs::remove_file(&t) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => {
+                return Err(format!(
+                    "db_sample_reset: could not delete {}: {e}",
+                    t.display()
+                ))
+            }
+        }
+    }
+    Ok(())
+}
+
+/// W4 (D-S2/D-S8): wipe the throwaway sample DB. Drops the pool from
+/// `DbInstances` first — the map lives in the Rust process and SURVIVES webview
+/// reloads, so a prior explore session's pool would hold the file open (Windows
+/// can't delete an open file) and a later `Database.load` must start from a
+/// fresh connection. The plugin's own `close` command leaves the entry in the
+/// map; removing it here fully forgets the URL. `DbPool::close` is pub(crate),
+/// so the removed pool is closed via sqlx's public `Pool::close`.
+#[tauri::command]
+pub async fn db_sample_reset(app: tauri::AppHandle, db: String) -> Result<(), String> {
+    let instances = app.state::<DbInstances>();
+    sample_reset_guarded(&instances, &db, |d| resolve_sqlite_path(&app, d)).await
+}
+
+/// The whole body of `db_sample_reset`, minus the `AppHandle`. W4 review: the
+/// command used to inline this, so the allowlist call and the pool-drop were
+/// only reachable through a `#[tauri::command]` no test can invoke — both a
+/// deleted `ensure_sample_url(&db)?` and a skipped `Pool::close()` compiled
+/// and passed `cargo test`. The house split stands (no test constructs an
+/// `AppHandle`); the wrapper is now genuinely thin, and everything it does is
+/// pinned by `sample_reset_refuses_the_real_db_without_touching_the_filesystem`
+/// and `sample_reset_forgets_and_closes_the_sample_pool`.
+///
+/// ORDER IS LOAD-BEARING: the allowlist runs FIRST — before the pool map is
+/// touched and before any path is even resolved.
+async fn sample_reset_guarded<F>(
+    instances: &DbInstances,
+    db: &str,
+    resolve: F,
+) -> Result<(), String>
+where
+    F: FnOnce(&str) -> Result<PathBuf, String>,
+{
+    ensure_sample_url(db)?;
+    let removed = {
+        let mut map = instances.0.write().await;
+        map.remove(db)
+    }; // write-guard dropped here, before the close/delete awaits
+    if let Some(DbPool::Sqlite(pool)) = removed {
+        pool.close().await;
+    }
+    let live = resolve(db)?;
+    remove_db_files(&live)
 }
 
 #[cfg(test)]
@@ -766,5 +847,146 @@ mod tests {
     #[test]
     fn max_schema_version_is_pinned() {
         assert_eq!(MAX_SCHEMA_VERSION, 55);
+    }
+
+    /// W4: the allowlist is EQUALITY on the one sample URL — `db_sample_reset`
+    /// must be impossible to aim at finance.db (or anything else).
+    #[test]
+    fn sample_reset_allowlist_refuses_everything_but_the_sample_url() {
+        assert!(ensure_sample_url(SAMPLE_DB_URL).is_ok());
+        for bad in [
+            "sqlite:finance.db",
+            "sqlite:sample-explore.db2",
+            "sqlite:./sample-explore.db",
+            "sample-explore.db",
+            "",
+            "sqlite:../finance.db",
+            // W4 review (MINOR 2): the six above kill `starts_with` and
+            // `contains` mutants but NOT `ends_with`, `eq_ignore_ascii_case`
+            // or `trim() ==`. These do — the rule is EQUALITY, and the test's
+            // name says "everything but the sample url".
+            "x sqlite:sample-explore.db",              // ends_with
+            "SQLITE:SAMPLE-EXPLORE.DB",                // eq_ignore_ascii_case
+            "sqlite:sample-explore.db ",               // trailing space  → trim()
+            " sqlite:sample-explore.db",               // leading space   → trim()
+            "sqlite:sample-explore.db?mode=rwc",       // query suffix
+            "sqlite:../x:sqlite:sample-explore.db",    // embedded
+        ] {
+            let err = ensure_sample_url(bad).unwrap_err();
+            assert!(err.contains("refusing"), "{bad}: {err}");
+        }
+    }
+
+    /// W4: mirror pin of the TS `EXPLORE_DB_URL` (src/lib/explore-mode.ts) —
+    /// the MAX_SCHEMA_VERSION mirror-pin precedent. Also regex-pinned
+    /// cross-language in tests/policy/ipc-parity.test.ts.
+    #[test]
+    fn sample_db_url_is_pinned() {
+        assert_eq!(SAMPLE_DB_URL, "sqlite:sample-explore.db");
+    }
+
+    #[test]
+    fn remove_db_files_deletes_main_and_both_sidecars() {
+        let dir = tempfile::tempdir().unwrap();
+        let live = dir.path().join("sample-explore.db");
+        for p in [
+            live.clone(),
+            dir.path().join("sample-explore.db-wal"),
+            dir.path().join("sample-explore.db-shm"),
+        ] {
+            std::fs::write(&p, b"x").unwrap();
+        }
+        remove_db_files(&live).unwrap();
+        assert!(!live.exists());
+        assert!(!dir.path().join("sample-explore.db-wal").exists());
+        assert!(!dir.path().join("sample-explore.db-shm").exists());
+    }
+
+    #[test]
+    fn remove_db_files_is_a_no_op_when_nothing_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        remove_db_files(&dir.path().join("sample-explore.db")).unwrap();
+    }
+
+    /// W4 review (MINOR 3): only ErrorKind::NotFound is tolerated — every
+    /// other io error must surface, so a locked or permission-denied sample
+    /// file fails LOUDLY instead of silently booting over a stale DB. A
+    /// `Err(_) => {}` mutant compiled and passed before this test existed.
+    /// A directory at the main path is the portable non-NotFound failure
+    /// (EISDIR on Linux, EPERM on macOS).
+    #[test]
+    fn remove_db_files_surfaces_a_non_not_found_delete_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        let live = dir.path().join("sample-explore.db");
+        std::fs::create_dir(&live).unwrap();
+        let err = remove_db_files(&live).unwrap_err();
+        assert!(err.contains("could not delete"), "{err}");
+        assert!(live.exists(), "the directory must still be there");
+    }
+
+    /// Build a `DbInstances` holding one open pool under `key`.
+    async fn instances_with(key: &str, path: &Path) -> (DbInstances, Pool<Sqlite>) {
+        let pool = seeded_pool(path).await;
+        let map = std::collections::HashMap::from([(
+            key.to_string(),
+            DbPool::Sqlite(pool.clone()),
+        )]);
+        (DbInstances(tokio::sync::RwLock::new(map)), pool)
+    }
+
+    /// W4 review (REFUTED 0, pinned anyway — cheap): the allowlist call is
+    /// the ENTIRE enforcement of D-S8 inside the command body, and deleting
+    /// `ensure_sample_url(&db)?` compiled and passed 21/21. The command is a
+    /// thin wrapper over this guarded free function, so the wiring is now
+    /// covered without constructing an AppHandle (the house split stands).
+    #[tokio::test]
+    async fn sample_reset_refuses_the_real_db_without_touching_the_filesystem() {
+        let dir = tempfile::tempdir().unwrap();
+        let live = dir.path().join("finance.db");
+        std::fs::write(&live, b"the user's only copy").unwrap();
+        let (instances, pool) = instances_with(SAMPLE_DB_URL, &dir.path().join("sample.db")).await;
+
+        let resolved = std::cell::Cell::new(false);
+        let err = sample_reset_guarded(&instances, "sqlite:finance.db", |_| {
+            resolved.set(true);
+            Ok(live.clone())
+        })
+        .await
+        .unwrap_err();
+
+        assert!(err.contains("refusing"), "{err}");
+        assert!(!resolved.get(), "the path must never even be resolved");
+        assert!(live.exists(), "finance.db must be untouched");
+        assert_eq!(
+            std::fs::read(&live).unwrap(),
+            b"the user's only copy",
+            "finance.db must be byte-identical"
+        );
+        // The refused call must also leave the pool map alone.
+        assert!(instances.0.read().await.contains_key(SAMPLE_DB_URL));
+        pool.close().await;
+    }
+
+    /// W4 review (REFUTED 1, pinned anyway — cheap): P-W4-3 makes the
+    /// pool-drop load-bearing (a prior session's pool survives webview
+    /// reloads in the Rust process and would hold the file open on Windows).
+    /// Replacing the remove+close block with a bare drop passed 21/21 before.
+    #[tokio::test]
+    async fn sample_reset_forgets_and_closes_the_sample_pool() {
+        let dir = tempfile::tempdir().unwrap();
+        let live = dir.path().join("sample-explore.db");
+        let (instances, probe) = instances_with(SAMPLE_DB_URL, &live).await;
+        assert!(!probe.is_closed());
+
+        sample_reset_guarded(&instances, SAMPLE_DB_URL, |_| Ok(live.clone()))
+            .await
+            .expect("the sample URL is the one allowed URL");
+
+        assert!(
+            !instances.0.read().await.contains_key(SAMPLE_DB_URL),
+            "the URL must be fully forgotten, not just closed in place"
+        );
+        assert!(probe.is_closed(), "the removed pool must be closed");
+        assert!(!live.exists(), "the sample file must be gone");
     }
 }

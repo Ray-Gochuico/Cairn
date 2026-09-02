@@ -246,6 +246,30 @@ describe('FreshnessBadge', () => {
     });
   });
 
+  // W4 review (MINOR 1): the badge's inline refresh is a second live-network
+  // path into explore. It is replaced by the RefreshSection's own SE-C10 line
+  // rather than left as a dead control.
+  it('W4: hides Refresh now while exploring and says why (SE-C10)', async () => {
+    vi.useRealTimers();
+    localStorage.setItem('explore.sampleMode.v1', '2026-07-08T12:00:00.000Z');
+    try {
+      const t = new Date(NOW.getTime() - 3 * 60 * 60 * 1000);
+      render(
+        <FreshnessBadge lastRefreshAt={t.toISOString()} cadence={RefreshCadence.DAILY} />,
+      );
+      const user = userEvent.setup();
+      await user.hover(screen.getByTestId('freshness-badge'));
+      await waitFor(() => {
+        expect(
+          screen.getByText("Sample data doesn't refresh from the market."),
+        ).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('freshness-refresh-now')).not.toBeInTheDocument();
+    } finally {
+      localStorage.removeItem('explore.sampleMode.v1');
+    }
+  });
+
   it('W19: popover Refresh now stamps only AFTER the awaited refresh resolves', async () => {
     vi.useRealTimers();
     mRefresh.mockReset();

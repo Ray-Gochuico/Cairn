@@ -3,6 +3,7 @@ import { fiEligiblePortfolioValue } from '@/lib/fi-portfolio';
 import { pickModerateEntry } from '@/lib/growth-scenario';
 import { effectiveSwr } from '@/lib/scenarios/effective-swr';
 import { effectiveBaselineInflation } from '@/lib/scenarios/effective-inflation';
+import { isExploreMode, prefKey } from '@/lib/explore-mode';
 
 /**
  * Wave 16 "Basecamp spine": THE shared scenario-assumptions module.
@@ -276,6 +277,11 @@ function finiteNum(v: unknown): number | undefined {
  * yearsUntilRetirement survive), so the migration is naturally idempotent.
  */
 function migrateLegacySilos(): Partial<ScenarioAssumptions> {
+  // W4 review (MAJOR 1): this migration READS and then STRIPS the raw
+  // `calc-state:` silos. Those are the REAL profile's keys while the
+  // calculator silos are namespaced in explore, so running it from a sample
+  // session would consume and delete the user's own overrides.
+  if (isExploreMode()) return {};
   const out: Partial<ScenarioAssumptions> = {};
   const take = (field: ScenarioField, value: number | undefined) => {
     if (value !== undefined && !(field in out)) out[field] = value;
@@ -329,7 +335,7 @@ function migrateLegacySilos(): Partial<ScenarioAssumptions> {
  */
 export function readSharedOverrides(): Partial<ScenarioAssumptions> {
   try {
-    const raw = sessionStorage.getItem(SCENARIO_STORAGE_KEY);
+    const raw = sessionStorage.getItem(scenarioStorageKeyFor(null));
     if (raw !== null) return sanitize(JSON.parse(raw));
   } catch {
     return {};
@@ -337,7 +343,7 @@ export function readSharedOverrides(): Partial<ScenarioAssumptions> {
   const migrated = migrateLegacySilos();
   if (Object.keys(migrated).length > 0) {
     try {
-      sessionStorage.setItem(SCENARIO_STORAGE_KEY, JSON.stringify(migrated));
+      sessionStorage.setItem(scenarioStorageKeyFor(null), JSON.stringify(migrated));
     } catch {
       // sessionStorage unavailable — in-memory state still drives the UI.
     }
@@ -348,8 +354,9 @@ export function readSharedOverrides(): Partial<ScenarioAssumptions> {
 /** Same removal-when-empty contract as calculator-state.ts's writeOverrides. */
 export function writeSharedOverrides(overrides: Partial<ScenarioAssumptions>): void {
   try {
-    if (Object.keys(overrides).length === 0) sessionStorage.removeItem(SCENARIO_STORAGE_KEY);
-    else sessionStorage.setItem(SCENARIO_STORAGE_KEY, JSON.stringify(overrides));
+    const key = scenarioStorageKeyFor(null);
+    if (Object.keys(overrides).length === 0) sessionStorage.removeItem(key);
+    else sessionStorage.setItem(key, JSON.stringify(overrides));
   } catch {
     // sessionStorage unavailable — in-memory state still drives the UI.
   }
@@ -363,7 +370,11 @@ export function writeSharedOverrides(overrides: Partial<ScenarioAssumptions>): v
  * empty-removes-key contract.
  */
 export function scenarioStorageKeyFor(scopePersonId: number | null): string {
-  return scopePersonId == null ? SCENARIO_STORAGE_KEY : `calc-scenario:p${scopePersonId}`;
+  // W4 review (MAJOR 1): person silos are keyed BY person id and hold numbers
+  // derived from that profile — namespaced while exploring, reaped on exit.
+  return prefKey(
+    scopePersonId == null ? SCENARIO_STORAGE_KEY : `calc-scenario:p${scopePersonId}`,
+  );
 }
 
 export function readOverridesFor(scopePersonId: number | null): Partial<ScenarioAssumptions> {

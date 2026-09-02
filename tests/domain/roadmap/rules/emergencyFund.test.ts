@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import {
   evaluateSmallEmergencyFund,
   evaluateEmergencyFund3Months,
@@ -9,6 +9,7 @@ import type { RoadmapContext } from '@/types/roadmap';
 import type { Account, AccountSnapshot, Category, Household, Person, Transaction } from '@/types/schema';
 import { AccountType, CategoryType, SnapshotSource } from '@/types/enums';
 import { makeHousehold } from '../../../factories';
+import { dateFromLocalISO, localTodayISO } from '@/lib/dates';
 
 
 function makePerson(stability: 'stable' | 'unstable' | null = null): Person {
@@ -379,5 +380,56 @@ describe('EF baseline uses REAL spending — transfers and reimbursements exclud
     const r = evaluateSmallEmergencyFund(ctx);
     expect(r.evidence).toMatch(/\$5,000/);
     expect(r.evidence).toMatch(/from Household/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// W4 review (MINOR 6): the EF baseline window was anchored with
+// `ctx.today.toISOString()`, but `ctx.today` is a LOCAL-midnight Date
+// (context.ts: dateFromLocalISO(useLocalToday())). East of UTC, local midnight
+// is the PREVIOUS UTC day — so on the 1st of a month the as-of month rolled
+// back and every current-month transaction fell outside the window
+// (`month > asOfMonth`). The divisor dropped, the baseline jumped, and the
+// sample profile's 6.7x reserve read as 5.1x. This is the house
+// localTodayISO-vs-toISOString gotcha class (the T2 UTC lesson).
+// ---------------------------------------------------------------------------
+describe('efContext as-of anchoring (local day, not UTC)', () => {
+  const originalTZ = process.env.TZ;
+
+  afterEach(() => {
+    vi.useRealTimers();
+    process.env.TZ = originalTZ;
+  });
+
+  const spendCat: Category = {
+    id: 1, name: 'Everything', parentCategoryId: null, color: null, icon: null,
+    type: CategoryType.NEED, isCapital: false, systemManaged: false, monthlyBudget: null,
+  };
+
+  /** The production derivation, verbatim: context.ts's `today` field. */
+  function contextForToday(transactions: Transaction[], categories: Category[]): RoadmapContext {
+    return {
+      ...makeContext({ baseline: 6000, cash: 30_000, transactions, categories }),
+      today: dateFromLocalISO(localTodayISO()),
+    };
+  }
+
+  it.each([
+    ['Pacific/Auckland', '2026-08-31T12:00:00.000Z'], // = 2026-09-01 00:00 NZST (UTC+12)
+    ['Asia/Tokyo', '2026-08-31T15:00:00.000Z'], // = 2026-09-01 00:00 JST (UTC+9)
+    ['America/Los_Angeles', '2026-09-01T07:00:00.000Z'], // = 2026-09-01 00:00 PDT (control)
+    ['UTC', '2026-09-01T00:00:00.000Z'], // CI's zone (control)
+  ])('counts current-month spending on the 1st in %s', (tz, instant) => {
+    process.env.TZ = tz;
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(instant));
+    expect(localTodayISO()).toBe('2026-09-01'); // precondition: it IS the 1st, locally
+
+    const ctx = contextForToday([tx(1, '2026-09-01', 1200)], [spendCat]);
+    const r = evaluateSmallEmergencyFund(ctx);
+    // From transactions ($1,200 over one observed month), NOT the $6,000
+    // household fallback the UTC-anchored window fell back to.
+    expect(r.evidence).toMatch(/from 12-mo avg/);
+    expect(r.evidence).toMatch(/\$1,200/);
   });
 });

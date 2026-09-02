@@ -8,6 +8,7 @@ import { RefreshCadence } from '@/types/enums';
 import { runMarketDataRefresh } from '@/market/run-market-data-refresh';
 import { partialWarning } from '@/components/settings/RefreshSection';
 import { getDatabase } from '@/db/db';
+import { isExploreMode } from '@/lib/explore-mode';
 
 interface FreshnessBadgeProps {
   /**
@@ -154,6 +155,8 @@ export function FreshnessBadge({
   });
   const isoTimestamp = refreshDate.toISOString();
   const cadenceLabel = CADENCE_LABEL[cadence];
+  // W4 review (MINOR 1): D-S7 — no market network from the sample session.
+  const exploring = isExploreMode();
 
   const handleRefreshNow = async () => {
     setRefreshing(true);
@@ -290,20 +293,30 @@ export function FreshnessBadge({
                 {refreshOutcome.text}
               </p>
             ))}
+          {/* W4 review (MINOR 1): D-S7 — explore is offline. The inline
+              refresh is replaced by RefreshSection's own line rather than
+              left on the popover as a dead control. */}
+          {exploring && (
+            <p className="text-muted-foreground mt-2 text-xs">
+              Sample data doesn&apos;t refresh from the market.
+            </p>
+          )}
           <div className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1 text-xs">
-            <button
-              type="button"
-              disabled={refreshing}
-              onClick={() => void handleRefreshNow()}
-              className={cn(
-                'text-primary underline hover:no-underline',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm',
-                refreshing && 'opacity-50 cursor-wait',
-              )}
-              data-testid="freshness-refresh-now"
-            >
-              {refreshing ? 'Refreshing…' : 'Refresh now'}
-            </button>
+            {!exploring && (
+              <button
+                type="button"
+                disabled={refreshing}
+                onClick={() => void handleRefreshNow()}
+                className={cn(
+                  'text-primary underline hover:no-underline',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm',
+                  refreshing && 'opacity-50 cursor-wait',
+                )}
+                data-testid="freshness-refresh-now"
+              >
+                {refreshing ? 'Refreshing…' : 'Refresh now'}
+              </button>
+            )}
             <a
               href="#/settings/refresh"
               className="text-primary underline hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"

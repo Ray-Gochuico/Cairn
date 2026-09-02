@@ -48,9 +48,20 @@ test('spending: CSV import round-trips — file in, preview commit, transactions
     .setInputFiles(path.resolve(HERE, 'fixtures', 'transactions.csv'));
   await page.getByRole('button', { name: /^Commit \(2 rows\)$/ }).click();
 
-  // Committed rows land in the Recent-transactions table (cell role scopes
-  // away the Top-merchants chart, which renders the same strings in SVG;
-  // exact:true scopes away the row's "Edit <merchant>" button cell).
+  // W4: the sample profile now seeds 44 household transactions, so the
+  // fixture's June rows no longer fit "Recent transactions — Latest 10".
+  // The round-trip is proven on the full list instead: the count is exact
+  // (44 seeded + 2 imported) and run-date-stable, and the rows themselves
+  // are still asserted by cell role (which scopes away the Top-merchants
+  // chart, rendering the same strings in SVG; exact:true scopes away the
+  // row's "Edit <merchant>" button cell).
+  await page.getByRole('link', { name: 'Open all transactions' }).click();
+  await expect(page.getByText('46 transactions')).toBeVisible({ timeout: 30_000 });
+  // The list is virtualized and date-descending; the imported June rows sit
+  // near the end, so scroll the container before asserting on them.
+  await page.getByTestId('transactions-scroll-parent').evaluate((el) => {
+    el.scrollTop = el.scrollHeight;
+  });
   await expect(page.getByRole('cell', { name: 'Blue Bottle Coffee', exact: true })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('cell', { name: 'Trader Joes', exact: true })).toBeVisible();
   expect(errors.join('\n')).not.toContain('Maximum update depth');
@@ -60,7 +71,7 @@ test('monthly check-in: Confirm all ratifies the seeded last-month values', asyn
   const errors = collectErrors(page);
   await page.goto('/monthly');
   // The Wave-A seed's derived confirm cards: Taxable Brokerage, Roth IRA,
-  // 401(k) (Demo Investor) + Partner Brokerage (Demo Partner) = 4. The
+  // 401(k) (Avery Sample) + Partner Brokerage (Jordan Sample) = 4. The
   // cash/savings accounts are MANUAL_BALANCE_TYPES and create no derived card.
   const confirmAll = page.getByRole('button', { name: /^Confirm all \(4\)$/ });
   await expect(confirmAll).toBeVisible({ timeout: 30_000 });
@@ -74,7 +85,7 @@ test('monthly check-in: Confirm all ratifies the seeded last-month values', asyn
 
 test('monthly check-in: a scoped Confirm all never ratifies hidden persons’ snapshots', async ({ page }) => {
   const errors = collectErrors(page);
-  // Wave-A seed: 3 derived cards owned by Demo Investor (p1), 1 by Demo Partner (p2).
+  // Wave-A seed: 3 derived cards owned by Avery Sample (p1), 1 by Jordan Sample (p2).
   await page.goto('/monthly?view=p1');
   const confirmP1 = page.getByRole('button', { name: /^Confirm all \(3\)$/ });
   await expect(confirmP1).toBeVisible({ timeout: 30_000 });
@@ -92,7 +103,7 @@ test('monthly check-in: a scoped Confirm all never ratifies hidden persons’ sn
 
 test('calculators: the page scope honors ?view= — scoped FI figures + caption, flip via the bar control', async ({ page }) => {
   const errors = collectErrors(page);
-  // Cold deep-link in P2 scope (Demo Partner). FI-eligible P2 portfolio =
+  // Cold deep-link in P2 scope (Jordan Sample). FI-eligible P2 portfolio =
   // Partner Brokerage 118,000 + Partner Savings 22,000; Joint Checking (8,000)
   // is excluded and declared.
   await page.goto('/calculators?view=p2');
@@ -101,24 +112,24 @@ test('calculators: the page scope honors ?view= — scoped FI figures + caption,
   const portfolio = page.getByLabel('Portfolio', { exact: true });
   await expect(portfolio).toHaveValue('140000', { timeout: 30_000 });
   await expect(
-    page.getByText("from Demo Partner's account snapshots — joint accounts not included"),
+    page.getByText("from Jordan Sample's account snapshots — joint accounts not included"),
   ).toBeVisible();
-  // 0051: Demo Partner's durable baseline (2600, seeded) replaces the even
+  // 0051: Jordan Sample's durable baseline (2600, seeded) replaces the even
   // split, with the upgraded provenance:
   await expect(page.getByLabel('Monthly expenses')).toHaveValue('2600');
-  await expect(page.getByText("from Demo Partner's Inputs")).toBeVisible();
+  await expect(page.getByText("from Jordan Sample's Inputs")).toBeVisible();
   // The FI waymark re-scopes (its meaning names the person):
-  await expect(page.getByTestId('path-to-fi-meaning')).toContainText('Demo Partner');
+  await expect(page.getByTestId('path-to-fi-meaning')).toContainText('Jordan Sample');
   // Open the card: the exclusions caption carries the counted joint total.
   await page.getByTestId('path-to-fi-trigger').click();
   await expect(page.getByTestId('path-to-fi-scope-exclusions')).toContainText('joint accounts ($8,000)');
   // The header copy is deduped on the grid; the BAR control flips the scope.
-  // Demo Investor's baseline stays NULL, so P1 scope keeps the labeled even
+  // Avery Sample's baseline stays NULL, so P1 scope keeps the labeled even
   // split of the $6,000 household baseline (CB4 unchanged — 0051 receipt):
   await expect(page.getByRole('combobox', { name: 'Filter view by person' })).toHaveCount(0);
   await page
     .getByRole('group', { name: 'Calculator scope' })
-    .getByRole('button', { name: 'Demo Investor' })
+    .getByRole('button', { name: 'Avery Sample' })
     .click();
   await expect(page.getByLabel('Monthly expenses')).toHaveValue('3000');
   await expect(page.getByText('half your household baseline — even split')).toBeVisible();
@@ -139,7 +150,7 @@ test('setup honesty: saved data renders cards not gates; abandonment surfaces th
   // The worded flow is the /setup default now; this pin covers the FORM view.
   await page.getByRole('button', { name: 'Switch to form view' }).click();
   await expect(page.getByTestId('person-chips')).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByTestId('person-chips')).toContainText('Demo Investor');
+  await expect(page.getByTestId('person-chips')).toContainText('Avery Sample');
   await expect(page.getByRole('button', { name: 'Start this section' })).toHaveCount(0);
   // C3: sections with saved data but no completion carry the neutral marker.
   await expect(page.getByText('has saved data').first()).toBeVisible();
@@ -197,14 +208,29 @@ test('roadmap interview: the $X bar answers with three framework cards on the se
   await expect(page.getByText('About the Frameworks')).toBeVisible();
   await page.getByRole('checkbox').check();
   await page.getByRole('button', { name: 'Continue' }).click();
-  // Three cards with the seed-derived split (hand-computed pins):
+  // Three cards with the seed-derived split (hand-computed pins).
+  //
+  // W4 re-pin: the sample profile now seeds real transactions, so the
+  // emergency-fund rule reads rolling12mBaseline instead of the $6,000
+  // household baseline. That average is (3 × $5,911.12 + $179.01) / 4
+  // observed months = $4,478.09 — rolling12m deliberately INCLUDES the
+  // in-progress month and divides by months observed
+  // (src/lib/expense-baseline.ts). $30,000 of cash / $4,478.09 = 6.7×, above
+  // the 6× target, so the EF leg is skipped and the whole lump goes to the
+  // mid-rate debt band. Every figure here is run-date-stable: the seed always
+  // writes the same amounts across the same 4 month buckets.
   const conservative = page.getByTestId('framework-conservative');
-  await expect(conservative).toContainText('Emergency fund — to 6× expenses');
-  await expect(conservative).toContainText('$6,000');
-  await expect(conservative).toContainText('$4,000'); // mid-rate remainder → Mortgage
-  await expect(conservative).toContainText('up from 5.0'); // 30,000/6,000 → 36,000/6,000
+  await expect(conservative).toContainText('Debt in the 5–8% band');
+  await expect(conservative).toContainText('$10,000'); // EF skipped → all to debt
+  await expect(conservative).toContainText(
+    'Pays Mortgage from $540,000 down to $530,000 — highest rate first (6.25%).',
+  );
+  await conservative.getByText('What this assumes').click();
+  await expect(conservative).toContainText(
+    'Emergency fund already at 6.7× monthly expenses — skipped.',
+  );
   const moderate = page.getByTestId('framework-moderate');
-  await expect(moderate).toContainText('$2,000'); // 50/50 of the $4,000 remainder
+  await expect(moderate).toContainText('$5,000'); // 50/50 of the full $10,000
   const aggressive = page.getByTestId('framework-aggressive');
   await expect(aggressive).toContainText('$10,000'); // 3× covered → all invest
   await aggressive.getByText('What this assumes').click();
@@ -247,7 +273,7 @@ test('investments at the 1024×700 window floor: no horizontal body pan', async 
 
 test('roadmap interview: home-purchase — hidden for the owner, asks once the home is removed, plans, and tracks a goal', async ({ page }) => {
   const errors = collectErrors(page);
-  // 1 — Owner state: the seed owns 'Demo Home' (PRIMARY_RESIDENCE) → the
+  // 1 — Owner state: the seed owns 'Sample Home' (PRIMARY_RESIDENCE) → the
   //     house question must NOT surface (D-HP1 receipt).
   await page.goto('/roadmap');
   await page.getByRole('checkbox').check();
@@ -256,7 +282,7 @@ test('roadmap interview: home-purchase — hidden for the owner, asks once the h
   await expect(page.getByText('Are there plans to buy a home?')).toHaveCount(0);
   // 2 — Remove the property (test-local mutation: fresh context ⇒ fresh
   //     IndexedDB). Verified against Property.tsx at execution: the editor
-  //     opens via the card's 'Edit details for Demo Home' button (clicking
+  //     opens via the card's 'Edit details for Sample Home' button (clicking
   //     the name text opens nothing); 'Delete property' lives in that
   //     drawer; the confirm dialog's destructive button defaults 'Delete'.
   //     Navigation is CLIENT-SIDE (sidebar links, the setup-honesty test's
@@ -266,10 +292,10 @@ test('roadmap interview: home-purchase — hidden for the owner, asks once the h
   //     SPA navigation keeps the in-memory DB — no race, and it is the
   //     path a real user takes.
   await page.getByRole('link', { name: 'Property' }).click();
-  await page.getByRole('button', { name: 'Edit details for Demo Home' }).click();
+  await page.getByRole('button', { name: 'Edit details for Sample Home' }).click();
   await page.getByRole('button', { name: 'Delete property' }).click();
   await page.getByRole('button', { name: 'Delete' }).click();
-  await expect(page.getByText('Demo Home')).toHaveCount(0); // the delete landed
+  await expect(page.getByText('Sample Home')).toHaveCount(0); // the delete landed
   // 3 — Back on /roadmap (no re-gate — acceptance held in-store): the ask.
   await page.getByRole('link', { name: 'Roadmap' }).click();
   await expect(page.getByText('Are there plans to buy a home?')).toBeVisible({ timeout: 30_000 });
@@ -306,7 +332,7 @@ test('roadmap interview: college vs. retirement reaches its two-sided card on th
   await card.getByRole('button', { name: 'Save' }).click();
   // The two-sided card. Structure pins only — target and FV move with the run
   // date (today → months-to-2034 shrinks monthly); 'May 2034' is time-stable.
-  await expect(card).toContainText('College for Demo Kid');
+  await expect(card).toContainText('College for Riley Sample');
   await expect(card).toContainText('starting May 2034');
   await expect(card).toContainText("in today's dollars");
   await expect(card).toContainText('moderate scenario, inflation-adjusted');

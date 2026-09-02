@@ -19,6 +19,7 @@ import {
 } from './scenario-assumptions';
 import { getCalcScopePersonId, subscribeCalcScope } from './calc-view-scope';
 import { usePersonsStore } from '@/stores/persons-store';
+import { prefKey } from '@/lib/explore-mode';
 
 /**
  * React binding for the Wave-16 shared scenario (Basecamp spine). One
@@ -80,11 +81,14 @@ function subscribe(listener: () => void): () => void {
 // store + sessionStorage tier as the six shared fields — the persons store is
 // NEVER written. Separate key so scenario-assumptions.ts's sanitize/migration
 // contract for the flat numeric shape stays untouched.
+// W4 review (MAJOR 1): a { personId: salary } map — person ids restart at 1
+// in the post-exit real DB.
 const SALARY_KEY = 'calc-scenario:salaries';
+const salaryKey = () => prefKey(SALARY_KEY);
 
 function readSalaries(): Record<number, number> {
   try {
-    const raw = sessionStorage.getItem(SALARY_KEY);
+    const raw = sessionStorage.getItem(salaryKey());
     if (!raw) return {};
     const parsed = JSON.parse(raw) as unknown;
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
@@ -111,8 +115,8 @@ function getSalariesSnapshot(): Record<number, number> {
 function commitSalaries(next: Record<number, number>): void {
   cachedSalaries = next;
   try {
-    if (Object.keys(next).length === 0) sessionStorage.removeItem(SALARY_KEY);
-    else sessionStorage.setItem(SALARY_KEY, JSON.stringify(next));
+    if (Object.keys(next).length === 0) sessionStorage.removeItem(salaryKey());
+    else sessionStorage.setItem(salaryKey(), JSON.stringify(next));
   } catch {
     // sessionStorage unavailable — in-memory state still drives the UI.
   }

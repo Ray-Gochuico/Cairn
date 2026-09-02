@@ -7,6 +7,13 @@ import { runMarketDataRefresh } from '@/market/run-market-data-refresh';
 import { SettingsRepo } from '@/domain/app-settings';
 import { isRefreshDue } from '@/lib/refresh-cadence';
 import { RefreshCadence } from '@/types/enums';
+import {
+  EXPLORE_DB_URL,
+  clearExploreFlag,
+  clearExplorePrefs,
+  isExploreMode,
+} from '@/lib/explore-mode';
+import { resetSampleDb } from '@/db/sample-reset';
 
 /**
  * Decide whether to run the background market-data refresh on launch.
@@ -57,7 +64,49 @@ export async function maybeRunLaunchRefresh(db: Database): Promise<void> {
   }
 }
 
+/**
+ * W4 explore boot (D-S1/D-S2/D-S7): a pristine sample DB, rebuilt from
+ * migrations + seed at the current MAX_SCHEMA_VERSION on EVERY boot. The
+ * real DB is never opened while the flag is set — isolation is structural.
+ * The sample is never migrated, never backed up, never corrupt-recovered:
+ * those problem classes are out by construction (it is always a just-built
+ * file, so assertDatabaseIntegrity trivially passes and SchemaTooNewError
+ * is unreachable).
+ */
+async function initExploreDatabase(): Promise<void> {
+  await resetSampleDb(); // idempotent delete; also drops a prior session's pool
+  const adapter = await TauriAdapter.load(EXPLORE_DB_URL);
+  setDatabase(adapter);
+  await assertDatabaseIntegrity(adapter);
+  const migrations = await loadAllMigrations();
+  await runMigrations(adapter, migrations);
+  const { seedSampleProfile } = await import('@/domain/sample-profile/sample-profile');
+  await seedSampleProfile(adapter);
+  // Deliberately NOT maybeRunLaunchRefresh — explore is offline (D-S7).
+}
+
 export async function initDatabase(): Promise<void> {
+  if (isExploreMode()) {
+    try {
+      await initExploreDatabase();
+    } catch (e) {
+      // W4 review (MINOR 0/4/18): never strand the user inside a sample
+      // profile that cannot open. The flag is what makes every relaunch
+      // re-enter this branch, and the banner — the only exit control — never
+      // mounts on a failed boot, so a Tauri user has no way to clear it
+      // (WKWebView's localStorage is not reachable from the app). Drop the
+      // flag and its namespaced prefs, then let main.tsx render the boot
+      // error: the NEXT launch is the real profile by construction, and the
+      // sample file was never the real DB, so leaving is always safe.
+      clearExplorePrefs();
+      clearExploreFlag();
+      // eslint-disable-next-line no-console
+      console.warn('[explore] sample boot failed; leaving sample mode:', e);
+      throw e;
+    }
+    return;
+  }
+  // ——— existing path, unchanged from here ———
   const adapter = await TauriAdapter.load('sqlite:finance.db');
   setDatabase(adapter);
 
@@ -76,15 +125,15 @@ export async function initDatabase(): Promise<void> {
   // prod bundle (which sets none of these Vite env vars). Runs BEFORE the
   // first-launch persons check in main.tsx so a smoke lands on /investments
   // without the /setup redirect, and seeds an app_wide disclosure acceptance
-  // so AppDisclaimerGate doesn't block. See src/dev/seed-demo-data.ts and
-  // docs/runbooks/populated-donut-smoke.md.
+  // so AppDisclaimerGate doesn't block.
+  // See src/domain/sample-profile/sample-profile.ts and docs/runbooks/populated-donut-smoke.md.
   if (
     import.meta.env.DEV &&
     import.meta.env.VITE_BROWSER_SHIM === '1' &&
     import.meta.env.VITE_SEED_DEMO === '1'
   ) {
-    const { seedDemoData } = await import('@/dev/seed-demo-data');
-    await seedDemoData(adapter);
+    const { seedSampleProfile } = await import('@/domain/sample-profile/sample-profile');
+    await seedSampleProfile(adapter);
   }
 
   // Run the background market-data derivations only when the configured

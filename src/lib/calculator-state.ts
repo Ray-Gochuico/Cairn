@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { prefKey } from '@/lib/explore-mode';
 
-const keyFor = (cardId: string) => `calc-state:${cardId}`;
+// W4 review (MAJOR 1/2): per-card overrides are numbers the user typed
+// against a profile's own figures. prefKey namespaces them while exploring so
+// a sample-session edit never prefills the real profile's card after exit.
+const keyFor = (cardId: string) => prefKey(`calc-state:${cardId}`);
 
 function readOverrides(cardId: string): Record<string, unknown> {
   try {

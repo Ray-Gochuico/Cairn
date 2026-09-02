@@ -1,3 +1,5 @@
+import { prefKey } from '@/lib/explore-mode';
+
 /**
  * Persists the user's selection of which budgetable categories are tracked
  * on the Budget page (rendered with overlay bars at the top). Anything not
@@ -12,7 +14,7 @@ export const TRACKED_BUDGET_CATEGORIES_KEY = 'trackedBudgetCategories.v1';
 
 export function getTrackedBudgetCategories(): number[] | null {
   try {
-    const raw = localStorage.getItem(TRACKED_BUDGET_CATEGORIES_KEY);
+    const raw = localStorage.getItem(prefKey(TRACKED_BUDGET_CATEGORIES_KEY));
     if (raw == null) return null;
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return null;
@@ -24,7 +26,7 @@ export function getTrackedBudgetCategories(): number[] | null {
 
 export function hasTrackedBudgetCategoriesSelection(): boolean {
   try {
-    return localStorage.getItem(TRACKED_BUDGET_CATEGORIES_KEY) != null;
+    return localStorage.getItem(prefKey(TRACKED_BUDGET_CATEGORIES_KEY)) != null;
   } catch {
     return false;
   }
@@ -32,7 +34,7 @@ export function hasTrackedBudgetCategoriesSelection(): boolean {
 
 export function persistTrackedBudgetCategories(ids: readonly number[]): void {
   try {
-    localStorage.setItem(TRACKED_BUDGET_CATEGORIES_KEY, JSON.stringify(ids));
+    localStorage.setItem(prefKey(TRACKED_BUDGET_CATEGORIES_KEY), JSON.stringify(ids));
   } catch {
     // Storage unavailable (private mode / quota / SSR); the in-memory state
     // still updates so the UI behaves correctly within the session.

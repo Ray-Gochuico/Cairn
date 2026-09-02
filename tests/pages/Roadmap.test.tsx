@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Roadmap from '@/pages/Roadmap';
+import { useRoadmap } from '@/domain/roadmap/context';
+import { evaluate } from '@/domain/roadmap/evaluate';
+import { anyDecisionPrompt } from '@/components/roadmap/DecisionPrompt';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { useAccountsStore } from '@/stores/accounts-store';
@@ -195,5 +198,94 @@ describe('Roadmap page', () => {
     expect(loadProperties).toHaveBeenCalledTimes(1);
     expect(loadHousingPayments).toHaveBeenCalledTimes(1);
     expect(loadGoals).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * ONE PLACE PER THING — smoke defect D2 (main 6ef73e41, 2026-09-02).
+ *
+ * /what-if's G9 row says "The roadmap has questions you haven't answered" and
+ * links to /roadmap. It used to fire on `evaluate(ctx) → any status
+ * 'unanswered'`, which is BROADER than what the Roadmap actually offers to
+ * answer: rules like s2_small_ef and s1_employer_match report 'unanswered'
+ * with evidence and a CTA to some OTHER page and no inline prompt at all. The
+ * CTA then landed the user on a page with nothing on it to answer.
+ *
+ * This renders the real page and the real predicate over the SAME stores and
+ * pins them to each other.
+ */
+function G9Probe() {
+  const ctx = useRoadmap();
+  if (!ctx) return <div data-testid="g9-probe">no-ctx</div>;
+  const results = evaluate(ctx);
+  // Left of the slash: what /what-if now asks. Right: the OLD status scan,
+  // rendered so the fixture proves the two predicates genuinely disagree.
+  const fires = anyDecisionPrompt(results.values());
+  const anyUnansweredStatus = [...results.values()].some((r) => r.status === 'unanswered');
+  return (
+    <div data-testid="g9-probe">
+      {`${fires ? 'fires' : 'silent'}/${anyUnansweredStatus ? 'status-unanswered' : 'no-status-unanswered'}`}
+    </div>
+  );
+}
+
+describe('G9 agrees with the Roadmap page (smoke D2)', () => {
+  /** Every question the Roadmap can ask with no persons and no accounts on
+   *  file, answered. monthlyExpenseBaseline stays 0 so s2_small_ef still
+   *  evaluates 'unanswered' — the CTA-only shape with nothing to answer. */
+  const ALL_ANSWERED = {
+    monthlyExpenseBaseline: 0,
+    hasWrittenIps: true,
+    hasHsaQualifiedHdhp: false,
+    upcomingLargePurchase: false,
+    makesCharitableGifts: false,
+  };
+
+  /** The Roadmap's own on-page prompts: the Yes/No buttons DecisionPrompt
+   *  renders inside the section-card bodies. QuestionBar / InterviewThreads
+   *  live outside those bodies and are a separate surface (D-W3-P2). */
+  function promptButtons(container: HTMLElement): HTMLElement[] {
+    const bodies = Array.from(container.querySelectorAll('[id^="section-"]'))
+      .filter((el) => el.id.endsWith('-body'));
+    return bodies.flatMap((b) =>
+      Array.from(b.querySelectorAll('button')).filter(
+        (btn) => btn.textContent === 'Yes' || btn.textContent === 'No',
+      ),
+    );
+  }
+
+  function renderBoth() {
+    const view = render(
+      <MemoryRouter>
+        <Roadmap />
+        <G9Probe />
+      </MemoryRouter>,
+    );
+    // Section cards auto-expand only when they hold an ACTIVE node; open the
+    // rest so every row the page can show is actually in the DOM.
+    for (const toggle of Array.from(
+      view.container.querySelectorAll<HTMLButtonElement>('button[aria-expanded="false"]'),
+    )) {
+      fireEvent.click(toggle);
+    }
+    return view;
+  }
+
+  it('every question the page offers is answered → G9 silent, though a node still reads "unanswered"', () => {
+    resetStores(makeHousehold(ALL_ANSWERED), ACCEPTED_VERSION);
+    const { container } = renderBoth();
+    expect(promptButtons(container)).toHaveLength(0);
+    // The OLD predicate would have fired here — that is the whole defect.
+    expect(screen.getByTestId('g9-probe')).toHaveTextContent('silent/status-unanswered');
+  });
+
+  it('one genuinely unanswered question the page surfaces → G9 fires', () => {
+    resetStores(makeHousehold({ ...ALL_ANSWERED, hasWrittenIps: null }), ACCEPTED_VERSION);
+    const { container } = renderBoth();
+    expect(promptButtons(container).length).toBeGreaterThan(0);
+    expect(
+      screen.getByText('Have you written an Investment Policy Statement (IPS)?'),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId('g9-probe')).toHaveTextContent('fires/status-unanswered');
   });
 });

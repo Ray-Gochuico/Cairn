@@ -143,6 +143,34 @@ describe('SetupWizard route handler', () => {
     ).toBeInTheDocument();
   });
 
+  // W4 review (MAJOR 0/3): the exact reachability the review reproduced.
+  // Settings → Advanced → "Reset disclaimers" clears the app_wide acceptance
+  // (AppDisclaimerGate then admits on null), and Settings → Getting started →
+  // "Revisit setup" lands on /setup?origin=revisit with NO ?section= — so an
+  // ESTABLISHED profile renders Step 0. The disclaimer itself is correct
+  // there; the explore ENTRY is not (spec: "Established profiles … never see
+  // it"), because inside explore the Dashboard's tour nudge could then write
+  // the REAL onboarding.tour.done.v1 key D-S7 names.
+  it('W4 entry rule: an established profile at /setup?origin=revisit sees Step 0 WITHOUT the explore action', () => {
+    resetStores({
+      household: makeHousehold(),
+      persons: [{ id: 1, name: 'Alice' }],
+      // acceptances cleared by "Reset disclaimers"
+    });
+    renderAt(['/setup?origin=revisit']);
+    expect(screen.getByRole('heading', { name: /disclaimer/i })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Explore with sample data first' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('W4 entry rule: a true first run at /setup DOES get the explore action', () => {
+    renderAt(['/setup']);
+    expect(
+      screen.getByRole('button', { name: 'Explore with sample data first' }),
+    ).toBeInTheDocument();
+  });
+
   it('mounts the WORDED flow (not the card wizard) once the disclaimer is accepted', async () => {
     resetStores({
       household: makeHousehold({ inflationAssumption: 0.024 }),

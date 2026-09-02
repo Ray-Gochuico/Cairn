@@ -1,7 +1,12 @@
 import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from 'sql.js';
 
-const IDB_NAME = 'finance-app-shim';
-const IDB_STORE = 'sqlite';
+// Hoisted (W4) so src/db/sample-reset.ts deletes from the SAME IDB/store this
+// shim persists into — one source of truth for the shim's storage identity.
+import {
+  SHIM_IDB_NAME as IDB_NAME,
+  SHIM_IDB_STORE as IDB_STORE,
+  shimKeyForDbUrl,
+} from '@/lib/browser-shims/shim-db-constants';
 
 let sqlPromise: Promise<SqlJsStatic> | null = null;
 function getSqlJs(): Promise<SqlJsStatic> {
@@ -59,10 +64,26 @@ async function persist(key: string, bytes: Uint8Array): Promise<void> {
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 function schedulePersist(key: string, db: SqlJsDatabase): void {
-  if (persistTimer) clearTimeout(persistTimer);
+  cancelScheduledPersist();
   persistTimer = setTimeout(() => {
+    persistTimer = null;
     void persist(key, db.export());
   }, 250);
+}
+
+/**
+ * W4 review (MINOR 17): a debounced persist that survives close() calls
+ * `db.export()` on a database whose sql.js FS file has been unlinked —
+ * Emscripten throws ErrnoError 44 (ENOENT) inside the timer, which surfaces
+ * as an uncaught pageerror and reds the e2e console guard. The explore
+ * transitions are the first paths that close the shim DB and then keep the
+ * document alive across an async IndexedDB op, so the window is real.
+ */
+function cancelScheduledPersist(): void {
+  if (persistTimer) {
+    clearTimeout(persistTimer);
+    persistTimer = null;
+  }
 }
 
 export interface QueryResult {
@@ -87,7 +108,7 @@ export default class Database {
 
   static async load(path: string): Promise<Database> {
     const SQL = await getSqlJs();
-    const key = path.replace(/^sqlite:/, '');
+    const key = shimKeyForDbUrl(path);
     const persisted = await loadPersisted(key);
     const db = persisted ? new SQL.Database(persisted) : new SQL.Database();
     db.exec('PRAGMA foreign_keys = ON');
@@ -173,6 +194,10 @@ export default class Database {
   }
 
   async close(): Promise<void> {
+    // Drop any pending debounced persist FIRST: the final persist below is
+    // authoritative, and a timer that fired after db.close() would export an
+    // unlinked file (W4 review MINOR 17).
+    cancelScheduledPersist();
     await persist(this.key, this.db.export());
     this.db.close();
   }

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { prefKey } from '@/lib/explore-mode';
 
 const KEY = 'backtest:last-run:v1';
 
@@ -26,7 +27,7 @@ export type BacktestLastRun = z.infer<typeof BacktestLastRunSchema>;
 
 export function readLastBacktestRun(): BacktestLastRun | null {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(prefKey(KEY));
     if (raw == null) return null;
     const parsed = BacktestLastRunSchema.safeParse(JSON.parse(raw));
     return parsed.success ? parsed.data : null;
@@ -37,7 +38,7 @@ export function readLastBacktestRun(): BacktestLastRun | null {
 
 export function writeLastBacktestRun(run: BacktestLastRun): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify(run));
+    localStorage.setItem(prefKey(KEY), JSON.stringify(run));
   } catch {
     // Storage unavailable — the card just keeps its first-run state.
   }

@@ -9,6 +9,7 @@ import {
   type MarketDataRefreshResult,
 } from '@/market/run-market-data-refresh';
 import { RefreshCadence } from '@/types/enums';
+import { isExploreMode } from '@/lib/explore-mode';
 
 const selectClass =
   'flex h-9 w-48 rounded-md border border-input bg-transparent px-2 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
@@ -58,6 +59,10 @@ export function partialWarning(result: MarketDataRefreshResult): string | null {
 }
 
 export function RefreshSection() {
+  // W4 (D-S7): explore is offline — a live market refresh would silently
+  // repaint the pinned sample narrative. The cadence select stays writable:
+  // it writes SAMPLE settings, wiped on exit.
+  const exploring = isExploreMode();
   const settings = useSettingsStore((s) => s.settings);
   const load = useSettingsStore((s) => s.load);
   const update = useSettingsStore((s) => s.update);
@@ -140,7 +145,7 @@ export function RefreshSection() {
             <Button
               type="button"
               variant="outline"
-              disabled={settings === null || refreshing}
+              disabled={settings === null || refreshing || exploring}
               onClick={() => void handleRefreshNow()}
             >
               {refreshing ? 'Refreshing…' : 'Refresh now'}
@@ -149,6 +154,11 @@ export function RefreshSection() {
               Last refreshed: {formatLastRefreshed(settings?.lastRefreshAt ?? null)}
             </span>
           </div>
+          {exploring && (
+            <p className="text-sm text-muted-foreground" data-testid="sample-mode-refresh-note">
+              Sample data doesn&apos;t refresh from the market.
+            </p>
+          )}
           {refreshError && (
             <p role="alert" className="text-sm text-destructive-soft-foreground">
               Refresh failed: {refreshError}. The last-refreshed time was not updated.

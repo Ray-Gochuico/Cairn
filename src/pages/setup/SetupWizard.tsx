@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
+import { isExploreMode } from '@/lib/explore-mode';
 import Step0Disclaimer from './Step0Disclaimer';
 import SectionLayout from './SectionLayout';
 import FlowShell from './flow/FlowShell';
@@ -30,6 +31,13 @@ import { documentTitleFor } from '@/lib/route-titles';
  * app-wide).
  */
 export default function SetupWizard() {
+  // W4 (D-S5/D-S7): while exploring, /setup and /welcome redirect home — this
+  // closes every writer of real device-local setup state (dismissed/progress/
+  // tailor) and keeps all reachable surfaces under the banner. Legal to
+  // early-return before hooks: isExploreMode() is a boot constant, so the
+  // hook order can never differ between renders of one mount.
+  if (isExploreMode()) return <Navigate to="/" replace />;
+
   const [searchParams, setSearchParams] = useSearchParams();
   const household = useHouseholdStore((s) => s.household);
   const loadHousehold = useHouseholdStore((s) => s.load);
@@ -40,6 +48,11 @@ export default function SetupWizard() {
   const personsLoading = usePersonsStore((s) => s.isLoading);
   const personsError = usePersonsStore((s) => s.error);
   const [stepZeroAccepted, setStepZeroAccepted] = useState(false);
+  // W4 (D-S7): true while the Step-0 explore entry is in flight. Holds Step 0
+  // mounted across the acceptance write so FlowShell (whose mount effect
+  // writes the REAL setupWizard.progress.v2) never mounts on the way into
+  // the sample profile. Released if the entry fails.
+  const [exploreEntering, setExploreEntering] = useState(false);
   // Stored view preference; the initializer also runs the one-time v1→v2
   // progress migration if needed (harmless and idempotent).
   const [storedView, setStoredView] = useState<'worded' | 'form'>(() => loadSetupProgress().view);
@@ -94,14 +107,17 @@ export default function SetupWizard() {
   // Existing-household users with a section= param bypass the disclaimer
   // — they've onboarded before and just want to reach a specific section.
   const showDisclaimer =
-    !disclaimerSatisfied &&
-    !(personsExist && queryParamSection !== undefined);
+    exploreEntering ||
+    (!disclaimerSatisfied && !(personsExist && queryParamSection !== undefined));
 
   if (showDisclaimer) {
     return (
       <>
         <StoreErrorBanner errors={gate.errors} onRetry={gate.retry} />
-        <Step0Disclaimer onComplete={() => setStepZeroAccepted(true)} />
+        <Step0Disclaimer
+          onComplete={() => setStepZeroAccepted(true)}
+          onExploreEntering={setExploreEntering}
+        />
       </>
     );
   }

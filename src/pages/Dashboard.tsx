@@ -84,6 +84,7 @@ import {
 import { BriefingCard } from '@/components/dashboard/BriefingCard';
 import { useTourStore } from '@/stores/tour-store';
 import { isSetupDismissed, hasSetupInProgress } from '@/lib/setup-dismissal';
+import { isExploreMode } from '@/lib/explore-mode';
 import { isTourDone, markTourDone } from '@/lib/onboarding-state';
 import type {
   Account,
@@ -309,8 +310,16 @@ export function ExistingUserTourPrompt() {
   // Read the gate once at mount: starting the tour must not make the row
   // disappear out from under the click, and dismiss controls visibility
   // via the explicit `hidden` flag below.
+  //
+  // W4 review (MAJOR 0/3): never in explore. This row reads the REAL
+  // dismissal/tour keys, which explore does not clear, so a leftover
+  // dismissal marker made it visible under the sample banner — where "Take a
+  // quick tour" is dead (PageShell unmounts TourOverlay while exploring) and
+  // Dismiss wrote the REAL onboarding.tour.done.v1, one of the four keys D-S7
+  // names. isExploreMode() is a boot constant, so reading it in the
+  // initializer is the same convention as the resume nudge below.
   const [hidden, setHidden] = useState(
-    () => !(isSetupDismissed() && !isTourDone()),
+    () => isExploreMode() || !(isSetupDismissed() && !isTourDone()),
   );
 
   if (hidden) return null;
@@ -824,7 +833,12 @@ export default function Dashboard() {
     // a migration-seeded singleton (0001_initial.sql:272). The honest resume
     // predicate: a persisted wizard run exists and was never finished. The
     // briefing row copy + link (CW9) already shipped and are byte-untouched.
-    if (!isSetupDismissed() && hasSetupInProgress()) return { kind: 'setup' as const };
+    // W4 (D-S7): a leftover REAL setup-progress record must not render a
+    // resume nudge inside explore — /setup mount-guards to '/' there, so the
+    // nudge would point at a redirecting route. isExploreMode() is a boot
+    // constant, so the memo's dep array stays as-is (same convention as the
+    // two localStorage reads already in this predicate).
+    if (!isExploreMode() && !isSetupDismissed() && hasSetupInProgress()) return { kind: 'setup' as const };
     if (disclosureGate.state === 'needs-acceptance') return { kind: 'disclosure' as const };
     if (!roadmapCtx) return null;
     const results = evaluate(roadmapCtx);
