@@ -7,7 +7,12 @@ import { runMarketDataRefresh } from '@/market/run-market-data-refresh';
 import { SettingsRepo } from '@/domain/app-settings';
 import { isRefreshDue } from '@/lib/refresh-cadence';
 import { RefreshCadence } from '@/types/enums';
-import { EXPLORE_DB_URL, isExploreMode } from '@/lib/explore-mode';
+import {
+  EXPLORE_DB_URL,
+  clearExploreFlag,
+  clearExplorePrefs,
+  isExploreMode,
+} from '@/lib/explore-mode';
 import { resetSampleDb } from '@/db/sample-reset';
 
 /**
@@ -82,7 +87,23 @@ async function initExploreDatabase(): Promise<void> {
 
 export async function initDatabase(): Promise<void> {
   if (isExploreMode()) {
-    await initExploreDatabase();
+    try {
+      await initExploreDatabase();
+    } catch (e) {
+      // W4 review (MINOR 0/4/18): never strand the user inside a sample
+      // profile that cannot open. The flag is what makes every relaunch
+      // re-enter this branch, and the banner — the only exit control — never
+      // mounts on a failed boot, so a Tauri user has no way to clear it
+      // (WKWebView's localStorage is not reachable from the app). Drop the
+      // flag and its namespaced prefs, then let main.tsx render the boot
+      // error: the NEXT launch is the real profile by construction, and the
+      // sample file was never the real DB, so leaving is always safe.
+      clearExplorePrefs();
+      clearExploreFlag();
+      // eslint-disable-next-line no-console
+      console.warn('[explore] sample boot failed; leaving sample mode:', e);
+      throw e;
+    }
     return;
   }
   // ——— existing path, unchanged from here ———

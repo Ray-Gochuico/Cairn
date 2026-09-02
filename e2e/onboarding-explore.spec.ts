@@ -16,10 +16,17 @@ import { collectErrors } from './console-guard';
  */
 
 /**
- * The REAL device-local keys D-S7 promises explore never writes. Note that
- * setupWizard.progress.v2 is ALREADY present at Step 0 — the wizard starts its
- * own first-run record the moment it mounts, before any explore click — so the
- * guarantee is "unchanged across the session", not "absent".
+ * The REAL device-local keys D-S7 promises explore never writes.
+ *
+ * setupWizard.progress.v2 is ABSENT at Step 0 and stays absent for the whole
+ * explore session: loadSetupProgress() is read-only, and the only writer
+ * (FlowShell's mount effect) first mounts on the REAL wizard AFTER exit. That
+ * matters for the strength of the BEFORE/DURING pair below — if a record
+ * already existed at Step 0, FlowShell's effect re-saves it verbatim, so an
+ * instant FlowShell mount (the T8 leak, mutant "drop the exploreEntering
+ * hold") would rewrite identical bytes and slip through unchanged. The
+ * scenario asserts the absence explicitly so a future legitimate write at
+ * Step 0 cannot silently downgrade this proof.
  */
 async function deviceKeys(page: Page) {
   return page.evaluate(() => ({
@@ -44,6 +51,11 @@ async function enterExplore(page: Page): Promise<void> {
 }
 
 test('enter: one click from Step 0 lands on a labeled, fully-populated sample', async ({ page }) => {
+  // Seven hard gotos, and with the flag set EVERY one re-runs the wipe + 55
+  // migrations + the full seed (the deliberate D-S2 rebuild). That measured
+  // 50-56 s against the 60 s default on a loaded machine — too thin a margin
+  // for the wave's headline proof (W4 review MINOR 15).
+  test.setTimeout(150_000);
   const errors = collectErrors(page);
   await enterExplore(page);
   const banner = page.getByRole('note', { name: 'Sample data notice' });
@@ -96,6 +108,8 @@ test('exit: a truly clean first-run — wizard at FlowShell, sample record gone,
   const before = await deviceKeys(page);
   expect(before.dismissed).toBeNull();
   expect(before.progressV1).toBeNull();
+  // Load-bearing for the byte-identical pair below — see deviceKeys' comment.
+  expect(before.progressV2).toBeNull();
   expect(before.tailor).toBeNull();
   expect(before.tour).toBeNull();
   await explore.click();
@@ -110,8 +124,17 @@ test('exit: a truly clean first-run — wizard at FlowShell, sample record gone,
   await expect(page.getByRole('note', { name: 'Sample data notice' })).toBeVisible({
     timeout: 30_000,
   });
-  expect(await deviceKeys(page)).toEqual(before);
+  const during = await deviceKeys(page);
+  expect(during.progressV2).toBeNull(); // still absent, not merely unchanged
+  expect(during).toEqual(before);
 
+  // D-S4: exit from a NON-root page. The banner is app-level chrome, so the
+  // action is there — and a reload-in-place would strand the fresh profile on
+  // an empty /settings with no wizard.
+  await page.goto('/settings');
+  await expect(page.getByRole('note', { name: 'Sample data notice' })).toBeVisible({
+    timeout: 30_000,
+  });
   await page
     .getByRole('note', { name: 'Sample data notice' })
     .getByRole('button', { name: 'Start my real setup' })

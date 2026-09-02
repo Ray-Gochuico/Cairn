@@ -310,8 +310,16 @@ export function ExistingUserTourPrompt() {
   // Read the gate once at mount: starting the tour must not make the row
   // disappear out from under the click, and dismiss controls visibility
   // via the explicit `hidden` flag below.
+  //
+  // W4 review (MAJOR 0/3): never in explore. This row reads the REAL
+  // dismissal/tour keys, which explore does not clear, so a leftover
+  // dismissal marker made it visible under the sample banner — where "Take a
+  // quick tour" is dead (PageShell unmounts TourOverlay while exploring) and
+  // Dismiss wrote the REAL onboarding.tour.done.v1, one of the four keys D-S7
+  // names. isExploreMode() is a boot constant, so reading it in the
+  // initializer is the same convention as the resume nudge below.
   const [hidden, setHidden] = useState(
-    () => !(isSetupDismissed() && !isTourDone()),
+    () => isExploreMode() || !(isSetupDismissed() && !isTourDone()),
   );
 
   if (hidden) return null;

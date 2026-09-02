@@ -1,6 +1,8 @@
 import { DisclosureModal } from '@/legal/DisclosureModal';
 import { DISCLOSURES } from '@/legal/disclosures';
 import { useHouseholdStore } from '@/stores/household-store';
+import { usePersonsStore } from '@/stores/persons-store';
+import { isSetupDismissed } from '@/lib/setup-dismissal';
 import { enterExploreMode } from '@/lib/explore-transitions';
 
 interface Props {
@@ -31,6 +33,27 @@ interface Props {
  */
 function Step0Disclaimer({ onComplete, onExploreEntering }: Props) {
   const acceptDisclaimer = useHouseholdStore((s) => s.acceptDisclaimer);
+  const persons = usePersonsStore((s) => s.persons);
+
+  /**
+   * W4 review (MAJOR 0/3): the spec's entry rule, enforced structurally —
+   * "Entry exists only at Step 0. Established profiles (persons > 0, or
+   * ?section= deep links, or Settings → Revisit setup) never see it — explore
+   * is a first-run feature in v1."
+   *
+   * Step 0 is reachable by more than the first-run boot redirect: an
+   * established user who runs Settings → Advanced → "Reset disclaimers" can
+   * then use "Revisit setup" (/setup?origin=revisit, no ?section=) and land
+   * here with persons > 0. The dismissal marker covers the other shape — a DB
+   * wiped or replaced under retained WebView storage (persons 0, marker kept).
+   *
+   * Both are exactly the populations for which explore stops being harmless:
+   * the Dashboard's re-entry tour nudge becomes visible inside the sample
+   * session, and its Dismiss writes the REAL onboarding.tour.done.v1 key that
+   * D-S7 names. The nudge carries its own explore guard now; this is the
+   * structural half — no established profile is offered the entry at all.
+   */
+  const firstRun = persons.length === 0 && !isSetupDismissed();
 
   // First-run path — the user has nothing to "diff from." Build a
   // first-run document that drops diffFromPrevious so the modal doesn't
@@ -63,7 +86,7 @@ function Step0Disclaimer({ onComplete, onExploreEntering }: Props) {
         await acceptDisclaimer('app_wide', version);
         onComplete();
       }}
-      secondaryAction={{
+      secondaryAction={!firstRun ? undefined : {
         label: 'Explore with sample data first',
         helper: 'See a filled-in Cairn before entering your own numbers.',
         busyLabel: 'Opening sample data…',

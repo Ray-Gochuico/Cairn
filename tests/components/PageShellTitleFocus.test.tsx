@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RouterProvider, createMemoryRouter } from 'react-router-dom';
@@ -11,6 +11,16 @@ import { useAccountsStore } from '@/stores/accounts-store';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { EXPLORE_FLAG_KEY } from '@/lib/explore-mode';
+
+// W4 review (MINOR 13): P-W4-7's TourOverlay gate had no pin — the overlay
+// renders nothing until the tour store is started, so mounting it in explore
+// changed nothing observable and the mutant survived. A marker makes the
+// GATE itself observable: the overlay's finish handler writes the REAL
+// onboarding.tour.done.v1 key that D-S7 names.
+vi.mock('@/components/layout/TourOverlay', () => ({
+  default: () => <div data-testid="tour-overlay" />,
+  TourOverlay: () => <div data-testid="tour-overlay" />,
+}));
 
 /** Opaque to isExploreMode() — only presence matters (test-clock policy). */
 const FLAG_SET_AT = '2026-07-08T12:00:00.000Z';
@@ -105,5 +115,16 @@ describe('PageShell route title + focus', () => {
     renderAt('/');
     expect(screen.queryByRole('note', { name: 'Sample data notice' })).toBeNull();
     expect(document.title).toBe('Dashboard · Cairn');
+  });
+
+  it('W4 (P-W4-7): TourOverlay is NOT mounted while exploring, and IS on the real profile', () => {
+    localStorage.setItem(EXPLORE_FLAG_KEY, FLAG_SET_AT);
+    renderAt('/');
+    expect(screen.queryByTestId('tour-overlay')).toBeNull();
+  });
+
+  it('W4 (P-W4-7): TourOverlay mounts normally without the flag', () => {
+    renderAt('/');
+    expect(screen.getByTestId('tour-overlay')).toBeInTheDocument();
   });
 });

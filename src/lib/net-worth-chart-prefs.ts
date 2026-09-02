@@ -1,5 +1,6 @@
 // src/lib/net-worth-chart-prefs.ts
 import type { TimeWindow } from './snapshot-bucketing';
+import { isExploreMode, prefKey } from './explore-mode';
 
 const VALID_WINDOWS: ReadonlySet<string> = new Set(
   ['3M', '6M', 'YTD', '1Y', '5Y', 'ALL'] satisfies readonly TimeWindow[],
@@ -47,8 +48,12 @@ export interface ChartPrefs {
  *   carry-over.
  */
 export function makeChartPrefs(namespace: string): ChartPrefs {
-  const windowKey = `${namespace}.timeWindow`;
-  const selectionKey = `${namespace}.selectedEntities`;
+  // W4 review (MAJOR 1): `selectedEntities` persists `{kind, id}` tuples over
+  // DB row ids, which the post-exit real DB reissues from 1 — a sample-era
+  // selection would silently drop real accounts out of the chart. Both keys of
+  // the namespace move together so a surface is never half-namespaced.
+  const windowKey = prefKey(`${namespace}.timeWindow`);
+  const selectionKey = prefKey(`${namespace}.selectedEntities`);
   return {
     getTimeWindow() {
       try {
@@ -120,6 +125,10 @@ const LEGACY_INVESTMENT_KEYS = {
  * keys are removed whether or not their values were usable.
  */
 export function migrateLegacyInvestmentChartPrefs(): void {
+  // W4 review (MAJOR 1): this migration REMOVES the real legacy keys. Running
+  // it from explore would consume the user's own saved selection into a
+  // namespaced key that exit then wipes — a silent loss of real preferences.
+  if (isExploreMode()) return;
   try {
     const target = makeChartPrefs('investmentChart');
 

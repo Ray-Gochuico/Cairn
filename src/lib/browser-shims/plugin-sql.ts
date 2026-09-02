@@ -64,10 +64,26 @@ async function persist(key: string, bytes: Uint8Array): Promise<void> {
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 function schedulePersist(key: string, db: SqlJsDatabase): void {
-  if (persistTimer) clearTimeout(persistTimer);
+  cancelScheduledPersist();
   persistTimer = setTimeout(() => {
+    persistTimer = null;
     void persist(key, db.export());
   }, 250);
+}
+
+/**
+ * W4 review (MINOR 17): a debounced persist that survives close() calls
+ * `db.export()` on a database whose sql.js FS file has been unlinked —
+ * Emscripten throws ErrnoError 44 (ENOENT) inside the timer, which surfaces
+ * as an uncaught pageerror and reds the e2e console guard. The explore
+ * transitions are the first paths that close the shim DB and then keep the
+ * document alive across an async IndexedDB op, so the window is real.
+ */
+function cancelScheduledPersist(): void {
+  if (persistTimer) {
+    clearTimeout(persistTimer);
+    persistTimer = null;
+  }
 }
 
 export interface QueryResult {
@@ -178,6 +194,10 @@ export default class Database {
   }
 
   async close(): Promise<void> {
+    // Drop any pending debounced persist FIRST: the final persist below is
+    // authoritative, and a timer that fired after db.close() would export an
+    // unlinked file (W4 review MINOR 17).
+    cancelScheduledPersist();
     await persist(this.key, this.db.export());
     this.db.close();
   }

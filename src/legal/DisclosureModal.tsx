@@ -117,9 +117,15 @@ export function DisclosureModal({
     try {
       await secondaryAction.onSelect();
     } catch (e) {
-      setError(
-        e instanceof Error ? e.message : 'Failed to open sample data. Please try again.',
-      );
+      // W4 review (MINOR 5): SE-C8 is THE failure line for this action, for
+      // every rejection shape. Most explore-entry failures are Error
+      // instances (sql.js, the household store, the repo wrappers), so an
+      // `e.message` branch put a raw technical string in the inline slot and
+      // left the contract copy all but unreachable. The cause is warned to
+      // the console for support instead — never console.error (e2e guard).
+      // eslint-disable-next-line no-console
+      console.warn('[explore] entry failed:', e);
+      setError('Failed to open sample data. Please try again.');
       setSecondaryBusy(false);
     }
   };

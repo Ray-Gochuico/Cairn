@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import Step0Disclaimer from '@/pages/setup/Step0Disclaimer';
 import { useHouseholdStore } from '@/stores/household-store';
+import { usePersonsStore } from '@/stores/persons-store';
 import * as exploreTransitions from '@/lib/explore-transitions';
+import type { Person } from '@/types/schema';
 
 describe('Step0Disclaimer', () => {
   beforeEach(() => {
@@ -12,6 +14,8 @@ describe('Step0Disclaimer', () => {
       isLoading: false,
       error: null,
     });
+    usePersonsStore.setState({ persons: [], isLoading: false, error: null });
+    localStorage.clear();
   });
 
   it('renders the app_wide disclaimer modal', () => {
@@ -91,6 +95,49 @@ describe('Step0Disclaimer', () => {
     enter.mockRestore();
   });
 
+  // W4 review (MAJOR 0/3): the spec's entry rule — "Established profiles
+  // (persons > 0, or ?section= deep links, or Settings → Revisit setup) never
+  // see it" — was documented but never enforced. An established user who runs
+  // Settings → Reset disclaimers and then Revisit setup lands on Step 0, and
+  // inside explore the Dashboard's tour nudge could write the REAL
+  // onboarding.tour.done.v1 key (D-S7's own named key).
+  it('W4 entry rule: no explore action once persons exist', () => {
+    useHouseholdStore.setState({ acceptDisclaimer: vi.fn() } as any);
+    usePersonsStore.setState({
+      persons: [{ id: 1, name: 'Alice' } as unknown as Person],
+      isLoading: false,
+      error: null,
+    });
+    render(<Step0Disclaimer onComplete={vi.fn()} />);
+    expect(
+      screen.queryByRole('button', { name: 'Explore with sample data first' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('See a filled-in Cairn before entering your own numbers.'),
+    ).not.toBeInTheDocument();
+    // The attestation itself is untouched — this is the legal gate.
+    expect(screen.getByRole('button', { name: /continue to setup/i })).toBeInTheDocument();
+  });
+
+  it('W4 entry rule: no explore action once the wizard has been dismissed once', () => {
+    useHouseholdStore.setState({ acceptDisclaimer: vi.fn() } as any);
+    // The "DB wiped/replaced under retained WebView storage" state: zero
+    // persons, but a retained dismissal marker.
+    localStorage.setItem('setupWizard.dismissed.v1', '2026-07-08T12:00:00.000Z');
+    render(<Step0Disclaimer onComplete={vi.fn()} />);
+    expect(
+      screen.queryByRole('button', { name: 'Explore with sample data first' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('W4 entry rule: a true first run (no persons, no dismissal) DOES see it', () => {
+    useHouseholdStore.setState({ acceptDisclaimer: vi.fn() } as any);
+    render(<Step0Disclaimer onComplete={vi.fn()} />);
+    expect(
+      screen.getByRole('button', { name: 'Explore with sample data first' }),
+    ).toBeInTheDocument();
+  });
+
   it('W4: the explore action is gated on the SAME attestation checkbox', () => {
     useHouseholdStore.setState({ acceptDisclaimer: vi.fn() } as any);
     render(<Step0Disclaimer onComplete={vi.fn()} />);
@@ -134,8 +181,14 @@ describe('Step0Disclaimer', () => {
     );
     fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', { name: 'Explore with sample data first' }));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     await waitFor(() => expect(calls).toEqual([true, false]));
-    // The modal surfaces the failure inline and re-enables the action.
-    expect(await screen.findByText('db down')).toBeInTheDocument();
+    // W4 review (MINOR 5): the inline slot shows the CONTRACT line (SE-C8),
+    // not the raw 'db down' — every rejection shape reads the same.
+    expect(
+      await screen.findByText('Failed to open sample data. Please try again.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('db down')).not.toBeInTheDocument();
+    warn.mockRestore();
   });
 });

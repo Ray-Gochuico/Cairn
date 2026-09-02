@@ -46,3 +46,60 @@ export function clearExploreFlag(): void {
     // Best-effort by design.
   }
 }
+
+/**
+ * Namespace every explore-session device-local preference lives under. The
+ * explore flag itself already carries it, so ONE prefix sweep at exit
+ * (`clearExplorePrefs`) reaps the whole family.
+ */
+export const EXPLORE_PREF_PREFIX = 'explore.';
+
+/**
+ * W4 review (MAJOR 1/2): the key a device-local preference is stored under
+ * while exploring.
+ *
+ * P-W4-10 keeps device UI prefs writable in explore on the premise that the
+ * only ids they carry are migration-seeded constants. That premise is FALSE
+ * for two families: donut hidden sets persist `entityKey(kind, id)` strings
+ * (`account:2`, `loan:1`) and the asset-chart persists `{kind, id}` tuples —
+ * and `backtest:last-run:v1` persists a computed VERDICT with a sample
+ * person's name in it. The sample DB and the post-exit real DB both issue
+ * autoincrement ids from 1, so a sample-era selection silently re-targets
+ * the user's real rows (and a sample verdict headlines their real
+ * Calculators page).
+ *
+ * Namespacing is preferred over "don't write in explore": the sample session
+ * stays fully interactive (pickers, chart selections, a real backtest run)
+ * and NOTHING it wrote outlives the exit.
+ *
+ * `isExploreMode()` is a boot constant, so this is stable for the lifetime of
+ * a page — safe to call during render or at module scope.
+ */
+export function prefKey(base: string): string {
+  return isExploreMode() ? `${EXPLORE_PREF_PREFIX}${base}` : base;
+}
+
+/**
+ * Remove every explore-namespaced key from BOTH web stores. Called on the way
+ * out (exitExploreMode) and on the explore-boot failure path, BEFORE the flag
+ * is cleared — so the real profile that boots next sees only its own prefs.
+ *
+ * The sweep also reaps `EXPLORE_FLAG_KEY` itself (it carries the prefix);
+ * callers still call `clearExploreFlag()` explicitly so the guarantee is
+ * named rather than incidental. Best-effort: never throws, never blocks exit.
+ */
+export function clearExplorePrefs(): void {
+  for (const store of [localStorage, sessionStorage]) {
+    try {
+      const doomed: string[] = [];
+      for (let i = 0; i < store.length; i++) {
+        const k = store.key(i);
+        if (k !== null && k.startsWith(EXPLORE_PREF_PREFIX)) doomed.push(k);
+      }
+      // Collect first, then delete: removing during the index walk shifts it.
+      for (const k of doomed) store.removeItem(k);
+    } catch {
+      // Best-effort by design (private mode / quota / denied storage).
+    }
+  }
+}

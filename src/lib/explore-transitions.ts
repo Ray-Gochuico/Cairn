@@ -1,6 +1,6 @@
 import { getDatabase } from '@/db/db';
 import { resetSampleDb } from '@/db/sample-reset';
-import { clearExploreFlag, setExploreFlag } from '@/lib/explore-mode';
+import { clearExploreFlag, clearExplorePrefs, setExploreFlag } from '@/lib/explore-mode';
 
 /**
  * The two explore transitions (W4 D-S4). Both are FULL navigations to '/' —
@@ -69,6 +69,11 @@ export async function exitExploreMode(
     // eslint-disable-next-line no-console
     console.warn('[explore] sample wipe failed (stale file is inert; next entry re-wipes):', e);
   }
+  // W4 review (MAJOR 1/2): drop every explore-namespaced device pref BEFORE
+  // the flag — donut hidden sets and chart selections hold SAMPLE row ids,
+  // and the backtest cache holds a sample verdict; the real DB reissues those
+  // ids from 1, so anything surviving here mis-targets the user's own rows.
+  clearExplorePrefs();
   clearExploreFlag();
   deps.navigate('/');
 }

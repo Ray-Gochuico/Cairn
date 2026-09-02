@@ -369,15 +369,31 @@ describe('W4 explore mode', () => {
     localStorage.setItem(EXPLORE_FLAG_KEY, FLAG_SET_AT);
     mList.mockResolvedValue([entry('cairn-20260602-100000.db', new Date('2026-06-02T22:50:00'))]);
     renderSection();
-    await waitFor(() => expect(mList).toHaveBeenCalled());
     expect(screen.getByRole('button', { name: /back up now/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /save a copy/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /restore from a file/i })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /^Restore backup from/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /reveal backups/i })).toBeEnabled();
     expect(screen.getByTestId('sample-mode-backup-note')).toHaveTextContent(
       'Backups work on your own data — this sample profile is wiped when you leave.',
     );
+  });
+
+  // W4 review (MINOR 9): the list is of the user's REAL backups, rendered
+  // under a banner that says "nothing here is yours". Reveal stays enabled
+  // (P-W4-11 — it opens a folder, touches no data path), but the dated rows
+  // and their dead Restore buttons do not belong in a sample session, and the
+  // "No backups yet" empty state would be a lie about the real folder.
+  it('never lists the REAL backups while exploring (and never reads the folder)', async () => {
+    localStorage.setItem(EXPLORE_FLAG_KEY, FLAG_SET_AT);
+    mList.mockResolvedValue([entry('cairn-20260602-100000.db', new Date('2026-06-02T22:50:00'))]);
+    renderSection();
+    await waitFor(() =>
+      expect(screen.getByTestId('sample-mode-backup-note')).toBeInTheDocument(),
+    );
+    expect(mList).not.toHaveBeenCalled();
+    expect(screen.queryAllByTestId('backup-row')).toEqual([]);
+    expect(screen.queryByRole('button', { name: /^Restore backup from/i })).toBeNull();
+    expect(screen.queryByText(/no backups yet/i)).toBeNull();
   });
 
   it('without the flag: the note is absent and the controls are live', async () => {

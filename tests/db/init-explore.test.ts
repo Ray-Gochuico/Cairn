@@ -75,6 +75,35 @@ describe('initDatabase — explore branch', () => {
     expect(settingsGet).not.toHaveBeenCalled(); // maybeRunLaunchRefresh skipped (D-S7)
   });
 
+  // W4 review (MINOR 0/4/18): a failing explore boot used to STRAND the user.
+  // The flag survived, so every relaunch re-entered the same failing branch,
+  // the banner (the only exit control) never mounted, and a Tauri user cannot
+  // reach WKWebView's localStorage to clear the flag by hand.
+  it('a failing explore boot clears the flag (and its prefs) so the NEXT boot is the real profile', async () => {
+    localStorage.setItem(EXPLORE_FLAG_KEY, FLAG_SET_AT);
+    localStorage.setItem('explore.donut.assets.hidden', '["account:2"]');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    load.mockRejectedValueOnce(new Error('sample-explore.db is locked'));
+
+    await expect(initDatabase()).rejects.toThrow('sample-explore.db is locked');
+
+    expect(localStorage.getItem(EXPLORE_FLAG_KEY)).toBeNull();
+    expect(localStorage.getItem('explore.donut.assets.hidden')).toBeNull();
+    expect(warn).toHaveBeenCalled(); // warn, never console.error (e2e console guard)
+    warn.mockRestore();
+  });
+
+  it('a failing explore boot never falls through to the REAL database', async () => {
+    localStorage.setItem(EXPLORE_FLAG_KEY, FLAG_SET_AT);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    resetSampleDb.mockRejectedValueOnce(new Error('could not delete'));
+
+    await expect(initDatabase()).rejects.toThrow('could not delete');
+
+    expect(load).not.toHaveBeenCalled(); // no URL was opened at all
+    warn.mockRestore();
+  });
+
   it('without the flag: the existing path — real URL, no wipe, no sample seed, launch refresh consulted', async () => {
     await initDatabase();
     expect(load).toHaveBeenCalledTimes(1);

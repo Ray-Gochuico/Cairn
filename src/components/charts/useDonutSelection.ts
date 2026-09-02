@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react';
+import { prefKey } from '@/lib/explore-mode';
 
 /**
  * Persistent multi-select state for donut entity-visibility pickers.
@@ -33,12 +34,21 @@ export function useDonutSelection(
   hideAll: () => void;
   allShown: boolean;
 } {
+  // W4 review (MAJOR 1): the hidden set persists `entityKey(kind, id)`
+  // strings — `account:2`, `loan:1`. The sample DB and the post-exit real DB
+  // both issue autoincrement ids from 1, so a sample-era hide would silently
+  // hide the user's OWN second account. prefKey namespaces the whole family
+  // while exploring; exitExploreMode reaps it. Boot constant ⇒ stable for the
+  // life of the mount, so it needs no memo and no dep-array entry of its own
+  // (`localStorageKey` already covers every change that can happen).
+  const storageKey = prefKey(localStorageKey);
+
   // useSyncExternalStore subscribes to the cross-instance pub/sub so a
   // toggle in one instance immediately re-renders consumers of every other
   // instance bound to the same key.
   const rawSnapshot = useSyncExternalStore(
-    (cb) => subscribe(localStorageKey, cb),
-    () => readRaw(localStorageKey),
+    (cb) => subscribe(storageKey, cb),
+    () => readRaw(storageKey),
     () => '',
   );
 
@@ -71,26 +81,26 @@ export function useDonutSelection(
     const stale = [...hidden].filter((k) => !allKeysSet.has(k));
     if (stale.length === 0) return;
     const trimmed = [...hidden].filter((k) => allKeysSet.has(k));
-    writeHidden(localStorageKey, trimmed);
-  }, [hidden, allKeysSet, localStorageKey]);
+    writeHidden(storageKey, trimmed);
+  }, [hidden, allKeysSet, storageKey]);
 
   const toggle = useCallback(
     (key: string) => {
-      const cur = readHiddenSet(localStorageKey);
+      const cur = readHiddenSet(storageKey);
       if (cur.has(key)) cur.delete(key);
       else cur.add(key);
-      writeHidden(localStorageKey, [...cur]);
+      writeHidden(storageKey, [...cur]);
     },
-    [localStorageKey],
+    [storageKey],
   );
 
   const showAll = useCallback(() => {
-    writeHidden(localStorageKey, []);
-  }, [localStorageKey]);
+    writeHidden(storageKey, []);
+  }, [storageKey]);
 
   const hideAll = useCallback(() => {
-    writeHidden(localStorageKey, [...allKeys]);
-  }, [allKeys, localStorageKey]);
+    writeHidden(storageKey, [...allKeys]);
+  }, [allKeys, storageKey]);
 
   return { selected, toggle, showAll, hideAll, allShown };
 }

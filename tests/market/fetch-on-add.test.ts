@@ -36,6 +36,22 @@ describe('fetchMarketDataOnAdd (burst-coalescing fetch-on-add)', () => {
     return { fetchMarketDataOnAdd, refresh: vi.mocked(runMarketDataRefresh) };
   }
 
+  // W4 review (MINOR 1): D-S7 says explore is offline. RefreshSection's
+  // "Refresh now" and the launch refresh were gated, but adding a holding
+  // (HoldingForm / HoldingsPanel / CSV import) still reached the network and
+  // repainted the pinned sample narrative with live quotes.
+  it('W4: never touches the network while exploring (D-S7 offline)', async () => {
+    localStorage.setItem('explore.sampleMode.v1', '2026-07-08T12:00:00.000Z');
+    try {
+      const { fetchMarketDataOnAdd, refresh } = await load();
+      fetchMarketDataOnAdd(db);
+      vi.advanceTimersByTime(10_000);
+      expect(refresh).not.toHaveBeenCalled();
+    } finally {
+      localStorage.removeItem('explore.sampleMode.v1');
+    }
+  });
+
   it('runs the refresh immediately on a lone add (leading edge)', async () => {
     const { fetchMarketDataOnAdd, refresh } = await load();
     fetchMarketDataOnAdd(db);

@@ -188,27 +188,41 @@ describe('DisclosureModal', () => {
       release();
     });
 
-    it('a rejected onSelect surfaces the inline error and re-enables', async () => {
+    // W4 review (MINOR 5): SE-C8 is THE failure line for this action, for
+    // EVERY rejection shape. The e.message branch made it nearly unreachable
+    // — sql.js, the household store and the repo wrappers all throw Error, so
+    // in practice the user saw a raw technical string ('db down') in the
+    // inline slot instead of the contract copy. Only the primary Continue
+    // action still surfaces its own message (a legal write the user retries).
+    it('an Error rejection shows the contract failure line, never the raw message (SE-C8)', async () => {
       const a = action();
       a.onSelect = vi.fn().mockRejectedValue(new Error('boom'));
-      render(<DisclosureModal document={appWideDoc} onAccept={vi.fn()} secondaryAction={a} />);
-      fireEvent.click(screen.getByRole('checkbox'));
-      fireEvent.click(screen.getByRole('button', { name: 'Explore with sample data first' }));
-      expect(await screen.findByText('boom')).toBeInTheDocument();
-      expect(
-        screen.getByRole('button', { name: 'Explore with sample data first' }),
-      ).toBeEnabled();
-    });
-
-    it('a non-Error rejection falls back to the contract failure line (SE-C8)', async () => {
-      const a = action();
-      a.onSelect = vi.fn().mockRejectedValue('opaque');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
       render(<DisclosureModal document={appWideDoc} onAccept={vi.fn()} secondaryAction={a} />);
       fireEvent.click(screen.getByRole('checkbox'));
       fireEvent.click(screen.getByRole('button', { name: 'Explore with sample data first' }));
       expect(
         await screen.findByText('Failed to open sample data. Please try again.'),
       ).toBeInTheDocument();
+      expect(screen.queryByText('boom')).not.toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Explore with sample data first' }),
+      ).toBeEnabled();
+      expect(warn).toHaveBeenCalled(); // the cause is still logged for support
+      warn.mockRestore();
+    });
+
+    it('a non-Error rejection shows the same contract failure line (SE-C8)', async () => {
+      const a = action();
+      a.onSelect = vi.fn().mockRejectedValue('opaque');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      render(<DisclosureModal document={appWideDoc} onAccept={vi.fn()} secondaryAction={a} />);
+      fireEvent.click(screen.getByRole('checkbox'));
+      fireEvent.click(screen.getByRole('button', { name: 'Explore with sample data first' }));
+      expect(
+        await screen.findByText('Failed to open sample data. Please try again.'),
+      ).toBeInTheDocument();
+      warn.mockRestore();
     });
   });
 });

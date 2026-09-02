@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { prefKey } from '@/lib/explore-mode';
 
 export const EARNER_KEY_PREFIX = 'calc-earner:';
-const keyFor = (cardId: string) => `${EARNER_KEY_PREFIX}${cardId}`;
+// W4 review (MAJOR 1): the stored VALUE is a person id, which the post-exit
+// real DB reissues from 1 — a sample-era pick would silently scope a real
+// card to the wrong earner.
+const keyFor = (cardId: string) => prefKey(`${EARNER_KEY_PREFIX}${cardId}`);
 
 /** Wave B (D-B9): explicit-Combined sentinel. Distinct from key-absent so a
  *  person page-scope (defaultId = the person) can still be overridden to
@@ -29,7 +33,7 @@ export function clearEarnerPicks(): void {
     const stale: string[] = [];
     for (let i = 0; i < sessionStorage.length; i += 1) {
       const k = sessionStorage.key(i);
-      if (k && k.startsWith(EARNER_KEY_PREFIX)) stale.push(k);
+      if (k && k.startsWith(prefKey(EARNER_KEY_PREFIX))) stale.push(k);
     }
     stale.forEach((k) => sessionStorage.removeItem(k));
   } catch {

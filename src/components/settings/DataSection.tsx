@@ -71,7 +71,12 @@ export function DataSection() {
   // Load (and reload) the rotating backups list. Best-effort: a failure leaves
   // the list as-is and surfaces a soft note rather than blocking the section.
   const refreshBackups = useCallback(async () => {
-    if (!isTauriRuntime()) {
+    // W4 review (MINOR 9): the list is of the user's REAL backups. Under a
+    // banner that says "nothing here is yours" the dated rows read as the
+    // sample's, and every Restore is disabled anyway — so the sample session
+    // never reads the folder at all. "Reveal backups" stays enabled
+    // (P-W4-11): it opens a folder and touches no data path.
+    if (!isTauriRuntime() || isExploreMode()) {
       setIsLoadingBackups(false);
       return;
     }
@@ -283,7 +288,7 @@ export function DataSection() {
               checks the file, then reloads. This cannot be undone.
             </p>
 
-            {backups.length > 0 ? (
+            {exploring ? null : backups.length > 0 ? (
               <ul className="divide-y divide-border rounded-md border">
                 {backups.map((b) => (
                   <li

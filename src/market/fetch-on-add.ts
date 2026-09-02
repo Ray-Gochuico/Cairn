@@ -1,5 +1,6 @@
 import type { Database } from '@/db/db';
 import { runMarketDataRefresh } from './run-market-data-refresh';
+import { isExploreMode } from '@/lib/explore-mode';
 
 /**
  * How long a burst window lasts. Adds within this window of the last run
@@ -29,8 +30,13 @@ let trailing: ReturnType<typeof setTimeout> | null = null;
  * Deliberately does NOT stamp last_refresh_at: this is data repair for one
  * ticker, not a user-cadence refresh — stamping would suppress the next due
  * launch refresh.
+ *
+ * W4 review (MINOR 1): a no-op while exploring. D-S7 makes the sample session
+ * 100% offline — the seeded prices ARE the pinned narrative, and a live quote
+ * would silently repaint them mid-tour.
  */
 export function fetchMarketDataOnAdd(db: Database): void {
+  if (isExploreMode()) return;
   const now = Date.now();
   if (trailing === null && now - lastRunAt > BURST_WINDOW_MS) {
     lastRunAt = now;

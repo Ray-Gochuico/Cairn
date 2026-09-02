@@ -68,6 +68,44 @@ describe('UpdaterSection — manual-only invariant', () => {
     expect(screen.getByText(/never leaves your device/i)).toBeInTheDocument();
   });
 
+  // W4 review (MINOR 20): D-S7 says explore is offline. "Check for updates"
+  // was the one remaining network-capable control under the banner, and it
+  // stamped a REAL device-local key while doing it.
+  describe('explore mode', () => {
+    beforeEach(() => {
+      localStorage.setItem('explore.sampleMode.v1', '2026-07-08T12:00:00.000Z');
+    });
+
+    it('disables the check and says why (SE-C13), and never calls check()', async () => {
+      render(<UpdaterSection />);
+      const button = await screen.findByRole('button', { name: /check for updates/i });
+      expect(button).toBeDisabled();
+      expect(
+        screen.getByText(
+          'Updates are checked from your own profile — not while exploring sample data.',
+        ),
+      ).toBeInTheDocument();
+      fireEvent.click(button);
+      await waitFor(() => expect(screen.getByText(/current version/i)).toBeInTheDocument());
+      expect(mockCheck).not.toHaveBeenCalled();
+    });
+
+    it('reads the last-checked stamp from the explore namespace, never the real key', async () => {
+      localStorage.setItem('updater.lastChecked', '2026-01-02T03:04:05.000Z');
+      render(<UpdaterSection />);
+      await waitFor(() => expect(screen.getByText('never')).toBeInTheDocument());
+    });
+
+    it('does not render the note on the real profile', async () => {
+      localStorage.removeItem('explore.sampleMode.v1');
+      render(<UpdaterSection />);
+      await screen.findByRole('button', { name: /check for updates/i });
+      expect(
+        screen.queryByText(/not while exploring sample data/i),
+      ).not.toBeInTheDocument();
+    });
+  });
+
   it('fires check() exactly once per click and shows "up to date"', async () => {
     mockCheck.mockResolvedValueOnce(null);
     render(<UpdaterSection />);
