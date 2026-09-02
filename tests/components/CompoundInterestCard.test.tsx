@@ -1,10 +1,15 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { CompoundInterestCard } from '@/pages/calculators/CompoundInterestCard';
 import { ScenarioBar } from '@/pages/calculators/ScenarioBar';
 import { __resetScenarioAssumptionsForTests } from '@/lib/calculators/use-scenario-assumptions';
+import {
+  CALCULATORS_PAGE_ID,
+  __resetDollarBasisForTests,
+  useDollarBasisStore,
+} from '@/lib/calculators/dollar-basis';
 import { SCENARIO_STORAGE_KEY } from '@/lib/calculators/scenario-assumptions';
 import { useSnapshotsStore } from '@/stores/snapshots-store';
 import { useAccountsStore } from '@/stores/accounts-store';
@@ -47,6 +52,7 @@ function mkAccount(id: number, type: AccountType = AccountType.ACCOUNT_BROKERAGE
 describe('CompoundInterestCard', () => {
   beforeEach(() => {
     sessionStorage.clear();
+    __resetDollarBasisForTests();
     // Wave 16: the shared-scenario module caches overrides at module level.
     __resetScenarioAssumptionsForTests();
     useSnapshotsStore.setState({ snapshots: [], isLoading: false, error: null });
@@ -159,6 +165,10 @@ describe('CompoundInterestCard', () => {
     await user.type(screen.getByLabelText('Return'), '7');
     await user.click(screen.getByRole('combobox', { name: /compound frequency/i }));
     await user.click(await screen.findByRole('option', { name: /annually/i }));
+    // W5 (D-T3/F2): the page default is now Today's $, which deflates. This
+    // test's subject is the NOMINAL engine's APY semantics, so read the
+    // headline in Future $ — the unchanged engine leg (D-T10).
+    await user.click(screen.getByRole('button', { name: 'Future $' }));
     // Match $1,9XX (any value between 1900 and 1999).
     await waitFor(() =>
       expect(screen.getByTestId('compound-headline').textContent).toMatch(/\$1,9\d{2}/),
@@ -176,10 +186,14 @@ describe('CompoundInterestCard', () => {
     await user.type(screen.getByLabelText('Portfolio'), '10000');
     await user.clear(screen.getByLabelText('Return'));
     await user.type(screen.getByLabelText('Return'), '7');
+    // W5 (D-T3/F2): read the NOMINAL leg — this is an engine-semantics check,
+    // and against the deflated Today's $ figure the bound would pass trivially.
+    await user.click(screen.getByRole('button', { name: 'Future $' }));
     await waitFor(() => {
       const headlineText = screen.getByTestId('compound-headline').textContent ?? '';
-      // Extract the numeric value from the currency string (e.g. "$19,672" → 19672).
-      const rendered = Number(headlineText.replace(/[^0-9]/g, ''));
+      // Extract the FIGURE only (e.g. "$19,672" → 19672) — the basis phrase
+      // beside it carries the inflation percent's digits (W5 D-T4).
+      const rendered = Number((headlineText.match(/\$[\d,]+/)?.[0] ?? '').replace(/[$,]/g, ''));
       expect(rendered).toBeGreaterThan(0);
       expect(rendered).toBeLessThan(APR_DIRECT_VALUE);
     });
@@ -218,47 +232,103 @@ describe('CompoundInterestCard', () => {
     ).toBe('250000');
   });
 
-  it('renders a Nominal/Real toggle and persists Real under calc-display-mode:compound-interest', async () => {
-    const user = userEvent.setup();
-    render(<CompoundInterestCard />);
-    await user.click(screen.getByRole('button', { name: /^real$/i }));
-    expect(sessionStorage.getItem('calc-display-mode:compound-interest')).toBe('REAL');
-  });
-
-  it('Real mode deflates the WHOLE card — headline + tiles + title in today\'s dollars', async () => {
-    // Wave 15 T5 (D6): the card now resolves inflation via the canonical
-    // chain (household → settings → 0.03). Seed settings at the OLD fallback
-    // (2.5%) so the pinned dollars below stay byte-identical while the test
-    // exercises step 2 of the real chain instead of the removed `?? 0.025`.
+  it('W5: no per-card toggle remains; the card follows the page basis store (D-T9)', () => {
     useSettingsStore.setState({
       settings: { defaultInflation: 0.025 } as AppSettings,
       isLoading: false,
       error: null,
     });
-    seedDemoScenario(); // W16: pv/pmt/rate ride the shared scenario now
-    const user = userEvent.setup();
-    render(<CompoundInterestCard />); // pv 1000, pmt 100, 7% APY, 10y monthly, 2.5% inflation
-    const headline = screen.getByTestId('compound-headline');
-    // Nominal first (byte-identical to prior behaviour) — and no basis suffix.
-    expect(headline.textContent).toBe('$19,072');
-    expect(headline.textContent).not.toContain("in today's dollars");
-    expect(screen.getByTestId('compound-total-contributed').textContent).toContain('Total contributed');
-    expect(screen.getByText('Balance over time')).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: /^real$/i }));
-
-    // Headline + tiles now read the deflated (today's-dollars) figures.
-    expect(headline.textContent).toContain('$14,899');
-    expect(headline.textContent).toContain("in today's dollars");
-    expect(screen.getByTestId('compound-total-contributed').textContent).toContain("Total contributed (today's $)");
-    expect(screen.getByTestId('compound-total-contributed').textContent).toContain('$11,622');
-    // Chart title names the basis.
-    expect(screen.getByText("Balance over time (today's dollars)")).toBeInTheDocument();
-    expect(screen.queryByText('Balance over time')).not.toBeInTheDocument();
+    seedDemoScenario();
+    render(<CompoundInterestCard />);
+    expect(screen.queryByRole('button', { name: /^real$/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^nominal$/i })).toBeNull();
+    act(() => useDollarBasisStore.getState().setBasis(CALCULATORS_PAGE_ID, 'future'));
+    expect(screen.getByTestId('compound-headline').textContent).toContain('$19,072');
   });
 
-  it('resolves inflation via the canonical chain: household.inflationAssumption beats settings.defaultInflation', async () => {
-    const user = userEvent.setup();
+  it("W5 ANCHOR PAIR: Today's $ (default) pins real + anti-pins nominal; Future $ inverts (D-T6)", () => {
+    // Seed settings at 2.5% so the house literals stay byte-identical
+    // ($19,072 nominal / $14,899 real / $11,622 per-period-real contributed).
+    useSettingsStore.setState({
+      settings: { defaultInflation: 0.025 } as AppSettings,
+      isLoading: false,
+      error: null,
+    });
+    seedDemoScenario();
+    render(<CompoundInterestCard />);
+    const headline = screen.getByTestId('compound-headline');
+    const contributed = screen.getByTestId('compound-total-contributed');
+
+    // ── Today's $ IS the default (D-T3 — the deliberate flip from NOMINAL) ──
+    expect(headline.textContent).toContain('$14,899');
+    expect(headline.textContent).not.toContain('$19,072'); // nominal anti-pin
+    expect(headline.textContent).toContain("in today's dollars");
+    expect(contributed.textContent).toContain('$11,622'); // per-period deflation
+    expect(contributed.textContent).not.toContain('$13,000'); // nominal anti-pin
+    expect(contributed.textContent).not.toContain('$10,155'); // horizon-deflated WRONG value
+    expect(contributed.textContent).toContain("(today's $)");
+    expect(screen.getByTestId('compound-final-balance').textContent).toContain('$14,899');
+    expect(screen.getByTestId('compound-chart-caption').textContent).toBe(
+      "Balance over time (today's $)",
+    );
+
+    // ── Flip the PAGE basis (the control lives in the ScenarioBar) ──
+    act(() => useDollarBasisStore.getState().setBasis(CALCULATORS_PAGE_ID, 'future'));
+
+    expect(headline.textContent).toContain('$19,072');
+    expect(headline.textContent).not.toContain('$14,899'); // real anti-pin
+    expect(headline.textContent).toContain('in future dollars, at your 2.5% inflation assumption');
+    expect(contributed.textContent).toContain('$13,000');
+    expect(contributed.textContent).not.toContain('$11,622');
+    expect(contributed.textContent).toContain('(future $)');
+    expect(screen.getByTestId('compound-chart-caption').textContent).toBe(
+      'Balance over time (future $)',
+    );
+  });
+
+  it('W5 phrase/math consistency pin: one resolver feeds the phrase AND the deflator', () => {
+    useHouseholdStore.setState({
+      household: {
+        filingStatus: FilingStatus.SINGLE,
+        state: 'CA',
+        city: null,
+        monthlyExpenseBaseline: 5000,
+        withdrawalRate: 0.04,
+        inflationAssumption: 0.024,
+        growthScenarios: [],
+      },
+      isLoading: false,
+      error: null,
+    });
+    seedDemoScenario();
+    render(<CompoundInterestCard />);
+    const dollars = (el: HTMLElement) =>
+      Number((el.textContent?.match(/\$[\d,]+/)?.[0] ?? '').replace(/[$,]/g, ''));
+    const headline = screen.getByTestId('compound-headline');
+    const today = dollars(headline);
+    expect(headline.textContent).toContain("in today's dollars");
+    act(() => useDollarBasisStore.getState().setBasis(CALCULATORS_PAGE_ID, 'future'));
+    expect(headline.textContent).toContain('at your 2.4% inflation assumption');
+    // The 2.4% in the phrase IS the deflator: ratio = 1.024^10 (whole-$ rounding).
+    expect(dollars(headline) / today).toBeCloseTo(Math.pow(1.024, 10), 3);
+  });
+
+  it('W5 zero-inflation edge (F11): bases identical; the edge phrase says so', () => {
+    sessionStorage.setItem(
+      SCENARIO_STORAGE_KEY,
+      JSON.stringify({ portfolio: 1000, annualContribution: 1200, returnPct: 7, inflationPct: 0 }),
+    );
+    render(<CompoundInterestCard />);
+    const headline = screen.getByTestId('compound-headline');
+    const todayFigure = headline.textContent?.match(/\$[\d,]+/)?.[0];
+    act(() => useDollarBasisStore.getState().setBasis(CALCULATORS_PAGE_ID, 'future'));
+    expect(headline.textContent).toContain(todayFigure!);
+    expect(headline.textContent).toContain(
+      "in future dollars — at your 0% inflation assumption these equal today's dollars",
+    );
+  });
+
+  it('resolves inflation via the canonical chain: household.inflationAssumption beats settings.defaultInflation', () => {
     seedDemoScenario(); // W16: non-zero pv/pmt so the deflation is observable
     useSettingsStore.setState({
       settings: { defaultInflation: 0.025 } as AppSettings,
@@ -279,17 +349,14 @@ describe('CompoundInterestCard', () => {
       error: null,
     });
     render(<CompoundInterestCard />);
-    await user.click(screen.getByRole('button', { name: /^real$/i }));
     const value = parseFloat(screen.getByTestId('compound-headline').textContent!.replace(/[^0-9.]/g, ''));
     // 5% household inflation deflates HARDER than the 2.5% settings default
     // would ($14,899 at 2.5%) — proving household wins the chain.
     expect(value).toBeLessThan(14899);
   });
 
-  it('collapsed-safe basis: the REAL headline itself says "in today\'s dollars"', async () => {
-    const user = userEvent.setup();
+  it('collapsed-safe basis: the default headline itself says "in today\'s dollars"', () => {
     render(<CompoundInterestCard />);
-    await user.click(screen.getByRole('button', { name: /^real$/i }));
     expect(screen.getByTestId('compound-headline').textContent).toContain("in today's dollars");
   });
 });
@@ -297,6 +364,7 @@ describe('CompoundInterestCard', () => {
 describe('CompoundInterestCard waymark meaning (Wave 17)', () => {
   beforeEach(() => {
     sessionStorage.clear();
+    __resetDollarBasisForTests();
     __resetScenarioAssumptionsForTests();
   });
 
@@ -332,6 +400,7 @@ describe('CompoundInterestCard waymark meaning (Wave 17)', () => {
 describe('CompoundInterestCard — person scope (Wave B)', () => {
   beforeEach(() => {
     sessionStorage.clear();
+    __resetDollarBasisForTests();
     __resetScenarioAssumptionsForTests();
     __resetCalcScopeForTests();
     useSettingsStore.setState({ settings: null, isLoading: false, error: null });
