@@ -7,6 +7,8 @@ import { runMarketDataRefresh } from '@/market/run-market-data-refresh';
 import { SettingsRepo } from '@/domain/app-settings';
 import { isRefreshDue } from '@/lib/refresh-cadence';
 import { RefreshCadence } from '@/types/enums';
+import { EXPLORE_DB_URL, isExploreMode } from '@/lib/explore-mode';
+import { resetSampleDb } from '@/db/sample-reset';
 
 /**
  * Decide whether to run the background market-data refresh on launch.
@@ -57,7 +59,33 @@ export async function maybeRunLaunchRefresh(db: Database): Promise<void> {
   }
 }
 
+/**
+ * W4 explore boot (D-S1/D-S2/D-S7): a pristine sample DB, rebuilt from
+ * migrations + seed at the current MAX_SCHEMA_VERSION on EVERY boot. The
+ * real DB is never opened while the flag is set — isolation is structural.
+ * The sample is never migrated, never backed up, never corrupt-recovered:
+ * those problem classes are out by construction (it is always a just-built
+ * file, so assertDatabaseIntegrity trivially passes and SchemaTooNewError
+ * is unreachable).
+ */
+async function initExploreDatabase(): Promise<void> {
+  await resetSampleDb(); // idempotent delete; also drops a prior session's pool
+  const adapter = await TauriAdapter.load(EXPLORE_DB_URL);
+  setDatabase(adapter);
+  await assertDatabaseIntegrity(adapter);
+  const migrations = await loadAllMigrations();
+  await runMigrations(adapter, migrations);
+  const { seedSampleProfile } = await import('@/domain/sample-profile/sample-profile');
+  await seedSampleProfile(adapter);
+  // Deliberately NOT maybeRunLaunchRefresh — explore is offline (D-S7).
+}
+
 export async function initDatabase(): Promise<void> {
+  if (isExploreMode()) {
+    await initExploreDatabase();
+    return;
+  }
+  // ——— existing path, unchanged from here ———
   const adapter = await TauriAdapter.load('sqlite:finance.db');
   setDatabase(adapter);
 

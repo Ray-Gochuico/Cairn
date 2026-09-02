@@ -23,18 +23,28 @@ describe('explore-mode flag', () => {
     expect(isExploreMode()).toBe(false);
   });
 
+  // NOTE: the spies below target the localStorage INSTANCE, not
+  // Storage.prototype. In this jsdom the accessors are OWN properties of the
+  // localStorage object, so a Storage.prototype spy never intercepts and both
+  // of these cases would pass vacuously (verified at W4 execution time).
   it('fails CLOSED to the real profile when localStorage throws', () => {
-    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+    // Set the flag first, so a passing assertion can only come from the catch
+    // (not from an absent key).
+    setExploreFlag();
+    expect(isExploreMode()).toBe(true);
+    vi.spyOn(window.localStorage, 'getItem').mockImplementation(() => {
       throw new Error('denied');
     });
     expect(isExploreMode()).toBe(false);
   });
 
   it('clearExploreFlag never throws (best-effort)', () => {
-    vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+    const spy = vi.spyOn(window.localStorage, 'removeItem').mockImplementation(() => {
       throw new Error('denied');
     });
     expect(() => clearExploreFlag()).not.toThrow();
+    expect(spy).toHaveBeenCalledWith(EXPLORE_FLAG_KEY); // the throw was really reached
+    spy.mockRestore(); // afterEach's own removeItem must not hit the throwing stub
   });
 
   it('pins the sample DB URL literal (mirrored by Rust SAMPLE_DB_URL)', () => {
