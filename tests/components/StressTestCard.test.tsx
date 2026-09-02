@@ -18,27 +18,40 @@ import { useContributionsStore } from '@/stores/contributions-store';
 import { useAccountsStore } from '@/stores/accounts-store';
 import { useAcceptancesStore } from '@/stores/disclosure-acceptances-store';
 import { FilingStatus, ContributionSource, SnapshotSource, AccountType } from '@/types/enums';
-import { StressTestCard } from '@/pages/calculators/StressTestCard';
+import { StressTestCard, chartEndYear } from '@/pages/calculators/StressTestCard';
 import { __resetScenarioAssumptionsForTests } from '@/lib/calculators/use-scenario-assumptions';
 import { syncCalcScope, __resetCalcScopeForTests } from '@/lib/calculators/calc-view-scope';
 import { DISCLOSURES } from '@/legal/disclosures';
 import type { Account, GrowthScenario, Person } from '@/types/schema';
 
 // DP-13 marker pin (review MINOR 10): recharts measures nothing in jsdom, so
-// the chart's marker CONTRACT is pinned at the prop boundary. No other test in
-// this file reads the chart's internals.
+// the chart's marker CONTRACT is pinned at the prop boundary. The smoke fix
+// adds the SERIES contract (which years are plotted) at the same boundary.
+// No other test in this file reads the chart's internals.
 vi.mock('@/components/charts/InlineChart', () => ({
   InlineChart: ({
     testId,
     markers,
+    data,
   }: {
     testId?: string;
     markers?: Array<{ x: number | string; y: number; color: string }>;
-  }) => <div data-testid={testId} data-markers={JSON.stringify(markers ?? [])} />,
+    data?: Array<{ [key: string]: number | string }>;
+  }) => (
+    <div
+      data-testid={testId}
+      data-markers={JSON.stringify(markers ?? [])}
+      data-years={JSON.stringify((data ?? []).map((p) => p.year))}
+    />
+  ),
 }));
 
 function chartMarkers(): Array<{ x: number; y: number; color: string }> {
   return JSON.parse(screen.getByTestId('stress-test-chart').getAttribute('data-markers')!);
+}
+
+function chartYears(): number[] {
+  return JSON.parse(screen.getByTestId('stress-test-chart').getAttribute('data-years')!);
 }
 
 const PINNED_DATE = new Date('2026-05-14T12:00:00Z');
@@ -498,6 +511,67 @@ describe('replay rendering — deterministic pins (portfolio 100k)', () => {
         "Never below its starting value at a year-end — contributions outpaced this window's losses.",
       ),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe('chart series is a VIEW of the replay, clipped at the recovery (smoke fix)', () => {
+  // `replayWindow` runs from the window start to the DATASET END because the
+  // recovery search needs that tail — plotting all of it turned a 3-year 1929
+  // stress window into a 94-point line to 2022 with a ~$180M y-axis, on a card
+  // whose first line is "History that happened once — not a forecast". The
+  // chart stops where the card's own claims stop: the recovery year, or the
+  // dataset end when the search found none. The replay itself is untouched.
+
+  it('chartEndYear: recovery after the window end extends the chart to the recovery', () => {
+    expect(chartEndYear({ startYear: 1973, endYear: 1981 }, 1984, 2022)).toBe(1984);
+  });
+
+  it('chartEndYear: a recovery INSIDE the window still charts through the window end', () => {
+    expect(chartEndYear({ startYear: 2000, endYear: 2002 }, 2001, 2022)).toBe(2002);
+  });
+
+  it('chartEndYear: no recovery charts through the dataset end (the search evidence)', () => {
+    expect(chartEndYear({ startYear: 1929, endYear: 1931 }, null, 2022)).toBe(2022);
+  });
+
+  it('the DEFAULT 1929 state plots 1929–1932 (four points), not 1929–2022', () => {
+    renderCard(); // depression-1929 · KEEP · 75/25 · $100k · $12k/yr → recovery 1932
+    const years = chartYears();
+    expect(years).toHaveLength(4);
+    expect(years[0]).toBe(1929);
+    expect(years[years.length - 1]).toBe(1932);
+  });
+
+  it('the 1970s Portfolio-only state plots 1973–1984 — through the recovery, past the 1981 window end', () => {
+    renderCard();
+    clickMode('Portfolio only');
+    clickChip('The 1970s inflation run');
+    const years = chartYears();
+    expect(years).toHaveLength(12);
+    expect(years[0]).toBe(1973);
+    expect(years[years.length - 1]).toBe(1984);
+    // the DP-13 markers still land inside the plotted range
+    const [trough, recovery] = chartMarkers();
+    expect(years).toContain(trough.x);
+    expect(years).toContain(recovery.x);
+  });
+
+  it('the 2022 window clips to the single point it already is — below the two-point chart gate', () => {
+    expect(chartEndYear({ startYear: 2022, endYear: 2022 }, null, 2022)).toBe(2022);
+    renderCard();
+    clickMode('Portfolio only');
+    clickChip('The 2022 inflation shock');
+    expect(screen.queryByTestId('stress-test-chart')).not.toBeInTheDocument();
+  });
+
+  it('the outpaced state (DP-15) draws NO markers — the rows they annotate are gone', () => {
+    primePortfolio(1_000, 50_000);
+    renderCard(); // depression-1929 · KEEP default
+    expect(
+      screen.getByText("Never below its starting value at a year-end — contributions outpaced this window's losses."),
+    ).toBeInTheDocument();
+    expect(chartMarkers()).toEqual([]);
+    expect(chartYears()).toEqual([1929, 1930, 1931]); // the series still renders — the named window
   });
 });
 

@@ -58,6 +58,26 @@ function seededStockPct(): { pct: number; fromLastRun: boolean } {
   return { pct: Math.round(DEFAULT_STOCK_PCT * 100), fromLastRun: false };
 }
 
+/**
+ * Last year the CHART plots. `replayWindow` deliberately runs from the window
+ * start to the dataset end because the recovery search needs that tail — but
+ * the tail is search range, not subject matter: plotting all of it drew the
+ * three-year 1929 window as a 94-point line to 2022 with a ~$180M y-axis, i.e.
+ * a nine-decade growth projection on a card whose first line is "History that
+ * happened once — not a forecast, not a probability." The chart is a VIEW of
+ * the replay, so it stops where the card's own claims stop: the recovery year
+ * when the search found one (CP-12/CP-13 name it), otherwise the dataset end —
+ * the evidence behind CP-14's "not back … by {lastDataYear}". `Math.max` keeps
+ * the named window whole when the recovery lands inside it.
+ */
+export function chartEndYear(
+  span: { startYear: number; endYear: number },
+  recoveredYear: number | null,
+  lastDataYear: number,
+): number {
+  return Math.max(span.endYear, recoveredYear ?? lastDataYear);
+}
+
 /** U+2212 for negative, explicit + otherwise (the formatSignedCurrency register). */
 const signedPct = (fraction: number, digits: number): string =>
   `${fraction < 0 ? '−' : '+'}${Math.abs(pctFromFraction(fraction)).toFixed(digits)}%`;
@@ -242,6 +262,14 @@ export function StressTestCard({ cardId = 'stress-test' }: { cardId?: string }) 
         : mode === 'KEEP'
           ? `Back at its starting value: ${result.recoveredYear} — with your ${formatCurrency(engine.annualContribution)}/yr contributions counted.`
           : `Back at its starting value: ${result.recoveredYear}.`;
+  // The plotted series stops at chartEndYear — everything past it is the
+  // recovery search's range, not a path this card claims anything about.
+  const chartSeries =
+    result == null
+      ? []
+      : result.yearEnds.filter(
+          (y) => y.year <= chartEndYear(win.span, result.recoveredYear, lastDataYear),
+        );
 
   return (
     <CalculatorCard
@@ -339,25 +367,33 @@ export function StressTestCard({ cardId = 'stress-test' }: { cardId?: string }) 
             label={`Vs your assumed path (${nYears} ${nYears === 1 ? 'year' : 'years'})`}
             value={`${formatCurrency(baselineEnd)} assumed · ${formatCurrency(result.windowEndBalance)} replayed · gap ${formatSignedCurrency(result.windowEndBalance - baselineEnd)}`}
           />
-          {result.yearEnds.length > 1 && (
+          {chartSeries.length > 1 && (
             <InlineChart
               label="Window replay"
               testId="stress-test-chart"
-              data={result.yearEnds.map((y) => ({ year: y.year, balance: y.balance }))}
+              data={chartSeries.map((y) => ({ year: y.year, balance: y.balance }))}
               xKey="year"
               series={[{ dataKey: 'balance', label: 'Portfolio (real $)', hero: true }]}
-              markers={[
-                { x: result.troughYear, y: result.troughBalance, color: 'hsl(var(--destructive))' },
-                ...(result.recoveredYear != null
-                  ? [
-                      {
-                        x: result.recoveredYear,
-                        y: result.yearEnds.find((p) => p.year === result.recoveredYear)!.balance,
-                        color: 'hsl(var(--blaze))',
-                      },
+              /* DP-15: the outpaced state replaces the Deepest-year-end row and
+                 omits the recovery row, so there is nothing for these markers
+                 to annotate — and both would sit on the window's first year
+                 (trough = start year, recovery = the plain scan's first hit). */
+              markers={
+                outpaced
+                  ? []
+                  : [
+                      { x: result.troughYear, y: result.troughBalance, color: 'hsl(var(--destructive))' },
+                      ...(result.recoveredYear != null
+                        ? [
+                            {
+                              x: result.recoveredYear,
+                              y: chartSeries.find((p) => p.year === result.recoveredYear)!.balance,
+                              color: 'hsl(var(--blaze))',
+                            },
+                          ]
+                        : []),
                     ]
-                  : []),
-              ]}
+              }
               yFormatter={formatCurrency}
             />
           )}
