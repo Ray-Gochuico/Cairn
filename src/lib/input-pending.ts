@@ -48,12 +48,25 @@ export function isMonthlyInputPending(
   const day = today.getDate();
   if (day === 1) return true;
   if (day <= MONTHLY_INPUT_GRACE_DAY) return false;
-  // day > 7: any account without a USER_CONFIRMED/MANUAL snapshot for last
-  // month means input is still pending. Daily AUTO_DERIVED rows coexist with
-  // the month-end confirmation, so the check must scan ALL of the account's
-  // rows (.some), not just the first (.find) — an auto row must never mask a
-  // real confirmation. No snapshot at all → pending. Empty accountIds →
-  // nothing to confirm → not pending.
+  return hasUnconfirmedLastMonth(input);
+}
+
+/**
+ * The FACT underneath `isMonthlyInputPending`'s calendar rules: does any
+ * tracked account still lack a USER_CONFIRMED/MANUAL snapshot for last month?
+ *
+ * Daily AUTO_DERIVED rows coexist with the month-end confirmation, so the
+ * check must scan ALL of the account's rows (.some), not just the first
+ * (.find) — an auto row must never mask a real confirmation. No snapshot at
+ * all → unconfirmed. Empty accountIds → nothing to confirm → false.
+ *
+ * `isMonthlyInputPending` layers the day-1 nudge and the 2..7 grace window on
+ * top of this predicate; surfaces that must state a FACT ("last month's
+ * balances aren't confirmed") rather than schedule a nudge read it directly
+ * (W3 model-gaps G3 — review MINOR 12). Both callers share this one body so
+ * the pending semantics can never fork.
+ */
+export function hasUnconfirmedLastMonth(input: InputPendingInput): boolean {
   return input.accountIds.some((accId) => {
     const confirmed = input.snapshotsLastMonth.some(
       (s) =>
@@ -134,6 +147,36 @@ export function monthlyInputPendingFor(
   }>,
   snapshots: ReadonlyArray<AccountSnapshot>,
 ): boolean {
+  return isMonthlyInputPending(today, eligibleInputs(today, accounts, snapshots));
+}
+
+/**
+ * `hasUnconfirmedLastMonth` over the same whole-store composition — the FACT
+ * without the nudge calendar. Used by surfaces that assert a state rather than
+ * prompt a ritual (W3 model-gaps G3).
+ */
+export function monthlyInputUnconfirmedFor(
+  today: Date,
+  accounts: ReadonlyArray<{
+    id?: number | null;
+    type: AccountType;
+    excludedFromNetWorth: boolean;
+  }>,
+  snapshots: ReadonlyArray<AccountSnapshot>,
+): boolean {
+  return hasUnconfirmedLastMonth(eligibleInputs(today, accounts, snapshots));
+}
+
+/** The eligible-id + last-month slices both compositions share. */
+function eligibleInputs(
+  today: Date,
+  accounts: ReadonlyArray<{
+    id?: number | null;
+    type: AccountType;
+    excludedFromNetWorth: boolean;
+  }>,
+  snapshots: ReadonlyArray<AccountSnapshot>,
+): InputPendingInput {
   const accountIds = accounts
     .filter(
       (a) =>
@@ -146,5 +189,5 @@ export function monthlyInputPendingFor(
   const snapshotsLastMonth = snapshots.filter(
     (s) => s.snapshotDate.slice(0, 7) === lastMonth,
   );
-  return isMonthlyInputPending(today, { accountIds, snapshotsLastMonth });
+  return { accountIds, snapshotsLastMonth };
 }

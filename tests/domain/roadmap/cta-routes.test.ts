@@ -150,6 +150,22 @@ describe('roadmap CTA hrefs resolve to real routes', () => {
     ).toEqual([]);
   });
 
+  it('W3: model-gaps CTA targets resolve against App.tsx routes (route rename cannot strand a link)', () => {
+    const src = readFileSync(resolve(SRC, 'lib/model-gaps.ts'), 'utf-8');
+    const targets = [...src.matchAll(/to: '([^']+)'/g)].map((m) => m[1]);
+    expect([...new Set(targets)].sort()).toEqual([
+      '/inputs/household',
+      '/inputs/persons',
+      '/investments?manage=accounts',
+      '/investments?manage=contributions',
+      '/monthly',
+      '/roadmap',
+      '/settings',
+    ]);
+    const valid = validRoutePaths();
+    expect(targets.filter((t) => !valid.has(t.split('?')[0]))).toEqual([]);
+  });
+
   it('self-check: a query-string CTA resolves via path normalization (W14)', () => {
     const valid = validRoutePaths();
     const href = '/investments?manage=accounts';
