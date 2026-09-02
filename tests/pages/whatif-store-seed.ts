@@ -5,6 +5,9 @@ import { useTransactionsStore } from '@/stores/transactions-store';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
 import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
+import { useContributionsStore } from '@/stores/contributions-store';
+import { useCategoriesStore } from '@/stores/categories-store';
+import { useRoadmapOverridesStore } from '@/stores/roadmap-overrides-store';
 import { seedResolvedStores } from '../helpers/seed-resolved-stores';
 
 /**
@@ -26,5 +29,12 @@ export function seedWhatIfRealStores(): void {
     { store: usePropertiesStore, collections: { properties: [] } },
     { store: useVehiclesStore, collections: { vehicles: [] } },
     { store: useAssetValueSnapshotsStore, collections: { assetValueSnapshots: [] } },
+    // W3: the page's gate grew by three stores (contributions + categories +
+    // roadmap-overrides feed useRoadmap's context for the model-gaps G9 row).
+    // seedResolvedStores seeds ANY collection field, so the overrides Map goes
+    // through the same mechanism — no bespoke setState needed.
+    { store: useContributionsStore, collections: { contributions: [] } },
+    { store: useCategoriesStore, collections: { categories: [] } },
+    { store: useRoadmapOverridesStore, collections: { overridesByNodeId: new Map() } },
   ]);
 }
