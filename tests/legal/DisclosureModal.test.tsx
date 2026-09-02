@@ -141,4 +141,74 @@ describe('DisclosureModal', () => {
     // the title element is reachable and labels the dialog.
     expect(screen.getByRole('heading', { name: /disclaimer/i })).toBeInTheDocument();
   });
+
+  describe('secondaryAction (W4 explore entry)', () => {
+    const action = () => ({
+      label: 'Explore with sample data first',
+      helper: 'See a filled-in Cairn before entering your own numbers.',
+      busyLabel: 'Opening sample data…',
+      onSelect: vi.fn().mockResolvedValue(undefined),
+    });
+
+    it('renders nothing without the prop (the AppDisclaimerGate surface is untouched)', () => {
+      render(<DisclosureModal document={appWideDoc} onAccept={vi.fn()} />);
+      expect(screen.queryByText('Explore with sample data first')).toBeNull();
+    });
+
+    it('renders label + helper, disabled until the attestation is checked', () => {
+      const a = action();
+      render(<DisclosureModal document={appWideDoc} onAccept={vi.fn()} secondaryAction={a} />);
+      const btn = screen.getByRole('button', { name: 'Explore with sample data first' });
+      expect(btn).toBeDisabled();
+      expect(
+        screen.getByText('See a filled-in Cairn before entering your own numbers.'),
+      ).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('checkbox'));
+      expect(btn).toBeEnabled();
+      fireEvent.click(btn);
+      expect(a.onSelect).toHaveBeenCalledTimes(1);
+    });
+
+    it('while in flight: shows the busy label and disables BOTH controls', async () => {
+      let release!: () => void;
+      const a = action();
+      a.onSelect = vi.fn().mockImplementation(() => new Promise<void>((r) => (release = r)));
+      render(
+        <DisclosureModal
+          document={appWideDoc}
+          onAccept={vi.fn()}
+          continueLabel="Continue to setup"
+          secondaryAction={a}
+        />,
+      );
+      fireEvent.click(screen.getByRole('checkbox'));
+      fireEvent.click(screen.getByRole('button', { name: 'Explore with sample data first' }));
+      expect(await screen.findByRole('button', { name: 'Opening sample data…' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Continue to setup' })).toBeDisabled();
+      release();
+    });
+
+    it('a rejected onSelect surfaces the inline error and re-enables', async () => {
+      const a = action();
+      a.onSelect = vi.fn().mockRejectedValue(new Error('boom'));
+      render(<DisclosureModal document={appWideDoc} onAccept={vi.fn()} secondaryAction={a} />);
+      fireEvent.click(screen.getByRole('checkbox'));
+      fireEvent.click(screen.getByRole('button', { name: 'Explore with sample data first' }));
+      expect(await screen.findByText('boom')).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Explore with sample data first' }),
+      ).toBeEnabled();
+    });
+
+    it('a non-Error rejection falls back to the contract failure line (SE-C8)', async () => {
+      const a = action();
+      a.onSelect = vi.fn().mockRejectedValue('opaque');
+      render(<DisclosureModal document={appWideDoc} onAccept={vi.fn()} secondaryAction={a} />);
+      fireEvent.click(screen.getByRole('checkbox'));
+      fireEvent.click(screen.getByRole('button', { name: 'Explore with sample data first' }));
+      expect(
+        await screen.findByText('Failed to open sample data. Please try again.'),
+      ).toBeInTheDocument();
+    });
+  });
 });

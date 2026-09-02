@@ -1,6 +1,7 @@
 import { DisclosureModal } from '@/legal/DisclosureModal';
 import { DISCLOSURES } from '@/legal/disclosures';
 import { useHouseholdStore } from '@/stores/household-store';
+import { enterExploreMode } from '@/lib/explore-transitions';
 
 interface Props {
   onComplete: () => void;
@@ -51,6 +52,21 @@ function Step0Disclaimer({ onComplete }: Props) {
       onAccept={async (version) => {
         await acceptDisclaimer('app_wide', version);
         onComplete();
+      }}
+      secondaryAction={{
+        label: 'Explore with sample data first',
+        helper: 'See a filled-in Cairn before entering your own numbers.',
+        busyLabel: 'Opening sample data…',
+        onSelect: async () => {
+          // 1. Acceptance on the REAL DB — the same write path the primary
+          //    action uses; the flag is not set yet, so getDatabase() is real.
+          await acceptDisclaimer('app_wide', firstRunDoc.version);
+          // 2. close (flush) → flag → navigate('/'): explore boot takes over.
+          //    The seed then writes the app_wide acceptance into the SAMPLE DB
+          //    at the registry version — justified because the flag is only
+          //    ever set after this genuine acceptance (D-S3).
+          await enterExploreMode();
+        },
       }}
     />
   );

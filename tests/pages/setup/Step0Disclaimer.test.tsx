@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import Step0Disclaimer from '@/pages/setup/Step0Disclaimer';
 import { useHouseholdStore } from '@/stores/household-store';
+import * as exploreTransitions from '@/lib/explore-transitions';
 
 describe('Step0Disclaimer', () => {
   beforeEach(() => {
@@ -70,5 +71,35 @@ describe('Step0Disclaimer', () => {
       expect(acceptDisclaimer).toHaveBeenCalled();
     });
     expect(onComplete).not.toHaveBeenCalled();
+  });
+
+  it('W4: the explore action accepts on the REAL db FIRST, then enters explore', async () => {
+    const order: string[] = [];
+    const acceptDisclaimer = vi.fn().mockImplementation(async () => void order.push('accept'));
+    useHouseholdStore.setState({ acceptDisclaimer } as any);
+    const enter = vi
+      .spyOn(exploreTransitions, 'enterExploreMode')
+      .mockImplementation(async () => void order.push('enter'));
+    const onComplete = vi.fn();
+    render(<Step0Disclaimer onComplete={onComplete} />);
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Explore with sample data first' }));
+    await waitFor(() => expect(order).toEqual(['accept', 'enter']));
+    expect(acceptDisclaimer).toHaveBeenCalledWith('app_wide', expect.any(String));
+    // Entry is a full navigation, not the wizard's own advance.
+    expect(onComplete).not.toHaveBeenCalled();
+    enter.mockRestore();
+  });
+
+  it('W4: the explore action is gated on the SAME attestation checkbox', () => {
+    useHouseholdStore.setState({ acceptDisclaimer: vi.fn() } as any);
+    render(<Step0Disclaimer onComplete={vi.fn()} />);
+    const explore = screen.getByRole('button', { name: 'Explore with sample data first' });
+    expect(explore).toBeDisabled();
+    expect(
+      screen.getByText('See a filled-in Cairn before entering your own numbers.'),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('checkbox'));
+    expect(explore).toBeEnabled();
   });
 });
