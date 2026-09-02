@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { MAX_SCHEMA_VERSION } from '@/db/migrations';
+import { EXPLORE_DB_URL } from '@/lib/explore-mode';
 import { collectSourceFiles, stripComments } from './source-walker';
 
 const ROOT = path.resolve(__dirname, '..', '..');
@@ -76,5 +77,16 @@ describe('JS ↔ Rust IPC parity', () => {
     // reject files it should accept. tests/db/schema-version-guard.test.ts
     // pins the JS literal; this closes the cross-language half for real.
     expect(Number(m[1])).toBe(MAX_SCHEMA_VERSION);
+  });
+
+  it('sample DB URL literal matches across languages (W4 allowlist pin)', () => {
+    // db_sample_reset is hard-allowlisted to ONE url. If the TS constant and
+    // the Rust allowlist ever drift, every explore wipe would be refused —
+    // and the real DB is only safe because the Rust side compares EQUALITY
+    // against this exact literal.
+    const rustSource = readFileSync(RUST_DB_BACKUP, 'utf8');
+    const m = rustSource.match(/pub const SAMPLE_DB_URL:\s*&str\s*=\s*"([^"]+)"\s*;/);
+    if (!m) throw new Error('pub const SAMPLE_DB_URL not found in src-tauri/src/db_backup.rs');
+    expect(m[1]).toBe(EXPLORE_DB_URL);
   });
 });

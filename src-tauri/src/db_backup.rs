@@ -320,11 +320,11 @@ fn resolve_sqlite_path<R: tauri::Runtime>(
     let rel = db
         .split_once(':')
         .map(|(_, p)| p)
-        .ok_or_else(|| format!("db_restore: '{db}' is not a sqlite: URL"))?;
+        .ok_or_else(|| format!("resolve_sqlite_path: '{db}' is not a sqlite: URL"))?;
     let mut base = app
         .path()
         .app_config_dir()
-        .map_err(|e| format!("db_restore: could not resolve app config dir: {e}"))?;
+        .map_err(|e| format!("resolve_sqlite_path: could not resolve app config dir: {e}"))?;
     base.push(rel);
     Ok(base)
 }
@@ -403,6 +403,65 @@ pub async fn db_restore(app: tauri::AppHandle, db: String, source: String) -> Re
     replace_database_file(&source_path, &live_path)?;
 
     Ok(())
+}
+
+/// The ONE database URL `db_sample_reset` may touch (W4 D-S8). Mirrored in TS
+/// as `EXPLORE_DB_URL` (src/lib/explore-mode.ts); pinned by
+/// `sample_db_url_is_pinned` and cross-language in tests/policy/ipc-parity.test.ts.
+pub const SAMPLE_DB_URL: &str = "sqlite:sample-explore.db";
+
+/// Equality allowlist — it must be IMPOSSIBLE to aim this command at
+/// finance.db. Free function so the refusal is unit-tested without an AppHandle.
+fn ensure_sample_url(db: &str) -> Result<(), String> {
+    if db == SAMPLE_DB_URL {
+        Ok(())
+    } else {
+        Err(format!(
+            "db_sample_reset: refusing to reset '{db}' — only '{SAMPLE_DB_URL}' can be wiped"
+        ))
+    }
+}
+
+/// Delete a sqlite main file + its `-wal`/`-shm` sidecars, tolerating absence
+/// (idempotent: the boot wipe runs on every explore boot, file present or not).
+fn remove_db_files(live: &Path) -> Result<(), String> {
+    let mut targets = vec![live.to_path_buf()];
+    targets.extend(sidecar_paths(live));
+    for t in targets {
+        match std::fs::remove_file(&t) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => {
+                return Err(format!(
+                    "db_sample_reset: could not delete {}: {e}",
+                    t.display()
+                ))
+            }
+        }
+    }
+    Ok(())
+}
+
+/// W4 (D-S2/D-S8): wipe the throwaway sample DB. Drops the pool from
+/// `DbInstances` first — the map lives in the Rust process and SURVIVES webview
+/// reloads, so a prior explore session's pool would hold the file open (Windows
+/// can't delete an open file) and a later `Database.load` must start from a
+/// fresh connection. The plugin's own `close` command leaves the entry in the
+/// map; removing it here fully forgets the URL. `DbPool::close` is pub(crate),
+/// so the removed pool is closed via sqlx's public `Pool::close`.
+#[tauri::command]
+pub async fn db_sample_reset(app: tauri::AppHandle, db: String) -> Result<(), String> {
+    ensure_sample_url(&db)?;
+    let removed = {
+        let instances = app.state::<DbInstances>();
+        let mut instances = instances.0.write().await;
+        instances.remove(&db)
+    }; // write-guard dropped here, before the close/delete awaits
+    if let Some(DbPool::Sqlite(pool)) = removed {
+        pool.close().await;
+    }
+    let live = resolve_sqlite_path(&app, &db)?;
+    remove_db_files(&live)
 }
 
 #[cfg(test)]
@@ -766,5 +825,54 @@ mod tests {
     #[test]
     fn max_schema_version_is_pinned() {
         assert_eq!(MAX_SCHEMA_VERSION, 55);
+    }
+
+    /// W4: the allowlist is EQUALITY on the one sample URL — `db_sample_reset`
+    /// must be impossible to aim at finance.db (or anything else).
+    #[test]
+    fn sample_reset_allowlist_refuses_everything_but_the_sample_url() {
+        assert!(ensure_sample_url(SAMPLE_DB_URL).is_ok());
+        for bad in [
+            "sqlite:finance.db",
+            "sqlite:sample-explore.db2",
+            "sqlite:./sample-explore.db",
+            "sample-explore.db",
+            "",
+            "sqlite:../finance.db",
+        ] {
+            let err = ensure_sample_url(bad).unwrap_err();
+            assert!(err.contains("refusing"), "{bad}: {err}");
+        }
+    }
+
+    /// W4: mirror pin of the TS `EXPLORE_DB_URL` (src/lib/explore-mode.ts) —
+    /// the MAX_SCHEMA_VERSION mirror-pin precedent. Also regex-pinned
+    /// cross-language in tests/policy/ipc-parity.test.ts.
+    #[test]
+    fn sample_db_url_is_pinned() {
+        assert_eq!(SAMPLE_DB_URL, "sqlite:sample-explore.db");
+    }
+
+    #[test]
+    fn remove_db_files_deletes_main_and_both_sidecars() {
+        let dir = tempfile::tempdir().unwrap();
+        let live = dir.path().join("sample-explore.db");
+        for p in [
+            live.clone(),
+            dir.path().join("sample-explore.db-wal"),
+            dir.path().join("sample-explore.db-shm"),
+        ] {
+            std::fs::write(&p, b"x").unwrap();
+        }
+        remove_db_files(&live).unwrap();
+        assert!(!live.exists());
+        assert!(!dir.path().join("sample-explore.db-wal").exists());
+        assert!(!dir.path().join("sample-explore.db-shm").exists());
+    }
+
+    #[test]
+    fn remove_db_files_is_a_no_op_when_nothing_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        remove_db_files(&dir.path().join("sample-explore.db")).unwrap();
     }
 }

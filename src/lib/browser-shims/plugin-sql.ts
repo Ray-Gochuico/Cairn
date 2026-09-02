@@ -1,7 +1,12 @@
 import initSqlJs, { type Database as SqlJsDatabase, type SqlJsStatic } from 'sql.js';
 
-const IDB_NAME = 'finance-app-shim';
-const IDB_STORE = 'sqlite';
+// Hoisted (W4) so src/db/sample-reset.ts deletes from the SAME IDB/store this
+// shim persists into — one source of truth for the shim's storage identity.
+import {
+  SHIM_IDB_NAME as IDB_NAME,
+  SHIM_IDB_STORE as IDB_STORE,
+  shimKeyForDbUrl,
+} from '@/lib/browser-shims/shim-db-constants';
 
 let sqlPromise: Promise<SqlJsStatic> | null = null;
 function getSqlJs(): Promise<SqlJsStatic> {
@@ -87,7 +92,7 @@ export default class Database {
 
   static async load(path: string): Promise<Database> {
     const SQL = await getSqlJs();
-    const key = path.replace(/^sqlite:/, '');
+    const key = shimKeyForDbUrl(path);
     const persisted = await loadPersisted(key);
     const db = persisted ? new SQL.Database(persisted) : new SQL.Database();
     db.exec('PRAGMA foreign_keys = ON');
