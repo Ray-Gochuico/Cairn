@@ -18,6 +18,7 @@ import { InlineLink } from '@/components/calculators/InlineLink';
 import { useViewFilter } from '@/lib/use-view-filter';
 import { useCalcScope } from '@/lib/calculators/use-calc-scope';
 import { EarnerSelect } from '@/components/calculators/EarnerSelect';
+import { DollarBasisToggle } from '@/components/calculators/DollarBasisToggle';
 import { useTransactionsStore } from '@/stores/transactions-store';
 import { personMonthlyExpenseHint } from '@/lib/calculators/person-expense-hint';
 
@@ -396,6 +397,9 @@ export function ScenarioBar() {
             Edit in Inputs
           </InlineLink>
           <ScopeControl />
+          <div className="ml-auto">
+            <DollarBasisToggle />
+          </div>
         </div>
         {/* Row 2 — actions (A#3: never a lone orphaned cluster under the title).
             Left: the nothing-saved contract (CW16, moved verbatim from the old

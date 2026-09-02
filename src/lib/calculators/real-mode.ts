@@ -1,3 +1,9 @@
+/** Engine-side display-mode vocabulary (hoisted from use-chart-display-mode
+ *  in W5 D-T9/m6 — the conversion-leg vocabulary lives with the converters).
+ *  The page-level DollarBasis maps onto this at exactly ONE place:
+ *  basis-view.ts's chartModeFor. */
+export type ChartDisplayMode = 'NOMINAL' | 'REAL';
+
 /** Deflate a nominal future value to today's purchasing power. */
 export function toRealValue(nominal: number, inflation: number, yearsFromNow: number): number {
   return nominal / Math.pow(1 + inflation, yearsFromNow);

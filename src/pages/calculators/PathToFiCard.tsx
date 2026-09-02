@@ -2,22 +2,22 @@ import { useCallback, useMemo, useState } from 'react';
 import { useHouseholdStore } from '@/stores/household-store';
 import { usePersonsStore } from '@/stores/persons-store';
 import { pickModerateEntry } from '@/lib/growth-scenario';
-import { CalculatorCard, EmptyMeaning, RailReset, RailViewGroup } from './CalculatorCard';
+import { CalculatorCard, EmptyMeaning, RailReset } from './CalculatorCard';
 import { financialIndependenceSeries } from '@/lib/financial-independence';
-import { coastFi } from '@/lib/coast-fi';
-import { realRateOf, realRateOfUnfloored } from '@/lib/calculators/real-rate';
 import { currentAge } from '@/lib/dates';
-import { formatCurrency, formatPercent, formatSignedCurrency } from '@/lib/format';
+import { formatCurrency, formatPercent } from '@/lib/format';
 import { useCalculatorState } from '@/lib/calculator-state';
 import { NumberField } from '@/components/calculators/NumberField';
 import { CalcTable, CalcRow, type CalcColumn } from '@/components/calculators/CalcTable';
 import { InlineChart } from '@/components/charts/InlineChart';
-import { buildProjectionChartData } from '@/lib/calculators/projection-chart';
-import { RealNominalToggle } from '@/components/calculators/RealNominalToggle';
-import { useChartDisplayMode } from '@/lib/calculators/use-chart-display-mode';
 import { fiChartSeries } from '@/lib/calculators/fi-chart-series';
 import { useScenarioAssumptions } from '@/lib/calculators/use-scenario-assumptions';
 import { useCalcScope } from '@/lib/calculators/use-calc-scope';
+import {
+  usePathToFiBasisView,
+  type RegisteredChart,
+  type RegisteredFigure,
+} from '@/lib/calculators/basis-view';
 import { InlineLink } from '@/components/calculators/InlineLink';
 import { cn } from '@/lib/utils';
 
@@ -99,10 +99,9 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
   );
   const yearsUntilRetirement = values.yearsUntilRetirement ?? 0;
 
-  const { engine, scenarioList, editedCount, scopeExclusions, isEdited } = useScenarioAssumptions();
+  const { engine, scenarioList, editedCount, isEdited } = useScenarioAssumptions();
   const scenarioEdited = editedCount > 0;
 
-  const [displayMode, setDisplayMode] = useChartDisplayMode(cardId ?? 'path-to-fi');
   const inflation = engine.inflation;
 
   const targetFv = engine.swr > 0 ? engine.annualExpenses / engine.swr : 0;
@@ -136,20 +135,28 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
   }, [hasData, noTarget, engine.portfolio, targetFv, scenarioList, inflation]);
   const fiSeries = mode === 'KEEP' ? keepFiSeries : stopFiSeries;
 
-  // Coast solve (per scenario, floored real rate — the CoastFI edge semantics).
-  const coastRows = useMemo(() => {
-    if (!hasData || noTarget) return null;
-    return scenarioList.map((s) => ({
-      label: s.label,
-      rate: s.rate,
-      realRate: realRateOfUnfloored(s.rate, inflation),
-      coastNeededToday: coastFi({
-        requiredAtRetirement: targetFv,
-        annualRate: realRateOf(s.rate, inflation),
-        yearsUntilRetirement,
-      }),
-    }));
-  }, [hasData, noTarget, scenarioList, inflation, targetFv, yearsUntilRetirement]);
+  // Card-computed chart horizon (display concern, no converters involved).
+  const horizon = useMemo(() => {
+    if (!hasData || noTarget || !fiSeries) return 0;
+    if (mode === 'KEEP') {
+      const finite = fiSeries.map((s) => s.years).filter((y) => Number.isFinite(y));
+      return finite.length ? Math.min(50, Math.max(10, Math.ceil(Math.max(...finite)))) : 30;
+    }
+    const h = Math.max(0, Math.round(yearsUntilRetirement));
+    return h < 1 ? 0 : h;
+  }, [hasData, noTarget, fiSeries, mode, yearsUntilRetirement]);
+
+  // W5: the ONE conversion boundary — coast rows (restricted converters) and
+  // the chart's basis both live behind it (D-T5). The years solves above are
+  // engine calls and basis-independent (the goalpost law).
+  const view = usePathToFiBasisView({
+    fiSeries: hasData && !noTarget ? fiSeries : null,
+    mode,
+    yearsUntilRetirement,
+    horizon,
+    targetFv,
+  });
+  const coastRows = view?.coastRows ?? null;
 
   const moderateKeepFi = keepFiSeries ? pickModerateEntry(keepFiSeries) : undefined;
   const moderateFi = fiSeries ? pickModerateEntry(fiSeries) : undefined;
@@ -163,36 +170,17 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
       : 0;
 
   const anyUnreachable = (fiSeries ?? []).some((s) => !Number.isFinite(s.years));
-  const coastFloored = scenarioList.some(
-    (s) => realRateOfUnfloored(s.rate, inflation) < 0,
-  );
+  const coastFloored = (coastRows ?? []).some((r) => r.realRate < 0);
 
-  // Mode-following trajectory chart (ONE InlineChart; fiChartSeries owns
-  // emphasis — hero is deliberately NOT set).
-  const { chartData, chartSeries, chartMarkers } = useMemo(() => {
+  // Chart series/markers styling stays card-local; the DATA is the bundle's
+  // (ONE InlineChart; fiChartSeries owns emphasis — hero is deliberately NOT set).
+  const { chartSeries, chartMarkers } = useMemo(() => {
     const empty = {
-      chartData: [] as Record<string, number>[],
       chartSeries: [] as ReturnType<typeof fiChartSeries>['series'],
       chartMarkers: [] as ReturnType<typeof fiChartSeries>['markers'],
     };
-    if (!hasData || noTarget || !fiSeries) return empty;
-    let horizon: number;
-    if (mode === 'KEEP') {
-      const finite = fiSeries.map((s) => s.years).filter((y) => Number.isFinite(y));
-      horizon = finite.length ? Math.min(50, Math.max(10, Math.ceil(Math.max(...finite)))) : 30;
-    } else {
-      horizon = Math.max(0, Math.round(yearsUntilRetirement));
-      if (horizon < 1) return empty;
-    }
-    const data = buildProjectionChartData({
-      pv: engine.portfolio,
-      annualContribution: mode === 'KEEP' ? engine.annualContribution : 0,
-      targetFv,
-      scenarios: fiSeries,
-      inflation,
-      displayMode,
-      horizon,
-    });
+    if (!view || view.chartData.length === 0 || !fiSeries) return empty;
+    const data = view.chartData;
     const targetBasis = data.length > 0 ? Number(data[data.length - 1].target) : targetFv;
     const { series, markers } = fiChartSeries(
       fiSeries,
@@ -200,19 +188,8 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
       targetBasis,
       mode === 'STOP' ? { targetLabel: 'Required at retirement' } : undefined,
     );
-    return { chartData: data, chartSeries: series, chartMarkers: markers };
-  }, [
-    hasData,
-    noTarget,
-    fiSeries,
-    mode,
-    yearsUntilRetirement,
-    engine.portfolio,
-    engine.annualContribution,
-    targetFv,
-    inflation,
-    displayMode,
-  ]);
+    return { chartSeries: series, chartMarkers: markers };
+  }, [view, fiSeries, mode, targetFv]);
 
   const rail = (
     <>
@@ -248,9 +225,6 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
           Stop today
         </button>
       </div>
-      <RailViewGroup>
-        <RealNominalToggle mode={displayMode} onChange={setDisplayMode} />
-      </RailViewGroup>
     </>
   );
 
@@ -367,10 +341,16 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
     >
       {mode === 'STOP' && atOrPastRetirement ? null : (
         <>
-          {/* Teaching block — replaces the old duplicated real-basis footnotes. */}
-          <p className="text-sm text-muted-foreground">
-            Target {formatCurrency(targetFv)} = 12 × {formatCurrency(engine.monthlyExpenses)}
-            /mo ÷ {formatPercent(engine.swr)} SWR — in today&#39;s dollars.
+          {/* Teaching block — the FI target is a PINNED-basis figure (F10):
+              defined real; it keeps its today's-dollars statement in BOTH
+              modes and gains the bridge clause under Future $ (C12/C13). */}
+          <p className="text-sm text-muted-foreground" data-testid="ptf-teaching-line">
+            <span data-testid="ptf-target-fv">Target {view?.fmt.targetFv}</span> = 12 ×{' '}
+            <span data-testid="ptf-monthly-expenses">{view?.fmt.monthlyExpenses}</span>/mo ÷{' '}
+            {formatPercent(engine.swr)} SWR — in today&#39;s dollars.
+            {view?.teachingBridge && (
+              <span data-testid="ptf-teaching-bridge"> {view.teachingBridge}</span>
+            )}
           </p>
           <p className="text-xs text-muted-foreground">
             You&#39;re {coastPct.toFixed(0)}% of the way to coasting — at 100% you could stop
@@ -381,12 +361,16 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
               expenses field is edited (the default no longer applies) AND
               when the person's durable baseline (migration 0051) is set —
               expenses then come from their Inputs, not the split. */}
-          {scope.isScoped && scopeExclusions && (
+          {scope.isScoped && view?.scopeExclusionsFmt && (
             <p className="text-xs text-muted-foreground" data-testid="path-to-fi-scope-exclusions">
               {scope.personName}&#39;s solve counts only {scope.personName}&#39;s accounts and
-              contributions — joint accounts ({formatCurrency(scopeExclusions.jointPortfolio)})
+              contributions — joint accounts (
+              <span data-testid="ptf-joint-portfolio">{view.scopeExclusionsFmt.jointPortfolio}</span>)
               and unattributed contributions (
-              {formatCurrency(scopeExclusions.unattributedContribution)}/yr) aren&#39;t counted.
+              <span data-testid="ptf-unattributed-contribution">
+                {view.scopeExclusionsFmt.unattributedContribution}
+              </span>
+              /yr) aren&#39;t counted.
               {!isEdited.monthlyExpenses &&
                 scope.person?.monthlyExpenseBaseline == null &&
                 ' Expenses default to half the household baseline.'}
@@ -405,9 +389,11 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
                       {formatPercent(s.rate)} ≈ {formatPercent(coast?.realRate ?? 0)} real
                     </>,
                     Number.isFinite(s.years) ? s.years.toFixed(1) : '—',
-                    coast && !atOrPastRetirement
-                      ? formatSignedCurrency(coast.coastNeededToday - engine.portfolio)
-                      : '—',
+                    coast && !atOrPastRetirement ? (
+                      <span data-testid="ptf-gap">{coast.gapFmt}</span>
+                    ) : (
+                      '—'
+                    ),
                   ]}
                 />
               );
@@ -425,11 +411,12 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
               0, so its coast target equals the full FI number.
             </p>
           )}
-          {chartData.length > 1 && (
+          {view && view.chartData.length > 1 && (
             <InlineChart
-              label="Path to FI"
+              label={view.chartLabel}
+              labelTestId="path-to-fi-chart-caption"
               testId="path-to-fi-chart"
-              data={chartData as Array<Record<string, number | string>>}
+              data={view.chartData as Array<Record<string, number | string>>}
               xKey="year"
               series={chartSeries}
               markers={chartMarkers}
@@ -441,3 +428,16 @@ export function PathToFiCard({ cardId }: PathToFiCardProps = {}) {
     </CalculatorCard>
   );
 }
+
+/** W5 test-only registration (frozen contract for W2). `ptf-gap` repeats
+ *  per table row — the sweep applies the invariant rule to every node. */
+export const PATH_TO_FI_BASIS_FIGURES: RegisteredFigure[] = [
+  { testId: 'ptf-target-fv', cls: 'pinned', pinnedBasis: 'today' }, // inventory #7
+  { testId: 'ptf-monthly-expenses', cls: 'invariant' },             // #8
+  { testId: 'ptf-joint-portfolio', cls: 'invariant' },              // #9
+  { testId: 'ptf-unattributed-contribution', cls: 'invariant' },    // #10
+  { testId: 'ptf-gap', cls: 'invariant' },                          // #11
+];
+export const PATH_TO_FI_BASIS_CHARTS: RegisteredChart[] = [
+  { chartTestId: 'path-to-fi-chart', captionTestId: 'path-to-fi-chart-caption', cls: 'convertible' }, // #12
+];

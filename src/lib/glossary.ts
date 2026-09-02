@@ -349,21 +349,21 @@ export const GLOSSARY: Record<string, GlossaryEntry> = {
   'NOMINAL VS REAL': {
     term: 'Nominal vs Real',
     shortDefinition:
-      'Nominal dollars are today\'s sticker amounts; real dollars discount future amounts back to today\'s purchasing power using inflation.',
+      "Two ways to state one projected amount: Future $ (nominal) is the raw number the account would read in that future year; Today's $ (real) discounts it back to today's purchasing power using your inflation assumption.",
   },
   NOMINAL: {
     term: 'Nominal',
     shortDefinition:
-      'Sticker-price dollars — what a number says without adjusting for inflation.',
+      'Future-dollar amounts (Future $) — the raw number a projection reads without adjusting for inflation.',
     fullDefinition:
-      'Nominal mode shows future projections in raw future dollars. Useful for "what will the account balance read" questions, but a $1M nominal balance in 30 years buys far less than $1M today.',
+      'Nominal (Future $) shows projections in raw future dollars. Useful for "what will the account balance read" questions, but a $1M nominal balance in 30 years buys far less than $1M today.',
   },
   REAL: {
     term: 'Real',
     shortDefinition:
-      "Today's-dollar amounts — future projections discounted back using your inflation assumption so they're comparable to today's prices.",
+      "Today's-dollar amounts (Today's $) — future projections discounted back using your inflation assumption so they're comparable to today's prices.",
     fullDefinition:
-      'Real mode shows what a future balance is worth in today\'s purchasing power. Better for "can I retire on this?" planning since expenses also tend to move with inflation.',
+      'Real (Today\'s $) shows what a future balance is worth in today\'s purchasing power. Better for "can I retire on this?" planning since expenses also tend to move with inflation.',
   },
   SINGLE: {
     term: 'Single',

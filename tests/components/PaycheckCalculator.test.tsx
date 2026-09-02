@@ -404,7 +404,7 @@ describe('PaycheckCalculator', () => {
 
   // a11y T7: The "Show as:" period switcher must have role="group" + aria-label
   // so the four aria-pressed buttons are announced as a named group to screen
-  // readers (mirrors RealNominalToggle and SupplementalMethodToggle patterns).
+  // readers (mirrors DollarBasisToggle and SupplementalMethodToggle patterns).
   it('period-switcher buttons are wrapped in role=group with label "Display period"', async () => {
     primeStores();
     render(<MemoryRouter><PaycheckCalculator /></MemoryRouter>);

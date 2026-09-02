@@ -1,6 +1,6 @@
 import { balanceTrajectory } from '@/lib/projection-trajectory';
 import { toRealSeries } from '@/lib/calculators/real-mode';
-import type { ChartDisplayMode } from '@/lib/calculators/use-chart-display-mode';
+import type { ChartDisplayMode } from '@/lib/calculators/real-mode';
 
 export interface ProjectionChartInput {
   pv: number;

@@ -53,6 +53,8 @@ interface InlineChartProps {
   yFormatter?: (value: number) => string;
   markers?: InlineChartMarker[];
   testId?: string;
+  /** data-testid for the label node (W5 basis-caption registration). */
+  labelTestId?: string;
 }
 
 /**
@@ -88,12 +90,16 @@ export function InlineChart({
   yFormatter,
   markers,
   testId,
+  labelTestId,
 }: InlineChartProps) {
   const last = data.length > 0 ? data[data.length - 1] : null;
   return (
     <div className="min-w-0" data-testid={testId}>
       {label != null && (
-        <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">
+        <div
+          data-testid={labelTestId}
+          className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2"
+        >
           {label}
         </div>
       )}

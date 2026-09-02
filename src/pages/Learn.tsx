@@ -41,7 +41,7 @@ function DifficultyBadge({ difficulty }: { difficulty: TriviaQuestion['difficult
 }
 
 // Wave 8: the persistent difficulty preference (revived from v1's
-// learning_state column). House aria-pressed group (RealNominalToggle shape).
+// learning_state column). House aria-pressed group (the DollarBasisToggle shape).
 const PREFERENCE_OPTIONS = [
   { value: LearningDifficulty.BEGINNER, label: 'Basics' },
   { value: LearningDifficulty.MIXED, label: 'Mix' },
