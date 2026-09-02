@@ -56,14 +56,16 @@ describe('computeTailoring', () => {
     expect(r.calculators.every((c) => c.visible)).toBe(true);
   });
 
-  it('the 7 always-shown calculators are visible even on empty input (Wave-18 merged ids)', () => {
+  it('the 9 always-shown calculators are visible even on empty input (Wave-18 merged ids + W1 cards)', () => {
     const r = computeTailoring(emptyInput());
     const always = [
       'paycheck',
       'path-to-fi',
+      'retirement-age',
       'compound-interest',
       'contribution-allocator',
       'backtest',
+      'stress-test',
       'retirement-401k-withdrawal',
       'debt-payoff',
     ];
@@ -157,7 +159,7 @@ describe('computeTailoring', () => {
     expect(calc(r, 'overtime').visible).toBe(true);
   });
 
-  it('persons exist but all conditionals zero → all 3 conditionals hidden, 7 always-shown still visible', () => {
+  it('persons exist but all conditionals zero → all 3 conditionals hidden, 9 always-shown still visible', () => {
     const r = computeTailoring(
       emptyInput({
         persons: [

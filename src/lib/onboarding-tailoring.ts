@@ -114,12 +114,14 @@ export function computeTailoring(input: TailoringInput): TailoringResult {
   const hasSupplemental = hasBonus || hasCommission;
 
   const calculators: TailorCalc[] = [
-    // Always shown (7).
+    // Always shown (9).
     { id: 'paycheck', label: calculatorCardLabel('paycheck'), visible: true, reason: 'Always available' },
     { id: 'path-to-fi', label: calculatorCardLabel('path-to-fi'), visible: true, reason: 'Always available' },
+    { id: 'retirement-age', label: calculatorCardLabel('retirement-age'), visible: true, reason: 'Always available' },
     { id: 'compound-interest', label: calculatorCardLabel('compound-interest'), visible: true, reason: 'Always available' },
     { id: 'contribution-allocator', label: calculatorCardLabel('contribution-allocator'), visible: true, reason: 'Always available' },
     { id: 'backtest', label: calculatorCardLabel('backtest'), visible: true, reason: 'Always available' },
+    { id: 'stress-test', label: calculatorCardLabel('stress-test'), visible: true, reason: 'Always available' },
     { id: 'retirement-401k-withdrawal', label: calculatorCardLabel('retirement-401k-withdrawal'), visible: true, reason: 'Always available' },
     { id: 'debt-payoff', label: calculatorCardLabel('debt-payoff'), visible: true, reason: 'Always available — add a loan to use it' },
     // Conditional (3).

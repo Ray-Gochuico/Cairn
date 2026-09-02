@@ -219,9 +219,11 @@ describe('CALCULATOR_CARD_DEFS (Wave-17 registry data)', () => {
     expect(CALCULATOR_CARD_IDS).toEqual(CALCULATOR_CARD_DEFS.map((d) => d.id));
     // Wave 18 B6: bonus-tax + commission-tax → supplemental-pay;
     // financial-independence + coast-fi → path-to-fi (registry section order).
+    // W1 (D-W1-1): retirement-age directly after path-to-fi; stress-test
+    // directly after backtest — both inside the contiguous path-to-fi run.
     expect(CALCULATOR_CARD_IDS).toEqual([
       'paycheck', 'supplemental-pay', 'overtime', 'retirement-401k-withdrawal',
-      'path-to-fi', 'compound-interest', 'backtest',
+      'path-to-fi', 'retirement-age', 'compound-interest', 'backtest', 'stress-test',
       'debt-payoff', 'equity', 'contribution-allocator',
     ]);
   });

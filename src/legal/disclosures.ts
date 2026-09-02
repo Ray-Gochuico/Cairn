@@ -73,15 +73,18 @@ Tax thresholds shown reflect the **2026 tax year** and will become outdated. Alw
 // 2022; corrected here in v1.2). Superseded bodies are not retained as
 // constants (noUnusedLocals); the per-version diffs live in `diffFromPrevious`
 // below and the full history is in git.
-const BACKTEST_TEXT_v1_2 = `**About the Historical Backtest**
+// v1.3 (W1, 2026-08-25) adds the Stress Test card to the doc's coverage: a
+// both-surfaces opening + the bracket line scoped to the Backtest tool. W2
+// takes v1.3 → v1.4 for the History view — one owner per version number.
+const BACKTEST_TEXT_v1_3 = `**About the Historical Backtest**
 
-This view replays your plan against U.S. market data from 1871 to 2022. Each line is one historical starting year — what would have happened to someone who began this exact plan in 1929, 1966, 1973, and so on. Only start years with a full horizon of data are shown (for a 30-year horizon the latest start is 1993, since the data ends in 2022).
+This data replays your plan against U.S. market data from 1871 to 2022, in two views. The **Backtest tool** replays every historical starting year — what would have happened to someone who began this exact plan in 1929, 1966, 1973, and so on; only start years with a full horizon of data are shown (for a 30-year horizon the latest start is 1993, since the data ends in 2022). The **Stress Test card** replays a handful of named historical windows — specific starting sequences from the same dataset (the 1929 crash, the 1970s inflation run, and so on) — against the portfolio and contributions you hold today. Both are history replayed, never a forecast.
 
-**Past results do not predict future returns.** This is the most important sentence on this page. The U.S. market has only ~120 *overlapping* 30-year windows since 1871 — they share most of their years, so they are **not independent samples**, and a "94 of 120" success count is **not a 94/120 probability**. The next 30 years will be a new window not in this dataset. Backtests systematically miss tail risks that have not happened yet (a U.S. default, a multi-decade stagnation, a regime change in tax law).
+**Past results do not predict future returns.** This is the most important sentence on this page. The U.S. market has only ~120 *overlapping* 30-year windows since 1871 — they share most of their years, so they are **not independent samples**, and a "94 of 120" success count is **not a 94/120 probability**. The next 30 years will be a new window not in this dataset. Backtests systematically miss tail risks that have not happened yet (a U.S. default, a multi-decade stagnation, a regime change in tax law). A named stress window is one sequence that happened once — it is not a probability of anything.
 
 The **success rate is a count of past outcomes, not a probability** of future success. Raising the *goal ending amount* above $0 makes "success" stricter — you are asking the plan to also leave a margin — but it stays a tally of what *did* happen, never a forecast of what will.
 
-Everything in this replay is computed in **real (CPI-adjusted) dollars** — both your inputs and the results are stated in today's purchasing power. The returns applied each year are **real (CPI-adjusted) total returns for a stock/bond blend**: the stock leg is Shiller's CPI-deflated S&P total return and the bond leg is a 10-year U.S. Treasury total return deflated to real, weighted by the stock percentage you chose and rebalanced annually. Those returns are applied **gross of fees** — your own real portfolio will diverge based on fund expense ratios, asset location, and how your actual allocation differs from the chosen stock percentage. **Tax brackets are held at 2026 levels** across the entire 1871-to-2022 replay — historical brackets are not reconstructed, so any income-tax treatment is approximate. See *Settings → Disclosures* for the full assumption set.`;
+Everything in these replays is computed in **real (CPI-adjusted) dollars** — both your inputs and the results are stated in today's purchasing power. The returns applied each year are **real (CPI-adjusted) total returns for a stock/bond blend**: the stock leg is Shiller's CPI-deflated S&P total return and the bond leg is a 10-year U.S. Treasury total return deflated to real, weighted by the stock percentage you chose and rebalanced annually. Those returns are applied **gross of fees** — your own real portfolio will diverge based on fund expense ratios, asset location, and how your actual allocation differs from the chosen stock percentage. **Tax brackets are held at 2026 levels** across the Backtest tool's entire 1871-to-2022 replay — historical brackets are not reconstructed, so any income-tax treatment is approximate; the Stress Test card applies no tax treatment at all. See *Settings → Disclosures* for the full assumption set.`;
 
 const LEARNING_TEXT_v1_0 = `**About the Learning feature**
 
@@ -144,13 +147,13 @@ export const DISCLOSURES = {
       'I understand the trivia content is general financial-literacy education, not advice, and I will verify any specifics before acting.',
   } satisfies DisclosureDocument,
   backtest: {
-    version: '1.2',
+    version: '1.3',
     title: 'About the Historical Backtest',
-    body: BACKTEST_TEXT_v1_2,
+    body: BACKTEST_TEXT_v1_3,
     diffFromPrevious:
-      'Version 1.2 corrects the stated data coverage. v1.1 said the replay ran "from 1871 to today" and named 2000 as an example start year, but the underlying Shiller dataset ends in 2022 — so coverage is 1871 to 2022, and a 30-year horizon can start no later than 1993 (1993 + 29 = 2022). The example start years are now in-range (1929, 1966, 1973), and the "held at 2026 brackets across the entire replay" line now reads "1871-to-2022" rather than "1871-to-present." No change to the count-not-probability, overlapping-windows, or real-returns framing carried over from v1.1. Please re-read and re-accept.',
+      'Version 1.3 adds the Stress Test card to what this disclosure covers. The card replays five named historical windows — specific starting sequences from the same 1871-to-2022 dataset, using the same real (CPI-adjusted) stock/bond return basis — against the portfolio and contributions you hold today. The opening paragraph now describes both views, the tail-risk paragraph notes that a named window is one sequence that happened once, and the tax-bracket line is scoped to the Backtest tool (the Stress Test card applies no tax treatment). No change to the count-not-probability, overlapping-windows, real-returns, or gross-of-fees framing carried over from v1.2. Please re-read and re-accept.',
     acceptanceCheckboxLabel:
-      'I understand the backtest reports historical outcomes only and is not a prediction of future performance.',
+      'I understand the backtest and stress test report historical outcomes only and are not a prediction of future performance.',
   } satisfies DisclosureDocument,
   interview: {
     version: '1.1',

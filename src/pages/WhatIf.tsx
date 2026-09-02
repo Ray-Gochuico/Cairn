@@ -31,6 +31,19 @@ import { useTaxRulesStore } from '@/stores/tax-rules-store';
 import { usePropertiesStore } from '@/stores/properties-store';
 import { useVehiclesStore } from '@/stores/vehicles-store';
 import { useAssetValueSnapshotsStore } from '@/stores/asset-value-snapshots-store';
+import { useContributionsStore } from '@/stores/contributions-store';
+import { useCategoriesStore } from '@/stores/categories-store';
+import { useRoadmapOverridesStore } from '@/stores/roadmap-overrides-store';
+import { useRoadmap } from '@/domain/roadmap/context';
+import { evaluate } from '@/domain/roadmap/evaluate';
+import CompareScenariosCard from '@/components/whatif/CompareScenariosCard';
+import ModelGapsCard from '@/components/whatif/ModelGapsCard';
+import {
+  resolveComparePair,
+  resolveDeflatorSourceLabel,
+  type ComparePairSelection,
+} from '@/lib/whatif/plan-review';
+import type { ModelGapsInput } from '@/lib/model-gaps';
 import {
   detectMilestones,
   effectiveSwr,
@@ -39,6 +52,7 @@ import {
   type Milestones,
   type MonthlyState,
 } from '@/lib/scenarios';
+import { localTodayISO } from '@/lib/dates';
 import { FiPillsPosition, ProjectionDetailLevel } from '@/types/enums';
 
 export default function WhatIf() {
@@ -63,10 +77,22 @@ export default function WhatIf() {
   const loadProperties     = usePropertiesStore((s) => s.load);
   const loadVehicles       = useVehiclesStore((s) => s.load);
   const loadAssetSnapshots = useAssetValueSnapshotsStore((s) => s.load);
+  // W3: three added page-owned loads. useRoadmap() composes 9 stores and this
+  // page already loaded six of them; these are the missing three (constraint
+  // 8 — hydration is PAGE-owned and joined into the LATCHED gate below, never
+  // fired from a descendant).
+  const loadContributions  = useContributionsStore((s) => s.load);
+  const loadCategories     = useCategoriesStore((s) => s.load);
+  const loadRoadmapOverrides = useRoadmapOverridesStore((s) => s.load);
 
   const household          = useHouseholdStore((s) => s.household);
   const persons            = usePersonsStore((s) => s.persons);
   const accounts           = useAccountsStore((s) => s.accounts);
+  // W3 card inputs (loans names the extra-payment levers; snapshots +
+  // contributions feed the model-gaps provenance rows).
+  const loans              = useLoansStore((s) => s.loans);
+  const snapshots          = useSnapshotsStore((s) => s.snapshots);
+  const contributions      = useContributionsStore((s) => s.contributions);
 
   // Household-default position for the FI / Coast FI pill row, with a
   // session-only inline override (chevron next to the row). Selecting a
@@ -132,7 +158,10 @@ export default function WhatIf() {
     loadProperties();
     loadVehicles();
     loadAssetSnapshots();
-  }, [load, loadLoans, loadHoldings, loadAccounts, loadSnapshots, loadTransactions, loadPersons, loadTaxYears, loadProperties, loadVehicles, loadAssetSnapshots]);
+    loadContributions();
+    loadCategories();
+    loadRoadmapOverrides();
+  }, [load, loadLoans, loadHoldings, loadAccounts, loadSnapshots, loadTransactions, loadPersons, loadTaxYears, loadProperties, loadVehicles, loadAssetSnapshots, loadContributions, loadCategories, loadRoadmapOverrides]);
 
   // W10 M33: the ~11-store cold load used to flash "Set up your household…"
   // and the projection-empty CTA before any store resolved. Gate on the
@@ -150,6 +179,9 @@ export default function WhatIf() {
       usePropertiesStore((s) => s.isLoading),
       useVehiclesStore((s) => s.isLoading),
       useAssetValueSnapshotsStore((s) => s.isLoading),
+      useContributionsStore((s) => s.isLoading),
+      useCategoriesStore((s) => s.isLoading),
+      useRoadmapOverridesStore((s) => s.isLoading),
     ],
     [
       useScenariosStore((s) => s.error),
@@ -162,6 +194,9 @@ export default function WhatIf() {
       usePropertiesStore((s) => s.error),
       useVehiclesStore((s) => s.error),
       useAssetValueSnapshotsStore((s) => s.error),
+      useContributionsStore((s) => s.error),
+      useCategoriesStore((s) => s.error),
+      useRoadmapOverridesStore((s) => s.error),
     ],
     reload,
   );
@@ -224,6 +259,71 @@ export default function WhatIf() {
     }
     return false;
   }, [projections]);
+
+  // ── W3 ────────────────────────────────────────────────────────────────
+  // RM-1: every hook below MUST stay above the early returns.
+
+  const loanNames = useMemo(
+    () =>
+      Object.fromEntries(loans.map((l) => [l.id, l.name] as const)) as Record<number, string>,
+    [loans],
+  );
+  // The libs never read a clock (D-W3-9); the page injects the date — and it
+  // is the LOCAL calendar day, the same one useLocalToday feeds /monthly, the
+  // sidebar dot and Dashboard. ONE clock per page (review MINOR 12; the T2
+  // UTC lesson): toISOString().slice(0,10) is the UTC day, which flips hours
+  // early west of UTC and would let G3 disagree with every sibling surface.
+  const todayIso = useMemo(() => localTodayISO(), []);
+
+  // D-W3-3/P3: the compare pair is a LENS — session-only, never persisted,
+  // never writes visible/isActive. Hoisted here because ModelGaps' G10 names
+  // the same pair the picker shows.
+  const [pairSel, setPairSel] = useState<ComparePairSelection>({ aId: null, bId: null });
+  const comparePair = useMemo(
+    () => resolveComparePair(scenarios, pairSel, createdScenarioId),
+    [scenarios, pairSel, createdScenarioId],
+  );
+  const onSelectA = useCallback((id: number) => setPairSel((p) => ({ ...p, aId: id })), []);
+  const onSelectB = useCallback((id: number) => setPairSel((p) => ({ ...p, bId: id })), []);
+
+  // G9 (D-W3-P2): the Dashboard unanswered-scan, retargeted. useRoadmap
+  // composes state only (no .load() — boot-loop constraint 8).
+  const roadmapCtx = useRoadmap();
+  const roadmapHasUnanswered = useMemo(() => {
+    if (!roadmapCtx) return false;
+    const results = evaluate(roadmapCtx);
+    for (const r of results.values()) if (r.status === 'unanswered') return true;
+    return false;
+  }, [roadmapCtx]);
+
+  // G2's consequence ("the portfolio starts at $0 in these projections") is
+  // only true when the ENGINE seed is zero. state-snapshot.ts seeds 529s and
+  // falls back to holdings for accounts without a snapshot, neither of which
+  // the FI-eligible provenance scan sees (review MINOR 1/14) — so positive
+  // evidence from the compared lines' month 0 suppresses the row.
+  const engineStartsAtZero = useMemo(() => {
+    for (const s of [comparePair.a, comparePair.b]) {
+      if (s?.id == null) continue;
+      const first = projections.get(s.id)?.[0];
+      if (first && totalInvestments(first) + first.cash !== 0) return false;
+    }
+    return true;
+  }, [comparePair, projections]);
+
+  const gapsInput: ModelGapsInput = useMemo(() => ({
+    household: household ?? null,
+    settings: settingsForDisplay,
+    persons,
+    accounts,
+    snapshots,
+    contributions,
+    roadmapHasUnanswered,
+    engineStartsAtZero,
+    sides: [comparePair.a, comparePair.b]
+      .filter((s): s is NonNullable<typeof s> => s != null)
+      .map((s) => ({ name: s.name, payload: s.leverPayload })),
+    todayIso,
+  }), [household, settingsForDisplay, persons, accounts, snapshots, contributions, roadmapHasUnanswered, engineStartsAtZero, comparePair, todayIso]);
 
   // IMPORTANT: All useMemo / useState / useEffect declarations MUST be
   // above this early return. Hooks must always run in the same order
@@ -294,6 +394,13 @@ export default function WhatIf() {
   const activeScenario =
     scenarios.find((s) => s.isActive) ?? scenarios.find((s) => s.isBaseline) ?? null;
   const displayInflation = effectiveBaselineInflation(
+    activeScenario,
+    household ?? null,
+    settingsForDisplay,
+  );
+  // W3 CR-Y3: the deflator clause names WHERE that rate came from, branch for
+  // branch with the resolver above (D-W3-P9).
+  const deflatorSourceLabel = resolveDeflatorSourceLabel(
     activeScenario,
     household ?? null,
     settingsForDisplay,
@@ -376,6 +483,33 @@ export default function WhatIf() {
       )}
 
       <MilestoneStrip scenarios={scenarios} milestones={milestones} />
+
+      {/* W3 (D-W3-1): Compare scenarios + What the model doesn't know yet.
+          Household-scoped like the whole page (D-W3-14; /what-if is on the
+          ViewFilter hide list). The chart above is byte-untouched. */}
+      {hasProjectionData && (
+        <>
+          <CompareScenariosCard
+            scenarios={scenarios}
+            projections={projections}
+            milestones={milestones}
+            household={household ?? null}
+            engineDefaults={{
+              inflation: real.defaults?.inflation,
+              defaultDrawdownTaxRate: real.defaults?.defaultDrawdownTaxRate,
+            }}
+            dollarMode={dollarMode}
+            horizonMonths={horizonMonths}
+            displayInflation={displayInflation}
+            deflatorSourceLabel={deflatorSourceLabel}
+            loanNames={loanNames}
+            pair={comparePair}
+            onSelectA={onSelectA}
+            onSelectB={onSelectB}
+          />
+          <ModelGapsCard input={gapsInput} />
+        </>
+      )}
 
       {/*
         Page-level projection footnote — surfaces the modeling

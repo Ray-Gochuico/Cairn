@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'fs';
+import { readFileSync, readdirSync, statSync } from 'fs';
 import path from 'path';
+import { stripComments } from '../policy/source-walker';
 
 /**
  * Trailhead Stone (Wave 12) token contract. Locks the blaze accent family,
@@ -222,4 +223,59 @@ describe('radius', () => {
   it('is 0.375rem (Trailhead Stone)', () => {
     expect(block(':root')).toMatch(/--radius:\s*0\.375rem/);
   });
+});
+
+// --- opacity-modified primary-foreground on solid --primary -----------------
+
+function walkSrc(dir: string, acc: string[] = []): string[] {
+  for (const entry of readdirSync(dir)) {
+    const full = path.join(dir, entry);
+    if (statSync(full).isDirectory()) walkSrc(full, acc);
+    else if (/\.(ts|tsx|css)$/.test(entry)) acc.push(full);
+  }
+  return acc;
+}
+
+/** sRGB over-composite, the way a browser paints `text-<token>/<n>`. */
+function over(fg: Rgb, bg: Rgb, alpha: number): Rgb {
+  return [0, 1, 2].map((i) => fg[i] * alpha + bg[i] * (1 - alpha)) as Rgb;
+}
+
+/**
+ * The solid pair above (5.63 / 5.90) says nothing about an OPACITY-modified
+ * variant: `text-primary-foreground/80` on a `bg-primary` chip alpha-blends to
+ * 4.21 (light) / 4.34 (dark) — under the 4.5 AA floor for 12px text, and
+ * silently missed by the whole styles bar (W1 review MAJOR 5). Any such
+ * variant that ships must still clear 4.5 over --primary; differentiate with
+ * figure style (font-normal / tabular-nums) instead of opacity.
+ */
+describe('primary-foreground opacity variants stay AA on solid --primary', () => {
+  const ALPHA_RE = /text-primary-foreground\/(\d{1,3})\b/g;
+  const found: Array<{ where: string; alpha: number }> = [];
+  for (const file of walkSrc(path.join(ROOT, 'src'))) {
+    // Comments discuss the forbidden class by name; only shipped classNames count.
+    const text = stripComments(readFileSync(file, 'utf8'));
+    for (const m of text.matchAll(ALPHA_RE)) {
+      found.push({ where: path.relative(ROOT, file), alpha: Number(m[1]) / 100 });
+    }
+  }
+
+  for (const { name, body } of THEMES) {
+    it(`${name}: every shipped opacity variant clears 4.5 (found ${found.length})`, () => {
+      const offenders = found
+        .map(({ where, alpha }) => ({
+          where,
+          alpha,
+          ratio: contrastRatio(
+            over(hsl(body, 'primary-foreground'), hsl(body, 'primary'), alpha),
+            hsl(body, 'primary'),
+          ),
+        }))
+        .filter((r) => r.ratio < 4.5);
+      expect(
+        offenders.map((o) => `${o.where} @${o.alpha} → ${o.ratio.toFixed(2)}:1`),
+        `${name}: opacity-modified primary-foreground text below 4.5 on --primary`,
+      ).toEqual([]);
+    });
+  }
 });
