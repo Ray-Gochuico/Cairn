@@ -47,6 +47,11 @@ const NAMESPACED: ReadonlySet<string> = new Set([
   'src/lib/calculators/use-selected-earner.ts',
   // A $/mo figure the user set against the sample's numbers.
   'src/lib/calculators/next-dollar-store.ts',
+  // W5's page-level Today's $ / Future $ basis ('calc-basis:<pageId>'). The
+  // stored value is an enum, but the W4×W5 merge ruling (2026-09-02)
+  // namespaces it anyway: an explore session must leave NOTHING behind, and
+  // the `explore.` sweep on exit reaps it.
+  'src/lib/calculators/dollar-basis.ts',
   // Update-check stamp — also disabled in explore (D-S7 offline).
   'src/components/settings/UpdaterSection.tsx',
   // The helper's own home.
@@ -68,7 +73,10 @@ const RAW_WITH_REASON: Readonly<Record<string, string>> = {
   'src/lib/backup-restore.ts': 'restore-failure notice; every restore control is disabled in explore',
   'src/lib/calculator-card-layout.ts': 'card ids; the legacy import is explore-guarded (it DELETES a real key)',
   'src/lib/calculator-visibility.ts': 'hidden calculator ids — app constants',
-  'src/lib/calculators/use-chart-display-mode.ts': 'NOMINAL|REAL enum',
+  // NOTE (W4×W5 merge, 2026-09-02): the per-card display-mode hook that used
+  // to sit here ('NOMINAL|REAL enum') was DELETED by W5 — the page-level
+  // basis toggle replaces it, and its own key is NAMESPACED above. The
+  // stale-entry half of the ratchet is what caught the removal.
   'src/lib/calculators/use-supplemental-method.ts': 'AGGREGATE|FLAT enum',
   'src/lib/interview/bar-store.ts': 'session-scoped answered-question ids (protected surface: src/lib/interview)',
   'src/lib/onboarding-state.ts': 'D-S7 REAL tailor/tour keys — unreachable in explore by structural guards',

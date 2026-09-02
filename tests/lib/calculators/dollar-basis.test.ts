@@ -1,5 +1,5 @@
 import { renderHook, act } from '@testing-library/react';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   CALCULATORS_PAGE_ID,
   __readInitialDollarBasisForTests,
@@ -7,6 +7,7 @@ import {
   useDollarBasis,
   useDollarBasisStore,
 } from '@/lib/calculators/dollar-basis';
+import { clearExploreFlag, clearExplorePrefs, setExploreFlag } from '@/lib/explore-mode';
 
 describe('useDollarBasis (W5 D-T2/D-T3/D-T8)', () => {
   beforeEach(() => {
@@ -89,5 +90,66 @@ describe('useDollarBasis (W5 D-T2/D-T3/D-T8)', () => {
     act(() => useDollarBasisStore.getState().setBasis(CALCULATORS_PAGE_ID, 'future'));
     expect(a.result.current[0]).toBe('future');
     expect(b.result.current[0]).toBe('future');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// W4×W5 merge reconciliation (coordinator ruling, 2026-09-02): the basis key
+// is NAMESPACED under W4's explore ratchet, so an explore session leaves
+// nothing behind — `clearExplorePrefs()` sweeps the whole `explore.` family
+// on the way out. The pair below pins BOTH sides of prefKey(): the ratchet
+// itself only proves the file CALLS prefKey, not that the composed key is
+// right.
+// ---------------------------------------------------------------------------
+describe('useDollarBasis under explore mode (W4 pref ratchet)', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    localStorage.clear();
+    __resetDollarBasisForTests();
+  });
+
+  // Storage only — no store writes. A `__resetDollarBasisForTests()` here
+  // would run BEFORE RTL's own cleanup (inner afterEach first), so the
+  // zustand write would re-render a still-mounted hook outside act().
+  afterEach(() => {
+    clearExploreFlag();
+    sessionStorage.clear();
+  });
+
+  it('writes the namespaced key while exploring, and the sweep reaps it', () => {
+    setExploreFlag();
+    const { result } = renderHook(() => useDollarBasis(CALCULATORS_PAGE_ID));
+    act(() => result.current[1]('future'));
+
+    expect(sessionStorage.getItem('explore.calc-basis:calculators')).toBe('future');
+    // The real profile's own key was never touched.
+    expect(sessionStorage.getItem('calc-basis:calculators')).toBeNull();
+
+    // Exit: the prefix sweep reaps it, so the real session reads a clean default.
+    clearExplorePrefs();
+    clearExploreFlag();
+    expect(sessionStorage.getItem('explore.calc-basis:calculators')).toBeNull();
+    expect(__readInitialDollarBasisForTests(CALCULATORS_PAGE_ID)).toBe('today');
+  });
+
+  it('writes the bare key with the flag unset (the real profile is unprefixed)', () => {
+    const { result } = renderHook(() => useDollarBasis(CALCULATORS_PAGE_ID));
+    act(() => result.current[1]('future'));
+
+    expect(sessionStorage.getItem('calc-basis:calculators')).toBe('future');
+    expect(sessionStorage.getItem('explore.calc-basis:calculators')).toBeNull();
+  });
+
+  it('an explore-era basis never seeds the real read (the leak this prevents)', () => {
+    setExploreFlag();
+    const { result } = renderHook(() => useDollarBasis(CALCULATORS_PAGE_ID));
+    act(() => result.current[1]('future'));
+
+    // Exit WITHOUT the sweep: even a stranded explore key is invisible to the
+    // real profile, because the real read composes an unprefixed key.
+    clearExploreFlag();
+    act(() => __resetDollarBasisForTests()); // the hook above is still mounted
+    expect(__readInitialDollarBasisForTests(CALCULATORS_PAGE_ID)).toBe('today');
+    expect(sessionStorage.getItem('explore.calc-basis:calculators')).toBe('future');
   });
 });

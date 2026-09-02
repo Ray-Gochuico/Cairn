@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { create } from 'zustand';
+import { prefKey } from '@/lib/explore-mode';
 
 /** UI naming (D-T11): "Today's $" = real, "Future $" = nominal. */
 export type DollarBasis = 'today' | 'future';
@@ -7,7 +8,19 @@ export type DollarBasis = 'today' | 'future';
 /** The one v1 page instance (D-T7). W5.1 adds 'whatif' without API change. */
 export const CALCULATORS_PAGE_ID = 'calculators';
 
-const keyFor = (pageId: string) => `calc-basis:${pageId}`;
+/**
+ * W4×W5 merge reconciliation (coordinator ruling, 2026-09-02): the basis key
+ * is NAMESPACED under W4's explore ratchet
+ * (tests/policy/explore-pref-namespace.test.ts). The stored VALUE is an enum,
+ * but an explore session must leave nothing behind, and `prefKey` puts the
+ * key inside the `explore.` prefix `clearExplorePrefs()` sweeps on exit —
+ * the same idiom W4 applied to `calc-state:` (src/lib/calculator-state.ts).
+ *
+ * The `calc-basis:` literal stays private to this module (D-T2): prefKey only
+ * wraps the composed key, so W5's KEY_ALLOWLIST
+ * (tests/policy/dollar-basis-policy.test.ts) is unchanged.
+ */
+const keyFor = (pageId: string) => prefKey(`calc-basis:${pageId}`);
 
 /** Corrupt/missing values fall back to the honest default (D-T3). */
 function readInitial(pageId: string): DollarBasis {
